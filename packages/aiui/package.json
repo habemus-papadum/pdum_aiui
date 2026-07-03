@@ -1,0 +1,34 @@
+{
+  "name": "@habemus-papadum/aiui",
+  "version": "0.0.0+dev",
+  "description": "ai ui frontends",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nehal Patel <nehal@alum.mit.edu>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
