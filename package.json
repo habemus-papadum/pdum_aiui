@@ -1,9 +1,9 @@
 {
   "name": "pdum_aiui",
-  "version": "0.0.0+dev",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "pdum_aiui \u2014 a lockstep-versioned TypeScript monorepo.",
+  "description": "pdum_aiui — a lockstep-versioned TypeScript monorepo.",
   "author": "Nehal Patel <nehal@alum.mit.edu>",
   "license": "MIT",
   "engines": {
