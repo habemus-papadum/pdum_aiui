@@ -62,9 +62,12 @@ export async function launchClaudeSession(opts) {
   // If a subscription login exists, drop any ambient ANTHROPIC_API_KEY so Claude
   // authenticates via the subscription (CI sets CLAUDE_CODE_OAUTH_TOKEN instead).
   const unset = subscriptionAuthAvailable() ? "-u ANTHROPIC_API_KEY " : "";
+  // `aiui claude` stays neutral on Chrome; the automated harness forwards
+  // Claude's own `--no-chrome` (as a passthrough) to skip the browser-detection
+  // prompt that would otherwise block this headless session.
   const cmd =
     `cd ${REPO_ROOT} && env ${unset}AIUI_CACHE=${cacheDir} IS_SANDBOX=1 ` +
-    `${TSX} ${AIUI_CLI} claude --aiui-tag ${opts.tag} --aiui-no-chrome --model ${model}`;
+    `${TSX} ${AIUI_CLI} claude --aiui-tag ${opts.tag} --no-chrome --model ${model}`;
 
   try {
     tmux(["kill-session", "-t", sessionName]);

@@ -3,11 +3,24 @@
  * shared by CLI subcommands like `quick`.
  */
 import { select } from "@inquirer/prompts";
+import { agentsByPid, type ClaudeAgent, listClaudeAgents } from "./agents";
 import type { RunningServer } from "./registry";
 
 /**
- * Prompt the user to pick one of the given running servers, rendering each as
- * its working directory with the pid/port for disambiguation. With a single
+ * Render a server as a selector row. Prefers the owning Claude Code session's
+ * name (matched by `ppid`) over a raw pid, since that's how a user recognises
+ * which session a channel belongs to; falls back to the pid when the session
+ * isn't known.
+ */
+export function serverLabel(server: RunningServer, agents: Map<number, ClaudeAgent>): string {
+  const agent = agents.get(server.ppid);
+  const who = agent ? agent.name : `pid ${server.ppid}`;
+  return `${who}  ·  ${server.cwd}  ·  port ${server.port}`;
+}
+
+/**
+ * Prompt the user to pick one of the given running servers, labelling each with
+ * its Claude Code session name, working directory, and port. With a single
  * server there's nothing to choose, so it's returned directly.
  *
  * @throws if `servers` is empty — callers should handle "none running" before
@@ -20,10 +33,11 @@ export async function selectMcpServer(servers: RunningServer[]): Promise<Running
   if (servers.length === 1) {
     return servers[0];
   }
+  const agents = agentsByPid(listClaudeAgents());
   return select({
     message: "Select a running aiui MCP server",
     choices: servers.map((server) => ({
-      name: `${server.cwd}  ·  pid ${server.pid}, port ${server.port}`,
+      name: serverLabel(server, agents),
       value: server,
     })),
   });

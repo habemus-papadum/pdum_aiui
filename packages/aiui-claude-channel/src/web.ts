@@ -2,11 +2,13 @@
  * The channel server's web backend.
  *
  * A small HTTP + WebSocket server the outside world uses to push text into the
- * Claude Code session behind this MCP server. Today it exposes a health check,
- * a `POST /prompt` that forwards its `text` to the session, and a `/ws`
- * websocket that does the same per message — enough to drive an end-to-end
- * test, and the foundation for richer routes later. It listens on an
- * OS-assigned port, on loopback only.
+ * Claude Code session behind this MCP server. It exposes a health check, a
+ * `POST /prompt` that forwards its `text` to the session, and a `/ws`
+ * websocket speaking the stream-processor protocol (see channel.ts): the
+ * client's initial hello picks a format out of the processor registry, and
+ * each thread of messages is fed to its own processor, which pushes prompts
+ * into the session as it sees fit. It listens on an OS-assigned port, on
+ * loopback only.
  *
  * Nothing here may write to stdout: in the `mcp` command that stream carries the
  * MCP stdio protocol. Surface problems through the returned promise instead.
@@ -14,13 +16,20 @@
 import { createServer } from "node:http";
 import express from "express";
 import { WebSocketServer } from "ws";
+import { createChannelConnection, type ProcessorRegistry } from "./channel";
+import { defaultProcessors } from "./processors";
 
 /** Forward prompt text into the Claude Code session. */
 export type PromptHandler = (text: string) => void | Promise<void>;
 
 export interface WebServerOptions {
-  /** Called with text arriving over `POST /prompt` or a websocket message. */
+  /** Called with text arriving over `POST /prompt` or from a stream processor. */
   onPrompt: PromptHandler;
+  /**
+   * Stream formats the websocket protocol accepts, keyed by the name clients
+   * declare in their hello. Defaults to {@link defaultProcessors}.
+   */
+  processors?: ProcessorRegistry;
 }
 
 export interface WebServer {
@@ -60,15 +69,17 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   const httpServer = createServer(app);
 
+  // Each websocket connection gets its own protocol state machine; its threads
+  // die with the connection, and concurrent clients never share state.
+  const processors = options.processors ?? defaultProcessors();
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
   wss.on("connection", (socket) => {
+    const connection = createChannelConnection({ processors, sendPrompt: options.onPrompt });
     socket.on("message", async (data) => {
-      const text = data.toString();
-      try {
-        await options.onPrompt(text);
-        socket.send(JSON.stringify({ ok: true }));
-      } catch (err) {
-        socket.send(JSON.stringify({ ok: false, error: errorMessage(err) }));
+      const response = await connection.handleMessage(data.toString());
+      socket.send(JSON.stringify(response));
+      if (response.fatal) {
+        socket.close();
       }
     });
   });

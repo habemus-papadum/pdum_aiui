@@ -42,6 +42,26 @@ pnpm new-package demo --no-publish      # internal-only, never published
 New packages join version lockstep automatically. Internal dependencies use `workspace:^`; pnpm
 rewrites them to a concrete version at publish time.
 
+## Documentation
+
+Docs are a monorepo-aware static site — [VitePress](https://vitepress.dev) (Markdown, like MkDocs)
+plus a [TypeDoc](https://typedoc.org) API-reference step. It documents the repo at two altitudes:
+top-level conceptual docs live under [`docs/`](./docs), and each package contributes its own section
+(README → overview, `packages/<slug>/docs/*.md` → guides, `src/index.ts` → an API reference).
+
+```sh
+pnpm docs:dev       # generate + serve locally with hot reload (http://localhost:5173)
+pnpm docs:build     # generate + build the static site into docs/.vitepress/dist
+pnpm docs:preview   # serve the built static site
+pnpm docs:gen       # regenerate package pages + API + sidebar only
+```
+
+The site is generated from the same `packages/*` glob everything else uses, so **adding a package
+needs no doc-config changes** — its pages and API reference appear automatically on the next
+`docs:gen`. `scripts/docs-gen.mjs` is the generator; `docs/guide/documentation.md` explains the
+system in full. The generated tree (`docs/packages/**`, the sidebar, VitePress `cache/`/`dist/`) is
+gitignored.
+
 ## Releasing
 
 Releases run **entirely in CI** — there is no local release script and no tag trigger. From the
@@ -69,7 +89,9 @@ Actions). Provenance additionally requires the repo to be public (or npm Pro/Tea
 
 ```
 packages/*               published libraries (shared lockstep version)
+docs/                    documentation site (VitePress) — top-level guides + generated package docs
 scripts/versioning.mjs   the lockstep version engine (CI-managed — do not run `set` by hand)
 scripts/new-package.mjs  scaffolder for new packages
+scripts/docs-gen.mjs     docs generator — package pages + TypeDoc API + sidebar
 .github/workflows/       ci.yml (gate) + release.yml (publish)
 ```

@@ -8,6 +8,7 @@ import { listMcpServers } from "../list";
 import type { RunningServer } from "../registry";
 import { selectMcpServer } from "../select";
 import { sendPrompt } from "../send";
+import { sendPromptWs } from "../send-ws";
 
 export interface QuickOptions {
   /**
@@ -20,6 +21,11 @@ export interface QuickOptions {
    * `quick --tag <t> --message "..."` is a fully non-interactive one-shot send.
    */
   message?: string;
+  /**
+   * Send over the `/ws` stream-processor protocol (text-concat) instead of
+   * `POST /prompt`, exercising the websocket path end-to-end.
+   */
+  ws?: boolean;
 }
 
 /** Run the (select-a-server-and-)send-a-prompt flow. */
@@ -54,9 +60,13 @@ export async function runQuick(options: QuickOptions = {}): Promise<void> {
     return;
   }
 
-  let result: Awaited<ReturnType<typeof sendPrompt>>;
+  const transport = options.ws ? "websocket /ws" : "POST /prompt";
+  let ok: boolean;
+  let error: string | undefined;
   try {
-    result = await sendPrompt(server, text);
+    ({ ok, error } = options.ws
+      ? await sendPromptWs(server, text)
+      : await sendPrompt(server, text));
   } catch (err) {
     console.error(
       `Failed to reach the server: ${err instanceof Error ? err.message : String(err)}`,
@@ -65,11 +75,13 @@ export async function runQuick(options: QuickOptions = {}): Promise<void> {
     return;
   }
 
-  if (!result.ok) {
-    console.error(`Server responded ${result.status}${result.error ? `: ${result.error}` : ""}`);
+  if (!ok) {
+    console.error(`Send over ${transport} failed${error ? `: ${error}` : ""}`);
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Sent. The prompt should now appear in the session at ${server.cwd}.`);
+  console.log(
+    `Sent over ${transport}. The prompt should now appear in the session at ${server.cwd}.`,
+  );
 }

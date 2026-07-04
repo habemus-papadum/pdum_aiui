@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { execa } from "execa";
 import { splitAiuiArgs } from "../util/aiui-args";
+import { nudgeChannelAck } from "../util/enter-nudge";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
 import { printError } from "../util/ui";
 import { commandExists } from "../util/which";
@@ -31,7 +32,7 @@ const CHANNEL_SERVER_ID = "aiui";
  * its own UUID.
  */
 export async function runClaude(rawArgs: string[] = []): Promise<void> {
-  const { tag, noChrome, passthrough } = splitAiuiArgs(rawArgs);
+  const { tag, passthrough } = splitAiuiArgs(rawArgs);
 
   if (!commandExists("claude")) {
     printError(
@@ -61,14 +62,12 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     },
   });
 
-  const args = ["--dangerously-skip-permissions"];
-  // `--chrome` attaches Claude to a real browser. In a headless/CI run or the
-  // test harness there's nothing to attach to, and Claude will even prompt at
-  // startup if it *detects* a browser extension — so `--aiui-no-chrome` passes
-  // Claude's own `--no-chrome`, which both drops the integration and suppresses
-  // that prompt.
-  args.push(noChrome ? "--no-chrome" : "--chrome");
-  args.push(
+  // We don't add `--chrome` or `--no-chrome`: whether to use Claude's browser
+  // integration is the user's call, forwarded via passthrough (e.g.
+  // `aiui claude --chrome`). Automated/CI contexts pass `--no-chrome` themselves
+  // (see the e2e test harness) to skip the browser-detection startup prompt.
+  const args = [
+    "--dangerously-skip-permissions",
     "--mcp-config",
     mcpConfig,
     "--plugin-dir",
@@ -77,7 +76,16 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     // so opt this session into loading ours as a development channel.
     "--dangerously-load-development-channels",
     `server:${CHANNEL_SERVER_ID}`,
-  );
+  ];
+
+  // Loading our development channel makes Claude show a one-key acknowledgement
+  // prompt at startup. In a real interactive session, best-effort press Enter on
+  // the user's behalf (see nudgeChannelAck). Skip it when there's no TTY or in
+  // print mode (`-p`/`--print`) — the prompt only appears in the interactive TUI,
+  // and the harness drives its own keypresses over tmux.
+  if (isInteractiveSession(passthrough)) {
+    nudgeChannelAck();
+  }
 
   // Hand the terminal over to Claude. stdio:"inherit" so the session owns the
   // terminal (and, when spawned by the test harness, so Claude's stdio is the
@@ -90,4 +98,16 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   if (result.exitCode) {
     process.exitCode = result.exitCode;
   }
+}
+
+/**
+ * Whether this invocation will bring up Claude's interactive TUI — the only
+ * context where the channel acknowledgement prompt appears. Requires a real
+ * terminal on both ends and no print-mode flag.
+ */
+export function isInteractiveSession(passthrough: string[]): boolean {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return false;
+  }
+  return !passthrough.some((arg) => arg === "-p" || arg === "--print");
 }

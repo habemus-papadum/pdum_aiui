@@ -35,6 +35,7 @@ export function buildProgram(): Command {
     .description("pick a running channel server and send it a prompt (end-to-end test)")
     .option("--tag <tag>", "target the server with this tag, skipping the selector")
     .option("-m, --message <text>", "prompt to send, skipping the interactive text prompt")
+    .option("--ws", "send over the /ws websocket protocol instead of POST /prompt")
     .action(runQuick);
 
   program.command("config").description("print the channel config as JSON").action(runConfig);

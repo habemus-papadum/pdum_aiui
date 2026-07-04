@@ -24,8 +24,9 @@ const VERSION =
  *
  * This is the process Claude Code spawns as a subprocess. On startup it:
  *  1. connects the stdio transport (completing the session handshake),
- *  2. starts a loopback web backend (POST /prompt, GET /health, ws /ws) that
- *     forwards text into the session over the channel, and
+ *  2. starts a loopback web backend (POST /prompt, GET /health, and the /ws
+ *     stream-processor websocket) that forwards text into the session over
+ *     the channel, and
  *  3. advertises itself in the shared cache registry (tag, pid, parent pid,
  *     port, cwd) so tools like `quick` can find it.
  *

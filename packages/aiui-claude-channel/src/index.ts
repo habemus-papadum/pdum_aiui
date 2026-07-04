@@ -6,9 +6,30 @@
  * @packageDocumentation
  */
 
+export {
+  agentsByPid,
+  type ClaudeAgent,
+  type EnrichedServer,
+  enrichServers,
+  listClaudeAgents,
+  parseClaudeAgents,
+  type SessionInfo,
+} from "./agents";
+export {
+  type ChannelConnection,
+  type ChannelConnectionOptions,
+  type ChannelResponse,
+  createChannelConnection,
+  type ProcessorRegistry,
+  type SendPrompt,
+  type StreamProcessor,
+  type StreamProcessorFactory,
+  type ThreadContext,
+} from "./channel";
 export { channelCliPath } from "./cli-path";
 export { CHANNEL_CONFIG } from "./commands/config";
 export { dirRank, type ListOptions, listMcpServers, sortServers } from "./list";
+export { defaultProcessors, textConcatProcessor } from "./processors";
 export {
   isProcessAlive,
   type RegisteredServer,
@@ -20,9 +41,16 @@ export {
   registryFileFor,
   removeEntryFile,
 } from "./registry";
-export { selectMcpServer } from "./select";
+export { selectMcpServer, serverLabel } from "./select";
 export { type SendResult, sendPrompt, sendPromptByTag } from "./send";
+export {
+  type SendPromptWsOptions,
+  sendPromptWs,
+  sendPromptWsByTag,
+  type WsSendResult,
+} from "./send-ws";
 export { createChannelServer } from "./server";
+export { type ChannelInfo, collectChannelInfo, registerChannelTools } from "./tools";
 export { type PromptHandler, startWebServer, type WebServer, type WebServerOptions } from "./web";
 
 /** The published package name — handy for smoke tests. */

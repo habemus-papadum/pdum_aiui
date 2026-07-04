@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { runClaude } from "./commands/claude";
+import { runMcp } from "./commands/mcp";
 import { runVite } from "./commands/vite";
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
@@ -19,7 +20,7 @@ export function buildProgram(): Command {
 
   program
     .name("aiui")
-    .description("ai ui frontends — thin launchers for Claude and Vite")
+    .description("ai ui frontends — thin launchers for Claude, Vite, and the channel CLI")
     .version(VERSION)
     // Only treat options as aiui's own when they come *before* the subcommand.
     // Without this, commander parses interspersed options and would swallow e.g.
@@ -47,6 +48,19 @@ export function buildProgram(): Command {
     .helpOption(false)
     .argument("[args...]", "arguments forwarded to vite")
     .action((args: string[]) => runVite(args));
+
+  // `aiui mcp <args...>` forwards to the aiui-claude-channel CLI, so the
+  // user-facing channel commands live under `aiui` (e.g. `aiui mcp quick`)
+  // without duplicating them or moving them off the package that owns the
+  // in-process MCP server.
+  program
+    .command("mcp")
+    .description("run a channel command (forwards to aiui-claude-channel), e.g. `aiui mcp quick`")
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .helpOption(false)
+    .argument("[args...]", "arguments forwarded to the aiui-claude-channel CLI")
+    .action((args: string[]) => runMcp(args));
 
   return program;
 }

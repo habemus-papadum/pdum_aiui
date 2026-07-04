@@ -11,9 +11,14 @@ export interface AiuiArgs {
   /** The `--aiui-tag <tag>` value, if provided (the channel/MCP session tag). */
   tag?: string;
   /**
-   * `--aiui-no-chrome` was passed: launch Claude without the `--chrome` browser
-   * integration. Needed for headless/CI runs and the test harness, where there's
-   * no browser to attach to.
+   * The `--aiui-mcp <tag>` value, if provided — the tag of the running channel
+   * MCP server to target (e.g. so `aiui vite` connects to a specific session).
+   */
+  mcp?: string;
+  /**
+   * `--aiui-no-chrome` was passed. Currently a no-op — `aiui claude` always
+   * launches Claude with `--no-chrome` now — kept as a recognized flag for when
+   * we wire up the Chrome DevTools MCP and it gets real meaning again.
    */
   noChrome: boolean;
   /** Everything else, to forward verbatim to the wrapped tool. */
@@ -28,13 +33,17 @@ const AIUI_PREFIX = "--aiui-";
  * Recognised aiui options:
  *  - `--aiui-tag <tag>` / `--aiui-tag=<tag>` — the channel/MCP session tag,
  *    forwarded to the channel server (and usable with `quick --tag`).
- *  - `--aiui-no-chrome` — drop the `--chrome` flag from the launched Claude.
+ *  - `--aiui-mcp <tag>` / `--aiui-mcp=<tag>` — the tag of the running channel
+ *    MCP server to target (e.g. which session `aiui vite` should connect to).
+ *  - `--aiui-no-chrome` — accepted but currently a no-op (Claude is always
+ *    launched with `--no-chrome`); reserved for future Chrome DevTools MCP use.
  *
  * Any other `--aiui-*` flag throws, so a typo surfaces loudly instead of being
  * silently dropped or leaking into the child command.
  */
 export function splitAiuiArgs(args: string[]): AiuiArgs {
   let tag: string | undefined;
+  let mcp: string | undefined;
   let noChrome = false;
   const passthrough: string[] = [];
 
@@ -60,6 +69,16 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         tag = value;
         break;
       }
+      case "--aiui-mcp": {
+        if (value === undefined) {
+          value = args[++i];
+        }
+        if (!value) {
+          throw new Error("--aiui-mcp requires a non-empty value");
+        }
+        mcp = value;
+        break;
+      }
       case "--aiui-no-chrome": {
         if (value !== undefined) {
           throw new Error("--aiui-no-chrome takes no value");
@@ -72,5 +91,5 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
     }
   }
 
-  return { tag, noChrome, passthrough };
+  return { tag, mcp, noChrome, passthrough };
 }
