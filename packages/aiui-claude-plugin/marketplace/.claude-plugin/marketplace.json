@@ -1,0 +1,24 @@
+{
+  "name": "aiui",
+  "owner": {
+    "name": "Nehal Patel",
+    "email": "nehal@alum.mit.edu"
+  },
+  "plugins": [
+    {
+      "name": "aiui",
+      "source": "./plugins/aiui",
+      "description": "aiui workflow commands and skill (placeholder — slash commands, a skill, and a helper script)."
+    },
+    {
+      "name": "frontend-design",
+      "source": "./plugins/frontend-design",
+      "description": "Frontend-for-agents design principles for scientific/technical UI code. Stub — content under review in drafts/."
+    },
+    {
+      "name": "session-browser",
+      "source": "./plugins/session-browser",
+      "description": "Skill for the shared session browser (Chrome DevTools MCP). Stub — etiquette guidance under review in drafts/."
+    }
+  ]
+}

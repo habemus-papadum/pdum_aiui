@@ -16,16 +16,57 @@ export interface AiuiArgs {
    */
   mcp?: string;
   /**
-   * `--aiui-no-chrome` was passed. Currently a no-op — `aiui claude` always
-   * launches Claude with `--no-chrome` now — kept as a recognized flag for when
-   * we wire up the Chrome DevTools MCP and it gets real meaning again.
+   * `--aiui-chrome` was passed: force the Chrome DevTools MCP on even where it
+   * would default off (i.e. under CI).
+   */
+  chrome: boolean;
+  /**
+   * `--aiui-no-chrome` was passed: don't attach the Chrome DevTools MCP to the
+   * session. (Distinct from claude's own `--no-chrome`, which disables Claude
+   * Code's built-in browser integration and forwards via passthrough.)
    */
   noChrome: boolean;
+  /**
+   * The `--aiui-chrome-profile <name>` value, if provided — which named Chrome
+   * profile (user data dir under `.aiui-cache/chrome/`) to launch with.
+   */
+  chromeProfile?: string;
+  /**
+   * The `--aiui-chrome-data-dir <path>` value, if provided — an explicit Chrome
+   * user data dir, bypassing the named-profile convention entirely.
+   */
+  chromeDataDir?: string;
+  /**
+   * The `--aiui-browser-url <url>` value, if provided — attach the Chrome
+   * DevTools MCP to this endpoint and manage no browser locally. This is the
+   * flag `aiui browser --tunnel` prints for the remote side; it overrides
+   * `chrome.browserUrl` in config for this launch.
+   */
+  browserUrl?: string;
   /** Everything else, to forward verbatim to the wrapped tool. */
   passthrough: string[];
 }
 
 const AIUI_PREFIX = "--aiui-";
+
+/**
+ * Detect a standalone `--help`/`-h` or `--version`/`-v` in a passthrough list.
+ *
+ * The wrapper commands treat these as **inert**: no config read, no browser or
+ * Chrome-for-Testing activity, no channel discovery — just aiui's own
+ * help/version, then the flag forwarded to the wrapped tool so its output
+ * follows. Only exact argument matches count; a flag *value* that happens to
+ * contain the text (e.g. `-p "explain --help"`) doesn't trigger it.
+ */
+export function infoFlag(passthrough: string[]): "help" | "version" | undefined {
+  if (passthrough.includes("--help") || passthrough.includes("-h")) {
+    return "help";
+  }
+  if (passthrough.includes("--version") || passthrough.includes("-v")) {
+    return "version";
+  }
+  return undefined;
+}
 
 /**
  * Partition `args` into aiui's own options and the rest.
@@ -35,8 +76,14 @@ const AIUI_PREFIX = "--aiui-";
  *    forwarded to the channel server (and usable with `quick --tag`).
  *  - `--aiui-mcp <tag>` / `--aiui-mcp=<tag>` — the tag of the running channel
  *    MCP server to target (e.g. which session `aiui vite` should connect to).
- *  - `--aiui-no-chrome` — accepted but currently a no-op (Claude is always
- *    launched with `--no-chrome`); reserved for future Chrome DevTools MCP use.
+ *  - `--aiui-chrome` / `--aiui-no-chrome` — force the Chrome DevTools MCP on
+ *    (even under CI) / leave it off. Passing both is an error.
+ *  - `--aiui-chrome-profile <name>` — launch Chrome with the named profile
+ *    (created on first use under `.aiui-cache/chrome/<name>`).
+ *  - `--aiui-chrome-data-dir <path>` — launch Chrome with an explicit user data
+ *    dir instead of a named profile. Mutually exclusive with the above.
+ *  - `--aiui-browser-url <url>` — attach the Chrome DevTools MCP to this
+ *    endpoint (e.g. a tunneled remote browser) instead of managing one.
  *
  * Any other `--aiui-*` flag throws, so a typo surfaces loudly instead of being
  * silently dropped or leaking into the child command.
@@ -44,7 +91,11 @@ const AIUI_PREFIX = "--aiui-";
 export function splitAiuiArgs(args: string[]): AiuiArgs {
   let tag: string | undefined;
   let mcp: string | undefined;
+  let chrome = false;
   let noChrome = false;
+  let chromeProfile: string | undefined;
+  let chromeDataDir: string | undefined;
+  let browserUrl: string | undefined;
   const passthrough: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -79,6 +130,13 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         mcp = value;
         break;
       }
+      case "--aiui-chrome": {
+        if (value !== undefined) {
+          throw new Error("--aiui-chrome takes no value");
+        }
+        chrome = true;
+        break;
+      }
       case "--aiui-no-chrome": {
         if (value !== undefined) {
           throw new Error("--aiui-no-chrome takes no value");
@@ -86,10 +144,53 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         noChrome = true;
         break;
       }
+      case "--aiui-chrome-profile": {
+        if (value === undefined) {
+          value = args[++i];
+        }
+        if (!value) {
+          throw new Error("--aiui-chrome-profile requires a non-empty value");
+        }
+        chromeProfile = value;
+        break;
+      }
+      case "--aiui-chrome-data-dir": {
+        if (value === undefined) {
+          value = args[++i];
+        }
+        if (!value) {
+          throw new Error("--aiui-chrome-data-dir requires a non-empty value");
+        }
+        chromeDataDir = value;
+        break;
+      }
+      case "--aiui-browser-url": {
+        if (value === undefined) {
+          value = args[++i];
+        }
+        if (!value) {
+          throw new Error("--aiui-browser-url requires a non-empty value");
+        }
+        browserUrl = value;
+        break;
+      }
       default:
         throw new Error(`unknown aiui option: ${name}`);
     }
   }
 
-  return { tag, mcp, noChrome, passthrough };
+  if (chrome && noChrome) {
+    throw new Error("--aiui-chrome and --aiui-no-chrome are mutually exclusive");
+  }
+  if (chromeProfile !== undefined && chromeDataDir !== undefined) {
+    throw new Error("--aiui-chrome-profile and --aiui-chrome-data-dir are mutually exclusive");
+  }
+  if (browserUrl !== undefined && (chromeProfile !== undefined || chromeDataDir !== undefined)) {
+    throw new Error(
+      "--aiui-browser-url means the browser is managed elsewhere — it can't be combined " +
+        "with --aiui-chrome-profile or --aiui-chrome-data-dir",
+    );
+  }
+
+  return { tag, mcp, chrome, noChrome, chromeProfile, chromeDataDir, browserUrl, passthrough };
 }

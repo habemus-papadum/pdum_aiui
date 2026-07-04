@@ -3,7 +3,7 @@
   "version": "0.0.0+dev",
   "private": true,
   "type": "module",
-  "description": "pdum_aiui — a lockstep-versioned TypeScript monorepo.",
+  "description": "pdum_aiui \u2014 a lockstep-versioned TypeScript monorepo.",
   "author": "Nehal Patel <nehal@alum.mit.edu>",
   "license": "MIT",
   "engines": {
@@ -16,15 +16,20 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:packaging": "node scripts/packaging-test.mjs",
     "lint": "biome check .",
     "format": "biome check --write .",
     "aiui": "tsx packages/aiui/src/cli.ts",
     "new-package": "node scripts/new-package.mjs",
+    "npm:list": "node scripts/npm-provision.mjs list",
+    "npm:reserve": "node scripts/npm-provision.mjs reserve",
+    "npm:trust": "node scripts/npm-provision.mjs trust",
     "version:check": "node scripts/versioning.mjs current",
     "docs:gen": "node scripts/docs-gen.mjs",
     "docs:dev": "pnpm docs:gen && vitepress dev docs",
     "docs:build": "pnpm docs:gen && vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "demo": "tsx packages/aiui/src/cli.ts vite packages/aiui-demo"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

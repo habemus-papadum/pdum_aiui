@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
+import { projectCacheDir } from "../trace";
 import { startWebServer } from "../web";
 
 export interface McpOptions {
@@ -10,6 +12,12 @@ export interface McpOptions {
    * (e.g. from a test harness) to make the server addressable by a known value.
    */
   tag?: string;
+  /**
+   * JSON launch summary from the launcher (`aiui claude`) — how the session's
+   * Chrome DevTools MCP was wired, etc. Parsed tolerantly (it's diagnostics,
+   * not behavior) and surfaced at `GET /debug/api/info`. See launch-info.ts.
+   */
+  launchInfo?: string;
 }
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
@@ -37,6 +45,14 @@ const VERSION =
  */
 export async function runMcp(options: McpOptions = {}): Promise<void> {
   const tag = options.tag ?? randomUUID();
+  let launchInfo: LaunchInfo | undefined;
+  if (options.launchInfo !== undefined) {
+    launchInfo = parseLaunchInfo(options.launchInfo);
+    if (!launchInfo) {
+      // Diagnostics only — a bad value must never stop the server.
+      process.stderr.write("[aiui-channel] ignoring malformed --launch-info JSON\n");
+    }
+  }
   const mcp = createChannelServer(VERSION);
 
   // Push text into the Claude Code session over the one-way channel.
@@ -52,7 +68,14 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   const transport = new StdioServerTransport();
   await mcp.connect(transport);
 
-  const web = await startWebServer({ onPrompt: (text) => pushToSession(text) });
+  // Lowering traces + the /debug viewer live in the project-local cache
+  // (.aiui-cache/ under this server's cwd — gitignored, readable by the
+  // Claude Code session running in the same directory).
+  const web = await startWebServer({
+    onPrompt: (text) => pushToSession(text),
+    traceDir: projectCacheDir(),
+    launchInfo,
+  });
   const registration = registerServer(web.port, tag);
 
   // Reliable cleanup. `remove()` is race-safe and idempotent, so calling it from

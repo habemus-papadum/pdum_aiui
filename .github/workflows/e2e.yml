@@ -1,0 +1,66 @@
+name: E2E
+
+# The one true end-to-end test (packages/aiui/test/claude.e2e.ts): it launches a
+# real Claude Code session (Haiku) in tmux, pushes prompts through the custom
+# channel over both transports, and checks cleanup. It spends subscription
+# usage and takes minutes, so it does NOT run on every push (see ci.yml) —
+# just a weekly cadence to catch drift (Claude Code CLI changes, prompt/UI
+# changes) plus manual dispatch for on-demand runs. It is a real gate here: a
+# red weekly run is the signal that the workflow needs attention.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_MODEL: claude-haiku-4-5
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      IS_SANDBOX: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Claude Code
+        run: |
+          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Seed Claude settings (skip the first-run theme picker; set effort)
+        # On a fresh CI home, Claude Code's interactive TUI opens with a theme
+        # picker ("Dark mode / Light mode / ..."), which the harness can't get
+        # past — so the channel never registers and the e2e times out. Presetting
+        # `theme` skips that onboarding step entirely; `effortLevel` pins the
+        # reasoning effort for the session.
+        run: |
+          mkdir -p "$HOME/.claude"
+          jq -n '{theme: "dark", effortLevel: "medium"}' > "$HOME/.claude/settings.json"
+          cat "$HOME/.claude/settings.json"
+
+      - name: Install tmux
+        # The e2e runs Claude's interactive TUI in a tmux pane so it can drive and
+        # scrape it (Claude's alternate-screen UI isn't capturable via `screen`).
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - name: Build (the e2e imports the built channel library)
+        run: pnpm -r run build
+
+      - name: End-to-end (Claude channel round-trip on Haiku)
+        run: pnpm run test:e2e

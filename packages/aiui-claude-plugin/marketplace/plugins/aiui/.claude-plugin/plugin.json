@@ -1,0 +1,9 @@
+{
+  "name": "aiui",
+  "description": "Placeholder aiui plugin \u2014 slash commands, a skill, and a helper script for aiui workflows.",
+  "version": "0.0.0",
+  "author": {
+    "name": "Nehal Patel",
+    "email": "nehal@alum.mit.edu"
+  }
+}

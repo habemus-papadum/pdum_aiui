@@ -1,0 +1,20 @@
+{
+  "name": "aiui-demo-playground",
+  "private": true,
+  "type": "module",
+  "aiui": {
+    "demo": true
+  },
+  "scripts": {
+    "claude": "aiui claude",
+    "dev": "aiui vite dev",
+    "open": "aiui open"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-dev-overlay": "__AIUI_VERSION_RANGE__"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui": "__AIUI_VERSION_RANGE__",
+    "vite": "^6.4.1"
+  }
+}

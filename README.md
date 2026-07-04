@@ -1,6 +1,31 @@
 # pdum_aiui
 
-ai ui frontends
+Tooling and knowledge for building **scientific/technical visualization UIs with AI agents in a
+tight iteration loop** — keeping an interactive Claude Code CLI session at the center while raising
+the level of abstraction you prompt it at. Three layers:
+
+1. **Prompt lowering (intent compilation)** — high-level multimodal prompts (voice, screenshots,
+   DOM context, pronouns like "make *this* wider") are *lowered*, compiler-style, into agent-ready
+   prompts — **interleaved text and images**, the format current agents execute best — and injected
+   into the running session via a custom Claude Code channel. The lowering pipeline is meant to be
+   inspectable — an open research area, not just a feature.
+2. **Intent tools** — frontends for that pipeline, starting with a browser overlay for the page
+   under development (speak a change, capture screenshots/DOM state, send it down the pipeline).
+3. **Frontend for agents** — principles, utilities, and Claude skills for the code agents write in
+   this loop: SolidJS 2.0 (beta), Observable-style async dataflow, debuggable by the agent's
+   future self.
+
+**Full story in the [docs](https://habemus-papadum.github.io/pdum_aiui/):**
+[motivation](https://habemus-papadum.github.io/pdum_aiui/guide/motivation) ·
+[prompt lowering](https://habemus-papadum.github.io/pdum_aiui/guide/prompt-lowering) ·
+[frontend for agents](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-for-agents)
+
+> [!CAUTION]
+> **This codebase is dangerous to run.** It launches Claude Code with
+> `--dangerously-skip-permissions` (currently hard-coded) and injects externally-supplied prompts
+> into your live session through a custom channel — which means trusting this code completely.
+> It is **safer to read than to run**: treat it as reference and parts for building your own
+> system. Details: [Read before running](https://habemus-papadum.github.io/pdum_aiui/guide/warning).
 
 A pnpm + TypeScript monorepo. Packages live under `packages/*` in the `@habemus-papadum` scope,
 versioned in **lockstep** (one shared version across the whole repo). Each package declares a

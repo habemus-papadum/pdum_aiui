@@ -11,23 +11,29 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+    ".": "./src/index.ts"
   },
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
   "bin": {
     "aiui-claude-plugin": "./dist/cli.js"
   },
   "files": [
     "dist",
-    "plugin"
+    "marketplace"
   ],
   "publishConfig": {
-    "access": "restricted"
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",

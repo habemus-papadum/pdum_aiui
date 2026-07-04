@@ -1,13 +1,12 @@
 import { Command } from "commander";
+import { type BrowserOptions, runBrowser, runOpen } from "./commands/browser";
+import { runChrome } from "./commands/chrome";
 import { runClaude } from "./commands/claude";
+import { type DemoOptions, runDemo } from "./commands/demo";
 import { runMcp } from "./commands/mcp";
 import { runVite } from "./commands/vite";
 
-// Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
-// guard is a no-op in the built CLI (where the define replaces it with a string
-// literal) but keeps this working anywhere the define isn't applied.
-declare const __AIUI_VERSION__: string;
-const VERSION = typeof __AIUI_VERSION__ === "string" ? __AIUI_VERSION__ : "0.0.0+dev";
+import { VERSION } from "./util/version";
 
 /**
  * Build the `aiui` command tree.
@@ -48,6 +47,56 @@ export function buildProgram(): Command {
     .helpOption(false)
     .argument("[args...]", "arguments forwarded to vite")
     .action((args: string[]) => runVite(args));
+
+  // Unlike its siblings, `aiui chrome` is a real subcommand (not a forwarding
+  // wrapper): it manages the agent's browser — the Chrome for Testing install,
+  // launch status, and the devtools extension path.
+  program
+    .command("chrome")
+    .description("manage the agent's browser: install | update | status | extension")
+    .argument("<action>", "install | update | status | extension")
+    .action((action: string) => runChrome([action]));
+
+  // The shared session browser (human + agent in one window). `browser` starts
+  // or finds it — locally before/without a session, or on your local machine
+  // for remote development (tunnel its debug port to the remote box).
+  program
+    .command("browser")
+    .description(
+      "start (or find) the shared session browser; --tunnel does the whole remote-dev local half",
+    )
+    .option(
+      "--profile <name>",
+      "named profile (project .aiui-cache/chrome/, or the user cache with --tunnel)",
+    )
+    .option("--data-dir <path>", "explicit Chrome user data dir")
+    .option("--port <port>", "fixed local DevTools debug port (default: OS-assigned)")
+    .option("--headless", "launch with no UI")
+    .option("--open <url>", "also open this URL in it")
+    .option(
+      "--tunnel <[user@]host>",
+      "reverse-tunnel the debug port to this host (Ctrl-C closes it)",
+    )
+    .option("--remote-port <port>", "fixed port on the tunnel's remote side (default: 9222)")
+    .action((opts: BrowserOptions) => runBrowser(opts));
+
+  // A disposable, npx-able playground: scaffolds a sample app into the user's
+  // own directory (its own git repo — agent edits stay in the sandbox) and is
+  // safe to re-run: an existing demo continues instead of being re-scaffolded.
+  program
+    .command("demo")
+    .description("scaffold a runnable demo playground (safe to re-run; default dir: aiui-demo)")
+    .argument("[dir]", "target directory (default: aiui-demo)")
+    .option("--skip-install", "scaffold only — don't run npm install")
+    .action((dir: string | undefined, opts: DemoOptions) => runDemo(dir, opts));
+
+  program
+    .command("open")
+    .description("open a URL in the session browser, e.g. `aiui open http://localhost:5173`")
+    .argument("<url>", "the URL to open")
+    .option("--profile <name>", "named profile under .aiui-cache/chrome/")
+    .option("--data-dir <path>", "explicit Chrome user data dir")
+    .action((url: string, opts: Pick<BrowserOptions, "profile" | "dataDir">) => runOpen(url, opts));
 
   // `aiui mcp <args...>` forwards to the aiui-claude-channel CLI, so the
   // user-facing channel commands live under `aiui` (e.g. `aiui mcp quick`)

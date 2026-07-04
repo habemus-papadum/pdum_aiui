@@ -2,15 +2,19 @@ import type { RunningServer } from "@habemus-papadum/aiui-claude-channel";
 import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel";
 import chalk from "chalk";
 import { execa } from "execa";
-import { splitAiuiArgs } from "../util/aiui-args";
+import { infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { type CliInvocation, resolvePackageCli } from "../util/resolve-cli";
 import { printError } from "../util/ui";
+import { VERSION } from "../util/version";
 
 const VITE_PKG = "vite";
 
-// The environment variable Vite reads to learn which channel server's web
-// backend to talk to. Exposed to the Vite dev server (and, via Vite's `import.meta.env`,
-// the app) so the browser client can reach the right running channel.
+// The environment variable that tells the Vite dev server which channel
+// server's web backend to talk to. Read in the dev-server process by the
+// aiuiDevOverlay() plugin (@habemus-papadum/aiui-dev-overlay/vite), which
+// mounts the intent tool and hands it the port; app source can also read it
+// via Vite's `import.meta.env`. It can NOT be read from inside the prebuilt
+// overlay bundle — see the overlay package's src/vite.ts for that subtlety.
 const VITE_PORT_ENV = "VITE_AIUI_PORT";
 
 /** The channel server `runVite` should point Vite at, or why it couldn't. */
@@ -69,6 +73,20 @@ export function resolveChannelTarget(
  */
 export async function runVite(rawArgs: string[] = []): Promise<void> {
   const { mcp, tag, passthrough } = splitAiuiArgs(rawArgs);
+
+  // `--help` / `--version` are inert: aiui's own answer, then Vite's — with no
+  // channel discovery (which could otherwise block on an interactive picker).
+  const info = infoFlag(passthrough);
+  if (info) {
+    if (info === "help") {
+      printViteWrapperHelp();
+    } else {
+      console.log(`aiui ${VERSION}`);
+    }
+    await forwardToVite(passthrough);
+    return;
+  }
+
   // `--aiui-mcp` is the purpose-built selector; `--aiui-tag` is accepted too.
   const targetTag = mcp ?? tag;
 
@@ -96,15 +114,8 @@ export async function runVite(rawArgs: string[] = []): Promise<void> {
     console.error(chalk.dim(`aiui: no running channel found — ${VITE_PORT_ENV} left unset`));
   }
 
-  let vite: CliInvocation;
-  try {
-    vite = resolvePackageCli(VITE_PKG);
-  } catch {
-    printError(
-      "Vite is not available",
-      "`vite` should be installed as a dependency of aiui — try reinstalling.",
-    );
-    process.exitCode = 1;
+  const vite = resolveVite();
+  if (!vite) {
     return;
   }
 
@@ -120,4 +131,47 @@ export async function runVite(rawArgs: string[] = []): Promise<void> {
   if (result.exitCode) {
     process.exitCode = result.exitCode;
   }
+}
+
+/** Resolve the Vite CLI; print the friendly install pointer when missing. */
+function resolveVite(): CliInvocation | undefined {
+  try {
+    return resolvePackageCli(VITE_PKG);
+  } catch {
+    printError(
+      "Vite is not available",
+      "`vite` should be installed as a dependency of aiui — try reinstalling.",
+    );
+    process.exitCode = 1;
+    return undefined;
+  }
+}
+
+/** Run Vite with the args verbatim (the --help/--version forward). */
+async function forwardToVite(args: string[]): Promise<void> {
+  const vite = resolveVite();
+  if (!vite) {
+    return;
+  }
+  const result = await execa(vite.command, [...vite.args, ...args], {
+    stdio: "inherit",
+    reject: false,
+  });
+  if (result.exitCode) {
+    process.exitCode = result.exitCode;
+  }
+}
+
+/** The aiui half of `aiui vite --help` (vite's own --help follows it). */
+function printViteWrapperHelp(): void {
+  console.log(`aiui vite — launch Vite connected to the running aiui channel
+
+aiui's own flags (everything else forwards to vite verbatim):
+  --aiui-mcp <tag>   connect to the channel server with this tag
+  --aiui-tag <tag>   accepted alias for --aiui-mcp
+
+The chosen channel's port is exported as VITE_AIUI_PORT; the aiuiDevOverlay()
+Vite plugin picks it up there and wires the intent tool to it. What follows is
+vite's own --help:
+`);
 }

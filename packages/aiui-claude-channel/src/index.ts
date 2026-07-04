@@ -18,18 +18,48 @@ export {
 export {
   type ChannelConnection,
   type ChannelConnectionOptions,
+  type ChannelFormat,
   type ChannelResponse,
   createChannelConnection,
-  type ProcessorRegistry,
+  type FormatRegistry,
+  type MessageMeta,
   type SendPrompt,
   type StreamProcessor,
   type StreamProcessorFactory,
   type ThreadContext,
 } from "./channel";
 export { channelCliPath } from "./cli-path";
+export {
+  type ChannelClient,
+  type ChannelClientOptions,
+  type ChannelThread,
+  connectChannelClient,
+} from "./client";
+export { jsonCodec, type PayloadCodec, rawCodec } from "./codec";
 export { CHANNEL_CONFIG } from "./commands/config";
+export {
+  type DecodedFrame,
+  decodeFrame,
+  type Envelope,
+  type EnvelopeKind,
+  encodeFrame,
+  type HelloMeta,
+  PROTOCOL_VERSION,
+  type SourceInfo,
+  type TabInfo,
+} from "./frame";
+export {
+  type ChromeDevtoolsInfo,
+  type LaunchInfo,
+  parseLaunchInfo,
+} from "./launch-info";
 export { dirRank, type ListOptions, listMcpServers, sortServers } from "./list";
-export { defaultProcessors, textConcatProcessor } from "./processors";
+export {
+  augmentTextPrompt,
+  defaultFormats,
+  textConcatFormat,
+  textConcatProcessor,
+} from "./processors";
 export {
   isProcessAlive,
   type RegisteredServer,
@@ -50,7 +80,33 @@ export {
   type WsSendResult,
 } from "./send-ws";
 export { createChannelServer } from "./server";
-export { type ChannelInfo, collectChannelInfo, registerChannelTools } from "./tools";
+export {
+  createTransportStats,
+  type FrameStat,
+  type TransportSnapshot,
+  type TransportStats,
+} from "./stats";
+export {
+  type ChannelInfo,
+  collectChannelInfo,
+  registerChannelTools,
+  selfChannelInfo,
+  type UnregisteredInfo,
+} from "./tools";
+export {
+  createTraceStore,
+  listTraces,
+  PROJECT_CACHE_DIRNAME,
+  projectCacheDir,
+  readTrace,
+  type TraceHandle,
+  type TraceManifest,
+  type TraceStage,
+  type TraceStageKind,
+  type TraceStore,
+  traceBlobPath,
+} from "./trace";
+export { type TracingThreadContext, traceOf, withTracing } from "./tracing";
 export { type PromptHandler, startWebServer, type WebServer, type WebServerOptions } from "./web";
 
 /** The published package name — handy for smoke tests. */

@@ -6,8 +6,9 @@ import sidebar from "./sidebar.generated.json" with { type: "json" };
 export default defineConfig({
   title: "pdum_aiui",
   description: "Docs for the @habemus-papadum aiui monorepo — packages, guides, and API reference.",
-  // GitHub Pages / any subpath is fine later; "/" works for local serving now.
-  base: "/",
+  // "/" works for local serving; the Pages workflow sets DOCS_BASE to the repo
+  // subpath (e.g. "/pdum_aiui/") so assets resolve on project Pages.
+  base: process.env.DOCS_BASE ?? "/",
   cleanUrls: true,
   lastUpdated: true,
   // Generated API pages and imported notes can contain links we don't want to hard-fail on.

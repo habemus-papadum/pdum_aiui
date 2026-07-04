@@ -1,54 +1,174 @@
 # Getting Started
 
-## Requirements
+Get the full loop running: a Claude Code session wired with the aiui channel, your web app served
+by Vite, and the [web intent tool](./web-intent-tool) floating over the page — so what you type in
+the widget lands in the session as a prompt.
 
-- Node 24+
-- pnpm 11+
+::: danger First
+Read [⚠️ Read before running](./warning). `aiui claude` loads a custom channel into your session
+and, if you say yes to its first-run question — which is easy to do without reading it — launches
+Claude Code with permissions skipped. If you're still here, you've decided to trust this code.
+:::
 
-```sh
-pnpm install
-```
+## The quickest start: a disposable demo
 
-## Working in the repo
-
-```sh
-pnpm build       # build every package (Vite library mode + tsc .d.ts)
-pnpm test        # run all tests (Vitest)
-pnpm typecheck   # tsc --noEmit across packages
-pnpm lint        # Biome (lint + format check)
-```
-
-## Working on the docs
-
-The documentation site is powered by [VitePress](https://vitepress.dev) with an
-[TypeDoc](https://typedoc.org) API-reference step. Four scripts drive it:
+No checkout, no integration work — scaffold a sandbox and try the whole loop:
 
 ```sh
-pnpm docs:gen      # regenerate the package pages + API reference + sidebar
-pnpm docs:dev      # generate, then serve with hot reload at http://localhost:5173
-pnpm docs:build    # generate, then build the static site into docs/.vitepress/dist
-pnpm docs:preview  # serve the built static site locally
+npx @habemus-papadum/aiui demo my-demo
+cd my-demo
+npm run claude    # terminal 1 — Claude Code with the aiui channel + session browser
+npm run dev       # terminal 2 — the demo app (Vite + the intent tool)
+npx aiui open http://localhost:5173   # open the app in the session browser
 ```
 
-`docs:dev` and `docs:build` run `docs:gen` for you first, so the everyday loop is just:
+`aiui demo` copies a small sample app (real source: Vite, one `aiuiDevOverlay()` plugin, a fake
+"spectra" viewer to point at) into a directory of your own and makes it a **standalone git
+repo** — so when the agent starts rewriting the app, the churn is versioned *there*, like a
+much-mutated notebook, and never lands anywhere upstream. It installs its dependencies once
+(including `aiui` itself, so later `npx aiui …` calls in that directory resolve locally instead
+of re-downloading), and it's safe to re-run: an existing demo is **continued**, never
+re-scaffolded — your changes and the agent's survive.
+
+Everything below explains the same loop piece by piece, for wiring aiui into your *own* app.
+
+## 0. Prerequisites
+
+- The [Claude Code](https://claude.com/claude-code) CLI (`claude`) on your PATH, logged in.
+- The `aiui` CLI: `npm install -D @habemus-papadum/aiui` in your project (or, working on this
+  repo itself: `pnpm install && pnpm build`, then the `./aiui` wrapper / `pnpm aiui`).
+- A Vite-based web app you're developing. **No app handy?** Use the
+  [disposable demo](#the-quickest-start-a-disposable-demo) above. (Repo developers also have
+  `pnpm demo`, which serves `packages/aiui-demo` straight from the checkout — handy, but agent
+  edits land in your working tree and will try to ride along with your next commit; the
+  scaffolded demo is the sandboxed alternative.)
+
+## 1. Terminal one — the session
+
+From your project directory:
 
 ```sh
-pnpm docs:dev
+aiui claude
 ```
 
-Then open the printed local URL. Edit any Markdown under `docs/` or any package `README.md`
-and the site hot-reloads. (Changes to a package's **API** — its TypeScript source — need a
-`pnpm docs:gen` re-run to re-extract.)
+This is a normal, interactive Claude Code session — with a channel attached. Under the hood it
+spawns the channel MCP server, which starts a loopback web backend on a random port and registers
+itself (port, pid, tag) in the user cache so other tools can find it.
 
-## Adding a new package
+The very first interactive launch asks two one-time questions — skip Claude's permission prompts?
+auto-dismiss the channel acknowledgement? — with no default, so the answers are yours; they're
+saved to your user [config](./config). Claude Code then asks you to confirm loading the
+development channel at each startup; aiui presses Enter for you if you said yes to the
+[enter nudge](./web-intent-tool#the-acknowledgement-prompt).
 
-Nothing special is required for docs. Create the package as usual:
+The launch also brings up the **[session browser](./chrome)**: one visible Chrome window that
+you and the agent share. aiui starts it (or finds it already running for this project) and
+attaches the **Chrome DevTools MCP** to it, so the agent drives *the same tabs you're looking
+at* — navigate, click, screenshot, read the console. It uses a persistent, project-local profile
+under `.aiui-cache/chrome/`, never your personal browser profile. On your first interactive
+launch, aiui offers to download **Chrome for Testing**, its recommended browser (version-pinned,
+separate from your real Chrome, auto-loads the aiui DevTools panel) — and keeps it current from
+then on, per your answer. [The Agent's Browser](./chrome) covers the rest: turning it off
+(`--aiui-no-chrome`; automatic under CI), the attach-vs-launch modes, alternate profiles, and the
+`aiui browser` / `aiui chrome` commands. Durable settings for all of this — and for the launcher
+itself, like `skipPermissions` — live in [config.json](./config); working remotely (session on
+another machine, browser on yours) is its own short guide: [Remote Development](./remote).
+
+## 2. Terminal two — your app
 
 ```sh
-pnpm new-package my-lib --public
+aiui vite dev
 ```
 
-The scaffold ships a `README.md` and a `docs/` folder with a starter page. The next
-`pnpm docs:gen` (or `docs:dev`) automatically picks the package up: its README becomes the
-overview, its `docs/*.md` become guides, and its exports become an API reference — no doc
-config to touch. See [The Documentation System](./documentation) for the full picture.
+`aiui vite` finds the running channel server (one running → auto-selected; several → an
+interactive picker; or pin one with `--aiui-mcp <tag>`) and launches Vite with
+**`VITE_AIUI_PORT`** set to the channel's port. That env var is how the intent-tool plugin
+(next step) finds the channel.
+
+Vite prints your app's URL — open it **in the session browser**, not your default one, so you
+and the agent are on the same page (literally):
+
+```sh
+aiui open http://localhost:5173
+```
+
+## 3. Add the intent tool to your Vite config
+
+```ts
+// vite.config.ts
+import aiuiDevOverlay from "@habemus-papadum/aiui-dev-overlay/vite";
+import { defineConfig } from "vite";
+
+export default defineConfig({ plugins: [aiuiDevOverlay()] });
+```
+
+That's the whole integration — no app code. The plugin mounts the tool (defaulting to the text
+modality) into every page the dev server serves and hands it the channel port; it is
+dev-server-only, so production builds are untouched. The tool renders a floating **✳ aiui**
+button in the corner of your page. (Custom modalities and non-Vite setups mount from app code
+instead — see the [Web Intent Tool](./web-intent-tool) page.)
+
+## 4. Use it
+
+Click the button, type what you want, hit Enter:
+
+![The intent tool open over a demo app, prompt sent](/intent-tool.png)
+
+The text streams over the channel's websocket to the MCP server, gets **lowered** into a prompt,
+and appears in your Claude Code session in terminal one. What lands there is more than what you
+typed: the lowered prompt is prefixed with **where it came from** — the browser tab (URL, title,
+and, when the aiui DevTools extension is present in the session browser, the tab's ids) plus the
+app's **source root** — and a pointer to the `session-browser` skill that teaches the agent how
+to find that exact tab through the Chrome DevTools MCP. So "make *this* wider" arrives with
+enough context for the agent to select your tab, look at it, and know which code renders it.
+
+Text is deliberately the simple, working start. Richer modalities — voice, screenshots, DOM
+capture ("make *this* wider" pointing at an element) — ride the same pipeline and are the
+roadmap; see the [Web Intent Tool](./web-intent-tool) design page.
+
+## 5. Inspect the lowering
+
+Every submission records a **lowering trace** — the inputs as they arrived, any intermediate
+representations, and the final prompt. The 🔍 button in the widget (or
+`http://127.0.0.1:$VITE_AIUI_PORT/debug`) opens the trace debugger:
+
+![The lowering debugger showing a trace's input and output stages](/lowering-debugger.png)
+
+For the proof-of-concept text modality the trace is just input → output. As richer modalities land
+(voice, screenshots, DOM context), this view is where you'll see each stage of the compilation —
+and where you'll look when you disagree with how your intent was rendered.
+
+Traces live in `.aiui-cache/` under the directory where `aiui claude` runs (project-local,
+gitignored) — screenshots and other blobs are stored there too, so lowered prompts can reference
+them by path and the session can read them.
+
+## 6. Optional: the DevTools panel
+
+For the full debugging surface — channel/server monitor, websocket latency + frame sizes as the
+page measured them, and the trace debugger in one place — load the
+[aiui DevTools panel](./devtools): build it
+(`pnpm --filter @habemus-papadum/aiui-devtools-extension build`), load
+`packages/aiui-devtools-extension/extension` unpacked at `chrome://extensions`, and open the **aiui** tab
+in DevTools on your app's page.
+
+In the [session browser](./chrome), a dev checkout rebuilds the panel every time the browser
+starts (~0.3 s, never stale) and tries to auto-load it — see
+[The Agent's Browser](./chrome#the-aiui-devtools-panel-when-is-it-available) for the auto-load caveat
+(Chrome-branded builds ≥ 137 ignore `--load-extension`; Chrome for Testing honors it) and the
+one-time manual fallback that the persistent profile then remembers. The manual build-and-load
+above is only for loading the panel into your *personal* browser.
+
+## Scripted sends (no browser)
+
+The same channel takes prompts from the CLI — handy for scripts and tests:
+
+```sh
+aiui mcp quick --message "run the tests"        # picks a server, POSTs the text
+aiui mcp quick --ws --message "run the tests"   # same, over the websocket protocol
+```
+
+## Where to go next
+
+- [The Web Intent Tool](./web-intent-tool) — the design: modalities, lowering, traces, debugging.
+- [Prompt Lowering](./prompt-lowering) — why this exists and where it's going.
+- [Developing pdum_aiui](./development) — working on this repo itself.

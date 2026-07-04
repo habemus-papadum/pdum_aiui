@@ -1,0 +1,36 @@
+/**
+ * Test support: a scriptable fake WebSocket for exercising the intent tool
+ * without a server. Lives outside the build/typecheck graph (see tsconfig
+ * `exclude`) — test-only code.
+ */
+import type { Ack, WebSocketLike } from "../protocol";
+
+/** A fake WebSocket factory: acks every frame, records what was sent. */
+export function fakeSocketFactory(ackFor: (frame: Uint8Array, index: number) => Ack) {
+  const sent: Uint8Array[] = [];
+  const listeners = new Map<string, Array<(event: unknown) => void>>();
+  const emit = (type: string, event: unknown) => {
+    for (const fn of listeners.get(type) ?? []) {
+      fn(event);
+    }
+  };
+  const socket: WebSocketLike = {
+    binaryType: "blob",
+    send(frame: Uint8Array) {
+      const index = sent.length;
+      sent.push(frame);
+      queueMicrotask(() => emit("message", { data: JSON.stringify(ackFor(frame, index)) }));
+    },
+    close() {
+      emit("close", {});
+    },
+    addEventListener(type: string, listener: (event: never) => void) {
+      listeners.set(type, [...(listeners.get(type) ?? []), listener as (event: unknown) => void]);
+    },
+  };
+  const factory = (_url: string) => {
+    queueMicrotask(() => emit("open", {}));
+    return socket;
+  };
+  return { factory, sent };
+}

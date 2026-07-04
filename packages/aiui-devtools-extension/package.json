@@ -1,0 +1,26 @@
+{
+  "name": "@habemus-papadum/aiui-devtools-extension",
+  "version": "0.0.0+dev",
+  "description": "Chrome DevTools panel for aiui \u2014 monitor the channel server, the websocket transport, and lowering traces.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-devtools-extension"
+  },
+  "files": [
+    "extension"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287"
+  }
+}

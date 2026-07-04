@@ -30,3 +30,10 @@ pnpm-debug.log*
 
 # Throwaway npmrc written by CI at publish time
 .npmrc-publish
+
+# aiui project-local cache (lowering traces, screenshots, Chrome profiles for the
+# DevTools MCP — see docs/guide/web-intent-tool and docs/guide/getting-started)
+.aiui-cache/
+
+# aiui-devtools-extension build output (tsc)
+packages/aiui-devtools-extension/extension/js/

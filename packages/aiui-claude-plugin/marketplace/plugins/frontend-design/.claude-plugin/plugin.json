@@ -1,0 +1,9 @@
+{
+  "name": "frontend-design",
+  "description": "Frontend-for-agents design principles for scientific/technical UI code. Work in progress.",
+  "version": "0.0.0",
+  "author": {
+    "name": "Nehal Patel",
+    "email": "nehal@alum.mit.edu"
+  }
+}

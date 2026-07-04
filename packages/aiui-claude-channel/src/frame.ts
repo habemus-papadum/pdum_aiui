@@ -1,0 +1,135 @@
+/**
+ * The binary frame format for the `/ws` channel.
+ *
+ * One WebSocket binary frame carries one channel message:
+ *
+ * ```
+ *   ┌────────┬───────────────────────┬────────────────┐
+ *   │ u32 BE │ header (UTF-8 JSON)    │ payload bytes  │
+ *   │ hdrLen │ the Envelope          │ raw / opaque   │
+ *   └────────┴───────────────────────┴────────────────┘
+ * ```
+ *
+ * WebSocket already delimits whole messages and gives us each frame's length,
+ * so we length-prefix only the *header* — the payload is simply the rest of
+ * the frame. The payload is opaque bytes produced by a format's codec (JSON
+ * for text formats, raw for audio/video/screenshots); it is never base64'd,
+ * and decoding it is zero-copy (a subarray view into the received frame).
+ *
+ * Everything here uses only `TextEncoder`/`TextDecoder`/`DataView`, so it runs
+ * unchanged in the browser as well as Node — a client re-implements the whole
+ * format in ~20 lines. Big-endian u32 is network byte order.
+ */
+
+/** Bump when a change to the framing or envelope shape is not backward-compatible. */
+export const PROTOCOL_VERSION = 1;
+
+/** The kind of message an {@link Envelope} carries. */
+export type EnvelopeKind = "hello" | "data";
+
+/**
+ * The browser tab a client page lives in, as far as the page can know it.
+ *
+ * `url`/`title` the page reads live off itself; the numeric/string ids come
+ * from the aiui DevTools extension, which stamps them onto dev pages (see the
+ * extension's content script). All ids are **correlation hints** for an agent:
+ * the Chrome DevTools MCP accepts only its own `pageId` from `list_pages` —
+ * match by URL/title and verify (the session-browser skill teaches the
+ * workflow; background in archive/chrome-devtools-mcp-tab-routing-notes.md).
+ */
+export interface TabInfo {
+  /** The page's live `location.href` at send time. */
+  url?: string;
+  /** The page's live `document.title` at send time. */
+  title?: string;
+  /** `chrome.tabs.Tab.id` — extension-layer tab id. */
+  chromeTabId?: number;
+  /** `chrome.tabs.Tab.windowId`. */
+  windowId?: number;
+  /** The tab's index in its window (drifts as tabs move; a hint only). */
+  tabIndex?: number;
+  /** CDP `Target.TargetID` — for raw-CDP consumers, not the MCP tools. */
+  targetId?: string;
+}
+
+/** Where the page's source code lives on disk (from the dev server). */
+export interface SourceInfo {
+  /** The dev server's source root (the Vite root) — an absolute path. */
+  root?: string;
+}
+
+/** Optional client context sent once, on the `hello` frame. */
+export interface HelloMeta {
+  /** The browser tab the connection was opened from. */
+  tab?: TabInfo;
+  /** Where the page's source code lives. */
+  source?: SourceInfo;
+}
+
+/** The routing/lifecycle metadata carried in every frame's header. */
+export interface Envelope {
+  /** Protocol version (see {@link PROTOCOL_VERSION}). */
+  v: number;
+  /** What this frame is. */
+  kind: EnvelopeKind;
+  /** On a `hello`: the stream format the connection will speak. */
+  format?: string;
+  /** On a `hello`: optional client context (tab identity, source location). */
+  meta?: HelloMeta;
+  /** On a `data` frame: the client-generated thread id it belongs to. */
+  threadId?: string;
+  /** On a `data` frame: true when this is the thread's final frame. */
+  fin?: boolean;
+}
+
+/** A decoded frame: its envelope plus a (zero-copy) view of its payload. */
+export interface DecodedFrame {
+  envelope: Envelope;
+  /** The opaque payload bytes — a view into the source frame, not a copy. */
+  payload: Uint8Array;
+}
+
+const HEADER_LENGTH_BYTES = 4;
+const EMPTY = new Uint8Array(0);
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * Serialize an envelope and payload into a single binary frame. The payload is
+ * copied once into the frame (WebSocket sends one contiguous buffer); nothing
+ * is base64'd.
+ */
+export function encodeFrame(envelope: Envelope, payload: Uint8Array = EMPTY): Uint8Array {
+  const header = utf8Encoder.encode(JSON.stringify(envelope));
+  const frame = new Uint8Array(HEADER_LENGTH_BYTES + header.length + payload.length);
+  new DataView(frame.buffer).setUint32(0, header.length, false);
+  frame.set(header, HEADER_LENGTH_BYTES);
+  frame.set(payload, HEADER_LENGTH_BYTES + header.length);
+  return frame;
+}
+
+/**
+ * Parse a binary frame back into its envelope and payload. The returned
+ * payload is a subarray view of `frame` (no copy) — callers that retain it
+ * past the current tick should copy it.
+ *
+ * @throws if the frame is truncated or its header is not valid JSON.
+ */
+export function decodeFrame(frame: Uint8Array): DecodedFrame {
+  if (frame.length < HEADER_LENGTH_BYTES) {
+    throw new Error("frame too short: missing 4-byte header length prefix");
+  }
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  const headerLength = view.getUint32(0, false);
+  const headerEnd = HEADER_LENGTH_BYTES + headerLength;
+  if (headerEnd > frame.length) {
+    throw new Error(`frame too short: header length ${headerLength} exceeds frame`);
+  }
+  let envelope: Envelope;
+  try {
+    envelope = JSON.parse(utf8Decoder.decode(frame.subarray(HEADER_LENGTH_BYTES, headerEnd)));
+  } catch {
+    throw new Error("frame header is not valid UTF-8 JSON");
+  }
+  return { envelope, payload: frame.subarray(headerEnd) };
+}

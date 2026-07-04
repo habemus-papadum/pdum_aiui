@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 // Scaffold a new package into packages/<slug> from scripts/_skeleton.
 //
-// Usage: pnpm new-package <name> (--public | --private | --no-publish) [--description "..."]
+// Usage: pnpm new-package <name> (--public | --private | --no-publish) [--description "..."] [--no-reserve]
 //
 // A publication level is MANDATORY — you decide at creation time (see CLAUDE.md):
 //   --public      publish to npm publicly            (publishConfig.access: "public")
 //   --private     publish to npm as a private pkg    (publishConfig.access: "restricted")
 //                 — requires a paid npm org; the free tier can only publish public scoped packages
 //   --no-publish  never published                    ("private": true; pnpm -r publish skips it)
+//
+// For a publishable level (--public/--private), the new name is also RESERVED on
+// npm right away (a placeholder publish via npm-provision.mjs, using your local
+// npm auth) so a trusted publisher can be attached to it later. Pass --no-reserve
+// to scaffold files only and touch npm yourself. Attaching the OIDC trusted
+// publisher is a deliberately SEPARATE step: `pnpm npm:trust <slug>`.
 //
 // The new package joins version lockstep immediately (it adopts the current shared
 // version). No other file needs editing — the packages/* glob picks it up everywhere.
@@ -36,7 +42,7 @@ function fail(message) {
 }
 
 const USAGE =
-  'usage: pnpm new-package <name> (--public | --private | --no-publish) [--description "..."]';
+  'usage: pnpm new-package <name> (--public | --private | --no-publish) [--description "..."] [--no-reserve]';
 
 // The three publication levels, mapped to the package.json shape each produces.
 // Exactly one must be chosen on the command line — there is no default.
@@ -47,7 +53,7 @@ const LEVELS = {
 };
 
 function parseArgs(argv) {
-  const opts = { description: "A TypeScript library." };
+  const opts = { description: "A TypeScript library.", reserve: true };
   let name;
   let levelFlag;
   for (let i = 0; i < argv.length; i++) {
@@ -59,6 +65,8 @@ function parseArgs(argv) {
       levelFlag = arg;
     } else if (arg === "--description") {
       opts.description = argv[++i] ?? opts.description;
+    } else if (arg === "--no-reserve") {
+      opts.reserve = false;
     } else if (!arg.startsWith("--") && !name) {
       name = arg;
     } else {
@@ -112,7 +120,7 @@ function walk(dir) {
 }
 
 function main() {
-  const { name, publish, access, description } = parseArgs(process.argv.slice(2));
+  const { name, publish, access, description, reserve } = parseArgs(process.argv.slice(2));
   const slug = slugify(name);
   if (!slug) {
     fail(`"${name}" slugifies to an empty string`);
@@ -165,6 +173,35 @@ function main() {
     `Created packages/${slug} (${scope}/${slug} @ ${version}) [${level}]\n` +
       "Next: run `pnpm install` to link the new workspace member.\n",
   );
+
+  // For a publishable level, reserve the name on npm now (a placeholder publish
+  // via the shared provisioning tool, using local npm auth) unless --no-reserve.
+  // Attaching the OIDC trusted publisher stays a separate, deliberate step.
+  if (publish && reserve) {
+    process.stdout.write(
+      `\nReserving ${scope}/${slug} on npm (local auth; may prompt for 2FA)...\n`,
+    );
+    try {
+      execFileSync("node", [join(scriptsDir, "npm-provision.mjs"), "reserve", slug], {
+        cwd: repoRoot,
+        stdio: "inherit",
+      });
+    } catch {
+      process.stderr.write(
+        `\nwarning: name reservation failed. Scaffolding is done; reserve later with ` +
+          `\`pnpm npm:reserve ${slug}\`.\n`,
+      );
+    }
+    process.stdout.write(
+      `Then attach the trusted publisher (separate step): \`pnpm npm:trust ${slug}\` — or, if your\n` +
+        `npm account is passkey-only, configure it on the website (see docs/guide/releasing.md).\n`,
+    );
+  } else if (publish) {
+    process.stdout.write(
+      `\nPublishing steps (run when ready): \`pnpm npm:reserve ${slug}\`, then attach the trusted\n` +
+        `publisher (\`pnpm npm:trust ${slug}\` or the website) — see docs/guide/releasing.md.\n`,
+    );
+  }
 }
 
 main();

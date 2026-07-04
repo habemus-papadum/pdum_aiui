@@ -68,20 +68,14 @@ jobs:
       - name: Test
         run: pnpm run test
 
-  e2e:
-    # The one true end-to-end test: it drives a live Claude Code session (Haiku)
-    # through the custom channel and scrapes the TUI, so it spends a little
-    # subscription usage and is inherently a bit flaky. It runs as its own job,
-    # only post-merge (not on PRs, where fork secrets are withheld), and
-    # continue-on-error so a hiccup is visible but never blocks the build/release.
+  # Consumability gate: build → pack every publishable package → install the
+  # tarballs into a scratch npm project → drive the installed CLIs the way a
+  # consumer would. Catches missing `files` entries (e.g. the devtools
+  # extension shipping without its built js/), bins that only resolve in the
+  # workspace layout, and workspace:^ ranges that don't convert. No Claude
+  # Code, no browser. Locally: `pnpm test:packaging`.
+  packaging:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
-    continue-on-error: true
-    env:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      ANTHROPIC_MODEL: claude-haiku-4-5
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-      IS_SANDBOX: "1"
     steps:
       - uses: actions/checkout@v5
 
@@ -96,18 +90,11 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Set up Claude Code
-        run: |
-          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Packaging test (pack → scratch install → CLI smoke)
+        run: pnpm run test:packaging
 
-      - name: Install tmux
-        # The e2e runs Claude's interactive TUI in a tmux pane so it can drive and
-        # scrape it (Claude's alternate-screen UI isn't capturable via `screen`).
-        run: sudo apt-get update && sudo apt-get install -y tmux
-
-      - name: Build (the e2e imports the built channel library)
-        run: pnpm -r run build
-
-      - name: End-to-end (Claude channel round-trip on Haiku)
-        run: pnpm run test:e2e
+  # The live-session e2e is deliberately NOT part of this workflow: it drives a
+  # real Claude Code session (spends subscription usage, takes minutes, and is
+  # inherently a bit flaky), which is too expensive to pay on every push. It
+  # lives in e2e.yml — a weekly cron plus manual dispatch — so it stays healthy
+  # without taxing the inner loop. Run it locally anytime: `pnpm test:e2e`.

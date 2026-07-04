@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Emit real JS the extension pages load directly (no bundler): NodeNext
+    // modules keep the explicit ./x.js import specifiers browsers need.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "extension/js",
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "types": ["chrome"]
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

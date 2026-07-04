@@ -1,0 +1,23 @@
+{
+  "name": "@habemus-papadum/aiui-demo",
+  "version": "0.0.0+dev",
+  "description": "Playground app for the web intent tool — run it, click the widget, watch prompts land in your session.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-demo"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-dev-overlay": "workspace:^"
+  },
+  "devDependencies": {
+    "vite": "^6.4.1"
+  }
+}

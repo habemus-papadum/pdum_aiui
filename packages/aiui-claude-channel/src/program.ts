@@ -28,6 +28,10 @@ export function buildProgram(): Command {
     .command("mcp")
     .description("launch the MCP channel server over stdio")
     .option("--tag <tag>", "session tag to advertise (defaults to a generated UUID)")
+    .option(
+      "--launch-info <json>",
+      "launcher-provided session summary (browser/DevTools MCP wiring), surfaced at /debug/api/info",
+    )
     .action(runMcp);
 
   program

@@ -1,9 +1,0 @@
-{
-  "name": "aiui-claude-plugin",
-  "description": "Placeholder aiui plugin — slash commands, a skill, and a helper script for aiui workflows.",
-  "version": "0.0.0",
-  "author": {
-    "name": "Nehal Patel",
-    "email": "nehal@alum.mit.edu"
-  }
-}

@@ -1,0 +1,9 @@
+{
+  "name": "session-browser",
+  "description": "Etiquette for driving the shared session browser through the Chrome DevTools MCP: announce before acting, preserve the user's context.",
+  "version": "0.0.0",
+  "author": {
+    "name": "Nehal Patel",
+    "email": "nehal@alum.mit.edu"
+  }
+}

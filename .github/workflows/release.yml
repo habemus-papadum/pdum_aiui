@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # provenance attestation (independent of the token publish)
+      id-token: write # OIDC: both the trusted-publishing auth AND provenance
     steps:
       - uses: actions/checkout@v5
         with:
@@ -128,21 +128,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r run build
 
-      - name: Publish to npm
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm (OIDC trusted publishing — no token)
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc-publish"
-          export NPM_CONFIG_USERCONFIG="$HOME/.npmrc-publish"
-          # ONE recursive publish across packages/*. pnpm auto-skips private:true
-          # packages and expands each workspace:^ dep to ^<release> at pack time.
+          # Trusted publishing: no NPM_TOKEN. The id-token:write permission above
+          # lets npm do the OIDC handshake, so auth comes from this workflow's
+          # identity (habemus-papadum/pdum_aiui · release.yml), which each package
+          # trusts (set once via `pnpm npm:trust`). Provenance is automatic.
           #
-          # Auth = NPM_TOKEN; --provenance = OIDC attestation only. This split is the
-          # documented steady state: pnpm's OIDC trusted-publishing handshake still
-          # 404s (pnpm #9812 / #11513). Future migration once fixed: drop NPM_TOKEN and
-          # publish per-tarball via `npm publish <tarball> --provenance` (npm >= 11.5.1).
-          pnpm -r publish --provenance --no-git-checks
-          rm -f "$HOME/.npmrc-publish"
+          # We pack with pnpm (rewrites workspace:^ -> ^<release>) and publish each
+          # tarball with `npm publish`, because `npm` — not `pnpm` — speaks the OIDC
+          # handshake (pnpm #9812 / #11513). Needs npm >= 11.5.1; ensure a current one.
+          npm install -g npm@latest
+          node scripts/npm-provision.mjs publish
 
   github-release:
     needs: [prepare, npm-publish]

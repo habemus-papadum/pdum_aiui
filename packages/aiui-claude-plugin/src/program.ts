@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { runPath } from "./commands/path";
+import { runList, runPath } from "./commands/path";
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
 // guard is a no-op in the built CLI (where the define replaces it with a string
@@ -18,13 +18,16 @@ export function buildProgram(): Command {
 
   program
     .name("aiui-claude-plugin")
-    .description("the aiui Claude Code plugin — locates its bundled plugin directory")
+    .description("the aiui Claude Code plugin marketplace — locates its bundled plugins")
     .version(VERSION);
 
   program
     .command("path")
-    .description("print the absolute path to the bundled plugin directory")
+    .description("print the marketplace directory, or one plugin's directory (for --plugin-dir)")
+    .argument("[plugin]", "a bundled plugin name (see `list`)")
     .action(runPath);
+
+  program.command("list").description("print the bundled plugin names").action(runList);
 
   return program;
 }

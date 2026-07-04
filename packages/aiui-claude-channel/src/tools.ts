@@ -43,6 +43,27 @@ export function collectChannelInfo(entries: RegistryEntry[], agents: ClaudeAgent
   }));
 }
 
+/** What {@link selfChannelInfo} returns before the server has registered. */
+export interface UnregisteredInfo {
+  registered: false;
+  pid: number;
+}
+
+/**
+ * This process's own channel info: its registry entry enriched with the Claude
+ * session that owns it. Shared by the `channel_info` MCP tool and the debug
+ * API's `/debug/api/info`.
+ */
+export function selfChannelInfo(): ChannelInfo | UnregisteredInfo {
+  const self = readEntry(registryFileFor(process.pid));
+  if (!self) {
+    return { registered: false, pid: process.pid };
+  }
+  return (
+    collectChannelInfo([self], listClaudeAgents())[0] ?? { registered: false, pid: process.pid }
+  );
+}
+
 /**
  * Register the channel server's tools. Requires the server to have been created
  * with the `tools` capability (see {@link createChannelServer}).
@@ -65,10 +86,6 @@ export function registerChannelTools(server: Server): void {
       throw new Error(`unknown tool: ${request.params.name}`);
     }
     // Report our own registry entry (the file this process wrote for itself).
-    const self = readEntry(registryFileFor(process.pid));
-    const payload = self
-      ? (collectChannelInfo([self], listClaudeAgents())[0] ?? null)
-      : { registered: false, pid: process.pid };
-    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+    return { content: [{ type: "text", text: JSON.stringify(selfChannelInfo(), null, 2) }] };
   });
 }

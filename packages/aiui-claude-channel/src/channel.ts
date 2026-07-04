@@ -1,22 +1,26 @@
 /**
- * The websocket channel protocol: connection state machine and processor types.
+ * The websocket channel protocol: connection state machine, formats, and
+ * processor types.
  *
- * A client connects (no auth), declares the message-stream format it will
- * speak in an initial hello — `{"type": "hello", "format": "<name>"}` — and
- * then streams messages tagged with client-generated thread ids:
- * `{"threadId": "<id>", "payload": ...}`. The connection looks the format up
- * in its {@link ProcessorRegistry}; each new thread id gets its own
- * {@link StreamProcessor} built by that format's factory, and every later
- * payload for the thread is fed to it. A processor decides for itself when its
- * thread is complete (e.g. the client said it's done) and closes it via
- * {@link ThreadContext.close}; any further message naming a closed thread is
- * an error. A connection may run any number of threads, and the server any
+ * A client connects (no auth) and sends a binary `hello` frame declaring the
+ * stream format it will speak — `{ kind: "hello", format: "<name>" }`. The
+ * connection looks the format up in its {@link FormatRegistry}: a format bundles
+ * a {@link PayloadCodec} (how to decode this format's payload bytes) with a
+ * {@link StreamProcessorFactory} (what to do with the decoded payloads). After
+ * hello the client streams `data` frames tagged with client-generated thread
+ * ids; each new id gets its own {@link StreamProcessor}, and every later frame
+ * for that thread is decoded with the format's codec and handed to it. A frame
+ * may set `fin` to mark the thread's last message; the processor decides for
+ * itself when to {@link ThreadContext.close}. Any frame naming a closed thread
+ * is an error. A connection may run any number of threads, and the server any
  * number of connections.
  *
- * This module is transport-agnostic — raw message strings in, response
- * objects out — so the protocol is unit-testable without a websocket in
- * sight. See web.ts for the wiring.
+ * This module is transport-agnostic — it takes raw frame bytes in and returns
+ * response objects out — so the protocol is unit-testable without a websocket.
+ * See {@link ./frame} for the wire format and web.ts for the wiring.
  */
+import type { PayloadCodec } from "./codec";
+import { decodeFrame, type Envelope, type HelloMeta } from "./frame";
 
 /** Push text into the Claude Code session (the channel notification). */
 export type SendPrompt = (text: string) => void | Promise<void>;
@@ -25,40 +29,53 @@ export type SendPrompt = (text: string) => void | Promise<void>;
 export interface ThreadContext {
   /** The client-generated id of this thread. */
   threadId: string;
+  /** The client context from the connection's hello (tab, source), if sent. */
+  hello?: HelloMeta;
   /** Push text into the Claude Code session. */
   sendPrompt: SendPrompt;
   /**
-   * Mark this thread closed: the processor is released and any further
-   * message naming this thread id is rejected. Idempotent.
+   * Mark this thread closed: the processor is released and any further frame
+   * naming this thread id is rejected. Idempotent.
    */
   close: () => void;
 }
 
-/** Consumes the message payloads of a single thread. */
+/** Per-message metadata the framework surfaces alongside the decoded payload. */
+export interface MessageMeta {
+  /** True when the client marked this the thread's final frame (`fin`). */
+  fin: boolean;
+}
+
+/** Consumes the decoded message payloads of a single thread. */
 export interface StreamProcessor {
   /**
-   * Handle one message payload. Calls are serialized in arrival order — an
-   * async handler never overlaps the thread's (or connection's) next message.
-   * Throwing rejects that message (`ok: false`) without closing the thread.
+   * Handle one decoded payload. Calls are serialized in arrival order — an
+   * async handler never overlaps the thread's (or connection's) next frame.
+   * Throwing rejects that frame (`ok: false`) without closing the thread.
    */
-  onMessage(payload: unknown): void | Promise<void>;
+  onMessage(payload: unknown, meta: MessageMeta): void | Promise<void>;
 }
 
 /** Builds the processor for one new thread. */
 export type StreamProcessorFactory = (ctx: ThreadContext) => StreamProcessor;
 
-/**
- * Available stream formats, keyed by the name a client may declare in its
- * hello message.
- */
-export type ProcessorRegistry = ReadonlyMap<string, StreamProcessorFactory>;
+/** A stream format: how to decode its payloads, and what to do with them. */
+export interface ChannelFormat {
+  /** Decodes this format's payload bytes into what the processor sees. */
+  codec: PayloadCodec;
+  /** Builds the processor for each new thread of this format. */
+  createProcessor: StreamProcessorFactory;
+}
 
-/** The per-message reply the transport sends back to the client. */
+/** Available stream formats, keyed by the name a client declares at hello. */
+export type FormatRegistry = ReadonlyMap<string, ChannelFormat>;
+
+/** The per-frame reply the transport sends back to the client. */
 export interface ChannelResponse {
   ok: boolean;
-  /** Echo of the message's thread id, when it named one. */
+  /** Echo of the frame's thread id, when it named one. */
   threadId?: string;
-  /** True when this message led the processor to close the thread. */
+  /** True when this frame led the processor to close the thread. */
   closed?: boolean;
   /** What went wrong, when `ok` is false. */
   error?: string;
@@ -68,7 +85,7 @@ export interface ChannelResponse {
 
 export interface ChannelConnectionOptions {
   /** The formats this connection may speak; hello must name one of them. */
-  processors: ProcessorRegistry;
+  formats: FormatRegistry;
   /** Where thread processors push prompt text. */
   sendPrompt: SendPrompt;
 }
@@ -76,60 +93,89 @@ export interface ChannelConnectionOptions {
 /** The protocol state of one client connection. */
 export interface ChannelConnection {
   /**
-   * Handle one raw message from the client, resolving with the reply to send
-   * back. Messages are processed strictly in call order, one at a time.
+   * Handle one raw binary frame from the client, resolving with the reply to
+   * send back. Frames are processed strictly in call order, one at a time.
    */
-  handleMessage(raw: string): Promise<ChannelResponse>;
+  handleFrame(frame: Uint8Array): Promise<ChannelResponse>;
 }
 
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+/** Decode a frame, or return the ChannelResponse describing why it couldn't be. */
+const parseFrame = (
+  frame: Uint8Array,
+  helloDone: boolean,
+): { envelope: Envelope; payload: Uint8Array } | ChannelResponse => {
+  try {
+    return decodeFrame(frame);
+  } catch (err) {
+    // A malformed frame before hello leaves no usable connection to salvage.
+    return { ok: false, fatal: !helloDone, error: errorMessage(err) };
+  }
+};
 
 /** Create the state machine for one freshly connected client. */
 export function createChannelConnection(options: ChannelConnectionOptions): ChannelConnection {
   // Set by a successful hello; its presence is the "hello received" state.
-  let factory: StreamProcessorFactory | undefined;
+  let format: ChannelFormat | undefined;
+  // Client context from the hello, handed to every thread's processor.
+  let hello: HelloMeta | undefined;
   const threads = new Map<string, StreamProcessor>();
   const closed = new Set<string>();
 
-  const handleHello = (message: unknown): ChannelResponse => {
-    if (!isRecord(message) || message.type !== "hello" || typeof message.format !== "string") {
+  const handleHello = (envelope: Envelope): ChannelResponse => {
+    if (envelope.kind !== "hello" || typeof envelope.format !== "string") {
       return {
         ok: false,
         fatal: true,
-        error: 'expected an initial hello: {"type": "hello", "format": "<format>"}',
+        error: 'expected an initial hello frame: { kind: "hello", format: "<format>" }',
       };
     }
-    const found = options.processors.get(message.format);
+    const found = options.formats.get(envelope.format);
     if (!found) {
-      const known = [...options.processors.keys()].sort().join(", ");
+      const known = [...options.formats.keys()].sort().join(", ");
       return {
         ok: false,
         fatal: true,
-        error: `unknown format "${message.format}" (known formats: ${known})`,
+        error: `unknown format "${envelope.format}" (known formats: ${known})`,
       };
     }
-    factory = found;
+    format = found;
+    if (envelope.meta !== undefined && typeof envelope.meta === "object") {
+      hello = envelope.meta;
+    }
     return { ok: true };
   };
 
-  const handleThreadMessage = async (
-    message: unknown,
-    buildProcessor: StreamProcessorFactory,
+  const handleData = async (
+    envelope: Envelope,
+    payload: Uint8Array,
+    activeFormat: ChannelFormat,
   ): Promise<ChannelResponse> => {
-    if (!isRecord(message) || typeof message.threadId !== "string" || message.threadId === "") {
-      return { ok: false, error: 'expected a message with a non-empty string "threadId"' };
+    if (
+      envelope.kind !== "data" ||
+      typeof envelope.threadId !== "string" ||
+      envelope.threadId === ""
+    ) {
+      return { ok: false, error: 'expected a data frame with a non-empty "threadId"' };
     }
-    const threadId = message.threadId;
+    const threadId = envelope.threadId;
     if (closed.has(threadId)) {
       return { ok: false, threadId, error: `thread "${threadId}" is closed` };
     }
+
+    let decoded: unknown;
+    try {
+      decoded = activeFormat.codec.decode(payload);
+    } catch (err) {
+      return { ok: false, threadId, error: `payload decode failed: ${errorMessage(err)}` };
+    }
+
     let processor = threads.get(threadId);
     if (!processor) {
-      processor = buildProcessor({
+      processor = activeFormat.createProcessor({
         threadId,
+        ...(hello !== undefined ? { hello } : {}),
         sendPrompt: options.sendPrompt,
         close: () => {
           threads.delete(threadId);
@@ -139,30 +185,29 @@ export function createChannelConnection(options: ChannelConnectionOptions): Chan
       threads.set(threadId, processor);
     }
     try {
-      await processor.onMessage(message.payload);
+      await processor.onMessage(decoded, { fin: envelope.fin === true });
     } catch (err) {
       return { ok: false, threadId, error: errorMessage(err) };
     }
     return closed.has(threadId) ? { ok: true, threadId, closed: true } : { ok: true, threadId };
   };
 
-  // Serialize message handling: chain every call on the previous one so an
-  // async processor never sees message N+1 before it finished message N.
+  // Serialize frame handling: chain every call on the previous one so an async
+  // processor never sees frame N+1 before it finished frame N.
   let queue: Promise<unknown> = Promise.resolve();
-  const handleMessage = (raw: string): Promise<ChannelResponse> => {
+  const handleFrame = (frame: Uint8Array): Promise<ChannelResponse> => {
     const result = queue.then((): Promise<ChannelResponse> | ChannelResponse => {
-      let message: unknown;
-      try {
-        message = JSON.parse(raw);
-      } catch {
-        // Before hello there is no usable connection to salvage.
-        return { ok: false, fatal: factory === undefined, error: "message is not valid JSON" };
+      const parsed = parseFrame(frame, format !== undefined);
+      if (!("envelope" in parsed)) {
+        return parsed;
       }
-      return factory === undefined ? handleHello(message) : handleThreadMessage(message, factory);
+      return format === undefined
+        ? handleHello(parsed.envelope)
+        : handleData(parsed.envelope, parsed.payload, format);
     });
     queue = result;
     return result;
   };
 
-  return { handleMessage };
+  return { handleFrame };
 }

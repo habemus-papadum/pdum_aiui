@@ -34,41 +34,82 @@ const server = createChannelServer("1.0.0"); // an unconnected MCP Server
 
 ## The websocket protocol
 
-The `mcp` command's web backend serves a `/ws` websocket speaking a small
-JSON protocol (no auth; loopback only). Every message gets a JSON reply
-(`{ "ok": true, ... }` or `{ "ok": false, "error": ... }`).
+The `mcp` command's web backend serves a `/ws` websocket speaking a compact
+**binary** protocol (no auth; loopback only), designed to carry audio,
+screenshots, and video without base64 overhead. Most consumers should use the
+[client library](#client-library) rather than encode frames by hand.
 
-1. **Hello.** The first message declares the stream format the connection will
-   speak: `{"type": "hello", "format": "text-concat"}`. The format is looked up
-   in the server's processor registry; an unknown format (or malformed hello)
-   is fatal — the reply carries `"fatal": true` and the socket is closed.
-2. **Thread messages.** Everything after hello is
-   `{"threadId": "<client-generated id>", "payload": ...}`. The first message
-   for a new thread id creates a stream processor for it (from the format's
-   factory); each payload is fed to that thread's processor, in arrival order.
-   A connection may interleave any number of threads, and the server any
-   number of connections — the same thread id on two connections is two
-   independent threads.
-3. **Close.** The processor decides when its thread is done (e.g. the client
-   said so) and closes it; the reply to the closing message carries
-   `"closed": true`. Any later message naming that thread id is an error.
+### Wire format
 
-### Built-in format: `text-concat`
+Client → server frames are WebSocket **binary** frames; each is one channel
+message laid out as a length-prefixed header followed by the raw payload:
 
-Payloads are `{ "text": string }` and/or `{ "done": true }`. Text chunks are
-concatenated verbatim; `done` sends the accumulated text into the Claude Code
-session as a single prompt and closes the thread.
-
-```jsonc
-> {"type": "hello", "format": "text-concat"}
-< {"ok": true}
-> {"threadId": "5f0c…", "payload": {"text": "Summarize "}}
-< {"ok": true, "threadId": "5f0c…"}
-> {"threadId": "5f0c…", "payload": {"text": "this repo.", "done": true}}
-< {"ok": true, "threadId": "5f0c…", "closed": true}
+```
+┌────────┬───────────────────────┬────────────────┐
+│ u32 BE │ header (UTF-8 JSON)    │ payload bytes  │
+│ hdrLen │ the envelope          │ raw / opaque   │
+└────────┴───────────────────────┴────────────────┘
 ```
 
-Custom formats: build a registry and hand it to `startWebServer` —
-`startWebServer({ onPrompt, processors: new Map([...defaultProcessors(), ["my-format", myFactory]]) })`.
-A factory receives the thread's context (`threadId`, `sendPrompt`, `close`) and
-returns `{ onMessage(payload) }`.
+WebSocket already delimits whole messages, so only the header is
+length-prefixed — the payload is the rest of the frame, and is never base64'd
+or copied on decode. Server → client replies are small JSON **text** frames
+(`{ "ok": true, ... }` / `{ "ok": false, "error": ... }`), since the
+high-bandwidth direction is client → server.
+
+The header envelope is `{ v, kind, format?, threadId?, fin? }`:
+
+1. **Hello.** The first frame declares the stream format:
+   `{"v":1,"kind":"hello","format":"text-concat"}` with an empty payload. The
+   format is looked up in the server's registry; an unknown format (or a
+   malformed hello) is fatal — the reply carries `"fatal": true` and the socket
+   is closed.
+2. **Data.** After hello, frames are `{"v":1,"kind":"data","threadId":"<uuid>","fin":false}`
+   plus a payload. The first frame for a new thread id creates that thread's
+   processor; each frame's payload is decoded by the format's codec and fed to
+   the processor in arrival order. A connection may interleave any number of
+   threads, and the server any number of connections — the same thread id on
+   two connections is two independent threads.
+3. **Close.** A frame with `"fin": true` marks the thread's last message. The
+   processor decides when to actually close (e.g. on `fin`); the reply carries
+   `"closed": true`, and any later frame naming that thread id is an error.
+
+### Formats and codecs
+
+A **format** pairs a **codec** (how its payload bytes decode) with a
+**processor** (what to do with the decoded payloads). Two codecs ship and are
+reused across formats:
+
+- `jsonCodec` — marshals the payload to/from JSON (for text-shaped formats);
+- `rawCodec` — identity, the payload *is* the bytes (the efficient path for
+  already-encoded audio/video/screenshots).
+
+Built-in format **`text-concat`** (jsonCodec): each data frame carries an
+optional `{ "text": string }` chunk, concatenated verbatim until a `fin` frame,
+which sends the accumulated text into the session as one prompt and closes the
+thread.
+
+Custom formats: hand `startWebServer` a registry —
+`startWebServer({ onPrompt, formats: new Map([...defaultFormats(), ["my-format", { codec, createProcessor }]]) })`.
+A `createProcessor` receives the thread's context (`threadId`, `sendPrompt`,
+`close`) and returns `{ onMessage(payload, { fin }) }`.
+
+## Client library
+
+`connectChannelClient` hides the framing and codecs — connect declaring a
+format, open threads, and send payloads:
+
+```ts
+import { connectChannelClient, rawCodec } from "@habemus-papadum/aiui-claude-channel";
+
+// Text: the default jsonCodec suits text-concat.
+const client = await connectChannelClient({ url: "ws://127.0.0.1:PORT/ws", format: "text-concat" });
+const t = client.openThread();              // client-generated UUID thread id
+await t.send({ text: "Summarize " });
+await t.finish({ text: "this repo." });     // fin → server flushes the prompt
+await client.close();
+
+// Media: pass rawCodec and send Uint8Array frames straight through (no base64).
+const media = await connectChannelClient({ url, format: "screenshots", codec: rawCodec });
+await media.openThread().finish(pngBytes);
+```

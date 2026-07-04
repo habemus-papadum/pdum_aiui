@@ -23,7 +23,8 @@
  * Enter at Claude's empty main input is a no-op submit, so an unneeded nudge
  * does no harm. The attempts are also kept early (before a user could plausibly
  * have dismissed the prompt and started typing a real message) so we don't race
- * their input. Set `AIUI_NO_ENTER_NUDGE=1` to disable entirely.
+ * their input. Whether to nudge at all is the user's saved first-run choice
+ * (`claude.enterNudge` in config.json) — the caller gates on it.
  */
 import { spawn } from "node:child_process";
 
@@ -51,9 +52,6 @@ const DEFAULT_DELAYS_MS = [250, 750];
  * swallowed. Call this only for an interactive session (see the caller).
  */
 export function nudgeChannelAck(delaysMs: number[] = DEFAULT_DELAYS_MS): void {
-  if (process.env.AIUI_NO_ENTER_NUDGE) {
-    return;
-  }
   const tiocsti = TIOCSTI_BY_PLATFORM[process.platform];
   if (tiocsti === undefined) {
     return;

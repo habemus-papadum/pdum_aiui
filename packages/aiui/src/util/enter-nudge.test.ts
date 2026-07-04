@@ -36,11 +36,6 @@ describe("nudgeChannelAck", () => {
     expect(opts).toEqual({ stdio: "ignore" });
   });
 
-  it("does nothing when AIUI_NO_ENTER_NUDGE is set", () => {
-    vi.useFakeTimers();
-    vi.stubEnv("AIUI_NO_ENTER_NUDGE", "1");
-    nudgeChannelAck([10]);
-    vi.advanceTimersByTime(20);
-    expect(spawnMock).not.toHaveBeenCalled();
-  });
+  // Opting out of the nudge is the caller's job now (the user's saved
+  // claude.enterNudge choice) — nudgeChannelAck itself has no kill switch.
 });

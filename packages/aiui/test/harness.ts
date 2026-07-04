@@ -12,7 +12,7 @@
  * typechecked with the package — it's test-only support.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -58,16 +58,27 @@ export async function launchClaudeSession(opts) {
   const prevCache = process.env.AIUI_CACHE;
   process.env.AIUI_CACHE = cacheDir;
 
+  // Preseed the first-run choices (the isolated cache has no user config, and
+  // the launcher would otherwise prompt on the tmux TTY and stall the run):
+  // permissions skipped — the TUI flow under test — and the enter nudge on,
+  // with the harness's own send-keys rules as the fallback dismisser.
+  writeFileSync(
+    join(cacheDir, "config.json"),
+    `${JSON.stringify({ claude: { skipPermissions: true, enterNudge: true } })}\n`,
+  );
+
   // IS_SANDBOX skips the first-run --dangerously-skip-permissions confirmation.
   // If a subscription login exists, drop any ambient ANTHROPIC_API_KEY so Claude
   // authenticates via the subscription (CI sets CLAUDE_CODE_OAUTH_TOKEN instead).
   const unset = subscriptionAuthAvailable() ? "-u ANTHROPIC_API_KEY " : "";
-  // `aiui claude` stays neutral on Chrome; the automated harness forwards
-  // Claude's own `--no-chrome` (as a passthrough) to skip the browser-detection
-  // prompt that would otherwise block this headless session.
+  // Two distinct Chrome opt-outs: `--aiui-no-chrome` keeps the Chrome DevTools
+  // MCP out of the session (no npx download or browser launch in e2e — CI would
+  // skip it anyway, but be deterministic locally too), and Claude's own
+  // `--no-chrome` (forwarded as passthrough) skips the browser-detection prompt
+  // that would otherwise block this headless session.
   const cmd =
     `cd ${REPO_ROOT} && env ${unset}AIUI_CACHE=${cacheDir} IS_SANDBOX=1 ` +
-    `${TSX} ${AIUI_CLI} claude --aiui-tag ${opts.tag} --no-chrome --model ${model}`;
+    `${TSX} ${AIUI_CLI} claude --aiui-tag ${opts.tag} --aiui-no-chrome --no-chrome --model ${model}`;
 
   try {
     tmux(["kill-session", "-t", sessionName]);
@@ -123,6 +134,10 @@ export async function launchClaudeSession(opts) {
   // once: the dev-channels confirmation, and (on a fresh CI checkout) folder
   // trust — both are dismissed by confirming the default with Enter.
   const rules = [
+    // Fresh-home first-run theme picker (Dark mode is the highlighted default, so
+    // Enter accepts it). CI presets a theme in ~/.claude/settings.json to skip this
+    // step entirely; this rule is the fallback for a fresh local checkout.
+    { re: /run \/theme|dark mode.*light mode/i, keys: "Enter", fired: false },
     { re: /development channels|local development/i, keys: "Enter", fired: false },
     { re: /do you trust|trust the files|trust this folder/i, keys: "Enter", fired: false },
   ];

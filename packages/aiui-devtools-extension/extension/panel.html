@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>aiui</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    background: #14171f; color: #e8e8ea;
+    font: 12px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid #2a3140; flex: none;
+  }
+  header .brand { font-weight: 700; }
+  header .brand span { color: #8ab4f8; }
+  .tab {
+    border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer;
+    background: transparent; color: #9aa0aa; font: inherit;
+  }
+  .tab:hover { color: #e8e8ea; }
+  .tab.active { background: #2a3140; color: #e8e8ea; }
+  #status { margin-left: auto; color: #9aa0aa; font-size: 11px; }
+  #status.ok::before { content: "●"; color: #7ee0a3; margin-right: 5px; }
+  #status.bad::before { content: "●"; color: #f28b82; margin-right: 5px; }
+  main { flex: 1; overflow-y: auto; padding: 12px; }
+  section[hidden] { display: none; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #9aa0aa; margin: 14px 0 6px; }
+  h2:first-child { margin-top: 0; }
+  .cards { display: flex; gap: 10px; flex-wrap: wrap; }
+  .card {
+    background: #1f2430; border: 1px solid #2a3140; border-radius: 10px;
+    padding: 8px 14px; min-width: 110px;
+  }
+  .card .v { font-size: 17px; font-weight: 600; }
+  .card .k { color: #9aa0aa; font-size: 11px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 0; }
+  dt { color: #9aa0aa; }
+  dd { margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 3px 10px 3px 0; white-space: nowrap; }
+  th { color: #9aa0aa; font-weight: 500; border-bottom: 1px solid #2a3140; }
+  td.num, th.num { text-align: right; }
+  td.mono { font-family: ui-monospace, monospace; }
+  .ok-cell { color: #7ee0a3; } .err-cell { color: #f28b82; }
+  .hint { color: #9aa0aa; }
+  #traces-frame { width: 100%; height: calc(100vh - 90px); border: 0; border-radius: 8px; background: #14171f; }
+  #port-row { padding: 6px 12px; border-top: 1px solid #2a3140; color: #9aa0aa; flex: none; }
+  #port-row input {
+    width: 70px; background: #14171f; color: #e8e8ea; border: 1px solid #2a3140;
+    border-radius: 6px; padding: 2px 6px; font: inherit;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span>aiui</span> devtools</div>
+    <button type="button" class="tab active" data-tab="server">Server</button>
+    <button type="button" class="tab" data-tab="transport">Transport</button>
+    <button type="button" class="tab" data-tab="traces">Traces</button>
+    <div id="status">looking for a channel…</div>
+  </header>
+  <main>
+    <section id="tab-server">
+      <h2>Channel</h2>
+      <dl id="info"><dt class="hint">waiting</dt><dd></dd></dl>
+      <h2>Server transport counters</h2>
+      <div class="cards" id="server-cards"></div>
+      <h2>Recent frames (server view)</h2>
+      <table id="server-frames"><tbody></tbody></table>
+    </section>
+    <section id="tab-transport" hidden>
+      <h2>Client → server (as the page measured it)</h2>
+      <div class="cards" id="client-cards"></div>
+      <h2>Recent frames (page view)</h2>
+      <table id="client-frames"><tbody></tbody></table>
+      <p class="hint" id="transport-hint"></p>
+    </section>
+    <section id="tab-traces" hidden>
+      <iframe id="traces-frame" title="lowering traces"></iframe>
+    </section>
+  </main>
+  <div id="port-row" hidden>
+    channel port: <input id="port-input" inputmode="numeric" placeholder="port" />
+    <span class="hint">(no instrumented page found — enter the port from the aiui-channel startup log)</span>
+  </div>
+  <script type="module" src="js/panel.js"></script>
+</body>
+</html>
