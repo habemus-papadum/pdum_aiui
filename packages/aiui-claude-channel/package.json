@@ -35,7 +35,14 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-util": "workspace:^",
+    "@inquirer/prompts": "^7.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "express": "^5.1.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/ws": "^8.5.0"
   }
 }

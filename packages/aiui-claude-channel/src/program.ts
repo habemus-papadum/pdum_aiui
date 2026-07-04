@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { runConfig } from "./commands/config";
 import { runMcp } from "./commands/mcp";
+import { runQuick } from "./commands/quick";
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
 // guard is a no-op in the built CLI (where the define replaces it with a string
@@ -23,7 +24,18 @@ export function buildProgram(): Command {
     .description("Claude Code channel — an MCP server that pushes aiui events into a session")
     .version(VERSION);
 
-  program.command("mcp").description("launch the MCP channel server over stdio").action(runMcp);
+  program
+    .command("mcp")
+    .description("launch the MCP channel server over stdio")
+    .option("--tag <tag>", "session tag to advertise (defaults to a generated UUID)")
+    .action(runMcp);
+
+  program
+    .command("quick")
+    .description("pick a running channel server and send it a prompt (end-to-end test)")
+    .option("--tag <tag>", "target the server with this tag, skipping the selector")
+    .option("-m, --message <text>", "prompt to send, skipping the interactive text prompt")
+    .action(runQuick);
 
   program.command("config").description("print the channel config as JSON").action(runConfig);
 

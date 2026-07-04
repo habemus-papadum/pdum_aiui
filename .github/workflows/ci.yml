@@ -23,6 +23,9 @@ jobs:
       ANTHROPIC_MODEL: claude-haiku-4-5
       # No autoupdater / telemetry / nonessential traffic.
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      # Tell Claude it's in a sandbox so `--dangerously-skip-permissions` doesn't
+      # block on its first-run confirmation prompt in a fresh directory.
+      IS_SANDBOX: "1"
     steps:
       - uses: actions/checkout@v5
 
@@ -64,3 +67,47 @@ jobs:
 
       - name: Test
         run: pnpm run test
+
+  e2e:
+    # The one true end-to-end test: it drives a live Claude Code session (Haiku)
+    # through the custom channel and scrapes the TUI, so it spends a little
+    # subscription usage and is inherently a bit flaky. It runs as its own job,
+    # only post-merge (not on PRs, where fork secrets are withheld), and
+    # continue-on-error so a hiccup is visible but never blocks the build/release.
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    continue-on-error: true
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_MODEL: claude-haiku-4-5
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      IS_SANDBOX: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Claude Code
+        run: |
+          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install tmux
+        # The e2e runs Claude's interactive TUI in a tmux pane so it can drive and
+        # scrape it (Claude's alternate-screen UI isn't capturable via `screen`).
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - name: Build (the e2e imports the built channel library)
+        run: pnpm -r run build
+
+      - name: End-to-end (Claude channel round-trip on Haiku)
+        run: pnpm run test:e2e

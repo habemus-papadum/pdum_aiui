@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { execa } from "execa";
+import { splitAiuiArgs } from "../util/aiui-args";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
 import { printError } from "../util/ui";
 import { commandExists } from "../util/which";
@@ -22,10 +23,16 @@ const CHANNEL_SERVER_ID = "aiui";
  * npm it runs the built `dist` entry; see {@link resolvePackageCli}. Only
  * `claude` itself is checked on the PATH, since everything here launches it.
  *
- * Any `passthrough` args (e.g. from `aiui claude --resume`) are appended to the
- * generated command line, so callers can drive the underlying `claude`.
+ * Args are split into aiui's own options (those beginning with `--aiui-`) and
+ * the rest, which forward verbatim to `claude`. So `aiui claude --resume` passes
+ * `--resume` through, while `aiui claude --aiui-tag <uuid>` is consumed here to
+ * tag the channel session (letting a test harness address the exact MCP server
+ * it spawned via `quick --tag`). When no tag is given the channel server mints
+ * its own UUID.
  */
-export async function runClaude(passthrough: string[] = []): Promise<void> {
+export async function runClaude(rawArgs: string[] = []): Promise<void> {
+  const { tag, noChrome, passthrough } = splitAiuiArgs(rawArgs);
+
   if (!commandExists("claude")) {
     printError(
       "`claude` was not found on your PATH",
@@ -40,17 +47,28 @@ export async function runClaude(passthrough: string[] = []): Promise<void> {
   const plugin = resolve(packageRoot(PLUGIN_PKG), "plugin");
 
   // Resolve how to run the channel CLI (tsx-from-source in dev, dist when
-  // installed) and append its `mcp` subcommand.
+  // installed) and append its `mcp` subcommand. A user-supplied `--aiui-tag`
+  // is forwarded as the server's `--tag`; without one the server generates its
+  // own UUID.
   const channel = resolvePackageCli(CHANNEL_PKG);
+  const mcpArgs = [...channel.args, "mcp"];
+  if (tag) {
+    mcpArgs.push("--tag", tag);
+  }
   const mcpConfig = JSON.stringify({
     mcpServers: {
-      [CHANNEL_SERVER_ID]: { command: channel.command, args: [...channel.args, "mcp"] },
+      [CHANNEL_SERVER_ID]: { command: channel.command, args: mcpArgs },
     },
   });
 
-  const args = [
-    "--dangerously-skip-permissions",
-    "--chrome",
+  const args = ["--dangerously-skip-permissions"];
+  // `--chrome` attaches Claude to a real browser. In a headless/CI run or the
+  // test harness there's nothing to attach to, and Claude will even prompt at
+  // startup if it *detects* a browser extension — so `--aiui-no-chrome` passes
+  // Claude's own `--no-chrome`, which both drops the integration and suppresses
+  // that prompt.
+  args.push(noChrome ? "--no-chrome" : "--chrome");
+  args.push(
     "--mcp-config",
     mcpConfig,
     "--plugin-dir",
@@ -59,11 +77,17 @@ export async function runClaude(passthrough: string[] = []): Promise<void> {
     // so opt this session into loading ours as a development channel.
     "--dangerously-load-development-channels",
     `server:${CHANNEL_SERVER_ID}`,
-  ];
+  );
 
-  // DRY RUN — we don't launch Claude yet. Prefix the whole command with `echo`
-  // so running `aiui claude` just prints the exact command line that *would* be
-  // run (the leading `claude` included). To actually launch, drop the "echo" /
-  // "claude" prefix and exec the first token as the program instead.
-  await execa("echo", ["claude", ...args, ...passthrough], { stdio: "inherit" });
+  // Hand the terminal over to Claude. stdio:"inherit" so the session owns the
+  // terminal (and, when spawned by the test harness, so Claude's stdio is the
+  // harness's captured pipes). reject:false so an interrupted/non-zero Claude
+  // exit becomes our exit code rather than a thrown error.
+  const result = await execa("claude", [...args, ...passthrough], {
+    stdio: "inherit",
+    reject: false,
+  });
+  if (result.exitCode) {
+    process.exitCode = result.exitCode;
+  }
 }

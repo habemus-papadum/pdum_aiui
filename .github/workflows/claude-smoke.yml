@@ -28,6 +28,9 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       ANTHROPIC_MODEL: ${{ inputs.model }}
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      # Sandbox marker so `--dangerously-skip-permissions` doesn't block on its
+      # first-run confirmation in the fresh CI directory.
+      IS_SANDBOX: "1"
     steps:
       - name: Install Claude Code
         run: |

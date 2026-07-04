@@ -15,6 +15,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "lint": "biome check .",
     "format": "biome check --write .",
     "aiui": "tsx packages/aiui/src/cli.ts",
