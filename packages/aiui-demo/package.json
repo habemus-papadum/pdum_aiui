@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-demo",
-  "version": "0.1.0",
+  "version": "0.1.0+dev",
   "description": "Playground app for the web intent tool — run it, click the widget, watch prompts land in your session.",
   "private": true,
   "type": "module",

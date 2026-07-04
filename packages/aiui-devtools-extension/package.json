@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-devtools-extension",
-  "version": "0.1.0",
+  "version": "0.1.0+dev",
   "description": "Chrome DevTools panel for aiui — monitor the channel server, the websocket transport, and lowering traces.",
   "type": "module",
   "license": "MIT",
