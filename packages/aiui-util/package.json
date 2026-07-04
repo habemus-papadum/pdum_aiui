@@ -1,14 +1,13 @@
 {
-  "name": "@habemus-papadum/aiui",
+  "name": "@habemus-papadum/aiui-util",
   "version": "0.0.0+dev",
-  "description": "ai ui frontends",
+  "description": "Shared utilities for aiui packages (cache dirs, etc.).",
   "type": "module",
   "license": "MIT",
-  "author": "Nehal Patel <nehal@alum.mit.edu>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
-    "directory": "packages/aiui"
+    "directory": "packages/aiui-util"
   },
   "sideEffects": false,
   "exports": {
@@ -20,9 +19,6 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "aiui": "./dist/cli.js"
-  },
   "files": [
     "dist"
   ],
@@ -33,13 +29,5 @@
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "@habemus-papadum/aiui-claude-plugin": "workspace:^",
-    "chalk": "^5.3.0",
-    "commander": "^15.0.0",
-    "execa": "^9.6.1",
-    "vite": "^6.4.3"
   }
 }

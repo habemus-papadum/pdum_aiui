@@ -1,0 +1,70 @@
+name: claude-smoke
+
+# On-demand check that Claude Code actually runs in CI, on the cheap Haiku model.
+# Unlike ci.yml (which only installs `claude`), this one spends a tiny bit of your
+# subscription to make a real `claude -p` call and confirm the model used.
+#
+# Run from the Actions UI (claude-smoke -> Run workflow) or:
+#   gh workflow run claude-smoke.yml -f prompt="..."
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Prompt sent to `claude -p`"
+        type: string
+        default: "In one short sentence, say hello from aiui CI."
+      model:
+        description: "Model to force via ANTHROPIC_MODEL"
+        type: string
+        default: claude-haiku-4-5
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_MODEL: ${{ inputs.model }}
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+    steps:
+      - name: Install Claude Code
+        run: |
+          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - run: claude --version
+
+      - name: Run prompt and confirm the model
+        env:
+          # Kept out of the run-script interpolation to avoid shell injection from the input.
+          INPUT_PROMPT: ${{ inputs.prompt }}
+        run: |
+          set -o pipefail
+          echo "Requested ANTHROPIC_MODEL=$ANTHROPIC_MODEL"
+
+          # --output-format json returns the CLI's own record of the run (model + usage),
+          # which is authoritative — far more reliable than asking the model to name
+          # itself in the prompt. --dangerously-skip-permissions is safe on a throwaway runner.
+          OUT=$(claude -p "$INPUT_PROMPT" \
+            --output-format json \
+            --dangerously-skip-permissions)
+
+          echo "----- raw JSON result -----"
+          echo "$OUT" | jq .
+
+          # The keys under .modelUsage (and/or a .model field) are the exact model id(s)
+          # the CLI billed this run to.
+          MODEL=$(echo "$OUT" | jq -r '(.modelUsage | keys[]?) // .model // empty' | head -n1)
+          RESULT=$(echo "$OUT" | jq -r '.result // empty')
+
+          echo "----- summary -----"
+          echo "Assistant said : $RESULT"
+          echo "Model used     : ${MODEL:-<no model field found; see raw JSON above>}"
+
+          case "$MODEL" in
+            *haiku*) echo "::notice::Confirmed Haiku — $MODEL" ;;
+            "")      echo "::warning::Could not read a model id from the JSON; check the raw output and ANTHROPIC_MODEL above" ;;
+            *)       echo "::error::Expected Haiku but the run used '$MODEL'"; exit 1 ;;
+          esac

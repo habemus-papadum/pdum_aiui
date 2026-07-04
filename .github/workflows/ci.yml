@@ -13,6 +13,16 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Auth for any CI step that shells out to Claude Code. Mint it locally with
+      # `claude setup-token` (uses your Claude subscription, not per-token API
+      # billing) and store it as the CLAUDE_CODE_OAUTH_TOKEN Actions secret. GitHub
+      # withholds secrets from fork PRs, so it never reaches untrusted contributors.
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # Force the cheap, fast Haiku model everywhere `claude` runs in CI.
+      ANTHROPIC_MODEL: claude-haiku-4-5
+      # No autoupdater / telemetry / nonessential traffic.
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
     steps:
       - uses: actions/checkout@v5
 
@@ -26,6 +36,19 @@ jobs:
 
       - name: Install (frozen lockfile — also the lockfile-drift guard)
         run: pnpm install --frozen-lockfile
+
+      - name: Set up Claude Code
+        # Installs the `claude` CLI so tests can shell out to it. Nothing here calls
+        # `claude -p`, so no model inference (and no subscription usage) is spent on
+        # every push — `--version` just proves the install. The actual model call
+        # lives in the claude-smoke.yml smoke test. When you add tests that drive
+        # `claude`, they run in this job with Haiku + the OAuth token already in env.
+        run: |
+          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Claude Code available
+        run: claude --version
 
       - name: Lockstep version invariant
         run: node scripts/versioning.mjs current

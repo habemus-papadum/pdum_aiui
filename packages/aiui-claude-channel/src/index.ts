@@ -6,6 +6,7 @@
  * @packageDocumentation
  */
 
+export { channelCliPath } from "./cli-path";
 export { CHANNEL_CONFIG } from "./commands/config";
 export { createChannelServer } from "./server";
 
