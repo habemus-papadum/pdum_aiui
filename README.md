@@ -2,8 +2,10 @@
 
 ai ui frontends
 
-A pnpm + TypeScript monorepo. Every package under `packages/*` is published to npm under the
-`@habemus-papadum` scope and versioned in **lockstep** (one shared version across the whole repo).
+A pnpm + TypeScript monorepo. Packages live under `packages/*` in the `@habemus-papadum` scope,
+versioned in **lockstep** (one shared version across the whole repo). Each package declares a
+publication level — public, private, or never-published — when it's created (see
+[CLAUDE.md](./CLAUDE.md)).
 
 ## Requirements
 
@@ -28,9 +30,13 @@ pnpm format      # Biome autofix
 
 ## Add a package
 
+Every package picks a publication level at creation time — pass exactly one of `--public`,
+`--private`, or `--no-publish` (see [CLAUDE.md](./CLAUDE.md) for the full convention):
+
 ```sh
-pnpm new-package my-lib          # -> packages/my-lib, published as @habemus-papadum/my-lib
-pnpm new-package demo --private  # internal-only, never published
+pnpm new-package my-lib --public       # published publicly as @habemus-papadum/my-lib
+pnpm new-package my-lib --private       # published to npm, private (needs a paid npm org)
+pnpm new-package demo --no-publish      # internal-only, never published
 ```
 
 New packages join version lockstep automatically. Internal dependencies use `workspace:^`; pnpm

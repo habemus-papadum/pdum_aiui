@@ -17,11 +17,14 @@
     "test:watch": "vitest",
     "lint": "biome check .",
     "format": "biome check --write .",
+    "aiui": "tsx packages/aiui/src/cli.ts",
     "new-package": "node scripts/new-package.mjs",
     "version:check": "node scripts/versioning.mjs current"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
+    "@types/node": "^26.1.0",
+    "tsx": "^4.22.5",
     "typescript": "^5.6.0",
     "vite": "^6.0.0",
     "vitest": "^3.2.0"

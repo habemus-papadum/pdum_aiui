@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 // Scaffold a new package into packages/<slug> from scripts/_skeleton.
 //
-// Usage: pnpm new-package <name> [--private] [--description "..."]
+// Usage: pnpm new-package <name> (--public | --private | --no-publish) [--description "..."]
+//
+// A publication level is MANDATORY — you decide at creation time (see CLAUDE.md):
+//   --public      publish to npm publicly            (publishConfig.access: "public")
+//   --private     publish to npm as a private pkg    (publishConfig.access: "restricted")
+//                 — requires a paid npm org; the free tier can only publish public scoped packages
+//   --no-publish  never published                    ("private": true; pnpm -r publish skips it)
 //
 // The new package joins version lockstep immediately (it adopts the current shared
 // version). No other file needs editing — the packages/* glob picks it up everywhere.
@@ -29,13 +35,28 @@ function fail(message) {
   process.exit(1);
 }
 
+const USAGE =
+  'usage: pnpm new-package <name> (--public | --private | --no-publish) [--description "..."]';
+
+// The three publication levels, mapped to the package.json shape each produces.
+// Exactly one must be chosen on the command line — there is no default.
+const LEVELS = {
+  "--public": { publish: true, access: "public" },
+  "--private": { publish: true, access: "restricted" },
+  "--no-publish": { publish: false, access: undefined },
+};
+
 function parseArgs(argv) {
-  const opts = { private: false, description: "A TypeScript library." };
+  const opts = { description: "A TypeScript library." };
   let name;
+  let levelFlag;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--private") {
-      opts.private = true;
+    if (arg in LEVELS) {
+      if (levelFlag) {
+        fail(`${levelFlag} and ${arg} are mutually exclusive — pick exactly one`);
+      }
+      levelFlag = arg;
     } else if (arg === "--description") {
       opts.description = argv[++i] ?? opts.description;
     } else if (!arg.startsWith("--") && !name) {
@@ -45,9 +66,14 @@ function parseArgs(argv) {
     }
   }
   if (!name) {
-    fail('usage: pnpm new-package <name> [--private] [--description "..."]');
+    fail(USAGE);
   }
-  return { name, ...opts };
+  if (!levelFlag) {
+    fail(
+      `a publication level is required — pass one of --public, --private, or --no-publish\n${USAGE}`,
+    );
+  }
+  return { name, ...LEVELS[levelFlag], ...opts };
 }
 
 function slugify(name) {
@@ -86,7 +112,7 @@ function walk(dir) {
 }
 
 function main() {
-  const { name, private: isPrivate, description } = parseArgs(process.argv.slice(2));
+  const { name, publish, access, description } = parseArgs(process.argv.slice(2));
   const slug = slugify(name);
   if (!slug) {
     fail(`"${name}" slugifies to an empty string`);
@@ -110,6 +136,8 @@ function main() {
     __DESCRIPTION__: description,
     __DIRECTORY__: `packages/${slug}`,
     __REPO_URL__: repoUrl,
+    // For --no-publish this is a throwaway — publishConfig is stripped below.
+    __ACCESS__: access ?? "public",
   };
   for (const file of walk(dest)) {
     let text = readFileSync(file, "utf8");
@@ -122,7 +150,9 @@ function main() {
   const pkgPath = join(dest, "package.json");
   renameSync(join(dest, "package.json.tmpl"), pkgPath);
 
-  if (isPrivate) {
+  // --no-publish uses npm's own opt-out: `"private": true` makes `pnpm -r publish`
+  // skip the package, so publishConfig/files (which only matter when publishing) go away.
+  if (!publish) {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
     pkg.private = true;
     pkg.publishConfig = undefined;
@@ -130,8 +160,9 @@ function main() {
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
 
+  const level = publish ? access : "no-publish";
   process.stdout.write(
-    `Created packages/${slug} (${scope}/${slug} @ ${version})${isPrivate ? " [private]" : ""}\n` +
+    `Created packages/${slug} (${scope}/${slug} @ ${version}) [${level}]\n` +
       "Next: run `pnpm install` to link the new workspace member.\n",
   );
 }

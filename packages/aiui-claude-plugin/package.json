@@ -1,14 +1,13 @@
 {
-  "name": "@habemus-papadum/aiui",
+  "name": "@habemus-papadum/aiui-claude-plugin",
   "version": "0.0.0+dev",
-  "description": "ai ui frontends",
+  "description": "A Claude plugin (skills, commands, scripts) with a CLI for configuration info.",
   "type": "module",
   "license": "MIT",
-  "author": "Nehal Patel <nehal@alum.mit.edu>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
-    "directory": "packages/aiui"
+    "directory": "packages/aiui-claude-plugin"
   },
   "sideEffects": false,
   "exports": {
@@ -21,10 +20,11 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "aiui": "./dist/cli.js"
+    "aiui-claude-plugin": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "plugin"
   ],
   "publishConfig": {
     "access": "restricted"
@@ -35,10 +35,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "@habemus-papadum/aiui-claude-plugin": "workspace:^",
-    "chalk": "^5.3.0",
-    "commander": "^15.0.0",
-    "execa": "^9.6.1"
+    "commander": "^15.0.0"
   }
 }

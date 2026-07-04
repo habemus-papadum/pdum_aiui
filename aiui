@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+# Dev launcher for the aiui CLI. Runs packages/aiui/src/cli.ts straight from
+# TypeScript source via the repo's local tsx — no build step, picks up edits
+# immediately. Works from any cwd.
+#
+#   ./aiui claude
+#   ./aiui vite
+#   ./aiui --help
+#
+# The built dist/cli.js + package.json "bin" is what real consumers get; this is
+# only the local dev loop.
+set -e
+
+here="$(cd "$(dirname "$0")" && pwd)"
+tsx="$here/node_modules/.bin/tsx"
+
+if [ ! -x "$tsx" ]; then
+  echo "aiui: tsx not found — run 'pnpm install' first" >&2
+  exit 1
+fi
+
+# Put the workspace's node_modules/.bin dirs on PATH — the aiui package's own
+# first, then the root — exactly like `pnpm run` does. This is what lets the CLI
+# (and any process it spawns) find the binaries provided by aiui's dependencies,
+# e.g. `vite`. Env is inherited by the exec'd process and its children.
+PATH="$here/packages/aiui/node_modules/.bin:$here/node_modules/.bin:$PATH"
+export PATH
+
+# exec so signals (Ctrl-C) reach the CLI/child process directly.
+exec "$tsx" "$here/packages/aiui/src/cli.ts" "$@"

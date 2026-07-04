@@ -14,27 +14,17 @@ const external = [
 ];
 
 export default defineConfig({
-  define: {
-    // Bake the package version into the CLI so `aiui --version` needs no runtime
-    // package.json read. Between releases this is the `X.Y.Z+dev` marker.
-    __AIUI_VERSION__: JSON.stringify(pkg.version),
-  },
   build: {
     lib: {
-      // Two entrypoints: the library (index) and the `aiui` bin (cli).
-      entry: { index: "src/index.ts", cli: "src/cli.ts" },
+      entry: "src/index.ts",
       formats: ["es"],
-      fileName: (_format, entryName) => `${entryName}.js`,
+      fileName: "index",
     },
     outDir: "dist",
     sourcemap: true,
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
       external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
-      output: {
-        // Make only the CLI chunk directly executable; the library stays clean.
-        banner: (chunk: { name: string }) => (chunk.name === "cli" ? "#!/usr/bin/env node" : ""),
-      },
     },
   },
 });

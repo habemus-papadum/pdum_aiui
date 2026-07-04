@@ -15,13 +15,14 @@ const external = [
 
 export default defineConfig({
   define: {
-    // Bake the package version into the CLI so `aiui --version` needs no runtime
-    // package.json read. Between releases this is the `X.Y.Z+dev` marker.
-    __AIUI_VERSION__: JSON.stringify(pkg.version),
+    // Bake the package version into the CLI so `aiui-claude-channel --version`
+    // needs no runtime package.json read. Between releases this is the
+    // `X.Y.Z+dev` marker.
+    __AIUI_CHANNEL_VERSION__: JSON.stringify(pkg.version),
   },
   build: {
     lib: {
-      // Two entrypoints: the library (index) and the `aiui` bin (cli).
+      // Two entrypoints: the library (index) and the `aiui-claude-channel` bin (cli).
       entry: { index: "src/index.ts", cli: "src/cli.ts" },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

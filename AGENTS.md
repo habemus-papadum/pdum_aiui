@@ -24,8 +24,12 @@ pnpm build       # Vite library build + tsc .d.ts, per package
 pnpm test        # Vitest
 pnpm typecheck   # tsc --noEmit
 pnpm lint        # Biome (also enforced in CI)
-pnpm new-package <name> [--private]
+./aiui <cmd>     # run the aiui CLI from source via tsx (e.g. `./aiui claude`)
+pnpm new-package <name> (--public | --private | --no-publish)
 ```
+
+`new-package` requires a publication level — see [CLAUDE.md](./CLAUDE.md) for the
+`--public` / `--private` / `--no-publish` convention.
 
 ## Architecture
 
