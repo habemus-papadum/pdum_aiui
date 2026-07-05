@@ -18,10 +18,11 @@ interesting about a visualization is discovered by looking at it.
 ## How I actually work
 
 I use Claude Code, in a terminal, as a CLI. I find it genuinely useful to be able to **interrupt**,
-and — this surprises people — I **watch the transcript as it goes**. I can scan information
+and I **watch the transcript as it goes**. I scan information
 quickly, and it feels a bit like mining for gold: little nuggets flash by, some worth grabbing. I
-also just learn a lot by watching an agent work — it tries low-level Linux tricks I'd never have
-reached for.
+also just learn a lot by watching an agent work — I love low-level tricks and details and not only 
+do I see things I'd never reached for before, occasionally, I get the thrill of seeing something 
+truly super-human.
 
 In practice I have three modes of working:
 
@@ -29,7 +30,7 @@ In practice I have three modes of working:
 2. **Long runs** — I hand Claude Code something well-scoped and let it run for an hour or more.
 3. **Swarms** — large-scale parallel work I don't inspect closely at all.
 
-Most of my *physical time at the computer* is mode 1 — and I can only sustain a few hours of it a
+Most of m`y *physical time at the computer* is mode 1 — and I can only sustain a few hours of it a
 day. So those hours have to count, and honestly, they should be fun. This whole project exists to
 make mode 1 higher-bandwidth without giving up the thing I like about it: Claude Code stays open,
 in front of me, doing its thing.

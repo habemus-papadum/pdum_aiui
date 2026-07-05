@@ -29,8 +29,9 @@ transcript) at the center. Three layers:
    (screenshot rectangle → components → source); it ships as its own module, separate from the
    intent tool.
 
-Longer form: `docs/guide/` (motivation, prompt-lowering, frontend-for-agents). Exploratory notes
-live in `docs/agentic_ui_workflow/` and `docs/reactive-flows/`.
+Longer form: `docs/guide/` (motivation, prompt-lowering, frontend-for-agents). Pre-implementation
+exploratory notes are retired to `archive/` — readable on GitHub, deliberately not part of the
+docs site.
 
 **Security posture (deliberate, documented — do not "fix" without being asked):** `aiui claude`
 asks on the first interactive run whether to launch Claude Code with

@@ -1,0 +1,17 @@
+{
+  "name": "@habemus-papadum/aiui-workbench",
+  "version": "0.1.0+dev",
+  "description": "Interactive design workbench for the multimodal intent layer — never published.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "bench": "tsx bench/transcribe-bench.ts"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "vite": "^6.4.3"
+  }
+}

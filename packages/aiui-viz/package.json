@@ -1,0 +1,70 @@
+{
+  "name": "@habemus-papadum/aiui-viz",
+  "version": "0.1.0+dev",
+  "description": "Reactive scientific-visualization utilities for agent-written frontends: Observable-style async cells for SolidJS 2.0, worker streaming, durable HMR registries, and the agent tool surface.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-viz"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./plot": "./src/plot.tsx",
+    "./site": "./src/site/index.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./plot": {
+        "types": "./dist/plot.d.ts",
+        "import": "./dist/plot.js"
+      },
+      "./site": {
+        "types": "./dist/site/index.d.ts",
+        "import": "./dist/site.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@observablehq/plot": "^0.6",
+    "@solidjs/web": ">=2.0.0-beta.0 <2.0.0-experimental.0",
+    "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0",
+    "katex": "^0.16 || ^0.17"
+  },
+  "peerDependenciesMeta": {
+    "@observablehq/plot": {
+      "optional": true
+    },
+    "katex": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@observablehq/plot": "^0.6.17",
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15",
+    "vite-plugin-solid": "3.0.0-next.5",
+    "katex": "^0.17.0"
+  }
+}

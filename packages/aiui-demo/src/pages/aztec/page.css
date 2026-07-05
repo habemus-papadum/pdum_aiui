@@ -1,0 +1,97 @@
+/* aztec page — reuses the shared token theme (styles.css) and adds only the
+ * tiling-specific chrome. All colors are design tokens (dark default, light
+ * under prefers-color-scheme); the canvas host keeps the constant --figure-bg
+ * so the tiling reads as a self-contained dark plate in both modes, and the
+ * legend swatches use the constant figure domino palette (palette.ts) so they
+ * key the plate, not the page. */
+
+.aztec-host {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  line-height: 0;
+  background: var(--figure-bg);
+}
+.aztec-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  image-rendering: auto;
+}
+
+/* --- legend / color key --------------------------------------------------- */
+.aztec-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+.aztec-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-heading);
+}
+.aztec-legend-item i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.aztec-legend-item b {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* --- controls ------------------------------------------------------------- */
+.aztec-scrub {
+  margin-top: 10px;
+}
+.aztec-scrub input[type="range"] {
+  accent-color: var(--accent-strong);
+}
+.aztec-status {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- prose + permanent table ---------------------------------------------- */
+.aztec-prose {
+  color: var(--text-heading);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 0 0 12px;
+}
+.aztec-prose.dim {
+  color: var(--text-dim);
+  margin-top: 12px;
+  margin-bottom: 2px;
+}
+.aztec-prose b {
+  color: var(--text);
+  font-weight: 600;
+}
+.aztec-perm-table {
+  width: auto;
+  min-width: 340px;
+}
+.aztec-perm-table td,
+.aztec-perm-table th {
+  text-align: right;
+}
+.aztec-perm-table td:first-child,
+.aztec-perm-table th:first-child {
+  text-align: left;
+}
+.aztec-ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+.aztec-bad {
+  color: var(--error-text);
+  font-weight: 700;
+}

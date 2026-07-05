@@ -50,10 +50,15 @@ function traceFormat(name: string, format: ChannelFormat, store: TraceStore): Ch
       const tracedCtx: TracingThreadContext = {
         threadId: ctx.threadId,
         ...(ctx.hello !== undefined ? { hello: ctx.hello } : {}),
+        ...(ctx.push !== undefined ? { push: ctx.push } : {}),
         trace,
-        sendPrompt: async (text) => {
-          trace.record({ kind: "output", label: "lowered prompt", data: text });
-          await ctx.sendPrompt(text);
+        sendPrompt: async (text, meta) => {
+          trace.record({
+            kind: "output",
+            label: "lowered prompt",
+            data: meta !== undefined ? { text, meta } : text,
+          });
+          await ctx.sendPrompt(text, meta);
         },
         close: () => {
           trace.end("completed");
@@ -65,7 +70,12 @@ function traceFormat(name: string, format: ChannelFormat, store: TraceStore): Ch
       let frame = 0;
       return {
         onMessage(payload, meta) {
-          const label = `frame ${frame}${meta.fin ? " (fin)" : ""}`;
+          // Name the input stage after its chunk (intent-v1) so the /debug
+          // viewer reads "frame 3 attachment shot_1" rather than a bare index.
+          const chunk = meta.chunk
+            ? ` ${meta.chunk.kind}${meta.chunk.kind === "attachment" ? ` ${meta.chunk.id}` : ""}`
+            : "";
+          const label = `frame ${frame}${chunk}${meta.fin ? " (fin)" : ""}`;
           if (payload instanceof Uint8Array) {
             // Binary payloads (screenshots, audio) go straight to a blob file.
             trace.recordBlob({ kind: "input", label }, payload, `input-${frame}.bin`);

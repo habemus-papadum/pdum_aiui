@@ -32,5 +32,9 @@ export function fakeSocketFactory(ackFor: (frame: Uint8Array, index: number) => 
     queueMicrotask(() => emit("open", {}));
     return socket;
   };
-  return { factory, sent };
+  /** Simulate a server → client push (a message not paired with a send). */
+  const push = (message: unknown): void => {
+    emit("message", { data: JSON.stringify(message) });
+  };
+  return { factory, sent, push };
 }

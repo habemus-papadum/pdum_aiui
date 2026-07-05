@@ -12,7 +12,12 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./vite": "./src/vite.ts"
+    "./vite": "./src/vite.ts",
+    "./intent-pipeline": "./src/intent-pipeline/index.ts",
+    "./debug-ui": "./src/debug-ui/index.ts"
+  },
+  "imports": {
+    "#source-locator": "./src/source-locator.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -33,7 +38,18 @@
       "./vite": {
         "types": "./dist/vite.d.ts",
         "import": "./dist/vite.js"
+      },
+      "./intent-pipeline": {
+        "types": "./dist/intent-pipeline/index.d.ts",
+        "import": "./dist/intent-pipeline.js"
+      },
+      "./debug-ui": {
+        "types": "./dist/debug-ui/index.d.ts",
+        "import": "./dist/debug-ui.js"
       }
+    },
+    "imports": {
+      "#source-locator": "./dist/source-locator.js"
     }
   },
   "scripts": {
@@ -42,15 +58,21 @@
     "test": "vitest run"
   },
   "peerDependencies": {
+    "@babel/core": "^7.29.0",
     "vite": ">=6"
   },
   "peerDependenciesMeta": {
+    "@babel/core": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@types/babel__core": "^7.20.5",
     "jsdom": "^29.0.0",
     "vite": "^6.4.1"
   }

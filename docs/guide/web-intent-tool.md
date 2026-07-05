@@ -1,11 +1,13 @@
 # The Web Intent Tool
 
 The first concrete layer-2 tool: a widget you mount into the web app you're developing that
-collects intent — text today; voice, screenshots, and DOM context tomorrow — and streams it to the
-running channel server, where it is **lowered** into a prompt for the Claude Code session. This
-page is the design document; [Getting Started](./getting-started) shows it in action, and
-`pnpm demo` (the `aiui-demo` package) is a ready-made playground: `./aiui claude` in one terminal,
-`pnpm demo` in another, and poke at it.
+collects intent — dictation, region screenshots, pen ink, and DOM context, with plain text as the
+escape hatch — and streams it to the running channel server, where it is **lowered** into a prompt
+for the Claude Code session. This page is the **design document**; [Using the intent
+overlay](./intent-overlay) is the user guide for the default multimodal modality;
+[Getting Started](./getting-started) shows the whole loop in action; and `pnpm demo` (the
+`aiui-demo` package) is a ready-made playground: `./aiui claude` in one terminal, `pnpm demo` in
+another, and poke at it.
 
 ![The intent tool over a demo app](/intent-tool.png)
 
@@ -26,12 +28,14 @@ export default defineConfig({ plugins: [aiuiDevOverlay()] });
 
 The plugin is `apply: "serve"`, so the dev gate is structural: the tool *cannot* exist in a
 production build — no `import.meta.env.DEV` guard for an app to forget. The Vite config is also
-where an app declares **which message format** its tool speaks —
-`aiuiDevOverlay({ format: "text-concat" })` selects the bundled modality by its wire-format name
-(text is the only one today; richer formats will slot in here). Apps with custom modalities mount
-from app code instead (`aiuiDevOverlay({ mount: false })` keeps the port/source injection, since
-modalities are functions and can't cross vite.config); outside Vite entirely,
-`mountIntentTool({ port })` works anywhere. A DevTools-panel or browser-extension delivery would
+where an app declares **which message format** its tool speaks — the default is the multimodal
+`intent-v1` modality; `aiuiDevOverlay({ format: "text-concat" })` selects the plain-text escape
+hatch instead, by its wire-format name.
+ Client-side pipeline options ride the same call
+(`aiuiDevOverlay({ intent: { … } })` — see [Using the intent overlay](./intent-overlay#configuring-the-pipeline)).
+Apps with custom modalities mount from app code instead (`aiuiDevOverlay({ mount: false })` keeps
+the port/source injection, since modalities are functions and can't cross vite.config); outside
+Vite entirely, `mountIntentTool({ port })` works anywhere. A DevTools-panel or browser-extension delivery would
 avoid even the config line — both remain on the table. How the plugin gets the tool and its port
 into the page is subtler than it looks — see
 [the internals note](#how-the-plugin-gets-the-tool-into-the-page-subtle) below.
@@ -58,6 +62,16 @@ piece is independent of any particular modality:
 | **Collection** (browser) | The UI that gathers the input and streams it | `IntentModality` | `aiui-dev-overlay` |
 | **Lowering** (server) | Converts the incoming stream into the final prompt | `ChannelFormat` (codec + `StreamProcessor`) | `aiui-claude-channel` |
 | **Debugging** (web app) | Renders the recorded lowering trace | trace viewer (+ per-format custom views, planned) | `aiui-claude-channel` |
+
+The rich modalities (voice + pen + screenshots + component location, and the correction
+meta-loop) were **designed before they shipped** and now ship as the default overlay (see
+[Using the intent overlay](./intent-overlay)). The
+[intent workbench](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench)
+(`pnpm workbench`) lives on as the **lab where the pipeline is measured and tuned** — a single
+instrumented page, running the very same pipeline this overlay does, where every interaction
+choice is a setting, every action is an event, the IR passes re-run live as you talk/draw/shoot,
+and a `bench/` corpus runner ranks transcription and correction models offline. Design decisions
+are made there and graduate into the shipping three pieces.
 
 The three meet at one string: the **stream format name**. The client's `IntentModality.format`
 names the format its frames speak; the server's format registry maps that name to a codec and a
@@ -156,6 +170,42 @@ the skill pointer) and the source location — that prefix is what turns "make t
 something the agent can act on. The trace shows the whole lowering: the `info` client context,
 the raw `input` frames, the user text as an `ir` stage, and the full augmented prompt as the
 `output` stage.
+
+#### What rides the payload: the "about *this*" selection chip
+
+A selection is the payload-level parallel to the hello's tab identity — not *which page* the
+intent came from, but *which thing on it*. The overlay runs a **selection watcher** (`selection.ts`):
+a debounced `document.selectionchange` listener that snapshots the last non-collapsed selection.
+A live read is impossible — the moment focus moves into the widget's textarea the document
+selection reads empty — so the selection has to be captured *before* the interaction that asks
+about it. The snapshot survives that focus steal (an emptied selection never clears it; only an
+explicit dismiss or a completed submission does) and expires after a couple of minutes.
+
+When a snapshot exists the panel shows a dismissible **chip** above the input —
+`about: "reaction-diffusion on the GPU" · src/ui/App.tsx:35:13 ✕` — and the text modality rides it
+on the submission, which grows from `{ text }` to `{ text, selection? }`. The `selection` block is
+the snapshot minus its capture timestamp: the selected `text`, its `rects` (for later screenshot
+annotation), `sourceLoc`, `cell`, `tex`, and `url`. The binary protocol is unchanged; this is
+entirely payload-level.
+
+Attribution reuses the same DOM contract the screenshot/`locate` pipeline reads, so app authors
+write nothing selection-specific: from the selection's start element, `closest('[data-source-loc]')`
+and `closest('[data-cell]')` give the authoring line and dataflow node, and `closest('[data-tex]')`
+— falling back to KaTeX's own `<annotation encoding="application/x-tex">` — recovers the TeX behind
+rendered math (a selection over an equation carries `\partial u/\partial t`, not mangled glyphs).
+Every field is optional; a page with no aiui instrumentation still yields text + rects.
+
+The `text-concat` processor keeps the last selection a thread carried and, on `fin`, folds it into
+the augmented prompt right after the tab/source block (and adds nothing when there is no selection):
+
+```
+It concerns this on-screen selection: "reaction-diffusion on the GPU" (authored at src/ui/App.tsx:35:13; produced by cell catalog).
+The selected content is rendered mathematics; its TeX source: \partial u/\partial t
+```
+
+The chip and its snapshot live in the widget, not the modality: `IntentToolContext` exposes
+`selection()` and `clearSelection()`, so any future modality — a screenshot annotator, a voice turn
+— attaches or consumes the same on-screen reference through one hook.
 
 ### Lowering: stream processors, traced
 

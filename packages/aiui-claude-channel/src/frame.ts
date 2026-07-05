@@ -64,7 +64,32 @@ export interface HelloMeta {
   tab?: TabInfo;
   /** Where the page's source code lives. */
   source?: SourceInfo;
+  /**
+   * The client's view of its `IntentPipelineConfig` (the `intent-v1` format
+   * reads which transcriber/corrector/models/policy/passes to run from it).
+   * Typed loosely on purpose — the envelope carries no dependency on the
+   * pipeline package; the processor validates the fields it uses.
+   */
+  intent?: unknown;
 }
+
+/**
+ * What an `intent-v1` `data` frame carries, tagged in the envelope so the
+ * processor can interpret an otherwise-opaque payload without peeking inside
+ * it. Absent on every other format (and on legacy frames), which keeps
+ * `text-concat` and the like unaffected.
+ *
+ *  - `events` — payload is UTF-8 JSON `{ events: IntentEvent[] }` (an
+ *    append-only batch of the client's interaction log);
+ *  - `attachment` — payload is raw bytes (a shot PNG or an audio segment),
+ *    identified by `id` (`shot_N` / `seg_N`) and `mime`;
+ *  - `context` — payload is UTF-8 JSON `{ selection?: … }`, sent at most once,
+ *    just before `fin`.
+ */
+export type ChunkDescriptor =
+  | { kind: "events" }
+  | { kind: "context" }
+  | { kind: "attachment"; id: string; mime: string };
 
 /** The routing/lifecycle metadata carried in every frame's header. */
 export interface Envelope {
@@ -80,6 +105,11 @@ export interface Envelope {
   threadId?: string;
   /** On a `data` frame: true when this is the thread's final frame. */
   fin?: boolean;
+  /**
+   * On an `intent-v1` `data` frame: how to interpret the payload (see
+   * {@link ChunkDescriptor}). Absent on other formats and legacy frames.
+   */
+  chunk?: ChunkDescriptor;
 }
 
 /** A decoded frame: its envelope plus a (zero-copy) view of its payload. */

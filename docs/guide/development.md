@@ -39,7 +39,11 @@ package's dev manifest points at source, while the published `dist/` mapping liv
 ```
 
 Everything in the dev loop (Vite, Vitest, tsx) transpiles TypeScript from linked packages, so
-resolving to `.ts` is free; npm consumers see only the `publishConfig` (dist) form. Three things
+resolving to `.ts` is free; npm consumers see only the `publishConfig` (dist) form. This extends
+to packages shipping **JSX** (`aiui-viz` exports `.tsx` in dev): vite-plugin-solid compiles any
+served `.tsx` and only suppresses solid-refresh for `/node_modules/` ids — workspace links
+resolve to real `packages/*` paths, so linked component sources get compilation *and* HMR in
+consumers. Three things
 keep the scheme honest:
 
 - **`bin` entries still point at `dist/`** — bins run under plain `node` from installed

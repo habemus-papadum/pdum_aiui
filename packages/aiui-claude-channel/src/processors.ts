@@ -11,13 +11,20 @@
 
 import type { ChannelFormat, StreamProcessorFactory } from "./channel";
 import { jsonCodec } from "./codec";
-import type { HelloMeta } from "./frame";
+import { intentV1Format } from "./intent-v1";
+import { asSelection, augmentTextPrompt, type SelectionContext } from "./prompt-context";
 import { traceOf } from "./tracing";
+
+// The connection-context preamble is shared with the `intent-v1` lowering, so
+// it lives in prompt-context.ts; re-exported here for the package's public API.
+export { augmentTextPrompt, type SelectionContext } from "./prompt-context";
 
 /** The message payload a `text-concat` thread accepts: an optional text chunk. */
 interface TextConcatPayload {
   /** A chunk to append to the thread's accumulated text. */
   text?: string;
+  /** An optional on-screen selection the user is asking about. */
+  selection?: unknown;
 }
 
 /** Validate/narrow a decoded `text-concat` payload (may be empty on a bare fin). */
@@ -36,64 +43,6 @@ const asTextChunk = (payload: unknown): string | undefined => {
 };
 
 /**
- * Wrap a user's text in the context the connection's hello provided: which
- * browser tab it came from (with the routing caveats an agent needs) and where
- * the page's source code lives. Returns the text unchanged when there is no
- * context to add — a bare client (no plugin, no extension) still works.
- *
- * The tab ids are labeled as *hints* on purpose: Chrome's extension tab id,
- * the CDP target id, and the Chrome DevTools MCP's pageId are three different
- * namespaces, and only `list_pages` can produce the last one (see the
- * session-browser skill, which this preamble points the agent at).
- */
-export function augmentTextPrompt(text: string, meta: HelloMeta | undefined): string {
-  const tab = meta?.tab;
-  const source = meta?.source;
-  const sections: string[] = [];
-
-  if (tab !== undefined && (tab.url !== undefined || tab.title !== undefined)) {
-    const hints: string[] = [];
-    if (tab.chromeTabId !== undefined) {
-      hints.push(`chrome tab id ${tab.chromeTabId}`);
-    }
-    if (tab.windowId !== undefined) {
-      hints.push(`window id ${tab.windowId}`);
-    }
-    if (tab.tabIndex !== undefined) {
-      hints.push(`tab index ${tab.tabIndex}`);
-    }
-    if (tab.targetId !== undefined) {
-      hints.push(`CDP target id ${tab.targetId}`);
-    }
-    sections.push(
-      [
-        `It was submitted from the browser tab "${tab.title ?? "(untitled)"}" at ${tab.url ?? "(unknown url)"}`,
-        hints.length > 0 ? ` (${hints.join(", ")})` : "",
-        ".\n",
-        "To act on that tab with the Chrome DevTools MCP: the ids above are correlation hints only — ",
-        "call list_pages, match by URL/title, then select_page with the pageId list_pages returned, ",
-        "and verify you selected the right page. The session-browser skill covers this workflow.",
-      ].join(""),
-    );
-  }
-
-  if (source?.root !== undefined) {
-    sections.push(`The source code of the web app in that tab is located at: ${source.root}`);
-  }
-
-  if (sections.length === 0) {
-    return text;
-  }
-  return [
-    "This prompt was sent from the aiui web intent tool running in a web app under development.",
-    ...sections,
-    "The user's prompt follows.",
-    "---",
-    text,
-  ].join("\n\n");
-}
-
-/**
  * The `text-concat` format (JSON payloads): each `data` frame carries an
  * optional `{ "text": string }` chunk, concatenated verbatim (no separator)
  * until a frame marked `fin`, which sends the accumulated text — wrapped in
@@ -104,16 +53,22 @@ export function augmentTextPrompt(text: string, meta: HelloMeta | undefined): st
  */
 export const textConcatProcessor: StreamProcessorFactory = (ctx) => {
   const parts: string[] = [];
+  // A selection is per-submission: keep the last one any frame carried before fin.
+  let selection: SelectionContext | undefined;
   return {
     async onMessage(payload: unknown, meta) {
       const text = asTextChunk(payload as TextConcatPayload);
       if (text !== undefined) {
         parts.push(text);
       }
+      const seen = asSelection(payload);
+      if (seen !== undefined) {
+        selection = seen;
+      }
       if (meta.fin) {
         const userText = parts.join("");
         if (userText !== "") {
-          const prompt = augmentTextPrompt(userText, ctx.hello);
+          const prompt = augmentTextPrompt(userText, ctx.hello, selection);
           if (prompt !== userText) {
             // Expose the augmentation as a pipeline stage: user text in,
             // context-wrapped prompt out (the trace's `output` stage).
@@ -135,5 +90,8 @@ export const textConcatFormat: ChannelFormat = {
 
 /** The built-in format registry: stream format name → format. */
 export function defaultFormats(): Map<string, ChannelFormat> {
-  return new Map([["text-concat", textConcatFormat]]);
+  return new Map([
+    ["text-concat", textConcatFormat],
+    ["intent-v1", intentV1Format],
+  ]);
 }

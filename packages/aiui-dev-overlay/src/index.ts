@@ -32,16 +32,62 @@ export type {
   IntentToolContext,
   IntentToolHandle,
   IntentToolOptions,
+  OpenThreadOptions,
 } from "./intent";
 export { mountIntentTool, textModality, unmountIntentTool } from "./intent";
+export type {
+  CorrectionDiff,
+  CorrectionInput,
+  Corrector,
+  ShotPixels,
+  ShotSink,
+  Transcriber,
+  TranscriptResult,
+} from "./multimodal";
+export {
+  AudioCapture,
+  Ink,
+  locateComponents,
+  MULTIMODAL_STYLES,
+  mockCorrector,
+  mockTranscriber,
+  multimodalModality,
+  Preview,
+  ShotTool,
+  SYSTEM_PROMPT,
+} from "./multimodal";
 export type { DevOverlayHandle, DevOverlayOptions } from "./overlay";
 export {
   isDevEnvironment,
   mountDevOverlay,
   unmountDevOverlay,
 } from "./overlay";
-export type { Ack, IntentSocket, WebSocketFactory, WebSocketLike } from "./protocol";
+export type {
+  Ack,
+  AttachmentChunk,
+  FrameChunk,
+  IntentSocket,
+  JsonChunk,
+  ServerMessage,
+  WebSocketFactory,
+  WebSocketLike,
+} from "./protocol";
 export { connectIntentSocket, encodeFrame, encodeJsonPayload, PROTOCOL_VERSION } from "./protocol";
+export type {
+  SelectionRect,
+  SelectionSnapshot,
+  SelectionWatcher,
+  SelectionWatcherOptions,
+} from "./selection";
+export { installSelectionWatcher } from "./selection";
+export type {
+  BridgeTool,
+  ToolsBridgeApi,
+  ToolsBridgeOptions,
+  ToolsSocketFactory,
+  ToolsSocketLike,
+} from "./tools-bridge";
+export { canonicalToolsHash, installToolsBridge } from "./tools-bridge";
 
 /** The published package name — handy for smoke tests. */
 export const name = "@habemus-papadum/aiui-dev-overlay";

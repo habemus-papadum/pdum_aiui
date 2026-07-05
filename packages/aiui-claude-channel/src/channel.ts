@@ -20,10 +20,19 @@
  * See {@link ./frame} for the wire format and web.ts for the wiring.
  */
 import type { PayloadCodec } from "./codec";
-import { decodeFrame, type Envelope, type HelloMeta } from "./frame";
+import { type ChunkDescriptor, decodeFrame, type Envelope, type HelloMeta } from "./frame";
 
-/** Push text into the Claude Code session (the channel notification). */
-export type SendPrompt = (text: string) => void | Promise<void>;
+/**
+ * Push text into the Claude Code session (the channel notification). The
+ * optional `meta` becomes attributes on the rendered `<channel>` tag — the
+ * mechanism the `intent-v1` lowering uses to carry Option-C attachment paths
+ * (body tokens in the text, `shot_N` → absolute path in meta). Text-only
+ * callers (and handlers that ignore the second argument) are unaffected.
+ */
+export type SendPrompt = (text: string, meta?: Record<string, string>) => void | Promise<void>;
+
+/** Push a server → client message down the same socket (out-of-band of acks). */
+export type PushMessage = (message: unknown) => void;
 
 /** What a processor can see and do for the one thread it owns. */
 export interface ThreadContext {
@@ -33,6 +42,14 @@ export interface ThreadContext {
   hello?: HelloMeta;
   /** Push text into the Claude Code session. */
   sendPrompt: SendPrompt;
+  /**
+   * Push a message back to the connected client, distinct from the per-frame
+   * ack (the client tells them apart by a `kind` field). Present only when the
+   * transport supports it; `intent-v1` uses it for server-produced `lowered`
+   * events (transcripts, correction diffs). Undefined in the pure protocol
+   * tests, which never exercise it.
+   */
+  push?: PushMessage;
   /**
    * Mark this thread closed: the processor is released and any further frame
    * naming this thread id is rejected. Idempotent.
@@ -44,6 +61,12 @@ export interface ThreadContext {
 export interface MessageMeta {
   /** True when the client marked this the thread's final frame (`fin`). */
   fin: boolean;
+  /**
+   * The frame's {@link ChunkDescriptor}, when the envelope tagged one (only
+   * `intent-v1` frames do). Lets a processor interpret a raw payload without
+   * the codec — which never sees the envelope — having to.
+   */
+  chunk?: ChunkDescriptor;
 }
 
 /** Consumes the decoded message payloads of a single thread. */
@@ -88,6 +111,12 @@ export interface ChannelConnectionOptions {
   formats: FormatRegistry;
   /** Where thread processors push prompt text. */
   sendPrompt: SendPrompt;
+  /**
+   * Optional server → client push for this connection (see
+   * {@link ThreadContext.push}). Handed to every thread's processor; omit it
+   * and processors that need it degrade gracefully.
+   */
+  push?: PushMessage;
 }
 
 /** The protocol state of one client connection. */
@@ -177,6 +206,7 @@ export function createChannelConnection(options: ChannelConnectionOptions): Chan
         threadId,
         ...(hello !== undefined ? { hello } : {}),
         sendPrompt: options.sendPrompt,
+        ...(options.push !== undefined ? { push: options.push } : {}),
         close: () => {
           threads.delete(threadId);
           closed.add(threadId);
@@ -185,7 +215,10 @@ export function createChannelConnection(options: ChannelConnectionOptions): Chan
       threads.set(threadId, processor);
     }
     try {
-      await processor.onMessage(decoded, { fin: envelope.fin === true });
+      await processor.onMessage(decoded, {
+        fin: envelope.fin === true,
+        ...(envelope.chunk !== undefined ? { chunk: envelope.chunk } : {}),
+      });
     } catch (err) {
       return { ok: false, threadId, error: errorMessage(err) };
     }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
+import { PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
 import { projectCacheDir } from "../trace";
@@ -53,13 +54,23 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
       process.stderr.write("[aiui-channel] ignoring malformed --launch-info JSON\n");
     }
   }
-  const mcp = createChannelServer(VERSION);
+  // The page-tool registry is shared by the MCP tools (which read and drive it)
+  // and the `/tools` websocket in the web backend (which feeds it), so create it
+  // once and hand the same instance to both.
+  const pageTools = new PageToolDirectory();
+  const mcp = createChannelServer(VERSION, { pageTools });
 
-  // Push text into the Claude Code session over the one-way channel.
-  const pushToSession = (text: string, kind = "prompt"): Promise<void> =>
+  // Push text into the Claude Code session over the one-way channel. Extra meta
+  // (the intent-v1 lowering's Option-C attachment paths) rides as additional
+  // `<channel>` attributes next to the body tokens that reference them.
+  const pushToSession = (
+    text: string,
+    kind = "prompt",
+    extraMeta?: Record<string, string>,
+  ): Promise<void> =>
     mcp.notification({
       method: "notifications/claude/channel",
-      params: { content: text, meta: { kind } },
+      params: { content: text, meta: { kind, ...extraMeta } },
     });
 
   // Connect stdio first: the handshake must complete before we open the backend
@@ -72,9 +83,10 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // (.aiui-cache/ under this server's cwd — gitignored, readable by the
   // Claude Code session running in the same directory).
   const web = await startWebServer({
-    onPrompt: (text) => pushToSession(text),
+    onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
     traceDir: projectCacheDir(),
     launchInfo,
+    pageTools,
   });
   const registration = registerServer(web.port, tag);
 

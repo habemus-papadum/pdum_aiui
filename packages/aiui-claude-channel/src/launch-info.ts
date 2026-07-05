@@ -38,11 +38,31 @@ export interface ChromeDevtoolsInfo {
   extensionDir?: string;
 }
 
+/**
+ * The status of the `OPENAI_API_KEY` the intent pipeline needs, as the launcher
+ * found it at startup. A *status*, never the key itself (or any prefix of it) —
+ * the DevTools panel uses this to explain a degraded pipeline without ever
+ * seeing the secret. See `aiui`'s openai-preflight for how it's determined.
+ *
+ *  - "valid"      — present and accepted by OpenAI (authenticated check passed).
+ *  - "invalid"    — present but rejected (401/403) — usually a stale shell export.
+ *  - "missing"    — not set in the launcher's environment.
+ *  - "unverified" — present but not checked (CI/non-interactive) or the check
+ *                   couldn't complete (offline, timeout, transient error).
+ */
+export type OpenAiKeyStatus = "valid" | "invalid" | "missing" | "unverified";
+
 /** The launcher-provided session summary (extensible envelope). */
 export interface LaunchInfo {
   /** What assembled this session, e.g. "aiui claude". */
   launcher?: string;
   chromeDevtools?: ChromeDevtoolsInfo;
+  /**
+   * How the launcher's OpenAI key preflight came out (status only, never the
+   * key). Absent when no launcher recorded it. Lets the DevTools panel explain
+   * why transcription/correction fell back to mock/off.
+   */
+  openaiKey?: OpenAiKeyStatus;
 }
 
 /**

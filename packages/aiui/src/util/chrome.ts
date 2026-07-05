@@ -204,8 +204,9 @@ export function devtoolsExtensionDir(): string | undefined {
 /**
  * Rebuild the aiui-devtools-extension package so the auto-loaded panel is never stale.
  *
- * A full tsc of the extension is ~0.3s — cheap enough to run on every launch
- * rather than tracking staleness. Best-effort by design: outside a dev
+ * A full tsc of the extension (plus the debug-ui esbuild bundle) is well
+ * under a second — cheap enough to run on every launch rather than tracking
+ * staleness. Best-effort by design: outside a dev
  * checkout (no devtools package, no typescript) it silently does nothing, and
  * a failing compile warns loudly but never blocks the launch — whatever
  * `extension/js` already holds is what gets loaded.
@@ -234,6 +235,26 @@ export async function buildDevtoolsExtension(): Promise<void> {
     printWarning(
       "aiui-devtools-extension failed to compile — the DevTools panel will be stale or missing",
       result.all || result.message,
+    );
+    return;
+  }
+  // The Intent pane's shared debug-ui is bundled (esbuild) from the overlay's
+  // source — tsc alone can't produce it. Same best-effort posture: the script
+  // is only present in a dev checkout, and a failure degrades exactly one pane
+  // (the panel imports debug-ui.js lazily), never the launch.
+  const bundleScript = join(root, "build-debug-ui.mjs");
+  if (!existsSync(bundleScript)) {
+    return;
+  }
+  const bundle = await execa(process.execPath, [bundleScript], {
+    cwd: root,
+    reject: false,
+    all: true,
+  });
+  if (bundle.exitCode) {
+    printWarning(
+      "aiui-devtools-extension debug-ui bundle failed — the Intent pane will be degraded",
+      bundle.all || bundle.message,
     );
   }
 }

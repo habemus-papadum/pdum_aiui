@@ -23,6 +23,7 @@ import {
 import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
+import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
 import { printError, printWarning } from "../util/ui";
 import { VERSION } from "../util/version";
@@ -89,6 +90,18 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     config = await ensureLaunchChoices(config);
   }
 
+  // Preflight the OpenAI key the intent pipeline needs (transcription +
+  // correction, which run in the spawned channel process — the key reaches
+  // them through this environment). Interactive launches verify it against the
+  // API and report any degradation once; CI/non-interactive only note presence
+  // without touching the network. Either way the launch proceeds — a bad or
+  // missing key means the modality degrades to mock/off, never a refusal. We
+  // keep only the status (never the key) to thread into launch-info below.
+  const openaiKey = await preflightOpenAiKey({ verify: interactive });
+  if (interactive) {
+    reportOpenAiPreflight(openaiKey);
+  }
+
   if (!ensureClaudeOnPath()) {
     return;
   }
@@ -131,7 +144,11 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // Tell the channel server how this session was assembled. It surfaces this
   // at /debug/api/info, and the DevTools panel's Server tab renders it — the
   // first place to look when browser/MCP connectivity misbehaves.
-  const launchInfo: LaunchInfo = { launcher: "aiui claude", chromeDevtools: chromeInfo };
+  const launchInfo: LaunchInfo = {
+    launcher: "aiui claude",
+    chromeDevtools: chromeInfo,
+    openaiKey,
+  };
   mcpArgs.push("--launch-info", JSON.stringify(launchInfo));
   const mcpConfig = JSON.stringify({ mcpServers });
 

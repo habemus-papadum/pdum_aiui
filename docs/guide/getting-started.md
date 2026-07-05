@@ -102,29 +102,31 @@ import { defineConfig } from "vite";
 export default defineConfig({ plugins: [aiuiDevOverlay()] });
 ```
 
-That's the whole integration — no app code. The plugin mounts the tool (defaulting to the text
-modality) into every page the dev server serves and hands it the channel port; it is
-dev-server-only, so production builds are untouched. The tool renders a floating **✳ aiui**
-button in the corner of your page. (Custom modalities and non-Vite setups mount from app code
-instead — see the [Web Intent Tool](./web-intent-tool) page.)
+That's the whole integration — no app code. The plugin mounts the tool (defaulting to the
+multimodal [intent overlay](./intent-overlay)) into every page the dev server serves and hands it
+the channel port; it is dev-server-only, so production builds are untouched. The tool renders a
+floating **✳ aiui** button in the corner of your page.
+(Custom modalities and non-Vite setups mount from app code instead — see the
+[Web Intent Tool](./web-intent-tool) page.)
 
 ## 4. Use it
 
-Click the button, type what you want, hit Enter:
+Arm the overlay with the backtick key `` ` `` (or the **✳ aiui** button), then compose a turn:
+hold **Space** and say what you want, drag to circle the thing you mean, tap **S** to grab a
+screenshot of it — then **Enter** to send. Prefer typing? The plain-text escape hatch is one tab
+over. The [Using the intent overlay](./intent-overlay) page is the full how-to (the keymap, the
+correction loop, the config); this is the thirty-second version.
 
-![The intent tool open over a demo app, prompt sent](/intent-tool.png)
+![The intent overlay open over a demo app, a turn sent](/intent-tool.png)
 
-The text streams over the channel's websocket to the MCP server, gets **lowered** into a prompt,
+The turn streams over the channel's websocket to the MCP server, gets **lowered** into a prompt,
 and appears in your Claude Code session in terminal one. What lands there is more than what you
-typed: the lowered prompt is prefixed with **where it came from** — the browser tab (URL, title,
+said: the dictation, any corrections applied, and each screenshot placed at its spot in the prose
+with its on-disk path — all prefixed with **where it came from** — the browser tab (URL, title,
 and, when the aiui DevTools extension is present in the session browser, the tab's ids) plus the
-app's **source root** — and a pointer to the `session-browser` skill that teaches the agent how
-to find that exact tab through the Chrome DevTools MCP. So "make *this* wider" arrives with
-enough context for the agent to select your tab, look at it, and know which code renders it.
-
-Text is deliberately the simple, working start. Richer modalities — voice, screenshots, DOM
-capture ("make *this* wider" pointing at an element) — ride the same pipeline and are the
-roadmap; see the [Web Intent Tool](./web-intent-tool) design page.
+app's **source root** — and a pointer to the `session-browser` skill that teaches the agent how to
+find that exact tab through the Chrome DevTools MCP. So "make *this* wider" arrives with enough
+context for the agent to select your tab, look at it, and know which code renders it.
 
 ## 5. Inspect the lowering
 
@@ -134,9 +136,10 @@ representations, and the final prompt. The 🔍 button in the widget (or
 
 ![The lowering debugger showing a trace's input and output stages](/lowering-debugger.png)
 
-For the proof-of-concept text modality the trace is just input → output. As richer modalities land
-(voice, screenshots, DOM context), this view is where you'll see each stage of the compilation —
-and where you'll look when you disagree with how your intent was rendered.
+A multimodal turn traces the whole compilation — the merged event stream, the composed body with
+its `{shot_N}` tokens, the correction diffs — while the plain-text escape hatch is just
+input → output. Either way this view is where you look when you disagree with how your intent was
+rendered.
 
 Traces live in `.aiui-cache/` under the directory where `aiui claude` runs (project-local,
 gitignored) — screenshots and other blobs are stored there too, so lowered prompts can reference

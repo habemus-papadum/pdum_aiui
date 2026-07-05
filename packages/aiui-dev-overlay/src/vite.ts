@@ -29,8 +29,31 @@
  *     consumer's dev server, so it can embed the port as a literal — no
  *     env-substitution timing to get wrong. It mounts on window `load` and
  *     keeps the widget mounted if the app rebuilds its DOM (see `load()`).
+ *     The same module also installs the page-tools bridge
+ *     (`installToolsBridge` — `window.__AIUI__.tools` + the `/tools`
+ *     websocket), so page toolkits registered with `agentToolkit` reach the
+ *     agent as callable tools with zero app wiring.
  */
 import type { Plugin } from "vite";
+// Imported through the package-internal `#source-locator` subpath rather than a
+// relative path. This node-side entry is externalized during a consumer's Vite
+// config bundling and loaded by node's native ESM, which — unlike Vite/tsx
+// transforms — can't resolve an extensionless relative import of a sibling
+// `.ts`. The `#`-import (resolved via package.json `imports`, dev→src / publish→
+// dist) carries no extension in the specifier, so it resolves cleanly for node
+// and TypeScript in both the source-first dev shape and the published `dist`.
+import { sourceLocatorVite } from "#source-locator";
+import type { IntentPipelineConfig } from "./intent-pipeline";
+
+// Re-exported from the `./vite` (node-side) subpath so the compile-time locator
+// stays out of the browser bundle. Consumers usually enable it through
+// `aiuiDevOverlay({ locator })` rather than wiring these directly.
+export {
+  type SourceLocatorOptions,
+  type SourceLocatorViteOptions,
+  sourceLocatorBabel,
+  sourceLocatorVite,
+} from "#source-locator";
 
 /** The env var `aiui vite` exports to point the dev server at the channel. */
 const PORT_ENV = "VITE_AIUI_PORT";
@@ -49,15 +72,26 @@ export interface AiuiDevOverlayOptions {
    * Auto-mount the intent tool (default `true`). Set `false` to keep only the
    * port/source injection and mount from app code instead — needed when
    * passing custom modalities, which are functions and can't cross
-   * vite.config.
+   * vite.config. `false` also skips the tools bridge; call
+   * `installToolsBridge()` from app code if you still want page tools
+   * forwarded to the agent.
    */
   mount?: boolean;
   /**
-   * The wire format the mounted tool speaks — selects the bundled modality
-   * (default `"text-concat"`, currently the only one). This is where an app's
-   * Vite config declares which message format its intent tool uses.
+   * The wire format the mounted tool speaks — selects the bundled modality set.
+   * Omitted → the default `[multimodal (intent-v1), text]` (multimodal active,
+   * text as the escape hatch). `"text-concat"` → text only; `"intent-v1"` →
+   * multimodal only. This is where an app's Vite config declares its intent
+   * tool's message format.
    */
   format?: string;
+  /**
+   * Client-side pipeline config for the bundled multimodal modality (talk mode,
+   * ink fade, transcriber/corrector choice, arming rebind, research knobs).
+   * JSON-serializable — it is embedded as a literal in the mount module and
+   * rides the hello so a lowering trace records it. See `IntentPipelineConfig`.
+   */
+  intent?: Partial<IntentPipelineConfig>;
   /** Channel port to inject; defaults to `process.env.VITE_AIUI_PORT`. */
   port?: number | string;
   /**
@@ -66,6 +100,29 @@ export interface AiuiDevOverlayOptions {
    * the page's code lives). Defaults to the resolved Vite root.
    */
   sourceRoot?: string;
+  /**
+   * Enable compile-time source-location stamping (opt-in, default off). When
+   * on, `aiuiDevOverlay()` returns an ARRAY of plugins — a `"pre"` babel pass
+   * that stamps every host JSX element with `data-source-loc` and (unless
+   * disabled) injects `{ name, loc }` into cell-factory call sites — plus the
+   * overlay plugin. Vite flattens nested plugin arrays, so
+   * `plugins: [aiuiDevOverlay({ locator: true })]` keeps working.
+   *
+   * - `true` — JSX stamping and the default `cell()` call-site injection.
+   * - `{ cellFactories }` — configure the call-site factory names; pass `[]`
+   *   to keep JSX stamping only.
+   *
+   * ORDER MATTERS for JSX stamping: place `aiuiDevOverlay(...)` BEFORE your
+   * framework's JSX plugin (e.g. `vite-plugin-solid`, which is also
+   * `enforce: "pre"`) — same-enforce plugins run in array order, and the
+   * locator must see JSX before the framework compiles each element into an
+   * opaque template. The `cell()` half is order-independent (plain `.ts`).
+   *
+   * Requires `@babel/core` (an optional peer) as a devDependency of the app.
+   * The locator's source-loc paths are relative to the same root injected as
+   * `window.__AIUI__.sourceRoot` (this option's `sourceRoot`, else the Vite root).
+   */
+  locator?: boolean | { cellFactories?: string[] };
 }
 
 /**
@@ -80,7 +137,7 @@ export interface AiuiDevOverlayOptions {
  * Launch through `aiui vite` so the channel port is known. Without one (env
  * unset) the widget still mounts and reports "no channel port" on send.
  */
-export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin {
+export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Plugin[] {
   const mount = options.mount ?? true;
   // The resolved Vite root, captured in configResolved — the sourceRoot
   // default. An explicit option always wins.
@@ -107,7 +164,7 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin {
   // ever close the tag.
   const scriptString = (value: string): string => JSON.stringify(value).replace(/</g, "\\u003c");
 
-  return {
+  const overlay: Plugin = {
     name: "aiui:dev-overlay",
     apply: "serve",
     configResolved(config) {
@@ -134,6 +191,10 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin {
         "force: true",
         ...(port === undefined ? [] : [`port: ${port}`]),
         ...(options.format === undefined ? [] : [`format: ${scriptString(options.format)}`]),
+        // `<` escaped so a config value can never close the module's <script>.
+        ...(options.intent === undefined
+          ? []
+          : [`intent: ${JSON.stringify(options.intent).replace(/</g, "\\u003c")}`]),
       ];
       const mountCall = `mountIntentTool({ ${args.join(", ")} })`;
       // Mount after `load`, not at module eval: this script runs before the
@@ -141,8 +202,14 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin {
       // (`document.body.innerHTML = …`) would sweep an eager mount away. The
       // observer remounts if the app rebuilds its DOM later — mountIntentTool
       // discards a handle whose host has left the document.
+      //
+      // The tools bridge, by contrast, installs at module eval: this script
+      // precedes the app's modules in the document, so page toolkits find
+      // `window.__AIUI__.tools` synchronously when they register. Without a
+      // channel port it is a no-op.
       return [
-        `import { mountIntentTool } from ${JSON.stringify(PKG)};`,
+        `import { installToolsBridge, mountIntentTool } from ${JSON.stringify(PKG)};`,
+        `installToolsBridge(${port === undefined ? "" : `{ port: ${port} }`});`,
         `const mount = () => ${mountCall};`,
         "const keep = () => {",
         "  mount();",
@@ -183,6 +250,18 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin {
       return tags;
     },
   };
+
+  if (!options.locator) return overlay;
+
+  // Opt-in locator: prepend the `"pre"` babel pass. Its source-loc paths share
+  // the overlay's source root (explicit `sourceRoot`, else each captures the
+  // resolved Vite root). Returning an array is transparent to consumers — Vite
+  // flattens nested plugin arrays.
+  const locatorOptions = options.locator === true ? {} : options.locator;
+  return [
+    sourceLocatorVite({ root: options.sourceRoot, cellFactories: locatorOptions.cellFactories }),
+    overlay,
+  ];
 }
 
 export default aiuiDevOverlay;

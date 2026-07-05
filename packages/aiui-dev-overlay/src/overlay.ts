@@ -2,7 +2,7 @@
  * Dev-only overlay: a Shadow-DOM-isolated "floating tool surface" you import and
  * mount into any page. This is a scaffold — it renders a floating button that
  * toggles a small placeholder panel. The real inspection / element-picking
- * behavior is a TODO (see the sketch in `docs/agentic_ui_workflow`).
+ * behavior is a TODO (see the sketch in `archive/agentic_ui_workflow`).
  *
  * Dependency-free and browser-only: no Node APIs, no `process`.
  */

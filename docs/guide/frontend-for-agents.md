@@ -1,78 +1,149 @@
 # Frontend code for agents
 
-The third layer of the project is slightly orthogonal to [prompt lowering](./prompt-lowering), but
-it pairs naturally with it: a set of **principles, utilities, examples, and workflows** — ultimately
-a TypeScript library plus Claude skills — for writing frontend code that AI agents write well,
-debug well, and iterate on fast. The target domain is scientific/technical visualization.
+The third layer of the project pairs naturally with [prompt lowering](./prompt-lowering) but
+stands on its own: **principles, utilities, examples, and skills for writing frontend code that
+AI agents write well, debug well, and iterate on fast**, aimed at scientific/technical
+visualization. It began as an aspiration; it is now a working methodology with a library
+(`@habemus-papadum/aiui-viz`), two reference apps (the morphogen and aztec notebooks in
+`packages/aiui-demo`), and a ledger of engineering findings.
 
-It's more than a pairing, though: an app built this way is *instrumented*, and that
-instrumentation is what makes prompt lowering effective. A screenshot stops being just pixels
-when, for any rectangle, the tooling can look up which components rendered it and where their
-source lives. Architecturally this layer is its **own JavaScript module, separate from the
-[browser intent tool](./prompt-lowering#concrete-intent-tools-layer-2)** — the intent tool
-captures intent from any page; these utilities make *your* app maximally legible to it.
+This page is the **concepts** — what the pieces are and what we demand of them. Three companion
+pages go deeper: [Design choices](./frontend-design-choices) explains, at
+framework-designer level, exactly what we built and why; [Hard-won details](./frontend-hard-won)
+is the ledger of paid-for technical knowledge underneath it; the
+[Style guide](./frontend-style-guide) is the authoring conventions — page structure, TOC,
+plotting, math — that make every notebook in a lab read as one publication.
 
-## The shape of the code
+## The premise
 
-**Async is the norm, so structure the app as a dependency graph.** Scientific UIs are full of
-computations that aren't instantaneous — remote data pulls, web-worker jobs, long transforms. The
-code wants an Observable-notebook-style dataflow: cells with dependencies, recomputing as inputs
-resolve. At the same time it should *not* be a specialized syntax — it should read as mainstream
-code.
+Agents write most of the code; a human stays in the loop, watching and steering, pointing at the
+running app and saying "make *this* wider." Three consequences shape everything:
 
-**The chosen base is SolidJS 2.0 (beta).** Its fine-grained reactivity and first-class async
-primitives are the closest mainstream substrate for that dataflow style. The
-[solid-cells notes](/reactive-flows/solid-cells-motivation) work through this in detail (with a
-[v1](/reactive-flows/solid-cells-solidjs_v1) and a
-[SolidJS 2.0](/reactive-flows/solid-cells-solidjs_v2) iteration).
+1. **The app must be legible to the tools an agent debugs with** — a screenshot, a console, an
+   evaluated expression. Instrumentation is not overhead; it is what makes the pairing loop and
+   [prompt lowering](./prompt-lowering) work at all.
+2. **The code may be more explicit than a human author would enjoy** — richer chrome, denser
+   instrumentation, schemas next to logic. Agents don't get bored. The hard constraint is that it
+   stays *readable*, because the human still reviews and steers.
+3. **The running state is precious.** The loop edits the very app being inspected. A human drives
+   the app into an interesting state — a simulation grown for minutes, a bug reproduced — and the
+   agent edits code underneath it. Edits must not reset that state.
 
-**AI writes it; humans must be able to read it.** Since agents produce most of the code, it can be
-more explicit — even more tedious — than a human author would enjoy. That's a fine trade. The hard
-constraint is that it stays *comprehensible* to a human reader, because the human is still in the
-loop, watching and steering.
+## The concepts
 
-## Debuggable for your future self
+### Cells: async dataflow as the structure of the app
 
-The agent that writes the code is — for all practical purposes — a later instance of the agent
-that will debug it. It should leave itself handles:
+Scientific UIs are full of computations that take time — worker jobs, fetches, long transforms —
+with dependencies among them. We structure them the way an Observable notebook does: as a graph
+of **cells**. A cell is one asynchronous value with everything its consumers need attached: it
+recomputes when inputs change, *holds* until its inputs are ready, streams partial results,
+reports progress, keeps its last good value visible while a new one computes, carries an
+`AbortSignal` so superseded work actually stops, and exposes a small state machine
+(`pending · streaming · refreshing · ready · errored`) for UI chrome.
 
-- **Source locators.** Use a locator-style plugin to annotate components with their source
-  location, so when the user points at something in the running app ("make *this* wider"), the
-  agent can go from pixel to file:line without a search.
-- **Self-installed debugging hooks.** Knowing it will be connected to a Chrome DevTools MCP
-  server, the agent can attach small functions to global state — hooks it can later call to query
-  or perturb the live app instead of reasoning blind. See
-  [Agentic frontend debugging](/agentic_ui_workflow/agentic_frontend_debugging) and
-  [making web workers observable](/agentic_ui_workflow/agent_observable_web_workers).
-- **HMR-mindful patterns.** The loop edits the very app being inspected, so state should survive
-  hot reloads and the tooling should never fight them. See
-  [HMR for agentic coding](/agentic_ui_workflow/hmr_for_agentic_coding).
-- **Declared affordances.** Annotate inputs and forms in a superset of
-  [WebMCP](https://developer.chrome.com/docs/ai/webmcp), so agents interact with the app through
-  declared, typed hooks rather than brittle selector automation.
+Two ideas inside this deserve their own names:
 
-::: info Open exploration
-"What exactly does it mean to write frontend code for your future self?" is a question this
-project intends to *explore*, not one it has answered. The bullets above are the current bets; the
-[notes](/agentic_ui_workflow/prior_sketches_and_explorations) hold earlier sketches. Expect this
-page to change.
-:::
+- **Streaming is the default.** A downloading table fills in packet by packet; a worker posts a
+  cheap partial seconds before its expensive final answer. Consumers choose per-use whether they
+  want every partial or only settled runs.
+- **Cancellation is supersession.** There is almost no explicit cancel plumbing. Moving a slider
+  invalidates the in-flight run; the graph aborts it (and the worker really stops) and starts the
+  next. Even the explicit "cancel" button is just "hold this cell until further notice."
 
-## Deliverables
+The substrate is SolidJS 2.0 (beta), whose async-first reactive core absorbed most of what this
+model needs — the archived solid-cells design notes (`archive/reactive-flows/` in the repo) trace
+that history. The code reads as mainstream TypeScript, not a notebook dialect.
 
-What this layer should eventually ship:
+### The durable/disposable line: why edits don't destroy state
 
-- **Principles** — written up as docs like this one, refined by use.
-- **Utilities** — the TypeScript library (dataflow cells, locator/hook helpers, overlay plumbing).
-- **Examples** — small scientific UIs built the intended way.
-- **Workflows & skills** — Claude skills and plugin tooling that teach an agent these conventions,
-  plus environment checks (doctor/setup commands) so a repo can verify its prerequisites.
+The single most consequential structural rule: every piece of the app is explicitly either
+**durable** (survives a code edit — the WebGL field textures, the running worker, accumulated
+history, and above all the user's interaction state) or **disposable** (recomputed freely —
+render functions, cell computes, shaders, chart options). The line is drawn *in the module
+layout*, so hot-module-reloading has an easy job: durable things live in a registry that
+re-evaluating modules **adopt rather than recreate**; disposable things rebuild from the durable
+roots on every edit.
 
-## Related notes
+The reframe that makes this coherent: **a code edit is just another cause of invalidation** — the
+same machinery that recomputes a cell when a slider moves recomputes it when its compute function
+changes. In the reference apps this is real: editing a GLSL shader recolors a running simulation
+without resetting the field; editing the dataflow module rebuilds every cell while sliders,
+history, and the sim carry on; and each hot swap logs what it preserved, so the reload itself is
+observable.
 
-The gestures that seeded this layer (initial thoughts, not written in stone):
-[Desiderata](/desiderata) ·
-[Prior sketches](/agentic_ui_workflow/prior_sketches_and_explorations) ·
-[solid-cells motivation](/reactive-flows/solid-cells-motivation) ·
-[HMR for agentic coding](/agentic_ui_workflow/hmr_for_agentic_coding) ·
-[Agentic frontend debugging](/agentic_ui_workflow/agentic_frontend_debugging)
+### Legibility: from a pointing gesture to code
+
+When a human points at the running app, the tooling must answer two different questions:
+
+- **"Which code *authored* this element?"** — solved by compile-time stamping: every rendered
+  element carries `data-source-loc="src/ui/Controls.tsx:81:9"`.
+- **"Which computation *produced* this value?"** — solved by cell attribution: elements that
+  render a cell's value carry `data-cell="analysis"`, and a live registry maps cell names to
+  their state and definition site.
+
+Together they turn "make *this* wider" into a file, a line, and a dataflow node — without the
+scientific code carrying any affordances for it (identity is injected at compile time; the
+attribution boundary comes free with the standard cell-rendering wrapper). The contract is
+deliberately framework-neutral: two DOM attributes plus a registry, however a given stack
+implements them.
+
+### The tool surface: the app grows verbs for the agent
+
+As features are built, the app accumulates **tools** — named, described, schema'd operations an
+agent can discover and call (`window.__morpho.call("jump-regime", { id: "mitosis" })`), plus one
+bounded `report()` that snapshots the whole app. Tools are registered *next to the feature that
+implements them*, ImGui-style, so the surface grows with the code instead of being a manifest
+maintained elsewhere. This is the WebMCP direction: ultimately these registrations flow through
+the dev overlay to the channel and appear to the agent as first-class tools. In practice the tool
+surface is also how the agent *verifies its own work* — the reference apps were tested end-to-end
+through their own tools.
+
+### Many notebooks, one lab
+
+Real practice is a collection of explorations — separate pages with nav, VitePress-style. And
+each page reads like a short paper, not a dashboard: sections that interleave the interactive
+laboratory with prose, real mathematics, a theory of what's on screen, and an "experiments"
+section of concrete things to try — navigable through a right-hand table of contents, under a
+shared header that makes the *collection* visible. Pages respect the system's light/dark
+preference; simulation canvases stay self-contained dark figures in both. Two
+patterns cover it: **separate Vite entries** (a full page load per notebook — which *is* the
+resource policy: leaving a page frees its GPU contexts and workers by construction), and a
+**single-entry shell** with lazy pages whose heavy islands declare suspend policies (pause /
+hibernate / dispose) — the durable/disposable line applied at page granularity. Coordination
+stays boring: URL for shareable state, localStorage for preferences, BroadcastChannel across
+tabs.
+
+## The weaving challenge
+
+None of these is exotic alone. The challenge — and the actual design work — is that they are all
+the *same* structural decisions viewed from different sides. Named nodes serve attribution *and*
+HMR identity *and* auto-derived tools. The durable/disposable line serves state preservation
+*and* page lifecycles *and* worker ownership. Boundaries (the cell-rendering wrapper) serve
+loading chrome *and* attribution stamps. A framework that weaves them means the scientific code —
+the part a human most needs to read — stays clean: define parameters, define cells, render
+values. Everything else is injected, adopted, or derived.
+
+## What agents get to do that we wouldn't ask of humans
+
+Worth naming, because it changes the design targets: an agent will happily register a tool and a
+reporter beside every feature, thread progress callbacks through every long computation, keep
+observability chrome on every async value, write the one-line attribution affordance every time,
+and verify its work by driving the app through its own tool surface. Designing *for* that
+diligence — making each of those a one-liner with a convention — is what makes the resulting app
+better instrumented than a human team would ever bother to make it.
+
+## Where things live
+
+- **Library** — `@habemus-papadum/aiui-viz` (`packages/aiui-viz`): cells, the CellView wrapper,
+  the worker protocol, the durable registry, the tool surface.
+- **Reference apps** — `packages/aiui-demo`: morphogen (reaction-diffusion) and aztec (domino
+  tilings), each a full notebook built the intended way; `PRINCIPLES.md` there maps file layout
+  to methodology.
+- **Design choices** — [the level-2 page](./frontend-design-choices); **ledger** —
+  [the level-3 page](./frontend-hard-won).
+- **Skill** — the `frontend-design` Claude plugin
+  (`packages/aiui-claude-plugin/marketplace/plugins/frontend-design`) teaches this to a coding
+  agent; the docs here are its source of truth.
+- **Background notes** — the pre-implementation explorations (solid-cells, HMR for agentic
+  coding, agentic frontend debugging, observable web workers) are retired to the repo's
+  `archive/` folder; these pages are their distillation.

@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseClaudeAgents } from "./agents";
+import { PageToolDirectory } from "./page-tools";
 import type { RunningServer } from "./registry";
 import { createChannelServer } from "./server";
 import { collectChannelInfo } from "./tools";
@@ -114,6 +115,128 @@ describe("channel_info tool (wired through a real client/server pair)", () => {
       const result = await client.callTool({ name: "channel_info" });
       const content = result.content as Array<{ type: string; text: string }>;
       expect(JSON.parse(content[0].text)).toEqual({ registered: false, pid: process.pid });
+    } finally {
+      await client.close();
+      await mcp.close();
+    }
+  });
+});
+
+describe("page-tool MCP tools (wired to a directory with a fake page connection)", () => {
+  /**
+   * A directory holding one page connection whose handlers answer routed calls,
+   * plus an MCP client/server pair whose server exposes that directory. Mirrors
+   * what the `/tools` websocket would feed and what the agent would drive.
+   */
+  async function connectWithDirectory(handlers: Record<string, (args: unknown) => unknown> = {}) {
+    const pageTools = new PageToolDirectory({ log: () => {}, newId: () => "fixed-id" });
+    let clientId = "";
+    clientId = pageTools.addConnection((msg) => {
+      if (msg.type !== "call") {
+        return;
+      }
+      queueMicrotask(() => {
+        const fn = handlers[msg.name];
+        pageTools.handleClientMessage(clientId, {
+          v: 1,
+          type: "result",
+          callId: msg.callId,
+          ok: true,
+          value: fn ? fn(msg.args) : null,
+        });
+      });
+    });
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const mcp = createChannelServer("1.2.3", { pageTools });
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([mcp.connect(serverTransport), client.connect(clientTransport)]);
+    return { pageTools, clientId, mcp, client };
+  }
+
+  it("advertises the page-tool tools and lists directory entries", async () => {
+    const { pageTools, clientId, mcp, client } = await connectWithDirectory();
+    pageTools.handleClientMessage(clientId, {
+      v: 1,
+      type: "register",
+      ns: "morpho",
+      url: "http://localhost/morpho",
+      hash: "h1",
+      tools: [{ name: "set-params", description: "set params", inputSchema: { type: "object" } }],
+    });
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.map((t) => t.name).sort()).toEqual([
+        "channel_info",
+        "page_tools_call",
+        "page_tools_list",
+      ]);
+
+      const result = await client.callTool({ name: "page_tools_list" });
+      const content = result.content as Array<{ type: string; text: string }>;
+      const listed = JSON.parse(content[0].text);
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toMatchObject({
+        clientId,
+        ns: "morpho",
+        url: "http://localhost/morpho",
+        tools: [{ name: "set-params", description: "set params", inputSchema: { type: "object" } }],
+      });
+    } finally {
+      await client.close();
+      await mcp.close();
+    }
+  });
+
+  it("routes page_tools_call to the page and returns its JSON value", async () => {
+    const { pageTools, clientId, mcp, client } = await connectWithDirectory({
+      greet: (args) => ({ hi: (args as { name: string }).name }),
+    });
+    pageTools.handleClientMessage(clientId, {
+      v: 1,
+      type: "register",
+      ns: "morpho",
+      hash: "h1",
+      tools: [{ name: "greet", description: "greet" }],
+    });
+    try {
+      const result = await client.callTool({
+        name: "page_tools_call",
+        arguments: { name: "greet", args: { name: "ada" } },
+      });
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(JSON.parse(content[0].text)).toEqual({ hi: "ada" });
+    } finally {
+      await client.close();
+      await mcp.close();
+    }
+  });
+
+  it("surfaces a routing error (no page connected) as an isError result", async () => {
+    const { mcp, client } = await connectWithDirectory();
+    // The fake connection registered no namespaces, so nothing matches.
+    try {
+      const result = await client.callTool({
+        name: "page_tools_call",
+        arguments: { name: "nope" },
+      });
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toMatch(/no page tool "nope"/);
+    } finally {
+      await client.close();
+      await mcp.close();
+    }
+  });
+
+  it("omits the page-tool tools when no directory is supplied", async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const mcp = createChannelServer("1.2.3");
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([mcp.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.map((t) => t.name)).toEqual(["channel_info"]);
     } finally {
       await client.close();
       await mcp.close();
