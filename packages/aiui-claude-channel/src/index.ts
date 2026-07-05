@@ -60,10 +60,21 @@ export {
   type TabInfo,
 } from "./frame";
 export {
+  channelSourceDir,
+  defaultFormatLoader,
+  type FormatLoader,
+  isSourceRun,
+  loadModuleFresh,
+  type WatchFn,
+  type WatchOptions,
+  watchChannelSource,
+} from "./hot";
+export {
   createIntentV1Format,
   type IntentV1Options,
   intentV1Format,
   type LoweredMessage,
+  type SpeechMessage,
 } from "./intent-v1";
 export {
   type ChromeDevtoolsInfo,
@@ -90,6 +101,34 @@ export {
   textConcatProcessor,
 } from "./processors";
 export {
+  DEFAULT_REALTIME_MODEL,
+  OPENAI_REALTIME_URL,
+  openaiRealtimeSocketFactory,
+  openRealtimeSession,
+  type RealtimeCallbacks,
+  type RealtimeResult,
+  type RealtimeSession,
+  type RealtimeSessionOptions,
+  type RealtimeSocket,
+  type RealtimeSocketFactory,
+  type RealtimeSocketHandlers,
+} from "./realtime";
+export {
+  DEFAULT_MAX_RESPONSES,
+  DEFAULT_REALTIME_VOICE_MODEL,
+  DEFAULT_VOICE_INSTRUCTIONS,
+  DEFAULT_VOICE_TRANSCRIPTION_MODEL,
+  OPENAI_REALTIME_VOICE_URL,
+  openRealtimeVoiceSession,
+  pcm16ToWav,
+  REALTIME_VOICE_RATE,
+  type RealtimeVoiceCallbacks,
+  type RealtimeVoiceSession,
+  type RealtimeVoiceSessionOptions,
+  type VoiceAudioClip,
+  type VoiceUserResult,
+} from "./realtime-voice";
+export {
   isProcessAlive,
   type RegisteredServer,
   type RegistryEntry,
@@ -110,6 +149,14 @@ export {
 } from "./send-ws";
 export { type ChannelServerOptions, createChannelServer } from "./server";
 export {
+  mockSpeaker,
+  type OpenAiSpeakerOptions,
+  openaiSpeaker,
+  type Speaker,
+  type SpeakInput,
+  type SpeechResult,
+} from "./speak";
+export {
   createTransportStats,
   type FrameStat,
   type TransportSnapshot,
@@ -117,6 +164,7 @@ export {
 } from "./stats";
 export {
   type ChannelInfo,
+  type ChannelToolHandles,
   collectChannelInfo,
   registerChannelTools,
   selfChannelInfo,
@@ -146,7 +194,14 @@ export {
   type Transcriber,
   type TranscriptResult,
 } from "./transcribe";
-export { type PromptHandler, startWebServer, type WebServer, type WebServerOptions } from "./web";
+export {
+  type ChannelReload,
+  type PromptHandler,
+  type ReloadSummary,
+  startWebServer,
+  type WebServer,
+  type WebServerOptions,
+} from "./web";
 
 /** The published package name — handy for smoke tests. */
 export const name = "@habemus-papadum/aiui-claude-channel";

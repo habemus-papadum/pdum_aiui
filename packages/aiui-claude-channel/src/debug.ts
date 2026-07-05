@@ -28,7 +28,11 @@
  *   GET /debug/api/info             this server's own channel info (tag, port,
  *                                   pid, owning Claude session) plus, under
  *                                   `launch`, the launcher-provided session
- *                                   summary (see launch-info.ts)
+ *                                   summary (see launch-info.ts), and the live
+ *                                   reload `generation`
+ *   POST /debug/api/reload          reload the lowering layer in place (drops +
+ *                                   reconnects live sockets); returns the reload
+ *                                   summary. 404 when reload isn't wired.
  *   GET /debug/api/stats            server-side transport counters (see stats.ts)
  *   GET /debug/api/preview?path=…   an image from disk, for hover previews of
  *                                   absolute paths mentioned in lowered prompts
@@ -44,6 +48,7 @@ import type { LaunchInfo } from "./launch-info";
 import type { TransportStats } from "./stats";
 import { selfChannelInfo } from "./tools";
 import { listTraces, readTrace, traceBlobPath } from "./trace";
+import type { ChannelReload } from "./web";
 
 const BLOB_TYPES: Record<string, string> = {
   ".png": "image/png",
@@ -118,12 +123,21 @@ function traceRev(cacheDir: string, id: string): number | undefined {
   }
 }
 
+/** Live hooks the reload feature threads into the debug API. */
+export interface DebugReloadHooks {
+  /** Reads the current reload generation, for /debug/api/info. */
+  getGeneration?: () => number;
+  /** Drives a reload for POST /debug/api/reload; omit and the route 404s. */
+  onReload?: ChannelReload;
+}
+
 /** Mount the debug tool's routes onto the backend's express app. */
 export function registerDebugRoutes(
   app: Express,
   cacheDir: string,
   stats?: TransportStats,
   launchInfo?: LaunchInfo,
+  reload: DebugReloadHooks = {},
 ): void {
   // Loopback diagnostics: let any local page (the DevTools panel opened as a
   // plain tab, test fixtures) read these endpoints cross-origin. The server
@@ -145,7 +159,27 @@ export function registerDebugRoutes(
     if (!infoCache || Date.now() - infoCache.at > INFO_CACHE_MS) {
       infoCache = { at: Date.now(), value: selfChannelInfo() };
     }
-    res.json(launchInfo ? { ...infoCache.value, launch: launchInfo } : infoCache.value);
+    // The generation is read fresh each request (it's outside the info cache) so
+    // a panel polling /debug/api/info sees a reload the moment it lands.
+    res.json({
+      ...infoCache.value,
+      ...(launchInfo ? { launch: launchInfo } : {}),
+      ...(reload.getGeneration ? { generation: reload.getGeneration() } : {}),
+    });
+  });
+
+  // Reload the lowering layer in place — the DevTools panel's button and `curl`
+  // both POST here. CORS is already open on /debug above.
+  app.post("/debug/api/reload", async (_req, res) => {
+    if (!reload.onReload) {
+      res.status(404).json({ error: "reload not available" });
+      return;
+    }
+    try {
+      res.json(await reload.onReload());
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   app.get("/debug/api/stats", (_req, res) => {

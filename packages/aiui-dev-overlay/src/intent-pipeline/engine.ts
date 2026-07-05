@@ -258,6 +258,48 @@ export class Engine {
       }),
     );
   }
+
+  /**
+   * Rehydrate the stream from a recovered turn (HMR/reload turn recovery — see
+   * the overlay's turn-store.ts). Replays each event through the current
+   * listeners so UI surfaces (preview, HUD) rebuild and the modality re-opens
+   * its socket, but WITHOUT re-stamping timestamps or arming idle timers (these
+   * events already happened). Restores the id counters from the log so new
+   * segments/shots can't collide with recovered ones, and leaves the engine
+   * armed with the given thread state. Talking is never resumed (the recording
+   * died with the page).
+   */
+  replay(
+    events: IntentEvent[],
+    state: { threadOpen: boolean; mode?: Mode } = { threadOpen: false },
+  ): void {
+    this.events = [];
+    this.armed = true;
+    this.talking = false;
+    this.threadOpen = state.threadOpen;
+    this.mode = state.mode ?? "ink";
+    this.correctionTarget = undefined;
+    let maxSegment = 0;
+    let maxShot = 0;
+    for (const event of events) {
+      this.events.push(event);
+      const segment = (event as { segment?: unknown }).segment;
+      if (typeof segment === "number") {
+        maxSegment = Math.max(maxSegment, segment);
+      }
+      if (event.type === "shot") {
+        const n = Number(event.marker.replace(/^shot_/, ""));
+        if (Number.isFinite(n)) {
+          maxShot = Math.max(maxShot, n);
+        }
+      }
+      for (const listener of this.listeners) {
+        listener(event, this);
+      }
+    }
+    this.segmentCounter = maxSegment;
+    this.shotCounter = maxShot;
+  }
 }
 
 // ── the first IR pass, pure ──────────────────────────────────────────────────

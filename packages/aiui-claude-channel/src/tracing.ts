@@ -69,6 +69,18 @@ function traceFormat(name: string, format: ChannelFormat, store: TraceStore): Ch
       const inner = format.createProcessor(tracedCtx);
       let frame = 0;
       return {
+        async onClose() {
+          // The connection dropped this thread without a fin: let the processor
+          // release its resources, then mark the trace abandoned. `trace.end`
+          // is idempotent, so a thread that already closed normally (which
+          // deletes it from the connection's live set, so onClose never runs
+          // for it) keeps its "completed" status regardless.
+          try {
+            await inner.onClose?.();
+          } finally {
+            trace.end("abandoned");
+          }
+        },
         onMessage(payload, meta) {
           // Name the input stage after its chunk (intent-v1) so the /debug
           // viewer reads "frame 3 attachment shot_1" rather than a bare index.

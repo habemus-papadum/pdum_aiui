@@ -5,9 +5,13 @@
  * Extracted from `text-concat` so the `intent-v1` lowering reuses the exact
  * same tab/source/selection blocks instead of duplicating them — the two
  * formats must produce identical context wording so a trace reads the same
- * whichever modality lowered it. {@link augmentTextPrompt} is the one place that
- * wording lives; {@link asSelection} normalizes a loosely-typed selection block
- * the same way for both formats.
+ * whichever modality lowered it. The wording lives in exactly one place —
+ * {@link promptContextSections} / {@link selectionSections} build the blocks and
+ * {@link wrapWithContext} encloses them — which lets a streaming processor
+ * pre-warm the hello-fixed part (tab/source) and defer only the body and the
+ * late selection to `fin`, while `text-concat` still calls the all-in-one
+ * {@link augmentTextPrompt}. {@link asSelection} normalizes a loosely-typed
+ * selection block the same way for both formats.
  */
 import type { HelloMeta } from "./frame";
 
@@ -66,21 +70,19 @@ export const asSelection = (payload: unknown): SelectionContext | undefined => {
 };
 
 /**
- * Wrap a user's text in the context the connection's hello provided: which
- * browser tab it came from (with the routing caveats an agent needs) and where
- * the page's source code lives. Returns the text unchanged when there is no
- * context to add — a bare client (no plugin, no extension) still works.
+ * The tab + source context sections — everything the hello fixes at connect
+ * time, independent of the (late-arriving) on-screen selection. Split out from
+ * {@link augmentTextPrompt} so a processor can **pre-warm** this skeleton once
+ * at thread-open and only concatenate the body + selection at `fin` (the
+ * incremental-lowering seam; see streaming-turns.md §2). Empty for a bare
+ * client with no tab/source context.
  *
  * The tab ids are labeled as *hints* on purpose: Chrome's extension tab id,
  * the CDP target id, and the Chrome DevTools MCP's pageId are three different
  * namespaces, and only `list_pages` can produce the last one (see the
  * session-browser skill, which this preamble points the agent at).
  */
-export function augmentTextPrompt(
-  text: string,
-  meta: HelloMeta | undefined,
-  selection?: SelectionContext,
-): string {
+export function promptContextSections(meta: HelloMeta | undefined): string[] {
   const tab = meta?.tab;
   const source = meta?.source;
   const sections: string[] = [];
@@ -115,25 +117,43 @@ export function augmentTextPrompt(
     sections.push(`The source code of the web app in that tab is located at: ${source.root}`);
   }
 
-  if (selection?.text) {
-    const attribution: string[] = [];
-    if (selection.sourceLoc !== undefined) {
-      attribution.push(`authored at ${selection.sourceLoc}`);
-    }
-    if (selection.cell !== undefined) {
-      attribution.push(`produced by cell ${selection.cell}`);
-    }
-    const lines = [
-      `It concerns this on-screen selection: "${selection.text}"${
-        attribution.length > 0 ? ` (${attribution.join("; ")})` : ""
-      }.`,
-    ];
-    if (selection.tex !== undefined) {
-      lines.push(`The selected content is rendered mathematics; its TeX source: ${selection.tex}`);
-    }
-    sections.push(lines.join("\n"));
-  }
+  return sections;
+}
 
+/**
+ * The on-screen-selection section — the late-arriving part of the context (it
+ * rides its own `context` frame just before `fin`). Returns `[]` when there is
+ * no selection text to talk about.
+ */
+export function selectionSections(selection: SelectionContext | undefined): string[] {
+  if (!selection?.text) {
+    return [];
+  }
+  const attribution: string[] = [];
+  if (selection.sourceLoc !== undefined) {
+    attribution.push(`authored at ${selection.sourceLoc}`);
+  }
+  if (selection.cell !== undefined) {
+    attribution.push(`produced by cell ${selection.cell}`);
+  }
+  const lines = [
+    `It concerns this on-screen selection: "${selection.text}"${
+      attribution.length > 0 ? ` (${attribution.join("; ")})` : ""
+    }.`,
+  ];
+  if (selection.tex !== undefined) {
+    lines.push(`The selected content is rendered mathematics; its TeX source: ${selection.tex}`);
+  }
+  return [lines.join("\n")];
+}
+
+/**
+ * Wrap a user prompt in already-assembled context sections. The one place the
+ * enclosing wording lives — {@link augmentTextPrompt} and the `intent-v1`
+ * lowering both feed it their sections so the two formats stay byte-identical.
+ * No sections → the text is returned unchanged (a bare client still works).
+ */
+export function wrapWithContext(sections: string[], text: string): string {
   if (sections.length === 0) {
     return text;
   }
@@ -144,4 +164,19 @@ export function augmentTextPrompt(
     "---",
     text,
   ].join("\n\n");
+}
+
+/**
+ * Wrap a user's text in the context the connection's hello provided: which
+ * browser tab it came from (with the routing caveats an agent needs), where
+ * the page's source code lives, and any on-screen selection. Returns the text
+ * unchanged when there is no context to add — a bare client (no plugin, no
+ * extension) still works.
+ */
+export function augmentTextPrompt(
+  text: string,
+  meta: HelloMeta | undefined,
+  selection?: SelectionContext,
+): string {
+  return wrapWithContext([...promptContextSections(meta), ...selectionSections(selection)], text);
 }

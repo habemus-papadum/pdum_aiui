@@ -37,6 +37,14 @@ describe("encodeFrame / decodeFrame", () => {
     }
   });
 
+  it("round-trips a streamed audio chunk (seq + raw PCM payload)", () => {
+    const pcm = new Uint8Array([0x00, 0x01, 0xff, 0x7f, 0x80]);
+    const chunk = { kind: "audio", id: "seg_2", seq: 7, mime: "audio/pcm;rate=24000" } as const;
+    const { envelope: out, payload } = decodeFrame(encodeFrame(envelope({ chunk }), pcm));
+    expect(out.chunk).toEqual(chunk);
+    expect([...payload]).toEqual([...pcm]);
+  });
+
   it("round-trips a large binary payload (screenshot-sized)", () => {
     const payload = new Uint8Array(2 * 1024 * 1024);
     for (let i = 0; i < payload.length; i += 4093) {

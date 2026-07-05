@@ -40,6 +40,8 @@ interface DriveOptions {
   hello?: HelloMeta;
   transcriber?: Transcriber;
   corrector?: Corrector;
+  /** Force the env key (e.g. `""` to exercise the keyless/degraded seam). */
+  apiKey?: string;
   /** When set, wrap the format in tracing rooted here so blob paths resolve. */
   cache?: string;
 }
@@ -66,6 +68,7 @@ function drive(opts: DriveOptions = {}): Driver {
   let format: ChannelFormat = createIntentV1Format({
     ...(opts.transcriber !== undefined ? { transcriber: opts.transcriber } : {}),
     ...(opts.corrector !== undefined ? { corrector: opts.corrector } : {}),
+    ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
   });
   if (opts.cache !== undefined) {
     format = withTracing(new Map([["intent-v1", format]]), createTraceStore(opts.cache)).get(
@@ -219,6 +222,49 @@ describe("intent-v1 server transcription", () => {
     await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1]));
     expect(d.pushed).toEqual([]);
   });
+
+  it("echoes a note (not silence) when openai transcription is asked for but the channel is keyless", async () => {
+    // openai requested, no override, forced-empty key → the transcriber seam is
+    // absent. The default is `openai`, so a keyless launch lands here.
+    const d = drive({ hello: openaiHello({ transcriber: "openai" }), apiKey: "" });
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "talk-start", segment: 1 },
+      { at: 3, type: "talk-end", segment: 1, ms: 200 },
+    ]);
+    await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1, 2, 3]));
+
+    expect(d.pushed).toHaveLength(1);
+    const events = (d.pushed[0] as { events: IntentEvent[] }).events;
+    expect(events.map((e) => e.type)).toEqual(["transcript-final", "note"]);
+    // The segment resolves to an empty final so the preview doesn't hang…
+    expect((events[0] as Extract<IntentEvent, { type: "transcript-final" }>).text).toBe("");
+    // …and the note names the cause the widget can show.
+    expect((events[1] as Extract<IntentEvent, { type: "note" }>).text).toMatch(/OPENAI_API_KEY/);
+  });
+
+  it("echoes a note when server-side transcription throws (e.g. an invalid key)", async () => {
+    const throwing: Transcriber = {
+      name: "throwing",
+      async transcribe() {
+        throw new Error("transcription failed (401)");
+      },
+    };
+    const d = drive({ hello: openaiHello({ transcriber: "openai" }), transcriber: throwing });
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "talk-start", segment: 1 },
+    ]);
+    // The throw is caught inside the processor — the frame is not rejected.
+    await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1, 2, 3]));
+
+    expect(d.pushed).toHaveLength(1);
+    const events = (d.pushed[0] as { events: IntentEvent[] }).events;
+    expect(events.map((e) => e.type)).toEqual(["transcript-final", "note"]);
+    expect((events[1] as Extract<IntentEvent, { type: "note" }>).text).toMatch(
+      /transcription failed.*401/,
+    );
+  });
 });
 
 describe("intent-v1 server correction", () => {
@@ -324,6 +370,89 @@ describe("intent-v1 server correction", () => {
     // No server-produced events (the client's patch was used as-is).
     expect(d.pushed).toEqual([]);
     expect(d.sent[0].text).toContain("baseline");
+  });
+});
+
+describe("intent-v1 incremental lowering (S1)", () => {
+  /** The `reused` flag the fin lowering records — true = speculative cache hit. */
+  const finReused = (cache: string): boolean => {
+    const [trace] = listTraces(cache);
+    const stage = trace.stages.find((s) => s.label === "fin compose");
+    return (stage?.data as { reused: boolean }).reused;
+  };
+
+  it("reuses the speculative compose at fin when the event log is unchanged since", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
+    const d = drive({ cache });
+    // One events batch composes speculatively; the bare fin adds no events.
+    await d.feedEvents(loadFixture("plain-dictation.json"));
+    await d.fin();
+
+    // The output is the same as ever…
+    expect(d.sent).toHaveLength(1);
+    expect(d.sent[0].text).toBe(
+      "make the baseline curve a bit thicker and color it amber " +
+        "the legend overlaps the plot on narrow screens can you move it below",
+    );
+    // …and it came from the cache, not a fin-time recompute.
+    expect(finReused(cache)).toBe(true);
+  });
+
+  it("recomputes at fin when a shot path is wired after the last events batch", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
+    const d = drive({ cache });
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 9, 9]);
+    // Batch (shot event, no path yet → speculative Option-A), then the bytes
+    // land and wire the path — the one late mutation between batch and fin.
+    await d.feedEvents(loadFixture("full-turn-send.json"));
+    await d.feedAttachment("shot_1", "image/png", png);
+    await d.fin();
+
+    // The wired path made it into the committed prompt (Option-C token + meta)…
+    expect(d.sent).toHaveLength(1);
+    expect(d.sent[0].text).toContain("{shot_1}");
+    expect(d.sent[0].meta?.shot_1).toBeDefined();
+    // …which required a fin-time recompute (the cache was stale).
+    expect(finReused(cache)).toBe(false);
+  });
+
+  it("saves a shot blob to the trace dir on arrival, before fin", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
+    const d = drive({ cache });
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
+    await d.feedEvents(loadFixture("full-turn-send.json"));
+    await d.feedAttachment("shot_1", "image/png", png); // no fin yet
+
+    // The bytes are already on disk while the turn is still open.
+    const [trace] = listTraces(cache);
+    const blob = join(cache, "traces", trace.id, "shot_1.png");
+    expect(existsSync(blob)).toBe(true);
+    expect([...readFileSync(blob)]).toEqual([...png]);
+    // The turn has not committed yet — no prompt, thread still open.
+    expect(d.sent).toEqual([]);
+    expect(d.isClosed()).toBe(false);
+
+    await d.fin();
+    expect(d.sent).toHaveLength(1);
+  });
+
+  it("records incremental stages in arrival order (blob + speculative compose precede fin)", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
+    const d = drive({ cache });
+    await d.feedEvents(loadFixture("full-turn-send.json"));
+    await d.feedAttachment("shot_1", "image/png", new Uint8Array([0x89, 1, 2, 3]));
+    await d.fin();
+
+    const [trace] = listTraces(cache);
+    const at = (label: string): number => trace.stages.findIndex((s) => s.label === label);
+    // The blob was recorded on the attachment frame, before the fin frame.
+    expect(at("attachment shot_1")).toBeGreaterThanOrEqual(0);
+    expect(at("attachment shot_1")).toBeLessThan(at("frame 2 (fin)"));
+    // The speculative compose ran during the turn, before the fin lowering.
+    expect(at("composed (speculative)")).toBeGreaterThanOrEqual(0);
+    expect(at("composed (speculative)")).toBeLessThan(at("merged events"));
+    // The condition pass ran on arrival too.
+    expect(at("condition shot_1 (imageDownscale)")).toBeLessThan(at("frame 2 (fin)"));
   });
 });
 

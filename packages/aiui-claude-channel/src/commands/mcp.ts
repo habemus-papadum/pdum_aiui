@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { channelSourceDir, watchChannelSource } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
 import { PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
 import { projectCacheDir } from "../trace";
-import { startWebServer } from "../web";
+import { startWebServer, type WebServer } from "../web";
 
 export interface McpOptions {
   /**
@@ -58,7 +59,18 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // and the `/tools` websocket in the web backend (which feeds it), so create it
   // once and hand the same instance to both.
   const pageTools = new PageToolDirectory();
-  const mcp = createChannelServer(VERSION, { pageTools });
+  // The web server is created after the MCP server, so `channel_reload` gets a
+  // late-bound thunk: by the time the agent can call the tool, `web` is set.
+  let web: WebServer | undefined;
+  const mcp = createChannelServer(VERSION, {
+    pageTools,
+    reload: () => {
+      if (!web) {
+        throw new Error("web backend not ready yet");
+      }
+      return web.reload();
+    },
+  });
 
   // Push text into the Claude Code session over the one-way channel. Extra meta
   // (the intent-v1 lowering's Option-C attachment paths) rides as additional
@@ -82,13 +94,46 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // Lowering traces + the /debug viewer live in the project-local cache
   // (.aiui-cache/ under this server's cwd — gitignored, readable by the
   // Claude Code session running in the same directory).
-  const web = await startWebServer({
+  web = await startWebServer({
     onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
     traceDir: projectCacheDir(),
     launchInfo,
     pageTools,
   });
   const registration = registerServer(web.port, tag);
+
+  // Dev-only auto-reload on source edits, opt-in via AIUI_CHANNEL_WATCH=1 and
+  // only meaningful in a source checkout (a packaged install has nothing on disk
+  // to watch). Off by default — the `channel_reload` tool and POST /debug/api/reload
+  // are the always-on triggers.
+  let stopWatch: (() => void) | undefined;
+  if (process.env.AIUI_CHANNEL_WATCH === "1") {
+    const srcDir = channelSourceDir();
+    if (srcDir) {
+      stopWatch = watchChannelSource({
+        dir: srcDir,
+        onChange: () => {
+          web
+            ?.reload()
+            .then((s) =>
+              process.stderr.write(
+                `[aiui-channel] reloaded on edit — generation=${s.generation} socketsDropped=${s.socketsDropped}\n`,
+              ),
+            )
+            .catch((err) =>
+              process.stderr.write(
+                `[aiui-channel] reload failed: ${err instanceof Error ? err.message : String(err)}\n`,
+              ),
+            );
+        },
+      });
+      process.stderr.write(`[aiui-channel] watching ${srcDir} for edits (AIUI_CHANNEL_WATCH=1)\n`);
+    } else {
+      process.stderr.write(
+        "[aiui-channel] AIUI_CHANNEL_WATCH=1 ignored — not running from source\n",
+      );
+    }
+  }
 
   // Reliable cleanup. `remove()` is race-safe and idempotent, so calling it from
   // several exit paths is fine. The synchronous `exit` handler is the last-resort
@@ -99,8 +144,9 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
       return;
     }
     shuttingDown = true;
+    stopWatch?.();
     registration.remove();
-    await web.close().catch(() => {});
+    await web?.close().catch(() => {});
     await mcp.close().catch(() => {});
   };
 

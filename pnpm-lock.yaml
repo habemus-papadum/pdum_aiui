@@ -181,6 +181,9 @@ importers:
 
   packages/aiui-dev-overlay/workbench:
     devDependencies:
+      '@habemus-papadum/aiui-claude-channel':
+        specifier: workspace:^
+        version: link:../../aiui-claude-channel
       '@habemus-papadum/aiui-dev-overlay':
         specifier: workspace:^
         version: link:..

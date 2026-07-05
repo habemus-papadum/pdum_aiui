@@ -77,6 +77,16 @@ export interface StreamProcessor {
    * Throwing rejects that frame (`ok: false`) without closing the thread.
    */
   onMessage(payload: unknown, meta: MessageMeta): void | Promise<void>;
+  /**
+   * Optional teardown: the transport connection dropped this thread **without**
+   * a `fin` (the socket just closed mid-turn). The processor should release any
+   * per-thread resources it holds — an upstream realtime session, incremental
+   * caches — and must **not** produce a user-visible side effect (no
+   * `sendPrompt`): an abandoned turn lowers to nothing. Never called for a
+   * thread that closed itself via {@link ThreadContext.close}. Best-effort — a
+   * throw is swallowed so sibling threads still tear down.
+   */
+  onClose?(): void | Promise<void>;
 }
 
 /** Builds the processor for one new thread. */
@@ -126,6 +136,15 @@ export interface ChannelConnection {
    * send back. Frames are processed strictly in call order, one at a time.
    */
   handleFrame(frame: Uint8Array): Promise<ChannelResponse>;
+  /**
+   * The transport connection closed. Every thread still open (i.e. one that
+   * never `fin`'d) gets its processor's {@link StreamProcessor.onClose}, so
+   * per-thread resources are released rather than leaked. Runs after any
+   * in-flight frame (it chains on the same serialization queue). Idempotent-ish:
+   * a second call simply finds no open threads. Drive it from the transport's
+   * connection-close (see web.ts).
+   */
+  close(): Promise<void>;
 }
 
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
@@ -242,5 +261,24 @@ export function createChannelConnection(options: ChannelConnectionOptions): Chan
     return result;
   };
 
-  return { handleFrame };
+  // Tear down every still-open thread when the connection drops. Chained on the
+  // same queue so it runs after the last in-flight frame; each processor's
+  // onClose is best-effort so one throwing teardown can't strand the rest.
+  const close = (): Promise<void> => {
+    const result = queue.then(async () => {
+      const live = [...threads.values()];
+      threads.clear();
+      for (const processor of live) {
+        try {
+          await processor.onClose?.();
+        } catch {
+          // best-effort teardown — a leak is better than an unhandled rejection
+        }
+      }
+    });
+    queue = result;
+    return result;
+  };
+
+  return { handleFrame, close };
 }

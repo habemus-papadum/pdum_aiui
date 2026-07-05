@@ -65,9 +65,10 @@ and because a walkie-talkie key can't be left open by accident. Press-to-toggle 
 config choice if holding a key while you also draw or shoot feels awkward.
 
 The transcript **preview** streams above the widget as you go, with shot thumbnails inline. How
-live it feels depends on which transcriber runs (see [What runs where](#what-runs-where-mock-vs-the-channel)):
-the mock streams word-by-word; the real REST transcriber has no partials, so the preview fills in
-all at once when the segment's transcript lands.
+live it feels depends on which transcriber runs (see [What runs where](#what-runs-where-the-channel-real-vs-mock)):
+the default channel-side REST transcriber has no partials, so the preview fills in all at once when
+the segment's transcript lands; the **experimental** `openai-realtime` transcriber streams partial
+deltas *while you speak* (the preview fills as you talk); the mock streams word-by-word.
 
 ## Ink
 
@@ -118,22 +119,45 @@ follow from corrections being patches:
   produced or won't apply, the overlay falls back to a plain replacement of the selected text —
   the correction still lands.
 
-## What runs where: mock vs the channel
+## What runs where: the channel (real) vs mock
 
 The two model-backed steps — transcription and the correction diff — each run in one of two
-places, chosen by config:
+places, chosen by config. **The real, channel-side path is the default**; mock is the explicit
+offline choice.
 
-- **`mock` (local, offline, no key).** The default. Transcription streams canned phrases (with
-  injectable typos, so the correction loop has something to fix) and corrections are built
-  locally. Nothing leaves the browser and no API key is needed — this is the mode to design and
-  demo against.
-- **`openai` (channel-side).** The real thing runs in the **channel process**, not the page:
-  when a talk segment or a correction request reaches the channel, it calls OpenAI and echoes the
-  result back to the widget to merge into its preview. The key lives with the channel — it is read
-  from `OPENAI_API_KEY` in the environment `aiui claude` runs in, **never** from the page or
-  `config.json`. `aiui claude` [preflights that key](./config#the-intent-pipeline-openai-key) at
-  launch, and a missing or stale key **degrades** transcription/correction to mock/off rather than
-  blocking anything — the overlay still mounts and works.
+- **`openai` (channel-side) — the default.** The real transcription and correction run in the
+  **channel process**, not the page: when a talk segment or a correction request reaches the
+  channel it calls OpenAI and echoes the result back to the widget to merge into its preview.
+  It's a REST round-trip with no partials, so a segment's transcript fills in all at once, on the
+  order of ~1–1.5 s after you release Space (that latency floor is what the audio-stack work is
+  measuring). The key lives with the channel — read from `OPENAI_API_KEY` in the environment
+  `aiui claude` runs in, **never** from the page or `config.json` — and `aiui claude`
+  [preflights it](./config#the-intent-pipeline-openai-key) at launch. If the channel has no key
+  (or a stale one), the step does **not** silently fall back: the widget's status says
+  transcription or correction is *unavailable* and how to fix it. The overlay still mounts and
+  everything else — ink, shots, composing, sending — keeps working.
+- **`mock` (local, offline, no key) — for development.** Transcription streams canned phrases (with
+  injectable typos, so the correction loop has something to fix) and corrections are built locally;
+  nothing leaves the browser. It's the explicit offline/dev choice — set `transcriber: "mock"` and
+  `corrector: "mock"` (see [Configuring the pipeline](#configuring-the-pipeline)) — and it's what
+  the [intent workbench lab](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench)
+  defaults to, so the whole loop runs there with no channel and no key.
+
+### Realtime transcription (experimental)
+
+`transcriber: "openai-realtime"` swaps the REST round-trip for a **streaming** session: instead of
+recording a whole segment and uploading it, the page streams PCM to a per-thread realtime session
+the channel holds open, and partial transcript deltas echo back **while you speak** — the preview
+fills as you talk, and the final lands a fraction of a second after you release Space rather than
+after the ~1–1.5 s REST floor. It is the same `openai` posture in every other way (the key lives in
+the channel; a keyless channel or an upstream error degrades *loudly* — the widget says so, never a
+silent switch to mock). It's opt-in and still a spike: it needs the mic **and** an `AudioWorklet`
+(so it can't start in a context that lacks either — again, said out loud, no silent fallback), and
+its models/latency are still being measured (the workbench bench's realtime leg). Knobs:
+`realtimeModel` (default `gpt-realtime-whisper`) and `realtimeDelay`
+(`minimal`…`xhigh`, a latency/accuracy trade-off). The `rapid`, `premium`, and `flagship`
+[tiers](#tiers-one-dial-for-the-whole-ladder) set these (and their spoken-audio siblings) for you —
+this subsection is the manual path.
 
 When you **send**, the whole turn is lowered in the channel into a single prompt: the dictated
 text, the corrections applied, and each screenshot placed at its position in the prose as a
@@ -144,6 +168,59 @@ is prefixed just as it is for text. Every stage of that lowering is recorded as 
 can inspect in the debugger:
 
 ![The lowering debugger showing a multimodal trace](/lowering-debugger.png)
+
+## Tiers: one dial for the whole ladder
+
+The pipeline has a dozen model knobs — transcriber, transcription model, corrector, TTS, realtime
+voice — and `tier` is a single **cost-sized dial** over all of them: pick a rung and the tier
+expands into the fine-grained fields for you.
+
+The five rungs, cheapest first:
+
+| `tier` | Backend | $/active-hr (~10 min speech) | What you feel |
+| --- | --- | --- | --- |
+| `mock` | mock STT + mock corrector | $0 | canned transcript; no key, no network — pure offline dev. |
+| `standard` *(default)* | `gpt-4o-mini-transcribe` + `gpt-4o-mini` | ~$0.03 (cents) | dictate, and it catches up ~1.4 s after you release. Today's behavior, unchanged. |
+| `rapid` | `gpt-realtime-whisper` (streaming STT) + `gpt-4o-mini` | ~$0.17 (dimes) | same silence, but the final snaps in ~2× faster (~655 ms). No partials, no voice back. |
+| `premium` | `rapid` + `gpt-4o-mini-tts` spoken acks | ~$0.18 (dimes) | it says "sent" back to you — keep your eyes on the app, not the preview. |
+| `flagship` | `gpt-realtime-2` (audio+text conversational) | ~$1–6 (dollars) | spoken answers, barge-in, model turn-detection. Text is still the source of truth. |
+
+`tier` defaults to `standard` — an absent tier *is* standard — which reproduces today's exact
+REST-mini behavior, so there is zero billing surprise for anyone who never touches it.
+
+**The merge rule: preset first, then your explicit knobs.** The effective config is
+`DEFAULT ← tier preset ← explicit fine fields` — the tier preset fills in over the defaults, and
+your explicit fields (the Vite `intent` option unioned with any gear-panel/agent overrides) fill
+in over the preset. A tier only *supplies* the fields it owns; anything you name explicitly still
+wins. So `{ tier: "flagship", model: "whisper-1" }` runs the flagship voice model but pins `model`
+to `whisper-1`. Switching `tier` **re-derives** the fields that tier owns — you don't inherit the
+old tier's fields frozen in.
+
+**Setting it — three doors, one validated path.** Set `tier` any of the ways you set the other
+knobs:
+
+- the Vite option — `aiuiDevOverlay({ intent: { tier: "premium" } })`;
+- the gear (**⚙ advanced config**) panel — edit `tier` in the JSON;
+- the agent's `aiui_overlay set_config` tool — `{ config: { tier: "flagship" } }`.
+
+All three go through the same validated config path.
+
+**Degradation is loud — a paid tier never quietly downgrades.** A keyless `premium` says *"spoken
+confirmation unavailable — no OPENAI_API_KEY (premium tier)"* rather than silently becoming
+`rapid`; a keyless `flagship` says flagship needs `OPENAI_API_KEY` rather than falling back to
+REST. Same posture the pipeline already takes for keyless transcription (see
+[What runs where](#what-runs-where-the-channel-real-vs-mock)).
+
+**What it feels like in practice** (measured live, 2026-07-05, against real OpenAI calls). On
+`premium`, the spoken "sent" ack lands ~1.1 s after you send (~14 KB per ack). On `flagship`, your
+transcript — the IR the prompt is lowered from — lands ~0.5–0.9 s after you release, and the
+model's spoken reply is playable ~1.4–1.6 s after release, at ~0.6–0.8¢ per spoken turn for short
+utterances.
+
+**Flagship reaches nothing on the page yet.** v1 ships `realtimeTools: "none"` — the voice model
+can talk and be interrupted (barge-in ducks/cancels the reply the moment you talk over it) but has
+no page tools; wiring the conversational model to on-page actions is a later, separately-reviewed
+phase.
 
 ## Configuring the pipeline
 
@@ -175,15 +252,27 @@ The knobs, with their defaults:
 
 | Field | Default | What it does |
 | --- | --- | --- |
+| `tier` | `standard` | The cost dial — one preset over the model knobs below; see [Tiers](#tiers-one-dial-for-the-whole-ladder). |
 | `talkMode` | `hold` | Space is hold-to-talk (`hold`) or press-to-toggle (`toggle`). |
 | `inkFadeSec` | `6` | Seconds until ink fades; `0` keeps strokes until you clear them. |
 | `autoEndSec` | `0` | Idle seconds before a turn auto-ends; `0` means explicit Enter only. |
-| `transcriber` | `mock` | `mock` (local) or `openai` (channel-side transcription). |
+| `transcriber` | `openai` | `openai` (channel-side REST — the default), `openai-realtime` (experimental streaming, partials as you speak), `openai-voice` (the flagship conversational session — streams PCM like `openai-realtime`, but the channel holds a `gpt-realtime-2` model that answers aloud; its input transcription still feeds the lowered prompt), or `mock` (local, offline). |
 | `model` | `gpt-4o-mini-transcribe` | OpenAI transcription model (when `transcriber: openai`). |
+| `realtimeModel` | `gpt-realtime-whisper` | Realtime transcription model (when `transcriber: openai-realtime`). |
+| `realtimeDelay` | *(model default)* | Realtime latency/accuracy trade-off: `minimal`…`xhigh` (when `transcriber: openai-realtime`). |
+| `audioBack` | `off` | Spoken audio back to you: `off` (silent), `acks` (premium — short TTS confirmations), `voice` (flagship — native conversational speech). Also the client-side mute — set `off` to silence audio-back regardless of tier. |
 | `correctionPolicy` | `replace` | A correction rewrites the transcript (`replace`) or rides along as a note for the lowering model (`note`). |
-| `corrector` | `mock` | `mock` (local patch) or `openai` (a chat model writes the diff). |
+| `corrector` | `openai` | `openai` (a chat model writes the diff — the default) or `mock` (local patch, offline). |
 | `correctionModel` | `gpt-4o-mini` | Chat model that emits the correction patch (when `corrector: openai`). |
 | `arming` | `{ key: "`", enabled: true }` | The arm/disarm key, and whether keyboard arming is on at all. |
+
+The spoken-audio tiers carry a small cluster of fine fields you normally never set by hand — `tier`
+fills them in — but they're there to override one when you want: `ttsModel` (premium TTS model,
+default `gpt-4o-mini-tts`) and `ttsVoice` (its voice id); and, for flagship, `realtimeVoiceModel`
+(default `gpt-realtime-2`), `realtimeVoice` (voice id, e.g. `cedar`/`marin`), `realtimeTools`
+(`"none"` in v1 — the flagship model gets no page tools yet), and `realtimeReasoning`
+(`minimal`|`low`|`medium`|`high`, the flagship reasoning effort — carried in config, not yet wired
+to the wire in v1).
 
 Research knobs ship **without UI** and default off: `passes` (the lowering's condition/polish
 slots — `silenceTrim`, `imageDownscale`), `silenceGate` (client-side dead-air trimming before a

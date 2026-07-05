@@ -12,8 +12,14 @@
  * @packageDocumentation
  */
 
-export type { IntentPipelineConfig } from "./config";
-export { DEFAULT_INTENT_CONFIG } from "./config";
+export type { IntentPipelineConfig, IntentTier } from "./config";
+export {
+  DEFAULT_INTENT_CONFIG,
+  DEFAULT_TIER,
+  expandTier,
+  TIER_CONTROLLED_KEYS,
+  TIER_PRESETS,
+} from "./config";
 export type {
   ComposedIntent,
   ComposedItem,

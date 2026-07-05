@@ -26,12 +26,28 @@ overlay package's folder.
 pnpm workbench      # from the repo root (alias for: pnpm --filter @habemus-papadum/aiui-workbench dev)
 ```
 
-Open the printed URL in **Chrome**. For real transcription/correction, put `OPENAI_API_KEY=sk-…`
-in the repo-root `.env.dev` (gitignored; wins over a shell export). Everything works without a
-key — the default transcriber and corrector are mocks.
+Open the printed URL in **Chrome**. The lab defaults **live**, like the shipping overlay — put
+`OPENAI_API_KEY=sk-…` in the repo-root `.env.dev` (gitignored; wins over a shell export) and you
+get real transcription/correction with real latency. No key → the openai backends error loudly
+and one drawer click flips you to the [mock backends](#the-mock-backends), which keep the whole
+loop usable offline.
 
 **Evaluating the UI? Start with the [turn-flow guide](./docs/turn-flow.md)** — how to run each
 scenario, what's real vs simulated, and the toggle/measurement walkthrough.
+
+### The mock backends
+
+`transcriber: "mock"` and `corrector: "mock"` are the lab's **offline/headless mode** — one
+drawer click (or a `DEFAULT_SETTINGS` tweak) away, and what agents driving the bench without a
+mic or key should use. They are the reason the whole loop can run with no channel and no key:
+the mock transcriber streams a canned phrase
+word-by-word at a configurable cadence and can **inject typos** at a set rate: deliberate
+mis-transcriptions that give the select-and-speak correction meta-loop something real to fix. The
+mock corrector builds the V4A patch locally, replacing the selection in place. They exist so the
+whole interaction — dictation preview, correction, the diff flash — can be iterated offline and
+captured as `fixtures/`, and so the bench is deterministic. Everywhere else, `mock` is the explicit
+offline choice you opt into (`transcriber`/`corrector: "mock"`); the shipping overlay defaults to
+the real channel-side path. The `mockWordMs` / `mockTypoRate` knobs live in the settings drawer.
 
 ## Scripts
 
@@ -40,7 +56,7 @@ scenario, what's real vs simulated, and the toggle/measurement walkthrough.
 | `pnpm dev` | the lab page (vite; `/api/transcribe`, `/api/chat`, `/api/shot`, `/api/preview` dev-server endpoints) |
 | `pnpm test` | vitest — the `bench/` unit tests (the pipeline's own tests moved to the overlay; the fixtures replay there too) |
 | `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm bench` | the standalone transcription benchmark (no GUI; see the [audio-stack notes](./docs/openai-audio-stack.md)) |
+| `pnpm bench` | the standalone transcription benchmark (no GUI; REST latency/RTF/WER **plus** a realtime-streaming leg — `--realtime=<model>` / `off` — reporting release→final and partials-before-release side by side, which answers T6; see the [audio-stack notes](./docs/openai-audio-stack.md)) |
 
 ## What the lab keeps vs. imports
 
@@ -55,7 +71,7 @@ overlay, the lab picks it up with no build step). The lab owns only its scaffold
 | `src/scenery.ts` | the app-under-test, self-annotated with `data-cell` / `data-source-loc` the way the locator vite plugin stamps a real app |
 | `src/settings.ts` | the toggle drawer, editing `IntentPipelineConfig` (localStorage-persisted; `WorkbenchSettings` is an alias) |
 | `src/styles.ts` | the lab chrome (scenery, HUD, dock frame, settings); the panes ship `aiui-dbg-*`, the multimodal layer ships `mm-*` |
-| `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark across models (+ a planned corpus runner — see the audio-stack notes) |
+| `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark across REST models + a realtime-streaming leg (release→final vs REST's floor, partials-before-release — T6; streams through the channel's `openRealtimeSession`) (+ a planned corpus runner — see the audio-stack notes) |
 | `fixtures/` | captured interaction event-streams; replayed by the overlay's `intent-pipeline/fixtures.test.ts` |
 | `vite.config.ts` | dev server + `/api/*` endpoints (`.env.dev` loading, transcription/chat proxies, shot persistence, path previews) |
 

@@ -18,7 +18,13 @@
  *
  * Framework-free, browser-safe.
  */
-import { DEFAULT_INTENT_CONFIG, type IntentPipelineConfig } from "../intent-pipeline";
+import {
+  DEFAULT_TIER,
+  expandTier,
+  type IntentPipelineConfig,
+  TIER_CONTROLLED_KEYS,
+  TIER_PRESETS,
+} from "../intent-pipeline";
 
 /** localStorage key for the panel's override layer (per origin). */
 export const INTENT_CONFIG_STORAGE_KEY = "aiui-intent-config";
@@ -76,16 +82,26 @@ const objectOf =
 
 /** The known keys of IntentPipelineConfig and how to type-check each. */
 const SCHEMA: Record<string, FieldCheck> = {
+  tier: oneOf(["mock", "standard", "rapid", "premium", "flagship"]),
   talkMode: oneOf(["hold", "toggle"]),
   inkFadeSec: num,
   autoEndSec: num,
-  transcriber: oneOf(["mock", "openai"]),
+  transcriber: oneOf(["mock", "openai", "openai-realtime", "openai-voice"]),
   model: str,
+  realtimeModel: str,
+  realtimeDelay: oneOf(["minimal", "low", "medium", "high", "xhigh"]),
   mockWordMs: num,
   mockTypoRate: num,
   correctionPolicy: oneOf(["replace", "note"]),
   corrector: oneOf(["mock", "openai"]),
   correctionModel: str,
+  audioBack: oneOf(["off", "acks", "voice"]),
+  ttsModel: str,
+  ttsVoice: str,
+  realtimeVoiceModel: str,
+  realtimeVoice: str,
+  realtimeTools: oneOf(["none", "submit_intent", "page"]),
+  realtimeReasoning: oneOf(["minimal", "low", "medium", "high"]),
   arming: objectOf({ key: str, enabled: bool }),
   silenceGate: objectOf({ enabled: bool, thresholdDb: num, minSilenceMs: num }),
   priming: objectOf({ sources: strArray }),
@@ -148,12 +164,77 @@ export function computeOverrides(
   return overrides as Partial<IntentPipelineConfig>;
 }
 
-/** Effective config = DEFAULT ← Vite intent option ← persisted overrides. */
+/**
+ * Effective config = `DEFAULT ← expandTier(tier) ← explicit`, where the explicit
+ * layer is the Vite `intent` option ∪ the persisted/agent overrides (the
+ * non-default layers, i.e. "set on purpose"). The tier preset fills the fine
+ * fields *above* the defaults but *below* anything explicit, so a `tier` picks a
+ * cost-sized preset while an explicit fine field still wins
+ * (`{ tier:"flagship", model:"whisper-1" }` runs flagship but pins `model`).
+ *
+ * The subtlety this exact shape solves (model-tiers.md, choice #4): the tier must
+ * expand at the **delta** level, not the merged level — once layers are merged,
+ * every field has a value and "the user set `model`" is indistinguishable from
+ * "`DEFAULT` provided `model`". So `viteOption` must be the **raw** Vite partial,
+ * never a pre-merged `DEFAULT+vite` object; passing a pre-merged base here would
+ * make every field look explicit and the preset would never apply.
+ */
 export function effectiveConfig(
   viteOption: Partial<IntentPipelineConfig>,
   overrides: Partial<IntentPipelineConfig>,
 ): IntentPipelineConfig {
-  return { ...DEFAULT_INTENT_CONFIG, ...viteOption, ...overrides };
+  const explicit = { ...viteOption, ...overrides };
+  const tier = explicit.tier ?? DEFAULT_TIER;
+  return { ...expandTier(tier), ...explicit };
+}
+
+/**
+ * The persisted delta for an Apply — {@link computeOverrides} plus the
+ * **tier-switch delta reconciliation** (model-tiers.md, choice #5). The JSON
+ * editor shows the *fully expanded* effective config, so when a user switches
+ * `tier` while the editor still literally holds the previous tier's fine-field
+ * values, a naive delta would freeze those stale values as explicit overrides —
+ * pinning the old tier's fields onto the new one.
+ *
+ * The fix: when the applied delta contains a `tier`, drop every tier-controlled
+ * fine field from the delta **unless it differs from the new tier's preset**
+ * (`TIER_PRESETS[newTier]`, not `base`). A field that equals the new tier's
+ * preset value is redundant and re-derived by {@link expandTier}; a field that
+ * *diverges* from it is a deliberate cross-tier override and kept (so
+ * `set_config({ tier:"flagship", model:"whisper-1" })` keeps `model`). The
+ * equivalent user-facing rule: *changing `tier` re-derives the fields that tier
+ * owns; only fields you set that diverge from the new tier stick.*
+ *
+ * Both the gear panel's Apply and the agent's `set_config` call this, so they
+ * behave identically.
+ */
+export function overridesForApply(
+  edited: Partial<IntentPipelineConfig>,
+  base: IntentPipelineConfig,
+): Partial<IntentPipelineConfig> {
+  const raw = computeOverrides(edited, base) as Record<string, unknown>;
+  const newTier = raw.tier;
+  if (typeof newTier !== "string") {
+    return raw as Partial<IntentPipelineConfig>;
+  }
+  const preset = (TIER_PRESETS[newTier as keyof typeof TIER_PRESETS] ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const reconciled: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key !== "tier" && TIER_CONTROLLED_KEYS.has(key)) {
+      // Keep a tier-controlled field only if it diverges from the new tier's
+      // preset; otherwise it is redundant (or a stale editor value) and expansion
+      // supplies it.
+      if (JSON.stringify(value) !== JSON.stringify(preset[key])) {
+        reconciled[key] = value;
+      }
+    } else {
+      reconciled[key] = value;
+    }
+  }
+  return reconciled as Partial<IntentPipelineConfig>;
 }
 
 // ── persistence (per origin) ────────────────────────────────────────────────
@@ -196,8 +277,13 @@ export function clearIntentOverrides(key: string = INTENT_CONFIG_STORAGE_KEY): v
 // ── the panel UI ──────────────────────────────────────────────────────────────
 
 export interface AdvancedConfigOptions {
-  /** The DEFAULT+Vite base — the layer the persisted delta sits on. */
-  base: IntentPipelineConfig;
+  /**
+   * The **raw** Vite `intent` partial (NOT pre-merged with DEFAULT) — the tier
+   * expansion needs the raw explicit layer to distinguish "set on purpose" from
+   * the defaults. The base the persisted delta sits on is derived here as
+   * `effectiveConfig(viteOption, {})`.
+   */
+  viteOption: Partial<IntentPipelineConfig>;
   /** The current effective config (base + persisted overrides) at mount. */
   effective: IntentPipelineConfig;
   /** localStorage key for the override layer. */
@@ -214,6 +300,10 @@ export interface AdvancedConfigOptions {
  */
 export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfigOptions): void {
   const storageKey = opts.storageKey ?? INTENT_CONFIG_STORAGE_KEY;
+  // The base the persisted delta is computed against: DEFAULT ← tier preset ←
+  // Vite option. Derived from the raw Vite partial so the tier expansion is
+  // included (the panel diffs the editor against this).
+  const base = effectiveConfig(opts.viteOption, {});
   let current = opts.effective;
 
   const gear = document.createElement("button");
@@ -259,7 +349,7 @@ export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfig
   hint.className = "mm-config-hint";
   hint.style.cssText = "margin-top:6px;font-size:11px;color:#6b7280;line-height:1.5;";
   hint.textContent =
-    "Full effective config (DEFAULT ← Vite intent option ← your edits). Unknown keys and type mismatches are rejected. Most knobs apply live; transcriber/corrector/model take effect on the next talk. Persisted for this site.";
+    "Full effective config (DEFAULT ← tier preset ← Vite intent option ← your edits). Set `tier` to a preset (mock/standard/rapid/premium/flagship); explicit fine fields still win. Unknown keys and type mismatches are rejected. Most knobs apply live; transcriber/corrector/model take effect on the next talk. Persisted for this site.";
 
   panel.append(editor, row, hint);
   container.append(gear, panel);
@@ -293,9 +383,9 @@ export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfig
       setMsg(result.error, true);
       return;
     }
-    const overrides = computeOverrides(result.config, opts.base);
+    const overrides = overridesForApply(result.config, base);
     saveIntentOverrides(overrides, storageKey);
-    current = effectiveConfig(opts.base, overrides);
+    current = effectiveConfig(opts.viteOption, overrides);
     opts.onApply(current);
     refresh();
     const count = Object.keys(overrides).length;
@@ -309,7 +399,7 @@ export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfig
 
   reset.addEventListener("click", () => {
     clearIntentOverrides(storageKey);
-    current = effectiveConfig(opts.base, {});
+    current = effectiveConfig(opts.viteOption, {});
     opts.onApply(current);
     refresh();
     setMsg("reset to defaults ✓", false);

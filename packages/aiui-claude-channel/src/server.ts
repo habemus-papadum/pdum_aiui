@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import type { PageToolDirectory } from "./page-tools";
 import { registerChannelTools } from "./tools";
+import type { ChannelReload } from "./web";
 
 /** Optional wiring for {@link createChannelServer}. */
 export interface ChannelServerOptions {
@@ -10,6 +11,13 @@ export interface ChannelServerOptions {
    * those tools are simply not advertised — only `channel_info` is.
    */
   pageTools?: PageToolDirectory;
+  /**
+   * Reload handle to expose through the `channel_reload` MCP tool. The web
+   * server is created after this one, so callers pass a late-bound thunk that
+   * dereferences it (see commands/mcp.ts). Omit it and `channel_reload` is not
+   * advertised.
+   */
+  reload?: ChannelReload;
 }
 
 const INSTRUCTIONS = [
@@ -24,10 +32,10 @@ const INSTRUCTIONS = [
  *
  * The server declares the experimental `claude/channel` capability, which is
  * what marks it as a Claude Code channel (rather than a plain tool/resource
- * server), plus a `tools` capability for `channel_info` and — when a page-tool
- * directory is supplied — `page_tools_list`/`page_tools_call` (see
- * {@link registerChannelTools}). It is returned unconnected so callers (and
- * tests) can inspect it without wiring up a transport.
+ * server), plus a `tools` capability for `channel_info` and — when supplied —
+ * `page_tools_list`/`page_tools_call` (a page-tool directory) and `channel_reload`
+ * (a reload handle) (see {@link registerChannelTools}). It is returned unconnected
+ * so callers (and tests) can inspect it without wiring up a transport.
  */
 export function createChannelServer(version: string, options: ChannelServerOptions = {}): Server {
   const server = new Server(
@@ -37,6 +45,9 @@ export function createChannelServer(version: string, options: ChannelServerOptio
       instructions: INSTRUCTIONS,
     },
   );
-  registerChannelTools(server, options.pageTools);
+  registerChannelTools(server, {
+    ...(options.pageTools ? { pageTools: options.pageTools } : {}),
+    ...(options.reload ? { reload: options.reload } : {}),
+  });
   return server;
 }

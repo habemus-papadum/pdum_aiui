@@ -117,6 +117,15 @@ screenshot of it — then **Enter** to send. Prefer typing? The plain-text escap
 over. The [Using the intent overlay](./intent-overlay) page is the full how-to (the keymap, the
 correction loop, the config); this is the thirty-second version.
 
+::: tip Dictation and correction use OpenAI by default
+Speech transcription and the dictation-correction step run for real against OpenAI in the channel
+process, which reads `OPENAI_API_KEY` from the environment you launched `aiui claude` in — the
+launcher [preflights it](./config#the-intent-pipeline-openai-key) and warns up front if it's
+missing. Without a key the widget's status says transcription is *unavailable*; it never silently
+degrades. Working offline? Switch the overlay to the
+[mock backends](./intent-overlay#what-runs-where-the-channel-real-vs-mock).
+:::
+
 ![The intent overlay open over a demo app, a turn sent](/intent-tool.png)
 
 The turn streams over the channel's websocket to the MCP server, gets **lowered** into a prompt,

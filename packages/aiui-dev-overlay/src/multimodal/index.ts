@@ -17,5 +17,12 @@ export { Ink } from "./ink";
 export { multimodalModality } from "./modality";
 export { Preview } from "./preview";
 export { locateComponents, type ShotPixels, type ShotSink, ShotTool } from "./shot";
+export {
+  type SpeechAudioElement,
+  type SpeechAudioFactory,
+  type SpeechClip,
+  SpeechPlayer,
+  type SpeechPlayerOptions,
+} from "./speech";
 export { STYLES as MULTIMODAL_STYLES } from "./styles";
 export { mockTranscriber, type Transcriber, type TranscriptResult } from "./transcribe";

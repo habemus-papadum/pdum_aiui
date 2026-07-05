@@ -21,7 +21,14 @@ pnpm typecheck       # tsc --noEmit across packages
 pnpm lint            # Biome (lint + format check)
 pnpm test:packaging  # pack every publishable package, install into a scratch npm project, smoke the CLIs
 pnpm test:e2e        # live Claude Code session e2e (spends subscription usage)
+pnpm workbench       # the intent overlay's offline lab (mock backends, no channel, no key)
 ```
+
+`pnpm workbench` runs the **intent workbench** — the pipeline mounted on instrumented scenery with
+the [mock transcriber/corrector](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench#the-mock-backends)
+as its defaults, for latency/accuracy measurement, pipeline-config research, and fixture capture.
+It's where the mocking infrastructure lives; the shipping overlay defaults to the real
+channel-side backends.
 
 ### Editable workspace dependencies (source-first)
 
@@ -62,6 +69,19 @@ keep the scheme honest:
 New packages inherit all of this from the `pnpm new-package` skeleton. When adding a subpath
 export (like the overlay's `./vite`), add it to **both** the dev `exports` and the
 `publishConfig.exports`.
+
+### Hot-reloading the running channel
+
+Source-first dev picks up edits everywhere the code is *transpiled on demand* — but the
+`aiui-claude-channel` MCP server is a long-lived process behind a live Claude Code session, so its
+already-loaded lowering code doesn't update on edit like a Vite page does. It can **reload in
+place** instead: the `channel_reload` MCP tool (or `POST /debug/api/reload`, or
+`AIUI_CHANNEL_WATCH=1` for auto-reload on save) rebuilds the format registry from the code now on
+disk without restarting the process. Live websockets drop and reconnect on their own; the session
+and the web port stay up. Reload reaches the format entry modules (`processors.ts`, `intent-v1.ts`)
+and their edits — deeper changes still want a relaunch. See the channel's
+[websocket-protocol doc](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-claude-channel/docs/websocket-protocol.md#hot-reload)
+for what survives and what drops.
 
 ### The packaging test
 

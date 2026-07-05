@@ -22,12 +22,15 @@
  * this is only a "the wire still works" smoke.
  */
 import { readFileSync } from "node:fs";
+import { openaiSpeaker, SYSTEM_PROMPT } from "@habemus-papadum/aiui-claude-channel";
 import { describe, expect, it } from "vitest";
-// Imported from the workbench source directly. These move to
-// @habemus-papadum/aiui-dev-overlay/intent-pipeline when P1 of the graduation
-// plan lands (see multimodal-intent-graduation.md); update the path then.
-import { SYSTEM_PROMPT } from "../../aiui-dev-overlay/workbench/src/correct";
-import { applyPatch } from "../../aiui-dev-overlay/workbench/src/patch";
+// The correction prompt + V4A applier graduated from the workbench into the
+// shared packages (multimodal-intent-graduation.md P1): the SYSTEM_PROMPT is
+// re-exported by the channel's corrector seam (a dependency here); `applyPatch`
+// graduated to the intent-pipeline core — imported by relative source path since
+// aiui-dev-overlay is not a dependency of this package (as the workbench import
+// was before).
+import { applyPatch } from "../../aiui-dev-overlay/src/intent-pipeline/patch";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -36,6 +39,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // correction diff. Cheapest tokens that still exercise the real request shape.
 const TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const CORRECT_MODEL = "gpt-4o-mini";
+// The premium tier's TTS-ack model (model-tiers.md T2). A one-word ack is a few KB.
+const TTS_MODEL = "gpt-4o-mini-tts";
 
 const wavPath = new URL("./fixtures/segment.wav", import.meta.url);
 
@@ -111,5 +116,20 @@ describe.skipIf(!OPENAI_API_KEY)("openai intent pipeline · real round-trip (e2e
     const applied = applyPatch(docLines, content);
     expect(applied).not.toEqual(docLines);
     console.log(`[e2e] correction (${CORRECT_MODEL}): ${latencyMs}ms → ${JSON.stringify(applied)}`);
+  });
+
+  it("synthesizes a short TTS ack: non-empty audio + a MIME (premium tier)", async () => {
+    // The production speaker seam (the premium tier's audioBack:"acks" path).
+    const started = performance.now();
+    const result = await openaiSpeaker({
+      model: () => TTS_MODEL,
+      apiKey: OPENAI_API_KEY as string,
+    }).speak({ text: "sent", voice: "alloy" });
+    const latencyMs = Math.round(performance.now() - started);
+
+    expect(result.bytes.length).toBeGreaterThan(0);
+    expect(result.mime).toMatch(/^audio\//);
+    expect(result.model).toBe(TTS_MODEL);
+    console.log(`[e2e] tts (${TTS_MODEL}): ${latencyMs}ms → ${result.bytes.length} bytes`);
   });
 });

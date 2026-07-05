@@ -22,6 +22,19 @@ don't rewrite the fixture.
 | `full-turn-send.json` | A full multimodal turn: dictation → region shot → dictation, interleaved (`items = [text, shot, text]`), ending in send. |
 | `cancel-turn.json` | A dictation segment then **Esc**: `thread-close(reason: "cancel")`, engine stays armed. |
 
+## Streaming (realtime) wire fixtures — `streaming/`
+
+The five fixtures above are pure `IntentEvent[]` streams replayed through `composeIntent`. The
+**realtime transcriber** (streaming-turns.md §3) introduces a different shape: an *ordered wire
+sequence* of interleaved client frames (`events` batches + streamed `audio` frames) and the
+server's delta→delta→final echoes. Those live under `streaming/` (a subdirectory, so the
+`composeIntent` replay in `intent-pipeline/fixtures.test.ts` — which globs only this directory's
+top-level `*.json` — is unaffected) and are replayed by the channel's `realtime.test.ts`.
+
+| File | What it is |
+| --- | --- |
+| `streaming/realtime-turn.json` | One `openai-realtime` dictation turn on the wire: `armed → thread-open → talk-start`, three `audio` frames carrying `seg_1`'s PCM in `seq` order, `talk-end` (the commit boundary), then the upstream `…delta`/`…completed` echoes, then a bare `fin`. Pins the streaming contract — audio streams *during* talk under the PTT boundaries, and the partial deltas must **not** change what the turn commits (only the `…completed` final composes). |
+
 ## Capture method
 
 All five were driven against the **real** workbench dev server (`pnpm dev --port 5183`)

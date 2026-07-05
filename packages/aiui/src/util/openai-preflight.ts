@@ -11,8 +11,9 @@
  *
  * So the launcher's whole job is to *preflight* that env var and tell the user
  * what it found — degradation, not refusal. A missing or rejected key never
- * blocks the launch; the modality still mounts and transcription/correction
- * fall back to mock/off. The most valuable case this catches is the one that
+ * blocks the launch; the modality still mounts, but transcription/correction are
+ * unavailable until the key is set (the widget says so — `mock` is the explicit
+ * offline choice, not a silent fallback). The most valuable case this catches is the one that
  * bit the bench twice (see workbench field-notes, "Keys & config"): a **stale
  * shell export** shadowing the real key, which surfaces as a confusing 401 deep
  * in the pipeline rather than a clear message up front.
@@ -118,10 +119,11 @@ export function openAiPreflightMessage(status: OpenAiKeyStatus): PreflightMessag
         level: "warn",
         title: "OPENAI_API_KEY is not set — the intent pipeline will run degraded",
         detail:
-          "Speech transcription and dictation correction fall back to mock/off mode. To enable " +
-          "them, export the key in the shell you run `aiui claude` from:\n" +
+          "Speech transcription and dictation correction are unavailable — the overlay says so when " +
+          "you try to dictate. To enable them, export the key in the shell you run `aiui claude` from:\n" +
           "  export OPENAI_API_KEY=sk-…\n" +
-          "It flows through to the channel process, which is where those calls happen.",
+          "It flows through to the channel process, which is where those calls happen. (For offline " +
+          "work, switch the overlay to the mock backends — see the intent-overlay guide.)",
       };
     case "invalid":
       return {
@@ -134,7 +136,7 @@ export function openAiPreflightMessage(status: OpenAiKeyStatus): PreflightMessag
           "not the whole secret):\n" +
           "  echo $OPENAI_API_KEY | head -c 12\n" +
           "and compare that against the start of your real key. Until it's fixed, transcription " +
-          "and correction run in mock/off mode.",
+          "and correction are unavailable.",
       };
     case "unverified":
       return {
@@ -142,8 +144,8 @@ export function openAiPreflightMessage(status: OpenAiKeyStatus): PreflightMessag
         title: "couldn't verify OPENAI_API_KEY with OpenAI — continuing",
         detail:
           "The check didn't complete (offline, a timeout, or a transient OpenAI error), so the " +
-          "key is unverified — not known-bad. Launch continues; if the intent pipeline degrades " +
-          "to mock/off, an unreachable or invalid key may be why.",
+          "key is unverified — not known-bad. Launch continues; if transcription and correction " +
+          "turn out unavailable, an unreachable or invalid key may be why.",
       };
   }
 }

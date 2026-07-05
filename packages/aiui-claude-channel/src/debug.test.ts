@@ -94,8 +94,10 @@ describe("web backend with traceDir", () => {
     const info = (await (await fetch(`http://127.0.0.1:${port}/debug/api/info`)).json()) as {
       registered?: boolean;
       pid?: number;
+      generation?: number;
     };
-    expect(info).toEqual({ registered: false, pid: process.pid });
+    // The reload generation rides along on info (0 before any reload).
+    expect(info).toEqual({ registered: false, pid: process.pid, generation: 0 });
   });
 
   it("surfaces launch info under `launch`, and serves transport stats", async () => {

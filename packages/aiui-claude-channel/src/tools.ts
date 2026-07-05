@@ -12,10 +12,12 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { type ClaudeAgent, enrichServers, listClaudeAgents, type SessionInfo } from "./agents";
 import type { PageToolDirectory } from "./page-tools";
 import { type RegistryEntry, readEntry, registryFileFor } from "./registry";
+import type { ChannelReload } from "./web";
 
 const CHANNEL_INFO_TOOL = "channel_info";
 const PAGE_TOOLS_LIST_TOOL = "page_tools_list";
 const PAGE_TOOLS_CALL_TOOL = "page_tools_call";
+const CHANNEL_RELOAD_TOOL = "channel_reload";
 
 /** A channel server plus the Claude Code session that owns it. */
 export interface ChannelInfo {
@@ -82,6 +84,14 @@ const PAGE_TOOLS_CALL_DESCRIPTION =
   "errors and lists the candidates (pass ns and/or clientId to pick one). Errors if no page " +
   "is connected, no tool matches, the page is mid-reload, or the call times out.";
 
+const CHANNEL_RELOAD_DESCRIPTION =
+  "After you edit this channel's own source, reload its lowering layer in place — the format " +
+  "registry is rebuilt from the code now on disk, no session restart. Live websockets drop and " +
+  "reconnect on their own (an in-flight intent turn is abandoned; the page stays up), and the " +
+  "MCP stdio session and web port are unaffected. Returns { reloaded, generation, socketsDropped }. " +
+  "Only reloads the format-entry modules (processors, intent-v1) and their edits; changes deeper " +
+  "in the import graph still need a full relaunch.";
+
 /** JSON text tool result. */
 const jsonResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -93,14 +103,23 @@ const errorResult = (message: string) => ({
   isError: true as const,
 });
 
+/** Optional handles the channel tools drive (see {@link registerChannelTools}). */
+export interface ChannelToolHandles {
+  /** Exposes `page_tools_list` / `page_tools_call` when supplied. */
+  pageTools?: PageToolDirectory;
+  /** Exposes `channel_reload` when supplied (late-bound to the web server). */
+  reload?: ChannelReload;
+}
+
 /**
  * Register the channel server's tools. Requires the server to have been created
- * with the `tools` capability (see {@link createChannelServer}). When a
- * {@link PageToolDirectory} is supplied, the page-tool bridge tools
- * (`page_tools_list` / `page_tools_call`) are advertised alongside
- * `channel_info`.
+ * with the `tools` capability (see {@link createChannelServer}). `channel_info`
+ * is always advertised; a {@link PageToolDirectory} adds the page-tool bridge
+ * tools (`page_tools_list` / `page_tools_call`), and a reload handle adds
+ * `channel_reload`.
  */
-export function registerChannelTools(server: Server, pageTools?: PageToolDirectory): void {
+export function registerChannelTools(server: Server, handles: ChannelToolHandles = {}): void {
+  const { pageTools, reload } = handles;
   server.setRequestHandler(ListToolsRequestSchema, () => ({
     tools: [
       {
@@ -137,6 +156,15 @@ export function registerChannelTools(server: Server, pageTools?: PageToolDirecto
             },
           ]
         : []),
+      ...(reload
+        ? [
+            {
+              name: CHANNEL_RELOAD_TOOL,
+              description: CHANNEL_RELOAD_DESCRIPTION,
+              inputSchema: { type: "object", properties: {}, additionalProperties: false },
+            },
+          ]
+        : []),
     ],
   }));
 
@@ -145,6 +173,13 @@ export function registerChannelTools(server: Server, pageTools?: PageToolDirecto
     if (name === CHANNEL_INFO_TOOL) {
       // Report our own registry entry (the file this process wrote for itself).
       return jsonResult(selfChannelInfo());
+    }
+    if (reload && name === CHANNEL_RELOAD_TOOL) {
+      try {
+        return jsonResult(await reload());
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
     }
     if (pageTools && name === PAGE_TOOLS_LIST_TOOL) {
       return jsonResult(pageTools.list());

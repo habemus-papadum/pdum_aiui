@@ -36,6 +36,8 @@ interface Harness {
   events(batch: IntentEvent[]): Promise<ChannelResponse>;
   context(selection: unknown): Promise<ChannelResponse>;
   bareFin(): Promise<ChannelResponse>;
+  /** Drop the transport connection (tears down any thread still mid-turn). */
+  close(): Promise<void>;
   prompts: Array<{ text: string; meta?: Record<string, string> }>;
   pushed: unknown[];
 }
@@ -70,6 +72,7 @@ function harness(format: ChannelFormat): Harness {
       conn.handleFrame(
         encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId: TID, fin: true }),
       ),
+    close: () => conn.close(),
     prompts,
     pushed,
   };
@@ -143,5 +146,40 @@ describe("intent-v1 wire contract", () => {
     expect(h.prompts[0].text.match(/baseline/g)).toHaveLength(1);
     // The context frame folded its selection into the lowered prompt.
     expect(h.prompts[0].text).toContain('on-screen selection: "the plot"');
+  });
+
+  it("tears down an abandoned turn: onClose marks the trace abandoned, sends nothing", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-int-"));
+    const h = harness(traced(createIntentV1Format({ corrector: mockCorrector() }), cache));
+    await h.hello({ corrector: "openai", correctionPolicy: "replace" });
+
+    // A turn that streams a full dictation but never sends the terminating fin.
+    await h.events([
+      { at: 1, type: "armed", on: true },
+      { at: 2, type: "thread-open", trigger: "talk" },
+      { at: 3, type: "talk-start", segment: 1 },
+      { at: 4, type: "talk-end", segment: 1, ms: 200 },
+      {
+        at: 5,
+        type: "transcript-final",
+        segment: 1,
+        text: "make the plot wider",
+        latencyMs: 100,
+        model: "mock",
+      },
+    ]);
+
+    // The socket drops — the connection tears the still-open thread down via
+    // its processor's onClose (the S2 realtime-session teardown seam).
+    await h.close();
+
+    // The invariant: an abandoned turn commits nothing observable.
+    expect(h.prompts).toEqual([]);
+    // The trace records the run as abandoned rather than leaving it open-ended.
+    const [trace] = listTraces(cache);
+    expect(trace.status).toBe("abandoned");
+    // A second close (e.g. a duplicate socket 'close' event) is a harmless no-op.
+    await expect(h.close()).resolves.toBeUndefined();
+    expect(trace.status).toBe("abandoned");
   });
 });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_INTENT_CONFIG } from "../intent-pipeline";
+import { DEFAULT_INTENT_CONFIG, expandTier, TIER_PRESETS } from "../intent-pipeline";
 import { installLocalStorage } from "../test-support/local-storage";
 import {
   clearIntentOverrides,
@@ -8,6 +8,7 @@ import {
   effectiveConfig,
   INTENT_CONFIG_STORAGE_KEY,
   loadIntentOverrides,
+  overridesForApply,
   saveIntentOverrides,
   validateIntentConfig,
 } from "./advanced-config";
@@ -71,6 +72,31 @@ describe("validateIntentConfig (strict — typos fail loudly)", () => {
     expect(validateIntentConfig([1, 2]).ok).toBe(false);
     expect(validateIntentConfig(null).ok).toBe(false);
   });
+
+  it("accepts the tier dial and the new audio-back / flagship fields", () => {
+    expect(validateIntentConfig({ tier: "flagship" }).ok).toBe(true);
+    expect(validateIntentConfig({ transcriber: "openai-voice" }).ok).toBe(true);
+    expect(
+      validateIntentConfig({
+        audioBack: "acks",
+        ttsModel: "gpt-4o-mini-tts",
+        ttsVoice: "cedar",
+        realtimeVoiceModel: "gpt-realtime-2",
+        realtimeVoice: "cedar",
+        realtimeTools: "none",
+        realtimeReasoning: "low",
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("rejects an out-of-set tier / audioBack value, naming the key", () => {
+    const badTier = validateIntentConfig({ tier: "deluxe" });
+    expect(badTier.ok).toBe(false);
+    if (!badTier.ok) {
+      expect(badTier.error).toMatch(/"tier" must be one of/);
+    }
+    expect(validateIntentConfig({ audioBack: "loud" }).ok).toBe(false);
+  });
 });
 
 describe("computeOverrides (the persisted delta)", () => {
@@ -91,6 +117,122 @@ describe("computeOverrides (the persisted delta)", () => {
     expect(computeOverrides({ arming: { key: "~", enabled: true } }, base)).toEqual({
       arming: { key: "~", enabled: true },
     });
+  });
+});
+
+describe("tiers: expansion + merge precedence", () => {
+  it("expands each tier into its expected fine fields (the expansion table)", () => {
+    // mock — offline, keyless, both seams mock.
+    expect(expandTier("mock")).toMatchObject({ transcriber: "mock", corrector: "mock" });
+    // standard (the default) reproduces today's REST-mini backends.
+    expect(expandTier("standard")).toMatchObject({
+      transcriber: "openai",
+      model: "gpt-4o-mini-transcribe",
+      corrector: "openai",
+      correctionModel: "gpt-4o-mini",
+      audioBack: "off",
+    });
+    // rapid — streaming STT, no voice back.
+    expect(expandTier("rapid")).toMatchObject({
+      transcriber: "openai-realtime",
+      realtimeModel: "gpt-realtime-whisper",
+      audioBack: "off",
+    });
+    // premium — rapid + spoken TTS acks.
+    expect(expandTier("premium")).toMatchObject({
+      transcriber: "openai-realtime",
+      audioBack: "acks",
+      ttsModel: "gpt-4o-mini-tts",
+    });
+    // flagship — the conversational voice model.
+    expect(expandTier("flagship")).toMatchObject({
+      transcriber: "openai-voice",
+      audioBack: "voice",
+      realtimeVoiceModel: "gpt-realtime-2",
+      realtimeVoice: "cedar",
+      realtimeTools: "none",
+    });
+  });
+
+  it("an absent/unknown tier expands to the bare defaults (standard behavior)", () => {
+    expect(expandTier(undefined).transcriber).toBe(DEFAULT_INTENT_CONFIG.transcriber);
+    expect(expandTier("bogus").transcriber).toBe(DEFAULT_INTENT_CONFIG.transcriber);
+  });
+
+  it("effectiveConfig layers DEFAULT ← tier preset ← explicit; a bare tier picks the preset", () => {
+    const flagship = effectiveConfig({ tier: "flagship" }, {});
+    expect(flagship.transcriber).toBe("openai-voice");
+    expect(flagship.audioBack).toBe("voice");
+    expect(flagship.realtimeVoiceModel).toBe("gpt-realtime-2");
+  });
+
+  it("an explicit fine field WINS over the tier preset (choice #4)", () => {
+    // flagship runs the voice model, but `model` is pinned to whisper-1.
+    const cfg = effectiveConfig({ tier: "flagship", model: "whisper-1" }, {});
+    expect(cfg.transcriber).toBe("openai-voice"); // from the preset
+    expect(cfg.model).toBe("whisper-1"); // explicit wins
+  });
+
+  it("no tier reproduces standard exactly (today's default, unchanged)", () => {
+    const cfg = effectiveConfig({}, {});
+    expect(cfg.transcriber).toBe("openai");
+    expect(cfg.model).toBe("gpt-4o-mini-transcribe");
+    expect(cfg.corrector).toBe("openai");
+    expect(cfg.audioBack).toBe("off");
+  });
+});
+
+describe("tiers: the switch delta trap (overridesForApply)", () => {
+  const base = effectiveConfig({}, {}); // DEFAULT+standard, vite intent = {}
+
+  it("the exact scenario: set tier rapid (no transcriber override) → switch flagship applies", () => {
+    // Set tier rapid — the persisted delta is JUST {tier}, no frozen fine fields.
+    const rapidDelta = overridesForApply({ tier: "rapid" }, base);
+    expect(rapidDelta).toEqual({ tier: "rapid" });
+    expect("transcriber" in rapidDelta).toBe(false);
+
+    // Now switch to flagship — flagship's fields apply, not rapid's frozen ones.
+    const flagshipDelta = overridesForApply({ tier: "flagship" }, base);
+    expect(flagshipDelta).toEqual({ tier: "flagship" });
+    const effective = effectiveConfig({}, flagshipDelta);
+    expect(effective.transcriber).toBe("openai-voice");
+    expect(effective.audioBack).toBe("voice");
+  });
+
+  it("a panel switch drops stale tier-controlled fields that match the new preset", () => {
+    // The editor still literally holds the previous tier's expansion; switching to
+    // flagship with those fields present must NOT freeze redundant ones.
+    const editedFullFlagship = { ...effectiveConfig({ tier: "flagship" }, {}) };
+    const delta = overridesForApply(editedFullFlagship, base);
+    // Only the tier survives — every fine field equals flagship's preset, so it is
+    // re-derived by expansion rather than frozen as an override.
+    expect(delta.tier).toBe("flagship");
+    expect(delta.transcriber).toBeUndefined();
+    expect(delta.audioBack).toBeUndefined();
+    expect(delta.realtimeVoiceModel).toBeUndefined();
+  });
+
+  it("keeps an explicit fine field that diverges from the new tier's preset", () => {
+    // Switching to flagship AND pinning model=whisper-1 in one apply: model is not
+    // set by flagship's preset, so it diverges and is kept.
+    const delta = overridesForApply({ tier: "flagship", model: "whisper-1" }, base);
+    expect(delta).toMatchObject({ tier: "flagship", model: "whisper-1" });
+    expect(effectiveConfig({}, delta).model).toBe("whisper-1");
+  });
+
+  it("without a tier change, overridesForApply is a plain delta (no reconciliation)", () => {
+    // Editing a fine field alone (tier unchanged) behaves exactly like before.
+    expect(overridesForApply({ talkMode: "toggle" }, base)).toEqual({ talkMode: "toggle" });
+  });
+
+  it("TIER_PRESETS covers every tier the schema accepts", () => {
+    expect(Object.keys(TIER_PRESETS).sort()).toEqual([
+      "flagship",
+      "mock",
+      "premium",
+      "rapid",
+      "standard",
+    ]);
   });
 });
 

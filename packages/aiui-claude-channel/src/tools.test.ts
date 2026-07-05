@@ -243,3 +243,68 @@ describe("page-tool MCP tools (wired to a directory with a fake page connection)
     }
   });
 });
+
+describe("channel_reload tool (wired through a real client/server pair)", () => {
+  async function connect(reload?: () => Promise<unknown>) {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const mcp = createChannelServer("1.2.3", reload ? { reload: reload as never } : {});
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([mcp.connect(serverTransport), client.connect(clientTransport)]);
+    return { mcp, client };
+  }
+
+  it("is advertised only when a reload handle is supplied", async () => {
+    const withReload = await connect(async () => ({
+      reloaded: true,
+      generation: 1,
+      socketsDropped: 0,
+    }));
+    const without = await connect();
+    try {
+      expect((await withReload.client.listTools()).tools.map((t) => t.name).sort()).toEqual([
+        "channel_info",
+        "channel_reload",
+      ]);
+      expect((await without.client.listTools()).tools.map((t) => t.name)).toEqual(["channel_info"]);
+    } finally {
+      await Promise.all([withReload.client.close(), without.client.close()]);
+      await Promise.all([withReload.mcp.close(), without.mcp.close()]);
+    }
+  });
+
+  it("drives the reload handle and returns its summary", async () => {
+    let calls = 0;
+    const { mcp, client } = await connect(async () => {
+      calls += 1;
+      return { reloaded: true, generation: calls, socketsDropped: 2 };
+    });
+    try {
+      const result = await client.callTool({ name: "channel_reload" });
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(JSON.parse(content[0].text)).toEqual({
+        reloaded: true,
+        generation: 1,
+        socketsDropped: 2,
+      });
+      expect(calls).toBe(1);
+    } finally {
+      await client.close();
+      await mcp.close();
+    }
+  });
+
+  it("surfaces a reload failure as an isError result", async () => {
+    const { mcp, client } = await connect(async () => {
+      throw new Error("fresh code failed to load");
+    });
+    try {
+      const result = await client.callTool({ name: "channel_reload" });
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toMatch(/fresh code failed to load/);
+    } finally {
+      await client.close();
+      await mcp.close();
+    }
+  });
+});

@@ -16,14 +16,14 @@
  */
 import { createServer } from "node:http";
 import express from "express";
-import { type RawData, WebSocketServer } from "ws";
+import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import { createChannelConnection, type FormatRegistry } from "./channel";
 import { registerDebugRoutes } from "./debug";
+import { defaultFormatLoader, type FormatLoader } from "./hot";
 import type { LaunchInfo } from "./launch-info";
 import { PageToolDirectory } from "./page-tools";
-import { defaultFormats } from "./processors";
 import { createTransportStats } from "./stats";
-import { createTraceStore } from "./trace";
+import { createTraceStore, type TraceStore } from "./trace";
 import { withTracing } from "./tracing";
 
 /**
@@ -60,6 +60,16 @@ export interface WebServerOptions {
    * is created (and returned on the handle).
    */
   pageTools?: PageToolDirectory;
+  /**
+   * How {@link WebServer.reload} obtains a fresh base (untraced) format registry
+   * for each reload generation. Defaults to the hot loader (see hot.ts): a source
+   * run re-imports the lowering layer from disk; a packaged run rebuilds from the
+   * bundle. Tests inject a fake to drive the reload orchestration deterministically.
+   * Ignored when {@link WebServerOptions.formats} is set — those formats are
+   * caller-owned in-memory objects, not something to re-read from disk (a reload
+   * then simply re-wraps them and cycles connections).
+   */
+  loadFormats?: FormatLoader;
 }
 
 /** Normalize `ws`'s several binary shapes into a single Uint8Array frame. */
@@ -73,6 +83,18 @@ const toFrame = (data: RawData): Uint8Array => {
   return data;
 };
 
+/** The outcome of a {@link WebServer.reload}. */
+export interface ReloadSummary {
+  reloaded: true;
+  /** The reload counter after this reload (0 at startup, +1 per reload). */
+  generation: number;
+  /** How many live websockets were dropped (the clients reconnect on their own). */
+  socketsDropped: number;
+}
+
+/** Reload the channel's lowering layer in place (see {@link WebServer.reload}). */
+export type ChannelReload = () => Promise<ReloadSummary>;
+
 export interface WebServer {
   /** The port the backend bound to (chosen by the OS). */
   port: number;
@@ -82,6 +104,17 @@ export interface WebServer {
    * still reach it.
    */
   pageTools: PageToolDirectory;
+  /**
+   * Reload the lowering layer in place: rebuild the format registry from freshly
+   * (re-)loaded code, then drop every live websocket (they reconnect and
+   * re-register on their own). The HTTP server, express app, and port never
+   * bounce, and on-disk traces + launch info survive. Idempotent and safe to
+   * call with zero connections (it just bumps the generation). If the fresh code
+   * fails to load, the reload rejects and the running server is left untouched.
+   */
+  reload: ChannelReload;
+  /** The current reload generation (0 at startup, +1 per successful reload). */
+  getGeneration: () => number;
   /** Stop accepting connections and release the port. */
   close: () => Promise<void>;
 }
@@ -98,6 +131,10 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   const pageTools = options.pageTools ?? new PageToolDirectory();
 
+  // Bumps on every successful reload; surfaced on /health and /debug/api/info so
+  // a page or panel can tell it's talking to freshly-reloaded code.
+  let generation = 0;
+
   app.get("/health", (_req, res) => {
     // Readable cross-origin: the dev overlay's tools bridge probes this route
     // from the app's dev-server origin before dialing `/tools` (the browser
@@ -106,7 +143,13 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     // presence is part of the capability signal — it ships together with the
     // `/tools` endpoint, so a CORS-refused probe means an older channel.
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.json({ ok: true, pid: process.pid, ppid: process.ppid, pageTools: pageTools.summary() });
+    res.json({
+      ok: true,
+      pid: process.pid,
+      ppid: process.ppid,
+      generation,
+      pageTools: pageTools.summary(),
+    });
   });
 
   app.post("/prompt", async (req, res) => {
@@ -130,16 +173,43 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // traceDir, every thread also records a lowering trace and /debug serves the
   // viewer over them, plus the server-side transport counters.
   const stats = createTransportStats();
-  let formats = options.formats ?? defaultFormats();
-  if (options.traceDir) {
-    formats = withTracing(formats, createTraceStore(options.traceDir));
-    registerDebugRoutes(app, options.traceDir, stats, options.launchInfo);
-  }
+
+  // The trace store is a long-lived singleton: created once, reused across every
+  // reload so on-disk trace history survives. The format registry, by contrast,
+  // is rebuilt on each reload (below) — its lowering code is what changes.
+  const traceStore: TraceStore | undefined = options.traceDir
+    ? createTraceStore(options.traceDir)
+    : undefined;
+
+  // How each (re)load produces the base format registry. An explicit `formats`
+  // registry is caller-owned in-memory state, so it can't be re-read from disk —
+  // reload keeps returning it (still cycling sockets). Otherwise the hot loader
+  // reloads the lowering layer from disk (source run) or the bundle (packaged).
+  const loadFormats: FormatLoader =
+    options.loadFormats ??
+    (options.formats ? () => options.formats as FormatRegistry : defaultFormatLoader());
+
+  // Rebuild the live registry for a generation: load the base formats, then
+  // re-wrap tracing (a fresh wrap over the same singleton store).
+  const buildFormats = async (gen: number): Promise<FormatRegistry> => {
+    const base = await loadFormats(gen);
+    return traceStore ? withTracing(base, traceStore) : base;
+  };
+
+  // The registry new connections read. Reassigned on reload; existing (dropped)
+  // connections captured the old one.
+  let formats = await buildFormats(generation);
+
   // Two websocket endpoints share one HTTP server: `/ws` (the binary
   // stream-processor protocol) and `/tools` (the JSON page-tool protocol). When
   // several `WebSocketServer`s attach via the `server` option they fight over
   // the upgrade, so both run in `noServer` mode and one upgrade listener routes
   // by path (anything else is dropped).
+  // Every live socket (both endpoints), so reload can drop them all. Tracked
+  // explicitly rather than via `wss.clients` because the `noServer` upgrade path
+  // makes that set's membership less obvious to reason about.
+  const liveSockets = new Set<WebSocket>();
+
   const wss = new WebSocketServer({ noServer: true });
   const toolsWss = new WebSocketServer({ noServer: true });
   httpServer.on("upgrade", (req, socket, head) => {
@@ -155,10 +225,11 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   wss.on("connection", (socket) => {
     stats.connectionOpened();
-    socket.on("close", () => stats.connectionClosed());
+    liveSockets.add(socket);
     // A processor may push server → client messages (the `intent-v1` lowering
     // sends `lowered` events) out-of-band of the per-frame acks; the client
-    // tells them apart by their `kind` field.
+    // tells them apart by their `kind` field. Reads `formats` at connect time,
+    // so a connection opened after a reload speaks the freshly loaded layer.
     const connection = createChannelConnection({
       formats,
       sendPrompt: options.onPrompt,
@@ -167,6 +238,14 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
           socket.send(JSON.stringify(message));
         }
       },
+    });
+    socket.on("close", () => {
+      liveSockets.delete(socket);
+      stats.connectionClosed();
+      // Tear down any thread abandoned mid-turn (socket dropped before its
+      // `fin`) so processors release per-thread resources instead of leaking.
+      // A reload drops the socket the same way, so onClose teardown runs then too.
+      void connection.close();
     });
     socket.on("message", async (data, isBinary) => {
       if (!isBinary) {
@@ -197,6 +276,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // answers the calls the directory routes to it. Unlike `/ws` this is a plain
   // JSON protocol — the payloads are tiny schemas and results, not media.
   toolsWss.on("connection", (socket) => {
+    liveSockets.add(socket);
     const clientId = pageTools.addConnection((message) => {
       if (socket.readyState === socket.OPEN) {
         socket.send(JSON.stringify(message));
@@ -214,11 +294,50 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       }
       pageTools.handleClientMessage(clientId, parsed);
     });
-    socket.on("close", () => pageTools.removeConnection(clientId));
+    socket.on("close", () => {
+      liveSockets.delete(socket);
+      // Reload closes this socket, which drops the page's namespaces from the
+      // directory; the bridge reconnects and re-registers them (invisibly, by hash).
+      pageTools.removeConnection(clientId);
+    });
     // A socket error is followed by `close`; swallow it so it doesn't crash the
     // process (Node treats an unhandled 'error' on the socket as fatal).
     socket.on("error", () => {});
   });
+
+  // Reload the lowering layer in place. Order matters for robustness: build the
+  // fresh registry FIRST — if the freshly edited code throws (a syntax error the
+  // agent just introduced), we reject here and leave the running server, its
+  // sockets, and the old registry untouched. Only once the rebuild succeeds do we
+  // swap the registry, bump the generation, and drop live sockets. Each dropped
+  // socket runs its normal close path (onClose thread teardown, directory entry
+  // removal); the clients reconnect and re-register on their own.
+  const reload: ChannelReload = async () => {
+    const next = await buildFormats(generation + 1);
+    generation += 1;
+    formats = next;
+    const dropping = [...liveSockets];
+    liveSockets.clear();
+    for (const socket of dropping) {
+      try {
+        // 1012 = "service restart": the standards-registered code for exactly this.
+        socket.close(1012, "channel reload");
+      } catch {
+        // A socket already closing/closed just gets skipped.
+      }
+    }
+    return { reloaded: true, generation, socketsDropped: dropping.length };
+  };
+
+  if (options.traceDir) {
+    // Debug tool + JSON API (traces, this server's info, transport stats) plus
+    // the reload endpoint. Registered here, after `reload` exists, so the route
+    // can drive it; the generation getter keeps /debug/api/info's value live.
+    registerDebugRoutes(app, options.traceDir, stats, options.launchInfo, {
+      getGeneration: () => generation,
+      onReload: reload,
+    });
+  }
 
   await new Promise<void>((resolveListen, rejectListen) => {
     httpServer.once("error", rejectListen);
@@ -236,5 +355,5 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       toolsWss.close(() => wss.close(() => httpServer.close(() => resolveClose())));
     });
 
-  return { port, pageTools, close };
+  return { port, pageTools, reload, getGeneration: () => generation, close };
 }

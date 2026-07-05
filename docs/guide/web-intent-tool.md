@@ -226,6 +226,28 @@ traceOf(ctx)?.record({ kind: "ir", label: "resolved pronouns", data: rewritten }
 Traces land in `.aiui-cache/traces/<id>/` — a `trace.json` manifest of stages (`input` → `ir`* →
 `output`) with binary payloads stored as sibling blob files.
 
+### The overlay dogfoods its own agent surface
+
+The intent tool is itself a frontend an agent pair-programs against, so it follows the
+[frontend-for-agents](./frontend-for-agents) methodology it exists to enable: it registers its own
+tools through the very bridge pages use (`window.__AIUI__.tools`), under the identifier-shaped
+namespace **`aiui_overlay`**, and they reach the session as ordinary `page_tools_list` /
+`page_tools_call` MCP tools. Callable: `report` (one bounded snapshot — armed/mode/talking/thread,
+active modality, effective `IntentPipelineConfig`, the event-log tail, channel + thread-socket
+state, selection/capture presence), `get_config` / `set_config` (validated through the *same*
+strict validator the advanced panel uses, applied live and persisted the same way — "agent, switch
+my transcriber to mock" is a page-tools call), `arm` / `disarm`, `open_panel` / `close_panel`, and
+`get_events` (the raw event tail). Installed next to the modality that owns the state, so it exists
+exactly as long as the widget does and deregisters (empty-set re-register) on unmount.
+
+Because the loop edits the overlay's own source mid-turn, the *turn* is made durable. The overlay
+has no HMR self-accept anywhere in its import graph, so an overlay-source edit under a source-first
+dev server **full-reloads the page** — which wipes any `window`-durable state. So the current
+thread's event log (transcript + shot refs + thread state — nothing else; config is already
+persisted separately) is mirrored to `sessionStorage`, bounded by freshness and same-URL, and
+restored on the fresh mount with a status line; a soft `MutationObserver` remount adopts the live
+in-memory copy silently instead. See `turn-store.ts` for the finding.
+
 ## The debugger
 
 The trace debugger lists lowering runs newest-first and renders every stage — inputs, IRs, the

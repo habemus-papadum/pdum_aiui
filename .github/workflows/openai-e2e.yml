@@ -1,13 +1,21 @@
 name: OpenAI E2E
 
-# The intent pipeline's real-OpenAI micro-tier (packages/aiui/test/openai-pipeline.e2e.ts):
-# one ~2s transcription and one correction-diff chat call against the LIVE API,
-# asserting round-trip shape (HTTP 200, non-empty text, patch parses) — not
-# output quality. Fractions of a cent per run. Like the Claude e2e (e2e.yml)
-# it's too expensive/external for every push, so it runs on a weekly cadence
-# plus manual dispatch. Everything above this (unit tests) stays mocked;
-# everything below (quality, latency curves, model comparisons) lives in the
-# workbench bench/corpus runner, run by humans.
+# The intent pipeline's real-OpenAI micro-tier:
+#  - openai-pipeline.e2e.ts — one ~2s REST transcription + one correction-diff
+#    chat call + one short TTS ack (premium tier), asserting round-trip shape
+#    (HTTP 200, non-empty text/audio, patch parses);
+#  - openai-realtime.e2e.ts — one ~2s realtime (streaming) transcription session
+#    over the live WebSocket GA endpoint, asserting ≥1 delta + a non-empty final
+#    (streaming-turns.md §3, L1);
+#  - openai-voice.e2e.ts — one short gpt-realtime-2 conversational turn (the
+#    flagship tier), asserting the model answered aloud (≥1 audio clip) + a
+#    non-empty reply/user transcript + a clean close (model-tiers.md T3). This one
+#    is CENTS (one spoken reply), not fractions — still well within the cap.
+# All assert round-trip SHAPE, not output quality.
+# Like the Claude e2e (e2e.yml) they're too expensive/external for every push, so
+# they run on a weekly cadence plus manual dispatch. Everything above this (unit
+# tests) stays mocked; everything below (quality, latency curves, model
+# comparisons) lives in the workbench bench/corpus runner, run by humans.
 
 on:
   schedule:
@@ -43,6 +51,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # No build step: the test hits OpenAI directly and imports the workbench
-      # correction prompt/patch applier from source (workspace source-first).
-      - name: OpenAI round-trip (transcription + correction diff)
+      # correction prompt/patch applier + the channel's realtime session from
+      # source (workspace source-first).
+      - name: OpenAI round-trip (REST transcription + correction diff + TTS ack)
         run: pnpm exec vitest run --config vitest.e2e.config.ts openai-pipeline.e2e
+
+      - name: OpenAI round-trip (realtime streaming transcription)
+        run: pnpm exec vitest run --config vitest.e2e.config.ts openai-realtime.e2e
+
+      - name: OpenAI round-trip (flagship gpt-realtime-2 voice turn)
+        run: pnpm exec vitest run --config vitest.e2e.config.ts openai-voice.e2e

@@ -17,10 +17,11 @@ The `aiui-claude-channel mcp` process runs a small loopback web backend (see the
 
 | Surface | Direction | Shape | Use |
 | --- | --- | --- | --- |
-| `GET /health` | — | JSON | liveness / registry probe |
+| `GET /health` | — | JSON | liveness / registry probe (carries the reload `generation`) |
 | `POST /prompt` | in | JSON text | one-shot plain-text prompt |
 | `/ws` | in | **binary frames** | streaming, multi-thread, media-capable |
 | `/tools` | both | JSON text | page-declared tools the agent can call (see [The `/tools` endpoint](#the-tools-endpoint)) |
+| `POST /debug/api/reload` | in | JSON | reload the lowering layer in place (see [Hot reload](#hot-reload)) |
 
 `POST /prompt` is the trivial path — one prompt, one HTTP request. `/ws` is the rich path
 this page documents first: many concurrent streams of typed messages, with the payload bytes
@@ -276,9 +277,10 @@ the meaning rides `envelope.chunk`:
 
 ```ts
 type ChunkDescriptor =
-  | { kind: "events" }                                    // JSON { events: IntentEvent[] }
-  | { kind: "context" }                                   // JSON { selection?: … }
-  | { kind: "attachment"; id: string; mime: string };     // raw bytes (shot_N / seg_N)
+  | { kind: "events" }                                          // JSON { events: IntentEvent[] }
+  | { kind: "context" }                                         // JSON { selection?: … }
+  | { kind: "attachment"; id: string; mime: string }            // raw bytes — one whole shot_N / seg_N
+  | { kind: "audio"; id: string; seq: number; mime: string };   // raw PCM — one streamed frame of seg_N
 ```
 
 **Client → server** `data` frames (all on one thread, `fin` on the last):
@@ -287,8 +289,14 @@ type ChunkDescriptor =
 | --- | --- | --- |
 | `{ kind: "events" }` | UTF-8 JSON `{ events }` | an append-only batch of the interaction log; batches arrive in order and are concatenated |
 | `{ kind: "attachment", id: "shot_N", mime }` | raw PNG bytes | a region/viewport screenshot |
-| `{ kind: "attachment", id: "seg_N", mime }` | raw audio bytes | the audio for talk segment N (e.g. `audio/webm;codecs=opus`, `audio/wav`) |
+| `{ kind: "attachment", id: "seg_N", mime }` | raw audio bytes | a **whole** talk segment in one frame — the REST transcriber path (e.g. `audio/webm;codecs=opus`, `audio/wav`) |
+| `{ kind: "audio", id: "seg_N", seq, mime }` | raw PCM16 bytes | **one streamed frame** of segment N, `seq` ordered — the realtime transcriber path (`audio/pcm;rate=24000`). Frames stream *during* talk; the segment's `talk-start`/`talk-end` events stay the boundaries |
 | `{ kind: "context" }` | UTF-8 JSON `{ selection? }` | the on-screen selection, sent at most once, just before `fin` |
+
+`attachment seg_N` and `audio seg_N` are the two transcriber paths, chosen by the hello's
+`intent.transcriber`: `"openai"` uploads one whole-blob `attachment`; `"openai-realtime"` streams
+many `audio` frames. Additive by construction (`audio`'s absence is the legacy behavior), so
+`PROTOCOL_VERSION` is unchanged.
 
 Attachment `id`s are identifier-shaped (`shot_1`, `seg_2`) so a `shot_N` doubles as its
 Option-C meta key. `mime` on an audio segment names the container — the server uses it to
@@ -304,11 +312,33 @@ stream:
 
 Two producers, both gated on the hello's `intent` config:
 
-- **Transcription.** When a `seg_N` attachment arrives and `intent.transcriber === "openai"`,
+- **Transcription (REST).** When a `seg_N` attachment arrives and `intent.transcriber === "openai"`,
   the segment is transcribed server-side (`OPENAI_API_KEY`, model from `intent.model`) and a
   `{ type: "transcript-final", segment: N, text, latencyMs, model }` event is pushed. With
   `intent.transcriber === "mock"` the client's own `transcript-final` events (already in its
   `events` batches) are used and nothing is transcribed.
+- **Transcription (realtime, streaming).** When `intent.transcriber === "openai-realtime"` the
+  channel holds **one upstream WebSocket per thread** to OpenAI's realtime transcription endpoint,
+  opened at thread-open so its handshake overlaps the arm→talk gap. Each `audio` frame is
+  base64-appended to the upstream buffer (`input_audio_buffer.append`); the segment's `talk-end`
+  event commits it (`input_audio_buffer.commit`). Upstream partial deltas are pushed back as
+  `{ type: "transcript-delta", segment, text }` (cumulative — the preview fills *as you speak*) and
+  the final as `{ type: "transcript-final", … }`, exactly the events the REST path produces, so the
+  client renders both with no new code. A fast `fin` waits (bounded) for an in-flight final before
+  composing. Keyless, or an upstream error, takes the same loud degraded path as REST — an empty
+  `transcript-final` plus a `note` naming the cause, never a silent switch to mock. The upstream
+  socket is closed on `fin`, on cancel, and on a dropped connection (`onClose`), so it is never
+  leaked. Config knobs: `intent.realtimeModel` (default `gpt-realtime-whisper`) and
+  `intent.realtimeDelay` (`minimal`…`xhigh`; omitted → the model default).
+
+  > **Verified surface (GA, re-checked live 2026-07-05, drift from the design doc noted).** The
+  > design sketched the **Beta** shape (`OpenAI-Beta: realtime=v1`, `transcription_session.update`);
+  > that shape now returns `beta_api_shape_disabled`. The channel speaks the **GA** shape:
+  > `wss://api.openai.com/v1/realtime?intent=transcription`, `Authorization: Bearer` **only** (no
+  > beta header), configured with one `session.update` carrying a nested
+  > `session.type: "transcription"` (`audio.input.format = { type: "audio/pcm", rate: 24000 }`,
+  > `audio.input.transcription = { model, delay? }`, `turn_detection: null`). Events back:
+  > `conversation.item.input_audio_transcription.delta` / `.completed`, correlated by `item_id`.
 - **Correction diff.** A `correction` event that arrives **without** a `patch` while
   `intent.corrector === "openai"` is a *request*: the V4A diff runs server-side (temperature
   0, model `intent.correctionModel`; the document is the current transcript as
@@ -318,23 +348,37 @@ Two producers, both gated on the hello's `intent` config:
   the client falls back to plain replacement — corrections never silently vanish. A correction
   that already carries a `patch` (e.g. a mock-transcriber turn) passes straight through.
 
-**The `fin` lowering.** On the final frame the processor:
+**Incremental lowering — most of the work happens on arrival, not at `fin`.** The cheap,
+pure, and pre-warmable stages run as events arrive so `fin` is a near-empty commit of the one
+observable side effect (the session notification). As each frame lands the processor:
 
-1. saves each attachment to the trace blob store (`.aiui-cache/traces/<id>/shot_N.png`,
-   `seg_N.<ext>`) and wires each `shot_N`'s absolute path into the shot event;
-2. runs the condition passes (silence-trim on audio, image-downscale on shots — gated by
-   `intent.passes`; identity stubs today, the structure is what matters);
-3. folds the merged event stream with `composeIntent` (applying corrections under
-   `intent.correctionPolicy`) into the Option-C body + meta;
-4. wraps the body in the same tab/source/selection context block `text-concat` uses and
-   sends it as one prompt — the body's `{shot_N}` tokens in the notification `content`, the
-   `shot_N` → absolute-path map in the notification `meta`.
+- **saves each attachment to the trace blob store on arrival**
+  (`.aiui-cache/traces/<id>/shot_N.png`, `seg_N.<ext>`) — a `shot_N`'s absolute path is wired
+  into its shot event the moment the bytes arrive (the correlated event was flushed first), so
+  `fin` does no disk I/O;
+- **runs the condition passes on arrival** (silence-trim on each audio segment, image-downscale
+  on each shot — gated by `intent.passes`; identity stubs today, the structure is what matters);
+- **composes speculatively** after each mutating batch: `composeIntent` (applying corrections
+  under `intent.correctionPolicy`) is a pure fold with no side effects, so it runs eagerly and
+  its result is cached, fingerprinted by a mutation counter.
+
+**On the final frame** the processor then commits: it reuses the cached compose when the event
+log is unchanged since (and otherwise recomputes — e.g. a shot path was wired after the last
+batch), wraps the Option-C body in the same pre-warmed tab/source/selection context block
+`text-concat` uses, and sends it as one prompt — the body's `{shot_N}` tokens in the
+notification `content`, the `shot_N` → absolute-path map in the notification `meta`.
+
+The **invariant** that keeps this safe: speculation only ever populates caches and the trace —
+it never `sendPrompt`s, never pushes, never re-runs a paid seam. Only `fin` commits, and only
+when the turn was not cancelled.
 
 A thread that ends in an explicit **cancel** (`thread-close` with `reason: "cancel"`), or
-one that never `fin`s (the socket just closes), lowers to **no notification**. Every stage
-(client context → merged events → composed intent → conditioned → lowered prompt) is
-recorded on the thread's trace, so the `/debug` viewer shows the whole lowering with
-hover-previewable attachment paths.
+one that never `fin`s (the socket just closes — its processor's `onClose` drops the per-thread
+state), lowers to **no notification**. Every stage (client context → prompt preamble →
+per-attachment condition/blob → speculative compose → merged events → composed intent →
+conditioned → lowered prompt) is recorded on the thread's trace **as it happens**, so the
+`/debug` viewer shows the lowering progress *during* a turn, with hover-previewable attachment
+paths. An abandoned run is marked `abandoned` rather than left open-ended.
 
 ### Custom formats
 
@@ -530,6 +574,45 @@ This iteration exposes page tools through the two fixed MCP tools (`page_tools_l
 `page_tools_call`); it does **not** register each page tool as its own dynamically-named MCP tool.
 That is the natural follow-up.
 
+## Hot reload
+
+The channel can **reload its lowering layer in place** — rebuild the format registry from the code
+now on disk — without restarting the process behind the MCP stdio session. This exists so an agent
+can edit the channel's own source mid-pair-programming and pick up the change on the same session.
+
+**What survives, what drops:**
+
+| Survives | Drops |
+| --- | --- |
+| The MCP stdio connection (the process never restarts) | Every live `/ws` and `/tools` websocket |
+| The web server's **port** (pages seed it at HTML load) | An intent turn in flight (abandoned — lowers to nothing) |
+| On-disk trace history and launch info | — |
+
+Dropping the sockets is deliberate — it exercises exactly the reconnect paths the clients are
+built for. The overlay's tools bridge re-dials (~3 s) and re-registers its namespaces (deduped by
+content hash, so re-registration is invisible upstream); a `/ws` thread abandoned mid-turn runs its
+processor's `onClose` teardown (upstream realtime sockets closed, trace marked `abandoned`). Each
+drop closes with WebSocket code **1012** ("service restart").
+
+**Triggers** — all return `{ reloaded: true, generation, socketsDropped }`:
+
+- **MCP tool `channel_reload`** — the headline: the session agent calls it after editing channel source.
+- **`POST /debug/api/reload`** — for the DevTools panel / `curl`.
+- **A dev file-watcher** (opt-in) — set `AIUI_CHANNEL_WATCH=1` and, in a source checkout, edits to
+  the package's `src/` auto-reload (debounced). Off by default.
+
+**Generation.** A counter starting at 0, bumped on each successful reload, surfaced on `GET /health`
+and `GET /debug/api/info` so a page or panel can tell it's talking to freshly-reloaded code.
+
+**Reload depth (a real boundary).** ESM gives a module a fresh instance per unique import query, but
+only for the module named — its static imports stay cached. So reload re-executes the two format
+entry modules (`processors.ts`, `intent-v1.ts`) and picks up their edits; modules *they* import
+(codec, channel, tracing, prompt-context, realtime, transcribe, correct, compose) stay cached and
+need a full relaunch. Old module instances are never evicted — each reload leaks the previous copy.
+This is a **dev aid, not general HMR.** In a packaged (bundled) install there is no separate source
+to re-read, so a reload rebuilds the registry from the bundle (code unchanged) but still cycles the
+sockets. Load a fresh registry however you like by passing `startWebServer` a `loadFormats` seam.
+
 ## Source & API
 
 The protocol is implemented in a few small, transport-decoupled modules:
@@ -543,6 +626,7 @@ The protocol is implemented in a few small, transport-decoupled modules:
 - **`transcribe.ts`** / **`correct.ts`** — the server-side transcription and correction-diff seams (mock + OpenAI REST).
 - **`client.ts`** — `connectChannelClient`.
 - **`page-tools.ts`** — `PageToolDirectory`, the `/tools` registry and call router.
-- **`web.ts`** — the HTTP + WebSocket backend that wires both `/ws` and `/tools` to a live session.
+- **`hot.ts`** / **`reloadable.ts`** — the hot-reload loader (query-busted re-import, dev file-watcher) and the reloadable format-layer entry.
+- **`web.ts`** — the HTTP + WebSocket backend that wires both `/ws` and `/tools` to a live session, plus `WebServer.reload`.
 
 See the [API Reference](./api/) for the exported types and functions.

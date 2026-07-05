@@ -30,13 +30,18 @@ export interface Ack {
  * A streaming modality (`intent-v1`) tags its data frames with a `chunk` so the
  * server can tell an event batch from a raw attachment from the end-of-turn
  * context. `events`/`context` carry a JSON payload; `attachment` carries **raw
- * bytes** (PNG / audio) and an `id` (`shot_N` / `seg_N`) correlating it with the
- * `shot`/`talk` event already on the wire. See the `intent-v1` contract in the
- * multimodal-intent-graduation handoff.
+ * bytes** (PNG / a whole audio segment) and an `id` (`shot_N` / `seg_N`)
+ * correlating it with the `shot`/`talk` event already on the wire; `audio`
+ * carries **one streamed PCM frame** of `seg_N` (the realtime transcriber path),
+ * in `seq` order, while the segment's `talk-start`/`talk-end` events stay the
+ * boundaries. See the `intent-v1` contract in the multimodal-intent-graduation
+ * and streaming-turns handoffs. Mirrors `ChunkDescriptor` in the channel's
+ * `frame.ts` — the source of truth; change both together.
  */
 export type JsonChunk = { kind: "events" } | { kind: "context" };
 export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
-export type FrameChunk = JsonChunk | AttachmentChunk;
+export type AudioChunk = { kind: "audio"; id: string; seq: number; mime: string };
+export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk;
 
 /**
  * A server→client push on the same socket, distinguished from an {@link Ack} by
@@ -89,8 +94,8 @@ export interface IntentSocket {
    */
   sendChunk(threadId: string, chunk: JsonChunk, payload: unknown, fin?: boolean): Promise<Ack>;
   /**
-   * Send a raw-binary attachment chunk (a shot PNG or an audio segment) — the
-   * bytes ride the frame's payload verbatim, never base64'd.
+   * Send a raw-binary attachment chunk (a shot PNG or a whole audio segment) —
+   * the bytes ride the frame's payload verbatim, never base64'd.
    */
   sendAttachment(
     threadId: string,
@@ -98,6 +103,13 @@ export interface IntentSocket {
     bytes: Uint8Array,
     fin?: boolean,
   ): Promise<Ack>;
+  /**
+   * Send one streamed PCM frame of a talk segment (the realtime path) — raw
+   * bytes on the payload, `seq`/`id` in the envelope chunk. Same wire shape as
+   * {@link sendAttachment}; a distinct method only so the `audio` chunk's `seq`
+   * is carried.
+   */
+  sendAudio(threadId: string, chunk: AudioChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /**
    * Register a handler for server pushes (messages carrying a `kind`) — the
    * lowered echoes an `intent-v1` thread merges back in. Acks are never routed
@@ -239,6 +251,11 @@ export function connectIntentSocket(
             sendFrame(
               // Raw bytes ride the payload verbatim — the whole reason the frame
               // format keeps the payload opaque and un-base64'd.
+              encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
+              { kind: "data", threadId, fin },
+            ),
+          sendAudio: (threadId, chunk, bytes, fin = false) =>
+            sendFrame(
               encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
               { kind: "data", threadId, fin },
             ),

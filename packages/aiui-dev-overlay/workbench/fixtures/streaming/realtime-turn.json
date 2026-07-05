@@ -1,0 +1,60 @@
+{
+  "description": "One realtime (openai-realtime) dictation turn as an ordered WIRE sequence: interleaved client events / streamed audio frames and the server's delta→delta→final echoes, ending in a bare fin. Unlike the sibling *.json fixtures (pure IntentEvent[] streams replayed through composeIntent), this captures the streaming CONTRACT — audio frames carry seg_1's PCM in seq order while talk-start/talk-end stay the segment boundaries, and the partial deltas must NOT change the committed compose (only the final does). Replayed by realtime.test.ts.",
+  "config": { "transcriber": "openai-realtime" },
+  "steps": [
+    {
+      "dir": "c2s",
+      "chunk": { "kind": "events" },
+      "events": [
+        { "at": 1, "type": "armed", "on": true },
+        { "at": 2, "type": "thread-open", "trigger": "talk" },
+        { "at": 3, "type": "talk-start", "segment": 1 }
+      ]
+    },
+    {
+      "dir": "c2s",
+      "chunk": { "kind": "audio", "id": "seg_1", "seq": 0, "mime": "audio/pcm;rate=24000" },
+      "bytes": [16, 0, 32, 0]
+    },
+    {
+      "dir": "c2s",
+      "chunk": { "kind": "audio", "id": "seg_1", "seq": 1, "mime": "audio/pcm;rate=24000" },
+      "bytes": [48, 0, 64, 0]
+    },
+    {
+      "dir": "c2s",
+      "chunk": { "kind": "audio", "id": "seg_1", "seq": 2, "mime": "audio/pcm;rate=24000" },
+      "bytes": [80, 0, 96, 0]
+    },
+    {
+      "dir": "c2s",
+      "chunk": { "kind": "events" },
+      "events": [{ "at": 4, "type": "talk-end", "segment": 1, "ms": 420 }]
+    },
+    {
+      "dir": "s2c",
+      "server": {
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_1",
+        "delta": "reaction "
+      }
+    },
+    {
+      "dir": "s2c",
+      "server": {
+        "type": "conversation.item.input_audio_transcription.delta",
+        "item_id": "item_1",
+        "delta": "diffusion on the gpu"
+      }
+    },
+    {
+      "dir": "s2c",
+      "server": {
+        "type": "conversation.item.input_audio_transcription.completed",
+        "item_id": "item_1",
+        "transcript": "reaction diffusion on the GPU"
+      }
+    },
+    { "dir": "c2s", "fin": true }
+  ]
+}

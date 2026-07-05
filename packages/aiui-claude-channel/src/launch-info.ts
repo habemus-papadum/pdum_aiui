@@ -60,7 +60,7 @@ export interface LaunchInfo {
   /**
    * How the launcher's OpenAI key preflight came out (status only, never the
    * key). Absent when no launcher recorded it. Lets the DevTools panel explain
-   * why transcription/correction fell back to mock/off.
+   * why transcription/correction are unavailable.
    */
   openaiKey?: OpenAiKeyStatus;
 }

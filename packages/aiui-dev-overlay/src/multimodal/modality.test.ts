@@ -2,15 +2,23 @@
 import { decodeFrame, jsonCodec } from "@habemus-papadum/aiui-claude-channel";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mountIntentTool, unmountIntentTool } from "../intent";
-import type { IntentEvent } from "../intent-pipeline";
+import type { IntentEvent, IntentPipelineConfig } from "../intent-pipeline";
 import { fakeSocketFactory } from "../test-support/fake-socket";
 import { installLocalStorage } from "../test-support/local-storage";
 import { INTENT_CONFIG_STORAGE_KEY, loadIntentOverrides } from "./advanced-config";
+import type { PcmSource } from "./audio";
 import { multimodalModality } from "./modality";
+import type { SpeechAudioElement } from "./speech";
 
 afterEach(() => {
   unmountIntentTool();
   delete window.__AIUI__;
+  // The modality now mirrors an open turn to sessionStorage (turn recovery);
+  // jsdom's sessionStorage persists across tests, so clear it or a leftover turn
+  // would be "recovered" into the next test's fresh mount.
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.clear();
+  }
   window.getSelection()?.removeAllRanges();
 });
 
@@ -364,6 +372,453 @@ describe("multimodalModality: degradation", () => {
     const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
     expect(status.toLowerCase()).toMatch(/no channel|unavailable|send/);
   });
+
+  it("tells the user transcription needs the channel (openai transcriber, no port)", async () => {
+    const { factory } = fakeSocketFactory(() => ({ ok: true }));
+    const handle = mountIntentTool({
+      force: true,
+      // no port → openThread rejects → the turn has no channel to upload to
+      webSocketFactory: factory,
+      modalities: [multimodalModality({ transcriber: "openai" })],
+    });
+
+    key("keydown", "`"); // arm
+    key("keydown", " "); // talk-start (openai path; jsdom has no mic → degrades)
+    await wait(40);
+    key("keyup", " "); // talk-end: no channel for the openai transcriber
+    await wait(40);
+
+    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
+    // The status names the fix, never silently switches to mock.
+    expect(status).toMatch(/transcription needs the channel/i);
+    expect(status).toMatch(/aiui claude|mock/i);
+  });
+
+  it("surfaces a server note echo (e.g. a missing key) in the widget status", async () => {
+    const { handle, push } = mountMultimodal({ transcriber: "openai" });
+
+    key("keydown", "`");
+    key("keydown", " ");
+    await wait(50);
+    key("keyup", " "); // uploads seg_1, awaits the channel echo
+    await wait(30);
+
+    // The channel echoes an empty final + a note (its keyless/degraded path).
+    push({
+      kind: "lowered",
+      events: [
+        {
+          at: Date.now(),
+          type: "transcript-final",
+          segment: 1,
+          text: "",
+          latencyMs: 0,
+          model: "gpt-4o-mini-transcribe",
+        },
+        {
+          at: Date.now(),
+          type: "note",
+          text: "server-side transcription is unavailable — the channel process has no OPENAI_API_KEY.",
+        },
+      ],
+    });
+    await flush();
+
+    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
+    expect(status).toMatch(/OPENAI_API_KEY/);
+  });
+
+  it("says why a correction fell back to plain replacement (channel corrector, no patch echo)", async () => {
+    const { handle, sent, push } = mountMultimodal({
+      transcriber: "mock",
+      corrector: "openai",
+      mockWordMs: 0,
+      mockTypoRate: 0,
+      diffFlashMs: 0,
+    });
+    const CANNED = "make the baseline curve a bit thicker and color it amber";
+
+    key("keydown", "`"); // arm
+    key("keydown", " ");
+    await wait(30);
+    key("keyup", " "); // mock transcription → CANNED lands in the preview
+    await wait(60);
+    key("keydown", "e"); // correct mode
+
+    const seg = document.querySelector(".mm-preview-body .mm-seg") as HTMLElement;
+    const textNode = seg.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, textNode.textContent?.length ?? 0);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    document
+      .querySelector(".mm-preview-body")
+      ?.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    await wait(20);
+
+    const input = document.querySelector(".mm-correction-bar input") as HTMLInputElement;
+    input.value = "corrected";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await wait(30);
+
+    // Confirm the patchless request was sent, then have the server echo a
+    // completed correction WITHOUT a patch (its diff-failure fallback).
+    expect(streamedEvents(sent).filter((e) => e.type === "correction")).toHaveLength(1);
+    push({
+      kind: "lowered",
+      events: [
+        {
+          at: Date.now(),
+          type: "correction",
+          from: 0,
+          to: CANNED.length,
+          original: CANNED,
+          instruction: "corrected",
+          via: "typed",
+          // no patch → the client applies a plain replacement and must say why
+        },
+      ],
+    });
+    await wait(20);
+
+    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
+    expect(status).toMatch(/plain replacement/i);
+    // The correction still landed (never silently vanishes).
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    expect(body.textContent).toContain("corrected");
+  });
+});
+
+/** A scriptable fake {@link PcmSource}: jsdom has no AudioWorklet, so realtime
+ * capture is injected. `emit` fires a captured frame; `available:false` models a
+ * mic/AudioWorklet that can't start. */
+function fakePcmSource(opts: { available?: boolean } = {}) {
+  let onFrame: ((f: Int16Array) => void) | undefined;
+  let started = false;
+  const source: PcmSource = {
+    async start(cb) {
+      if (opts.available === false) {
+        return false;
+      }
+      onFrame = cb;
+      started = true;
+      return true;
+    },
+    async stop() {
+      started = false;
+      onFrame = undefined;
+    },
+    level: () => (started ? 0.5 : 0),
+    dispose() {
+      started = false;
+    },
+  };
+  return {
+    source,
+    emit: (frame: Int16Array) => onFrame?.(frame),
+    isStarted: () => started,
+  };
+}
+
+/** Every `audio` chunk frame the connection sent, decoded. */
+function audioChunks(sent: Uint8Array[]) {
+  return frames(sent)
+    .map((f) => f.envelope as { chunk?: { kind?: string; id?: string; seq?: number } })
+    .filter((e) => e.chunk?.kind === "audio")
+    .map((e) => e.chunk);
+}
+
+/** Mount the realtime modality with an injected PCM source + fake socket. */
+function mountRealtime(pcm: PcmSource, over: Record<string, unknown> = {}) {
+  const { factory, sent, push } = fakeSocketFactory(() => ({ ok: true }));
+  const handle = mountIntentTool({
+    force: true,
+    port: 4321,
+    webSocketFactory: factory,
+    modalities: [
+      multimodalModality({ transcriber: "openai-realtime", ...over }, { pcmSource: () => pcm }),
+    ],
+  });
+  return { handle, sent, push };
+}
+
+describe("multimodalModality: realtime (streaming) transcriber", () => {
+  it("streams PCM as audio chunks while talking, then flushes talk-end immediately", async () => {
+    const pcm = fakePcmSource();
+    const { sent } = mountRealtime(pcm.source);
+
+    key("keydown", "`"); // arm
+    key("keydown", " "); // talk-start → realtime capture starts → thread opens
+    await wait(50); // socket connect
+    expect(pcm.isStarted()).toBe(true);
+
+    // Frames captured during talk stream as `audio` chunks, in seq order.
+    pcm.emit(Int16Array.of(1000, -1000, 500));
+    pcm.emit(Int16Array.of(200, 300));
+    await wait(20);
+    const chunks = audioChunks(sent);
+    expect(chunks.map((c) => c?.seq)).toEqual([0, 1]);
+    expect(chunks.every((c) => c?.id === "seg_1")).toBe(true);
+    // The raw PCM rode the payload (2 bytes/sample) — first frame was 3 samples.
+    const firstAudio = frames(sent).find(
+      (f) => (f.envelope as { chunk?: { kind?: string } }).chunk?.kind === "audio",
+    );
+    expect(firstAudio?.payload.length).toBe(6);
+
+    key("keyup", " "); // talk-end → stop capture → flush talk-end past the debounce
+    await wait(30); // < EVENTS_DEBOUNCE_MS (60): only the immediate flush can have sent it
+    expect(pcm.isStarted()).toBe(false);
+    const types = streamedEvents(sent).map((e) => e.type);
+    expect(types).toContain("talk-end");
+  });
+
+  it("renders transcript-delta echoes progressively into the preview", async () => {
+    const pcm = fakePcmSource();
+    const { push } = mountRealtime(pcm.source);
+
+    key("keydown", "`");
+    key("keydown", " ");
+    await wait(50);
+    pcm.emit(Int16Array.of(1, 2, 3));
+    key("keyup", " ");
+    await wait(20);
+
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    // Partial deltas fill the preview as they arrive (cumulative text).
+    push({
+      kind: "lowered",
+      events: [{ at: Date.now(), type: "transcript-delta", segment: 1, text: "make the" }],
+    });
+    await flush();
+    expect(body.textContent).toContain("make the");
+    push({
+      kind: "lowered",
+      events: [
+        { at: Date.now(), type: "transcript-delta", segment: 1, text: "make the plot wider" },
+      ],
+    });
+    await flush();
+    expect(body.textContent).toContain("make the plot wider");
+
+    // The final resolves the segment.
+    push({
+      kind: "lowered",
+      events: [
+        {
+          at: Date.now(),
+          type: "transcript-final",
+          segment: 1,
+          text: "make the plot wider",
+          latencyMs: 700,
+          model: "gpt-realtime-whisper",
+        },
+      ],
+    });
+    await flush();
+    expect(body.textContent).toContain("make the plot wider");
+  });
+
+  it("degrades loudly when capture is unavailable — no silent fallback", async () => {
+    const pcm = fakePcmSource({ available: false });
+    const { handle, sent } = mountRealtime(pcm.source);
+
+    key("keydown", "`");
+    key("keydown", " "); // realtime capture can't start
+    await wait(50);
+    // A stray frame can't be emitted (start returned false) — no audio streams.
+    expect(audioChunks(sent)).toHaveLength(0);
+
+    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
+    // Names the fix and the alternatives; never silently switches backend.
+    expect(status).toMatch(/realtime dictation needs/i);
+    expect(status).toMatch(/openai|mock/i);
+  });
+
+  it("tells the user realtime transcription needs the channel (no port)", async () => {
+    const pcm = fakePcmSource();
+    const { factory } = fakeSocketFactory(() => ({ ok: true }));
+    const handle = mountIntentTool({
+      force: true,
+      // no port → openThread rejects → no channel to stream to
+      webSocketFactory: factory,
+      modalities: [
+        multimodalModality({ transcriber: "openai-realtime" }, { pcmSource: () => pcm.source }),
+      ],
+    });
+
+    key("keydown", "`");
+    key("keydown", " ");
+    await wait(40);
+    key("keyup", " "); // talk-end: no channel for the realtime session
+    await wait(40);
+
+    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
+    expect(status).toMatch(/realtime transcription needs the channel/i);
+    expect(status).toMatch(/aiui claude|mock/i);
+  });
+
+  it("openai-voice streams PCM like openai-realtime (shares the capture path)", async () => {
+    const pcm = fakePcmSource();
+    // openai-voice is the flagship transcriber — it reuses the realtime PCM path.
+    const { sent } = mountRealtime(pcm.source, { transcriber: "openai-voice" });
+
+    key("keydown", "`");
+    key("keydown", " "); // talk-start → PCM capture starts (usesPcmStream includes voice)
+    await wait(50);
+    expect(pcm.isStarted()).toBe(true);
+    pcm.emit(Int16Array.of(1, 2, 3));
+    await wait(20);
+    expect(audioChunks(sent).length).toBeGreaterThan(0);
+  });
+});
+
+/** A scriptable fake {@link SpeechAudioElement}: jsdom can't play, so the audio
+ * element is injected; `end()` fires the `ended` listener to advance the queue. */
+function fakeSpeechAudio() {
+  const created: Array<{ src: string; played: boolean; paused: boolean; end: () => void }> = [];
+  const factory = (src: string): SpeechAudioElement => {
+    const listeners: Record<string, () => void> = {};
+    const rec = { src, played: false, paused: false, end: () => listeners.ended?.() };
+    created.push(rec);
+    return {
+      play: () => {
+        rec.played = true;
+      },
+      pause: () => {
+        rec.paused = true;
+      },
+      addEventListener: (type, listener) => {
+        listeners[type] = listener;
+      },
+    };
+  };
+  return { factory, created };
+}
+
+/** Mount with an injected speech audio element + fake socket; audioBack on by default. */
+function mountWithSpeech(
+  over: Record<string, unknown>,
+  speechAudio: (src: string) => SpeechAudioElement,
+) {
+  const { factory, sent, push } = fakeSocketFactory(() => ({ ok: true }));
+  const handle = mountIntentTool({
+    force: true,
+    port: 4321,
+    webSocketFactory: factory,
+    modalities: [
+      multimodalModality(
+        { transcriber: "mock", mockWordMs: 0, mockTypoRate: 0, audioBack: "acks", ...over },
+        { speechAudio },
+      ),
+    ],
+  });
+  return { handle, sent, push };
+}
+
+/** Arm + talk so the thread socket opens (and onServerMessage is wired). */
+async function openThread(): Promise<void> {
+  key("keydown", "`");
+  key("keydown", " ");
+  await wait(50);
+  key("keyup", " ");
+  await wait(20);
+}
+
+describe("multimodalModality: speech playback (premium/flagship audio-back)", () => {
+  it("plays a pushed speech clip, shows the speaker line, clears on end", async () => {
+    const audio = fakeSpeechAudio();
+    const { push } = mountWithSpeech({}, audio.factory);
+    await openThread();
+
+    push({ kind: "speech", id: "ack_0", mime: "audio/mpeg", data: btoa("clip"), label: "sent" });
+    await flush();
+
+    expect(audio.created).toHaveLength(1);
+    expect(audio.created[0].src).toBe(`data:audio/mpeg;base64,${btoa("clip")}`);
+    expect(audio.created[0].played).toBe(true);
+    const speaker = document.querySelector(".mm-speaker") as HTMLElement;
+    expect(speaker.hidden).toBe(false);
+    expect(speaker.textContent).toContain("sent");
+
+    audio.created[0].end(); // the clip finishes
+    await flush();
+    expect(speaker.hidden).toBe(true);
+  });
+
+  it("does NOT play when audioBack is off (client-side mute)", async () => {
+    const audio = fakeSpeechAudio();
+    const { push } = mountWithSpeech({ audioBack: "off" }, audio.factory);
+    await openThread();
+
+    push({ kind: "speech", id: "ack_0", mime: "audio/mpeg", data: btoa("x"), label: "sent" });
+    await flush();
+    expect(audio.created).toHaveLength(0);
+  });
+
+  it("barge-in: a new talk-start stops the playing clip", async () => {
+    const audio = fakeSpeechAudio();
+    const { push } = mountWithSpeech({}, audio.factory);
+    await openThread();
+
+    push({ kind: "speech", id: "ack_0", mime: "audio/mpeg", data: btoa("x"), label: "sent" });
+    await flush();
+    expect(audio.created[0].played).toBe(true);
+
+    key("keydown", " "); // talk-start again → barge-in ducks the clip
+    await wait(20);
+    expect(audio.created[0].paused).toBe(true);
+  });
+});
+
+describe("multimodalModality: tiers via set_config (the agent path)", () => {
+  let uninstallStorage: () => void;
+  beforeEach(() => {
+    uninstallStorage = installLocalStorage();
+  });
+  afterEach(() => {
+    uninstallStorage();
+  });
+
+  type SetConfigOk = { ok: true; config: IntentPipelineConfig };
+
+  it("switch tier rapid persists just {tier}; then flagship re-derives its fields", () => {
+    // Vite intent empty → the base is pure `standard`, so the delta is the tier only.
+    mountMultimodal({});
+    const overlay = window.__aiui_overlay;
+    expect(overlay).toBeDefined();
+
+    const rapid = overlay?.call("set_config", { config: { tier: "rapid" } }) as SetConfigOk;
+    expect(rapid.ok).toBe(true);
+    // The persisted delta is JUST {tier} — no transcriber override frozen in.
+    expect(loadIntentOverrides()).toEqual({ tier: "rapid" });
+    expect(rapid.config.transcriber).toBe("openai-realtime");
+
+    // Switching to flagship re-derives flagship's fields (not rapid's frozen ones).
+    const flagship = overlay?.call("set_config", { config: { tier: "flagship" } }) as SetConfigOk;
+    expect(loadIntentOverrides()).toEqual({ tier: "flagship" });
+    expect(flagship.config.transcriber).toBe("openai-voice");
+    expect(flagship.config.audioBack).toBe("voice");
+    expect(flagship.config.realtimeVoiceModel).toBe("gpt-realtime-2");
+  });
+
+  it("an explicit fine field still wins over the tier preset", () => {
+    mountMultimodal({});
+    const overlay = window.__aiui_overlay;
+    const result = overlay?.call("set_config", {
+      config: { tier: "flagship", model: "whisper-1" },
+    }) as SetConfigOk;
+    expect(result.config.transcriber).toBe("openai-voice"); // from the preset
+    expect(result.config.model).toBe("whisper-1"); // explicit wins
+  });
+
+  it("rejects an unknown tier loudly (validated exactly like the panel)", () => {
+    mountMultimodal({});
+    const overlay = window.__aiui_overlay;
+    expect(() => overlay?.call("set_config", { config: { tier: "deluxe" } })).toThrow(/tier/);
+    expect(loadIntentOverrides()).toEqual({});
+  });
 });
 
 describe("multimodalModality: advanced config panel", () => {
@@ -392,7 +847,9 @@ describe("multimodalModality: advanced config panel", () => {
   }
 
   it("gear opens the editor over the full effective config", () => {
-    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    // Explicit mock for both seams (the shipped defaults are the real `openai`
+    // backends) so the assertion below tests a subset present, not the default.
+    const { handle } = mountMultimodal({ transcriber: "mock", corrector: "mock", mockWordMs: 0 });
     const panel = q<HTMLElement>(handle, ".mm-config");
     expect(panel.hidden).toBe(true);
     q<HTMLButtonElement>(handle, ".mm-gear").click();
@@ -469,7 +926,7 @@ describe("multimodalModality: advanced config panel", () => {
     expect(helloIntent(sent)).toMatchObject({
       talkMode: "toggle", // persisted override
       mockWordMs: 99, // vite intent option
-      corrector: "mock", // DEFAULT
+      corrector: "openai", // DEFAULT (the shipped real backend)
     });
   });
 });

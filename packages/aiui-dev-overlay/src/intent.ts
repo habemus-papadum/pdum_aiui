@@ -31,6 +31,7 @@ import { isDevEnvironment } from "./overlay";
 import {
   type Ack,
   type AttachmentChunk,
+  type AudioChunk,
   connectIntentSocket,
   type JsonChunk,
   type ServerMessage,
@@ -52,8 +53,10 @@ export interface IntentThread {
    * — the `intent-v1` streaming form. `fin` marks the thread's final frame.
    */
   sendChunk(chunk: JsonChunk, payload: unknown, fin?: boolean): Promise<Ack>;
-  /** Send a raw-binary attachment chunk (a shot PNG or an audio segment). */
+  /** Send a raw-binary attachment chunk (a shot PNG or a whole audio segment). */
   sendAttachment(chunk: AttachmentChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
+  /** Send one streamed PCM frame of a talk segment (the realtime path). */
+  sendAudio(chunk: AudioChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /** Register a handler for this thread's server pushes (lowered echoes). */
   onServerMessage(handler: (msg: ServerMessage) => void): void;
   /** Close the underlying socket without sending `fin` (a cancel). */
@@ -79,8 +82,16 @@ export interface IntentToolContext {
   openThread(options?: OpenThreadOptions): Promise<IntentThread>;
   /** Show a short status line in the panel footer. */
   setStatus(text: string): void;
+  /** Open the tool's panel. */
+  openPanel(): void;
   /** Close the tool's panel. */
   closePanel(): void;
+  /** Whether the tool's panel is currently open (for the overlay's own report). */
+  panelOpen(): boolean;
+  /** The last status line shown in the panel footer (for the overlay's report). */
+  lastStatus(): string;
+  /** The label of the modality tab currently shown (for the overlay's report). */
+  activeModalityLabel(): string;
   /**
    * The on-screen selection currently attached to the panel (the chip), or
    * undefined. A modality reads this at submit time to ride it on the payload.
@@ -370,10 +381,16 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   shadowRoot.appendChild(root);
   document.body.appendChild(host);
 
+  // The last status line is exposed on the context so the overlay's own agent
+  // surface can report it (see multimodal/modality.ts).
+  let lastStatusText = "";
   const setStatus = (text: string, isError = false): void => {
+    lastStatusText = text;
     status.textContent = text;
     status.className = `status${isError ? " error" : ""}`;
   };
+  // Which modality tab is showing — tracked for the overlay's report.
+  let activeIndex = 0;
 
   // Watch the page's selection so the modality can attach "the thing the user
   // highlighted" to its submission. Ignore selections inside our own host, and
@@ -422,9 +439,15 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   const contextFor = (modality: IntentModality): IntentToolContext => ({
     port,
     setStatus: (text) => setStatus(text, /fail|error|no channel/i.test(text)),
+    openPanel: () => {
+      panel.hidden = false;
+    },
     closePanel: () => {
       panel.hidden = true;
     },
+    panelOpen: () => !panel.hidden,
+    lastStatus: () => lastStatusText,
+    activeModalityLabel: () => modalities[activeIndex]?.label ?? "",
     selection: () => watcher.snapshot(),
     clearSelection: () => watcher.clear(),
     async openThread(threadOptions): Promise<IntentThread> {
@@ -462,6 +485,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
         sendChunk: (chunk, payload, fin = false) => socket.sendChunk(threadId, chunk, payload, fin),
         sendAttachment: (chunk, bytes, fin = false) =>
           socket.sendAttachment(threadId, chunk, bytes, fin),
+        sendAudio: (chunk, bytes, fin = false) => socket.sendAudio(threadId, chunk, bytes, fin),
         onServerMessage: (handler) =>
           socket.onServerMessage((msg) => {
             // Route only this thread's pushes (server may omit threadId for
@@ -487,6 +511,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     tab.className = `tab${i === 0 ? " active" : ""}`;
     tab.textContent = modality.label;
     tab.addEventListener("click", () => {
+      activeIndex = i;
       mounted.forEach((m, j) => {
         m.container.hidden = j !== i;
         m.tab.classList.toggle("active", j === i);

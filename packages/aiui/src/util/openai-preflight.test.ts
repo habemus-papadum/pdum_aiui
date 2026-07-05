@@ -116,7 +116,9 @@ describe("openAiPreflightMessage", () => {
     const msg = openAiPreflightMessage("missing");
     expect(msg?.level).toBe("warn");
     expect(msg?.detail).toContain("OPENAI_API_KEY");
-    expect(msg?.detail).toContain("mock/off");
+    // The real backends are the default now — degradation is "unavailable",
+    // not a silent switch to mock.
+    expect(msg?.detail).toContain("unavailable");
   });
 
   it("points an invalid key at the stale-export check", () => {

@@ -95,8 +95,9 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // them through this environment). Interactive launches verify it against the
   // API and report any degradation once; CI/non-interactive only note presence
   // without touching the network. Either way the launch proceeds — a bad or
-  // missing key means the modality degrades to mock/off, never a refusal. We
-  // keep only the status (never the key) to thread into launch-info below.
+  // missing key leaves transcription/correction unavailable (the widget says
+  // so; mock is the explicit offline choice), never a refusal. We keep only the
+  // status (never the key) to thread into launch-info below.
   const openaiKey = await preflightOpenAiKey({ verify: interactive });
   if (interactive) {
     reportOpenAiPreflight(openaiKey);

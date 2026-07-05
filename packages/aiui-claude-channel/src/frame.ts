@@ -81,15 +81,24 @@ export interface HelloMeta {
  *
  *  - `events` — payload is UTF-8 JSON `{ events: IntentEvent[] }` (an
  *    append-only batch of the client's interaction log);
- *  - `attachment` — payload is raw bytes (a shot PNG or an audio segment),
+ *  - `attachment` — payload is raw bytes (a shot PNG or a whole audio segment),
  *    identified by `id` (`shot_N` / `seg_N`) and `mime`;
+ *  - `audio` — payload is raw bytes: **one streamed PCM frame** of segment
+ *    `seg_N`, in `seq` order (the realtime-transcriber path, streaming-turns.md
+ *    §3). Where `attachment seg_N` is one whole segment in one frame (the REST
+ *    path), `audio seg_N` is that same segment arriving as many frames *while
+ *    you talk*; the segment's existing `talk-start`/`talk-end` events remain the
+ *    boundaries (talk-end commits the upstream buffer). Additive, like every
+ *    other member — its absence is the legacy behavior every non-`intent-v1`
+ *    format relies on, so `PROTOCOL_VERSION` is unaffected;
  *  - `context` — payload is UTF-8 JSON `{ selection?: … }`, sent at most once,
  *    just before `fin`.
  */
 export type ChunkDescriptor =
   | { kind: "events" }
   | { kind: "context" }
-  | { kind: "attachment"; id: string; mime: string };
+  | { kind: "attachment"; id: string; mime: string }
+  | { kind: "audio"; id: string; seq: number; mime: string };
 
 /** The routing/lifecycle metadata carried in every frame's header. */
 export interface Envelope {

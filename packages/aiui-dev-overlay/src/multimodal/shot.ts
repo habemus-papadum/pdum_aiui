@@ -89,6 +89,11 @@ export class ShotTool {
     return this.start !== undefined;
   }
 
+  /** Whether a display-capture grant is live (a shot would capture pixels). */
+  hasCaptureGrant(): boolean {
+    return this.video !== undefined;
+  }
+
   async shootViewport(): Promise<void> {
     await this.capture({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight });
   }

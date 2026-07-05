@@ -18,6 +18,7 @@
  * @packageDocumentation
  */
 
+export { disposeDurable, durable } from "./durable";
 export type { ClientMeta, FrameMetric, PageInstrumentation, TabInfo } from "./instrumentation";
 export {
   collectClientMeta,
@@ -41,6 +42,10 @@ export type {
   Corrector,
   ShotPixels,
   ShotSink,
+  SpeechAudioElement,
+  SpeechAudioFactory,
+  SpeechClip,
+  SpeechPlayerOptions,
   Transcriber,
   TranscriptResult,
 } from "./multimodal";
@@ -54,6 +59,7 @@ export {
   multimodalModality,
   Preview,
   ShotTool,
+  SpeechPlayer,
   SYSTEM_PROMPT,
 } from "./multimodal";
 export type { DevOverlayHandle, DevOverlayOptions } from "./overlay";
@@ -62,6 +68,14 @@ export {
   mountDevOverlay,
   unmountDevOverlay,
 } from "./overlay";
+export type {
+  OverlayReport,
+  OverlayToolsDeps,
+  OverlayToolsHandle,
+  SetConfigResult,
+  ThreadSocketState,
+} from "./overlay-tools";
+export { installOverlayTools, OVERLAY_TOOLS_NS } from "./overlay-tools";
 export type {
   Ack,
   AttachmentChunk,
@@ -88,6 +102,8 @@ export type {
   ToolsSocketLike,
 } from "./tools-bridge";
 export { canonicalToolsHash, installToolsBridge } from "./tools-bridge";
+export type { RecoveredTurn } from "./turn-store";
+export { intentTurnStore, TURN_STORAGE_KEY, TurnStore } from "./turn-store";
 
 /** The published package name — handy for smoke tests. */
 export const name = "@habemus-papadum/aiui-dev-overlay";

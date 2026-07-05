@@ -1,6 +1,12 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
+import type { ChannelFormat } from "./channel";
 import { type ChannelClient, connectChannelClient } from "./client";
+import { jsonCodec } from "./codec";
+import { defaultFormats } from "./processors";
 import { startWebServer, type WebServer } from "./web";
 
 describe("startWebServer", () => {
@@ -257,6 +263,210 @@ describe("startWebServer page tools (/tools websocket end to end)", () => {
     );
     await expect(server.pageTools.call({ name: "report", ns: "aztec" })).resolves.toBe(
       "aztec-report",
+    );
+  });
+});
+
+/**
+ * A tools client that behaves like the dev-overlay bridge across a drop:
+ * re-dials after a short delay and re-registers its namespace on every (re)open.
+ * We keep the delay tiny so the reconnect test never sleeps for the real 3s.
+ */
+function reconnectingPage(port: number, ns: string, tools: unknown[], reconnectMs: number) {
+  let ws: WebSocket | undefined;
+  let disposed = false;
+  let registerCount = 0;
+  const dial = (): void => {
+    ws = new WebSocket(`ws://127.0.0.1:${port}/tools`);
+    ws.on("open", () => {
+      ws?.send(
+        JSON.stringify({
+          v: 1,
+          type: "register",
+          ns,
+          url: `http://localhost/${ns}`,
+          hash: "h1",
+          tools,
+        }),
+      );
+    });
+    ws.on("message", (data) => {
+      if (JSON.parse(data.toString()).type === "registered") {
+        registerCount += 1;
+      }
+    });
+    ws.on("close", () => {
+      if (!disposed) {
+        setTimeout(dial, reconnectMs);
+      }
+    });
+    ws.on("error", () => {});
+  };
+  dial();
+  return {
+    get registerCount() {
+      return registerCount;
+    },
+    dispose(): void {
+      disposed = true;
+      ws?.close();
+    },
+  };
+}
+
+describe("startWebServer reload (hot-reload the lowering layer in place)", () => {
+  let server: WebServer | undefined;
+  const clients: ChannelClient[] = [];
+  const disposers: Array<() => void> = [];
+
+  afterEach(async () => {
+    for (const dispose of disposers.splice(0)) {
+      dispose();
+    }
+    await Promise.all(clients.splice(0).map((c) => c.close().catch(() => {})));
+    await server?.close();
+    server = undefined;
+  });
+
+  const connect = async (port: number, format: string): Promise<ChannelClient> => {
+    const client = await connectChannelClient({ url: `ws://127.0.0.1:${port}/ws`, format });
+    clients.push(client);
+    return client;
+  };
+
+  /** A text format whose lowered prompt carries its generation, to prove the swap. */
+  const stampFormat = (gen: number): ChannelFormat => ({
+    codec: jsonCodec,
+    createProcessor: (ctx) => ({
+      async onMessage(payload, meta) {
+        if (meta.fin) {
+          await ctx.sendPrompt(`gen${gen}: ${(payload as { text?: string })?.text ?? ""}`);
+          ctx.close();
+        }
+      },
+    }),
+  });
+
+  it("rebuilds the registry so a connection opened after reload speaks the new layer", async () => {
+    const prompts: string[] = [];
+    server = await startWebServer({
+      onPrompt: (t) => {
+        prompts.push(t);
+      },
+      loadFormats: (gen) => new Map([["text-concat", stampFormat(gen)]]),
+    });
+    await (await connect(server.port, "text-concat")).openThread("a").finish({ text: "hi" });
+    expect(prompts).toEqual(["gen0: hi"]);
+
+    const summary = await server.reload();
+    expect(summary).toMatchObject({ reloaded: true, generation: 1 });
+
+    // A connection opened after the reload lowers through the gen-1 format.
+    await (await connect(server.port, "text-concat")).openThread("b").finish({ text: "hi" });
+    expect(prompts).toEqual(["gen0: hi", "gen1: hi"]);
+  });
+
+  it("drops live sockets on reload and runs each thread's onClose teardown", async () => {
+    const torndown: string[] = [];
+    const probeFormat: ChannelFormat = {
+      codec: jsonCodec,
+      createProcessor: (ctx) => ({
+        onMessage() {
+          // Keep the thread open — never fin, never self-close.
+        },
+        onClose() {
+          torndown.push(ctx.threadId);
+        },
+      }),
+    };
+    server = await startWebServer({
+      onPrompt: () => {},
+      loadFormats: () => new Map([["probe", probeFormat]]),
+    });
+    const client = await connect(server.port, "probe");
+    await client.openThread("t1").send({}); // materialize the processor, mid-turn
+
+    const summary = await server.reload();
+    expect(summary.socketsDropped).toBe(1);
+    // The dropped socket runs the abandoned-thread teardown path.
+    await vi.waitFor(() => expect(torndown).toEqual(["t1"]));
+  });
+
+  it("is a no-op beyond the generation bump with no connections, and survives a double reload", async () => {
+    server = await startWebServer({ onPrompt: () => {}, loadFormats: () => defaultFormats() });
+    expect(await server.reload()).toEqual({ reloaded: true, generation: 1, socketsDropped: 0 });
+    expect(await server.reload()).toEqual({ reloaded: true, generation: 2, socketsDropped: 0 });
+    expect(server.getGeneration()).toBe(2);
+  });
+
+  it("rejects and leaves the running server untouched when the fresh layer fails to load", async () => {
+    let broken = false;
+    server = await startWebServer({
+      onPrompt: () => {},
+      loadFormats: () => {
+        if (broken) {
+          throw new Error("bad edit");
+        }
+        return defaultFormats();
+      },
+    });
+    broken = true;
+    await expect(server.reload()).rejects.toThrow("bad edit");
+    expect(server.getGeneration()).toBe(0); // generation not bumped on failure
+
+    // The old layer is still live: a fresh connection still lowers a prompt.
+    const ack = await (await connect(server.port, "text-concat"))
+      .openThread("a")
+      .finish({ text: "alive" });
+    expect(ack).toMatchObject({ ok: true, closed: true });
+  });
+
+  it("reloads via POST /debug/api/reload and reflects the generation on /debug/api/info and /health", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-reload-"));
+    server = await startWebServer({
+      onPrompt: () => {},
+      traceDir: cache,
+      loadFormats: () => defaultFormats(),
+    });
+    const base = `http://127.0.0.1:${server.port}`;
+
+    const res = await fetch(`${base}/debug/api/reload`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ reloaded: true, generation: 1, socketsDropped: 0 });
+
+    const info = (await (await fetch(`${base}/debug/api/info`)).json()) as { generation?: number };
+    expect(info.generation).toBe(1);
+    const health = (await (await fetch(`${base}/health`)).json()) as { generation?: number };
+    expect(health.generation).toBe(1);
+  });
+
+  it("end to end: a reconnecting tools client re-registers after a reload drops its socket", async () => {
+    server = await startWebServer({ onPrompt: () => {}, loadFormats: () => defaultFormats() });
+    const page = reconnectingPage(
+      server.port,
+      "morpho",
+      [{ name: "report", description: "snap" }],
+      20,
+    );
+    disposers.push(() => page.dispose());
+
+    // The first registration lands.
+    await vi.waitFor(() => expect(server?.pageTools.list()).toHaveLength(1));
+    const before = page.registerCount;
+
+    const summary = await server.reload();
+    expect(summary.socketsDropped).toBeGreaterThanOrEqual(1); // the live socket was dropped
+
+    // The bridge-style client reconnects on its own and re-registers — a fresh
+    // register (registerCount climbs), leaving the directory repopulated. (The
+    // brief emptied state between drop and reconnect is real but too transient to
+    // assert without racing the ~20ms reconnect; the rising count proves the round trip.)
+    await vi.waitFor(
+      () => {
+        expect(page.registerCount).toBeGreaterThan(before);
+        expect(server?.pageTools.list()).toHaveLength(1);
+      },
+      { timeout: 2000 },
     );
   });
 });

@@ -17,7 +17,14 @@ import {
  * fields later if the lab ever needs a knob the pipeline doesn't.
  */
 export type WorkbenchSettings = IntentPipelineConfig;
-export const DEFAULT_SETTINGS = DEFAULT_INTENT_CONFIG;
+// The lab defaults LIVE, like the shipped overlay: a human evaluating the
+// interaction should hear real latency, not the mock's (put a key in the
+// repo-root .env.dev; without one the openai backends error loudly and the
+// drawer flips to mock in one click). Mock stays the explicit choice for
+// offline/headless work — agents driving the bench without a mic or key.
+export const DEFAULT_SETTINGS: WorkbenchSettings = {
+  ...DEFAULT_INTENT_CONFIG,
+};
 
 const KEY = "aiui-workbench-settings";
 

@@ -69,13 +69,13 @@ export function degradedKeyLine(status: string | undefined): string | null {
     case "valid":
       return null;
     case "missing":
-      return "OPENAI_API_KEY isn't set — transcription and correction run in mock/off mode.";
+      return "OPENAI_API_KEY isn't set — transcription and correction are unavailable until it's set (or switch the overlay to the mock backends for offline work).";
     case "invalid":
-      return "OPENAI_API_KEY was rejected (a stale shell export?) — the pipeline runs degraded (mock transcription/correction).";
+      return "OPENAI_API_KEY was rejected (a stale shell export?) — transcription and correction are unavailable until it's fixed.";
     case "unverified":
-      return "OPENAI_API_KEY wasn't verified at launch — transcription/correction may fall back to mock.";
+      return "OPENAI_API_KEY wasn't verified at launch — transcription and correction may be unavailable.";
     default:
-      return "OPENAI_API_KEY is unusable — the pipeline runs degraded (mock transcription/correction).";
+      return "OPENAI_API_KEY is unusable — transcription and correction are unavailable (the pipeline runs degraded).";
   }
 }
 

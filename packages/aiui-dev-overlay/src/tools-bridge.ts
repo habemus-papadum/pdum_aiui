@@ -47,6 +47,12 @@ export interface BridgeTool {
 export interface ToolsBridgeApi {
   /** Declare (replacing) the full tool set for one page namespace. */
   register(ns: string, tools: BridgeTool[]): void;
+  /**
+   * Remove a namespace (e.g. a feature unmounting). The channel has no
+   * `unregister` message, so this declares the namespace with an empty tool set
+   * — wire-compatible removal: nothing stays callable under it.
+   */
+  unregister(ns: string): void;
 }
 
 /** Options for {@link installToolsBridge}. */
@@ -414,6 +420,13 @@ export function installToolsBridge(opts: ToolsBridgeOptions = {}): () => void {
     register(ns: string, tools: BridgeTool[]): void {
       registry.set(ns, tools.slice());
       sendRegister(ns, tools);
+    },
+    unregister(ns: string): void {
+      // Drop it locally (so a reconnect doesn't re-declare it) and tell the
+      // server via an empty-set register — the channel keys by (connection, ns)
+      // and this leaves the namespace with zero callable tools.
+      registry.delete(ns);
+      sendRegister(ns, []);
     },
   };
 
