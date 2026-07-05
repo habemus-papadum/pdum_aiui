@@ -1,0 +1,102 @@
+[
+  {
+    "at": 1783269039027,
+    "type": "armed",
+    "on": true
+  },
+  {
+    "at": 1783269039090,
+    "type": "thread-open",
+    "trigger": "talk"
+  },
+  {
+    "at": 1783269039091,
+    "type": "talk-start",
+    "segment": 1
+  },
+  {
+    "at": 1783269039391,
+    "type": "talk-end",
+    "segment": 1,
+    "ms": 300
+  },
+  {
+    "at": 1783269039420,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make"
+  },
+  {
+    "at": 1783269039449,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the"
+  },
+  {
+    "at": 1783269039477,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline"
+  },
+  {
+    "at": 1783269039505,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve"
+  },
+  {
+    "at": 1783269039532,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a"
+  },
+  {
+    "at": 1783269039560,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit"
+  },
+  {
+    "at": 1783269039588,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker"
+  },
+  {
+    "at": 1783269039615,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and"
+  },
+  {
+    "at": 1783269039641,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color"
+  },
+  {
+    "at": 1783269039669,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color it"
+  },
+  {
+    "at": 1783269039697,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color it amber"
+  },
+  {
+    "at": 1783269039699,
+    "type": "transcript-final",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color it amber",
+    "latencyMs": 305.30000019073486,
+    "model": "mock"
+  },
+  {
+    "at": 1783269039804,
+    "type": "thread-close",
+    "reason": "cancel"
+  }
+]

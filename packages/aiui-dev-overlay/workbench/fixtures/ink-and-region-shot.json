@@ -1,1 +1,61 @@
-[{"at":1783268989637,"type":"armed","on":true},{"at":1783268989786,"type":"thread-open","trigger":"ink"},{"at":1783268989786,"type":"stroke","points":6,"bounds":{"x":110,"y":150,"w":370,"h":150}},{"at":1783268989851,"type":"shot","marker":"shot_1","rect":{"x":40,"y":90,"w":740,"h":300},"components":[{"component":"SpectrumPlot","source":"workbench/src/scenery.ts:20","rect":{"x":28,"y":77.5,"w":758,"h":311}},{"component":"AppShell","source":"workbench/src/scenery.ts:12","rect":{"x":0,"y":0,"w":2154,"h":554.5}}]},{"at":1783268989942,"type":"thread-close","reason":"send"}]
+[
+  {
+    "at": 1783268989637,
+    "type": "armed",
+    "on": true
+  },
+  {
+    "at": 1783268989786,
+    "type": "thread-open",
+    "trigger": "ink"
+  },
+  {
+    "at": 1783268989786,
+    "type": "stroke",
+    "points": 6,
+    "bounds": {
+      "x": 110,
+      "y": 150,
+      "w": 370,
+      "h": 150
+    }
+  },
+  {
+    "at": 1783268989851,
+    "type": "shot",
+    "marker": "shot_1",
+    "rect": {
+      "x": 40,
+      "y": 90,
+      "w": 740,
+      "h": 300
+    },
+    "components": [
+      {
+        "component": "SpectrumPlot",
+        "source": "workbench/src/scenery.ts:20",
+        "rect": {
+          "x": 28,
+          "y": 77.5,
+          "w": 758,
+          "h": 311
+        }
+      },
+      {
+        "component": "AppShell",
+        "source": "workbench/src/scenery.ts:12",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 2154,
+          "h": 554.5
+        }
+      }
+    ]
+  },
+  {
+    "at": 1783268989942,
+    "type": "thread-close",
+    "reason": "send"
+  }
+]

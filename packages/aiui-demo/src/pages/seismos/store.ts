@@ -80,6 +80,9 @@ export interface SeismosStore {
   summary: Accessor<Summary | undefined>;
   /** Magnitude histogram of the current selection, kept live by the stats client. */
   histo: Accessor<MagBin[]>;
+  /** Country borders for the map's faint overlay; empty until loaded (or if the
+   *  optional overlay asset failed to fetch — the map still renders without it). */
+  world: Accessor<BorderFeature[]>;
   /** Idempotent async load; forwards fraction-complete to `onProgress`. */
   ensureLoaded: (onProgress?: (fraction: number) => void) => Promise<Summary>;
   /** Bounded, read-only SELECT for the agent query tool (row-capped, sanitized). */
@@ -111,6 +114,7 @@ export const store: SeismosStore = durable("seismos:store", () => {
   const [loadError, setLoadError] = createSignal<unknown>(undefined);
   const [summary, setSummary] = createSignal<Summary | undefined>(undefined);
   const [histo, setHisto] = createSignal<MagBin[]>([]);
+  const [world, setWorld] = createSignal<BorderFeature[]>([]);
 
   // A second connection dedicated to our own reads (summary + the agent query
   // tool), so they never contend with Mosaic's connection.
@@ -136,7 +140,20 @@ export const store: SeismosStore = durable("seismos:store", () => {
     };
   }
 
+  // The country overlay is optional chrome: fetch it alongside the parquet so it
+  // adds no latency, and never let its failure abort the dataset load.
+  async function fetchWorld(): Promise<BorderFeature[]> {
+    const res = await fetch(WORLD_URL);
+    if (!res.ok) throw new Error(`world overlay fetch failed: ${res.status}`);
+    const gj = (await res.json()) as { features: BorderFeature[] };
+    return gj.features;
+  }
+
   async function load(report: (fraction: number) => void): Promise<Summary> {
+    const worldPromise = fetchWorld().catch((err) => {
+      console.warn("[seismos] country overlay unavailable; map renders without it", err);
+      return [] as BorderFeature[];
+    });
     report(0.04);
     const db: AsyncDuckDB = await instantiateDuckDB();
     const mosaicCon = await db.connect();
