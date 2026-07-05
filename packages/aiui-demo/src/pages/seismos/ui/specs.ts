@@ -22,6 +22,7 @@ import {
   count,
   frame,
   from,
+  geo,
   height,
   intervalX,
   intervalXY,
@@ -57,15 +58,35 @@ function cosmetics(): Directive[] {
  * dots), colored by a per-mode sequential density scheme on a sqrt scale
  * (epicenter density is extremely skewed). A 2-D interval brush publishes a
  * lon/lat box into the crossfilter.
+ *
+ * Two legibility choices: `pixelSize` 1.5 makes each density cell ~50% larger,
+ * so the sparse, isolated events (most of Earth's crust is aseismic) read as
+ * visible specks rather than single pixels; and a faint country-border overlay
+ * (drawn *over* the opaque raster, since its near-black density floor otherwise
+ * hides any layer behind it) gives that sparse scatter geographic anchoring.
+ * The borders are polylines in raw lon/lat — the same identity scale space the
+ * raster uses — so a projection-less `geo` mark aligns exactly (see NOTES.md).
  */
 export function mapSpec(w = 640, h = 320): Directive[] {
   const p = seismic();
+  const world = store.world();
   return [
     raster(from(TABLE(), { filterBy: BRUSH() }), {
       x: "longitude",
       y: "latitude",
       fill: "density",
+      pixelSize: 1.5,
     }),
+    ...(world.length
+      ? [
+          geo(world, {
+            stroke: p.coast,
+            strokeOpacity: p.coastOpacity,
+            strokeWidth: 0.5,
+            clip: "frame",
+          }),
+        ]
+      : []),
     frame({ stroke: plotStyle().color, strokeOpacity: 0.25 }),
     // A raster is a density aggregation, so its x/y channels don't resolve to a
     // plain column for the brush (getField → null, giving a `NULL BETWEEN …`

@@ -1,22 +1,30 @@
 /**
- * The transcript preview: a popup that shows what the machine thinks you
- * said, as you say it — streaming segment text with tiny inline screenshot
- * thumbnails at the position they were taken.
+ * The transcript preview: a popup that shows what the machine thinks you said,
+ * as you say it — streaming segment text with tiny inline screenshot thumbnails
+ * at the position they were taken.
  *
  * Correct mode (E) is the meta layer: the popup expands and the transcript
- * becomes **selectable text**. Select the wrong words — ordinary text
- * selection, no special gesture — then speak the fix (auto-submits when the
- * segment ends) or type it. The correction micro-pipeline (correct.ts) turns
- * {transcript, selection, instruction} into a V4A patch; when it lands, the
- * preview flashes the inline word-diff (pink deletions / green additions) for
- * a beat before settling on the clean text.
+ * becomes **selectable text**. Select the wrong words — ordinary text selection,
+ * no special gesture — then speak the fix (auto-submits when the segment ends)
+ * or type it. The correction micro-pipeline (correct.ts) turns {transcript,
+ * selection, instruction} into a V4A patch; when it lands, the preview flashes
+ * the inline word-diff (pink deletions / green additions) for a beat before
+ * settling on the clean text.
+ *
+ * Graduated from the workbench. It renders into a light-DOM layer (not a shadow
+ * root) precisely so native selection resolves against its text — the
+ * hard-won reason correction uses `Selection` instead of a lasso (field-notes).
  */
-import type { Engine } from "./engine";
-import { applyCorrectionToLines, type DiffRun, wordDiff } from "./patch";
-import type { IntentEvent } from "./types";
+import {
+  applyCorrectionToLines,
+  type DiffRun,
+  type Engine,
+  type IntentEvent,
+  wordDiff,
+} from "../intent-pipeline";
 
-/** How long the pink/green inline diff stays up before the clean render. */
-const DIFF_FLASH_MS = 500;
+/** Fallback flash duration when config.diffFlashMs is unset. */
+const DEFAULT_DIFF_FLASH_MS = 500;
 
 interface Piece {
   kind: "text" | "shot";
@@ -43,14 +51,14 @@ export class Preview {
   constructor(engine: Engine) {
     this.engine = engine;
     this.root = document.createElement("div");
-    this.root.className = "wb-preview";
-    this.root.innerHTML = `<div class="wb-preview-title">transcript</div>`;
+    this.root.className = "mm-preview";
+    this.root.innerHTML = `<div class="mm-preview-title">transcript</div>`;
     this.body = document.createElement("div");
-    this.body.className = "wb-preview-body";
+    this.body.className = "mm-preview-body";
     this.root.append(this.body);
 
     this.correctionBar = document.createElement("div");
-    this.correctionBar.className = "wb-correction-bar";
+    this.correctionBar.className = "mm-correction-bar";
     this.correctionBar.style.display = "none";
     this.correctionInput = document.createElement("input");
     this.correctionInput.placeholder = "type the fix — or hold Space and say it";
@@ -127,7 +135,7 @@ export class Preview {
   /** Absolute offset (in renderedText space) of a point inside the body. */
   private offsetOf(node: Node, nodeOffset: number): number | undefined {
     const span = (node instanceof Element ? node : node.parentElement)?.closest?.(
-      ".wb-seg",
+      ".mm-seg",
     ) as HTMLElement | null;
     if (!span) {
       return undefined;
@@ -232,7 +240,7 @@ export class Preview {
     this.flashTimer = setTimeout(() => {
       this.flash = undefined;
       this.render();
-    }, DIFF_FLASH_MS);
+    }, this.engine.settings.diffFlashMs ?? DEFAULT_DIFF_FLASH_MS);
   }
 
   // ── rendering ───────────────────────────────────────────────────────────────
@@ -246,12 +254,12 @@ export class Preview {
         if (piece.thumb) {
           const img = document.createElement("img");
           img.src = piece.thumb;
-          img.className = "wb-thumb";
+          img.className = "mm-thumb";
           img.title = piece.marker ?? "";
           this.body.append(img);
         } else {
           const chip = document.createElement("span");
-          chip.className = "wb-thumb-chip";
+          chip.className = "mm-thumb-chip";
           chip.textContent = `📷 ${piece.marker}`;
           this.body.append(chip);
         }
@@ -259,14 +267,14 @@ export class Preview {
       }
       const text = piece.text ?? "";
       const span = document.createElement("span");
-      span.className = piece.final ? "wb-seg final" : "wb-seg";
+      span.className = piece.final ? "mm-seg final" : "mm-seg";
       span.dataset.off = String(offset);
       const runs = this.flash?.get(piece);
       if (runs) {
-        // The 500 ms merge view: deletions struck pink, additions green.
+        // The flash view: deletions struck pink, additions green.
         for (const run of runs) {
           const part = document.createElement("span");
-          part.className = run.kind === "same" ? "" : `wb-diff-${run.kind}`;
+          part.className = run.kind === "same" ? "" : `mm-diff-${run.kind}`;
           part.textContent = `${run.text} `;
           span.append(part);
         }

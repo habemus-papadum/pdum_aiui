@@ -1,7 +1,7 @@
 /**
  * The aiui DevTools panel.
  *
- * Two data sources, three views:
+ * Two data sources, four views:
  *  - **Server** — the channel server's own identity (`/debug/api/info`), a
  *    health-ping latency, and its transport counters (`/debug/api/stats`).
  *  - **Transport** — the *page's* view of the websocket: per-frame size + ack
@@ -9,13 +9,29 @@
  *    read out of the inspected page via `chrome.devtools.inspectedWindow`.
  *  - **Traces** — the lowering-trace debugger, embedded from the server's
  *    `/debug` page (which remains usable standalone).
+ *  - **Intent** — one chosen trace, live-followed through the shared `debug-ui`
+ *    (loaded lazily from `./debug-ui.js`): the intent event stream, its IR
+ *    passes, and per-segment timing, polled off `/debug/api/traces/:id/live`.
  *
  * Port discovery: the instrumented page publishes its channel port on
- * `window.__AIUI__.port` (set when the intent tool mounts). Outside DevTools —
- * the panel also works opened as a plain tab — or when no instrumented page is
- * found, a manual port field (or `?port=` query param) takes over.
+ * `window.__AIUI__.port` (set when the intent tool mounts). That's primary;
+ * with no instrumented page the panel falls back to the most recently used port
+ * (remembered in localStorage), and a manual field (or `?port=` query param)
+ * always overrides. The panel also works opened as a plain tab.
  */
+import {
+  addRecentPort,
+  channelBaseUrl,
+  degradedKeyLine,
+  loadRecentPorts,
+  saveRecentPorts,
+  type TraceSummary,
+  traceSummaryLine,
+} from "./intent-pane.js";
 import { formatAgo, formatBytes, formatMs, summarizeRtt } from "./stats.js";
+
+/** The shared debug UI, lazily imported (an esbuild bundle — see build-debug-ui.mjs). */
+type DebugUiModule = typeof import("./debug-ui.js");
 
 /** Mirror of aiui-dev-overlay's FrameMetric (the window.__AIUI__ wire shape, v1). */
 interface PageFrame {
@@ -49,6 +65,8 @@ interface LaunchChromeDevtools {
 interface LaunchInfoPayload {
   launcher?: string;
   chromeDevtools?: LaunchChromeDevtools;
+  /** The launcher's OpenAI-key preflight status (status only — never the key). */
+  openaiKey?: string;
 }
 interface ServerFrame {
   at: string;
@@ -97,11 +115,20 @@ async function readPageInstrumentation(): Promise<PageInstrumentation | null> {
 // ── state ────────────────────────────────────────────────────────────────────
 let port: number | null = null;
 let tracesSrcFor: number | null = null;
+// A pinned port (a ?port= preset or a manual entry) sticks; the page's
+// `window.__AIUI__.port` is otherwise primary, with remembered ports as the
+// last-resort fallback (graduation handoff, port-discovery option a).
+let portPinned = false;
+
+const storage: Pick<Storage, "getItem" | "setItem"> | undefined =
+  typeof localStorage !== "undefined" ? localStorage : undefined;
+let recentPorts = loadRecentPorts(storage);
 
 // Standalone conveniences: ?port= presets, the footer input overrides.
 const queryPort = Number(new URLSearchParams(location.search).get("port"));
 if (Number.isInteger(queryPort) && queryPort > 0) {
   port = queryPort;
+  portPinned = true;
 }
 
 // ── rendering ────────────────────────────────────────────────────────────────
@@ -306,12 +333,22 @@ const fetchJson = async <T>(path: string): Promise<T | null> => {
   }
 };
 
-async function tick(): Promise<void> {
+async function tickCore(): Promise<void> {
   const inst = await readPageInstrumentation();
-  if (inst?.port && port === null) {
+  // The page's port is primary (unless the user pinned one); with no
+  // instrumented page, fall back to the most recently used port.
+  if (inst?.port && !portPinned) {
     port = inst.port;
+  } else if (port === null && recentPorts.length) {
+    port = recentPorts[0];
   }
-  $("port-row").hidden = !(port === null && !inst?.port);
+  // The manual row shows whenever there's no page-provided port, so a
+  // fallback/remembered port can always be overridden.
+  $("port-row").hidden = Boolean(inst?.port);
+  const portInput = $<HTMLInputElement>("port-input");
+  if (document.activeElement !== portInput && port !== null) {
+    portInput.value = String(port);
+  }
 
   if (port === null) {
     setStatus(
@@ -336,6 +373,14 @@ async function tick(): Promise<void> {
   }
   setStatus(`port ${port} · ping ${formatMs(pingMs)}`, true);
 
+  // A port that answered is worth remembering — but only persist when the
+  // order actually changes (this runs every tick), i.e. it wasn't already first.
+  if (recentPorts[0] !== port) {
+    recentPorts = addRecentPort(recentPorts, port);
+    saveRecentPorts(storage, recentPorts);
+    renderPortRecents();
+  }
+
   renderInfo(await fetchJson<Record<string, unknown>>("/debug/api/info"));
   renderServerStats(stats);
   renderClientFrames(inst);
@@ -347,6 +392,122 @@ async function tick(): Promise<void> {
   }
 }
 
+// ── intent pane (shared debug-ui, lazy) ──────────────────────────────────────
+// The debug UI is an esbuild bundle loaded on demand, so a plain `tsc` build
+// (the session-browser auto-rebuild) never breaks the other tabs — the Intent
+// pane just degrades until `pnpm build` produces extension/js/debug-ui.js.
+let debugUiMod: DebugUiModule | null | undefined;
+async function loadDebugUi(): Promise<DebugUiModule | null> {
+  if (debugUiMod === undefined) {
+    debugUiMod = await import("./debug-ui.js").catch(() => null);
+  }
+  return debugUiMod;
+}
+
+let intentTraceId = "";
+let intentKey = ""; // `${port}:${traceId}` — rebuild the follower when it changes
+let intentPoll: ReturnType<DebugUiModule["createTracePoll"]> | null = null;
+let traceView: InstanceType<DebugUiModule["TraceView"]> | null = null;
+
+const renderPortRecents = (): void => {
+  const list = document.getElementById("port-recents");
+  if (list) {
+    list.replaceChildren(
+      ...recentPorts.map((p) => {
+        const opt = document.createElement("option");
+        opt.value = String(p);
+        return opt;
+      }),
+    );
+  }
+};
+
+const renderTraceOptions = (traces: TraceSummary[]): void => {
+  const select = $<HTMLSelectElement>("intent-trace");
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = traces.length ? "— select a trace —" : "— no traces yet —";
+  const options = [
+    placeholder,
+    ...traces.map((t) => {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = `${t.format} · ${traceSummaryLine(t)}`;
+      opt.selected = t.id === intentTraceId;
+      return opt;
+    }),
+  ];
+  select.replaceChildren(...options);
+  // A followed trace that aged out of the listing resets the selection.
+  if (intentTraceId && !traces.some((t) => t.id === intentTraceId)) {
+    intentTraceId = "";
+  }
+};
+
+const clearIntentFollower = (): void => {
+  intentKey = "";
+  intentPoll = null;
+  traceView = null;
+  $("intent-view").replaceChildren();
+};
+
+async function updateIntent(): Promise<void> {
+  if ($("tab-intent").hidden) {
+    return;
+  }
+  const note = $("intent-note");
+  if (port === null) {
+    note.textContent = "Connect to a channel (Server tab) to follow intent traces.";
+    clearIntentFollower();
+    return;
+  }
+  const dbg = await loadDebugUi();
+  if (!dbg) {
+    note.textContent =
+      "Intent debug UI isn't built — run: pnpm --filter @habemus-papadum/aiui-devtools-extension build";
+    return;
+  }
+  const base = channelBaseUrl(port);
+
+  const info = await fetchJson<{ launch?: LaunchInfoPayload }>("/debug/api/info");
+  const degraded = degradedKeyLine(info?.launch?.openaiKey);
+
+  renderTraceOptions(
+    (await fetchJson<{ traces: TraceSummary[] }>("/debug/api/traces"))?.traces ?? [],
+  );
+
+  // Rebuild the poller + view whenever the port or selected trace changes.
+  const key = `${port}:${intentTraceId}`;
+  if (key !== intentKey) {
+    clearIntentFollower();
+    intentKey = key;
+    if (intentTraceId) {
+      intentPoll = dbg.createTracePoll({ baseUrl: base, traceId: intentTraceId });
+      traceView = new dbg.TraceView({
+        blobUrl: (id, file) =>
+          `${base}/debug/blob/${encodeURIComponent(id)}/${encodeURIComponent(file)}`,
+        previewUrl: (p) => `${base}/debug/api/preview?path=${encodeURIComponent(p)}`,
+      });
+      $("intent-view").replaceChildren(traceView.root);
+    }
+  }
+
+  note.textContent = degraded ?? (intentTraceId ? "" : "Select a trace to follow it live.");
+
+  if (intentPoll && traceView) {
+    const result = await intentPoll.poll();
+    if (result.changed && result.trace) {
+      traceView.update(result.trace);
+    }
+  }
+}
+
+/** One poll cycle: the base panel plus the intent follower. */
+async function tick(): Promise<void> {
+  await tickCore();
+  await updateIntent();
+}
+
 // ── wiring ───────────────────────────────────────────────────────────────────
 for (const tab of document.querySelectorAll<HTMLButtonElement>(".tab")) {
   tab.addEventListener("click", () => {
@@ -356,14 +517,26 @@ for (const tab of document.querySelectorAll<HTMLButtonElement>(".tab")) {
     for (const section of document.querySelectorAll<HTMLElement>("main > section")) {
       section.hidden = section.id !== `tab-${tab.dataset.tab}`;
     }
+    // Render the Intent pane immediately on switch, not at the next poll tick.
+    if (tab.dataset.tab === "intent") {
+      void updateIntent();
+    }
   });
 }
 
 $<HTMLInputElement>("port-input").addEventListener("change", (event) => {
   const value = Number((event.target as HTMLInputElement).value);
   port = Number.isInteger(value) && value > 0 ? value : null;
+  portPinned = port !== null; // a manual entry sticks over page discovery
   void tick();
 });
 
+$<HTMLSelectElement>("intent-trace").addEventListener("change", (event) => {
+  intentTraceId = (event.target as HTMLSelectElement).value;
+  void updateIntent();
+});
+$("intent-refresh").addEventListener("click", () => void updateIntent());
+
+renderPortRecents();
 void tick();
 setInterval(() => void tick(), 1500);

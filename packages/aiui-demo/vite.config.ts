@@ -35,7 +35,11 @@ export default defineConfig(({ command, isPreview }) => ({
     },
   },
   plugins: [
-    aiuiDevOverlay({ format: "text-concat", locator: { cellFactories: ["cell"] } }),
+    // No explicit `format`: the intent tool rides the default modality set —
+    // the multimodal (intent-v1) tab active, with the text tab as the escape
+    // hatch. (Sends fail against an old channel that doesn't know intent-v1;
+    // that degrades to a widget error, not a crash.)
+    aiuiDevOverlay({ locator: { cellFactories: ["cell"] } }),
     solid(),
   ],
 }));

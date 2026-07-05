@@ -104,6 +104,12 @@ export interface TabInfo {
 export interface ClientMeta {
   tab?: TabInfo;
   source?: { root?: string };
+  /**
+   * The `intent-v1` client's effective `IntentPipelineConfig` (JSON-serializable
+   * view), so a lowering trace records the whole configuration the events were
+   * produced under. Opaque here — the modality supplies it, the channel reads it.
+   */
+  intent?: Record<string, unknown>;
 }
 
 /**

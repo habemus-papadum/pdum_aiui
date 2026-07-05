@@ -1,13 +1,24 @@
-# aiui intent workbench
+# aiui intent workbench — the lab
 
-The design bench for the **rich multimodal intent layer** — voice, pen, screenshots, component
-location, and the correction meta-loop — one instrumented page where interaction-design choices
-are settings, every action is an event on one stream, and the IR passes re-run live. What
-survives dogfooding here graduates into `aiui-dev-overlay` + the channel; exported event JSON
-becomes the fixtures the real passes are tested against.
+The multimodal intent layer — voice, pen, screenshots, component location, the correction
+meta-loop — was **prototyped here and has graduated**: the pipeline lives in
+`@habemus-papadum/aiui-dev-overlay` (`intent-pipeline` + `multimodal` + `debug-ui`), the lowering
+runs in the channel, and the intent overlay is the shipping default. What remains here is the
+**lab**: the same pipeline, imported source-first, mounted on an instrumented page against
+self-annotated scenery, plus the mocks and dev-proxies the shipping path replaces with the
+channel. Its charter is narrow:
 
-Private, never published. Part of the `@habemus-papadum/aiui-dev-overlay` package's folder but
-its own workspace member (`@habemus-papadum/aiui-workbench`).
+- **latency / accuracy measurement** — the `bench/` harness and the timing pane;
+- **pipeline-config research** — every knob of `IntentPipelineConfig` is a toggle, settled by use;
+- **fixture capture** — real interaction streams exported to `fixtures/`, the regression net for
+  the extracted pipeline and the channel processor;
+- **offline UI iteration** — the whole loop runs on mocks, no channel, no keys.
+
+*How to **use** the intent overlay lives in the guide ([docs/guide/intent-overlay.md](../../../docs/guide/intent-overlay.md)).
+This lab's docs are about how to **measure and tune** it.*
+
+Private, never published. Its own workspace member (`@habemus-papadum/aiui-workbench`) inside the
+overlay package's folder.
 
 ## Run
 
@@ -15,50 +26,55 @@ its own workspace member (`@habemus-papadum/aiui-workbench`).
 pnpm workbench      # from the repo root (alias for: pnpm --filter @habemus-papadum/aiui-workbench dev)
 ```
 
-Open the printed URL in **Chrome**. For real transcription, put `OPENAI_API_KEY=sk-…` in the
-repo-root `.env.dev` (gitignored; wins over a shell export). Everything works without a key —
-the default transcriber is a mock.
+Open the printed URL in **Chrome**. For real transcription/correction, put `OPENAI_API_KEY=sk-…`
+in the repo-root `.env.dev` (gitignored; wins over a shell export). Everything works without a
+key — the default transcriber and corrector are mocks.
 
 **Evaluating the UI? Start with the [turn-flow guide](./docs/turn-flow.md)** — how to run each
-scenario, what's real vs simulated, and what every toggle is for.
+scenario, what's real vs simulated, and the toggle/measurement walkthrough.
 
 ## Scripts
 
 | Command | What |
 | --- | --- |
-| `pnpm dev` | the workbench page (vite; `/api/transcribe`, `/api/shot`, `/api/preview` dev-server endpoints) |
-| `pnpm test` | vitest — engine/keymap/bench unit tests |
+| `pnpm dev` | the lab page (vite; `/api/transcribe`, `/api/chat`, `/api/shot`, `/api/preview` dev-server endpoints) |
+| `pnpm test` | vitest — the `bench/` unit tests (the pipeline's own tests moved to the overlay; the fixtures replay there too) |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm bench` | the standalone transcription benchmark (no GUI; see the [audio-stack notes](./docs/openai-audio-stack.md)) |
 
-## Source map
+## What the lab keeps vs. imports
 
-| File | What it owns |
+The pipeline is a workspace dependency, resolved to **source** (editable installs — edit the
+overlay, the lab picks it up with no build step). The lab owns only its scaffolding:
+
+| Lab file | What it owns |
 | --- | --- |
-| `src/engine.ts` | the event stream + state machine (armed/mode/talking/thread) and `composeIntent`, the first IR pass (pure, tested) |
-| `src/keymap.ts` | the minimalist keymap; decision logic is pure and tested |
-| `src/ink.ts` | the pen canvas: strokes, fade, clear, freeze-into-screenshot |
-| `src/shot.ts` | region/viewport capture (one-time tab grant), the component locator (`[data-source]` hit-testing) |
-| `src/audio.ts` | mic stream, per-segment MediaRecorder, level meter |
-| `src/transcribe.ts` | the `Transcriber` seam: mock (streaming, injectable typos) + OpenAI REST via the dev-server proxy |
-| `src/preview.ts` | the transcript popup: streaming text, inline thumbnails, selection-based correction targeting, the diff flash |
-| `src/patch.ts` | V4A (`apply_patch`) subset: context-anchored patch apply + the word-level diff for the flash |
-| `src/correct.ts` | the correction micro-pipeline seam: mock (local patch) + openai (LLM emits the patch via `/api/chat`) |
-| `src/inspector.ts` | events / IR / timing panes + JSON export; Option-C path rows with hover previews |
-| `src/settings.ts` | the toggle drawer (localStorage-persisted) |
-| `src/scenery.ts` | the app-under-test, self-annotated the way a locator vite plugin would |
-| `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark across models |
-| `vite.config.ts` | dev server + `/api/*` endpoints (`.env.dev` loading, transcription proxy, shot persistence, path previews) |
+| `src/main.ts` | wires the page: scenery + the overlay's multimodal surfaces + the `intent-pipeline` engine/keymap + the shared debug panes + the settings drawer; exposes `window.__wb` for fixture capture / headless driving |
+| `src/transcribe.ts` | the lab's **`openai`** transcriber (dev-proxy `/api/transcribe`) — the seam + `mock` are the overlay's; the shipping `openai` path runs channel-side |
+| `src/correct.ts` | the lab's **`openai`** corrector (dev-proxy `/api/chat`) — the seam, `mock`, and `SYSTEM_PROMPT` are the overlay's |
+| `src/scenery.ts` | the app-under-test, self-annotated with `data-cell` / `data-source-loc` the way the locator vite plugin stamps a real app |
+| `src/settings.ts` | the toggle drawer, editing `IntentPipelineConfig` (localStorage-persisted; `WorkbenchSettings` is an alias) |
+| `src/styles.ts` | the lab chrome (scenery, HUD, dock frame, settings); the panes ship `aiui-dbg-*`, the multimodal layer ships `mm-*` |
+| `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark across models (+ a planned corpus runner — see the audio-stack notes) |
+| `fixtures/` | captured interaction event-streams; replayed by the overlay's `intent-pipeline/fixtures.test.ts` |
+| `vite.config.ts` | dev server + `/api/*` endpoints (`.env.dev` loading, transcription/chat proxies, shot persistence, path previews) |
+
+| Imported from the overlay | What it provides |
+| --- | --- |
+| `…/intent-pipeline` | `Engine`, the keymap, `composeIntent`, the V4A patch machinery, `IntentPipelineConfig` |
+| `…` (main entry, `multimodal`) | `Ink`, `ShotTool`, `AudioCapture`, `Preview`, `locateComponents`, the `mock` transcriber/corrector, `SYSTEM_PROMPT`, `MULTIMODAL_STYLES`, the seam types |
+| `…/debug-ui` | `EventPanes` + `engineSource` — the events / IR / timing panes and JSON export, shared with the DevTools extension |
 
 ## Docs
 
-- **[The turn flow — an evaluator's guide](./docs/turn-flow.md)**: run it, what's implemented
-  and wired (and what's simulated), the toggle table, a full evaluation walkthrough.
+- **[The turn flow — an evaluator's guide](./docs/turn-flow.md)**: run it, what's real vs
+  simulated, the toggle table, the measurement walkthrough. (How to *use* the overlay is the
+  [guide page](../../../docs/guide/intent-overlay.md); this is how to *evaluate* it.)
 - **[The OpenAI audio stack](./docs/openai-audio-stack.md)**: the model-choice question — the
   L0→L3 sophistication ladder, cost framing, silence gating, keyword priming, audio-back, and
   the evaluation-corpus/model-lab plan. Includes the first benchmark results.
-- **[Open questions & graduation criteria](./docs/open-questions.md)**: what's still unsettled,
-  and how a design hypothesis gets promoted out of the workbench.
+- **[Open questions & graduation criteria](./docs/open-questions.md)**: the scoreboard — what
+  graduated (P0–P5) and what's still open (T1–T7, pending dogfooding).
 - **[Field notes](./docs/field-notes.md)**: the engineering residue — the correction
   micro-pipeline (and its two instruction modes), why selection beat the lasso, the
   typing-guard truths, browser/API gotchas, key handling.

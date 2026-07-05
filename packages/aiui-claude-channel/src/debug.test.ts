@@ -136,6 +136,42 @@ describe("web backend with traceDir", () => {
     expect(stats.recent[1].processMs).toBeGreaterThanOrEqual(0);
   });
 
+  it("live-follows a trace by revision, with CORS", async () => {
+    const { cache, port } = await startTraced();
+    const store = createTraceStore(cache);
+    const trace = store.begin("intent-v1", "t-live");
+    trace.record({ kind: "input", label: "frame 0", data: [{ at: 1, type: "thread-open" }] });
+
+    const base = `http://127.0.0.1:${port}/debug/api/traces/${trace.id}/live`;
+    const res1 = await fetch(base);
+    expect(res1.status).toBe(200);
+    // The DevTools panel polls this cross-origin; the /debug CORS header applies.
+    expect(res1.headers.get("access-control-allow-origin")).toBe("*");
+    const body1 = (await res1.json()) as { rev: number; stages: unknown[] };
+    expect(typeof body1.rev).toBe("number");
+    expect(body1.stages).toHaveLength(1);
+
+    // Already at the current revision → a tiny "unchanged" answer.
+    const unchanged = (await (await fetch(`${base}?since=${body1.rev}`)).json()) as {
+      unchanged?: boolean;
+      rev: number;
+    };
+    expect(unchanged).toEqual({ unchanged: true, rev: body1.rev });
+
+    // A new stage bumps the manifest mtime → the follower sees the change.
+    await new Promise((r) => setTimeout(r, 12));
+    trace.record({ kind: "output", label: "lowered", data: "make it wider" });
+    const res3 = await fetch(`${base}?since=${body1.rev}`);
+    const body3 = (await res3.json()) as { rev: number; stages: unknown[]; unchanged?: boolean };
+    expect(body3.unchanged).toBeUndefined();
+    expect(body3.rev).toBeGreaterThan(body1.rev);
+    expect(body3.stages).toHaveLength(2);
+
+    // Unknown trace → 404 (same as the manifest route).
+    const missing = await fetch(`http://127.0.0.1:${port}/debug/api/traces/nope/live`);
+    expect(missing.status).toBe(404);
+  });
+
   it("keeps /debug and tracing off without a traceDir", async () => {
     const prompts: string[] = [];
     server = await startWebServer({ onPrompt: (t) => prompts.push(t) });

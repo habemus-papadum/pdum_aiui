@@ -23,6 +23,7 @@ export {
   createChannelConnection,
   type FormatRegistry,
   type MessageMeta,
+  type PushMessage,
   type SendPrompt,
   type StreamProcessor,
   type StreamProcessorFactory,
@@ -38,6 +39,16 @@ export {
 export { jsonCodec, type PayloadCodec, rawCodec } from "./codec";
 export { CHANNEL_CONFIG } from "./commands/config";
 export {
+  type CorrectionDiff,
+  type CorrectionInput,
+  type Corrector,
+  mockCorrector,
+  type OpenAiCorrectorOptions,
+  openaiCorrector,
+  SYSTEM_PROMPT,
+} from "./correct";
+export {
+  type ChunkDescriptor,
   type DecodedFrame,
   decodeFrame,
   type Envelope,
@@ -48,6 +59,12 @@ export {
   type SourceInfo,
   type TabInfo,
 } from "./frame";
+export {
+  createIntentV1Format,
+  type IntentV1Options,
+  intentV1Format,
+  type LoweredMessage,
+} from "./intent-v1";
 export {
   type ChromeDevtoolsInfo,
   type LaunchInfo,
@@ -119,6 +136,16 @@ export {
   traceBlobPath,
 } from "./trace";
 export { type TracingThreadContext, traceOf, withTracing } from "./tracing";
+export {
+  audioExtensionForMime,
+  type FetchLike,
+  mockTranscriber,
+  type OpenAiTranscriberOptions,
+  openaiTranscriber,
+  type TranscribeInput,
+  type Transcriber,
+  type TranscriptResult,
+} from "./transcribe";
 export { type PromptHandler, startWebServer, type WebServer, type WebServerOptions } from "./web";
 
 /** The published package name — handy for smoke tests. */

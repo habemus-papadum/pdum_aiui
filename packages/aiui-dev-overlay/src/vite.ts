@@ -43,6 +43,7 @@ import type { Plugin } from "vite";
 // dist) carries no extension in the specifier, so it resolves cleanly for node
 // and TypeScript in both the source-first dev shape and the published `dist`.
 import { sourceLocatorVite } from "#source-locator";
+import type { IntentPipelineConfig } from "./intent-pipeline";
 
 // Re-exported from the `./vite` (node-side) subpath so the compile-time locator
 // stays out of the browser bundle. Consumers usually enable it through
@@ -77,11 +78,20 @@ export interface AiuiDevOverlayOptions {
    */
   mount?: boolean;
   /**
-   * The wire format the mounted tool speaks — selects the bundled modality
-   * (default `"text-concat"`, currently the only one). This is where an app's
-   * Vite config declares which message format its intent tool uses.
+   * The wire format the mounted tool speaks — selects the bundled modality set.
+   * Omitted → the default `[multimodal (intent-v1), text]` (multimodal active,
+   * text as the escape hatch). `"text-concat"` → text only; `"intent-v1"` →
+   * multimodal only. This is where an app's Vite config declares its intent
+   * tool's message format.
    */
   format?: string;
+  /**
+   * Client-side pipeline config for the bundled multimodal modality (talk mode,
+   * ink fade, transcriber/corrector choice, arming rebind, research knobs).
+   * JSON-serializable — it is embedded as a literal in the mount module and
+   * rides the hello so a lowering trace records it. See `IntentPipelineConfig`.
+   */
+  intent?: Partial<IntentPipelineConfig>;
   /** Channel port to inject; defaults to `process.env.VITE_AIUI_PORT`. */
   port?: number | string;
   /**
@@ -181,6 +191,10 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
         "force: true",
         ...(port === undefined ? [] : [`port: ${port}`]),
         ...(options.format === undefined ? [] : [`format: ${scriptString(options.format)}`]),
+        // `<` escaped so a config value can never close the module's <script>.
+        ...(options.intent === undefined
+          ? []
+          : [`intent: ${JSON.stringify(options.intent).replace(/</g, "\\u003c")}`]),
       ];
       const mountCall = `mountIntentTool({ ${args.join(", ")} })`;
       // Mount after `load`, not at module eval: this script runs before the

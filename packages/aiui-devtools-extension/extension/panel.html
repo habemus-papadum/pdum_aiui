@@ -53,6 +53,21 @@
     width: 70px; background: #14171f; color: #e8e8ea; border: 1px solid #2a3140;
     border-radius: 6px; padding: 2px 6px; font: inherit;
   }
+  #tab-intent { display: flex; flex-direction: column; height: calc(100vh - 90px); }
+  #intent-controls { display: flex; align-items: center; gap: 8px; flex: none; margin-bottom: 6px; }
+  #intent-controls label { color: #9aa0aa; display: flex; align-items: center; gap: 6px; }
+  #intent-controls select {
+    background: #14171f; color: #e8e8ea; border: 1px solid #2a3140;
+    border-radius: 6px; padding: 2px 6px; font: inherit; max-width: 340px;
+  }
+  #intent-controls button {
+    background: #1f2430; color: #9aa0aa; border: 1px solid #2a3140;
+    border-radius: 6px; padding: 2px 8px; cursor: pointer; font: inherit;
+  }
+  #intent-controls button:hover { color: #e8e8ea; }
+  #intent-note { margin: 0 0 8px; color: #ffd166; }
+  #intent-note:empty { display: none; }
+  #intent-view { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -61,6 +76,7 @@
     <button type="button" class="tab active" data-tab="server">Server</button>
     <button type="button" class="tab" data-tab="transport">Transport</button>
     <button type="button" class="tab" data-tab="traces">Traces</button>
+    <button type="button" class="tab" data-tab="intent">Intent</button>
     <div id="status">looking for a channel…</div>
   </header>
   <main>
@@ -82,9 +98,20 @@
     <section id="tab-traces" hidden>
       <iframe id="traces-frame" title="lowering traces"></iframe>
     </section>
+    <section id="tab-intent" hidden>
+      <div id="intent-controls">
+        <label>trace
+          <select id="intent-trace"><option value="">— select a trace —</option></select>
+        </label>
+        <button type="button" id="intent-refresh" title="reload the trace list">↻</button>
+      </div>
+      <p class="hint" id="intent-note"></p>
+      <div id="intent-view"></div>
+    </section>
   </main>
   <div id="port-row" hidden>
-    channel port: <input id="port-input" inputmode="numeric" placeholder="port" />
+    channel port: <input id="port-input" inputmode="numeric" placeholder="port" list="port-recents" />
+    <datalist id="port-recents"></datalist>
     <span class="hint">(no instrumented page found — enter the port from the aiui-channel startup log)</span>
   </div>
   <script type="module" src="js/panel.js"></script>

@@ -1,8 +1,11 @@
 # The turn flow: an evaluator's guide
 
-*You're about to use the workbench to judge the multimodal interaction design. This page tells
-you how to run it, exactly what's implemented (and what's real vs simulated), which toggles
-exist and what design question each one answers, and a walkthrough that exercises everything.*
+*You're about to use the lab to **judge and measure** the multimodal interaction design. This
+page tells you how to run it, exactly what's real vs simulated, which toggles exist and what
+design question each one answers, and a walkthrough that exercises everything. How to **use** the
+shipping overlay (the same gestures, in a real app) is the guide page
+([docs/guide/intent-overlay.md](../../../../docs/guide/intent-overlay.md)) — this page is the
+lab's measurement companion, not a duplicate of it.*
 
 ## Running it
 
@@ -40,13 +43,15 @@ Two permission prompts you'll meet, each once per session:
 | `mock` transcriber (default) | **Simulated** — canned phrases streamed word-by-word, with injectable typos; ignores the audio entirely |
 | `openai` transcriber | **Real and wired** — mic → MediaRecorder → dev-server proxy → OpenAI (`gpt-4o-mini-transcribe` by default). Verified end-to-end with synthesized speech; the only leg not yet exercised by a human is a live microphone, which is part of what you're evaluating |
 | Transcript preview + correction meta-loop (E) | **Real** — select the preview text, speak or type the fix; corrections run through an **LLM diff micro-pipeline** (mock corrector by default; `gpt-4o-mini` emits a V4A patch when `corrector: openai`) with a pink/green inline diff flash on apply |
-| Inspector (events / IR / timing / export) | **Real** — IR stages recompute live; S3 emits the Option-C body+meta encoding with hover-previewable paths |
-| Channel / Claude injection | **Absent, by design** — the workbench is a standalone bench; Enter "sends" only in the sense of closing the thread. Nothing reaches any session |
+| Debug panes (events / IR / timing / export) | **Real, and shared** — the `debug-ui` panes the DevTools extension also embeds; IR stages recompute live; S3 emits the Option-C body+meta encoding with hover-previewable paths |
+| Channel / Claude injection | **Absent in the lab, by design** — the shipping overlay streams the thread to the channel (that's what graduated); the lab stays standalone, so Enter "sends" only in the sense of closing the thread. Nothing reaches any session |
 | Streaming/realtime STT, silence gating, audio-back, keyword priming | **Not built** — see [the audio-stack notes](./openai-audio-stack.md) for the plan |
 
 ## The interaction design under test
 
-Minimalist keys — one hand, no chords:
+The keys, as a quick reference while you evaluate — the full interaction rationale (thread
+lifecycle, why ink is gestural, the correction meta-loop and its two instruction modes) now
+lives in the [guide page](../../../../docs/guide/intent-overlay.md); it isn't repeated here:
 
 | Key       | Action |
 | --------- | ------ |
@@ -59,28 +64,10 @@ Minimalist keys — one hand, no chords:
 | **Enter** | send: finalize the thread |
 | **Esc**   | step out one level: correct → ink → cancel thread → disarm |
 
-**Thread lifecycle.** No begin gesture: a thread opens on the first contentful act (talk-start,
-stroke, or shot) and closes on Enter (send) or Esc (cancel). Auto-end after N idle seconds
-exists as a setting, default off.
-
-**Ink is gestural, not a document.** Strokes fade after ~6 s (setting; 0 = keep) — unless a
-screenshot captures them first, in which case the circle is composited into the image and
-travels with the pixels it annotated.
-
-**The correction meta-loop.** The preview streams while you speak, shot thumbnails inline. Spot
-an error → `E` → the preview expands and the transcript becomes **selectable text** → select the
-wrong words (ordinary selection, no special gesture) → the next spoken segment auto-submits as
-the fix when it ends (or type it in the inline box). The correction is a **micro-pipeline**, not
-a string replace: {transcript, selection, instruction} goes to a small model that answers with a
-patch in OpenAI's `apply_patch` (V4A) format, applied by context matching. The prompt
-distinguishes **two instruction modes**: a *replacement* (you dictate verbatim what the selected
-span should become) and a *description* ("no, it's not beat, it's Vite, the frontend framework")
-— in the second, the selection is just the example occurrence and the fix applies to every
-affected occurrence across the whole transcript. On apply, the preview flashes
-the inline word-diff (pink deletions, green additions) for half a second, then settles on the
-clean text. The default `mock` corrector builds the patch locally (offline, instant); switch
-`corrector` to `openai` for the real thing (~2 s with `gpt-4o-mini`, recorded in the timing
-pane). A failed patch degrades to a plain replacement — corrections never silently vanish.
+What matters for evaluation: a thread opens on the first contentful act and closes on Enter/Esc;
+ink fades (a setting) unless a shot freezes it into the pixels; and the correction meta-loop
+(`E` → select the wrong words → speak or type the fix → V4A-patch diff flash) is the layer's
+most novel bet. The toggles below and the walkthrough are where you put each of those under load.
 
 ## The toggles, and the question each one answers
 

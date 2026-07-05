@@ -91,7 +91,8 @@ describe("mountIntentTool", () => {
   });
 
   it("hides the tab row for a single modality", () => {
-    const handle = mountIntentTool({ force: true, port: 1 });
+    // `text-concat` is the single-modality escape hatch (the default set is two).
+    const handle = mountIntentTool({ force: true, port: 1, format: "text-concat" });
     const tabs = handle.shadowRoot?.querySelector(".tabs") as HTMLElement;
     expect(tabs.hidden).toBe(true);
     // The [hidden] attribute must actually win over `.tabs { display: flex }`.
@@ -106,6 +107,16 @@ describe("mountIntentTool", () => {
     expect(() => mountIntentTool({ force: true, port: 1, format: "voice" })).toThrow(
       /unknown intent format "voice"/,
     );
+  });
+
+  it("defaults to the multimodal set: [Multimodal, Text], multimodal active", () => {
+    const handle = mountIntentTool({ force: true, port: 1 });
+    const tabs = [...(handle.shadowRoot?.querySelectorAll(".tab") ?? [])];
+    expect(tabs.map((t) => t.textContent)).toEqual(["Multimodal", "Text"]);
+    expect(tabs[0].classList.contains("active")).toBe(true);
+    // The tab row is visible (two modalities), and the text tab's textarea exists.
+    expect((handle.shadowRoot?.querySelector(".tabs") as HTMLElement).hidden).toBe(false);
+    expect(handle.shadowRoot?.querySelector("textarea")).not.toBeNull();
   });
 
   it("mounts custom modalities with tabs", () => {
@@ -128,7 +139,12 @@ describe("mountIntentTool", () => {
 describe("textModality", () => {
   it("sends the typed text as a single fin frame of a text-concat thread", async () => {
     const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
-    const handle = mountIntentTool({ force: true, port: 4321, webSocketFactory: factory });
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [textModality()],
+    });
     handle.open();
 
     const textarea = handle.shadowRoot?.querySelector("textarea") as HTMLTextAreaElement;
@@ -161,7 +177,12 @@ describe("textModality", () => {
 
   it("ignores empty submissions", async () => {
     const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
-    const handle = mountIntentTool({ force: true, port: 4321, webSocketFactory: factory });
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [textModality()],
+    });
     const textarea = handle.shadowRoot?.querySelector("textarea") as HTMLTextAreaElement;
     textarea.value = "   ";
     (handle.shadowRoot?.querySelector(".send") as HTMLButtonElement).click();
@@ -184,7 +205,12 @@ describe("textModality with an on-screen selection", () => {
     document.body.appendChild(p);
 
     const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
-    const handle = mountIntentTool({ force: true, port: 4321, webSocketFactory: factory });
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [textModality()],
+    });
     handle.open();
 
     // Select prose in the page; the watcher debounces (~150ms) then shows a chip.
@@ -223,7 +249,12 @@ describe("textModality with an on-screen selection", () => {
 
   it("sends a bare { text } payload when nothing is selected", async () => {
     const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
-    const handle = mountIntentTool({ force: true, port: 4321, webSocketFactory: factory });
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [textModality()],
+    });
     handle.open();
     const textarea = handle.shadowRoot?.querySelector("textarea") as HTMLTextAreaElement;
     textarea.value = "no selection here";

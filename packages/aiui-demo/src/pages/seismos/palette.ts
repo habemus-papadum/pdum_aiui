@@ -46,7 +46,7 @@ const PALETTE: Record<Mode, SeismicPalette> = {
     deep: "#4f86d8",
     densityScheme: "inferno",
     coast: "#c6cdd8",
-    coastOpacity: 0.22,
+    coastOpacity: 0.28,
   },
   light: {
     hist: "#2f6fce",
@@ -55,8 +55,8 @@ const PALETTE: Record<Mode, SeismicPalette> = {
     intermediate: "#1f9068",
     deep: "#2f6fce",
     densityScheme: "YlOrRd",
-    coast: "#6b7784",
-    coastOpacity: 0.34,
+    coast: "#5f6b78",
+    coastOpacity: 0.42,
   },
 };
 

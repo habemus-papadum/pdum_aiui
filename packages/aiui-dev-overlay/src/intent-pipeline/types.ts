@@ -1,9 +1,13 @@
 /**
- * The workbench's shared vocabulary: everything the overlay does becomes an
- * {@link IntentEvent} on one append-only stream. The inspector renders the
- * stream raw, and every "IR stage" is a pure function over it (see
- * engine.ts/composeIntent) — which is the whole point of the workbench:
- * design the passes by watching them run on real interaction.
+ * The intent pipeline's shared vocabulary: every multimodal act becomes an
+ * {@link IntentEvent} on one append-only stream. Every "IR stage" is a pure
+ * function over that stream (see engine.ts/composeIntent) — which is the whole
+ * point: design the passes by watching them run on real interaction. The
+ * inspector (in the workbench lab) renders the stream raw; these event shapes
+ * are also the fixture format and, from P2, the wire contract.
+ *
+ * Framework-free and browser-safe by construction — no DOM, no deps. Config
+ * (the old `WorkbenchSettings`) lives in {@link ./config}.
  */
 
 export interface Rect {
@@ -82,40 +86,3 @@ export type IntentEvent =
       latencyMs?: number;
     }
   | { at: number; type: "note"; text: string };
-
-/** Every contested interaction-design choice is a setting, not a decision. */
-export interface WorkbenchSettings {
-  /** Space bar behavior: hold-to-talk (walkie-talkie) or press-to-toggle. */
-  talkMode: "hold" | "toggle";
-  /** Seconds until ink strokes fade out; 0 = persist until cleared. */
-  inkFadeSec: number;
-  /** Auto-end the thread after this many silent/idle seconds; 0 = explicit Enter only. */
-  autoEndSec: number;
-  /** Which transcriber runs. */
-  transcriber: "mock" | "openai";
-  /** OpenAI transcription model (when transcriber = openai). */
-  model: string;
-  /** Mock: per-word cadence in ms. */
-  mockWordMs: number;
-  /** Mock: probability [0..1] a word is mangled — fuel for correction mode. */
-  mockTypoRate: number;
-  /** What a correction does: rewrite the transcript, or ride along as a note. */
-  correctionPolicy: "replace" | "note";
-  /** Which correction micro-pipeline runs (see correct.ts). */
-  corrector: "mock" | "openai";
-  /** Chat model that emits the correction patch (when corrector = openai). */
-  correctionModel: string;
-}
-
-export const DEFAULT_SETTINGS: WorkbenchSettings = {
-  talkMode: "hold",
-  inkFadeSec: 6,
-  autoEndSec: 0,
-  transcriber: "mock",
-  model: "gpt-4o-mini-transcribe",
-  mockWordMs: 140,
-  mockTypoRate: 0.07,
-  correctionPolicy: "replace",
-  corrector: "mock",
-  correctionModel: "gpt-4o-mini",
-};

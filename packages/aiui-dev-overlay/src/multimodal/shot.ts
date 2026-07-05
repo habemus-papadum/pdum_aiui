@@ -1,22 +1,45 @@
 /**
- * Region screenshots + the component locator prototype.
+ * Region screenshots + the component locator.
  *
  * Capture: the browser can't screenshot itself silently, so the first shot
- * asks once via getDisplayMedia (pick this tab) and the stream is kept for
- * the session — every later shot is an instant frame-grab. Denied/unavailable
+ * asks once via getDisplayMedia (pick this tab) and the stream is kept for the
+ * session — every later shot is an instant frame-grab. Denied/unavailable
  * capture degrades gracefully: the shot event still carries the rect and the
- * located components, just no pixels. (The production path won't have this
- * problem at all: the session browser's CDP port can screenshot server-side.
- * The workbench trades that for zero moving parts.)
+ * located components, just no pixels. (A follow-up path can capture server-side
+ * via the session browser's CDP endpoint — the channel knows it from
+ * launch-info — but getDisplayMedia works everywhere with zero moving parts.)
  *
  * Locator: sample a grid of points inside the rect, `elementsFromPoint` each,
- * walk up to the nearest `[data-source]` ancestor, dedupe. The workbench's
- * scenery annotates itself the way a locator-style vite plugin would annotate
- * a real app (`data-comp` + `data-source="file.ts:line"`), so this exercises
- * the exact mechanism screenshot-rect → components → source needs.
+ * walk up to the nearest `[data-source-loc]`/`[data-cell]` ancestor, dedupe.
+ * Those are the real stamps the overlay's source-locator Vite plugin emits on
+ * host elements (`data-source-loc="file:line:col"` relative to the app root,
+ * `data-cell="name"`) — the same handles `selection.ts` reads — so this
+ * exercises the exact screenshot-rect → components → source path a real app
+ * has. When `window.__AIUI__.sourceRoot` is known the stamp is resolved to an
+ * absolute path (what the agent opens); otherwise the relative stamp rides
+ * through and the channel resolves it.
+ *
+ * Unlike the workbench's prototype, no PNG is POSTed to a dev proxy: the raw
+ * bytes are handed back for the modality to upload as an `intent-v1` attachment
+ * frame, and the channel assigns the on-disk path.
  */
+import type { LocatedComponent, Rect } from "../intent-pipeline";
 import type { Ink } from "./ink";
-import type { LocatedComponent, Rect } from "./types";
+
+/** A captured frame: the inline preview thumbnail plus the raw PNG for upload. */
+export interface ShotPixels {
+  /** Data-URL thumbnail shown inline in the preview. */
+  thumb: string;
+  /** Raw PNG bytes — uploaded as the shot's attachment frame. */
+  bytes: Uint8Array;
+}
+
+export type ShotSink = (
+  rect: Rect,
+  components: LocatedComponent[],
+  thumb?: string,
+  bytes?: Uint8Array,
+) => void;
 
 export class ShotTool {
   readonly veil: HTMLDivElement;
@@ -24,24 +47,16 @@ export class ShotTool {
   private stream: MediaStream | undefined;
   private video: HTMLVideoElement | undefined;
   private start: { x: number; y: number } | undefined;
-  private readonly onShot: (
-    rect: Rect,
-    components: LocatedComponent[],
-    thumb?: string,
-    path?: string,
-  ) => void;
+  private readonly onShot: ShotSink;
   private readonly ink: Ink;
 
-  constructor(
-    ink: Ink,
-    onShot: (rect: Rect, components: LocatedComponent[], thumb?: string, path?: string) => void,
-  ) {
+  constructor(ink: Ink, onShot: ShotSink) {
     this.ink = ink;
     this.onShot = onShot;
     this.veil = document.createElement("div");
-    this.veil.className = "wb-shot-veil";
+    this.veil.className = "mm-shot-veil";
     this.box = document.createElement("div");
-    this.box.className = "wb-shot-box";
+    this.box.className = "mm-shot-box";
     this.veil.append(this.box);
 
     this.veil.addEventListener("pointerdown", (e) => {
@@ -99,22 +114,8 @@ export class ShotTool {
 
   private async capture(rect: Rect): Promise<void> {
     const components = locateComponents(rect, [this.veil, this.ink.canvas]);
-    const thumb = await this.grabThumb(rect);
-    // Persist the pixels so the lowered prompt can reference a real absolute
-    // path (the Option-C contract) — best-effort; the event degrades without it.
-    let path: string | undefined;
-    if (thumb) {
-      try {
-        const bytes = await fetch(thumb).then((r) => r.blob());
-        const saved = (await fetch("/api/shot", {
-          method: "POST",
-          headers: { "content-type": "image/png" },
-          body: bytes,
-        }).then((r) => r.json())) as { path?: string };
-        path = saved.path;
-      } catch {}
-    }
-    this.onShot(rect, components, thumb, path);
+    const pixels = await this.grab(rect);
+    this.onShot(rect, components, pixels?.thumb, pixels?.bytes);
   }
 
   private async ensureStream(): Promise<HTMLVideoElement | undefined> {
@@ -143,7 +144,7 @@ export class ShotTool {
     }
   }
 
-  private async grabThumb(rect: Rect): Promise<string | undefined> {
+  private async grab(rect: Rect): Promise<ShotPixels | undefined> {
     const video = await this.ensureStream();
     if (!video) {
       return undefined;
@@ -171,10 +172,12 @@ export class ShotTool {
       canvas.width,
       canvas.height,
     );
-    // Freeze any ink inside the rect into the image — annotations travel
-    // with the pixels they annotate.
+    // Freeze any ink inside the rect into the image — annotations travel with
+    // the pixels they annotate.
     this.ink.compositeInto(ctx, rect.x, rect.y, scaleX);
-    return canvas.toDataURL("image/png");
+    const thumb = canvas.toDataURL("image/png");
+    const bytes = await canvasPngBytes(canvas);
+    return bytes ? { thumb, bytes } : undefined;
   }
 
   dispose(): void {
@@ -185,8 +188,45 @@ export class ShotTool {
   }
 }
 
+/** PNG bytes from a canvas via toBlob (preferred) with a data-URL fallback. */
+function canvasPngBytes(canvas: HTMLCanvasElement): Promise<Uint8Array | undefined> {
+  return new Promise((resolve) => {
+    if (typeof canvas.toBlob !== "function") {
+      resolve(dataUrlToBytes(canvas.toDataURL("image/png")));
+      return;
+    }
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        resolve(undefined);
+        return;
+      }
+      blob
+        .arrayBuffer()
+        .then((buf) => resolve(new Uint8Array(buf)))
+        .catch(() => resolve(undefined));
+    }, "image/png");
+  });
+}
+
+function dataUrlToBytes(dataUrl: string): Uint8Array | undefined {
+  const comma = dataUrl.indexOf(",");
+  if (comma === -1) {
+    return undefined;
+  }
+  const binary = atob(dataUrl.slice(comma + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 /** The locator pass: rect → annotated components under it. */
 export function locateComponents(rect: Rect, ignore: Element[]): LocatedComponent[] {
+  if (typeof document === "undefined" || typeof document.elementsFromPoint !== "function") {
+    return []; // no hit-testing available (headless/exotic) — shot degrades to rect only
+  }
+  const sourceRoot = typeof window === "undefined" ? undefined : window.__AIUI__?.sourceRoot;
   const found = new Map<Element, LocatedComponent>();
   const steps = 6;
   const hidden = ignore.map((el) => {
@@ -202,12 +242,13 @@ export function locateComponents(rect: Rect, ignore: Element[]): LocatedComponen
         const x = rect.x + (rect.w * i) / steps;
         const y = rect.y + (rect.h * j) / steps;
         for (const element of document.elementsFromPoint(x, y)) {
-          const host = element.closest("[data-source]");
+          const host = element.closest("[data-source-loc], [data-cell]");
           if (host && !found.has(host)) {
             const box = host.getBoundingClientRect();
+            const stamp = host.getAttribute("data-source-loc") ?? undefined;
             found.set(host, {
-              component: host.getAttribute("data-comp") ?? host.tagName.toLowerCase(),
-              source: host.getAttribute("data-source") ?? "unknown",
+              component: host.getAttribute("data-cell") ?? host.tagName.toLowerCase(),
+              source: stamp ? absoluteSource(stamp, sourceRoot) : "unknown",
               rect: { x: box.x, y: box.y, w: box.width, h: box.height },
             });
           }
@@ -220,4 +261,16 @@ export function locateComponents(rect: Rect, ignore: Element[]): LocatedComponen
     }
   }
   return [...found.values()];
+}
+
+/**
+ * Resolve a `data-source-loc` stamp (`file:line:col`, app-root-relative) to an
+ * absolute `sourceRoot/file:line:col` when the root is known, else pass the
+ * relative stamp through for the channel to resolve.
+ */
+function absoluteSource(stamp: string, root: string | undefined): string {
+  if (!root) {
+    return stamp;
+  }
+  return root.endsWith("/") ? `${root}${stamp}` : `${root}/${stamp}`;
 }

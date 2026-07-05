@@ -26,6 +26,31 @@ export interface Ack {
   fatal?: boolean;
 }
 
+/**
+ * A streaming modality (`intent-v1`) tags its data frames with a `chunk` so the
+ * server can tell an event batch from a raw attachment from the end-of-turn
+ * context. `events`/`context` carry a JSON payload; `attachment` carries **raw
+ * bytes** (PNG / audio) and an `id` (`shot_N` / `seg_N`) correlating it with the
+ * `shot`/`talk` event already on the wire. See the `intent-v1` contract in the
+ * multimodal-intent-graduation handoff.
+ */
+export type JsonChunk = { kind: "events" } | { kind: "context" };
+export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
+export type FrameChunk = JsonChunk | AttachmentChunk;
+
+/**
+ * A server→client push on the same socket, distinguished from an {@link Ack} by
+ * its `kind` field (acks never have one). The `intent-v1` server pushes
+ * `{ kind: "lowered", threadId, events }` — the lowered echoes (a segment's
+ * `transcript-final`, a completed `correction`) the client merges back into its
+ * engine stream as if they had happened locally.
+ */
+export interface ServerMessage {
+  kind: string;
+  threadId?: string;
+  [key: string]: unknown;
+}
+
 const utf8 = new TextEncoder();
 
 /** Encode one binary frame: length-prefixed JSON envelope + payload bytes. */
@@ -56,8 +81,29 @@ export type WebSocketFactory = (url: string) => WebSocketLike;
 
 /** A connected, hello-completed channel socket. */
 export interface IntentSocket {
-  /** Send one data frame for a thread; resolves with the server's ack. */
+  /** Send one JSON data frame for a thread; resolves with the server's ack. */
   send(threadId: string, payload: unknown, fin: boolean): Promise<Ack>;
+  /**
+   * Send a tagged JSON chunk (an `events` batch or the end-of-turn `context`)
+   * for a streaming thread. `fin` marks the thread's final frame.
+   */
+  sendChunk(threadId: string, chunk: JsonChunk, payload: unknown, fin?: boolean): Promise<Ack>;
+  /**
+   * Send a raw-binary attachment chunk (a shot PNG or an audio segment) — the
+   * bytes ride the frame's payload verbatim, never base64'd.
+   */
+  sendAttachment(
+    threadId: string,
+    chunk: AttachmentChunk,
+    bytes: Uint8Array,
+    fin?: boolean,
+  ): Promise<Ack>;
+  /**
+   * Register a handler for server pushes (messages carrying a `kind`) — the
+   * lowered echoes an `intent-v1` thread merges back in. Acks are never routed
+   * here. Multiple handlers are allowed; each fires per push.
+   */
+  onServerMessage(handler: (msg: ServerMessage) => void): void;
   close(): void;
 }
 
@@ -122,16 +168,26 @@ export function connectIntentSocket(
     }
   };
 
+  // Server pushes (lowered echoes, notices) carry a `kind`; per-frame acks never
+  // do — so `kind` is the dispatch discriminator. Pushes never consume a pending
+  // ack entry.
+  const serverMessageHandlers: Array<(msg: ServerMessage) => void> = [];
   socket.addEventListener("message", (event: MessageEvent) => {
-    let ack: Ack;
+    let parsed: unknown;
     try {
-      ack = JSON.parse(String(event.data)) as Ack;
+      parsed = JSON.parse(String(event.data));
     } catch {
-      ack = { ok: false, error: "server sent invalid JSON" };
+      parsed = { ok: false, error: "server sent invalid JSON" };
+    }
+    if (parsed !== null && typeof parsed === "object" && "kind" in parsed) {
+      for (const handler of serverMessageHandlers) {
+        handler(parsed as ServerMessage);
+      }
+      return;
     }
     const entry = pending.shift();
     if (entry) {
-      settle(entry, ack);
+      settle(entry, parsed as Ack);
     }
   });
   socket.addEventListener("error", () => fail("websocket error"));
@@ -171,6 +227,24 @@ export function connectIntentSocket(
               ),
               { kind: "data", threadId, fin },
             ),
+          sendChunk: (threadId, chunk, payload, fin = false) =>
+            sendFrame(
+              encodeFrame(
+                { v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk },
+                payload === undefined ? undefined : encodeJsonPayload(payload),
+              ),
+              { kind: "data", threadId, fin },
+            ),
+          sendAttachment: (threadId, chunk, bytes, fin = false) =>
+            sendFrame(
+              // Raw bytes ride the payload verbatim — the whole reason the frame
+              // format keeps the payload opaque and un-base64'd.
+              encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
+              { kind: "data", threadId, fin },
+            ),
+          onServerMessage: (handler) => {
+            serverMessageHandlers.push(handler);
+          },
           close: () => socket.close(),
         });
       });

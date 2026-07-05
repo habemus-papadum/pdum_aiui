@@ -14,6 +14,7 @@ import { CellView } from "@habemus-papadum/aiui-viz";
 import { SiteHeader, TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
 import { Show } from "solid-js";
 import { BRAND, LINKS, TABS } from "../../../site/nav";
+import { ThemeToggle } from "../../../site/ThemeToggle";
 import { seismosGraph } from "../graph";
 import { store } from "../store";
 import { Dashboard, Panel } from "./Dashboard";
@@ -41,6 +42,7 @@ export function App() {
   return (
     <>
       <SiteHeader brand={BRAND} tabs={TABS} active="seismos" links={LINKS} />
+      <ThemeToggle />
       <div class="app">
         <div class="app-main">
           <header class="app-head">

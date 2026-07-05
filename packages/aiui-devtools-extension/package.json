@@ -16,11 +16,13 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node build-debug-ui.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
   "devDependencies": {
-    "@types/chrome": "^0.0.287"
+    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@types/chrome": "^0.0.287",
+    "esbuild": "^0.25.0"
   }
 }

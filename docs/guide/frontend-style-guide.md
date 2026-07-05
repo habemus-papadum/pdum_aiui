@@ -120,7 +120,11 @@ graduates to a library subpath once stable.
 
 Covered in depth in [design choices §8](./frontend-design-choices); the style-guide rules:
 
-- Pages follow the **system** color scheme; no toggle.
+- Pages follow the **system** color scheme; no toggle — the default. A *page* may deviate
+  deliberately when its content demands it (seismos defaults to light with a persisted toggle
+  because its epicenter map reads best on a light surface — the other notebooks follow the
+  system); the deviation is documented where it was decided, in that page's NOTES.md, and the
+  policy anchor is the page's own head script.
 - All stylesheet color goes through `:root` tokens (dark default, light under the media query).
   Literal colors (charts, SVG strokes) read the app's theme module, keyed on `colorMode()` from
   `aiui-viz/site`.

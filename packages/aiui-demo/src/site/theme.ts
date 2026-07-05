@@ -1,22 +1,82 @@
 /**
- * theme.ts — this app's palettes and Plot cosmetics, keyed by the library's
- * reactive color mode (`@habemus-papadum/aiui-viz/site`).
+ * theme.ts — this app's palettes and Plot cosmetics, plus the mode signal.
  *
- * The app follows `prefers-color-scheme` with no toggle (design-choices §8):
- * CSS design tokens on `:root` carry the dark-default / light-override colors
- * for everything the stylesheet can reach. This module supplies the colors that
- * must be *literal* values instead — chart series, Observable Plot cosmetics,
- * inline SVG strokes — driven off the `mode()` signal so those redraw on a
- * system theme change too. The mode machinery itself (durable matchMedia
- * signal) is library porcelain; only the palettes are this app's.
+ * Theming policy is **per page**, anchored in each page's <head> no-flash
+ * script (which stamps `<html data-theme>` before first paint) and finished
+ * here at module load by reading that attribute back into the signal:
+ *
+ * - **morphogen + aztec** follow `prefers-color-scheme` (the style-guide
+ *   default): their heads stamp the system mode, and `initSystemTheme()`
+ *   (called from their entries) keeps signal + attribute live on OS changes.
+ *   No toggle is rendered.
+ * - **seismos** is the sanctioned one-off (see its NOTES.md): light by
+ *   default — the epicenter map reads best on a light surface — with an
+ *   explicit ThemeToggle persisted in localStorage. Only its head reads
+ *   storage; only it calls `setMode`/`toggleMode`.
+ *
+ * Either way `mode()` is the single source of truth for the *literal* colors
+ * below (chart series, Plot cosmetics, SVG strokes); CSS goes through the
+ * `:root[data-theme]` tokens.
  */
-import { type ColorMode, colorMode, isDark } from "@habemus-papadum/aiui-viz/site";
+import { createSignal } from "solid-js";
 
-export { isDark };
-/** The live system color mode (re-exported for existing call sites). */
-export const mode = colorMode;
-
+export type ColorMode = "light" | "dark";
 export type Mode = ColorMode;
+
+const STORAGE_KEY = "aiui-theme";
+
+/** The head script already stamped the page's policy onto <html>. */
+function initialMode(): Mode {
+  if (typeof document !== "undefined" && document.documentElement.dataset.theme === "dark") {
+    return "dark";
+  }
+  return "light";
+}
+
+const [mode, setModeSignal] = createSignal<Mode>(initialMode());
+
+function reflect(m: Mode): void {
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.theme = m;
+  }
+}
+
+/** The live color mode. Reading it in a chart's options memo re-renders that
+ *  chart on a mode change (toggle or OS, per the page's policy). */
+export { mode };
+export const isDark = (): boolean => mode() === "dark";
+
+/**
+ * System-following pages (morphogen, aztec) call this once from their entry:
+ * signal + attribute track `prefers-color-scheme` live. Entry modules run once
+ * per page load, so the listener never stacks under HMR.
+ */
+export function initSystemTheme(): void {
+  const mql = window.matchMedia("(prefers-color-scheme: dark)");
+  const apply = (dark: boolean) => {
+    const m: Mode = dark ? "dark" : "light";
+    setModeSignal(m);
+    reflect(m);
+  };
+  apply(mql.matches);
+  mql.addEventListener("change", (e) => apply(e.matches));
+}
+
+/** Set the mode explicitly and persist it (seismos's toggle only). */
+export function setMode(m: Mode): void {
+  setModeSignal(m);
+  reflect(m);
+  try {
+    localStorage.setItem(STORAGE_KEY, m);
+  } catch {
+    /* ignore persistence failures */
+  }
+}
+
+/** Flip between light and dark (the ThemeToggle handler). */
+export function toggleMode(): void {
+  setMode(mode() === "dark" ? "light" : "dark");
+}
 
 /**
  * The canonical categorical chart palette, one validated set per mode (same

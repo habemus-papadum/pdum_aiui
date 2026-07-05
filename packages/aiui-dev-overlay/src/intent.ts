@@ -24,9 +24,18 @@
  * `window.__AIUI__.port`; pass `port` explicitly outside Vite. Reading
  * `import.meta.env` here cannot work in the shipped package — see vite.ts.
  */
-import { collectClientMeta, setChannelPort } from "./instrumentation";
+import { type ClientMeta, collectClientMeta, setChannelPort } from "./instrumentation";
+import type { IntentPipelineConfig } from "./intent-pipeline";
+import { multimodalModality } from "./multimodal";
 import { isDevEnvironment } from "./overlay";
-import { type Ack, connectIntentSocket, type WebSocketFactory } from "./protocol";
+import {
+  type Ack,
+  type AttachmentChunk,
+  connectIntentSocket,
+  type JsonChunk,
+  type ServerMessage,
+  type WebSocketFactory,
+} from "./protocol";
 import { installSelectionWatcher, type SelectionSnapshot } from "./selection";
 
 /** Stable id for the injected host element; also the double-injection guard. */
@@ -34,10 +43,31 @@ const HOST_ID = "aiui-intent-tool-host";
 
 /** One thread of an intent submission. */
 export interface IntentThread {
-  /** Send a non-final payload (streaming modalities). */
+  /** Send a non-final JSON payload (streaming modalities). */
   send(payload: unknown): Promise<Ack>;
   /** Send the final payload (`fin`) and release the connection. */
   finish(payload?: unknown): Promise<Ack>;
+  /**
+   * Send a tagged JSON chunk (an `events` batch or the end-of-turn `context`)
+   * — the `intent-v1` streaming form. `fin` marks the thread's final frame.
+   */
+  sendChunk(chunk: JsonChunk, payload: unknown, fin?: boolean): Promise<Ack>;
+  /** Send a raw-binary attachment chunk (a shot PNG or an audio segment). */
+  sendAttachment(chunk: AttachmentChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
+  /** Register a handler for this thread's server pushes (lowered echoes). */
+  onServerMessage(handler: (msg: ServerMessage) => void): void;
+  /** Close the underlying socket without sending `fin` (a cancel). */
+  close(): void;
+}
+
+/** Extra per-thread options a modality passes to {@link IntentToolContext.openThread}. */
+export interface OpenThreadOptions {
+  /**
+   * A JSON-serializable client config to ride the hello as `meta.intent` (the
+   * `intent-v1` modality's effective `IntentPipelineConfig`), so a lowering
+   * trace records the whole configuration.
+   */
+  intent?: Record<string, unknown>;
 }
 
 /** What the host provides a mounted modality. */
@@ -46,7 +76,7 @@ export interface IntentToolContext {
    * Open a fresh connection + thread speaking this modality's format.
    * Rejects when no channel port is known or the server is unreachable.
    */
-  openThread(): Promise<IntentThread>;
+  openThread(options?: OpenThreadOptions): Promise<IntentThread>;
   /** Show a short status line in the panel footer. */
   setStatus(text: string): void;
   /** Close the tool's panel. */
@@ -73,15 +103,27 @@ export interface IntentModality {
 }
 
 export interface IntentToolOptions {
-  /** The intent inputs to offer. Defaults to `[textModality()]`. */
+  /**
+   * The intent inputs to offer. Defaults to the bundled multimodal modality
+   * (active) plus the text modality as an escape hatch — see {@link
+   * bundledModalities}.
+   */
   modalities?: IntentModality[];
   /**
-   * Pick the bundled modality by its wire-format name (today: `text-concat`).
-   * The `aiuiDevOverlay()` Vite plugin's `format` option lands here. Ignored
-   * when `modalities` is given; unknown names throw. Custom modalities can't
-   * be named this way (they are functions) — pass `modalities` instead.
+   * Pick the bundled modality set by wire-format name: `intent-v1` (the
+   * multimodal default), or `text-concat` (text only — the escape hatch). The
+   * `aiuiDevOverlay()` Vite plugin's `format` option lands here. Omitted →
+   * the default set `[multimodal, text]`. Ignored when `modalities` is given;
+   * unknown names throw. Custom modalities can't be named this way (they are
+   * functions) — pass `modalities` instead.
    */
   format?: string;
+  /**
+   * Client-side pipeline config for the bundled multimodal modality (talk mode,
+   * ink fade, transcriber/corrector choice, arming rebind, research knobs). The
+   * `aiuiDevOverlay({ intent })` Vite option lands here; JSON-serializable.
+   */
+  intent?: Partial<IntentPipelineConfig>;
   /** Channel port; defaults to the plugin-injected `window.__AIUI__.port`. */
   port?: number | string;
   /** Mount even outside a dev-like environment (demos, tests). */
@@ -129,21 +171,38 @@ function noopHandle(): IntentToolHandle {
   return { open() {}, close() {}, toggle() {}, unmount() {}, shadowRoot: null };
 }
 
-/** The modalities this package bundles, by the wire format each speaks. */
-const BUNDLED_MODALITIES: Record<string, () => IntentModality> = {
+/**
+ * The modalities this package bundles, by the wire format each speaks. Each
+ * maker takes the client-side intent config (only the multimodal one uses it).
+ */
+const BUNDLED_MODALITIES: Record<
+  string,
+  (intent?: Partial<IntentPipelineConfig>) => IntentModality
+> = {
+  "intent-v1": (intent) => multimodalModality(intent),
   "text-concat": () => textModality(),
 };
 
-/** Resolve the `format` option to a bundled modality; unknown names throw. */
-function bundledModality(format: string | undefined): IntentModality {
-  const make = BUNDLED_MODALITIES[format ?? "text-concat"];
+/**
+ * Resolve the `format` option to the modality set the tool mounts. Omitted →
+ * the default `[multimodal, text]` (multimodal active, text as the escape
+ * hatch). A named format → that single bundled modality; unknown names throw.
+ */
+function bundledModalities(
+  format: string | undefined,
+  intent?: Partial<IntentPipelineConfig>,
+): IntentModality[] {
+  if (format === undefined) {
+    return [multimodalModality(intent), textModality()];
+  }
+  const make = BUNDLED_MODALITIES[format];
   if (!make) {
     const known = Object.keys(BUNDLED_MODALITIES).sort().join(", ");
     throw new Error(
       `unknown intent format "${format}" (bundled formats: ${known}) — pass { modalities } for a custom one`,
     );
   }
-  return make();
+  return [make(intent)];
 }
 
 const STYLES = `
@@ -244,7 +303,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     return noopHandle();
   }
 
-  const modalities = options.modalities ?? [bundledModality(options.format)];
+  const modalities = options.modalities ?? bundledModalities(options.format, options.intent);
   const port = resolvePort(options.port);
   if (port !== undefined) {
     // Publish the port to window.__AIUI__ so the DevTools panel can find the
@@ -368,20 +427,26 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     },
     selection: () => watcher.snapshot(),
     clearSelection: () => watcher.clear(),
-    async openThread(): Promise<IntentThread> {
+    async openThread(threadOptions): Promise<IntentThread> {
       if (port === undefined) {
         throw new Error(
           "no channel port — add the aiuiDevOverlay() Vite plugin and launch with `aiui vite` (or pass { port })",
         );
       }
       // The hello carries what this page knows about itself — tab identity
-      // (extension-stamped), live url/title, source root — so the server can
-      // contextualize the lowered prompt. Collected fresh per thread.
+      // (extension-stamped), live url/title, source root, and (intent-v1) the
+      // modality's effective config — so the server can contextualize and
+      // trace the lowered prompt. Collected fresh per thread.
+      const baseMeta = collectClientMeta();
+      const meta: ClientMeta | undefined =
+        threadOptions?.intent !== undefined
+          ? { ...(baseMeta ?? {}), intent: threadOptions.intent }
+          : baseMeta;
       const socket = await connectIntentSocket(
         `ws://127.0.0.1:${port}/ws`,
         modality.format,
         options.webSocketFactory,
-        collectClientMeta(),
+        meta,
       );
       const threadId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -394,6 +459,18 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
           socket.close();
           return ack;
         },
+        sendChunk: (chunk, payload, fin = false) => socket.sendChunk(threadId, chunk, payload, fin),
+        sendAttachment: (chunk, bytes, fin = false) =>
+          socket.sendAttachment(threadId, chunk, bytes, fin),
+        onServerMessage: (handler) =>
+          socket.onServerMessage((msg) => {
+            // Route only this thread's pushes (server may omit threadId for
+            // connection-level notices — deliver those too).
+            if (msg.threadId === undefined || msg.threadId === threadId) {
+              handler(msg);
+            }
+          }),
+        close: () => socket.close(),
       };
     },
   });
@@ -474,9 +551,10 @@ export function unmountIntentTool(): void {
  * The wire form of an attached selection: the snapshot minus `at` (a capture
  * timestamp the channel doesn't need). Optional fields are omitted when absent
  * so the payload stays minimal; the channel validates loosely and ignores what
- * it doesn't recognize.
+ * it doesn't recognize. Shared with the multimodal modality's end-of-turn
+ * `context` chunk so both modalities send selections in one shape.
  */
-function toSelectionPayload(snap: SelectionSnapshot): Record<string, unknown> {
+export function toSelectionPayload(snap: SelectionSnapshot): Record<string, unknown> {
   return {
     text: snap.text,
     rects: snap.rects,

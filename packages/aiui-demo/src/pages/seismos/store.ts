@@ -176,6 +176,8 @@ export const store: SeismosStore = durable("seismos:store", () => {
     // coordinator re-queries whenever the crossfilter changes.
     const client = new MagHistogramClient(TABLE, brush, setHisto);
     coordinator.connect(client);
+
+    setWorld(await worldPromise);
     report(1);
     return s;
   }
@@ -235,6 +237,7 @@ export const store: SeismosStore = durable("seismos:store", () => {
     loadError,
     summary,
     histo,
+    world,
     ensureLoaded,
     runQuery,
   } satisfies SeismosStore;

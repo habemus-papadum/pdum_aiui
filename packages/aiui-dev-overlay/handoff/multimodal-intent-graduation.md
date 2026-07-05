@@ -1,8 +1,19 @@
 # Handoff: graduating the multimodal intent tool (workbench → overlay + channel)
 
-> **STATUS (2026-07-05): plan only — do not start yet.** Work is in flight in both trees (the
-> overlay/demo stream and the workbench stream). This document is the plan of record for when
-> both settle. From the aiui-main session.
+> **STATUS — P0–P5 landed (2026-07-05).** The graduation is structurally complete:
+> **P0** real fixtures (`workbench/fixtures/`, the regression net); **P1** pipeline →
+> `src/intent-pipeline/` with `IntentPipelineConfig`; **P2** the multimodal channel format +
+> server-side lowering processor; **P3** the `IntentModality` in `src/multimodal/` (default now)
+> with the source-locator/`getDisplayMedia` stand-in swaps; **P4** the shared `src/debug-ui/`
+> (embedded by the lab and the DevTools extension); **P5** the workbench slimmed into the lab
+> (inspector → shared debug-ui; keeps scenery, settings drawer over `IntentPipelineConfig`,
+> dev-proxy `openai` impls, `bench/`, `fixtures/`). Companion work (launcher OpenAI preflight +
+> micro-e2e tier) landed alongside. **P6** docs drafted (`docs/guide/intent-overlay.md` exists;
+> lab docs role-changed) — **screenshots still pending.** Open items: **T1–T7 dogfooding** (the
+> design verdict — see `workbench/docs/open-questions.md`); the advanced-config raw-JSON panel
+> (deferred); per-tool dynamic MCP registration (prior handoff); the CDP-capture experiment
+> (dropped for now in favour of `getDisplayMedia`). This document is the plan of record. From the
+> aiui-main session.
 
 ## The goal, in one paragraph
 

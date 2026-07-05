@@ -91,11 +91,13 @@ interface Envelope {
   meta?: HelloMeta;              // on hello: optional client context (see below)
   threadId?: string;             // on data: which thread this frame belongs to
   fin?: boolean;                 // on data: true if this is the thread's last frame
+  chunk?: ChunkDescriptor;       // on data: intent-v1 payload tag (see that format)
 }
 ```
 
 The current `PROTOCOL_VERSION` is `1`; it is bumped only for a change to the framing or
-envelope shape that is not backward-compatible.
+envelope shape that is not backward-compatible. `chunk` is additive: only `intent-v1`
+frames set it, and its absence is exactly the legacy behavior every other format relies on.
 
 ## Connection lifecycle
 
@@ -133,13 +135,17 @@ interface HelloMeta {
   source?: {
     root?: string;               // the app's source root (its Vite root)
   };
+  intent?: unknown;              // the client's IntentPipelineConfig view (intent-v1)
 }
 ```
 
 `meta` is optional end to end — a bare client omits it and everything still works. The
 connection hands it to every thread's processor (`ThreadContext.hello`); tracing records
 it as an `info` stage; the `text-concat` processor uses it to prefix the lowered prompt
-with the tab and source context. How the values are gathered browser-side is the dev
+with the tab and source context. `intent` is typed loosely on purpose — the envelope
+carries no dependency on the intent-pipeline package; the `intent-v1` processor validates
+the fields it reads (`transcriber`, `model`, `corrector`, `correctionModel`,
+`correctionPolicy`, `passes`). How the values are gathered browser-side is the dev
 overlay's *Client context* doc; how an agent uses them to reach the tab is the
 `session-browser` skill.
 
@@ -188,6 +194,13 @@ interface ChannelResponse {
 Replies arrive **in the order the frames were sent**, one per frame — so a client can pair
 each reply with its request by FIFO order (which is what the client library does). The
 per-frame ack also serves as flow-control feedback.
+
+A processor may also push **out-of-band** server → client messages that are *not* acks —
+today only the [`intent-v1`](#built-in-format-intent-v1) format does, sending `lowered`
+messages. These always carry a `kind` field (acks never do), so a client distinguishes
+them by shape and keeps matching acks to frames by FIFO among the messages that have **no**
+`kind`. An out-of-band message may arrive interleaved with acks (typically just before the
+ack of the frame that produced it); order across the two streams is not guaranteed.
 
 ### Error taxonomy
 
@@ -243,6 +256,85 @@ carries an optional `{ "text": string }` chunk; chunks are concatenated verbatim
 separator) until a `fin` frame, which sends the accumulated text into the session as a
 single prompt and closes the thread. A thread finished with nothing accumulated closes
 without sending anything.
+
+### Built-in format: `intent-v1`
+
+`intent-v1` is the multimodal intent tool's format. Where `text-concat` accumulates a
+string, `intent-v1` accumulates the intent tool's **event log** plus binary attachments
+(audio segments, screenshot PNGs), and on `fin` **lowers** the whole turn into one
+Option-C prompt — a body with `{shot_N}` tokens and the image paths in `meta` (see
+[`archive/channel-attachment-path-encoding.md`](../../../archive/channel-attachment-path-encoding.md)).
+The lowering — transcription, the correction diff, the pass structure, `composeIntent`,
+Option-C assembly — runs **in the channel**, keyed by the channel process's environment;
+the pipeline core is shared with the browser modality
+(`@habemus-papadum/aiui-dev-overlay/intent-pipeline`), so one implementation and one set of
+captured fixtures cover both sides.
+
+Its codec is `rawCodec` (the payload is opaque bytes). What a payload *means* depends on the
+frame's **chunk tag** in the envelope — which the codec, seeing only bytes, cannot know — so
+the meaning rides `envelope.chunk`:
+
+```ts
+type ChunkDescriptor =
+  | { kind: "events" }                                    // JSON { events: IntentEvent[] }
+  | { kind: "context" }                                   // JSON { selection?: … }
+  | { kind: "attachment"; id: string; mime: string };     // raw bytes (shot_N / seg_N)
+```
+
+**Client → server** `data` frames (all on one thread, `fin` on the last):
+
+| chunk | payload | meaning |
+| --- | --- | --- |
+| `{ kind: "events" }` | UTF-8 JSON `{ events }` | an append-only batch of the interaction log; batches arrive in order and are concatenated |
+| `{ kind: "attachment", id: "shot_N", mime }` | raw PNG bytes | a region/viewport screenshot |
+| `{ kind: "attachment", id: "seg_N", mime }` | raw audio bytes | the audio for talk segment N (e.g. `audio/webm;codecs=opus`, `audio/wav`) |
+| `{ kind: "context" }` | UTF-8 JSON `{ selection? }` | the on-screen selection, sent at most once, just before `fin` |
+
+Attachment `id`s are identifier-shaped (`shot_1`, `seg_2`) so a `shot_N` doubles as its
+Option-C meta key. `mime` on an audio segment names the container — the server uses it to
+name the upload file, which is how OpenAI's STT sniffs the codec.
+
+**Server → client** — besides the per-frame ack, the processor pushes `lowered` messages
+(distinguished by `kind`) carrying events it produced for the client to merge into its own
+stream:
+
+```jsonc
+{ "kind": "lowered", "threadId": "…", "events": [ /* IntentEvent[] */ ] }
+```
+
+Two producers, both gated on the hello's `intent` config:
+
+- **Transcription.** When a `seg_N` attachment arrives and `intent.transcriber === "openai"`,
+  the segment is transcribed server-side (`OPENAI_API_KEY`, model from `intent.model`) and a
+  `{ type: "transcript-final", segment: N, text, latencyMs, model }` event is pushed. With
+  `intent.transcriber === "mock"` the client's own `transcript-final` events (already in its
+  `events` batches) are used and nothing is transcribed.
+- **Correction diff.** A `correction` event that arrives **without** a `patch` while
+  `intent.corrector === "openai"` is a *request*: the V4A diff runs server-side (temperature
+  0, model `intent.correctionModel`; the document is the current transcript as
+  segments-as-lines, via `composeIntent`) and the completed correction event (same
+  `from`/`to`/`original`/`instruction`/`via`, plus `patch`/`model`/`latencyMs`) is pushed. A
+  diff that fails or produces a patch that will not apply is pushed **without** a `patch`, so
+  the client falls back to plain replacement — corrections never silently vanish. A correction
+  that already carries a `patch` (e.g. a mock-transcriber turn) passes straight through.
+
+**The `fin` lowering.** On the final frame the processor:
+
+1. saves each attachment to the trace blob store (`.aiui-cache/traces/<id>/shot_N.png`,
+   `seg_N.<ext>`) and wires each `shot_N`'s absolute path into the shot event;
+2. runs the condition passes (silence-trim on audio, image-downscale on shots — gated by
+   `intent.passes`; identity stubs today, the structure is what matters);
+3. folds the merged event stream with `composeIntent` (applying corrections under
+   `intent.correctionPolicy`) into the Option-C body + meta;
+4. wraps the body in the same tab/source/selection context block `text-concat` uses and
+   sends it as one prompt — the body's `{shot_N}` tokens in the notification `content`, the
+   `shot_N` → absolute-path map in the notification `meta`.
+
+A thread that ends in an explicit **cancel** (`thread-close` with `reason: "cancel"`), or
+one that never `fin`s (the socket just closes), lowers to **no notification**. Every stage
+(client context → merged events → composed intent → conditioned → lowered prompt) is
+recorded on the thread's trace, so the `/debug` viewer shows the whole lowering with
+hover-previewable attachment paths.
 
 ### Custom formats
 
@@ -442,10 +534,13 @@ That is the natural follow-up.
 
 The protocol is implemented in a few small, transport-decoupled modules:
 
-- **`frame.ts`** — `encodeFrame` / `decodeFrame`, the `Envelope`, `PROTOCOL_VERSION`.
+- **`frame.ts`** — `encodeFrame` / `decodeFrame`, the `Envelope`, `ChunkDescriptor`, `PROTOCOL_VERSION`.
 - **`codec.ts`** — `PayloadCodec`, `jsonCodec`, `rawCodec`.
 - **`channel.ts`** — `createChannelConnection`, the per-connection state machine.
 - **`processors.ts`** — `defaultFormats`, `textConcatFormat`.
+- **`prompt-context.ts`** — `augmentTextPrompt`, the shared tab/source/selection preamble.
+- **`intent-v1.ts`** — the `intent-v1` format: codec + lowering processor.
+- **`transcribe.ts`** / **`correct.ts`** — the server-side transcription and correction-diff seams (mock + OpenAI REST).
 - **`client.ts`** — `connectChannelClient`.
 - **`page-tools.ts`** — `PageToolDirectory`, the `/tools` registry and call router.
 - **`web.ts`** — the HTTP + WebSocket backend that wires both `/ws` and `/tools` to a live session.

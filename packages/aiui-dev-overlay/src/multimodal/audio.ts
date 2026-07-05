@@ -3,6 +3,10 @@
  * talk segment (talk-start → talk-end), yielding a webm/opus blob for the
  * transcriber. An AnalyserNode drives the HUD level meter so "is it hearing
  * me" is answered by pixels, not faith.
+ *
+ * Graduated from the workbench verbatim — pure browser-media plumbing, no
+ * workbench or channel coupling. The overlay's `openai` transcriber uploads the
+ * blob this produces to the channel; the workbench lab posts it to a dev proxy.
  */
 export class AudioCapture {
   private stream: MediaStream | undefined;

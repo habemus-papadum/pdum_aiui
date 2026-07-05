@@ -65,3 +65,62 @@ describe("connectIntentSocket", () => {
     );
   });
 });
+
+describe("intent-v1 chunks and server pushes", () => {
+  it("tags an events chunk with a JSON payload", async () => {
+    const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
+    const socket = await connectIntentSocket("ws://fake/ws", "intent-v1", factory);
+    await socket.sendChunk("t-1", { kind: "events" }, { events: [{ type: "thread-open" }] }, false);
+    const { envelope, payload } = decodeFrame(sent[1]);
+    expect(envelope).toMatchObject({
+      kind: "data",
+      threadId: "t-1",
+      fin: false,
+      chunk: { kind: "events" },
+    });
+    expect(jsonCodec.decode(payload)).toEqual({ events: [{ type: "thread-open" }] });
+  });
+
+  it("carries raw attachment bytes verbatim (no base64) with an id + mime", async () => {
+    const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
+    const socket = await connectIntentSocket("ws://fake/ws", "intent-v1", factory);
+    // A tiny PNG signature is enough to prove the bytes cross unchanged.
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    await socket.sendAttachment(
+      "t-1",
+      { kind: "attachment", id: "shot_1", mime: "image/png" },
+      bytes,
+    );
+    const { envelope, payload } = decodeFrame(sent[1]);
+    expect(envelope).toMatchObject({
+      kind: "data",
+      threadId: "t-1",
+      chunk: { kind: "attachment", id: "shot_1", mime: "image/png" },
+    });
+    expect([...payload]).toEqual([...bytes]);
+  });
+
+  it("marks the thread's final frame with fin", async () => {
+    const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
+    const socket = await connectIntentSocket("ws://fake/ws", "intent-v1", factory);
+    await socket.send("t-1", undefined, true);
+    expect(decodeFrame(sent[1]).envelope.fin).toBe(true);
+  });
+
+  it("routes `kind`-bearing server messages to onServerMessage, not the ack path", async () => {
+    const { factory, push } = fakeSocketFactory(() => ({ ok: true }));
+    const socket = await connectIntentSocket("ws://fake/ws", "intent-v1", factory);
+    const pushes: unknown[] = [];
+    socket.onServerMessage((msg) => pushes.push(msg));
+
+    // A push must not steal the ack a pending send is waiting for.
+    const ackPromise = socket.sendChunk("t-1", { kind: "events" }, { events: [] }, false);
+    push({ kind: "lowered", threadId: "t-1", events: [{ type: "note", text: "hi" }] });
+    const ack = await ackPromise;
+
+    expect(ack.ok).toBe(true);
+    expect(pushes).toEqual([
+      { kind: "lowered", threadId: "t-1", events: [{ type: "note", text: "hi" }] },
+    ]);
+  });
+});

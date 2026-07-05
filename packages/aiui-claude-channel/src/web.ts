@@ -26,8 +26,13 @@ import { createTransportStats } from "./stats";
 import { createTraceStore } from "./trace";
 import { withTracing } from "./tracing";
 
-/** Forward prompt text into the Claude Code session. */
-export type PromptHandler = (text: string) => void | Promise<void>;
+/**
+ * Forward prompt text into the Claude Code session. The optional `meta` (from
+ * the `intent-v1` lowering) becomes attributes on the rendered `<channel>` tag,
+ * carrying Option-C attachment paths alongside the body tokens that reference
+ * them. Text-only callers are unaffected.
+ */
+export type PromptHandler = (text: string, meta?: Record<string, string>) => void | Promise<void>;
 
 export interface WebServerOptions {
   /** Called with text arriving over `POST /prompt` or from a stream processor. */
@@ -151,7 +156,18 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   wss.on("connection", (socket) => {
     stats.connectionOpened();
     socket.on("close", () => stats.connectionClosed());
-    const connection = createChannelConnection({ formats, sendPrompt: options.onPrompt });
+    // A processor may push server → client messages (the `intent-v1` lowering
+    // sends `lowered` events) out-of-band of the per-frame acks; the client
+    // tells them apart by their `kind` field.
+    const connection = createChannelConnection({
+      formats,
+      sendPrompt: options.onPrompt,
+      push: (message) => {
+        if (socket.readyState === socket.OPEN) {
+          socket.send(JSON.stringify(message));
+        }
+      },
+    });
     socket.on("message", async (data, isBinary) => {
       if (!isBinary) {
         socket.send(JSON.stringify({ ok: false, fatal: true, error: "expected a binary frame" }));

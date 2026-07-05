@@ -7,22 +7,35 @@
  *   C      clear ink             E      correct mode (lasso the transcript)
  *   Enter  send thread           Esc    step out
  */
-import { AudioCapture } from "./audio";
-import { type Corrector, mockCorrector, openaiCorrector } from "./correct";
-import { composeIntent, Engine } from "./engine";
-import { Ink } from "./ink";
-import { Inspector } from "./inspector";
-import { installKeymap } from "./keymap";
-import { Preview } from "./preview";
+import {
+  AudioCapture,
+  type Corrector,
+  Ink,
+  locateComponents,
+  MULTIMODAL_STYLES,
+  mockCorrector,
+  mockTranscriber,
+  Preview,
+  ShotTool,
+  type Transcriber,
+} from "@habemus-papadum/aiui-dev-overlay";
+import { EventPanes, engineSource } from "@habemus-papadum/aiui-dev-overlay/debug-ui";
+import {
+  composeIntent,
+  Engine,
+  installKeymap,
+} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import { openaiCorrector } from "./correct";
 import { mountScenery } from "./scenery";
 import { loadSettings, settingsPanel } from "./settings";
-import { locateComponents, ShotTool } from "./shot";
 import { STYLES } from "./styles";
-import { mockTranscriber, openaiTranscriber, type Transcriber } from "./transcribe";
+import { openaiTranscriber } from "./transcribe";
 
 // ── page ─────────────────────────────────────────────────────────────────────
+// The overlay owns the ink/shot/preview layer styles now (mm-*); the lab adds
+// its scenery + dock (shared debug panes) + settings chrome on top.
 const style = document.createElement("style");
-style.textContent = STYLES;
+style.textContent = `${MULTIMODAL_STYLES}\n${STYLES}`;
 document.head.append(style);
 
 const scenery = document.createElement("div");
@@ -79,8 +92,28 @@ const ink = new Ink({
 });
 document.body.append(ink.canvas);
 
-const shots = new ShotTool(ink, (rect, components, thumb, path) => {
-  engine.shotDone(rect, components, thumb, path);
+const shots = new ShotTool(ink, (rect, components, thumb, bytes) => {
+  // The lab persists the pixels to a real temp path so the lowered prompt's
+  // Option-C meta carries genuine absolute paths (the shipping modality uploads
+  // the same bytes to the channel, which assigns the path). Best-effort — the
+  // shot event still describes itself if the save fails.
+  void (async () => {
+    let path: string | undefined;
+    if (bytes) {
+      try {
+        // Copy into an ArrayBuffer-backed view so it's a valid BlobPart.
+        const body = new Uint8Array(bytes.length);
+        body.set(bytes);
+        const saved = (await fetch("/api/shot", {
+          method: "POST",
+          headers: { "content-type": "image/png" },
+          body: new Blob([body], { type: "image/png" }),
+        }).then((r) => r.json())) as { path?: string };
+        path = saved.path;
+      } catch {}
+    }
+    engine.shotDone(rect, components, thumb, path);
+  })();
 });
 document.body.append(shots.veil);
 
@@ -89,10 +122,19 @@ document.body.append(preview.root);
 
 const dock = document.createElement("div");
 dock.className = "wb-dock";
-const inspector = new Inspector(engine);
-dock.append(inspector.root);
+// The shared debug UI (the same panes the DevTools extension embeds), bound to
+// the live engine: events / IR / timing + JSON export. It self-injects its
+// aiui-dbg-* styles and defaults its path previews to /api/preview.
+const panes = new EventPanes({ correctionPolicy: engine.settings.correctionPolicy });
+panes.bind(engineSource(engine));
+dock.append(panes.root);
 dock.append(
-  settingsPanel(settings, () => engine.events.length /* live reads; nothing to rebuild */),
+  settingsPanel(settings, () => {
+    // The only setting that changes what the panes compose is the correction
+    // policy; sync it and re-run the IR pass over the current events.
+    panes.config.correctionPolicy = settings.correctionPolicy;
+    panes.update(engine.events);
+  }),
 );
 document.body.append(dock);
 
@@ -246,7 +288,7 @@ renderHud();
 
 // ── lab hook ─────────────────────────────────────────────────────────────────
 // A tiny handle for fixture capture and headless driving (this is the lab; the
-// shipping overlay exposes nothing). `events` is what the inspector's export
+// shipping overlay exposes nothing). `events` is what the debug UI's export
 // button serializes; the rest lets a script drive the real pipeline directly.
 (window as unknown as { __wb?: unknown }).__wb = {
   engine,

@@ -2,14 +2,18 @@
  * The pen: a full-viewport canvas that turns primary-pointer drags into
  * strokes while the overlay is armed (ink mode). Policies under test:
  *
- *  - strokes FADE after settings.inkFadeSec (0 = persist) — the hypothesis is
+ *  - strokes FADE after config.inkFadeSec (0 = persist) — the hypothesis is
  *    that annotations are gestural, not documents, so they should evaporate
  *    unless a screenshot captured them;
  *  - C clears everything immediately;
  *  - a region shot "freezes" overlapping ink by compositing it into the
  *    captured image (see shot.ts), so what you circled travels with pixels.
+ *
+ * Graduated from the workbench. The canvas is a page-level overlay layer (not
+ * inside a shadow root) so it can sit above the app under development; its
+ * `mm-ink` class is styled by the modality's injected STYLES.
  */
-import type { Rect } from "./types";
+import type { Rect } from "../intent-pipeline";
 
 interface Stroke {
   points: Array<{ x: number; y: number }>;
@@ -18,13 +22,16 @@ interface Stroke {
 
 export class Ink {
   readonly canvas: HTMLCanvasElement;
-  private readonly ctx: CanvasRenderingContext2D;
+  /** Null in environments without a 2D context (jsdom, exotic): stroke capture
+   * still works for the pipeline; only the visible rendering degrades. */
+  private readonly ctx: CanvasRenderingContext2D | null;
   private strokes: Stroke[] = [];
   private live: Stroke | undefined;
   private raf = 0;
   private fadeSec: () => number;
   private onStroke: (points: number, bounds: Rect) => void;
   private onAutoClear: () => void;
+  private readonly onResize = () => this.resize();
 
   constructor(opts: {
     fadeSec: () => number;
@@ -35,14 +42,10 @@ export class Ink {
     this.onStroke = opts.onStroke;
     this.onAutoClear = opts.onAutoClear;
     this.canvas = document.createElement("canvas");
-    this.canvas.className = "wb-ink";
-    const ctx = this.canvas.getContext("2d");
-    if (!ctx) {
-      throw new Error("no 2d context");
-    }
-    this.ctx = ctx;
+    this.canvas.className = "mm-ink";
+    this.ctx = this.canvas.getContext("2d");
     this.resize();
-    window.addEventListener("resize", () => this.resize());
+    window.addEventListener("resize", this.onResize);
 
     this.canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) {
@@ -73,11 +76,14 @@ export class Ink {
     this.canvas.addEventListener("pointerup", finish);
     this.canvas.addEventListener("pointercancel", finish);
 
-    const tick = () => {
-      this.draw();
+    // Only animate where we can actually paint (and where rAF exists).
+    if (this.ctx && typeof requestAnimationFrame === "function") {
+      const tick = () => {
+        this.draw();
+        this.raf = requestAnimationFrame(tick);
+      };
       this.raf = requestAnimationFrame(tick);
-    };
-    this.raf = requestAnimationFrame(tick);
+    }
   }
 
   setActive(on: boolean): void {
@@ -116,8 +122,11 @@ export class Ink {
   }
 
   private draw(): void {
-    const dpr = window.devicePixelRatio || 1;
     const ctx = this.ctx;
+    if (!ctx) {
+      return;
+    }
+    const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -145,7 +154,10 @@ export class Ink {
   }
 
   dispose(): void {
-    cancelAnimationFrame(this.raf);
+    if (this.raf && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this.raf);
+    }
+    window.removeEventListener("resize", this.onResize);
     this.canvas.remove();
   }
 }

@@ -16,9 +16,16 @@ const external = [
 export default defineConfig({
   build: {
     lib: {
-      // Two entries: the browser bundle and the dev-server plugin behind the
-      // `./vite` subpath export (Node code — kept out of the browser bundle).
-      entry: { index: "src/index.ts", vite: "src/vite.ts" },
+      // Four entries: the browser bundle, the dev-server plugin behind the
+      // `./vite` subpath export (Node code — kept out of the browser bundle),
+      // the framework-free intent pipeline behind `./intent-pipeline`, and the
+      // shared debug UI behind `./debug-ui` (lab + DevTools extension).
+      entry: {
+        index: "src/index.ts",
+        vite: "src/vite.ts",
+        "intent-pipeline": "src/intent-pipeline/index.ts",
+        "debug-ui": "src/debug-ui/index.ts",
+      },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },

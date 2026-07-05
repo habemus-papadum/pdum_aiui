@@ -31,6 +31,22 @@ records what the build taught, for folding back into those.
   the stored naive timestamps are UTC wall-clock and bin identically regardless of
   the browser's zone.
 
+### The country-border overlay (map chrome)
+
+- **What:** faint country outlines drawn over the epicenter map so the sparse
+  density has geographic anchoring — committed at `public/data/countries-110m.geojson`
+  (**165 KB**, 177 features), fetched once during `store.load()` alongside the
+  parquet (non-fatal on failure — the map just renders without it).
+- **Source & license:** **Natural Earth** 1:110m Admin-0 countries
+  (`nvkelso/natural-earth-vector`, `geojson/ne_110m_admin_0_countries.geojson`) —
+  **public domain** (Natural Earth is released with no restrictions).
+- **Preprocessed at author time** (fetch → transform, script not committed; the
+  geojson is the artifact): properties stripped, coordinates rounded to 2 decimals
+  (~1 km, far finer than the ~60 km/px map), and every polygon ring converted to a
+  `MultiLineString` **split at the antimeridian** (border-only, no fill — see
+  finding 6 for why). The single ±180-crossing feature (Russia) is cut cleanly; the
+  result has no horizontal streaks.
+
 ## The DuckDB-WASM + Vite recipe (no CDN)
 
 The site deploys to S3 under base `/aiui/` and must not depend on jsDelivr. Mosaic's
@@ -160,7 +176,27 @@ signal inside their own options memo.
    `Plot.update()` is argless in vgplot but typed as requiring a `mark` — pass
    `undefined`.
 
-6. **Driving Mosaic brushes from an agent:** the coordinator batches, so a
+6. **A projection-less `geo` mark aligns exactly with a lon/lat raster — but the
+   opaque raster forces the overlay on top.** The epicenter map plots raw
+   `longitude`/`latitude` on linear scales (equirectangular *is* the identity map
+   (lon,lat)→(x,y)). Observable Plot's `geo` mark, when the plot has **no
+   `projection`**, falls back to `xyProjection` — it passes coordinates straight
+   through the x/y scales (`@observablehq/plot/src/projection.js`). So a `geo` mark
+   built from country borders in raw lon/lat lands pixel-for-pixel on the raster,
+   with none of the fit/inset drift a real projection introduces. Two gotchas:
+   (a) the density raster renders as one `<image>` stretched to fill the inner
+   frame and is **fully opaque** (its zero-density floor is `inferno`≈black /
+   `YlOrRd`≈pale, not transparent) — anything drawn *behind* it is invisible, so
+   the overlay must be a later mark (on top), stroked and faint; and (b) without a
+   projection there's no antimeridian clipping, so any polygon crossing ±180 would
+   streak across the map — pre-cut the geometry into `MultiLineString`s at the
+   antimeridian (author-time) rather than relying on Plot to clip. Color is a
+   per-mode `coast` + `coastOpacity` in `palette.ts`, tuned as *chrome* (like a
+   graticule), exempt from the categorical-CVD checks. Separately, `pixelSize: 1.5`
+   on the raster makes each density cell ~50% larger so isolated events read as
+   visible specks rather than single pixels.
+
+7. **Driving Mosaic brushes from an agent:** the coordinator batches, so a
    `report()` immediately after a `set-filter` reads stale (the ledger's same-tick
    note, confirmed here). Await a task boundary. Also, **d3-brush (the map's 2-D
    brush) can't be reliably driven by synthetic pointer events** in a headless probe
@@ -184,3 +220,14 @@ signal inside their own options memo.
 - **Honest caveats stated in the prose:** the rising event count through the decades
   is mostly the *detection network* growing, not seismicity — so completeness itself
   improves over time; and Mc set below the roll-off biases b.
+
+## Why THIS page defaults to light (a deliberate one-off)
+
+seismos deviates from the style guide's default theming convention (follow
+`prefers-color-scheme`, no toggle): the epicenter-density map reads far better on a light
+surface, so **this page only** defaults to light with an explicit ThemeToggle (persisted in
+localStorage, reflected onto `<html data-theme>` by its head's no-flash script). The other
+notebooks (morphogen, aztec) follow the system mode with no toggle, per the convention —
+their heads stamp the system preference and `initSystemTheme()` keeps it live. The policy
+anchor is each page's <head> script; see `src/site/theme.ts` for the mechanism. New pages
+should follow the system unless they have a reason like this one.

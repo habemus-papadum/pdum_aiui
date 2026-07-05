@@ -228,6 +228,7 @@ function main() {
           { text: "Getting Started", link: "/guide/getting-started" },
           { text: "Prompt Lowering", link: "/guide/prompt-lowering" },
           { text: "Web Intent Tool", link: "/guide/web-intent-tool" },
+          { text: "Using the Intent Overlay", link: "/guide/intent-overlay" },
           { text: "DevTools Panel", link: "/guide/devtools" },
           { text: "The Agent's Browser", link: "/guide/chrome" },
           { text: "Remote Development", link: "/guide/remote" },

@@ -12,7 +12,9 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./vite": "./src/vite.ts"
+    "./vite": "./src/vite.ts",
+    "./intent-pipeline": "./src/intent-pipeline/index.ts",
+    "./debug-ui": "./src/debug-ui/index.ts"
   },
   "imports": {
     "#source-locator": "./src/source-locator.ts"
@@ -36,6 +38,14 @@
       "./vite": {
         "types": "./dist/vite.d.ts",
         "import": "./dist/vite.js"
+      },
+      "./intent-pipeline": {
+        "types": "./dist/intent-pipeline/index.d.ts",
+        "import": "./dist/intent-pipeline.js"
+      },
+      "./debug-ui": {
+        "types": "./dist/debug-ui/index.d.ts",
+        "import": "./dist/debug-ui.js"
       }
     },
     "imports": {

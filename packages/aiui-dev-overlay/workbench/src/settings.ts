@@ -5,8 +5,19 @@
  * decisions get made by feel and by the timing pane, not in the abstract.
  * Persisted to localStorage so an opinion survives reloads.
  */
-import type { WorkbenchSettings } from "./types";
-import { DEFAULT_SETTINGS } from "./types";
+import {
+  DEFAULT_INTENT_CONFIG,
+  type IntentPipelineConfig,
+} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+
+/**
+ * The lab's settings ARE the pipeline config (the drawer edits the same object
+ * the engine reads). Kept as a local alias so the rest of the workbench keeps
+ * saying `WorkbenchSettings`, and so this is the one place to grow lab-only
+ * fields later if the lab ever needs a knob the pipeline doesn't.
+ */
+export type WorkbenchSettings = IntentPipelineConfig;
+export const DEFAULT_SETTINGS = DEFAULT_INTENT_CONFIG;
 
 const KEY = "aiui-workbench-settings";
 
@@ -28,7 +39,7 @@ export function saveSettings(settings: WorkbenchSettings): void {
 export function settingsPanel(settings: WorkbenchSettings, onChange: () => void): HTMLDivElement {
   const root = document.createElement("div");
   root.className = "wb-settings";
-  root.innerHTML = `<div class="wb-insp-tabs"><span style="padding:6px 8px">settings</span></div>`;
+  root.innerHTML = `<div class="wb-settings-head">settings</div>`;
 
   const body = document.createElement("div");
   body.className = "wb-settings-body";

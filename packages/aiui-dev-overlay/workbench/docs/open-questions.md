@@ -21,13 +21,17 @@ Each maps to a toggle in the settings drawer — see the
 
 ## Structural questions (need building, not toggling)
 
-- **Thread → channel**: the workbench never sends anything anywhere. When a thread's composed
-  intent is good, what carries it — the existing ws protocol with a new format, or a new frame
-  kind? (The Option-C body+meta already matches the channel's notification contract.)
-- **Locator in real apps**: the scenery self-annotates; the real thing is a vite plugin stamping
-  `data-comp`/`data-source` during dev builds. Design exists in spirit, not in code.
-- **Silence gating** (condition pass) and **keyword priming**: specced in the
-  [audio-stack notes](./openai-audio-stack.md); neither is built.
+- **Thread → channel** — **BUILT (P2).** A multimodal channel format now carries the thread (the
+  JSON event log + binary attachment frames), and a lowering processor composes it server-side
+  and emits the Option-C body+meta notification — the encoding this bench already matched. The
+  lab itself still sends nowhere, by design.
+- **Locator in real apps** — **BUILT (P3).** The overlay's `source-locator` vite plugin stamps
+  `data-source-loc` / `data-cell` at dev-build time, and the graduated shot locator hit-tests
+  those and resolves them against `window.__AIUI__.sourceRoot` to absolute `file:line:col`. The
+  scenery here hand-writes the same stamps to keep the lab faithful.
+- **Silence gating** (condition pass) and **keyword priming**: typed as optional groups in
+  `IntentPipelineConfig` (shipped without UI) and specced in the
+  [audio-stack notes](./openai-audio-stack.md); the pass *slots* exist, the passes are stubs.
 - **Audio-back ack** (L2): prototype behind a setting once wired; the open UX question is
   barge-in — does a spoken ack collide with the human continuing to talk?
 - **Multi-monitor / scrolling**: shots capture the tab viewport; ink coordinates are
@@ -45,3 +49,9 @@ A gesture/policy moves out of the workbench when:
 Then: the modality goes into `aiui-dev-overlay` (widget + protocol frames), the pass into the
 channel's processors with the fixtures as tests, and the locator annotations become a real vite
 plugin.
+
+**This graduation has now happened (P0–P5):** the pipeline, modality, debug UI, channel format,
+and locator plugin all landed, with the exported fixtures as the regression net. What's left is
+the *design* verdict — the **T1–T7 questions above stay open pending real dogfooding** (the
+structural work being done doesn't settle whether hold-to-talk, ~1.5 s REST latency, or the
+~2 s LLM corrector are the right calls). The lab's job now is to answer them.

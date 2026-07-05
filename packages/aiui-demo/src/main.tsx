@@ -16,6 +16,10 @@
 
 import { render } from "@solidjs/web";
 import "./styles.css";
+import { initSystemTheme } from "./site/theme";
+
+initSystemTheme(); // morphogen follows prefers-color-scheme (style-guide default)
+
 import "./model/graph"; // builds the cell graph + registers agent tools
 import { App } from "./ui/App";
 

@@ -128,9 +128,8 @@ explain a degraded pipeline.
 the corrector policy, silence gating, keyword priming — all of that is `IntentPipelineConfig`,
 owned and configured by the overlay (`aiuiDevOverlay({ intent: { … } })` plus channel-side
 config), not by `aiui claude` flags. The launcher's whole job is preflighting this key and
-passing the environment through. A dedicated **"Using the intent overlay"** guide page will cover
-those knobs; until then the overlay's [web intent tool](./web-intent-tool) page is the entry
-point.
+passing the environment through. The [Using the intent overlay](./intent-overlay) guide page
+covers those knobs.
 
 ## State aiui keeps (and how it affects behavior)
 

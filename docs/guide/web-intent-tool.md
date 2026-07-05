@@ -1,11 +1,13 @@
 # The Web Intent Tool
 
 The first concrete layer-2 tool: a widget you mount into the web app you're developing that
-collects intent — text today; voice, screenshots, and DOM context tomorrow — and streams it to the
-running channel server, where it is **lowered** into a prompt for the Claude Code session. This
-page is the design document; [Getting Started](./getting-started) shows it in action, and
-`pnpm demo` (the `aiui-demo` package) is a ready-made playground: `./aiui claude` in one terminal,
-`pnpm demo` in another, and poke at it.
+collects intent — dictation, region screenshots, pen ink, and DOM context, with plain text as the
+escape hatch — and streams it to the running channel server, where it is **lowered** into a prompt
+for the Claude Code session. This page is the **design document**; [Using the intent
+overlay](./intent-overlay) is the user guide for the default multimodal modality;
+[Getting Started](./getting-started) shows the whole loop in action; and `pnpm demo` (the
+`aiui-demo` package) is a ready-made playground: `./aiui claude` in one terminal, `pnpm demo` in
+another, and poke at it.
 
 ![The intent tool over a demo app](/intent-tool.png)
 
@@ -26,12 +28,14 @@ export default defineConfig({ plugins: [aiuiDevOverlay()] });
 
 The plugin is `apply: "serve"`, so the dev gate is structural: the tool *cannot* exist in a
 production build — no `import.meta.env.DEV` guard for an app to forget. The Vite config is also
-where an app declares **which message format** its tool speaks —
-`aiuiDevOverlay({ format: "text-concat" })` selects the bundled modality by its wire-format name
-(text is the only one today; richer formats will slot in here). Apps with custom modalities mount
-from app code instead (`aiuiDevOverlay({ mount: false })` keeps the port/source injection, since
-modalities are functions and can't cross vite.config); outside Vite entirely,
-`mountIntentTool({ port })` works anywhere. A DevTools-panel or browser-extension delivery would
+where an app declares **which message format** its tool speaks — the default is the multimodal
+`intent-v1` modality; `aiuiDevOverlay({ format: "text-concat" })` selects the plain-text escape
+hatch instead, by its wire-format name.
+ Client-side pipeline options ride the same call
+(`aiuiDevOverlay({ intent: { … } })` — see [Using the intent overlay](./intent-overlay#configuring-the-pipeline)).
+Apps with custom modalities mount from app code instead (`aiuiDevOverlay({ mount: false })` keeps
+the port/source injection, since modalities are functions and can't cross vite.config); outside
+Vite entirely, `mountIntentTool({ port })` works anywhere. A DevTools-panel or browser-extension delivery would
 avoid even the config line — both remain on the table. How the plugin gets the tool and its port
 into the page is subtler than it looks — see
 [the internals note](#how-the-plugin-gets-the-tool-into-the-page-subtle) below.
@@ -60,11 +64,14 @@ piece is independent of any particular modality:
 | **Debugging** (web app) | Renders the recorded lowering trace | trace viewer (+ per-format custom views, planned) | `aiui-claude-channel` |
 
 The rich modalities (voice + pen + screenshots + component location, and the correction
-meta-loop) are being **designed before they're shipped**, in the
+meta-loop) were **designed before they shipped** and now ship as the default overlay (see
+[Using the intent overlay](./intent-overlay)). The
 [intent workbench](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench)
-(`pnpm workbench`) — a single instrumented page where every interaction-design choice is a
-setting, every action is an event, and the IR passes re-run live as you talk, draw, and shoot.
-What survives dogfooding there graduates into these three pieces.
+(`pnpm workbench`) lives on as the **lab where the pipeline is measured and tuned** — a single
+instrumented page, running the very same pipeline this overlay does, where every interaction
+choice is a setting, every action is an event, the IR passes re-run live as you talk/draw/shoot,
+and a `bench/` corpus runner ranks transcription and correction models offline. Design decisions
+are made there and graduate into the shipping three pieces.
 
 The three meet at one string: the **stream format name**. The client's `IntentModality.format`
 names the format its frames speak; the server's format registry maps that name to a codec and a

@@ -12,15 +12,9 @@
  *  - it CLOSES explicitly on Enter (send) or Esc (cancel), or — policy,
  *    default off — after `autoEndSec` of idle silence.
  */
+import { DEFAULT_INTENT_CONFIG, type IntentPipelineConfig } from "./config";
 import { applyCorrectionToLines } from "./patch";
-import {
-  DEFAULT_SETTINGS,
-  type IntentEvent,
-  type LocatedComponent,
-  type Mode,
-  type Rect,
-  type WorkbenchSettings,
-} from "./types";
+import type { IntentEvent, LocatedComponent, Mode, Rect } from "./types";
 
 export type EngineListener = (event: IntentEvent, engine: Engine) => void;
 
@@ -31,7 +25,7 @@ export interface CorrectionTarget {
 }
 
 export class Engine {
-  readonly settings: WorkbenchSettings;
+  readonly settings: IntentPipelineConfig;
   events: IntentEvent[] = [];
   armed = false;
   mode: Mode = "ink";
@@ -46,8 +40,8 @@ export class Engine {
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
 
-  constructor(settings: Partial<WorkbenchSettings> = {}, now: () => number = () => Date.now()) {
-    this.settings = { ...DEFAULT_SETTINGS, ...settings };
+  constructor(settings: Partial<IntentPipelineConfig> = {}, now: () => number = () => Date.now()) {
+    this.settings = { ...DEFAULT_INTENT_CONFIG, ...settings };
     this.now = now;
   }
 

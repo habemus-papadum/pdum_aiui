@@ -1,0 +1,21 @@
+/**
+ * The multimodal intent modality and the reusable surfaces it hosts.
+ *
+ * Internal to the overlay's main entry (no dedicated subpath): the shipping
+ * integration is `mountIntentTool` / `aiuiDevOverlay()`, which pick this
+ * modality up by its `intent-v1` format. The individual pieces (Ink, ShotTool,
+ * Preview, the transcriber/corrector seams, the layer STYLES) are exported so
+ * the **workbench lab** can drive them directly against its own mocks and
+ * dev-proxy model calls — same surfaces, different host.
+ *
+ * @packageDocumentation
+ */
+export { AudioCapture } from "./audio";
+export type { CorrectionDiff, CorrectionInput, Corrector } from "./correct";
+export { mockCorrector, SYSTEM_PROMPT } from "./correct";
+export { Ink } from "./ink";
+export { multimodalModality } from "./modality";
+export { Preview } from "./preview";
+export { locateComponents, type ShotPixels, type ShotSink, ShotTool } from "./shot";
+export { STYLES as MULTIMODAL_STYLES } from "./styles";
+export { mockTranscriber, type Transcriber, type TranscriptResult } from "./transcribe";

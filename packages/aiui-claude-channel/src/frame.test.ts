@@ -22,6 +22,21 @@ describe("encodeFrame / decodeFrame", () => {
     expect(payload.length).toBe(0);
   });
 
+  it("round-trips an intent-v1 chunk descriptor with a binary payload", () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const env = envelope({ chunk: { kind: "attachment", id: "shot_1", mime: "image/png" } });
+    const { envelope: out, payload } = decodeFrame(encodeFrame(env, png));
+    expect(out.chunk).toEqual({ kind: "attachment", id: "shot_1", mime: "image/png" });
+    expect([...payload]).toEqual([...png]);
+  });
+
+  it("round-trips events / context chunk kinds", () => {
+    for (const chunk of [{ kind: "events" }, { kind: "context" }] as const) {
+      const { envelope: out } = decodeFrame(encodeFrame(envelope({ chunk })));
+      expect(out.chunk).toEqual(chunk);
+    }
+  });
+
   it("round-trips a large binary payload (screenshot-sized)", () => {
     const payload = new Uint8Array(2 * 1024 * 1024);
     for (let i = 0; i < payload.length; i += 4093) {

@@ -60,11 +60,17 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   const pageTools = new PageToolDirectory();
   const mcp = createChannelServer(VERSION, { pageTools });
 
-  // Push text into the Claude Code session over the one-way channel.
-  const pushToSession = (text: string, kind = "prompt"): Promise<void> =>
+  // Push text into the Claude Code session over the one-way channel. Extra meta
+  // (the intent-v1 lowering's Option-C attachment paths) rides as additional
+  // `<channel>` attributes next to the body tokens that reference them.
+  const pushToSession = (
+    text: string,
+    kind = "prompt",
+    extraMeta?: Record<string, string>,
+  ): Promise<void> =>
     mcp.notification({
       method: "notifications/claude/channel",
-      params: { content: text, meta: { kind } },
+      params: { content: text, meta: { kind, ...extraMeta } },
     });
 
   // Connect stdio first: the handshake must complete before we open the backend
@@ -77,7 +83,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // (.aiui-cache/ under this server's cwd — gitignored, readable by the
   // Claude Code session running in the same directory).
   const web = await startWebServer({
-    onPrompt: (text) => pushToSession(text),
+    onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
     traceDir: projectCacheDir(),
     launchInfo,
     pageTools,

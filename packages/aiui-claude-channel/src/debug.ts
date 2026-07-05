@@ -18,6 +18,12 @@
  *   GET /debug                      the viewer app (self-contained HTML)
  *   GET /debug/api/traces           all trace manifests, newest first
  *   GET /debug/api/traces/:id       one manifest
+ *   GET /debug/api/traces/:id/live  a revision-poll for live-following one
+ *                                   trace: `{rev, ...manifest}`, or — when the
+ *                                   caller passes `?since=<rev>` and nothing
+ *                                   changed — `{unchanged:true, rev}`. `rev` is
+ *                                   the manifest's mtime, which bumps on every
+ *                                   stage (see trace.ts's flush-per-record).
  *   GET /debug/blob/:id/:file       a stage's blob file (image/text/binary)
  *   GET /debug/api/info             this server's own channel info (tag, port,
  *                                   pid, owning Claude session) plus, under
@@ -28,10 +34,10 @@
  *                                   absolute paths mentioned in lowered prompts
  *                                   (allowlisted roots only — see previewablePath)
  */
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, isAbsolute, sep } from "node:path";
+import { extname, isAbsolute, join, sep } from "node:path";
 import { cacheDir as userCacheDir } from "@habemus-papadum/aiui-util";
 import type { Express } from "express";
 import type { LaunchInfo } from "./launch-info";
@@ -90,6 +96,26 @@ export function previewablePath(raw: string, roots: string[]): string | undefine
     }
   }
   return undefined;
+}
+
+/** Trace ids/filenames the store ever writes match this (no path traversal). */
+const SAFE_TRACE_ID = /^[\w.-]+$/;
+
+/**
+ * The current revision of a trace: its manifest's mtime in ms, or undefined if
+ * the trace doesn't exist. trace.json is rewritten on every recorded stage, so
+ * a rising mtime is a faithful "something changed" signal for live-following —
+ * cheaper than reading/diffing the manifest each poll.
+ */
+function traceRev(cacheDir: string, id: string): number | undefined {
+  if (!SAFE_TRACE_ID.test(id)) {
+    return undefined;
+  }
+  try {
+    return statSync(join(cacheDir, "traces", id, "trace.json")).mtimeMs;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Mount the debug tool's routes onto the backend's express app. */
@@ -158,6 +184,31 @@ export function registerDebugRoutes(
       return;
     }
     res.json(trace);
+  });
+
+  // Live-follow one trace with a cheap revision poll (the DevTools panel's
+  // Intent pane, the lab). `rev` is the manifest file's mtime — trace.ts
+  // rewrites the whole manifest on every recorded stage, so mtime advances
+  // with the run. A client echoes the last `rev` as `?since=`; when it still
+  // matches we answer `{unchanged:true}` (a handful of bytes) instead of
+  // re-sending the whole manifest. CORS is already open on `/debug` above.
+  app.get("/debug/api/traces/:id/live", (req, res) => {
+    const rev = traceRev(cacheDir, req.params.id);
+    if (rev === undefined) {
+      res.status(404).json({ error: "no such trace" });
+      return;
+    }
+    const since = typeof req.query.since === "string" ? Number(req.query.since) : Number.NaN;
+    if (Number.isFinite(since) && since === rev) {
+      res.json({ unchanged: true, rev });
+      return;
+    }
+    const trace = readTrace(cacheDir, req.params.id);
+    if (!trace) {
+      res.status(404).json({ error: "no such trace" });
+      return;
+    }
+    res.json({ rev, ...trace });
   });
 
   app.get("/debug/blob/:id/:file", async (req, res) => {

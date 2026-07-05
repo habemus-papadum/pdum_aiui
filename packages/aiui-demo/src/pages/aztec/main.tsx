@@ -9,6 +9,10 @@
  * §8, Level 1).
  */
 import { render } from "@solidjs/web";
+import { initSystemTheme } from "../../site/theme";
+
+initSystemTheme(); // aztec follows prefers-color-scheme (style-guide default)
+
 import "../../styles.css";
 import "./page.css";
 import "./graph"; // builds the cell graph + registers agent tools

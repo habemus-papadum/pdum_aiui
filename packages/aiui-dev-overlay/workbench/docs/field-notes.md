@@ -4,6 +4,14 @@
 lives in [turn-flow.md](./turn-flow.md); model strategy in
 [openai-audio-stack.md](./openai-audio-stack.md); this page is the engineering residue.*
 
+> **Where the code lives now.** The pieces this page dissects have graduated out of the lab:
+> `engine` / `keymap` / `patch` / `types` are the overlay's `intent-pipeline`, and `ink` / `shot`
+> / `audio` / `preview` / the transcriber & corrector seams + mocks are the overlay's
+> `multimodal`. The lab imports them source-first and keeps only the dev-proxy `openai` impls,
+> scenery, settings, and `bench/`. The contracts below (segments-as-lines, the event shapes) are
+> now enforced by `intent-pipeline/fixtures.test.ts` in the overlay, which replays real captured
+> streams (`workbench/fixtures/`) through `composeIntent`.
+
 ## The correction micro-pipeline
 
 **Shape:** `{transcript (one segment per line), selected span, instruction}` → small LLM →
@@ -37,7 +45,9 @@ sees is "one talk segment per line", and `composeIntent` must produce *the same*
 we originally merged consecutive segments into one text run for prettiness, and patches
 generated against per-segment lines stopped applying. If the line-ification ever changes, it
 must change in `composeIntent`, the preview's pieces, and the corrector's doc assembly
-together. (The join is by-line for patching, by-space for the final prompt.)
+together. (The join is by-line for patching, by-space for the final prompt.) This is exactly
+what the overlay's `intent-pipeline/fixtures.test.ts` guards: captured streams replayed through
+`composeIntent` fail loudly if the line-ification drifts.
 
 **Corrections compound.** Each correction patches the *already-corrected* document (the
 pipeline builds `docLines` from `composeIntent`, not from raw finals), so a second fix can
