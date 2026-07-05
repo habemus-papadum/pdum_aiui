@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
+import { PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
 import { projectCacheDir } from "../trace";
@@ -53,7 +54,11 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
       process.stderr.write("[aiui-channel] ignoring malformed --launch-info JSON\n");
     }
   }
-  const mcp = createChannelServer(VERSION);
+  // The page-tool registry is shared by the MCP tools (which read and drive it)
+  // and the `/tools` websocket in the web backend (which feeds it), so create it
+  // once and hand the same instance to both.
+  const pageTools = new PageToolDirectory();
+  const mcp = createChannelServer(VERSION, { pageTools });
 
   // Push text into the Claude Code session over the one-way channel.
   const pushToSession = (text: string, kind = "prompt"): Promise<void> =>
@@ -75,6 +80,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     onPrompt: (text) => pushToSession(text),
     traceDir: projectCacheDir(),
     launchInfo,
+    pageTools,
   });
   const registration = registerServer(web.port, tag);
 

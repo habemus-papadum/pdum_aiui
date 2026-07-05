@@ -1,0 +1,10 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "types": ["vite/client"]
+  },
+  "include": ["src", "bench", "vite.config.ts"]
+}

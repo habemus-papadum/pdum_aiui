@@ -51,12 +51,24 @@ export {
 export {
   type ChromeDevtoolsInfo,
   type LaunchInfo,
+  type OpenAiKeyStatus,
   parseLaunchInfo,
 } from "./launch-info";
 export { dirRank, type ListOptions, listMcpServers, sortServers } from "./list";
 export {
+  type PageToolCall,
+  type PageToolDescriptor,
+  PageToolDirectory,
+  type PageToolDirectoryOptions,
+  type PageToolRegistration,
+  type PageToolSend,
+  type PageToolSummary,
+  type ServerToClientMessage,
+} from "./page-tools";
+export {
   augmentTextPrompt,
   defaultFormats,
+  type SelectionContext,
   textConcatFormat,
   textConcatProcessor,
 } from "./processors";
@@ -79,7 +91,7 @@ export {
   sendPromptWsByTag,
   type WsSendResult,
 } from "./send-ws";
-export { createChannelServer } from "./server";
+export { type ChannelServerOptions, createChannelServer } from "./server";
 export {
   createTransportStats,
   type FrameStat,

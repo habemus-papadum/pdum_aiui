@@ -27,6 +27,7 @@
 import { collectClientMeta, setChannelPort } from "./instrumentation";
 import { isDevEnvironment } from "./overlay";
 import { type Ack, connectIntentSocket, type WebSocketFactory } from "./protocol";
+import { installSelectionWatcher, type SelectionSnapshot } from "./selection";
 
 /** Stable id for the injected host element; also the double-injection guard. */
 const HOST_ID = "aiui-intent-tool-host";
@@ -50,6 +51,13 @@ export interface IntentToolContext {
   setStatus(text: string): void;
   /** Close the tool's panel. */
   closePanel(): void;
+  /**
+   * The on-screen selection currently attached to the panel (the chip), or
+   * undefined. A modality reads this at submit time to ride it on the payload.
+   */
+  selection(): SelectionSnapshot | undefined;
+  /** Drop the attached selection — call after a submission consumes it. */
+  clearSelection(): void;
   /** The channel port in use, if known. */
   readonly port: number | undefined;
 }
@@ -174,6 +182,22 @@ const STYLES = `
   }
   .tab:hover { color: #e8e8ea; }
   .tab.active { background: #2a3140; color: #e8e8ea; }
+  .chiprow { padding: 0 12px 8px; }
+  .chiprow[hidden] { display: none; }
+  .chip {
+    display: flex; align-items: center; gap: 6px; max-width: 100%;
+    border: 1px solid #2a3140; border-radius: 6px; padding: 4px 6px 4px 8px;
+    background: #171b24; color: #cfd3da; font-size: 11px;
+  }
+  .chip-label {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chip-loc { color: #8ab4f8; flex-shrink: 0; }
+  .chip-dismiss {
+    margin-left: auto; flex-shrink: 0; border: none; background: transparent;
+    color: #9aa0aa; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px;
+  }
+  .chip-dismiss:hover { color: #e8e8ea; }
   .body { padding: 0 12px 10px; }
   .status {
     padding: 6px 12px 10px; color: #9aa0aa; font-size: 11px;
@@ -273,12 +297,16 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
 
   const tabs = document.createElement("div");
   tabs.className = "tabs";
+  // The selection chip lives above the modality body: "about: '…' · file:line ✕".
+  const chipRow = document.createElement("div");
+  chipRow.className = "chiprow";
+  chipRow.hidden = true;
   const body = document.createElement("div");
   body.className = "body";
   const status = document.createElement("div");
   status.className = "status";
 
-  panel.append(head, tabs, body, status);
+  panel.append(head, tabs, chipRow, body, status);
   root.append(fab, panel);
   shadowRoot.appendChild(root);
   document.body.appendChild(host);
@@ -288,6 +316,49 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     status.className = `status${isError ? " error" : ""}`;
   };
 
+  // Watch the page's selection so the modality can attach "the thing the user
+  // highlighted" to its submission. Ignore selections inside our own host, and
+  // re-render the chip whenever the snapshot changes (a new selection or a
+  // dismiss). `renderChip` is hoisted so `onChange` can name it here.
+  const watcher = installSelectionWatcher({
+    ignoreWithin: [host],
+    onChange: (snap) => renderChip(snap),
+  });
+
+  function renderChip(snap: SelectionSnapshot | undefined): void {
+    chipRow.replaceChildren();
+    chipRow.hidden = snap === undefined;
+    if (snap === undefined) {
+      return;
+    }
+    const chip = document.createElement("div");
+    chip.className = "chip";
+
+    const label = document.createElement("span");
+    label.className = "chip-label";
+    const trimmed = snap.text.length > 40 ? `${snap.text.slice(0, 40)}…` : snap.text;
+    label.textContent = `about: "${trimmed}"`;
+    chip.appendChild(label);
+
+    if (snap.sourceLoc !== undefined) {
+      const loc = document.createElement("span");
+      loc.className = "chip-loc";
+      loc.textContent = snap.sourceLoc;
+      chip.appendChild(loc);
+    }
+
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "chip-dismiss";
+    dismiss.textContent = "✕";
+    dismiss.setAttribute("aria-label", "Dismiss selection");
+    dismiss.addEventListener("click", () => watcher.clear());
+    chip.appendChild(dismiss);
+
+    chipRow.appendChild(chip);
+  }
+  renderChip(watcher.snapshot());
+
   // One context per modality — openThread speaks that modality's format.
   const contextFor = (modality: IntentModality): IntentToolContext => ({
     port,
@@ -295,6 +366,8 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     closePanel: () => {
       panel.hidden = true;
     },
+    selection: () => watcher.snapshot(),
+    clearSelection: () => watcher.clear(),
     async openThread(): Promise<IntentThread> {
       if (port === undefined) {
         throw new Error(
@@ -372,6 +445,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
           m.cleanup.unmount();
         }
       }
+      watcher.dispose();
       host.remove();
       if (window.__aiuiIntentTool === handle) {
         window.__aiuiIntentTool = undefined;
@@ -397,10 +471,28 @@ export function unmountIntentTool(): void {
 }
 
 /**
+ * The wire form of an attached selection: the snapshot minus `at` (a capture
+ * timestamp the channel doesn't need). Optional fields are omitted when absent
+ * so the payload stays minimal; the channel validates loosely and ignores what
+ * it doesn't recognize.
+ */
+function toSelectionPayload(snap: SelectionSnapshot): Record<string, unknown> {
+  return {
+    text: snap.text,
+    rects: snap.rects,
+    ...(snap.sourceLoc !== undefined ? { sourceLoc: snap.sourceLoc } : {}),
+    ...(snap.cell !== undefined ? { cell: snap.cell } : {}),
+    ...(snap.tex !== undefined ? { tex: snap.tex } : {}),
+    url: snap.url,
+  };
+}
+
+/**
  * The proof-of-concept text modality: a textarea whose submit sends
- * `{ text }` as a single-frame `text-concat` thread. No lowering cleverness —
- * it exists to exercise the full data path (widget → websocket → processor →
- * session) and to be the template for real modalities.
+ * `{ text }` (plus an optional `selection` block when the user highlighted
+ * something on the page) as a single-frame `text-concat` thread. No lowering
+ * cleverness — it exists to exercise the full data path (widget → websocket →
+ * processor → session) and to be the template for real modalities.
  */
 export function textModality(): IntentModality {
   return {
@@ -427,13 +519,18 @@ export function textModality(): IntentModality {
         if (!text) {
           return;
         }
+        // Attach the current on-screen selection (if any) at submit time; a
+        // selection is per-submission, so clear it once the send succeeds.
+        const selection = ctx.selection();
+        const payload = selection ? { text, selection: toSelectionPayload(selection) } : { text };
         ctx.setStatus("sending…");
         try {
           const thread = await ctx.openThread();
-          const ack = await thread.finish({ text });
+          const ack = await thread.finish(payload);
           if (ack.ok) {
             ctx.setStatus("sent ✓ — check the session (🔍 shows the lowering trace)");
             textarea.value = "";
+            ctx.clearSelection();
           } else {
             ctx.setStatus(`send failed: ${ack.error ?? "unknown error"}`);
           }

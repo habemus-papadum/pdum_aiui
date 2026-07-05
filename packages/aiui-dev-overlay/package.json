@@ -14,6 +14,9 @@
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts"
   },
+  "imports": {
+    "#source-locator": "./src/source-locator.ts"
+  },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
@@ -34,6 +37,9 @@
         "types": "./dist/vite.d.ts",
         "import": "./dist/vite.js"
       }
+    },
+    "imports": {
+      "#source-locator": "./dist/source-locator.js"
     }
   },
   "scripts": {
@@ -42,15 +48,21 @@
     "test": "vitest run"
   },
   "peerDependencies": {
+    "@babel/core": "^7.29.0",
     "vite": ">=6"
   },
   "peerDependenciesMeta": {
+    "@babel/core": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@types/babel__core": "^7.20.5",
     "jsdom": "^29.0.0",
     "vite": "^6.4.1"
   }

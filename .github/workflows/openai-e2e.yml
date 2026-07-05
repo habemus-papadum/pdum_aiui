@@ -1,0 +1,48 @@
+name: OpenAI E2E
+
+# The intent pipeline's real-OpenAI micro-tier (packages/aiui/test/openai-pipeline.e2e.ts):
+# one ~2s transcription and one correction-diff chat call against the LIVE API,
+# asserting round-trip shape (HTTP 200, non-empty text, patch parses) — not
+# output quality. Fractions of a cent per run. Like the Claude e2e (e2e.yml)
+# it's too expensive/external for every push, so it runs on a weekly cadence
+# plus manual dispatch. Everything above this (unit tests) stays mocked;
+# everything below (quality, latency curves, model comparisons) lives in the
+# workbench bench/corpus runner, run by humans.
+
+on:
+  schedule:
+    - cron: "30 9 * * 1" # Mondays 09:30 UTC (just after the Claude e2e)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  openai-e2e:
+    runs-on: ubuntu-latest
+    env:
+      # A shared OpenAI key, scoped to a DEDICATED OpenAI project with a hard,
+      # very low monthly spend cap — so a leak or a runaway loop is capped at the
+      # budget, not the card. GitHub withholds secrets from fork PRs (same as
+      # CLAUDE_CODE_OAUTH_TOKEN in ci.yml), so it never reaches untrusted
+      # contributors, and the test skips itself when the key is absent — forks
+      # and offline runs stay green.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # No build step: the test hits OpenAI directly and imports the workbench
+      # correction prompt/patch applier from source (workspace source-first).
+      - name: OpenAI round-trip (transcription + correction diff)
+        run: pnpm exec vitest run --config vitest.e2e.config.ts openai-pipeline.e2e

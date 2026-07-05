@@ -24,9 +24,15 @@
  *                                   `launch`, the launcher-provided session
  *                                   summary (see launch-info.ts)
  *   GET /debug/api/stats            server-side transport counters (see stats.ts)
+ *   GET /debug/api/preview?path=…   an image from disk, for hover previews of
+ *                                   absolute paths mentioned in lowered prompts
+ *                                   (allowlisted roots only — see previewablePath)
  */
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
+import { tmpdir } from "node:os";
+import { extname, isAbsolute, sep } from "node:path";
+import { cacheDir as userCacheDir } from "@habemus-papadum/aiui-util";
 import type { Express } from "express";
 import type { LaunchInfo } from "./launch-info";
 import type { TransportStats } from "./stats";
@@ -46,6 +52,45 @@ const BLOB_TYPES: Record<string, string> = {
 
 /** How long a `/debug/api/info` result is reused before re-resolving. */
 const INFO_CACHE_MS = 10_000;
+
+/** Only images are previewable — anything else is never served. */
+const PREVIEW_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
+
+/**
+ * Resolve a preview request to a servable file, or undefined.
+ *
+ * Lowered prompts reference attachments by **absolute path** (see
+ * archive/channel-attachment-path-encoding.md — the session reads them with
+ * its own tools), and the debug viewer wants to show those images on hover.
+ * Serving arbitrary filesystem paths from a web endpoint is a real hole even
+ * on loopback, so this is deliberately narrow: absolute, image extension, and
+ * — after symlinks resolve — inside one of the `roots` where attachment blobs
+ * legitimately live (the trace cache, the OS temp dir, the aiui user cache).
+ * Everything else is a 404, with no reason disclosed.
+ */
+export function previewablePath(raw: string, roots: string[]): string | undefined {
+  if (!raw || !isAbsolute(raw) || !PREVIEW_EXT.test(raw)) {
+    return undefined;
+  }
+  let real: string;
+  try {
+    real = realpathSync(raw);
+  } catch {
+    return undefined; // missing file
+  }
+  for (const root of roots) {
+    let realRoot: string;
+    try {
+      realRoot = realpathSync(root);
+    } catch {
+      continue;
+    }
+    if (real === realRoot || real.startsWith(realRoot + sep)) {
+      return real;
+    }
+  }
+  return undefined;
+}
 
 /** Mount the debug tool's routes onto the backend's express app. */
 export function registerDebugRoutes(
@@ -83,6 +128,23 @@ export function registerDebugRoutes(
       return;
     }
     res.json(stats.snapshot());
+  });
+
+  // Hover previews for absolute image paths mentioned in prompts/stages.
+  const previewRoots = [cacheDir, tmpdir(), userCacheDir(undefined, { create: false })];
+  app.get("/debug/api/preview", async (req, res) => {
+    const raw = typeof req.query.path === "string" ? req.query.path : "";
+    const file = previewablePath(raw, previewRoots);
+    if (!file) {
+      res.status(404).json({ error: "not previewable" });
+      return;
+    }
+    try {
+      const bytes = await readFile(file);
+      res.type(BLOB_TYPES[extname(file).toLowerCase()] ?? "application/octet-stream").send(bytes);
+    } catch {
+      res.status(404).json({ error: "not previewable" });
+    }
   });
 
   app.get("/debug/api/traces", (_req, res) => {
@@ -162,6 +224,15 @@ const DEBUG_APP_HTML = /* html */ `<!doctype html>
   .stage-body a { color: #8ab4f8; }
   #detail h2 { font-size: 15px; margin: 0 0 2px; }
   #detail .sub { color: #9aa0aa; font-size: 12px; margin-bottom: 16px; }
+  .path { color: #ffd166; border-bottom: 1px dotted #ffd16688; }
+  .path.img { cursor: zoom-in; }
+  #peek {
+    position: fixed; z-index: 10; display: none; pointer-events: none;
+    background: #1f2430; border: 1px solid #3a4152; border-radius: 8px; padding: 4px;
+    box-shadow: 0 8px 30px #0009;
+  }
+  #peek img { display: block; max-width: 380px; max-height: 280px; border-radius: 5px; }
+  #peek .peek-err { color: #9aa0aa; font-size: 11px; padding: 4px 6px; }
 </style>
 </head>
 <body>
@@ -170,7 +241,56 @@ const DEBUG_APP_HTML = /* html */ `<!doctype html>
     Send something from the intent tool to create one.</div></main>
 <script>
 const IMAGE = /\\.(png|jpe?g|gif|webp|svg)$/i;
+// Absolute unix paths (>= one directory deep) inside prompt/stage text. The
+// lowering convention hands the session attachments as absolute paths
+// (archive/channel-attachment-path-encoding.md), so the debugger makes them
+// tangible: highlighted, and — for images under the previewable roots —
+// hover to peek, click to open.
+const ABS_PATH = new RegExp("(^|[\\\\s\\"'({\\\\[=:,])(/(?:[\\\\w.@%+~-]+/)+[\\\\w.@%+~-]+)", "g");
 let active = null;
+
+const peek = document.createElement("div");
+peek.id = "peek";
+document.body.append(peek);
+function previewUrl(path) { return "/debug/api/preview?path=" + encodeURIComponent(path); }
+function showPeek(path, x, y) {
+  peek.replaceChildren();
+  const img = document.createElement("img");
+  img.onerror = () => {
+    const err = document.createElement("div");
+    err.className = "peek-err";
+    err.textContent = "no preview (outside the previewable roots, or gone)";
+    peek.replaceChildren(err);
+  };
+  img.src = previewUrl(path);
+  peek.append(img);
+  peek.style.left = Math.min(x + 14, innerWidth - 400) + "px";
+  peek.style.top = Math.min(y + 14, innerHeight - 300) + "px";
+  peek.style.display = "block";
+}
+function hidePeek() { peek.style.display = "none"; }
+
+// Render text with absolute paths wrapped in interactive spans.
+function renderText(container, text) {
+  let last = 0;
+  ABS_PATH.lastIndex = 0;
+  for (let m = ABS_PATH.exec(text); m; m = ABS_PATH.exec(text)) {
+    const start = m.index + m[1].length;
+    container.append(document.createTextNode(text.slice(last, start)));
+    const path = m[2];
+    const span = document.createElement("span");
+    span.className = IMAGE.test(path) ? "path img" : "path";
+    span.textContent = path;
+    if (IMAGE.test(path)) {
+      span.onmouseenter = (e) => showPeek(path, e.clientX, e.clientY);
+      span.onmouseleave = hidePeek;
+      span.onclick = () => window.open(previewUrl(path), "_blank");
+    }
+    container.append(span);
+    last = start + path.length;
+  }
+  container.append(document.createTextNode(text.slice(last)));
+}
 
 async function refresh() {
   const res = await fetch("/debug/api/traces");
@@ -228,7 +348,7 @@ async function show(id) {
       }
     } else if (s.data !== undefined) {
       const pre = document.createElement("pre");
-      pre.textContent = typeof s.data === "string" ? s.data : JSON.stringify(s.data, null, 2);
+      renderText(pre, typeof s.data === "string" ? s.data : JSON.stringify(s.data, null, 2));
       body.append(pre);
     }
     box.append(head, body);

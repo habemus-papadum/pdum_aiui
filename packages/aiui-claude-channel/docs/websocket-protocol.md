@@ -20,10 +20,13 @@ The `aiui-claude-channel mcp` process runs a small loopback web backend (see the
 | `GET /health` | — | JSON | liveness / registry probe |
 | `POST /prompt` | in | JSON text | one-shot plain-text prompt |
 | `/ws` | in | **binary frames** | streaming, multi-thread, media-capable |
+| `/tools` | both | JSON text | page-declared tools the agent can call (see [The `/tools` endpoint](#the-tools-endpoint)) |
 
 `POST /prompt` is the trivial path — one prompt, one HTTP request. `/ws` is the rich path
-this page documents: many concurrent streams of typed messages, with the payload bytes
-carried raw.
+this page documents first: many concurrent streams of typed messages, with the payload bytes
+carried raw. `/tools` is a separate, request/response JSON protocol — a browser page registers the
+tools it exposes and answers the calls the agent routes back to it; it is documented in its own
+section below.
 
 The server binds `127.0.0.1` on an OS-assigned port and there is **no authentication** —
 it assumes a cooperative, same-host client. It also assumes clients are non-malicious:
@@ -337,6 +340,104 @@ message size. For media larger than that (long audio, big frames), split the pay
 several `data` frames on one thread and reassemble in the processor, marking the last frame
 `fin`. Prefer streaming smaller chunks over buffering one enormous frame.
 
+## The `/tools` endpoint
+
+`/ws` pushes data *into* the session. `/tools` is the other direction of the loop: it lets a
+browser page under development **expose tools to the agent**. A page (via the aiui dev overlay's
+tools bridge) declares the tools it can honestly support — name, description, JSON Schema — and the
+channel surfaces them to the Claude Code session as the MCP tools `page_tools_list` and
+`page_tools_call`. When the agent calls one, the channel routes it back down this socket to the live
+page function, and the result returns the same way.
+
+Unlike `/ws`, this is a **request/response JSON protocol**, not a binary media stream: every message
+is a single WebSocket **text** frame carrying one JSON object. The payloads are tiny (schemas,
+argument objects, results), so the binary framing `/ws` uses would buy nothing here. Like `/ws`,
+there is no authentication — it assumes a cooperative same-host client.
+
+### Directory model
+
+The channel keeps a **directory** of registrations. A registration is one namespace's full tool set
+on one connection:
+
+```ts
+interface PageToolRegistration {
+  clientId: string;        // server-assigned, per connection
+  ns: string;              // page namespace ("morpho", "aztec", …), unique per connection
+  url?: string;            // the page's location.href at registration
+  tab?: TabInfo;           // browser tab identity (correlation hints — see /ws HelloMeta)
+  source?: SourceInfo;     // the page's source root
+  hash: string;            // page-computed content hash of the tool set (identity across reloads)
+  tools: { name: string; description: string; inputSchema?: object }[];
+  registeredAt: string;    // ISO timestamp of the latest registration
+}
+```
+
+A connection may hold **several namespaces**; a page reload **replaces** a namespace's entry rather
+than adding one (identity is `(clientId, ns)`); and a registration is dropped when its socket closes
+(pages don't get to run code when they die). The whole directory lives only in the channel process's
+memory.
+
+### Messages
+
+**client → server**
+
+```jsonc
+// declare the full tool set for one namespace (idempotent; replaces the ns entry)
+{ "v": 1, "type": "register", "ns": "morpho", "url": "http://localhost:5173/",
+  "tab": { "title": "morpho" }, "source": { "root": "/repo/app" }, "hash": "a1b2c3d4",
+  "tools": [ { "name": "set-params", "description": "set the sim parameters",
+              "inputSchema": { "type": "object", "properties": { /* … */ } } } ] }
+
+// answer a call the server routed to this connection
+{ "v": 1, "type": "result", "callId": "…", "ok": true,  "value": <any JSON> }
+{ "v": 1, "type": "result", "callId": "…", "ok": false, "error": "human-readable message" }
+```
+
+**server → client**
+
+```jsonc
+// invoke one of this connection's tools
+{ "v": 1, "type": "call", "callId": "…", "ns": "morpho", "name": "set-params", "args": { /* … */ } }
+
+// acknowledge a register (optional for the client to use)
+{ "v": 1, "type": "registered", "ns": "morpho", "hash": "a1b2c3d4" }
+```
+
+### Two design rules the client must honor
+
+- **Registration is declarative, and forwarding is hashed.** The client always re-declares its
+  *complete* current set for a namespace (on connect, on reload, on HMR graph-swap) and carries a
+  content hash of the schema-relevant fields (name, description, inputSchema — never the function).
+  The server logs a registration line **only when the hash changes**, so the constant churn of dev
+  reloads with an unchanged tool set is invisible to the agent, and the MCP tool list never flickers.
+- **Implementations resolve at call time.** The client holds no function references across reloads —
+  when a `call` arrives it looks the implementing function up in the *current* registry by name.
+  Then HMR replacing every closure changes nothing observable.
+
+### Calls, ambiguity, and lifecycle
+
+`page_tools_call` takes `{ name, args?, ns?, clientId? }`. The directory routes to the **one**
+registration that matches (a tool with that `name`, narrowed by `ns`/`clientId` when given):
+
+- **exactly one match** → the call is sent to that connection; the promise resolves on the matching
+  `result` (default timeout 15 s).
+- **several matches** → the call errors, listing the candidates (`clientId`, `ns`, `url`, `tab`) so
+  the agent can retry with `ns` and/or `clientId`.
+- **no page connected / no tool matches** → a clear error.
+- **the page disconnects before answering** → any in-flight call for that connection rejects.
+
+`GET /health` includes a cheap `pageTools` summary (`{ clients, namespaces, tools }`) and is
+served with `Access-Control-Allow-Origin: *`: browsers log failed websocket handshakes as
+unsuppressable console errors, so a well-behaved client (the dev overlay's tools bridge) probes
+`/health` cross-origin first and only dials `/tools` when the payload advertises `pageTools`.
+The CORS header shipped together with `/tools`, so its absence identifies a pre-`/tools` server.
+
+### Not yet: per-tool MCP registration
+
+This iteration exposes page tools through the two fixed MCP tools (`page_tools_list` /
+`page_tools_call`); it does **not** register each page tool as its own dynamically-named MCP tool.
+That is the natural follow-up.
+
 ## Source & API
 
 The protocol is implemented in a few small, transport-decoupled modules:
@@ -346,6 +447,7 @@ The protocol is implemented in a few small, transport-decoupled modules:
 - **`channel.ts`** — `createChannelConnection`, the per-connection state machine.
 - **`processors.ts`** — `defaultFormats`, `textConcatFormat`.
 - **`client.ts`** — `connectChannelClient`.
-- **`web.ts`** — the HTTP + WebSocket backend that wires it to a live session.
+- **`page-tools.ts`** — `PageToolDirectory`, the `/tools` registry and call router.
+- **`web.ts`** — the HTTP + WebSocket backend that wires both `/ws` and `/tools` to a live session.
 
 See the [API Reference](./api/) for the exported types and functions.

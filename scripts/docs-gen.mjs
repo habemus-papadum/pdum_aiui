@@ -67,6 +67,12 @@ function discoverPackages() {
         description: pkg.description ?? "",
         noPublish: pkg.private === true,
         indexTs: join(dir, "src", "index.ts"),
+        // Every source entry the dev `exports` map exposes ("." plus subpaths
+        // like "./plot", "./site", "./vite") — so the API reference covers the
+        // whole public surface, not just the root barrel.
+        entryPoints: Object.values(pkg.exports ?? {})
+          .filter((v) => typeof v === "string" && v.startsWith("./src/"))
+          .map((v) => join(dir, v)),
         readme: join(dir, "README.md"),
         docsDir: join(dir, "docs"),
       };
@@ -101,7 +107,10 @@ function copyPackageGuides(pkg, outDir) {
 
 /** Run TypeDoc → Markdown for one package. Returns the API sidebar items, or null. */
 function generateApi(pkg, outDir) {
-  if (!existsSync(pkg.indexTs)) return null;
+  const entries = (pkg.entryPoints?.length ? pkg.entryPoints : [pkg.indexTs]).filter((e) =>
+    existsSync(e),
+  );
+  if (entries.length === 0) return null;
   const apiDir = join(outDir, "api");
   const args = [
     typedocBin(),
@@ -109,8 +118,7 @@ function generateApi(pkg, outDir) {
     "typedoc-plugin-markdown",
     "--plugin",
     "typedoc-vitepress-theme",
-    "--entryPoints",
-    pkg.indexTs,
+    ...entries.flatMap((e) => ["--entryPoints", e]),
     "--tsconfig",
     join(pkg.dir, "tsconfig.json"),
     "--out",
@@ -225,6 +233,9 @@ function main() {
           { text: "Remote Development", link: "/guide/remote" },
           { text: "Configuration", link: "/guide/config" },
           { text: "Frontend for Agents", link: "/guide/frontend-for-agents" },
+          { text: "Frontend: Design Choices", link: "/guide/frontend-design-choices" },
+          { text: "Frontend: Hard-Won Details", link: "/guide/frontend-hard-won" },
+      { text: "Frontend: Style Guide", link: "/guide/frontend-style-guide" },
           { text: "⚠️ Read Before Running", link: "/guide/warning" },
         ],
       },

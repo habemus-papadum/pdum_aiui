@@ -4,6 +4,6 @@ import { defineConfig } from "vitest/config";
 // own vite.config.ts. `vitest run` at the root runs the whole monorepo at once.
 export default defineConfig({
   test: {
-    projects: ["packages/*"],
+    projects: ["packages/*", "packages/aiui-dev-overlay/workbench"],
   },
 });

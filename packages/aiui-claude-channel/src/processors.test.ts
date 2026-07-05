@@ -124,6 +124,92 @@ describe("augmentTextPrompt", () => {
   });
 });
 
+describe("augmentTextPrompt with an on-screen selection", () => {
+  it("adds a selection block with attribution and TeX", () => {
+    const prompt = augmentTextPrompt("make this wider", undefined, {
+      text: "reaction-diffusion on the GPU",
+      sourceLoc: "src/ui/App.tsx:32:9",
+      cell: "catalog",
+      tex: "\\partial u/\\partial t",
+    });
+    expect(prompt).toContain(
+      'It concerns this on-screen selection: "reaction-diffusion on the GPU"',
+    );
+    expect(prompt).toContain("authored at src/ui/App.tsx:32:9");
+    expect(prompt).toContain("produced by cell catalog");
+    expect(prompt).toContain("its TeX source: \\partial u/\\partial t");
+    expect(prompt.endsWith("make this wider")).toBe(true);
+  });
+
+  it("includes only the selected text when there is no attribution", () => {
+    const prompt = augmentTextPrompt("hi", undefined, { text: "some words" });
+    expect(prompt).toContain('It concerns this on-screen selection: "some words".');
+    expect(prompt).not.toContain("authored at");
+    expect(prompt).not.toContain("produced by cell");
+    expect(prompt).not.toContain("TeX source");
+  });
+
+  it("leaves the prompt unchanged when the selection carries no text", () => {
+    expect(augmentTextPrompt("hi", undefined, undefined)).toBe("hi");
+    expect(augmentTextPrompt("hi", undefined, {})).toBe("hi");
+  });
+
+  it("composes after the tab/source block and before the user's prompt", () => {
+    const prompt = augmentTextPrompt(
+      "make it bigger",
+      {
+        tab: { url: "http://localhost:5199/", title: "morphogen" },
+        source: { root: "/repo/app" },
+      },
+      { text: "the header", sourceLoc: "src/ui/App.tsx:10:3" },
+    );
+    const srcIdx = prompt.indexOf("/repo/app");
+    const selIdx = prompt.indexOf("on-screen selection");
+    const promptIdx = prompt.indexOf("The user's prompt follows.");
+    expect(srcIdx).toBeGreaterThan(-1);
+    expect(selIdx).toBeGreaterThan(srcIdx);
+    expect(promptIdx).toBeGreaterThan(selIdx);
+    expect(prompt.endsWith("make it bigger")).toBe(true);
+  });
+});
+
+describe("textConcatProcessor with a selection", () => {
+  it("augments the prompt with a selection carried on a frame", async () => {
+    const { processor, prompts } = build();
+    await processor.onMessage(
+      { text: "make this wider", selection: { text: "the plot", sourceLoc: "src/ui/App.tsx:5:1" } },
+      fin,
+    );
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain('on-screen selection: "the plot"');
+    expect(prompts[0]).toContain("authored at src/ui/App.tsx:5:1");
+    expect(prompts[0].endsWith("make this wider")).toBe(true);
+  });
+
+  it("keeps the last selection seen across frames", async () => {
+    const { processor, prompts } = build();
+    await processor.onMessage({ text: "a ", selection: { text: "first" } }, notFin);
+    await processor.onMessage({ text: "b", selection: { text: "second" } }, fin);
+    expect(prompts[0]).toContain('on-screen selection: "second"');
+    expect(prompts[0]).not.toContain("first");
+  });
+
+  it("ignores a malformed selection but still sends the text", async () => {
+    const { processor, prompts } = build();
+    await processor.onMessage({ text: "hello", selection: "nonsense" }, fin);
+    expect(prompts).toEqual(["hello"]);
+  });
+
+  it("sends an identical prompt to the no-selection case when none is present", async () => {
+    const withArg = build();
+    await withArg.processor.onMessage({ text: "just text" }, fin);
+    const withoutSelectionField = build();
+    await withoutSelectionField.processor.onMessage({ text: "just text", selection: {} }, fin);
+    expect(withArg.prompts[0]).toBe("just text");
+    expect(withoutSelectionField.prompts[0]).toBe("just text");
+  });
+});
+
 describe("defaultFormats", () => {
   it("registers text-concat with the JSON codec", () => {
     expect(defaultFormats().get("text-concat")).toBe(textConcatFormat);

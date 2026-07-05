@@ -1,8 +1,9 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { connectChannelClient } from "./client";
+import { previewablePath } from "./debug";
 import type { LaunchInfo } from "./launch-info";
 import { createTraceStore } from "./trace";
 import { startWebServer, type WebServer } from "./web";
@@ -140,5 +141,65 @@ describe("web backend with traceDir", () => {
     server = await startWebServer({ onPrompt: (t) => prompts.push(t) });
     const res = await fetch(`http://127.0.0.1:${server.port}/debug`);
     expect(res.status).toBe(404);
+  });
+
+  it("serves image previews only from the allowlisted roots", async () => {
+    const { cache, port } = await startTraced();
+    const png = [0x89, 0x50, 0x4e, 0x47];
+
+    // Inside the trace cache → served with an image content type.
+    writeFileSync(join(cache, "shot_1.png"), new Uint8Array(png));
+    const ok = await fetch(
+      `http://127.0.0.1:${port}/debug/api/preview?path=${encodeURIComponent(join(cache, "shot_1.png"))}`,
+    );
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toContain("image/png");
+
+    // Inside the OS temp dir (the other legitimate attachment home) → served.
+    const tmp = join(tmpdir(), `aiui-preview-${process.pid}.png`);
+    writeFileSync(tmp, new Uint8Array(png));
+    const tmpRes = await fetch(
+      `http://127.0.0.1:${port}/debug/api/preview?path=${encodeURIComponent(tmp)}`,
+    );
+    expect(tmpRes.status).toBe(200);
+    rmSync(tmp, { force: true });
+
+    // Outside every root, non-image, relative, missing → uniformly 404.
+    for (const bad of [
+      join(process.cwd(), "package.json"),
+      join(cache, "trace.json"),
+      "relative/shot.png",
+      join(cache, "missing.png"),
+    ]) {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/debug/api/preview?path=${encodeURIComponent(bad)}`,
+      );
+      expect(res.status, bad).toBe(404);
+    }
+  });
+});
+
+describe("previewablePath", () => {
+  it("requires absolute, image-suffixed, existing files under a root", () => {
+    const root = mkdtempSync(join(tmpdir(), "aiui-prev-"));
+    writeFileSync(join(root, "a.png"), "x");
+    writeFileSync(join(root, "a.txt"), "x");
+    expect(previewablePath(join(root, "a.png"), [root])).toBeTruthy();
+    expect(previewablePath(join(root, "a.txt"), [root])).toBeUndefined();
+    expect(previewablePath("a.png", [root])).toBeUndefined();
+    expect(previewablePath(join(root, "nope.png"), [root])).toBeUndefined();
+    expect(previewablePath(join(root, "a.png"), [join(root, "sub")])).toBeUndefined();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("is not fooled by .. traversal out of a root", () => {
+    const root = mkdtempSync(join(tmpdir(), "aiui-prev-"));
+    const outside = mkdtempSync(join(tmpdir(), "aiui-prev-out-"));
+    writeFileSync(join(outside, "secret.png"), "x");
+    expect(
+      previewablePath(join(root, "..", basename(outside), "secret.png"), [root]),
+    ).toBeUndefined();
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   });
 });

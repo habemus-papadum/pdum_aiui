@@ -20,6 +20,7 @@ import { type RawData, WebSocketServer } from "ws";
 import { createChannelConnection, type FormatRegistry } from "./channel";
 import { registerDebugRoutes } from "./debug";
 import type { LaunchInfo } from "./launch-info";
+import { PageToolDirectory } from "./page-tools";
 import { defaultFormats } from "./processors";
 import { createTransportStats } from "./stats";
 import { createTraceStore } from "./trace";
@@ -47,6 +48,13 @@ export interface WebServerOptions {
    * etc. — see launch-info.ts), surfaced at `GET /debug/api/info`.
    */
   launchInfo?: LaunchInfo;
+  /**
+   * The registry of in-browser tools the `/tools` websocket feeds and the MCP
+   * layer reads (see {@link PageToolDirectory}). Pass the same instance the MCP
+   * server was built with so tool calls reach live pages; omitted, a fresh one
+   * is created (and returned on the handle).
+   */
+  pageTools?: PageToolDirectory;
 }
 
 /** Normalize `ws`'s several binary shapes into a single Uint8Array frame. */
@@ -63,6 +71,12 @@ const toFrame = (data: RawData): Uint8Array => {
 export interface WebServer {
   /** The port the backend bound to (chosen by the OS). */
   port: number;
+  /**
+   * The page-tool registry the `/tools` websocket feeds. The MCP layer reads
+   * and drives it; surfaced here so a caller that let the server create one can
+   * still reach it.
+   */
+  pageTools: PageToolDirectory;
   /** Stop accepting connections and release the port. */
   close: () => Promise<void>;
 }
@@ -77,8 +91,17 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   const app = express();
   app.use(express.json());
 
+  const pageTools = options.pageTools ?? new PageToolDirectory();
+
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, pid: process.pid, ppid: process.ppid });
+    // Readable cross-origin: the dev overlay's tools bridge probes this route
+    // from the app's dev-server origin before dialing `/tools` (the browser
+    // logs failed websocket handshakes unsuppressably, so it never dials
+    // blind). The payload is harmless loopback metadata, and the header's
+    // presence is part of the capability signal — it ships together with the
+    // `/tools` endpoint, so a CORS-refused probe means an older channel.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json({ ok: true, pid: process.pid, ppid: process.ppid, pageTools: pageTools.summary() });
   });
 
   app.post("/prompt", async (req, res) => {
@@ -107,7 +130,24 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     formats = withTracing(formats, createTraceStore(options.traceDir));
     registerDebugRoutes(app, options.traceDir, stats, options.launchInfo);
   }
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  // Two websocket endpoints share one HTTP server: `/ws` (the binary
+  // stream-processor protocol) and `/tools` (the JSON page-tool protocol). When
+  // several `WebSocketServer`s attach via the `server` option they fight over
+  // the upgrade, so both run in `noServer` mode and one upgrade listener routes
+  // by path (anything else is dropped).
+  const wss = new WebSocketServer({ noServer: true });
+  const toolsWss = new WebSocketServer({ noServer: true });
+  httpServer.on("upgrade", (req, socket, head) => {
+    const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+    if (pathname === "/ws") {
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    } else if (pathname === "/tools") {
+      toolsWss.handleUpgrade(req, socket, head, (ws) => toolsWss.emit("connection", ws, req));
+    } else {
+      socket.destroy();
+    }
+  });
+
   wss.on("connection", (socket) => {
     stats.connectionOpened();
     socket.on("close", () => stats.connectionClosed());
@@ -137,6 +177,33 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     });
   });
 
+  // The `/tools` endpoint: a page declares its tool set as JSON text frames and
+  // answers the calls the directory routes to it. Unlike `/ws` this is a plain
+  // JSON protocol — the payloads are tiny schemas and results, not media.
+  toolsWss.on("connection", (socket) => {
+    const clientId = pageTools.addConnection((message) => {
+      if (socket.readyState === socket.OPEN) {
+        socket.send(JSON.stringify(message));
+      }
+    });
+    socket.on("message", (data, isBinary) => {
+      if (isBinary) {
+        return; // the tools protocol is JSON text only
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(data.toString());
+      } catch {
+        return; // ignore garbage from a cooperative same-host client
+      }
+      pageTools.handleClientMessage(clientId, parsed);
+    });
+    socket.on("close", () => pageTools.removeConnection(clientId));
+    // A socket error is followed by `close`; swallow it so it doesn't crash the
+    // process (Node treats an unhandled 'error' on the socket as fatal).
+    socket.on("error", () => {});
+  });
+
   await new Promise<void>((resolveListen, rejectListen) => {
     httpServer.once("error", rejectListen);
     httpServer.listen(0, "127.0.0.1", () => {
@@ -150,8 +217,8 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   const close = (): Promise<void> =>
     new Promise((resolveClose) => {
-      wss.close(() => httpServer.close(() => resolveClose()));
+      toolsWss.close(() => wss.close(() => httpServer.close(() => resolveClose())));
     });
 
-  return { port, close };
+  return { port, pageTools, close };
 }

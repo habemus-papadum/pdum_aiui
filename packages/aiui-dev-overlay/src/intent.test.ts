@@ -14,6 +14,19 @@ afterEach(() => {
 });
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Make `text` the live document selection over its first text node. */
+function selectText(el: Element, start = 0, end?: number): void {
+  const node = el.firstChild as Text;
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, end ?? node.textContent?.length ?? 0);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+}
 
 describe("mountIntentTool", () => {
   it("mounts a shadow host with the fab and hidden panel", () => {
@@ -154,5 +167,70 @@ describe("textModality", () => {
     (handle.shadowRoot?.querySelector(".send") as HTMLButtonElement).click();
     await flush();
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("textModality with an on-screen selection", () => {
+  afterEach(() => {
+    document.body.querySelector("p")?.remove();
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it("shows a chip for the selection and rides it on the submit payload", async () => {
+    const p = document.createElement("p");
+    p.setAttribute("data-source-loc", "src/ui/App.tsx:32:9");
+    p.setAttribute("data-cell", "catalog");
+    p.textContent = "reaction-diffusion on the GPU";
+    document.body.appendChild(p);
+
+    const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
+    const handle = mountIntentTool({ force: true, port: 4321, webSocketFactory: factory });
+    handle.open();
+
+    // Select prose in the page; the watcher debounces (~150ms) then shows a chip.
+    selectText(p, 0, 18); // "reaction-diffusion"
+    await wait(200);
+
+    const chip = handle.shadowRoot?.querySelector(".chip");
+    expect(chip).not.toBeNull();
+    expect(chip?.querySelector(".chip-label")?.textContent).toContain("reaction-diffusion");
+    expect(chip?.querySelector(".chip-loc")?.textContent).toBe("src/ui/App.tsx:32:9");
+
+    // Submit: the data frame must carry the selection block (minus `at`).
+    const textarea = handle.shadowRoot?.querySelector("textarea") as HTMLTextAreaElement;
+    textarea.value = "make this wider";
+    textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    await flush();
+
+    expect(sent).toHaveLength(2); // hello + data
+    const data = decodeFrame(sent[1]);
+    const payload = jsonCodec.decode(data.payload) as {
+      text: string;
+      selection?: Record<string, unknown>;
+    };
+    expect(payload.text).toBe("make this wider");
+    expect(payload.selection).toMatchObject({
+      text: "reaction-diffusion",
+      sourceLoc: "src/ui/App.tsx:32:9",
+      cell: "catalog",
+    });
+    expect(payload.selection).not.toHaveProperty("at");
+
+    // A submitted selection is consumed: the chip disappears.
+    expect(handle.shadowRoot?.querySelector(".chip")).toBeNull();
+  });
+
+  it("sends a bare { text } payload when nothing is selected", async () => {
+    const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
+    const handle = mountIntentTool({ force: true, port: 4321, webSocketFactory: factory });
+    handle.open();
+    const textarea = handle.shadowRoot?.querySelector("textarea") as HTMLTextAreaElement;
+    textarea.value = "no selection here";
+    textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    await flush();
+    const payload = jsonCodec.decode(decodeFrame(sent[1]).payload);
+    expect(payload).toEqual({ text: "no selection here" });
   });
 });

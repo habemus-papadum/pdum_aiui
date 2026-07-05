@@ -18,6 +18,27 @@ import { traceOf } from "./tracing";
 interface TextConcatPayload {
   /** A chunk to append to the thread's accumulated text. */
   text?: string;
+  /** An optional on-screen selection the user is asking about. */
+  selection?: unknown;
+}
+
+/**
+ * An on-screen selection a `text-concat` frame may carry (the intent tool's
+ * `SelectionSnapshot` minus its capture timestamp). Everything is optional; the
+ * augmentation only uses `text` and the attribution fields, and drops the whole
+ * block when there is no text.
+ */
+export interface SelectionContext {
+  /** The selected text. */
+  text?: string;
+  /** `data-source-loc` (`file:line:col`) of the selection's origin element. */
+  sourceLoc?: string;
+  /** `data-cell` (dataflow node) of the selection's origin element. */
+  cell?: string;
+  /** TeX source when the selection is rendered mathematics. */
+  tex?: string;
+  /** The page URL the selection came from. */
+  url?: string;
 }
 
 /** Validate/narrow a decoded `text-concat` payload (may be empty on a bare fin). */
@@ -36,6 +57,40 @@ const asTextChunk = (payload: unknown): string | undefined => {
 };
 
 /**
+ * Pull the optional `selection` block out of a payload, loosely: unknown/wrong
+ * shapes yield undefined rather than throwing (a selection is enrichment, never
+ * a reason to reject a frame), and only string fields we understand are kept.
+ * Returns undefined unless there is selection text to talk about.
+ */
+const asSelection = (payload: unknown): SelectionContext | undefined => {
+  if (payload === null || typeof payload !== "object") {
+    return undefined;
+  }
+  const { selection } = payload as Record<string, unknown>;
+  if (selection === null || typeof selection !== "object") {
+    return undefined;
+  }
+  const raw = selection as Record<string, unknown>;
+  const str = (value: unknown): string | undefined =>
+    typeof value === "string" && value !== "" ? value : undefined;
+  const text = str(raw.text);
+  if (text === undefined) {
+    return undefined;
+  }
+  const sourceLoc = str(raw.sourceLoc);
+  const cell = str(raw.cell);
+  const tex = str(raw.tex);
+  const url = str(raw.url);
+  return {
+    text,
+    ...(sourceLoc !== undefined ? { sourceLoc } : {}),
+    ...(cell !== undefined ? { cell } : {}),
+    ...(tex !== undefined ? { tex } : {}),
+    ...(url !== undefined ? { url } : {}),
+  };
+};
+
+/**
  * Wrap a user's text in the context the connection's hello provided: which
  * browser tab it came from (with the routing caveats an agent needs) and where
  * the page's source code lives. Returns the text unchanged when there is no
@@ -46,7 +101,11 @@ const asTextChunk = (payload: unknown): string | undefined => {
  * namespaces, and only `list_pages` can produce the last one (see the
  * session-browser skill, which this preamble points the agent at).
  */
-export function augmentTextPrompt(text: string, meta: HelloMeta | undefined): string {
+export function augmentTextPrompt(
+  text: string,
+  meta: HelloMeta | undefined,
+  selection?: SelectionContext,
+): string {
   const tab = meta?.tab;
   const source = meta?.source;
   const sections: string[] = [];
@@ -81,6 +140,25 @@ export function augmentTextPrompt(text: string, meta: HelloMeta | undefined): st
     sections.push(`The source code of the web app in that tab is located at: ${source.root}`);
   }
 
+  if (selection?.text) {
+    const attribution: string[] = [];
+    if (selection.sourceLoc !== undefined) {
+      attribution.push(`authored at ${selection.sourceLoc}`);
+    }
+    if (selection.cell !== undefined) {
+      attribution.push(`produced by cell ${selection.cell}`);
+    }
+    const lines = [
+      `It concerns this on-screen selection: "${selection.text}"${
+        attribution.length > 0 ? ` (${attribution.join("; ")})` : ""
+      }.`,
+    ];
+    if (selection.tex !== undefined) {
+      lines.push(`The selected content is rendered mathematics; its TeX source: ${selection.tex}`);
+    }
+    sections.push(lines.join("\n"));
+  }
+
   if (sections.length === 0) {
     return text;
   }
@@ -104,16 +182,22 @@ export function augmentTextPrompt(text: string, meta: HelloMeta | undefined): st
  */
 export const textConcatProcessor: StreamProcessorFactory = (ctx) => {
   const parts: string[] = [];
+  // A selection is per-submission: keep the last one any frame carried before fin.
+  let selection: SelectionContext | undefined;
   return {
     async onMessage(payload: unknown, meta) {
       const text = asTextChunk(payload as TextConcatPayload);
       if (text !== undefined) {
         parts.push(text);
       }
+      const seen = asSelection(payload);
+      if (seen !== undefined) {
+        selection = seen;
+      }
       if (meta.fin) {
         const userText = parts.join("");
         if (userText !== "") {
-          const prompt = augmentTextPrompt(userText, ctx.hello);
+          const prompt = augmentTextPrompt(userText, ctx.hello, selection);
           if (prompt !== userText) {
             // Expose the augmentation as a pipeline stage: user text in,
             // context-wrapped prompt out (the trace's `output` stage).

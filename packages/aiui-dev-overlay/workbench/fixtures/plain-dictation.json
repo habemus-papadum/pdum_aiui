@@ -1,0 +1,199 @@
+[
+  {
+    "at": 1783268794964,
+    "type": "armed",
+    "on": true
+  },
+  {
+    "at": 1783268795027,
+    "type": "thread-open",
+    "trigger": "talk"
+  },
+  {
+    "at": 1783268795027,
+    "type": "talk-start",
+    "segment": 1
+  },
+  {
+    "at": 1783268795328,
+    "type": "talk-end",
+    "segment": 1,
+    "ms": 301
+  },
+  {
+    "at": 1783268795355,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make"
+  },
+  {
+    "at": 1783268795381,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the"
+  },
+  {
+    "at": 1783268795408,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline"
+  },
+  {
+    "at": 1783268795435,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve"
+  },
+  {
+    "at": 1783268795462,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a"
+  },
+  {
+    "at": 1783268795488,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit"
+  },
+  {
+    "at": 1783268795515,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker"
+  },
+  {
+    "at": 1783268795542,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and"
+  },
+  {
+    "at": 1783268795569,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color"
+  },
+  {
+    "at": 1783268795596,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color it"
+  },
+  {
+    "at": 1783268795622,
+    "type": "transcript-delta",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color it amber"
+  },
+  {
+    "at": 1783268795622,
+    "type": "transcript-final",
+    "segment": 1,
+    "text": "make the baseline curve a bit thicker and color it amber",
+    "latencyMs": 293.2000002861023,
+    "model": "mock"
+  },
+  {
+    "at": 1783268795739,
+    "type": "talk-start",
+    "segment": 2
+  },
+  {
+    "at": 1783268796040,
+    "type": "talk-end",
+    "segment": 2,
+    "ms": 301
+  },
+  {
+    "at": 1783268796068,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the"
+  },
+  {
+    "at": 1783268796095,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend"
+  },
+  {
+    "at": 1783268796122,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps"
+  },
+  {
+    "at": 1783268796149,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the"
+  },
+  {
+    "at": 1783268796175,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot"
+  },
+  {
+    "at": 1783268796202,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on"
+  },
+  {
+    "at": 1783268796228,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow"
+  },
+  {
+    "at": 1783268796255,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow screens"
+  },
+  {
+    "at": 1783268796282,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow screens can"
+  },
+  {
+    "at": 1783268796309,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow screens can you"
+  },
+  {
+    "at": 1783268796338,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow screens can you move"
+  },
+  {
+    "at": 1783268796366,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow screens can you move it"
+  },
+  {
+    "at": 1783268796395,
+    "type": "transcript-delta",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow screens can you move it below"
+  },
+  {
+    "at": 1783268796397,
+    "type": "transcript-final",
+    "segment": 2,
+    "text": "the legend overlaps the plot on narrow screens can you move it below",
+    "latencyMs": 355.69999980926514,
+    "model": "mock"
+  },
+  {
+    "at": 1783268796519,
+    "type": "thread-close",
+    "reason": "send"
+  }
+]
