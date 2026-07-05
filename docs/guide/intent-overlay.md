@@ -12,7 +12,6 @@ knobs. The [Web Intent Tool](./web-intent-tool) page is the design (how the thre
 collection, lowering, debugging — fit together and how a modality plugs in); this page assumes
 you already have the tool mounted (see [Getting Started](./getting-started)) and want to drive it.
 
-<!-- TODO(P6): retake /intent-tool.png to show the multimodal widget — an ink stroke + the streaming transcript preview + a shot thumbnail — over the demo app. Capture via the session browser. -->
 ![The intent overlay over a demo app](/intent-tool.png)
 
 ## Arming: the overlay stays out of your way until you call it
@@ -144,7 +143,6 @@ tab and source context that every intent submission carries (see
 is prefixed just as it is for text. Every stage of that lowering is recorded as a **trace** you
 can inspect in the debugger:
 
-<!-- TODO(P6): retake /lowering-debugger.png to show a multimodal trace — the merged event stream, the composed Option-C body with {shot_N} tokens, and the meta path hover-preview. Capture via the session browser. -->
 ![The lowering debugger showing a multimodal trace](/lowering-debugger.png)
 
 ## Configuring the pipeline

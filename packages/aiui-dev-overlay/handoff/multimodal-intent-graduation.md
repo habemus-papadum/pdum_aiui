@@ -8,11 +8,16 @@
 > (embedded by the lab and the DevTools extension); **P5** the workbench slimmed into the lab
 > (inspector → shared debug-ui; keeps scenery, settings drawer over `IntentPipelineConfig`,
 > dev-proxy `openai` impls, `bench/`, `fixtures/`). Companion work (launcher OpenAI preflight +
-> micro-e2e tier) landed alongside. **P6** docs drafted (`docs/guide/intent-overlay.md` exists;
-> lab docs role-changed) — **screenshots still pending.** Open items: **T1–T7 dogfooding** (the
-> design verdict — see `workbench/docs/open-questions.md`); the advanced-config raw-JSON panel
-> (deferred); per-tool dynamic MCP registration (prior handoff); the CDP-capture experiment
-> (dropped for now in favour of `getDisplayMedia`). This document is the plan of record. From the
+> micro-e2e tier) landed alongside. **P6** complete: `docs/guide/intent-overlay.md`
+> (sidebar-wired), web-intent-tool/getting-started/config trued to the landed widget, lab docs
+> role-changed, and both screenshots retaken from live runs (`intent-tool.png` — the multimodal
+> widget mid-turn; `lowering-debugger.png` — a real intent-v1 trace with the Option-C meta and
+> path hover-peek). The advanced-config raw-JSON panel also shipped (gear in the widget), and a
+> live-found regression (mock dictation gated on a mic permission prompt) was fixed with a
+> regression test. Open items: **T1–T7 dogfooding** (the design verdict — see
+> `workbench/docs/open-questions.md`); a curated visible-toggles row (deliberately waiting on
+> that dogfooding); per-tool dynamic MCP registration (prior handoff); the CDP-capture
+> experiment (dropped for now in favour of `getDisplayMedia`). This document is the plan of record. From the
 > aiui-main session.
 
 ## The goal, in one paragraph
