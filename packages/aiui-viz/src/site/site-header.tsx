@@ -38,7 +38,11 @@ export function SiteHeader(props: SiteHeaderProps) {
   return (
     <header class="site-header">
       <div class="site-header-inner">
-        <a class="site-wordmark" href={props.brand.href ?? "./"} aria-label={`${props.brand.name} home`}>
+        <a
+          class="site-wordmark"
+          href={props.brand.href ?? "./"}
+          aria-label={`${props.brand.name} home`}
+        >
           <b>{props.brand.name}</b>
           {props.brand.suffix !== undefined ? <> · {props.brand.suffix}</> : null}
         </a>

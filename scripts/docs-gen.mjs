@@ -236,7 +236,7 @@ function main() {
           { text: "Frontend for Agents", link: "/guide/frontend-for-agents" },
           { text: "Frontend: Design Choices", link: "/guide/frontend-design-choices" },
           { text: "Frontend: Hard-Won Details", link: "/guide/frontend-hard-won" },
-      { text: "Frontend: Style Guide", link: "/guide/frontend-style-guide" },
+          { text: "Frontend: Style Guide", link: "/guide/frontend-style-guide" },
           { text: "⚠️ Read Before Running", link: "/guide/warning" },
         ],
       },

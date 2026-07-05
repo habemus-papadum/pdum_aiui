@@ -98,7 +98,6 @@ export function RegimeAtlas() {
                 <For each={regimes()}>
                   {(r) => (
                     // biome-ignore lint/a11y/noStaticElementInteractions: same pointer-first affordance; regime rows in the table are focusable
-                    // biome-ignore lint/a11y/useKeyWithClickEvents: see above
                     <g
                       class="atlas-point"
                       onClick={(e) => {

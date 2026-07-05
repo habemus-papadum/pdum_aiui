@@ -33,7 +33,7 @@
     "workbench": "pnpm --filter @habemus-papadum/aiui-workbench dev"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.0.0",
+    "@biomejs/biome": "2.5.2",
     "@types/node": "^26.1.0",
     "tsx": "^4.22.5",
     "typedoc": "^0.28.19",

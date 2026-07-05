@@ -67,7 +67,9 @@ function harness(format: ChannelFormat): Harness {
     // The client's terminator: a data frame with fin, an EMPTY payload, and NO
     // chunk descriptor.
     bareFin: () =>
-      conn.handleFrame(encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId: TID, fin: true })),
+      conn.handleFrame(
+        encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId: TID, fin: true }),
+      ),
     prompts,
     pushed,
   };
