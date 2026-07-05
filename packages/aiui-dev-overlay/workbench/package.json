@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-workbench",
-  "version": "0.1.0+dev",
+  "version": "0.2.0+dev",
   "description": "Interactive design workbench for the multimodal intent layer — never published.",
   "private": true,
   "type": "module",
