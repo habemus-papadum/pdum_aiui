@@ -16,6 +16,7 @@
  *    corrections are patches, not string replaces.
  */
 
+import { type CallCost, priceCall, usageFromChatCompletions } from "./cost";
 import type { FetchLike } from "./transcribe";
 
 /** The transcript + selection + instruction a corrector diffs. */
@@ -33,6 +34,8 @@ export interface CorrectionDiff {
   patch: string;
   model: string;
   latencyMs: number;
+  /** What the diff call cost (absent for the mock / when the API sent no usage). */
+  cost?: CallCost;
 }
 
 /** Turns a correction request into a V4A patch. */
@@ -140,6 +143,7 @@ export function openaiCorrector(options: OpenAiCorrectorOptions): Corrector {
       });
       const payload = (await res.json()) as {
         error?: { message?: string };
+        usage?: unknown;
         choices?: Array<{ message?: { content?: string } }>;
       };
       const content = payload.choices?.[0]?.message?.content;
@@ -149,7 +153,13 @@ export function openaiCorrector(options: OpenAiCorrectorOptions): Corrector {
       if (!content.includes("*** Begin Patch")) {
         throw new Error(`model did not return a patch: ${content.slice(0, 120)}`);
       }
-      return { patch: content, model, latencyMs: performance.now() - started };
+      const usage = usageFromChatCompletions(payload.usage);
+      return {
+        patch: content,
+        model,
+        latencyMs: performance.now() - started,
+        ...(usage ? { cost: priceCall("openai", model, usage) } : {}),
+      };
     },
   };
 }

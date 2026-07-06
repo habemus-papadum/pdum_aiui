@@ -79,6 +79,23 @@ export interface TraceManifest {
   startedAt: string;
   endedAt?: string;
   status?: "completed" | "abandoned";
+  /**
+   * A one-line gloss of the turn, written **after** the fact by the lowering
+   * processor once the prompt has been sent (see {@link TraceHandle.setSummary}
+   * and summarize.ts). Absent on unsummarized traces (cancelled/empty turns, a
+   * keyless channel, or a run whose summary call failed or is still in flight).
+   * Rides the list route so viewers can title rows with it.
+   */
+  summary?: string;
+  /**
+   * Running roll-up (USD) of what the turn's own model calls cost —
+   * transcription, correction, TTS, realtime responses, the summary gloss.
+   * Accumulated via {@link TraceHandle.addCost}; absent when nothing was
+   * accounted (mock tiers, keyless runs, unpriced models). Estimated
+   * components (see cost.ts) are included, so treat it as a floor. Rides the
+   * list route like {@link summary}.
+   */
+  costUsd?: number;
   stages: TraceStage[];
 }
 
@@ -100,6 +117,21 @@ export interface TraceHandle {
     bytes: Uint8Array,
     filename: string,
   ): string | undefined;
+  /**
+   * Set (or replace) the manifest's one-line {@link TraceManifest.summary}.
+   * Unlike {@link record}, this works **after** the trace has ended — the
+   * summary is generated off the hot path, well after the turn was sent and the
+   * trace finalized (see summarize.ts, intent-v1.ts). Best-effort like the rest:
+   * a vanished trace dir just means no summary lands.
+   */
+  setSummary(text: string): void;
+  /**
+   * Add one model call's spend (USD) to the manifest's {@link TraceManifest.costUsd}
+   * roll-up. Like {@link setSummary}, deliberately usable **after** the trace has
+   * ended — the summary gloss (the last paid call of a turn) resolves off the hot
+   * path, after finalization. Non-finite/non-positive amounts are ignored.
+   */
+  addCost(usd: number): void;
   /** Finalize the manifest. Idempotent. */
   end(status?: "completed" | "abandoned"): void;
 }
@@ -161,6 +193,8 @@ const noopHandle = (id: string, dir: string): TraceHandle => ({
   dir,
   record() {},
   recordBlob: () => undefined,
+  setSummary() {},
+  addCost() {},
   end() {},
 });
 
@@ -228,6 +262,24 @@ export function createTraceStore(cacheDir: string, session?: string): TraceStore
         manifest.stages.push({ at: new Date().toISOString(), ...stage, file: filename });
         flush();
         return file;
+      },
+      setSummary(text) {
+        // Deliberately *not* guarded by `ended`: the summary is written after
+        // the turn is sent and the trace finalized. We are the sole writer of
+        // this manifest, so the in-memory object (which already carries
+        // endedAt/status) is authoritative — set the field and rewrite. A
+        // vanished dir is swallowed by flush, so a pruned/cleaned trace no-ops.
+        manifest.summary = text;
+        flush();
+      },
+      addCost(usd) {
+        // Same post-end latitude as setSummary (the summary's own cost is the
+        // canonical late arrival); same sole-writer reasoning.
+        if (!Number.isFinite(usd) || usd <= 0) {
+          return;
+        }
+        manifest.costUsd = (manifest.costUsd ?? 0) + usd;
+        flush();
       },
       end(status = "completed") {
         if (ended) {

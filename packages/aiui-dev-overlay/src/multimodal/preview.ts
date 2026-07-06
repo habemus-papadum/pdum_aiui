@@ -33,6 +33,7 @@
  */
 import {
   applyCorrectionToLines,
+  type CorrectionTarget,
   type DiffRun,
   type Engine,
   type IntentEvent,
@@ -314,17 +315,21 @@ export class Preview {
     // description mode. (Sending the full text as the "selected span" taught
     // the model inverted semantics — "keep the first sentence" deleted it —
     // and made patches huge and fragile.)
-    let target: { from: number; to: number; original: string } | undefined;
+    // Every fix is scoped to the ACTIVE CHUNK: the corrector model sees only
+    // its lines, and "replace across everything" means across this chunk —
+    // never across an image boundary into text the user isn't looking at.
+    const scope = this.selectedChunkWindow();
+    let target: CorrectionTarget | undefined;
     const selStart = this.editArea.selectionStart ?? 0;
     const selEnd = this.editArea.selectionEnd ?? 0;
     if (selEnd > selStart) {
       const original = this.editArea.value.slice(selStart, selEnd).trim();
       if (original !== "") {
-        target = { from: selStart, to: selEnd, original };
+        target = { from: selStart, to: selEnd, original, ...(scope ? { scope } : {}) };
       }
     }
     if (!target && this.editArea.value.trim() !== "") {
-      target = { from: 0, to: 0, original: "" };
+      target = { from: 0, to: 0, original: "", ...(scope ? { scope } : {}) };
     }
     const instruction = this.correctionInput.value.trim();
     this.correctionInput.value = "";
@@ -418,6 +423,24 @@ export class Preview {
   private selectedChunk(): Piece[] {
     const index = this.selectedChunkIndex();
     return index === -1 ? [] : this.textChunks()[index];
+  }
+
+  /**
+   * The active chunk's window over the transcript's TEXT-ITEM line sequence
+   * ([fromLine, toLine)) — the coordinates `composeIntent`'s docLines use, so
+   * a correction scoped here means the same lines on both sides of the wire.
+   */
+  private selectedChunkWindow(): { fromLine: number; toLine: number } | undefined {
+    const chunks = this.textChunks();
+    const index = this.selectedChunkIndex();
+    if (index === -1) {
+      return undefined;
+    }
+    let fromLine = 0;
+    for (let i = 0; i < index; i++) {
+      fromLine += chunks[i].length;
+    }
+    return { fromLine, toLine: fromLine + chunks[index].length };
   }
 
   /** Switch the editor to another chunk (folding pending edits first). */

@@ -53,7 +53,14 @@ describe("web backend with traceDir", () => {
     expect(prompts).toEqual(["traced prompt"]);
 
     const list = (await (await fetch(`http://127.0.0.1:${port}/debug/api/traces`)).json()) as {
-      traces: Array<{ id: string; format: string; threadId: string; status?: string }>;
+      traces: Array<{
+        id: string;
+        format: string;
+        threadId: string;
+        status?: string;
+        stageCount?: number;
+        stages?: unknown[];
+      }>;
     };
     expect(list.traces).toHaveLength(1);
     const [summary] = list.traces;
@@ -62,6 +69,10 @@ describe("web backend with traceDir", () => {
       threadId: "thread-42",
       status: "completed",
     });
+    // The list route is slimmed: a stageCount, not the (potentially megabyte)
+    // full stages array — those come from the per-trace routes below.
+    expect(summary.stageCount).toBe(3);
+    expect(summary.stages).toBeUndefined();
 
     const detail = (await (
       await fetch(`http://127.0.0.1:${port}/debug/api/traces/${summary.id}`)

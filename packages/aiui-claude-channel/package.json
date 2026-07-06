@@ -44,6 +44,7 @@
     "@habemus-papadum/aiui-util": "workspace:^",
     "@inquirer/prompts": "^7.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@pydantic/genai-prices": "^0.0.69",
     "commander": "^15.0.0",
     "express": "^5.1.0",
     "ws": "^8.18.0"

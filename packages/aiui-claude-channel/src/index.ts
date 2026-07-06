@@ -175,6 +175,14 @@ export {
   type TransportStats,
 } from "./stats";
 export {
+  DEFAULT_SUMMARY_MODEL,
+  type OpenAiSummarizerOptions,
+  openaiSummarizer,
+  SUMMARY_SYSTEM_PROMPT,
+  type Summarizer,
+  summaryPromptInput,
+} from "./summarize";
+export {
   type ChannelInfo,
   type ChannelToolHandles,
   collectChannelInfo,

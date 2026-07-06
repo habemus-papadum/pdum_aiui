@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPatch, wordDiff } from "./patch";
+import { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
 
 const patch = (body: string) =>
   `*** Begin Patch\n*** Update File: transcript\n${body}\n*** End Patch`;
@@ -79,5 +79,29 @@ describe("wordDiff", () => {
 
   it("returns one same run for identical strings", () => {
     expect(wordDiff("same text", "same text")).toEqual([{ kind: "same", text: "same text" }]);
+  });
+});
+
+describe("applyCorrectionToLines — chunk scope", () => {
+  it("the plain-replacement fallback searches only inside the scoped window", () => {
+    const lines = ["the curb is long", "and wide", "another curb here"];
+    const { lines: out, applied } = applyCorrectionToLines(lines, {
+      original: "curb",
+      instruction: "curve",
+      scope: { fromLine: 2, toLine: 3 }, // the active chunk: only line 2
+    });
+    expect(applied).toBe(true);
+    expect(out[0]).toBe("the curb is long"); // chunk 1 untouched
+    expect(out[2]).toBe("another curve here");
+  });
+
+  it("no match inside the window → not applied, even when it exists outside", () => {
+    const lines = ["the curb is long", "another line"];
+    const { applied } = applyCorrectionToLines(lines, {
+      original: "curb",
+      instruction: "curve",
+      scope: { fromLine: 1, toLine: 2 },
+    });
+    expect(applied).toBe(false);
   });
 });

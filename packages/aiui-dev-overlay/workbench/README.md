@@ -71,15 +71,19 @@ from the config.
   *own* overlay, source locator, and agent-tool surface, so this exercises full fidelity —
   including component location — against a real Solid app.
 
-**Right — the dock**, three views over the owned channel:
+**Right — the dock**, one view over the owned channel: the lowering
+**`TraceView`** — the same component the DevTools extension embeds, so
+improvements land in both at once. It live-follows the newest turn and renders it
+as a reading surface: a status header (sent / cancelled / abandoned / live), the
+lowered prompt as a hero (context preamble dimmed, screenshots as thumbnails),
+and every recorded stage as a compact, direction-coloured, filterable card. This
+subsumes the old three-tab dock: the per-frame wire data lives in the trace's
+input stages (open a card's *raw* disclosure), and the final prompt is the
+selected trace's hero. Backed by shared `debug-ui` + `/debug/api/traces`.
 
-| Tab | What it shows | Backed by |
-| --- | --- | --- |
-| **Trace** | the lowering trace, stage by stage, live-following — the same `TraceView` the DevTools extension embeds, so improvements land in both at once | shared `debug-ui` + `/debug/api/traces` |
-| **Raw frames** | every websocket frame in either direction (hello, chunks, acks, pushes) as collapsible JSON trees | `/debug/api/frames` (the channel's frame-log ring) |
-| **Prompt** | the final lowered prompt that *would* have been injected — text, Option-C meta, history | the `lowered-prompt` push |
-
-Trace-list rows carry an **actor badge** when a trace wasn't produced by a human (the overlay
+Trace-list rows title themselves with the turn's **one-line summary** once it
+lands (a small model glosses the sent prompt; see the channel's `summarize.ts`),
+falling back to the format. They carry an **actor badge** when a trace wasn't produced by a human (the overlay
 self-reports `meta.actor`; default `human`, opted into `agent` per tab via
 `sessionStorage.setItem("aiui-actor", "agent")` — never inferred from `navigator.webdriver`,
 which is browser-wide in the shared session browser), so agent-driven UI testing is tellable
@@ -105,8 +109,7 @@ scaffolding:
 | `src/main.ts` | the shell: header, app slot, dock tabs, server discovery |
 | `src/apps.ts` | the pluggable scenery registry (inline vs iframe hosting) |
 | `src/scenery.ts` | the spectra app-under-test, self-annotated with `data-cell` / `data-source-loc` |
-| `src/frames-feed.ts` | since-cursor poller over `/debug/api/frames`, shared by Raw + Prompt |
-| `src/traces-pane.ts` / `raw-pane.ts` / `prompt-pane.ts` | the dock views (list/log chrome only — rendering is shared debug-ui) |
+| `src/traces-pane.ts` | the dock's trace list + selection chrome (rendering is the shared debug-ui `TraceView`) |
 | `src/serve-ready.ts` | the `AIUI_CHANNEL_SERVE` ready-line contract with the spawned server |
 | `src/ports.ts` | the fixed 49222/49223/49224 port layout + `WORKBENCH_*PORT` overrides |
 | `src/open-browser.ts` / `open-browser-cli.ts` | the browser sidecar: the `WORKBENCH_BROWSER` mapping + session-browser open (shared plumbing from `aiui-util`), and its tsx-spawned runner |

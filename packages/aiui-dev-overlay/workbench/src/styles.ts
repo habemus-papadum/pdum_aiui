@@ -1,9 +1,10 @@
 /**
- * The workbench shell's stylesheet: header, split layout, dock tabs, and the
- * workbench-local chrome around the shared panes (trace list rows, raw frame
- * rows, prompt view) — plus the spectra scenery. The intent overlay brings its
- * own `mm-*` styles when it mounts, and the debug-ui panes self-inject their
- * `aiui-dbg-*` sheet; nothing here restyles either.
+ * The workbench shell's stylesheet: header, split layout, and the
+ * workbench-local chrome around the shared trace view (the trace-list rows) —
+ * plus the spectra scenery. The dock is a single pane now (the trace view
+ * subsumes the old Raw-frames/Prompt tabs), so there is no tab bar to style. The
+ * intent overlay brings its own `mm-*` styles when it mounts, and the debug-ui
+ * self-injects its `aiui-dbg-*` sheet; nothing here restyles either.
  */
 export const STYLES = /* css */ `
   body { margin: 0; background: #0f1117; color: #e8e8ea; font: 14px/1.5 ui-sans-serif, system-ui; }
@@ -26,11 +27,6 @@ export const STYLES = /* css */ `
 
   #wb-dock { width: 46%; min-width: 420px; display: flex; flex-direction: column;
     border-left: 1px solid #262c3a; background: #12151d; font-size: 12px; }
-  #wb-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid #262c3a; }
-  #wb-tabs button { background: transparent; border: 1px solid transparent; border-bottom: none;
-    color: #9aa0aa; font: inherit; padding: 5px 12px; cursor: pointer;
-    border-radius: 8px 8px 0 0; }
-  #wb-tabs button.selected { background: #171b25; border-color: #262c3a; color: #e8e8ea; }
   #wb-pane-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   #wb-pane-host > * { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
@@ -47,22 +43,6 @@ export const STYLES = /* css */ `
     padding: 0 7px; }
   .wb-trace-view { flex: 1; overflow-y: auto; padding: 6px 10px; }
   .wb-empty { padding: 16px; color: #6b7280; }
-
-  .wb-raw-log { flex: 1; overflow-y: auto; padding: 4px 10px; }
-  .wb-frame { border-bottom: 1px solid #1b2130; padding: 4px 0; }
-  .wb-frame-head { font: 11px/1.5 ui-monospace, monospace; color: #9aa0aa; }
-  .wb-frame-in .wb-frame-head { color: #8ab4f8; }
-  .wb-frame-out .wb-frame-head { color: #7ee0a3; }
-
-  .wb-prompt { overflow-y: auto; padding: 10px 12px; }
-  .wb-prompt-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: #9aa0aa; margin: 8px 0 4px; }
-  .wb-prompt-text { background: #14171f; border: 1px solid #2a3140; border-radius: 8px;
-    padding: 10px 12px; white-space: pre-wrap; font: 12px/1.6 ui-monospace, monospace; }
-  .wb-prompt-history { margin-top: 12px; border-top: 1px solid #262c3a; }
-  .wb-prompt-row { padding: 4px 0; color: #6b7280; border-bottom: 1px solid #1b2130;
-    font: 11px/1.5 ui-monospace, monospace; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; }
 
   /* ── spectra scenery (unchanged bones, now inside the left pane) ── */
   #wb-scenery header { padding: 18px 28px 6px; }

@@ -17,6 +17,8 @@
  * lives here and not on the page).
  */
 
+import { type CallCost, priceCall, usageFromTranscription } from "./cost";
+
 /** A cross-realm `fetch` — Node's global, or a test double with the same shape. */
 export type FetchLike = typeof fetch;
 
@@ -25,6 +27,8 @@ export interface TranscriptResult {
   text: string;
   latencyMs: number;
   model: string;
+  /** What the call cost (absent for the mock / when the API sent no usage). */
+  cost?: CallCost;
 }
 
 /** A pause-bounded audio segment to transcribe: its bytes and container MIME. */
@@ -128,11 +132,23 @@ export function openaiTranscriber(options: OpenAiTranscriberOptions): Transcribe
         headers: { authorization: `Bearer ${options.apiKey}` },
         body: form,
       });
-      const payload = (await res.json()) as { text?: string; error?: { message?: string } };
+      const payload = (await res.json()) as {
+        text?: string;
+        usage?: unknown;
+        error?: { message?: string };
+      };
       if (!res.ok || payload.error) {
         throw new Error(payload.error?.message ?? `transcription failed (${res.status})`);
       }
-      return { text: payload.text ?? "", latencyMs: performance.now() - started, model };
+      // The endpoint reports multimodal usage (audio input tokens are the bulk
+      // of an STT call) — price it here, where the model name is authoritative.
+      const usage = usageFromTranscription(payload.usage);
+      return {
+        text: payload.text ?? "",
+        latencyMs: performance.now() - started,
+        model,
+        ...(usage ? { cost: priceCall("openai", model, usage) } : {}),
+      };
     },
   };
 }

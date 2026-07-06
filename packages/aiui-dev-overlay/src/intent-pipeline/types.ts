@@ -116,6 +116,14 @@ export type IntentEvent =
       instruction: string;
       via: "speech" | "typed";
       /**
+       * The window of transcript lines (text items, [fromLine, toLine)) this
+       * correction is scoped to — the chunk that was active in the editor.
+       * The corrector model sees ONLY these lines and the plain-replacement
+       * fallback searches only inside them; absent → the whole transcript
+       * (pre-chunk-editor events, and the engine-level tests).
+       */
+      scope?: { fromLine: number; toLine: number };
+      /**
        * The V4A patch the correction micro-pipeline produced (see patch.ts /
        * correct.ts). Absent when the pipeline failed — appliers then fall
        * back to replacing `original` with `instruction`.

@@ -33,6 +33,7 @@ import { makeDraggable } from "../drag";
 import type { IntentModality, IntentThread, IntentToolContext } from "../intent";
 import { toSelectionPayload } from "../intent";
 import {
+  type CorrectionTarget,
   composeIntent,
   Engine,
   type IntentEvent,
@@ -665,7 +666,7 @@ export function multimodalModality(
        * the resolution too would make the server apply it twice.
        */
       const applyCorrectionLocally = (
-        target: { from: number; to: number; original: string },
+        target: CorrectionTarget,
         instruction: string,
         via: "speech" | "typed",
         diff?: CorrectionDiff,
@@ -681,9 +682,18 @@ export function multimodalModality(
 
       // ── the correction micro-pipeline (mock local / channel round-trip) ──────
       engine.correctionPipeline = (target, instruction, via) => {
-        const docLines = composeIntent(engine.events, config.correctionPolicy)
+        const allLines = composeIntent(engine.events, config.correctionPolicy)
           .items.filter((item) => item.kind === "text")
           .map((item) => item.text ?? "");
+        // Scope the model's document to the active chunk (see the correction
+        // event's `scope`): the patch stays context-anchored, so it lands in
+        // the full transcript regardless.
+        const docLines = target.scope
+          ? allLines.slice(
+              Math.max(0, target.scope.fromLine),
+              Math.min(allLines.length, target.scope.toLine),
+            )
+          : allLines;
         if (config.corrector === "mock") {
           // Local patch: this correction event is the server's ONLY copy, so it
           // streams normally (the server, in mock mode, passes it through).
@@ -714,7 +724,7 @@ export function multimodalModality(
        * back to plain replacement.
        */
       function requestChannelCorrection(
-        target: { from: number; to: number; original: string },
+        target: CorrectionTarget,
         instruction: string,
         via: "speech" | "typed",
       ): Promise<CorrectionDiff> {
@@ -736,6 +746,7 @@ export function multimodalModality(
             original: target.original,
             instruction,
             via,
+            ...(target.scope !== undefined ? { scope: target.scope } : {}),
           };
           void (async () => {
             const thread = await getThread();

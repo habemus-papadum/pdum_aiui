@@ -11,24 +11,18 @@
  * *inspection*: watch the raw frames, the trace stages, and the prompt that
  * would have been injected, without ever triggering an agent.
  *
- * The dock's trace views are the shared debug-ui — the same components the
- * DevTools extension embeds — so improving them improves every host at once.
+ * The dock is the shared debug-ui {@link TraceView} — the same component the
+ * DevTools extension embeds — so improving it improves every host at once. It
+ * used to carry three tabs (Trace / Raw frames / Prompt); the trace view now
+ * subsumes all three (per-frame wire data lives in the trace stages, and the
+ * final prompt is the selected trace's hero), so the dock is a single pane.
  */
 import { mountIntentTool, unmountIntentTool } from "@habemus-papadum/aiui-dev-overlay";
 import { WORKBENCH_APPS, type WorkbenchApp, type WorkbenchAppContext } from "./apps";
-import { FramesFeed } from "./frames-feed";
-import { PromptPane } from "./prompt-pane";
-import { RawPane } from "./raw-pane";
 import { STYLES } from "./styles";
 import { TracesPane } from "./traces-pane";
 
 const APP_STORAGE_KEY = "aiui-workbench-app";
-
-interface Pane {
-  root: HTMLElement;
-  activate(): void;
-  deactivate(): void;
-}
 
 const style = document.createElement("style");
 style.textContent = STYLES;
@@ -46,7 +40,6 @@ document.body.innerHTML = `
     <div id="wb-split">
       <div id="wb-app"></div>
       <div id="wb-dock">
-        <nav id="wb-tabs"></nav>
         <div id="wb-pane-host"></div>
       </div>
     </div>
@@ -62,7 +55,6 @@ function must<T extends Element>(selector: string): T {
 const appHost = must<HTMLDivElement>("#wb-app");
 const appPick = must<HTMLSelectElement>("#wb-app-pick");
 const status = must<HTMLSpanElement>("#wb-status");
-const tabsNav = must<HTMLElement>("#wb-tabs");
 const paneHost = must<HTMLDivElement>("#wb-pane-host");
 
 for (const app of WORKBENCH_APPS) {
@@ -99,39 +91,13 @@ appPick.addEventListener("change", mountSelectedApp);
 mountSelectedApp(); // scenery renders immediately; the overlay follows the port
 
 // ── the dock (right pane) ────────────────────────────────────────────────────
+// One pane: the shared TraceView, live-following the newest turn. The tab bar is
+// gone (like the intent tool with a single modality) — the trace view is now the
+// whole debugging surface, subsuming the old Raw-frames and Prompt tabs.
 function buildDock(baseUrl: string): void {
-  const feed = new FramesFeed({ baseUrl });
-  const panes: Record<string, Pane> = {
-    traces: new TracesPane({ baseUrl }),
-    raw: new RawPane(feed),
-    prompt: new PromptPane(feed),
-  };
-  let active: Pane | undefined;
-  const buttons = new Map<string, HTMLButtonElement>();
-  const show = (id: string): void => {
-    active?.deactivate();
-    paneHost.replaceChildren();
-    const pane = panes[id];
-    paneHost.append(pane.root);
-    pane.activate();
-    active = pane;
-    for (const [key, button] of buttons) {
-      button.classList.toggle("selected", key === id);
-    }
-  };
-  for (const [id, label] of [
-    ["traces", "Trace"],
-    ["raw", "Raw frames"],
-    ["prompt", "Prompt"],
-  ] as const) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = label;
-    button.addEventListener("click", () => show(id));
-    buttons.set(id, button);
-    tabsNav.append(button);
-  }
-  show("traces");
+  const pane = new TracesPane({ baseUrl });
+  paneHost.replaceChildren(pane.root);
+  pane.activate();
 }
 
 // ── server discovery ─────────────────────────────────────────────────────────

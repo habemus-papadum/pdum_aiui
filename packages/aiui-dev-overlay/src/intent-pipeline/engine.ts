@@ -24,6 +24,8 @@ export interface CorrectionTarget {
   from: number;
   to: number;
   original: string;
+  /** The transcript-line window the fix is scoped to (the active chunk). */
+  scope?: { fromLine: number; toLine: number };
 }
 
 export class Engine {
@@ -311,6 +313,7 @@ export class Engine {
         original: target.original,
         instruction,
         via,
+        ...(target.scope !== undefined ? { scope: target.scope } : {}),
         patch: diff?.patch,
         model: diff?.model,
         latencyMs: diff?.latencyMs,
@@ -379,7 +382,14 @@ export interface ComposedIntent {
   transcript: string;
   /** Chronological interleave of text runs and shot markers. */
   items: ComposedItem[];
-  corrections: Array<{ original: string; instruction: string; applied: boolean; patch?: string }>;
+  corrections: Array<{
+    original: string;
+    instruction: string;
+    applied: boolean;
+    patch?: string;
+    /** The chunk window the fix was scoped to (see the correction event). */
+    scope?: { fromLine: number; toLine: number };
+  }>;
   components: LocatedComponent[];
   /**
    * The lowered body: prose with each screenshot **inlined at its position**
@@ -472,6 +482,7 @@ export function composeIntent(
         instruction: event.instruction,
         applied: false,
         patch: event.patch,
+        ...(event.scope !== undefined ? { scope: event.scope } : {}),
       });
     } else if (event.type === "correction-undo") {
       // Escape in the correction box: pop the most recent still-active

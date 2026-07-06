@@ -46,4 +46,30 @@ describe("traceRowParts", () => {
   it("falls back to the trace id when there is no timestamp", () => {
     expect(traceRowParts({ id: "someid" }).title).toContain("someid");
   });
+
+  it("titles the row with the turn summary when it has landed", () => {
+    const row = traceRowParts({
+      id: "x",
+      format: "intent-v1",
+      startedAt: "2026-07-06T18:52:21.997Z",
+      summary: "rewrite the beet essay to say vite",
+    });
+    expect(row.title).toContain("rewrite the beet essay to say vite");
+    // The gloss replaces the bare format in the title.
+    expect(row.title).not.toContain("intent-v1");
+  });
+});
+
+describe("cost in the row title", () => {
+  it("appends the spend roll-up when the manifest carries one", () => {
+    const { title } = traceRowParts({
+      id: "t1",
+      startedAt: "2026-07-06T18:52:01.000Z",
+      summary: "rewrite the beet essay",
+      costUsd: 0.0007,
+    });
+    expect(title).toContain("rewrite the beet essay · $0.0007");
+    // No roll-up → no dangling separator.
+    expect(traceRowParts({ id: "t2", format: "intent-v1" }).title.endsWith("intent-v1")).toBe(true);
+  });
 });

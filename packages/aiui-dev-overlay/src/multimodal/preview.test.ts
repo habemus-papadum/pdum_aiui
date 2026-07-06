@@ -246,3 +246,38 @@ describe("the correction bar's live zone", () => {
     expect(composeIntent(engine.events).transcript).toBe("make the curb thicker");
   });
 });
+
+describe("chunk-scoped corrections", () => {
+  it("a fix in the active chunk never touches the same word in another chunk", () => {
+    const { engine, preview } = mounted();
+    // Chunk 1: "the curb is long" · [shot] · Chunk 2 (active): "another curb here"
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "the curb is long", 90, "mock");
+    engine.shotDone({ x: 0, y: 0, w: 10, h: 10 }, [], "data:image/png;base64,x", "/tmp/s.png");
+    const s2 = engine.talkStart() ?? 2;
+    engine.talkEnd();
+    engine.transcriptFinal(s2, "another curb here", 90, "mock");
+
+    engine.setMode("correct");
+    preview.setCorrectMode(true); // the LAST chunk is active by default
+    const editArea = document.querySelector(".mm-edit-area") as HTMLTextAreaElement;
+    expect(editArea.value).toBe("another curb here");
+    editArea.setSelectionRange(8, 12); // "curb" in the active chunk
+    const input = document.querySelector(".mm-correction-bar textarea") as HTMLTextAreaElement;
+    input.value = "curve";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    // The correction event is scoped to the active chunk's line window —
+    // chunk 1 is line 0, the shot splits, chunk 2 is line 1.
+    const correction = engine.events.find((e) => e.type === "correction");
+    expect(correction).toMatchObject({
+      original: "curb",
+      scope: { fromLine: 1, toLine: 2 },
+    });
+    // And the composed transcript proves the reach: chunk 1's "curb" survives.
+    const transcript = composeIntent(engine.events).transcript;
+    expect(transcript).toContain("the curb is long");
+    expect(transcript).toContain("another curve here");
+  });
+});

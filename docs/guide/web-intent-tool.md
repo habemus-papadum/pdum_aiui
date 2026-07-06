@@ -364,9 +364,14 @@ in-memory copy silently instead. See `turn-store.ts` for the finding.
 
 ## The debugger
 
-The trace debugger lists lowering runs newest-first and renders every stage — inputs, IRs, the
-final prompt — with images inline. This is the compiler's IR dump for prompt lowering: when the
-prompt doesn't say what you meant, find the stage that lost it.
+The trace debugger lists lowering runs newest-first (each row titled with a one-line summary of
+the turn once it lands) and renders the selected run as a **reading surface**: a status header
+(sent / cancelled / abandoned / live), the lowered prompt as a **hero** — context preamble
+dimmed, body prominent, each `<screenshot>` shown as a thumbnail — then filter chips and the
+recorded stages as compact, direction-coloured **cards** that coalesce noisy runs (hundreds of
+audio frames become one card) and hide the internal chatter behind toggles. This is the
+compiler's IR dump for prompt lowering: when the prompt doesn't say what you meant, open the card
+that lost it.
 
 ![The lowering debugger](/lowering-debugger.png)
 

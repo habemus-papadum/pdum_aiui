@@ -6,99 +6,246 @@ import { TraceView } from "./trace-view";
 
 const events: IntentEvent[] = [
   { at: 1, type: "thread-open", trigger: "talk" },
-  {
-    at: 2,
-    type: "transcript-final",
-    segment: 1,
-    text: "make it wider",
-    latencyMs: 20,
-    model: "mock",
-  },
+  { at: 2, type: "talk-start", segment: 1 },
+  { at: 3, type: "transcript-final", segment: 1, text: "make it wider", latencyMs: 20, model: "m" },
+  { at: 4, type: "correction", via: "typed", original: "beat", instruction: "vite" },
 ];
 
-describe("TraceView", () => {
-  it("renders generic stages and embeds event panes for an event-log stage", () => {
-    const view = new TraceView({ blobUrl: (id, f) => `http://host/blob/${id}/${f}` });
-    const trace: LiveTrace = {
-      rev: 1,
-      id: "trace-42",
-      format: "intent-v1",
-      threadId: "th-1",
-      status: "completed",
-      stages: [
-        {
-          at: new Date().toISOString(),
-          kind: "input",
-          label: "config",
-          data: { talkMode: "hold" },
-        },
-        { at: new Date().toISOString(), kind: "input", label: "event log", data: events },
-        { at: new Date().toISOString(), kind: "output", label: "shot", file: "shot_1.png" },
-      ],
-    };
-    view.update(trace);
+const patch = [
+  "*** Begin Patch",
+  "*** Update File: transcript",
+  "@@",
+  "-Here's another chunk of text.",
+  "+Here's another piece of text.",
+  "*** End Patch",
+].join("\n");
 
-    // Header reflects the manifest.
-    expect(view.root.querySelector("h2")?.textContent).toContain("intent-v1");
+const loweredText =
+  "This prompt was sent from the aiui web intent tool running in a web app under development.\n\n" +
+  "The source code of the web app in that tab is located at: /proj\n\n" +
+  "The user's prompt follows.\n\n---\n\n" +
+  'make this wider <screenshot path=".aiui-cache/traces/trace-42/shot_1.png"/> please';
 
-    // The event-log stage becomes the full event panes (with tabs).
-    expect(view.root.querySelector(".aiui-dbg-tabs")).toBeTruthy();
-    expect(view.root.textContent).toContain("make it wider");
+/** A rich, completed intent-v1 trace exercising most card types. */
+function fullTrace(over: Partial<LiveTrace> = {}): LiveTrace {
+  return {
+    rev: 1,
+    id: "trace-42",
+    format: "intent-v1",
+    threadId: "th-1",
+    actor: "human",
+    status: "completed",
+    startedAt: "2026-07-06T18:00:00.000Z",
+    endedAt: "2026-07-06T18:00:06.900Z",
+    stages: [
+      {
+        kind: "info",
+        label: "client context",
+        data: { tab: { url: "http://x/", title: "X" }, actor: "human" },
+      },
+      {
+        kind: "info",
+        label: "intent config",
+        data: { tier: "standard", transcriber: "openai", corrector: "openai" },
+      },
+      { kind: "input", label: "frame 0 events", file: "input-0.bin" },
+      { kind: "input", label: "frame 1 audio", file: "input-1.bin" },
+      { kind: "input", label: "frame 2 audio", file: "input-2.bin" },
+      { kind: "input", label: "frame 3 audio", file: "input-3.bin" },
+      {
+        kind: "ir",
+        label: "composed (speculative)",
+        data: { transcript: "make it", prompt: "make it" },
+      },
+      {
+        kind: "ir",
+        label: "composed (speculative)",
+        data: { transcript: "make it wider", prompt: "make it wider" },
+      },
+      {
+        kind: "ir",
+        label: "correction patch",
+        data: { model: "gpt-4o-mini", latencyMs: 1541, patch },
+      },
+      { kind: "ir", label: "attachment shot_1", file: "shot_1.png" },
+      { kind: "ir", label: "merged events", data: events },
+      {
+        kind: "info",
+        label: "speech ack_0",
+        data: { mime: "audio/mpeg", bytes: 1234, text: "sent" },
+      },
+      { kind: "output", label: "lowered prompt", data: loweredText },
+    ],
+    ...over,
+  };
+}
 
-    // Structured stage data renders as the collapsible JSON tree, not a <pre>.
-    const tree = view.root.querySelector(".aiui-dbg-json");
-    expect(tree).toBeTruthy();
-    expect(tree?.querySelector(".aiui-dbg-json-key")?.textContent).toBe("talkMode");
-    expect(tree?.querySelector(".aiui-dbg-json-string")?.textContent).toBe('"hold"');
-    expect(view.root.querySelector(".aiui-dbg-tbody pre")).toBeNull();
+const mount = (): TraceView =>
+  new TraceView({
+    blobUrl: (id, f) => `http://host/blob/${id}/${f}`,
+    previewUrl: (p) => `http://host/pv?p=${p}`,
+  });
 
-    // The blob stage resolves through the injected blobUrl.
-    const img = view.root.querySelector<HTMLImageElement>("img");
+describe("TraceView — status header", () => {
+  it("headlines a sent turn with format, duration, and stage count", () => {
+    const view = mount();
+    view.update(fullTrace());
+    const outcome = view.root.querySelector(".aiui-dbg-outcome");
+    expect(outcome?.textContent).toContain("sent");
+    expect(outcome?.classList.contains("state-sent")).toBe(true);
+    const meta = view.root.querySelector(".aiui-dbg-status-meta")?.textContent ?? "";
+    expect(meta).toContain("intent-v1");
+    expect(meta).toContain("6.9s");
+    expect(meta).toContain("13 stages");
+  });
+
+  it("marks a cancelled turn and shows the no-prompt hero note", () => {
+    const view = mount();
+    view.update(
+      fullTrace({
+        stages: [{ kind: "ir", label: "conditioned", data: { cancelled: true } }],
+      }),
+    );
+    expect(view.root.querySelector(".aiui-dbg-outcome")?.textContent).toContain("cancelled");
+    expect(view.root.querySelector(".aiui-dbg-hero-none")?.textContent).toContain("cancelled");
+  });
+});
+
+describe("TraceView — the prompt hero", () => {
+  it("renders the body with a dimmed preamble and a screenshot thumbnail off the blob route", () => {
+    const view = mount();
+    view.update(fullTrace());
+    const preamble = view.root.querySelector(".aiui-dbg-hero-preamble")?.textContent ?? "";
+    expect(preamble).toContain("The user's prompt follows.");
+    const body = view.root.querySelector(".aiui-dbg-hero-body");
+    expect(body?.textContent).toContain("make this wider");
+    // The <screenshot> block became an <img> pointing at the stable trace blob.
+    const img = body?.querySelector<HTMLImageElement>(".aiui-dbg-shot img");
     expect(img?.getAttribute("src")).toBe("http://host/blob/trace-42/shot_1.png");
   });
+});
 
-  it("renders a plain text-concat trace with no event log", () => {
-    const view = new TraceView();
-    view.update({
-      rev: 1,
-      id: "t",
-      format: "text-concat",
-      threadId: "th",
-      stages: [
-        { kind: "input", label: "chunk", data: "hello " },
-        { kind: "output", label: "prompt", data: "hello world" },
-      ],
-    });
-    expect(view.root.querySelector(".aiui-dbg-tabs")).toBeNull(); // no event panes
-    expect(view.root.textContent).toContain("hello world");
-    // Plain-string stage data keeps the flat <pre> rendering — no tree chrome.
-    expect(view.root.querySelectorAll(".aiui-dbg-tbody pre")).toHaveLength(2);
-    expect(view.root.querySelector(".aiui-dbg-json")).toBeNull();
+describe("TraceView — cards, coalescing, filters", () => {
+  it("coalesces audio frames and hides audio + compose by default", () => {
+    const view = mount();
+    view.update(fullTrace());
+    const titles = [...view.root.querySelectorAll(".aiui-dbg-card-title")].map(
+      (e) => e.textContent,
+    );
+    // Default story: no audio stream, no speculative compose.
+    expect(titles).not.toContain("audio stream");
+    expect(titles).not.toContain("speculative compose");
+    // But the merged-events and correction cards are there.
+    expect(titles).toContain("merged events");
+    expect(titles).toContain("correction patch");
   });
 
-  it("keeps string leaves inside the tree path-interactive (previewUrl injected)", () => {
-    const view = new TraceView({ previewUrl: (p) => `http://host/preview?p=${p}` });
-    view.update({
-      rev: 1,
-      id: "t",
-      format: "intent-v1",
-      threadId: "th",
-      stages: [
-        {
-          kind: "output",
-          label: "attachments",
-          data: { shots: ["/tmp/aiui/shot_1.png"], note: "see above" },
-        },
-      ],
-    });
-    const path = view.root.querySelector(".aiui-dbg-json .aiui-dbg-path");
-    expect(path?.textContent).toBe("/tmp/aiui/shot_1.png");
-    expect(path?.classList.contains("img")).toBe(true);
+  it("reveals the coalesced audio card (×3) when the audio chip is toggled on", () => {
+    const view = mount();
+    view.update(fullTrace());
+    const audioChip = view.root.querySelector<HTMLButtonElement>('[data-cat="audio"]');
+    audioChip?.click();
+    const audioCard = [...view.root.querySelectorAll(".aiui-dbg-card")].find(
+      (c) => c.querySelector(".aiui-dbg-card-title")?.textContent === "audio stream",
+    );
+    expect(audioCard).toBeTruthy();
+    expect(audioCard?.querySelector(".aiui-dbg-card-count")?.textContent).toBe("×3");
   });
 
-  it("shows an empty hint when nothing is selected", () => {
-    const view = new TraceView();
+  it("filters by direction lane", () => {
+    const view = mount();
+    view.update(fullTrace());
+    view.root.querySelector<HTMLButtonElement>('[data-dir="out"]')?.click();
+    const titles = [...view.root.querySelectorAll(".aiui-dbg-card-title")].map(
+      (e) => e.textContent,
+    );
+    // Out lane = server → browser pushes only; the lowered prompt lives in
+    // its own agent lane now, so it filters out here too.
+    expect(titles).toContain("speech");
+    expect(titles).not.toContain("lowered prompt");
+    expect(titles).not.toContain("merged events");
+    expect(titles).not.toContain("client context");
+
+    view.root.querySelector<HTMLButtonElement>('[data-dir="agent"]')?.click();
+    const agentTitles = [...view.root.querySelectorAll(".aiui-dbg-card-title")].map(
+      (e) => e.textContent,
+    );
+    expect(agentTitles).toContain("lowered prompt");
+    expect(agentTitles).not.toContain("speech");
+  });
+
+  it("renders the merged-events card with an event-type summary and correction line", () => {
+    const view = mount();
+    view.update(fullTrace());
+    const card = [...view.root.querySelectorAll(".aiui-dbg-card")].find(
+      (c) => c.querySelector(".aiui-dbg-card-title")?.textContent === "merged events",
+    );
+    expect(card?.querySelector(".aiui-dbg-card-info")?.textContent).toContain("4 events");
+    const subs = [...(card?.querySelectorAll(".aiui-dbg-card-sub") ?? [])].map(
+      (s) => s.textContent,
+    );
+    expect(subs.some((s) => s?.includes("transcript-final"))).toBe(true);
+    expect(subs.some((s) => s?.includes("beat") && s?.includes("vite"))).toBe(true);
+  });
+
+  it("renders a correction patch as a red/green diff", () => {
+    const view = mount();
+    view.update(fullTrace());
+    expect(view.root.querySelector(".aiui-dbg-patch-line.del")?.textContent).toContain(
+      "Here's another chunk of text.",
+    );
+    expect(view.root.querySelector(".aiui-dbg-patch-line.add")?.textContent).toContain(
+      "Here's another piece of text.",
+    );
+  });
+
+  it("renders a saved screenshot blob as a clickable image card", () => {
+    const view = mount();
+    view.update(fullTrace());
+    const img = view.root.querySelector<HTMLImageElement>(".aiui-dbg-card-img");
+    expect(img?.getAttribute("src")).toBe("http://host/blob/trace-42/shot_1.png");
+  });
+});
+
+describe("TraceView — live-follow state survival", () => {
+  it("keeps an opened raw disclosure open across a re-render", () => {
+    const view = mount();
+    view.update(fullTrace());
+    // Open the merged-events card's raw disclosure.
+    const card = [...view.root.querySelectorAll(".aiui-dbg-card")].find(
+      (c) => c.querySelector(".aiui-dbg-card-title")?.textContent === "merged events",
+    );
+    const details = card?.querySelector<HTMLDetailsElement>(".aiui-dbg-card-raw");
+    expect(details).toBeTruthy();
+    if (details) {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle"));
+    }
+    // A poll update re-renders; the same card's disclosure must still be open.
+    view.update(fullTrace({ rev: 2 }));
+    const after = [...view.root.querySelectorAll(".aiui-dbg-card")].find(
+      (c) => c.querySelector(".aiui-dbg-card-title")?.textContent === "merged events",
+    );
+    expect(after?.querySelector<HTMLDetailsElement>(".aiui-dbg-card-raw")?.open).toBe(true);
+  });
+
+  it("keeps a toggled filter across a re-render", () => {
+    const view = mount();
+    view.update(fullTrace());
+    view.root.querySelector<HTMLButtonElement>('[data-cat="audio"]')?.click(); // audio on
+    view.update(fullTrace({ rev: 2 }));
+    const titles = [...view.root.querySelectorAll(".aiui-dbg-card-title")].map(
+      (e) => e.textContent,
+    );
+    expect(titles).toContain("audio stream");
+  });
+});
+
+describe("TraceView — empty", () => {
+  it("shows a hint when nothing is selected", () => {
+    const view = mount();
     view.update(undefined);
     expect(view.root.textContent).toContain("Select a trace");
+    expect(view.root.querySelector(".aiui-dbg-filters")?.hasAttribute("hidden")).toBe(true);
   });
 });

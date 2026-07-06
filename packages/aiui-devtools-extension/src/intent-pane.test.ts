@@ -72,13 +72,31 @@ describe("degradedKeyLine", () => {
 });
 
 describe("traceSummaryLine", () => {
-  it("summarizes stage count and status", () => {
+  it("summarizes stage count and status (older servers' full stages)", () => {
     expect(
       traceSummaryLine({ id: "a", format: "intent-v1", stages: [1], status: "completed" }),
     ).toContain("1 stage · completed");
     expect(traceSummaryLine({ id: "b", format: "intent-v1", stages: [1, 2] })).toContain(
       "2 stages · live",
     );
+  });
+
+  it("reads the slimmed route's stageCount", () => {
+    expect(
+      traceSummaryLine({ id: "c", format: "intent-v1", stageCount: 47, status: "completed" }),
+    ).toContain("47 stages · completed");
+  });
+
+  it("prefers the turn gloss over the stage count when it has landed", () => {
+    const line = traceSummaryLine({
+      id: "d",
+      format: "intent-v1",
+      stageCount: 47,
+      status: "completed",
+      summary: "rewrite the beet essay to say vite",
+    });
+    expect(line).toContain("rewrite the beet essay to say vite · completed");
+    expect(line).not.toContain("47 stages");
   });
 });
 

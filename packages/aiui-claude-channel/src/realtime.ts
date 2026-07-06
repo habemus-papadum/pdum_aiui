@@ -38,6 +38,7 @@
  * pattern as `transcribe.ts`'s injected `fetch`.
  */
 import WebSocket from "ws";
+import { type CallCost, priceCall, usageFromTranscription } from "./cost";
 
 /** The verified GA endpoint for a transcription-intent realtime session. */
 export const OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?intent=transcription";
@@ -51,6 +52,12 @@ export interface RealtimeResult {
   /** Wall-clock from the segment's commit (talk-end) to its `…completed`. */
   latencyMs: number;
   model: string;
+  /**
+   * The segment's cost, when the upstream `…completed` carried usage. May
+   * arrive with `usd` absent — the realtime STT models can be newer than the
+   * price catalog — in which case the usage is still accounted in the trace.
+   */
+  cost?: CallCost;
 }
 
 /** What a realtime session reports back, keyed by our own segment ordinal. */
@@ -266,10 +273,14 @@ export function openRealtimeSession(
           return;
         }
         const started = commitAt.get(segment) ?? now();
+        // GA `…completed` events may carry usage (audio tokens dominate);
+        // price per segment when they do, tolerate their absence.
+        const usage = usageFromTranscription((message as { usage?: unknown }).usage);
         completeSegment(segment, itemId, {
           text: message.transcript ?? cumulativeByItem.get(itemId) ?? "",
           latencyMs: Math.max(0, now() - started),
           model: options.model(),
+          ...(usage ? { cost: priceCall("openai", options.model(), usage) } : {}),
         });
         return;
       }

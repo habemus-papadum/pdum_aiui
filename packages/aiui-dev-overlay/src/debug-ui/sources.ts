@@ -83,6 +83,8 @@ export interface LiveTrace {
   endedAt?: string;
   /** Who drove the client (`"human"` / `"agent"` — the hello's `meta.actor`). */
   actor?: string;
+  /** Running USD roll-up of the turn's own model calls (see the channel's cost.ts). */
+  costUsd?: number;
   stages: TraceStageLike[];
 }
 

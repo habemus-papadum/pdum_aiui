@@ -19,6 +19,7 @@
  * (same seam pattern as `transcribe.ts`).
  */
 
+import { type CallCost, estimatedTtsUsage, priceCall } from "./cost";
 import type { FetchLike } from "./transcribe";
 
 /** One synthesized clip: the audio bytes plus how long, which model, and its MIME. */
@@ -28,6 +29,12 @@ export interface SpeechResult {
   mime: string;
   latencyMs: number;
   model: string;
+  /**
+   * ESTIMATED cost: `/v1/audio/speech` returns raw audio with no usage object,
+   * so input tokens are guessed from text length and the audio output goes
+   * unpriced — a floor, marked `estimated` (absent for the mock).
+   */
+  cost?: CallCost;
 }
 
 /** A short line to speak, and an optional voice id. */
@@ -127,6 +134,7 @@ export function openaiSpeaker(options: OpenAiSpeakerOptions): Speaker {
         mime: MIME_FOR_FORMAT[format] ?? "audio/mpeg",
         latencyMs: performance.now() - started,
         model,
+        cost: priceCall("openai", model, estimatedTtsUsage(text), { estimated: true }),
       };
     },
   };

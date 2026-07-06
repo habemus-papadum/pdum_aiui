@@ -62,6 +62,7 @@ import {
 } from "./channel";
 import { rawCodec } from "./codec";
 import { type Corrector, openaiCorrector } from "./correct";
+import type { CallCost } from "./cost";
 import type { ChunkDescriptor } from "./frame";
 import {
   asSelection,
@@ -82,6 +83,7 @@ import {
   type RealtimeVoiceSession,
 } from "./realtime-voice";
 import { openaiSpeaker, type Speaker } from "./speak";
+import { openaiSummarizer, type Summarizer } from "./summarize";
 import { traceOf } from "./tracing";
 import {
   audioExtensionForMime,
@@ -238,6 +240,13 @@ export interface IntentV1Options {
    * connection. Present (even keyless) → the voice path is exercised offline.
    */
   realtimeVoiceSocketFactory?: RealtimeSocketFactory;
+  /**
+   * Test seam override for the post-send turn summarizer (see summarize.ts). Its
+   * mere presence enables summaries even with no key; absent + keyless → no
+   * summary (the gloss is a convenience, never load-bearing). Real seam is the
+   * env-keyed {@link openaiSummarizer}.
+   */
+  summarizer?: Summarizer;
 }
 
 /**
@@ -448,6 +457,16 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           : undefined))
       : undefined;
 
+  // The post-send summarizer (summarize.ts): unlike the seams above it is not
+  // gated on a tier — every turn is worth a one-line gloss for the trace list.
+  // Enabled whenever there's a key (or a test seam); keyless → absent and the
+  // trace simply carries no summary. Never on the hot path (see `summarize`).
+  const summarizer: Summarizer | undefined =
+    options.summarizer ??
+    (apiKey
+      ? openaiSummarizer({ apiKey, ...(options.fetch ? { fetch: options.fetch } : {}) })
+      : undefined);
+
   trace?.record({
     kind: "info",
     label: "intent config",
@@ -471,6 +490,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       correctorReady: corrector !== undefined,
       speakerReady: speaker !== undefined,
       voiceReady,
+      summarizerReady: summarizer !== undefined,
     },
   });
 
@@ -573,6 +593,23 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     } satisfies LoweredMessage);
   };
 
+  /**
+   * Account one model call: a `cost:` trace stage (what/usage/usd — the trace
+   * viewer renders these as 💰 cards) plus the manifest's running roll-up.
+   * Unpriced calls (a model missing from the catalog) still record usage; only
+   * a priced call moves the roll-up. Post-end callers (the summary gloss) get
+   * the roll-up but no stage — `record` is closed by then, by design.
+   */
+  const recordCost = (what: string, cost: CallCost | undefined): void => {
+    if (!cost) {
+      return;
+    }
+    trace?.record({ kind: "info", label: `cost: ${what}`, data: cost });
+    if (cost.usd !== undefined) {
+      trace?.addCost(cost.usd);
+    }
+  };
+
   /** Push a base64 audio clip for the client to play (TTS ack / model reply). */
   const pushSpeech = (id: string, mime: string, bytes: Uint8Array, label?: string): void => {
     ctx.push?.({
@@ -595,11 +632,21 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     request: Extract<IntentEvent, { type: "correction" }>,
   ): Promise<void> => {
     // Document = segments-as-lines from the current composed state (the same
-    // shape the corrector model and the applier share — field-notes contract).
+    // shape the corrector model and the applier share — field-notes contract),
+    // narrowed to the request's chunk scope when it carries one: the model
+    // only ever sees the chunk the user was editing, so "fix every occurrence"
+    // can't leak across an image boundary. The patch stays context-anchored,
+    // so it applies to the full document unchanged.
     const composed = composeIntent(events, intent.correctionPolicy, composeOptions);
-    const docLines = composed.items
+    const allLines = composed.items
       .filter((item) => item.kind === "text")
       .map((item) => item.text ?? "");
+    const docLines = request.scope
+      ? allLines.slice(
+          Math.max(0, request.scope.fromLine),
+          Math.min(allLines.length, request.scope.toLine),
+        )
+      : allLines;
     // Trace the whole round-trip: "why didn't my fix apply?" must be
     // answerable from the trace viewer, not reconstructed from toasts.
     trace?.record({
@@ -622,8 +669,18 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       trace?.record({
         kind: "ir",
         label: "correction patch",
-        data: { model: diff.model, latencyMs: diff.latencyMs, patch: diff.patch },
+        // The call's cost rides the patch stage itself (one card in the
+        // viewer), but still moves the manifest roll-up below.
+        data: {
+          model: diff.model,
+          latencyMs: diff.latencyMs,
+          patch: diff.patch,
+          ...(diff.cost ? { cost: diff.cost } : {}),
+        },
       });
+      if (diff.cost?.usd !== undefined) {
+        trace?.addCost(diff.cost.usd);
+      }
       const completed: IntentEvent = {
         ...request,
         patch: diff.patch,
@@ -705,6 +762,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           push([{ at: Date.now(), type: "transcript-delta", segment, text }]);
         },
         onFinal: (segment, result) => {
+          recordCost(`realtime transcription seg_${segment}`, result.cost);
           const produced: IntentEvent = {
             at: Date.now(),
             type: "transcript-final",
@@ -782,6 +840,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           // trace records it; never the IR (text stays the single source of truth).
           push([{ at: Date.now(), type: "note", text: `🔊 ${text}` }]);
           trace?.record({ kind: "info", label: "voice reply", data: { text } });
+        },
+        onUsage: (cost, responseId) => {
+          // Conversational responses re-bill the whole context each time — the
+          // per-response accounting is exactly where the money goes.
+          recordCost(`voice response ${responseId}`, cost);
         },
         onError: (message, segment) => {
           if (segment !== undefined) {
@@ -930,6 +993,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       if (transcriber !== undefined) {
         try {
           const result = await transcriber.transcribe({ bytes: conditioned.bytes, mime });
+          recordCost(`transcription ${id}`, result.cost);
           const produced: IntentEvent = {
             at: Date.now(),
             type: "transcript-final",
@@ -1016,6 +1080,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         text: phrase,
         ...(intent.ttsVoice !== undefined ? { voice: intent.ttsVoice } : {}),
       });
+      recordCost("tts ack", clip.cost);
       pushSpeech(`ack_${ackSeq++}`, clip.mime, clip.bytes, phrase);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1025,6 +1090,33 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         message: `spoken confirmation failed: ${message}`,
         detail: OPENAI_KEY_HINT,
       });
+    }
+  };
+
+  /**
+   * Gloss the just-sent turn onto its trace, off the hot path. Fired
+   * fire-and-forget from {@link lower} *after* the send — the fin ack must never
+   * wait on a summary — so by the time this resolves the trace has usually ended
+   * already; {@link TraceHandle.setSummary} is designed to write post-end. Input
+   * is the composed body (no preamble; screenshots stripped inside the seam).
+   * Keyless (no seam) or any failure → skip silently: a missing row gloss falls
+   * back to the timestamp, never a broken turn. (A failure can't be traced here —
+   * `record` no-ops once the trace has ended — so the drop is genuinely silent.)
+   */
+  const summarize = async (body: string): Promise<void> => {
+    if (summarizer === undefined || body === "") {
+      return;
+    }
+    try {
+      const result = await summarizer.summarize(body);
+      trace?.setSummary(result.text);
+      // The trace has ended by now, so no `cost:` stage lands (record no-ops
+      // post-end) — but the roll-up still moves; addCost writes post-end.
+      if (result.cost?.usd !== undefined) {
+        trace?.addCost(result.cost.usd);
+      }
+    } catch {
+      // best-effort: the trace list just shows the timestamp for this turn
     }
   };
 
@@ -1110,6 +1202,10 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // Premium tier: a spoken "sent" once the notification landed (the send-
       // received ack — the minimal recommended trigger set, streaming-turns.md §4).
       await speakAck();
+      // Gloss the turn for the trace list — detached, so the fin ack does not
+      // wait on a chat round-trip. `composed.prompt` is the body only (the
+      // preamble is context, not intent). Best-effort; never awaited.
+      void summarize(composed.prompt);
     }
     // The turn committed — the upstream socket(s) have no more segments to handle,
     // so close (idempotent; onClose closes them for abandoned turns).

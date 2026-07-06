@@ -9,6 +9,7 @@ import { type Corrector, mockCorrector } from "./correct";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format, type LoweredPromptMessage } from "./intent-v1";
 import { defaultFormats } from "./processors";
+import type { Summarizer } from "./summarize";
 import { createTraceStore, listTraces } from "./trace";
 import { withTracing } from "./tracing";
 import { mockTranscriber, type Transcriber } from "./transcribe";
@@ -42,6 +43,8 @@ interface DriveOptions {
   hello?: HelloMeta;
   transcriber?: Transcriber;
   corrector?: Corrector;
+  /** Test seam for the post-send turn summarizer (see summarize.ts). */
+  summarizer?: Summarizer;
   /** Force the env key (e.g. `""` to exercise the keyless/degraded seam). */
   apiKey?: string;
   /** When set, wrap the format in tracing rooted here so blob paths resolve. */
@@ -73,6 +76,7 @@ function drive(opts: DriveOptions = {}): Driver {
   let format: ChannelFormat = createIntentV1Format({
     ...(opts.transcriber !== undefined ? { transcriber: opts.transcriber } : {}),
     ...(opts.corrector !== undefined ? { corrector: opts.corrector } : {}),
+    ...(opts.summarizer !== undefined ? { summarizer: opts.summarizer } : {}),
     ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
   });
   if (opts.cache !== undefined) {
@@ -186,6 +190,114 @@ describe("intent-v1 lowering — fixtures", () => {
     expect(d.isClosed()).toBe(true);
     expect(d.sent).toEqual([]);
     expect(d.pushed).toEqual([]);
+  });
+});
+
+describe("intent-v1 cost accounting", () => {
+  it("records a cost stage per priced call and rolls the manifest total up", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-cost-"));
+    const d = drive({
+      cache,
+      hello: openaiHello({ transcriber: "openai" }),
+      transcriber: {
+        name: "priced-mock",
+        transcribe: async () => ({
+          text: "make the plot wider",
+          latencyMs: 5,
+          model: "gpt-4o-mini-transcribe",
+          // The shape a real seam produces (see transcribe.ts + cost.ts).
+          cost: {
+            usd: 0.000455,
+            provider: "openai",
+            model: "gpt-4o-mini-transcribe",
+            usage: { input_tokens: 120, input_audio_tokens: 120, output_tokens: 19 },
+          },
+        }),
+      },
+    });
+    await d.feedEvents([
+      { at: 1, type: "armed", on: true },
+      { at: 2, type: "thread-open", trigger: "talk" },
+      { at: 3, type: "talk-start", segment: 1 },
+      { at: 4, type: "talk-end", segment: 1, ms: 300 },
+    ]);
+    await d.feedAttachment("seg_1", "audio/webm;codecs=opus", new Uint8Array([1, 2, 3]));
+    await d.fin();
+
+    const [trace] = listTraces(cache);
+    // The call got its 💰 stage…
+    const cost = trace.stages.find((st) => st.label === "cost: transcription seg_1");
+    expect(cost).toBeDefined();
+    expect((cost?.data as { usd?: number }).usd).toBeCloseTo(0.000455, 6);
+    // …and the manifest carries the roll-up (one priced call here).
+    expect(trace.costUsd).toBeCloseTo(0.000455, 6);
+  });
+});
+
+describe("intent-v1 turn summary", () => {
+  const mockSummarizer = (line: string): Summarizer => ({
+    name: "mock",
+    summarize: async () => ({ text: line }),
+  });
+  // The summary is fired detached after the send; let its microtasks settle.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("writes the summarizer's line onto the trace manifest after a sent turn", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-summary-"));
+    const d = drive({ cache, summarizer: mockSummarizer("rewrite the essay to say vite") });
+    await d.feedEvents(loadFixture("plain-dictation.json"));
+    await d.fin();
+    expect(d.sent).toHaveLength(1);
+    await settle();
+
+    const [trace] = listTraces(cache);
+    expect(trace.summary).toBe("rewrite the essay to say vite");
+    // The summary rides *on top of* a finished trace — status is unaffected.
+    expect(trace.status).toBe("completed");
+  });
+
+  it("summarizes the body only — no preamble text reaches the seam", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-summary-"));
+    let seen: string | undefined;
+    const spy: Summarizer = {
+      name: "spy",
+      summarize: async (body) => {
+        seen = body;
+        return { text: "gloss" };
+      },
+    };
+    const d = drive({
+      cache,
+      summarizer: spy,
+      hello: { source: { root: "/proj" }, intent: {} } as HelloMeta,
+    });
+    await d.feedEvents(loadFixture("plain-dictation.json"));
+    await d.fin();
+    await settle();
+    // wrapWithContext's preamble ("This prompt was sent from …") is excluded.
+    expect(seen).toBeDefined();
+    expect(seen).not.toContain("This prompt was sent from");
+    expect(seen).toContain("make the baseline curve");
+  });
+
+  it("records no summary for a cancelled turn (nothing was sent)", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-summary-"));
+    const d = drive({ cache, summarizer: mockSummarizer("should not appear") });
+    await d.feedEvents(loadFixture("cancel-turn.json"));
+    await d.fin();
+    await settle();
+    const [trace] = listTraces(cache);
+    expect(trace.summary).toBeUndefined();
+  });
+
+  it("records no summary when keyless with no seam", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-summary-"));
+    const d = drive({ cache, apiKey: "" });
+    await d.feedEvents(loadFixture("plain-dictation.json"));
+    await d.fin();
+    await settle();
+    const [trace] = listTraces(cache);
+    expect(trace.summary).toBeUndefined();
   });
 });
 

@@ -242,8 +242,19 @@ export function registerDebugRoutes(
     // The current session label rides with the listing (additive) so viewers
     // can split "this server's traces" from earlier/other processes' — the
     // manifests all live flat in one cache dir.
+    //
+    // Slim each manifest to a `stageCount`: this route is polled every ~2 s and
+    // a single voice turn records one stage *per audio frame* (hundreds), so
+    // returning full `stages` for every trace made the listing megabytes of
+    // payload the list never reads. Follow views fetch the whole manifest from
+    // `/debug/api/traces/:id[/live]`; the list only needs the count (and the
+    // `summary`, which rides untouched with the rest of the manifest fields).
+    const traces = listTraces(cacheDir).map(({ stages, ...rest }) => ({
+      ...rest,
+      stageCount: stages.length,
+    }));
     res.json({
-      traces: listTraces(cacheDir),
+      traces,
       ...(hooks.session !== undefined ? { session: hooks.session } : {}),
     });
   });
@@ -476,8 +487,12 @@ async function refresh() {
     }
     const meta = document.createElement("div");
     meta.className = "meta";
+    // The list route serves a slimmed manifest — stageCount in place of the full
+    // stages array (see registerDebugRoutes). A one-line summary rides the
+    // manifest when the turn was glossed; show it in place of the raw count.
+    const n = t.stageCount != null ? t.stageCount : (t.stages ? t.stages.length : 0);
     meta.textContent = new Date(t.startedAt).toLocaleTimeString()
-      + " · " + t.stages.length + " stage" + (t.stages.length === 1 ? "" : "s")
+      + " · " + (t.summary ? t.summary : n + " stage" + (n === 1 ? "" : "s"))
       + (t.status ? " · " + t.status : " · live");
     div.append(fmt, meta);
     return div;

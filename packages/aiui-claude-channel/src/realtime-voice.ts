@@ -46,6 +46,7 @@
  * the STT lowering keeps working (the IR is captured), the model just stops
  * speaking, loudly noted. See docs/guide/intent-overlay.md §Tiers.
  */
+import { type CallCost, priceCall, usageFromRealtimeResponse } from "./cost";
 import {
   openaiRealtimeSocketFactory,
   type RealtimeSocketFactory,
@@ -99,6 +100,13 @@ export interface RealtimeVoiceCallbacks {
   onAudio(clip: VoiceAudioClip): void;
   /** The MODEL's spoken-reply transcript (what the human was told) — logged, not the IR. */
   onReplyTranscript(text: string, responseId: string): void;
+  /**
+   * What one response cost. A conversational realtime turn re-bills its whole
+   * context per response — the documented cost trap the response cap guards —
+   * so accounting is per `response.done`, priced against the session's model.
+   * Optional: older callers (and most tests) simply don't observe spend.
+   */
+  onUsage?(cost: CallCost, responseId: string): void;
   /**
    * A failure. `segment` names the committed segment it belongs to (so the caller
    * can finalize just that one loudly); undefined for a session-wide fault or a
@@ -404,6 +412,12 @@ export function openRealtimeVoiceSession(
       }
       case "response.done": {
         const id = message.response?.id ?? message.response_id ?? "";
+        const usage = usageFromRealtimeResponse(
+          (message.response as { usage?: unknown } | undefined)?.usage,
+        );
+        if (usage) {
+          callbacks.onUsage?.(priceCall("openai", options.model(), usage), id);
+        }
         flushResponse(id);
         return;
       }

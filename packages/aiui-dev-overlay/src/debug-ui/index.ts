@@ -6,12 +6,15 @@
  * both render intent debugging identically, off the same fixtures.
  *
  * The pieces:
+ *  - {@link TraceView} — a whole channel trace rendered as a reading surface: a
+ *    status header, the lowered prompt as a hero, and the recorded stages as
+ *    compact, directional, filterable cards (see trace-cards.ts for the pure
+ *    classification/coalescing under it). Generic — an unknown stage still gets
+ *    a sensible card — so it works for any modality the debugger records.
  *  - {@link EventPanes} — events / IR / timing / export over an {@link IntentEvent}
- *    stream. The lab's dock and the rich per-stage view for an event log.
- *  - {@link TraceView} — a whole channel trace rendered generically (works for
- *    any modality), embedding {@link EventPanes} where a stage carries an event log.
+ *    stream. A standalone view of one event log (the lab's dock still mounts it).
  *  - {@link renderJsonTree} — the dependency-free collapsible JSON widget the
- *    trace view renders structured stage data with (path-aware string leaves).
+ *    trace view's raw disclosures render structured stage data with.
  *  - {@link DebugSource} + {@link engineSource} / {@link traceLiveSource} —
  *    the small interface behind the panes: a live engine, or an HTTP poll of the
  *    channel's `/debug/api/traces/:id/live` route.
@@ -43,5 +46,28 @@ export {
   traceLiveSource,
 } from "./sources";
 export { DEBUG_UI_CSS, injectDebugUiStyles } from "./styles";
+export type {
+  CardCategory,
+  CardDirection,
+  PatchLine,
+  PatchLineKind,
+  PromptSegment,
+  StageClass,
+  TraceCard,
+  TraceOutcome,
+  TraceState,
+} from "./trace-cards";
+export {
+  buildCards,
+  cardVisible,
+  classifyStage,
+  correctionLines,
+  eventTypesSummary,
+  loweredPromptText,
+  parsePatchLines,
+  parseShotBlocks,
+  splitLoweredPrompt,
+  traceOutcome,
+} from "./trace-cards";
 export type { TraceViewConfig } from "./trace-view";
 export { TraceView } from "./trace-view";

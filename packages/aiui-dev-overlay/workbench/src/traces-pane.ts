@@ -19,6 +19,15 @@ interface TraceListEntry {
   actor?: string;
   /** The producing server's session label (absent on pre-upgrade traces). */
   session?: string;
+  /**
+   * The one-line turn gloss the channel writes after the send (see the
+   * channel's summarize.ts). When present it titles the row in place of the bare
+   * format; it lands a beat after the trace (an async chat call), and the list's
+   * 2s refresh picks it up.
+   */
+  summary?: string;
+  /** The turn's model-spend roll-up in USD (channel cost.ts), when accounted. */
+  costUsd?: number;
 }
 
 export interface TracesPaneOptions {
@@ -52,8 +61,15 @@ export function traceRowParts(
   if (currentSession !== undefined && entry.session !== currentSession) {
     badges.push(entry.session ?? "unknown session");
   }
+  // Prefer the turn gloss once it's landed — "18:52 · rewrite the beet essay"
+  // reads far better than "18:52 · intent-v1" for a list of a dozen turns. The
+  // spend roll-up tags along so a scan of the list is also a scan of the bill.
+  const cost =
+    entry.costUsd !== undefined && entry.costUsd > 0
+      ? ` · ${entry.costUsd >= 0.01 ? `$${entry.costUsd.toFixed(2)}` : `$${entry.costUsd.toFixed(4)}`}`
+      : "";
   return {
-    title: `${time} · ${entry.format ?? "?"}`,
+    title: `${time} · ${entry.summary ?? entry.format ?? "?"}${cost}`,
     badges,
     dim: entry.status === "abandoned",
   };

@@ -111,7 +111,15 @@ function findHunk(doc: string[], match: string[]): number {
  */
 export function applyCorrectionToLines(
   lines: string[],
-  correction: { patch?: string; original: string; instruction: string },
+  correction: {
+    patch?: string;
+    original: string;
+    instruction: string;
+    /** Restrict the plain-replacement fallback to this line window (the
+     * active chunk); the patch path needs no restriction — its hunks are
+     * context-anchored to the chunk's own lines. */
+    scope?: { fromLine: number; toLine: number };
+  },
 ): { lines: string[]; applied: boolean } {
   if (correction.patch) {
     try {
@@ -126,7 +134,12 @@ export function applyCorrectionToLines(
   if (correction.original === "") {
     return { lines, applied: false };
   }
-  const at = lines.findIndex((line) => line.includes(correction.original));
+  const fromLine = Math.max(0, correction.scope?.fromLine ?? 0);
+  const toLine = Math.min(lines.length, correction.scope?.toLine ?? lines.length);
+  const inWindow = lines
+    .slice(fromLine, toLine)
+    .findIndex((line) => line.includes(correction.original));
+  const at = inWindow === -1 ? -1 : fromLine + inWindow;
   if (at === -1) {
     return { lines, applied: false };
   }

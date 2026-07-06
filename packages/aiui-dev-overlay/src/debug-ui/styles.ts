@@ -40,27 +40,89 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-peek img { display: block; max-width: 380px; max-height: 280px; border-radius: 5px; }
 .aiui-dbg-peek .aiui-dbg-peek-err { color: #9aa0aa; font-size: 11px; padding: 4px 6px; }
 
-/* trace view (generic stages, the extension's live-follow) */
-.aiui-dbg-trace { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow-y: auto; }
-.aiui-dbg-trace-head h2 { font-size: 14px; margin: 0 0 2px; }
-.aiui-dbg-trace-head .sub { color: #9aa0aa; font-size: 12px; margin-bottom: 14px; }
-.aiui-dbg-tstage { margin-bottom: 12px; border: 1px solid #2a3140; border-radius: 10px; overflow: hidden; }
-.aiui-dbg-thead { display: flex; gap: 8px; align-items: baseline; padding: 6px 12px;
-  background: #1f2430; font-size: 12px; }
-.aiui-dbg-tkind { font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: .06em; }
-.aiui-dbg-tkind.input { color: #8ab4f8; }
-.aiui-dbg-tkind.ir { color: #d0a8ff; }
-.aiui-dbg-tkind.output { color: #7ee0a3; }
-.aiui-dbg-tkind.info { color: #9aa0aa; }
-.aiui-dbg-thead .at { margin-left: auto; color: #9aa0aa; font-size: 11px; }
-.aiui-dbg-tbody { padding: 10px 12px; }
-.aiui-dbg-tbody pre { margin: 0; white-space: pre-wrap; word-break: break-word;
-  font: 12px/1.5 ui-monospace, monospace; }
-.aiui-dbg-tbody img { max-width: 100%; border-radius: 6px; }
-.aiui-dbg-tbody a { color: #8ab4f8; }
-/* an event-log stage embeds the full event panes; give it room */
-.aiui-dbg-tbody .aiui-dbg { min-height: 260px; }
-.aiui-dbg-tbody .aiui-dbg-pane { max-height: 320px; }
+/* ── trace view: the card-based reading surface (dock + DevTools) ───────────── */
+.aiui-dbg-trace { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow-y: auto;
+  color: #e8e8ea; font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+
+/* status header — the outcome at a glance, pinned to the top on scroll */
+.aiui-dbg-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-bottom: 1px solid #262c3a; position: sticky; top: 0;
+  background: #14171f; z-index: 2; }
+.aiui-dbg-outcome { font-weight: 700; font-size: 12px; border-radius: 999px; padding: 1px 10px; }
+.aiui-dbg-outcome.state-sent { color: #7ee0a3; background: #7ee0a31a; }
+.aiui-dbg-outcome.state-cancelled { color: #ffd166; background: #ffd1661a; }
+.aiui-dbg-outcome.state-abandoned { color: #9aa0aa; background: #9aa0aa1a; }
+.aiui-dbg-outcome.state-empty { color: #9aa0aa; background: #9aa0aa1a; }
+.aiui-dbg-outcome.state-live { color: #8ab4f8; background: #8ab4f81a; }
+.aiui-dbg-status-meta { color: #9aa0aa; font-size: 12px; }
+.aiui-dbg-status-actor { color: #ffd166; border: 1px solid #3a2f14; border-radius: 999px;
+  padding: 0 8px; font-size: 10px; font-weight: 600; }
+
+/* the prompt hero — preamble dimmed, body prominent, screenshots as thumbnails */
+.aiui-dbg-hero { padding: 12px 14px; border-bottom: 1px solid #262c3a; }
+.aiui-dbg-hero-preamble { color: #6f7686; font: 11px/1.55 ui-monospace, monospace;
+  white-space: pre-wrap; word-break: break-word; margin-bottom: 8px; }
+.aiui-dbg-hero-body { color: #e8e8ea; font: 13px/1.6 ui-monospace, monospace;
+  white-space: pre-wrap; word-break: break-word; }
+.aiui-dbg-hero-none { color: #9aa0aa; font-style: italic; }
+.aiui-dbg-shot { display: inline-block; vertical-align: top; margin: 4px 6px; }
+.aiui-dbg-shot img { display: block; max-width: 100%; border-radius: 6px; border: 1px solid #2a3140;
+  cursor: zoom-in; }
+.aiui-dbg-shot-cap { color: #9aa0aa; font: 10px/1.4 ui-sans-serif, system-ui; margin-top: 2px; }
+.aiui-dbg-shot-missing { color: #9aa0aa; font-size: 12px; }
+
+/* filter chips — one direction lane + per-category toggles */
+.aiui-dbg-filters { padding: 8px 12px; border-bottom: 1px solid #262c3a;
+  display: flex; flex-direction: column; gap: 6px; }
+.aiui-dbg-filters[hidden] { display: none; }
+.aiui-dbg-filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.aiui-dbg-chip { background: none; border: 1px solid #2a3140; color: #9aa0aa; cursor: pointer;
+  border-radius: 999px; padding: 2px 10px; font: 11px/1.4 ui-sans-serif, system-ui; }
+.aiui-dbg-chip:hover { color: #e8e8ea; }
+.aiui-dbg-chip.dir.active { background: #232936; color: #e8e8ea; border-color: #3a4152; }
+.aiui-dbg-chip.cat.active { color: #e8e8ea; border-color: #3a4152; background: #1b2130; }
+
+/* the card list — one card per logical item, coloured by direction */
+.aiui-dbg-cards { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.aiui-dbg-card { border: 1px solid #2a3140; border-left-width: 3px; border-radius: 8px;
+  padding: 6px 10px; background: #171b25; }
+.aiui-dbg-card.dir-in { border-left-color: #8ab4f8; }
+.aiui-dbg-card.dir-out { border-left-color: #7ee0a3; }
+.aiui-dbg-card.dir-agent { border-left-color: #c58af9; }
+.aiui-dbg-card.dir-internal { border-left-color: #ffd166; }
+.aiui-dbg-card.err { border-left-color: #f28b82; }
+.aiui-dbg-card-head { display: flex; align-items: baseline; gap: 6px; }
+.aiui-dbg-card-arrow { color: #6f7686; font-size: 11px; width: 12px; flex: none; }
+.aiui-dbg-card.dir-in .aiui-dbg-card-arrow { color: #8ab4f8; }
+.aiui-dbg-card.dir-out .aiui-dbg-card-arrow { color: #7ee0a3; }
+.aiui-dbg-card-icon { font-size: 12px; flex: none; }
+.aiui-dbg-card-title { font-weight: 600; color: #e8e8ea; font-size: 12px; }
+.aiui-dbg-card.err .aiui-dbg-card-title { color: #f28b82; }
+.aiui-dbg-card-count { margin-left: auto; color: #9aa0aa; font-size: 11px; }
+.aiui-dbg-card-info { color: #cfd3da; font-size: 12px; margin-top: 3px; word-break: break-word; }
+.aiui-dbg-card.err .aiui-dbg-card-info { color: #f2b8b3; }
+.aiui-dbg-card-sub { color: #9aa0aa; font: 11px/1.5 ui-monospace, monospace; margin-top: 3px;
+  word-break: break-word; }
+.aiui-dbg-card-sub.fix { color: #ffd166; }
+.aiui-dbg-card-img { display: block; max-width: 100%; border-radius: 6px; margin-top: 6px;
+  border: 1px solid #2a3140; cursor: zoom-in; }
+.aiui-dbg-card-audio { display: block; margin-top: 6px; width: 100%; height: 32px; }
+
+/* correction patch → a real diff (mirrors the overlay's mm-diff palette) */
+.aiui-dbg-patch { margin: 6px 0 0; padding: 6px 8px; background: #14171f; border-radius: 6px;
+  font: 11px/1.5 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+.aiui-dbg-patch-line { padding: 0 2px; border-radius: 3px; }
+.aiui-dbg-patch-line.del { color: #ff5c87; background: #ff5c8722; }
+.aiui-dbg-patch-line.add { color: #7ee0a3; background: #7ee0a322; }
+.aiui-dbg-patch-line.meta, .aiui-dbg-patch-line.hunk { color: #6f7686; }
+.aiui-dbg-patch-line.context { color: #cfd3da; }
+
+/* the collapsed raw disclosure under each card */
+.aiui-dbg-card-raw { margin-top: 6px; }
+.aiui-dbg-card-raw > summary { cursor: pointer; color: #6f7686; font-size: 11px; user-select: none; }
+.aiui-dbg-card-raw > summary:hover { color: #9aa0aa; }
+.aiui-dbg-card-raw a { color: #8ab4f8; word-break: break-all; }
+.aiui-dbg-card-raw > .aiui-dbg-json { margin-top: 4px; }
 
 /* JsonTree (json-tree.ts) — the collapsible stage-data widget */
 .aiui-dbg-json { font: 12px/1.6 ui-monospace, monospace; word-break: break-word; }

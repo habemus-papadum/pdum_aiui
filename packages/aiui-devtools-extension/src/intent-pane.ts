@@ -93,14 +93,34 @@ export interface TraceSummary {
    * recorded before the label existed.
    */
   session?: string;
+  /**
+   * Stage count as the slimmed list route reports it (see the channel's
+   * debug.ts — the list dropped full `stages` to a `stageCount` because a busy
+   * session's manifests are megabytes). Older servers still send full `stages`,
+   * so both are read.
+   */
+  stageCount?: number;
   stages?: unknown[];
+  /** The one-line turn gloss (channel summarize.ts), when it has landed. */
+  summary?: string;
+  /** The turn's model-spend roll-up in USD (channel cost.ts), when accounted. */
+  costUsd?: number;
 }
 
-/** The secondary line under a trace's format in the picker. */
+/**
+ * The secondary line under a trace's format in the picker. Prefers the one-line
+ * turn gloss once it's landed; otherwise falls back to the stage count (from the
+ * slimmed route's `stageCount`, or an older server's full `stages`).
+ */
 export function traceSummaryLine(t: TraceSummary): string {
-  const n = t.stages?.length ?? 0;
+  const n = t.stageCount ?? t.stages?.length ?? 0;
   const started = t.startedAt ? new Date(t.startedAt).toLocaleTimeString() : "";
-  return `${started ? `${started} · ` : ""}${n} stage${n === 1 ? "" : "s"} · ${t.status ?? "live"}`;
+  const tail = t.summary ?? `${n} stage${n === 1 ? "" : "s"}`;
+  const cost =
+    t.costUsd !== undefined && t.costUsd > 0
+      ? ` · ${t.costUsd >= 0.01 ? `$${t.costUsd.toFixed(2)}` : `$${t.costUsd.toFixed(4)}`}`
+      : "";
+  return `${started ? `${started} · ` : ""}${tail} · ${t.status ?? "live"}${cost}`;
 }
 
 /**
