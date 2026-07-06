@@ -45,12 +45,22 @@ fast; not editing.
   a document-symbol **outline + breadcrumb**, project-wide **symbol search**, and **jump-back /
   jump-forward** across a navigation history stack. This is "let a person move through the codebase
   quickly" — the core value.
-- **Not in scope**: editing, refactors, run/debug, terminals, source control UI. If it feels like an
+- **Not in scope for _this_ design**: editing, refactors, run/debug, terminals. If it feels like an
   IDE feature, it's out unless it directly serves *reading*.
 
-  Comment:  a source control UI is actually useful sometimes in read-only mode for annotating things as well. There might be a question of looking at a commit message and selecting something as well. That's, I think, a reasonable future enhancement. I mean, that's read-only and has high value. I would say the Git log does have high value that would be another component.
+### A sibling, not a feature: the read-only source-control / Git reader
 
-In this case, what I would say is that would be a separate design exercise that works well with the source control mechanism but is its own code browser mechanism that is slightly orthogonal. It works well with it, but it'd be its own design challenge in design projects. 
+Source control is the one thing worth calling out explicitly so it doesn't confuse the scope above.
+A **read-only Git reader** has high, honest value and is squarely read-only: read a `git log`, read a
+commit message, blame a line, and — usefully — **select text out of a diff or a commit message to
+talk about it**, exactly like selecting code here. So it is *not* being dismissed; it is being
+**deferred as its own design exercise**.
+
+The reason it's a sibling rather than a Tier: it is *slightly orthogonal*. LSP has nothing to say
+about history, refs, blame, or diffs — that's a different model with a different backend (Git, not a
+language server). It **composes** with this reader (shares the shell, the selection→compose path of
+§Tier 2, and the diff rendering of §Tier 3) but owns its own data. Treat it as a future companion
+proposal (`docs/proposals/source-control-reader.md`) rather than scope creep here.
 
 ### No veneer: proxy the LSP, don't reinterpret it
 
@@ -130,8 +140,9 @@ This is what "not every single thing is a reactive cell" means, made precise.
 
 - **A SolidJS 2.0 app**, built like the reference notebooks in `packages/aiui-demo` and on
   `@habemus-papadum/aiui-viz` — its own package (proposed: `@habemus-papadum/aiui-code`), its own
-  Vite entry, opened in the session browser (`aiui open`) and embeddable as a cockpit pane. It
-  discovers the channel port exactly as the overlay does (`window.__AIUI__.port` / registry).
+  Vite entry. It discovers the channel port exactly as the overlay does (`window.__AIUI__.port` /
+  registry). *How it's presented* — a slide-in drawer over the app vs. a standalone tab — is its own
+  question, answered in [Presenting the reader](#presenting-the-reader-slide-in-overlay-vs-a-synchronized-tab).
 - **Split of concerns:** the heavy UI app is one package; the channel gains only *thin, cwd-bound
   services* (`/lsp`, `/files`, and Tier 3's walkthrough store). This mirrors the repo's existing
   "collection in one package, server services in another" split.
@@ -253,13 +264,51 @@ an agent turn — the last being the natural marriage of Tier 3 with the change-
 The overlay already maps a screenshot rectangle → components → `file:line` (`locateComponents`,
 `data-source-loc`). The reader closes the loop:
 
-- From an app screenshot / DOM selection → **"open in reader"** → jump to `file:line`.
-- From a code selection → **highlight the rendered component** in the app (reverse
-  `data-source-loc` lookup).
+- **Jump to a source location *from the running web app* — a first-class capability.** While you're
+  in the UI, point at a component (a click, a DOM selection, or the end of a screenshot drag) and
+  jump straight to that `file:line:col` in the reader. This is the primary trigger for the reader
+  sliding in (below): you're looking at the app, you see something, and the code that authored it is
+  one gesture away. Mechanically it's the reverse of a code selection — the same `data-source-loc`
+  stamp read from the DOM instead of produced by the editor — plus a `reveal(file, range)` command
+  into the reader.
+- From a code selection → **highlight the rendered component** in the app (the other direction of the
+  same `data-source-loc` lookup).
 
 That is the "look at the code **and** the UI **and** the client, and point across them" cockpit — the
 thing the current tool can't do. Not required for Tier 1, but the payoff that makes the reader more
 than a mini-IDE.
+
+## Presenting the reader: slide-in overlay vs. a synchronized tab
+
+How does the reader sit next to the app you're developing? Two shapes, and they serve different
+moments — the recommendation is to support **both with one reader app**.
+
+**A. Slide-in overlay (recommended for the "switch to code mid-prompt" moment).** The dev overlay
+injects the reader as a **full web app in an iframe drawer** that slides in over the app page —
+literally one application overlaid on another. This is the natural home for the app→code jump above:
+point at a component and the drawer slides in already at that `file:line`. Prompt-state sync is
+**free** here: the reader is a child of the overlay's host, so a code selection `postMessage`s up to
+the overlay and joins the *same* compose session as DOM/screenshot selections — one intent
+websocket, one prompt preview, nothing to reconcile. Costs: an iframe boundary, Monaco loading
+inside the app's tab, and z-index/focus/keymap arbitration with the app (the overlay already solves
+the last one with its armed-keymap + typing-target guard).
+
+**B. Standalone / synchronized tab (recommended for deep reading and walkthroughs).** The reader is
+its own full-screen tab (`aiui open`), unconstrained by the app's layout — better for long reading
+sessions, navigation, and narrated walkthroughs. The catch is exactly the one you named: if
+prompt-building spans two tabs, the **compose draft must synchronize**. The two surfaces live on
+different origins (app dev-server vs. reader), so `BroadcastChannel` won't reach across them — the
+**channel is the sync hub**. Give the channel a small per-session **compose draft** (the accumulating
+selections + the in-progress transcript) that both the overlay and the reader subscribe to and append
+to over their existing websockets. The draft is server-side state the two surfaces mirror — the same
+"durable state lives off the browser, the client is stateless" posture the overlay already takes.
+
+**Recommendation.** One reader app, two host contexts: the iframe drawer for integrated
+prompt-building (sync via `postMessage` to the parent overlay), the standalone tab for reading +
+walkthroughs (sync via the channel-hosted compose draft). The channel-hosted draft is the more
+general mechanism, so if we build it first, the drawer can use it too and `postMessage` becomes an
+optimization rather than a requirement. New tab vs. drawer then stops being an either/or — it's the
+same app and the same draft, presented in whichever host fits the moment.
 
 ---
 
@@ -285,11 +334,12 @@ lowering · the walkthrough data model + store + `create_walkthrough` MCP tool +
   search; jump history. *This alone delivers "I can finally read what the agent is doing."*
 - **P1.5 — power-tool nav:** modal keystroke navigation + voice navigation.
 - **P2 — Tier 2:** code selection → chip → reuse voice + correction → `code-v1` lowering → inject;
-  multi-file accumulation; the prompt preview.
+  multi-file accumulation; the prompt preview. (Standalone tab first; the slide-in drawer + the
+  channel-hosted compose-draft sync is the integrated form — see *Presenting the reader*.)
 - **P3 — Tier 3:** the walkthrough model + `create_walkthrough` MCP tool + the reader's narrated,
   diff-aware stepper.
-- **P4 — the loop:** bidirectional code ↔ UI linking; the file watcher's "live" affordance; the
-  "explain what you just did" tour.
+- **P4 — the loop:** the app→code jump + the slide-in drawer; bidirectional code ↔ UI linking; the
+  file watcher's "live" affordance; the "explain what you just did" tour.
 
 ## Open questions / decisions
 
@@ -300,8 +350,13 @@ lowering · the walkthrough data model + store + `create_walkthrough` MCP tool +
 2. **New package vs a pane in an existing surface.** Proposal: a new `aiui-code` SolidJS app,
    standalone + embeddable. Alternative: a workbench/DevTools-panel pane (cramped for a full reader).
 3. **Language scope for v1.** TS/JS only (obvious here) vs a multi-server registry from the start.
-4. **Where the reader is framed** in the eventual code↔UI↔client cockpit — a tab, a split pane, a
-   separate window? Depends on how the broader cockpit is composed.
+4. **Presentation & prompt-state sync.** Proposed answer in
+   [Presenting the reader](#presenting-the-reader-slide-in-overlay-vs-a-synchronized-tab): one app,
+   both a slide-in drawer and a standalone tab. The remaining sub-decision is *ordering* — build the
+   general channel-hosted **compose draft** first (works for both hosts), or the cheaper
+   `postMessage` drawer first (works only overlaid).
+5. **The source-control / Git reader** — a deferred companion proposal (see the sibling note under
+   Tier 1). Open: when we write it, and how much of this reader's shell it reuses vs. owns.
 
 ## Risks / watch-items
 
