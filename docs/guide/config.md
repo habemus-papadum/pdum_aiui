@@ -37,6 +37,32 @@ Two asymmetries to know about:
 | user    | `~/.cache/aiui/config.json` (respects `AIUI_CACHE` and `XDG_CACHE_HOME`)     |
 | project | `.aiui-cache/config.json`, under the directory where the command runs        |
 
+## Checking and editing: `aiui config`
+
+You never have to open those files by hand — every key is browsable and editable from the CLI,
+rendered from the same schema the loader validates against (so what the commands show is exactly
+what a launch would accept):
+
+```sh
+aiui config              # the interactive browser (same as `aiui config tui`)
+aiui config show         # every key: effective value + which file set it
+aiui config show --json  # machine-readable: file paths, per-level values, effective merge
+aiui config get chrome.mode            # the effective value (provenance on stderr)
+aiui config set chrome.mode launch     # validated write to the user config
+aiui config set chrome.headless true --project   # …or to .aiui-cache/config.json here
+aiui config unset claude.skipPermissions         # remove a key (get re-asked on first run)
+```
+
+The **TUI** (bare `aiui config`, in a real terminal) lists every key grouped by section; the
+panel under the list is the documentation card — what the key does, its default, and what the
+user and project files each say. Picking a key offers set/unset at either level: enums and
+booleans become menus, strings and numbers a validated input. `Ctrl-C` leaves at any point.
+
+`set` and `unset` write the **user** file unless you pass `--project` — same reasoning as the
+first-run prompts above: personal preferences belong to the user level, and the project file
+(which a team may share or commit) is only touched deliberately. Values are validated before
+writing, so you can't `set` a config that would then fail the launch.
+
 ## All keys
 
 ```json

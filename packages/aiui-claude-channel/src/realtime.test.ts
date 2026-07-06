@@ -281,8 +281,9 @@ function driveRealtime(opts: {
   };
 }
 
+// `?? []` skips non-event pushes (fin's `lowered-prompt` carries no events).
 const pushedEvents = (pushed: Array<{ events: IntentEvent[] }>): IntentEvent[] =>
-  pushed.flatMap((p) => p.events);
+  pushed.flatMap((p) => p.events ?? []);
 
 describe("intent-v1 realtime transcription (streaming)", () => {
   it("streams audio → delta echoes in order → commit at talk-end → final → compose", async () => {

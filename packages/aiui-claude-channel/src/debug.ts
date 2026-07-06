@@ -16,7 +16,10 @@
  *
  * Routes:
  *   GET /debug                      the viewer app (self-contained HTML)
- *   GET /debug/api/traces           all trace manifests, newest first
+ *   GET /debug/api/traces           all trace manifests, newest first, plus
+ *                                   this server's `session` label (see
+ *                                   trace.ts) so lists can default-filter to
+ *                                   the current server's traces
  *   GET /debug/api/traces/:id       one manifest
  *   GET /debug/api/traces/:id/live  a revision-poll for live-following one
  *                                   trace: `{rev, ...manifest}`, or — when the
@@ -28,12 +31,17 @@
  *   GET /debug/api/info             this server's own channel info (tag, port,
  *                                   pid, owning Claude session) plus, under
  *                                   `launch`, the launcher-provided session
- *                                   summary (see launch-info.ts), and the live
- *                                   reload `generation`
+ *                                   summary (see launch-info.ts), the live
+ *                                   reload `generation`, and `debug: true` on a
+ *                                   debug-mode server
  *   POST /debug/api/reload          reload the lowering layer in place (drops +
  *                                   reconnects live sockets); returns the reload
  *                                   summary. 404 when reload isn't wired.
  *   GET /debug/api/stats            server-side transport counters (see stats.ts)
+ *   GET /debug/api/frames?since=N   the protocol frame log (see frame-log.ts):
+ *                                   `{seq, entries}` with the entries recorded
+ *                                   after seq N — the workbench's raw-JSON pane
+ *                                   polls this with its last seen seq
  *   GET /debug/api/preview?path=…   an image from disk, for hover previews of
  *                                   absolute paths mentioned in lowered prompts
  *                                   (allowlisted roots only — see previewablePath)
@@ -44,6 +52,7 @@ import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, sep } from "node:path";
 import { cacheDir as userCacheDir } from "@habemus-papadum/aiui-util";
 import type { Express } from "express";
+import type { FrameLog } from "./frame-log";
 import type { LaunchInfo } from "./launch-info";
 import type { TransportStats } from "./stats";
 import { selfChannelInfo } from "./tools";
@@ -123,12 +132,21 @@ function traceRev(cacheDir: string, id: string): number | undefined {
   }
 }
 
-/** Live hooks the reload feature threads into the debug API. */
-export interface DebugReloadHooks {
+/** Live server state the web backend threads into the debug API. */
+export interface DebugHooks {
   /** Reads the current reload generation, for /debug/api/info. */
   getGeneration?: () => number;
   /** Drives a reload for POST /debug/api/reload; omit and the route 404s. */
   onReload?: ChannelReload;
+  /** The server's protocol frame log, for GET /debug/api/frames. */
+  frameLog?: FrameLog;
+  /**
+   * This server process's trace session label (see {@link sessionLabel} in
+   * trace.ts), reported alongside the listing on GET /debug/api/traces.
+   */
+  session?: string;
+  /** True on a debug-mode server (`serve`); echoed on /debug/api/info. */
+  debug?: boolean;
 }
 
 /** Mount the debug tool's routes onto the backend's express app. */
@@ -137,7 +155,7 @@ export function registerDebugRoutes(
   cacheDir: string,
   stats?: TransportStats,
   launchInfo?: LaunchInfo,
-  reload: DebugReloadHooks = {},
+  hooks: DebugHooks = {},
 ): void {
   // Loopback diagnostics: let any local page (the DevTools panel opened as a
   // plain tab, test fixtures) read these endpoints cross-origin. The server
@@ -164,22 +182,35 @@ export function registerDebugRoutes(
     res.json({
       ...infoCache.value,
       ...(launchInfo ? { launch: launchInfo } : {}),
-      ...(reload.getGeneration ? { generation: reload.getGeneration() } : {}),
+      ...(hooks.getGeneration ? { generation: hooks.getGeneration() } : {}),
+      ...(hooks.debug === true ? { debug: true } : {}),
     });
   });
 
   // Reload the lowering layer in place — the DevTools panel's button and `curl`
   // both POST here. CORS is already open on /debug above.
   app.post("/debug/api/reload", async (_req, res) => {
-    if (!reload.onReload) {
+    if (!hooks.onReload) {
       res.status(404).json({ error: "reload not available" });
       return;
     }
     try {
-      res.json(await reload.onReload());
+      res.json(await hooks.onReload());
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  // The protocol frame log (see frame-log.ts). A poller echoes the last `seq`
+  // it saw as `?since=` and receives only what's new; no `since` (or a bad
+  // one) returns everything still in the ring.
+  app.get("/debug/api/frames", (req, res) => {
+    if (!hooks.frameLog) {
+      res.status(404).json({ error: "frame log not enabled" });
+      return;
+    }
+    const since = typeof req.query.since === "string" ? Number(req.query.since) : Number.NaN;
+    res.json(hooks.frameLog.snapshot(Number.isFinite(since) ? since : 0));
   });
 
   app.get("/debug/api/stats", (_req, res) => {
@@ -208,7 +239,13 @@ export function registerDebugRoutes(
   });
 
   app.get("/debug/api/traces", (_req, res) => {
-    res.json({ traces: listTraces(cacheDir) });
+    // The current session label rides with the listing (additive) so viewers
+    // can split "this server's traces" from earlier/other processes' — the
+    // manifests all live flat in one cache dir.
+    res.json({
+      traces: listTraces(cacheDir),
+      ...(hooks.session !== undefined ? { session: hooks.session } : {}),
+    });
   });
 
   app.get("/debug/api/traces/:id", (req, res) => {
@@ -279,7 +316,12 @@ const DEBUG_APP_HTML = /* html */ `<!doctype html>
     width: 300px; flex: none; overflow-y: auto;
     border-right: 1px solid #2a3140; padding: 10px;
   }
-  #list h1 { font-size: 13px; margin: 4px 6px 10px; color: #9aa0aa; font-weight: 600; }
+  #list h1 { font-size: 13px; margin: 4px 6px 6px; color: #9aa0aa; font-weight: 600; }
+  #list .all-toggle {
+    display: flex; align-items: center; gap: 6px; margin: 0 6px 10px;
+    color: #9aa0aa; font-size: 11px; cursor: pointer; user-select: none;
+  }
+  #list .all-toggle input { margin: 0; accent-color: #8ab4f8; }
   .trace {
     padding: 8px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 4px;
   }
@@ -287,6 +329,16 @@ const DEBUG_APP_HTML = /* html */ `<!doctype html>
   .trace.active { background: #2a3140; }
   .trace .fmt { font-weight: 600; }
   .trace .meta { color: #9aa0aa; font-size: 11px; }
+  .actor {
+    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
+    background: #3a2f14; color: #ffd166; font-size: 10px; font-weight: 600;
+    vertical-align: 1px;
+  }
+  /* Deliberately dimmer than .actor: session is context, not provenance. */
+  .session {
+    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
+    background: #222836; color: #7d8695; font-size: 10px; vertical-align: 1px;
+  }
   #detail { flex: 1; overflow-y: auto; padding: 18px 22px; }
   #detail .empty { color: #9aa0aa; margin-top: 40px; text-align: center; }
   .stage { margin-bottom: 14px; border: 1px solid #2a3140; border-radius: 10px; overflow: hidden; }
@@ -321,7 +373,10 @@ const DEBUG_APP_HTML = /* html */ `<!doctype html>
 </style>
 </head>
 <body>
-  <nav id="list"><h1>lowering traces</h1><div id="items"></div></nav>
+  <nav id="list"><h1>lowering traces</h1>
+    <label class="all-toggle" title="include traces recorded by other/earlier server processes">
+      <input type="checkbox" id="all-sessions"> all sessions</label>
+    <div id="items"></div></nav>
   <main id="detail"><div class="empty">Select a trace — newest are first.<br>
     Send something from the intent tool to create one.</div></main>
 <script>
@@ -333,6 +388,16 @@ const IMAGE = /\\.(png|jpe?g|gif|webp|svg)$/i;
 // hover to peek, click to open.
 const ABS_PATH = new RegExp("(^|[\\\\s\\"'({\\\\[=:,])(/(?:[\\\\w.@%+~-]+/)+[\\\\w.@%+~-]+)", "g");
 let active = null;
+
+// The session dimension: the listing reports which server process is serving
+// it ("session"), and each manifest carries the label of the process that
+// recorded it. The list defaults to this server's traces; the "all sessions"
+// toggle reveals the rest — earlier runs, other servers on the same cache —
+// each row then wearing a dim session pill ("unknown" for pre-label traces).
+let session = null;
+let allSessions = false;
+const allToggle = document.getElementById("all-sessions");
+allToggle.onchange = () => { allSessions = allToggle.checked; refresh(); };
 
 const peek = document.createElement("div");
 peek.id = "peek";
@@ -379,7 +444,13 @@ function renderText(container, text) {
 
 async function refresh() {
   const res = await fetch("/debug/api/traces");
-  const { traces } = await res.json();
+  const body = await res.json();
+  session = body.session || null;
+  // Default view: only this server's traces. A server that reports no label
+  // (an older channel) can't be filtered against, so everything shows.
+  const traces = (allSessions || session === null)
+    ? body.traces
+    : body.traces.filter((t) => t.session === session);
   // First load with traces present: jump straight to the newest one.
   if (!active && traces.length) { active = traces[0].id; show(active); }
   const items = document.getElementById("items");
@@ -389,6 +460,20 @@ async function refresh() {
     div.onclick = () => { active = t.id; show(t.id); refresh(); };
     const fmt = document.createElement("div");
     fmt.className = "fmt"; fmt.textContent = t.format;
+    // Provenance badge: non-human runs (agents, automation) get a pill so a
+    // human scanning the list can tell their own turns from an agent's.
+    if (t.actor && t.actor !== "human") {
+      const pill = document.createElement("span");
+      pill.className = "actor"; pill.textContent = t.actor;
+      fmt.append(pill);
+    }
+    // Under "all sessions" every row says whose it is; the default view is
+    // all-current-session, so the pill would be noise there.
+    if (allSessions) {
+      const pill = document.createElement("span");
+      pill.className = "session"; pill.textContent = t.session || "unknown";
+      fmt.append(pill);
+    }
     const meta = document.createElement("div");
     meta.className = "meta";
     meta.textContent = new Date(t.startedAt).toLocaleTimeString()
@@ -397,7 +482,8 @@ async function refresh() {
     div.append(fmt, meta);
     return div;
   }));
-  if (!traces.length) items.innerHTML = '<div class="trace"><div class="meta">no traces yet</div></div>';
+  if (!traces.length) items.innerHTML = '<div class="trace"><div class="meta">no traces '
+    + (allSessions || session === null ? "yet" : "in this session yet") + '</div></div>';
 }
 
 async function show(id) {
@@ -410,7 +496,9 @@ async function show(id) {
   h2.textContent = t.format + " — " + t.id;
   const sub = document.createElement("div");
   sub.className = "sub";
-  sub.textContent = "thread " + t.threadId + " · started " + t.startedAt
+  sub.textContent = "thread " + t.threadId
+    + (t.actor ? " · actor " + t.actor : "")
+    + " · started " + t.startedAt
     + (t.endedAt ? " · ended " + t.endedAt : " · live");
   frag.append(h2, sub);
   for (const s of t.stages) {

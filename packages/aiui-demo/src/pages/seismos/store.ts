@@ -38,17 +38,63 @@ const DATA_URL = `${import.meta.env.BASE_URL}data/quakes.parquet`;
 const WORLD_URL = `${import.meta.env.BASE_URL}data/countries-110m.geojson`;
 const TABLE = "quakes";
 
-/**
- * A country's borders as antimeridian-split polylines in raw lon/lat — the exact
- * coordinate space the epicenter raster lives in, so a `geo` mark drawn from
- * these aligns pixel-for-pixel with the density image (no projection, no
- * fitting). Preprocessed at author time from Natural Earth 110m (see NOTES.md).
- */
-export interface BorderFeature {
+/** The on-disk shape: antimeridian-split MultiLineString features (NOTES.md). */
+interface BorderFeature {
   type: "Feature";
   properties: Record<string, never>;
   geometry: { type: "MultiLineString"; coordinates: [number, number][][] };
 }
+
+/**
+ * One vertex of a country border, flattened for a vgplot `line` mark: raw
+ * lon/lat — the exact coordinate space the epicenter raster lives in — with a
+ * per-ring series id (`z` channel) so separate coastlines don't connect. Why a
+ * line mark and not `geo`: vgplot's geo mark, fed these features as literal
+ * client data on a projection-less plot, renders no mark group at all
+ * (verified standalone); a line mark in plain x/y scale space aligns
+ * pixel-for-pixel with the density image by construction. Preprocessed at
+ * author time from Natural Earth 110m (see NOTES.md).
+ */
+export interface BorderPoint {
+  /** Equal-Earth-projected vertex (see {@link equalEarth}). */
+  x: number;
+  y: number;
+  /** Series id: one polyline ring per value. */
+  ring: number;
+}
+
+/**
+ * Equal Earth projection (Šavrič–Patterson–Jenny 2018), shared by the epicenter
+ * map's layers. Equal-AREA — the right family for a density map (Mercator
+ * inflates high latitudes and visually dilutes density there) — with a rounded,
+ * Robinson-like silhouette and a native ~2.05:1 aspect. The projection is baked
+ * into the DATA (eq_x/eq_y table columns, transformed border/graticule
+ * vertices), not the plot: every layer stays in linear x/y space, the DuckDB
+ * raster bins in projected (equal-area!) space, and the interval brush filters
+ * on eq_x/eq_y — the on-screen rectangle IS the filtered region. Constants are
+ * the published A1–A4; validated against the reference values (x_max 2.7066,
+ * aspect 2.055).
+ */
+const EE_A1 = 1.340264;
+const EE_A2 = -0.081106;
+const EE_A3 = 0.000893;
+const EE_A4 = 0.003796;
+const EE_M = Math.sqrt(3) / 2;
+export function equalEarth(lonDeg: number, latDeg: number): { x: number; y: number } {
+  const lon = (lonDeg * Math.PI) / 180;
+  const theta = Math.asin(EE_M * Math.sin((latDeg * Math.PI) / 180));
+  const t2 = theta * theta;
+  const t6 = t2 * t2 * t2;
+  return {
+    x:
+      (lon * Math.cos(theta) * (2 * Math.sqrt(3))) /
+      (3 * (EE_A1 + 3 * EE_A2 * t2 + t6 * (7 * EE_A3 + 9 * EE_A4 * t2))),
+    y: theta * (EE_A1 + EE_A2 * t2 + t6 * (EE_A3 + EE_A4 * t2)),
+  };
+}
+/** Projected extents: x at (±180°, 0°), y at the poles. */
+export const EQ_X_MAX = equalEarth(180, 0).x;
+export const EQ_Y_MAX = equalEarth(0, 90).y;
 
 /** Default magnitude of completeness — global M4.5+ completeness sits near here. */
 export const DEFAULT_MC = 4.7;
@@ -82,7 +128,7 @@ export interface SeismosStore {
   histo: Accessor<MagBin[]>;
   /** Country borders for the map's faint overlay; empty until loaded (or if the
    *  optional overlay asset failed to fetch — the map still renders without it). */
-  world: Accessor<BorderFeature[]>;
+  world: Accessor<BorderPoint[]>;
   /** Idempotent async load; forwards fraction-complete to `onProgress`. */
   ensureLoaded: (onProgress?: (fraction: number) => void) => Promise<Summary>;
   /** Bounded, read-only SELECT for the agent query tool (row-capped, sanitized). */
@@ -114,7 +160,7 @@ export const store: SeismosStore = durable("seismos:store", () => {
   const [loadError, setLoadError] = createSignal<unknown>(undefined);
   const [summary, setSummary] = createSignal<Summary | undefined>(undefined);
   const [histo, setHisto] = createSignal<MagBin[]>([]);
-  const [world, setWorld] = createSignal<BorderFeature[]>([]);
+  const [world, setWorld] = createSignal<BorderPoint[]>([]);
 
   // A second connection dedicated to our own reads (summary + the agent query
   // tool), so they never contend with Mosaic's connection.
@@ -142,17 +188,25 @@ export const store: SeismosStore = durable("seismos:store", () => {
 
   // The country overlay is optional chrome: fetch it alongside the parquet so it
   // adds no latency, and never let its failure abort the dataset load.
-  async function fetchWorld(): Promise<BorderFeature[]> {
+  async function fetchWorld(): Promise<BorderPoint[]> {
     const res = await fetch(WORLD_URL);
     if (!res.ok) throw new Error(`world overlay fetch failed: ${res.status}`);
     const gj = (await res.json()) as { features: BorderFeature[] };
-    return gj.features;
+    const points: BorderPoint[] = [];
+    let ring = 0;
+    for (const feature of gj.features) {
+      for (const line of feature.geometry.coordinates) {
+        for (const [lon, lat] of line) points.push({ ...equalEarth(lon, lat), ring });
+        ring++;
+      }
+    }
+    return points;
   }
 
   async function load(report: (fraction: number) => void): Promise<Summary> {
     const worldPromise = fetchWorld().catch((err) => {
       console.warn("[seismos] country overlay unavailable; map renders without it", err);
-      return [] as BorderFeature[];
+      return [] as BorderPoint[];
     });
     report(0.04);
     const db: AsyncDuckDB = await instantiateDuckDB();
@@ -168,6 +222,18 @@ export const store: SeismosStore = durable("seismos:store", () => {
     // Materialize the parquet into a real table once (durable): views and our
     // own reads then hit an in-memory table, not the file each time.
     await queryCon.query(loadParquet(TABLE, "quakes.parquet").toString());
+    // The map's projection columns (see equalEarth above): computed once at load
+    // so the raster bins and the brush filter in projected space with linear
+    // scales. Same polynomial as the JS mirror; theta staged in a subquery.
+    await queryCon.query(
+      `CREATE OR REPLACE TABLE ${TABLE} AS SELECT * EXCLUDE (ee_theta),
+         RADIANS(longitude) * COS(ee_theta) * 1.1547005383792515
+           / (1.340264 + 3*-0.081106*ee_theta*ee_theta
+              + POWER(ee_theta, 6) * (7*0.000893 + 9*0.003796*ee_theta*ee_theta)) AS eq_x,
+         ee_theta * (1.340264 + -0.081106*ee_theta*ee_theta
+              + POWER(ee_theta, 6) * (0.000893 + 0.003796*ee_theta*ee_theta)) AS eq_y
+       FROM (SELECT *, ASIN(0.8660254037844386 * SIN(RADIANS(latitude))) AS ee_theta FROM ${TABLE})`,
+    );
     report(0.95);
 
     const s = await computeSummary(queryCon);

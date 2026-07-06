@@ -73,17 +73,29 @@ browser's CDP endpoint), the `/debug` viewer with path hover-previews.
 
 ## Target architecture
 
-```
-aiui-dev-overlay
-  src/intent-pipeline/     engine, keymap, patch/word-diff, types, config   (framework-free, exported)
-  src/multimodal/          the IntentModality: ink, shot(+locator), audio, preview UI
-  src/debug-ui/            inspector panes (events / IR / timing / export)   (exported for lab + extension)
-  workbench/               the LAB: scenery + settings drawer + mocks + bench/ + imports of all the above
-aiui-claude-channel
-  multimodal format        codec: JSON event frames + binary attachment frames
-  lowering processor       transcribe → correct(diff) → condition/polish → Option-C body+meta → notify
-aiui-devtools-extension
-  panel embeds debug-ui    live intent debugging next to Server/Transport/Traces
+```mermaid
+flowchart TB
+  subgraph overlay["aiui-dev-overlay"]
+    pipeline["src/intent-pipeline/<br/>engine · keymap · patch/word-diff · types · config<br/>(framework-free, exported)"]
+    mm["src/multimodal/<br/>the IntentModality: ink · shot(+locator) · audio · preview"]
+    debugui["src/debug-ui/<br/>inspector panes: events / IR / timing / export<br/>(exported for lab + extension)"]
+    lab["workbench/ — the LAB<br/>scenery · settings drawer · mocks · bench/"]
+  end
+  subgraph channel["aiui-claude-channel"]
+    fmt["multimodal format<br/>JSON event frames + binary attachment frames"]
+    lower["lowering processor<br/>transcribe → correct(diff) → condition/polish<br/>→ Option-C body+meta → notify"]
+  end
+  subgraph ext["aiui-devtools-extension"]
+    panel["panel embeds debug-ui<br/>live intent debugging next to Server/Transport/Traces"]
+  end
+
+  pipeline --> mm
+  pipeline --> lab
+  pipeline -->|"shared (source-first)"| lower
+  mm -->|"intent-v1 wire"| fmt
+  fmt --> lower
+  debugui --> lab
+  debugui --> panel
 ```
 
 Workspace deps are source-first (editable installs), so the lab importing overlay source has no

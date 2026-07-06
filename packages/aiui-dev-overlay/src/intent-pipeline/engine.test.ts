@@ -105,6 +105,36 @@ describe("composeIntent", () => {
     expect(composed.meta.shot_1_info).toBe("Legend @ scenery.ts:33");
   });
 
+  it("excludes retracted shots (shot-drop) from items, prompt, and meta", () => {
+    const engine = armedEngine();
+    const s1 = engine.talkStart();
+    engine.talkEnd();
+    engine.transcriptFinal(s1 ?? 1, "compare this", 90, "mock");
+    const first = engine.shotDone(
+      { x: 1, y: 2, w: 30, h: 20 },
+      [{ component: "Legend", source: "scenery.ts:33", rect: { x: 0, y: 0, w: 10, h: 10 } }],
+      "data:image/png;base64,x",
+      "/tmp/aiui-workbench/1-shot_1.png",
+    );
+    engine.shotDone(
+      { x: 5, y: 6, w: 30, h: 20 },
+      [],
+      "data:image/png;base64,y",
+      "/tmp/aiui-workbench/2-shot_2.png",
+    );
+    engine.dropShot(first);
+
+    const composed = composeIntent(engine.events);
+    // The retracted shot vanishes from the composition; the kept one stays.
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot"]);
+    expect(composed.items[1].marker).toBe("shot_2");
+    expect(composed.prompt).not.toContain("shot_1");
+    expect(composed.prompt).toContain("{shot_2}");
+    expect(composed.meta).toEqual({ shot_2: "/tmp/aiui-workbench/2-shot_2.png" });
+    // ...but the shot event itself is still in the stream (append-only; traces keep it).
+    expect(engine.events.some((e) => e.type === "shot" && e.marker === "shot_1")).toBe(true);
+  });
+
   it("applies a V4A patch correction across the whole transcript", () => {
     const engine = armedEngine();
     const s1 = engine.talkStart();

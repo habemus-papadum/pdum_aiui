@@ -92,6 +92,15 @@ export interface AiuiDevOverlayOptions {
    * rides the hello so a lowering trace records it. See `IntentPipelineConfig`.
    */
   intent?: Partial<IntentPipelineConfig>;
+  /**
+   * Actor label for trace provenance, embedded in the mount module and sent on
+   * every intent hello as `meta.actor`. Omitted → the widget detects it at
+   * runtime: `navigator.webdriver === true` (Chrome automation — the agent
+   * driving the session browser) → `"agent"`, else `"human"` — so traces from
+   * agent-driven UI testing are distinguishable from a human's in the trace
+   * list. Set it to force a fixed label for everything this dev server serves.
+   */
+  actor?: string;
   /** Channel port to inject; defaults to `process.env.VITE_AIUI_PORT`. */
   port?: number | string;
   /**
@@ -191,6 +200,7 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
         "force: true",
         ...(port === undefined ? [] : [`port: ${port}`]),
         ...(options.format === undefined ? [] : [`format: ${scriptString(options.format)}`]),
+        ...(options.actor === undefined ? [] : [`actor: ${scriptString(options.actor)}`]),
         // `<` escaped so a config value can never close the module's <script>.
         ...(options.intent === undefined
           ? []

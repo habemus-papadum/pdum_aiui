@@ -27,6 +27,8 @@ export interface LiveTrace {
   status?: string;
   startedAt?: string;
   endedAt?: string;
+  /** Who drove the client (`"human"` / `"agent"` — the hello's `meta.actor`). */
+  actor?: string;
   stages: TraceStageLike[];
 }
 

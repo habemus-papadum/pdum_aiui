@@ -7,12 +7,29 @@
  *   S      hold + drag a rect = region screenshot; tap = viewport shot
  *   C      clear ink
  *   E      enter/exit correct mode (the meta layer)
+ *   K      open/close the config strip (the quick-config layer)
  *   Enter  send — finalize the thread
  *   Esc    step out one level (correct → ink → cancel thread → disarm)
+ *
+ * K is deliberately the ONLY key config costs the main layer: everything else
+ * (tier digits, save, reset, the advanced editor) lives inside the strip, where
+ * the strip UI itself shows the bindings. While the strip is open its keys take
+ * priority; every other key still means what it always means (Space talks), so
+ * the strip is a layer, not a mode.
  *
  * The decision logic is pure ({@link keyCommand}) so the design is unit-
  * testable; installKeymap() is the thin DOM binding around it.
  */
+import type { IntentTier } from "./config";
+
+/** The strip's digit row: 1..5, cheapest tier first (matches the tier ladder). */
+export const TIER_BY_DIGIT: readonly IntentTier[] = [
+  "mock",
+  "standard",
+  "rapid",
+  "premium",
+  "flagship",
+];
 
 export interface KeyState {
   armed: boolean;
@@ -21,6 +38,8 @@ export interface KeyState {
   talkMode: "hold" | "toggle";
   /** True when focus is in a text input — keys must not fire. */
   typing: boolean;
+  /** True while the quick-config strip is open (its keys take priority). */
+  configOpen?: boolean;
 }
 
 export type KeyCommand =
@@ -32,7 +51,13 @@ export type KeyCommand =
   | { cmd: "ink-clear" }
   | { cmd: "correct-toggle" }
   | { cmd: "send" }
-  | { cmd: "step-out" };
+  | { cmd: "step-out" }
+  | { cmd: "config-toggle" }
+  | { cmd: "config-tier"; tier: IntentTier }
+  | { cmd: "config-save" }
+  | { cmd: "config-reset" }
+  | { cmd: "config-advanced" }
+  | { cmd: "config-close" };
 
 /** Map one key event to a command, or undefined to let the page have it. */
 export function keyCommand(
@@ -49,6 +74,37 @@ export function keyCommand(
   }
   if (!state.armed) {
     return undefined;
+  }
+
+  // The strip's own keys, checked first while it is open. Anything not claimed
+  // here falls through to the normal armed keymap below — except S, which the
+  // strip claims for "save" (shadowing screenshots until it closes).
+  if (state.configOpen && phase === "down" && !repeat) {
+    const digit = Number.parseInt(key, 10);
+    if (digit >= 1 && digit <= TIER_BY_DIGIT.length) {
+      return { cmd: "config-tier", tier: TIER_BY_DIGIT[digit - 1] };
+    }
+    switch (key) {
+      case "s":
+      case "S":
+        return { cmd: "config-save" };
+      case "r":
+      case "R":
+        return { cmd: "config-reset" };
+      case "g":
+      case "G":
+        return { cmd: "config-advanced" };
+      case "Escape":
+      case "k":
+      case "K":
+        return { cmd: "config-close" };
+    }
+  }
+  if (state.configOpen && (key === "s" || key === "S")) {
+    return undefined; // swallow the S keyup too, so shoot-release can't fire
+  }
+  if ((key === "k" || key === "K") && phase === "down" && !repeat) {
+    return { cmd: "config-toggle" };
   }
 
   switch (key) {

@@ -39,8 +39,12 @@ Minimalist by design — one hand, no chords:
 | **S**     | hold + drag = region screenshot · tap = whole viewport |
 | **C**     | clear ink |
 | **E**     | correct mode — select transcript text, then speak or type the fix |
+| **K**     | quick config — the [tier strip](#quick-config-the-k-strip): switch tiers, save/reset, open the editor |
 | **Enter** | send — finalize and lower the turn |
 | **Esc**   | step out one level (see the escape ladder below) |
+
+K is deliberately the only key configuration costs this layer: the tier digits, save, reset,
+and the advanced editor all live *inside* the strip it opens, which shows its own bindings.
 
 ## A turn, start to finish
 
@@ -92,6 +96,11 @@ list like `SpectrumPlot @ src/ui/plot.tsx:20` — the picture and the code that 
 
 If you deny capture (or the browser can't grant it), shots **degrade gracefully**: the turn still
 carries the rectangle and the located components, just no pixels.
+
+Every shot appears in the transcript preview as a yellow-outlined thumbnail: **hover** for a
+full-size peek, and hover's **✕** retracts it from the turn — took the wrong screenshot, remove
+it before sending. Retraction is an event like everything else (`shot-drop`), so the channel's
+lowering drops the image too; the original shot stays visible in the trace.
 
 ## The correction meta-loop
 
@@ -188,6 +197,39 @@ The five rungs, cheapest first:
 `tier` defaults to `standard` — an absent tier *is* standard — which reproduces today's exact
 REST-mini behavior, so there is zero billing surprise for anyone who never touches it.
 
+What actually changes per rung is the audio path — how your voice reaches the channel, and
+whether anything is spoken back. `rapid` swaps the release-time blob upload for PCM streamed while
+you talk; `premium` adds a spoken ack after send; `flagship` swaps in a model that answers aloud
+(its input transcription still feeds the prompt, so text stays the source of truth):
+
+```mermaid
+flowchart TB
+  subgraph mock["mock · $0 · offline"]
+    direction LR
+    m1["canned transcript<br/>no key · no network"]
+  end
+  subgraph standard["standard (default) · release→final ~1.4s"]
+    direction LR
+    s1["record whole<br/>segment"] --> s2["seg_N blob<br/>at release"] --> s3["REST transcribe<br/>gpt-4o-mini-transcribe"] --> s4["transcript-final<br/>echo"]
+  end
+  subgraph rapid["rapid · release→final ~0.7s"]
+    direction LR
+    r1["stream PCM<br/>during talk"] --> r2["realtime session<br/>gpt-realtime-whisper"] --> r3["commit<br/>at release"] --> r4["transcript-final<br/>echo"]
+  end
+  subgraph premium["premium · rapid + spoken ack ~1.1s"]
+    direction LR
+    p1["rapid<br/>input path"] --> p2["fin"] --> p3["TTS<br/>gpt-4o-mini-tts"] --> p4["speech message<br/>widget says 'sent'"]
+  end
+  subgraph flagship["flagship · model speaks replies"]
+    direction LR
+    f1["rapid-style<br/>PCM input"] --> f2["gpt-realtime-2<br/>response.create"] --> f3["audio deltas<br/>→ WAV speech"] --> f4["plays reply aloud<br/>barge-in cancels"]
+  end
+  m1 ~~~ s1
+  s1 ~~~ r1
+  r1 ~~~ p1
+  p1 ~~~ f1
+```
+
 **The merge rule: preset first, then your explicit knobs.** The effective config is
 `DEFAULT ← tier preset ← explicit fine fields` — the tier preset fills in over the defaults, and
 your explicit fields (the Vite `intent` option unioned with any gear-panel/agent overrides) fill
@@ -196,14 +238,46 @@ wins. So `{ tier: "flagship", model: "whisper-1" }` runs the flagship voice mode
 to `whisper-1`. Switching `tier` **re-derives** the fields that tier owns — you don't inherit the
 old tier's fields frozen in.
 
-**Setting it — three doors, one validated path.** Set `tier` any of the ways you set the other
+**Setting it — four doors, one validated path.** Set `tier` any of the ways you set the other
 knobs:
 
 - the Vite option — `aiuiDevOverlay({ intent: { tier: "premium" } })`;
+- the [**K strip**](#quick-config-the-k-strip) — a digit while armed, session-scoped;
 - the gear (**⚙ advanced config**) panel — edit `tier` in the JSON;
 - the agent's `aiui_overlay set_config` tool — `{ config: { tier: "flagship" } }`.
 
-All three go through the same validated config path.
+All four go through the same validated config path.
+
+## Quick config: the K strip
+
+Press **K** while armed and a small strip opens above the HUD — the keyboard-speed door to the
+tier dial, built for the "let me try this segment on `rapid`" moment when reaching for the Vite
+config or the JSON editor would break your flow. The strip is its own documentation:
+
+```
+TIER   session — unsaved
+[1 mock] [2 standard] [3 rapid] [4 premium] [5 flagship]
+S save for site · R reset to file · G editor · Esc close
+```
+
+- **1–5** pick a tier, cheapest first — the same ladder as the table above, so the digit *is*
+  the price dial. The switch is **session-scoped**: it takes effect immediately but persists
+  nowhere, and a reload returns you to the file (Vite) config plus whatever you saved earlier.
+  Your explicit fine fields still win over the preset, exactly as everywhere else.
+- **Mid-thread, the switch waits.** A thread's opening hello already told the channel which
+  pipeline to run, so a tier picked while a thread is open applies **when that thread closes**
+  (send or cancel) — the strip says so, and the next thread's hello carries it. No thread open →
+  it applies on the spot.
+- **S** saves the current config for this site (the same per-origin browser storage the gear
+  panel writes, as the same minimal delta). **R** resets to the file config, clearing both the
+  session layer and the saved one. **G** jumps to the fine-grained door: the gear panel's JSON
+  editor over the full effective config.
+- **Esc** (or **K** again) closes the strip — it never steps out of your turn. Everything
+  unrelated keeps working while it's open: Space still talks, Enter still sends. Disarming
+  closes it.
+
+The layering, in full: `DEFAULT ← tier preset ← Vite intent ← saved overrides ← session`. The
+strip's digits write only the last layer; **S** folds it into the saved one; **R** empties both.
 
 **Degradation is loud — a paid tier never quietly downgrades.** A keyless `premium` says *"spoken
 confirmation unavailable — no OPENAI_API_KEY (premium tier)"* rather than silently becoming

@@ -5,7 +5,9 @@
  * a *trace* — the channel's per-stage record of a lowering run (inputs → IRs →
  * lowered prompt). It is deliberately generic so it works for **any** modality
  * the debugger records: each stage shows its text (with absolute paths made
- * previewable) or its blob (image inline, else a link). The one special case is
+ * previewable), its structured data as a collapsible JSON tree (see
+ * json-tree.ts — string leaves keep the same path affordance), or its blob
+ * (image inline, else a link). The one special case is
  * a stage whose payload is an {@link IntentEvent} log — that gets the full
  * {@link EventPanes} treatment (events / IR / timing) embedded in place, which
  * is what makes the multimodal `intent-v1` traces first-class here while
@@ -13,6 +15,7 @@
  */
 import type { IntentEvent } from "../intent-pipeline";
 import { EventPanes } from "./event-panes";
+import { renderJsonTree } from "./json-tree";
 import { defaultPreviewUrl, type PreviewUrl, renderPathText } from "./paths";
 import { extractIntentEvents, type LiveTrace, type TraceStageLike } from "./sources";
 import { injectDebugUiStyles } from "./styles";
@@ -120,12 +123,23 @@ export class TraceView {
         a.textContent = stage.file;
         body.append(a);
       }
-    } else if (stage.data !== undefined) {
+    } else if (typeof stage.data === "string") {
+      // A plain string stage (a lowered prompt, a text chunk) stays flat text —
+      // a one-leaf tree would only add chrome around it.
       const pre = this.doc.createElement("pre");
-      const text =
-        typeof stage.data === "string" ? stage.data : JSON.stringify(stage.data, null, 2);
-      renderPathText(pre, text, this.config.previewUrl ?? defaultPreviewUrl);
+      renderPathText(pre, stage.data, this.config.previewUrl ?? defaultPreviewUrl);
       body.append(pre);
+    } else if (stage.data !== undefined) {
+      // Structured data gets the collapsible tree. Its string leaves run
+      // through the same path-span affordance as the flat rendering, so
+      // attachment paths inside stage data stay peekable/clickable.
+      body.append(
+        renderJsonTree(stage.data, {
+          open: 2,
+          document: this.doc,
+          previewUrl: this.config.previewUrl ?? defaultPreviewUrl,
+        }),
+      );
     }
 
     box.append(head, body);

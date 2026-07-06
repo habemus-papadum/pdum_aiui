@@ -30,7 +30,7 @@ In practice I have three modes of working:
 2. **Long runs** — I hand Claude Code something well-scoped and let it run for an hour or more.
 3. **Swarms** — large-scale parallel work I don't inspect closely at all.
 
-Most of m`y *physical time at the computer* is mode 1 — and I can only sustain a few hours of it a
+Most of my *physical time at the computer* is mode 1 — and I can only sustain a few hours of it a
 day. So those hours have to count, and honestly, they should be fun. This whole project exists to
 make mode 1 higher-bandwidth without giving up the thing I like about it: Claude Code stays open,
 in front of me, doing its thing.

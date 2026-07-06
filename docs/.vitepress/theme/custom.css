@@ -1,0 +1,32 @@
+/* vitepress-plugin-mermaid renders each ```mermaid fence into <div class="mermaid">.
+   Keep diagrams centered and inside the content column: mermaid's useMaxWidth already
+   scales an SVG down to fit, and overflow-x:auto lets a genuinely wide diagram scroll
+   inside its own box rather than forcing the page body to scroll sideways. */
+.mermaid {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  margin: 20px 0;
+}
+
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* VitePress's `.vp-doc p { margin; line-height }` leaks into mermaid's HTML node/edge
+   labels (they render inside the content area) but NOT into the off-DOM pass where
+   mermaid *measures* each label — so a multi-line label renders taller than its
+   measured box and its last line clips. Reset the label typography back to what
+   mermaid sized the box for (1.5 line-height, no paragraph margins). These selectors
+   out-specify `.vp-doc p`, so no !important is needed. */
+.mermaid .nodeLabel,
+.mermaid .edgeLabel,
+.mermaid .cluster-label,
+.mermaid foreignObject div,
+.mermaid foreignObject span,
+.mermaid foreignObject p {
+  margin: 0;
+  padding: 0;
+  line-height: 1.5;
+}

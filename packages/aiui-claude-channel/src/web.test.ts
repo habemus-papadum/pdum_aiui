@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
-import type { ChannelFormat } from "./channel";
+import type { ChannelFormat, ChannelResponse } from "./channel";
 import { type ChannelClient, connectChannelClient } from "./client";
 import { jsonCodec } from "./codec";
+import { encodeFrame, PROTOCOL_VERSION } from "./frame";
 import { defaultFormats } from "./processors";
 import { startWebServer, type WebServer } from "./web";
 
@@ -142,6 +143,56 @@ describe("startWebServer", () => {
     expect(ack).toMatchObject({ ok: false, fatal: true });
     expect(ack.error).toContain("binary");
     await closed;
+  });
+});
+
+describe("startWebServer debug mode", () => {
+  let server: WebServer | undefined;
+  const openSockets: WebSocket[] = [];
+
+  afterEach(async () => {
+    for (const ws of openSockets.splice(0)) {
+      ws.close();
+    }
+    await server?.close();
+    server = undefined;
+  });
+
+  /** Send a hello over a raw socket and return its ack verbatim. */
+  async function helloAck(port: number): Promise<ChannelResponse> {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    openSockets.push(socket);
+    await new Promise<void>((resolve, reject) => {
+      socket.once("open", () => resolve());
+      socket.once("error", reject);
+    });
+    return new Promise((resolve) => {
+      socket.once("message", (data) => resolve(JSON.parse(data.toString())));
+      socket.send(encodeFrame({ v: PROTOCOL_VERSION, kind: "hello", format: "text-concat" }));
+    });
+  }
+
+  it("advertises debug on /health and on the hello ack (never with a kind field)", async () => {
+    server = await startWebServer({ onPrompt: () => {}, debug: true });
+
+    const health = (await (await fetch(`http://127.0.0.1:${server.port}/health`)).json()) as {
+      debug?: boolean;
+    };
+    expect(health.debug).toBe(true);
+
+    const ack = await helloAck(server.port);
+    expect(ack).toEqual({ ok: true, debug: true });
+    // The ack/push discriminator: acks never carry `kind` (clients rely on it).
+    expect("kind" in ack).toBe(false);
+  });
+
+  it("stays silent about debug when the server is not in debug mode", async () => {
+    server = await startWebServer({ onPrompt: () => {} });
+    const health = (await (await fetch(`http://127.0.0.1:${server.port}/health`)).json()) as {
+      debug?: boolean;
+    };
+    expect(health.debug).toBeUndefined();
+    expect(await helloAck(server.port)).toEqual({ ok: true });
   });
 });
 

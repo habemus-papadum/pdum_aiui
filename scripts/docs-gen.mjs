@@ -170,27 +170,6 @@ function writePackagesIndex(pkgs) {
   writeFileSync(join(genPackagesDir, "index.md"), `${lines.join("\n")}\n`);
 }
 
-/**
- * Auto-list top-level conceptual docs (anything under docs/ that isn't the generated
- * package tree, the VitePress internals, the home page, or the curated guide/).
- */
-function discoverNotes() {
-  const files = globSync("**/*.md", {
-    cwd: docsDir,
-    exclude: (name) =>
-      name === "index.md" ||
-      name.startsWith(".vitepress") ||
-      name.startsWith("packages/") ||
-      name.startsWith("guide/"),
-  });
-  return files
-    .map((rel) => {
-      const body = readFileSync(join(docsDir, rel), "utf8");
-      return { text: titleOf(body, basename(rel, ".md")), link: `/${rel.replace(/\.md$/, "")}` };
-    })
-    .sort((a, b) => a.text.localeCompare(b.text));
-}
-
 function main() {
   // Start from a clean generated tree so deleted packages/pages don't linger.
   rmSync(genPackagesDir, { recursive: true, force: true });
@@ -217,27 +196,39 @@ function main() {
 
   writePackagesIndex(pkgs);
 
-  const notes = discoverNotes();
   const sidebar = {
     "/": [
       {
-        text: "Guide",
+        text: "User Guide",
         items: [
           { text: "Introduction", link: "/guide/" },
-          { text: "Motivation & Workflow", link: "/guide/motivation" },
           { text: "Getting Started", link: "/guide/getting-started" },
-          { text: "Prompt Lowering", link: "/guide/prompt-lowering" },
-          { text: "Web Intent Tool", link: "/guide/web-intent-tool" },
+          { text: "Installation", link: "/guide/installation" },
           { text: "Using the Intent Overlay", link: "/guide/intent-overlay" },
+          { text: "Configuration", link: "/guide/config" },
+          { text: "⚠️ Read Before Running", link: "/guide/warning" },
+        ],
+      },
+      {
+        text: "Concepts & Design",
+        items: [
+          { text: "Motivation & Workflow", link: "/guide/motivation" },
+          { text: "Prompt Lowering", link: "/guide/prompt-lowering" },
+          { text: "The Channel MCP Server", link: "/guide/channel" },
+          { text: "Web Intent Tool", link: "/guide/web-intent-tool" },
           { text: "DevTools Panel", link: "/guide/devtools" },
           { text: "The Agent's Browser", link: "/guide/chrome" },
           { text: "Remote Development", link: "/guide/remote" },
-          { text: "Configuration", link: "/guide/config" },
-          { text: "Frontend for Agents", link: "/guide/frontend-for-agents" },
-          { text: "Frontend: Design Choices", link: "/guide/frontend-design-choices" },
-          { text: "Frontend: Hard-Won Details", link: "/guide/frontend-hard-won" },
-          { text: "Frontend: Style Guide", link: "/guide/frontend-style-guide" },
-          { text: "⚠️ Read Before Running", link: "/guide/warning" },
+          {
+            text: "Frontend for Agents",
+            collapsed: false,
+            items: [
+              { text: "Concepts", link: "/guide/frontend-for-agents" },
+              { text: "Design Choices", link: "/guide/frontend-design-choices" },
+              { text: "Hard-Won Details", link: "/guide/frontend-hard-won" },
+              { text: "Style Guide", link: "/guide/frontend-style-guide" },
+            ],
+          },
         ],
       },
       {
@@ -250,7 +241,6 @@ function main() {
         ],
       },
       { text: "Packages", link: "/packages/", items: packageNodes },
-      ...(notes.length ? [{ text: "Notes", collapsed: true, items: notes }] : []),
     ],
   };
 

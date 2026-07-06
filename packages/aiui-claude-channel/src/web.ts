@@ -19,11 +19,12 @@ import express from "express";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import { createChannelConnection, type FormatRegistry } from "./channel";
 import { registerDebugRoutes } from "./debug";
+import { ackEntry, createFrameLog, type FrameLogSink, inboundEntry, pushEntry } from "./frame-log";
 import { defaultFormatLoader, type FormatLoader } from "./hot";
 import type { LaunchInfo } from "./launch-info";
 import { PageToolDirectory } from "./page-tools";
 import { createTransportStats } from "./stats";
-import { createTraceStore, type TraceStore } from "./trace";
+import { createTraceStore, sessionLabel, type TraceStore } from "./trace";
 import { withTracing } from "./tracing";
 
 /**
@@ -49,6 +50,14 @@ export interface WebServerOptions {
    */
   traceDir?: string;
   /**
+   * The server's `--tag`, used only to name this process's trace **session
+   * label** (see {@link sessionLabel}; untagged servers label as "channel").
+   * Every trace stamped with the label, and `/debug/api/traces` reports it, so
+   * trace lists can default-filter to this server's runs. Purely a human-facing
+   * dimension — nothing routes on it.
+   */
+  tag?: string;
+  /**
    * Launcher-provided session summary (how the Chrome DevTools MCP was wired,
    * etc. — see launch-info.ts), surfaced at `GET /debug/api/info`.
    */
@@ -70,6 +79,19 @@ export interface WebServerOptions {
    * then simply re-wraps them and cycles connections).
    */
   loadFormats?: FormatLoader;
+  /**
+   * Server-level debug mode (the standalone `serve` command sets it). Surfaced
+   * on `/health`, `/debug/api/info`, and every hello ack, so clients and tools
+   * can tell they are talking to a debug server whose prompts never reach a
+   * Claude Code session.
+   */
+  debug?: boolean;
+  /**
+   * Observes every frame-log entry as it is recorded (see frame-log.ts) — the
+   * seam recording mode attaches its JSONL sink to (see recording.ts). The log
+   * itself is always kept, sink or not.
+   */
+  frameSink?: FrameLogSink;
 }
 
 /** Normalize `ws`'s several binary shapes into a single Uint8Array frame. */
@@ -149,6 +171,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       ppid: process.ppid,
       generation,
       pageTools: pageTools.summary(),
+      ...(options.debug === true ? { debug: true } : {}),
     });
   });
 
@@ -174,11 +197,21 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // viewer over them, plus the server-side transport counters.
   const stats = createTransportStats();
 
+  // The protocol frame log (see frame-log.ts): every hello/chunk/ack/push in a
+  // bounded ring, always recorded (it holds parsed JSON or byte counts, never
+  // media bytes) and served at /debug/api/frames when the debug routes are on.
+  const frameLog = createFrameLog(
+    options.frameSink !== undefined ? { sink: options.frameSink } : {},
+  );
+
   // The trace store is a long-lived singleton: created once, reused across every
   // reload so on-disk trace history survives. The format registry, by contrast,
   // is rebuilt on each reload (below) — its lowering code is what changes.
+  // Creating the store is also where this process's session label is minted:
+  // reloads swap code, not identity, so every trace of the server's lifetime
+  // carries the same label.
   const traceStore: TraceStore | undefined = options.traceDir
-    ? createTraceStore(options.traceDir)
+    ? createTraceStore(options.traceDir, sessionLabel(options.tag))
     : undefined;
 
   // How each (re)load produces the base format registry. An explicit `formats`
@@ -234,10 +267,14 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       formats,
       sendPrompt: options.onPrompt,
       push: (message) => {
+        // Logged even if the socket already dropped: the push *happened* (the
+        // frame log is the server's record, not the client's).
+        frameLog.record(pushEntry(message));
         if (socket.readyState === socket.OPEN) {
           socket.send(JSON.stringify(message));
         }
       },
+      ...(options.debug === true ? { debug: true } : {}),
     });
     socket.on("close", () => {
       liveSockets.delete(socket);
@@ -249,13 +286,18 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     });
     socket.on("message", async (data, isBinary) => {
       if (!isBinary) {
-        socket.send(JSON.stringify({ ok: false, fatal: true, error: "expected a binary frame" }));
+        const rejection = { ok: false, fatal: true, error: "expected a binary frame" };
+        frameLog.record(ackEntry(rejection));
+        socket.send(JSON.stringify(rejection));
         socket.close();
         return;
       }
       // Acks stay small JSON text frames; the high-bandwidth direction (data
       // in) is what the binary framing optimizes.
       const frame = toFrame(data);
+      // Log the inbound frame before handling it, so a push produced *while*
+      // handling (a lowered-prompt, a transcript echo) sits after its cause.
+      frameLog.record(inboundEntry(frame));
       const handledAt = performance.now();
       const response = await connection.handleFrame(frame);
       stats.recordFrame({
@@ -265,6 +307,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
         ...(response.threadId ? { threadId: response.threadId } : {}),
         ...(response.closed ? { closed: true } : {}),
       });
+      frameLog.record(ackEntry(response));
       socket.send(JSON.stringify(response));
       if (response.fatal) {
         socket.close();
@@ -330,12 +373,18 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   };
 
   if (options.traceDir) {
-    // Debug tool + JSON API (traces, this server's info, transport stats) plus
-    // the reload endpoint. Registered here, after `reload` exists, so the route
-    // can drive it; the generation getter keeps /debug/api/info's value live.
+    // Debug tool + JSON API (traces, this server's info, transport stats, the
+    // frame log) plus the reload endpoint. Registered here, after `reload`
+    // exists, so the route can drive it; the generation getter keeps
+    // /debug/api/info's value live.
     registerDebugRoutes(app, options.traceDir, stats, options.launchInfo, {
       getGeneration: () => generation,
       onReload: reload,
+      frameLog,
+      // The store's session label rides along so the traces listing can say
+      // which rows are this server's (a traceDir implies the store exists).
+      ...(traceStore?.session !== undefined ? { session: traceStore.session } : {}),
+      ...(options.debug === true ? { debug: true } : {}),
     });
   }
 

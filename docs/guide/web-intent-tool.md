@@ -55,7 +55,33 @@ Code, running in the same cwd, reads them from disk. Project-local paths make th
 
 A **modality** is one kind of intent input (plain text; voice + screenshot; a DOM selection…).
 Every modality is implemented as three cooperating pieces, and the abstraction layer for each
-piece is independent of any particular modality:
+piece is independent of any particular modality. Those pieces, in motion — collection in the
+browser, lowering in the channel, and the traces that feed debugging — plus the side rails that
+carry page tools and the debugger:
+
+```mermaid
+flowchart TB
+  subgraph browser["Browser · your app (dev server)"]
+    widget["Overlay widget<br/>multimodal · text"]
+    app["Page app<br/>+ tools bridge"]
+  end
+  subgraph channel["Channel MCP server · loopback"]
+    proc["Stream processor<br/>lowering + compose"]
+    ptools["page-tools directory"]
+    traces[("traces<br/>.aiui-cache")]
+  end
+  session["Claude Code session"]
+  viewer["/debug viewer<br/>+ DevTools panel"]
+
+  widget -->|"binary /ws · hello"| proc
+  app <-->|"/tools JSON"| ptools
+  proc -->|"notification + paths"| session
+  ptools -->|"page_tools_* MCP"| session
+  proc --> traces
+  traces --> viewer
+```
+
+Each piece is implemented against an abstraction independent of any particular modality:
 
 | Piece | What it does | Abstraction | Lives in |
 | ----- | ------------ | ----------- | -------- |
@@ -226,6 +252,78 @@ traceOf(ctx)?.record({ kind: "ir", label: "resolved pronouns", data: rewritten }
 Traces land in `.aiui-cache/traces/<id>/` — a `trace.json` manifest of stages (`input` → `ir`* →
 `output`) with binary payloads stored as sibling blob files.
 
+#### A full multimodal turn, end to end
+
+A default turn (the `standard` tier: voice dictation, one screenshot, a selection) as it crosses
+the wire. The thread's socket opens on the first contentful act; audio uploads as a whole `seg_N`
+blob at talk-end and is transcribed server-side; the shot's blob is saved the moment its bytes
+land; and `fin` is a near-empty commit that reuses the compose already run speculatively. Every
+client frame is acked FIFO — only the closing ack (which drives *"sent ✓"*) is drawn.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant W as Widget
+  participant C as Channel
+  participant AI as OpenAI
+  participant S as Session
+
+  User->>W: ` arm · hold Space
+  W->>C: open socket · hello (meta.intent)
+  W->>C: events {thread-open, talk-start}
+  User->>W: release Space (talk-end)
+  W->>C: events {talk-end} — flushed now
+  W->>C: attachment seg_N (raw audio bytes)
+  C->>AI: POST /audio/transcriptions
+  AI-->>C: transcript text
+  C-->>W: lowered {transcript-final} — preview fills
+  User->>W: S drag (region shot)
+  W->>C: attachment shot_N (raw PNG)
+  Note over C: blob saved on arrival · shot path wired
+  User->>W: Enter (send)
+  W->>C: context {selection} (optional)
+  W->>C: bare fin
+  Note over C: fin — reuse speculative compose
+  C->>S: notification · body {shot_N} + meta paths
+  C-->>W: ack (closed) → "sent ✓"
+```
+
+#### The correction meta-loop
+
+Fixing a mis-transcription is a **patch**, not a retype, and where the diff runs depends on the
+`corrector` config. The `mock` corrector builds the patch in the browser and streams the
+correction already carrying it — the channel just appends it. The default `openai` corrector
+streams a *patchless* correction as a **request**: the channel runs the V4A diff, echoes the
+completed correction back, and holds the one patched copy (the client applies the echo locally and
+never re-sends, so no patched twin appears on the wire). Either way a malformed or non-applying
+patch degrades to a plain replacement — a correction never silently vanishes.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant W as Widget
+  participant C as Channel
+  participant AI as OpenAI
+
+  User->>W: E · select transcript text · speak or type the fix
+  alt corrector = mock (offline)
+    W->>W: local V4A patch (mockCorrector)
+    W->>C: events {correction WITH patch}
+    Note over C: appended as-is — no diff run
+  else corrector = openai (default)
+    W->>C: events {correction, no patch} = request
+    C->>AI: diff · gpt-4o-mini · V4A · temp 0
+    AI-->>C: patch
+    Note over C: validate the patch applies
+    C-->>W: lowered {correction + patch} echo
+    W->>W: apply echo locally · diff flash (pink del / green add)
+    Note over C: server keeps one patched copy (never applied twice)
+  end
+  Note over C,W: malformed / won't-apply → patchless echo → plain replacement (never vanishes)
+```
+
 ### The overlay dogfoods its own agent surface
 
 The intent tool is itself a frontend an agent pair-programs against, so it follows the
@@ -263,6 +361,22 @@ also works **standalone** and **live** (it polls; you can watch a trace grow mid
 generic stage viewer covers every modality; the design allows a modality to ship a *custom* debug
 view keyed by its format (waveform scrubbing for audio, region overlays for screenshots) — the
 manifest already carries the format name, but the plug-in mechanism itself is not built yet.
+
+**Traces are one per thread, and they say who made them.** Every websocket thread mints one
+trace directory under `.aiui-cache/traces/` — including cancelled turns (`status: "abandoned"`)
+and turns driven by an agent doing UI testing, which is why a busy session's list grows fast.
+To keep those apart, the overlay self-reports an **actor** on every thread's hello (`meta.actor`:
+browser automation — `navigator.webdriver` — defaults to `agent`, otherwise `human`; override
+with the `actor` option on the Vite plugin or `mountIntentTool`), and the channel stamps it on
+the trace manifest. Trace lists — `/debug`, the DevTools Intent pane, the workbench — badge any
+non-human actor. There is no pruning yet; traces only accumulate.
+
+**Watching lowering without an agent: the workbench.** The in-repo workbench (`pnpm workbench`)
+runs the whole pipeline against a **debug channel server** (`aiui-claude-channel serve`) that has
+no MCP client at all — turns lower, trace, and echo the final prompt back over the websocket (a
+`lowered-prompt` push every client is free to ignore), but can never reach a session. Its trace
+pane reuses the same shared debug-ui components as the DevTools panel, so viewer improvements
+land in both. See `packages/aiui-dev-overlay/workbench/README.md`.
 
 ## Adding a modality — the checklist
 

@@ -118,7 +118,7 @@ export function App() {
               <Show when={ready()}>
                 <div class="pair">
                   <Panel class="obs-map" title="epicenters" sub="drag a region">
-                    <MosaicView spec={() => mapSpec(440, 240)} />
+                    <MosaicView spec={() => mapSpec(440, 250)} />
                   </Panel>
                   <Panel title="magnitude" sub="re-counts the brushed region">
                     <MosaicView spec={() => magHistSpec(360, 240)} />

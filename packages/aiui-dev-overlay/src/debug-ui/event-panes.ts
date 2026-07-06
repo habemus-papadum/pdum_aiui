@@ -277,6 +277,8 @@ function describe(event: IntentEvent): string {
       return `stroke · ${event.points}pts @ ${Math.round(event.bounds.x)},${Math.round(event.bounds.y)}`;
     case "ink-clear":
       return event.auto ? "ink faded out" : "ink cleared";
+    case "shot-drop":
+      return `${event.marker} retracted (✕ on the preview thumb)`;
     case "shot":
       return `${event.marker} · ${Math.round(event.rect.w)}×${Math.round(event.rect.h)} · ${
         event.components.length

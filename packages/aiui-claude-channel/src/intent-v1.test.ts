@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { ChannelFormat, ThreadContext } from "./channel";
 import { type Corrector, mockCorrector } from "./correct";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
-import { createIntentV1Format } from "./intent-v1";
+import { createIntentV1Format, type LoweredPromptMessage } from "./intent-v1";
 import { defaultFormats } from "./processors";
 import { createTraceStore, listTraces } from "./trace";
 import { withTracing } from "./tracing";
@@ -33,6 +33,8 @@ interface Driver {
   fin(): Promise<void>;
   sent: SentPrompt[];
   pushed: unknown[];
+  /** The relative order of side effects: `"sent"` and `"push <kind>"` markers. */
+  timeline: string[];
   isClosed(): boolean;
 }
 
@@ -50,15 +52,18 @@ interface DriveOptions {
 function drive(opts: DriveOptions = {}): Driver {
   const sent: SentPrompt[] = [];
   const pushed: unknown[] = [];
+  const timeline: string[] = [];
   let closed = false;
   const ctx: ThreadContext = {
     threadId: "t-1",
     ...(opts.hello !== undefined ? { hello: opts.hello } : {}),
     sendPrompt: (text, meta) => {
       sent.push({ text, ...(meta !== undefined ? { meta } : {}) });
+      timeline.push("sent");
     },
     push: (message) => {
       pushed.push(message);
+      timeline.push(`push ${(message as { kind?: string }).kind}`);
     },
     close: () => {
       closed = true;
@@ -90,6 +95,7 @@ function drive(opts: DriveOptions = {}): Driver {
     fin: () => send(new Uint8Array(0), undefined, true),
     sent,
     pushed,
+    timeline,
     isClosed: () => closed,
   };
 }
@@ -177,6 +183,35 @@ describe("intent-v1 lowering — fixtures", () => {
     expect(d.isClosed()).toBe(true);
     expect(d.sent).toEqual([]);
     expect(d.pushed).toEqual([]);
+  });
+});
+
+describe("intent-v1 lowered-prompt push", () => {
+  it("pushes the composed prompt on fin, before the session notification", async () => {
+    const d = drive();
+    await d.feedEvents(loadFixture("plain-dictation.json"));
+    await d.fin();
+
+    expect(d.sent).toHaveLength(1);
+    // The pushed prompt is exactly what sendPrompt committed (no meta: no shots).
+    expect(d.pushed).toEqual([{ kind: "lowered-prompt", threadId: "t-1", prompt: d.sent[0].text }]);
+    // …and it went out before the notification, so a widget's view never lags.
+    expect(d.timeline).toEqual(["push lowered-prompt", "sent"]);
+  });
+
+  it("carries the Option-C meta alongside the prompt when the turn has attachments", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
+    const d = drive({ cache });
+    await d.feedEvents(loadFixture("full-turn-send.json"));
+    await d.feedAttachment("shot_1", "image/png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    await d.fin();
+
+    const message = d.pushed.find(
+      (m) => (m as { kind?: string }).kind === "lowered-prompt",
+    ) as LoweredPromptMessage;
+    expect(message.prompt).toBe(d.sent[0].text);
+    expect(message.prompt).toContain("{shot_1}");
+    expect(message.meta).toEqual(d.sent[0].meta);
   });
 });
 
@@ -367,8 +402,9 @@ describe("intent-v1 server correction", () => {
     const d = drive({ hello: openaiHello({ corrector: "openai" }), corrector: throwingCorrector });
     await d.feedEvents(loadFixture("dictation-typed-correction.json"));
     await d.fin();
-    // No server-produced events (the client's patch was used as-is).
-    expect(d.pushed).toEqual([]);
+    // No server-produced events (the client's patch was used as-is) — the only
+    // push is the fin's lowered-prompt.
+    expect(d.pushed.map((m) => (m as { kind: string }).kind)).toEqual(["lowered-prompt"]);
     expect(d.sent[0].text).toContain("baseline");
   });
 });

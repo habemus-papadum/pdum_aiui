@@ -6,18 +6,18 @@ provisioning is a local concern; the session's MCP just needs a URL.** A reverse
 your local browser's DevTools debug port to the remote machine, and the remote `aiui claude`
 attaches to it instead of managing any browser of its own.
 
-```
- local machine                          remote machine
-┌──────────────────────────┐          ┌────────────────────────────┐
-│ session browser          │          │ aiui claude                │
-│  (CfT + profile +        │  ssh -R  │  chrome-devtools-mcp       │
-│   devtools panel,        │◄─────────│   --browser-url            │
-│   local port floats)     │   9222   │   http://127.0.0.1:9222    │
-│                          │          │                            │
-│ your editor / VS Code ───┼─────────►│ vite dev, channel server   │
-│  (auto port-forwards     │ forwards │  (ports forwarded back by  │
-│   5173, channel port)    │          │   VS Code as usual)        │
-└──────────────────────────┘          └────────────────────────────┘
+```mermaid
+flowchart LR
+  subgraph local["local machine"]
+    browser["session browser<br/>CfT · profile · panel<br/>(local port floats)"]
+    editor["your editor / VS Code"]
+  end
+  subgraph remote["remote machine"]
+    claude["aiui claude<br/>chrome-devtools-mcp<br/>--browser-url<br/>http://127.0.0.1:9222"]
+    servers["vite dev · channel server"]
+  end
+  claude -->|"ssh -R 9222 (reverse tunnel)"| browser
+  editor -->|"VS Code forwards 5173, channel port"| servers
 ```
 
 ## The one-command way

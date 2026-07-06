@@ -56,6 +56,7 @@
   #tab-intent { display: flex; flex-direction: column; height: calc(100vh - 90px); }
   #intent-controls { display: flex; align-items: center; gap: 8px; flex: none; margin-bottom: 6px; }
   #intent-controls label { color: #9aa0aa; display: flex; align-items: center; gap: 6px; }
+  #intent-controls input[type="checkbox"] { margin: 0; accent-color: #8ab4f8; }
   #intent-controls select {
     background: #14171f; color: #e8e8ea; border: 1px solid #2a3140;
     border-radius: 6px; padding: 2px 6px; font: inherit; max-width: 340px;
@@ -102,6 +103,9 @@
       <div id="intent-controls">
         <label>trace
           <select id="intent-trace"><option value="">— select a trace —</option></select>
+        </label>
+        <label title="include traces recorded by other/earlier channel servers">
+          <input type="checkbox" id="intent-all-sessions" /> all sessions
         </label>
         <button type="button" id="intent-refresh" title="reload the trace list">↻</button>
       </div>

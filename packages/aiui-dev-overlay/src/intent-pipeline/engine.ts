@@ -211,6 +211,11 @@ export class Engine {
     return marker;
   }
 
+  /** Retract a shot from the turn (see the `shot-drop` event's doc). */
+  dropShot(marker: string): void {
+    this.emit(this.stamp({ type: "shot-drop", marker }));
+  }
+
   // ── corrections (the meta layer) ───────────────────────────────────────────
 
   /**
@@ -358,6 +363,15 @@ export function composeIntent(
   }
   const scope = start === -1 ? events : events.slice(start);
 
+  // Retracted shots (the preview's ✕) never reach the composition — the shot
+  // events themselves stay in the stream, so the trace still shows them.
+  const droppedShots = new Set<string>();
+  for (const event of scope) {
+    if (event.type === "shot-drop") {
+      droppedShots.add(event.marker);
+    }
+  }
+
   const items: ComposedItem[] = [];
   const corrections: ComposedIntent["corrections"] = [];
   for (const event of scope) {
@@ -365,7 +379,7 @@ export function composeIntent(
       // One item per segment, deliberately unmerged: segments-as-lines is the
       // document shape the correction patches (and the corrector model) see.
       items.push({ kind: "text", text: event.text });
-    } else if (event.type === "shot") {
+    } else if (event.type === "shot" && !droppedShots.has(event.marker)) {
       items.push({
         kind: "shot",
         marker: event.marker,

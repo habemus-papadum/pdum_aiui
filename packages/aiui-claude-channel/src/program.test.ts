@@ -6,10 +6,10 @@ describe("aiui-claude-channel cli", () => {
     expect(buildProgram().name()).toBe("aiui-claude-channel");
   });
 
-  it("registers the config, mcp, and quick subcommands", () => {
+  it("registers the config, mcp, quick, and serve subcommands", () => {
     const names = buildProgram()
       .commands.map((cmd) => cmd.name())
       .sort();
-    expect(names).toEqual(["config", "mcp", "quick"]);
+    expect(names).toEqual(["config", "mcp", "quick", "serve"]);
   });
 });

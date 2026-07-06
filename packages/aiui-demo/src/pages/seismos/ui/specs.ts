@@ -20,12 +20,11 @@ import {
   colorScale,
   colorScheme,
   count,
-  frame,
   from,
-  geo,
   height,
   intervalX,
   intervalXY,
+  line,
   marginBottom,
   marginLeft,
   raster,
@@ -36,12 +35,14 @@ import {
   width,
   xDomain,
   xLabel,
+  xTicks,
   yDomain,
   yLabel,
+  yTicks,
 } from "@uwdata/vgplot";
 import { plotStyle } from "../../../site/theme";
 import { seismic } from "../palette";
-import { DEFAULT_MC, store } from "../store";
+import { DEFAULT_MC, EQ_X_MAX, EQ_Y_MAX, equalEarth, store } from "../store";
 import type { Directive } from "./MosaicView";
 
 const TABLE = () => store.table;
@@ -64,22 +65,75 @@ function cosmetics(): Directive[] {
  * visible specks rather than single pixels; and a faint country-border overlay
  * (drawn *over* the opaque raster, since its near-black density floor otherwise
  * hides any layer behind it) gives that sparse scatter geographic anchoring.
- * The borders are polylines in raw lon/lat — the same identity scale space the
- * raster uses — so a projection-less `geo` mark aligns exactly (see NOTES.md).
+ * The borders are polylines drawn as a `line` mark (one ring per `z` series) —
+ * the same x/y scale space the raster uses, so they align exactly. NOT a `geo`
+ * mark: vgplot's geo, given literal features on a projection-less plot,
+ * silently renders nothing (see NOTES.md).
+ *
+ * The map is an Equal Earth projection with LINEAR scales: both coordinates are
+ * pre-projected (eq_x/eq_y table columns for the raster and brush, transformed
+ * vertices for borders and graticule), so the projection costs the plot nothing
+ * — and the brush's `eq_x/eq_y BETWEEN` predicate filters exactly the on-screen
+ * rectangle the user drew (equalEarth in store.ts). Since projected x mixes
+ * lon and lat, the axes carry no honest tick labels; the graticule (30° grid +
+ * the rounded world outline) is the georeference instead.
  */
-export function mapSpec(w = 640, h = 320): Directive[] {
+
+/** One vertex of the 30° graticule / world outline, pre-projected. */
+interface GraticulePoint {
+  x: number;
+  y: number;
+  ring: number;
+}
+
+/**
+ * The 30° graticule and the projection's rounded boundary, built once — as two
+ * separate point sets because they draw at different opacities and vgplot's
+ * client-data marks accept only constant (or column-name) channels: a
+ * function-valued channel silently hangs the mark's update (learned live).
+ */
+function buildGraticule(): { grid: GraticulePoint[]; outline: GraticulePoint[] } {
+  const grid: GraticulePoint[] = [];
+  const outline: GraticulePoint[] = [];
+  let ring = 0;
+  const push = (arr: GraticulePoint[], lon: number, lat: number) =>
+    arr.push({ ...equalEarth(lon, lat), ring });
+  // Interior meridians every 30°, pole to pole.
+  for (let lon = -150; lon <= 150; lon += 30) {
+    for (let lat = -90; lat <= 90; lat += 2) push(grid, lon, lat);
+    ring++;
+  }
+  // Interior parallels every 30° (the equatorial band; poles are the outline's).
+  for (let lat = -60; lat <= 60; lat += 30) {
+    for (let lon = -180; lon <= 180; lon += 2) push(grid, lon, lat);
+    ring++;
+  }
+  // The world outline: ±180° meridians joined by the flat pole lines — the
+  // rounded silhouette that makes the projection legible as a globe.
+  for (let lat = -90; lat <= 90; lat += 2) push(outline, -180, lat);
+  for (let lon = -180; lon <= 180; lon += 2) push(outline, lon, 90);
+  for (let lat = 90; lat >= -90; lat -= 2) push(outline, 180, lat);
+  for (let lon = 180; lon >= -180; lon -= 2) push(outline, lon, -90);
+  return { grid, outline };
+}
+const GRATICULE = buildGraticule();
+
+export function mapSpec(w = 640, h = 350): Directive[] {
   const p = seismic();
   const world = store.world();
   return [
     raster(from(TABLE(), { filterBy: BRUSH() }), {
-      x: "longitude",
-      y: "latitude",
+      x: "eq_x",
+      y: "eq_y",
       fill: "density",
       pixelSize: 1.5,
     }),
     ...(world.length
       ? [
-          geo(world, {
+          line(world, {
+            x: "x",
+            y: "y",
+            z: "ring",
             stroke: p.coast,
             strokeOpacity: p.coastOpacity,
             strokeWidth: 0.5,
@@ -87,22 +141,40 @@ export function mapSpec(w = 640, h = 320): Directive[] {
           }),
         ]
       : []),
-    frame({ stroke: plotStyle().color, strokeOpacity: 0.25 }),
     // A raster is a density aggregation, so its x/y channels don't resolve to a
     // plain column for the brush (getField → null, giving a `NULL BETWEEN …`
     // predicate). Name the geographic fields explicitly so the 2-D brush filters
     // on longitude/latitude.
-    intervalXY({ as: BRUSH(), xfield: "longitude", yfield: "latitude" }),
+    // The graticule + rounded world outline, in place of axis chrome (projected
+    // x has no single longitude, so tick labels would lie).
+    line(GRATICULE.grid, {
+      x: "x",
+      y: "y",
+      z: "ring",
+      stroke: p.coast,
+      strokeOpacity: p.coastOpacity * 0.45,
+      strokeWidth: 0.5,
+    }),
+    line(GRATICULE.outline, {
+      x: "x",
+      y: "y",
+      stroke: p.coast,
+      strokeOpacity: p.coastOpacity,
+      strokeWidth: 0.8,
+    }),
+    intervalXY({ as: BRUSH(), xfield: "eq_x", yfield: "eq_y" }),
     width(w),
     height(h),
-    xDomain([-180, 180]),
-    yDomain([-90, 90]),
+    xDomain([-EQ_X_MAX * 1.02, EQ_X_MAX * 1.02]),
+    yDomain([-EQ_Y_MAX * 1.03, EQ_Y_MAX * 1.03]),
+    xTicks([]),
+    yTicks([]),
     colorScale("sqrt"),
     colorScheme(p.densityScheme),
     marginLeft(34),
     marginBottom(24),
-    xLabel("longitude"),
-    yLabel("latitude"),
+    xLabel(null),
+    yLabel(null),
     ...cosmetics(),
   ];
 }

@@ -2,6 +2,15 @@ import { Command } from "commander";
 import { type BrowserOptions, runBrowser, runOpen } from "./commands/browser";
 import { runChrome } from "./commands/chrome";
 import { runClaude } from "./commands/claude";
+import {
+  runConfigGet,
+  runConfigSet,
+  runConfigShow,
+  runConfigUnset,
+  type ShowOptions,
+  type WriteOptions,
+} from "./commands/config";
+import { runConfigTui } from "./commands/config-tui";
 import { type DemoOptions, runDemo } from "./commands/demo";
 import { runMcp } from "./commands/mcp";
 import { runVite } from "./commands/vite";
@@ -97,6 +106,41 @@ export function buildProgram(): Command {
     .option("--profile <name>", "named profile under .aiui-cache/chrome/")
     .option("--data-dir <path>", "explicit Chrome user data dir")
     .action((url: string, opts: Pick<BrowserOptions, "profile" | "dataDir">) => runOpen(url, opts));
+
+  // The two-level config.json, self-documenting: every subcommand renders from
+  // the same schema table validation uses (util/config-schema.ts). Bare
+  // `aiui config` opens the interactive browser.
+  const config = program
+    .command("config")
+    .description("inspect and edit aiui's config.json — tui | show | get | set | unset")
+    .action(() => runConfigTui());
+  config
+    .command("tui")
+    .description("browse every setting interactively: docs, defaults, current values, editing")
+    .action(() => runConfigTui());
+  config
+    .command("show")
+    .description("every key with its effective value and which file set it")
+    .option("--json", "machine-readable: file paths, per-level values, effective merge")
+    .action((opts: ShowOptions) => runConfigShow(opts));
+  config
+    .command("get")
+    .description("print a key's effective value (provenance goes to stderr)")
+    .argument("<key>", 'dotted key, e.g. "chrome.mode"')
+    .action((key: string) => runConfigGet(key));
+  config
+    .command("set")
+    .description("set a key in the user config (or the project's with --project)")
+    .argument("<key>", 'dotted key, e.g. "chrome.mode"')
+    .argument("<value>", "the new value, validated against the schema")
+    .option("--project", "write .aiui-cache/config.json here instead of the user config")
+    .action((key: string, value: string, opts: WriteOptions) => runConfigSet(key, value, opts));
+  config
+    .command("unset")
+    .description("remove a key from the user config (or the project's with --project)")
+    .argument("<key>", 'dotted key, e.g. "claude.skipPermissions"')
+    .option("--project", "remove from .aiui-cache/config.json here instead of the user config")
+    .action((key: string, opts: WriteOptions) => runConfigUnset(key, opts));
 
   // `aiui mcp <args...>` forwards to the aiui-claude-channel CLI, so the
   // user-facing channel commands live under `aiui` (e.g. `aiui mcp quick`)

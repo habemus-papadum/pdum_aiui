@@ -28,7 +28,7 @@ export type {
 } from "./engine";
 export { composeIntent, Engine } from "./engine";
 export type { KeyCommand, KeyState } from "./keymap";
-export { installKeymap, isTypingTarget, keyCommand } from "./keymap";
+export { installKeymap, isTypingTarget, keyCommand, TIER_BY_DIGIT } from "./keymap";
 export type { DiffRun } from "./patch";
 export { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
 export type { IntentEvent, LocatedComponent, Mode, Rect } from "./types";

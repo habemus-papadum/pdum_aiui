@@ -53,7 +53,9 @@ big frames, slow acks, or errors:
 The [trace debugger](./web-intent-tool#the-debugger) embedded from the server's `/debug` page —
 inputs → intermediate representations → the lowered prompt. It stays a standalone page too
 (traces are plain files in `.aiui-cache/`; the viewer works with or without DevTools), which is
-why the panel embeds rather than reimplements it.
+why the panel embeds rather than reimplements it. Trace lists mark provenance: a trace whose
+hello carried a non-human `actor` (browser automation self-reports as `agent`) is badged, so
+agent-driven UI-testing turns are tellable from yours.
 
 ## Install & use
 

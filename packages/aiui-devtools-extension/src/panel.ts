@@ -23,9 +23,12 @@ import {
   addRecentPort,
   channelBaseUrl,
   degradedKeyLine,
+  filterTracesBySession,
   loadRecentPorts,
   saveRecentPorts,
   type TraceSummary,
+  traceActorBadge,
+  traceSessionLabel,
   traceSummaryLine,
 } from "./intent-pane.js";
 import { formatAgo, formatBytes, formatMs, summarizeRtt } from "./stats.js";
@@ -405,6 +408,9 @@ async function loadDebugUi(): Promise<DebugUiModule | null> {
 }
 
 let intentTraceId = "";
+// The trace list defaults to the server's own session (the label riding on
+// /debug/api/traces); the "all sessions" checkbox reveals earlier/other runs.
+let intentAllSessions = false;
 let intentKey = ""; // `${port}:${traceId}` — rebuild the follower when it changes
 let intentPoll: ReturnType<DebugUiModule["createTracePoll"]> | null = null;
 let traceView: InstanceType<DebugUiModule["TraceView"]> | null = null;
@@ -422,7 +428,7 @@ const renderPortRecents = (): void => {
   }
 };
 
-const renderTraceOptions = (traces: TraceSummary[]): void => {
+const renderTraceOptions = (traces: TraceSummary[], showSessions: boolean): void => {
   const select = $<HTMLSelectElement>("intent-trace");
   const placeholder = document.createElement("option");
   placeholder.value = "";
@@ -432,7 +438,13 @@ const renderTraceOptions = (traces: TraceSummary[]): void => {
     ...traces.map((t) => {
       const opt = document.createElement("option");
       opt.value = t.id;
-      opt.textContent = `${t.format} · ${traceSummaryLine(t)}`;
+      // Non-human traces get a text badge next to the format ("[agent] …") —
+      // <option>s are text-only, so the badge is part of the label. Under
+      // "all sessions" the recording session's label is appended the same way
+      // (the default view is single-session, so it would be noise there).
+      const badge = traceActorBadge(t);
+      const session = showSessions ? ` · ${traceSessionLabel(t)}` : "";
+      opt.textContent = `${t.format}${badge ? ` ${badge}` : ""} · ${traceSummaryLine(t)}${session}`;
       opt.selected = t.id === intentTraceId;
       return opt;
     }),
@@ -472,8 +484,14 @@ async function updateIntent(): Promise<void> {
   const info = await fetchJson<{ launch?: LaunchInfoPayload }>("/debug/api/info");
   const degraded = degradedKeyLine(info?.launch?.openaiKey);
 
+  // The listing rides with the server's own session label; default-filter the
+  // picker to that session (see filterTracesBySession for the edge cases).
+  const listing = await fetchJson<{ traces: TraceSummary[]; session?: string }>(
+    "/debug/api/traces",
+  );
   renderTraceOptions(
-    (await fetchJson<{ traces: TraceSummary[] }>("/debug/api/traces"))?.traces ?? [],
+    filterTracesBySession(listing?.traces ?? [], listing?.session, intentAllSessions),
+    intentAllSessions,
   );
 
   // Rebuild the poller + view whenever the port or selected trace changes.
@@ -533,6 +551,10 @@ $<HTMLInputElement>("port-input").addEventListener("change", (event) => {
 
 $<HTMLSelectElement>("intent-trace").addEventListener("change", (event) => {
   intentTraceId = (event.target as HTMLSelectElement).value;
+  void updateIntent();
+});
+$<HTMLInputElement>("intent-all-sessions").addEventListener("change", (event) => {
+  intentAllSessions = (event.target as HTMLInputElement).checked;
   void updateIntent();
 });
 $("intent-refresh").addEventListener("click", () => void updateIntent());

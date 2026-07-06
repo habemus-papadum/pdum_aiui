@@ -19,7 +19,13 @@
  */
 
 export { disposeDurable, durable } from "./durable";
-export type { ClientMeta, FrameMetric, PageInstrumentation, TabInfo } from "./instrumentation";
+export type {
+  ClientMeta,
+  CollectClientMetaOptions,
+  FrameMetric,
+  PageInstrumentation,
+  TabInfo,
+} from "./instrumentation";
 export {
   collectClientMeta,
   getInstrumentation,
@@ -82,6 +88,7 @@ export type {
   FrameChunk,
   IntentSocket,
   JsonChunk,
+  LoweredPromptMessage,
   ServerMessage,
   WebSocketFactory,
   WebSocketLike,

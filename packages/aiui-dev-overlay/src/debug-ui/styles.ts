@@ -61,6 +61,23 @@ export const DEBUG_UI_CSS = /* css */ `
 /* an event-log stage embeds the full event panes; give it room */
 .aiui-dbg-tbody .aiui-dbg { min-height: 260px; }
 .aiui-dbg-tbody .aiui-dbg-pane { max-height: 320px; }
+
+/* JsonTree (json-tree.ts) — the collapsible stage-data widget */
+.aiui-dbg-json { font: 12px/1.6 ui-monospace, monospace; word-break: break-word; }
+.aiui-dbg-json details { margin: 0; }
+.aiui-dbg-json summary.aiui-dbg-json-summary { cursor: pointer; user-select: none; }
+.aiui-dbg-json summary.aiui-dbg-json-summary::marker { color: #9aa0aa; font-size: 10px; }
+.aiui-dbg-json-children { margin-left: 5px; padding-left: 14px; border-left: 1px solid #262c3a; }
+.aiui-dbg-json-key { color: #8ab4f8; }
+.aiui-dbg-json-mark { color: #9aa0aa; }
+.aiui-dbg-json-count { color: #9aa0aa; font-size: 11px; margin-left: 6px; }
+.aiui-dbg-json-preview { color: #6f7686; font-size: 11px; margin-left: 8px; }
+/* the inline preview earns its keep only while the node is closed */
+.aiui-dbg-json details[open] > summary > .aiui-dbg-json-preview { display: none; }
+.aiui-dbg-json-string { color: #7ee0a3; white-space: pre-wrap; }
+.aiui-dbg-json-number { color: #d0a8ff; }
+.aiui-dbg-json-boolean { color: #ffd166; }
+.aiui-dbg-json-null, .aiui-dbg-json-empty { color: #9aa0aa; }
 `;
 
 /** Inject the debug-UI stylesheet into a document's head, at most once. */

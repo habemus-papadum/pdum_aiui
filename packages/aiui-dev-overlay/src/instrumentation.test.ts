@@ -110,3 +110,41 @@ describe("collectClientMeta", () => {
     expect(meta?.tab?.targetId).toBe("ABC");
   });
 });
+
+describe("collectClientMeta: the actor label (trace provenance)", () => {
+  /** Shadow navigator.webdriver on the instance; returns the undo. */
+  function stubWebdriver(value: boolean): () => void {
+    const own = Object.getOwnPropertyDescriptor(navigator, "webdriver");
+    Object.defineProperty(navigator, "webdriver", { value, configurable: true });
+    return () => {
+      if (own) {
+        Object.defineProperty(navigator, "webdriver", own);
+      } else {
+        delete (navigator as { webdriver?: boolean }).webdriver;
+      }
+    };
+  }
+
+  it("defaults to 'human' in a plain (non-automated) page", () => {
+    expect(collectClientMeta()?.actor).toBe("human");
+  });
+
+  it("reports 'agent' when navigator.webdriver is true (browser automation)", () => {
+    const restore = stubWebdriver(true);
+    try {
+      expect(collectClientMeta()?.actor).toBe("agent");
+    } finally {
+      restore();
+    }
+  });
+
+  it("lets an explicit actor override the webdriver detection", () => {
+    const restore = stubWebdriver(true);
+    try {
+      expect(collectClientMeta({ actor: "bot-7" })?.actor).toBe("bot-7");
+    } finally {
+      restore();
+    }
+    expect(collectClientMeta({ actor: "agent" })?.actor).toBe("agent");
+  });
+});

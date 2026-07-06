@@ -1,21 +1,21 @@
-# aiui intent workbench — the lab
+# aiui intent workbench — the no-agent lab
 
-The multimodal intent layer — voice, pen, screenshots, component location, the correction
-meta-loop — was **prototyped here and has graduated**: the pipeline lives in
-`@habemus-papadum/aiui-dev-overlay` (`intent-pipeline` + `multimodal` + `debug-ui`), the lowering
-runs in the channel, and the intent overlay is the shipping default. What remains here is the
-**lab**: the same pipeline, imported source-first, mounted on an instrumented page against
-self-annotated scenery, plus the mocks and dev-proxies the shipping path replaces with the
-channel. Its charter is narrow:
+The workbench runs the **entire intent pipeline with no agent on the other end**. Its dev server
+owns a **debug channel server** (`aiui-claude-channel serve`) that does everything the real one
+does — voice models, the correction micro-pipeline, diffs, lowering, trace recording — but has no
+MCP client attached, so a turn can never reach a Claude session. Instead, the final lowered
+prompt is pushed back over the websocket (and printed to the terminal), and the page shows you
+everything: half the window is a real app under the shipping intent overlay, the other half is
+trace instrumentation.
 
-- **latency / accuracy measurement** — the `bench/` harness and the timing pane;
-- **pipeline-config research** — every knob of `IntentPipelineConfig` is a toggle, settled by use;
-- **fixture capture** — real interaction streams exported to `fixtures/`, the regression net for
-  the extracted pipeline and the channel processor;
-- **offline UI iteration** — the whole loop runs on mocks, no channel, no keys.
+That inversion is the point. In a live session, sending a turn *triggers an agent*; here you can
+speak, ink, shoot, correct, and send as many turns as you like and only ever get **data** —
+which makes the workbench the place to study raw pipeline output, iterate on the lowering, and
+(eventually) collect interaction recordings for datasets.
 
-*How to **use** the intent overlay lives in the guide ([docs/guide/intent-overlay.md](../../../docs/guide/intent-overlay.md)).
-This lab's docs are about how to **measure and tune** it.*
+*How to **use** the intent overlay lives in the guide
+([docs/guide/intent-overlay.md](../../../docs/guide/intent-overlay.md)). This lab is for
+**watching what it produces**.*
 
 Private, never published. Its own workspace member (`@habemus-papadum/aiui-workbench`) inside the
 overlay package's folder.
@@ -23,74 +23,85 @@ overlay package's folder.
 ## Run
 
 ```sh
-pnpm workbench      # from the repo root (alias for: pnpm --filter @habemus-papadum/aiui-workbench dev)
+pnpm workbench            # from the repo root
+WORKBENCH_RECORD=1 pnpm workbench   # + frame-log recording (JSONL under .aiui-cache/recordings/)
 ```
 
-Open the printed URL in **Chrome**. The lab defaults **live**, like the shipping overlay — put
-`OPENAI_API_KEY=sk-…` in the repo-root `.env.dev` (gitignored; wins over a shell export) and you
-get real transcription/correction with real latency. No key → the openai backends error loudly
-and one drawer click flips you to the [mock backends](#the-mock-backends), which keep the whole
-loop usable offline.
+Open the printed URL in **Chrome**. Put `OPENAI_API_KEY=sk-…` in the repo-root `.env.dev`
+(gitignored; wins over a shell export) and the owned channel runs real transcription/correction;
+without a key, switch the overlay to the `mock` tier (arm, **K**, **1**) and the whole loop runs
+offline. Traces and recordings land in this package's own `.aiui-cache/` (gitignored), never in
+the project's.
 
-**Evaluating the UI? Start with the [turn-flow guide](./docs/turn-flow.md)** — how to run each
-scenario, what's real vs simulated, and the toggle/measurement walkthrough.
+## The layout
 
-### The mock backends
+**Left — the app.** Pluggable scenery (`src/apps.ts`), two registrations today:
 
-`transcriber: "mock"` and `corrector: "mock"` are the lab's **offline/headless mode** — one
-drawer click (or a `DEFAULT_SETTINGS` tweak) away, and what agents driving the bench without a
-mic or key should use. They are the reason the whole loop can run with no channel and no key:
-the mock transcriber streams a canned phrase
-word-by-word at a configurable cadence and can **inject typos** at a set rate: deliberate
-mis-transcriptions that give the select-and-speak correction meta-loop something real to fix. The
-mock corrector builds the V4A patch locally, replacing the selection in place. They exist so the
-whole interaction — dictation preview, correction, the diff flash — can be iterated offline and
-captured as `fixtures/`, and so the bench is deterministic. Everywhere else, `mock` is the explicit
-offline choice you opt into (`transcriber`/`corrector: "mock"`); the shipping overlay defaults to
-the real channel-side path. The `mockWordMs` / `mockTypoRate` knobs live in the settings drawer.
+- **spectra (inline)** — the self-annotated absorption viewer (`src/scenery.ts`), mounted in-page;
+  the workbench mounts the shipping intent overlay over itself (arm `` ` ``, Space talk, drag
+  ink, S shot, E correct, K tiers, ⏎ send).
+- **morphogen demo (iframe)** — the real `packages/aiui-demo` app, whose dev server the workbench
+  starts programmatically with `VITE_AIUI_PORT` pointed at the debug channel. The demo brings its
+  *own* overlay, source locator, and agent-tool surface, so this exercises full fidelity —
+  including component location — against a real Solid app.
+
+**Right — the dock**, three views over the owned channel:
+
+| Tab | What it shows | Backed by |
+| --- | --- | --- |
+| **Trace** | the lowering trace, stage by stage, live-following — the same `TraceView` the DevTools extension embeds, so improvements land in both at once | shared `debug-ui` + `/debug/api/traces` |
+| **Raw frames** | every websocket frame in either direction (hello, chunks, acks, pushes) as collapsible JSON trees | `/debug/api/frames` (the channel's frame-log ring) |
+| **Prompt** | the final lowered prompt that *would* have been injected — text, Option-C meta, history | the `lowered-prompt` push |
+
+Trace-list rows carry an **actor badge** when a trace wasn't produced by a human (the overlay
+self-reports `meta.actor`; browser automation — `navigator.webdriver` — defaults to `agent`), so
+agent-driven UI testing is tellable from your own turns.
 
 ## Scripts
 
 | Command | What |
 | --- | --- |
-| `pnpm dev` | the lab page (vite; `/api/transcribe`, `/api/chat`, `/api/shot`, `/api/preview` dev-server endpoints) |
-| `pnpm test` | vitest — the `bench/` unit tests (the pipeline's own tests moved to the overlay; the fixtures replay there too) |
+| `pnpm dev` | the workbench (also spawns the debug channel + the demo app's dev server) |
+| `pnpm test` | vitest — feed/pane helpers + the `bench/` unit tests |
 | `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm bench` | the standalone transcription benchmark (no GUI; REST latency/RTF/WER **plus** a realtime-streaming leg — `--realtime=<model>` / `off` — reporting release→final and partials-before-release side by side, which answers T6; see the [audio-stack notes](./docs/openai-audio-stack.md)) |
+| `pnpm bench` | the standalone transcription benchmark (no GUI; REST latency/RTF/WER + a realtime-streaming leg; see the [audio-stack notes](./docs/openai-audio-stack.md)) |
 
 ## What the lab keeps vs. imports
 
 The pipeline is a workspace dependency, resolved to **source** (editable installs — edit the
-overlay, the lab picks it up with no build step). The lab owns only its scaffolding:
+overlay or the channel, the workbench picks it up with no build step). The lab owns only its
+scaffolding:
 
 | Lab file | What it owns |
 | --- | --- |
-| `src/main.ts` | wires the page: scenery + the overlay's multimodal surfaces + the `intent-pipeline` engine/keymap + the shared debug panes + the settings drawer; exposes `window.__wb` for fixture capture / headless driving |
-| `src/transcribe.ts` | the lab's **`openai`** transcriber (dev-proxy `/api/transcribe`) — the seam + `mock` are the overlay's; the shipping `openai` path runs channel-side |
-| `src/correct.ts` | the lab's **`openai`** corrector (dev-proxy `/api/chat`) — the seam, `mock`, and `SYSTEM_PROMPT` are the overlay's |
-| `src/scenery.ts` | the app-under-test, self-annotated with `data-cell` / `data-source-loc` the way the locator vite plugin stamps a real app |
-| `src/settings.ts` | the toggle drawer, editing `IntentPipelineConfig` (localStorage-persisted; `WorkbenchSettings` is an alias) |
-| `src/styles.ts` | the lab chrome (scenery, HUD, dock frame, settings); the panes ship `aiui-dbg-*`, the multimodal layer ships `mm-*` |
-| `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark across REST models + a realtime-streaming leg (release→final vs REST's floor, partials-before-release — T6; streams through the channel's `openRealtimeSession`) (+ a planned corpus runner — see the audio-stack notes) |
+| `src/main.ts` | the shell: header, app slot, dock tabs, server discovery |
+| `src/apps.ts` | the pluggable scenery registry (inline vs iframe hosting) |
+| `src/scenery.ts` | the spectra app-under-test, self-annotated with `data-cell` / `data-source-loc` |
+| `src/frames-feed.ts` | since-cursor poller over `/debug/api/frames`, shared by Raw + Prompt |
+| `src/traces-pane.ts` / `raw-pane.ts` / `prompt-pane.ts` | the dock views (list/log chrome only — rendering is shared debug-ui) |
+| `src/serve-ready.ts` | the `AIUI_CHANNEL_SERVE` ready-line contract with the spawned server |
+| `vite.config.ts` | spawns the debug channel (`serve --tag workbench`) + the demo app's Vite server; `/wb/api/servers` |
+| `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark (REST + realtime legs) |
 | `fixtures/` | captured interaction event-streams; replayed by the overlay's `intent-pipeline/fixtures.test.ts` |
-| `vite.config.ts` | dev server + `/api/*` endpoints (`.env.dev` loading, transcription/chat proxies, shot persistence, path previews) |
 
-| Imported from the overlay | What it provides |
+| Imported | What it provides |
 | --- | --- |
-| `…/intent-pipeline` | `Engine`, the keymap, `composeIntent`, the V4A patch machinery, `IntentPipelineConfig` |
-| `…` (main entry, `multimodal`) | `Ink`, `ShotTool`, `AudioCapture`, `Preview`, `locateComponents`, the `mock` transcriber/corrector, `SYSTEM_PROMPT`, `MULTIMODAL_STYLES`, the seam types |
-| `…/debug-ui` | `EventPanes` + `engineSource` — the events / IR / timing panes and JSON export, shared with the DevTools extension |
+| overlay main entry | `mountIntentTool` — the shipping widget, mounted un-modified |
+| `…/debug-ui` | `TraceView`, `createTracePoll`, `renderJsonTree` — shared with the DevTools extension |
+| the channel (spawned, not imported) | transcription, correction, lowering, traces, the frame log |
+
+The old lab-only machinery — the hand-wired engine/keymap page, the settings drawer, the
+browser-side `openai` dev-proxies (`/api/transcribe`, `/api/chat`) — is gone: the shipping
+overlay's K strip + advanced-config panel cover the knobs, and the real channel-side backends
+cover the models. The mock tier remains the offline mode, selected like any other tier.
 
 ## Docs
 
-- **[The turn flow — an evaluator's guide](./docs/turn-flow.md)**: run it, what's real vs
-  simulated, the toggle table, the measurement walkthrough. (How to *use* the overlay is the
-  [guide page](../../../docs/guide/intent-overlay.md); this is how to *evaluate* it.)
-- **[The OpenAI audio stack](./docs/openai-audio-stack.md)**: the model-choice question — the
-  L0→L3 sophistication ladder, cost framing, silence gating, keyword priming, audio-back, and
-  the evaluation-corpus/model-lab plan. Includes the first benchmark results.
-- **[Open questions & graduation criteria](./docs/open-questions.md)**: the scoreboard — what
-  graduated (P0–P5) and what's still open (T1–T7, pending dogfooding).
-- **[Field notes](./docs/field-notes.md)**: the engineering residue — the correction
-  micro-pipeline (and its two instruction modes), why selection beat the lasso, the
-  typing-guard truths, browser/API gotchas, key handling.
+- **[The turn flow — an evaluator's guide](./docs/turn-flow.md)**: scenario walkthroughs (written
+  against the pre-graduation lab; keys and pipeline behavior unchanged).
+- **[The OpenAI audio stack](./docs/openai-audio-stack.md)**: model choice, cost framing, silence
+  gating, priming, audio-back; first benchmark results.
+- **[Open questions & graduation criteria](./docs/open-questions.md)**: what graduated, what's
+  still open (T1–T7).
+- **[Field notes](./docs/field-notes.md)**: engineering residue — correction micro-pipeline,
+  selection vs lasso, typing-guard truths, browser gotchas.

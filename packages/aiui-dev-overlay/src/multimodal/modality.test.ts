@@ -242,6 +242,33 @@ describe("multimodalModality: shot attachments", () => {
       restore();
     }
   });
+
+  it("the preview thumb's ✕ retracts the shot: piece gone, shot-drop streamed", async () => {
+    const restore = stubCapture();
+    try {
+      const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+      key("keydown", "`");
+      key("keydown", "s");
+      key("keyup", "s"); // viewport shot
+      await wait(250);
+
+      const wrap = document.querySelector<HTMLElement>(".mm-preview-body .mm-thumb-wrap");
+      expect(wrap).not.toBeNull();
+      expect(wrap?.querySelector(".mm-thumb")).not.toBeNull();
+      const x = wrap?.querySelector<HTMLButtonElement>(".mm-thumb-x");
+      expect(x?.title).toContain("shot_1");
+      x?.click();
+      await wait(120); // let the events debounce flush
+
+      // The thumbnail left the preview, and the retraction streamed to the
+      // channel — the shared composeIntent drops it server-side too.
+      expect(document.querySelector(".mm-preview-body .mm-thumb-wrap")).toBeNull();
+      const drop = streamedEvents(sent).find((e) => e.type === "shot-drop");
+      expect(drop).toMatchObject({ marker: "shot_1" });
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe("multimodalModality: lowered echoes merge in", () => {
@@ -928,5 +955,120 @@ describe("multimodalModality: advanced config panel", () => {
       mockWordMs: 99, // vite intent option
       corrector: "openai", // DEFAULT (the shipped real backend)
     });
+  });
+});
+
+describe("multimodalModality: the quick-config strip (the K layer)", () => {
+  let uninstallStorage: () => void;
+  beforeEach(() => {
+    uninstallStorage = installLocalStorage();
+  });
+  afterEach(() => {
+    uninstallStorage();
+  });
+
+  const strip = (): HTMLElement | null => document.querySelector(".mm-config-strip");
+  const stripOpen = (): boolean => strip()?.classList.contains("visible") ?? false;
+  const activeChip = (): string =>
+    strip()?.querySelector(".mm-tier-chip.active")?.textContent ?? "";
+
+  /** Every hello frame's meta.intent, in send order (one per thread socket). */
+  function helloIntents(sent: Uint8Array[]): Record<string, unknown>[] {
+    return frames(sent)
+      .filter(({ envelope }) => (envelope as { kind?: string }).kind === "hello")
+      .map(
+        ({ envelope }) =>
+          (envelope as { meta?: { intent?: Record<string, unknown> } }).meta?.intent ?? {},
+      );
+  }
+
+  const MOCK = { transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 } as const;
+
+  it("K opens the strip; a digit switches tier for the session only", async () => {
+    const { sent } = mountMultimodal(MOCK);
+    key("keydown", "`"); // arm
+    expect(stripOpen()).toBe(false);
+    key("keydown", "k");
+    expect(stripOpen()).toBe(true);
+    key("keydown", "3"); // rapid
+    expect(activeChip()).toContain("rapid");
+
+    // Session-scoped: NOTHING persisted — a reload would return to the file config.
+    expect(loadIntentOverrides()).toEqual({});
+
+    // The next thread's hello carries the session tier; the Vite fine field
+    // (transcriber: mock) still wins over the preset.
+    key("keydown", " ");
+    await wait(50);
+    expect(helloIntents(sent)[0]).toMatchObject({ tier: "rapid", transcriber: "mock" });
+  });
+
+  it("a tier picked mid-thread waits for the thread to close", async () => {
+    const { sent } = mountMultimodal(MOCK);
+    key("keydown", "`");
+    key("keydown", " "); // talk → thread opens
+    await wait(50);
+    key("keyup", " ");
+    await wait(50);
+
+    key("keydown", "k");
+    key("keydown", "5"); // flagship — but a thread is open
+    expect(strip()?.querySelector(".mm-strip-pending")?.textContent).toContain("flagship");
+    expect(helloIntents(sent)[0]?.tier).toBeUndefined(); // this thread keeps its config
+
+    key("keydown", "Escape"); // close the strip (not the thread)
+    expect(stripOpen()).toBe(false);
+    key("keydown", "Enter"); // send → thread closes → the pending tier lands
+    await wait(120);
+
+    key("keydown", " "); // next thread
+    await wait(50);
+    const hellos = helloIntents(sent);
+    expect(hellos).toHaveLength(2);
+    expect(hellos[1]).toMatchObject({ tier: "flagship" });
+    expect(loadIntentOverrides()).toEqual({}); // still session-only
+  });
+
+  it("S persists the session layer for the site as a minimal delta", () => {
+    mountMultimodal(MOCK);
+    key("keydown", "`");
+    key("keydown", "k");
+    key("keydown", "3"); // rapid, session layer
+    expect(loadIntentOverrides()).toEqual({});
+    key("keydown", "s"); // save
+    expect(loadIntentOverrides()).toEqual({ tier: "rapid" });
+    expect(strip()?.textContent).toContain("saved for this site");
+  });
+
+  it("R resets both layers back to the file (Vite) config", async () => {
+    localStorage.setItem(INTENT_CONFIG_STORAGE_KEY, JSON.stringify({ talkMode: "toggle" }));
+    const { sent } = mountMultimodal(MOCK);
+    key("keydown", "`");
+    key("keydown", "k");
+    key("keydown", "5"); // flagship, session layer
+    key("keydown", "r"); // reset everything
+    expect(loadIntentOverrides()).toEqual({});
+
+    key("keydown", " ");
+    await wait(50);
+    const hello = helloIntents(sent)[0];
+    expect(hello?.tier).toBeUndefined(); // the session tier did not survive
+    expect(hello).toMatchObject({ talkMode: "hold", transcriber: "mock" });
+  });
+
+  it("Esc closes the strip without stepping out; disarming closes it too", () => {
+    mountMultimodal(MOCK);
+    key("keydown", "`");
+    key("keydown", "k");
+    expect(stripOpen()).toBe(true);
+    key("keydown", "Escape");
+    expect(stripOpen()).toBe(false);
+    expect(document.body.classList.contains("mm-armed")).toBe(true); // still armed
+
+    key("keydown", "k");
+    expect(stripOpen()).toBe(true);
+    key("keydown", "`"); // disarm
+    expect(stripOpen()).toBe(false);
+    expect(document.body.classList.contains("mm-armed")).toBe(false);
   });
 });

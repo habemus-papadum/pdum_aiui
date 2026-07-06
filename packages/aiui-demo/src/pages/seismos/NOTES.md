@@ -46,6 +46,32 @@ records what the build taught, for folding back into those.
   `MultiLineString` **split at the antimeridian** (border-only, no fill — see
   finding 6 for why). The single ±180-crossing feature (Russia) is cut cleanly; the
   result has no horizontal streaks.
+- **Drawn as a `line` mark, not `geo`** (fixed 2026-07-06): vgplot's `geo` mark,
+  fed these features as literal client data on a projection-less plot, renders **no
+  mark group at all** — silently. Reproduced standalone (a plot with only
+  `geo(features)` + x/y domains: axes render, zero geo paths). The working
+  mechanism: `store.load()` flattens the MultiLineStrings into `{lon, lat, ring}`
+  vertices (~10.6k points, 290 rings) and the spec draws one `line` mark with
+  `z: "ring"` in plain x/y scale space — aligned with the raster by construction.
+- **Equal Earth without a projection system** (2026-07-06): the map is a true
+  Equal Earth (Šavrič–Patterson–Jenny 2018) with the projection baked into the
+  DATA, not the plot. `eq_x`/`eq_y` table columns are computed once in DuckDB at
+  load (same polynomial as the JS mirror `equalEarth()` in store.ts, constants
+  validated: x_max 2.7066, aspect 2.055); borders and the 30° graticule + world
+  outline are pre-projected client-side. Every layer stays in linear x/y space:
+  the raster bins in projected — equal-AREA, so density-honest — space
+  server-side, and the `intervalXY` brush emits `eq_x/eq_y BETWEEN …`, i.e.
+  exactly the on-screen rectangle the user drew; the crossfilter is untouched.
+  Since projected x mixes lon and lat, the axes are tickless and the graticule
+  is the georeference. Why not Mercator (tried first): it inflates high
+  latitudes and dilutes density — the wrong family for a density map. Why not
+  Goode homolosine ("the fingers"): its interruptions slice the oceans, i.e.
+  the Ring of Fire itself.
+- **vgplot client-data marks take only constant or column-name channels**
+  (2026-07-06): a function-valued channel (e.g. `strokeOpacity: (d) => …`) on a
+  literal-data `line` mark doesn't throw — the mark's `update()` never
+  resolves, hanging the whole plot silently. Split by series into separate
+  marks with constant channels instead (the graticule grid vs. outline).
 
 ## The DuckDB-WASM + Vite recipe (no CDN)
 

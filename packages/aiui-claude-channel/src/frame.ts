@@ -65,6 +65,13 @@ export interface HelloMeta {
   /** Where the page's source code lives. */
   source?: SourceInfo;
   /**
+   * Who is driving this connection: `"human"` | `"agent"` | free-form.
+   * Self-reported by the client (automation should default to `"agent"`);
+   * recorded on the trace manifest as provenance, so the /debug viewer can
+   * badge non-human runs. Absent means unknown — treated like a human client.
+   */
+  actor?: string;
+  /**
    * The client's view of its `IntentPipelineConfig` (the `intent-v1` format
    * reads which transcriber/corrector/models/policy/passes to run from it).
    * Typed loosely on purpose — the envelope carries no dependency on the

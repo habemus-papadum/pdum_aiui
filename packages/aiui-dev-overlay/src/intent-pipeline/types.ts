@@ -67,6 +67,17 @@ export type IntentEvent =
       path?: string;
     }
   | {
+      /**
+       * Retract a shot from the turn (the preview thumbnail's ✕). Append-only
+       * like everything else: the shot event (and any uploaded bytes) stay in
+       * the stream and the trace; `composeIntent` — shared with the channel's
+       * lowering — just excludes the marker from the composition.
+       */
+      at: number;
+      type: "shot-drop";
+      marker: string;
+    }
+  | {
       at: number;
       type: "correction";
       /** Character range in the rendered transcript at selection time. */

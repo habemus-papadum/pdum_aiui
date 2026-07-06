@@ -146,6 +146,14 @@ describe("intent-v1 wire contract", () => {
     expect(h.prompts[0].text.match(/baseline/g)).toHaveLength(1);
     // The context frame folded its selection into the lowered prompt.
     expect(h.prompts[0].text).toContain('on-screen selection: "the plot"');
+
+    // The fin also pushed the committed prompt back to the client (the
+    // additive `lowered-prompt` message), byte-for-byte what the session got.
+    expect(h.pushed.at(-1)).toEqual({
+      kind: "lowered-prompt",
+      threadId: TID,
+      prompt: h.prompts[0].text,
+    });
   });
 
   it("tears down an abandoned turn: onClose marks the trace abandoned, sends nothing", async () => {

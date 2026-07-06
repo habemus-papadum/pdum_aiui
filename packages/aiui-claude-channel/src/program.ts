@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { runConfig } from "./commands/config";
 import { runMcp } from "./commands/mcp";
 import { runQuick } from "./commands/quick";
+import { runServe } from "./commands/serve";
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
 // guard is a no-op in the built CLI (where the define replaces it with a string
@@ -41,6 +42,18 @@ export function buildProgram(): Command {
     .option("-m, --message <text>", "prompt to send, skipping the interactive text prompt")
     .option("--ws", "send over the /ws websocket protocol instead of POST /prompt")
     .action(runQuick);
+
+  program
+    .command("serve")
+    .description(
+      "run a standalone debug channel server (no MCP, no registry) that prints lowered prompts to stdout",
+    )
+    .option("--tag <tag>", "label used in stderr logging (a debug server is never registered)")
+    .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/")
+    // Discard the handle: the CLI just lets the server run until a signal.
+    .action(async (options) => {
+      await runServe(options);
+    });
 
   program.command("config").description("print the channel config as JSON").action(runConfig);
 

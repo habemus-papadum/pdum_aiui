@@ -16,13 +16,12 @@ package onto npm is **two deliberately separate steps**, both run **locally with
 
 Only after both does the CI release workflow publish real versions.
 
-```
- reserve (local)        trust (local)              release.yml (CI, OIDC)
-┌──────────────┐      ┌──────────────────┐       ┌──────────────────────┐
-│ placeholder  │  →   │ npm trust github │   →   │ npm publish <tarball>│
-│ @scope/x@... │      │  release.yml     │       │  (no token, OIDC)    │
-└──────────────┘      └──────────────────┘       └──────────────────────┘
-   name exists           publisher trusted            real version live
+```mermaid
+flowchart LR
+  A["<b>reserve</b> (local)<br/>publish placeholder<br/>@scope/x@…<br/><i>name exists</i>"]
+  B["<b>trust</b> (local)<br/>npm trust github<br/>release.yml<br/><i>publisher trusted</i>"]
+  C["<b>release.yml</b> (CI, OIDC)<br/>npm publish tarball<br/>no token<br/><i>real version live</i>"]
+  A --> B --> C
 ```
 
 ## Provisioning commands

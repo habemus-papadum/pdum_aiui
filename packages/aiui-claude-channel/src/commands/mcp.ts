@@ -99,6 +99,10 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     traceDir: projectCacheDir(),
     launchInfo,
     pageTools,
+    // The *explicit* --tag only (not the UUID minted above): the UUID is an
+    // address for the registry, not a human label — an untagged server's
+    // trace session labels as "channel·<pid>·<HHMMSS>" (see sessionLabel).
+    ...(options.tag !== undefined ? { tag: options.tag } : {}),
   });
   const registration = registerServer(web.port, tag);
 

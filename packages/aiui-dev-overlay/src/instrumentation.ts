@@ -110,6 +110,13 @@ export interface ClientMeta {
    * produced under. Opaque here — the modality supplies it, the channel reads it.
    */
   intent?: Record<string, unknown>;
+  /**
+   * Who is driving the page: `"human"`, `"agent"`, or an explicit label. Trace
+   * provenance — the channel stamps it on the trace manifest so agent-driven UI
+   * testing (Chrome automation sets `navigator.webdriver`) is distinguishable
+   * from a human in the trace list. See {@link collectClientMeta} for the rules.
+   */
+  actor?: string;
 }
 
 /**
@@ -121,13 +128,24 @@ export interface ClientMeta {
  */
 export const TAB_DATASET_KEY = "aiuiTab";
 
+/** Options for {@link collectClientMeta}. */
+export interface CollectClientMetaOptions {
+  /**
+   * Explicit actor label riding the hello as `meta.actor`; overrides the
+   * `navigator.webdriver` detection. Pass it when a harness knows who it is
+   * better than the heuristic does (a named bot, a recorded demo).
+   */
+  actor?: string;
+}
+
 /**
  * Collect what this page knows about itself for a connection's hello: live
  * URL/title, the extension-stamped tab identity (if the aiui DevTools
- * extension is installed), and the plugin-seeded source root. Degrades to
- * whatever subset exists — returns undefined outside a DOM.
+ * extension is installed), the plugin-seeded source root, and the actor label
+ * (who is driving the page). Degrades to whatever subset exists — returns
+ * undefined outside a DOM.
  */
-export function collectClientMeta(): ClientMeta | undefined {
+export function collectClientMeta(options: CollectClientMetaOptions = {}): ClientMeta | undefined {
   if (typeof document === "undefined" || typeof location === "undefined") {
     return undefined;
   }
@@ -156,5 +174,18 @@ export function collectClientMeta(): ClientMeta | undefined {
   return {
     tab,
     ...(sourceRoot !== undefined ? { source: { root: sourceRoot } } : {}),
+    actor: options.actor ?? detectActor(),
   };
+}
+
+/**
+ * The default actor label: an explicit option always wins (see
+ * {@link CollectClientMetaOptions}); otherwise `navigator.webdriver === true` —
+ * set by any browser-automation session, including the agent driving the
+ * shared session browser through the Chrome DevTools MCP — means `"agent"`,
+ * else `"human"`. This is what lets the trace list tell agent-driven UI
+ * testing apart from a person using the intent tool.
+ */
+function detectActor(): string {
+  return typeof navigator !== "undefined" && navigator.webdriver === true ? "agent" : "human";
 }

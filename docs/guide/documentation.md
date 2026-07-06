@@ -18,7 +18,6 @@ The monorepo documents itself at two levels, and the layout mirrors that:
 docs/                       ← VitePress content root (srcDir)
   index.md                  home page                         (tracked)
   guide/                    top-level conceptual docs          (tracked)
-  <other notes>.md          auto-listed under "Notes"          (tracked)
   packages/                 GENERATED — do not edit by hand    (gitignored)
     index.md                package overview grid
     <slug>/index.md         ← packages/<slug>/README.md
@@ -29,9 +28,9 @@ docs/                       ← VitePress content root (srcDir)
     sidebar.generated.json  GENERATED sidebar                  (gitignored)
 ```
 
-- **Top-level, conceptual docs** are hand-written Markdown living directly under `docs/`. The
-  curated ones are in `guide/`; any other `*.md` you drop under `docs/` is auto-listed in the
-  **Notes** section of the sidebar.
+- **Top-level, conceptual docs** are hand-written Markdown under `docs/guide/`, listed in the
+  curated sidebar in `docs-gen.mjs`. Exploratory or superseded material lives in the repo-root
+  `archive/` — readable on GitHub, deliberately outside the site.
 - **Per-package docs** are assembled per package from three sources: the package `README.md`
   (becomes the overview), any `packages/<slug>/docs/*.md` (become guides), and the package's
   exported API (becomes the **API Reference**).
@@ -55,9 +54,9 @@ itself.
 
 ## Extending it
 
-- **Add a conceptual doc:** drop a `*.md` file anywhere under `docs/` (outside `packages/`).
-  It appears under **Notes**; move it into `guide/` and add it to the curated Guide list in
-  `docs-gen.mjs` if it's foundational.
+- **Add a conceptual doc:** create it under `docs/guide/` and add it to the curated sidebar in
+  `docs-gen.mjs` (User Guide for how-to material, Concepts & Design for how-it-works). If it's
+  exploratory rather than foundational, it belongs in the repo-root `archive/` instead.
 - **Add per-package prose:** create `packages/<slug>/docs/whatever.md`. It becomes a guide page
   under that package on the next `docs:gen`.
 - **Improve the API reference:** write [TSDoc](https://tsdoc.org) comments in the package's

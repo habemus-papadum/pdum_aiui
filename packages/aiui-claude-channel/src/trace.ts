@@ -62,6 +62,20 @@ export interface TraceManifest {
   format: string;
   /** The client-generated thread id. */
   threadId: string;
+  /**
+   * Who drove the turn (`"human"` | `"agent"` | free-form) — the client's
+   * self-report from its hello (see {@link HelloMeta.actor} in frame.ts).
+   * Absent on traces whose hello carried none.
+   */
+  actor?: string;
+  /**
+   * Which server process recorded the trace — the label its trace store was
+   * created with (see {@link sessionLabel}). Traces from every run of a
+   * project pile up flat in one cache dir, so this is the dimension trace
+   * lists filter on ("this server's traces") and label rows from other runs
+   * with. Absent on traces recorded before the label existed.
+   */
+  session?: string;
   startedAt: string;
   endedAt?: string;
   status?: "completed" | "abandoned";
@@ -94,11 +108,40 @@ export interface TraceHandle {
 export interface TraceStore {
   /** The traces root: `<cacheDir>/traces`. */
   readonly dir: string;
-  /** Start recording a new trace. Never throws. */
-  begin(format: string, threadId: string): TraceHandle;
+  /**
+   * The session label every {@link begin} stamps on its manifest (see
+   * {@link TraceManifest.session}), when the store was created with one.
+   */
+  readonly session?: string;
+  /**
+   * Start recording a new trace. Never throws. `actor` is the hello's
+   * provenance self-report (see {@link TraceManifest.actor}), when known.
+   */
+  begin(format: string, threadId: string, actor?: string): TraceHandle;
 }
 
 const MANIFEST = "trace.json";
+
+/**
+ * Mint the label naming one server process's trace session:
+ * `<tag>·<pid>·<HHMMSS>`. `tag` is the server's `--tag` (falling back to
+ * `"channel"` when it launched untagged), and HHMMSS is the process-start
+ * wall clock (local time) — tag, pid, and start time together let a human
+ * tell "this server's traces" from an earlier run's at a glance, without
+ * depending on the registry. Minted once per server process, when its trace
+ * store is created; every trace the store begins is stamped with it (see
+ * {@link TraceManifest.session}). The defaults describe *this* process;
+ * tests pass explicit values.
+ */
+export function sessionLabel(
+  tag: string | undefined,
+  pid: number = process.pid,
+  startedAt: Date = new Date(Date.now() - process.uptime() * 1000),
+): string {
+  const two = (n: number): string => String(n).padStart(2, "0");
+  const clock = `${two(startedAt.getHours())}${two(startedAt.getMinutes())}${two(startedAt.getSeconds())}`;
+  return `${tag ?? "channel"}·${pid}·${clock}`;
+}
 
 /** Sortable-unique trace id: UTC timestamp + a short random suffix. */
 function newTraceId(): string {
@@ -121,17 +164,25 @@ const noopHandle = (id: string, dir: string): TraceHandle => ({
   end() {},
 });
 
-/** Open a trace store rooted at a project cache dir (created on first use). */
-export function createTraceStore(cacheDir: string): TraceStore {
+/**
+ * Open a trace store rooted at a project cache dir (created on first use).
+ * `session` is the owning server process's label (see {@link sessionLabel});
+ * every trace begun through the store carries it. Omitted (tests, ad-hoc
+ * stores), manifests simply have no session — the "unknown" bucket in
+ * session-filtered trace lists.
+ */
+export function createTraceStore(cacheDir: string, session?: string): TraceStore {
   const tracesDir = join(cacheDir, "traces");
 
-  const begin = (format: string, threadId: string): TraceHandle => {
+  const begin = (format: string, threadId: string, actor?: string): TraceHandle => {
     const id = newTraceId();
     const dir = join(tracesDir, id);
     const manifest: TraceManifest = {
       id,
       format,
       threadId,
+      ...(actor !== undefined ? { actor } : {}),
+      ...(session !== undefined ? { session } : {}),
       startedAt: new Date().toISOString(),
       stages: [],
     };
@@ -190,7 +241,7 @@ export function createTraceStore(cacheDir: string): TraceStore {
     };
   };
 
-  return { dir: tracesDir, begin };
+  return { dir: tracesDir, ...(session !== undefined ? { session } : {}), begin };
 }
 
 /** Read one trace's manifest, or null if absent/malformed/unsafe id. */

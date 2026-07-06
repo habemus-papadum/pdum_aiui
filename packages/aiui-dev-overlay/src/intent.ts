@@ -135,6 +135,15 @@ export interface IntentToolOptions {
    * `aiuiDevOverlay({ intent })` Vite option lands here; JSON-serializable.
    */
   intent?: Partial<IntentPipelineConfig>;
+  /**
+   * Actor label riding every thread's hello as `meta.actor` — trace
+   * provenance. Omitted → detected at open time: `navigator.webdriver === true`
+   * (any browser automation, e.g. the agent driving the session browser via
+   * the Chrome DevTools MCP) → `"agent"`, else `"human"`. The channel stamps it
+   * on the trace manifest, so agent-driven UI testing is distinguishable from
+   * a human in the trace list. Set it explicitly to force a fixed label.
+   */
+  actor?: string;
   /** Channel port; defaults to the plugin-injected `window.__AIUI__.port`. */
   port?: number | string;
   /** Mount even outside a dev-like environment (demos, tests). */
@@ -457,10 +466,11 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
         );
       }
       // The hello carries what this page knows about itself — tab identity
-      // (extension-stamped), live url/title, source root, and (intent-v1) the
-      // modality's effective config — so the server can contextualize and
-      // trace the lowered prompt. Collected fresh per thread.
-      const baseMeta = collectClientMeta();
+      // (extension-stamped), live url/title, source root, the actor label
+      // (explicit option, else webdriver-detected — trace provenance), and
+      // (intent-v1) the modality's effective config — so the server can
+      // contextualize and trace the lowered prompt. Collected fresh per thread.
+      const baseMeta = collectClientMeta({ actor: options.actor });
       const meta: ClientMeta | undefined =
         threadOptions?.intent !== undefined
           ? { ...(baseMeta ?? {}), intent: threadOptions.intent }

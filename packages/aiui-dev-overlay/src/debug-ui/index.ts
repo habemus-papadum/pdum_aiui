@@ -10,6 +10,8 @@
  *    stream. The lab's dock and the rich per-stage view for an event log.
  *  - {@link TraceView} — a whole channel trace rendered generically (works for
  *    any modality), embedding {@link EventPanes} where a stage carries an event log.
+ *  - {@link renderJsonTree} — the dependency-free collapsible JSON widget the
+ *    trace view renders structured stage data with (path-aware string leaves).
  *  - {@link DebugSource} + {@link engineSource} / {@link traceLiveSource} —
  *    the small interface behind the panes: a live engine, or an HTTP poll of the
  *    channel's `/debug/api/traces/:id/live` route.
@@ -21,6 +23,8 @@
 
 export type { EventPanesConfig } from "./event-panes";
 export { EventPanes } from "./event-panes";
+export type { JsonTreeOptions } from "./json-tree";
+export { renderJsonTree } from "./json-tree";
 export type { PreviewUrl } from "./paths";
 export { defaultPreviewUrl } from "./paths";
 export type {

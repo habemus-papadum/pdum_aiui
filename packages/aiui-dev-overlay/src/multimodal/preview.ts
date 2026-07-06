@@ -47,6 +47,8 @@ export class Preview {
   private flash: Map<Piece, DiffRun[]> | undefined;
   private flashTimer: ReturnType<typeof setTimeout> | undefined;
   private correcting = false;
+  /** The hover enlargement, when one is up (fixed-position, body-attached). */
+  private peek: HTMLImageElement | undefined;
 
   constructor(engine: Engine) {
     this.engine = engine;
@@ -188,6 +190,9 @@ export class Preview {
       case "shot":
         this.pieces.push({ kind: "shot", marker: event.marker, thumb: event.thumb });
         break;
+      case "shot-drop":
+        this.pieces = this.pieces.filter((p) => !(p.kind === "shot" && p.marker === event.marker));
+        break;
       default:
         break;
     }
@@ -245,24 +250,21 @@ export class Preview {
 
   // ── rendering ───────────────────────────────────────────────────────────────
 
+  /** Drop the body-attached peek (the modality calls this on unmount too). */
+  dispose(): void {
+    this.hidePeek();
+  }
+
   private render(): void {
+    // A re-render can remove the hovered thumb; its peek would linger on the
+    // body with no mouseleave to clear it.
+    this.hidePeek();
     this.body.replaceChildren();
     const target = this.engine.correctionTarget;
     let offset = 0;
     for (const piece of this.pieces) {
       if (piece.kind === "shot") {
-        if (piece.thumb) {
-          const img = document.createElement("img");
-          img.src = piece.thumb;
-          img.className = "mm-thumb";
-          img.title = piece.marker ?? "";
-          this.body.append(img);
-        } else {
-          const chip = document.createElement("span");
-          chip.className = "mm-thumb-chip";
-          chip.textContent = `📷 ${piece.marker}`;
-          this.body.append(chip);
-        }
+        this.body.append(this.renderShot(piece));
         continue;
       }
       const text = piece.text ?? "";
@@ -294,6 +296,63 @@ export class Preview {
       offset += text.length + 1; // the joining space
     }
     this.body.scrollTop = this.body.scrollHeight;
+  }
+
+  /**
+   * One shot in the transcript flow: the thumbnail (or the degraded no-pixels
+   * chip), a hover **peek** (a fixed-position enlargement — the body is a
+   * scroll container, so an absolutely-positioned child would clip), and a
+   * hover **✕** that retracts the shot from the turn via {@link Engine.dropShot}
+   * — took the wrong screenshot, remove it before sending.
+   */
+  private renderShot(piece: Piece): HTMLElement {
+    const wrap = document.createElement("span");
+    wrap.className = "mm-thumb-wrap";
+    if (piece.thumb) {
+      const img = document.createElement("img");
+      img.src = piece.thumb;
+      img.className = "mm-thumb";
+      img.title = piece.marker ?? "";
+      wrap.append(img);
+      wrap.addEventListener("mouseenter", () => this.showPeek(wrap, piece.thumb ?? ""));
+      wrap.addEventListener("mouseleave", () => this.hidePeek());
+    } else {
+      const chip = document.createElement("span");
+      chip.className = "mm-thumb-chip";
+      chip.textContent = `📷 ${piece.marker}`;
+      wrap.append(chip);
+    }
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "mm-thumb-x";
+    drop.title = `remove ${piece.marker} from this turn`;
+    drop.textContent = "✕";
+    drop.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.hidePeek();
+      if (piece.marker) {
+        this.engine.dropShot(piece.marker);
+      }
+    });
+    wrap.append(drop);
+    return wrap;
+  }
+
+  private showPeek(anchor: HTMLElement, src: string): void {
+    this.hidePeek();
+    const rect = anchor.getBoundingClientRect();
+    const peek = document.createElement("img");
+    peek.className = "mm-thumb-peek";
+    peek.src = src;
+    peek.style.left = `${Math.max(8, rect.left)}px`;
+    peek.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+    document.body.append(peek);
+    this.peek = peek;
+  }
+
+  private hidePeek(): void {
+    this.peek?.remove();
+    this.peek = undefined;
   }
 
   /** All rendered text, in the same offset space selections resolve into. */

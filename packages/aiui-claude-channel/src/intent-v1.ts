@@ -94,6 +94,24 @@ export interface LoweredMessage {
 }
 
 /**
+ * The turn's final lowered prompt, pushed to the client just before it is sent
+ * into the session — exactly what the fin commit hands `sendPrompt`, so a
+ * client (the workbench, a widget's "what did I just send?" affordance) can
+ * show the committed prompt without polling the trace API. Pushed to every
+ * client, unconditionally: the push protocol is additive, and old clients
+ * ignore unknown kinds by design. A cancelled or empty turn pushes nothing
+ * (there is no prompt to show).
+ */
+export interface LoweredPromptMessage {
+  kind: "lowered-prompt";
+  threadId: string;
+  /** The full composed prompt (context preamble + body), exactly as sent. */
+  prompt: string;
+  /** The Option-C attachment paths, when the prompt carries `{shot_N}` tokens. */
+  meta?: Record<string, string>;
+}
+
+/**
  * A base64 audio clip pushed to the client to play — the `premium` tier's spoken
  * TTS ack and the `flagship` tier's model reply share this one additive message
  * (streaming-turns.md §4, model-tiers.md T2/T3). Distinguished from a per-frame
@@ -982,6 +1000,14 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         composed.prompt,
       );
       const meta = Object.keys(composed.meta).length > 0 ? composed.meta : undefined;
+      // Show the client what is about to be committed (pushed first, so the
+      // widget's view of the prompt never lags the session notification).
+      ctx.push?.({
+        kind: "lowered-prompt",
+        threadId: ctx.threadId,
+        prompt,
+        ...(meta !== undefined ? { meta } : {}),
+      } satisfies LoweredPromptMessage);
       await ctx.sendPrompt(prompt, meta);
       // Premium tier: a spoken "sent" once the notification landed (the send-
       // received ack — the minimal recommended trigger set, streaming-turns.md §4).

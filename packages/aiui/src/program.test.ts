@@ -6,10 +6,16 @@ describe("aiui cli", () => {
     expect(buildProgram().name()).toBe("aiui");
   });
 
-  it("registers the browser, chrome, claude, demo, mcp, open, and vite subcommands", () => {
+  it("registers the browser, chrome, claude, config, demo, mcp, open, and vite subcommands", () => {
     const names = buildProgram()
       .commands.map((cmd) => cmd.name())
       .sort();
-    expect(names).toEqual(["browser", "chrome", "claude", "demo", "mcp", "open", "vite"]);
+    expect(names).toEqual(["browser", "chrome", "claude", "config", "demo", "mcp", "open", "vite"]);
+  });
+
+  it("gives aiui config its tui, show, get, set, and unset subcommands", () => {
+    const config = buildProgram().commands.find((cmd) => cmd.name() === "config");
+    const names = config?.commands.map((cmd) => cmd.name()).sort();
+    expect(names).toEqual(["get", "set", "show", "tui", "unset"]);
   });
 });

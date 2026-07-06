@@ -56,6 +56,21 @@ export interface ServerMessage {
   [key: string]: unknown;
 }
 
+/**
+ * The `lowered-prompt` push: on every successful `fin` the server broadcasts
+ * the thread's final lowered prompt (plus its string meta) on the same socket.
+ * Typed here so a client can narrow a {@link ServerMessage} on
+ * `kind === "lowered-prompt"`. The overlay itself deliberately ignores it —
+ * see the handler in multimodal/modality.ts — the workbench consumes it
+ * server-side; the type exists for custom modalities that want the result.
+ */
+export interface LoweredPromptMessage extends ServerMessage {
+  kind: "lowered-prompt";
+  threadId: string;
+  prompt: string;
+  meta?: Record<string, string>;
+}
+
 const utf8 = new TextEncoder();
 
 /** Encode one binary frame: length-prefixed JSON envelope + payload bytes. */

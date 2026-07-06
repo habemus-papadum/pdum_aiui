@@ -1,0 +1,113 @@
+# The Channel MCP Server
+
+Everything in aiui converges on one process: the **custom channel MCP server**
+(`aiui-claude-channel mcp`). Claude Code spawns it over stdio at launch, and from then on it is
+both the session's inbound feed and the local hub every other piece talks to — the intent tool in
+your page, the page-tools bridge, the DevTools panel, the trace debugger. This page is how that
+process works; [Prompt Lowering](./prompt-lowering) covers the *compiler* that runs inside it,
+and the [websocket protocol reference](/packages/aiui-claude-channel/websocket-protocol) covers
+the wire in detail.
+
+## The process model
+
+`aiui claude` launches Claude Code with `--dangerously-load-development-channels` and registers
+the channel as an MCP server, so Claude Code spawns it as a child process speaking MCP over
+stdio. Two consequences shape everything else:
+
+- **Into the session: one-way notifications.** The channel pushes text with a
+  `notifications/claude/channel` MCP notification; the session sees it as a `<channel>` block —
+  context to read and act on, nothing to call back into. Lowered prompts arrive this way, with
+  extra metadata (like attachment file paths) riding as attributes next to the body tokens that
+  reference them.
+- **Out of the session: MCP tools.** The same server declares tools the agent can call —
+  `page_tools_list` / `page_tools_call` (drive tools that live *in a web page*, see below) and
+  `channel_reload` (hot-reload the server's own lowering layer after editing its source).
+
+Beside the stdio connection, the server opens a **web backend** on a loopback-only,
+OS-assigned port. That port is the address of the whole aiui world for this session.
+
+The session talks to the process over stdio (tools out, notifications in); everything else — the
+page's overlay widget and tools bridge, the DevTools panel — reaches it through the loopback web
+backend, whose port they discover via the on-disk registry (below):
+
+```mermaid
+flowchart TB
+  session["Claude Code session"]
+  subgraph proc["Channel MCP server process"]
+    core["lowering +<br/>page-tools router"]
+    surfaces["web backend (loopback)<br/>/ws · /tools · /prompt<br/>/health · /debug"]
+    core --> surfaces
+  end
+  page["Page<br/>overlay widget<br/>+ tools bridge"]
+  panel["DevTools panel"]
+  registry[("registry file<br/>~/.cache/aiui/mcp")]
+
+  session -->|"stdio · MCP tools out"| core
+  core -->|"stdio · notifications in"| session
+  page -->|"binary /ws · declare /tools"| surfaces
+  panel -->|"/debug + monitors"| surfaces
+  proc -.->|"advertises port"| registry
+  registry -.->|"discovery"| page
+```
+
+## Discovery: the registry
+
+Each running server advertises itself in a small on-disk registry
+(`~/.cache/aiui/mcp/<pid>.json`): a stable `tag`, its `pid`, the `ppid` of the Claude Code
+session that owns it, the web backend `port`, and the launch `cwd`. Entries are removed on exit
+and pruned when stale. This is how `aiui vite` finds the right server for a project (exporting
+the port to the dev server as `VITE_AIUI_PORT`), how the `aiuiDevOverlay()` plugin seeds it into
+pages (`window.__AIUI__.port`), and how CLI helpers like `aiui-claude-channel quick` pick a
+server to push a test prompt into.
+
+## The surfaces
+
+| Surface | Speaks | Purpose |
+| --- | --- | --- |
+| `/ws` | binary frames | The intent protocol: a client's hello picks a **format** (`text-concat`, `intent-v1`), then each thread streams events, audio, and screenshots to that format's lowering processor. |
+| `/tools` | JSON frames | The page-tools bridge: pages declare their `agentToolkit` tools here; the directory backs the `page_tools_*` MCP tools, and calls route back to the live page function. |
+| `POST /prompt` | JSON | Push plain text into the session — the simplest integration and the end-to-end smoke test. |
+| `GET /health` | JSON | Liveness, plus a page-tools summary; served with a permissive CORS header so pages can probe capability before dialing a websocket. |
+| `/debug` | HTML + JSON API | The lowering-trace viewer; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
+
+## Lowering, traces, and what reaches the session
+
+Each `/ws` thread is fed to its format's **stream processor** — the lowering pipeline. For the
+multimodal `intent-v1` format the processor works *incrementally*: transcription and correction
+diffs run as events arrive (server-side, because `OPENAI_API_KEY` lives with the channel
+process, never in the page), screenshots are saved to the trace blob store the moment their
+bytes land, and a speculative compose keeps the final prompt one cheap step away. On `fin` the
+composed prompt — body text with `{shot_N}` tokens, file paths in metadata — is pushed into the
+session as a notification.
+
+Every stage is recorded by the tracing layer into the project-local cache
+(`.aiui-cache/traces/<id>/`), which is what the `/debug` viewer, the DevTools panel's Intent
+pane, and the standalone trace debugger render — including mid-turn, since stages now land as
+they happen. An abandoned thread (page closed mid-turn) is torn down and its trace marked
+`abandoned`.
+
+## Hot reload
+
+The server can rebuild its lowering layer **in place**: the `channel_reload` MCP tool (or
+`POST /debug/api/reload`) re-imports the format/processor modules fresh and swaps them in. The
+MCP stdio connection, the HTTP server, and the port all survive; live websockets are deliberately
+dropped — clients are built for it (the tools bridge reconnects and re-registers within seconds;
+an in-flight intent thread is abandoned and the overlay recovers the turn). The fresh layer is
+built *before* the swap, so a syntax error in a just-edited file rejects the reload and leaves
+the running server untouched. This is what makes pair-programming *on the channel itself*
+practical: edit, `channel_reload`, try again — no session restart.
+
+## Keys and degradation
+
+Model-backed lowering (transcription, correction, speech) uses `OPENAI_API_KEY` from the
+environment `aiui claude` ran in. The launcher preflights it (a status-only check; see
+[Configuration](./config#the-intent-pipeline-openai-key)) and the result travels to
+`/debug/api/info` — the key itself never leaves the process. Without a valid key the channel
+still runs everything else and every model-backed path fails *loudly* with what to do about it;
+nothing silently degrades.
+
+## Trust model
+
+Loopback only, no authentication, spawned into a session that may be running with permissions
+skipped — the channel is a **development tool** with the same posture as the rest of aiui.
+Read [⚠️ Read Before Running](./warning) before running any of it.

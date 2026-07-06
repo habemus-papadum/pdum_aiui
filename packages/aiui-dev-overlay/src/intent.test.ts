@@ -191,6 +191,63 @@ describe("textModality", () => {
   });
 });
 
+describe("actor self-reporting (trace provenance on the hello)", () => {
+  /** Shadow navigator.webdriver on the instance; returns the undo. */
+  function stubWebdriver(value: boolean): () => void {
+    const own = Object.getOwnPropertyDescriptor(navigator, "webdriver");
+    Object.defineProperty(navigator, "webdriver", { value, configurable: true });
+    return () => {
+      if (own) {
+        Object.defineProperty(navigator, "webdriver", own);
+      } else {
+        delete (navigator as { webdriver?: boolean }).webdriver;
+      }
+    };
+  }
+
+  /** Mount the text modality, submit once, and decode the hello's meta. */
+  async function helloMetaFor(actor?: string): Promise<Record<string, unknown> | undefined> {
+    const { factory, sent } = fakeSocketFactory(() => ({ ok: true }));
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [textModality()],
+      ...(actor === undefined ? {} : { actor }),
+    });
+    handle.open();
+    const textarea = handle.shadowRoot?.querySelector("textarea") as HTMLTextAreaElement;
+    textarea.value = "who is driving?";
+    textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    await flush();
+    const hello = decodeFrame(sent[0]);
+    return (hello.envelope as { meta?: Record<string, unknown> }).meta;
+  }
+
+  it("defaults to 'human' in a plain page", async () => {
+    expect((await helloMetaFor())?.actor).toBe("human");
+  });
+
+  it("reports 'agent' when navigator.webdriver is true (agent-driven UI testing)", async () => {
+    const restore = stubWebdriver(true);
+    try {
+      expect((await helloMetaFor())?.actor).toBe("agent");
+    } finally {
+      restore();
+    }
+  });
+
+  it("threads an explicit actor option through every thread's hello", async () => {
+    const restore = stubWebdriver(true);
+    try {
+      expect((await helloMetaFor("bot-7"))?.actor).toBe("bot-7");
+    } finally {
+      restore();
+    }
+  });
+});
+
 describe("textModality with an on-screen selection", () => {
   afterEach(() => {
     document.body.querySelector("p")?.remove();

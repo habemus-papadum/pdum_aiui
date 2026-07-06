@@ -35,6 +35,7 @@ import {
   Engine,
   type IntentEvent,
   type IntentPipelineConfig,
+  type IntentTier,
   isTypingTarget,
   type KeyCommand,
   keyCommand,
@@ -42,6 +43,7 @@ import {
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
 import { intentTurnStore } from "../turn-store";
 import {
+  clearIntentOverrides,
   effectiveConfig,
   loadIntentOverrides,
   mountAdvancedConfig,
@@ -50,6 +52,7 @@ import {
   validateIntentConfig,
 } from "./advanced-config";
 import { AudioCapture, type PcmSource, REALTIME_PCM_MIME, WorkletPcmSource } from "./audio";
+import { ConfigStrip, type ConfigStripState } from "./config-strip";
 import { type CorrectionDiff, mockCorrector } from "./correct";
 import { Ink } from "./ink";
 import { Preview } from "./preview";
@@ -157,9 +160,13 @@ export function multimodalModality(
         <button class="mm-arm" title="arm/disarm">✳</button>
         <span class="mm-state">off</span>
         <canvas class="mm-meter" width="60" height="14"></canvas>
-        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · S shot · C clear · E correct · ⏎ send · Esc out</span>
+        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · S shot · C clear · E correct · K config · ⏎ send · Esc out</span>
         <span class="mm-speaker" hidden></span>`;
       layers.append(hud);
+
+      // The quick-config strip (the K layer) sits just above the HUD.
+      const strip = new ConfigStrip();
+      layers.append(strip.root);
       document.body.append(layers);
       const armButton = hud.querySelector<HTMLButtonElement>(".mm-arm");
       const stateLabel = hud.querySelector<HTMLSpanElement>(".mm-state");
@@ -193,16 +200,19 @@ export function multimodalModality(
       const renderLabels = (): void => {
         const key = armKeyLabel(config);
         help.innerHTML = `Press <b>${key}</b> to arm, then <b>Space</b> to talk, drag to sketch,
-          <b>S</b> to screenshot, <b>E</b> to correct, <b>Enter</b> to send. A ✳ badge sits
-          bottom-left while active.`;
+          <b>S</b> to screenshot, <b>E</b> to correct, <b>K</b> for quick config (tiers),
+          <b>Enter</b> to send. A ✳ badge sits bottom-left while active.`;
         if (keysLabel) {
-          keysLabel.textContent = `${key} arm · Space talk · drag ink · S shot · C clear · E correct · ⏎ send · Esc out`;
+          keysLabel.textContent = `${key} arm · Space talk · drag ink · S shot · C clear · E correct · K config · ⏎ send · Esc out`;
         }
       };
       renderLabels();
 
       let shooting = false;
       function renderHud(): void {
+        if (!engine.armed) {
+          strip.hide(); // disarming always closes the quick-config strip
+        }
         document.body.classList.toggle("mm-armed", engine.armed);
         hud.classList.toggle("armed", engine.armed);
         hud.classList.toggle("talking", engine.talking);
@@ -398,6 +408,10 @@ export function multimodalModality(
               ...(typeof msg.label === "string" ? { label: msg.label } : {}),
             });
           }
+        } else if (msg.kind === "lowered-prompt") {
+          // Deliberately ignored: the overlay doesn't surface the final lowered
+          // prompt (yet) — the workbench consumes this push server-side. See
+          // LoweredPromptMessage in protocol.ts.
         }
       }
 
@@ -721,9 +735,78 @@ export function multimodalModality(
         return 0;
       }
 
+      // ── the quick-config session layer (the K strip's scope model) ───────────
+      // Sits ABOVE the persisted (localStorage) layer: DEFAULT ← tier preset ←
+      // Vite intent ← persisted ← session. A digit in the strip writes only this
+      // layer, so a quick tier switch lasts for the page session and a reload
+      // returns to file + saved config; the strip's S folds it into the persisted
+      // layer, R clears both. localStorage is read fresh on recompute — storage
+      // is the single source of truth for the persisted layer.
+      let sessionOverrides: Partial<IntentPipelineConfig> = {};
+      // A tier picked while a thread is open: the thread's hello already told
+      // the channel which pipeline to run, so the switch waits for thread-close.
+      let pendingTier: IntentTier | undefined;
+      const recomputeEffective = (): IntentPipelineConfig =>
+        effectiveConfig(viteOption, { ...loadIntentOverrides(), ...sessionOverrides });
+      const stripState = (note?: string): ConfigStripState => ({
+        config,
+        ...(pendingTier !== undefined ? { pendingTier } : {}),
+        sessionDirty: Object.keys(sessionOverrides).length > 0,
+        saved: Object.keys(loadIntentOverrides()).length > 0,
+        ...(note !== undefined ? { note } : {}),
+      });
+      const applyTier = (tier: IntentTier): void => {
+        sessionOverrides = { ...sessionOverrides, tier };
+        pendingTier = undefined;
+        applyEffective(recomputeEffective());
+        strip.render(stripState());
+        ctx.setStatus(`tier → ${tier} — this session only (K, then S to save)`);
+      };
+
       // ── keymap: reuse the pure keyCommand, but own arming (rebind/disable) ────
       const dispatch = (command: KeyCommand): void => {
         switch (command.cmd) {
+          case "config-toggle":
+            if (strip.open) {
+              strip.hide();
+            } else {
+              strip.show(stripState());
+            }
+            break;
+          case "config-close":
+            strip.hide();
+            break;
+          case "config-tier":
+            if (engine.threadOpen) {
+              pendingTier = command.tier;
+              strip.render(stripState());
+              ctx.setStatus(`tier → ${command.tier} — applies when this thread closes`);
+            } else {
+              applyTier(command.tier);
+            }
+            break;
+          case "config-save": {
+            // Fold everything explicit (persisted + session) into the persisted
+            // layer — the same delta-vs-base the gear panel's Apply computes.
+            saveIntentOverrides(overridesForApply({ ...config }, base));
+            sessionOverrides = {};
+            strip.render(stripState("saved for this site ✓"));
+            ctx.setStatus("config saved for this site (browser storage)");
+            break;
+          }
+          case "config-reset":
+            clearIntentOverrides();
+            sessionOverrides = {};
+            pendingTier = undefined;
+            applyEffective(effectiveConfig(viteOption, {}));
+            strip.render(stripState("reset to the file config ✓"));
+            ctx.setStatus("config reset to the file (Vite) config");
+            break;
+          case "config-advanced":
+            strip.hide();
+            ctx.openPanel();
+            advancedPanel.open();
+            break;
           case "arm-toggle":
             engine.setArmed(!engine.armed);
             break;
@@ -769,7 +852,12 @@ export function multimodalModality(
         }
         renderHud();
       };
-      let uninstallKeys = bindKeys(config, () => engine, dispatch);
+      let uninstallKeys = bindKeys(
+        config,
+        () => engine,
+        () => strip.open,
+        dispatch,
+      );
 
       // ── advanced config panel (gear → raw JSON over the full effective config) ─
       // Apply mutates the live config in place: dynamic reads (mock cadence, ink
@@ -778,14 +866,40 @@ export function multimodalModality(
       // keymap is rebound (arming key/enabled), and the labels refresh. The next
       // thread's hello carries the new config because openThread reads it fresh.
       const applyEffective = (effective: IntentPipelineConfig): void => {
+        // Drop keys the new effective config no longer has (e.g. `tier` after a
+        // reset) — Object.assign alone would leave them frozen on the live object.
+        for (const key of Object.keys(config)) {
+          if (!(key in effective)) {
+            delete (config as unknown as Record<string, unknown>)[key];
+          }
+        }
         Object.assign(config, effective);
         Object.assign(engine.settings, effective);
         uninstallKeys();
-        uninstallKeys = bindKeys(config, () => engine, dispatch);
+        uninstallKeys = bindKeys(
+          config,
+          () => engine,
+          () => strip.open,
+          dispatch,
+        );
         renderLabels();
         renderHud();
       };
-      mountAdvancedConfig(container, { viteOption, effective: config, onApply: applyEffective });
+      // The panel's Apply (and Reset) persists its own delta and hands back the
+      // new effective config — at that point the session layer is folded in or
+      // deliberately edited away, so it clears here (as does a pending tier).
+      const advancedPanel = mountAdvancedConfig(container, {
+        viteOption,
+        effective: config,
+        onApply: (effective) => {
+          sessionOverrides = {};
+          pendingTier = undefined;
+          applyEffective(effective);
+          if (strip.open) {
+            strip.render(stripState());
+          }
+        },
+      });
 
       // The agent's set_config: the SAME validate → delta → persist → applyEffective
       // path the advanced panel's Apply button runs (including the tier-switch
@@ -799,8 +913,15 @@ export function multimodalModality(
         }
         const overrides = overridesForApply(result.config, base);
         saveIntentOverrides(overrides);
+        // The agent set the persisted layer explicitly — the session layer (and
+        // any tier waiting on thread-close) yields to it, like a panel Apply.
+        sessionOverrides = {};
+        pendingTier = undefined;
         const effective = effectiveConfig(viteOption, overrides);
         applyEffective(effective);
+        if (strip.open) {
+          strip.render(stripState());
+        }
         overlayTools.reregister(); // schemas unchanged → invisible upstream, by design
         return { ok: true, applied: Object.keys(overrides).length, config: { ...effective } };
       };
@@ -830,6 +951,11 @@ export function multimodalModality(
             void finalizeThread();
           } else {
             void cancelThread();
+          }
+          // A tier picked mid-thread lands now — before any next thread opens,
+          // so the next hello carries it.
+          if (pendingTier !== undefined) {
+            applyTier(pendingTier);
           }
         }
         // Persist the turn while a thread is open (transcript + shot refs + thread
@@ -910,6 +1036,7 @@ export function multimodalModality(
           void cancelThread();
           ink.dispose();
           shots.dispose();
+          preview.dispose();
           audio.dispose();
           pcmSource?.dispose();
           speechPlayer.dispose();
@@ -951,6 +1078,7 @@ function armKeyLabel(config: IntentPipelineConfig): string {
 function bindKeys(
   config: IntentPipelineConfig,
   getEngine: () => Engine,
+  isConfigOpen: () => boolean,
   dispatch: (command: KeyCommand) => void,
 ): () => void {
   const armKey = config.arming?.key ?? "`";
@@ -977,6 +1105,7 @@ function bindKeys(
         talking: engine.talking,
         talkMode: config.talkMode,
         typing: false,
+        configOpen: isConfigOpen(),
       },
       event.key,
       phase,

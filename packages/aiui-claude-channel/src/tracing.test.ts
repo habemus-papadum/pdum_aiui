@@ -105,7 +105,47 @@ describe("withTracing", () => {
     expect(trace.stages[1].data).toBe("SHOUT");
   });
 
+  it("stamps the store's session label on every traced run", async () => {
+    const cache = freshCache();
+    const formats = withTracing(
+      new Map([["text-concat", textConcatFormat]]),
+      createTraceStore(cache, "wb·1·010203"),
+    );
+    const { processor } = makeThread(formats.get("text-concat") as ChannelFormat, []);
+    await processor.onMessage({ text: "hi" }, { fin: true });
+    expect(listTraces(cache)[0].session).toBe("wb·1·010203");
+  });
+
   it("traceOf returns undefined outside tracing", () => {
     expect(traceOf({ threadId: "x", sendPrompt: () => {}, close: () => {} })).toBeUndefined();
+  });
+
+  it("records the hello's actor on the manifest (strings only)", async () => {
+    const cache = freshCache();
+    const formats = withTracing(
+      new Map([["text-concat", textConcatFormat]]),
+      createTraceStore(cache),
+    );
+    const format = formats.get("text-concat") as ChannelFormat;
+
+    const run = async (threadId: string, hello: ThreadContext["hello"]): Promise<void> => {
+      const ctx: ThreadContext = {
+        threadId,
+        ...(hello !== undefined ? { hello } : {}),
+        sendPrompt: () => {},
+        close: () => {},
+      };
+      await format.createProcessor(ctx).onMessage({ text: "hi" }, { fin: true });
+    };
+
+    await run("t-agent", { actor: "agent" });
+    // A non-string actor (a hostile/buggy client) is dropped, not recorded.
+    await run("t-bogus", { actor: 42 as unknown as string });
+    await run("t-none", undefined);
+
+    const byThread = new Map(listTraces(cache).map((t) => [t.threadId, t]));
+    expect(byThread.get("t-agent")?.actor).toBe("agent");
+    expect(byThread.get("t-bogus")?.actor).toBeUndefined();
+    expect(byThread.get("t-none")?.actor).toBeUndefined();
   });
 });

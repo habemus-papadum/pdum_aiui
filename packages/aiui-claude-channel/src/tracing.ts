@@ -40,7 +40,10 @@ function traceFormat(name: string, format: ChannelFormat, store: TraceStore): Ch
   return {
     codec: format.codec,
     createProcessor: (ctx) => {
-      const trace = store.begin(name, ctx.threadId);
+      // Provenance: the hello's self-reported actor ("human" | "agent" | …)
+      // lands on the manifest so the /debug viewer can badge non-human runs.
+      const actor = typeof ctx.hello?.actor === "string" ? ctx.hello.actor : undefined;
+      const trace = store.begin(name, ctx.threadId, actor);
       // The connection's client context (tab identity, source location) shapes
       // the lowering — make it visible on every trace, whatever the format.
       if (ctx.hello !== undefined) {

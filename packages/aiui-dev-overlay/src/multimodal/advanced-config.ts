@@ -284,7 +284,12 @@ export interface AdvancedConfigOptions {
    * `effectiveConfig(viteOption, {})`.
    */
   viteOption: Partial<IntentPipelineConfig>;
-  /** The current effective config (base + persisted overrides) at mount. */
+  /**
+   * The **live** effective config object — the one the modality mutates in
+   * place on every apply (panel, agent `set_config`, the K strip). The editor
+   * reads it at open/refresh time, so it always shows the current truth no
+   * matter which door last changed it.
+   */
   effective: IntentPipelineConfig;
   /** localStorage key for the override layer. */
   storageKey?: string;
@@ -292,19 +297,28 @@ export interface AdvancedConfigOptions {
   onApply: (effective: IntentPipelineConfig) => void;
 }
 
+/** The panel's programmatic surface (the K strip's G opens it). */
+export interface AdvancedConfigHandle {
+  /** Reveal the editor (as if the gear were clicked), refreshed to the live config. */
+  open(): void;
+}
+
 /**
  * Render the gear + advanced JSON editor into `container` (the widget panel's
- * body). Returns nothing — the panel owns its own state. Applying validates and
- * persists the delta, then calls `onApply` with the new effective config; Reset
- * clears the persisted layer and re-applies the base.
+ * body). The panel owns its own state; the returned handle only exposes
+ * `open()`. Applying validates and persists the delta, then calls `onApply`
+ * with the new effective config; Reset clears the persisted layer and
+ * re-applies the base.
  */
-export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfigOptions): void {
+export function mountAdvancedConfig(
+  container: HTMLElement,
+  opts: AdvancedConfigOptions,
+): AdvancedConfigHandle {
   const storageKey = opts.storageKey ?? INTENT_CONFIG_STORAGE_KEY;
   // The base the persisted delta is computed against: DEFAULT ← tier preset ←
   // Vite option. Derived from the raw Vite partial so the tier expansion is
   // included (the panel diffs the editor against this).
   const base = effectiveConfig(opts.viteOption, {});
-  let current = opts.effective;
 
   const gear = document.createElement("button");
   gear.type = "button";
@@ -355,7 +369,7 @@ export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfig
   container.append(gear, panel);
 
   const refresh = (): void => {
-    editor.value = JSON.stringify(current, null, 2);
+    editor.value = JSON.stringify(opts.effective, null, 2);
   };
   const setMsg = (text: string, isError: boolean): void => {
     msg.textContent = text;
@@ -385,8 +399,8 @@ export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfig
     }
     const overrides = overridesForApply(result.config, base);
     saveIntentOverrides(overrides, storageKey);
-    current = effectiveConfig(opts.viteOption, overrides);
-    opts.onApply(current);
+    // onApply mutates opts.effective in place; refresh() then reads it live.
+    opts.onApply(effectiveConfig(opts.viteOption, overrides));
     refresh();
     const count = Object.keys(overrides).length;
     setMsg(
@@ -399,9 +413,15 @@ export function mountAdvancedConfig(container: HTMLElement, opts: AdvancedConfig
 
   reset.addEventListener("click", () => {
     clearIntentOverrides(storageKey);
-    current = effectiveConfig(opts.viteOption, {});
-    opts.onApply(current);
+    opts.onApply(effectiveConfig(opts.viteOption, {}));
     refresh();
     setMsg("reset to defaults ✓", false);
   });
+
+  return {
+    open(): void {
+      panel.hidden = false;
+      refresh();
+    },
+  };
 }

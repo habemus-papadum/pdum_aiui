@@ -60,6 +60,14 @@ export {
   type TabInfo,
 } from "./frame";
 export {
+  createFrameLog,
+  FRAME_LOG_LIMIT,
+  type FrameLog,
+  type FrameLogEntry,
+  type FrameLogOptions,
+  type FrameLogSink,
+} from "./frame-log";
+export {
   channelSourceDir,
   defaultFormatLoader,
   type FormatLoader,
@@ -74,6 +82,7 @@ export {
   type IntentV1Options,
   intentV1Format,
   type LoweredMessage,
+  type LoweredPromptMessage,
   type SpeechMessage,
 } from "./intent-v1";
 export {
@@ -128,6 +137,7 @@ export {
   type VoiceAudioClip,
   type VoiceUserResult,
 } from "./realtime-voice";
+export { createJsonlRecorder, type JsonlRecorder } from "./recording";
 export {
   isProcessAlive,
   type RegisteredServer,
@@ -176,6 +186,7 @@ export {
   PROJECT_CACHE_DIRNAME,
   projectCacheDir,
   readTrace,
+  sessionLabel,
   type TraceHandle,
   type TraceManifest,
   type TraceStage,

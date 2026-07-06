@@ -114,6 +114,13 @@ export interface ChannelResponse {
   error?: string;
   /** True when the connection is unusable and the transport should drop it. */
   fatal?: boolean;
+  /**
+   * True on the **hello ack** when the server runs in debug mode (e.g. the
+   * standalone `serve` command, which prints prompts instead of reaching a
+   * session). Additive: acks never carry a `kind` field — that is how clients
+   * tell them apart from pushes — so a new ack field is safe for old clients.
+   */
+  debug?: boolean;
 }
 
 export interface ChannelConnectionOptions {
@@ -127,6 +134,12 @@ export interface ChannelConnectionOptions {
    * and processors that need it degrade gracefully.
    */
   push?: PushMessage;
+  /**
+   * Advertise server-level debug mode on the hello ack (see
+   * {@link ChannelResponse.debug}), so a client knows its prompts end up on a
+   * debug server's stdout rather than in a Claude Code session.
+   */
+  debug?: boolean;
 }
 
 /** The protocol state of one client connection. */
@@ -192,7 +205,7 @@ export function createChannelConnection(options: ChannelConnectionOptions): Chan
     if (envelope.meta !== undefined && typeof envelope.meta === "object") {
       hello = envelope.meta;
     }
-    return { ok: true };
+    return { ok: true, ...(options.debug === true ? { debug: true } : {}) };
   };
 
   const handleData = async (

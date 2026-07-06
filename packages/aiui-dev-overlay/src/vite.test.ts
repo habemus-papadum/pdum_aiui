@@ -81,6 +81,15 @@ describe("aiuiDevOverlay", () => {
     );
   });
 
+  it("passes the configured actor to the mount (trace provenance)", () => {
+    process.env[PORT_ENV] = "50123";
+    expect(loadMount(aiuiDevOverlay({ actor: "agent" }))).toContain(
+      'mountIntentTool({ force: true, port: 50123, actor: "agent" })',
+    );
+    // Omitted → not serialized: the widget detects webdriver at runtime.
+    expect(loadMount(aiuiDevOverlay())).not.toContain("actor");
+  });
+
   it("seeds the source root — explicit option, or the resolved Vite root", () => {
     const explicit = aiuiDevOverlay({ sourceRoot: "/repo/app" });
     expect(htmlTags(explicit)[0].children).toContain('window.__AIUI__.sourceRoot = "/repo/app";');
