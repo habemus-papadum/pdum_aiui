@@ -38,7 +38,14 @@ export class RawPane {
   }
 
   activate(): void {
-    this.unsubscribe ??= this.feed.subscribe((entries) => this.append(entries));
+    if (this.unsubscribe) {
+      return;
+    }
+    // Rebuild from scratch: subscribing replays the feed's full buffered
+    // history (see FramesFeed), so rows left from a previous activation
+    // would otherwise render twice.
+    this.log.replaceChildren();
+    this.unsubscribe = this.feed.subscribe((entries) => this.append(entries));
   }
 
   deactivate(): void {

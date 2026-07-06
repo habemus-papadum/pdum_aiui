@@ -19,6 +19,8 @@
  */
 
 export { disposeDurable, durable } from "./durable";
+export type { AddErrorOptions, OverlayError, OverlayErrorInput } from "./errors";
+export { addError, dismissError, ERROR_TOAST_CAP } from "./errors";
 export type {
   ClientMeta,
   CollectClientMetaOptions,
@@ -85,6 +87,7 @@ export { installOverlayTools, OVERLAY_TOOLS_NS } from "./overlay-tools";
 export type {
   Ack,
   AttachmentChunk,
+  ErrorMessage,
   FrameChunk,
   IntentSocket,
   JsonChunk,
@@ -93,7 +96,13 @@ export type {
   WebSocketFactory,
   WebSocketLike,
 } from "./protocol";
-export { connectIntentSocket, encodeFrame, encodeJsonPayload, PROTOCOL_VERSION } from "./protocol";
+export {
+  connectIntentSocket,
+  encodeFrame,
+  encodeJsonPayload,
+  isErrorMessage,
+  PROTOCOL_VERSION,
+} from "./protocol";
 export type {
   SelectionRect,
   SelectionSnapshot,

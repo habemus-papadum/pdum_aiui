@@ -12,7 +12,7 @@
  */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { discoverSessionBrowser } from "../util/browser";
+import { discoverSessionBrowser } from "@habemus-papadum/aiui-util";
 import { ensureLatestCft, installedCft, latestStableCft } from "../util/cft";
 import {
   buildDevtoolsExtension,

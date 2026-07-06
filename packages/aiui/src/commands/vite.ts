@@ -1,11 +1,19 @@
 import type { RunningServer } from "@habemus-papadum/aiui-claude-channel";
 import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel";
+import {
+  decideBrowserAction,
+  discoverSessionBrowser,
+  openInSessionBrowser,
+} from "@habemus-papadum/aiui-util";
 import chalk from "chalk";
 import { execa } from "execa";
-import { infoFlag, splitAiuiArgs } from "../util/aiui-args";
+import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
+import { resolveChromeSettings } from "../util/chrome";
+import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { type CliInvocation, resolvePackageCli } from "../util/resolve-cli";
-import { printError } from "../util/ui";
+import { printError, printNote, printWarning } from "../util/ui";
 import { VERSION } from "../util/version";
+import { startSessionBrowser } from "./browser";
 
 const VITE_PKG = "vite";
 
@@ -70,9 +78,19 @@ export function resolveChannelTarget(
  * run it via the current Node with an absolute path. Resolving it also doubles
  * as the "is Vite available?" check: if it isn't installed, we fail loudly
  * rather than shelling out to nothing. See {@link resolvePackageCli}.
+ *
+ * Once the dev server is up, a *sidecar* opens it in the session browser (the
+ * shared window `aiui claude` attaches the agent to). We never know up front
+ * which port Vite will bind — the user runs many dev servers and Vite walks up
+ * from 5173 — so instead of guessing, Vite's stdout is teed through us and
+ * scanned for its own ready banner (see {@link parseViteLocalUrl}). stdin and
+ * stderr stay inherited: Vite still owns the terminal, its interactive
+ * shortcuts and Ctrl-C behave exactly as before. The sidecar is fire-and-forget
+ * ({@link openAppInBrowser}): whatever the browser does, the dev server runs on.
  */
 export async function runVite(rawArgs: string[] = []): Promise<void> {
-  const { mcp, tag, passthrough } = splitAiuiArgs(rawArgs);
+  const aiuiArgs = splitAiuiArgs(rawArgs);
+  const { mcp, tag, passthrough } = aiuiArgs;
 
   // `--help` / `--version` are inert: aiui's own answer, then Vite's — with no
   // channel discovery (which could otherwise block on an interactive picker).
@@ -119,17 +137,183 @@ export async function runVite(rawArgs: string[] = []): Promise<void> {
     return;
   }
 
-  // stdio inherit so the dev server owns the terminal and Ctrl-C reaches it.
+  // execa merges `env` over process.env, so we only add entries deliberately.
+  const env: NodeJS.ProcessEnv = {};
+  if (port) {
+    env[VITE_PORT_ENV] = port;
+  }
+  // Piping stdout (below) makes Vite see a non-TTY and drop its colors. When
+  // *our* stdout is a real terminal the tee lands there verbatim, so tell the
+  // child to keep coloring — unless the user already voted (FORCE_COLOR /
+  // NO_COLOR), in which case their setting passes through untouched.
+  if (process.stdout.isTTY && !("FORCE_COLOR" in process.env) && !("NO_COLOR" in process.env)) {
+    env.FORCE_COLOR = "1";
+  }
+
+  // stdin/stderr inherit so the dev server owns the terminal (Ctrl-C, the
+  // h/r/q shortcuts); stdout is piped *only* to learn which port Vite bound —
+  // every byte is teed straight back out. buffer:false because a dev server
+  // runs for hours and execa would otherwise accumulate its whole output.
   // reject:false so a non-zero/interrupted Vite exit is propagated as our exit
-  // code instead of throwing an error the user didn't cause. execa merges `env`
-  // over process.env, so we only add VITE_AIUI_PORT when we actually resolved one.
-  const result = await execa(vite.command, [...vite.args, ...passthrough], {
-    stdio: "inherit",
+  // code instead of throwing an error the user didn't cause.
+  const child = execa(vite.command, [...vite.args, ...passthrough], {
+    stdio: ["inherit", "pipe", "inherit"],
+    buffer: false,
     reject: false,
-    ...(port ? { env: { [VITE_PORT_ENV]: port } } : {}),
+    env,
   });
+  if (child.stdout) {
+    teeAndDetectLocalUrl(child.stdout, process.stdout, (url) => {
+      // Fire-and-forget: openAppInBrowser catches everything itself, and Vite
+      // must never wait on (or die with) the browser.
+      void openAppInBrowser(url, aiuiArgs);
+    });
+  }
+  const result = await child;
   if (result.exitCode) {
     process.exitCode = result.exitCode;
+  }
+}
+
+/**
+ * ANSI CSI escape sequences (colors, cursor movement, screen clears):
+ * `ESC [`, parameter bytes, intermediate bytes, one final byte.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching the ESC byte is the point
+const ANSI_CSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+
+/**
+ * Parse one line of Vite's stdout for the local dev-server URL.
+ *
+ * Vite's ready banner looks like (colored in a real terminal):
+ *
+ *     ➜  Local:   http://localhost:5174/
+ *     ➜  Network: use --host to expose
+ *
+ * Only the `Local:` line counts, and only with a loopback host (`localhost`,
+ * `127.0.0.1`, `[::1]`) — that's the URL meaningful to open in a browser on
+ * this machine, or to port-forward in the headless hint. ANSI codes are
+ * stripped *first*: Vite colors the host and the port separately, so escape
+ * sequences sit in the middle of the URL text and no pattern would survive
+ * matching against the raw bytes. Returns undefined for anything that isn't
+ * the ready line — the same shape as the workbench's parseServeReadyLine, the
+ * house pattern for these one-line protocols.
+ */
+export function parseViteLocalUrl(line: string): string | undefined {
+  const plain = line.replace(ANSI_CSI, "");
+  const match = plain.match(
+    /\bLocal:\s+(https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\/?\S*)/,
+  );
+  return match?.[1];
+}
+
+/**
+ * Tee a child's stdout to ours verbatim while watching for the dev-server URL.
+ *
+ * Chunks are forwarded untouched (colors, spinners, screen clears all pass
+ * through); scanning happens on a parallel line-buffered copy so a URL split
+ * across chunk boundaries is still seen. Once found, `onUrl` fires exactly
+ * once and the scanner disengages — from then on this is a plain passthrough.
+ * Exported for tests, which drive it with in-memory streams (no child
+ * process).
+ */
+export function teeAndDetectLocalUrl(
+  source: NodeJS.ReadableStream,
+  sink: NodeJS.WritableStream,
+  onUrl: (url: string) => void,
+): void {
+  let buffer = "";
+  let found = false;
+  source.on("data", (chunk: Buffer | string) => {
+    sink.write(chunk);
+    if (found) {
+      return;
+    }
+    buffer += chunk.toString();
+    for (;;) {
+      const newline = buffer.indexOf("\n");
+      if (newline === -1) {
+        break;
+      }
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      const url = parseViteLocalUrl(line);
+      if (url) {
+        found = true;
+        buffer = "";
+        onUrl(url);
+        return;
+      }
+    }
+    // Guard the partial-line buffer against pathological unbroken output; the
+    // banner line we're waiting for is short, so nothing real is lost.
+    if (buffer.length > 8192) {
+      buffer = buffer.slice(-8192);
+    }
+  });
+}
+
+type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
+
+/**
+ * The browser sidecar: once the dev server's URL is known, put it in front of
+ * the user — in the *session browser* (the shared window `aiui claude`
+ * attaches the agent to; see aiui-util's browser module and `aiui open`),
+ * never their default browser. A running session browser gets a new tab; none running
+ * means launching one exactly the way `aiui browser` does
+ * ({@link startSessionBrowser}), with the app as its first tab.
+ *
+ * Runs concurrently with Vite and must never interfere with it: everything is
+ * caught, failures print a warning, and the dev server keeps the terminal and
+ * keeps running either way. It is also deliberately non-interactive — Vite
+ * owns stdin — so the Chrome for Testing sync never prompts here; it just
+ * uses whatever browser is already available.
+ */
+async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> {
+  try {
+    // `--aiui-browser-url` beats a configured chrome.browserUrl for this run,
+    // the same precedence `aiui claude` gives it.
+    const chromeCfg: ChromeConfig = {
+      ...loadAiuiConfig().chrome,
+      ...(aiuiArgs.browserUrl ? { browserUrl: aiuiArgs.browserUrl } : {}),
+    };
+    const action = decideBrowserAction(aiuiArgs, chromeCfg);
+    if (action.kind === "skip") {
+      return;
+    }
+    if (action.kind === "hint") {
+      printNote(
+        `detected a headless environment (${action.reason}) — not opening a browser`,
+        `Assuming the dev server's port is already forwarded, open ${url} in the browser\n` +
+          "on your local machine. (Pass --aiui-browser to open one here anyway.)",
+      );
+      return;
+    }
+
+    if (chromeCfg.browserUrl) {
+      await openInSessionBrowser(chromeCfg.browserUrl, url);
+      console.error(chalk.dim(`aiui: opened ${url} in the browser at ${chromeCfg.browserUrl}`));
+      return;
+    }
+    const settings = resolveChromeSettings(aiuiArgs, chromeCfg);
+    const running = await discoverSessionBrowser(settings.userDataDir);
+    if (running) {
+      await openInSessionBrowser(running.browserUrl, url);
+      console.error(chalk.dim(`aiui: opened ${url} in the session browser`));
+    } else {
+      await startSessionBrowser({
+        flags: aiuiArgs,
+        config: chromeCfg,
+        interactive: false,
+        startUrl: url,
+      });
+      console.error(chalk.dim(`aiui: opened ${url} in a new session browser`));
+    }
+  } catch (error) {
+    printWarning(
+      "couldn't open the app in the session browser — the dev server is unaffected",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 
@@ -167,11 +351,18 @@ function printViteWrapperHelp(): void {
   console.log(`aiui vite — launch Vite connected to the running aiui channel
 
 aiui's own flags (everything else forwards to vite verbatim):
-  --aiui-mcp <tag>   connect to the channel server with this tag
-  --aiui-tag <tag>   accepted alias for --aiui-mcp
+  --aiui-mcp <tag>               connect to the channel server with this tag
+  --aiui-tag <tag>               accepted alias for --aiui-mcp
+  --aiui-browser                 open the app in the session browser even when
+                                 the environment looks headless (CI, SSH, no display)
+  --aiui-no-browser              never open a browser for this run
+  --aiui-chrome-profile <name>   browser profile at .aiui-cache/chrome/<name>
+  --aiui-chrome-data-dir <path>  explicit browser user data dir
 
 The chosen channel's port is exported as VITE_AIUI_PORT; the aiuiDevOverlay()
-Vite plugin picks it up there and wires the intent tool to it. What follows is
-vite's own --help:
+Vite plugin picks it up there and wires the intent tool to it. When Vite prints
+its Local: URL, aiui opens it in the shared session browser (the one \`aiui
+claude\` and \`aiui open\` use); in headless environments it prints the URL to
+open on your own machine instead. What follows is vite's own --help:
 `);
 }

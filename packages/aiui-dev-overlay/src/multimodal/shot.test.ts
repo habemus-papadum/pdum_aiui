@@ -6,41 +6,96 @@ import { locateComponents, ShotTool } from "./shot";
 afterEach(() => {
   delete window.__AIUI__;
   vi.restoreAllMocks();
-  delete (document as unknown as { elementsFromPoint?: unknown }).elementsFromPoint;
+  document.body.replaceChildren();
 });
 
-/** jsdom lacks elementsFromPoint; install one that returns `els` for any point. */
-function stubElementsFromPoint(els: Element[]): void {
-  (
-    document as unknown as { elementsFromPoint: (x: number, y: number) => Element[] }
-  ).elementsFromPoint = () => els;
+/** jsdom has no layout: pin an element's viewport box for the containment math. */
+function stubRect(el: Element, box: { x: number; y: number; w: number; h: number }): void {
+  (el as HTMLElement).getBoundingClientRect = () =>
+    ({
+      x: box.x,
+      y: box.y,
+      left: box.x,
+      top: box.y,
+      right: box.x + box.w,
+      bottom: box.y + box.h,
+      width: box.w,
+      height: box.h,
+      toJSON: () => ({}),
+    }) as DOMRect;
 }
 
-describe("locateComponents (the P3 locator: data-source-loc / data-cell)", () => {
-  it("reads data-cell for the name and resolves the stamp to an absolute path", () => {
-    const el = document.createElement("div");
-    el.setAttribute("data-cell", "SpectrumPlot");
-    el.setAttribute("data-source-loc", "src/ui/Plot.tsx:20:9");
-    document.body.append(el);
-    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/repo/app" };
-    stubElementsFromPoint([el]);
+/** An annotated element appended to `parent` with a pinned box. */
+function annotated(
+  parent: Element,
+  attrs: { cell?: string; loc?: string },
+  box: { x: number; y: number; w: number; h: number },
+): HTMLElement {
+  const el = document.createElement("div");
+  if (attrs.cell) {
+    el.setAttribute("data-cell", attrs.cell);
+  }
+  if (attrs.loc) {
+    el.setAttribute("data-source-loc", attrs.loc);
+  }
+  stubRect(el, box);
+  parent.append(el);
+  return el;
+}
 
-    const [component] = locateComponents({ x: 0, y: 0, w: 100, h: 100 }, []);
-    expect(component.component).toBe("SpectrumPlot");
-    expect(component.source).toBe("/repo/app/src/ui/Plot.tsx:20:9");
-    el.remove();
+describe("locateComponents (enclosure locator: data-source-loc / data-cell)", () => {
+  it("keeps only the highest fully-enclosed elements, with their direct-cell frontier", () => {
+    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/repo/app" };
+    // The app shell overlaps every rect — the old grid locator reported it on
+    // every shot; enclosure must not.
+    const shell = annotated(document.body, { cell: "AppShell" }, { x: 0, y: 0, w: 1000, h: 800 });
+    const plot = annotated(
+      shell,
+      { cell: "SpectrumPlot", loc: "src/ui/Plot.tsx:20:9" },
+      { x: 100, y: 100, w: 200, h: 150 },
+    );
+    // A cell inside the plot: enclosed too, but contained → the plot's frontier,
+    // not its own entry. A deeper cell under it must NOT surface (one level).
+    const axis = annotated(
+      plot,
+      { cell: "axis", loc: "src/ui/Axis.tsx:5:1" },
+      { x: 110, y: 110, w: 50, h: 50 },
+    );
+    annotated(axis, { cell: "tickmarks" }, { x: 112, y: 112, w: 10, h: 10 });
+
+    const components = locateComponents({ x: 90, y: 90, w: 250, h: 200 });
+    expect(components).toHaveLength(1);
+    expect(components[0].component).toBe("SpectrumPlot");
+    expect(components[0].source).toBe("/repo/app/src/ui/Plot.tsx:20:9");
+    expect(components[0].containment).toBeUndefined();
+    expect(components[0].cells).toEqual([
+      { name: "axis", source: "/repo/app/src/ui/Axis.tsx:5:1" },
+    ]);
+  });
+
+  it("falls back to the innermost containing element (within) when nothing is enclosed", () => {
+    const shell = annotated(document.body, { cell: "AppShell" }, { x: 0, y: 0, w: 1000, h: 800 });
+    annotated(
+      shell,
+      { cell: "SpectrumPlot", loc: "src/ui/Plot.tsx:20:9" },
+      { x: 100, y: 100, w: 600, h: 500 },
+    );
+
+    // A drag entirely inside the plot: encloses nothing annotated.
+    const components = locateComponents({ x: 200, y: 200, w: 80, h: 60 });
+    expect(components).toHaveLength(1);
+    expect(components[0].component).toBe("SpectrumPlot"); // innermost, not the shell
+    expect(components[0].containment).toBe("within");
   });
 
   it("passes the relative stamp through when no sourceRoot is known", () => {
-    const el = document.createElement("div");
-    el.setAttribute("data-cell", "Legend");
-    el.setAttribute("data-source-loc", "src/ui/Legend.tsx:3:1");
-    document.body.append(el);
-    stubElementsFromPoint([el]);
-
-    const [component] = locateComponents({ x: 0, y: 0, w: 10, h: 10 }, []);
+    annotated(
+      document.body,
+      { cell: "Legend", loc: "src/ui/Legend.tsx:3:1" },
+      { x: 2, y: 2, w: 6, h: 6 },
+    );
+    const [component] = locateComponents({ x: 0, y: 0, w: 10, h: 10 });
     expect(component.source).toBe("src/ui/Legend.tsx:3:1");
-    el.remove();
   });
 });
 
@@ -92,13 +147,18 @@ describe("ShotTool capture", () => {
     const restore = stubCapture();
     try {
       const ink = new Ink({ fadeSec: () => 0, onStroke: () => {}, onAutoClear: () => {} });
-      let received: { thumb?: string; bytes?: Uint8Array } | undefined;
-      const shots = new ShotTool(ink, (_rect, _components, thumb, bytes) => {
-        received = { thumb, bytes };
+      let received:
+        | { components?: unknown[]; viewport?: boolean; thumb?: string; bytes?: Uint8Array }
+        | undefined;
+      const shots = new ShotTool(ink, (_rect, components, viewport, thumb, bytes) => {
+        received = { components, viewport, thumb, bytes };
       });
       await shots.shootViewport();
       expect(received?.bytes).toBeInstanceOf(Uint8Array);
       expect([...(received?.bytes ?? [])]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+      // Viewport shots skip the locator entirely and say so.
+      expect(received?.viewport).toBe(true);
+      expect(received?.components).toEqual([]);
       ink.dispose();
       shots.dispose();
     } finally {
@@ -109,7 +169,7 @@ describe("ShotTool capture", () => {
   it("degrades to no pixels when capture is unavailable", async () => {
     const ink = new Ink({ fadeSec: () => 0, onStroke: () => {}, onAutoClear: () => {} });
     let received: { bytes?: Uint8Array } | undefined;
-    const shots = new ShotTool(ink, (_rect, _components, _thumb, bytes) => {
+    const shots = new ShotTool(ink, (_rect, _components, _viewport, _thumb, bytes) => {
       received = { bytes };
     });
     // jsdom has no getDisplayMedia — the shot still fires, without bytes.
@@ -117,5 +177,64 @@ describe("ShotTool capture", () => {
     expect(received?.bytes).toBeUndefined();
     ink.dispose();
     shots.dispose();
+  });
+});
+
+describe("ShotTool region veil (D arm/disarm)", () => {
+  /** Dispatch a pointer event on the veil (jsdom has PointerEvent, no capture API). */
+  function pointer(el: HTMLElement, type: string, x: number, y: number): void {
+    el.dispatchEvent(
+      new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true }),
+    );
+  }
+
+  it("hides immediately when disarmed with no drag in progress", () => {
+    const ink = new Ink({ fadeSec: () => 0, onStroke: () => {}, onAutoClear: () => {} });
+    const shots = new ShotTool(ink, () => {});
+    shots.setArmed(true);
+    expect(shots.veil.style.display).toBe("block");
+    shots.setArmed(false);
+    expect(shots.veil.style.display).toBe("none");
+    ink.dispose();
+    shots.dispose();
+  });
+
+  it("defers the disarm when D is released mid-drag: the veil stays up, the capture still runs, then it hides on pointerup", async () => {
+    const restore = stubCapture();
+    try {
+      const ink = new Ink({ fadeSec: () => 0, onStroke: () => {}, onAutoClear: () => {} });
+      let shot: { rect: { x: number; y: number; w: number; h: number } } | undefined;
+      const shots = new ShotTool(ink, (rect) => {
+        shot = { rect };
+      });
+      document.body.append(shots.veil);
+      // jsdom elements have no setPointerCapture; the veil calls it on pointerdown.
+      (shots.veil as unknown as { setPointerCapture(id: number): void }).setPointerCapture =
+        () => {};
+
+      shots.setArmed(true);
+      pointer(shots.veil, "pointerdown", 10, 10);
+      pointer(shots.veil, "pointermove", 110, 80);
+      expect(shots.dragInProgress()).toBe(true);
+
+      // D up WHILE the pointer is still down: hiding now would drop the shot, so
+      // the disarm is deferred — the veil stays visible.
+      shots.setArmed(false);
+      expect(shots.veil.style.display).toBe("block");
+      expect(shots.dragInProgress()).toBe(true);
+
+      // pointerup finishes the region capture, then the deferred disarm fires.
+      pointer(shots.veil, "pointerup", 110, 80);
+      expect(shots.veil.style.display).toBe("none");
+      expect(shots.dragInProgress()).toBe(false);
+
+      await new Promise((resolve) => setTimeout(resolve, 200)); // grab()'s compositor beat
+      expect(shot?.rect).toMatchObject({ x: 10, y: 10, w: 100, h: 70 });
+
+      ink.dispose();
+      shots.dispose();
+    } finally {
+      restore();
+    }
   });
 });

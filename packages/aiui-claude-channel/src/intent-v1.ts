@@ -4,7 +4,9 @@
  *
  * Where `text-concat` accumulates a string, `intent-v1` accumulates the intent
  * tool's **event log** plus binary attachments, and on `fin` lowers the whole
- * turn into one Option-C prompt (body with `{shot_N}` tokens, paths in meta).
+ * turn into one prompt with each screenshot inlined at its position
+ * (`[screenshot: <path> (elements: …)]` — paths relativized to this process's
+ * cwd, the agent's working directory; see composeIntent).
  * The pipeline core — `composeIntent`, the V4A applier, the config shape — is
  * imported from `@habemus-papadum/aiui-dev-overlay/intent-pipeline`, the same
  * module the browser modality runs, so one implementation and one set of
@@ -51,7 +53,13 @@ import {
   expandTier,
   type IntentEvent,
 } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
-import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
+import {
+  type ChannelFormat,
+  type MessageMeta,
+  pushError,
+  type StreamProcessor,
+  type ThreadContext,
+} from "./channel";
 import { rawCodec } from "./codec";
 import { type Corrector, openaiCorrector } from "./correct";
 import type { ChunkDescriptor } from "./frame";
@@ -178,11 +186,27 @@ interface ResolvedIntent {
   realtimeTools: "none" | "submit_intent" | "page";
   /** Reasoning effort for the flagship model (`minimal`…`high`); undefined → model default. */
   realtimeReasoning: string | undefined;
+  /** How screenshots render in the lowered body (see ComposeOptions.shotFormat). */
+  shotFormat: "xml" | "text";
 }
 
 /** The premium TTS default model, and the flagship conversational default. */
 const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_REALTIME_VOICE_MODEL = "gpt-realtime-2";
+
+/**
+ * The remediation line every OpenAI-backed failure carries on its error push.
+ * The single most common cause of "the pipeline stopped working" is a stale or
+ * revoked OPENAI_API_KEY in the channel process's environment — a condition
+ * only the server can see, so the server names it. Attached unconditionally to
+ * OpenAI-seam failures: when the real cause is something else (a network blip,
+ * a malformed model reply) the message line already says so, and a hint that
+ * doesn't apply costs one sentence.
+ */
+const OPENAI_KEY_HINT =
+  "If this keeps happening, check the OPENAI_API_KEY in the environment the channel " +
+  "process was launched from (a stale key fails every OpenAI call) — fix it and relaunch " +
+  "`aiui claude`, or switch to the mock tier for offline work.";
 
 /** Dependency injection + env for the format (real seams in prod, mocks in tests). */
 export interface IntentV1Options {
@@ -281,6 +305,7 @@ function resolveIntent(raw: unknown): ResolvedIntent {
       preset.realtimeTools ?? "none",
     ),
     realtimeReasoning: optStr(cfg.realtimeReasoning ?? preset.realtimeReasoning),
+    shotFormat: oneOf(cfg.shotFormat, ["xml", "text"] as const, "xml"),
   };
 }
 
@@ -367,6 +392,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   const intent = resolveIntent(ctx.hello?.intent);
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   const trace = traceOf(ctx);
+  // The base every prompt path (screenshots AND source locations) relativizes
+  // against — the agent's working directory. Defaults to this process's cwd
+  // (right for `aiui claude`, whose channel runs in the project); a supervisor
+  // whose cwd is elsewhere overrides via AIUI_PROMPT_CWD (the workbench spawns
+  // its channel in the workbench package but wants repo-root-relative paths).
+  const promptCwd = process.env.AIUI_PROMPT_CWD || process.cwd();
+  const composeOptions = { cwd: promptCwd, shotFormat: intent.shotFormat };
 
   // Resolve the pipe seams once. `openai` requested but keyless (and no test
   // override) → the seam is absent and that stage degrades (no transcript /
@@ -517,7 +549,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
    * pushes, or spends). fin reuses this when the log is unchanged since.
    */
   const recompose = (): void => {
-    lastComposed = composeIntent(events, intent.correctionPolicy);
+    lastComposed = composeIntent(events, intent.correctionPolicy, composeOptions);
     composedSeq = mutationSeq;
     trace?.record({
       kind: "ir",
@@ -564,10 +596,17 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   ): Promise<void> => {
     // Document = segments-as-lines from the current composed state (the same
     // shape the corrector model and the applier share — field-notes contract).
-    const composed = composeIntent(events, intent.correctionPolicy);
+    const composed = composeIntent(events, intent.correctionPolicy, composeOptions);
     const docLines = composed.items
       .filter((item) => item.kind === "text")
       .map((item) => item.text ?? "");
+    // Trace the whole round-trip: "why didn't my fix apply?" must be
+    // answerable from the trace viewer, not reconstructed from toasts.
+    trace?.record({
+      kind: "ir",
+      label: "correction request",
+      data: { selected: request.original, instruction: request.instruction, docLines },
+    });
     try {
       const diff = await corrector?.diff({
         docLines,
@@ -580,6 +619,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // Validate the patch actually applies; a patch that does not is treated
       // as malformed and dropped so the client falls back to plain replacement.
       applyPatch(docLines, diff.patch);
+      trace?.record({
+        kind: "ir",
+        label: "correction patch",
+        data: { model: diff.model, latencyMs: diff.latencyMs, patch: diff.patch },
+      });
       const completed: IntentEvent = {
         ...request,
         patch: diff.patch,
@@ -588,12 +632,22 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       };
       appendEvent(completed);
       push([completed]);
-    } catch {
+    } catch (error) {
       // Corrections never silently vanish: push the request through without a
-      // patch (plain first-occurrence replacement downstream).
+      // patch (plain first-occurrence replacement downstream) — and say WHY.
+      // Before the error push, the cause (an invalid key 401, a patch that
+      // wouldn't apply) died here in this catch; the client could only report
+      // "the echo had no patch".
       const fallback: IntentEvent = { ...request, patch: undefined };
       appendEvent(fallback);
       push([fallback]);
+      const message = error instanceof Error ? error.message : String(error);
+      trace?.record({ kind: "info", label: "correction failed", data: { message } });
+      pushError(ctx, {
+        source: "correction",
+        message: `correction failed — applied as a plain replacement instead: ${message}`,
+        detail: OPENAI_KEY_HINT,
+      });
     }
     // The merged stream just changed — refresh the speculative compose.
     recompose();
@@ -602,10 +656,17 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   /**
    * Finalize a segment we could not transcribe: echo an empty `transcript-final`
    * (so the client's preview resolves instead of waiting for an echo that will
-   * never come) plus a `note` the widget shows in its status. Degradation is
-   * loud and specific — never a silent drop, never a silent switch to mock.
+   * never come) plus a `note` the widget shows in its status — and push the
+   * same text as a generic error (see {@link pushError}) so the failure is
+   * visible even with the panel closed (the note only reaches the footer
+   * status line). Degradation is loud and specific — never a silent drop,
+   * never a silent switch to mock.
    */
-  const finalizeSilentSegment = (id: string, noteText: string): void => {
+  const finalizeSilentSegment = (
+    id: string,
+    noteText: string,
+    error: { source: string; detail?: string } = { source: "transcription" },
+  ): void => {
     const empty: IntentEvent = {
       at: Date.now(),
       type: "transcript-final",
@@ -616,6 +677,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     };
     appendEvent(empty);
     push([empty, { at: Date.now(), type: "note", text: noteText }]);
+    pushError(ctx, {
+      source: error.source,
+      message: noteText,
+      ...(error.detail !== undefined ? { detail: error.detail } : {}),
+    });
   };
 
   // ── realtime (streaming) transcription session ───────────────────────────────
@@ -653,9 +719,19 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         },
         onError: (message, segment) => {
           if (segment !== undefined) {
-            finalizeSilentSegment(`seg_${segment}`, `realtime transcription failed: ${message}`);
+            finalizeSilentSegment(`seg_${segment}`, `realtime transcription failed: ${message}`, {
+              source: "transcription",
+              detail: OPENAI_KEY_HINT,
+            });
           } else {
+            // Session-wide fault before any commit (a refused upstream
+            // handshake is where a bad key shows up on this path).
             push([{ at: Date.now(), type: "note", text: `realtime transcription: ${message}` }]);
+            pushError(ctx, {
+              source: "transcription",
+              message: `realtime transcription: ${message}`,
+              detail: OPENAI_KEY_HINT,
+            });
           }
         },
       },
@@ -709,9 +785,17 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         },
         onError: (message, segment) => {
           if (segment !== undefined) {
-            finalizeSilentSegment(`seg_${segment}`, `flagship voice failed: ${message}`);
+            finalizeSilentSegment(`seg_${segment}`, `flagship voice failed: ${message}`, {
+              source: "voice",
+              detail: OPENAI_KEY_HINT,
+            });
           } else {
             push([{ at: Date.now(), type: "note", text: `flagship voice: ${message}` }]);
+            pushError(ctx, {
+              source: "voice",
+              message: `flagship voice: ${message}`,
+              detail: OPENAI_KEY_HINT,
+            });
           }
         },
       },
@@ -754,6 +838,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         `${voiceEnabled ? "flagship voice" : "server-side realtime transcription"} is unavailable — ` +
           "the channel process has no OPENAI_API_KEY. " +
           'Set it and relaunch `aiui claude`, or use transcriber:"mock" for offline work.',
+        { source: voiceEnabled ? "voice" : "transcription" },
       );
     }
   };
@@ -780,7 +865,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     }
     buffered.lastSeq = Math.max(buffered.lastSeq, chunk.seq);
     // The payload is a view into the received frame; copy before retaining it.
-    const copy = bytes.slice();
+    // Explicitly: on a Buffer, `.slice()` is another view, not a copy (the
+    // trap that corrupted REST transcription uploads — see transcribe.ts), so
+    // retaining it would pin every frame's whole allocation in memory.
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
     buffered.chunks.push(copy);
     buffered.bytes += copy.length;
     // Only one of the two sessions is ever active (a hello picks one transcriber).
@@ -853,9 +942,16 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           push([produced]);
         } catch (error) {
           // A live transcription failure (an invalid key, a REST error): don't
-          // reject the frame into silence — echo a note the widget surfaces.
+          // reject the frame into silence — echo a note the widget surfaces,
+          // and an error push naming the likeliest fix (the stale-key hint).
+          // Also record it in the trace: the toast is ephemeral, and a trace
+          // whose transcript is silently empty is undebuggable after the fact.
           const message = error instanceof Error ? error.message : String(error);
-          finalizeSilentSegment(id, `transcription failed: ${message}`);
+          trace?.record({ kind: "info", label: `transcription failed ${id}`, data: { message } });
+          finalizeSilentSegment(id, `transcription failed: ${message}`, {
+            source: "transcription",
+            detail: OPENAI_KEY_HINT,
+          });
         }
       } else if (intent.transcriber === "openai") {
         // The hello asked for channel-side transcription but this channel has no
@@ -909,13 +1005,10 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     if (speaker === undefined) {
       // Keyless/degraded premium: the spoken ack is a promised feature of the
       // tier, so its absence is loud (never a silent downgrade to `rapid`).
-      push([
-        {
-          at: Date.now(),
-          type: "note",
-          text: "spoken confirmation unavailable — the channel process has no OPENAI_API_KEY (premium tier)",
-        },
-      ]);
+      const text =
+        "spoken confirmation unavailable — the channel process has no OPENAI_API_KEY (premium tier)";
+      push([{ at: Date.now(), type: "note", text }]);
+      pushError(ctx, { source: "speech", message: text });
       return;
     }
     try {
@@ -927,6 +1020,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       push([{ at: Date.now(), type: "note", text: `spoken confirmation failed: ${message}` }]);
+      pushError(ctx, {
+        source: "speech",
+        message: `spoken confirmation failed: ${message}`,
+        detail: OPENAI_KEY_HINT,
+      });
     }
   };
 
@@ -964,7 +1062,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       composed = lastComposed;
       reused = true;
     } else {
-      composed = composeIntent(events, intent.correctionPolicy);
+      composed = composeIntent(events, intent.correctionPolicy, composeOptions);
       reused = false;
     }
     trace?.record({ kind: "info", label: "fin compose", data: { reused } });

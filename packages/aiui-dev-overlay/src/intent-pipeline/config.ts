@@ -132,6 +132,13 @@ export interface IntentPipelineConfig {
    * clean render. Absent → the built-in default (500 ms).
    */
   diffFlashMs?: number;
+  /**
+   * How screenshots render in the lowered prompt: an indented `<screenshot>`
+   * XML block (absent → `"xml"`, the default — Claude-family models attend
+   * reliably to tags and it stays human-readable), or `"text"` for the plain
+   * bracket block. A lowering choice, read channel-side off the hello.
+   */
+  shotFormat?: "xml" | "text";
 }
 
 /**

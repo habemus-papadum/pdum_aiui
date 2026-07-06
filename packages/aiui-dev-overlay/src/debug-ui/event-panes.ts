@@ -287,6 +287,8 @@ function describe(event: IntentEvent): string {
       return `correction (${event.via}${
         event.model ? `, ${event.model} ${Math.round(event.latencyMs ?? 0)}ms` : ""
       }${event.patch ? ", patched" : ", plain replace"}): “${event.original}” → “${event.instruction}”`;
+    case "correction-undo":
+      return "correction undone (Esc — the last diff popped)";
     case "note":
       return event.text;
   }

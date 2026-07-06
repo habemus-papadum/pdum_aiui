@@ -36,7 +36,15 @@ export class PromptPane {
   }
 
   activate(): void {
-    this.unsubscribe ??= this.feed.subscribe((entries) => this.collect(entries));
+    if (this.unsubscribe) {
+      return;
+    }
+    // Rebuild from scratch: subscribing replays the feed's full buffered
+    // history (see FramesFeed), so prompts collected during a previous
+    // activation would otherwise double up.
+    this.prompts = [];
+    this.render();
+    this.unsubscribe = this.feed.subscribe((entries) => this.collect(entries));
   }
 
   deactivate(): void {

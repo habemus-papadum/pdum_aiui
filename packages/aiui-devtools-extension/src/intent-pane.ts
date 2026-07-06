@@ -106,8 +106,9 @@ export function traceSummaryLine(t: TraceSummary): string {
 /**
  * The actor badge for a trace entry, or "" for a human/unlabeled one. Traces
  * self-report who drove them (the overlay's hello `meta.actor`: explicit
- * option, else `navigator.webdriver` → "agent"), so the list can flag runs
- * produced by agent-driven UI testing. A *text* badge on purpose: the trace
+ * option, else the tab's `aiui-actor` opt-in toggle, else "human"), so the
+ * list can flag runs produced by agent-driven UI testing. A *text* badge on
+ * purpose: the trace
  * list is a native `<select>`, whose `<option>`s render text only — no markup
  * to style. "human" is the unmarked default and gets no badge.
  */

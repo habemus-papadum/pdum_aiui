@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { decodeFrame, jsonCodec } from "@habemus-papadum/aiui-claude-channel";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type IntentModality, mountIntentTool, textModality, unmountIntentTool } from "./intent";
+import {
+  type IntentModality,
+  type IntentToolContext,
+  type IntentToolHandle,
+  mountIntentTool,
+  textModality,
+  unmountIntentTool,
+} from "./intent";
 import { fakeSocketFactory } from "./test-support/fake-socket";
 
 const HOST_ID = "aiui-intent-tool-host";
@@ -192,18 +199,9 @@ describe("textModality", () => {
 });
 
 describe("actor self-reporting (trace provenance on the hello)", () => {
-  /** Shadow navigator.webdriver on the instance; returns the undo. */
-  function stubWebdriver(value: boolean): () => void {
-    const own = Object.getOwnPropertyDescriptor(navigator, "webdriver");
-    Object.defineProperty(navigator, "webdriver", { value, configurable: true });
-    return () => {
-      if (own) {
-        Object.defineProperty(navigator, "webdriver", own);
-      } else {
-        delete (navigator as { webdriver?: boolean }).webdriver;
-      }
-    };
-  }
+  afterEach(() => {
+    sessionStorage.removeItem("aiui-actor");
+  });
 
   /** Mount the text modality, submit once, and decode the hello's meta. */
   async function helloMetaFor(actor?: string): Promise<Record<string, unknown> | undefined> {
@@ -229,22 +227,18 @@ describe("actor self-reporting (trace provenance on the hello)", () => {
     expect((await helloMetaFor())?.actor).toBe("human");
   });
 
-  it("reports 'agent' when navigator.webdriver is true (agent-driven UI testing)", async () => {
-    const restore = stubWebdriver(true);
-    try {
-      expect((await helloMetaFor())?.actor).toBe("agent");
-    } finally {
-      restore();
-    }
+  it("honors the per-tab opt-in toggle (sessionStorage 'aiui-actor')", async () => {
+    // The explicit opt-in an agent/CI run flips in the tab it drives — never a
+    // webdriver heuristic (browser-wide in the shared session browser, where
+    // it mislabeled the human's own turns; see ACTOR_STORAGE_KEY).
+    sessionStorage.setItem("aiui-actor", "agent");
+    expect((await helloMetaFor())?.actor).toBe("agent");
   });
 
   it("threads an explicit actor option through every thread's hello", async () => {
-    const restore = stubWebdriver(true);
-    try {
-      expect((await helloMetaFor("bot-7"))?.actor).toBe("bot-7");
-    } finally {
-      restore();
-    }
+    // The option outranks the tab toggle.
+    sessionStorage.setItem("aiui-actor", "agent");
+    expect((await helloMetaFor("bot-7"))?.actor).toBe("bot-7");
   });
 });
 
@@ -320,5 +314,141 @@ describe("textModality with an on-screen selection", () => {
     await flush();
     const payload = jsonCodec.decode(decodeFrame(sent[1]).payload);
     expect(payload).toEqual({ text: "no selection here" });
+  });
+});
+
+describe("error toasts (the generic error surface)", () => {
+  /** A modality that hands its context out so tests can drive reportError/openThread. */
+  function capturingModality(): { modality: IntentModality; ctx: () => IntentToolContext } {
+    let captured: IntentToolContext | undefined;
+    return {
+      modality: {
+        format: "intent-v1",
+        label: "Capture",
+        mount(_container, ctx) {
+          captured = ctx;
+          return undefined;
+        },
+      },
+      ctx: () => {
+        if (!captured) {
+          throw new Error("modality never mounted");
+        }
+        return captured;
+      },
+    };
+  }
+
+  const toastsIn = (handle: IntentToolHandle) => [
+    ...(handle.shadowRoot?.querySelectorAll(".toast") ?? []),
+  ];
+
+  it("renders a dismissible toast from reportError, outside the panel", () => {
+    const { modality, ctx } = capturingModality();
+    const handle = mountIntentTool({ force: true, port: 4321, modalities: [modality] });
+
+    ctx().reportError({
+      source: "transcription",
+      message: "transcription failed (401)",
+      detail: "check OPENAI_API_KEY",
+    });
+
+    // Visible without opening the panel — the whole point of the toast surface.
+    expect((handle.shadowRoot?.querySelector(".panel") as HTMLElement).hidden).toBe(true);
+    const [toast] = toastsIn(handle);
+    expect(toast).toBeDefined();
+    expect(toast.querySelector(".toast-source")?.textContent).toBe("transcription");
+    expect(toast.querySelector(".toast-msg")?.textContent).toBe("transcription failed (401)");
+    expect(toast.querySelector(".toast-detail")?.textContent).toBe("check OPENAI_API_KEY");
+
+    (toast.querySelector(".toast-dismiss") as HTMLButtonElement).click();
+    expect(toastsIn(handle)).toHaveLength(0);
+  });
+
+  it("dedupes repeats into one toast with a ×N badge and caps the column", () => {
+    const { modality, ctx } = capturingModality();
+    const handle = mountIntentTool({ force: true, port: 4321, modalities: [modality] });
+
+    // The repeat storm (a dead thread rejecting every audio frame)…
+    ctx().reportError({ source: "channel", message: "audio frame rejected: connection closed" });
+    ctx().reportError({ source: "channel", message: "audio frame rejected: connection closed" });
+    ctx().reportError({ source: "channel", message: "audio frame rejected: connection closed" });
+    expect(toastsIn(handle)).toHaveLength(1);
+    expect(toastsIn(handle)[0].querySelector(".toast-count")?.textContent).toBe("×3");
+
+    // …and a burst of distinct errors never exceeds the cap.
+    for (let i = 0; i < 5; i++) {
+      ctx().reportError({ message: `distinct error ${i}` });
+    }
+    expect(toastsIn(handle).length).toBeLessThanOrEqual(3);
+  });
+
+  it("routes a server-pushed kind:'error' message into the toasts", async () => {
+    const { factory, push } = fakeSocketFactory(() => ({ ok: true }));
+    const { modality, ctx } = capturingModality();
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [modality],
+    });
+
+    await ctx().openThread();
+    push({
+      kind: "error",
+      threadId: "some-thread",
+      source: "correction",
+      message: "correction failed — applied as a plain replacement instead: 401",
+    });
+
+    const [toast] = toastsIn(handle);
+    expect(toast).toBeDefined();
+    expect(toast.querySelector(".toast-source")?.textContent).toBe("correction");
+    expect(toast.querySelector(".toast-msg")?.textContent).toContain("plain replacement");
+  });
+
+  it("toasts an unexpected mid-thread socket drop through the same surface", async () => {
+    const { factory, drop } = fakeSocketFactory(() => ({ ok: true }));
+    const { modality, ctx } = capturingModality();
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [modality],
+    });
+
+    await ctx().openThread();
+    drop(1012, "channel reload"); // the channel restarting out from under the turn
+
+    const [toast] = toastsIn(handle);
+    expect(toast).toBeDefined();
+    expect(toast.querySelector(".toast-source")?.textContent).toBe("connection");
+    expect(toast.querySelector(".toast-msg")?.textContent).toContain("channel reload");
+  });
+
+  it("toasts a refused connection (hello rejected) and still rejects openThread", async () => {
+    const { factory } = fakeSocketFactory(() => ({ ok: false, error: "unknown format" }));
+    const { modality, ctx } = capturingModality();
+    const handle = mountIntentTool({
+      force: true,
+      port: 4321,
+      webSocketFactory: factory,
+      modalities: [modality],
+    });
+
+    await expect(ctx().openThread()).rejects.toThrow("unknown format");
+    const [toast] = toastsIn(handle);
+    expect(toast).toBeDefined();
+    expect(toast.querySelector(".toast-source")?.textContent).toBe("connection");
+    expect(toast.querySelector(".toast-msg")?.textContent).toContain("unknown format");
+  });
+
+  it("toasts when no channel port is configured at all", async () => {
+    const { modality, ctx } = capturingModality();
+    const handle = mountIntentTool({ force: true, modalities: [modality] });
+
+    await expect(ctx().openThread()).rejects.toThrow(/no channel port/);
+    const [toast] = toastsIn(handle);
+    expect(toast?.querySelector(".toast-msg")?.textContent).toContain("no channel port");
   });
 });

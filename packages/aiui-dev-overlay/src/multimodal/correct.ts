@@ -42,6 +42,14 @@ export function mockCorrector(): Corrector {
     name: "mock",
     async diff({ docLines, selected, instruction }) {
       const started = performance.now();
+      if (selected === "") {
+        // Empty selected = a whole-transcript instruction (see SYSTEM_PROMPT).
+        // The mock can only patch a marked span — and "replacing" the empty
+        // string would insert the instruction at the head of line 1.
+        throw new Error(
+          "a whole-transcript instruction needs the openai corrector (mock patches a selected span)",
+        );
+      }
       const line = docLines.find((l) => l.includes(selected));
       if (!line) {
         throw new Error(`selection not found in transcript: ${JSON.stringify(selected)}`);
@@ -68,6 +76,8 @@ The instruction comes in two distinct modes — recognize which one you're in:
 2. DESCRIPTION: the instruction *describes* the change — it talks about the text ("no, it's not beat, it's Vite, the frontend framework"). Infer the intended edit. The selection is then just the example occurrence / context: if the same mis-transcription appears elsewhere in the transcript, fix EVERY occurrence, not only the selected one. Descriptions often carry disambiguating context (what a word means, how it's spelled) — use it, don't include it in the text.
 
 Cues: instructions starting with "no", "not", "I meant", "it should say", or containing explanations ("the framework", "with a K") are descriptions. A bare word or phrase is a replacement.
+
+If SELECTED is empty (""), there is no marked span: treat the INSTRUCTION as a DESCRIPTION addressing the whole transcript — "keep only the first sentence", "drop the last part", "it's Vite everywhere, not beat". Edit exactly what the instruction asks — nothing more, nothing less — and leave every untouched line byte-identical.
 
 Reply with ONLY a patch in this exact format — no commentary, no code fences:
 

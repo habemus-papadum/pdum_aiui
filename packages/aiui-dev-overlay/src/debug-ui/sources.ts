@@ -118,7 +118,11 @@ export function createTracePoll(opts: TracePollOptions): {
   poll(): Promise<TracePollResult>;
   reset(): void;
 } {
-  const doFetch = opts.fetch ?? fetch;
+  // Wrapped for uniformity with the panes (a bare-call alias happens to keep
+  // `this` = undefined, which native fetch tolerates — but one refactor into a
+  // method call away from "Illegal invocation"; see traces-pane.ts).
+  const doFetch =
+    opts.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   let lastRev: number | undefined;
 
   return {

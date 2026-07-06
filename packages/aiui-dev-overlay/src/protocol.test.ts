@@ -4,7 +4,14 @@ import {
   PROTOCOL_VERSION as SERVER_PROTOCOL_VERSION,
 } from "@habemus-papadum/aiui-claude-channel";
 import { describe, expect, it } from "vitest";
-import { connectIntentSocket, encodeFrame, encodeJsonPayload, PROTOCOL_VERSION } from "./protocol";
+import {
+  connectIntentSocket,
+  encodeFrame,
+  encodeJsonPayload,
+  isErrorMessage,
+  PROTOCOL_VERSION,
+  type ServerMessage,
+} from "./protocol";
 import { fakeSocketFactory } from "./test-support/fake-socket";
 
 describe("frame encoding (cross-checked against the channel package)", () => {
@@ -122,5 +129,66 @@ describe("intent-v1 chunks and server pushes", () => {
     expect(pushes).toEqual([
       { kind: "lowered", threadId: "t-1", events: [{ type: "note", text: "hi" }] },
     ]);
+  });
+
+  it("delivers a server error push through onServerMessage as an ErrorMessage", async () => {
+    const { factory, push } = fakeSocketFactory(() => ({ ok: true }));
+    const socket = await connectIntentSocket("ws://fake/ws", "intent-v1", factory);
+    const errors: ServerMessage[] = [];
+    socket.onServerMessage((msg) => {
+      if (isErrorMessage(msg)) {
+        errors.push(msg);
+      }
+    });
+    push({
+      kind: "error",
+      threadId: "t-1",
+      source: "transcription",
+      message: "transcription failed (401)",
+      detail: "check OPENAI_API_KEY",
+    });
+    expect(errors).toEqual([
+      {
+        kind: "error",
+        threadId: "t-1",
+        source: "transcription",
+        message: "transcription failed (401)",
+        detail: "check OPENAI_API_KEY",
+      },
+    ]);
+  });
+});
+
+describe("connection-loss detection (the client-detected half of the error surface)", () => {
+  it("synthesizes a connection error push when the server drops an established socket", async () => {
+    const { factory, drop } = fakeSocketFactory(() => ({ ok: true }));
+    const socket = await connectIntentSocket("ws://fake/ws", "intent-v1", factory);
+    const errors: ServerMessage[] = [];
+    socket.onServerMessage((msg) => {
+      if (isErrorMessage(msg)) {
+        errors.push(msg);
+      }
+    });
+
+    drop(1012, "channel reload"); // the server-initiated drop (e.g. a reload)
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ kind: "error", source: "connection" });
+    // The close reason rides the message so the toast can say WHY.
+    expect(errors[0].message).toContain("channel reload");
+    // Sends after the drop settle with a failure ack rather than hanging.
+    const ack = await socket.send("t-1", { text: "late" }, false);
+    expect(ack).toMatchObject({ ok: false });
+  });
+
+  it("stays silent when the client itself closes the socket (a finished turn)", async () => {
+    const { factory } = fakeSocketFactory(() => ({ ok: true }));
+    const socket = await connectIntentSocket("ws://fake/ws", "intent-v1", factory);
+    const pushes: ServerMessage[] = [];
+    socket.onServerMessage((msg) => pushes.push(msg));
+
+    socket.close(); // the deliberate teardown after fin/cancel
+
+    expect(pushes).toEqual([]);
   });
 });

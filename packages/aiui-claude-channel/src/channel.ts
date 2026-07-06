@@ -34,6 +34,61 @@ export type SendPrompt = (text: string, meta?: Record<string, string>) => void |
 /** Push a server → client message down the same socket (out-of-band of acks). */
 export type PushMessage = (message: unknown) => void;
 
+/**
+ * The generic server → client **error push** — the one message shape every
+ * server-side failure surfaces through, so the page can show the user what
+ * went wrong instead of failing silently (the status quo this replaces: errors
+ * that only reached the channel process's log, or per-frame `ok:false` acks
+ * the client dropped on the floor). Like every push it is distinguished from a
+ * per-frame ack by its `kind`; old clients ignore unknown kinds by design, so
+ * the message is additive and `PROTOCOL_VERSION` is unaffected.
+ *
+ * Format-agnostic on purpose: `intent-v1` pushes it today (transcription /
+ * correction / speech failures), but any current or future processor — or the
+ * transport itself — can reuse it via {@link pushError}. The dev overlay
+ * renders these as dismissible toasts, and merges its own client-detected
+ * failures (socket refused, socket dropped) into the same surface; its
+ * `ErrorMessage` in `aiui-dev-overlay/src/protocol.ts` mirrors this shape —
+ * change both together.
+ */
+export interface ChannelErrorMessage {
+  kind: "error";
+  /** The thread the failure belongs to; omitted for connection-level faults. */
+  threadId?: string;
+  /**
+   * A coarse category for the failure site (`"transcription"`,
+   * `"correction"`, `"speech"`, `"voice"`, …) — the toast's badge, and part of
+   * the client's dedupe key. Free-form so new failure sites need no protocol
+   * change.
+   */
+  source?: string;
+  /** One informative human-readable sentence — what failed, and what to do. */
+  message: string;
+  /** Optional second line: remediation hints, the upstream error body, etc. */
+  detail?: string;
+}
+
+/**
+ * Surface a server-side failure to the connected page — THE helper every
+ * failure site calls (one mechanism, not per-feature patches). Degrades to a
+ * no-op on transports without push (the pure protocol tests), matching how
+ * processors already treat {@link ThreadContext.push}: the failure is then
+ * only as visible as the ack/trace made it, which is exactly the pre-push
+ * status quo, never worse.
+ */
+export function pushError(
+  ctx: Pick<ThreadContext, "threadId" | "push">,
+  error: { source?: string; message: string; detail?: string },
+): void {
+  ctx.push?.({
+    kind: "error",
+    threadId: ctx.threadId,
+    message: error.message,
+    ...(error.source !== undefined ? { source: error.source } : {}),
+    ...(error.detail !== undefined ? { detail: error.detail } : {}),
+  } satisfies ChannelErrorMessage);
+}
+
 /** What a processor can see and do for the one thread it owns. */
 export interface ThreadContext {
   /** The client-generated id of this thread. */

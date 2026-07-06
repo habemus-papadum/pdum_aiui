@@ -223,8 +223,7 @@ describe("multimodalModality: shot attachments", () => {
     try {
       const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
       key("keydown", "`"); // arm
-      key("keydown", "s"); // S down: arm the shot
-      key("keyup", "s"); // S tap (no drag): viewport shot → opens thread, uploads bytes
+      key("keydown", "s"); // S: whole-viewport shot → opens thread, uploads bytes
       await wait(250); // socket connect + ~120ms compositor wait + flush
 
       const attachment = frames(sent).find(
@@ -248,8 +247,7 @@ describe("multimodalModality: shot attachments", () => {
     try {
       const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
       key("keydown", "`");
-      key("keydown", "s");
-      key("keyup", "s"); // viewport shot
+      key("keydown", "s"); // whole-viewport shot
       await wait(250);
 
       const wrap = document.querySelector<HTMLElement>(".mm-preview-body .mm-thumb-wrap");
@@ -265,6 +263,47 @@ describe("multimodalModality: shot attachments", () => {
       expect(document.querySelector(".mm-preview-body .mm-thumb-wrap")).toBeNull();
       const drop = streamedEvents(sent).find((e) => e.type === "shot-drop");
       expect(drop).toMatchObject({ marker: "shot_1" });
+    } finally {
+      restore();
+    }
+  });
+
+  it("a fast region drag (pointerup before D-up) yields exactly one shot — the race the split fixed", async () => {
+    const restore = stubCapture();
+    try {
+      const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+      const veil = document.querySelector<HTMLElement>(".mm-shot-veil");
+      expect(veil).not.toBeNull();
+      // jsdom elements have no setPointerCapture; the veil calls it on pointerdown.
+      (veil as unknown as { setPointerCapture(id: number): void }).setPointerCapture = () => {};
+
+      key("keydown", "`"); // arm
+      key("keydown", "d"); // D down: arm the region veil
+
+      // The drag: down · move · up, a rect well past the 8px threshold. Its
+      // pointerup fires the region capture BEFORE the key comes up — exactly the
+      // fast-drag ordering that used to ALSO trigger a whole-viewport shot.
+      const at = (x: number, y: number) => ({
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        bubbles: true,
+      });
+      veil?.dispatchEvent(new PointerEvent("pointerdown", at(20, 20)));
+      veil?.dispatchEvent(new PointerEvent("pointermove", at(120, 90)));
+      veil?.dispatchEvent(new PointerEvent("pointerup", at(120, 90)));
+
+      key("keyup", "d"); // D up AFTER the drag completed: must NOT add a viewport shot
+
+      await wait(250); // socket + ~120ms compositor wait + flush
+
+      const shots = streamedEvents(sent).filter((e) => e.type === "shot");
+      expect(shots).toHaveLength(1);
+      // ...and the single shot is the dragged region (100×70), not the viewport.
+      expect((shots[0] as { rect?: { w: number; h: number } }).rect).toMatchObject({
+        w: 100,
+        h: 70,
+      });
     } finally {
       restore();
     }
@@ -318,25 +357,15 @@ describe("multimodalModality: lowered echoes merge in", () => {
     await wait(30);
     key("keyup", " "); // mock transcription → CANNED lands in the preview
     await wait(60);
-    key("keydown", "e"); // correct mode → the preview text becomes selectable
+    key("keydown", "e"); // correct mode → the document opens in the top editor
     await wait(20);
 
-    // Select the whole segment's text node, then let the preview capture it.
-    const seg = document.querySelector(".mm-preview-body .mm-seg") as HTMLElement;
-    const textNode = seg.firstChild as Text;
-    const range = document.createRange();
-    range.setStart(textNode, 0);
-    range.setEnd(textNode, textNode.textContent?.length ?? 0);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    document
-      .querySelector(".mm-preview-body")
-      ?.dispatchEvent(new Event("pointerup", { bubbles: true }));
-    await wait(20);
+    // Mark the whole document in the top editor (send-time selection).
+    const editArea = document.querySelector(".mm-edit-area") as HTMLTextAreaElement;
+    editArea.setSelectionRange(0, editArea.value.length);
 
     // Type the fix + Enter → a patchless correction REQUEST goes to the server.
-    const input = document.querySelector(".mm-correction-bar input") as HTMLInputElement;
+    const input = document.querySelector(".mm-correction-bar textarea") as HTMLTextAreaElement;
     input.value = "corrected";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await wait(30);
@@ -472,20 +501,12 @@ describe("multimodalModality: degradation", () => {
     await wait(60);
     key("keydown", "e"); // correct mode
 
-    const seg = document.querySelector(".mm-preview-body .mm-seg") as HTMLElement;
-    const textNode = seg.firstChild as Text;
-    const range = document.createRange();
-    range.setStart(textNode, 0);
-    range.setEnd(textNode, textNode.textContent?.length ?? 0);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    document
-      .querySelector(".mm-preview-body")
-      ?.dispatchEvent(new Event("pointerup", { bubbles: true }));
-    await wait(20);
+    // Mark the whole document in the TOP editor (the span a fix targets now
+    // lives in the edit area's native selection, read at send time).
+    const editArea = document.querySelector(".mm-edit-area") as HTMLTextAreaElement;
+    editArea.setSelectionRange(0, editArea.value.length);
 
-    const input = document.querySelector(".mm-correction-bar input") as HTMLInputElement;
+    const input = document.querySelector(".mm-correction-bar textarea") as HTMLTextAreaElement;
     input.value = "corrected";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await wait(30);
@@ -1003,6 +1024,26 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(helloIntents(sent)[0]).toMatchObject({ tier: "rapid", transcriber: "mock" });
   });
 
+  it("clicking a tier chip (or an action) works like its key — the strip is mouse-operable", () => {
+    mountMultimodal(MOCK);
+    key("keydown", "`"); // arm
+    key("keydown", "k"); // open the strip
+    expect(stripOpen()).toBe(true);
+
+    // Click the rapid chip: same dispatch as pressing 3. (Regression: chips
+    // used to be display-only spans — under the armed crosshair cursor they
+    // read as broken buttons, and the mouse path silently did nothing.)
+    const rapid = strip()?.querySelector<HTMLElement>('[data-tier="rapid"]');
+    rapid?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(activeChip()).toContain("rapid");
+    expect(loadIntentOverrides()).toEqual({}); // still session-only
+
+    // Click "Esc close" in the action row: closes the strip like the key.
+    const close = strip()?.querySelector<HTMLElement>('[data-cmd="close"]');
+    close?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(stripOpen()).toBe(false);
+  });
+
   it("a tier picked mid-thread waits for the thread to close", async () => {
     const { sent } = mountMultimodal(MOCK);
     key("keydown", "`");
@@ -1018,9 +1059,10 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
 
     key("keydown", "Escape"); // close the strip (not the thread)
     expect(stripOpen()).toBe(false);
-    key("keydown", "Enter"); // send → thread closes → the pending tier lands
+    key("keydown", "Enter"); // send → thread closes (and disarms) → the pending tier lands
     await wait(120);
 
+    key("keydown", "`"); // re-arm — send disarmed
     key("keydown", " "); // next thread
     await wait(50);
     const hellos = helloIntents(sent);

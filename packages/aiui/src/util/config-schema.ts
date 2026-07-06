@@ -23,8 +23,12 @@
  * the app's Vite config — see docs/guide/intent-overlay.md.)
  */
 
-export const CHROME_CHANNELS = ["stable", "beta", "dev", "canary"] as const;
-export type ChromeChannel = (typeof CHROME_CHANNELS)[number];
+// The channel list lives with the launch code (aiui-util's browser module,
+// whose RELEASE_CHANNELS map must stay exhaustive over it); re-exported here
+// so the config table keeps being the one import surface for config shapes.
+import { CHROME_CHANNELS } from "@habemus-papadum/aiui-util";
+
+export { CHROME_CHANNELS, type ChromeChannel } from "@habemus-papadum/aiui-util";
 
 export const FOR_TESTING_MODES = ["prompt", "auto", "off"] as const;
 export type ForTestingMode = (typeof FOR_TESTING_MODES)[number];

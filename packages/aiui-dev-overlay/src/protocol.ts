@@ -71,6 +71,37 @@ export interface LoweredPromptMessage extends ServerMessage {
   meta?: Record<string, string>;
 }
 
+/**
+ * The generic `error` push — the single surface through which a server-side
+ * failure (a stale OPENAI_API_KEY failing transcription, a correction diff
+ * erroring, a degraded seam) reaches the page, instead of dying in the channel
+ * process's log. Mirrors `ChannelErrorMessage` in the channel package's
+ * `channel.ts` — the source of truth; change both together.
+ *
+ * The client itself also *synthesizes* this message for transport faults it
+ * alone can see: {@link connectIntentSocket} delivers one to every
+ * `onServerMessage` handler when the socket closes out from under a completed
+ * hello (channel stopped, channel reloaded mid-turn). Client-detected and
+ * server-pushed errors thereby render through one UI path — the intent tool's
+ * toast column (see intent.ts).
+ */
+export interface ErrorMessage extends ServerMessage {
+  kind: "error";
+  /** The thread the failure belongs to; absent for connection-level faults. */
+  threadId?: string;
+  /** Coarse failure category (`"connection"`, `"transcription"`, …) — the badge. */
+  source?: string;
+  /** One informative human-readable sentence. */
+  message: string;
+  /** Optional second line: remediation, upstream error body, close reason. */
+  detail?: string;
+}
+
+/** Narrow a {@link ServerMessage} to an {@link ErrorMessage} (kind + a real message). */
+export function isErrorMessage(msg: ServerMessage): msg is ErrorMessage {
+  return msg.kind === "error" && typeof (msg as { message?: unknown }).message === "string";
+}
+
 const utf8 = new TextEncoder();
 
 /** Encode one binary frame: length-prefixed JSON envelope + payload bytes. */
@@ -218,7 +249,38 @@ export function connectIntentSocket(
     }
   });
   socket.addEventListener("error", () => fail("websocket error"));
-  socket.addEventListener("close", () => fail("connection closed"));
+
+  // Set by the returned socket's own close() so the deliberate teardown after a
+  // successful `fin` (or a cancel) is never reported as a fault; anything else
+  // that closes an established socket — the channel process stopping, a reload
+  // dropping every connection (code 1012), a network fault — IS one.
+  let closedByClient = false;
+  // Set once the hello ack lands: a close before that already surfaces through
+  // the connect promise's rejection, so no synthetic error doubles it.
+  let helloDone = false;
+  socket.addEventListener("close", (event: { code?: number; reason?: string }) => {
+    fail("connection closed");
+    if (!helloDone || closedByClient) {
+      return;
+    }
+    // An unexpected close is a failure only the client can observe — surface it
+    // through the SAME path as a server-pushed error, so one handler (the
+    // intent tool's toast column) covers both. The server's close reason
+    // ("channel reload") rides along when it sent one. Note there is no
+    // reconnect to report: the intent socket is deliberately one-per-thread
+    // (stateless widget); the in-progress turn cannot be resumed, only redone.
+    const reason = typeof event?.reason === "string" && event.reason !== "" ? event.reason : "";
+    const synthetic: ErrorMessage = {
+      kind: "error",
+      source: "connection",
+      message: `channel connection closed unexpectedly${reason ? ` (${reason})` : ""} — this turn was not sent`,
+      detail:
+        "The channel server stopped, reloaded, or dropped the socket. Check that `aiui claude`/`aiui vite` is still running, then re-send.",
+    };
+    for (const handler of serverMessageHandlers) {
+      handler(synthetic);
+    }
+  });
 
   const sendFrame = (
     frame: Uint8Array,
@@ -241,10 +303,12 @@ export function connectIntentSocket(
         { kind: "hello" },
       ).then((ack) => {
         if (!ack.ok) {
+          closedByClient = true; // our own teardown of a refused hello — not a fault
           socket.close();
           reject(new Error(ack.error ?? "hello rejected"));
           return;
         }
+        helloDone = true;
         resolve({
           send: (threadId, payload, fin) =>
             sendFrame(
@@ -277,7 +341,10 @@ export function connectIntentSocket(
           onServerMessage: (handler) => {
             serverMessageHandlers.push(handler);
           },
-          close: () => socket.close(),
+          close: () => {
+            closedByClient = true;
+            socket.close();
+          },
         });
       });
     });

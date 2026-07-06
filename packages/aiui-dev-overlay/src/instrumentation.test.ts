@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  ACTOR_STORAGE_KEY,
   collectClientMeta,
   type FrameMetric,
   getInstrumentation,
@@ -112,39 +113,26 @@ describe("collectClientMeta", () => {
 });
 
 describe("collectClientMeta: the actor label (trace provenance)", () => {
-  /** Shadow navigator.webdriver on the instance; returns the undo. */
-  function stubWebdriver(value: boolean): () => void {
-    const own = Object.getOwnPropertyDescriptor(navigator, "webdriver");
-    Object.defineProperty(navigator, "webdriver", { value, configurable: true });
-    return () => {
-      if (own) {
-        Object.defineProperty(navigator, "webdriver", own);
-      } else {
-        delete (navigator as { webdriver?: boolean }).webdriver;
-      }
-    };
-  }
+  afterEach(() => {
+    sessionStorage.removeItem(ACTOR_STORAGE_KEY);
+  });
 
-  it("defaults to 'human' in a plain (non-automated) page", () => {
+  it("defaults to 'human' — never inferred, not even under automation", () => {
     expect(collectClientMeta()?.actor).toBe("human");
   });
 
-  it("reports 'agent' when navigator.webdriver is true (browser automation)", () => {
-    const restore = stubWebdriver(true);
-    try {
-      expect(collectClientMeta()?.actor).toBe("agent");
-    } finally {
-      restore();
-    }
+  it("honors the per-tab opt-in toggle (ACTOR_STORAGE_KEY)", () => {
+    // The explicit flip an agent/CI run makes in the tab it drives. This
+    // replaced the navigator.webdriver heuristic, which is browser-wide and
+    // labeled the human's own turns "agent" in the shared session browser.
+    sessionStorage.setItem(ACTOR_STORAGE_KEY, "agent");
+    expect(collectClientMeta()?.actor).toBe("agent");
+    sessionStorage.setItem(ACTOR_STORAGE_KEY, "ci-e2e");
+    expect(collectClientMeta()?.actor).toBe("ci-e2e");
   });
 
-  it("lets an explicit actor override the webdriver detection", () => {
-    const restore = stubWebdriver(true);
-    try {
-      expect(collectClientMeta({ actor: "bot-7" })?.actor).toBe("bot-7");
-    } finally {
-      restore();
-    }
-    expect(collectClientMeta({ actor: "agent" })?.actor).toBe("agent");
+  it("lets an explicit actor option outrank the tab toggle", () => {
+    sessionStorage.setItem(ACTOR_STORAGE_KEY, "agent");
+    expect(collectClientMeta({ actor: "bot-7" })?.actor).toBe("bot-7");
   });
 });

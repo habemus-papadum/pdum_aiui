@@ -23,6 +23,7 @@ export {
 export type {
   ComposedIntent,
   ComposedItem,
+  ComposeOptions,
   CorrectionTarget,
   EngineListener,
 } from "./engine";
@@ -31,4 +32,4 @@ export type { KeyCommand, KeyState } from "./keymap";
 export { installKeymap, isTypingTarget, keyCommand, TIER_BY_DIGIT } from "./keymap";
 export type { DiffRun } from "./patch";
 export { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
-export type { IntentEvent, LocatedComponent, Mode, Rect } from "./types";
+export type { IntentEvent, LocatedCell, LocatedComponent, Mode, Rect } from "./types";

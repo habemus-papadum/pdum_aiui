@@ -13,6 +13,7 @@
   "devDependencies": {
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@habemus-papadum/aiui-util": "workspace:^",
     "vite": "^6.4.3"
   }
 }

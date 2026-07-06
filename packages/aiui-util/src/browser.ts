@@ -2,12 +2,19 @@
  * The session browser: one user-visible Chrome shared by the human and the
  * agent.
  *
- * In the default "attach" mode, aiui launches the browser itself — with a
- * DevTools debug port, the project profile, and the aiui devtools extension —
- * and chrome-devtools-mcp *attaches* to it (`--browser-url`) instead of
- * launching a private one. That's what makes the agent's browser the same
- * window the human is looking at: shared tabs, shared state, visible from
- * session start.
+ * In the aiui CLI's default "attach" mode, `aiui claude` launches the browser
+ * itself — with a DevTools debug port, the project profile, and the aiui
+ * devtools extension — and chrome-devtools-mcp *attaches* to it
+ * (`--browser-url`) instead of launching a private one. That's what makes the
+ * agent's browser the same window the human is looking at: shared tabs,
+ * shared state, visible from session start.
+ *
+ * This module is the shared plumbing under that story — discovery, launch,
+ * open-a-tab, and the auto-open decision ladder — so every dev-server sidecar
+ * (`aiui vite`, the workbench's `pnpm workbench`) puts its page in the same
+ * shared window instead of re-deriving the mechanics. The aiui CLI layers its
+ * own affordances on top (config resolution, Chrome for Testing sync, the
+ * devtools-extension autoload); nothing here reads config or prompts.
  *
  * There is deliberately no registry file for browsers. Chrome itself writes
  * `DevToolsActivePort` into the user data dir of any instance started with a
@@ -23,13 +30,17 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Browser, ChromeReleaseChannel, computeSystemExecutablePath } from "@puppeteer/browsers";
 import { execa } from "execa";
-import type { ChromeChannel } from "./config";
+import { headlessReason } from "./environment";
 
 /** Chrome writes this into the user data dir when debugging is enabled. */
 const ACTIVE_PORT_FILE = "DevToolsActivePort";
 
 /** How long a fresh Chrome gets to bring up its debug endpoint. */
 const LAUNCH_TIMEOUT_MS = 20_000;
+
+/** The installed-Chrome release channels a launch can target. */
+export const CHROME_CHANNELS = ["stable", "beta", "dev", "canary"] as const;
+export type ChromeChannel = (typeof CHROME_CHANNELS)[number];
 
 export interface SessionBrowser {
   /** The DevTools endpoint chrome-devtools-mcp attaches to. */
@@ -102,7 +113,7 @@ const RELEASE_CHANNELS: Record<ChromeChannel, ChromeReleaseChannel> = {
 };
 
 /**
- * Launch the session browser detached (it deliberately outlives the aiui
+ * Launch the session browser detached (it deliberately outlives the launching
  * process — it's the user's window too) and wait for its debug endpoint.
  *
  * `debugPort` 0 lets the OS pick a free port; Chrome reports the choice via
@@ -127,6 +138,19 @@ export async function launchSessionBrowser(opts: {
     `--user-data-dir=${opts.userDataDir}`,
     "--no-first-run",
     "--no-default-browser-check",
+    // Media prompts, pre-answered — this is a *dev* browser (unauthenticated
+    // debug port, project-local profile; see docs/guide/warning.md), and the
+    // intent tool's dictation + screenshots otherwise re-prompt constantly:
+    // Chrome scopes mic permission per-origin (every dev-server PORT is its
+    // own origin), and the getDisplayMedia share picker can never be
+    // persisted at all.
+    //  - fake-ui: auto-accept getUserMedia permission prompts. The *default,
+    //    real* devices are used — fake devices only come from the separate
+    //    --use-fake-device-for-media-stream, deliberately not passed.
+    "--use-fake-ui-for-media-stream",
+    //  - auto-accept the current-tab share the shot tool asks for
+    //    (getDisplayMedia({ preferCurrentTab: true })) — no picker dialog.
+    "--auto-accept-this-tab-capture",
   ];
   if (opts.extensionDir) {
     args.push(`--load-extension=${opts.extensionDir}`);
@@ -187,6 +211,71 @@ export async function openInSessionBrowser(browserUrl: string, url: string): Pro
   if (!res.ok) {
     throw new Error(`the browser refused to open the tab (${res.status} ${res.statusText})`);
   }
+}
+
+/** The force/suppress escape hatches a sidecar's caller can express. */
+export interface BrowserAutoOpenFlags {
+  /** Force opening even under CI/SSH/no-display (`--aiui-browser`, `WORKBENCH_BROWSER=1`). */
+  browser?: boolean;
+  /** Never open a browser for this run (`--aiui-no-browser`, `WORKBENCH_BROWSER=0`). */
+  noBrowser?: boolean;
+}
+
+/** The config a sidecar's project may have voted with (aiui's `chrome` section). */
+export interface BrowserAutoOpenConfig {
+  /** `false` opts the project out of browser integration wholesale. */
+  enabled?: boolean;
+  /** A browser managed elsewhere (usually reverse-tunneled) — attach there. */
+  browserUrl?: string;
+}
+
+/** What a browser sidecar should do once its dev-server URL is known. */
+export type BrowserAction = { kind: "open" } | { kind: "skip" } | { kind: "hint"; reason: string };
+
+/**
+ * Decide the browser sidecar's move — pure (env and platform are parameters)
+ * so every rung is unit-testable. The ladder, most explicit first, mirrors
+ * the aiui CLI's flag-beats-config ordering:
+ *
+ *  1. Suppress flag → skip, silently. The user said no for this run.
+ *  2. Force flag → open, even under CI, over SSH, or with
+ *     `chrome.enabled: false` — the force flag exists precisely to overrule
+ *     the defaults (e.g. the dev box is "headless" but its display is a
+ *     forwarded port away).
+ *  3. `chrome.enabled: false` → skip: the config opted this project out of
+ *     browser integration wholesale, same as it disables the DevTools MCP.
+ *  4. A configured `chrome.browserUrl` → open. The browser deliberately lives
+ *     elsewhere (typically the user's local machine, reverse-tunneled — see
+ *     docs/guide/remote), so *this* machine being headless is irrelevant:
+ *     opening a tab there is exactly the point of the setup.
+ *  5. CI or headless (see ./environment) → don't launch a browser nobody
+ *     can see; hand back the reason so the caller can print the
+ *     port-forwarding hint instead.
+ *  6. Otherwise → open.
+ */
+export function decideBrowserAction(
+  args: BrowserAutoOpenFlags,
+  config: BrowserAutoOpenConfig = {},
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): BrowserAction {
+  if (args.noBrowser) {
+    return { kind: "skip" };
+  }
+  if (args.browser) {
+    return { kind: "open" };
+  }
+  if (config.enabled === false) {
+    return { kind: "skip" };
+  }
+  if (config.browserUrl) {
+    return { kind: "open" };
+  }
+  const reason = headlessReason(env, platform);
+  if (reason) {
+    return { kind: "hint", reason };
+  }
+  return { kind: "open" };
 }
 
 function sleep(ms: number): Promise<void> {

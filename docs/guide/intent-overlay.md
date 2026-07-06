@@ -36,7 +36,8 @@ Minimalist by design — one hand, no chords:
 | `` ` ``   | arm / disarm the overlay (also the **✳ aiui** button) |
 | **Space** | talk — *hold*-to-talk (default) or press-to-*toggle*, per config |
 | *drag*    | ink — no key; while armed, dragging draws |
-| **S**     | hold + drag = region screenshot · tap = whole viewport |
+| **D**     | hold + drag a rectangle = region screenshot |
+| **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
 | **E**     | correct mode — select transcript text, then speak or type the fix |
 | **K**     | quick config — the [tier strip](#quick-config-the-k-strip): switch tiers, save/reset, open the editor |
@@ -84,9 +85,11 @@ composited **into the PNG** and travels with the pixels it annotated.
 
 ## Screenshots
 
-Hold **S** and drag a rectangle for a region shot, or tap **S** for the whole viewport. The
-first shot of a session asks once for screen-capture permission — pick **"This Tab"** — and every
-later shot is an instant frame grab.
+Hold **D** and drag a rectangle for a region shot, or press **S** for the whole viewport. The
+two gestures live on separate keys on purpose: a bare tap and a fast drag are indistinguishable at
+key-release, so folding both onto one key let a quick region drag also fire a whole-viewport shot.
+The first shot of a session asks once for screen-capture permission — pick **"This Tab"** — and
+every later shot is an instant frame grab.
 
 Each shot also **locates the components** under its rectangle: the overlay hit-tests the captured
 region against the source-location annotations your app carries (`data-source-loc`, i.e.
@@ -105,10 +108,31 @@ lowering drops the image too; the original shot stays visible in the trace.
 ## The correction meta-loop
 
 Speech-to-text mangles domain words — and the overlay makes fixing them a first-class gesture
-rather than a retype. Press **E** to enter correct mode: the preview expands and the transcript
-becomes **selectable text**. Select the wrong words with an ordinary text selection (no special
-gesture), then either **speak** the fix (the next segment auto-submits as the correction when it
-ends) or type it into the inline box.
+rather than a retype. Press **E** to enter correct mode: a **two-box editor** opens over the turn
+(in correct mode Enter never sends the turn).
+
+**The top box edits one text chunk at a time** — a contiguous run of dictated segments with no
+screenshot in between (any number of pauses or Space presses). It opens on the **last** chunk;
+when the turn has several, a chip row picks which chunk is in the editor, and the rendered
+transcript above stays visible the whole time — screenshots never disappear, and corrector diffs
+still flash inline, with the chunk under edit highlighted. Click for a caret and type; dictate
+with the caret here and the words insert at the caret. To *insert* text, this is the way — don't
+instruct, just edit. Direct edits become locally-patched correction events at the next boundary
+(send, commit, or switching chunks), so the lowered prompt always includes them.
+
+**The bottom box is for replacement instructions** — "curve", or "it's Vite, not beat". The mic
+listens hands-free (Space types spaces); spoken words stream into the live line and fold in at
+whichever box last held the caret. A selection in the **top** box at send time is the marked
+span; with none, the instruction addresses the whole transcript and the corrector fixes every
+affected occurrence. **Tab** hops between the boxes.
+
+- **Enter in the bottom box with an instruction** sends it: the box clears, *applying fix…*
+  pulses, and the patch flashes its pink/green diff when it lands. Keep going, fix after fix.
+- **Enter with an empty box** means *done editing*: manual edits fold in, the session commits,
+  and you're back in ink mode. (Enter in the top box is just a newline — it's an editor.)
+- **Escape aborts the whole edit**: every diff applied this session — corrector patches and
+  manual edits alike — is undone via real `correction-undo` stream events (so the lowered prompt
+  agrees with what you see), and you're back in ink where you started.
 
 A correction is a **patch, not a string replace** — which is what lets it be smarter than
 "swap these characters." The transcript (one segment per line), your selection, and the
@@ -169,8 +193,23 @@ its models/latency are still being measured (the workbench bench's realtime leg)
 this subsection is the manual path.
 
 When you **send**, the whole turn is lowered in the channel into a single prompt: the dictated
-text, the corrections applied, and each screenshot placed at its position in the prose as a
-`{shot_N}` token, with the image's on-disk path carried alongside so the session can open it. The
+text, the corrections applied, and each screenshot **inlined at its position in the prose** as an
+indented block —
+
+```xml
+<screenshot path=".aiui-cache/traces/…/shot_1.png">
+  <element name="Legend" source="src/Legend.tsx:30:2">
+    <cell name="colorScale" source="src/Legend.tsx:41:8"/>
+    <cell name="ticks"/>
+  </element>
+</screenshot>
+```
+
+— the image's on-disk path, the components the drag framed, and their top-level dataflow cells
+(paths and source locations relativized to the session's working directory when they live under
+it). XML is the default because models attend reliably to tags while the indented form stays
+readable; `shotFormat: "text"` in the intent config switches to a plain bracket block. Viewport
+shots (S) render as a single self-closing tag with no element metadata. The
 tab and source context that every intent submission carries (see
 [the web intent tool](./web-intent-tool#what-rides-the-hello-tab-identity-and-source-location))
 is prefixed just as it is for text. Every stage of that lowering is recorded as a **trace** you

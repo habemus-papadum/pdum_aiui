@@ -86,7 +86,8 @@ describe("aiuiDevOverlay", () => {
     expect(loadMount(aiuiDevOverlay({ actor: "agent" }))).toContain(
       'mountIntentTool({ force: true, port: 50123, actor: "agent" })',
     );
-    // Omitted → not serialized: the widget detects webdriver at runtime.
+    // Omitted → not serialized: the widget resolves the actor at runtime
+    // (the tab's aiui-actor opt-in toggle, else "human").
     expect(loadMount(aiuiDevOverlay())).not.toContain("actor");
   });
 

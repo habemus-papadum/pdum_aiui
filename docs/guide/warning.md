@@ -49,6 +49,11 @@ understand about how it's wired:
   that can reach it has full control of that browser. It binds to loopback only, so "any process"
   means anything running on your machine — and if you tunnel it for
   [remote development](./remote), anything on the remote machine too.
+- The session browser also launches with **media prompts pre-answered**
+  (`--use-fake-ui-for-media-stream`, `--auto-accept-this-tab-capture`): any page open in it can
+  capture the microphone and its own tab **without a permission dialog**. This exists so the
+  intent tool's dictation and screenshots don't re-prompt per dev-server port — but it applies to
+  every page in that browser, so don't browse the open web in it.
 
 Details: [The Agent's Browser](./chrome).
 

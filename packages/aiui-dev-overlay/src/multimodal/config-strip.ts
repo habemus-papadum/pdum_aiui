@@ -15,7 +15,7 @@
  * strip says so — because a thread's hello already told the channel which
  * pipeline to run.
  */
-import type { IntentPipelineConfig, IntentTier } from "../intent-pipeline";
+import type { IntentPipelineConfig, IntentTier, KeyCommand } from "../intent-pipeline";
 import { TIER_BY_DIGIT } from "../intent-pipeline";
 
 export interface ConfigStripState {
@@ -36,12 +36,41 @@ export function displayTier(config: IntentPipelineConfig): IntentTier {
   return config.tier ?? "standard";
 }
 
+/** The action row's clickable entries, keyed by their `data-cmd` stamp. */
+const ACTION_COMMANDS: Record<string, KeyCommand> = {
+  save: { cmd: "config-save" },
+  reset: { cmd: "config-reset" },
+  advanced: { cmd: "config-advanced" },
+  close: { cmd: "config-close" },
+};
+
 export class ConfigStrip {
   readonly root: HTMLDivElement;
 
-  constructor() {
+  /**
+   * `onCommand` routes clicks into the SAME dispatch the keymap feeds — the
+   * strip stays decision-free. Clicks exist because the chips *look* like
+   * buttons: a keyboard-only strip under the armed crosshair cursor read as
+   * "broken", not "press 3". One delegated listener survives re-renders
+   * (render() replaces innerHTML).
+   */
+  constructor(onCommand?: (command: KeyCommand) => void) {
     this.root = document.createElement("div");
     this.root.className = "mm-config-strip";
+    if (onCommand) {
+      this.root.addEventListener("click", (event) => {
+        const target = event.target as Element | null;
+        const chip = target?.closest("[data-tier]");
+        if (chip) {
+          onCommand({ cmd: "config-tier", tier: chip.getAttribute("data-tier") as IntentTier });
+          return;
+        }
+        const action = target?.closest("[data-cmd]")?.getAttribute("data-cmd");
+        if (action && ACTION_COMMANDS[action]) {
+          onCommand(ACTION_COMMANDS[action]);
+        }
+      });
+    }
   }
 
   get open(): boolean {
@@ -72,7 +101,7 @@ export class ConfigStrip {
       if (tier === state.pendingTier) {
         classes.push("pending");
       }
-      return `<span class="${classes.join(" ")}"><b>${index + 1}</b> ${tier}</span>`;
+      return `<span class="${classes.join(" ")}" data-tier="${tier}"><b>${index + 1}</b> ${tier}</span>`;
     }).join("");
     const pending = state.pendingTier
       ? `<div class="mm-strip-pending">→ ${state.pendingTier} applies when this thread closes</div>`
@@ -82,6 +111,6 @@ export class ConfigStrip {
       <div class="mm-strip-title">tier <span class="mm-strip-layer">${layer}</span></div>
       <div class="mm-strip-tiers">${chips}</div>
       ${pending}${note}
-      <div class="mm-strip-actions"><b>S</b> save for site · <b>R</b> reset to file · <b>G</b> editor · <b>Esc</b> close</div>`;
+      <div class="mm-strip-actions"><span data-cmd="save"><b>S</b> save for site</span> · <span data-cmd="reset"><b>R</b> reset to file</span> · <span data-cmd="advanced"><b>G</b> editor</span> · <span data-cmd="close"><b>Esc</b> close</span></div>`;
   }
 }

@@ -24,6 +24,8 @@
  * `window.__AIUI__.port`; pass `port` explicitly outside Vite. Reading
  * `import.meta.env` here cannot work in the shipped package — see vite.ts.
  */
+import { makeDraggable } from "./drag";
+import { addError, dismissError, type OverlayError, type OverlayErrorInput } from "./errors";
 import { type ClientMeta, collectClientMeta, setChannelPort } from "./instrumentation";
 import type { IntentPipelineConfig } from "./intent-pipeline";
 import { multimodalModality } from "./multimodal";
@@ -33,6 +35,8 @@ import {
   type AttachmentChunk,
   type AudioChunk,
   connectIntentSocket,
+  type IntentSocket,
+  isErrorMessage,
   type JsonChunk,
   type ServerMessage,
   type WebSocketFactory,
@@ -82,6 +86,17 @@ export interface IntentToolContext {
   openThread(options?: OpenThreadOptions): Promise<IntentThread>;
   /** Show a short status line in the panel footer. */
   setStatus(text: string): void;
+  /**
+   * Surface a failure as a dismissible toast next to the fab — the one
+   * error mechanism (see errors.ts). Server-pushed `kind:"error"` messages
+   * land here automatically (the host listens on every thread's socket);
+   * modalities call it directly for the failures only the client can see
+   * (no channel to talk to, a rejected frame, no microphone). Unlike
+   * {@link setStatus}, this stays visible with the panel closed — the normal
+   * state while driving the multimodal modality — and it dedupes/caps, so
+   * repeated identical failures never stack unboundedly.
+   */
+  reportError(error: OverlayErrorInput): void;
   /** Open the tool's panel. */
   openPanel(): void;
   /** Close the tool's panel. */
@@ -137,11 +152,12 @@ export interface IntentToolOptions {
   intent?: Partial<IntentPipelineConfig>;
   /**
    * Actor label riding every thread's hello as `meta.actor` — trace
-   * provenance. Omitted → detected at open time: `navigator.webdriver === true`
-   * (any browser automation, e.g. the agent driving the session browser via
-   * the Chrome DevTools MCP) → `"agent"`, else `"human"`. The channel stamps it
-   * on the trace manifest, so agent-driven UI testing is distinguishable from
-   * a human in the trace list. Set it explicitly to force a fixed label.
+   * provenance. Omitted → `"human"`, unless the tab opted in via the
+   * `aiui-actor` sessionStorage toggle (how an agent or CI run labels the tab
+   * it drives — see ACTOR_STORAGE_KEY in instrumentation.ts, including why
+   * this is an opt-in and not a webdriver heuristic). The channel stamps it on
+   * the trace manifest, so agent-driven UI testing is distinguishable from a
+   * person in the trace list. Set it explicitly to force a fixed label.
    */
   actor?: string;
   /** Channel port; defaults to the plugin-injected `window.__AIUI__.port`. */
@@ -246,7 +262,9 @@ const STYLES = `
   .panel[hidden] { display: none; }
   .head {
     display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px;
+    cursor: grab; touch-action: none;
   }
+  .fab { touch-action: none; }
   .title { font-weight: 600; margin-right: auto; }
   .iconbtn {
     border: none; background: transparent; color: #9aa0aa; cursor: pointer;
@@ -296,6 +314,35 @@ const STYLES = `
     background: #8ab4f8; color: #14171f; font-weight: 600;
   }
   .send:hover { background: #a5c5fa; }
+  /* The error-toast column: anchored beside the fab (left of the root box) so
+     it never covers the panel, growing upward, newest nearest the fab. Toasts
+     are informational — they steal no focus and block nothing. */
+  .toasts {
+    position: absolute; right: calc(100% + 8px); bottom: 0;
+    width: 300px; max-width: calc(100vw - 96px);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .toast {
+    border: 1px solid #5c2b31; border-radius: 10px; background: #241b20;
+    box-shadow: 0 4px 16px rgba(0,0,0,.35); padding: 8px 10px;
+    color: #e8e8ea; font-size: 12px;
+  }
+  .toast-head { display: flex; align-items: center; gap: 6px; }
+  .toast-source {
+    color: #f28b82; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .toast-count {
+    color: #9aa0aa; font-size: 10px; border: 1px solid #3a4152;
+    border-radius: 999px; padding: 0 6px;
+  }
+  .toast-dismiss {
+    margin-left: auto; border: none; background: transparent; color: #9aa0aa;
+    cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px;
+  }
+  .toast-dismiss:hover { color: #e8e8ea; }
+  .toast-msg { margin-top: 4px; word-break: break-word; }
+  .toast-detail { margin-top: 4px; color: #9aa0aa; font-size: 11px; word-break: break-word; }
 `;
 
 /**
@@ -385,10 +432,23 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   const status = document.createElement("div");
   status.className = "status";
 
+  // The error-toast column (see errors.ts for the state rules). Lives beside
+  // the fab so it is visible with the panel closed — the panel-footer status
+  // line, the previous only surface, vanished with the panel.
+  const toasts = document.createElement("div");
+  toasts.className = "toasts";
+
   panel.append(head, tabs, chipRow, body, status);
-  root.append(fab, panel);
+  root.append(toasts, fab, panel);
   shadowRoot.appendChild(root);
   document.body.appendChild(host);
+
+  // The whole widget (fab + panel + toasts) moves out of the way by dragging
+  // the fab or the panel's header row; a sub-threshold press stays a click
+  // (fab toggle, ✕, 🔍 — see drag.ts). The panel body is not a grip: it holds
+  // the modality UI and the textarea, where dragging means selecting.
+  const undragFab = makeDraggable(root, { handle: fab });
+  const undragHead = makeDraggable(root, { handle: head });
 
   // The last status line is exposed on the context so the overlay's own agent
   // surface can report it (see multimodal/modality.ts).
@@ -397,6 +457,61 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     lastStatusText = text;
     status.textContent = text;
     status.className = `status${isError ? " error" : ""}`;
+  };
+
+  // ── the generic error surface ──────────────────────────────────────────────
+  // One list, one renderer; everything error-shaped funnels through
+  // reportError: server `kind:"error"` pushes (wired per-socket in openThread),
+  // the synthetic connection-lost push protocol.ts fabricates, connect
+  // failures caught below, and modalities' own client-side failures.
+  let errors: OverlayError[] = [];
+  const renderToasts = (): void => {
+    toasts.replaceChildren();
+    for (const entry of errors) {
+      const toast = document.createElement("div");
+      toast.className = "toast";
+
+      const headRow = document.createElement("div");
+      headRow.className = "toast-head";
+      const sourceBadge = document.createElement("span");
+      sourceBadge.className = "toast-source";
+      sourceBadge.textContent = entry.source ?? "error";
+      headRow.appendChild(sourceBadge);
+      if (entry.count > 1) {
+        const count = document.createElement("span");
+        count.className = "toast-count";
+        count.textContent = `×${entry.count}`;
+        headRow.appendChild(count);
+      }
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.className = "toast-dismiss";
+      dismiss.textContent = "✕";
+      dismiss.setAttribute("aria-label", "Dismiss error");
+      dismiss.addEventListener("click", () => {
+        errors = dismissError(errors, entry.id);
+        renderToasts();
+      });
+      headRow.appendChild(dismiss);
+      toast.appendChild(headRow);
+
+      const msg = document.createElement("div");
+      msg.className = "toast-msg";
+      msg.textContent = entry.message;
+      toast.appendChild(msg);
+
+      if (entry.detail !== undefined) {
+        const detail = document.createElement("div");
+        detail.className = "toast-detail";
+        detail.textContent = entry.detail;
+        toast.appendChild(detail);
+      }
+      toasts.appendChild(toast);
+    }
+  };
+  const reportError = (input: OverlayErrorInput): void => {
+    errors = addError(errors, input);
+    renderToasts();
   };
   // Which modality tab is showing — tracked for the overlay's report.
   let activeIndex = 0;
@@ -448,6 +563,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   const contextFor = (modality: IntentModality): IntentToolContext => ({
     port,
     setStatus: (text) => setStatus(text, /fail|error|no channel/i.test(text)),
+    reportError,
     openPanel: () => {
       panel.hidden = false;
     },
@@ -461,26 +577,60 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     clearSelection: () => watcher.clear(),
     async openThread(threadOptions): Promise<IntentThread> {
       if (port === undefined) {
-        throw new Error(
-          "no channel port — add the aiuiDevOverlay() Vite plugin and launch with `aiui vite` (or pass { port })",
-        );
+        // The same one-mechanism rule as the connect failure below: toast it
+        // here so every modality surfaces "there is no channel" identically.
+        const message =
+          "no channel port — add the aiuiDevOverlay() Vite plugin and launch with `aiui vite` (or pass { port })";
+        reportError({ source: "connection", message });
+        throw new Error(message);
       }
       // The hello carries what this page knows about itself — tab identity
       // (extension-stamped), live url/title, source root, the actor label
-      // (explicit option, else webdriver-detected — trace provenance), and
-      // (intent-v1) the modality's effective config — so the server can
-      // contextualize and trace the lowered prompt. Collected fresh per thread.
+      // (explicit option, else the tab's opt-in toggle, else "human" — trace
+      // provenance), and (intent-v1) the modality's effective config — so the
+      // server can contextualize and trace the lowered prompt. Collected fresh
+      // per thread.
       const baseMeta = collectClientMeta({ actor: options.actor });
       const meta: ClientMeta | undefined =
         threadOptions?.intent !== undefined
           ? { ...(baseMeta ?? {}), intent: threadOptions.intent }
           : baseMeta;
-      const socket = await connectIntentSocket(
-        `ws://127.0.0.1:${port}/ws`,
-        modality.format,
-        options.webSocketFactory,
-        meta,
-      );
+      let socket: IntentSocket;
+      try {
+        socket = await connectIntentSocket(
+          `ws://127.0.0.1:${port}/ws`,
+          modality.format,
+          options.webSocketFactory,
+          meta,
+        );
+      } catch (err) {
+        // The failure every modality shares: no socket at all (channel down,
+        // wrong port, never launched) or a refused hello (an older server that
+        // doesn't know the format). Toast it HERE, once, so every modality gets
+        // the surfacing for free; the rethrow keeps each modality's own
+        // degraded path (compose-locally, status line) exactly as it was.
+        reportError({
+          source: "connection",
+          message: err instanceof Error ? err.message : String(err),
+          detail:
+            `No channel server answered on 127.0.0.1:${port}. ` +
+            "Launch the app through `aiui vite` (with `aiui claude` running), or check the port.",
+        });
+        throw err;
+      }
+      // Route error pushes — server-side failures and the synthetic
+      // connection-lost message protocol.ts fabricates — into the toasts. On
+      // the raw socket, not the thread wrapper below, so connection-level
+      // errors (no threadId) and late stragglers are never filtered away.
+      socket.onServerMessage((msg) => {
+        if (isErrorMessage(msg)) {
+          reportError({
+            message: msg.message,
+            ...(msg.source !== undefined ? { source: msg.source } : {}),
+            ...(msg.detail !== undefined ? { detail: msg.detail } : {}),
+          });
+        }
+      });
       const threadId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -557,6 +707,8 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
           m.cleanup.unmount();
         }
       }
+      undragFab();
+      undragHead();
       watcher.dispose();
       host.remove();
       if (window.__aiuiIntentTool === handle) {

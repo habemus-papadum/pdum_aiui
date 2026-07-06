@@ -196,6 +196,9 @@ importers:
       '@habemus-papadum/aiui-dev-overlay':
         specifier: workspace:^
         version: link:..
+      '@habemus-papadum/aiui-util':
+        specifier: workspace:^
+        version: link:../../aiui-util
       vite:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
@@ -212,7 +215,14 @@ importers:
         specifier: ^0.25.0
         version: 0.25.12
 
-  packages/aiui-util: {}
+  packages/aiui-util:
+    dependencies:
+      '@puppeteer/browsers':
+        specifier: ^2.10.5
+        version: 2.13.2
+      execa:
+        specifier: ^9.6.1
+        version: 9.6.1
 
   packages/aiui-viz:
     devDependencies:

@@ -6,8 +6,9 @@
  * region screenshots with a component locator, hold-to-talk dictation with a
  * streaming preview, and the select-and-speak correction meta-loop. The
  * interaction is exactly the one designed in the workbench (see its
- * `docs/turn-flow.md`): backtick arms, Space talks, drag inks, S shoots, C
- * clears, E enters correct mode, Enter sends, Esc steps out one level.
+ * `docs/turn-flow.md`): backtick arms, Space talks, drag inks, D drag-shoots a
+ * region, S shoots the whole viewport, C clears, E enters correct mode, Enter
+ * sends, Esc steps out one level.
  *
  * Where the workbench was a standalone bench — mock transcriber, dev-proxy for
  * the real model, self-annotated scenery — this modality streams the turn to
@@ -28,6 +29,7 @@
  * no pixels.
  */
 
+import { makeDraggable } from "../drag";
 import type { IntentModality, IntentThread, IntentToolContext } from "../intent";
 import { toSelectionPayload } from "../intent";
 import {
@@ -41,6 +43,7 @@ import {
   keyCommand,
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
+import type { Ack } from "../protocol";
 import { intentTurnStore } from "../turn-store";
 import {
   clearIntentOverrides,
@@ -139,18 +142,105 @@ export function multimodalModality(
       });
       layers.append(ink.canvas);
 
-      const shots = new ShotTool(ink, (rect, components, thumb, bytes) => {
+      const shots = new ShotTool(ink, (rect, components, viewport, thumb, bytes) => {
+        // A capture can resolve long after the gesture — the first shot blocks
+        // on the getDisplayMedia picker — by which time the turn may have been
+        // sent or cancelled (send disarms). A disarmed engine means this shot
+        // has no turn to join: drop it, or the straggler event lands after the
+        // preview cleared and its thumb haunts the next arm.
+        if (!engine.armed) {
+          return;
+        }
         // No dev-proxy: the channel assigns the on-disk path from the uploaded
         // bytes, so the shot event carries no path — its marker correlates it
         // with the attachment frame.
-        const marker = engine.shotDone(rect, components, thumb, undefined);
+        const marker = engine.shotDone(rect, components, thumb, undefined, viewport);
         if (bytes) {
           void uploadAttachment(marker, "image/png", bytes);
         }
       });
       layers.append(shots.veil);
 
-      const preview = new Preview(engine);
+      // ── silence-endpointed listening (main loop + correction box) ────────────
+      // Utterances end on *silence*: once the level meter has heard voice, ~a
+      // second of quiet ends the segment and — while listening is still wanted
+      // — immediately starts the next one. Two surfaces want it:
+      //  - the MAIN loop (Space held / toggled): each utterance uploads and
+      //    transcribes as you pause, so REST behaves like streaming — the
+      //    preview fills utterance by utterance instead of all-at-release;
+      //  - the CORRECTION box, which has no push-to-talk boundary at all
+      //    (Space types spaces there) — silence is its only segmenter.
+      // Done browser-side off the existing AnalyserNode/worklet level (server
+      // VAD would only cover the realtime tiers; this covers REST too). The
+      // mock's level is always 0, so mock segments end only on the explicit
+      // gestures — which keeps every test deterministic.
+      const ENDPOINT_VOICE_LEVEL = 0.05;
+      const ENDPOINT_SILENCE_MS = 900;
+      let mainListening = false;
+      let correctionListening = false;
+      const listening = (): boolean => mainListening || correctionListening;
+      let endpointTimer: ReturnType<typeof setInterval> | undefined;
+      const stopEndpointer = (): void => {
+        if (endpointTimer) {
+          clearInterval(endpointTimer);
+          endpointTimer = undefined;
+        }
+      };
+      // Whether the CURRENT segment has heard voice — mount-scoped because the
+      // correction bar's empty-Enter needs it (see CorrectionVoiceHooks.heard):
+      // hands-free listening keeps a silent segment open, so `engine.talking`
+      // alone can't distinguish "just spoke" from "sitting in silence".
+      let heardVoice = false;
+      const startEndpointer = (): void => {
+        if (endpointTimer) {
+          return; // one poller serves however many surfaces are listening
+        }
+        let lastVoicedAt = Date.now();
+        endpointTimer = setInterval(() => {
+          if (!listening() || !engine.talking) {
+            heardVoice = false; // between segments — a stale flag must not end the next one early
+            return;
+          }
+          const level = usesPcmStream(config) ? (pcmSource?.level() ?? 0) : audio.level();
+          if (level > ENDPOINT_VOICE_LEVEL) {
+            heardVoice = true;
+            lastVoicedAt = Date.now();
+            return;
+          }
+          if (heardVoice && Date.now() - lastVoicedAt > ENDPOINT_SILENCE_MS) {
+            heardVoice = false; // this utterance is over; transcribe it…
+            void talkEnd().then(() => {
+              if (listening()) {
+                void talkStart(); // …and keep listening for the next one
+              }
+            });
+          }
+        }, 100);
+      };
+      const startCorrectionListening = (): void => {
+        correctionListening = true;
+        startEndpointer();
+        void talkStart();
+      };
+      const stopCorrectionListening = (): void => {
+        correctionListening = false;
+        if (!listening()) {
+          stopEndpointer();
+        }
+        void talkEnd();
+      };
+
+      // The preview borrows the talk plumbing for the correction bar: the mic
+      // goes live hands-free while the bar is open, streamed speech renders in
+      // its live zone, and Enter ends the segment before committing.
+      // `talkStart`/`talkEnd` are function declarations (hoisted); the hooks
+      // only fire on user interaction, post-mount.
+      const preview = new Preview(engine, {
+        start: startCorrectionListening,
+        stop: stopCorrectionListening,
+        talking: () => engine.talking,
+        heard: () => heardVoice,
+      });
       layers.append(preview.root);
 
       // ── HUD (arm button + state + level meter) ───────────────────────────────
@@ -160,14 +250,27 @@ export function multimodalModality(
         <button class="mm-arm" title="arm/disarm">✳</button>
         <span class="mm-state">off</span>
         <canvas class="mm-meter" width="60" height="14"></canvas>
-        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · S shot · C clear · E correct · K config · ⏎ send · Esc out</span>
+        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · K config · ⏎ send · Esc out</span>
         <span class="mm-speaker" hidden></span>`;
       layers.append(hud);
 
-      // The quick-config strip (the K layer) sits just above the HUD.
-      const strip = new ConfigStrip();
+      // The quick-config strip (the K layer) sits just above the HUD. Clicks
+      // on its chips/actions route into the same dispatch as the keymap
+      // (`dispatch` is defined below; strip clicks can only happen post-mount).
+      const strip = new ConfigStrip((command) => dispatch(command));
       layers.append(strip.root);
       document.body.append(layers);
+
+      // Both floating surfaces move out of the way by dragging (they cover app
+      // content by construction). They sit above the ink canvas and shot veil,
+      // so a drag on them is never a stroke or a screenshot. The preview only
+      // drags by its frame/title — inside the transcript body a drag *is* the
+      // correction-targeting selection gesture, and the correction bar holds an
+      // input — both stay excluded.
+      const undragHud = makeDraggable(hud);
+      const undragPreview = makeDraggable(preview.root, {
+        exclude: (target) => target.closest(".mm-preview-body, .mm-correction-bar") !== null,
+      });
       const armButton = hud.querySelector<HTMLButtonElement>(".mm-arm");
       const stateLabel = hud.querySelector<HTMLSpanElement>(".mm-state");
       const meter = hud.querySelector<HTMLCanvasElement>(".mm-meter");
@@ -200,10 +303,11 @@ export function multimodalModality(
       const renderLabels = (): void => {
         const key = armKeyLabel(config);
         help.innerHTML = `Press <b>${key}</b> to arm, then <b>Space</b> to talk, drag to sketch,
-          <b>S</b> to screenshot, <b>E</b> to correct, <b>K</b> for quick config (tiers),
-          <b>Enter</b> to send. A ✳ badge sits bottom-left while active.`;
+          <b>D</b>+drag to screenshot a region (<b>S</b> grabs the whole viewport),
+          <b>E</b> to correct, <b>K</b> for quick config (tiers), <b>Enter</b> to send.
+          A ✳ badge sits bottom-left while active.`;
         if (keysLabel) {
-          keysLabel.textContent = `${key} arm · Space talk · drag ink · S shot · C clear · E correct · K config · ⏎ send · Esc out`;
+          keysLabel.textContent = `${key} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · K config · ⏎ send · Esc out`;
         }
       };
       renderLabels();
@@ -212,6 +316,15 @@ export function multimodalModality(
       function renderHud(): void {
         if (!engine.armed) {
           strip.hide(); // disarming always closes the quick-config strip
+        }
+        // Enforce "no armed+ink state → no veil" here, where every dispatch
+        // and engine event lands. The veil is stranded when D's keyup never
+        // arrives — classically the first shot's getDisplayMedia picker
+        // stealing focus mid-hold — and a stranded veil is a full-viewport
+        // crosshair overlay the user can't click through, surviving disarm.
+        if (shooting && (!engine.armed || engine.mode !== "ink")) {
+          shots.setArmed(false);
+          shooting = false;
         }
         document.body.classList.toggle("mm-armed", engine.armed);
         hud.classList.toggle("armed", engine.armed);
@@ -225,6 +338,35 @@ export function multimodalModality(
         preview.setCorrectMode(engine.armed && engine.mode === "correct");
         preview.root.classList.toggle("visible", engine.armed);
       }
+
+      // A focus steal mid-D-hold (the display-capture picker, a cmd-tab) eats
+      // the keyup itself: treat window blur as D-up. setArmed(false) already
+      // defers the hide when a drag is genuinely in flight.
+      //
+      // Blur also STOPS ALL LISTENING. The auto-restarting hands-free mic has
+      // no idea the user turned away — it once transcribed an entire spoken
+      // conversation held in another window, segment by segment, on the API
+      // bill. Away = mic off; refocusing re-arms it when the correction
+      // editor is still open (the one surface that listens without a held key).
+      const onWindowBlur = (): void => {
+        if (shooting) {
+          shots.setArmed(false);
+          shooting = false;
+        }
+        if (listening() || engine.talking) {
+          mainListening = false;
+          correctionListening = false;
+          stopEndpointer();
+          void talkEnd();
+        }
+      };
+      const onWindowFocus = (): void => {
+        if (engine.armed && engine.mode === "correct" && !engine.talking) {
+          startCorrectionListening();
+        }
+      };
+      window.addEventListener("blur", onWindowBlur);
+      window.addEventListener("focus", onWindowFocus);
 
       const meterCtx = meter?.getContext("2d") ?? null;
       const meterTimer = setInterval(() => {
@@ -253,6 +395,24 @@ export function multimodalModality(
       const rememberError = (error: unknown): void => {
         const message = error instanceof Error ? error.message : String(error);
         ctx.setStatus(`send unavailable: ${message}`);
+      };
+
+      /**
+       * Surface a rejected frame — the server answered `ok:false` (thread
+       * closed, decode failure, a processor throw, "connection closed" after a
+       * drop). These acks used to be awaited and then dropped on the floor: the
+       * turn kept composing while nothing was actually reaching the channel.
+       * One toast per distinct error — the host dedupes, so a dead thread
+       * rejecting every streamed PCM frame is one toast with a climbing ×N.
+       */
+      const reportBadAck = (what: string, ack: Ack): void => {
+        if (ack.ok) {
+          return;
+        }
+        ctx.reportError({
+          source: "channel",
+          message: `${what} rejected: ${ack.error ?? "unknown error"}`,
+        });
       };
 
       const getThread = async (): Promise<IntentThread | undefined> => {
@@ -310,7 +470,10 @@ export function multimodalModality(
         }
         const batch = outbox.splice(0);
         try {
-          await thread.sendChunk({ kind: "events" }, { events: batch }, false);
+          reportBadAck(
+            "event batch",
+            await thread.sendChunk({ kind: "events" }, { events: batch }, false),
+          );
         } catch (error) {
           rememberError(error);
         }
@@ -324,7 +487,10 @@ export function multimodalModality(
         // Flush the correlated event first so the server has it when the bytes land.
         await flushOutbox(thread);
         try {
-          await thread.sendAttachment({ kind: "attachment", id, mime }, bytes, false);
+          reportBadAck(
+            `attachment ${id}`,
+            await thread.sendAttachment({ kind: "attachment", id, mime }, bytes, false),
+          );
         } catch (error) {
           rememberError(error);
         }
@@ -338,17 +504,27 @@ export function multimodalModality(
         }
         if (!thread) {
           resetThread();
+          // The socket never opened (or failed at thread-open — the host
+          // toasted the cause then). The user just hit SEND, so re-surface the
+          // consequence now: the toast dedupe folds a repeat into ×N.
           ctx.setStatus("composed locally — no channel connected to send to");
+          ctx.reportError({
+            source: "connection",
+            message: "not sent — no channel connected (the turn was composed locally only)",
+          });
           return;
         }
         await flushOutbox(thread);
         const selection = ctx.selection();
         if (selection) {
           try {
-            await thread.sendChunk(
-              { kind: "context" },
-              { selection: toSelectionPayload(selection) },
-              false,
+            reportBadAck(
+              "selection context",
+              await thread.sendChunk(
+                { kind: "context" },
+                { selection: toSelectionPayload(selection) },
+                false,
+              ),
             );
           } catch (error) {
             rememberError(error);
@@ -361,9 +537,17 @@ export function multimodalModality(
             ctx.setStatus("sent ✓ — check the session (🔍 shows the lowering trace)");
           } else {
             ctx.setStatus(`send failed: ${ack.error ?? "unknown error"}`);
+            reportBadAck("send (fin)", ack);
           }
         } catch (error) {
+          // A fin that THROWS (vs. an ok:false ack) was the one send failure
+          // that only reached the panel-footer status line — invisible with
+          // the panel closed, i.e. exactly when the multimodal turn is used.
           rememberError(error);
+          ctx.reportError({
+            source: "channel",
+            message: `send failed: ${error instanceof Error ? error.message : String(error)}`,
+          });
         }
         resetThread();
       }
@@ -463,8 +647,14 @@ export function multimodalModality(
           text: `correction pipeline failed (${config.corrector}): ${message} — applied as plain replacement`,
         });
         // ...and a user-facing status, so the fallback to plain replacement is
-        // never silent about why the model correction didn't land.
+        // never silent about why the model correction didn't land. The toast
+        // repeats it because correcting happens with the panel closed (the
+        // preview is page-level) — a status line nobody can see is not "loud".
         ctx.setStatus(`correction applied as plain replacement — ${message}`);
+        ctx.reportError({
+          source: "correction",
+          message: `correction applied as plain replacement — ${message}`,
+        });
       };
 
       /**
@@ -599,6 +789,10 @@ export function multimodalModality(
           audio.start();
         } else if (needsAudio) {
           ctx.setStatus("no microphone — dictation needs mic access");
+          ctx.reportError({
+            source: "audio",
+            message: "no microphone — dictation needs mic access (the segment will be silent)",
+          });
         }
       }
 
@@ -621,9 +815,10 @@ export function multimodalModality(
         const thread = await getThread();
         if (!thread) {
           engine.transcriptFinal(segment, "", 0, "openai");
-          ctx.setStatus(
-            'transcription needs the channel — launch through `aiui claude`, or set transcriber:"mock" for offline work',
-          );
+          const message =
+            'transcription needs the channel — launch through `aiui claude`, or set transcriber:"mock" for offline work';
+          ctx.setStatus(message);
+          ctx.reportError({ source: "connection", message });
           return;
         }
         const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -647,9 +842,10 @@ export function multimodalModality(
         if (!started) {
           // No mic / no AudioWorklet — say so, and DON'T silently fall back (the
           // project posture: name the fix, never switch backends behind the user).
-          ctx.setStatus(
-            'realtime dictation needs mic + AudioWorklet, unavailable here — try transcriber:"openai" (REST) or "mock" for offline work',
-          );
+          const message =
+            'realtime dictation needs mic + AudioWorklet, unavailable here — try transcriber:"openai" (REST) or "mock" for offline work';
+          ctx.setStatus(message);
+          ctx.reportError({ source: "audio", message });
           return;
         }
         pcmSegment = segment;
@@ -666,9 +862,10 @@ export function multimodalModality(
         const thread = await getThread();
         if (!thread) {
           engine.transcriptFinal(segment, "", 0, "openai-realtime");
-          ctx.setStatus(
-            'realtime transcription needs the channel — launch through `aiui claude`, or set transcriber:"mock" for offline work',
-          );
+          const message =
+            'realtime transcription needs the channel — launch through `aiui claude`, or set transcriber:"mock" for offline work';
+          ctx.setStatus(message);
+          ctx.reportError({ source: "connection", message });
           return;
         }
         // Flush the outbox NOW, past the 60 ms events debounce, so talk-end reaches
@@ -695,10 +892,13 @@ export function multimodalModality(
           return; // degraded: no channel — realtimeTalkEnd reports it to the user
         }
         try {
-          await thread.sendAudio(
-            { kind: "audio", id: `seg_${segment}`, seq, mime: REALTIME_PCM_MIME },
-            bytes,
-            false,
+          reportBadAck(
+            "audio frame",
+            await thread.sendAudio(
+              { kind: "audio", id: `seg_${segment}`, seq, mime: REALTIME_PCM_MIME },
+              bytes,
+              false,
+            ),
           );
         } catch (error) {
           rememberError(error);
@@ -811,25 +1011,49 @@ export function multimodalModality(
             engine.setArmed(!engine.armed);
             break;
           case "talk-start":
+            // Main-loop listening: the endpointer auto-splits the hold into
+            // utterance segments (pseudo-streaming on the REST tier).
+            mainListening = true;
+            startEndpointer();
             void talkStart();
             break;
           case "talk-end":
+            // Space released (possibly in the gap between auto-split segments
+            // — the keymap sends this unconditionally): stop wanting to listen
+            // FIRST so an in-flight silence-restart can't reopen the mic.
+            mainListening = false;
+            if (!listening()) {
+              stopEndpointer();
+            }
             void talkEnd();
             break;
           case "shoot-arm":
+            // D pressed: arm the crosshair veil so the next drag is a region
+            // shot. Only in ink mode — correct mode owns the pointer for text
+            // selection, and shots belong to the ink layer.
             if (engine.mode === "ink") {
               shooting = true;
               shots.setArmed(true);
             }
             break;
           case "shoot-release":
-            if (shooting && !shots.dragInProgress()) {
-              shots.setArmed(false);
+            // D released: always disarm — this clears the veil even if the mode
+            // flipped mid-hold (shoot-release keys off `shooting`, never the
+            // mode, so the veil can't be stranded). setArmed(false) defers the
+            // actual hide when a drag is still in flight so its pointerup can
+            // finish the capture. There is deliberately NO viewport fallback
+            // here: the whole-viewport shot is S's own key, split off so a fast
+            // drag (pointerup before this keyup) can't also fire it.
+            if (shooting) {
               shooting = false;
-              void shots.shootViewport(); // S tapped without a drag: whole viewport
-            } else if (shooting) {
               shots.setArmed(false);
-              shooting = false; // drag in flight — the veil finishes on pointerup
+            }
+            break;
+          case "shoot-viewport":
+            // S: capture the whole viewport now — a single press, no veil, no
+            // hold. Gated on ink mode like the region shot.
+            if (engine.mode === "ink") {
+              void shots.shootViewport();
             }
             break;
           case "ink-clear":
@@ -844,11 +1068,19 @@ export function multimodalModality(
             ink.clear();
             break;
           case "step-out":
+            // In correct mode Esc aborts the whole edit session (every applied
+            // diff undone) — same semantics as Esc inside either editor box.
+            if (engine.mode === "correct") {
+              preview.abortEdit();
+              break;
+            }
             if (engine.mode === "ink" && engine.threadOpen) {
               ink.clear();
             }
             engine.stepOut();
             break;
+          case "swallow":
+            break; // claimed key, no action (see the KeyCommand doc)
         }
         renderHud();
       };
@@ -1032,6 +1264,11 @@ export function multimodalModality(
         unmount() {
           overlayTools.dispose();
           uninstallKeys();
+          undragHud();
+          undragPreview();
+          window.removeEventListener("blur", onWindowBlur);
+          window.removeEventListener("focus", onWindowFocus);
+          stopEndpointer();
           clearInterval(meterTimer);
           void cancelThread();
           ink.dispose();

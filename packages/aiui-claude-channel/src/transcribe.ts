@@ -106,10 +106,21 @@ export function openaiTranscriber(options: OpenAiTranscriberOptions): Transcribe
       const started = performance.now();
       const model = options.model();
       const form = new FormData();
-      // A fresh ArrayBuffer-backed Blob: filename extension must match the
-      // container (see audioExtensionForMime) or OpenAI 400s on the sniff.
+      // Copy the payload into a fresh, exactly-sized array. `bytes` is
+      // typically a Buffer *view* into the received ws frame (the payload
+      // sliced out of its envelope) — and Buffer.prototype.slice(), unlike
+      // Uint8Array's, returns another view, NOT a copy. The previous
+      // `bytes.slice().buffer` therefore handed the Blob the ENTIRE
+      // underlying frame allocation — envelope bytes, Buffer-pool neighbors
+      // and all — which OpenAI rejected as "corrupted or unsupported" audio
+      // while the very same segment saved to the trace store played fine.
+      // A Blob part built from a typed array respects the view's bounds.
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      // Filename extension must match the container (see audioExtensionForMime)
+      // or OpenAI 400s on the sniff.
       const ext = audioExtensionForMime(mime);
-      const blob = new Blob([bytes.slice().buffer], { type: mime.split(";")[0] });
+      const blob = new Blob([copy], { type: mime.split(";")[0] });
       form.append("file", blob, `segment.${ext}`);
       form.append("model", model);
       const res = await doFetch(`${baseUrl}/v1/audio/transcriptions`, {

@@ -12,4 +12,10 @@ describe("aiui-claude-channel cli", () => {
       .sort();
     expect(names).toEqual(["config", "mcp", "quick", "serve"]);
   });
+
+  it("serve declares --tag, --record, and --port", () => {
+    const serve = buildProgram().commands.find((cmd) => cmd.name() === "serve");
+    const flags = serve?.options.map((option) => option.long).sort();
+    expect(flags).toEqual(["--port", "--record", "--tag"]);
+  });
 });

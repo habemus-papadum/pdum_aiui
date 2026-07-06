@@ -1,8 +1,8 @@
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { runConfig } from "./commands/config";
 import { runMcp } from "./commands/mcp";
 import { runQuick } from "./commands/quick";
-import { runServe } from "./commands/serve";
+import { parsePort, runServe } from "./commands/serve";
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
 // guard is a no-op in the built CLI (where the define replaces it with a string
@@ -50,6 +50,19 @@ export function buildProgram(): Command {
     )
     .option("--tag <tag>", "label used in stderr logging (a debug server is never registered)")
     .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/")
+    // The validator is the pure parsePort (tested in serve.test.ts); re-wrapped
+    // here so commander renders a bad value as a usage error, not a crash.
+    .option(
+      "--port <port>",
+      "bind this loopback port instead of an OS-assigned one (fails if taken)",
+      (value) => {
+        try {
+          return parsePort(value);
+        } catch (error) {
+          throw new InvalidArgumentError(error instanceof Error ? error.message : String(error));
+        }
+      },
+    )
     // Discard the handle: the CLI just lets the server run until a signal.
     .action(async (options) => {
       await runServe(options);

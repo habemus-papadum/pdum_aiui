@@ -36,5 +36,13 @@ export function fakeSocketFactory(ackFor: (frame: Uint8Array, index: number) => 
   const push = (message: unknown): void => {
     emit("message", { data: JSON.stringify(message) });
   };
-  return { factory, sent, push };
+  /**
+   * Simulate a SERVER-initiated close (the channel stopping, or a reload
+   * dropping every socket with 1012) — distinct from the client's own
+   * `close()`, which the protocol must NOT report as a fault.
+   */
+  const drop = (code = 1012, reason = "channel reload"): void => {
+    emit("close", { code, reason });
+  };
+  return { factory, sent, push, drop };
 }

@@ -5,9 +5,11 @@
  * asks once via getDisplayMedia (pick this tab) and the stream is kept for the
  * session — every later shot is an instant frame-grab. Denied/unavailable
  * capture degrades gracefully: the shot event still carries the rect and the
- * located components, just no pixels. (A follow-up path can capture server-side
- * via the session browser's CDP endpoint — the channel knows it from
- * launch-info — but getDisplayMedia works everywhere with zero moving parts.)
+ * located components, just no pixels. (In the session browser there is no
+ * dialog at all — it launches with --auto-accept-this-tab-capture. A
+ * server-side CDP capture path was considered and rejected: see the decision
+ * note in handoff/pipeline-and-interaction-model.md — this stream is also the
+ * realtime submode's video source, which CDP round-trips can't be.)
  *
  * Locator: sample a grid of points inside the rect, `elementsFromPoint` each,
  * walk up to the nearest `[data-source-loc]`/`[data-cell]` ancestor, dedupe.
@@ -23,7 +25,7 @@
  * bytes are handed back for the modality to upload as an `intent-v1` attachment
  * frame, and the channel assigns the on-disk path.
  */
-import type { LocatedComponent, Rect } from "../intent-pipeline";
+import type { LocatedCell, LocatedComponent, Rect } from "../intent-pipeline";
 import type { Ink } from "./ink";
 
 /** A captured frame: the inline preview thumbnail plus the raw PNG for upload. */
@@ -37,6 +39,8 @@ export interface ShotPixels {
 export type ShotSink = (
   rect: Rect,
   components: LocatedComponent[],
+  /** True for a whole-viewport shot (no locator run, no element metadata). */
+  viewport: boolean,
   thumb?: string,
   bytes?: Uint8Array,
 ) => void;
@@ -47,6 +51,12 @@ export class ShotTool {
   private stream: MediaStream | undefined;
   private video: HTMLVideoElement | undefined;
   private start: { x: number; y: number } | undefined;
+  /**
+   * True when D was released while a drag was still in flight: the disarm is
+   * deferred so the in-progress pointerup can still complete its capture, and
+   * only then does the veil hide itself. See {@link setArmed}.
+   */
+  private disarmPending = false;
   private readonly onShot: ShotSink;
   private readonly ink: Ink;
 
@@ -73,16 +83,44 @@ export class ShotTool {
       if (rect && rect.w > 8 && rect.h > 8) {
         void this.capture(rect);
       }
+      // If D came up mid-drag, its disarm was deferred to this pointerup so the
+      // capture above could still run; hide the veil now. grab()'s compositor
+      // beat lets the hide land before the frame is actually read.
+      if (this.disarmPending) {
+        this.hideVeil();
+      }
     });
   }
 
-  /** S held: show the crosshair veil; S released without a drag → whole viewport. */
+  /**
+   * D held: show the crosshair veil so the next drag is a region shot; D
+   * released: hide it again. There is deliberately no viewport fallback here —
+   * the whole-viewport shot lives on its own key (S), split off so a fast drag
+   * can't also fire it (keymap.ts's header note explains the race).
+   *
+   * The one subtlety is disarming mid-drag: if D comes up while the pointer is
+   * still down, hiding the veil now would clear `start` and drop the region the
+   * user is drawing. So we defer via {@link disarmPending} and let that drag's
+   * own pointerup finish the capture and then hide the veil.
+   */
   setArmed(on: boolean): void {
-    this.veil.style.display = on ? "block" : "none";
-    if (!on) {
-      this.start = undefined;
-      this.box.style.display = "none";
+    if (on) {
+      this.disarmPending = false;
+      this.veil.style.display = "block";
+      return;
     }
+    if (this.dragInProgress()) {
+      this.disarmPending = true; // hide once the in-flight pointerup lands
+      return;
+    }
+    this.hideVeil();
+  }
+
+  private hideVeil(): void {
+    this.veil.style.display = "none";
+    this.start = undefined;
+    this.box.style.display = "none";
+    this.disarmPending = false;
   }
 
   dragInProgress(): boolean {
@@ -95,7 +133,10 @@ export class ShotTool {
   }
 
   async shootViewport(): Promise<void> {
-    await this.capture({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight });
+    // Deliberately no locator: "the whole viewport" frames everything, so
+    // element metadata adds bulk without a reference point (and skipping the
+    // lookup keeps S instant).
+    await this.capture({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }, true);
   }
 
   private update(e: PointerEvent): void {
@@ -117,10 +158,10 @@ export class ShotTool {
     return { x, y, w: Math.abs(e.clientX - this.start.x), h: Math.abs(e.clientY - this.start.y) };
   }
 
-  private async capture(rect: Rect): Promise<void> {
-    const components = locateComponents(rect, [this.veil, this.ink.canvas]);
+  private async capture(rect: Rect, viewport = false): Promise<void> {
+    const components = viewport ? [] : locateComponents(rect);
     const pixels = await this.grab(rect);
-    this.onShot(rect, components, pixels?.thumb, pixels?.bytes);
+    this.onShot(rect, components, viewport, pixels?.thumb, pixels?.bytes);
   }
 
   private async ensureStream(): Promise<HTMLVideoElement | undefined> {
@@ -154,8 +195,8 @@ export class ShotTool {
     if (!video) {
       return undefined;
     }
-    // Give the compositor a beat so the veil (display:none during S-up
-    // handling) isn't in the frame.
+    // Give the compositor a beat so the veil (hidden as D comes up, or right
+    // after this drag's pointerup) isn't in the frame.
     await new Promise((resolve) => setTimeout(resolve, 120));
     const scaleX = video.videoWidth / window.innerWidth;
     const scaleY = video.videoHeight / window.innerHeight;
@@ -226,46 +267,119 @@ function dataUrlToBytes(dataUrl: string): Uint8Array | undefined {
   return bytes;
 }
 
-/** The locator pass: rect → annotated components under it. */
-export function locateComponents(rect: Rect, ignore: Element[]): LocatedComponent[] {
-  if (typeof document === "undefined" || typeof document.elementsFromPoint !== "function") {
-    return []; // no hit-testing available (headless/exotic) — shot degrades to rect only
+/** Border slack for containment tests: a drag rarely lands pixel-perfect. */
+const ENCLOSE_TOLERANCE = 2;
+
+/**
+ * The locator pass: rect → the components the user *framed*.
+ *
+ * Earlier versions grid-sampled `elementsFromPoint` and reported every
+ * annotated ancestor the rect touched — which put the app shell in every
+ * shot's metadata (a rect anywhere intersects it). What the prompt actually
+ * needs is a point of reference, not an inventory, so:
+ *
+ *  1. Keep the **highest annotated elements fully enclosed** by the rect
+ *     (±{@link ENCLOSE_TOLERANCE}px): of the enclosed elements, drop any
+ *     contained in another — the survivors are what the drag deliberately
+ *     framed.
+ *  2. If the rect encloses nothing annotated — a drag *inside* one big
+ *     component — fall back to the **innermost annotated element containing
+ *     the rect**, marked `containment: "within"`; one element, the smallest
+ *     answer to "where is this?".
+ *  3. For each kept element, surface its **direct-cell frontier**: the topmost
+ *     `data-cell` descendants with no other cell between them and the element.
+ *     One level deep on purpose — cells mirror the dataflow graph, and the
+ *     frontier names are enough for an agent to enter it; enumerating the
+ *     whole subtree would bury the reference points it exists to provide.
+ */
+export function locateComponents(rect: Rect): LocatedComponent[] {
+  if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") {
+    return []; // no DOM (headless/exotic) — shot degrades to rect only
   }
   const sourceRoot = typeof window === "undefined" ? undefined : window.__AIUI__?.sourceRoot;
-  const found = new Map<Element, LocatedComponent>();
-  const steps = 6;
-  const hidden = ignore.map((el) => {
-    const prev = (el as HTMLElement).style.visibility;
-    (el as HTMLElement).style.visibility = "hidden";
-    return () => {
-      (el as HTMLElement).style.visibility = prev;
+  const annotated = [...document.querySelectorAll("[data-source-loc], [data-cell]")];
+
+  const enclosed = annotated.filter((el) => {
+    const box = el.getBoundingClientRect();
+    return (
+      box.width > 0 &&
+      box.height > 0 &&
+      box.left >= rect.x - ENCLOSE_TOLERANCE &&
+      box.top >= rect.y - ENCLOSE_TOLERANCE &&
+      box.right <= rect.x + rect.w + ENCLOSE_TOLERANCE &&
+      box.bottom <= rect.y + rect.h + ENCLOSE_TOLERANCE
+    );
+  });
+  // Highest-first: drop anything another enclosed element already contains.
+  let kept = enclosed.filter((el) => !enclosed.some((other) => other !== el && other.contains(el)));
+  let containment: LocatedComponent["containment"];
+
+  if (kept.length === 0) {
+    // Nothing framed — anchor to the innermost annotated container instead.
+    const containing = annotated.filter((el) => {
+      const box = el.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.height > 0 &&
+        box.left <= rect.x + ENCLOSE_TOLERANCE &&
+        box.top <= rect.y + ENCLOSE_TOLERANCE &&
+        box.right >= rect.x + rect.w - ENCLOSE_TOLERANCE &&
+        box.bottom >= rect.y + rect.h - ENCLOSE_TOLERANCE
+      );
+    });
+    const innermost = containing.find((el) => !containing.some((o) => o !== el && el.contains(o)));
+    kept = innermost ? [innermost] : [];
+    containment = "within";
+  }
+
+  return kept.map((host) => {
+    const box = host.getBoundingClientRect();
+    const stamp = host.getAttribute("data-source-loc") ?? undefined;
+    const cells = cellFrontier(host, sourceRoot);
+    return {
+      component: host.getAttribute("data-cell") ?? host.tagName.toLowerCase(),
+      source: stamp ? absoluteSource(stamp, sourceRoot) : "unknown",
+      rect: { x: box.x, y: box.y, w: box.width, h: box.height },
+      ...(cells.length > 0 ? { cells } : {}),
+      ...(containment !== undefined ? { containment } : {}),
     };
   });
-  try {
-    for (let i = 0; i <= steps; i++) {
-      for (let j = 0; j <= steps; j++) {
-        const x = rect.x + (rect.w * i) / steps;
-        const y = rect.y + (rect.h * j) / steps;
-        for (const element of document.elementsFromPoint(x, y)) {
-          const host = element.closest("[data-source-loc], [data-cell]");
-          if (host && !found.has(host)) {
-            const box = host.getBoundingClientRect();
-            const stamp = host.getAttribute("data-source-loc") ?? undefined;
-            found.set(host, {
-              component: host.getAttribute("data-cell") ?? host.tagName.toLowerCase(),
-              source: stamp ? absoluteSource(stamp, sourceRoot) : "unknown",
-              rect: { x: box.x, y: box.y, w: box.width, h: box.height },
-            });
-          }
-        }
+}
+
+/**
+ * The direct-cell frontier under `host`: `data-cell` descendants with no
+ * other `data-cell` element strictly between them and `host`.
+ */
+function cellFrontier(host: Element, sourceRoot: string | undefined): LocatedCell[] {
+  const frontier: LocatedCell[] = [];
+  for (const el of host.querySelectorAll("[data-cell]")) {
+    let between = el.parentElement;
+    let shadowed = false;
+    while (between && between !== host) {
+      if (between.hasAttribute("data-cell")) {
+        shadowed = true;
+        break;
       }
+      between = between.parentElement;
     }
-  } finally {
-    for (const restore of hidden) {
-      restore();
+    if (shadowed) {
+      continue;
     }
+    const name = el.getAttribute("data-cell");
+    if (!name) {
+      continue;
+    }
+    // A cell element usually carries no stamp of its own (the source-locator
+    // stamps JSX host elements; `data-cell` comes from the dataflow runtime).
+    // Fall back to the first stamped element *inside* the cell: that is where
+    // the cell's UI is authored — an approximation, but exactly the file an
+    // agent should open first for "this cell".
+    const stamp =
+      el.getAttribute("data-source-loc") ??
+      el.querySelector("[data-source-loc]")?.getAttribute("data-source-loc");
+    frontier.push({ name, ...(stamp ? { source: absoluteSource(stamp, sourceRoot) } : {}) });
   }
-  return [...found.values()];
+  return frontier;
 }
 
 /**

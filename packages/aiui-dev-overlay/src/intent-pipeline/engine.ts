@@ -10,7 +10,9 @@
  *  - a thread OPENS implicitly on the first contentful act while armed
  *    (talk-start, stroke, or shot) — there is no "begin" gesture;
  *  - it CLOSES explicitly on Enter (send) or Esc (cancel), or — policy,
- *    default off — after `autoEndSec` of idle silence.
+ *    default off — after `autoEndSec` of idle silence;
+ *  - a send also DISARMS: Enter ends the interaction, and re-arming starts
+ *    a visibly fresh turn.
  */
 import { DEFAULT_INTENT_CONFIG, type IntentPipelineConfig } from "./config";
 import { applyCorrectionToLines } from "./patch";
@@ -121,6 +123,11 @@ export class Engine {
         this.talkEnd();
       }
       this.closeThread("send");
+      // Send ends the whole interaction, not just the thread: disarm, so the
+      // surfaces (preview, HUD) put themselves away and a re-arm starts a
+      // visibly fresh turn. Without this, the armed HUD + retained transcript
+      // read as "nothing happened" after Enter.
+      this.setArmed(false);
     }
   }
 
@@ -179,14 +186,15 @@ export class Engine {
   }
 
   transcriptFinal(segment: number, text: string, latencyMs: number, model: string): void {
-    // A segment spoken at a selected correction target *is* the correction.
-    const target = this.correctionTarget;
-    if (target) {
-      this.correctionTarget = undefined;
+    // A segment spoken in correct mode (or at a selected target) belongs to
+    // the correction, not the content — flag it so composition excludes it.
+    // It does NOT auto-submit: the spoken words land in the correction input
+    // (where typing and talking coexist) and Enter is the single commit
+    // gesture, so any lassoed target stays set until commit or dismissal.
+    if (this.correctionTarget || this.mode === "correct") {
       this.emit(
         this.stamp({ type: "transcript-final", segment, text, latencyMs, model, correction: true }),
       );
-      this.submitCorrection(target, text, "speech");
       return;
     }
     this.emit(this.stamp({ type: "transcript-final", segment, text, latencyMs, model }));
@@ -203,11 +211,27 @@ export class Engine {
     this.emit(this.stamp({ type: "ink-clear", auto }));
   }
 
-  shotDone(rect: Rect, components: LocatedComponent[], thumb?: string, path?: string): string {
+  shotDone(
+    rect: Rect,
+    components: LocatedComponent[],
+    thumb?: string,
+    path?: string,
+    viewport?: boolean,
+  ): string {
     this.ensureThread("shot");
-    // Identifier-shaped (underscore) so the token can double as a meta key.
+    // Identifier-shaped (underscore) so the marker doubles as an attachment id.
     const marker = `shot_${++this.shotCounter}`;
-    this.emit(this.stamp({ type: "shot", marker, rect, components, thumb, path }));
+    this.emit(
+      this.stamp({
+        type: "shot",
+        marker,
+        rect,
+        components,
+        thumb,
+        path,
+        ...(viewport ? { viewport: true } : {}),
+      }),
+    );
     return marker;
   }
 
@@ -241,6 +265,36 @@ export class Engine {
     } else {
       this.correction(target, instruction, via);
     }
+  }
+
+  /**
+   * Undo the most recent still-active correction of the current thread (an
+   * Escape in the correction box). Emits a `correction-undo` event — the
+   * stream stays append-only; compose pops the correction from the applied
+   * set. Returns false (and emits nothing) when there is nothing to undo,
+   * which is the caller's cue to step out instead.
+   */
+  undoCorrection(): boolean {
+    let start = -1;
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      if (this.events[i].type === "thread-open") {
+        start = i;
+        break;
+      }
+    }
+    let active = 0;
+    for (const event of start === -1 ? this.events : this.events.slice(start)) {
+      if (event.type === "correction") {
+        active += 1;
+      } else if (event.type === "correction-undo") {
+        active -= 1;
+      }
+    }
+    if (active <= 0) {
+      return false;
+    }
+    this.emit(this.stamp({ type: "correction-undo" }));
+    return true;
   }
 
   correction(
@@ -316,6 +370,8 @@ export interface ComposedItem {
   thumb?: string;
   path?: string;
   components?: LocatedComponent[];
+  /** True for a whole-viewport shot (renders with no element metadata). */
+  viewport?: boolean;
 }
 
 export interface ComposedIntent {
@@ -326,17 +382,38 @@ export interface ComposedIntent {
   corrections: Array<{ original: string; instruction: string; applied: boolean; patch?: string }>;
   components: LocatedComponent[];
   /**
-   * The lowered body, Option-C style (archive/channel-attachment-path-encoding.md):
-   * prose with `{shot_n}` tokens at the exact position each image belongs.
+   * The lowered body: prose with each screenshot **inlined at its position**
+   * as `[screenshot: <path> (elements: …)]` — path (relativized against
+   * {@link ComposeOptions.cwd} when given), located elements, and their cell
+   * frontier, all in the text where the image belongs. This replaced the
+   * Option-C `{shot_n}` token + meta-map scheme: the indirection cost a hint
+   * line and a metadata block the agent had to correlate, for structure
+   * nothing downstream actually consumed (`meta` only ever became text
+   * attributes on the rendered channel tag).
    */
   prompt: string;
   /**
-   * The lowered meta: `shot_n` → absolute image path, plus `shot_n_info` →
-   * the located components. Body token + same-named meta key is what keeps
-   * position *and* structure. Shots without a saved file degrade to Option A
-   * (inline bracket) and don't appear here.
+   * Retained for wire/API compatibility; shots no longer populate it (their
+   * paths and element info are inlined in {@link prompt}).
    */
   meta: Record<string, string>;
+}
+
+/** Options for {@link composeIntent}. */
+export interface ComposeOptions {
+  /**
+   * The agent's working directory: screenshot paths AND source locations
+   * under it render relative (shorter, stable across machines); paths outside
+   * it stay absolute. Only the channel passes this — the browser has no cwd
+   * and its compose is a preview, not the committed prompt.
+   */
+  cwd?: string;
+  /**
+   * How screenshots render in the body: an indented `<screenshot>` XML block
+   * (default — Claude-family models attend reliably to tags, and it stays
+   * human-readable), or the plain-text bracket block. See {@link renderShot}.
+   */
+  shotFormat?: "xml" | "text";
 }
 
 /**
@@ -353,6 +430,7 @@ export interface ComposedIntent {
 export function composeIntent(
   events: IntentEvent[],
   policy: "replace" | "note" = "replace",
+  options: ComposeOptions = {},
 ): ComposedIntent {
   let start = -1;
   for (let i = events.length - 1; i >= 0; i--) {
@@ -386,6 +464,7 @@ export function composeIntent(
         thumb: event.thumb,
         path: event.path,
         components: event.components,
+        ...(event.viewport ? { viewport: true } : {}),
       });
     } else if (event.type === "correction") {
       corrections.push({
@@ -394,6 +473,11 @@ export function composeIntent(
         applied: false,
         patch: event.patch,
       });
+    } else if (event.type === "correction-undo") {
+      // Escape in the correction box: pop the most recent still-active
+      // correction. Order matters — corrections apply sequentially, so only
+      // LIFO undo keeps the remaining stack coherent.
+      corrections.pop();
     }
   }
 
@@ -434,25 +518,11 @@ export function composeIntent(
     .trim();
 
   const promptParts: string[] = [];
-  const meta: Record<string, string> = {};
   for (const item of items) {
     if (item.kind === "text" && item.text) {
       promptParts.push(item.text);
     } else if (item.kind === "shot" && item.marker) {
-      const info = item.components?.length
-        ? item.components.map((c) => `${c.component} @ ${c.source}`).join(", ")
-        : "";
-      if (item.path) {
-        // Option C: positional token in the body, path in same-named meta.
-        promptParts.push(`{${item.marker}}`);
-        meta[item.marker] = item.path;
-        if (info) {
-          meta[`${item.marker}_info`] = info;
-        }
-      } else {
-        // No file on disk — degrade to an inline bracket (Option A-ish).
-        promptParts.push(`[${item.marker}${info ? ` (components: ${info})` : ""}]`);
-      }
+      promptParts.push(renderShot(item, options));
     }
   }
   if (policy === "note") {
@@ -460,10 +530,146 @@ export function composeIntent(
       promptParts.push(`(transcription fix: "${correction.original}" → ${correction.instruction})`);
     }
   }
-  if (Object.keys(meta).some((k) => !k.endsWith("_info"))) {
-    // The doc's one-line hint: make the token→meta convention explicit.
-    promptParts.push("({shot_n} tokens are attached image paths — open them to look.)");
-  }
 
-  return { transcript, items, corrections, components, prompt: promptParts.join(" ").trim(), meta };
+  return {
+    transcript,
+    items,
+    corrections,
+    components,
+    prompt: promptParts.join(" ").trim(),
+    meta: {},
+  };
+}
+
+// ── shot rendering (the inline block) ────────────────────────────────────────
+
+/** Cells listed per element before collapsing behind `cells-omitted`/"+N more". */
+const MAX_CELLS_IN_PROMPT = 4;
+
+/**
+ * One shot, inlined as a block at its position in the prose. Two styles,
+ * chosen by {@link ComposeOptions.shotFormat}:
+ *
+ * `"xml"` (the default — Claude-family models attend reliably to XML tags,
+ * and the indented form stays perfectly readable for a human):
+ *
+ *   <screenshot path=".aiui-cache/traces/…/shot_1.png">
+ *     <element name="Legend" source="src/Legend.tsx:30:2">
+ *       <cell name="colorScale" source="src/Legend.tsx:41:8"/>
+ *       <cell name="ticks"/>
+ *     </element>
+ *   </screenshot>
+ *
+ * `"text"` (the plain-prose alternative, same content):
+ *
+ *   [screenshot: .aiui-cache/traces/…/shot_1.png
+ *     Legend @ src/Legend.tsx:30:2 — cells: colorScale @ src/Legend.tsx:41:8, ticks
+ *   ]
+ *
+ * Everything is relativized against `cwd` — the image path *and* every
+ * source location. Viewport shots render as a single self-closing tag /
+ * one-liner with no element info by design; a `within` anchor (the drag
+ * enclosed nothing) is marked so the agent knows it's context, not framing.
+ */
+function renderShot(item: ComposedItem, options: ComposeOptions): string {
+  return (options.shotFormat ?? "xml") === "xml"
+    ? renderShotXml(item, options.cwd)
+    : renderShotText(item, options.cwd);
+}
+
+function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
+  const attrs: string[] = [];
+  if (item.path) {
+    attrs.push(`path="${escapeXml(relativizePath(item.path, cwd))}"`);
+  } else {
+    // No file on disk (capture denied/unavailable) — the reference still helps.
+    attrs.push(`marker="${escapeXml(item.marker ?? "")}"`, `missing="image not captured"`);
+  }
+  if (item.viewport) {
+    attrs.push(`view="full-viewport"`);
+    return `<screenshot ${attrs.join(" ")}/>`;
+  }
+  const components = item.components ?? [];
+  if (components.length === 0) {
+    return `<screenshot ${attrs.join(" ")}/>`;
+  }
+  const lines = components.map((c) => {
+    const el: string[] = [`name="${escapeXml(c.component)}"`];
+    if (c.source && c.source !== "unknown") {
+      el.push(`source="${escapeXml(relativizePath(c.source, cwd))}"`);
+    }
+    if (c.containment === "within") {
+      el.push(`containment="within"`);
+    }
+    const cells = c.cells ?? [];
+    if (cells.length > MAX_CELLS_IN_PROMPT) {
+      el.push(`cells-omitted="${cells.length - MAX_CELLS_IN_PROMPT}"`);
+    }
+    if (cells.length === 0) {
+      return `  <element ${el.join(" ")}/>`;
+    }
+    const kids = cells.slice(0, MAX_CELLS_IN_PROMPT).map((cell) => {
+      const src = cell.source ? ` source="${escapeXml(relativizePath(cell.source, cwd))}"` : "";
+      return `    <cell name="${escapeXml(cell.name)}"${src}/>`;
+    });
+    return [`  <element ${el.join(" ")}>`, ...kids, "  </element>"].join("\n");
+  });
+  // Multi-line blocks get a blank line's worth of separation from the prose
+  // around them; the single-line forms (viewport, no elements) read fine
+  // inline mid-sentence and stay there.
+  return `\n${[`<screenshot ${attrs.join(" ")}>`, ...lines, "</screenshot>"].join("\n")}\n`;
+}
+
+function renderShotText(item: ComposedItem, cwd: string | undefined): string {
+  const head = item.path
+    ? `[screenshot: ${relativizePath(item.path, cwd)}`
+    : `[screenshot ${item.marker} — image not captured`;
+  if (item.viewport) {
+    return `${head} (full viewport)]`;
+  }
+  const components = item.components ?? [];
+  if (components.length === 0) {
+    return `${head}]`;
+  }
+  const refs = components.map((c) => {
+    const where = c.source && c.source !== "unknown" ? ` @ ${relativizePath(c.source, cwd)}` : "";
+    const anchor = c.containment === "within" ? "within " : "";
+    let ref = `  ${anchor}${c.component}${where}`;
+    const cells = c.cells ?? [];
+    if (cells.length > 0) {
+      const shown = cells
+        .slice(0, MAX_CELLS_IN_PROMPT)
+        .map((cell) =>
+          cell.source ? `${cell.name} @ ${relativizePath(cell.source, cwd)}` : cell.name,
+        );
+      const more = cells.length - MAX_CELLS_IN_PROMPT;
+      ref += ` — cells: ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`;
+    }
+    return ref;
+  });
+  // Same separation rule as the XML form: multi-line blocks stand apart.
+  return `\n${[head, ...refs, "]"].join("\n")}\n`;
+}
+
+/**
+ * Render a path relative to `cwd` when it lives under it; otherwise keep it
+ * absolute (a path outside the agent's tree relativized would be a lie).
+ * Works on `file:line:col` source locations too (prefix logic). Pure string
+ * logic — this module stays browser-safe.
+ */
+function relativizePath(path: string, cwd: string | undefined): string {
+  if (!cwd) {
+    return path;
+  }
+  const base = cwd.endsWith("/") ? cwd : `${cwd}/`;
+  return path.startsWith(base) ? path.slice(base.length) : path;
+}
+
+/** Minimal XML attribute escaping (paths and names are attribute values). */
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

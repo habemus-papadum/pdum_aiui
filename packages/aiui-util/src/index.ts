@@ -1,8 +1,13 @@
 /**
- * Shared utilities for the aiui packages.
+ * Shared utilities for the aiui packages: cache directories, environment
+ * detection (CI / SSH / headless), and the session-browser plumbing that
+ * dev-server sidecars build their browser auto-open on.
  *
  * @packageDocumentation
  */
+
+export * from "./browser";
+export * from "./environment";
 
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";

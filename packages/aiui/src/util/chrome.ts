@@ -10,7 +10,7 @@
  *
  * - **attach** (default): the MCP is pointed (`--browser-url`) at a shared,
  *   user-visible *session browser* — discovered or eagerly launched via
- *   util/browser.ts — so human and agent work in the same window.
+ *   aiui-util's browser module — so human and agent work in the same window.
  * - **launch**: the MCP launches its own private browser, lazily, on the
  *   agent's first tool call ({@link chromeMcpServer} builds that entry).
  *
@@ -41,6 +41,7 @@
 import { existsSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
+import { isCi } from "@habemus-papadum/aiui-util";
 import { execa } from "execa";
 import type { AiuiArgs } from "./aiui-args";
 import type { AiuiConfig, ChromeChannel, ChromeMode } from "./config";
@@ -74,6 +75,12 @@ type ChromeFlags = Pick<AiuiArgs, "chrome" | "noChrome" | "chromeProfile" | "chr
  * npx download + Chrome launch), with `--aiui-no-chrome`, or with
  * `chrome.enabled: false` in config. `--aiui-chrome` forces it on even under
  * CI; `chrome.enabled: true` merely restates the default and does not.
+ *
+ * Deliberately gated on CI alone, not the wider `isHeadless` check from
+ * aiui-util: on a headless-but-interactive box (SSH into a dev machine)
+ * the MCP still works — it just launches/attaches a headless-capable Chrome —
+ * whereas *opening a page for the user* would be pointless. Only commands that
+ * put a window in front of someone consult the broader signals.
  */
 export function chromeDevtoolsEnabled(
   args: Pick<ChromeFlags, "chrome" | "noChrome">,
@@ -90,12 +97,6 @@ export function chromeDevtoolsEnabled(
     return false;
   }
   return !isCi(env);
-}
-
-/** Truthy `CI` env var, with the conventional "false"/"0" escape hatches. */
-export function isCi(env: NodeJS.ProcessEnv = process.env): boolean {
-  const ci = env.CI;
-  return ci !== undefined && ci !== "" && ci !== "0" && ci.toLowerCase() !== "false";
 }
 
 /** The launch-relevant Chrome settings after flags and config are reconciled. */

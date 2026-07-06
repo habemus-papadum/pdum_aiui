@@ -4,12 +4,22 @@
  *
  *   `      arm / disarm the overlay (also the ✳ button)
  *   Space  talk — hold-to-talk or toggle, per settings.talkMode
- *   S      hold + drag a rect = region screenshot; tap = viewport shot
+ *   D      hold + drag a rect = region screenshot (release without a drag = nothing)
+ *   S      whole-viewport screenshot (fires on press)
  *   C      clear ink
  *   E      enter/exit correct mode (the meta layer)
  *   K      open/close the config strip (the quick-config layer)
- *   Enter  send — finalize the thread
+ *   Enter  send — finalize the thread (in correct mode: done editing, back to ink)
  *   Esc    step out one level (correct → ink → cancel thread → disarm)
+ *
+ * The two screenshot gestures ride two keys ON PURPOSE. They were once both on
+ * S — hold-and-drag for a region, a bare tap for the viewport — but a tap and a
+ * *fast* drag are indistinguishable at keyup: on a quick drag the pointerup
+ * finishes the region capture BEFORE the S keyup arrives, so at keyup the drag
+ * already looks done and the "tapped without a drag" branch fired too — you got
+ * BOTH the region shot and a whole-viewport one. Splitting the keys deletes that
+ * heuristic outright: D means "arm the region veil" and never falls back to a
+ * viewport shot, and S is a standalone viewport capture on keydown.
  *
  * K is deliberately the ONLY key config costs the main layer: everything else
  * (tier digits, save, reset, the advanced editor) lives inside the strip, where
@@ -46,8 +56,9 @@ export type KeyCommand =
   | { cmd: "arm-toggle" }
   | { cmd: "talk-start" }
   | { cmd: "talk-end" }
-  | { cmd: "shoot-arm" } // S down: next drag is a shot; S up without drag = viewport shot
-  | { cmd: "shoot-release" }
+  | { cmd: "shoot-arm" } // D down: arm the region veil — the next drag is the shot
+  | { cmd: "shoot-release" } // D up: disarm the veil (a drag already in flight still finishes)
+  | { cmd: "shoot-viewport" } // S: capture the whole viewport now — no veil, no hold
   | { cmd: "ink-clear" }
   | { cmd: "correct-toggle" }
   | { cmd: "send" }
@@ -57,7 +68,15 @@ export type KeyCommand =
   | { cmd: "config-save" }
   | { cmd: "config-reset" }
   | { cmd: "config-advanced" }
-  | { cmd: "config-close" };
+  | { cmd: "config-close" }
+  /**
+   * Claim the key (preventDefault) but do nothing. Exists for armed-Space
+   * repeats: `talk-start` runs *async* mic acquisition before the engine
+   * marks `talking`, so during that window held-Space repeats used to map to
+   * nothing, go unprevented, and scroll the page — worst right after the
+   * user first granted media permissions, when acquisition is slowest.
+   */
+  | { cmd: "swallow" };
 
 /** Map one key event to a command, or undefined to let the page have it. */
 export function keyCommand(
@@ -78,7 +97,11 @@ export function keyCommand(
 
   // The strip's own keys, checked first while it is open. Anything not claimed
   // here falls through to the normal armed keymap below — except S, which the
-  // strip claims for "save" (shadowing screenshots until it closes).
+  // strip claims for "save" (shadowing the viewport screenshot until it closes).
+  // Because S now fires on keydown and the strip's save IS that keydown handler,
+  // claiming it here is all it takes — there is no keyup to swallow anymore. (D
+  // is deliberately NOT shadowed: the region veil stays reachable, and a D held
+  // across the strip opening still disarms cleanly on its own keyup below.)
   if (state.configOpen && phase === "down" && !repeat) {
     const digit = Number.parseInt(key, 10);
     if (digit >= 1 && digit <= TIER_BY_DIGIT.length) {
@@ -100,9 +123,6 @@ export function keyCommand(
         return { cmd: "config-close" };
     }
   }
-  if (state.configOpen && (key === "s" || key === "S")) {
-    return undefined; // swallow the S keyup too, so shoot-release can't fire
-  }
   if ((key === "k" || key === "K") && phase === "down" && !repeat) {
     return { cmd: "config-toggle" };
   }
@@ -113,18 +133,30 @@ export function keyCommand(
         if (phase === "down" && !repeat && !state.talking) {
           return { cmd: "talk-start" };
         }
-        if (phase === "up" && state.talking) {
+        if (phase === "up") {
+          // Release ALWAYS ends the hold — not just while `talking`. The
+          // silence endpointer auto-splits a held Space into utterance
+          // segments, so a release can land in the gap between one segment's
+          // end and the next one's start; an unconditional talk-end is what
+          // stops the auto-restart there (the modality's talkEnd is a no-op
+          // when nothing is recording).
           return { cmd: "talk-end" };
         }
-        // Swallow repeats so the page never scrolls while armed.
-        return state.talking && phase === "down" ? { cmd: "talk-start" } : undefined;
+        // Swallow every other armed-Space down (repeats — including the ones
+        // that arrive while talk-start's mic acquisition is still in flight
+        // and `talking` is not yet true) so the page never scrolls.
+        return { cmd: "swallow" };
       }
       if (phase === "down" && !repeat) {
         return state.talking ? { cmd: "talk-end" } : { cmd: "talk-start" };
       }
-      return undefined;
-    case "s":
-    case "S":
+      // Toggle mode: repeats are equally scroll-y — swallow them too.
+      return phase === "down" ? { cmd: "swallow" } : undefined;
+    case "d":
+    case "D":
+      // The region shot: arm the crosshair veil on the way down, disarm on the
+      // way up. A drag that pointerup already completed just disarms; a drag
+      // still in flight finishes on its own pointerup (see shot.ts).
       if (phase === "down" && !repeat) {
         return { cmd: "shoot-arm" };
       }
@@ -132,6 +164,12 @@ export function keyCommand(
         return { cmd: "shoot-release" };
       }
       return undefined;
+    case "s":
+    case "S":
+      // The whole-viewport shot: a single press, fired on keydown. No veil, no
+      // hold, no keyup handling — so it can never race a drag the way the old
+      // S-tap-vs-S-drag heuristic did (see the header note).
+      return phase === "down" && !repeat ? { cmd: "shoot-viewport" } : undefined;
     case "c":
     case "C":
       return phase === "down" && !repeat ? { cmd: "ink-clear" } : undefined;
@@ -139,7 +177,13 @@ export function keyCommand(
     case "E":
       return phase === "down" && !repeat ? { cmd: "correct-toggle" } : undefined;
     case "Enter":
-      return phase === "down" && !repeat ? { cmd: "send" } : undefined;
+      if (phase === "down" && !repeat) {
+        // In correct mode Enter means "done editing — back to ink", NEVER
+        // "send the turn": the user's hands are on Enter to commit edits, and
+        // one stray press must not fire the whole prompt into the session.
+        return state.mode === "correct" ? { cmd: "correct-toggle" } : { cmd: "send" };
+      }
+      return undefined;
     case "Escape":
       return phase === "down" && !repeat ? { cmd: "step-out" } : undefined;
     default:

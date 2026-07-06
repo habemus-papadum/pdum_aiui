@@ -94,11 +94,11 @@ export interface AiuiDevOverlayOptions {
   intent?: Partial<IntentPipelineConfig>;
   /**
    * Actor label for trace provenance, embedded in the mount module and sent on
-   * every intent hello as `meta.actor`. Omitted → the widget detects it at
-   * runtime: `navigator.webdriver === true` (Chrome automation — the agent
-   * driving the session browser) → `"agent"`, else `"human"` — so traces from
-   * agent-driven UI testing are distinguishable from a human's in the trace
-   * list. Set it to force a fixed label for everything this dev server serves.
+   * every intent hello as `meta.actor`. Omitted → `"human"`, unless the tab
+   * opted in via the `aiui-actor` sessionStorage toggle (how an agent or CI
+   * run labels the tab it drives — see ACTOR_STORAGE_KEY in the overlay's
+   * instrumentation.ts for why this is an opt-in, not a webdriver heuristic).
+   * Set it to force a fixed label for everything this dev server serves.
    */
   actor?: string;
   /** Channel port to inject; defaults to `process.env.VITE_AIUI_PORT`. */

@@ -233,6 +233,22 @@ The chip and its snapshot live in the widget, not the modality: `IntentToolConte
 `selection()` and `clearSelection()`, so any future modality — a screenshot annotator, a voice turn
 — attaches or consumes the same on-screen reference through one hook.
 
+#### When it breaks: one generic error surface
+
+Failures never stay server-side (or die in a dropped ack): a generic `kind:"error"` push —
+`ChannelErrorMessage` in the channel's `channel.ts`, mirrored as `ErrorMessage` in the overlay's
+`protocol.ts` — carries a short message, a coarse `source` (`transcription`, `correction`,
+`connection`, …), and an optional remediation `detail`. Every server-side failure site routes
+through one helper (`pushError`); the flagship example is a stale `OPENAI_API_KEY`, which the
+channel alone can see, so the channel names it. The widget renders these as **dismissible toasts**
+beside the fab — visible with the panel closed (where the footer status line is not), deduped
+(repeats become one toast with a ×N badge) and capped. Client-detected transport faults use the
+same surface: a channel that is down or refuses the hello toasts at `openThread`, an established
+socket closing out from under a turn (the channel stopping, or a reload dropping every connection)
+synthesizes the same error message locally, and any `ok:false` frame ack the modality receives is
+reported instead of dropped. There is no reconnect to report — the intent socket is deliberately
+one per thread, so an interrupted turn is re-sent, not resumed.
+
 ### Lowering: stream processors, traced
 
 Server-side, a modality's lowering is its `ChannelFormat`: a codec (JSON or raw bytes) plus a
@@ -278,14 +294,14 @@ sequenceDiagram
   C->>AI: POST /audio/transcriptions
   AI-->>C: transcript text
   C-->>W: lowered {transcript-final} — preview fills
-  User->>W: S drag (region shot)
+  User->>W: D drag (region shot)
   W->>C: attachment shot_N (raw PNG)
   Note over C: blob saved on arrival · shot path wired
   User->>W: Enter (send)
   W->>C: context {selection} (optional)
   W->>C: bare fin
   Note over C: fin — reuse speculative compose
-  C->>S: notification · body {shot_N} + meta paths
+  C->>S: notification · shots inlined as <screenshot> blocks
   C-->>W: ack (closed) → "sent ✓"
 ```
 
@@ -365,10 +381,13 @@ manifest already carries the format name, but the plug-in mechanism itself is no
 **Traces are one per thread, and they say who made them.** Every websocket thread mints one
 trace directory under `.aiui-cache/traces/` — including cancelled turns (`status: "abandoned"`)
 and turns driven by an agent doing UI testing, which is why a busy session's list grows fast.
-To keep those apart, the overlay self-reports an **actor** on every thread's hello (`meta.actor`:
-browser automation — `navigator.webdriver` — defaults to `agent`, otherwise `human`; override
-with the `actor` option on the Vite plugin or `mountIntentTool`), and the channel stamps it on
-the trace manifest. Trace lists — `/debug`, the DevTools Intent pane, the workbench — badge any
+To keep those apart, the overlay self-reports an **actor** on every thread's hello
+(`meta.actor`). It defaults to `human` and is only ever changed by explicit opt-in: per tab via
+`sessionStorage.setItem("aiui-actor", "agent")` (one evaluate for an agent or CI run to label
+the tab it drives; remove the key to revert), or pinned with the `actor` option on the Vite
+plugin / `mountIntentTool`. It is deliberately **not** inferred from `navigator.webdriver` —
+that flag is browser-wide, and in the shared session browser it labeled the human's own turns
+as `agent`. The channel stamps the label on the trace manifest. Trace lists — `/debug`, the DevTools Intent pane, the workbench — badge any
 non-human actor. There is no pruning yet; traces only accumulate.
 
 **Watching lowering without an agent: the workbench.** The in-repo workbench (`pnpm workbench`)

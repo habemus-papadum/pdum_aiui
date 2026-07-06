@@ -1,13 +1,14 @@
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ChromeDevtoolsInfo, LaunchInfo } from "@habemus-papadum/aiui-claude-channel";
-import { execa } from "execa";
-import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import {
   discoverSessionBrowser,
+  isCi,
   launchSessionBrowser,
   sessionBrowserBinary,
-} from "../util/browser";
+} from "@habemus-papadum/aiui-util";
+import { execa } from "execa";
+import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { syncChromeForTesting } from "../util/cft";
 import {
   buildDevtoolsExtension,
@@ -16,7 +17,6 @@ import {
   chromeMcpAttachServer,
   chromeMcpServer,
   devtoolsExtensionDir,
-  isCi,
   maybeExtensionAutoloadHint,
   resolveChromeSettings,
 } from "../util/chrome";
@@ -128,7 +128,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
 
   // By default the session also gets the Chrome DevTools MCP — off under CI,
   // `--aiui-no-chrome`, or `chrome.enabled: false`. In the default "attach"
-  // mode the MCP shares a user-visible session browser (see util/browser);
+  // mode the MCP shares a user-visible session browser (see aiui-util's
+  // browser module);
   // "launch" mode keeps the browser private to the MCP and lazily started.
   let chromeInfo: ChromeDevtoolsInfo = { enabled: false };
   if (chromeDevtoolsEnabled(aiuiArgs, config.chrome)) {

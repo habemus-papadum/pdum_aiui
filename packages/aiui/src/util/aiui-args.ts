@@ -27,6 +27,18 @@ export interface AiuiArgs {
    */
   noChrome: boolean;
   /**
+   * `--aiui-browser` was passed: open the wrapped tool's page in the session
+   * browser even where it would default off (CI / headless environments —
+   * e.g. `aiui vite` on a machine whose port *is* getting forwarded to one
+   * with a display).
+   */
+  browser: boolean;
+  /**
+   * `--aiui-no-browser` was passed: skip all session-browser activity (no
+   * tab opened, no browser launched) for this run.
+   */
+  noBrowser: boolean;
+  /**
    * The `--aiui-chrome-profile <name>` value, if provided — which named Chrome
    * profile (user data dir under `.aiui-cache/chrome/`) to launch with.
    */
@@ -78,6 +90,9 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
  *    MCP server to target (e.g. which session `aiui vite` should connect to).
  *  - `--aiui-chrome` / `--aiui-no-chrome` — force the Chrome DevTools MCP on
  *    (even under CI) / leave it off. Passing both is an error.
+ *  - `--aiui-browser` / `--aiui-no-browser` — force opening the page in the
+ *    session browser (even in CI/headless environments) / never open one.
+ *    Passing both is an error.
  *  - `--aiui-chrome-profile <name>` — launch Chrome with the named profile
  *    (created on first use under `.aiui-cache/chrome/<name>`).
  *  - `--aiui-chrome-data-dir <path>` — launch Chrome with an explicit user data
@@ -93,6 +108,8 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
   let mcp: string | undefined;
   let chrome = false;
   let noChrome = false;
+  let browser = false;
+  let noBrowser = false;
   let chromeProfile: string | undefined;
   let chromeDataDir: string | undefined;
   let browserUrl: string | undefined;
@@ -144,6 +161,20 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         noChrome = true;
         break;
       }
+      case "--aiui-browser": {
+        if (value !== undefined) {
+          throw new Error("--aiui-browser takes no value");
+        }
+        browser = true;
+        break;
+      }
+      case "--aiui-no-browser": {
+        if (value !== undefined) {
+          throw new Error("--aiui-no-browser takes no value");
+        }
+        noBrowser = true;
+        break;
+      }
       case "--aiui-chrome-profile": {
         if (value === undefined) {
           value = args[++i];
@@ -182,6 +213,9 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
   if (chrome && noChrome) {
     throw new Error("--aiui-chrome and --aiui-no-chrome are mutually exclusive");
   }
+  if (browser && noBrowser) {
+    throw new Error("--aiui-browser and --aiui-no-browser are mutually exclusive");
+  }
   if (chromeProfile !== undefined && chromeDataDir !== undefined) {
     throw new Error("--aiui-chrome-profile and --aiui-chrome-data-dir are mutually exclusive");
   }
@@ -192,5 +226,16 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
     );
   }
 
-  return { tag, mcp, chrome, noChrome, chromeProfile, chromeDataDir, browserUrl, passthrough };
+  return {
+    tag,
+    mcp,
+    chrome,
+    noChrome,
+    browser,
+    noBrowser,
+    chromeProfile,
+    chromeDataDir,
+    browserUrl,
+    passthrough,
+  };
 }

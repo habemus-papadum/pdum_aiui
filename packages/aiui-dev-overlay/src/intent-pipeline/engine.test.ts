@@ -21,8 +21,12 @@ describe("Engine thread lifecycle", () => {
     const engine = armedEngine();
     engine.strokeDone(10, { x: 0, y: 0, w: 5, h: 5 });
     engine.send();
-    expect(engine.events.at(-1)).toMatchObject({ type: "thread-close", reason: "send" });
+    // Send closes the thread AND disarms (Enter ends the interaction).
+    expect(engine.events.at(-2)).toMatchObject({ type: "thread-close", reason: "send" });
+    expect(engine.events.at(-1)).toMatchObject({ type: "armed", on: false });
+    expect(engine.armed).toBe(false);
 
+    engine.setArmed(true); // a fresh turn needs a fresh arm
     engine.shotDone({ x: 0, y: 0, w: 10, h: 10 }, []);
     engine.setArmed(false);
     expect(
@@ -45,7 +49,7 @@ describe("Engine thread lifecycle", () => {
     expect(engine.armed).toBe(false);
   });
 
-  it("routes a spoken segment into the pending correction target", () => {
+  it("flags a segment spoken at a correction target and keeps the target for commit", () => {
     const engine = armedEngine();
     const segment = engine.talkStart();
     engine.transcriptFinal(segment ?? 1, "make the curb thicker", 100, "mock");
@@ -53,9 +57,13 @@ describe("Engine thread lifecycle", () => {
     const fix = engine.talkStart();
     engine.talkEnd();
     engine.transcriptFinal(fix ?? 2, "curve", 80, "mock");
-    const correction = engine.events.find((e) => e.type === "correction");
-    expect(correction).toMatchObject({ original: "curb", instruction: "curve", via: "speech" });
-    expect(engine.correctionTarget).toBeUndefined();
+    // Flagged as correction speech (not content), but NOT auto-submitted: the
+    // words land in the correction bar, where typing and talking coexist and
+    // Enter is the single commit gesture — so the target survives.
+    const final = engine.events.filter((e) => e.type === "transcript-final").at(-1);
+    expect(final).toMatchObject({ text: "curve", correction: true });
+    expect(engine.events.some((e) => e.type === "correction")).toBe(false);
+    expect(engine.correctionTarget).toEqual({ from: 9, to: 13, original: "curb" });
   });
 });
 
@@ -78,19 +86,30 @@ describe("composeIntent", () => {
     expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot", "text"]);
     expect(composed.corrections[0]).toMatchObject({ applied: true });
     expect(composed.components[0].component).toBe("Legend");
-    // No saved file → the shot degrades to an inline bracket (Option A-ish).
-    expect(composed.prompt).toContain("[shot_1 (components: Legend @ scenery.ts:33)]");
+    // No saved file → the reference degrades but keeps the element info inline.
+    expect(composed.prompt).toContain(
+      '<screenshot marker="shot_1" missing="image not captured">\n' +
+        '  <element name="Legend" source="scenery.ts:33"/>\n' +
+        "</screenshot>",
+    );
     expect(composed.meta).toEqual({});
   });
 
-  it("emits Option C for shots with a saved path: body token + same-named meta", () => {
+  it("inlines a saved shot at its position: path, elements, and cell frontier in the text", () => {
     const engine = armedEngine();
     const s1 = engine.talkStart();
     engine.talkEnd();
     engine.transcriptFinal(s1 ?? 1, "compare this", 90, "mock");
     engine.shotDone(
       { x: 1, y: 2, w: 30, h: 20 },
-      [{ component: "Legend", source: "scenery.ts:33", rect: { x: 0, y: 0, w: 10, h: 10 } }],
+      [
+        {
+          component: "Legend",
+          source: "scenery.ts:33",
+          rect: { x: 0, y: 0, w: 10, h: 10 },
+          cells: [{ name: "colorScale", source: "scenery.ts:41" }, { name: "ticks" }],
+        },
+      ],
       "data:image/png;base64,x",
       "/tmp/aiui-workbench/1-shot_1.png",
     );
@@ -99,13 +118,77 @@ describe("composeIntent", () => {
     engine.transcriptFinal(s2 ?? 2, "against the mock", 90, "mock");
 
     const composed = composeIntent(engine.events);
-    expect(composed.prompt).toContain("compare this {shot_1} against the mock");
-    expect(composed.prompt).toContain("{shot_n} tokens are attached image paths");
-    expect(composed.meta.shot_1).toBe("/tmp/aiui-workbench/1-shot_1.png");
-    expect(composed.meta.shot_1_info).toBe("Legend @ scenery.ts:33");
+    expect(composed.prompt).toContain(
+      "compare this \n" +
+        '<screenshot path="/tmp/aiui-workbench/1-shot_1.png">\n' +
+        '  <element name="Legend" source="scenery.ts:33">\n' +
+        '    <cell name="colorScale" source="scenery.ts:41"/>\n' +
+        '    <cell name="ticks"/>\n' +
+        "  </element>\n" +
+        "</screenshot>\n " +
+        "against the mock",
+    );
+    // Everything is in the text now: no meta block, no token↔meta hint line.
+    expect(composed.meta).toEqual({});
+    expect(composed.prompt).not.toContain("{shot_");
   });
 
-  it("excludes retracted shots (shot-drop) from items, prompt, and meta", () => {
+  it("renders the plain-text style on request (shotFormat: text), sources relativized", () => {
+    const engine = armedEngine();
+    engine.shotDone(
+      { x: 1, y: 2, w: 30, h: 20 },
+      [
+        {
+          component: "Legend",
+          source: "/repo/app/src/Legend.tsx:30:2",
+          rect: { x: 0, y: 0, w: 10, h: 10 },
+          cells: [{ name: "colorScale", source: "/repo/app/src/Legend.tsx:41:8" }],
+        },
+      ],
+      "data:image/png;base64,x",
+      "/repo/app/.aiui-cache/traces/t1/shot_1.png",
+    );
+    const composed = composeIntent(engine.events, "replace", {
+      cwd: "/repo/app",
+      shotFormat: "text",
+    });
+    expect(composed.prompt).toContain(
+      "[screenshot: .aiui-cache/traces/t1/shot_1.png\n" +
+        "  Legend @ src/Legend.tsx:30:2 — cells: colorScale @ src/Legend.tsx:41:8\n" +
+        "]",
+    );
+  });
+
+  it("relativizes shot paths under the compose cwd; a viewport shot carries no element info", () => {
+    const engine = armedEngine();
+    engine.shotDone(
+      { x: 0, y: 0, w: 1024, h: 768 },
+      [],
+      "data:image/png;base64,x",
+      "/repo/app/.aiui-cache/traces/t1/shot_1.png",
+      true, // viewport
+    );
+    engine.shotDone(
+      { x: 1, y: 2, w: 30, h: 20 },
+      [{ component: "Legend", source: "scenery.ts:33", rect: { x: 0, y: 0, w: 10, h: 10 } }],
+      "data:image/png;base64,y",
+      "/somewhere/else/shot_2.png",
+    );
+
+    const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
+    // Inside cwd → relative; the viewport shot is a single self-closing tag.
+    expect(composed.prompt).toContain(
+      '<screenshot path=".aiui-cache/traces/t1/shot_1.png" view="full-viewport"/>',
+    );
+    // Outside cwd → the absolute path is the truth; keep it.
+    expect(composed.prompt).toContain(
+      '<screenshot path="/somewhere/else/shot_2.png">\n' +
+        '  <element name="Legend" source="scenery.ts:33"/>\n' +
+        "</screenshot>",
+    );
+  });
+
+  it("excludes retracted shots (shot-drop) from items and prompt", () => {
     const engine = armedEngine();
     const s1 = engine.talkStart();
     engine.talkEnd();
@@ -129,8 +212,8 @@ describe("composeIntent", () => {
     expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot"]);
     expect(composed.items[1].marker).toBe("shot_2");
     expect(composed.prompt).not.toContain("shot_1");
-    expect(composed.prompt).toContain("{shot_2}");
-    expect(composed.meta).toEqual({ shot_2: "/tmp/aiui-workbench/2-shot_2.png" });
+    expect(composed.prompt).toContain('<screenshot path="/tmp/aiui-workbench/2-shot_2.png"/>');
+    expect(composed.meta).toEqual({});
     // ...but the shot event itself is still in the stream (append-only; traces keep it).
     expect(engine.events.some((e) => e.type === "shot" && e.marker === "shot_1")).toBe(true);
   });
@@ -198,6 +281,7 @@ describe("composeIntent", () => {
     engine.talkEnd();
     engine.transcriptFinal(s1 ?? 1, "old thread", 10, "mock");
     engine.send();
+    engine.setArmed(true); // send disarmed; re-arm for the next turn
     const s2 = engine.talkStart();
     engine.talkEnd();
     engine.transcriptFinal(s2 ?? 2, "new thread", 10, "mock");

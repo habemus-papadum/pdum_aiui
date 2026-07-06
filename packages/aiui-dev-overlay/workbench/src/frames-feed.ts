@@ -28,6 +28,9 @@ export interface FramesFeedOptions {
   fetch?: typeof fetch;
 }
 
+/** How much history the feed replays to a late subscriber (the server ring is the real buffer). */
+const MAX_BUFFERED = 500;
+
 export class FramesFeed {
   private readonly listeners = new Set<(entries: FrameEntry[]) => void>();
   private readonly baseUrl: string;
@@ -35,15 +38,29 @@ export class FramesFeed {
   private readonly fetchFn: typeof fetch;
   private since = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
+  /**
+   * Everything this feed has seen, bounded — replayed to each new subscriber.
+   * Without this, the shared `since` cursor makes tab order lossy: the panes
+   * subscribe on activate and unsubscribe on tab switch, so opening Prompt
+   * first advanced the cursor past the whole turn and a later Raw-frames tab
+   * rendered nothing at all (the empty-pane bug). History must come from the
+   * feed, not from whoever happened to be listening when it arrived.
+   */
+  private buffer: FrameEntry[] = [];
 
   constructor(options: FramesFeedOptions) {
     this.baseUrl = options.baseUrl;
     this.intervalMs = options.intervalMs ?? 1000;
-    this.fetchFn = options.fetch ?? fetch;
+    // Wrap, don't alias — `this.fetchFn(...)` on a bare native fetch is an
+    // "Illegal invocation" (see traces-pane.ts; it killed all three panes).
+    this.fetchFn = options.fetch ?? ((input, init) => fetch(input, init));
   }
 
   subscribe(listener: (entries: FrameEntry[]) => void): () => void {
     this.listeners.add(listener);
+    if (this.buffer.length > 0) {
+      listener(this.buffer.slice()); // catch the newcomer up before live ticks
+    }
     if (!this.timer) {
       this.timer = setInterval(() => void this.poll(), this.intervalMs);
       void this.poll();
@@ -70,6 +87,10 @@ export class FramesFeed {
         this.since = payload.seq;
       }
       if (entries.length > 0) {
+        this.buffer.push(...entries);
+        if (this.buffer.length > MAX_BUFFERED) {
+          this.buffer.splice(0, this.buffer.length - MAX_BUFFERED);
+        }
         for (const listener of this.listeners) {
           listener(entries);
         }

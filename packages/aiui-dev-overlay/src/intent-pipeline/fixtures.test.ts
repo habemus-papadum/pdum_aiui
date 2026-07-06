@@ -102,9 +102,9 @@ describe("ink-and-region-shot.json", () => {
     expect(shot).toBeDefined();
     expect(shot?.path).toBeUndefined();
     expect(composed.components.length).toBeGreaterThan(0);
-    // No saved file → Option-A inline bracket in the body, nothing in meta.
-    expect(composed.prompt).toContain("[shot_1");
-    expect(composed.meta.shot_1).toBeUndefined();
+    // No saved file → degraded inline reference, element info kept in the text.
+    expect(composed.prompt).toContain('<screenshot marker="shot_1" missing="image not captured"');
+    expect(composed.meta).toEqual({});
   });
 });
 

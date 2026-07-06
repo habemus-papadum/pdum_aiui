@@ -20,6 +20,10 @@
  * `/debug/api/info`, and every hello ack, so clients can tell), traces to the
  * project-local cache as usual, and — with `--record` — appends every
  * frame-log entry as JSONL under `.aiui-cache/recordings/` (see recording.ts).
+ * It binds an OS-assigned loopback port unless `--port` pins one (the
+ * workbench pins its channel to a fixed port so a human always knows where it
+ * is); either way the ready line below carries the actual port, and a pinned
+ * port that is already taken fails loudly instead of drifting.
  *
  * stdout protocol (stderr carries all progress/errors): the first line,
  * printed exactly once when the server is ready, is machine-parseable —
@@ -53,6 +57,29 @@ export interface ServeOptions {
    * (`.aiui-cache/` under the cwd); tests point it at a temp dir.
    */
   cacheDir?: string;
+  /**
+   * Fixed loopback port to bind (`--port`). Omitted, the OS assigns a free one
+   * — the right default for anything discovered via the ready line or the
+   * registry. A supervisor that promises its user a *known* address (the
+   * workbench pins its channel to 49223) passes one; a taken port is then a
+   * hard, explained failure instead of a silent drift (see {@link runServe}).
+   */
+  port?: number;
+}
+
+/**
+ * Parse a `--port` value: an integer in [1, 65535], strictly decimal (no
+ * `0x10`, no floats, no empty string — `Number()` alone is too forgiving for a
+ * CLI flag). Throws with a human-readable message; the CLI layer (program.ts)
+ * re-wraps it as a commander `InvalidArgumentError` so usage errors render as
+ * usage errors.
+ */
+export function parsePort(value: string): number {
+  const port = /^\d+$/.test(value.trim()) ? Number(value.trim()) : Number.NaN;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`expected an integer between 1 and 65535, got "${value}"`);
+  }
+  return port;
 }
 
 /** The running debug server, for tests (the CLI just lets it run). */
@@ -73,24 +100,42 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     process.stderr.write(`[aiui-channel serve] recording frames to ${recorder.path}\n`);
   }
 
-  const web = await startWebServer({
-    // The whole point: the "session" is stdout. The delimiters make the block
-    // easy to spot in a scrollback and easy to slice in a script.
-    onPrompt: (text, meta) => {
-      const lines = ["--- lowered prompt ---", text];
-      if (meta !== undefined) {
-        lines.push("--- meta ---", JSON.stringify(meta, null, 2));
-      }
-      lines.push("--- end ---");
-      process.stdout.write(`${lines.join("\n")}\n`);
-    },
-    traceDir: cacheDir,
-    debug: true,
-    // Names this run's trace session ("channel·…" when untagged), so /debug's
-    // list separates a debug server's traces from a real session's.
-    ...(options.tag !== undefined ? { tag: options.tag } : {}),
-    ...(recorder !== undefined ? { frameSink: recorder.sink } : {}),
-  });
+  let web: Awaited<ReturnType<typeof startWebServer>>;
+  try {
+    web = await startWebServer({
+      // The whole point: the "session" is stdout. The delimiters make the block
+      // easy to spot in a scrollback and easy to slice in a script.
+      onPrompt: (text, meta) => {
+        const lines = ["--- lowered prompt ---", text];
+        if (meta !== undefined) {
+          lines.push("--- meta ---", JSON.stringify(meta, null, 2));
+        }
+        lines.push("--- end ---");
+        process.stdout.write(`${lines.join("\n")}\n`);
+      },
+      traceDir: cacheDir,
+      debug: true,
+      // Names this run's trace session ("channel·…" when untagged), so /debug's
+      // list separates a debug server's traces from a real session's.
+      ...(options.tag !== undefined ? { tag: options.tag } : {}),
+      ...(recorder !== undefined ? { frameSink: recorder.sink } : {}),
+      ...(options.port !== undefined ? { port: options.port } : {}),
+    });
+  } catch (error) {
+    await recorder?.close();
+    // A fixed port exists to be predictable, so a collision must explain
+    // itself — the raw EADDRINUSE stack says which port but not what to do.
+    if (
+      options.port !== undefined &&
+      (error as NodeJS.ErrnoException | undefined)?.code === "EADDRINUSE"
+    ) {
+      throw new Error(
+        `port ${options.port} is already in use — is another \`serve\` (or a workbench, ` +
+          "which spawns one) still running? Stop it, or pass a different --port.",
+      );
+    }
+    throw error;
+  }
 
   // The same dev auto-reload `mcp` has (AIUI_CHANNEL_WATCH=1, source checkout
   // only): edit the lowering code and the format registry hot-rebuilds — open

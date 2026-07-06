@@ -26,11 +26,16 @@ describe("keyCommand", () => {
   it("hold mode: space down starts, space up ends, repeats swallowed", () => {
     expect(keyCommand(base, " ", "down", false)).toEqual({ cmd: "talk-start" });
     expect(keyCommand({ ...base, talking: true }, " ", "up", false)).toEqual({ cmd: "talk-end" });
-    // key-repeat while held must not toggle anything off
-    expect(keyCommand({ ...base, talking: true }, " ", "down", true)).toEqual({
-      cmd: "talk-start",
-    });
-    expect(keyCommand(base, " ", "up", false)).toBeUndefined();
+    // Key-repeats while held are claimed-but-inert (swallow): they must not
+    // toggle anything AND must not fall through unprevented — including in the
+    // window where talk-start's async mic acquisition hasn't yet set `talking`
+    // (an unswallowed Space repeat scrolls the page).
+    expect(keyCommand({ ...base, talking: true }, " ", "down", true)).toEqual({ cmd: "swallow" });
+    expect(keyCommand(base, " ", "down", true)).toEqual({ cmd: "swallow" });
+    // Release ALWAYS ends the hold — even when `talking` is momentarily false
+    // (the silence endpointer's gap between auto-split segments); the modality
+    // treats a redundant talk-end as a no-op.
+    expect(keyCommand(base, " ", "up", false)).toEqual({ cmd: "talk-end" });
   });
 
   it("toggle mode: space down flips, space up is inert", () => {
@@ -43,13 +48,29 @@ describe("keyCommand", () => {
   });
 
   it("maps the rest of the tiny keyboard", () => {
-    expect(keyCommand(base, "s", "down", false)).toEqual({ cmd: "shoot-arm" });
-    expect(keyCommand(base, "S", "up", false)).toEqual({ cmd: "shoot-release" });
+    // D arms the region veil on the way down, disarms on the way up.
+    expect(keyCommand(base, "d", "down", false)).toEqual({ cmd: "shoot-arm" });
+    expect(keyCommand(base, "D", "up", false)).toEqual({ cmd: "shoot-release" });
+    // S is the whole-viewport shot: a single keydown, nothing on keyup.
+    expect(keyCommand(base, "s", "down", false)).toEqual({ cmd: "shoot-viewport" });
+    expect(keyCommand(base, "S", "up", false)).toBeUndefined();
     expect(keyCommand(base, "c", "down", false)).toEqual({ cmd: "ink-clear" });
     expect(keyCommand(base, "e", "down", false)).toEqual({ cmd: "correct-toggle" });
     expect(keyCommand(base, "Enter", "down", false)).toEqual({ cmd: "send" });
     expect(keyCommand(base, "Escape", "down", false)).toEqual({ cmd: "step-out" });
     expect(keyCommand(base, "x", "down", false)).toBeUndefined();
+  });
+
+  it("keeps the two screenshot gestures from overlapping (the split that killed the race)", () => {
+    // D's keyup is only ever a disarm — never a viewport fallback (the old S-tap
+    // heuristic that double-fired on a fast drag is gone).
+    expect(keyCommand(base, "d", "up", false)).toEqual({ cmd: "shoot-release" });
+    // Holding D doesn't re-arm on key-repeat.
+    expect(keyCommand(base, "d", "down", true)).toBeUndefined();
+    // S fires once on keydown; a held S (repeat) must not spam viewport shots,
+    // and its keyup does nothing.
+    expect(keyCommand(base, "s", "down", true)).toBeUndefined();
+    expect(keyCommand(base, "s", "up", false)).toBeUndefined();
   });
 });
 
@@ -83,9 +104,17 @@ describe("keyCommand: the config strip layer", () => {
     expect(keyCommand(open, "k", "down", false)).toEqual({ cmd: "config-close" });
   });
 
-  it("the strip claims S entirely (no stray shoot-release on keyup)", () => {
+  it("claims S for save; its keyup is inert, so no viewport shot leaks through", () => {
+    expect(keyCommand(open, "s", "down", false)).toEqual({ cmd: "config-save" });
     expect(keyCommand(open, "s", "up", false)).toBeUndefined();
     expect(keyCommand(open, "S", "up", false)).toBeUndefined();
+    // A repeat S-down while the strip is open must not fall through to a shot.
+    expect(keyCommand(open, "s", "down", true)).toBeUndefined();
+  });
+
+  it("does NOT shadow D: the region veil stays reachable while the strip is open", () => {
+    expect(keyCommand(open, "d", "down", false)).toEqual({ cmd: "shoot-arm" });
+    expect(keyCommand(open, "d", "up", false)).toEqual({ cmd: "shoot-release" });
   });
 
   it("is a layer, not a mode: unclaimed keys keep their armed meaning", () => {

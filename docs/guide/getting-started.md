@@ -85,8 +85,11 @@ interactive picker; or pin one with `--aiui-mcp <tag>`) and launches Vite with
 **`VITE_AIUI_PORT`** set to the channel's port. That env var is how the intent-tool plugin
 (next step) finds the channel.
 
-Vite prints your app's URL — open it **in the session browser**, not your default one, so you
-and the agent are on the same page (literally):
+When Vite prints your app's URL, aiui opens it **in the session browser** for you — not your
+default browser — so you and the agent are on the same page (literally). `--aiui-no-browser`
+turns that off; in headless environments (CI, SSH, no display) aiui instead prints the URL to
+open on your local machine, assuming you've forwarded the port (`--aiui-browser` forces a
+browser open anyway). To open the app again later:
 
 ```sh
 aiui open http://localhost:5173
@@ -112,8 +115,8 @@ floating **✳ aiui** button in the corner of your page.
 ## 4. Use it
 
 Arm the overlay with the backtick key `` ` `` (or the **✳ aiui** button), then compose a turn:
-hold **Space** and say what you want, drag to circle the thing you mean, tap **S** to grab a
-screenshot of it — then **Enter** to send. Prefer typing? The plain-text escape hatch is one tab
+hold **Space** and say what you want, drag to circle the thing you mean, hold **D** and drag a box
+to screenshot a region (**S** grabs the whole viewport) — then **Enter** to send. Prefer typing? The plain-text escape hatch is one tab
 over. The [Using the intent overlay](./intent-overlay) page is the full how-to (the keymap, the
 correction loop, the config); this is the thirty-second version.
 

@@ -17,13 +17,36 @@ export interface Rect {
   h: number;
 }
 
-/** A component found under a screenshot rect via `data-source` annotations. */
+/** One dataflow cell surfaced with a located component (see {@link LocatedComponent.cells}). */
+export interface LocatedCell {
+  name: string;
+  /** `path/to/file.ts:line:col` when the cell element carries its own stamp. */
+  source?: string;
+}
+
+/**
+ * A component a region screenshot located via the `data-source-loc` /
+ * `data-cell` annotations. The locator keeps only the **highest annotated
+ * elements fully enclosed by the rect** — the things the user framed, not
+ * everything the rect grazes — or, when the rect encloses nothing annotated
+ * (a drag inside one big component), the innermost annotated element
+ * *containing* the rect, marked `containment: "within"`.
+ */
 export interface LocatedComponent {
   component: string;
   /** `path/to/file.ts:line` — what the locator plugin will emit in real apps. */
   source: string;
   /** Viewport bbox at capture time. */
   rect: Rect;
+  /**
+   * The element's direct-cell frontier: the topmost `data-cell` descendants
+   * (no other cell between them and this element). Deliberately one level —
+   * enough of a handle into the dataflow graph for an agent to start from;
+   * deeper cells are the agent's own journey.
+   */
+  cells?: LocatedCell[];
+  /** How the rect relates to this element; absent means `"enclosed"`. */
+  containment?: "enclosed" | "within";
 }
 
 export type Mode = "ink" | "correct";
@@ -61,6 +84,12 @@ export type IntentEvent =
       marker: string;
       rect: Rect;
       components: LocatedComponent[];
+      /**
+       * True for a whole-viewport shot (S). Viewport shots deliberately skip
+       * the locator and render with no element metadata — "everything" is not
+       * a useful point of reference.
+       */
+      viewport?: boolean;
       /** Data-URL thumbnail (absent when no capture stream was granted). */
       thumb?: string;
       /** Absolute path of the saved PNG on disk (the thing the prompt hands the session). */
@@ -95,5 +124,16 @@ export type IntentEvent =
       /** Corrector model + its latency, for the timing pane. */
       model?: string;
       latencyMs?: number;
+    }
+  | {
+      /**
+       * Undo the most recent still-active correction (LIFO — a stack pop).
+       * Append-only like everything else: the correction event stays in the
+       * stream and the trace; `composeIntent` — shared with the channel's
+       * lowering — pops it from the applied set, so the preview AND the
+       * lowered prompt agree about what Escape took back.
+       */
+      at: number;
+      type: "correction-undo";
     }
   | { at: number; type: "note"; text: string };

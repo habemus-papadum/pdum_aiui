@@ -48,7 +48,15 @@ The channel listens on `window.__AIUI__.port`, present on any instrumented page 
 
 If you edit the channel's own source, the `channel_reload` MCP tool (or `POST /debug/api/reload`)
 rebuilds its lowering layer in place — live sockets drop and reconnect on their own, the session and
-page stay up.
+page stay up. **Know its depth boundary**: the reload re-imports exactly one module level
+(`processors.ts`, `intent-v1.ts` — see the channel's `reloadable.ts`). Edits to anything those
+import — `transcribe.ts`, `correct.ts`, `realtime.ts`, `prompt-context.ts`, the shared
+`intent-pipeline` — do **not** take effect on reload; they need a channel process restart. The
+in-place reload exists because in `aiui claude` the process is load-bearing (the stdio MCP pipe to
+the session, the OS-assigned port every running dev server holds) — so for deep edits, tell the
+user a relaunch of `aiui claude` (or their dev harness) is required rather than assuming the
+reload covered it. The **workbench** is different: it fully restarts its own channel child on any
+channel-side source edit, so deep edits there are picked up automatically.
 
 ## Routing to the tab an intent-tool prompt came from
 
@@ -92,6 +100,11 @@ The browser is the user's. Etiquette:
   or mutating call.** For deictic references ("this chart"), screenshot first, act second.
 - Announce visible actions in one short transcript line *before* you take them. Pure reads
   (screenshots, console reads, non-mutating evaluates) need no announcement.
+- **Label your turns.** If you drive the intent tool (or any instrumented page's overlay) in a tab
+  you opened, first run `sessionStorage.setItem("aiui-actor", "agent")` in that tab — traces you
+  produce are then badged `agent` instead of blending into the user's own. This is a per-tab,
+  explicit opt-in (default `human`; `navigator.webdriver` is deliberately ignored — it is
+  browser-wide here and would mislabel the user). Remove the key to revert.
 
 Gotchas that have cost real debugging time:
 

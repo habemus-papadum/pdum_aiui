@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-util",
   "version": "0.2.0+dev",
-  "description": "Shared utilities for aiui packages (cache dirs, etc.).",
+  "description": "Shared utilities for aiui packages (cache dirs, environment detection, session-browser plumbing).",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -35,5 +35,9 @@
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@puppeteer/browsers": "^2.10.5",
+    "execa": "^9.6.1"
   }
 }

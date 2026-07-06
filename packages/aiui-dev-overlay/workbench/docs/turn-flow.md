@@ -58,7 +58,8 @@ lives in the [guide page](../../../../docs/guide/intent-overlay.md); it isn't re
 | `` ` ``   | arm / disarm the overlay (also the ✳ button, bottom-left) |
 | **Space** | talk — *hold*-to-talk (default) or press-to-*toggle*; a setting, on purpose |
 | *drag*    | ink — no key; while armed, drawing is the default gesture |
-| **S**     | hold + drag = region screenshot · tap = whole viewport |
+| **D**     | hold + drag a rectangle = region screenshot |
+| **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
 | **E**     | correct mode — select transcript text, then speak/type the fix |
 | **Enter** | send: finalize the thread |
@@ -101,12 +102,12 @@ on every event, **timing** records each transcription.
    about first? Did you ever leave the mic open?*
 3. **Ink.** Drag a circle around the legend. Watch it fade (~6 s). Draw again, press **C**.
    Set fade to 0 and see if persistent ink earns its clutter. *Judge: gesture or document?*
-4. **Shots + locator.** Hold **S**, drag a rect over the plot; grant "This Tab" once. Watch: a
+4. **Shots + locator.** Hold **D**, drag a rect over the plot; grant "This Tab" once. Watch: a
    thumbnail lands inline in the preview; the shot event lists located components
    (`SpectrumPlot @ workbench/src/scenery.ts:20`); the IR pane's S3 shows `{shot_1}` in the body
    and a `shot_1 = /…/aiui-workbench/…png` meta row — **hover the path to peek the image**,
    click to open. Circle something in ink first and shoot it: the ink is burned into the PNG.
-   Tap **S** without dragging for a viewport shot.
+   Press **S** for a whole-viewport shot.
 5. **The correction meta-loop.** Set `mock: typo rate` to 1 (guaranteed mangles: "curve"→"curb",
    "amber"→"ember"…). Talk. Press **E** — the preview expands. **Select** a mangled word; it
    highlights; the correction bar opens. Type the fix and Enter — or hold Space and *say* it

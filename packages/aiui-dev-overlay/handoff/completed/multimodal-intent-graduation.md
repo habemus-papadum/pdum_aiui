@@ -42,7 +42,7 @@ with the extension), scenery/mocks → stay as fixtures.*
 | Module | What it is | Fate |
 | --- | --- | --- |
 | `engine.ts` | event stream + modes/thread state machine + `composeIntent` (Option-C body+meta) | → overlay (pipeline core); `composeIntent` → channel processor |
-| `keymap.ts` | the minimal keymap (` arm · Space talk · drag ink · S shot · C · E · ⏎ · Esc) + typing guard | → overlay |
+| `keymap.ts` | the minimal keymap (` arm · Space talk · drag ink · D region-shot · S viewport-shot · C · E · ⏎ · Esc) + typing guard | → overlay |
 | `ink.ts`, `shot.ts`, `audio.ts`, `preview.ts` | pen canvas, capture+locator, mic/segments, streaming transcript + selection-correction UI | → overlay (the modality UI) |
 | `patch.ts`, `correct.ts` | V4A patch apply/word-diff; corrector seam (mock + LLM, two instruction modes) | apply+diff → overlay-shared lib; the LLM call → channel |
 | `transcribe.ts` | Transcriber seam (mock + OpenAI REST via dev proxy) | seam shape survives; real call → channel; mock stays (lab + offline) |

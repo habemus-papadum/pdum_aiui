@@ -120,6 +120,12 @@ export function applyCorrectionToLines(
       // fall through to the plain replacement
     }
   }
+  // A whole-transcript correction (empty original — no marked span) has no
+  // meaningful plain replacement: `includes("")` matches every line and would
+  // splice the instruction into the text. Patch or nothing.
+  if (correction.original === "") {
+    return { lines, applied: false };
+  }
   const at = lines.findIndex((line) => line.includes(correction.original));
   if (at === -1) {
     return { lines, applied: false };

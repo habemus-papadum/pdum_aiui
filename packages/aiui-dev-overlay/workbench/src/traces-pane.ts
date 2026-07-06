@@ -82,7 +82,10 @@ export class TracesPane {
 
   constructor(opts: TracesPaneOptions) {
     this.opts = opts;
-    this.fetchFn = opts.fetch ?? fetch;
+    // Wrap, don't alias: `this.fetchFn(...)` would invoke a bare native fetch
+    // with `this` = the pane — "Illegal invocation", swallowed by the poll's
+    // catch, and the list stays empty forever.
+    this.fetchFn = opts.fetch ?? ((input, init) => fetch(input, init));
     this.root = document.createElement("div");
     this.root.className = "wb-traces";
 

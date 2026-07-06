@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type ChannelConnection, type ChannelFormat, createChannelConnection } from "./channel";
+import {
+  type ChannelConnection,
+  type ChannelFormat,
+  createChannelConnection,
+  pushError,
+} from "./channel";
 import { jsonCodec, type PayloadCodec } from "./codec";
 import { encodeFrame, PROTOCOL_VERSION } from "./frame";
 
@@ -234,5 +239,36 @@ describe("createChannelConnection", () => {
     release();
     await Promise.all([first, second]);
     expect(events).toEqual(["start:1", "end:1", "start:2", "end:2"]);
+  });
+});
+
+describe("pushError (the generic server → client error push)", () => {
+  it("pushes a kind:'error' message with the thread id and every provided field", () => {
+    const pushed: unknown[] = [];
+    pushError(
+      { threadId: "t-9", push: (message) => pushed.push(message) },
+      { source: "transcription", message: "transcription failed (401)", detail: "check the key" },
+    );
+    expect(pushed).toEqual([
+      {
+        kind: "error",
+        threadId: "t-9",
+        source: "transcription",
+        message: "transcription failed (401)",
+        detail: "check the key",
+      },
+    ]);
+  });
+
+  it("omits absent optional fields (never a `source: undefined` on the wire)", () => {
+    const pushed: unknown[] = [];
+    pushError({ threadId: "t-1", push: (m) => pushed.push(m) }, { message: "boom" });
+    expect(pushed).toEqual([{ kind: "error", threadId: "t-1", message: "boom" }]);
+    expect(pushed[0]).not.toHaveProperty("source");
+    expect(pushed[0]).not.toHaveProperty("detail");
+  });
+
+  it("degrades to a no-op on a push-less transport (the pure protocol tests)", () => {
+    expect(() => pushError({ threadId: "t-1" }, { message: "boom" })).not.toThrow();
   });
 });

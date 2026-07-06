@@ -92,6 +92,15 @@ export interface WebServerOptions {
    * itself is always kept, sink or not.
    */
   frameSink?: FrameLogSink;
+  /**
+   * Fixed loopback port to bind. Defaults to 0 — an OS-assigned free port —
+   * which is right everywhere a human isn't typing the URL by hand (registered
+   * servers are discovered through the registry; parallel tests must never
+   * collide). A caller that wants a *known* address (the workbench's debug
+   * channel, via `serve --port`) passes one, accepting that a taken port is a
+   * loud `EADDRINUSE` rejection rather than a silent drift elsewhere.
+   */
+  port?: number;
 }
 
 /** Normalize `ws`'s several binary shapes into a single Uint8Array frame. */
@@ -144,8 +153,8 @@ export interface WebServer {
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
- * Start the web backend on `127.0.0.1:<random free port>`, resolving once it's
- * listening.
+ * Start the web backend on `127.0.0.1` — an OS-assigned free port unless
+ * {@link WebServerOptions.port} pins one — resolving once it's listening.
  */
 export async function startWebServer(options: WebServerOptions): Promise<WebServer> {
   const app = express();
@@ -390,7 +399,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   await new Promise<void>((resolveListen, rejectListen) => {
     httpServer.once("error", rejectListen);
-    httpServer.listen(0, "127.0.0.1", () => {
+    httpServer.listen(options.port ?? 0, "127.0.0.1", () => {
       httpServer.removeListener("error", rejectListen);
       resolveListen();
     });

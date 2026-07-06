@@ -68,6 +68,25 @@ an agent-driven browser wants:
 - **Automation-hostile branded restrictions don't apply** — notably `--load-extension` still
   works (branded Chrome ≥ 137 ignores it), so the aiui DevTools panel loads automatically.
 
+One CfT wart has no cure: the *"Chrome for Testing … is only for automated testing"* infobar is
+baked into headed CfT — no flag removes it ([puppeteer#10516]). If it bothers you more than the
+benefits above, point config at branded Chrome (`chrome.channel: "stable"` or
+`chrome.executablePath`) — the trade is loading the DevTools panel by hand (chrome://extensions →
+Load unpacked, once per profile), since branded Chrome ignores `--load-extension`.
+
+[puppeteer#10516]: https://github.com/puppeteer/puppeteer/issues/10516
+
+### Media prompts are pre-answered
+
+The session browser launches with `--use-fake-ui-for-media-stream` and
+`--auto-accept-this-tab-capture`: microphone permission prompts auto-accept (the *real* default
+mic — no fake devices), and the intent tool's current-tab screenshot capture skips the share
+picker. Without these, dictation re-prompts per **origin** — every dev-server port is a distinct
+origin — and Chrome never persists screen-share consent at all. This is a deliberate posture
+choice for a dev browser that already runs an unauthenticated debug port (see
+[the warning](./warning)): treat every page you open in it as able to hear the mic and see the
+tab without asking.
+
 ### The managed install
 
 Unless config picks a browser explicitly (`chrome.executablePath` / `chrome.channel`), every
@@ -116,7 +135,8 @@ reports the existing endpoint. Options: `--profile <name>`, `--data-dir <path>`,
 
 `aiui open http://localhost:5173` is the answer to "the Vite link opens my *default* browser":
 open the app as a tab in the session browser instead, so you and the agent are looking at the
-same page.
+same page. (`aiui vite` does this automatically when the dev server comes up — `--aiui-no-browser`
+opts out, and headless environments get a printed URL instead of a window.)
 
 `aiui chrome status` is the diagnostic to reach for first: the managed CfT install and its
 freshness, how *this* directory would connect (attach/launch, any running session browser),

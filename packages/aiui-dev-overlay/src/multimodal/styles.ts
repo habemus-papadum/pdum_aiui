@@ -17,7 +17,7 @@ export const STYLES = /* css */ `
   .mm-hud { position: fixed; left: 16px; bottom: 16px; z-index: 2147483643; display: flex; gap: 10px;
     align-items: center; background: #171b25; border: 1px solid #262c3a; border-radius: 999px;
     padding: 6px 14px 6px 6px; font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
-    color: #9aa0aa; }
+    color: #9aa0aa; cursor: grab; touch-action: none; }
   .mm-hud.armed { border-color: #8ab4f8; }
   .mm-hud.talking { border-color: #ff5c87; }
   .mm-arm { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
@@ -30,11 +30,13 @@ export const STYLES = /* css */ `
   .mm-preview { position: fixed; left: 50%; transform: translateX(-50%); bottom: 64px;
     z-index: 2147483642; width: min(560px, 70vw); background: #171b25ee; border: 1px solid #262c3a;
     border-radius: 12px; padding: 10px 14px; display: none;
-    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e8e8ea; }
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e8e8ea;
+    cursor: grab; touch-action: none; }
+  .mm-preview-body, .mm-correction-bar { cursor: auto; touch-action: auto; }
   .mm-preview.visible { display: block; }
   .mm-preview.correcting { border-color: #ffd166; bottom: 120px; width: min(720px, 80vw); }
   .mm-preview-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9aa0aa; }
-  .mm-preview.correcting .mm-preview-title::after { content: " — select the text to fix"; color: #ffd166; }
+  .mm-preview.correcting .mm-preview-title::after { content: " — edit the text directly, or instruct below"; color: #ffd166; }
   .mm-preview-body { max-height: 130px; overflow-y: auto; font-size: 14px; line-height: 1.7; }
   .mm-preview.correcting .mm-preview-body { max-height: 240px; font-size: 16px; }
   .mm-seg { color: #cfd3da; } .mm-seg.final { color: #e8e8ea; }
@@ -58,14 +60,33 @@ export const STYLES = /* css */ `
   .mm-thumb-peek { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
     max-height: 50vh; border: 2px solid #ffd166; border-radius: 8px; background: #0f1117;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none; }
-  .mm-correction-bar { display: flex; margin-top: 8px; }
-  .mm-correction-bar input { flex: 1; background: #0f1117; color: #e8e8ea; border: 1px solid #3a4152;
-    border-radius: 6px; padding: 6px 10px; font: inherit; }
+  .mm-correction-bar { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .mm-correction-bar textarea { background: #0f1117; color: #e8e8ea; border: 1px solid #3a4152;
+    border-radius: 6px; padding: 6px 10px; font: inherit; resize: vertical; min-height: 2.6em; }
+  .mm-correction-live { color: #9aa0aa; font-style: italic; font-size: 13px; }
+  .mm-correction-live:empty { display: none; }
+  .mm-correction-wait { color: #ffd166; font-size: 12px; animation: mm-wait-pulse 1.2s ease-in-out infinite; }
+  .mm-edit-area { width: 100%; box-sizing: border-box; background: #0f1117; color: #e8e8ea;
+    border: 1px solid #3a4152; border-radius: 6px; padding: 8px 10px; font-size: 15px;
+    line-height: 1.6; font-family: inherit; resize: vertical; min-height: 72px; margin-top: 6px; }
+  .mm-chunk-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; cursor: default; }
+  .mm-chunk-chip { border: 1px solid #3a4152; border-radius: 999px; padding: 1px 10px;
+    color: #9aa0aa; font-size: 11px; cursor: pointer; }
+  .mm-chunk-chip:hover { border-color: #8ab4f8; }
+  .mm-chunk-chip.active { border-color: #ffd166; color: #ffd166; }
+  .mm-seg.editing { background: #ffd16612; border-radius: 3px; box-shadow: 0 0 0 1px #ffd16633; }
+  @keyframes mm-wait-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 
   .mm-config-strip { position: fixed; left: 16px; bottom: 62px; z-index: 2147483643; display: none;
     background: #171b25ee; border: 1px solid #262c3a; border-radius: 12px; padding: 10px 14px;
     font: 12px/1.6 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #9aa0aa;
-    max-width: min(560px, 90vw); }
+    max-width: min(560px, 90vw);
+    /* Its own cursor: the strip must not inherit body.mm-armed's crosshair —
+       under a crosshair its clickable chips read as not-clickable. */
+    cursor: default; }
+  .mm-tier-chip, .mm-strip-actions [data-cmd] { cursor: pointer; }
+  .mm-tier-chip:hover { border-color: #8ab4f8; }
+  .mm-strip-actions [data-cmd]:hover b { color: #e8e8ea; }
   .mm-config-strip.visible { display: block; }
   .mm-strip-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9aa0aa; }
   .mm-strip-layer { text-transform: none; letter-spacing: 0; color: #6b7280; margin-left: 6px; }

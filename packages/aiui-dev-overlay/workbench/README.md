@@ -27,11 +27,37 @@ pnpm workbench            # from the repo root
 WORKBENCH_RECORD=1 pnpm workbench   # + frame-log recording (JSONL under .aiui-cache/recordings/)
 ```
 
-Open the printed URL in **Chrome**. Put `OPENAI_API_KEY=sk-…` in the repo-root `.env.dev`
+Once the UI is up, the workbench opens itself in the **session browser** — the same shared
+Chrome window `aiui claude` attaches the agent to, with the same sidecar behavior as `aiui vite`
+(the shared pieces live in `@habemus-papadum/aiui-util`): a running session browser (repo-root
+profile) gets a new tab, otherwise one is launched. In headless environments (CI, SSH, no
+display) nothing opens; it prints the URL to open on your own machine instead.
+`WORKBENCH_BROWSER=0` never opens a browser; `WORKBENCH_BROWSER=1` opens one even where the
+environment looks headless.
+
+Put `OPENAI_API_KEY=sk-…` in the repo-root `.env.dev`
 (gitignored; wins over a shell export) and the owned channel runs real transcription/correction;
 without a key, switch the overlay to the `mock` tier (arm, **K**, **1**) and the whole loop runs
 offline. Traces and recordings land in this package's own `.aiui-cache/` (gitignored), never in
 the project's.
+
+### Ports — fixed, on purpose
+
+Everything `pnpm workbench` starts binds a **known** loopback port (`src/ports.ts` has the full
+rationale), so you never have to fish addresses out of startup logs:
+
+| Port | Server | Override |
+| --- | --- | --- |
+| **49222** | the workbench UI itself | `WORKBENCH_PORT` |
+| **49223** | the debug channel server (`aiui-claude-channel serve --port …`) | `WORKBENCH_CHANNEL_PORT` |
+| **49224** | the demo app's dev server (iframe scenery) | `WORKBENCH_DEMO_PORT` |
+
+All three are strict: a taken port fails **loudly** at startup with an "is another workbench
+running?" hint instead of drifting to a random port. The overrides (same `WORKBENCH_*` convention
+as `WORKBENCH_RECORD`) are how you run a second workbench side by side. The page itself still
+discovers the children through `GET /wb/api/servers`, which reports the ports actually bound —
+the channel's arrives on its `AIUI_CHANNEL_SERVE` ready line (`src/serve-ready.ts`), never assumed
+from the config.
 
 ## The layout
 
@@ -39,7 +65,7 @@ the project's.
 
 - **spectra (inline)** — the self-annotated absorption viewer (`src/scenery.ts`), mounted in-page;
   the workbench mounts the shipping intent overlay over itself (arm `` ` ``, Space talk, drag
-  ink, S shot, E correct, K tiers, ⏎ send).
+  ink, D region-shot, S viewport-shot, E correct, K tiers, ⏎ send).
 - **morphogen demo (iframe)** — the real `packages/aiui-demo` app, whose dev server the workbench
   starts programmatically with `VITE_AIUI_PORT` pointed at the debug channel. The demo brings its
   *own* overlay, source locator, and agent-tool surface, so this exercises full fidelity —
@@ -54,8 +80,10 @@ the project's.
 | **Prompt** | the final lowered prompt that *would* have been injected — text, Option-C meta, history | the `lowered-prompt` push |
 
 Trace-list rows carry an **actor badge** when a trace wasn't produced by a human (the overlay
-self-reports `meta.actor`; browser automation — `navigator.webdriver` — defaults to `agent`), so
-agent-driven UI testing is tellable from your own turns.
+self-reports `meta.actor`; default `human`, opted into `agent` per tab via
+`sessionStorage.setItem("aiui-actor", "agent")` — never inferred from `navigator.webdriver`,
+which is browser-wide in the shared session browser), so agent-driven UI testing is tellable
+from your own turns.
 
 ## Scripts
 
@@ -80,7 +108,9 @@ scaffolding:
 | `src/frames-feed.ts` | since-cursor poller over `/debug/api/frames`, shared by Raw + Prompt |
 | `src/traces-pane.ts` / `raw-pane.ts` / `prompt-pane.ts` | the dock views (list/log chrome only — rendering is shared debug-ui) |
 | `src/serve-ready.ts` | the `AIUI_CHANNEL_SERVE` ready-line contract with the spawned server |
-| `vite.config.ts` | spawns the debug channel (`serve --tag workbench`) + the demo app's Vite server; `/wb/api/servers` |
+| `src/ports.ts` | the fixed 49222/49223/49224 port layout + `WORKBENCH_*PORT` overrides |
+| `src/open-browser.ts` / `open-browser-cli.ts` | the browser sidecar: the `WORKBENCH_BROWSER` mapping + session-browser open (shared plumbing from `aiui-util`), and its tsx-spawned runner |
+| `vite.config.ts` | spawns the debug channel (`serve --tag workbench --port …`) + the demo app's Vite server; `/wb/api/servers`; the browser sidecar |
 | `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark (REST + realtime legs) |
 | `fixtures/` | captured interaction event-streams; replayed by the overlay's `intent-pipeline/fixtures.test.ts` |
 

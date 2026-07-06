@@ -111,10 +111,11 @@ export interface ClientMeta {
    */
   intent?: Record<string, unknown>;
   /**
-   * Who is driving the page: `"human"`, `"agent"`, or an explicit label. Trace
-   * provenance — the channel stamps it on the trace manifest so agent-driven UI
-   * testing (Chrome automation sets `navigator.webdriver`) is distinguishable
-   * from a human in the trace list. See {@link collectClientMeta} for the rules.
+   * Who is driving the page: `"human"` (the default), `"agent"`, or an explicit
+   * label. Trace provenance — the channel stamps it on the trace manifest so
+   * agent-driven UI testing is distinguishable from a person in the trace list.
+   * Always an explicit opt-in, never a heuristic — see {@link collectClientMeta}
+   * for the rules and {@link ACTOR_STORAGE_KEY} for the per-tab toggle.
    */
   actor?: string;
 }
@@ -131,12 +132,33 @@ export const TAB_DATASET_KEY = "aiuiTab";
 /** Options for {@link collectClientMeta}. */
 export interface CollectClientMetaOptions {
   /**
-   * Explicit actor label riding the hello as `meta.actor`; overrides the
-   * `navigator.webdriver` detection. Pass it when a harness knows who it is
-   * better than the heuristic does (a named bot, a recorded demo).
+   * Explicit actor label riding the hello as `meta.actor`; wins over the
+   * per-tab {@link ACTOR_STORAGE_KEY} toggle. Pass it when a harness knows who
+   * it is (a named bot, a recorded demo).
    */
   actor?: string;
 }
+
+/**
+ * The sessionStorage key that relabels this **tab's** turns: set it to
+ * `"agent"` (or any label) and every subsequent hello from this tab carries
+ * that actor; remove it to fall back to `"human"`.
+ *
+ * This is the whole opt-in mechanism, and it is deliberately not a heuristic.
+ * The obvious heuristic — `navigator.webdriver` — is browser-wide: the shared
+ * session browser (Chrome for Testing, launched for CDP) sets it for the
+ * human's tabs and the agent's tabs alike, so it labeled *people* as agents.
+ * Per-tab storage matches how the browser is actually shared (the agent
+ * drives its own tab), survives reloads within that tab, and dies with it.
+ * An agent (or a CI harness) flips it with one evaluate:
+ *
+ *   sessionStorage.setItem("aiui-actor", "agent")
+ *
+ * Mislabeling tolerance is asymmetric by design: an unflagged agent turn
+ * showing as `human` is acceptable; a person's turn showing as `agent` was
+ * the bug that retired the heuristic.
+ */
+export const ACTOR_STORAGE_KEY = "aiui-actor";
 
 /**
  * Collect what this page knows about itself for a connection's hello: live
@@ -174,18 +196,25 @@ export function collectClientMeta(options: CollectClientMetaOptions = {}): Clien
   return {
     tab,
     ...(sourceRoot !== undefined ? { source: { root: sourceRoot } } : {}),
-    actor: options.actor ?? detectActor(),
+    actor: options.actor ?? currentActor(),
   };
 }
 
 /**
- * The default actor label: an explicit option always wins (see
- * {@link CollectClientMetaOptions}); otherwise `navigator.webdriver === true` —
- * set by any browser-automation session, including the agent driving the
- * shared session browser through the Chrome DevTools MCP — means `"agent"`,
- * else `"human"`. This is what lets the trace list tell agent-driven UI
- * testing apart from a person using the intent tool.
+ * The actor label: an explicit option always wins (see
+ * {@link CollectClientMetaOptions}); then the per-tab opt-in toggle
+ * ({@link ACTOR_STORAGE_KEY}); else `"human"`. Never inferred — see the key's
+ * doc for why the `navigator.webdriver` heuristic was retired.
  */
-function detectActor(): string {
-  return typeof navigator !== "undefined" && navigator.webdriver === true ? "agent" : "human";
+function currentActor(): string {
+  try {
+    const stored =
+      typeof sessionStorage !== "undefined" ? sessionStorage.getItem(ACTOR_STORAGE_KEY) : null;
+    if (stored !== null && stored !== "") {
+      return stored;
+    }
+  } catch {
+    // Storage access can throw (sandboxed frames) — the default covers it.
+  }
+  return "human";
 }

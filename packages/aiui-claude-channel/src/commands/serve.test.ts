@@ -1,12 +1,25 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { connectChannelClient } from "../client";
 import type { FrameLogEntry } from "../frame-log";
-import { runServe, type ServeHandle } from "./serve";
+import { parsePort, runServe, type ServeHandle } from "./serve";
 
 const freshCache = () => mkdtempSync(join(tmpdir(), "aiui-serve-"));
+
+/** Ask the OS for a free loopback port (bind 0, read it back, release it). */
+const freePort = (): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const srv = createTcpServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const address = srv.address();
+      const port = typeof address === "object" && address !== null ? address.port : 0;
+      srv.close(() => resolve(port));
+    });
+  });
 
 describe("runServe (standalone debug channel server)", () => {
   let handle: ServeHandle | undefined;
@@ -103,5 +116,43 @@ describe("runServe (standalone debug channel server)", () => {
     const cache = freshCache();
     handle = await runServe({ cacheDir: cache });
     expect(existsSync(join(cache, "recordings"))).toBe(false);
+  });
+
+  it("--port binds the requested port, and the ready line reports it", async () => {
+    const port = await freePort();
+    handle = await runServe({ cacheDir: freshCache(), port });
+
+    expect(handle.port).toBe(port);
+    const ready = JSON.parse(stdout[0].slice("AIUI_CHANNEL_SERVE ".length)) as { port: number };
+    expect(ready.port).toBe(port);
+    const health = (await (await fetch(`http://127.0.0.1:${port}/health`)).json()) as {
+      ok: boolean;
+    };
+    expect(health.ok).toBe(true);
+  });
+
+  it("fails loudly — not by drifting — when the requested port is taken", async () => {
+    // The first server (OS-assigned) is the squatter; the second asks for its port.
+    handle = await runServe({ cacheDir: freshCache() });
+    await expect(runServe({ cacheDir: freshCache(), port: handle.port })).rejects.toThrow(
+      new RegExp(`port ${handle.port} is already in use — is another`),
+    );
+    // No stray second ready line: the failed server never announced itself.
+    expect(stdout.filter((line) => line.startsWith("AIUI_CHANNEL_SERVE"))).toHaveLength(1);
+  });
+});
+
+describe("parsePort (--port validation)", () => {
+  it("accepts decimal integers in [1, 65535]", () => {
+    expect(parsePort("1")).toBe(1);
+    expect(parsePort("49223")).toBe(49223);
+    expect(parsePort("65535")).toBe(65535);
+    expect(parsePort(" 8080 ")).toBe(8080); // shells leave whitespace around sometimes
+  });
+
+  it("rejects everything else with a readable message", () => {
+    for (const bad of ["0", "65536", "-1", "abc", "", "8080.5", "0x1f90", "8080a"]) {
+      expect(() => parsePort(bad)).toThrow(/expected an integer between 1 and 65535/);
+    }
   });
 });

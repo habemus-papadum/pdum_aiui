@@ -7,6 +7,8 @@ const none: AiuiArgs = {
   mcp: undefined,
   chrome: false,
   noChrome: false,
+  browser: false,
+  noBrowser: false,
   chromeProfile: undefined,
   chromeDataDir: undefined,
   passthrough: [],
@@ -88,6 +90,40 @@ describe("splitAiuiArgs", () => {
     expect(() => splitAiuiArgs(["--aiui-chrome", "--aiui-no-chrome"])).toThrow(
       /mutually exclusive/,
     );
+  });
+
+  it("consumes --aiui-browser and --aiui-no-browser as boolean flags", () => {
+    expect(splitAiuiArgs(["--aiui-browser", "dev"])).toEqual({
+      ...none,
+      browser: true,
+      passthrough: ["dev"],
+    });
+    expect(splitAiuiArgs(["--aiui-no-browser", "dev"])).toEqual({
+      ...none,
+      noBrowser: true,
+      passthrough: ["dev"],
+    });
+  });
+
+  it("throws when a boolean browser flag is given a value", () => {
+    expect(() => splitAiuiArgs(["--aiui-browser=1"])).toThrow(/takes no value/);
+    expect(() => splitAiuiArgs(["--aiui-no-browser=1"])).toThrow(/takes no value/);
+  });
+
+  it("throws when --aiui-browser and --aiui-no-browser are combined", () => {
+    expect(() => splitAiuiArgs(["--aiui-browser", "--aiui-no-browser"])).toThrow(
+      /mutually exclusive/,
+    );
+  });
+
+  it("keeps --aiui-browser distinct from --aiui-browser-url", () => {
+    // The names share a prefix; matching is on the exact flag, so the value
+    // flag must not trip the boolean's "takes no value" error (or vice versa).
+    expect(splitAiuiArgs(["--aiui-browser", "--aiui-browser-url", "http://x:1"])).toEqual({
+      ...none,
+      browser: true,
+      browserUrl: "http://x:1",
+    });
   });
 
   it("consumes --aiui-chrome-profile in both forms", () => {

@@ -136,17 +136,17 @@ describe("intent-v1 lowering — fixtures", () => {
     expect(d.sent[0].text).not.toContain("base line");
   });
 
-  it("ink-and-region-shot: a shot with no attachment degrades to an inline bracket", async () => {
+  it("ink-and-region-shot: a shot with no attachment degrades to an inline reference", async () => {
     const d = drive();
     await d.feedEvents(loadFixture("ink-and-region-shot.json"));
     await d.fin();
     expect(d.sent).toHaveLength(1);
-    // No pixels were captured → Option-A inline marker, nothing in meta.
-    expect(d.sent[0].text).toContain("[shot_1");
+    // No pixels were captured → degraded inline reference, element info in the text.
+    expect(d.sent[0].text).toContain('<screenshot marker="shot_1" missing="image not captured"');
     expect(d.sent[0].meta).toBeUndefined();
   });
 
-  it("full-turn-send: a shot attachment becomes an Option-C token + absolute meta path", async () => {
+  it("full-turn-send: a shot attachment is inlined at its position with its path", async () => {
     const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
     const d = drive({ cache });
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
@@ -156,15 +156,18 @@ describe("intent-v1 lowering — fixtures", () => {
 
     expect(d.sent).toHaveLength(1);
     const { text, meta } = d.sent[0];
-    // Both dictated segments survive, with the token positioned between them.
+    // Both dictated segments survive, with the reference positioned between them.
     expect(text).toContain("make the baseline curve");
     expect(text).toContain("the legend overlaps the plot");
-    expect(text).toContain("{shot_1}");
-    // The path rides meta, is absolute, and the blob was actually written.
-    expect(meta?.shot_1).toBeDefined();
-    expect(isAbsolute(meta?.shot_1 ?? "")).toBe(true);
-    expect(existsSync(meta?.shot_1 ?? "")).toBe(true);
-    expect([...readFileSync(meta?.shot_1 ?? "")]).toEqual([...png]);
+    // The path is inlined in the text (the temp cache is outside the compose
+    // cwd, so it stays absolute), the blob was actually written, and there is
+    // no meta block anymore — everything the agent needs is in the sentence.
+    const inlinePath = /<screenshot path="([^"]+)"/.exec(text)?.[1];
+    expect(inlinePath).toBeDefined();
+    expect(isAbsolute(inlinePath ?? "")).toBe(true);
+    expect(existsSync(inlinePath ?? "")).toBe(true);
+    expect([...readFileSync(inlinePath ?? "")]).toEqual([...png]);
+    expect(meta).toBeUndefined();
 
     // The whole lowering was traced (info → merged events → composed → conditioned → output).
     const [trace] = listTraces(cache);
@@ -199,7 +202,7 @@ describe("intent-v1 lowered-prompt push", () => {
     expect(d.timeline).toEqual(["push lowered-prompt", "sent"]);
   });
 
-  it("carries the Option-C meta alongside the prompt when the turn has attachments", async () => {
+  it("shows the committed prompt with the shot path inlined (no meta block)", async () => {
     const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
     const d = drive({ cache });
     await d.feedEvents(loadFixture("full-turn-send.json"));
@@ -210,8 +213,9 @@ describe("intent-v1 lowered-prompt push", () => {
       (m) => (m as { kind?: string }).kind === "lowered-prompt",
     ) as LoweredPromptMessage;
     expect(message.prompt).toBe(d.sent[0].text);
-    expect(message.prompt).toContain("{shot_1}");
-    expect(message.meta).toEqual(d.sent[0].meta);
+    expect(message.prompt).toContain('<screenshot path="');
+    expect(message.meta).toBeUndefined();
+    expect(d.sent[0].meta).toBeUndefined();
   });
 });
 
@@ -269,13 +273,21 @@ describe("intent-v1 server transcription", () => {
     ]);
     await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1, 2, 3]));
 
-    expect(d.pushed).toHaveLength(1);
+    expect(d.pushed).toHaveLength(2);
     const events = (d.pushed[0] as { events: IntentEvent[] }).events;
     expect(events.map((e) => e.type)).toEqual(["transcript-final", "note"]);
     // The segment resolves to an empty final so the preview doesn't hang…
     expect((events[0] as Extract<IntentEvent, { type: "transcript-final" }>).text).toBe("");
-    // …and the note names the cause the widget can show.
+    // …the note names the cause the widget can show…
     expect((events[1] as Extract<IntentEvent, { type: "note" }>).text).toMatch(/OPENAI_API_KEY/);
+    // …and the generic error push carries the same cause to the toast surface
+    // (the note only reaches the panel-footer status line — closed = invisible).
+    expect(d.pushed[1]).toMatchObject({
+      kind: "error",
+      threadId: "t-1",
+      source: "transcription",
+      message: expect.stringMatching(/OPENAI_API_KEY/),
+    });
   });
 
   it("echoes a note when server-side transcription throws (e.g. an invalid key)", async () => {
@@ -293,12 +305,21 @@ describe("intent-v1 server transcription", () => {
     // The throw is caught inside the processor — the frame is not rejected.
     await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1, 2, 3]));
 
-    expect(d.pushed).toHaveLength(1);
+    expect(d.pushed).toHaveLength(2);
     const events = (d.pushed[0] as { events: IntentEvent[] }).events;
     expect(events.map((e) => e.type)).toEqual(["transcript-final", "note"]);
     expect((events[1] as Extract<IntentEvent, { type: "note" }>).text).toMatch(
       /transcription failed.*401/,
     );
+    // The stale/invalid-key scenario: the error push names the failure AND
+    // points at the fix (the key hint) — the toast the user actually sees.
+    expect(d.pushed[1]).toMatchObject({
+      kind: "error",
+      threadId: "t-1",
+      source: "transcription",
+      message: expect.stringMatching(/transcription failed.*401/),
+      detail: expect.stringMatching(/OPENAI_API_KEY/),
+    });
   });
 });
 
@@ -378,16 +399,61 @@ describe("intent-v1 server correction", () => {
       },
     ]);
 
-    expect(d.pushed).toHaveLength(1);
+    expect(d.pushed).toHaveLength(2);
     const event = (d.pushed[0] as { events: IntentEvent[] }).events[0] as Extract<
       IntentEvent,
       { type: "correction" }
     >;
     expect(event.patch).toBeUndefined();
+    // The fallback is no longer silent about WHY: the generic error push names
+    // the cause (here: the model's patch would not apply).
+    expect(d.pushed[1]).toMatchObject({
+      kind: "error",
+      threadId: "t-1",
+      source: "correction",
+      message: expect.stringMatching(/plain replacement/),
+    });
 
     // Falls back to plain first-occurrence replacement — the correction still lands.
     await d.fin();
     expect(d.sent[0].text).toContain("baseline");
+  });
+
+  it("pushes an error naming the cause when the corrector itself throws (stale key)", async () => {
+    const throwing: Corrector = {
+      name: "throws",
+      async diff() {
+        throw new Error("Incorrect API key provided (401)");
+      },
+    };
+    const d = drive({ hello: openaiHello({ corrector: "openai" }), corrector: throwing });
+    await d.feedEvents([
+      ...base(),
+      {
+        at: 6,
+        type: "correction",
+        from: 9,
+        to: 18,
+        original: "base line",
+        instruction: "baseline",
+        via: "typed",
+      },
+    ]);
+
+    // The patchless fallback still lands (never a vanished correction)…
+    const echoed = (d.pushed[0] as { events: IntentEvent[] }).events[0] as Extract<
+      IntentEvent,
+      { type: "correction" }
+    >;
+    expect(echoed.patch).toBeUndefined();
+    // …and the API error surfaces with the remediation hint instead of dying
+    // in the catch (the failure mode this feature exists for).
+    expect(d.pushed[1]).toMatchObject({
+      kind: "error",
+      source: "correction",
+      message: expect.stringMatching(/Incorrect API key.*401/),
+      detail: expect.stringMatching(/OPENAI_API_KEY/),
+    });
   });
 
   it("passes a correction that already carries a patch straight through", async () => {
@@ -438,16 +504,17 @@ describe("intent-v1 incremental lowering (S1)", () => {
     const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
     const d = drive({ cache });
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 9, 9]);
-    // Batch (shot event, no path yet → speculative Option-A), then the bytes
-    // land and wire the path — the one late mutation between batch and fin.
+    // Batch (shot event, no path yet → speculative degraded reference), then the
+    // bytes land and wire the path — the one late mutation between batch and fin.
     await d.feedEvents(loadFixture("full-turn-send.json"));
     await d.feedAttachment("shot_1", "image/png", png);
     await d.fin();
 
-    // The wired path made it into the committed prompt (Option-C token + meta)…
+    // The wired path made it into the committed prompt, inlined…
     expect(d.sent).toHaveLength(1);
-    expect(d.sent[0].text).toContain("{shot_1}");
-    expect(d.sent[0].meta?.shot_1).toBeDefined();
+    const inlinePath = /<screenshot path="([^"]+)"/.exec(d.sent[0].text)?.[1];
+    expect(inlinePath).toBeDefined();
+    expect(existsSync(inlinePath ?? "")).toBe(true);
     // …which required a fin-time recompute (the cache was stale).
     expect(finReused(cache)).toBe(false);
   });
