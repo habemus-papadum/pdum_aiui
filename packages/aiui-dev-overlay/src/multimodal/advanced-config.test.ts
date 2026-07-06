@@ -228,6 +228,8 @@ describe("tiers: the switch delta trap (overridesForApply)", () => {
   it("TIER_PRESETS covers every tier the schema accepts", () => {
     expect(Object.keys(TIER_PRESETS).sort()).toEqual([
       "flagship",
+      "live-gemini",
+      "live-openai",
       "mock",
       "premium",
       "rapid",

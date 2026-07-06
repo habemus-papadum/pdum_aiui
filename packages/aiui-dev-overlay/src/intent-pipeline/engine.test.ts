@@ -49,6 +49,19 @@ describe("Engine thread lifecycle", () => {
     expect(engine.armed).toBe(false);
   });
 
+  it("videoShare opens a thread on the first ON and records both edges", () => {
+    const engine = armedEngine();
+    expect(engine.threadOpen).toBe(false);
+    engine.videoShare(true);
+    // Turning the share on is a contentful act — it opens the thread.
+    expect(engine.threadOpen).toBe(true);
+    expect(engine.events.some((e) => e.type === "thread-open" && e.trigger === "shot")).toBe(true);
+    expect(engine.events.at(-1)).toMatchObject({ type: "video-share", on: true });
+    engine.videoShare(false);
+    expect(engine.events.at(-1)).toMatchObject({ type: "video-share", on: false });
+    expect(engine.threadOpen).toBe(true); // off doesn't close the thread (send/cancel do)
+  });
+
   it("flags a segment spoken at a correction target and keeps the target for commit", () => {
     const engine = armedEngine();
     const segment = engine.talkStart();

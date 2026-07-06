@@ -132,6 +132,18 @@ export class ShotTool {
     return this.video !== undefined;
   }
 
+  /**
+   * The live display-capture `<video>`, acquiring the one-time grant if needed.
+   * The realtime submode's ~1 fps video sampler draws from the SAME stream shots
+   * grab from — one grant serves both — so this exposes it without disturbing
+   * the shot flow (it only ensures/returns the shared element). Returns
+   * `undefined` when capture is denied or unavailable; sampling then simply
+   * doesn't run.
+   */
+  ensureCaptureStream(): Promise<HTMLVideoElement | undefined> {
+    return this.ensureStream();
+  }
+
   async shootViewport(): Promise<void> {
     // Deliberately no locator: "the whole viewport" frames everything, so
     // element metadata adds bulk without a reference point (and skipping the
@@ -251,6 +263,38 @@ function canvasPngBytes(canvas: HTMLCanvasElement): Promise<Uint8Array | undefin
         .then((buf) => resolve(new Uint8Array(buf)))
         .catch(() => resolve(undefined));
     }, "image/png");
+  });
+}
+
+/**
+ * JPEG bytes from a canvas via toBlob (preferred) with a data-URL fallback —
+ * the realtime submode's video sampler encodes its ~1 fps frames this way (the
+ * shot path stays PNG via {@link canvasPngBytes}; JPEG is small enough for a
+ * stream and legible enough to ground on).
+ */
+export function canvasJpegBytes(
+  canvas: HTMLCanvasElement,
+  quality: number,
+): Promise<Uint8Array | undefined> {
+  return new Promise((resolve) => {
+    if (typeof canvas.toBlob !== "function") {
+      resolve(dataUrlToBytes(canvas.toDataURL("image/jpeg", quality)));
+      return;
+    }
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          resolve(undefined);
+          return;
+        }
+        blob
+          .arrayBuffer()
+          .then((buf) => resolve(new Uint8Array(buf)))
+          .catch(() => resolve(undefined));
+      },
+      "image/jpeg",
+      quality,
+    );
   });
 }
 

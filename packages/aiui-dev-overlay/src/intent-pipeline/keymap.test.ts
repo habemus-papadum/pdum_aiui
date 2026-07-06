@@ -56,9 +56,22 @@ describe("keyCommand", () => {
     expect(keyCommand(base, "S", "up", false)).toBeUndefined();
     expect(keyCommand(base, "c", "down", false)).toEqual({ cmd: "ink-clear" });
     expect(keyCommand(base, "e", "down", false)).toEqual({ cmd: "correct-toggle" });
+    // V toggles the realtime screen share (the modality gates on submode).
+    expect(keyCommand(base, "v", "down", false)).toEqual({ cmd: "video-toggle" });
+    expect(keyCommand(base, "V", "down", false)).toEqual({ cmd: "video-toggle" });
     expect(keyCommand(base, "Enter", "down", false)).toEqual({ cmd: "send" });
     expect(keyCommand(base, "Escape", "down", false)).toEqual({ cmd: "step-out" });
     expect(keyCommand(base, "x", "down", false)).toBeUndefined();
+  });
+
+  it("V toggles the screen share only on ink-mode keydown, never repeats/keyup/correct", () => {
+    expect(keyCommand(base, "v", "down", false)).toEqual({ cmd: "video-toggle" });
+    expect(keyCommand(base, "v", "down", true)).toBeUndefined(); // key-repeat
+    expect(keyCommand(base, "v", "up", false)).toBeUndefined(); // keyup
+    // Inert in correct mode (that mode owns the pointer/keys for text selection).
+    expect(keyCommand({ ...base, mode: "correct" }, "v", "down", false)).toBeUndefined();
+    // Nothing while disarmed.
+    expect(keyCommand({ ...base, armed: false }, "v", "down", false)).toBeUndefined();
   });
 
   it("keeps the two screenshot gestures from overlapping (the split that killed the race)", () => {
@@ -86,11 +99,27 @@ describe("keyCommand: the config strip layer", () => {
   });
 
   it("digits 1..5 pick tiers, cheapest first, matching TIER_BY_DIGIT", () => {
-    expect(TIER_BY_DIGIT).toEqual(["mock", "standard", "rapid", "premium", "flagship"]);
+    expect(TIER_BY_DIGIT).toEqual([
+      "mock",
+      "standard",
+      "rapid",
+      "premium",
+      "flagship",
+      "live-gemini",
+      "live-openai",
+    ]);
     expect(keyCommand(open, "1", "down", false)).toEqual({ cmd: "config-tier", tier: "mock" });
     expect(keyCommand(open, "3", "down", false)).toEqual({ cmd: "config-tier", tier: "rapid" });
     expect(keyCommand(open, "5", "down", false)).toEqual({ cmd: "config-tier", tier: "flagship" });
-    expect(keyCommand(open, "6", "down", false)).toBeUndefined();
+    expect(keyCommand(open, "6", "down", false)).toEqual({
+      cmd: "config-tier",
+      tier: "live-gemini",
+    });
+    expect(keyCommand(open, "7", "down", false)).toEqual({
+      cmd: "config-tier",
+      tier: "live-openai",
+    });
+    expect(keyCommand(open, "8", "down", false)).toBeUndefined();
     expect(keyCommand(open, "0", "down", false)).toBeUndefined();
     // Digits mean nothing when the strip is closed.
     expect(keyCommand(base, "3", "down", false)).toBeUndefined();
@@ -119,7 +148,10 @@ describe("keyCommand: the config strip layer", () => {
 
   it("is a layer, not a mode: unclaimed keys keep their armed meaning", () => {
     expect(keyCommand(open, " ", "down", false)).toEqual({ cmd: "talk-start" });
-    expect(keyCommand(open, "Enter", "down", false)).toEqual({ cmd: "send" });
+    // Enter IS claimed while the strip is open: picking a rung already changed
+    // the mode, so Enter (like Esc/K) just closes the strip — it must never
+    // send the turn from inside the config layer.
+    expect(keyCommand(open, "Enter", "down", false)).toEqual({ cmd: "config-close" });
     expect(keyCommand(open, "c", "down", false)).toEqual({ cmd: "ink-clear" });
   });
 });

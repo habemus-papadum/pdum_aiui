@@ -50,6 +50,7 @@ export type CardCategory =
   | "wire"
   | "events"
   | "audio"
+  | "video"
   | "media"
   | "compose"
   | "corrections"
@@ -63,6 +64,7 @@ export const TOGGLE_CATEGORIES: readonly CardCategory[] = [
   "wire",
   "events",
   "audio",
+  "video",
   "media",
   "compose",
   "corrections",
@@ -76,12 +78,14 @@ export const ALWAYS_CATEGORIES: readonly CardCategory[] = ["context", "config", 
 
 /**
  * The buckets hidden by default: speculative composes and per-frame audio are
- * the noisiest internal chatter (a real turn records them by the hundred), and
- * the `wire` bucket is the raw event-frame receipts — blob pointers whose
- * decoded content the `merged events` card already tells better. Off by
- * default, the remaining cards read like a story; one chip brings them back.
+ * the noisiest internal chatter (a real turn records them by the hundred),
+ * per-frame `video` is the realtime submode's flood (a live turn streams it at
+ * ~1fps for the whole conversation), and the `wire` bucket is the raw
+ * event-frame receipts — blob pointers whose decoded content the `merged
+ * events` card already tells better. Off by default, the remaining cards read
+ * like a story; one chip brings them back.
  */
-export const DEFAULT_HIDDEN: readonly CardCategory[] = ["audio", "compose", "wire"];
+export const DEFAULT_HIDDEN: readonly CardCategory[] = ["audio", "video", "compose", "wire"];
 
 /** The toggle buckets enabled on first render (all but {@link DEFAULT_HIDDEN}). */
 export function defaultEnabledCategories(): Set<CardCategory> {
@@ -95,6 +99,7 @@ export const CATEGORY_META: Record<CardCategory, { icon: string; label: string }
   wire: { icon: "📦", label: "wire" },
   events: { icon: "📜", label: "events" },
   audio: { icon: "🎙", label: "audio" },
+  video: { icon: "🎞", label: "video" },
   media: { icon: "🖼", label: "media" },
   compose: { icon: "🧮", label: "compose" },
   corrections: { icon: "🩹", label: "fixes" },
@@ -182,6 +187,13 @@ export function classifyStage(stage: TraceStageLike): StageClass {
   if (/^frame \d+ audio/.test(label)) {
     return { ...norm("in", "audio", "🎙", "audio stream"), coalesceKey: "audio-in" };
   }
+  if (/^frame \d+ video/.test(label)) {
+    // The realtime submode's ~1fps live-session video. Coalesced like audio
+    // into one card (its own `video-in` key, so an audio↔video interleave
+    // splits into distinct cards rather than merging), hidden behind the
+    // `video` chip; the card body shows the handful of saved keyframes.
+    return { ...norm("in", "video", "🎞", "video stream"), coalesceKey: "video-in" };
+  }
   if (/^frame \d+ attachment shot_/.test(label)) {
     return norm("in", "media", "🖼", `${id ?? "shot"} uploaded`);
   }
@@ -257,6 +269,48 @@ export function classifyStage(stage: TraceStageLike): StageClass {
   }
   if (label === "voice reply") {
     return norm("out", "speech", "🗣", "voice reply");
+  }
+
+  // ── the realtime submode: the live-session composer ────────────────────────
+  // A realtime turn's cards ride the same lanes, read one conversation further
+  // upstream — the vantage is still the browser, but "the server" is now the
+  // live model (Gemini/OpenAI). `in`/blue is what WE stream to it (video, a
+  // deliberate shot, the Enter nudge); `out`/green is what it answers back
+  // (the submit_intent tool call, its spoken reply); `agent`/purple is the
+  // resolved prompt leaving for Claude — the same arrow the transcription
+  // lowered prompt wears. See handoff/transcription-and-realtime-submodes.md.
+  if (label === "live open") {
+    // Session opened: config-ish (vendor · model · video capability), always
+    // shown like `intent config`. 🛰 marks it as the *live* session's config.
+    return norm("internal", "config", "🛰", "live open");
+  }
+  if (/^live label shot_/.test(label)) {
+    // A deliberate shot injected into the live session, labeled so the model
+    // can reference it (RT0 finding #5). It flows TO the model → the in lane.
+    return norm("in", "media", "🏷", `${id ?? "shot"} shown to model`);
+  }
+  if (label === "live nudge") {
+    // Our text nudge ("call submit_intent now") — the fallback ladder's step 2.
+    return norm("in", "events", "🔔", "live nudge");
+  }
+  if (label === "live tool call") {
+    // The model's answer: the verbatim submit_intent segments. The realtime
+    // hero-adjacent — its body renders the interleave (prose + shot chips).
+    return norm("out", "events", "🧩", "live tool call");
+  }
+  if (label === "live resolved") {
+    // The channel resolved the tool call into the committed body + attachments:
+    // 🚀-adjacent, agent lane, sits beside the lowered-prompt hero.
+    return norm("agent", "lowered", "🚀", "live resolved");
+  }
+  if (label === "live reply") {
+    return norm("out", "speech", "🗣", "live reply");
+  }
+  if (label === "live fallback") {
+    // The ladder fell back to the chronicle compose — a degradation (the turn
+    // still sends), routed to the errors bucket so a "what went wrong?" pass
+    // catches it, but marked ⚠ (warning) rather than ❌ (hard failure).
+    return fail("internal", "⚠", "live fallback");
   }
 
   // ── failures & warnings ────────────────────────────────────────────────────
@@ -621,4 +675,104 @@ export function isImageFile(file: string): boolean {
 /** A blob filename a browser can play in an `<audio>` element (`.pcm` cannot). */
 export function isPlayableAudioFile(file: string): boolean {
   return AUDIO_EXT.test(file);
+}
+
+// ── the realtime submode (live-session cards) ─────────────────────────────────
+
+/**
+ * A `live open` stage's one-liner: which vendor/model the live session opened
+ * against, and whether it can take video (the 2-minute a+v cap makes this the
+ * capability the reader most wants at a glance). Defensive — the descriptor is
+ * the channel's `LiveCapabilities`, but a partial payload still reads.
+ */
+export function liveOpenLine(data: unknown): string {
+  const d = (data ?? {}) as { vendor?: unknown; model?: unknown; capabilities?: unknown };
+  const vendor = typeof d.vendor === "string" ? d.vendor : "";
+  const model = typeof d.model === "string" ? d.model : "";
+  const caps = (d.capabilities ?? {}) as { video?: unknown };
+  return [vendor, model, `video ${caps.video ? "✓" : "✗"}`].filter(Boolean).join(" · ");
+}
+
+/** A piece of a rendered `submit_intent` tool call: a prose run or an image ref. */
+export type LiveSegment = { kind: "text"; text: string } | { kind: "image"; marker: string };
+
+/**
+ * Parse a `live tool call` stage's verbatim `submit_intent` payload
+ * (`{segments:[{text?,image?}...]}` — the shape the live model emits, RT0
+ * finding #6) into ordered prose runs and image references, so the tool-call
+ * card can render the model's composition the way it was written: cleaned-up
+ * text with shot markers positioned in place, not a wall of JSON.
+ */
+export function liveToolSegments(data: unknown): LiveSegment[] {
+  const raw = (data as { segments?: unknown } | undefined)?.segments;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: LiveSegment[] = [];
+  for (const seg of raw) {
+    if (!seg || typeof seg !== "object") {
+      continue;
+    }
+    const text = (seg as { text?: unknown }).text;
+    const image = (seg as { image?: unknown }).image;
+    if (typeof text === "string" && text !== "") {
+      out.push({ kind: "text", text });
+    } else if (typeof image === "string" && image !== "") {
+      out.push({ kind: "image", marker: image });
+    }
+  }
+  return out;
+}
+
+/**
+ * Summarize a `live resolved` stage: the committed body (a snippet for the
+ * card) and how many of the tool call's image markers the channel could
+ * resolve to blobs vs. left dangling. Defensive over the payload shape the
+ * sibling processor settles on — reads a `refs: [{marker, resolved|path}]`
+ * array, or plain `resolved` / `unresolved` marker lists.
+ */
+export function liveResolvedSummary(data: unknown): {
+  body: string;
+  resolved: number;
+  unresolved: number;
+} {
+  const d = (data ?? {}) as {
+    body?: unknown;
+    refs?: unknown;
+    resolved?: unknown;
+    unresolved?: unknown;
+  };
+  const body = typeof d.body === "string" ? d.body : "";
+  let resolved = 0;
+  let unresolved = 0;
+  if (Array.isArray(d.refs)) {
+    for (const r of d.refs) {
+      const ref = (r ?? {}) as { resolved?: unknown; path?: unknown; file?: unknown };
+      if (ref.resolved === true || typeof ref.path === "string" || typeof ref.file === "string") {
+        resolved += 1;
+      } else {
+        unresolved += 1;
+      }
+    }
+  } else {
+    resolved = Array.isArray(d.resolved) ? d.resolved.length : 0;
+    unresolved = Array.isArray(d.unresolved) ? d.unresolved.length : 0;
+  }
+  return { body, resolved, unresolved };
+}
+
+/**
+ * The saved keyframe blobs among a coalesced run of video-frame stages. Only
+ * ~every 10th frame is persisted (`vid_<id>_<seq>.jpg`), so a `🎞 video stream
+ * ×120` card materializes the handful that exist, not the hundreds it covers.
+ * Returned in run order; the renderer caps how many thumbnails it draws.
+ */
+export function savedFrameFiles(stages: TraceStageLike[]): string[] {
+  const files: string[] = [];
+  for (const s of stages) {
+    if (s?.file && isImageFile(s.file)) {
+      files.push(s.file);
+    }
+  }
+  return files;
 }

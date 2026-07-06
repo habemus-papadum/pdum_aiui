@@ -241,6 +241,111 @@ describe("TraceView — live-follow state survival", () => {
   });
 });
 
+/** A realtime-submode trace: live session, video flood, a model-composed tool call. */
+function realtimeTrace(over: Partial<LiveTrace> = {}): LiveTrace {
+  return {
+    rev: 1,
+    id: "trace-live-7",
+    format: "intent-v1",
+    threadId: "th-live",
+    actor: "human",
+    status: "completed",
+    startedAt: "2026-07-06T18:00:00.000Z",
+    endedAt: "2026-07-06T18:01:30.000Z",
+    stages: [
+      {
+        kind: "info",
+        label: "live open",
+        data: {
+          vendor: "gemini",
+          model: "gemini-3.1-flash-live-preview",
+          capabilities: { video: true },
+        },
+      },
+      { kind: "input", label: "frame 0 video" },
+      { kind: "input", label: "frame 10 video", file: "vid_1_10.jpg" },
+      { kind: "input", label: "frame 20 video", file: "vid_1_20.jpg" },
+      { kind: "info", label: "live label shot_3" },
+      { kind: "info", label: "live nudge", data: { text: "the user pressed send — submit now" } },
+      {
+        kind: "ir",
+        label: "live tool call",
+        data: {
+          segments: [{ text: "make " }, { image: "shot_3" }, { text: " the legend bigger" }],
+        },
+      },
+      {
+        kind: "ir",
+        label: "live resolved",
+        data: {
+          body: "make the legend bigger",
+          refs: [{ marker: "shot_3", path: "/x/shot_3.png" }],
+        },
+      },
+      { kind: "info", label: "live reply", data: { text: "sure, enlarging the legend" } },
+      { kind: "output", label: "lowered prompt", data: "make the legend bigger" },
+    ],
+    ...over,
+  };
+}
+
+describe("TraceView — realtime submode", () => {
+  it("headlines a realtime turn as sent (lowered prompt present via the resolve path)", () => {
+    const view = mount();
+    view.update(realtimeTrace());
+    expect(view.root.querySelector(".aiui-dbg-outcome")?.textContent).toContain("sent");
+  });
+
+  it("renders the tool call's segments as prose interleaved with shot chips", () => {
+    const view = mount();
+    view.update(realtimeTrace());
+    const card = [...view.root.querySelectorAll(".aiui-dbg-card")].find(
+      (c) => c.querySelector(".aiui-dbg-card-title")?.textContent === "live tool call",
+    );
+    expect(card).toBeTruthy();
+    const seg = card?.querySelector(".aiui-dbg-live-seg");
+    expect(seg?.textContent).toContain("make");
+    expect(seg?.textContent).toContain("the legend bigger");
+    // The image ref became an inline chip, not raw text.
+    const chips = [...(seg?.querySelectorAll(".aiui-dbg-live-chip") ?? [])].map(
+      (c) => c.textContent,
+    );
+    expect(chips).toEqual(["🖼 shot_3"]);
+  });
+
+  it("shows the resolved card (agent lane) with its ref counts", () => {
+    const view = mount();
+    view.update(realtimeTrace());
+    const card = [...view.root.querySelectorAll(".aiui-dbg-card")].find(
+      (c) => c.querySelector(".aiui-dbg-card-title")?.textContent === "live resolved",
+    );
+    expect(card?.classList.contains("dir-agent")).toBe(true);
+    expect(card?.querySelector(".aiui-dbg-card-info")?.textContent).toContain("make the legend");
+    expect(card?.querySelector(".aiui-dbg-card-sub")?.textContent).toContain("1 ref resolved");
+  });
+
+  it("hides the video-stream card by default and reveals its saved keyframes on toggle", () => {
+    const view = mount();
+    view.update(realtimeTrace());
+    const titles = () =>
+      [...view.root.querySelectorAll(".aiui-dbg-card-title")].map((e) => e.textContent);
+    expect(titles()).not.toContain("video stream");
+    view.root.querySelector<HTMLButtonElement>('[data-cat="video"]')?.click();
+    const card = [...view.root.querySelectorAll(".aiui-dbg-card")].find(
+      (c) => c.querySelector(".aiui-dbg-card-title")?.textContent === "video stream",
+    );
+    expect(card?.querySelector(".aiui-dbg-card-count")?.textContent).toBe("×3");
+    // Only the two saved keyframes render as thumbnails (frame 0 wasn't saved).
+    const thumbs = [...(card?.querySelectorAll(".aiui-dbg-video-thumbs img") ?? [])].map((i) =>
+      i.getAttribute("src"),
+    );
+    expect(thumbs).toEqual([
+      "http://host/blob/trace-live-7/vid_1_10.jpg",
+      "http://host/blob/trace-live-7/vid_1_20.jpg",
+    ]);
+  });
+});
+
 describe("TraceView — empty", () => {
   it("shows a hint when nothing is selected", () => {
     const view = mount();

@@ -108,6 +108,17 @@ export const DEBUG_UI_CSS = /* css */ `
   border: 1px solid #2a3140; cursor: zoom-in; }
 .aiui-dbg-card-audio { display: block; margin-top: 6px; width: 100%; height: 32px; }
 
+/* realtime submode: the submit_intent tool call rendered as prose + shot chips */
+.aiui-dbg-live-seg { margin-top: 4px; color: #e8e8ea; font: 12px/1.6 ui-monospace, monospace;
+  white-space: pre-wrap; word-break: break-word; }
+.aiui-dbg-live-chip { display: inline-block; vertical-align: baseline; margin: 0 2px;
+  padding: 0 6px; border-radius: 999px; background: #1b2130; border: 1px solid #3a4152;
+  color: #c58af9; font-size: 11px; white-space: nowrap; }
+/* realtime submode: the saved keyframes of a coalesced video-stream card */
+.aiui-dbg-video-thumbs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.aiui-dbg-video-thumbs img { max-height: 64px; border-radius: 4px; border: 1px solid #2a3140;
+  cursor: zoom-in; }
+
 /* correction patch → a real diff (mirrors the overlay's mm-diff palette) */
 .aiui-dbg-patch { margin: 6px 0 0; padding: 6px 8px; background: #14171f; border-radius: 6px;
   font: 11px/1.5 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }

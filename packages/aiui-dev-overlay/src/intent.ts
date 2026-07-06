@@ -39,6 +39,7 @@ import {
   isErrorMessage,
   type JsonChunk,
   type ServerMessage,
+  type VideoChunk,
   type WebSocketFactory,
 } from "./protocol";
 import { installSelectionWatcher, type SelectionSnapshot } from "./selection";
@@ -61,6 +62,8 @@ export interface IntentThread {
   sendAttachment(chunk: AttachmentChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /** Send one streamed PCM frame of a talk segment (the realtime path). */
   sendAudio(chunk: AudioChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
+  /** Send one sampled screen-share video frame (the realtime submode's ~1 fps sampler). */
+  sendVideo(chunk: VideoChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /** Register a handler for this thread's server pushes (lowered echoes). */
   onServerMessage(handler: (msg: ServerMessage) => void): void;
   /** Close the underlying socket without sending `fin` (a cancel). */
@@ -646,6 +649,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
         sendAttachment: (chunk, bytes, fin = false) =>
           socket.sendAttachment(threadId, chunk, bytes, fin),
         sendAudio: (chunk, bytes, fin = false) => socket.sendAudio(threadId, chunk, bytes, fin),
+        sendVideo: (chunk, bytes, fin = false) => socket.sendVideo(threadId, chunk, bytes, fin),
         onServerMessage: (handler) =>
           socket.onServerMessage((msg) => {
             // Route only this thread's pushes (server may omit threadId for

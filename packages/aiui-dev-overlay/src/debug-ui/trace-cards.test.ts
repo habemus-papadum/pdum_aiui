@@ -14,10 +14,14 @@ import {
   formatUsd,
   isImageFile,
   isPlayableAudioFile,
+  liveOpenLine,
+  liveResolvedSummary,
+  liveToolSegments,
   loweredPromptText,
   noPromptMessage,
   parsePatchLines,
   parseShotBlocks,
+  savedFrameFiles,
   shotBlobName,
   splitLoweredPrompt,
   traceDurationMs,
@@ -116,6 +120,57 @@ describe("classifyStage", () => {
       error: false,
     });
   });
+
+  it("routes realtime video frames to their own coalescing bucket", () => {
+    expect(classifyStage(stage({ label: "frame 12 video", kind: "input" }))).toMatchObject({
+      direction: "in",
+      category: "video",
+      title: "video stream",
+      coalesceKey: "video-in",
+    });
+  });
+
+  it("classifies the realtime live-session labels onto the model↔us lanes", () => {
+    // Session config, always-shown like intent config, but the live 🛰 glyph.
+    expect(classifyStage(stage({ label: "live open", kind: "info" }))).toMatchObject({
+      direction: "internal",
+      category: "config",
+      icon: "🛰",
+    });
+    // A shot shown to the model flows TO it → in lane, media bucket, id kept.
+    expect(classifyStage(stage({ label: "live label shot_3", kind: "info" }))).toMatchObject({
+      direction: "in",
+      category: "media",
+      icon: "🏷",
+      title: "shot_3 shown to model",
+    });
+    // Our nudge (in/blue ←) vs. the model's tool call (out/green →).
+    expect(classifyStage(stage({ label: "live nudge", kind: "info" }))).toMatchObject({
+      direction: "in",
+      icon: "🔔",
+    });
+    expect(classifyStage(stage({ label: "live tool call", kind: "ir" }))).toMatchObject({
+      direction: "out",
+      icon: "🧩",
+    });
+    // The resolved prompt leaves for Claude → agent lane, beside the hero.
+    expect(classifyStage(stage({ label: "live resolved", kind: "ir" }))).toMatchObject({
+      direction: "agent",
+      category: "lowered",
+      icon: "🚀",
+    });
+    expect(classifyStage(stage({ label: "live reply", kind: "info" }))).toMatchObject({
+      direction: "out",
+      category: "speech",
+      icon: "🗣",
+    });
+    // The ladder fallback is a degradation → errors bucket, warning (not ❌).
+    expect(classifyStage(stage({ label: "live fallback", kind: "info" }))).toMatchObject({
+      category: "errors",
+      error: true,
+      icon: "⚠",
+    });
+  });
 });
 
 describe("buildCards", () => {
@@ -155,6 +210,35 @@ describe("buildCards", () => {
     expect(cards.every((c) => c.count === 1)).toBe(true);
   });
 
+  it("coalesces a video-frame run into one card", () => {
+    const cards = buildCards([
+      { label: "frame 0 video", kind: "input" },
+      { label: "frame 1 video", kind: "input", file: "vid_1_0.jpg" },
+      { label: "frame 2 video", kind: "input" },
+    ]);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ title: "video stream", category: "video", count: 3 });
+    expect(cards[0].indices).toEqual([0, 1, 2]);
+  });
+
+  it("keeps audio and video runs distinct when they interleave (audio/video/audio)", () => {
+    // Separate coalesce keys (audio-in vs video-in) mean an interleave splits
+    // into distinct cards rather than merging — the ordering stays legible.
+    const cards = buildCards([
+      { label: "frame 0 audio", kind: "input" },
+      { label: "frame 1 audio", kind: "input" },
+      { label: "frame 2 video", kind: "input" },
+      { label: "frame 3 video", kind: "input" },
+      { label: "frame 4 video", kind: "input" },
+      { label: "frame 5 audio", kind: "input" },
+    ]);
+    expect(cards.map((c) => [c.category, c.count])).toEqual([
+      ["audio", 2],
+      ["video", 3],
+      ["audio", 1],
+    ]);
+  });
+
   it("returns [] for a missing stage array", () => {
     expect(buildCards(undefined)).toEqual([]);
   });
@@ -180,9 +264,77 @@ describe("cardVisible", () => {
   it("gates togglable categories on the enabled set", () => {
     const enabled = defaultEnabledCategories();
     expect(cardVisible(card({ category: "events" }), "all", enabled)).toBe(true);
-    // audio + compose are hidden by default.
+    // audio + video + compose are hidden by default.
     expect(cardVisible(card({ category: "audio" }), "all", enabled)).toBe(false);
+    expect(cardVisible(card({ category: "video" }), "all", enabled)).toBe(false);
     expect(cardVisible(card({ category: "compose" }), "all", enabled)).toBe(false);
+  });
+});
+
+describe("realtime submode helpers", () => {
+  it("liveOpenLine: vendor · model · video capability, defensive on partials", () => {
+    expect(
+      liveOpenLine({
+        vendor: "gemini",
+        model: "gemini-3.1-flash-live-preview",
+        capabilities: { video: true },
+      }),
+    ).toBe("gemini · gemini-3.1-flash-live-preview · video ✓");
+    expect(liveOpenLine({ vendor: "openai", capabilities: { video: false } })).toBe(
+      "openai · video ✗",
+    );
+    expect(liveOpenLine(undefined)).toBe("video ✗");
+  });
+
+  it("liveToolSegments: parses submit_intent {segments} into ordered prose + image refs", () => {
+    expect(
+      liveToolSegments({
+        segments: [
+          { text: "make " },
+          { image: "shot_2" },
+          { text: " the legend bigger" },
+          { image: "shot_3" },
+        ],
+      }),
+    ).toEqual([
+      { kind: "text", text: "make " },
+      { kind: "image", marker: "shot_2" },
+      { kind: "text", text: " the legend bigger" },
+      { kind: "image", marker: "shot_3" },
+    ]);
+    // Non-array / empty payloads yield nothing (drops empty strings too).
+    expect(liveToolSegments({ segments: [{ text: "" }, {}, 3] })).toEqual([]);
+    expect(liveToolSegments(undefined)).toEqual([]);
+  });
+
+  it("liveResolvedSummary: body snippet + resolved/unresolved ref counts", () => {
+    expect(
+      liveResolvedSummary({
+        body: "the opacity slider",
+        refs: [
+          { marker: "shot_2", path: "/a/shot_2.png" },
+          { marker: "shot_9", resolved: false },
+        ],
+      }),
+    ).toEqual({ body: "the opacity slider", resolved: 1, unresolved: 1 });
+    // The plain-list shape is also accepted.
+    expect(liveResolvedSummary({ body: "x", resolved: ["shot_1"], unresolved: [] })).toMatchObject({
+      resolved: 1,
+      unresolved: 0,
+    });
+    expect(liveResolvedSummary(undefined)).toEqual({ body: "", resolved: 0, unresolved: 0 });
+  });
+
+  it("savedFrameFiles: keeps only the persisted image keyframes, in order", () => {
+    expect(
+      savedFrameFiles([
+        { label: "frame 0 video", kind: "input" },
+        { label: "frame 10 video", kind: "input", file: "vid_1_10.jpg" },
+        { label: "frame 11 video", kind: "input" },
+        { label: "frame 20 video", kind: "input", file: "vid_1_20.jpg" },
+        { label: "frame 21 video", kind: "input", file: "notes.pcm" },
+      ]),
+    ).toEqual(["vid_1_10.jpg", "vid_1_20.jpg"]);
   });
 });
 

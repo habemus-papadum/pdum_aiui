@@ -31,7 +31,7 @@
  */
 import { renderJsonTree } from "./json-tree";
 import { defaultPreviewUrl, type PreviewUrl, renderPathText } from "./paths";
-import type { LiveTrace } from "./sources";
+import type { LiveTrace, TraceStageLike } from "./sources";
 import { injectDebugUiStyles } from "./styles";
 import {
   buildCards,
@@ -48,10 +48,15 @@ import {
   formatUsd,
   isImageFile,
   isPlayableAudioFile,
+  type LiveSegment,
+  liveOpenLine,
+  liveResolvedSummary,
+  liveToolSegments,
   loweredPromptText,
   noPromptMessage,
   parsePatchLines,
   parseShotBlocks,
+  savedFrameFiles,
   shotBlobName,
   splitLoweredPrompt,
   TOGGLE_CATEGORIES,
@@ -354,8 +359,9 @@ export class TraceView {
       }
     };
 
-    // The lowered prompt lives in the hero; the card is a pointer.
-    if (card.category === "lowered") {
+    // The lowered prompt lives in the hero; the card is a pointer. (Its sibling
+    // in the `lowered` bucket, `live resolved`, renders its own body below.)
+    if (label === "lowered prompt") {
       info("shown above ↑");
       return;
     }
@@ -440,6 +446,51 @@ export class TraceView {
       case "realtime commit":
         info(`${Number(data?.frames ?? 0)} frames · ${Number(data?.bytes ?? 0)} B`);
         return;
+
+      // ── the realtime submode ──────────────────────────────────────────────
+      case "live open":
+        info(liveOpenLine(data));
+        return;
+      case "live nudge":
+        info(
+          typeof data?.text === "string" && data.text
+            ? `“${clip(String(data.text), 100)}”`
+            : "Enter nudge sent to the live model",
+        );
+        return;
+      case "live tool call": {
+        // The verbatim submit_intent segments, rendered as the model wrote
+        // them: prose interleaved with 🖼 shot chips.
+        const segments = liveToolSegments(card.stage.data);
+        if (segments.length > 0) {
+          box.append(this.renderLiveSegments(segments));
+        } else {
+          info("(no segments)");
+        }
+        return;
+      }
+      case "live resolved": {
+        const summary = liveResolvedSummary(card.stage.data);
+        info(clip(summary.body, 100) || "(resolved)");
+        if (summary.resolved || summary.unresolved) {
+          const refs = this.el("div", "aiui-dbg-card-sub");
+          refs.textContent = `${summary.resolved} ref${summary.resolved === 1 ? "" : "s"} resolved${
+            summary.unresolved ? ` · ${summary.unresolved} unresolved` : ""
+          }`;
+          box.append(refs);
+        }
+        return;
+      }
+      case "live reply":
+        info(clip(String(data?.text ?? ""), 100));
+        return;
+      case "live fallback":
+        info(
+          String(
+            data?.reason ?? data?.why ?? data?.message ?? "fell back to the chronicle compose",
+          ),
+        );
+        return;
       default:
         break;
     }
@@ -478,6 +529,20 @@ export class TraceView {
       return;
     }
 
+    // A deliberate shot shown to the live model (realtime submode).
+    if (/^live label shot_/.test(label)) {
+      info("shown to the live model");
+      return;
+    }
+
+    // Coalesced ~1fps video frames: thumbnails of the few saved keyframes,
+    // gathered across the whole run (the card only holds the last stage). This
+    // must precede the generic blob branch, which would render only the last.
+    if (card.category === "video") {
+      this.renderVideoThumbs(trace, card, box);
+      return;
+    }
+
     // A saved attachment blob: render the pixels / an audio player inline.
     if (card.stage.file) {
       this.renderBlobBody(trace, card, box, info);
@@ -512,6 +577,63 @@ export class TraceView {
     } else {
       // e.g. raw PCM — not natively playable; show the reference.
       info(file);
+    }
+  }
+
+  /**
+   * The `submit_intent` tool call as the model composed it: prose runs flow as
+   * text, image references become inline `🖼 shot_2` chips, positioned exactly
+   * where the model placed them (RT0 finding #6 — segments preserve position).
+   */
+  private renderLiveSegments(segments: LiveSegment[]): HTMLElement {
+    const wrap = this.el("div", "aiui-dbg-live-seg");
+    for (const seg of segments) {
+      if (seg.kind === "text") {
+        const span = this.el("span", "aiui-dbg-live-text");
+        span.textContent = seg.text;
+        wrap.append(span);
+      } else {
+        const chip = this.el("span", "aiui-dbg-live-chip");
+        chip.textContent = `🖼 ${seg.marker}`;
+        wrap.append(chip);
+      }
+    }
+    return wrap;
+  }
+
+  /**
+   * The saved keyframes of a coalesced video-stream card: a few thumbnails
+   * (capped at 6) gathered across the run's stages, with a "+N more" note when
+   * the run saved more than fit. The card covers hundreds of ~1fps frames; only
+   * every ~10th is persisted, so this is a sparse, honest sample.
+   */
+  private renderVideoThumbs(trace: LiveTrace, card: TraceCard, box: HTMLElement): void {
+    const stages = card.indices
+      .map((i) => (trace.stages ?? [])[i])
+      .filter((s): s is TraceStageLike => Boolean(s));
+    const saved = savedFrameFiles(stages);
+    if (saved.length === 0) {
+      const note = this.el("div", "aiui-dbg-card-info");
+      note.textContent = "no saved keyframes";
+      box.append(note);
+      return;
+    }
+    const cap = 6;
+    const thumbs = this.el("div", "aiui-dbg-video-thumbs");
+    for (const file of saved.slice(0, cap)) {
+      const url = this.config.blobUrl?.(trace.id ?? "", file) ?? file;
+      const img = this.doc.createElement("img");
+      img.src = url;
+      img.loading = "lazy";
+      img.alt = file;
+      img.addEventListener("click", () => this.doc.defaultView?.open(url, "_blank"));
+      thumbs.append(img);
+    }
+    box.append(thumbs);
+    if (saved.length > cap) {
+      const more = this.el("div", "aiui-dbg-card-sub");
+      more.textContent = `… +${saved.length - cap} more saved`;
+      box.append(more);
     }
   }
 

@@ -41,7 +41,9 @@ export interface Ack {
 export type JsonChunk = { kind: "events" } | { kind: "context" };
 export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
 export type AudioChunk = { kind: "audio"; id: string; seq: number; mime: string };
-export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk;
+/** One sampled video frame of the realtime submode's screen share (~1 fps). */
+export type VideoChunk = { kind: "video"; id: string; seq: number; mime: string };
+export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk | VideoChunk;
 
 /**
  * A server→client push on the same socket, distinguished from an {@link Ack} by
@@ -156,6 +158,13 @@ export interface IntentSocket {
    * is carried.
    */
   sendAudio(threadId: string, chunk: AudioChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
+  /**
+   * Send one sampled video frame of the realtime submode's screen share — raw
+   * JPEG bytes on the payload, `seq`/`id` in the envelope chunk. Same wire shape
+   * as {@link sendAudio}; a distinct method only so the `video` chunk kind (and
+   * its per-share `seq`) is carried.
+   */
+  sendVideo(threadId: string, chunk: VideoChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /**
    * Register a handler for server pushes (messages carrying a `kind`) — the
    * lowered echoes an `intent-v1` thread merges back in. Acks are never routed
@@ -334,6 +343,11 @@ export function connectIntentSocket(
               { kind: "data", threadId, fin },
             ),
           sendAudio: (threadId, chunk, bytes, fin = false) =>
+            sendFrame(
+              encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
+              { kind: "data", threadId, fin },
+            ),
+          sendVideo: (threadId, chunk, bytes, fin = false) =>
             sendFrame(
               encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
               { kind: "data", threadId, fin },

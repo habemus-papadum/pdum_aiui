@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { type BrowserOptions, runBrowser, runOpen } from "./commands/browser";
 import { runChrome } from "./commands/chrome";
 import { runClaude } from "./commands/claude";
+import { type CleanOptions, runClean } from "./commands/clean";
 import {
   runConfigGet,
   runConfigSet,
@@ -98,6 +99,21 @@ export function buildProgram(): Command {
     .argument("[dir]", "target directory (default: aiui-demo)")
     .option("--skip-install", "scaffold only — don't run npm install")
     .action((dir: string | undefined, opts: DemoOptions) => runDemo(dir, opts));
+
+  // Reset aiui's on-disk state to a fresh-install slate — the two cache roots
+  // (this repo's .aiui-cache/ and the user cache, including the managed Chrome
+  // for Testing). For clean demos of the install/first-run flow.
+  program
+    .command("clean")
+    .description(
+      "reset aiui state (project + user cache, incl. Chrome for Testing) for a clean-slate demo",
+    )
+    .option("--project-only", "only this repo's .aiui-cache/")
+    .option("--user-only", "only the user cache (~/.cache/aiui)")
+    .option("--keep-browser", "keep Chrome for Testing (skip the ~160 MB re-download)")
+    .option("-n, --dry-run", "print what would be deleted, then stop")
+    .option("-y, --yes", "delete without the confirmation prompt")
+    .action((opts: CleanOptions) => runClean(opts));
 
   program
     .command("open")

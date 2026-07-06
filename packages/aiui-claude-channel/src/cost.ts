@@ -172,6 +172,69 @@ export function usageFromRealtimeResponse(raw: unknown): Usage | undefined {
 }
 
 /**
+ * A Gemini Live `usageMetadata` → Usage. The Live API reports
+ * `{ totalTokenCount, promptTokenCount, responseTokenCount?,
+ * promptTokensDetails: [{modality, tokenCount}],
+ * responseTokensDetails: [{modality, tokenCount}] }` — the per-turn breakdown
+ * the realtime submode's cost trace draws from (google is a supported provider
+ * in {@link priceCall}). The per-modality arrays give the audio subsets; the
+ * totals come from `promptTokenCount`/`responseTokenCount`, falling back to the
+ * summed details (some turns omit the scalar totals). Tolerant like the others:
+ * garbage in → undefined out.
+ */
+export function usageFromGeminiLive(raw: unknown): Usage | undefined {
+  const u = asRecord(raw);
+  if (!u) {
+    return undefined;
+  }
+  // Sum a `[{modality, tokenCount}]` detail array, and pick out one modality.
+  const sumDetails = (list: unknown): number | undefined => {
+    if (!Array.isArray(list)) {
+      return undefined;
+    }
+    let total = 0;
+    let saw = false;
+    for (const entry of list) {
+      const e = asRecord(entry);
+      if (e && typeof e.tokenCount === "number") {
+        total += e.tokenCount;
+        saw = true;
+      }
+    }
+    return saw ? total : undefined;
+  };
+  const modalityTokens = (list: unknown, modality: string): number | undefined => {
+    if (!Array.isArray(list)) {
+      return undefined;
+    }
+    for (const entry of list) {
+      const e = asRecord(entry);
+      if (e && e.modality === modality && typeof e.tokenCount === "number") {
+        return e.tokenCount;
+      }
+    }
+    return undefined;
+  };
+  const promptDetails = u.promptTokensDetails;
+  const responseDetails = u.responseTokensDetails;
+  const inputTokens =
+    typeof u.promptTokenCount === "number" ? u.promptTokenCount : sumDetails(promptDetails);
+  if (inputTokens === undefined) {
+    return undefined; // nothing priceable — record nothing rather than a phantom call
+  }
+  const outputTokens =
+    typeof u.responseTokenCount === "number" ? u.responseTokenCount : sumDetails(responseDetails);
+  const inputAudio = modalityTokens(promptDetails, "AUDIO");
+  const outputAudio = modalityTokens(responseDetails, "AUDIO");
+  return {
+    input_tokens: inputTokens,
+    ...(outputTokens !== undefined ? { output_tokens: outputTokens } : {}),
+    ...(inputAudio !== undefined ? { input_audio_tokens: inputAudio } : {}),
+    ...(outputAudio !== undefined ? { output_audio_tokens: outputAudio } : {}),
+  };
+}
+
+/**
  * Estimated usage for a TTS call — `/v1/audio/speech` returns raw audio with
  * NO usage object, so the input side is estimated from text length (the
  * standard ≈4 chars/token heuristic) and the audio output goes unpriced

@@ -70,6 +70,17 @@ export {
   type FrameLogSink,
 } from "./frame-log";
 export {
+  DEFAULT_GEMINI_LIVE_MODEL,
+  GEMINI_LIVE_INSTRUCTIONS,
+  GEMINI_LIVE_URL,
+  type GeminiLiveSessionOptions,
+  geminiLiveSocketFactory,
+  type LiveFrameKind,
+  openGeminiLiveSession,
+  parseTimeLeftMs,
+  WindowOrderingGuard,
+} from "./gemini-live";
+export {
   channelSourceDir,
   defaultFormatLoader,
   type FormatLoader,
@@ -94,6 +105,26 @@ export {
   parseLaunchInfo,
 } from "./launch-info";
 export { dirRank, type ListOptions, listMcpServers, sortServers } from "./list";
+export {
+  type LabelEntry,
+  type ResolvedSegments,
+  type ResolveOptions,
+  renderShotBlock,
+  resolveSegments,
+} from "./live-resolve";
+export {
+  LIVE_NUDGE_TEXT,
+  type LiveCapabilities,
+  type LiveSession,
+  type LiveSessionCallbacks,
+  type SubmitIntentCall,
+} from "./live-session";
+export {
+  DEFAULT_OPENAI_LIVE_MODEL,
+  OPENAI_LIVE_INSTRUCTIONS,
+  type OpenAiLiveSessionOptions,
+  openOpenAiLiveSession,
+} from "./openai-live";
 export {
   type PageToolCall,
   type PageToolDescriptor,

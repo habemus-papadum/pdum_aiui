@@ -722,6 +722,128 @@ describe("multimodalModality: realtime (streaming) transcriber", () => {
   });
 });
 
+/** Every `video` chunk frame the connection sent, decoded. */
+function videoChunks(sent: Uint8Array[]) {
+  return frames(sent)
+    .map(
+      (f) => f.envelope as { chunk?: { kind?: string; id?: string; seq?: number; mime?: string } },
+    )
+    .filter((e) => e.chunk?.kind === "video")
+    .map((e) => e.chunk);
+}
+
+/**
+ * Mount a live (realtime submode) tier: a stubbed PCM source (jsdom has no
+ * AudioWorklet), a fast video sampler cadence so a few frames flow inside a
+ * `wait()`, and a fake socket. `live-gemini` sets `submode:"realtime"`.
+ */
+function mountLive(over: Record<string, unknown> = {}) {
+  const { factory, sent, push } = fakeSocketFactory(() => ({ ok: true }));
+  const pcm = fakePcmSource();
+  const handle = mountIntentTool({
+    force: true,
+    port: 4321,
+    webSocketFactory: factory,
+    modalities: [
+      multimodalModality(
+        { tier: "live-gemini", ...over },
+        { pcmSource: () => pcm.source, videoSampleIntervalMs: 20 },
+      ),
+    ],
+  });
+  return { handle, sent, push, pcm };
+}
+
+describe("multimodalModality: realtime submode screen share (V)", () => {
+  it("V streams video-share + sampled JPEG frames; disarm stops the sampler", async () => {
+    const restore = stubCapture();
+    try {
+      const { sent } = mountLive();
+      key("keydown", "`"); // arm
+      key("keydown", "v"); // video-toggle → videoShare(true) opens the thread, sampler starts
+      await wait(120); // socket connect + grant + immediate frame + a few 20ms intervals
+
+      // The share's ON edge rode the events stream.
+      const events = streamedEvents(sent);
+      expect(
+        events.some((e) => e.type === "video-share" && (e as { on?: boolean }).on === true),
+      ).toBe(true);
+
+      // Sampled frames flowed as `video` chunks — one share (vid_1), seq from 0.
+      const vids = videoChunks(sent);
+      expect(vids.length).toBeGreaterThan(0);
+      expect(vids[0]).toMatchObject({ id: "vid_1", seq: 0, mime: "image/jpeg" });
+      expect(vids.map((c) => c?.seq)).toEqual(vids.map((_, i) => i));
+      // The raw JPEG bytes rode the payload (the stubbed canvas hands back PNG magic).
+      const firstVideo = frames(sent).find(
+        (f) => (f.envelope as { chunk?: { kind?: string } }).chunk?.kind === "video",
+      );
+      expect([...(firstVideo?.payload ?? [])]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+
+      // The badge shows while sharing.
+      expect(document.querySelector<HTMLElement>(".mm-video")?.hidden).toBe(false);
+
+      key("keydown", "`"); // disarm → renderHud stops the sampler (share can't outlive the turn)
+      await wait(60); // let the stop + any in-flight upload settle
+      const settled = videoChunks(sent).length;
+      await wait(60); // three more 20ms intervals would have fired if it were still running
+      expect(videoChunks(sent).length).toBe(settled); // frozen — nothing new after disarm
+      expect(document.querySelector<HTMLElement>(".mm-video")?.hidden).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("toggling V off stops sampling and records the OFF edge (thread stays open)", async () => {
+    const restore = stubCapture();
+    try {
+      const { sent } = mountLive();
+      key("keydown", "`");
+      key("keydown", "v"); // on
+      await wait(80);
+      expect(videoChunks(sent).length).toBeGreaterThan(0);
+
+      key("keydown", "v"); // off
+      await wait(60);
+      const settled = videoChunks(sent).length;
+      await wait(60);
+      expect(videoChunks(sent).length).toBe(settled); // no more frames
+      expect(document.querySelector<HTMLElement>(".mm-video")?.hidden).toBe(true);
+      const shares = streamedEvents(sent).filter((e) => e.type === "video-share");
+      expect(shares.map((e) => (e as { on?: boolean }).on)).toEqual([true, false]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("V off a non-live tier is inert with a hint (dispatch gates on submode)", async () => {
+    const restore = stubCapture();
+    try {
+      const { handle, sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+      key("keydown", "`");
+      key("keydown", "v");
+      await wait(60);
+      expect(videoChunks(sent)).toHaveLength(0);
+      expect(streamedEvents(sent).some((e) => e.type === "video-share")).toBe(false);
+      const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
+      expect(status).toMatch(/live tier/i);
+    } finally {
+      restore();
+    }
+  });
+
+  it("E is inert in the realtime submode — corrections are a transcription feature", async () => {
+    const { handle } = mountLive();
+    key("keydown", "`");
+    key("keydown", "e"); // correct-toggle → gated
+    await wait(10);
+    // No correct mode entered (the preview never gains the `correcting` class).
+    expect(document.querySelector(".mm-preview.correcting")).toBeNull();
+    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
+    expect(status).toMatch(/just say the fix/i);
+  });
+});
+
 /** A scriptable fake {@link SpeechAudioElement}: jsdom can't play, so the audio
  * element is injected; `end()` fires the `ended` listener to advance the queue. */
 function fakeSpeechAudio() {

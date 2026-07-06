@@ -49,6 +49,7 @@ export { DEBUG_UI_CSS, injectDebugUiStyles } from "./styles";
 export type {
   CardCategory,
   CardDirection,
+  LiveSegment,
   PatchLine,
   PatchLineKind,
   PromptSegment,
@@ -63,9 +64,13 @@ export {
   classifyStage,
   correctionLines,
   eventTypesSummary,
+  liveOpenLine,
+  liveResolvedSummary,
+  liveToolSegments,
   loweredPromptText,
   parsePatchLines,
   parseShotBlocks,
+  savedFrameFiles,
   splitLoweredPrompt,
   traceOutcome,
 } from "./trace-cards";

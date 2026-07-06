@@ -8,6 +8,7 @@
  *   S      whole-viewport screenshot (fires on press)
  *   C      clear ink
  *   E      enter/exit correct mode (the meta layer)
+ *   V      toggle screen share (realtime/live tiers only — the ~1fps ambient sampler)
  *   K      open/close the config strip (the quick-config layer)
  *   Enter  send — finalize the thread (in correct mode: done editing, back to ink)
  *   Esc    step out one level (correct → ink → cancel thread → disarm)
@@ -39,6 +40,8 @@ export const TIER_BY_DIGIT: readonly IntentTier[] = [
   "rapid",
   "premium",
   "flagship",
+  "live-gemini",
+  "live-openai",
 ];
 
 export interface KeyState {
@@ -61,6 +64,7 @@ export type KeyCommand =
   | { cmd: "shoot-viewport" } // S: capture the whole viewport now — no veil, no hold
   | { cmd: "ink-clear" }
   | { cmd: "correct-toggle" }
+  | { cmd: "video-toggle" } // V: toggle the realtime submode's screen share (dispatch gates on submode)
   | { cmd: "send" }
   | { cmd: "step-out" }
   | { cmd: "config-toggle" }
@@ -118,6 +122,7 @@ export function keyCommand(
       case "G":
         return { cmd: "config-advanced" };
       case "Escape":
+      case "Enter": // picking a rung already changed the mode — Enter just closes
       case "k":
       case "K":
         return { cmd: "config-close" };
@@ -176,6 +181,16 @@ export function keyCommand(
     case "e":
     case "E":
       return phase === "down" && !repeat ? { cmd: "correct-toggle" } : undefined;
+    case "v":
+    case "V":
+      // The realtime submode's screen share. Only in ink mode (correct mode
+      // owns the pointer/keys for text selection), fired on keydown. The
+      // command always emits here — whether it *does* anything is gated on the
+      // effective submode in the modality's dispatch (a live tier only), which
+      // is where config is known; a non-live tier just shows a hint.
+      return phase === "down" && !repeat && state.mode === "ink"
+        ? { cmd: "video-toggle" }
+        : undefined;
     case "Enter":
       if (phase === "down" && !repeat) {
         // In correct mode Enter means "done editing — back to ink", NEVER

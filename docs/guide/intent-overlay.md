@@ -40,6 +40,7 @@ Minimalist by design — one hand, no chords:
 | **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
 | **E**     | correct mode — select transcript text, then speak or type the fix |
+| **V**     | share your screen — [live tiers only](#live-tiers-67--experimental); samples the display at ~1 fps for the live model |
 | **K**     | quick config — the [tier strip](#quick-config-the-k-strip): switch tiers, save/reset, open the editor |
 | **Enter** | send — finalize and lower the turn |
 | **Esc**   | step out one level (see the escape ladder below) |
@@ -287,6 +288,29 @@ knobs:
 
 All four go through the same validated config path.
 
+### Live tiers (6/7) — experimental
+
+Two further rungs — `live-gemini` (digit **6**) and `live-openai` (digit **7**) — switch the
+overlay into its **realtime submode**: instead of assembling a document and lowering it on Enter,
+the channel holds a live conversational session (Gemini Live / GPT realtime) that hears you
+continuously and, at the end, *composes the prompt itself*. Two interaction differences follow,
+both surfaced in the overlay:
+
+- **Screen share (V).** Press **V** to share your screen with the live model — it samples the
+  same display-capture stream a screenshot uses, at ~1 fps, as ambient context (a **● video**
+  badge shows on the HUD while it runs; deliberate **D**/**S** shots are still the *referenceable*
+  images). The share is bounded by the turn (it ends on send/cancel/disarm) and pauses while the
+  tab is in the background. Off a live tier, **V** just says *"video needs a live tier — K, then
+  6/7"*.
+- **No correction mode — just say the fix.** The lasso→patch correction loop (**E**) is a
+  transcription-mode feature; in a live tier there is no document to patch, so the native
+  correction is simply talking (*"no, the **left** legend"*). **E** is inert there and says so.
+
+This submode is experimental and the more expensive, higher-latency path; transcription mode
+(the five rungs above) remains the default. See
+[`handoff/transcription-and-realtime-submodes.md`](https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-dev-overlay/handoff/transcription-and-realtime-submodes.md)
+for the design.
+
 ## Quick config: the K strip
 
 Press **K** while armed and a small strip opens above the HUD — the keyboard-speed door to the
@@ -295,12 +319,13 @@ config or the JSON editor would break your flow. The strip is its own documentat
 
 ```
 TIER   session — unsaved
-[1 mock] [2 standard] [3 rapid] [4 premium] [5 flagship]
+[1 mock] [2 standard] [3 rapid] [4 premium] [5 flagship] [6 live-gemini] [7 live-openai]
 S save for site · R reset to file · G editor · Esc close
 ```
 
-- **1–5** pick a tier, cheapest first — the same ladder as the table above, so the digit *is*
-  the price dial. The switch is **session-scoped**: it takes effect immediately but persists
+- **1–7** pick a tier, cheapest first — the same ladder as the table above (6/7 are the
+  experimental [live tiers](#live-tiers-67--experimental)), so the digit *is* the price dial. The
+  switch is **session-scoped**: it takes effect immediately but persists
   nowhere, and a reload returns you to the file (Vite) config plus whatever you saved earlier.
   Your explicit fine fields still win over the preset, exactly as everywhere else.
 - **Mid-thread, the switch waits.** A thread's opening hello already told the channel which

@@ -144,4 +144,16 @@ export type IntentEvent =
       at: number;
       type: "correction-undo";
     }
+  | {
+      /**
+       * The realtime submode's screen share toggled (V). While on, the client
+       * samples the display-capture stream at ~1 fps into `video` chunks —
+       * unlabeled ambient context for the live model (deliberate shots stay
+       * the referenceable artifacts). An event so the trace shows exactly
+       * when the model could see the screen.
+       */
+      at: number;
+      type: "video-share";
+      on: boolean;
+    }
   | { at: number; type: "note"; text: string };

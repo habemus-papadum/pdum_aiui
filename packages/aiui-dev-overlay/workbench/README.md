@@ -81,6 +81,14 @@ subsumes the old three-tab dock: the per-frame wire data lives in the trace's
 input stages (open a card's *raw* disclosure), and the final prompt is the
 selected trace's hero. Backed by shared `debug-ui` + `/debug/api/traces`.
 
+A **realtime-submode** (`live` tier) turn reads the same way, one conversation
+further upstream: a `🛰 live open` config line, the `🧩 live tool call` card
+rendering the model's `submit_intent` as prose interleaved with `🖼 shot` chips,
+a `🚀 live resolved` card beside the hero, and `🗣 live reply` for what the model
+said aloud. The ~1fps video stream coalesces into one `🎞 video stream ×N` card
+(thumbnails of the saved keyframes) and, like the audio and speculative-compose
+floods, is **hidden by default** — toggle the `🎞 video` chip to see it.
+
 Trace-list rows title themselves with the turn's **one-line summary** once it
 lands (a small model glosses the sent prompt; see the channel's `summarize.ts`),
 falling back to the format. They carry an **actor badge** when a trace wasn't produced by a human (the overlay

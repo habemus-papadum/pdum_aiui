@@ -289,6 +289,8 @@ function describe(event: IntentEvent): string {
       }${event.patch ? ", patched" : ", plain replace"}): “${event.original}” → “${event.instruction}”`;
     case "correction-undo":
       return "correction undone (Esc — the last diff popped)";
+    case "video-share":
+      return event.on ? "video share ON (~1 fps)" : "video share off";
     case "note":
       return event.text;
   }

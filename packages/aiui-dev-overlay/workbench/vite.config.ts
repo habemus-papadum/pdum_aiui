@@ -332,9 +332,14 @@ export default defineConfig(() => {
   // your shell; the file wins over an inherited env var so a stale export
   // can't shadow it. The spawned channel server inherits it — transcription
   // and correction run channel-side, the key never reaches any page.
+  // GEMINI_API_KEY rides the same slot, for the realtime submode's Gemini Live
+  // session (channel-side too — see the realtime handoff §6).
   const env = loadEnv("dev", repoRoot, "");
   if (env.OPENAI_API_KEY) {
     process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
+  }
+  if (env.GEMINI_API_KEY) {
+    process.env.GEMINI_API_KEY = env.GEMINI_API_KEY;
   }
   // The fixed port layout (49222/49223/49224 unless WORKBENCH_*PORT overrides
   // — see src/ports.ts). Resolved here, once, so a bad override fails the

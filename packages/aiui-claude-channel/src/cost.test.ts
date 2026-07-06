@@ -4,6 +4,7 @@ import {
   normalizeUsage,
   priceCall,
   usageFromChatCompletions,
+  usageFromGeminiLive,
   usageFromRealtimeResponse,
   usageFromTranscription,
 } from "./cost";
@@ -124,5 +125,38 @@ describe("usage mappers", () => {
   it("tts estimate: ~4 chars per token, input side only", () => {
     expect(estimatedTtsUsage("sent")).toEqual({ input_tokens: 1 });
     expect(estimatedTtsUsage("a".repeat(40))).toEqual({ input_tokens: 10 });
+  });
+
+  it("gemini live: scalar totals + per-modality AUDIO subsets", () => {
+    expect(
+      usageFromGeminiLive({
+        totalTokenCount: 100,
+        promptTokenCount: 60,
+        responseTokenCount: 40,
+        promptTokensDetails: [{ modality: "AUDIO", tokenCount: 50 }],
+        responseTokensDetails: [
+          { modality: "TEXT", tokenCount: 10 },
+          { modality: "AUDIO", tokenCount: 30 },
+        ],
+      }),
+    ).toEqual({
+      input_tokens: 60,
+      output_tokens: 40,
+      input_audio_tokens: 50,
+      output_audio_tokens: 30,
+    });
+  });
+
+  it("gemini live: falls back to summed details when scalar totals are absent", () => {
+    expect(
+      usageFromGeminiLive({
+        promptTokensDetails: [
+          { modality: "TEXT", tokenCount: 5 },
+          { modality: "AUDIO", tokenCount: 45 },
+        ],
+      }),
+    ).toEqual({ input_tokens: 50, input_audio_tokens: 45 });
+    expect(usageFromGeminiLive(undefined)).toBeUndefined();
+    expect(usageFromGeminiLive({ nope: 1 })).toBeUndefined();
   });
 });

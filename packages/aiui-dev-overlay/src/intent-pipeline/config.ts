@@ -29,7 +29,7 @@ export interface IntentPipelineConfig {
    * (reproduces today's REST-mini default exactly). See `TIER_PRESETS` +
    * `expandTier`, and docs/guide/intent-overlay.md §Tiers.
    */
-  tier?: "mock" | "standard" | "rapid" | "premium" | "flagship";
+  tier?: "mock" | "standard" | "rapid" | "premium" | "flagship" | "live-gemini" | "live-openai";
 
   // ── the visible toggles (were WorkbenchSettings) ───────────────────────────
   /** Space bar behavior: hold-to-talk (walkie-talkie) or press-to-toggle. */
@@ -139,6 +139,22 @@ export interface IntentPipelineConfig {
    * bracket block. A lowering choice, read channel-side off the hello.
    */
   shotFormat?: "xml" | "text";
+
+  // ── the realtime submode (transcription-and-realtime-submodes.md) ──────────
+  /**
+   * Which submode the turn runs. `transcription` (absent → the default) is
+   * document assembly — everything above. `realtime` holds a live
+   * conversational session channel-side (Gemini Live / GPT realtime): the
+   * model hears the mic continuously, sees labeled shots (and, per
+   * `video-share`, ~1 fps screen frames), and COMPOSES the prompt itself via
+   * a `submit_intent` function call (interleaved text/image segments); the
+   * channel re-attaches withheld shot metadata when resolving it.
+   */
+  submode?: "transcription" | "realtime";
+  /** Realtime engine. `gemini` (video-capable, the reference) or `openai`. */
+  liveVendor?: "gemini" | "openai";
+  /** Realtime model id. Absent → the vendor default (see the tier presets). */
+  liveModel?: string;
 }
 
 /**
@@ -220,6 +236,21 @@ export const TIER_PRESETS: Record<IntentTier, Partial<IntentPipelineConfig>> = {
     realtimeVoiceModel: "gpt-realtime-2",
     realtimeVoice: "cedar",
     realtimeTools: "none",
+  },
+  // The realtime submode's rungs: the model IS the composer (submit_intent).
+  // Gemini is the reference engine (video-capable, manual-VAD verified — see
+  // archive/gemini-live-spike.mjs); OpenAI degrades to labeled shots only.
+  "live-gemini": {
+    submode: "realtime",
+    liveVendor: "gemini",
+    liveModel: "gemini-3.1-flash-live-preview",
+    audioBack: "voice",
+  },
+  "live-openai": {
+    submode: "realtime",
+    liveVendor: "openai",
+    liveModel: "gpt-realtime-2",
+    audioBack: "voice",
   },
 };
 

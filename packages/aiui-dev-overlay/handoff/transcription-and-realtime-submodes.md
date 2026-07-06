@@ -354,14 +354,60 @@ trace data, not vibes:
 
 | # | What | Size | Depends on |
 |---|---|---|---|
-| **RT0** | The G0 spike, both vendors. Throwaway script in the channel package, results appended to this doc. | S | — |
-| **RT1** | Vendor seam: `LiveSession`/`LiveCapabilities`; refactor `realtime-voice.ts` into `OpenAiLiveSession` (flagship regression-tested through it). | M | RT0 |
-| **RT2** | `GeminiLiveSession`: session config per §5, resample, compression, resumption/GoAway, usage telemetry. | L | RT1 |
+| **RT0** | ✅ **Done (July 2026)** — Gemini spike green end-to-end; see §10 below and `archive/gemini-live-spike.mjs`. | S | — |
+| **RT1** | ✅ **Done** — vendor seam `LiveSession`/`LiveCapabilities`/`SubmitIntentCall` in `aiui-claude-channel/src/live-session.ts`; OpenAI engine is a **separate** `openai-live.ts` under the seam (borrowed from, not a refactor of, `realtime-voice.ts` — flagship left untouched by design; `submit_intent` tool + `input_image` turn-items + tool-call drain added). | M | RT0 |
+| **RT2** | ✅ **Done** — `gemini-live.ts`: manual-VAD setup per §5, `sessionResumption`+sliding-window compression, `usageMetadata`→`cost.ts` (`usageFromGeminiLive`, google), GoAway surfaced. Client 24 kHz is sent `audio/pcm;rate=24000` (**no resampler** — live-verified the API accepts it); the window-open-with-audio rule enforced by a pure `WindowOrderingGuard`. Reconnect-on-GoAway deferred (handle captured, not yet re-dialed). | L | RT1 |
 | **RT3** | Client media: `video` chunk kind, ShotTool-stream sampling at 1 fps, share toggle + `video-share` events, capability gating in the UI. | M | RT1 |
-| **RT4** | The realtime processor: chronicle accumulation, injections (shots/selection/retraction advisories), `submit_intent` handling + enrichment + the fallback ladder, trace stages. | L | RT1, WP3 (selection-as-event) |
+| **RT4** | ✅ **Done** — realtime processor branch in `intent-v1.ts` (`submode:"realtime"`): chronicle accumulation, live injections (labeled shots/video), `submit_intent`→`resolveSegments` (shot metadata re-attached via a `renderShotBlock` mirror of engine.ts), the nudge→drain→`composeIntent` fallback ladder, and the pinned trace stages (`live open`/`live label shot_N`/`live nudge`/`live tool call`/`live resolved`/`live fallback`/`live reply`). Selection injected only into the fin preamble (not mid-session), corrections ignored (patchless echo + note). | L | RT1, WP3 (selection-as-event) |
 | **RT5** | Ledger preview (§4.2) from shared primitives; HUD meters (session budget, cost, response cap). | M | RT3, WP2 (UiMode) |
 | **RT6** | Gate evaluation G1–G4 in the workbench; decision: promote `live` tier out of experimental, or park with findings recorded here. | M | RT2–RT5 |
 
 Sequencing note: WP2 (UiMode) and WP3 (selection-as-event) from the companion doc are genuine
 prerequisites for RT5/RT4 respectively — the tracks interleave rather than queue. RT0 can start
 immediately and should: every sizing decision above gets sharper with G0 numbers in hand.
+
+---
+
+## 10. RT0 results (July 2026 — Gemini spike, all verified live)
+
+Working artifact: `archive/gemini-live-spike.mjs` (raw WebSocket, no SDK; `GEMINI_API_KEY` in
+`.env.dev`; the pasted capabilities guide the user supplied is the reference). Findings that
+bind the RT1/RT2 design:
+
+1. **Go raw WebSocket, not `@google/genai`.** SDK 2.10.0's wire transformer silently DROPS
+   `realtimeInputConfig` from the setup frame (present in the types, absent on the wire), which
+   makes manual VAD impossible through it — activity signals then die with `1007 Precondition
+   check failed`. Raw `BidiGenerateContent` (v1beta) works and matches how the channel already
+   speaks to OpenAI realtime (injectable socket factory, exact frames, testable).
+2. **The drag problem is solved by manual VAD.** With `automaticActivityDetection.disabled`,
+   the model stayed silent through a deliberate 2 s mid-window pause and responded only after
+   `activityEnd`. The turn is OURS to end — a drag's silence is a non-event. (OpenAI mirror:
+   `turn_detection: null` + explicit `response.create`; bonus, verified in docs: OpenAI's
+   turn detection can also be changed MID-SESSION via `session.update`.)
+3. **Undocumented window rule: a manual activity window must open with AUDIO.** `text`-first
+   inside a window → 1007; once audio has opened the window, `text` and `video` frames
+   interleave freely. Natural fit — the modality's mic streams continuously — but RT2 must
+   respect the ordering (never emit a label/frame into a window before any audio has flowed).
+4. **The Enter nudge works**: bare `realtimeInput.text` OUTSIDE any activity window is a legal,
+   immediately-answered turn — the fallback ladder's step-2 mechanism, verified.
+5. **Label-correlation works, metadata withheld.** Each deliberate image is preceded by a text
+   label (`[image s1]`) and sent as `realtimeInput.video` (PNG accepted). The model referenced
+   ids in speech ("the red screenshot [image s1]") and returned bare ids in the function call.
+   Element/cell metadata never goes to the live model — the channel keeps it keyed by label and
+   re-attaches it (the existing `<screenshot>` render) when resolving the function call.
+6. **The function-call shape is exactly the design**: `submit_intent` returned
+   `segments: [{text}, {image:"s1"}, {text}, {image:"s2"}, {text}]` — cleaned-up prose
+   interleaved with refs, positioned correctly. One run answered with a clarifying question
+   instead (sensible; the spike's audio contradicted its text) — the nudge resolved it; forced
+   function-calling (`toolConfig.functionCallingConfig.mode: ANY`) is setup-time-only on Live,
+   so the nudge, not forcing, is the mechanism.
+7. **Costs flow**: `usageMetadata` per turn with AUDIO-modality breakdown — cost.ts's Gemini
+   support plugs straight in.
+8. **OpenAI re-verified** (docs): `gpt-realtime-2` takes images via `conversation.item.create`
+   + `input_image` (pair the label as `input_text` in the same item), NO video; items never
+   auto-trigger responses; tools declared via `session.update`, calls arrive in `response.done`.
+
+Design deltas vs §4.3: the `submit_intent` schema is now `segments[]` (interleaved
+`{text?, image?}`), not `{prompt, image_refs}` — the spike proved models emit it naturally and
+it preserves position without post-hoc splicing. Video frames stay unlabeled ambient context;
+only deliberate shots (drag or S) get labels and are referenceable.

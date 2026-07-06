@@ -105,7 +105,9 @@ export type ChunkDescriptor =
   | { kind: "events" }
   | { kind: "context" }
   | { kind: "attachment"; id: string; mime: string }
-  | { kind: "audio"; id: string; seq: number; mime: string };
+  | { kind: "audio"; id: string; seq: number; mime: string }
+  // One sampled video frame of the realtime submode's screen share (~1 fps).
+  | { kind: "video"; id: string; seq: number; mime: string };
 
 /** The routing/lifecycle metadata carried in every frame's header. */
 export interface Envelope {

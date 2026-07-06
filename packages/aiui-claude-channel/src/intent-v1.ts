@@ -64,6 +64,10 @@ import { rawCodec } from "./codec";
 import { type Corrector, openaiCorrector } from "./correct";
 import type { CallCost } from "./cost";
 import type { ChunkDescriptor } from "./frame";
+import { DEFAULT_GEMINI_LIVE_MODEL, openGeminiLiveSession } from "./gemini-live";
+import { type LabelEntry, resolveSegments } from "./live-resolve";
+import { LIVE_NUDGE_TEXT, type LiveSession, type LiveSessionCallbacks } from "./live-session";
+import { DEFAULT_OPENAI_LIVE_MODEL, openOpenAiLiveSession } from "./openai-live";
 import {
   asSelection,
   promptContextSections,
@@ -84,6 +88,7 @@ import {
 } from "./realtime-voice";
 import { openaiSpeaker, type Speaker } from "./speak";
 import { openaiSummarizer, type Summarizer } from "./summarize";
+import type { TraceHandle } from "./trace";
 import { traceOf } from "./tracing";
 import {
   audioExtensionForMime,
@@ -150,6 +155,26 @@ export interface SpeechMessage {
 const REALTIME_DRAIN_TIMEOUT_MS = 10_000;
 
 /**
+ * How long the realtime submode's `fin` waits, after the Enter nudge, for the
+ * model's `submit_intent` call before it falls back to composing over the
+ * chronicle (§4.3 step 3). Generous — the spike measured Enter→tool-call well
+ * inside a few seconds — because the fallback is a genuine degradation (the model
+ * didn't compose), so we give it real room first.
+ */
+const LIVE_DRAIN_TIMEOUT_MS = 12_000;
+
+/**
+ * The realtime submode's stale-key hint, the Gemini twin of {@link OPENAI_KEY_HINT}.
+ * The single most common cause of "the live tier stopped working" is a missing or
+ * revoked GEMINI_API_KEY in the channel process's environment — a condition only
+ * the server can see, so the server names it.
+ */
+const GEMINI_KEY_HINT =
+  "If this keeps happening, check the GEMINI_API_KEY in the environment the channel " +
+  "process was launched from (a missing/stale key fails every Gemini Live call) — fix it and " +
+  "relaunch `aiui claude`, or switch to a transcription tier for text-composed prompts.";
+
+/**
  * The premium tier's spoken-ack trigger table, keyed by lowering milestone → the
  * deterministic phrase the channel synthesizes (no LLM). Data-driven so acks are
  * tuneable; v1 ships the minimal recommended set — one send-received ack on a
@@ -164,6 +189,17 @@ const ACK_PHRASES: Record<"sent", string> = {
 interface ResolvedIntent {
   /** The cost-sized preset, echoed to the trace (the fine fields below are already expanded). */
   tier: string;
+  /**
+   * Which submode runs. `transcription` (the default) is document assembly —
+   * everything the classic processor does; `realtime` holds a live
+   * conversational session where the MODEL composes (submit_intent). See
+   * transcription-and-realtime-submodes.md.
+   */
+  submode: "transcription" | "realtime";
+  /** Realtime engine (submode=realtime): the reference `gemini` or degraded `openai`. */
+  liveVendor: "gemini" | "openai";
+  /** Realtime model id (bare, e.g. `gemini-3.1-flash-live-preview`). */
+  liveModel: string;
   transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice";
   model: string;
   /** Realtime transcription model (when transcriber = `openai-realtime`). */
@@ -241,6 +277,19 @@ export interface IntentV1Options {
    */
   realtimeVoiceSocketFactory?: RealtimeSocketFactory;
   /**
+   * Test seam override for the realtime submode's **Gemini** upstream socket
+   * (`submode: realtime`, `liveVendor: gemini`), in place of the real `ws`
+   * connection. Present (even keyless) → the live path runs offline (the house
+   * pattern; see gemini-live.ts).
+   */
+  geminiLiveSocketFactory?: RealtimeSocketFactory;
+  /**
+   * Test seam override for the realtime submode's **OpenAI** upstream socket
+   * (`submode: realtime`, `liveVendor: openai`). Present (even keyless) → the
+   * degraded live path runs offline.
+   */
+  openaiLiveSocketFactory?: RealtimeSocketFactory;
+  /**
    * Test seam override for the post-send turn summarizer (see summarize.ts). Its
    * mere presence enables summaries even with no key; absent + keyless → no
    * summary (the gloss is a convenience, never load-bearing). Real seam is the
@@ -275,8 +324,24 @@ function resolveIntent(raw: unknown): ResolvedIntent {
   // fields), so a `tier`-only hello still resolves concrete seams.
   const tier = str(cfg.tier, "standard");
   const preset = expandTier(tier);
+  const liveVendor = oneOf(
+    cfg.liveVendor,
+    ["gemini", "openai"] as const,
+    preset.liveVendor ?? "gemini",
+  );
   return {
     tier,
+    submode: oneOf(
+      cfg.submode,
+      ["transcription", "realtime"] as const,
+      preset.submode ?? "transcription",
+    ),
+    liveVendor,
+    liveModel: str(
+      cfg.liveModel,
+      preset.liveModel ??
+        (liveVendor === "gemini" ? DEFAULT_GEMINI_LIVE_MODEL : DEFAULT_OPENAI_LIVE_MODEL),
+    ),
     transcriber: oneOf(
       cfg.transcriber,
       ["mock", "openai", "openai-realtime", "openai-voice"] as const,
@@ -408,6 +473,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // its channel in the workbench package but wants repo-root-relative paths).
   const promptCwd = process.env.AIUI_PROMPT_CWD || process.cwd();
   const composeOptions = { cwd: promptCwd, shotFormat: intent.shotFormat };
+
+  // The realtime submode is a different processor entirely — the model composes,
+  // not composeIntent — so it forks here, sharing only the resolved config, the
+  // trace, and the prompt cwd. Everything below this branch is transcription mode.
+  if (intent.submode === "realtime") {
+    return realtimeIntentProcessor(ctx, options, intent, apiKey, trace, composeOptions);
+  }
 
   // Resolve the pipe seams once. `openai` requested but keyless (and no test
   // override) → the seam is absent and that stage degrades (no transcript /
@@ -1245,6 +1317,414 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       audioFrames.clear();
       realtime?.close();
       realtimeVoice?.close();
+    },
+  };
+}
+
+/**
+ * The **realtime submode** processor (transcription-and-realtime-submodes.md §4).
+ * The classic {@link intentProcessor} above assembles a document and lets
+ * `composeIntent` compile it; here a live conversational session
+ * ({@link LiveSession}, Gemini or OpenAI) is held per-thread, the *model* composes
+ * via `submit_intent`, and the channel re-attaches the withheld shot metadata as
+ * it resolves the call. The event stream stays the IR of record — the chronicle —
+ * so the trace debugger keeps working and the fin ladder's step-3 fallback
+ * (`composeIntent` over the transcripts) is free.
+ *
+ * Shares only the resolved config, the trace, and the prompt cwd with the classic
+ * path; everything below is its own thin assembly (companion doc §B.3: two
+ * assemblies over one parts bin, not one component with mode flags).
+ */
+function realtimeIntentProcessor(
+  ctx: ThreadContext,
+  options: IntentV1Options,
+  intent: ResolvedIntent,
+  apiKey: string | undefined,
+  trace: TraceHandle | undefined,
+  composeOptions: { cwd: string; shotFormat: "xml" | "text" },
+): StreamProcessor {
+  const keyed = apiKey !== undefined && apiKey !== "";
+  const keyHint = intent.liveVendor === "gemini" ? GEMINI_KEY_HINT : OPENAI_KEY_HINT;
+  const keyName = intent.liveVendor === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
+
+  // Pre-warm the tab/source preamble (hello-fixed) exactly like the classic path;
+  // the model composes the body, the channel still owns context + commitment.
+  const staticSections = promptContextSections(ctx.hello);
+
+  // The chronicle: every event in arrival order (client acts + server-produced
+  // transcripts). It is the fallback compiler's input and the trace's record.
+  let events: IntentEvent[] = [];
+  let selection: SelectionContext | undefined;
+  // Shot metadata kept keyed by label — NEVER sent to the live model; re-attached
+  // by resolveSegments at fin (the `<screenshot>` block the agent gets).
+  const shotRegistry = new Map<string, LabelEntry>();
+  // Synthetic, increasing segment ordinals for the model's user-transcript turns
+  // (the chronicle needs monotonic segment numbers so the preview fills in order).
+  let userSeq = 0;
+  // Ambient video: count every frame, persist every 10th as a named artifact.
+  let videoCount = 0;
+  let videoUnsupportedNoted = false;
+
+  const push = (produced: IntentEvent[]): void => {
+    ctx.push?.({
+      kind: "lowered",
+      threadId: ctx.threadId,
+      events: produced,
+    } satisfies LoweredMessage);
+  };
+  const pushSpeech = (id: string, mime: string, bytes: Uint8Array, label?: string): void => {
+    ctx.push?.({
+      kind: "speech",
+      threadId: ctx.threadId,
+      id,
+      mime,
+      data: Buffer.from(bytes).toString("base64"),
+      ...(label !== undefined ? { label } : {}),
+    } satisfies SpeechMessage);
+    trace?.record({
+      kind: "info",
+      label: `speech ${id}`,
+      data: { mime, bytes: bytes.length, ...(label !== undefined ? { text: label } : {}) },
+    });
+  };
+  const recordCost = (what: string, cost: CallCost | undefined): void => {
+    if (!cost) {
+      return;
+    }
+    trace?.record({ kind: "info", label: `cost: ${what}`, data: cost });
+    if (cost.usd !== undefined) {
+      trace?.addCost(cost.usd);
+    }
+  };
+
+  // The post-send summarizer (the one-line trace gloss), same posture as the
+  // classic path: enabled whenever there's a key or a test seam, best-effort.
+  const summarizer: Summarizer | undefined =
+    options.summarizer ??
+    (keyed
+      ? openaiSummarizer({
+          apiKey: apiKey as string,
+          ...(options.fetch ? { fetch: options.fetch } : {}),
+        })
+      : undefined);
+  const summarize = async (body: string): Promise<void> => {
+    if (summarizer === undefined || body === "") {
+      return;
+    }
+    try {
+      const result = await summarizer.summarize(body);
+      trace?.setSummary(result.text);
+      if (result.cost?.usd !== undefined) {
+        trace?.addCost(result.cost.usd);
+      }
+    } catch {
+      // best-effort: the trace list just shows the timestamp for this turn
+    }
+  };
+
+  // ── open the live session (or degrade loudly) ────────────────────────────────
+  const factory =
+    intent.liveVendor === "gemini"
+      ? options.geminiLiveSocketFactory
+      : options.openaiLiveSocketFactory;
+  const liveReady = keyed || factory !== undefined;
+
+  let replySeq = 0;
+  const callbacks: LiveSessionCallbacks = {
+    onUserTranscript: (text) => {
+      // The model's user-transcript for one turn → a synthetic transcript-final,
+      // so the client preview fills and the fallback compiler has a document.
+      const produced: IntentEvent = {
+        at: Date.now(),
+        type: "transcript-final",
+        segment: userSeq++,
+        text,
+        latencyMs: 0,
+        model: intent.liveModel,
+      };
+      events.push(produced);
+      push([produced]);
+    },
+    onReplyTranscript: (text) => {
+      // What the human was told — a status note (the widget shows it) + the trace;
+      // never the IR (the committed prompt is submit_intent / the fallback).
+      push([{ at: Date.now(), type: "note", text: `🔊 ${text}` }]);
+      trace?.record({ kind: "info", label: "live reply", data: { text } });
+    },
+    onReplyAudio: (bytes, mime) => {
+      pushSpeech(`reply_${replySeq++}`, mime, bytes);
+    },
+    onInterrupted: () => {
+      trace?.record({ kind: "info", label: "live interrupted", data: {} });
+    },
+    onUsage: (cost) => {
+      // A live turn re-bills its context every response — where the money goes.
+      recordCost("live response", cost);
+    },
+    onError: (message) => {
+      push([{ at: Date.now(), type: "note", text: `${intent.liveVendor} realtime: ${message}` }]);
+      pushError(ctx, {
+        source: "voice",
+        message: `${intent.liveVendor} realtime: ${message}`,
+        detail: keyHint,
+      });
+    },
+    onGoAway: (msLeft) => {
+      const text = `live session winding down in ~${Math.round(msLeft / 1000)}s (${intent.liveVendor} GoAway)`;
+      push([{ at: Date.now(), type: "note", text }]);
+      trace?.record({ kind: "info", label: "live goaway", data: { msLeft } });
+    },
+  };
+
+  let session: LiveSession | undefined;
+  if (liveReady) {
+    session =
+      intent.liveVendor === "gemini"
+        ? openGeminiLiveSession(
+            {
+              apiKey: apiKey ?? "",
+              model: () => intent.liveModel,
+              ...(options.geminiLiveSocketFactory !== undefined
+                ? { socketFactory: options.geminiLiveSocketFactory }
+                : {}),
+            },
+            callbacks,
+          )
+        : openOpenAiLiveSession(
+            {
+              apiKey: apiKey ?? "",
+              model: () => intent.liveModel,
+              ...(options.openaiLiveSocketFactory !== undefined
+                ? { socketFactory: options.openaiLiveSocketFactory }
+                : {}),
+            },
+            callbacks,
+          );
+    trace?.record({
+      kind: "info",
+      label: "live open",
+      data: {
+        vendor: intent.liveVendor,
+        model: intent.liveModel,
+        capabilities: session.capabilities,
+      },
+    });
+  } else {
+    // Keyless with no test factory: absent + loud (never a silent downgrade to a
+    // transcription tier), immediately — the tier promised a live conversation.
+    trace?.record({
+      kind: "info",
+      label: "live open",
+      data: { vendor: intent.liveVendor, model: intent.liveModel, ready: false },
+    });
+    const message = `${intent.liveVendor} realtime is unavailable — the channel process has no ${keyName}.`;
+    push([{ at: Date.now(), type: "note", text: message }]);
+    pushError(ctx, { source: "voice", message, detail: keyHint });
+  }
+
+  // ── routing (chronicle accumulation + live injections) ───────────────────────
+  const onEventsChunk = (bytes: Uint8Array): void => {
+    for (const event of readEventBatch(decodeJson(bytes))) {
+      events.push(event);
+      switch (event.type) {
+        case "talk-start":
+          session?.activityStart();
+          break;
+        case "talk-end":
+          session?.activityEnd();
+          break;
+        case "shot":
+          // Merge the shot's metadata into the registry (the bytes/path arrive on
+          // its attachment frame); the model never sees any of it.
+          shotRegistry.set(event.marker, {
+            ...shotRegistry.get(event.marker),
+            components: event.components,
+            ...(event.viewport !== undefined ? { viewport: event.viewport } : {}),
+          });
+          break;
+        case "video-share":
+          trace?.record({ kind: "info", label: "video-share", data: { on: event.on } });
+          break;
+        case "correction": {
+          // Corrections are transcription-only; the client gates the UI, so a
+          // stray request just gets a patchless echo (the chronicle stays uniform)
+          // and a note — never the V4A pipeline.
+          const echo: IntentEvent = { ...event, patch: undefined };
+          push([
+            echo,
+            {
+              at: Date.now(),
+              type: "note",
+              text: "corrections are off in realtime mode — talk to adjust instead",
+            },
+          ]);
+          trace?.record({ kind: "info", label: "correction ignored (realtime)", data: {} });
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  };
+
+  const onAttachmentChunk = (
+    chunk: Extract<ChunkDescriptor, { kind: "attachment" }>,
+    bytes: Uint8Array,
+  ): void => {
+    if (!chunk.id.startsWith("shot_")) {
+      return; // realtime streams audio as `audio` chunks; only shots arrive here
+    }
+    // Save the shot artifact (the path the resolved prompt hands the agent), wire
+    // it into the registry, and inject the labeled image into the live session.
+    const path = trace?.recordBlob(
+      { kind: "ir", label: `attachment ${chunk.id}` },
+      bytes,
+      `${chunk.id}.png`,
+    );
+    shotRegistry.set(chunk.id, {
+      ...shotRegistry.get(chunk.id),
+      ...(path !== undefined ? { path } : {}),
+    });
+    session?.injectLabeledImage(chunk.id, bytes, chunk.mime);
+    trace?.record({
+      kind: "info",
+      label: `live label ${chunk.id}`,
+      data: { mime: chunk.mime, hasPath: path !== undefined },
+    });
+  };
+
+  const onVideoChunk = (
+    chunk: Extract<ChunkDescriptor, { kind: "video" }>,
+    bytes: Uint8Array,
+  ): void => {
+    videoCount += 1;
+    // Persist every 10th frame as a named artifact (the decorator already blobs
+    // every frame as input-N.bin; this gives the debugger legible video stills).
+    if (videoCount % 10 === 1) {
+      trace?.recordBlob(
+        { kind: "ir", label: `video sample ${chunk.id}` },
+        bytes,
+        `${chunk.id}_${chunk.seq}.jpg`,
+      );
+    }
+    if (session?.capabilities.video) {
+      session.appendVideoFrame(bytes, chunk.mime);
+    } else if (session !== undefined && !videoUnsupportedNoted) {
+      // The degraded vendor (OpenAI) has no video — say so once, then drop silently.
+      videoUnsupportedNoted = true;
+      trace?.record({
+        kind: "info",
+        label: "live video unsupported",
+        data: { vendor: intent.liveVendor },
+      });
+      push([
+        {
+          at: Date.now(),
+          type: "note",
+          text: `${intent.liveVendor} realtime has no video — screen frames ignored`,
+        },
+      ]);
+    }
+  };
+
+  const onContextChunk = (bytes: Uint8Array): void => {
+    selection = asSelection(decodeJson(bytes)) ?? selection;
+  };
+
+  // ── the fin ladder (§4.3) ────────────────────────────────────────────────────
+  const lower = async (): Promise<void> => {
+    trace?.record({ kind: "ir", label: "chronicle", data: events });
+    const cancelled = endedInCancel(events);
+    if (cancelled || session === undefined) {
+      // Cancelled, or keyless (already toasted at open): lower to nothing.
+      session?.close();
+      ctx.close();
+      return;
+    }
+
+    // Step 2: nudge, then await the model's submit_intent.
+    session.nudgeSubmit();
+    trace?.record({ kind: "info", label: "live nudge", data: { text: LIVE_NUDGE_TEXT } });
+    const call = await session.drainToolCall(LIVE_DRAIN_TIMEOUT_MS);
+
+    let body: string;
+    if (call !== null && call.segments.length > 0) {
+      trace?.record({ kind: "ir", label: "live tool call", data: { segments: call.segments } });
+      const resolved = resolveSegments(call.segments, shotRegistry, composeOptions);
+      body = resolved.body;
+      call.respond(true);
+      if (resolved.missingRefs.length > 0) {
+        trace?.record({
+          kind: "info",
+          label: "live refs unresolved",
+          data: { missing: resolved.missingRefs },
+        });
+      }
+      // One ref row per marker (the viewer counts resolved via `resolved === true
+      // || path`), a resolved marker carrying the shot path it re-attached.
+      const refs = [
+        ...resolved.resolvedMarkers.map((marker) => {
+          const path = shotRegistry.get(marker)?.path;
+          return { marker, resolved: true, ...(path !== undefined ? { path } : {}) };
+        }),
+        ...resolved.missingRefs.map((marker) => ({ marker, resolved: false })),
+      ];
+      trace?.record({ kind: "ir", label: "live resolved", data: { body, refs } });
+    } else {
+      // Step 3: the model didn't compose — fall back to composeIntent over the
+      // chronicle (the transcription compiler on the transcripts we kept). Loud.
+      const composed = composeIntent(events, intent.correctionPolicy, composeOptions);
+      body = composed.prompt;
+      const reason =
+        call === null ? "no submit_intent before send" : "submit_intent had no segments";
+      trace?.record({ kind: "info", label: "live fallback", data: { fallback: true, reason } });
+      pushError(ctx, {
+        source: "voice",
+        message: `the live model didn't compose a prompt (${reason}) — composed one from the transcript instead`,
+        detail: keyHint,
+      });
+    }
+
+    if (body !== "") {
+      const prompt = wrapWithContext([...staticSections, ...selectionSections(selection)], body);
+      ctx.push?.({
+        kind: "lowered-prompt",
+        threadId: ctx.threadId,
+        prompt,
+      } satisfies LoweredPromptMessage);
+      await ctx.sendPrompt(prompt);
+      // Gloss the turn for the trace list — detached; the fin ack never waits on it.
+      void summarize(body);
+    }
+    session.close();
+    ctx.close();
+  };
+
+  return {
+    async onMessage(payload: unknown, meta: MessageMeta) {
+      const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(0);
+      const chunk = meta.chunk;
+      if (chunk?.kind === "events") {
+        onEventsChunk(bytes);
+      } else if (chunk?.kind === "attachment") {
+        onAttachmentChunk(chunk, bytes);
+      } else if (chunk?.kind === "audio") {
+        session?.appendAudio(bytes);
+      } else if (chunk?.kind === "video") {
+        onVideoChunk(chunk, bytes);
+      } else if (chunk?.kind === "context") {
+        onContextChunk(bytes);
+      }
+      if (meta.fin) {
+        await lower();
+      }
+    },
+    onClose() {
+      // Abandoned turn (socket dropped before fin): drop the chronicle and close
+      // the upstream live session so its WebSocket is not leaked (the S2 teardown).
+      events = [];
+      shotRegistry.clear();
+      session?.close();
     },
   };
 }

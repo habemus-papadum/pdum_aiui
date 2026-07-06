@@ -24,6 +24,12 @@ export const STYLES = /* css */ `
     background: #232936; color: #e8e8ea; font-size: 15px; }
   .mm-hud.armed .mm-arm { background: #8ab4f8; color: #0f1117; }
   .mm-state { min-width: 90px; color: #e8e8ea; }
+  /* The screen-share badge (realtime submode): a pulsing red dot beside the
+     state label while the ~1fps sampler is running; hidden (attr) when off. */
+  .mm-video { color: #ff5c87; font-size: 11px; font-weight: 600; white-space: nowrap;
+    animation: mm-video-pulse 1.6s ease-in-out infinite; }
+  .mm-video[hidden] { display: none; }
+  @keyframes mm-video-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .mm-meter { border-radius: 3px; background: #0f1117; }
   .mm-keys { opacity: 0.7; }
 

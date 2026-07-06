@@ -242,6 +242,20 @@ export class Engine {
     this.emit(this.stamp({ type: "shot-drop", marker }));
   }
 
+  /**
+   * Toggle the realtime submode's screen share (V). Turning it *on* opens a
+   * thread like any other contentful act — the share is a first act of the turn
+   * — and either edge records a `video-share` event so the trace shows exactly
+   * when the live model could see the screen. The client-side sampler
+   * (video.ts) streams the frames; this verb only marks the boundaries.
+   */
+  videoShare(on: boolean): void {
+    if (on) {
+      this.ensureThread("shot");
+    }
+    this.emit(this.stamp({ type: "video-share", on }));
+  }
+
   // ── corrections (the meta layer) ───────────────────────────────────────────
 
   /**

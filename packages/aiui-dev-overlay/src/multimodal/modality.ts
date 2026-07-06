@@ -44,7 +44,7 @@ import {
   keyCommand,
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
-import type { Ack } from "../protocol";
+import type { Ack, VideoChunk } from "../protocol";
 import { intentTurnStore } from "../turn-store";
 import {
   clearIntentOverrides,
@@ -60,10 +60,11 @@ import { ConfigStrip, type ConfigStripState } from "./config-strip";
 import { type CorrectionDiff, mockCorrector } from "./correct";
 import { Ink } from "./ink";
 import { Preview } from "./preview";
-import { ShotTool } from "./shot";
+import { canvasJpegBytes, ShotTool } from "./shot";
 import { type SpeechAudioFactory, SpeechPlayer } from "./speech";
 import { STYLES } from "./styles";
 import { mockTranscriber, type Transcriber } from "./transcribe";
+import { sampleDimensions, VIDEO_FRAME_MIME, VIDEO_JPEG_QUALITY, VideoSampler } from "./video";
 
 /** How long to accumulate engine events before flushing an events chunk. */
 const EVENTS_DEBOUNCE_MS = 60;
@@ -85,6 +86,12 @@ export interface MultimodalDeps {
    * through; defaults to `new Audio(src)`. Injected in jsdom, which can't play.
    */
   speechAudio?: SpeechAudioFactory;
+  /**
+   * The realtime video sampler's cadence in ms; defaults to
+   * {@link VIDEO_SAMPLE_INTERVAL_MS} (~1 fps). Injected only by tests, which
+   * shorten it so a couple of sampled frames flow within a `wait()`.
+   */
+  videoSampleIntervalMs?: number;
 }
 
 /**
@@ -161,6 +168,22 @@ export function multimodalModality(
         }
       });
       layers.append(shots.veil);
+
+      // ── the realtime submode's screen sampler (V) ────────────────────────────
+      // While sharing (a live tier only), sample the SAME display-capture stream
+      // the shots grab from — one grant serves both — at ~1 fps into `video`
+      // chunks: unlabeled ambient context for the live model (deliberate shots
+      // stay the referenceable artifacts). `videoShareOrdinal` bumps per
+      // toggle-on (`vid_N`); the sampler counts the frame `seq` within one share.
+      // `captureVideoFrame` / `uploadVideo` are hoisted declarations below.
+      let videoShareOrdinal = 0;
+      const videoSampler = new VideoSampler({
+        captureFrame: () => captureVideoFrame(),
+        sendFrame: (seq, bytes) => void uploadVideo(seq, bytes),
+        ...(deps.videoSampleIntervalMs !== undefined
+          ? { intervalMs: deps.videoSampleIntervalMs }
+          : {}),
+      });
 
       // ── silence-endpointed listening (main loop + correction box) ────────────
       // Utterances end on *silence*: once the level meter has heard voice, ~a
@@ -250,8 +273,9 @@ export function multimodalModality(
       hud.innerHTML = `
         <button class="mm-arm" title="arm/disarm">✳</button>
         <span class="mm-state">off</span>
+        <span class="mm-video" hidden>● video</span>
         <canvas class="mm-meter" width="60" height="14"></canvas>
-        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · K config · ⏎ send · Esc out</span>
+        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · V video · K config · ⏎ send · Esc out</span>
         <span class="mm-speaker" hidden></span>`;
       layers.append(hud);
 
@@ -274,6 +298,7 @@ export function multimodalModality(
       });
       const armButton = hud.querySelector<HTMLButtonElement>(".mm-arm");
       const stateLabel = hud.querySelector<HTMLSpanElement>(".mm-state");
+      const videoBadge = hud.querySelector<HTMLSpanElement>(".mm-video");
       const meter = hud.querySelector<HTMLCanvasElement>(".mm-meter");
       const keysLabel = hud.querySelector<HTMLSpanElement>(".mm-keys");
       const speakerLabel = hud.querySelector<HTMLSpanElement>(".mm-speaker");
@@ -305,10 +330,11 @@ export function multimodalModality(
         const key = armKeyLabel(config);
         help.innerHTML = `Press <b>${key}</b> to arm, then <b>Space</b> to talk, drag to sketch,
           <b>D</b>+drag to screenshot a region (<b>S</b> grabs the whole viewport),
-          <b>E</b> to correct, <b>K</b> for quick config (tiers), <b>Enter</b> to send.
+          <b>E</b> to correct, <b>V</b> to share your screen (live tiers only),
+          <b>K</b> for quick config (tiers), <b>Enter</b> to send.
           A ✳ badge sits bottom-left while active.`;
         if (keysLabel) {
-          keysLabel.textContent = `${key} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · K config · ⏎ send · Esc out`;
+          keysLabel.textContent = `${key} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · V video · K config · ⏎ send · Esc out`;
         }
       };
       renderLabels();
@@ -327,6 +353,12 @@ export function multimodalModality(
           shots.setArmed(false);
           shooting = false;
         }
+        // The screen share is bounded by the turn: it can't outlive the thread
+        // (send/cancel/timeout) or a disarm. Enforce it here — where every
+        // dispatch and engine event lands — the same way the shot veil is.
+        if (videoSampler.sharing && (!engine.armed || !engine.threadOpen)) {
+          videoSampler.stop();
+        }
         document.body.classList.toggle("mm-armed", engine.armed);
         hud.classList.toggle("armed", engine.armed);
         hud.classList.toggle("talking", engine.talking);
@@ -334,6 +366,9 @@ export function multimodalModality(
           stateLabel.textContent = !engine.armed
             ? "off"
             : `${engine.mode}${engine.talking ? " · REC" : ""}${engine.threadOpen ? " · thread" : ""}`;
+        }
+        if (videoBadge) {
+          videoBadge.hidden = !videoSampler.sharing;
         }
         ink.setActive(engine.armed && engine.mode === "ink" && !shooting);
         preview.setCorrectMode(engine.armed && engine.mode === "correct");
@@ -360,11 +395,17 @@ export function multimodalModality(
           stopEndpointer();
           void talkEnd();
         }
+        // A screen share PAUSES on blur (rather than ending): the user glanced
+        // away, and streaming the other window they turned to would be both
+        // wrong context and wasted frames. Refocus resumes it (onWindowFocus)
+        // if the share is still on — pause/resume is a no-op when not sharing.
+        videoSampler.pause();
       };
       const onWindowFocus = (): void => {
         if (engine.armed && engine.mode === "correct" && !engine.talking) {
           startCorrectionListening();
         }
+        videoSampler.resume();
       };
       window.addEventListener("blur", onWindowBlur);
       window.addEventListener("focus", onWindowFocus);
@@ -916,6 +957,82 @@ export function multimodalModality(
         }
       }
 
+      // ── realtime submode: the ~1 fps screen sampler (V) ──────────────────────
+      /**
+       * Toggle screen sharing. Only reached in the realtime submode (the dispatch
+       * gates on it). Turning ON marks the share (which opens the thread + shows
+       * the badge) *then* acquires the display-capture grant — the same one-time
+       * picker a shot uses, auto-accepted in the session browser — so the thread
+       * is already open when the sampler's immediate first frame lands. A denied
+       * grant retracts the share honestly (badge off, an on→off in the trace)
+       * rather than sampling blind.
+       */
+      async function toggleVideoShare(): Promise<void> {
+        if (videoSampler.sharing) {
+          videoSampler.stop();
+          engine.videoShare(false);
+          renderHud();
+          return;
+        }
+        engine.videoShare(true);
+        renderHud();
+        const video = await shots.ensureCaptureStream();
+        if (!engine.armed) {
+          return; // disarmed during the picker — disarm already tore it all down
+        }
+        if (!video) {
+          engine.videoShare(false);
+          const message =
+            "screen capture unavailable — video sharing needs a display-capture grant";
+          ctx.setStatus(message);
+          ctx.reportError({ source: "capture", message });
+          renderHud();
+          return;
+        }
+        videoShareOrdinal += 1;
+        videoSampler.start();
+        renderHud();
+      }
+
+      /** Draw the shared capture element to a downscaled JPEG frame, or undefined. */
+      async function captureVideoFrame(): Promise<Uint8Array | undefined> {
+        const video = await shots.ensureCaptureStream();
+        if (!video) {
+          return undefined; // grant lost mid-share — skip this frame
+        }
+        const { width, height } = sampleDimensions(video.videoWidth, video.videoHeight);
+        const canvas = document.createElement("canvas");
+        // Clamp to ≥1: a not-yet-ready element (videoWidth 0) yields a tiny frame
+        // rather than a zero-dimension canvas — rare, since ensureStream awaits play().
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const c2d = canvas.getContext("2d");
+        if (!c2d) {
+          return undefined;
+        }
+        c2d.drawImage(video, 0, 0, canvas.width, canvas.height);
+        return canvasJpegBytes(canvas, VIDEO_JPEG_QUALITY);
+      }
+
+      /** One sampled frame → a `video` chunk on the current share, in seq order. */
+      async function uploadVideo(seq: number, bytes: Uint8Array): Promise<void> {
+        const thread = await getThread();
+        if (!thread) {
+          return; // degraded: no channel — the share simply doesn't stream
+        }
+        const chunk: VideoChunk = {
+          kind: "video",
+          id: `vid_${videoShareOrdinal}`,
+          seq,
+          mime: VIDEO_FRAME_MIME,
+        };
+        try {
+          reportBadAck("video frame", await thread.sendVideo(chunk, bytes, false));
+        } catch (error) {
+          rememberError(error);
+        }
+      }
+
       async function transcribeLocally(
         transcriber: Transcriber,
         segment: number,
@@ -1072,7 +1189,27 @@ export function multimodalModality(
             engine.inkCleared(false);
             break;
           case "correct-toggle":
+            // The lasso→patch correction loop is a transcription-mode feature:
+            // the realtime submode holds a live conversation with no editable
+            // document to patch — the native fix there is just talking ("no, the
+            // LEFT legend"). Gate at dispatch (needs the effective submode); the
+            // keymap stays submode-agnostic.
+            if (config.submode === "realtime") {
+              ctx.setStatus(
+                "corrections are a transcription-mode feature — in live mode just say the fix",
+              );
+              break;
+            }
             engine.setMode(engine.mode === "correct" ? "ink" : "correct");
+            break;
+          case "video-toggle":
+            // Screen share is realtime-only: the live model is what watches the
+            // ~1 fps frames. Off a live tier, name the fix and do nothing else.
+            if (config.submode !== "realtime") {
+              ctx.setStatus("video needs a live tier — K, then 6/7");
+              break;
+            }
+            void toggleVideoShare();
             break;
           case "send":
             engine.send();
@@ -1264,7 +1401,15 @@ export function multimodalModality(
         // with the page). Shot pixels / audio don't survive — the refs do.
         engine.replay(recovered.events, { threadOpen: recovered.threadOpen });
         renderHud();
-        if (recovered.source === "reloaded") {
+        if (config.submode === "realtime") {
+          // A realtime turn's live session died with the page and can't be
+          // revived — the channel opens a FRESH session on the new thread's
+          // socket (so nothing crashes; the re-streamed events seed it). Say so:
+          // the recovered dialogue is history, and any share must be re-toggled.
+          ctx.setStatus(
+            `recovered a live turn (${recovered.events.length} events) — its live session ended and a fresh one opens on send; ⏎ to send, Esc to discard`,
+          );
+        } else if (recovered.source === "reloaded") {
           ctx.setStatus(
             `recovered an in-progress turn (${recovered.events.length} events) — a reload interrupted its channel; ⏎ to send, Esc to discard`,
           );
@@ -1280,6 +1425,7 @@ export function multimodalModality(
           window.removeEventListener("blur", onWindowBlur);
           window.removeEventListener("focus", onWindowFocus);
           stopEndpointer();
+          videoSampler.dispose();
           clearInterval(meterTimer);
           void cancelThread();
           ink.dispose();
@@ -1298,14 +1444,22 @@ export function multimodalModality(
 }
 
 /**
- * Whether the config's transcriber streams PCM during talk (the AudioWorklet
- * path) rather than recording a whole segment for REST upload. Both the realtime
- * STT transcriber and the flagship conversational voice session stream — they
- * share the client capture path (model-tiers.md: `openai-voice` wires audio
- * exactly like `openai-realtime`); only the channel-side session differs.
+ * Whether the config streams PCM during talk (the AudioWorklet path) rather than
+ * recording a whole segment for REST upload. Three cases share the client
+ * capture path (model-tiers.md: `openai-voice` wires audio exactly like
+ * `openai-realtime`; only the channel-side session differs):
+ *  - the realtime STT transcriber (`openai-realtime`, rapid/premium),
+ *  - the flagship conversational voice session (`openai-voice`),
+ *  - the **realtime submode** (any live tier): the Gemini/OpenAI live engines
+ *    eat PCM as activity-window audio, so a live tier streams regardless of
+ *    which `transcriber` its preset left in place.
  */
 function usesPcmStream(config: IntentPipelineConfig): boolean {
-  return config.transcriber === "openai-realtime" || config.transcriber === "openai-voice";
+  return (
+    config.transcriber === "openai-realtime" ||
+    config.transcriber === "openai-voice" ||
+    config.submode === "realtime"
+  );
 }
 
 /** The arming key as a short label for the HUD/help, honoring the config. */
