@@ -20,23 +20,25 @@ The proposal's core model is sound and was adopted wholesale:
 
 ## Where it diverges — and why
 
-**Video transport: JPEG-frame streaming over a WebSocket relay, not WebRTC (for now).** The proposal
-recommends WebRTC video + an `RTCDataChannel`. We start with the host sampling the tab via
-`getDisplayMedia` into downscaled JPEG frames pushed over the same WebSocket that carries control.
-Reasons specific to this codebase:
+**Video transport: JPEG-frame streaming is the default; WebRTC is an opt-in option.** The proposal
+recommends WebRTC video + an `RTCDataChannel`. We shipped JPEG frames first — the host samples the tab
+via `getDisplayMedia` into downscaled frames pushed over the same WebSocket that carries control —
+because:
 
 - It **reuses machinery that already exists here** — the overlay's shot tool already does
   `getDisplayMedia({ preferCurrentTab })` and JPEG frame encoding.
 - It is **testable in Node**: the relay just moves bytes, so the whole pairing/relay/broadcast path
-  has real unit tests. WebRTC is effectively untestable headless and is a large amount of ICE/SDP
-  code before the first pixel.
+  has real unit tests. WebRTC media can't be exercised headless.
 - The user explicitly said latency and scroll fidelity are **not critical** ("even the scrolling
   doesn't have to be high fidelity").
 
-The divergence is deliberately **non-lossy for the future**: the wire protocol keeps an opaque
-`signal` passthrough that the relay forwards untouched in both directions, so WebRTC (video track +
-data channel, negotiated peer-to-peer) can be layered on **without changing the relay** — the
-control protocol and the host's coordinate mapping stay identical. The frame path becomes a fallback.
+**WebRTC was then added as a second mode** (`startPaintHost({ video: "webrtc" })`), keeping JPEG as the
+default. Because the design already reserved an opaque `signal` passthrough, this needed **no change to
+the frame/relay data path** — only per-viewer *addressing* of signal messages (WebRTC is
+point-to-point, so a host with several viewers negotiates one `RTCPeerConnection` each; the relay now
+routes signaling by a client id rather than broadcasting it). Control and coordinate mapping are
+identical in both modes; the iPad client adapts to whichever it receives (a `<video>` for WebRTC, an
+`<img>` for JPEG). Still deferred: automatic WebRTC→JPEG fallback on connection failure.
 
 **Control transport: the WebSocket relay, not a peer `RTCDataChannel`.** Same rationale — it is
 reliable, ordered, trivially testable, and correct on a trusted LAN. This is the part that matters
@@ -88,8 +90,11 @@ browse Bonjour, so it would require a native app. The CLI instead prints the LAN
 
 ## Status
 
-Built and tested: the ink surface, the protocol + codec, the relay (pairing, intent relay, video
-broadcast, session enrichment, HTTP serving), the host's intent-application core and sink adapters,
-and the overlay's remote-ink path. The browser-only wiring (websocket + screen capture on the host,
-the iPad client's gestures) is exercised by hand and via the guide's walkthrough. WebRTC video and
-Bonjour are documented seams, not yet implemented.
+Built and tested: the ink surface, the protocol + codec, the relay (pairing, intent relay, JPEG
+broadcast, **per-viewer signal routing**, session enrichment, HTTP serving), the host's
+intent-application core and sink adapters, and the overlay's remote-ink path. Both video modes are
+implemented — **JPEG** (default) and **WebRTC** (opt-in). The browser-only wiring (websocket + screen
+capture + the `RTCPeerConnection` offer/answer/ICE on the host, the iPad client's gestures + WebRTC
+answer) is exercised by hand and via the guide's walkthrough; its verifiable core — the relay's
+signal routing — has unit tests, and the client's inline JS is syntax-checked. Bonjour discovery and
+automatic WebRTC→JPEG fallback remain documented seams, not implemented.

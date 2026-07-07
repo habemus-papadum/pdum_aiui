@@ -103,9 +103,21 @@ export interface ViewState {
   documentZoom: number;
 }
 
-/** Opaque WebRTC (or other) signaling, forwarded either direction untouched. */
+/**
+ * Opaque WebRTC (or other) signaling, forwarded by the relay. The payload
+ * (`data`) is untouched — SDP descriptions and ICE candidates for the host↔iPad
+ * peer connection.
+ *
+ * `peer` addresses a specific viewer, because WebRTC is point-to-point while a
+ * host can have several: the host sends `{ peer: <clientId>, … }` and the relay
+ * routes it to that one client; a client sends no `peer`, and the relay stamps
+ * the sender's id as `peer` before handing it to the host. (Control intents and
+ * JPEG frames still broadcast to the whole room — only signaling is addressed.)
+ */
 export interface Signal {
   type: "signal";
+  /** Target viewer id (host→client); stamped by the relay on client→host. */
+  peer?: string;
   data: unknown;
 }
 
@@ -149,8 +161,8 @@ export type HostToRelay =
 /** relay → browser host. */
 export type RelayToHost =
   | { type: "registered"; id: string }
-  | { type: "clientJoined" }
-  | { type: "clientLeft" }
+  | { type: "clientJoined"; client: string }
+  | { type: "clientLeft"; client: string }
   | PaintIntent
   | Signal;
 

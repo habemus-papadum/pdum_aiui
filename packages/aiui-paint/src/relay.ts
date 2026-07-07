@@ -3,14 +3,18 @@
  * iPad (or any browser) view and draw on a desktop browser over the LAN.
  *
  * It plays the "shared backend" role from the design doc: it never owns the
- * painting model and (in this frame-streaming build) barely touches the media —
- * it pairs a **host** (the desktop browser, `/host`) with one or more **clients**
- * (the iPad, `/client`) into a room and relays between them:
+ * painting model and barely touches the media — it pairs a **host** (the desktop
+ * browser, `/host`) with one or more **clients** (the iPad, `/client`) into a room
+ * and relays between them:
  *   - host → clients: JSON view-state + opaque binary JPEG frames (broadcast);
- *   - clients → host: JSON paint/navigation intents + signaling.
- * It also advertises the list of connectable hosts, enriched from the on-disk
- * aiui channel registry (both live on the same machine) so each browser shows
- * which agent session it belongs to.
+ *   - clients → host: JSON paint/navigation intents;
+ *   - either direction: WebRTC signaling, addressed to one peer (see below).
+ * Signaling is the one thing it can't broadcast: WebRTC is point-to-point, so a
+ * `signal` from the host carries a `peer` (client id) the relay routes to, and a
+ * `signal` from a client is stamped with its id before reaching the host. It also
+ * advertises the list of connectable hosts, enriched from the on-disk aiui channel
+ * registry (both live on the same machine) so each browser shows which agent
+ * session it belongs to.
  *
  * SECURITY: unlike the channel server, this binds the LAN (`0.0.0.0`) and is
  * UNAUTHENTICATED by design — it is meant for a personal, trusted network (see
@@ -62,10 +66,12 @@ interface HostConn {
   ws: WebSocket;
   info: SessionInfo;
   registered: boolean;
-  clients: Set<ClientConn>;
+  /** Viewers of this host, keyed by client id so signaling can address one. */
+  clients: Map<string, ClientConn>;
 }
 
 interface ClientConn {
+  id: string;
   ws: WebSocket;
   host: HostConn | undefined;
 }
@@ -107,6 +113,7 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
   const hosts = new Map<string, HostConn>();
   const clients = new Set<ClientConn>();
   let hostSeq = 0;
+  let clientSeq = 0;
 
   const sessions = (): SessionInfo[] =>
     [...hosts.values()].filter((h) => h.registered).map((h) => ({ ...h.info }));
@@ -159,7 +166,7 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
       id,
       ws,
       registered: false,
-      clients: new Set(),
+      clients: new Map(),
       info: { id, label: "browser", busy: false, connectedAt: new Date().toISOString() },
     };
     hosts.set(id, conn);
@@ -167,8 +174,8 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
 
     ws.on("message", (data, isBinary) => {
       if (isBinary) {
-        // A video frame: fan out to every viewer of this host.
-        for (const client of conn.clients) {
+        // A JPEG video frame (frame-streaming mode): fan out to every viewer.
+        for (const client of conn.clients.values()) {
           sendRaw(client.ws, data, true);
         }
         return;
@@ -196,17 +203,24 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
         broadcastSessions();
         return;
       }
-      // viewState / signal → every viewer of this host.
-      if (message.type === "viewState" || message.type === "signal") {
-        for (const client of conn.clients) {
+      // viewState → every viewer; signal → the one addressed viewer (WebRTC is
+      // point-to-point, so signaling can't broadcast — see Signal.peer).
+      if (message.type === "viewState") {
+        for (const client of conn.clients.values()) {
           send(client.ws, message);
+        }
+      } else if (message.type === "signal") {
+        const target =
+          typeof message.peer === "string" ? conn.clients.get(message.peer) : undefined;
+        if (target) {
+          send(target.ws, { type: "signal", data: message.data });
         }
       }
     });
 
     ws.on("close", () => {
       hosts.delete(id);
-      for (const client of conn.clients) {
+      for (const client of conn.clients.values()) {
         client.host = undefined;
         send(client.ws, { type: "hostGone" });
       }
@@ -218,7 +232,7 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
 
   // An iPad (or any browser) viewing + drawing on a host.
   clientWss.on("connection", (ws) => {
-    const conn: ClientConn = { ws, host: undefined };
+    const conn: ClientConn = { id: `client-${++clientSeq}`, ws, host: undefined };
     clients.add(conn);
     send(ws, { type: "sessions", sessions: sessions() });
 
@@ -227,10 +241,10 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
       if (!host) {
         return;
       }
-      host.clients.delete(conn);
+      host.clients.delete(conn.id);
       conn.host = undefined;
       host.info.busy = host.clients.size > 0;
-      send(host.ws, { type: "clientLeft" });
+      send(host.ws, { type: "clientLeft", client: conn.id });
       broadcastSessions();
     };
 
@@ -250,10 +264,10 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
           return;
         }
         conn.host = host;
-        host.clients.add(conn);
+        host.clients.set(conn.id, conn);
         host.info.busy = true;
         send(ws, { type: "joined", host: host.id, label: host.info.label });
-        send(host.ws, { type: "clientJoined" });
+        send(host.ws, { type: "clientJoined", client: conn.id });
         broadcastSessions();
         return;
       }
@@ -261,8 +275,14 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
         leaveRoom();
         return;
       }
-      // Paint/navigation intents + signaling → the joined host.
-      if (conn.host && (isPaintIntent(message) || message.type === "signal")) {
+      if (!conn.host) {
+        return;
+      }
+      // Signaling → the host, stamped with this client's id so the host knows
+      // which peer connection it belongs to. Paint/navigation intents → the host.
+      if (message.type === "signal") {
+        send(conn.host.ws, { type: "signal", peer: conn.id, data: message.data });
+      } else if (isPaintIntent(message)) {
         send(conn.host.ws, message);
       }
     });

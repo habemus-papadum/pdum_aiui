@@ -56,6 +56,11 @@ class TestSocket {
     }
   }
 
+  /** Whether any currently-buffered JSON frame matches (does not consume). */
+  hasJson(pred: (m: Record<string, unknown>) => boolean): boolean {
+    return this.json.some(pred);
+  }
+
   async nextBinary(timeoutMs = 1000): Promise<Buffer> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -216,6 +221,55 @@ describe("paint relay", () => {
     client.sendJson({ type: "join", host: "host-nope" });
     const rejected = await client.nextJson((m) => m.type === "joinRejected");
     expect(rejected.reason).toBe("host not found");
+  });
+
+  it("carries a client id on clientJoined/clientLeft", async () => {
+    await startRelay();
+    const host = await registerHost();
+    const client = await connect("/client");
+    const { sessions } = await client.nextJson<{ sessions: Array<{ id: string }> }>(
+      (m) => m.type === "sessions" && (m.sessions as unknown[]).length === 1,
+    );
+    client.sendJson({ type: "join", host: sessions[0].id });
+    const joined = await host.nextJson((m) => m.type === "clientJoined");
+    expect(typeof joined.client).toBe("string");
+
+    client.sendJson({ type: "leave" });
+    const left = await host.nextJson((m) => m.type === "clientLeft");
+    expect(left.client).toBe(joined.client);
+  });
+
+  it("routes WebRTC signaling to the addressed viewer only", async () => {
+    await startRelay();
+    const host = await registerHost();
+    const a = await connect("/client");
+    const b = await connect("/client");
+    const list = await a.nextJson<{ sessions: Array<{ id: string }> }>(
+      (m) => m.type === "sessions" && (m.sessions as unknown[]).length === 1,
+    );
+    a.sendJson({ type: "join", host: list.sessions[0].id });
+    b.sendJson({ type: "join", host: list.sessions[0].id });
+    await host.nextJson((m) => m.type === "clientJoined");
+    await host.nextJson((m) => m.type === "clientJoined");
+
+    // A sends an SDP offer (no peer); the relay stamps A's id and hands it to the host.
+    a.sendJson({ type: "signal", data: { description: { type: "offer", sdp: "A" } } });
+    const relayed = await host.nextJson((m) => m.type === "signal");
+    expect(typeof relayed.peer).toBe("string");
+    expect(relayed.data).toEqual({ description: { type: "offer", sdp: "A" } });
+
+    // The host answers that specific peer; only A receives it (peer stripped).
+    host.sendJson({
+      type: "signal",
+      peer: relayed.peer,
+      data: { description: { type: "answer" } },
+    });
+    const answer = await a.nextJson((m) => m.type === "signal");
+    expect(answer.data).toEqual({ description: { type: "answer" } });
+    expect(answer.peer).toBeUndefined();
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(b.hasJson((m) => m.type === "signal")).toBe(false);
   });
 
   it("serves the iPad client and the HTTP endpoints", async () => {

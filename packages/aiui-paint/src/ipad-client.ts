@@ -42,7 +42,8 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     background: #0f131a; border-bottom: 1px solid #1c2130; }
   #stageTitle { font-size: 15px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #videoArea { position: relative; flex: 1; background: #000; overflow: hidden; }
-  #video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #jpegView, #rtcView { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; pointer-events: none; background: #000; }
   #ink { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
 
   #toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-wrap: wrap;
@@ -74,7 +75,8 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
       <span id="status"></span>
     </div>
     <div id="videoArea">
-      <img id="video" alt="">
+      <img id="jpegView" alt="">
+      <video id="rtcView" autoplay playsinline muted></video>
       <canvas id="ink"></canvas>
     </div>
     <div id="toolbar">
@@ -98,7 +100,9 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
   var stageScreen = byId("stageWrap");
   var listEl = byId("list");
   var hintEl = byId("hint");
-  var video = byId("video");
+  var jpegView = byId("jpegView");
+  var rtcView = byId("rtcView");
+  rtcView.muted = true;
   var ink = byId("ink");
   var ictx = ink.getContext("2d");
   var armBtn = byId("arm");
@@ -117,6 +121,51 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
   function clamp01(n) { return n < 0 ? 0 : (n > 1 ? 1 : n); }
   function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
 
+  // ── media: JPEG frames (an img) or WebRTC (a video), whichever the host sends ─
+  var mediaMode = "none";           // "jpeg" | "webrtc"
+  function showJpeg() { mediaMode = "jpeg"; rtcView.classList.add("hidden"); jpegView.classList.remove("hidden"); }
+  function showRtc() { mediaMode = "webrtc"; jpegView.classList.add("hidden"); rtcView.classList.remove("hidden"); }
+  function mediaSize() {
+    if (mediaMode === "webrtc") { return { w: rtcView.videoWidth, h: rtcView.videoHeight }; }
+    return { w: jpegView.naturalWidth, h: jpegView.naturalHeight };
+  }
+
+  // ── WebRTC receive: the host is the offerer; we answer and show the video ────
+  var RTC_CONFIG = { iceServers: [] };
+  var pc = null;
+  function ensurePc() {
+    if (pc) { return pc; }
+    pc = new RTCPeerConnection(RTC_CONFIG);
+    pc.onicecandidate = function (e) { if (e.candidate) { sendJson({ type: "signal", data: { candidate: e.candidate } }); } };
+    pc.ontrack = function (e) {
+      rtcView.srcObject = e.streams[0];
+      var p = rtcView.play();
+      if (p && p.catch) { p.catch(function () {}); }
+      showRtc();
+    };
+    return pc;
+  }
+  function handleSignal(data) {
+    if (!data) { return; }
+    if (data.description) {
+      var c = ensurePc();
+      c.setRemoteDescription(data.description).then(function () {
+        if (data.description.type === "offer") {
+          return c.createAnswer().then(function (a) { return c.setLocalDescription(a); }).then(function () {
+            sendJson({ type: "signal", data: { description: c.localDescription } });
+          });
+        }
+      }).catch(function () {});
+    } else if (data.candidate) {
+      ensurePc().addIceCandidate(data.candidate).catch(function () {});
+    }
+  }
+  function teardownPc() {
+    if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+    rtcView.srcObject = null;
+    mediaMode = "none";
+  }
+
   // ── websocket ──────────────────────────────────────────────────────────────
   ws.addEventListener("open", function () { hintEl.textContent = "Loading browsers..."; });
   ws.addEventListener("close", function () { hintEl.textContent = "Disconnected from relay."; });
@@ -126,9 +175,10 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
       handleControl(m);
       return;
     }
-    // A binary video frame.
+    // A binary JPEG frame (frame-streaming mode).
     var url = URL.createObjectURL(ev.data);
-    video.src = url;
+    jpegView.src = url;
+    if (mediaMode !== "jpeg") { showJpeg(); }
     if (state.lastUrl) { URL.revokeObjectURL(state.lastUrl); }
     state.lastUrl = url;
   });
@@ -138,13 +188,15 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     else if (m.type === "joined") { showStage(m.label || "browser"); }
     else if (m.type === "joinRejected") { hintEl.textContent = "Could not connect: " + (m.reason || "unknown"); }
     else if (m.type === "hostGone") { showSessions(); hintEl.textContent = "The browser disconnected."; }
+    else if (m.type === "signal") { handleSignal(m.data); }
     else if (m.type === "viewState") { updateStatus(m); }
   }
 
   function updateStatus(v) {
     var pct = v.scrollHeight > v.viewportHeight
       ? Math.round((v.scrollY / (v.scrollHeight - v.viewportHeight)) * 100) : 0;
-    statusEl.textContent = (v.armed ? "armed" : "idle") + "  ·  scroll " + pct + "%";
+    var mode = mediaMode === "none" ? "connecting" : mediaMode;
+    statusEl.textContent = (v.armed ? "armed" : "idle") + "  ·  " + mode + "  ·  scroll " + pct + "%";
   }
 
   // ── sessions list ────────────────────────────────────────────────────────────
@@ -177,15 +229,18 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
 
   function showStage(label) {
     titleEl.textContent = label;
+    teardownPc();                 // fresh media negotiation for this host
+    jpegView.removeAttribute("src");
     sessionsScreen.classList.add("hidden");
     stageScreen.classList.remove("hidden");
     setTimeout(resizeInk, 0);
   }
   function showSessions() {
     sendJson({ type: "leave" });
+    teardownPc();
     stageScreen.classList.add("hidden");
     sessionsScreen.classList.remove("hidden");
-    video.removeAttribute("src");
+    jpegView.removeAttribute("src");
     strokes = [];
   }
   byId("back").addEventListener("click", showSessions);
@@ -237,7 +292,8 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
   // ── coordinate mapping (letterboxed video content rect) ──────────────────────
   function contentRect() {
     var sw = ink.clientWidth, sh = ink.clientHeight;
-    var nw = video.naturalWidth, nh = video.naturalHeight;
+    var m = mediaSize();
+    var nw = m.w, nh = m.h;
     if (!nw || !nh) { return { x: 0, y: 0, w: sw, h: sh }; }
     var scale = Math.min(sw / nw, sh / nh);
     var w = nw * scale, h = nh * scale;

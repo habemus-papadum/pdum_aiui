@@ -8,7 +8,9 @@ draw on the iPad travels into the screenshot and the prompt just like ink drawn 
 This is the picture the design note
 [iPad-Controlled Browser Painting Stream](/proposals/ipad_browser_paint_stream_design) sketched; the
 [implementation plan](/proposals/ipad_browser_paint_stream_plan) records what was built and where it
-diverges (notably: JPEG-frame streaming over a websocket relay today, with a seam for WebRTC later).
+diverges. Video ships in two flavours: **JPEG frames** over the websocket relay (the default — simple,
+works everywhere) or **WebRTC** (opt-in — smooth, low-latency, peer-to-peer). Control and ink are
+identical either way.
 
 ::: danger Read before running
 The relay binds the **LAN** and is **unauthenticated** — by design, for a personal trusted network.
@@ -83,7 +85,29 @@ startPaintHost({
 
 **3. On the iPad**, open the printed URL in Safari, tap the browser you want, tap **Arm**, pick a
 color and thickness, and draw. The first frame prompts the desktop once for screen-capture (auto-
-accepted in the session browser).
+accepted in the session browser). The status line shows the active video mode (`jpeg`/`webrtc`).
+
+## Choosing the video transport
+
+The host picks how video reaches the iPad; the iPad adapts to whichever it receives.
+
+- **`video: "jpeg"` (default)** — the host samples the tab (~8 fps, downscaled) and pushes JPEG frames
+  over the relay. Simple, works on any browser, and it's testable. Good enough for annotating.
+- **`video: "webrtc"`** — the host negotiates a WebRTC peer connection per viewer (SDP + ICE over the
+  relay's `signal` passthrough) and sends the capture as a real video track: smooth and low-latency.
+
+```ts
+startPaintHost({
+  relayUrl: "http://your-mac.local:8788",
+  ink: sink,
+  video: "webrtc",                              // opt in
+  // rtcConfig: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }, // if peers span subnets
+});
+```
+
+On a trusted LAN the default empty `iceServers` connects on host candidates (add a STUN server only if
+the two devices are on different subnets). If WebRTC capture is unavailable the host simply sends no
+video and control still works; the two modes never mix on one host.
 
 ## Interacting from the iPad
 
@@ -129,7 +153,9 @@ surface.remoteEnd("s1", { x: 140, y: 20 });
 
 ## Limitations and seams
 
-- **Video is JPEG frames** (~8 fps, downscaled), not WebRTC — fine for annotating, not for video. The
-  protocol reserves an opaque `signal` passthrough so WebRTC can be added later with no relay change.
+- **JPEG is the default; WebRTC is opt-in** — the relay carries JPEG frames or WebRTC signaling (the
+  `signal` passthrough) without caring which. WebRTC gives smooth video but there is no automatic
+  fall-back from WebRTC to JPEG yet: if a peer connection fails, that viewer sees no video (control
+  still works) until it rejoins or the host is set to `"jpeg"`.
 - **No Bonjour discovery** — Safari web pages can't browse mDNS, so the CLI prints LAN URLs instead.
 - **One trust boundary** — no auth, no encryption. LAN only.

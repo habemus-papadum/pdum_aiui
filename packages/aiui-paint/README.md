@@ -40,6 +40,9 @@ const surface = new InkSurface({ fadeSec: () => 0 });
 startPaintHost({ relayUrl: "http://your-mac.local:8788", ink: inkSurfaceSink(surface) });
 ```
 
+Video is **JPEG frames** by default; pass `video: "webrtc"` to `startPaintHost` for a smooth,
+low-latency WebRTC peer connection instead (control and ink are identical either way).
+
 ## Entry points
 
 - `@habemus-papadum/aiui-paint` — browser-safe: the protocol, `startPaintHost`, `InkSurface`.

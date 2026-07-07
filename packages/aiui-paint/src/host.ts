@@ -2,8 +2,9 @@
  * The desktop **host** side of the paint stream — the browser page that owns the
  * painting model. It:
  *   - connects to the relay as a host and announces itself;
- *   - while a viewer is joined, streams downscaled JPEG frames of the tab and
- *     periodic view-state;
+ *   - while a viewer is joined, streams the tab as video — downscaled JPEG frames
+ *     (`video: "jpeg"`, default) or a WebRTC track per viewer (`video: "webrtc"`) —
+ *     plus periodic view-state;
  *   - applies incoming paint/navigation intents to an {@link InkSink} (arm,
  *     strokes) and to scroll/zoom handlers, mapping normalized 0..1 coordinates
  *     into its own surface pixels.
@@ -135,12 +136,18 @@ export function applyIntent(intent: PaintIntent, sink: InkSink, nav: NavHandlers
 
 // ── screen-capture frame source ──────────────────────────────────────────────
 
-/** A source of JPEG frames the host streams to viewers. */
+/** A source of screen frames the host streams to viewers. */
 export interface FrameSource {
   /** Acquire the capture (may prompt); resolves false if denied/unavailable. */
   start(): Promise<boolean>;
-  /** Grab one JPEG frame, or undefined if the grant was lost. */
+  /** Grab one JPEG frame, or undefined if the grant was lost (frame-streaming mode). */
   capture(): Promise<Uint8Array | undefined>;
+  /**
+   * The live capture `MediaStream` (WebRTC mode adds its tracks to each peer
+   * connection). Undefined until `start()` succeeds, or on a source that only
+   * supports frame streaming. The same stream backs both modes — one grant.
+   */
+  stream?(): MediaStream | undefined;
   stop(): void;
 }
 
@@ -194,6 +201,9 @@ export function displayCaptureSource(): FrameSource {
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       return canvasJpeg(canvas, FRAME_JPEG_QUALITY);
+    },
+    stream() {
+      return stream;
     },
     stop() {
       for (const track of stream?.getTracks() ?? []) {
@@ -266,7 +276,17 @@ export interface PaintHostOptions {
   channelPort?: number;
   /** Frame source. Defaults to {@link displayCaptureSource}. */
   frameSource?: FrameSource;
-  /** Frame rate while a viewer is watching. Defaults to 8. */
+  /**
+   * Video transport. `"jpeg"` (default) streams downscaled JPEG frames over the
+   * relay — simple, works everywhere. `"webrtc"` negotiates a peer connection per
+   * viewer (SDP/ICE over the relay's `signal` passthrough) for smooth, low-latency
+   * video; it needs a frame source that exposes a `MediaStream` (the default does).
+   * Control/ink is identical in both. Falls back to no video if capture is denied.
+   */
+  video?: "jpeg" | "webrtc";
+  /** WebRTC config (ICE servers). Defaults to `{ iceServers: [] }` — host-only, LAN. */
+  rtcConfig?: RTCConfiguration;
+  /** Frame rate while a viewer is watching (JPEG mode). Defaults to 8. */
   fps?: number;
   /** Navigation handlers. Default: window scroll + approximate transform zoom. */
   nav?: Partial<NavHandlers>;
@@ -316,6 +336,8 @@ function defaultViewState(armed: boolean): ViewState {
 export function startPaintHost(options: PaintHostOptions): PaintHost {
   const WS = options.WebSocketImpl ?? WebSocket;
   const fps = options.fps ?? 8;
+  const videoMode = options.video ?? "jpeg";
+  const rtcConfig: RTCConfiguration = options.rtcConfig ?? { iceServers: [] };
   const nav: NavHandlers = {
     scroll: options.nav?.scroll ?? windowScroll,
     zoom: options.nav?.zoom ?? makeTransformZoom(),
@@ -330,6 +352,9 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
   let capturing = false;
   let closed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  // One RTCPeerConnection per viewer (WebRTC is point-to-point). Keyed by the
+  // relay-assigned client id that rides clientJoined/clientLeft/signal.
+  const peers = new Map<string, RTCPeerConnection>();
 
   const url = hostWsUrl(options.relayUrl);
 
@@ -339,13 +364,27 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
     }
   };
 
-  const startStreaming = async (): Promise<void> => {
-    if (capturing) {
+  // Acquire the screen-capture grant once; keep it for the host's lifetime so
+  // viewers coming and going don't re-prompt. Returns whether capture is live.
+  const ensureCapture = async (): Promise<boolean> => {
+    if (!capturing) {
+      capturing = (await frames.start()) === true;
+    }
+    return capturing;
+  };
+
+  const startViewLoop = (): void => {
+    if (viewTimer) {
       return;
     }
-    capturing = (await frames.start()) === true;
-    if (!capturing) {
-      return; // capture denied — the viewer sees no video, control still works
+    viewTimer = setInterval(() => {
+      sendJson(options.viewState ? options.viewState() : defaultViewState(armed));
+    }, 500);
+  };
+
+  const startFrameLoop = async (): Promise<void> => {
+    if (frameTimer || !(await ensureCapture())) {
+      return; // already running, or capture denied — control still works
     }
     frameTimer = setInterval(
       () => {
@@ -358,12 +397,9 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       },
       Math.max(1, Math.round(1000 / fps)),
     );
-    viewTimer = setInterval(() => {
-      sendJson(options.viewState ? options.viewState() : defaultViewState(armed));
-    }, 500);
   };
 
-  const stopStreaming = (): void => {
+  const stopLoops = (): void => {
     if (frameTimer) {
       clearInterval(frameTimer);
       frameTimer = undefined;
@@ -372,8 +408,88 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       clearInterval(viewTimer);
       viewTimer = undefined;
     }
-    frames.stop();
-    capturing = false;
+  };
+
+  // ── WebRTC: the host is the offerer, one peer connection per viewer ──────────
+  const openPeer = async (clientId: string): Promise<void> => {
+    if (peers.has(clientId) || !(await ensureCapture())) {
+      return;
+    }
+    const stream = frames.stream?.();
+    if (!stream) {
+      return; // no MediaStream (capture denied, or a frame-only source) — no video
+    }
+    const pc = new RTCPeerConnection(rtcConfig);
+    peers.set(clientId, pc);
+    for (const track of stream.getTracks()) {
+      pc.addTrack(track, stream);
+    }
+    pc.addEventListener("icecandidate", (e) => {
+      if (e.candidate) {
+        sendJson({ type: "signal", peer: clientId, data: { candidate: e.candidate } });
+      }
+    });
+    pc.addEventListener("connectionstatechange", () => {
+      if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+        closePeer(clientId);
+      }
+    });
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendJson({ type: "signal", peer: clientId, data: { description: pc.localDescription } });
+    } catch {
+      closePeer(clientId);
+    }
+  };
+
+  const closePeer = (clientId: string): void => {
+    const pc = peers.get(clientId);
+    if (pc) {
+      try {
+        pc.close();
+      } catch {
+        // already closing
+      }
+      peers.delete(clientId);
+    }
+  };
+
+  const handleSignal = (peer: string | undefined, data: unknown): void => {
+    if (!peer || !data || typeof data !== "object") {
+      return;
+    }
+    const pc = peers.get(peer);
+    if (!pc) {
+      return;
+    }
+    const payload = data as {
+      description?: RTCSessionDescriptionInit;
+      candidate?: RTCIceCandidateInit;
+    };
+    if (payload.description) {
+      void pc.setRemoteDescription(payload.description).catch(() => {});
+    } else if (payload.candidate) {
+      void pc.addIceCandidate(payload.candidate).catch(() => {});
+    }
+  };
+
+  const onClientJoined = (clientId: string): void => {
+    viewers += 1;
+    startViewLoop();
+    if (videoMode === "webrtc") {
+      void openPeer(clientId);
+    } else {
+      void startFrameLoop();
+    }
+  };
+
+  const onClientLeft = (clientId: string): void => {
+    viewers = Math.max(0, viewers - 1);
+    closePeer(clientId);
+    if (viewers === 0) {
+      stopLoops(); // capture stays acquired for the next viewer
+    }
   };
 
   const connect = (): void => {
@@ -400,26 +516,24 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       }
       if (message.type === "registered" && typeof message.id === "string") {
         hostId = message.id;
-      } else if (message.type === "clientJoined") {
-        viewers += 1;
-        if (viewers === 1) {
-          void startStreaming();
-        }
-      } else if (message.type === "clientLeft") {
-        viewers = Math.max(0, viewers - 1);
-        if (viewers === 0) {
-          stopStreaming();
-        }
+      } else if (message.type === "clientJoined" && typeof message.client === "string") {
+        onClientJoined(message.client);
+      } else if (message.type === "clientLeft" && typeof message.client === "string") {
+        onClientLeft(message.client);
+      } else if (message.type === "signal") {
+        handleSignal(typeof message.peer === "string" ? message.peer : undefined, message.data);
       } else if (message.type === "setArmed" && typeof message.armed === "boolean") {
         armed = message.armed; // tracked for the view-state badge
         applyIntent(message as PaintIntent, options.ink, nav);
       } else if (message.type && isIntentType(message.type)) {
         applyIntent(message as PaintIntent, options.ink, nav);
       }
-      // `signal` frames (future WebRTC) are relayed to us but not yet consumed.
     });
     ws.addEventListener("close", () => {
-      stopStreaming();
+      stopLoops();
+      for (const clientId of [...peers.keys()]) {
+        closePeer(clientId);
+      }
       viewers = 0;
       if (!closed) {
         reconnectTimer = setTimeout(connect, 1000);
@@ -439,7 +553,12 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
       }
-      stopStreaming();
+      stopLoops();
+      for (const clientId of [...peers.keys()]) {
+        closePeer(clientId);
+      }
+      frames.stop();
+      capturing = false;
       ws?.close();
     },
   };
