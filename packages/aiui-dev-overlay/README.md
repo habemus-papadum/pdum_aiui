@@ -39,6 +39,9 @@ Options (all optional):
 | `sourceRoot` | the resolved Vite root | The app's source location, seeded as `window.__AIUI__.sourceRoot` and sent with every intent so lowered prompts can say where the page's code lives. |
 | `port` | `process.env.VITE_AIUI_PORT` | The channel server port (normally injected by `aiui vite`). |
 | `mount` | `true` | Set `false` to keep the port/source injection but mount from app code (custom modalities). |
+| `session` | `{ role: "app" }` | Session-bus role for this dev server's views (`app`, `code`, …). `false` skips the bus. See [Multi-view sessions](#multi-view-sessions). |
+| `intentTool` | `true` | `false` → a *contributor* view: joins the session bus but does **not** host a turn (no overlay). Pair with `session: { role: "code" }`. |
+| `codeUrl` | — | URL of the code reader; when set, the intent tool shows a **⧉ Code** button that opens it as a second, session-synced tab. |
 
 Every submission also carries **client context** on its hello — the tab's live url/title, the
 tab identity stamped by the aiui DevTools extension (`data-aiui-tab`), and the plugin-seeded
@@ -103,6 +106,28 @@ const shout: IntentModality = {
 
 mountIntentTool({ modalities: [textModality(), shout] });
 ```
+
+### Multi-view sessions
+
+Several browser views of one Claude Code session can share **arming**, the **prompt preview**, and
+**code contributions** over the channel's `/session` bus. The app tab *hosts* the turn; other
+views (the code reader, a git viewer) *contribute* to it — one prompt, several windows.
+
+`installSessionBus` (installed at `window.__AIUI__.session` by the Vite plugin) is the client:
+
+```ts
+const bus = window.__AIUI__.session;
+bus.set("armed", true);                       // shared, last-writer-wins
+bus.on("preview", (p) => render(p.text));     // the host's prompt-so-far
+bus.publish(SESSION_CONTRIBUTION_TOPIC, {      // feed the host's turn
+  kind: "selection", text, sourceLoc: "web/src/vec3.ts:21",
+});
+```
+
+The `session-contrib` exports (`SESSION_CONTRIBUTION_TOPIC`, `SelectionContribution`,
+`contributionToText`, `isShortSelection`) are the shared host↔contributor contract. A short
+selection inlines into the prompt; a long one is fenced under a location header. Full design:
+the repo's **Multi-View Sessions** guide.
 
 ### Also here
 

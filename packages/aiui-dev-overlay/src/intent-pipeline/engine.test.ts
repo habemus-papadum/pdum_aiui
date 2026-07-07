@@ -17,6 +17,30 @@ describe("Engine thread lifecycle", () => {
     expect(engine.events.some((e) => e.type === "thread-open" && e.trigger === "talk")).toBe(true);
   });
 
+  it("contributes external text as prompt content, opening the thread when armed", () => {
+    const engine = new Engine(
+      {},
+      ((): (() => number) => {
+        let t = 0;
+        return () => ++t;
+      })(),
+    );
+    // Not armed → a contribution is a no-op (needs an armed turn to join).
+    expect(engine.contribute("nope")).toBeUndefined();
+    expect(engine.threadOpen).toBe(false);
+
+    engine.setArmed(true);
+    const segment = engine.contribute("Regarding `a.ts:1`: `x`");
+    expect(typeof segment).toBe("number");
+    expect(engine.threadOpen).toBe(true);
+    expect(
+      engine.events.some((e) => e.type === "thread-open" && e.trigger === "contribution"),
+    ).toBe(true);
+    // It composes into the prompt as content (a transcript-final, not a correction).
+    const composed = composeIntent(engine.events, "replace");
+    expect(composed.items.some((i) => i.kind === "text" && i.text?.includes("a.ts:1"))).toBe(true);
+  });
+
   it("closes on send, and cancel-closes when disarmed mid-thread", () => {
     const engine = armedEngine();
     engine.strokeDone(10, { x: 0, y: 0, w: 5, h: 5 });

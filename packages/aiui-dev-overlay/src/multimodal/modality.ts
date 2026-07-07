@@ -46,6 +46,11 @@ import {
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
 import type { Ack, VideoChunk } from "../protocol";
+import {
+  contributionToText,
+  SESSION_CONTRIBUTION_TOPIC,
+  type SessionContribution,
+} from "../session-contrib";
 import { intentTurnStore } from "../turn-store";
 import {
   clearIntentOverrides,
@@ -129,6 +134,16 @@ export function multimodalModality(
       // to sessionStorage so a full reload (an overlay-source edit under the dev
       // server — see turn-store.ts) can still recover the in-progress turn.
       const turn = intentTurnStore();
+
+      // The session bus (installed by the Vite plugin's mount module, or app
+      // code): this modality is the turn HOST — it publishes `armed` + a prompt
+      // `preview` to the session's other views (the code reader) and ingests
+      // their `contribution`s. Undefined without a bus (manual mount / no
+      // channel): the turn just works locally, exactly as before.
+      const bus = typeof window !== "undefined" ? window.__AIUI__?.session : undefined;
+      // Guards the arming feedback loop: while applying a remote arm we must not
+      // re-broadcast it (the emitted `armed` event would echo back out).
+      let applyingRemoteArm = false;
 
       // ── page-level interaction layers (light DOM: native selection must
       // resolve against the preview text, per field-notes) ────────────────────
@@ -1354,6 +1369,28 @@ export function multimodalModality(
         return [];
       };
 
+      // The prompt-so-far, broadcast to the session's other views so the code
+      // reader can mirror it (read-only). Deduped — only a real text change is
+      // worth a bus message.
+      let lastPreview = "";
+      const broadcastPreview = (): void => {
+        if (!bus) {
+          return;
+        }
+        const text = engine.threadOpen
+          ? composeIntent(currentThreadEvents(), config.correctionPolicy)
+              .items.filter((i) => i.kind === "text")
+              .map((i) => i.text ?? "")
+              .join(" ")
+              .trim()
+          : "";
+        if (text === lastPreview) {
+          return;
+        }
+        lastPreview = text;
+        bus.set("preview", { text, threadOpen: engine.threadOpen, armed: engine.armed });
+      };
+
       // ── wire + lifecycle listener (preview & inspector subscribe separately) ─
       engine.onEvent((event) => {
         if (event.type === "thread-open") {
@@ -1362,6 +1399,11 @@ export function multimodalModality(
         if (threadPromise && !merging) {
           outbox.push(event);
           scheduleFlush();
+        }
+        // Mirror local arming to the session bus (unless we're applying a remote
+        // arm — that would echo back out and ping-pong).
+        if (event.type === "armed" && bus && !applyingRemoteArm) {
+          bus.set("armed", event.on);
         }
         if (event.type === "thread-close") {
           if (event.reason === "send") {
@@ -1382,6 +1424,7 @@ export function multimodalModality(
         } else {
           turn.clear();
         }
+        broadcastPreview();
         renderHud();
       });
       renderHud();
@@ -1430,6 +1473,50 @@ export function multimodalModality(
         getEvents: (count) => engine.events.slice(-count),
       });
 
+      // ── session bus: this modality hosts the shared turn ─────────────────────
+      // Apply a remote arm (from the reader's toggle), ingest contributions (a
+      // code selection → turn text), and publish the current state once the bus
+      // is ready so a view that connected first catches up.
+      let disposeBus: (() => void) | undefined;
+      if (bus) {
+        const offArmed = bus.on("armed", (value) => {
+          if (typeof value !== "boolean" || value === engine.armed) {
+            return;
+          }
+          applyingRemoteArm = true;
+          engine.setArmed(value);
+          applyingRemoteArm = false;
+          renderHud();
+        });
+        const offContrib = bus.onPublish(SESSION_CONTRIBUTION_TOPIC, (payload) => {
+          const c = payload as SessionContribution | undefined;
+          if (!c || typeof c.text !== "string" || c.text.length === 0) {
+            return;
+          }
+          // A contribution implies intent: arm if the session isn't already.
+          if (!engine.armed) {
+            engine.setArmed(true);
+          }
+          engine.contribute(contributionToText(c));
+          renderHud();
+          broadcastPreview();
+          ctx.setStatus(
+            c.kind === "selection"
+              ? "added a code selection to the turn"
+              : "added a note to the turn",
+          );
+        });
+        const offReady = bus.onReady(() => {
+          bus.set("armed", engine.armed);
+          broadcastPreview();
+        });
+        disposeBus = () => {
+          offArmed();
+          offContrib();
+          offReady();
+        };
+      }
+
       // ── turn recovery: adopt an in-progress turn a remount/reload interrupted ─
       const recovered = turn.recover();
       if (recovered) {
@@ -1458,6 +1545,7 @@ export function multimodalModality(
           if (instrumentation?.remotePaint === remotePaint) {
             instrumentation.remotePaint = undefined;
           }
+          disposeBus?.();
           overlayTools.dispose();
           uninstallKeys();
           undragHud();

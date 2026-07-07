@@ -111,12 +111,34 @@ export class Engine {
 
   // ── thread ─────────────────────────────────────────────────────────────────
 
-  private ensureThread(trigger: "talk" | "ink" | "shot"): void {
+  private ensureThread(trigger: "talk" | "ink" | "shot" | "contribution"): void {
     if (this.threadOpen || !this.armed) {
       return;
     }
     this.threadOpen = true;
     this.emit(this.stamp({ type: "thread-open", trigger }));
+  }
+
+  /**
+   * Ingest text contributed from ANOTHER view of the session (a code selection
+   * from the reader, over the session bus) as content in the current turn. Opens
+   * the thread if armed, then emits it as a `transcript-final` so it composes
+   * into the prompt exactly like spoken text and shows in the preview. No-op when
+   * not armed — a contribution needs an armed turn to join. Returns the segment
+   * number it was recorded under, or undefined.
+   */
+  contribute(text: string): number | undefined {
+    if (!this.armed || !text) {
+      return undefined;
+    }
+    this.ensureThread("contribution");
+    const segment = ++this.segmentCounter;
+    // Deliberately NOT flagged as a correction (unlike transcriptFinal's
+    // correct-mode guard): a contribution is always content.
+    this.emit(
+      this.stamp({ type: "transcript-final", segment, text, latencyMs: 0, model: "contribution" }),
+    );
+    return segment;
   }
 
   send(): void {

@@ -39,7 +39,13 @@ export default defineConfig(({ command, isPreview }) => ({
     // the multimodal (intent-v1) tab active, with the text tab as the escape
     // hatch. (Sends fail against an old channel that doesn't know intent-v1;
     // that degrades to a widget error, not a crash.)
-    aiuiDevOverlay({ locator: { cellFactories: ["cell"] } }),
+    // `code: true` serves the bundled code reader from THIS dev server at
+    // /__aiui/code and shows the intent tool's "Code" button that opens it in a
+    // second tab. No separate reader process — the reader is bundled here and
+    // talks to the channel's code sidecar over the injected port. The two tabs
+    // share arming + the prompt preview over the session bus (this dev server's
+    // views are role "app" by default); see docs/guide/multi-view-sessions.md.
+    aiuiDevOverlay({ locator: { cellFactories: ["cell"] }, code: true }),
     solid(),
   ],
 }));

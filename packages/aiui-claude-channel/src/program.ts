@@ -33,6 +33,7 @@ export function buildProgram(): Command {
       "--launch-info <json>",
       "launcher-provided session summary (browser/DevTools MCP wiring), surfaced at /debug/api/info",
     )
+    .option("--sidecars <json>", "JSON array of session sidecar descriptors to host")
     .action(runMcp);
 
   program

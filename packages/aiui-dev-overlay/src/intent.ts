@@ -165,6 +165,13 @@ export interface IntentToolOptions {
   actor?: string;
   /** Channel port; defaults to the plugin-injected `window.__AIUI__.port`. */
   port?: number | string;
+  /**
+   * URL of the **code reader** view. When set, the panel shows a "Code" button
+   * that opens it in a second tab; the two tabs share arming + the prompt
+   * preview over the session bus (see docs/guide/multi-view-sessions.md). Unset
+   * → no button.
+   */
+  codeUrl?: string;
   /** Mount even outside a dev-like environment (demos, tests). */
   force?: boolean;
   /** Test hook: replaces the global `WebSocket`. */
@@ -417,12 +424,26 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   } else {
     debugLink.style.display = "none";
   }
+  // The "Code" affordance: open the code reader in a second tab. The two tabs
+  // share arming + the prompt preview over the session bus, so you can arm here,
+  // switch to the reader, select code, and it joins this turn.
+  const codeLink = document.createElement("a");
+  codeLink.className = "iconbtn";
+  codeLink.textContent = "⧉ Code";
+  codeLink.title = "Open the code reader (shares this session)";
+  codeLink.target = "aiui-code";
+  codeLink.rel = "noreferrer";
+  if (typeof options.codeUrl === "string" && options.codeUrl.length > 0) {
+    codeLink.href = options.codeUrl;
+  } else {
+    codeLink.style.display = "none";
+  }
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
   closeBtn.className = "iconbtn";
   closeBtn.textContent = "✕";
   closeBtn.setAttribute("aria-label", "Close");
-  head.append(title, debugLink, closeBtn);
+  head.append(title, debugLink, codeLink, closeBtn);
 
   const tabs = document.createElement("div");
   tabs.className = "tabs";

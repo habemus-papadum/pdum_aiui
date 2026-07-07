@@ -109,4 +109,46 @@ describe("aiuiDevOverlay", () => {
     expect(tags).toHaveLength(1);
     expect(tags[0].children).toContain("window.__AIUI__");
   });
+
+  it("installs the session bus with role 'app' by default", () => {
+    process.env[PORT_ENV] = "50123";
+    const code = loadMount(aiuiDevOverlay());
+    expect(code).toContain('installSessionBus({ port: 50123, role: "app" });');
+    expect(code).toContain("installToolsBridge({ port: 50123 });");
+  });
+
+  it("carries the configured session role and label", () => {
+    process.env[PORT_ENV] = "50123";
+    expect(loadMount(aiuiDevOverlay({ session: { role: "code", label: "Reader" } }))).toContain(
+      'installSessionBus({ port: 50123, role: "code", label: "Reader" });',
+    );
+  });
+
+  it("session: false skips the bus (bridge + mount stay)", () => {
+    process.env[PORT_ENV] = "50123";
+    const code = loadMount(aiuiDevOverlay({ session: false }));
+    expect(code).not.toContain("installSessionBus");
+    expect(code).toContain("installToolsBridge");
+    expect(code).toContain("mountIntentTool");
+  });
+
+  it("code:true points the 'Code' button at the served reader route", () => {
+    process.env[PORT_ENV] = "50123";
+    expect(loadMount(aiuiDevOverlay({ code: true }))).toContain('codeUrl: "/__aiui/code"');
+  });
+
+  it("omits the 'Code' button when code is not set", () => {
+    process.env[PORT_ENV] = "50123";
+    expect(loadMount(aiuiDevOverlay({}))).not.toContain("codeUrl:");
+  });
+
+  it("intentTool: false is a contributor view — bus + bridge, no turn host", () => {
+    process.env[PORT_ENV] = "50123";
+    const code = loadMount(aiuiDevOverlay({ intentTool: false, session: { role: "code" } }));
+    expect(code).toContain('installSessionBus({ port: 50123, role: "code" });');
+    expect(code).toContain("installToolsBridge({ port: 50123 });");
+    // No hosting overlay: no mount, no keep/observer, not even the import.
+    expect(code).not.toContain("mountIntentTool");
+    expect(code).not.toContain("MutationObserver");
+  });
 });

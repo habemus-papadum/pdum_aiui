@@ -27,6 +27,9 @@ into your live, permission-skipping Claude Code session (loaded via
 `--dangerously-load-development-channels`). Think about what that means:
 
 - Anything that can reach the channel's local web backend can steer your agent.
+- When the project has an LSP setup, the channel also hosts the [code reader](./code-reader)'s
+  backend on the same port — read-only access to the project's source files, served with
+  permissive CORS (any local page or process that can reach the loopback port can read them).
 - The channel code itself runs inside your session's trust boundary. If you don't understand what
   this code does, **the custom channel could do anything to your computer**.
 

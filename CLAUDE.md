@@ -60,9 +60,17 @@ Every package's dev manifest points at **source**, and the `dist/` mapping lives
 "publishConfig": {
   "access": "…",
   "main": "./dist/index.js", "module": "./dist/index.js", "types": "./dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } }
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "default": "./dist/index.js" }
+  }
 }
 ```
+
+Every conditional-exports object in `publishConfig` must end with a `"default"` condition.
+Without it, `require.resolve()` on the *installed* package throws
+`ERR_PACKAGE_PATH_NOT_EXPORTED` — and source-first dev masks this completely, because the dev
+`exports` are bare strings that match any condition (this silently broke the code sidecar for
+installed consumers before PR #1's review caught it).
 
 So `workspace:^` deps behave like Python *editable installs*: edit a package, and every
 in-workspace consumer (the demo's dev server, sibling tests, the tsx-run CLI) picks it up with

@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { channelSourceDir, watchChannelSource } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
+import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
 import { PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
+import type { Sidecar } from "../sidecar";
 import { projectCacheDir } from "../trace";
 import { startWebServer, type WebServer } from "../web";
 
@@ -20,6 +22,14 @@ export interface McpOptions {
    * not behavior) and surfaced at `GET /debug/api/info`. See launch-info.ts.
    */
   launchInfo?: string;
+  /**
+   * JSON array of session sidecar descriptors the launcher wants this channel to
+   * host (see load-sidecars.ts). Each is dynamic-imported and constructed, then
+   * passed to `startWebServer({ sidecars })`. The channel takes no dependency on
+   * any concrete sidecar — the descriptor's `module` string is the caller's. A
+   * descriptor that fails to load is logged to stderr and skipped, never fatal.
+   */
+  sidecars?: string;
 }
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
@@ -54,6 +64,15 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
       // Diagnostics only — a bad value must never stop the server.
       process.stderr.write("[aiui-channel] ignoring malformed --launch-info JSON\n");
     }
+  }
+  // Resolve the launcher's sidecar descriptors into live sidecars. Both the
+  // parse and each load are best-effort (see load-sidecars.ts): a malformed
+  // value or one bad descriptor is logged to stderr and skipped, never fatal, so
+  // this can't stop the server from coming up. Stays generic — the channel
+  // dynamic-imports whatever `module` specifiers it's handed.
+  let sidecars: Sidecar[] | undefined;
+  if (options.sidecars !== undefined) {
+    sidecars = await loadSidecars(parseSidecarDescriptors(options.sidecars));
   }
   // The page-tool registry is shared by the MCP tools (which read and drive it)
   // and the `/tools` websocket in the web backend (which feeds it), so create it
@@ -98,6 +117,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
     traceDir: projectCacheDir(),
     launchInfo,
+    sidecars,
     pageTools,
     // The *explicit* --tag only (not the UUID minted above): the UUID is an
     // address for the registry, not a human label — an untagged server's
