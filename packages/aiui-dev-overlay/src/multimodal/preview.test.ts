@@ -289,30 +289,85 @@ describe("chunk-scoped corrections", () => {
 });
 
 describe("selection chips in the transcript", () => {
-  it("pins the app-selection chip at the start, updates it, and drops it", async () => {
+  it("renders a MINIMAL app-selection chip; a refinement supersedes in place", async () => {
     const { engine } = mounted();
     engine.talkStart(); // opens the thread
     engine.appSelection({ text: "the histogram title", sourceLoc: "src/App.tsx:10:2" });
     await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     let chip = body.querySelector(".mm-sel-chip") as HTMLElement;
-    expect(chip.textContent).toContain('about: "the histogram title"');
-    expect(chip.textContent).toContain("src/App.tsx:10:2");
-    // Pinned at the START of the transcript flow.
-    expect(body.firstElementChild).toBe(chip);
+    // Minimal: glyph + marker — no inline excerpt, no inline location. The
+    // substance rides the title (full text, never JS-truncated) and the peek.
+    expect(chip.textContent).toBe("⌖ sel_1");
+    expect(chip.classList.contains("mm-sel-app")).toBe(true);
+    expect(chip.title).toBe("src/App.tsx:10:2\nthe histogram title");
 
+    // A refinement (nothing contentful in between) keeps ONE chip, same marker.
     engine.appSelection({ text: "a different span" });
     await flush();
+    expect(body.querySelectorAll(".mm-sel-chip")).toHaveLength(1);
     chip = body.querySelector(".mm-sel-chip") as HTMLElement;
-    expect(chip.textContent).toContain('about: "a different span"');
-    expect(body.querySelectorAll(".mm-sel-chip")).toHaveLength(1); // last wins, one chip
+    expect(chip.textContent).toBe("⌖ sel_1");
 
     engine.appSelectionDrop();
     await flush();
     expect(body.querySelector(".mm-sel-chip")).toBeNull();
   });
 
-  it("renders a code-selection chip — excerpt AND location — at its stream position", async () => {
+  it("chips sit at their stream positions, interleaved with the text", async () => {
+    const { engine } = mounted();
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "make this wider", 90, "mock");
+    engine.appSelection({ text: "the histogram title" });
+    const s2 = engine.talkStart() ?? 2;
+    engine.talkEnd();
+    engine.transcriptFinal(s2, "and match this", 90, "mock");
+    engine.appSelection({ text: "the legend caption" });
+    await flush();
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    const seq = [...body.querySelectorAll(".mm-seg, .mm-sel-chip")].map((el) =>
+      el.classList.contains("mm-sel-chip") ? el.textContent : "text",
+    );
+    // text, chip, text, chip — each selection where it happened, own marker.
+    expect(seq).toEqual(["text", "⌖ sel_1", "text", "⌖ sel_2"]);
+  });
+
+  it("hover peeks the selection (loc + FULL text, CSS-clamped); ✕ drops that marker", async () => {
+    const { engine } = mounted();
+    const longText =
+      "a selected sentence well past any excerpt cap, kept whole in the peek card body";
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "make this wider", 90, "mock");
+    engine.appSelection({ text: longText, sourceLoc: "src/App.tsx:10:2" });
+    engine.transcriptFinal(2, "and this", 90, "mock");
+    engine.appSelection({ text: "second selection" });
+    await flush();
+
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    const wraps = [...body.querySelectorAll(".mm-thumb-wrap")] as HTMLElement[];
+    expect(wraps).toHaveLength(2);
+
+    // The peek: the mm-thumb-peek pattern as a card — location + the whole
+    // text (clamping is CSS line-clamp; nothing is truncated in the DOM).
+    wraps[0].dispatchEvent(new MouseEvent("mouseenter"));
+    const peek = document.body.querySelector(".mm-sel-peek") as HTMLElement;
+    expect(peek).not.toBeNull();
+    expect(peek.querySelector(".mm-sel-peek-loc")?.textContent).toBe("src/App.tsx:10:2");
+    expect(peek.querySelector(".mm-sel-peek-text")?.textContent).toBe(longText);
+    wraps[0].dispatchEvent(new MouseEvent("mouseleave"));
+    expect(document.body.querySelector(".mm-sel-peek")).toBeNull();
+
+    // The ✕ drops exactly THIS marker — the other chip survives.
+    (wraps[0].querySelector(".mm-thumb-x") as HTMLButtonElement).click();
+    expect(engine.events.at(-1)).toMatchObject({ type: "app-selection-drop", marker: "sel_1" });
+    await flush();
+    const chips = [...body.querySelectorAll(".mm-sel-chip")].map((c) => c.textContent);
+    expect(chips).toEqual(["⌖ sel_2"]);
+  });
+
+  it("renders a minimal code-selection chip whose ✕ streams a code-selection-drop", async () => {
     const { engine, preview } = mounted();
     const s1 = engine.talkStart() ?? 1;
     engine.talkEnd();
@@ -321,11 +376,10 @@ describe("selection chips in the transcript", () => {
     await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     const chip = body.querySelector(".mm-sel-chip") as HTMLElement;
-    // The code rides the chip (whitespace-collapsed) with its location beside
-    // it — a bare locator is opaque when debugging — and the full text on hover.
-    expect(chip.textContent).toContain("⧉ function curb() {}");
-    expect(chip.textContent).toContain("src/c.ts:1:1");
-    expect(chip.title).toBe("function curb()\n{}");
+    // Same minimal pill language as the app chip; the glyph tells them apart.
+    expect(chip.textContent).toBe("⧉ code_1");
+    expect(chip.classList.contains("mm-sel-code")).toBe(true);
+    expect(chip.title).toBe("src/c.ts:1:1\nfunction curb()\n{}");
     // Still a chip, not transcript text: no .mm-seg carries the code.
     const segs = [...body.querySelectorAll(".mm-seg")].map((s) => s.textContent);
     expect(segs.join(" ")).not.toContain("function curb()");
@@ -334,6 +388,15 @@ describe("selection chips in the transcript", () => {
     preview.setCorrectMode(true);
     const editArea = document.querySelector(".mm-edit-area") as HTMLTextAreaElement;
     expect(editArea.value).toBe("look at this helper");
+    engine.setMode("ink");
+    preview.setCorrectMode(false);
+
+    // The ✕ retracts it — "same thing as deleting a screenshot".
+    const wrap = chip.closest(".mm-thumb-wrap") as HTMLElement;
+    (wrap.querySelector(".mm-thumb-x") as HTMLButtonElement).click();
+    expect(engine.events.at(-1)).toMatchObject({ type: "code-selection-drop", marker: "code_1" });
+    await flush();
+    expect(body.querySelector(".mm-sel-chip")).toBeNull();
   });
 
   it("clears both chip kinds at thread boundaries", async () => {

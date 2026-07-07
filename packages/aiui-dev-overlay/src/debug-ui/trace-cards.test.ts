@@ -113,6 +113,34 @@ describe("classifyStage", () => {
     });
   });
 
+  it("classifies both selection kinds and their drops onto the in lane, always shown", () => {
+    // Selections are context riding the turn ("did my selection make it in?")
+    // — the always-shown context bucket, arriving from the browser.
+    expect(classifyStage(stage({ label: "app selection", kind: "ir" }))).toMatchObject({
+      direction: "in",
+      category: "context",
+      icon: "⌖",
+      title: "app selection",
+      error: false,
+    });
+    expect(classifyStage(stage({ label: "app selection dropped", kind: "ir" }))).toMatchObject({
+      direction: "in",
+      category: "context",
+      title: "app selection dropped",
+    });
+    expect(classifyStage(stage({ label: "code selection", kind: "ir" }))).toMatchObject({
+      direction: "in",
+      category: "context",
+      icon: "⧉",
+      title: "code selection",
+    });
+    expect(classifyStage(stage({ label: "code selection dropped", kind: "ir" }))).toMatchObject({
+      direction: "in",
+      category: "context",
+      title: "code selection dropped",
+    });
+  });
+
   it("falls through unknown labels to a generic card by kind (never drops)", () => {
     expect(classifyStage(stage({ label: "brand new stage", kind: "ir" }))).toMatchObject({
       direction: "internal",

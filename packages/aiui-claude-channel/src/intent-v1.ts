@@ -25,10 +25,13 @@
  *    transcribed here; the produced `transcript-final` event is both merged
  *    into the stream and pushed back to the client as a `lowered` message.
  *  - `context`  → JSON `{ selection }`: the on-screen selection, at most once —
- *    the LEGACY carrier. Current clients ride the selection on the stream
- *    itself as an `app-selection` event (emitted at thread-open, re-emitted on
- *    change, retracted by `app-selection-drop`); the fin wrap prefers the
- *    stream's selection and falls back to this chunk for older clients.
+ *    the LEGACY carrier. Current clients ride selections on the stream itself
+ *    as positional `app-selection` events (marker `sel_N`; one at thread-open,
+ *    one per mid-turn selection, each retractable by marker via
+ *    `app-selection-drop`), which `composeIntent` renders INLINE in the body
+ *    at their stream position. Only this legacy chunk still lowers through the
+ *    context preamble (`selectionSections`) — and only when the stream carried
+ *    no `app-selection` events of its own.
  *
  * A correction event that arrives without a `patch` while the hello selected
  * the OpenAI corrector is a request: the V4A diff runs here (against the current
@@ -70,7 +73,12 @@ import type { CallCost } from "./cost";
 import type { ChunkDescriptor } from "./frame";
 import { DEFAULT_GEMINI_LIVE_MODEL, openGeminiLiveSession } from "./gemini-live";
 import { type LabelEntry, resolveSegments } from "./live-resolve";
-import { LIVE_NUDGE_TEXT, type LiveSession, type LiveSessionCallbacks } from "./live-session";
+import {
+  LIVE_COMPOSER_INSTRUCTIONS,
+  LIVE_NUDGE_TEXT,
+  type LiveSession,
+  type LiveSessionCallbacks,
+} from "./live-session";
 import { DEFAULT_OPENAI_LIVE_MODEL, openOpenAiLiveSession } from "./openai-live";
 import {
   asSelection,
@@ -589,7 +597,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // (its bytes are saved then, not at fin) and wired into the matching shot
   // event so fin does no disk I/O.
   const shotPaths = new Map<string, string>();
+  // The LEGACY context-chunk selection (older clients). Ignored the moment the
+  // stream carries its own `app-selection` events — those render inline in the
+  // body, and the preamble section must not duplicate them.
   let selection: SelectionContext | undefined;
+  let streamHasSelection = false;
   let engagedSilenceTrim = false;
   let engagedImageDownscale = false;
 
@@ -1073,13 +1085,27 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         // raw input frames. (The composed/fin stages then show what they
         // lowered to.)
         if (event.type === "app-selection") {
+          // The stream carries its own selections now: they render INLINE in
+          // the body (composeIntent), so the legacy context-chunk preamble
+          // must stand down for this turn or the selection would ride twice.
+          streamHasSelection = true;
           const { at: _at, type: _type, ...data } = event;
           trace?.record({ kind: "ir", label: "app selection", data });
         } else if (event.type === "code-selection") {
           const { at: _at, type: _type, ...data } = event;
           trace?.record({ kind: "ir", label: "code selection", data });
         } else if (event.type === "app-selection-drop") {
-          trace?.record({ kind: "ir", label: "app selection dropped", data: {} });
+          trace?.record({
+            kind: "ir",
+            label: "app selection dropped",
+            data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
+          });
+        } else if (event.type === "code-selection-drop") {
+          trace?.record({
+            kind: "ir",
+            label: "code selection dropped",
+            data: { marker: event.marker },
+          });
         }
         // talk-end is the segment-commit boundary for the streaming transcriber
         // (PTT stays the contract — no `last` flag on the audio frames). The
@@ -1315,13 +1341,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
 
     // A cancelled turn (or one with nothing to say) lowers to no notification.
     if (!cancelled && composed.prompt !== "") {
-      // The app selection: the stream's own `app-selection` event (folded by
-      // composeIntent — last one wins, drops honored) is the record; the
-      // legacy send-time `context` chunk stays as the fallback for older
-      // clients. Either way it lowers through selectionSections, so the
-      // wording is identical to text-concat's selection block.
+      // App selections are stream events, folded by composeIntent into the
+      // BODY at their positions (marker-keyed latest-wins, drops honored) —
+      // already part of composed.prompt. The preamble's selection section
+      // survives only for the legacy send-time `context` chunk (older
+      // clients), and stands down when the stream carried its own selections.
       const prompt = wrapWithContext(
-        [...staticSections, ...selectionSections(composed.appSelection ?? selection)],
+        [...staticSections, ...selectionSections(streamHasSelection ? undefined : selection)],
         composed.prompt,
       );
       const meta = Object.keys(composed.meta).length > 0 ? composed.meta : undefined;
@@ -1418,11 +1444,14 @@ function realtimeIntentProcessor(
   // transcripts). It is the fallback compiler's input and the trace's record.
   let events: IntentEvent[] = [];
   let selection: SelectionContext | undefined;
-  // The stream's own app selection (last `app-selection` event, drop honored) —
-  // preferred over the legacy `context` chunk at the fin wrap, same as the
-  // classic path (there composeIntent folds it; here the chronicle is folded
-  // incrementally because the tool-call path never runs composeIntent).
-  let chronicleSelection: SelectionContext | undefined;
+  // The chronicle's app selections. The live model never sees the events, so
+  // for the TOOL-CALL path the latest still-carried one (marker-keyed: a drop
+  // only clears its own marker) lowers into the context preamble, preferred
+  // over the legacy `context` chunk. The step-3 FALLBACK runs composeIntent
+  // over the chronicle, which now renders every carried selection INLINE in
+  // the body — the preamble stands down there (`chronicleHasSelection`).
+  let chronicleSelection: { marker?: string; context: SelectionContext } | undefined;
+  let chronicleHasSelection = false;
   // Shot metadata kept keyed by label — NEVER sent to the live model; re-attached
   // by resolveSegments at fin (the `<screenshot>` block the agent gets).
   const shotRegistry = new Map<string, LabelEntry>();
@@ -1552,6 +1581,7 @@ function realtimeIntentProcessor(
             {
               apiKey: apiKey ?? "",
               model: () => intent.liveModel,
+              instructions: LIVE_COMPOSER_INSTRUCTIONS,
               ...(options.geminiLiveSocketFactory !== undefined
                 ? { socketFactory: options.geminiLiveSocketFactory }
                 : {}),
@@ -1562,6 +1592,7 @@ function realtimeIntentProcessor(
             {
               apiKey: apiKey ?? "",
               model: () => intent.liveModel,
+              instructions: LIVE_COMPOSER_INSTRUCTIONS,
               ...(options.openaiLiveSocketFactory !== undefined
                 ? { socketFactory: options.openaiLiveSocketFactory }
                 : {}),
@@ -1575,6 +1606,9 @@ function realtimeIntentProcessor(
         vendor: intent.liveVendor,
         model: intent.liveModel,
         capabilities: session.capabilities,
+        // The persona actually sent at open (passed above), so the trace shows
+        // the instructions this session ran under — including the commit gate.
+        instructions: LIVE_COMPOSER_INSTRUCTIONS,
       },
     });
   } else {
@@ -1614,22 +1648,45 @@ function realtimeIntentProcessor(
           trace?.record({ kind: "info", label: "video-share", data: { on: event.on } });
           break;
         case "app-selection": {
-          // First-class in the trace here too; the fin wrap folds the
-          // chronicle's effective app selection into the context preamble.
-          const { at: _at, type: _type, ...data } = event;
-          chronicleSelection = data;
-          trace?.record({ kind: "ir", label: "app selection", data });
+          // First-class in the trace here too; the tool-call fin wrap folds
+          // the chronicle's latest carried selection into the context preamble.
+          chronicleHasSelection = true;
+          const { at: _at, type: _type, marker, ...data } = event;
+          chronicleSelection = {
+            ...(marker !== undefined ? { marker } : {}),
+            context: data,
+          };
+          trace?.record({
+            kind: "ir",
+            label: "app selection",
+            data: { ...(marker !== undefined ? { marker } : {}), ...data },
+          });
           break;
         }
         case "app-selection-drop":
-          chronicleSelection = undefined;
-          trace?.record({ kind: "ir", label: "app selection dropped", data: {} });
+          // Retract exactly one: a marker'd drop only clears its own marker
+          // (a markerless drop — pre-marker clients — clears whatever rides).
+          if (event.marker === undefined || event.marker === chronicleSelection?.marker) {
+            chronicleSelection = undefined;
+          }
+          trace?.record({
+            kind: "ir",
+            label: "app selection dropped",
+            data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
+          });
           break;
         case "code-selection": {
           const { at: _at, type: _type, ...data } = event;
           trace?.record({ kind: "ir", label: "code selection", data });
           break;
         }
+        case "code-selection-drop":
+          trace?.record({
+            kind: "ir",
+            label: "code selection dropped",
+            data: { marker: event.marker },
+          });
+          break;
         case "correction": {
           // Corrections are transcription-only; the client gates the UI, so a
           // stray request just gets a patchless echo (the chronicle stays uniform)
@@ -1727,12 +1784,14 @@ function realtimeIntentProcessor(
       return;
     }
 
-    // Step 2: nudge, then await the model's submit_intent.
+    // The commit gate: inject the sentinel — per the instructions, the ONLY
+    // message that authorizes submit_intent — then await the model's call.
     session.nudgeSubmit();
     trace?.record({ kind: "info", label: "live nudge", data: { text: LIVE_NUDGE_TEXT } });
     const call = await session.drainToolCall(LIVE_DRAIN_TIMEOUT_MS);
 
     let body: string;
+    let usedFallback = false;
     if (call !== null && call.segments.length > 0) {
       trace?.record({ kind: "ir", label: "live tool call", data: { segments: call.segments } });
       const resolved = resolveSegments(call.segments, shotRegistry, composeOptions);
@@ -1758,6 +1817,7 @@ function realtimeIntentProcessor(
     } else {
       // Step 3: the model didn't compose — fall back to composeIntent over the
       // chronicle (the transcription compiler on the transcripts we kept). Loud.
+      usedFallback = true;
       const composed = composeIntent(events, intent.correctionPolicy, composeOptions);
       body = composed.prompt;
       const reason =
@@ -1771,8 +1831,17 @@ function realtimeIntentProcessor(
     }
 
     if (body !== "") {
+      // The tool-call body never saw the selection events, so the preamble
+      // carries the chronicle's latest (else the legacy chunk). The fallback
+      // body is composeIntent's, with every carried selection already INLINE
+      // — the preamble stands down for stream-borne selections there.
+      const preambleSelection = usedFallback
+        ? chronicleHasSelection
+          ? undefined
+          : selection
+        : (chronicleSelection?.context ?? selection);
       const prompt = wrapWithContext(
-        [...staticSections, ...selectionSections(chronicleSelection ?? selection)],
+        [...staticSections, ...selectionSections(preambleSelection)],
         body,
       );
       ctx.push?.({

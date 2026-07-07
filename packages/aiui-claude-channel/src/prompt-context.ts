@@ -121,9 +121,13 @@ export function promptContextSections(meta: HelloMeta | undefined): string[] {
 }
 
 /**
- * The on-screen-selection section — the late-arriving part of the context (it
- * rides its own `context` frame just before `fin`). Returns `[]` when there is
- * no selection text to talk about.
+ * The on-screen-selection section — the CONTEXT-CHUNK path only: the text
+ * modality's submit-time selection (`text-concat`) and older `intent-v1`
+ * clients' legacy `context` frame. Current intent-v1 clients ride selections
+ * on the stream as positional `app-selection` events, which `composeIntent`
+ * renders INLINE in the prompt body at their stream position — those never
+ * pass through here. Returns `[]` when there is no selection text to talk
+ * about.
  */
 export function selectionSections(selection: SelectionContext | undefined): string[] {
   if (!selection?.text) {

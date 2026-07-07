@@ -209,6 +209,10 @@ can't both ride; a selection made early can silently TTL-expire before a slow co
 `pointer-events:auto`, so you *can't make a selection at all* without disarming, and disarming
 **cancels the thread**.
 
+*(Updated July 2026: the paragraph above now describes only the TEXT modality's `context`-chunk
+path. For multimodal turns, selections became first-class positional stream events — see
+§B.2's status note.)*
+
 ### A.5 What the session actually receives (the lowered prompt)
 
 For a turn with speech, one shot, and a selection, `sendPrompt` gets (with `meta`):
@@ -331,6 +335,19 @@ observation ("record the text that was selected at the beginning of the interact
 
 This makes selection visible, traceable, repeatable, correctable — and it's the substrate tweak
 mode needs.
+
+*(Status, July 2026: done, and it went further than the proposal's "latest wins" default —
+selections are fully positional. An `app-selection` event carries a marker (`sel_N`, the
+engine assigns, mirroring `shot_N`); each new selection is its own interleaved item in
+`composeIntent` and its own minimal chip in the preview timeline, retractable exactly like a
+shot via `app-selection-drop { marker }`. Successive refinements with nothing contentful in
+between re-emit under the SAME marker (marker-keyed latest-wins in the fold — one chip tracks
+a drag). Code selections got markers (`code_N`) and their own `code-selection-drop` too. The
+lowered prompt renders event-borne selections INLINE at their stream position (the
+code-selection short/long rule, worded "Regarding the on-screen selection …"); the preamble's
+`selectionSections` survives only for the text modality's `context` chunk and legacy intent-v1
+clients, and stands down whenever the stream carried its own selection events. Pre-marker
+streams still fold latest-wins, degraded but never crashing.)*
 
 ### B.3 The prompt — probably over-complicated, and now measurable
 
