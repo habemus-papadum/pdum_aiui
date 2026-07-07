@@ -38,6 +38,18 @@ import { createWalkthroughStore } from "./walkthrough-store";
 
 const errMsg = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+/** Parse a request-target, or undefined for a malformed one (e.g. `//[`) — a
+ * request we can't even parse is never ours, and it must not throw: the host
+ * calls these handlers on every request, and an exception here would surface as
+ * an unhandled rejection (or crash the upgrade path) in the host process. */
+const parseRequestUrl = (raw: string | undefined): URL | undefined => {
+  try {
+    return new URL(raw ?? "/", "http://localhost");
+  } catch {
+    return undefined;
+  }
+};
+
 /** Cap on a POST body (walkthroughs are small JSON documents). */
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
@@ -91,11 +103,12 @@ export function mountAiuiCodeBackend(deps: AiuiCodeBackendDeps): MountedBackend 
   const log = deps.onLog ?? (() => {});
   const cacheDir = deps.cacheDir ?? `${deps.root}/.aiui-cache`;
 
-  // The project's language servers, read from .aiui-cache/lsp/manifest.json. With
-  // no manifest yet, bootstrap one from the built-in recipes for whatever
-  // well-known languages the project contains (python, typescript/js) — so the
-  // reader works out of the box, while `aiui setup-lsp` can later replace/extend
-  // it (exotic languages, project-tuned launchers, recorded probe results).
+  // The project's language servers: the committed .aiui/lsp setup when one
+  // exists, else bootstrap one from the built-in recipes for whatever well-known
+  // languages the project contains (python, typescript/js) — so the reader works
+  // out of the box. The bootstrap lands in the gitignored .aiui-cache/lsp
+  // (mounting the reader must never dirty the working tree); `aiui setup-lsp`
+  // records the committed, hand-tuned setup that then takes precedence.
   const manifest: LspManifest = ensureDefaultManifest(deps.root, { onLog: log });
   for (const s of manifest.servers)
     log(`lsp: ${s.language} → ${s.languageId} (${s.name ?? s.launcher})`);
@@ -155,7 +168,10 @@ export function mountAiuiCodeBackend(deps: AiuiCodeBackendDeps): MountedBackend 
     });
 
   const handleHttp = async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
-    const url = new URL(req.url ?? "/", "http://localhost");
+    const url = parseRequestUrl(req.url);
+    if (!url) {
+      return false; // an unparseable request-target is never ours
+    }
     const pathname = url.pathname;
     if (!pathname.startsWith(AIUI_CODE_PREFIX)) {
       return false; // not ours — let the host route it
@@ -259,8 +275,8 @@ export function mountAiuiCodeBackend(deps: AiuiCodeBackendDeps): MountedBackend 
   };
 
   const handleUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): boolean => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-    if (url.pathname !== ROUTES.lsp) {
+    const url = parseRequestUrl(req.url);
+    if (!url || url.pathname !== ROUTES.lsp) {
       // Not ours — return WITHOUT destroying the socket, so the host's own
       // upgrade listener (Vite's HMR websocket) still gets it.
       return false;

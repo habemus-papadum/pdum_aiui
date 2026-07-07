@@ -29,13 +29,15 @@ export function codeReaderSidecar(options: CodeReaderSidecarOptions): Sidecar {
       // The reader's own handler claims everything under /__aiui_code/* and
       // returns false for anything else (which falls through to `next`). The
       // channel scopes body parsing to `/prompt`, so POST streams reach the
-      // reader's raw body reader intact.
+      // reader's raw body reader intact. A rejection is routed to Express's
+      // error path — an unhandled rejection here would take down the whole
+      // channel process.
       app.use((req, res, next) => {
         void Promise.resolve(backend.handleHttp(req, res)).then((handled) => {
           if (!handled) {
             next();
           }
-        });
+        }, next);
       });
       return {
         handleUpgrade: (req, socket, head) => backend.handleUpgrade(req, socket, head),

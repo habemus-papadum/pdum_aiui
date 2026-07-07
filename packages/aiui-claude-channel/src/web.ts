@@ -290,7 +290,15 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   const toolsWss = new WebSocketServer({ noServer: true });
   const sessionWss = new WebSocketServer({ noServer: true });
   httpServer.on("upgrade", (req, socket, head) => {
-    const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+    // Nothing in here may throw: an exception in an 'upgrade' listener is an
+    // uncaughtException, which would take down the whole channel process.
+    let pathname: string;
+    try {
+      pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+    } catch {
+      socket.destroy(); // malformed request-target
+      return;
+    }
     if (pathname === "/ws") {
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
     } else if (pathname === "/tools") {
@@ -299,9 +307,17 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       sessionWss.handleUpgrade(req, socket, head, (ws) => sessionWss.emit("connection", ws, req));
     } else {
       // Offer the upgrade to each sidecar (e.g. the reader's `/lsp`); the first to
-      // claim it owns the socket. Nothing claims it → drop, as before.
+      // claim it owns the socket. Nothing claims it → drop, as before. A sidecar
+      // that throws mid-handshake is contained (logged, socket dropped) — one bad
+      // sidecar must not sink the session.
       for (const sidecar of mountedSidecars) {
-        if (sidecar.handleUpgrade?.(req, socket, head)) {
+        try {
+          if (sidecar.handleUpgrade?.(req, socket, head)) {
+            return;
+          }
+        } catch (err) {
+          log(`a sidecar upgrade handler threw: ${errorMessage(err)}`);
+          socket.destroy();
           return;
         }
       }

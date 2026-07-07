@@ -87,6 +87,51 @@ describe("channel sidecars", () => {
     expect(claimed).toEqual(["pass", "claim"]);
   });
 
+  it("contains a sidecar whose handleUpgrade throws — the server survives", async () => {
+    const throwing: Sidecar = {
+      name: "explosive",
+      mount: () => ({
+        handleUpgrade: () => {
+          throw new Error("upgrade boom");
+        },
+      }),
+    };
+    server = await start([throwing]);
+
+    // An unclaimed upgrade path reaches the sidecar, which throws; the channel
+    // must contain it (log + drop the socket), not die on an uncaughtException.
+    await new Promise<void>((resolve) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${server?.port}/anything`);
+      ws.on("error", () => resolve()); // socket dropped, as expected
+      ws.on("close", () => resolve());
+    });
+
+    const health = await fetch(`http://127.0.0.1:${server.port}/health`).then((r) => r.json());
+    expect(health.ok).toBe(true);
+  });
+
+  it("drops a malformed upgrade request-target without dying", async () => {
+    server = await start([]);
+    // `GET //[ HTTP/1.1` passes Node's parser but not WHATWG URL parsing; send it
+    // raw so nothing normalizes the path.
+    const { connect } = await import("node:net");
+    await new Promise<void>((resolve) => {
+      const sock = connect(server?.port ?? 0, "127.0.0.1", () => {
+        sock.write(
+          "GET //[ HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
+        );
+      });
+      sock.on("close", () => resolve());
+      sock.on("error", () => resolve());
+      setTimeout(() => {
+        sock.destroy();
+        resolve();
+      }, 1000);
+    });
+    const health = await fetch(`http://127.0.0.1:${server.port}/health`).then((r) => r.json());
+    expect(health.ok).toBe(true);
+  });
+
   it("a sidecar whose mount throws is skipped, not fatal", async () => {
     const bad: Sidecar = {
       name: "bad",

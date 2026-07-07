@@ -54,4 +54,20 @@ describe("codeReaderSidecar", () => {
     await Promise.resolve();
     expect(next2).toHaveBeenCalledOnce();
   });
+
+  it("routes a handleHttp rejection to next(err) — never an unhandled rejection", async () => {
+    const app = fakeApp();
+    // biome-ignore lint/suspicious/noExplicitAny: fake express app for the wrapper test
+    codeReaderSidecar({ root: "/proj" }).mount(app as any, { log: () => {} });
+    const mw = app.middlewares[0];
+
+    const boom = new Error("backend blew up");
+    handleHttp.mockRejectedValueOnce(boom as never);
+    const next = vi.fn();
+    mw({ url: "/__aiui_code/info" }, {}, next);
+    await Promise.resolve();
+    await Promise.resolve();
+    // Express's error path gets it; the channel process never sees a rejection.
+    expect(next).toHaveBeenCalledWith(boom);
+  });
 });
