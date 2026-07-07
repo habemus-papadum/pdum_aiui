@@ -19,8 +19,10 @@ pnpm paint:demo        # from the repo — starts the relay + a demo app togethe
 ```
 
 Draw on the demo's scrollable canvas with the mouse, then open the printed URL on an iPad to draw,
-scroll, and pinch-zoom remotely. Source: `packages/aiui-paint/demo/` — a compact example of wiring
-`InkSurface` + `startPaintHost`.
+scroll, and pinch-zoom remotely. Switch JPEG ⇄ WebRTC with the toolbar's `video:` button. There is
+no screen-share prompt — the demo streams a canvas it renders itself (`canvas.captureStream()`), a
+compact example of wiring `InkSurface` + `startPaintHost` with a custom `FrameSource` in
+`packages/aiui-paint/demo/`.
 
 ## Run the relay
 

@@ -45,18 +45,28 @@ One command starts everything — no overlay, no channel server, nothing else to
 pnpm paint:demo
 ```
 
-It launches the relay **and** a small demo app together, then opens the demo on this machine and
-prints the LAN URL to open on your iPad. The demo is a large scrollable "document" (a grid with
-labelled landmark blocks so scrolling is obviously doing something):
+It launches the relay **and** a small demo app together and prints two URLs: the demo to open on
+this machine, and the LAN URL to open on your iPad. (It does **not** auto-open a browser — that path
+pops a macOS "control Chrome" permission prompt; set `PAINT_DEMO_OPEN=1` if you want it back.) The
+demo is a large scrollable "document" (a grid with labelled landmark blocks so scrolling is
+obviously doing something):
 
 - **draw locally** with the mouse;
 - **draw from the iPad** — open the printed URL, pick *aiui paint demo*, tap **Arm**, and draw; the
   strokes land in document space, right where you drew relative to what the iPad shows;
 - **scroll** (one finger) and **pinch-zoom** (two fingers) around the document from the iPad.
 
-Add `?video=webrtc` to the demo URL to stream over WebRTC instead of JPEG. The first iPad connection
-asks the demo tab to share its screen (auto-accepted in the session browser). The demo lives in
-`packages/aiui-paint/demo/` and is a compact, copyable example of wiring `InkSurface` + `startPaintHost`.
+Switch **JPEG ⇄ WebRTC** live with the toolbar's `video:` button (or start at `…/?video=webrtc`).
+There is **no screen-share prompt**: rather than `getDisplayMedia`, the demo renders its own viewport
+(grid + landmarks + ink) into a canvas and streams that via `canvas.captureStream()` — which needs no
+user gesture and works from any origin, feeding both transports. The demo lives in
+`packages/aiui-paint/demo/` and is a compact, copyable example of wiring `InkSurface` +
+`startPaintHost` with a custom `FrameSource`.
+
+> Note: a page that streams the **actual screen** with the default `displayCaptureSource`
+> (`getDisplayMedia`) must call it from a real user gesture (a click) and a secure context
+> (`https://` or `http://localhost`). The demo sidesteps both by streaming a canvas it renders itself
+> — the right move whenever the host already knows how to draw its own content.
 
 ## Run it (wire it into your own app)
 
