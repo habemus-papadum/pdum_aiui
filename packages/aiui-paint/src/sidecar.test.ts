@@ -6,12 +6,12 @@ import { paintSidecar } from "./sidecar";
 
 /**
  * Mount the sidecar the way the channel does: an Express app on a loopback
- * http server, upgrades offered to the sidecar's handler. The LAN face is the
- * sidecar's own listener — bound to 127.0.0.1 here so a test machine's
- * firewall stays quiet; port 0 avoids clashing with a real session's 8788.
+ * http server, upgrades offered to the sidecar's handler. Everything — the
+ * iPad page, both websockets, `/paint/info` — lives on this one port; whether
+ * an iPad can reach it is the channel's bind decision, outside the sidecar.
  */
 async function mountOnChannel() {
-  const sidecar = paintSidecar({ root: "/proj/demo", lanPort: 0, lanHost: "127.0.0.1" });
+  const sidecar = paintSidecar({ root: "/proj/demo" });
   const app = express();
   const logs: string[] = [];
   const mounted = await sidecar.mount(app, { log: (m) => logs.push(m) });
@@ -43,38 +43,30 @@ afterEach(async () => {
 });
 
 describe("paintSidecar", () => {
-  it("serves /paint/info on the loopback face, reporting the LAN face", async () => {
+  it("serves /paint/info on the channel port", async () => {
     channel = await mountOnChannel();
-    const info = (await (await fetch(`http://127.0.0.1:${channel.port}/paint/info`)).json()) as {
-      ok: boolean;
-      lan?: { port: number; urls: string[] };
-      hosts: number;
-    };
-    expect(info.ok).toBe(true);
-    expect(info.lan?.port).toBeGreaterThan(0);
-    expect(info.hosts).toBe(0);
+    const res = await fetch(`http://127.0.0.1:${channel.port}/paint/info`);
+    const info = (await res.json()) as { ok: boolean; hosts: number; clients: number };
+    // The overlay's capability probe runs cross-origin (the app dev server).
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(info).toEqual({ ok: true, hosts: 0, clients: 0 });
   });
 
-  it("serves the iPad page on the LAN face, with a root redirect", async () => {
+  it("serves the iPad page on the channel port", async () => {
     channel = await mountOnChannel();
-    const { lan } = (await (await fetch(`http://127.0.0.1:${channel.port}/paint/info`)).json()) as {
-      lan: { port: number };
-    };
-
-    const page = await fetch(`http://127.0.0.1:${lan.port}/paint/`);
+    const page = await fetch(`http://127.0.0.1:${channel.port}/paint/`);
     expect(page.status).toBe(200);
     expect(await page.text()).toContain("aiui paint");
-
-    const redirect = await fetch(`http://127.0.0.1:${lan.port}/`, { redirect: "manual" });
-    expect(redirect.status).toBe(302);
-    expect(redirect.headers.get("location")).toBe("/paint/");
   });
 
-  it("accepts a host on the loopback face and a client on the LAN face — one room", async () => {
+  it("leaves non-paint routes to the channel", async () => {
     channel = await mountOnChannel();
-    const { lan } = (await (await fetch(`http://127.0.0.1:${channel.port}/paint/info`)).json()) as {
-      lan: { port: number };
-    };
+    const res = await fetch(`http://127.0.0.1:${channel.port}/health`);
+    expect(res.status).toBe(404); // Express's own fallback, not the sidecar's
+  });
+
+  it("accepts a host and a client on the same port — one room", async () => {
+    channel = await mountOnChannel();
 
     // The app page dials the channel port (which it already knows)…
     const host = new WebSocket(`ws://127.0.0.1:${channel.port}/paint/host`);
@@ -84,8 +76,8 @@ describe("paintSidecar", () => {
     });
     host.send(JSON.stringify({ type: "register", label: "app tab" }));
 
-    // …and the iPad dials the LAN face; both land in the same room state.
-    const client = new WebSocket(`ws://127.0.0.1:${lan.port}/paint/client`);
+    // …and the iPad dials the same port; both land in the same room state.
+    const client = new WebSocket(`ws://127.0.0.1:${channel.port}/paint/client`);
     const sessions = await new Promise<Array<Record<string, unknown>>>((resolve, reject) => {
       client.on("message", (data) => {
         const m = JSON.parse(data.toString()) as { type: string; sessions?: [] };
@@ -100,15 +92,5 @@ describe("paintSidecar", () => {
     expect(sessions[0]).toMatchObject({ label: "app tab", project: "/proj/demo" });
     host.close();
     client.close();
-  });
-
-  it("dispose closes the LAN listener", async () => {
-    channel = await mountOnChannel();
-    const { lan } = (await (await fetch(`http://127.0.0.1:${channel.port}/paint/info`)).json()) as {
-      lan: { port: number };
-    };
-    await channel.mounted.dispose?.();
-
-    await expect(fetch(`http://127.0.0.1:${lan.port}/paint/`)).rejects.toThrow();
   });
 });

@@ -36,6 +36,9 @@ export type ForTestingMode = (typeof FOR_TESTING_MODES)[number];
 export const CHROME_MODES = ["attach", "launch"] as const;
 export type ChromeMode = (typeof CHROME_MODES)[number];
 
+export const CHANNEL_BINDS = ["loopback", "host"] as const;
+export type ChannelBind = (typeof CHANNEL_BINDS)[number];
+
 /** Every config leaf is a JSON scalar; sections never nest further. */
 export type ConfigValue = boolean | number | string;
 
@@ -104,6 +107,30 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
     ],
   },
   {
+    name: "channel",
+    summary: "the channel server's web backend",
+    fields: [
+      {
+        key: "bind",
+        type: "enum",
+        values: CHANNEL_BINDS,
+        default: "loopback",
+        defaultText:
+          '"loopback" (unset: the first interactive launch asks, then persists the answer)',
+        summary: "Which interface the channel web server binds: loopback, or host (LAN).",
+        doc:
+          '"host" (0.0.0.0) makes the session\'s whole web surface — the iPad paint page, but ' +
+          "also prompt injection, /debug, and every sidecar — reachable by anyone on your " +
+          "network, UNAUTHENTICATED. That is the trusted-LAN posture (docs/guide/warning): " +
+          'right on a network that is yours alone, wrong on shared Wi-Fi. "loopback" keeps ' +
+          "everything this-machine-only; reaching the paint page from an iPad is then up to " +
+          "you — tunnel the channel port however you like (Tailscale, `ssh -L`). The first " +
+          "interactive launch asks and persists the answer at the user level. Per-launch " +
+          "flag: --aiui-bind.",
+      },
+    ],
+  },
+  {
     name: "sidecars",
     summary: "which session sidecars `aiui claude` asks the channel to host",
     fields: [
@@ -119,15 +146,14 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
       {
         key: "paint",
         type: "boolean",
-        default: false,
-        defaultText: "false (unset: the first interactive launch asks, then persists the answer)",
-        summary: "Host the iPad paint sidecar — opens an UNAUTHENTICATED LAN listener.",
+        default: true,
+        summary: "Host the iPad paint sidecar (on the channel's own port).",
         doc:
-          "The iPad paint stream (docs/guide/paint-stream): the channel stays loopback-only, " +
-          "but this sidecar opens a separate LAN listener anyone on your network can reach — " +
-          "which is why it is never silently enabled. The first interactive launch asks and " +
-          "persists the answer at the user level. Per-launch flags win: --aiui-sidecar paint / " +
-          "--aiui-no-sidecar paint. `aiui paint url` prints the iPad URL.",
+          "The iPad paint stream (docs/guide/paint-stream) rides the channel's one port — no " +
+          "extra process, no extra listener — so it is on by default; false turns it off. " +
+          "Whether an iPad can actually reach it is channel.bind's call (host, or a tunnel " +
+          "you own). Per-launch flags win: --aiui-sidecar paint / --aiui-no-sidecar paint. " +
+          "`aiui paint url` prints the URL to open on the iPad.",
       },
     ],
   },

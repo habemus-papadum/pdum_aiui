@@ -167,7 +167,7 @@ export interface IntentPipelineConfig {
  */
 export const DEFAULT_INTENT_CONFIG: IntentPipelineConfig = {
   talkMode: "hold",
-  inkFadeSec: 6,
+  inkFadeSec: 0,
   autoEndSec: 0,
   transcriber: "openai",
   model: "gpt-4o-mini-transcribe",

@@ -29,7 +29,13 @@ export type {
   CorrectionTarget,
   EngineListener,
 } from "./engine";
-export { composeIntent, Engine, SHORT_SELECTION_CHARS } from "./engine";
+export {
+  composeIntent,
+  Engine,
+  renderAppSelection,
+  renderCodeSelection,
+  SHORT_SELECTION_CHARS,
+} from "./engine";
 export type { KeyCommand, KeyState } from "./keymap";
 export { installKeymap, isTypingTarget, keyCommand, TIER_BY_DIGIT } from "./keymap";
 export type { DiffRun } from "./patch";

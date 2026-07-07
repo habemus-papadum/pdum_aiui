@@ -125,6 +125,11 @@
 .session-chip-code {
   color: #8ab4f8;
 }
+/* The app tab's on-screen selection — same blue family as code selections;
+   the ⌖ glyph (vs ⧉) separates the kinds. */
+.session-chip-sel {
+  color: #8ab4f8;
+}
 .session-chip-excerpt {
   color: var(--text-dim);
 }

@@ -124,10 +124,10 @@ the intent tool uses:
 
 The reader then fetches `/__aiui_code/*` and opens its `/lsp` socket against that origin. Because the
 page and the backend are on **different origins**, every backend call is cross-origin — which is why
-the backend sends a permissive `Access-Control-Allow-Origin`. This rides the same loopback-only,
-no-auth posture as the rest of the channel (see [Trust model](./channel#trust-model) and
-[Read before running](./warning)) — the reader adds no network exposure the channel didn't already
-have.
+the backend sends a permissive `Access-Control-Allow-Origin`. This rides the same no-auth,
+loopback-unless-you-chose-`host` posture as the rest of the channel (`channel.bind` — see
+[Trust model](./channel#trust-model) and [Read before running](./warning)) — the reader adds no
+network exposure the channel didn't already have.
 
 ## The overlay serves the reader
 

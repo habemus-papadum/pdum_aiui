@@ -207,6 +207,66 @@ describe("TraceView — cards, coalescing, filters", () => {
   });
 });
 
+describe("TraceView — selection cards", () => {
+  const infoOf = (view: TraceView, title: string): string =>
+    [...view.root.querySelectorAll(".aiui-dbg-card")]
+      .filter((c) => c.querySelector(".aiui-dbg-card-title")?.textContent === title)
+      .map((c) => c.querySelector(".aiui-dbg-card-info")?.textContent ?? "")
+      .join(" | ");
+
+  it("renders marked app/code selections and their drops as one-line cards", () => {
+    const view = mount();
+    view.update(
+      fullTrace({
+        stages: [
+          {
+            kind: "ir",
+            label: "app selection",
+            data: {
+              marker: "sel_1",
+              text: "the histogram title",
+              sourceLoc: "src/Hist.tsx:10:2",
+              cell: "hist",
+            },
+          },
+          { kind: "ir", label: "app selection dropped", data: { marker: "sel_1" } },
+          {
+            kind: "ir",
+            label: "code selection",
+            data: { marker: "code_1", text: "const x = 1;", sourceLoc: "src/a.ts:5:1" },
+          },
+          { kind: "ir", label: "code selection dropped", data: { marker: "code_1" } },
+        ],
+      }),
+    );
+    expect(infoOf(view, "app selection")).toContain(
+      "sel_1 · “the histogram title” @ src/Hist.tsx:10:2 · cell hist",
+    );
+    expect(infoOf(view, "app selection dropped")).toContain("sel_1 retracted");
+    expect(infoOf(view, "code selection")).toContain("code_1 · src/a.ts:5:1 · “const x = 1;”");
+    expect(infoOf(view, "code selection dropped")).toContain("code_1 retracted");
+  });
+
+  it("degrades old-shape stages (markerless / missing fields) instead of crashing", () => {
+    const view = mount();
+    view.update(
+      fullTrace({
+        stages: [
+          // A pre-marker trace: no marker, sparse fields.
+          { kind: "ir", label: "app selection", data: { text: "old style" } },
+          // The retired whole-turn drop: empty data.
+          { kind: "ir", label: "app selection dropped", data: {} },
+          // A code selection with nothing but text.
+          { kind: "ir", label: "code selection", data: { text: "let y;" } },
+        ],
+      }),
+    );
+    expect(infoOf(view, "app selection")).toContain("“old style”");
+    expect(infoOf(view, "app selection dropped")).toContain("retracted");
+    expect(infoOf(view, "code selection")).toContain("“let y;”");
+  });
+});
+
 describe("TraceView — live-follow state survival", () => {
   it("keeps an opened raw disclosure open across a re-render", () => {
     const view = mount();

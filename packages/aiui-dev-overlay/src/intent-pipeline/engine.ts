@@ -48,6 +48,8 @@ export class Engine {
   private listeners: EngineListener[] = [];
   private segmentCounter = 0;
   private shotCounter = 0;
+  private selCounter = 0;
+  private codeCounter = 0;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
 
@@ -136,7 +138,7 @@ export class Engine {
     this.emit(this.stamp({ type: "thread-open", trigger }));
     const selection = this.selectionProvider?.();
     if (selection !== undefined && selection.text !== "") {
-      this.emit(this.stamp({ type: "app-selection", ...selection }));
+      this.emitAppSelection(selection);
     }
   }
 
@@ -167,39 +169,126 @@ export class Engine {
    * reader's "Add to prompt →"). Same lifecycle as {@link contribute} — opens
    * the thread if armed, no-op when not — but emits the structured
    * `code-selection` event instead of pre-rendered text: how it reads in the
-   * prompt is `composeIntent`'s decision, made at lowering time.
+   * prompt is `composeIntent`'s decision, made at lowering time. Returns the
+   * assigned marker (`code_N` — the chip's retraction handle), or undefined.
    */
-  codeSelection(selection: CodeSelection): boolean {
+  codeSelection(selection: CodeSelection): string | undefined {
     if (!this.armed || selection.text === "") {
-      return false;
+      return undefined;
     }
     this.ensureThread("contribution");
-    this.emit(this.stamp({ type: "code-selection", ...selection }));
-    return true;
+    const marker = `code_${++this.codeCounter}`;
+    this.emit(this.stamp({ type: "code-selection", marker, ...selection }));
+    return marker;
+  }
+
+  /** Retract a code selection from the turn (the chip's ✕ — see the event doc). */
+  dropCodeSelection(marker: string): void {
+    this.emit(this.stamp({ type: "code-selection-drop", marker }));
   }
 
   /**
-   * Update the turn's app selection mid-thread (the page selection changed
-   * while the thread was open — e.g. re-selected during correct mode, when the
-   * ink canvas is down). Last one wins in composition; the thread-open capture
-   * itself goes through {@link selectionProvider}. No-op without an open
-   * thread — an app selection is context riding a turn, never a turn opener.
+   * Events that give the next app selection its own stream position: once one
+   * of these lands after the turn's last `app-selection`, a new snapshot is a
+   * NEW selection (fresh marker, its own chip) rather than a refinement of
+   * the last (same marker, the fold keeps the latest payload) — the rule that
+   * lets the watcher track a drag without spamming chips.
+   */
+  private static isContentful(event: IntentEvent): boolean {
+    return (
+      event.type === "talk-start" ||
+      event.type === "transcript-delta" ||
+      (event.type === "transcript-final" && !event.correction) ||
+      event.type === "stroke" ||
+      event.type === "shot" ||
+      event.type === "code-selection"
+    );
+  }
+
+  /** The marker for the next app-selection: reuse the last one while nothing
+   * contentful (or a drop) has intervened — see {@link Engine.isContentful}. */
+  private nextSelectionMarker(): string {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const event = this.events[i];
+      if (event.type === "thread-open") {
+        break;
+      }
+      if (event.type === "app-selection") {
+        if (event.marker !== undefined) {
+          return event.marker; // a refinement of the same selection
+        }
+        break; // markerless (replayed pre-marker stream): start fresh
+      }
+      if (event.type === "app-selection-drop" || Engine.isContentful(event)) {
+        break;
+      }
+    }
+    return `sel_${++this.selCounter}`;
+  }
+
+  private emitAppSelection(selection: AppSelection): void {
+    this.emit(
+      this.stamp({ type: "app-selection", marker: this.nextSelectionMarker(), ...selection }),
+    );
+  }
+
+  /**
+   * Record an app selection mid-thread (the page selection changed while the
+   * thread was open — tweak mode, correct mode, any live watcher update). A
+   * positional stream event like text and shots: a NEW selection appends its
+   * own chip; successive refinements with nothing contentful in between ride
+   * the SAME marker (the fold keeps the latest — one chip tracking the drag).
+   * The thread-open capture itself goes through {@link selectionProvider}.
+   * No-op without an open thread — an app selection rides a turn, never
+   * opens one.
    */
   appSelection(selection: AppSelection): boolean {
     if (!this.threadOpen || selection.text === "") {
       return false;
     }
-    this.emit(this.stamp({ type: "app-selection", ...selection }));
+    this.emitAppSelection(selection);
     return true;
   }
 
-  /** Retract the turn's app selection (the chip's ✕ / a cleared watcher). */
-  appSelectionDrop(): boolean {
+  /**
+   * Retract one app selection (a chip's ✕ / a cleared watcher): the given
+   * marker, or — when none is passed — the turn's most recent still-carried
+   * selection. Returns false (emitting nothing) when there is no thread or
+   * nothing left to retract.
+   */
+  appSelectionDrop(marker?: string): boolean {
     if (!this.threadOpen) {
       return false;
     }
-    this.emit(this.stamp({ type: "app-selection-drop" }));
+    const target = marker ?? this.lastCarriedSelectionMarker();
+    if (target === undefined) {
+      return false;
+    }
+    this.emit(this.stamp({ type: "app-selection-drop", marker: target }));
     return true;
+  }
+
+  /** The marker of the turn's most recent app-selection not already dropped. */
+  private lastCarriedSelectionMarker(): string | undefined {
+    const dropped = new Set<string>();
+    let candidate: string | undefined;
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const event = this.events[i];
+      if (event.type === "thread-open") {
+        break;
+      }
+      if (event.type === "app-selection-drop" && event.marker !== undefined) {
+        dropped.add(event.marker);
+      } else if (
+        event.type === "app-selection" &&
+        event.marker !== undefined &&
+        !dropped.has(event.marker)
+      ) {
+        candidate = event.marker;
+        break;
+      }
+    }
+    return candidate;
   }
 
   send(): void {
@@ -445,6 +534,12 @@ export class Engine {
     this.correctionTarget = undefined;
     let maxSegment = 0;
     let maxShot = 0;
+    let maxSel = 0;
+    let maxCode = 0;
+    const ordinal = (marker: string, prefix: string): number => {
+      const n = Number(marker.replace(prefix, ""));
+      return Number.isFinite(n) ? n : 0;
+    };
     for (const event of events) {
       this.events.push(event);
       const segment = (event as { segment?: unknown }).segment;
@@ -452,10 +547,11 @@ export class Engine {
         maxSegment = Math.max(maxSegment, segment);
       }
       if (event.type === "shot") {
-        const n = Number(event.marker.replace(/^shot_/, ""));
-        if (Number.isFinite(n)) {
-          maxShot = Math.max(maxShot, n);
-        }
+        maxShot = Math.max(maxShot, ordinal(event.marker, "shot_"));
+      } else if (event.type === "app-selection" && event.marker !== undefined) {
+        maxSel = Math.max(maxSel, ordinal(event.marker, "sel_"));
+      } else if (event.type === "code-selection" && event.marker !== undefined) {
+        maxCode = Math.max(maxCode, ordinal(event.marker, "code_"));
       }
       for (const listener of this.listeners) {
         listener(event, this);
@@ -463,30 +559,38 @@ export class Engine {
     }
     this.segmentCounter = maxSegment;
     this.shotCounter = maxShot;
+    this.selCounter = maxSel;
+    this.codeCounter = maxCode;
   }
 }
 
 // ── the first IR pass, pure ──────────────────────────────────────────────────
 
 export interface ComposedItem {
-  kind: "text" | "shot" | "code-selection";
+  kind: "text" | "shot" | "code-selection" | "app-selection";
   text?: string;
+  /** The item's stream identity (`shot_N` / `sel_N` / `code_N`) — absent for
+   * text runs and for selections from pre-marker traces. */
   marker?: string;
   thumb?: string;
   path?: string;
   components?: LocatedComponent[];
   /** True for a whole-viewport shot (renders with no element metadata). */
   viewport?: boolean;
-  /** A code-selection item's locator (`file:line:col` / `file:start-end`). */
+  /** A selection item's locator (`file:line:col` / `file:start-end`). */
   sourceLoc?: string;
   /** A code-selection item's line count. */
   lines?: number;
+  /** An app-selection item's producing dataflow cell (`data-cell`). */
+  cell?: string;
+  /** An app-selection item's TeX source (selected rendered mathematics). */
+  tex?: string;
 }
 
 export interface ComposedIntent {
   /** Transcript with `replace`-policy corrections applied. */
   transcript: string;
-  /** Chronological interleave of text runs and shot markers. */
+  /** Chronological interleave of text runs, shots, and selections (app + code). */
   items: ComposedItem[];
   corrections: Array<{
     original: string;
@@ -513,15 +617,6 @@ export interface ComposedIntent {
    * paths and element info are inlined in {@link prompt}).
    */
   meta: Record<string, string>;
-  /**
-   * The turn's effective app selection — the LAST `app-selection` event of
-   * the thread, unless an `app-selection-drop` retracted it. Deliberately NOT
-   * rendered into {@link prompt}: it is context about the intent, and the
-   * channel folds it into the prompt's context *preamble* (the same wording
-   * `text-concat`'s selection block uses — see the channel's prompt-context),
-   * so both modalities produce identical selection context.
-   */
-  appSelection?: AppSelection;
 }
 
 /** Options for {@link composeIntent}. */
@@ -566,36 +661,78 @@ export function composeIntent(
   }
   const scope = start === -1 ? events : events.slice(start);
 
-  // Retracted shots (the preview's ✕) never reach the composition — the shot
-  // events themselves stay in the stream, so the trace still shows them.
+  // Retracted shots and selections (the preview's ✕) never reach the
+  // composition — the events themselves stay in the stream, so the trace
+  // still shows them. Drops are keyed by marker: each retracts exactly one.
   const droppedShots = new Set<string>();
+  const droppedSelections = new Set<string>();
+  const droppedCode = new Set<string>();
   for (const event of scope) {
     if (event.type === "shot-drop") {
       droppedShots.add(event.marker);
+    } else if (event.type === "app-selection-drop" && event.marker !== undefined) {
+      droppedSelections.add(event.marker);
+    } else if (event.type === "code-selection-drop") {
+      droppedCode.add(event.marker);
     }
   }
 
   const items: ComposedItem[] = [];
   const corrections: ComposedIntent["corrections"] = [];
-  // The turn's app selection: last one wins (a re-selection mid-thread
-  // supersedes), a drop retracts whatever was carried.
-  let appSelection: AppSelection | undefined;
+  // App selections are POSITIONAL items, marker-keyed latest-wins: the first
+  // event under a marker claims the stream position, and every re-emit under
+  // the same marker (a refinement — the watcher tracking a drag) replaces the
+  // payload in place. Markerless events (pre-marker traces) share one legacy
+  // slot, reproducing the old single-selection latest-wins behavior.
+  const LEGACY_SELECTION_KEY = "";
+  const selectionByKey = new Map<string, ComposedItem>();
   for (const event of scope) {
     if (event.type === "transcript-final" && !event.correction) {
       // One item per segment, deliberately unmerged: segments-as-lines is the
       // document shape the correction patches (and the corrector model) see.
       items.push({ kind: "text", text: event.text });
     } else if (event.type === "app-selection") {
-      const { at: _at, type: _type, ...selection } = event;
-      appSelection = selection;
+      if (event.marker !== undefined && droppedSelections.has(event.marker)) {
+        continue;
+      }
+      const key = event.marker ?? LEGACY_SELECTION_KEY;
+      const next: ComposedItem = {
+        kind: "app-selection",
+        text: event.text,
+        ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
+        ...(event.cell !== undefined ? { cell: event.cell } : {}),
+        ...(event.tex !== undefined ? { tex: event.tex } : {}),
+        ...(event.marker !== undefined ? { marker: event.marker } : {}),
+      };
+      const existing = selectionByKey.get(key);
+      if (existing !== undefined) {
+        items[items.indexOf(existing)] = next; // supersede in place
+      } else {
+        items.push(next);
+      }
+      selectionByKey.set(key, next);
     } else if (event.type === "app-selection-drop") {
-      appSelection = undefined;
-    } else if (event.type === "code-selection") {
+      // Marker'd drops were pre-collected above; a markerless drop (pre-marker
+      // traces) retracts the most recent still-carried selection.
+      if (event.marker === undefined) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          if (items[i].kind === "app-selection") {
+            selectionByKey.delete(items[i].marker ?? LEGACY_SELECTION_KEY);
+            items.splice(i, 1);
+            break;
+          }
+        }
+      }
+    } else if (
+      event.type === "code-selection" &&
+      !(event.marker !== undefined && droppedCode.has(event.marker))
+    ) {
       items.push({
         kind: "code-selection",
         text: event.text,
         ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
         lines: event.lines ?? event.text.split("\n").length,
+        ...(event.marker !== undefined ? { marker: event.marker } : {}),
       });
     } else if (event.type === "shot" && !droppedShots.has(event.marker)) {
       items.push({
@@ -666,6 +803,8 @@ export function composeIntent(
       promptParts.push(renderShot(item, options));
     } else if (item.kind === "code-selection") {
       promptParts.push(renderCodeSelection(item));
+    } else if (item.kind === "app-selection") {
+      promptParts.push(renderAppSelection(item));
     }
   }
   if (policy === "note") {
@@ -681,13 +820,12 @@ export function composeIntent(
     components,
     prompt: promptParts.join(" ").trim(),
     meta: {},
-    ...(appSelection !== undefined ? { appSelection } : {}),
   };
 }
 
-// ── code-selection rendering (the deferred decision) ─────────────────────────
+// ── selection rendering (the deferred decision) ──────────────────────────────
 
-/** At or below this many characters a code selection is inlined; above, fenced. */
+/** At or below this many characters a selection is inlined; above, fenced. */
 export const SHORT_SELECTION_CHARS = 240;
 
 /**
@@ -697,8 +835,16 @@ export const SHORT_SELECTION_CHARS = 240;
  * inlined — "Regarding `file:line`: `code`" — the location and the code right
  * in the sentence; a **long** one becomes a fenced block under its location
  * header, set apart from the prose like a multi-line screenshot block.
+ *
+ * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
+ * re-attaches a selection the live model referenced by bare id (`code_1`)
+ * with THIS exact rendering — one implementation, per the defer-rendering
+ * rule. The parameter is the `ComposedItem` subset the rendering reads, so a
+ * caller need not fabricate a full item.
  */
-function renderCodeSelection(item: ComposedItem): string {
+export function renderCodeSelection(
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "lines">,
+): string {
   const text = item.text ?? "";
   const loc = item.sourceLoc !== undefined ? `\`${item.sourceLoc}\`` : "the selection";
   if (text.trim().length <= SHORT_SELECTION_CHARS) {
@@ -706,6 +852,44 @@ function renderCodeSelection(item: ComposedItem): string {
   }
   const n = item.lines ?? text.split("\n").length;
   return `\nRegarding ${loc} (${n} lines):\n\`\`\`\n${text}\n\`\`\`\n`;
+}
+
+/**
+ * One on-screen (app) selection, rendered at its position in the prose — the
+ * same short/long rule code selections use, worded for page text rather than
+ * source: a **short** selection is inlined — `Regarding the on-screen
+ * selection "…" (authored at file:line:col)` — and a **long** one becomes a
+ * fenced block under the same header. The attribution parenthetical (the
+ * authored-at locator, the producing cell, the TeX source of selected
+ * mathematics) keeps the wording the context preamble used, now placed where
+ * the selection actually sits in the stream. (The preamble path —
+ * `selectionSections` in the channel's prompt-context — remains only for the
+ * text modality's send-time `context` chunk.)
+ *
+ * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
+ * re-attaches a selection the live model referenced by bare id (`sel_2`)
+ * with THIS exact rendering — one implementation, per the defer-rendering
+ * rule. The parameter is the `ComposedItem` subset the rendering reads.
+ */
+export function renderAppSelection(
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "tex">,
+): string {
+  const attribution: string[] = [];
+  if (item.sourceLoc !== undefined) {
+    attribution.push(`authored at ${item.sourceLoc}`);
+  }
+  if (item.cell !== undefined) {
+    attribution.push(`produced by cell ${item.cell}`);
+  }
+  if (item.tex !== undefined) {
+    attribution.push(`rendered mathematics — TeX source: ${item.tex}`);
+  }
+  const attr = attribution.length > 0 ? ` (${attribution.join("; ")})` : "";
+  const text = (item.text ?? "").trim();
+  if (text.length <= SHORT_SELECTION_CHARS) {
+    return `Regarding the on-screen selection "${text}"${attr}`;
+  }
+  return `\nRegarding this on-screen selection${attr}:\n\`\`\`\n${text}\n\`\`\`\n`;
 }
 
 // ── shot rendering (the inline block) ────────────────────────────────────────

@@ -18,6 +18,14 @@ const codeDescriptor = (root: string) => ({
   options: { root },
 });
 
+/** The descriptor the CLI must emit for the (always-on) `paint` sidecar. */
+const paintDescriptor = (root: string) => ({
+  name: "paint",
+  module: "@habemus-papadum/aiui-paint/sidecar",
+  export: "paintSidecar",
+  options: { root },
+});
+
 /**
  * Deps for a test: the manifest + language-detection seams plus an identity
  * `resolveModule`, so the emitted `module` stays the bare specifier (the real
@@ -38,16 +46,18 @@ describe("resolveSidecars", () => {
   it("auto-enables code when a manifest is present (no flags)", () => {
     expect(
       resolveSidecars("/proj", { enable: [], disable: [] }, testDeps(manifestAt("/proj"))),
-    ).toEqual([codeDescriptor("/proj")]);
+    ).toEqual([codeDescriptor("/proj"), paintDescriptor("/proj")]);
   });
 
-  it("emits nothing when no manifest is present (no flags)", () => {
-    expect(resolveSidecars("/proj", { enable: [], disable: [] }, testDeps(noManifest))).toEqual([]);
+  it("emits only the always-on paint when no manifest is present (no flags)", () => {
+    expect(resolveSidecars("/proj", { enable: [], disable: [] }, testDeps(noManifest))).toEqual([
+      paintDescriptor("/proj"),
+    ]);
   });
 
   it("force-enables code by name even without a manifest", () => {
     const out = resolveSidecars("/proj", { enable: ["code"], disable: [] }, testDeps(noManifest));
-    expect(out).toEqual([codeDescriptor("/proj")]);
+    expect(out).toEqual([codeDescriptor("/proj"), paintDescriptor("/proj")]);
     // The exact contract shape, threading the root into options.
     expect(out[0]).toEqual({
       name: "code",
@@ -60,7 +70,7 @@ describe("resolveSidecars", () => {
   it("disable wins over an auto-detected manifest", () => {
     expect(
       resolveSidecars("/proj", { enable: [], disable: ["code"] }, testDeps(manifestAt("/proj"))),
-    ).toEqual([]);
+    ).toEqual([paintDescriptor("/proj")]);
   });
 
   it("disable wins over an explicit enable of the same name", () => {
@@ -70,19 +80,25 @@ describe("resolveSidecars", () => {
         { enable: ["code"], disable: ["code"] },
         testDeps(manifestAt("/proj")),
       ),
+    ).toEqual([paintDescriptor("/proj")]);
+  });
+
+  it("disable turns off the always-on paint", () => {
+    expect(
+      resolveSidecars("/proj", { enable: [], disable: ["paint"] }, testDeps(noManifest)),
     ).toEqual([]);
   });
 
   it("ignores enable names the CLI doesn't know how to construct", () => {
     expect(
       resolveSidecars("/proj", { enable: ["bogus", "code"], disable: [] }, testDeps(noManifest)),
-    ).toEqual([codeDescriptor("/proj")]);
+    ).toEqual([codeDescriptor("/proj"), paintDescriptor("/proj")]);
   });
 
   it("does not enable code when the manifest is at a different root", () => {
     expect(
       resolveSidecars("/proj", { enable: [], disable: [] }, testDeps(manifestAt("/elsewhere"))),
-    ).toEqual([]);
+    ).toEqual([paintDescriptor("/proj")]);
   });
 
   // The chicken-and-egg guard: the backend's LSP bootstrap only runs once the
@@ -94,7 +110,7 @@ describe("resolveSidecars", () => {
         { enable: [], disable: [] },
         testDeps(noManifest, () => ["typescript"]),
       ),
-    ).toEqual([codeDescriptor("/proj")]);
+    ).toEqual([codeDescriptor("/proj"), paintDescriptor("/proj")]);
   });
 
   it("disable wins over language detection too", () => {
@@ -104,7 +120,7 @@ describe("resolveSidecars", () => {
         { enable: [], disable: ["code"] },
         testDeps(noManifest, () => ["python"]),
       ),
-    ).toEqual([]);
+    ).toEqual([paintDescriptor("/proj")]);
   });
 
   it("a throwing language detector is contained (warned, not fatal)", () => {
@@ -120,7 +136,7 @@ describe("resolveSidecars", () => {
           log: (m) => warnings.push(m),
         },
       ),
-    ).toEqual([]);
+    ).toEqual([paintDescriptor("/proj")]);
     expect(warnings.join("\n")).toContain("walk exploded");
   });
 });

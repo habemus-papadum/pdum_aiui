@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { LiveSessionCallbacks } from "./live-session";
+import {
+  LIVE_COMPOSER_INSTRUCTIONS,
+  LIVE_NUDGE_TEXT,
+  type LiveSessionCallbacks,
+} from "./live-session";
 import { openOpenAiLiveSession } from "./openai-live";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 
@@ -76,8 +80,28 @@ describe("openOpenAiLiveSession", () => {
         },
       },
     });
-    const tools = (up.sent[0] as { session: { tools: Array<{ name: string }> } }).session.tools;
+    const tools = (
+      up.sent[0] as {
+        session: {
+          tools: Array<{
+            name: string;
+            parameters: {
+              properties: { segments: { items: { properties: Record<string, unknown> } } };
+            };
+          }>;
+        };
+      }
+    ).session.tools;
     expect(tools[0].name).toBe("submit_intent");
+    // Segments may interleave text, image ids, AND selection ids (F2).
+    expect(Object.keys(tools[0].parameters.properties.segments.items.properties)).toEqual([
+      "text",
+      "image",
+      "selection",
+    ]);
+    // The persona is the shared authoritative text (one place, both vendors).
+    const instructions = (up.sent[0] as { session: { instructions: string } }).session.instructions;
+    expect(instructions).toBe(LIVE_COMPOSER_INSTRUCTIONS);
   });
 
   it("has no video and no-ops appendVideoFrame", () => {
@@ -122,7 +146,24 @@ describe("openOpenAiLiveSession", () => {
     expect(up.sent.filter((m) => m.type === "response.create").length).toBe(before);
   });
 
-  it("nudgeSubmit posts a text item and a response.create", () => {
+  it("injectContextText posts a bare input_text item and NO response.create (silent context)", () => {
+    const up = fakeUpstream();
+    const { session } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    const before = up.sent.filter((m) => m.type === "response.create").length;
+    const label = '[selection sel_1: "gradient stops" — on-screen selection]';
+    session.injectContextText(label);
+    const item = up.sent.find((m) => m.type === "conversation.item.create") as {
+      item: { type: string; role: string; content: Array<{ type: string; text?: string }> };
+    };
+    expect(item.item.role).toBe("user");
+    expect(item.item.content).toEqual([{ type: "input_text", text: label }]);
+    // Items never auto-trigger a response, and we must not create one either.
+    expect(up.sent.filter((m) => m.type === "response.create").length).toBe(before);
+  });
+
+  it("nudgeSubmit posts the commit sentinel as a text item and a response.create", () => {
     const up = fakeUpstream();
     const { session } = collect(up);
     up.open();
@@ -130,6 +171,10 @@ describe("openOpenAiLiveSession", () => {
     session.nudgeSubmit();
     expect(types(up)).toContain("conversation.item.create");
     expect(types(up)).toContain("response.create");
+    const item = up.sent.find((m) => m.type === "conversation.item.create") as {
+      item: { content: Array<{ type: string; text?: string }> };
+    };
+    expect(item.item.content[0]).toEqual({ type: "input_text", text: LIVE_NUDGE_TEXT });
   });
 
   it("delivers a function_call from response.done through drainToolCall; respond writes function_call_output", async () => {
@@ -146,13 +191,19 @@ describe("openOpenAiLiveSession", () => {
             type: "function_call",
             name: "submit_intent",
             call_id: "call_1",
-            arguments: JSON.stringify({ segments: [{ text: "wider" }, { image: "shot_1" }] }),
+            arguments: JSON.stringify({
+              segments: [{ text: "wider" }, { image: "shot_1" }, { selection: "code_1" }],
+            }),
           },
         ],
       },
     });
     const call = await session.drainToolCall(1000);
-    expect(call?.segments).toEqual([{ text: "wider" }, { image: "shot_1" }]);
+    expect(call?.segments).toEqual([
+      { text: "wider" },
+      { image: "shot_1" },
+      { selection: "code_1" },
+    ]);
     call?.respond(true);
     const out = up.sent.find(
       (m) =>

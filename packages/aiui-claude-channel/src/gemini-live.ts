@@ -34,6 +34,10 @@
  *    `{realtimeInput:{video:{data,mimeType}}}`; ambient video frames are the same
  *    `realtimeInput.video` unlabeled. Element/cell metadata is NEVER sent — the
  *    channel keeps it keyed by label and re-attaches it when resolving the call.
+ *  - **Silent context (selections):** `{clientContent:{turns:[…],turnComplete:false}}`
+ *    — the incremental-context append, which does not solicit a reply. A bare
+ *    `realtimeInput.text` (the nudge's form) is answered immediately under manual
+ *    VAD (spike finding 4), so it cannot carry selection labels.
  *  - **Back:** `serverContent.{inputTranscription,outputTranscription,modelTurn}`,
  *    `toolCall`→`toolResponse`, `serverContent.interrupted`, `usageMetadata`,
  *    `goAway`.
@@ -42,6 +46,7 @@
 import WebSocket from "ws";
 import { priceCall, usageFromGeminiLive } from "./cost";
 import {
+  LIVE_COMPOSER_INSTRUCTIONS,
   LIVE_NUDGE_TEXT,
   type LiveCapabilities,
   type LiveSession,
@@ -68,21 +73,6 @@ const GEMINI_OUTPUT_RATE = 24000;
  */
 const GEMINI_INPUT_AUDIO_MIME = "audio/pcm;rate=24000";
 
-/**
- * The composer persona. Refined from the spike: labels arrive as `[image <id>]`,
- * the model refers to and returns bare ids, and `submit_intent` is a *brief* (a
- * cleaned-up rendering of intent), not a transcript. Kept terse — it is billed as
- * input tokens on every turn.
- */
-export const GEMINI_LIVE_INSTRUCTIONS =
-  "You help a developer compose a request for a coding agent while they talk and share images " +
-  "of their app. Images arrive labeled with bracketed ids like [image shot_3]. Build an accurate " +
-  'picture of what they want done to the app; resolve deictic references ("this slider", "here") ' +
-  "against what you have seen, fold in corrections, and drop rambling. When they signal completion " +
-  "(they say to send it, or you are nudged), call submit_intent: its segments[] interleaves the " +
-  'cleaned-up request text with image refs (a bare id, e.g. "shot_3") placed where each image ' +
-  "belongs — a brief, not a transcript. Speak briefly otherwise.";
-
 /** The `submit_intent` function declaration (the spike's exact schema). */
 const SUBMIT_INTENT_DECLARATION = {
   name: "submit_intent",
@@ -94,7 +84,11 @@ const SUBMIT_INTENT_DECLARATION = {
         type: "ARRAY",
         items: {
           type: "OBJECT",
-          properties: { text: { type: "STRING" }, image: { type: "STRING" } },
+          properties: {
+            text: { type: "STRING" },
+            image: { type: "STRING" },
+            selection: { type: "STRING" },
+          },
         },
       },
     },
@@ -158,7 +152,10 @@ export interface GeminiLiveSessionOptions {
   apiKey: string;
   /** Resolves the model id (bare, e.g. `gemini-3.1-flash-live-preview`) at open time. */
   model: () => string;
-  /** The composer persona (short — billed every turn). */
+  /**
+   * The composer persona (short — billed every turn). Default:
+   * {@link LIVE_COMPOSER_INSTRUCTIONS}, the shared authoritative text.
+   */
   instructions?: string;
   /** Override the endpoint (tests). */
   url?: string;
@@ -298,10 +295,11 @@ export function openGeminiLiveSession(
     const args = (fc.args ?? {}) as { segments?: unknown };
     const rawSegments = Array.isArray(args.segments) ? args.segments : [];
     const segments = rawSegments.map((s) => {
-      const seg = (s ?? {}) as { text?: unknown; image?: unknown };
+      const seg = (s ?? {}) as { text?: unknown; image?: unknown; selection?: unknown };
       return {
         ...(typeof seg.text === "string" ? { text: seg.text } : {}),
         ...(typeof seg.image === "string" ? { image: seg.image } : {}),
+        ...(typeof seg.selection === "string" ? { selection: seg.selection } : {}),
       };
     });
     let responded = false;
@@ -399,7 +397,7 @@ export function openGeminiLiveSession(
             model: `models/${options.model()}`,
             generationConfig: { responseModalities: ["AUDIO"] },
             systemInstruction: {
-              parts: [{ text: options.instructions ?? GEMINI_LIVE_INSTRUCTIONS }],
+              parts: [{ text: options.instructions ?? LIVE_COMPOSER_INSTRUCTIONS }],
             },
             tools: [{ functionDeclarations: [SUBMIT_INTENT_DECLARATION] }],
             realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
@@ -457,11 +455,21 @@ export function openGeminiLiveSession(
       }
       emit("other", { realtimeInput: { video: { data: toBase64(bytes), mimeType: mime } } });
     },
-    injectText(text) {
+    injectContextText(text) {
       if (dead) {
         return;
       }
-      emit("other", { realtimeInput: { text } });
+      // SILENT context: `clientContent` with `turnComplete: false` appends to
+      // the conversation without soliciting a reply — the Live API's documented
+      // incremental-context form. (`realtimeInput.text` is NOT usable here: under
+      // manual VAD a bare text turn is answered immediately — spike finding 4 —
+      // and a selection change must never make the model start talking.) Routed
+      // through the window guard as "other": the spike only verified the
+      // audio-first window rule for realtimeInput frames, so we conservatively
+      // keep clientContent out of an audio-less window too.
+      emit("other", {
+        clientContent: { turns: [{ role: "user", parts: [{ text }] }], turnComplete: false },
+      });
     },
     nudgeSubmit() {
       if (dead) {

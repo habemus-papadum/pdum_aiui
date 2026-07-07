@@ -24,7 +24,8 @@ transcript) at the center. Three layers:
    `window.__AIUI__` page instrumentation) + the trace debugger (the shared `debug-ui` viewer — the
    widget's 🔍 opens it at `/__aiui/debug`, session-pinned; `aiui debug` serves it standalone with a
    channel switcher). The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`,
-   `/health`); every page belongs to a frontend process.
+   `/health`); every page belongs to a frontend process. (One sidecar exception: the paint
+   sidecar's self-contained iPad client page at `/paint/` — an iPad has no frontend process.)
 3. **Frontend for agents** — principles/utilities/Claude skills for agent-written scientific UI:
    SolidJS 2.0 (beta), Observable-style async dataflow in mainstream syntax, code debuggable by
    the agent's future self (source locators, self-installed debug hooks, HMR-mindful,
@@ -39,7 +40,11 @@ docs site.
 **Security posture (deliberate, documented — do not "fix" without being asked):** `aiui claude`
 asks on the first interactive run whether to launch Claude Code with
 `--dangerously-skip-permissions` and persists the answer (`claude.skipPermissions`;
-non-interactive default: skip — see `packages/aiui/src/util/first-run.ts`), loads
+non-interactive default: skip — see `packages/aiui/src/util/first-run.ts`), asks where the
+channel's web server binds and persists that too (`channel.bind`: `loopback` keeps the
+unauthenticated surface this-machine-only, non-interactive default; `host` binds `0.0.0.0` so a
+LAN iPad can reach the always-on paint sidecar — and everything else on the port; the trusted-LAN
+posture), loads
 the custom channel via `--dangerously-load-development-channels`, and by default attaches the
 Chrome DevTools MCP — by default **attached** to a shared, user-visible session browser (launched
 eagerly with an unauthenticated loopback debug port, project-local profile under

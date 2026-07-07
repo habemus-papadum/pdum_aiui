@@ -97,12 +97,14 @@ export interface CorrectionVoiceHooks {
 }
 
 interface Piece {
-  kind: "text" | "shot" | "code-selection";
+  kind: "text" | "shot" | "code-selection" | "app-selection";
   /**
    * The keyed-`<For>` identity: `text:<segment>` / `shot:<marker>` /
-   * `code:<seq>` (and `text:patch:<seq>` for lines a patch introduced).
-   * Stable for the piece's whole life, so its DOM row persists across stream
-   * events — the point of the Solid port.
+   * `sel:<marker>` / `code:<marker>` (and `text:patch:<seq>` for lines a
+   * patch introduced). Stable for the piece's whole life, so its DOM row
+   * persists across stream events — the point of the Solid port. An
+   * app-selection refinement re-emitted under the SAME marker updates its
+   * piece in place: one chip at one position, tracking the drag.
    */
   key: string;
   segment?: number;
@@ -111,17 +113,10 @@ interface Piece {
   correction?: boolean;
   marker?: string;
   thumb?: string;
-  /** A code-selection piece's locator (`file:line:col` / `file:start-end`). */
+  /** A selection piece's locator (`file:line:col` / `file:start-end`). */
   sourceLoc?: string;
   /** A code-selection piece's line count. */
   lines?: number;
-}
-
-/** The turn's app selection, shown as a chip pinned at the transcript's start. */
-interface AppSelectionChip {
-  text: string;
-  sourceLoc?: string;
-  cell?: string;
 }
 
 /**
@@ -134,7 +129,6 @@ interface AppSelectionChip {
  */
 interface PreviewViewApi {
   setPieces(next: Piece[]): void;
-  setAppSel(sel: AppSelectionChip | undefined): void;
   tick(): void;
 }
 
@@ -146,10 +140,9 @@ export class Preview {
   private readonly engine: Engine;
   private readonly voice: CorrectionVoiceHooks;
   private pieces: Piece[] = [];
-  /** Uniquifier for pieces without a natural key (code chips, patch-added lines). */
+  /** Uniquifier for pieces without a natural key (patch-added lines, markerless
+   * selections from pre-marker streams). */
   private pieceSeq = 0;
-  /** The turn's app selection (last `app-selection` event; drop clears it). */
-  private appSel: AppSelectionChip | undefined;
   /** Per-text-piece diff runs, rendered during the post-correction flash.
    * Island state, NOT a signal: the settle timer below owns its clock and the
    * render root only re-reads it on {@link publish}'s tick. */
@@ -177,8 +170,8 @@ export class Preview {
     texts: Map<Piece, string | undefined>;
     added: Piece[];
   }> = [];
-  /** The hover enlargement, when one is up (fixed-position, body-attached). */
-  private peek: HTMLImageElement | undefined;
+  /** The hover enlargement/peek, when one is up (fixed-position, body-attached). */
+  private peek: HTMLElement | undefined;
   /** Correct mode's chunk editor (the rendered body stays visible above it). */
   private readonly editArea: HTMLTextAreaElement;
   /** The chunk picker row (visible only when the turn has >1 text chunk). */
@@ -656,7 +649,6 @@ export class Preview {
     switch (event.type) {
       case "thread-open":
         this.pieces = [];
-        this.appSel = undefined;
         break;
       case "thread-close":
         // Clear on EVERY close, send included. The transcript used to survive
@@ -664,28 +656,60 @@ export class Preview {
         // thumbs — reading as "my send did nothing". thread-open also clears,
         // but only fires on the first contentful act, one beat too late.
         this.pieces = [];
-        this.appSel = undefined;
         this.undoStack = [];
         this.stopWaiting();
         break;
-      case "app-selection":
-        this.appSel = {
-          text: event.text,
-          ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
-          ...(event.cell !== undefined ? { cell: event.cell } : {}),
-        };
+      case "app-selection": {
+        // Marker-keyed, like the fold: a refinement under the same marker
+        // updates its piece IN PLACE (the chip keeps its stream position and
+        // the peek reads the fresh payload); a new marker appends a new chip.
+        // Markerless events (pre-marker streams) share one latest-wins piece,
+        // the legacy single-selection behavior.
+        const key = `sel:${event.marker ?? "legacy"}`;
+        const existing = this.pieces.find((p) => p.kind === "app-selection" && p.key === key);
+        if (existing !== undefined) {
+          existing.text = event.text;
+          existing.sourceLoc = event.sourceLoc;
+        } else {
+          this.pieces.push({
+            kind: "app-selection",
+            key,
+            text: event.text,
+            ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
+            ...(event.marker !== undefined ? { marker: event.marker } : {}),
+          });
+        }
         break;
+      }
       case "app-selection-drop":
-        this.appSel = undefined;
+        if (event.marker !== undefined) {
+          this.pieces = this.pieces.filter(
+            (p) => !(p.kind === "app-selection" && p.marker === event.marker),
+          );
+        } else {
+          // Markerless (pre-marker stream): retract the most recent chip.
+          for (let i = this.pieces.length - 1; i >= 0; i--) {
+            if (this.pieces[i].kind === "app-selection") {
+              this.pieces.splice(i, 1);
+              break;
+            }
+          }
+        }
         break;
       case "code-selection":
         this.pieces.push({
           kind: "code-selection",
-          key: `code:${++this.pieceSeq}`,
+          key: `code:${event.marker ?? ++this.pieceSeq}`,
           text: event.text,
           ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
           lines: event.lines ?? event.text.split("\n").length,
+          ...(event.marker !== undefined ? { marker: event.marker } : {}),
         });
+        break;
+      case "code-selection-drop":
+        this.pieces = this.pieces.filter(
+          (p) => !(p.kind === "code-selection" && p.marker === event.marker),
+        );
         break;
       case "transcript-delta": {
         // Speech in correct mode streams into the bar's live zone, not the
@@ -860,7 +884,6 @@ export class Preview {
     // it every event — keep that exact behavior).
     this.hidePeek();
     this.view.setPieces([...this.pieces]);
-    this.view.setAppSel(this.appSel);
     this.view.tick();
   }
 
@@ -876,9 +899,8 @@ export class Preview {
     const PreviewBody = () => {
       // Signals INSIDE the render root; the class writes through `view`.
       const [pieces, setPieces] = createSignal<Piece[]>([]);
-      const [appSel, setAppSel] = createSignal<AppSelectionChip | undefined>(undefined);
       const [rev, setRev] = createSignal(0);
-      view = { setPieces, setAppSel, tick: () => setRev((n) => n + 1) };
+      view = { setPieces, tick: () => setRev((n) => n + 1) };
 
       // The lasso target (setCorrectionTarget emits no event — the mark
       // lands on the next stream tick, exactly as the old render did).
@@ -914,15 +936,6 @@ export class Preview {
           this.body.scrollTop = this.body.scrollHeight;
         },
       );
-
-      // The app selection opens the transcript: whatever was highlighted on
-      // the page when the turn started rides the whole turn as a pinned chip.
-      const chip = createMemo(() => {
-        const sel = appSel();
-        return sel === undefined
-          ? undefined
-          : [renderSelectionChip("about", sel.text, sel.sourceLoc), " "];
-      });
 
       /** One streaming text segment: class/text/mark/flash all reactive. */
       const textRow = (piece: Piece) => {
@@ -968,28 +981,25 @@ export class Preview {
       };
 
       return (
-        <>
-          {chip()}
-          <For each={pieces()} keyed={(piece) => piece.key}>
-            {(item) => {
-              // A deliberate one-shot read (hence untrack): identity per key
-              // is stable — the reducer mutates pieces in place — so this row
-              // callback runs once per piece's life and `kind` never changes.
-              const piece = untrack(item);
-              if (piece.kind === "shot") {
-                return this.renderShot(piece);
-              }
-              if (piece.kind === "code-selection") {
-                // The code rides the chip alongside its location (an excerpt;
-                // hover for the whole thing) — a bare locator is opaque when
-                // debugging. Static for the piece's life, built once.
-                const loc = piece.sourceLoc ?? `${piece.lines ?? "?"} lines`;
-                return <>{renderSelectionChip("⧉", oneLine(piece.text ?? ""), loc, piece.text)} </>;
-              }
-              return textRow(piece);
-            }}
-          </For>
-        </>
+        <For each={pieces()} keyed={(piece) => piece.key}>
+          {(item) => {
+            // A deliberate one-shot read (hence untrack): identity per key
+            // is stable — the reducer mutates pieces in place — so this row
+            // callback runs once per piece's life and `kind` never changes.
+            const piece = untrack(item);
+            if (piece.kind === "shot") {
+              return this.renderShot(piece);
+            }
+            if (piece.kind === "code-selection" || piece.kind === "app-selection") {
+              // A minimal pill at the piece's stream position; the hover peek
+              // (and the ✕) carry the substance. Built once per piece — an
+              // app-selection refinement mutates the piece in place, and the
+              // hover handlers read it fresh.
+              return this.renderSelectionPiece(piece);
+            }
+            return textRow(piece);
+          }}
+        </For>
       );
     };
     const dispose = render(PreviewBody, this.body);
@@ -1040,17 +1050,86 @@ export class Preview {
     return wrap;
   }
 
-  /** Test/report hook: the app-selection chip currently pinned, if any. */
-  appSelection(): { text: string; sourceLoc?: string; cell?: string } | undefined {
-    return this.appSel;
+  /**
+   * One selection — app or code — in the transcript flow: a MINIMAL pill (the
+   * same footprint as a shot's degraded chip; glyph + marker distinguishes
+   * the two kinds — `⌖ sel_1` on-screen, `⧉ code_1` from the reader), a hover
+   * **peek** (the mm-thumb-peek pattern: a floating card with the source
+   * location and the selected text, CSS-clamped — the full text stays in the
+   * DOM and the title), and a hover **✕** (the mm-thumb-x pattern) that
+   * retracts exactly THIS selection from the turn through the engine, so the
+   * drop streams to the channel like a shot-drop. An imperative island built
+   * once per piece; app-selection refinements mutate the piece in place and
+   * every hover reads it fresh.
+   */
+  private renderSelectionPiece(piece: Piece): HTMLElement {
+    const isCode = piece.kind === "code-selection";
+    const wrap = document.createElement("span");
+    wrap.className = "mm-thumb-wrap";
+    const chip = document.createElement("span");
+    chip.className = `mm-sel-chip ${isCode ? "mm-sel-code" : "mm-sel-app"}`;
+    chip.textContent = `${isCode ? "⧉" : "⌖"} ${piece.marker ?? (isCode ? "code" : "sel")}`;
+    const title = (): string =>
+      piece.sourceLoc !== undefined
+        ? `${piece.sourceLoc}\n${piece.text ?? ""}`
+        : (piece.text ?? "");
+    chip.title = title();
+    wrap.append(chip);
+    wrap.addEventListener("mouseenter", () => {
+      chip.title = title(); // refreshed: a refinement may have superseded it
+      this.showSelectionPeek(wrap, piece);
+    });
+    wrap.addEventListener("mouseleave", () => this.hidePeek());
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "mm-thumb-x";
+    drop.title = `remove this ${isCode ? "code selection" : "selection"} from this turn`;
+    drop.textContent = "✕";
+    drop.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.hidePeek();
+      if (isCode) {
+        if (piece.marker) {
+          this.engine.dropCodeSelection(piece.marker);
+        }
+      } else {
+        this.engine.appSelectionDrop(piece.marker);
+      }
+    });
+    wrap.append(drop);
+    return wrap;
   }
 
   private showPeek(anchor: HTMLElement, src: string): void {
     this.hidePeek();
-    const rect = anchor.getBoundingClientRect();
     const peek = document.createElement("img");
     peek.className = "mm-thumb-peek";
     peek.src = src;
+    this.placePeek(anchor, peek);
+  }
+
+  /** The selection peek: loc + full text, clamped by CSS (never JS-truncated). */
+  private showSelectionPeek(anchor: HTMLElement, piece: Piece): void {
+    this.hidePeek();
+    const peek = document.createElement("div");
+    peek.className = "mm-sel-peek";
+    if (piece.sourceLoc !== undefined) {
+      const loc = document.createElement("div");
+      loc.className = "mm-sel-peek-loc";
+      loc.textContent = piece.sourceLoc;
+      peek.append(loc);
+    }
+    const text = document.createElement("div");
+    text.className = "mm-sel-peek-text";
+    text.textContent = piece.text ?? "";
+    peek.append(text);
+    this.placePeek(anchor, peek);
+  }
+
+  /** Fixed-position, body-attached — the body is a scroll container, so an
+   * absolutely-positioned child would clip (the mm-thumb-peek lesson). */
+  private placePeek(anchor: HTMLElement, peek: HTMLElement): void {
+    const rect = anchor.getBoundingClientRect();
     peek.style.left = `${Math.max(8, rect.left)}px`;
     peek.style.bottom = `${window.innerHeight - rect.top + 8}px`;
     document.body.append(peek);
@@ -1061,39 +1140,4 @@ export class Preview {
     this.peek?.remove();
     this.peek = undefined;
   }
-}
-
-/** Chip text is a reference, not a document — keep it one glanceable line. */
-const CHIP_EXCERPT_CHARS = 48;
-
-/** Collapse a (possibly multiline) selection to one whitespace-normal line. */
-function oneLine(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-/**
- * One selection chip in the transcript flow: `badge label · loc`, hover
- * showing the full text. Shared by the app-selection chip (pinned at the
- * start, badge "about") and code-selection chips (badge "⧉", at their stream
- * position) so both wear the same pill.
- */
-function renderSelectionChip(
-  badge: string,
-  label: string,
-  loc?: string,
-  tooltip?: string,
-): HTMLElement {
-  const chip = document.createElement("span");
-  chip.className = "mm-sel-chip";
-  const excerpt =
-    label.length > CHIP_EXCERPT_CHARS ? `${label.slice(0, CHIP_EXCERPT_CHARS)}…` : label;
-  chip.textContent = badge === "about" ? `about: "${excerpt}"` : `${badge} ${excerpt}`;
-  if (loc !== undefined) {
-    const locEl = document.createElement("span");
-    locEl.className = "mm-sel-loc";
-    locEl.textContent = loc;
-    chip.append(locEl);
-  }
-  chip.title = tooltip ?? label;
-  return chip;
 }

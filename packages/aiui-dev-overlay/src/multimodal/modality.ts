@@ -18,11 +18,15 @@
  *  - shot PNGs and (for the `openai` transcriber) audio segments ride
  *    `chunk{kind:"attachment"}` raw-binary frames, correlated to their `shot`/
  *    `talk` event by id (`shot_N` / `seg_N`);
- *  - the page selection rides the stream itself as an `app-selection` event,
- *    emitted right after thread-open (whatever was highlighted before arming —
- *    the engine reads the watcher's snapshot via its selection provider) and
- *    re-emitted on mid-turn changes; the legacy `chunk{kind:"context"}` frame
- *    is no longer sent (the server still accepts it from older clients);
+ *  - page selections ride the stream itself as positional `app-selection`
+ *    events (marker `sel_N`, like a shot's `shot_N`): one right after
+ *    thread-open (whatever was highlighted before arming — the engine reads
+ *    the watcher's snapshot via its selection provider), and one per mid-turn
+ *    selection; refinements with nothing contentful in between supersede
+ *    under the same marker (one chip tracking a drag), and each chip's ✕
+ *    streams an `app-selection-drop` for exactly that marker. The legacy
+ *    `chunk{kind:"context"}` frame is no longer sent (the server still
+ *    accepts it from older clients);
  *  - the server lowers and pushes echoes back — a segment's `transcript-final`,
  *    a completed `correction` — which merge into the engine stream as if local.
  *
@@ -83,10 +87,10 @@ import { type SpeechAudioFactory, SpeechPlayer } from "./speech";
 import { HUD_STYLES, STYLES } from "./styles";
 import { UI_MODE_TABLE, type UiMode, uiMode } from "./ui-mode";
 
-/** A code selection's excerpt in the mirror marker — one glanceable line. */
+/** A selection's excerpt in the mirror item — one glanceable line. */
 const CODE_EXCERPT_CHARS = 48;
 
-/** Collapse a code selection to a one-line, length-capped marker excerpt. */
+/** Collapse a selection to a one-line, length-capped mirror excerpt. */
 function codeExcerpt(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > CODE_EXCERPT_CHARS ? `${flat.slice(0, CODE_EXCERPT_CHARS)}…` : flat;
@@ -131,12 +135,14 @@ export function multimodalModality(
       const base: IntentPipelineConfig = effectiveConfig(viteOption, {});
       const config: IntentPipelineConfig = effectiveConfig(viteOption, loadIntentOverrides());
       const engine = new Engine(config);
-      // The turn's app selection. At thread-open the engine reads the host's
-      // selection watcher through this provider, so whatever was highlighted
-      // on the page BEFORE arming opens the turn as its `app-selection` event
-      // (the transcript begins with the selection chip, and the selection can
-      // never be lost to a send-time read). Mid-turn changes keep the event
-      // current (last wins); a cleared watcher (the panel chip's ✕) retracts it.
+      // The turn's opening app selection. At thread-open the engine reads the
+      // host's selection watcher through this provider, so whatever was
+      // highlighted on the page BEFORE arming opens the turn as its first
+      // `app-selection` event (the transcript begins with the selection chip,
+      // and the selection can never be lost to a send-time read). Each later
+      // watcher snapshot appends its own positional event — the engine's
+      // marker/supersede rule keeps a refined drag on one chip — and a
+      // cleared watcher (the panel chip's ✕) retracts the latest.
       engine.selectionProvider = () => {
         const snap = ctx.selection();
         return snap !== undefined ? toAppSelection(snap) : undefined;
@@ -763,9 +769,9 @@ export function multimodalModality(
         // The mirror travels STRUCTURED (the defer-rendering rule applies to
         // mirrors too: intent crosses the bus as data; presentation is each
         // surface's own decision — the reader renders chips, not our prose).
-        // Shots ride as their marker only (pixels stay in this tab); code
-        // selections as locator + clipped excerpt (the full text already
-        // rides the stream as the code-selection event). `text` remains the
+        // Shots ride as their marker only (pixels stay in this tab);
+        // selections — code and app — as locator + clipped excerpt (the full
+        // text already rides the stream as its event). `text` remains the
         // legacy flat rendering so older views keep working.
         const composed = engine.threadOpen
           ? composeIntent(currentThreadEvents(), config.correctionPolicy).items
@@ -783,8 +789,16 @@ export function multimodalModality(
                   ...(i.sourceLoc !== undefined ? { sourceLoc: i.sourceLoc } : {}),
                   excerpt: codeExcerpt(i.text ?? ""),
                   ...(i.lines !== undefined ? { lines: i.lines } : {}),
+                  ...(i.marker !== undefined ? { marker: i.marker } : {}),
                 }
-              : { kind: "text", text: i.text ?? "" },
+              : i.kind === "app-selection"
+                ? {
+                    kind: "app-selection",
+                    ...(i.sourceLoc !== undefined ? { sourceLoc: i.sourceLoc } : {}),
+                    excerpt: codeExcerpt(i.text ?? ""),
+                    ...(i.marker !== undefined ? { marker: i.marker } : {}),
+                  }
+                : { kind: "text", text: i.text ?? "" },
         );
         const text = items
           .flatMap((i) =>
@@ -792,7 +806,9 @@ export function multimodalModality(
               ? [i.text]
               : i.kind === "code-selection"
                 ? [`[code: ${i.sourceLoc ?? "selection"} “${i.excerpt}”]`]
-                : [],
+                : i.kind === "app-selection"
+                  ? [`[sel: “${i.excerpt}”]`]
+                  : [],
           )
           .join(" ")
           .trim();

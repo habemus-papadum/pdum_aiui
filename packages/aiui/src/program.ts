@@ -187,15 +187,16 @@ export function buildProgram(): Command {
     .action((args: string[]) => runMcp(args));
 
   // `aiui paint …` — the iPad paint stream. `url` prints where the iPad should
-  // point its browser: each running channel that hosts the paint sidecar
-  // (`aiui claude --aiui-sidecar paint`) reports its LAN listener via
-  // `/paint/info`; this resolves them all so you can copy-paste the URL.
+  // point its browser: the paint surface rides each channel's one web server
+  // (`/paint/` on the channel port), so this resolves every running channel
+  // that answers `/paint/info` — plus whether its bind makes it LAN-reachable —
+  // so you can copy-paste the URL.
   const paint = program
     .command("paint")
     .description("the iPad paint stream — url (where the iPad should connect)");
   paint
     .command("url")
-    .description("print the LAN URL(s) an iPad should open, per running paint-enabled channel")
+    .description("print the URL(s) an iPad should open, per running paint-enabled channel")
     .option("--json", "machine-readable targets")
     .action((opts: { json?: boolean }) => runPaintUrl(opts));
 

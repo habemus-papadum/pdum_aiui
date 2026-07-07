@@ -6,6 +6,7 @@
  * begin with `--aiui-` so they're unambiguously distinguishable from flags meant
  * for the wrapped command (e.g. claude's `--resume`).
  */
+import { CHANNEL_BINDS, type ChannelBind } from "./config-schema";
 
 export interface AiuiArgs {
   /** The `--aiui-tag <tag>` value, if provided (the channel/MCP session tag). */
@@ -66,6 +67,13 @@ export interface AiuiArgs {
    * sidecars to disable for this run. Disable wins over enable.
    */
   noSidecar: string[];
+  /**
+   * The `--aiui-bind <loopback|host>` value, if provided — where the channel's
+   * web backend binds for this launch, overriding `channel.bind` in config.
+   * `host` is the trusted-LAN posture: the whole (unauthenticated) channel
+   * surface, iPad paint page included, becomes reachable from the network.
+   */
+  bind?: ChannelBind;
   /** Everything else, to forward verbatim to the wrapped tool. */
   passthrough: string[];
 }
@@ -113,6 +121,9 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
  *  - `--aiui-sidecar <name>` / `--aiui-no-sidecar <name>` — force-enable /
  *    disable a session sidecar by name. Both are repeatable and accumulate;
  *    disable wins over enable when the same name appears in both.
+ *  - `--aiui-bind <loopback|host>` — where the channel's web backend binds for
+ *    this launch (see `channel.bind` in the config guide). Any other value is
+ *    an error.
  *
  * Any other `--aiui-*` flag throws, so a typo surfaces loudly instead of being
  * silently dropped or leaking into the child command.
@@ -129,6 +140,7 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
   let browserUrl: string | undefined;
   const sidecar: string[] = [];
   const noSidecar: string[] = [];
+  let bind: ChannelBind | undefined;
   const passthrough: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -241,6 +253,16 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         noSidecar.push(value);
         break;
       }
+      case "--aiui-bind": {
+        if (value === undefined) {
+          value = args[++i];
+        }
+        if (!value || !(CHANNEL_BINDS as readonly string[]).includes(value)) {
+          throw new Error(`--aiui-bind requires one of: ${CHANNEL_BINDS.join(", ")}`);
+        }
+        bind = value as ChannelBind;
+        break;
+      }
       default:
         throw new Error(`unknown aiui option: ${name}`);
     }
@@ -274,6 +296,7 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
     browserUrl,
     sidecar,
     noSidecar,
+    bind,
     passthrough,
   };
 }

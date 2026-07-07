@@ -689,13 +689,14 @@ describe("intent-v1 lowering — selections", () => {
   });
   const open = (at = 1): IntentEvent => ({ at, type: "thread-open", trigger: "talk" });
 
-  it("lowers the stream's app-selection event into the context preamble", async () => {
+  it("renders the stream's app-selection INLINE in the body at its stream position", async () => {
     const d = drive();
     await d.feedEvents([
       open(),
       {
         at: 2,
         type: "app-selection",
+        marker: "sel_1",
         text: "reaction-diffusion on the GPU",
         sourceLoc: "src/ui/App.tsx:35:13",
         cell: "catalog",
@@ -704,28 +705,57 @@ describe("intent-v1 lowering — selections", () => {
     ]);
     await d.fin();
     expect(d.sent).toHaveLength(1);
-    // Identical wording to text-concat's selection block (prompt-context.ts).
-    expect(d.sent[0].text).toContain(
-      'It concerns this on-screen selection: "reaction-diffusion on the GPU" ' +
-        "(authored at src/ui/App.tsx:35:13; produced by cell catalog).",
+    // The selection is intent, placed where it happened in the stream —
+    // BEFORE the spoken words here — with the attribution wording inline.
+    expect(d.sent[0].text).toBe(
+      'Regarding the on-screen selection "reaction-diffusion on the GPU" ' +
+        "(authored at src/ui/App.tsx:35:13; produced by cell catalog) " +
+        "make this wider",
     );
-    // Context, not intent: the body itself is only the spoken words.
-    expect(d.sent[0].text.split("---")[1]?.trim()).toBe("make this wider");
+    // No preamble section: the stream path never rides selectionSections.
+    expect(d.sent[0].text).not.toContain("It concerns this on-screen selection");
   });
 
-  it("prefers the stream's selection over a legacy context chunk, which stays the fallback", async () => {
+  it("composes multiple interleaved selections at position; drops retract exactly one", async () => {
+    const d = drive();
+    await d.feedEvents([
+      open(),
+      seg(2, "make this wider"),
+      { at: 3, type: "app-selection", marker: "sel_1", text: "the histogram title" },
+      {
+        at: 4,
+        type: "transcript-final",
+        segment: 2,
+        text: "and match this",
+        latencyMs: 5,
+        model: "mock",
+      },
+      { at: 5, type: "app-selection", marker: "sel_2", text: "the legend caption" },
+      { at: 6, type: "app-selection-drop", marker: "sel_1" },
+    ]);
+    await d.fin();
+    expect(d.sent[0].text).toBe(
+      "make this wider and match this " + 'Regarding the on-screen selection "the legend caption"',
+    );
+  });
+
+  it("suppresses the legacy context chunk when the stream carries its own selections", async () => {
     const d = drive();
     await d.feedContext({ text: "stale send-time selection" });
     await d.feedEvents([
       open(),
-      { at: 2, type: "app-selection", text: "the fresh selection" },
+      { at: 2, type: "app-selection", marker: "sel_1", text: "the fresh selection" },
       seg(3, "explain this"),
     ]);
     await d.fin();
-    expect(d.sent[0].text).toContain('It concerns this on-screen selection: "the fresh selection"');
+    // The stream's selection rides the body inline; the stale chunk would
+    // duplicate it in the preamble — it stands down for this turn.
+    expect(d.sent[0].text).toContain('Regarding the on-screen selection "the fresh selection"');
     expect(d.sent[0].text).not.toContain("stale send-time selection");
+    expect(d.sent[0].text).not.toContain("It concerns this on-screen selection");
 
-    // An old client that only sends the context chunk still gets the preamble.
+    // An old client that only sends the context chunk still gets the preamble
+    // — the one surviving selectionSections path in intent-v1.
     const legacy = drive();
     await legacy.feedEvents([open(), seg(2, "explain this")]);
     await legacy.feedContext({ text: "context-chunk selection", cell: "flow" });
@@ -735,7 +765,7 @@ describe("intent-v1 lowering — selections", () => {
     );
   });
 
-  it("honors an app-selection-drop: the retracted selection never reaches the prompt", async () => {
+  it("tolerates pre-marker streams: a markerless drop retracts the latest selection", async () => {
     const d = drive();
     await d.feedEvents([
       open(),
@@ -755,6 +785,7 @@ describe("intent-v1 lowering — selections", () => {
       {
         at: 3,
         type: "code-selection",
+        marker: "code_1",
         text: "export function curb() {}",
         sourceLoc: "src/c.ts:12:1",
         lines: 1,
@@ -766,20 +797,59 @@ describe("intent-v1 lowering — selections", () => {
     );
   });
 
-  it("records first-class trace stages for both selection kinds", async () => {
+  it("honors a code-selection-drop: exactly that marker leaves the composition", async () => {
+    const d = drive();
+    await d.feedEvents([
+      open(),
+      seg(2, "compare these"),
+      { at: 3, type: "code-selection", marker: "code_1", text: "const a = 1;" },
+      { at: 4, type: "code-selection", marker: "code_2", text: "const b = 2;" },
+      { at: 5, type: "code-selection-drop", marker: "code_1" },
+    ]);
+    await d.fin();
+    expect(d.sent[0].text).toBe("compare these Regarding the selection: `const b = 2;`");
+  });
+
+  it("records first-class trace stages for both selection kinds and both drops", async () => {
     const cache = mkdtempSync(join(tmpdir(), "aiui-sel-"));
     const d = drive({ cache });
     await d.feedEvents([
       open(),
-      { at: 2, type: "app-selection", text: "the histogram title", cell: "hist" },
+      {
+        at: 2,
+        type: "app-selection",
+        marker: "sel_1",
+        text: "the histogram title",
+        cell: "hist",
+      },
       seg(3, "make it bigger"),
-      { at: 4, type: "code-selection", text: "const s = 1;", sourceLoc: "src/s.ts:1:1" },
+      {
+        at: 4,
+        type: "code-selection",
+        marker: "code_1",
+        text: "const s = 1;",
+        sourceLoc: "src/s.ts:1:1",
+      },
+      { at: 5, type: "code-selection-drop", marker: "code_1" },
+      { at: 6, type: "app-selection-drop", marker: "sel_1" },
     ]);
     await d.fin();
     const [trace] = listTraces(cache);
     const appStage = trace.stages.find((s) => s.label === "app selection");
-    expect(appStage?.data).toMatchObject({ text: "the histogram title", cell: "hist" });
+    expect(appStage?.data).toMatchObject({
+      marker: "sel_1",
+      text: "the histogram title",
+      cell: "hist",
+    });
     const codeStage = trace.stages.find((s) => s.label === "code selection");
-    expect(codeStage?.data).toMatchObject({ text: "const s = 1;", sourceLoc: "src/s.ts:1:1" });
+    expect(codeStage?.data).toMatchObject({
+      marker: "code_1",
+      text: "const s = 1;",
+      sourceLoc: "src/s.ts:1:1",
+    });
+    const codeDrop = trace.stages.find((s) => s.label === "code selection dropped");
+    expect(codeDrop?.data).toMatchObject({ marker: "code_1" });
+    const appDrop = trace.stages.find((s) => s.label === "app selection dropped");
+    expect(appDrop?.data).toMatchObject({ marker: "sel_1" });
   });
 });

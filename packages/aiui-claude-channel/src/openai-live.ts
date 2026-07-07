@@ -25,6 +25,8 @@
  *    `response.create`.
  *  - **Images:** `conversation.item.create` with an `input_text` label part and an
  *    `input_image` data-URL part (finding 8) — items never auto-trigger a response.
+ *  - **Silent context (selections):** an `input_text` item alone — no
+ *    `response.create`, so nothing is spoken back.
  *  - **The nudge:** an `input_text` item + `response.create`.
  *  - **The call:** a `function_call` item in `response.done.response.output`; its
  *    `arguments` (a JSON string) parse to `{ segments }`. `respond` writes a
@@ -39,6 +41,7 @@
  */
 import { priceCall, usageFromRealtimeResponse } from "./cost";
 import {
+  LIVE_COMPOSER_INSTRUCTIONS,
   LIVE_NUDGE_TEXT,
   type LiveCapabilities,
   type LiveSession,
@@ -60,19 +63,6 @@ import {
 /** The flagship conversational model, degraded to the realtime submode's composer. */
 export const DEFAULT_OPENAI_LIVE_MODEL = "gpt-realtime-2";
 
-/**
- * The composer persona — the OpenAI-side twin of {@link ./gemini-live}'s, minus
- * the video mention (this engine has none). Terse: billed as input every turn.
- */
-export const OPENAI_LIVE_INSTRUCTIONS =
-  "You help a developer compose a request for a coding agent while they talk and share images " +
-  "of their app. Images arrive labeled with bracketed ids like [image shot_3]. Build an accurate " +
-  'picture of what they want done to the app; resolve deictic references ("this slider", "here") ' +
-  "against what you have seen, fold in corrections, and drop rambling. When they signal completion " +
-  "(they say to send it, or you are nudged), call submit_intent: its segments[] interleaves the " +
-  'cleaned-up request text with image refs (a bare id, e.g. "shot_3") placed where each image ' +
-  "belongs — a brief, not a transcript. Speak briefly otherwise.";
-
 /** The `submit_intent` tool as GA realtime declares it (standard JSON Schema). */
 const SUBMIT_INTENT_TOOL = {
   type: "function",
@@ -85,7 +75,11 @@ const SUBMIT_INTENT_TOOL = {
         type: "array",
         items: {
           type: "object",
-          properties: { text: { type: "string" }, image: { type: "string" } },
+          properties: {
+            text: { type: "string" },
+            image: { type: "string" },
+            selection: { type: "string" },
+          },
         },
       },
     },
@@ -104,7 +98,10 @@ export interface OpenAiLiveSessionOptions {
   voice?: () => string | undefined;
   /** Resolves the input-transcription model (feeds the chronicle). */
   transcriptionModel?: () => string;
-  /** The composer persona (short — billed every turn). */
+  /**
+   * The composer persona (short — billed every turn). Default:
+   * {@link LIVE_COMPOSER_INSTRUCTIONS}, the shared authoritative text.
+   */
   instructions?: string;
   /** Override the endpoint (tests). */
   url?: string;
@@ -217,10 +214,11 @@ export function openOpenAiLiveSession(
     }
     const rawSegments = Array.isArray(parsed.segments) ? parsed.segments : [];
     const segments = rawSegments.map((s) => {
-      const seg = (s ?? {}) as { text?: unknown; image?: unknown };
+      const seg = (s ?? {}) as { text?: unknown; image?: unknown; selection?: unknown };
       return {
         ...(typeof seg.text === "string" ? { text: seg.text } : {}),
         ...(typeof seg.image === "string" ? { image: seg.image } : {}),
+        ...(typeof seg.selection === "string" ? { selection: seg.selection } : {}),
       };
     });
     let responded = false;
@@ -342,7 +340,7 @@ export function openOpenAiLiveSession(
           session: {
             type: "realtime",
             model: options.model(),
-            instructions: options.instructions ?? OPENAI_LIVE_INSTRUCTIONS,
+            instructions: options.instructions ?? LIVE_COMPOSER_INSTRUCTIONS,
             output_modalities: ["audio"],
             audio: {
               input: {
@@ -408,10 +406,13 @@ export function openOpenAiLiveSession(
       // No-op: this vendor has no video (capabilities.video === false). The
       // processor traces the drop; the engine simply ignores the frame.
     },
-    injectText(text) {
+    injectContextText(text) {
       if (dead) {
         return;
       }
+      // SILENT context: a bare text item with NO `response.create` chasing it —
+      // items never auto-trigger a response (finding 8), so this adds to the
+      // conversation without making the model speak.
       sendReady({
         type: "conversation.item.create",
         item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
