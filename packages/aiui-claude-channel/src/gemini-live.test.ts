@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { openGeminiLiveSession, parseTimeLeftMs, WindowOrderingGuard } from "./gemini-live";
-import type { LiveSessionCallbacks } from "./live-session";
+import {
+  LIVE_COMPOSER_INSTRUCTIONS,
+  LIVE_NUDGE_TEXT,
+  type LiveSessionCallbacks,
+} from "./live-session";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 
 /** A scripted fake of the Gemini Live upstream (mirrors realtime.test.ts). */
@@ -140,6 +144,25 @@ describe("openGeminiLiveSession", () => {
       up.sent[0] as { setup: { tools: Array<{ functionDeclarations: Array<{ name: string }> }> } }
     ).setup.tools;
     expect(tools[0].functionDeclarations[0].name).toBe("submit_intent");
+  });
+
+  it("sends the shared composer persona as the system instruction", () => {
+    const up = fakeUpstream();
+    collect(up);
+    up.open();
+    const setup = (
+      up.sent[0] as { setup: { systemInstruction: { parts: Array<{ text: string }> } } }
+    ).setup;
+    expect(setup.systemInstruction.parts[0].text).toBe(LIVE_COMPOSER_INSTRUCTIONS);
+  });
+
+  it("nudgeSubmit sends the commit sentinel as a bare out-of-window text turn", () => {
+    const up = fakeUpstream();
+    const { session } = collect(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    session.nudgeSubmit();
+    expect(realtimeFrames(up).some((r) => r.text === LIVE_NUDGE_TEXT)).toBe(true);
   });
 
   it("obeys the window rule: a label injected before audio is flushed after the first audio", () => {

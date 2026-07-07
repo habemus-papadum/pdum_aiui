@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { LiveSessionCallbacks } from "./live-session";
+import {
+  LIVE_COMPOSER_INSTRUCTIONS,
+  LIVE_NUDGE_TEXT,
+  type LiveSessionCallbacks,
+} from "./live-session";
 import { openOpenAiLiveSession } from "./openai-live";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 
@@ -78,6 +82,9 @@ describe("openOpenAiLiveSession", () => {
     });
     const tools = (up.sent[0] as { session: { tools: Array<{ name: string }> } }).session.tools;
     expect(tools[0].name).toBe("submit_intent");
+    // The persona is the shared authoritative text (one place, both vendors).
+    const instructions = (up.sent[0] as { session: { instructions: string } }).session.instructions;
+    expect(instructions).toBe(LIVE_COMPOSER_INSTRUCTIONS);
   });
 
   it("has no video and no-ops appendVideoFrame", () => {
@@ -122,7 +129,7 @@ describe("openOpenAiLiveSession", () => {
     expect(up.sent.filter((m) => m.type === "response.create").length).toBe(before);
   });
 
-  it("nudgeSubmit posts a text item and a response.create", () => {
+  it("nudgeSubmit posts the commit sentinel as a text item and a response.create", () => {
     const up = fakeUpstream();
     const { session } = collect(up);
     up.open();
@@ -130,6 +137,10 @@ describe("openOpenAiLiveSession", () => {
     session.nudgeSubmit();
     expect(types(up)).toContain("conversation.item.create");
     expect(types(up)).toContain("response.create");
+    const item = up.sent.find((m) => m.type === "conversation.item.create") as {
+      item: { content: Array<{ type: string; text?: string }> };
+    };
+    expect(item.item.content[0]).toEqual({ type: "input_text", text: LIVE_NUDGE_TEXT });
   });
 
   it("delivers a function_call from response.done through drainToolCall; respond writes function_call_output", async () => {

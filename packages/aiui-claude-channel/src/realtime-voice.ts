@@ -68,10 +68,16 @@ export const REALTIME_VOICE_RATE = 24000;
 /** Conservative per-thread cap on how many spoken responses the model may make. */
 export const DEFAULT_MAX_RESPONSES = 8;
 
-/** A short persona: kept terse because it is billed as input tokens every turn. */
+/**
+ * A short persona: kept terse because it is billed as input tokens every turn.
+ * Honest about the situation — the human is dictating an instruction for a
+ * coding agent; this model is only the spoken courtesy layer (the composition
+ * runs elsewhere, over the transcripts), so it must never restate the dictation.
+ */
 export const DEFAULT_VOICE_INSTRUCTIONS =
-  "You are a terse voice assistant for a developer driving a visualization app by voice. " +
-  "Acknowledge and answer in one short spoken sentence. Do not narrate or repeat the user's words.";
+  "A developer is dictating an instruction for a coding agent while working in their app; you " +
+  "are the spoken sidekick. The dictation is transcribed and composed separately — never " +
+  "repeat, rephrase, or narrate it. Acknowledge and answer questions in one short spoken sentence.";
 
 /** One user (input) transcript result — mirrors {@link ./realtime}.RealtimeResult. */
 export interface VoiceUserResult {

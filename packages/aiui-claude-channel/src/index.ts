@@ -71,7 +71,6 @@ export {
 } from "./frame-log";
 export {
   DEFAULT_GEMINI_LIVE_MODEL,
-  GEMINI_LIVE_INSTRUCTIONS,
   GEMINI_LIVE_URL,
   type GeminiLiveSessionOptions,
   geminiLiveSocketFactory,
@@ -113,6 +112,7 @@ export {
   resolveSegments,
 } from "./live-resolve";
 export {
+  LIVE_COMPOSER_INSTRUCTIONS,
   LIVE_NUDGE_TEXT,
   type LiveCapabilities,
   type LiveSession,
@@ -128,7 +128,6 @@ export {
 } from "./load-sidecars";
 export {
   DEFAULT_OPENAI_LIVE_MODEL,
-  OPENAI_LIVE_INSTRUCTIONS,
   type OpenAiLiveSessionOptions,
   openOpenAiLiveSession,
 } from "./openai-live";
