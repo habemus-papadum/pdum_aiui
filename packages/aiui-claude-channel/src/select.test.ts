@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { agentsByPid, parseClaudeAgents } from "./agents";
 import type { RunningServer } from "./registry";
-import { serverLabel } from "./select";
+import { selectMcpServer, serverLabel } from "./select";
+
+// The interactive widget, mocked so the auto-pick rules are testable; the
+// agent listing is stubbed empty so no test shells out to `claude`.
+vi.mock("@inquirer/prompts", () => ({ select: vi.fn() }));
+vi.mock("./agents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./agents")>()),
+  listClaudeAgents: () => [],
+}));
 
 function server(overrides: Partial<RunningServer>): RunningServer {
   return {
@@ -41,5 +49,41 @@ describe("serverLabel", () => {
 
   it("falls back to the parent pid when there's no matching session", () => {
     expect(serverLabel(server({ ppid: 555 }), agents)).toBe("pid 555  ·  /repo  ·  port 4000");
+  });
+
+  it("prefers the entry's own name, and always marks debug servers", () => {
+    expect(serverLabel(server({ ppid: 555, name: "aiui workbench", debug: true }), agents)).toBe(
+      "aiui workbench  ·  /repo  ·  port 4000  ·  debug",
+    );
+    // The name wins even over a known session; debug marks without a name too.
+    expect(serverLabel(server({ ppid: 100, name: "custom" }), agents)).toBe(
+      "custom  ·  /repo  ·  port 4000",
+    );
+    expect(serverLabel(server({ ppid: 555, debug: true }), agents)).toBe(
+      "pid 555  ·  /repo  ·  port 4000  ·  debug",
+    );
+  });
+});
+
+describe("selectMcpServer auto-pick", () => {
+  it("returns a lone real server without prompting", async () => {
+    const { select } = await import("@inquirer/prompts");
+    vi.mocked(select).mockClear();
+    const real = server({ tag: "real" });
+    await expect(selectMcpServer([real])).resolves.toBe(real);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("still prompts for a lone debug server — never a silent default", async () => {
+    const { select } = await import("@inquirer/prompts");
+    const debug = server({ tag: "wb", name: "aiui workbench", debug: true });
+    vi.mocked(select).mockClear();
+    vi.mocked(select).mockResolvedValueOnce(debug);
+    await expect(selectMcpServer([debug])).resolves.toBe(debug);
+    expect(select).toHaveBeenCalledOnce();
+    const { choices } = vi.mocked(select).mock.calls[0][0] as {
+      choices: Array<{ name: string }>;
+    };
+    expect(choices[0].name).toContain("debug");
   });
 });

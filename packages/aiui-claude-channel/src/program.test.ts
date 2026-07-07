@@ -13,10 +13,10 @@ describe("aiui-claude-channel cli", () => {
     expect(names).toEqual(["config", "mcp", "quick", "serve"]);
   });
 
-  it("serve declares --tag, --record, --port, and --sidecars", () => {
+  it("serve declares --tag, --name, --record, --port, and --sidecars", () => {
     const serve = buildProgram().commands.find((cmd) => cmd.name() === "serve");
     const flags = serve?.options.map((option) => option.long).sort();
-    expect(flags).toEqual(["--port", "--record", "--sidecars", "--tag"]);
+    expect(flags).toEqual(["--name", "--port", "--record", "--sidecars", "--tag"]);
   });
 
   it("mcp declares --tag, --launch-info, --sidecars, and --bind", () => {

@@ -1,0 +1,34 @@
+# Getting Started with @habemus-papadum/aiui-vscode
+
+The VS Code selection provider for the aiui dev overlay: a status bar item that shows (and
+picks) the browser tab this window talks to, and a command that sends the current editor
+selection into that tab's session turn.
+
+## Build and install the extension
+
+The extension is installed locally from this repo (it may reach the marketplace one day; the
+npm package already ships the underlying library):
+
+```sh
+pnpm --filter @habemus-papadum/aiui-vscode build
+pnpm --filter @habemus-papadum/aiui-vscode vsix
+code --install-extension packages/aiui-vscode/dist/aiui-vscode.vsix
+```
+
+## Use it
+
+1. Launch a session with `aiui claude` and open your app with the dev overlay mounted.
+2. In VS Code, click the **aiui** status bar item and pick the browser tab (channels come from
+   the on-disk registry; tabs from each channel's `GET /session/peers`).
+3. Select code, then run **`aiui: Send Selection to Browser Tab`** (command palette or editor
+   context menu). A toast confirms delivery — the selection appears as a chip in the overlay's
+   turn preview, arming the turn if needed — or explains why nothing was delivered.
+
+## How it plugs in
+
+The extension POSTs a structured `SelectionContribution` to the channel web backend's
+`POST /session/publish`, targeted at the picked tab's `clientId`; the server relays it down the
+tab's `/session` websocket on the `"contribution"` topic (`from: "server"`), exactly the message
+the code reader publishes from its own socket. Formatting is deferred to lowering: the payload
+carries verbatim text plus a `file:line:col` locator, and `composeIntent` decides how it reads
+in the final prompt.

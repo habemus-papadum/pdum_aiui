@@ -204,6 +204,8 @@ export function registerDebugRoutes(
         ppid: server.ppid,
         cwd: server.cwd,
         startedAt: server.startedAt,
+        ...(server.name !== undefined ? { name: server.name } : {}),
+        ...(server.debug === true ? { debug: true } : {}),
         ...(server.pid === process.pid ? { self: true } : {}),
       })),
     });

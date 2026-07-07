@@ -212,6 +212,10 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
       "serve",
       "--tag",
       "workbench",
+      // How selectors (quick, aiui vite, the VS Code extension) title this
+      // channel — its registry entry carries debug:true, so they all mark it.
+      "--name",
+      "aiui workbench",
       // The channel's fixed address. serve fails hard when the port is taken
       // (never drifts), and its actual port still arrives on the ready line —
       // which stays the single source of truth below.
