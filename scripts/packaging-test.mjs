@@ -91,6 +91,26 @@ const aiui = join(scratch, "node_modules", ".bin", "aiui");
 const run = (args) =>
   spawnSync(aiui, args, { cwd: scratch, env, encoding: "utf8", timeout: 120_000 });
 
+// Every conditional-exports object in a PACKED manifest must carry a "default"
+// condition: require.resolve() (which the CLI uses on the code sidecar) matches
+// CJS conditions and throws ERR_PACKAGE_PATH_NOT_EXPORTED without it. Dev never
+// catches this — the source-first exports are bare strings that match anything.
+const scopeDir = join(scratch, "node_modules", "@habemus-papadum");
+const conditionalWithoutDefault = [];
+for (const name of readdirSync(scopeDir)) {
+  const manifest = JSON.parse(readFileSync(join(scopeDir, name, "package.json"), "utf8"));
+  for (const [subpath, cond] of Object.entries(manifest.exports ?? {})) {
+    if (cond !== null && typeof cond === "object" && !("default" in cond)) {
+      conditionalWithoutDefault.push(`${name}: "${subpath}"`);
+    }
+  }
+}
+check(
+  "every packed conditional export carries a default condition",
+  conditionalWithoutDefault.length === 0,
+  conditionalWithoutDefault.join(", "),
+);
+
 console.log("driving the installed CLI…");
 check("aiui bin exists", existsSync(aiui));
 
