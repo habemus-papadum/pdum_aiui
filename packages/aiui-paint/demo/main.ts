@@ -173,8 +173,10 @@ const sink: InkSink = {
 // Default frame source = real getDisplayMedia screen capture; the "Share screen"
 // button arms it from a user gesture.
 const relayUrl = `http://${location.hostname}:${__RELAY_PORT__}`;
+// WebRTC is the default; `?video=jpeg` picks plain frame streaming (JPEG is
+// also the automatic backup when WebRTC can't run or its connection fails).
 let videoMode: "jpeg" | "webrtc" =
-  new URLSearchParams(location.search).get("video") === "webrtc" ? "webrtc" : "jpeg";
+  new URLSearchParams(location.search).get("video") === "jpeg" ? "jpeg" : "webrtc";
 let host: PaintHost = startHost(videoMode);
 
 function startHost(mode: "jpeg" | "webrtc"): PaintHost {
@@ -234,6 +236,6 @@ hintEl.innerHTML =
   "<b>aiui paint demo</b>, tap <b>Arm</b>, then draw with the Apple Pencil or one finger. " +
   "Two fingers scroll and pinch-zoom; your palm is ignored. " +
   "To send video, click <b>Share screen</b> and pick this tab — the iPad shows “waiting” until you do. " +
-  "Switch JPEG⇄WebRTC with the <b>video:</b> button.";
+  "Switch WebRTC⇄JPEG with the <b>video:</b> button.";
 
 window.addEventListener("beforeunload", () => host.close());

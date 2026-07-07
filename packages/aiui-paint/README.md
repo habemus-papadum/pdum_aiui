@@ -80,8 +80,9 @@ const host = startPaintHost({ relayUrl: "http://your-mac.local:8788", ink: inkSu
 shareButton.addEventListener("click", () => host.requestCapture());
 ```
 
-Video is **JPEG frames** by default; pass `video: "webrtc"` to `startPaintHost` for a smooth,
-low-latency WebRTC peer connection instead (control and ink are identical either way). Until capture
+Video is **WebRTC** by default (smooth, low-latency, per-viewer peer connections), with **JPEG
+frames** as the automatic backup — and `video: "jpeg"` to opt out of WebRTC entirely (control and
+ink are identical either way). Until capture
 is armed, the host reports `videoStatus: needsGesture` and the iPad shows "waiting to share" rather
 than black. A host that renders its own content can pass a `canvas.captureStream()`-backed
 `frameSource` and skip the gesture entirely.

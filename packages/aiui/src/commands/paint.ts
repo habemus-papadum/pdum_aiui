@@ -71,6 +71,8 @@ export async function runPaintUrl(opts: { json?: boolean } = {}): Promise<void> 
     console.log("");
     console.log("Start one with:");
     console.log(`  ${chalk.cyan("aiui claude --aiui-sidecar paint")}`);
+    console.log("or turn it on for every launch:");
+    console.log(`  ${chalk.cyan("aiui config set sidecars.paint true")}`);
     console.log("");
     console.log(
       "(The paint surface binds your LAN unauthenticated, so it is opt-in — see the docs.)",

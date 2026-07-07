@@ -97,8 +97,8 @@ async function main(): Promise<void> {
   }
   process.stdout.write(
     `\n  Then pick “aiui paint demo” on the iPad. Draw on either side; the ink is shared.\n` +
-      `  Switch JPEG⇄WebRTC with the toolbar button, or start at ` +
-      `http://localhost:${demoPort}/?video=webrtc\n` +
+      `  Switch WebRTC⇄JPEG with the toolbar button, or start at ` +
+      `http://localhost:${demoPort}/?video=jpeg\n` +
       `  ⚠️  The backend binds the LAN (${lan}:${backendPort}) and is UNAUTHENTICATED — trusted network only.\n` +
       "  Ctrl-C to stop.\n",
   );

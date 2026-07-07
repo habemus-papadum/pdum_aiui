@@ -157,12 +157,19 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // Tell the channel which session sidecars to host. The channel process
   // inherits this session's cwd, so the project root is process.cwd(): the
   // code reader's backend auto-enables when the project has an LSP setup or
-  // contains well-known languages (its backend bootstraps a setup lazily), and
-  // `--aiui-sidecar` / `--aiui-no-sidecar` force-enable / disable by name.
-  const sidecars = resolveSidecars(process.cwd(), {
-    enable: aiuiArgs.sidecar,
-    disable: aiuiArgs.noSidecar,
-  });
+  // contains well-known languages (its backend bootstraps a setup lazily).
+  // Three tiers, per name: `--aiui-sidecar` / `--aiui-no-sidecar` flags win,
+  // then the `sidecars.*` config (e.g. sidecars.paint from the first-run
+  // prompt), then auto-detection.
+  const enable = [...aiuiArgs.sidecar];
+  const disable = [...aiuiArgs.noSidecar];
+  for (const [name, on] of Object.entries(config.sidecars ?? {})) {
+    if (on === undefined || enable.includes(name) || disable.includes(name)) {
+      continue; // a per-launch flag beats the durable setting
+    }
+    (on ? enable : disable).push(name);
+  }
+  const sidecars = resolveSidecars(process.cwd(), { enable, disable });
   if (sidecars.length > 0) {
     mcpArgs.push("--sidecars", JSON.stringify(sidecars));
   }

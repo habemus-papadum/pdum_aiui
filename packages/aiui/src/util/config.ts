@@ -57,6 +57,12 @@ export interface AiuiConfig {
     /** Auto-dismiss Claude Code's development-channel prompt (util/enter-nudge.ts). */
     enterNudge?: boolean;
   };
+  sidecars?: {
+    /** Host the code reader sidecar (unset: auto-detect). */
+    code?: boolean;
+    /** Host the iPad paint sidecar — an unauthenticated LAN listener (default: false). */
+    paint?: boolean;
+  };
   chrome?: {
     /** Attach the Chrome DevTools MCP (default: true). */
     enabled?: boolean;

@@ -160,6 +160,10 @@ describe("loadAiuiConfig", () => {
   });
 
   it("is empty when neither file exists", () => {
-    expect(loadAiuiConfig(join(dir, "empty-project"))).toEqual({ claude: {}, chrome: {} });
+    expect(loadAiuiConfig(join(dir, "empty-project"))).toEqual({
+      claude: {},
+      sidecars: {},
+      chrome: {},
+    });
   });
 });

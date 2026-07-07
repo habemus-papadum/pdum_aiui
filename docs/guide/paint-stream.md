@@ -8,9 +8,9 @@ draw on the iPad travels into the screenshot and the prompt just like ink drawn 
 This is the picture the design note
 [iPad-Controlled Browser Painting Stream](/proposals/ipad_browser_paint_stream_design) sketched; the
 [implementation plan](/proposals/ipad_browser_paint_stream_plan) records what was built and where it
-diverges. Video ships in two flavours: **JPEG frames** over the websocket relay (the default — simple,
-works everywhere) or **WebRTC** (opt-in — smooth, low-latency, peer-to-peer). Control and ink are
-identical either way.
+diverges. Video ships in two flavours: **WebRTC** (the default — smooth, low-latency, peer-to-peer)
+with **JPEG frames** over the websocket as the simple, works-everywhere option — and the automatic
+backup when WebRTC can't run or its connection fails. Control and ink are identical either way.
 
 ::: danger Read before running
 The iPad-facing surface binds the **LAN** and is **unauthenticated** — by design, for a personal
@@ -50,6 +50,16 @@ is one flag and one command:
 aiui claude --aiui-sidecar paint    # opt-in: the LAN surface is deliberate (see the warning above)
 aiui paint url                      # prints the URL to open on the iPad
 ```
+
+To make it permanent, answer the first-run prompt (the first interactive `aiui claude` asks, the
+same way it asks about skip-permissions) or set it directly — the durable switch is
+[`sidecars.paint`](./config#all-keys):
+
+```sh
+aiui config set sidecars.paint true   # every launch hosts the paint surface
+```
+
+Per-launch flags always win over the config (`--aiui-no-sidecar paint` for one session off).
 
 The channel then hosts the paint backend on two faces:
 
@@ -181,23 +191,26 @@ accepted in the session browser). The status line shows the active video mode (`
 
 The host picks how video reaches the iPad; the iPad adapts to whichever it receives.
 
-- **`video: "jpeg"` (default)** — the host samples the tab (~8 fps, downscaled) and pushes JPEG frames
-  over the relay. Simple, works on any browser, and it's testable. Good enough for annotating.
-- **`video: "webrtc"`** — the host negotiates a WebRTC peer connection per viewer (SDP + ICE over the
-  relay's `signal` passthrough) and sends the capture as a real video track: smooth and low-latency.
+- **`video: "webrtc"` (default)** — the host negotiates a WebRTC peer connection per viewer (SDP +
+  ICE over the relay's `signal` passthrough) and sends the capture as a real video track: smooth and
+  low-latency.
+- **`video: "jpeg"`** — the host samples the tab (~8 fps, downscaled) and pushes JPEG frames over
+  the relay. Simple, works on any browser, and it's testable. Good enough for annotating — and it is
+  the **automatic backup**: a host that can't do WebRTC (no `RTCPeerConnection`, a frame-only
+  `FrameSource` with no `MediaStream`) or whose peer connection fails switches to frame streaming by
+  itself; the iPad adapts to whichever arrives.
 
 ```ts
 startPaintHost({
   relayUrl: "http://your-mac.local:8788",
   ink: sink,
-  video: "webrtc",                              // opt in
+  video: "jpeg",                                // opt out of WebRTC entirely
   // rtcConfig: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }, // if peers span subnets
 });
 ```
 
-On a trusted LAN the default empty `iceServers` connects on host candidates (add a STUN server only if
-the two devices are on different subnets). If WebRTC capture is unavailable the host simply sends no
-video and control still works; the two modes never mix on one host.
+On a trusted LAN the default empty `iceServers` connects on host candidates (add a STUN server only
+if the two devices are on different subnets).
 
 ## Interacting from the iPad
 
@@ -253,9 +266,9 @@ surface.remoteEnd("s1", { x: 140, y: 20 });
 
 ## Limitations and seams
 
-- **JPEG is the default; WebRTC is opt-in** — the backend carries JPEG frames or WebRTC signaling (the
-  `signal` passthrough) without caring which. WebRTC gives smooth video but there is no automatic
-  fall-back from WebRTC to JPEG yet: if a peer connection fails, that viewer sees no video (control
-  still works) until it rejoins or the host is set to `"jpeg"`.
+- **WebRTC is the default; JPEG is the backup** — the backend carries JPEG frames or WebRTC
+  signaling (the `signal` passthrough) without caring which. When a peer connection fails (or WebRTC
+  isn't available at all), the host falls back to JPEG frame streaming for the room; with several
+  viewers in mixed states, whoever receives frames displays frames.
 - **No Bonjour discovery** — Safari web pages can't browse mDNS, so the CLI prints LAN URLs instead.
 - **One trust boundary** — no auth, no encryption. LAN only.

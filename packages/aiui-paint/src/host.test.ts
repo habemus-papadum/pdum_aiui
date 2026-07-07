@@ -200,4 +200,27 @@ describe("startPaintHost capture handshake", () => {
     host.close();
     expect(host.captureState()).toBe("idle");
   });
+
+  it("default mode is webrtc, and JPEG frame streaming is the automatic backup", async () => {
+    // This Node environment has no RTCPeerConnection and the scripted source
+    // exposes no MediaStream — exactly the situations the backup exists for:
+    // with `video` unset (webrtc), the host must fall back to pushing frames.
+    FakeSocket.instances = [];
+    const host = startPaintHost({
+      relayUrl: "http://mac.local:8788",
+      ink: recordingSink(),
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      frameSource: scriptedSource(["active"]),
+      fps: 1000, // fast frame ticks so the test needn't wait
+    });
+    const sock = FakeSocket.instances[0];
+    sock.fire("open");
+    sock.fireMessage({ type: "clientJoined", client: "c1" });
+    await flush();
+    expect(host.captureState()).toBe("active");
+    // The frame loop engaged (the backup): binary frames reach the socket.
+    await new Promise((r) => setTimeout(r, 25));
+    expect(sock.sentBinary).toBeGreaterThan(0);
+    host.close();
+  });
 });

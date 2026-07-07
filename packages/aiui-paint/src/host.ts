@@ -304,11 +304,14 @@ export interface PaintHostOptions {
   /** Frame source. Defaults to {@link displayCaptureSource}. */
   frameSource?: FrameSource;
   /**
-   * Video transport. `"jpeg"` (default) streams downscaled JPEG frames over the
-   * relay — simple, works everywhere. `"webrtc"` negotiates a peer connection per
-   * viewer (SDP/ICE over the relay's `signal` passthrough) for smooth, low-latency
-   * video; it needs a frame source that exposes a `MediaStream` (the default does).
-   * Control/ink is identical in both. Falls back to no video if capture is denied.
+   * Video transport. `"webrtc"` (default) negotiates a peer connection per
+   * viewer (SDP/ICE over the relay's `signal` passthrough) — smooth,
+   * low-latency video. `"jpeg"` streams downscaled JPEG frames over the relay —
+   * simple, works everywhere. JPEG is also the automatic **backup**: a host
+   * whose environment can't do WebRTC (no `RTCPeerConnection`, a frame-only
+   * `FrameSource` with no `MediaStream`) or whose peer connection fails falls
+   * back to frame streaming by itself. Control/ink is identical in both.
+   * Falls back to no video only when capture is denied.
    */
   video?: "jpeg" | "webrtc";
   /** WebRTC config (ICE servers). Defaults to `{ iceServers: [] }` — host-only, LAN. */
@@ -376,7 +379,7 @@ function defaultViewState(armed: boolean): ViewState {
 export function startPaintHost(options: PaintHostOptions): PaintHost {
   const WS = options.WebSocketImpl ?? WebSocket;
   const fps = options.fps ?? 8;
-  const videoMode = options.video ?? "jpeg";
+  const videoMode = options.video ?? "webrtc";
   const rtcConfig: RTCConfiguration = options.rtcConfig ?? { iceServers: [] };
   const nav: NavHandlers = {
     scroll: options.nav?.scroll ?? windowScroll,
@@ -489,8 +492,11 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       return;
     }
     const stream = frames.stream?.();
-    if (!stream) {
-      return; // no MediaStream (capture denied, or a frame-only source) — no video
+    if (!stream || typeof RTCPeerConnection === "undefined") {
+      // No MediaStream (a frame-only source) or no WebRTC in this environment —
+      // fall back to JPEG frame streaming rather than showing nothing.
+      void startFrameLoop();
+      return;
     }
     const pc = new RTCPeerConnection(rtcConfig);
     peers.set(clientId, pc);
@@ -503,7 +509,12 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       }
     });
     pc.addEventListener("connectionstatechange", () => {
-      if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+      if (pc.connectionState === "failed") {
+        // WebRTC couldn't get through (ICE, network) — JPEG over the already-
+        // working relay socket is the backup, for as long as viewers remain.
+        closePeer(clientId);
+        void startFrameLoop();
+      } else if (pc.connectionState === "closed") {
         closePeer(clientId);
       }
     });
@@ -513,6 +524,7 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       sendJson({ type: "signal", peer: clientId, data: { description: pc.localDescription } });
     } catch {
       closePeer(clientId);
+      void startFrameLoop(); // negotiation never started — use the backup
     }
   };
 

@@ -115,3 +115,8 @@ with the same wire protocol, and two hosts ship in-repo —
 
 The `aiui-paint` bin (the separate relay process) was retired in the same move; its two jobs are
 covered by the sidecar and the demo server. See the [guide](../guide/paint-stream.md).
+
+Shortly after landing, the transport default flipped: **WebRTC is now the default** and JPEG the
+automatic backup (the deferred "automatic WebRTC→JPEG fallback" above now exists — a missing
+`RTCPeerConnection`, a frame-only source, or a failed peer connection switches the host to frame
+streaming by itself). The sections above describe the order things were built in.
