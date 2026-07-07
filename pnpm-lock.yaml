@@ -56,18 +56,12 @@ importers:
       '@habemus-papadum/aiui-claude-plugin':
         specifier: workspace:^
         version: link:../aiui-claude-plugin
-      '@habemus-papadum/aiui-code-server':
-        specifier: workspace:^
-        version: link:../aiui-code-server
       '@habemus-papadum/aiui-dev-overlay':
         specifier: workspace:^
         version: link:../aiui-dev-overlay
       '@habemus-papadum/aiui-devtools-extension':
         specifier: workspace:^
         version: link:../aiui-devtools-extension
-      '@habemus-papadum/aiui-lsp':
-        specifier: workspace:^
-        version: link:../aiui-lsp
       '@habemus-papadum/aiui-paint':
         specifier: workspace:^
         version: link:../aiui-paint
@@ -133,73 +127,6 @@ importers:
         specifier: ^15.0.0
         version: 15.0.0
 
-  packages/aiui-code:
-    dependencies:
-      '@habemus-papadum/aiui-code-protocol':
-        specifier: workspace:^
-        version: link:../aiui-code-protocol
-      '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
-        version: link:../aiui-viz
-      monaco-editor:
-        specifier: ^0.55.0
-        version: 0.55.1
-      vscode-languageserver-protocol:
-        specifier: ^3.17.5
-        version: 3.18.2
-    devDependencies:
-      '@babel/core':
-        specifier: ^7.29.7
-        version: 7.29.7
-      '@habemus-papadum/aiui-code-server':
-        specifier: workspace:^
-        version: link:../aiui-code-server
-      '@habemus-papadum/aiui-dev-overlay':
-        specifier: workspace:^
-        version: link:../aiui-dev-overlay
-      '@solidjs/web':
-        specifier: 2.0.0-beta.15
-        version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
-      solid-js:
-        specifier: 2.0.0-beta.15
-        version: 2.0.0-beta.15
-      vite:
-        specifier: ^6.4.1
-        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
-      vite-plugin-solid:
-        specifier: 3.0.0-next.5
-        version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
-
-  packages/aiui-code-protocol: {}
-
-  packages/aiui-code-server:
-    dependencies:
-      '@habemus-papadum/aiui-code-protocol':
-        specifier: workspace:^
-        version: link:../aiui-code-protocol
-      '@habemus-papadum/aiui-lsp':
-        specifier: workspace:^
-        version: link:../aiui-lsp
-      ws:
-        specifier: ^8.18.0
-        version: 8.21.0
-    devDependencies:
-      '@habemus-papadum/aiui-claude-channel':
-        specifier: workspace:^
-        version: link:../aiui-claude-channel
-      '@types/express':
-        specifier: ^5.0.0
-        version: 5.0.6
-      '@types/ws':
-        specifier: ^8.5.0
-        version: 8.18.1
-      express:
-        specifier: ^5.1.0
-        version: 5.2.1
-      vite:
-        specifier: ^6.4.1
-        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
-
   packages/aiui-demo:
     dependencies:
       '@duckdb/duckdb-wasm':
@@ -263,9 +190,6 @@ importers:
 
   packages/aiui-dev-overlay:
     dependencies:
-      '@habemus-papadum/aiui-code':
-        specifier: workspace:^
-        version: link:../aiui-code
       '@habemus-papadum/aiui-paint':
         specifier: workspace:^
         version: link:../aiui-paint
@@ -332,25 +256,6 @@ importers:
         version: 0.25.12
 
   packages/aiui-ink: {}
-
-  packages/aiui-lsp:
-    dependencies:
-      pyright:
-        specifier: ^1.1.411
-        version: 1.1.411
-      typescript:
-        specifier: ^5.6.0
-        version: 5.9.3
-      typescript-language-server:
-        specifier: ^5.3.0
-        version: 5.3.0
-      vscode-languageserver-protocol:
-        specifier: ^3.17.5
-        version: 3.18.2
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.0
 
   packages/aiui-paint:
     dependencies:
@@ -3702,11 +3607,6 @@ packages:
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
-
-  pyright@1.1.411:
-    resolution: {integrity: sha512-03S/vmS5lF1S/tVbKc2WNXCMq8JWCwta/qIYjj1jvqbQhoy+N3NgBzHTSmUlbYD6DJwqQ5XHf108QujoqeURvw==}
-    engines: {node: '>=14.0.0'}
-    hasBin: true
 
   qs@6.15.3:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
@@ -7936,10 +7836,6 @@ snapshots:
   punycode.js@2.3.1: {}
 
   punycode@2.3.1: {}
-
-  pyright@1.1.411:
-    optionalDependencies:
-      fsevents: 2.3.3
 
   qs@6.15.3:
     dependencies:

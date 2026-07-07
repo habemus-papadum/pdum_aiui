@@ -74,7 +74,7 @@ describe("mountIntentTool", () => {
 
   it("hides the debug icon without a debugUrl (the channel serves no HTML to link)", () => {
     const handle = mountIntentTool({ force: true, port: 4567 });
-    // No debugUrl (and no codeUrl) → the widget renders no icon link at all.
+    // No debugUrl → the widget renders no icon link at all.
     expect(handle.shadowRoot?.querySelector("a.iconbtn")).toBeNull();
   });
 

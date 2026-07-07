@@ -1,6 +1,6 @@
 /**
- * Contributions: what a non-host view (the code reader today) sends over the
- * session bus to add to the turn the app tab is building.
+ * Contributions: what a non-host view (a VS Code bridge, a git viewer) sends
+ * over the session bus to add to the turn the app tab is building.
  *
  * A contribution rides a bus `publish` on {@link SESSION_CONTRIBUTION_TOPIC}.
  * The host (the multimodal turn) ingests a **selection** contribution as a
@@ -20,7 +20,7 @@ export { SHORT_SELECTION_CHARS };
 
 /**
  * One structured item of the shared `preview` bus slot — the turn the app tab
- * is building, mirrored for other views (the code reader's SessionPanel) to
+ * is building, mirrored for other views to
  * render THEMSELVES. Structure, not prose, crosses the bus on purpose: the
  * defer-rendering rule (intent inputs travel structured; presentation is each
  * surface's own decision) applies to mirrors too. Shots travel as their

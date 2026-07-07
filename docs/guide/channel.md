@@ -104,8 +104,7 @@ practical: edit, `channel_reload`, try again — no session restart.
 
 The channel is also a generic **host** for other session backends. A **sidecar** is an extra HTTP
 (and optional websocket) surface the channel mounts alongside its own — so one session process, on
-one port, can serve more than the intent pipeline. The first is the
-[code reader](./code-reader)'s backend; the second is the
+one port, can serve more than the intent pipeline. The concrete one today is the
 [iPad paint stream](./paint-stream) (always on — it rides the same port, and whether a second
 device can reach it is the channel bind's decision, not the sidecar's). A git viewer would be
 the next.
@@ -113,12 +112,12 @@ the next.
 The channel stays **sidecar-agnostic**: it takes no dependency on any concrete sidecar and hardcodes
 no names. The launcher (`aiui claude`) decides which to run and hands the channel a JSON array of
 descriptors on `aiui-claude-channel mcp --sidecars <json>` (the standalone debug server takes the
-same flag, `serve --sidecars <json>` — how the workbench's channel hosts the code reader). Each
-descriptor names an importable module and the export to call as a factory:
+same flag, `serve --sidecars <json>` — how the workbench's channel hosts the same sidecars a real
+session would). Each descriptor names an importable module and the export to call as a factory:
 
 ```ts
 interface SidecarDescriptor {
-  name: string;      // stable id, used in logs and the CLI flags (e.g. "code")
+  name: string;      // stable id, used in logs and the CLI flags (e.g. "paint")
   module: string;    // an importable specifier the channel `import()`s
   export?: string;   // the factory export to call; defaults to "default"
   options?: unknown; // passed opaquely to the factory (e.g. { root: "/proj" })
@@ -131,9 +130,9 @@ isolated `node_modules`, so the launcher hands it an **absolute** `module` path 
 the channel, depends on the sidecar package.
 
 **Mount ordering is deliberate.** The channel's own routes go on first and always win: `/health`,
-`POST /prompt`, and the `/ws` / `/tools` / `/session` websocket upgrades. A sidecar confines itself to
-its own base path (the code reader: everything under `/__aiui_code`), is offered every websocket
-upgrade the channel didn't claim (return `true` to take the socket), and is disposed on shutdown.
+`POST /prompt`, and the `/ws` / `/tools` / `/session` websocket upgrades. A sidecar confines itself
+to its own base path, is offered every websocket upgrade the channel didn't claim (return `true`
+to take the socket), and is disposed on shutdown.
 
 **One bad sidecar can't sink the session.** A descriptor that fails to import, whose export isn't
 callable, that throws, or that returns something that isn't a sidecar is **logged to stderr and
@@ -142,9 +141,9 @@ skipped** — the channel starts anyway. (Malformed `--sidecars` JSON is tolerat
 Which sidecars are on for a launch — and the `--aiui-sidecar` / `--aiui-no-sidecar` flags that
 override auto-detection — is the launcher's call. The auto-detect policy (`resolveSidecars`) is
 exported from the aiui package so other supervisors can reuse it verbatim — the workbench does, for
-its debug channel. See [The Code Reader](./code-reader) for the worked example (the `Sidecar`
-interface lives in `packages/aiui-claude-channel/src/sidecar.ts`; the descriptor loader in
-`load-sidecars.ts`).
+its debug channel. See [The iPad Paint Stream](./paint-stream) for the worked example (the
+`Sidecar` interface lives in `packages/aiui-claude-channel/src/sidecar.ts`; the descriptor loader
+in `load-sidecars.ts`).
 
 ## Keys and degradation
 

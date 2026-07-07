@@ -3,9 +3,8 @@
 The workbench runs the **entire intent pipeline with no agent on the other end**. Its dev server
 owns a **debug channel server** (`aiui-claude-channel serve`) that does everything the real one
 does — voice models, the correction micro-pipeline, diffs, lowering, trace recording, and the
-session sidecars an `aiui claude` launch would host (today: the code reader with its LSP
-backend, auto-detected by the CLI's own policy) — but has no MCP client attached, so a turn can
-never reach a Claude session. Instead, the final lowered
+session sidecars an `aiui claude` launch would host (the CLI's own auto-detect policy) — but has
+no MCP client attached, so a turn can never reach a Claude session. Instead, the final lowered
 prompt is pushed back over the websocket (and printed to the terminal), and the page shows you
 everything: half the window is a real app under the shipping intent overlay, the other half is
 trace instrumentation.

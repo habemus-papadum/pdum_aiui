@@ -24,7 +24,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -93,7 +92,7 @@ const run = (args) =>
   spawnSync(aiui, args, { cwd: scratch, env, encoding: "utf8", timeout: 120_000 });
 
 // Every conditional-exports object in a PACKED manifest must carry a "default"
-// condition: require.resolve() (which the CLI uses on the code sidecar) matches
+// condition: require.resolve() (which the CLI uses on sidecar subpaths) matches
 // CJS conditions and throws ERR_PACKAGE_PATH_NOT_EXPORTED without it. Dev never
 // catches this — the source-first exports are bare strings that match anything.
 const scopeDir = join(scratch, "node_modules", "@habemus-papadum");
@@ -164,26 +163,32 @@ check("…with the PATH explanation", /not found on your PATH/.test(claude.stder
 const mcp = run(["mcp", "--help"]);
 check("aiui mcp --help (channel CLI from dist) exits 0", mcp.status === 0, mcp.stderr);
 
-// The installed sidecar path, end to end: resolve the code sidecar the way the
+// The installed sidecar path, end to end: resolve the paint sidecar the way the
 // CLI does (require.resolve against the exports map → an absolute dist path),
 // then load + construct + mount it the way the channel does — under plain node,
 // from the packed tarballs. This is the dev/installed seam that source-first
 // masks: in the workspace this resolves to src/*.ts under tsx; installed it
-// must resolve to dist/*.js and import cleanly with no loader.
+// must resolve to dist/*.js and import cleanly with no loader. (lanPort: 0 —
+// an OS-assigned ephemeral port, immediately disposed.)
 const sidecarProbe = join(scratch, "sidecar-probe.mjs");
 writeFileSync(
   sidecarProbe,
   `import { createRequire } from "node:module";
 import { loadSidecars } from "@habemus-papadum/aiui-claude-channel";
 const resolved = createRequire(import.meta.url).resolve(
-  "@habemus-papadum/aiui-code-server/sidecar",
+  "@habemus-papadum/aiui-paint/sidecar",
 );
 if (!resolved.endsWith(".js")) throw new Error("expected a dist .js path, got: " + resolved);
 // The raw absolute path, exactly as aiui's resolveSidecars hands it over.
 const sidecars = await loadSidecars([
-  { name: "code", module: resolved, export: "codeReaderSidecar", options: { root: process.cwd() } },
+  {
+    name: "paint",
+    module: resolved,
+    export: "paintSidecar",
+    options: { root: process.cwd(), lanPort: 0, lanHost: "127.0.0.1" },
+  },
 ]);
-if (sidecars.length !== 1) throw new Error("the code sidecar did not load");
+if (sidecars.length !== 1) throw new Error("the paint sidecar did not load");
 const express = (await import("express")).default;
 const mounted = await sidecars[0].mount(express(), { log: () => {} });
 await mounted.dispose?.();
@@ -197,7 +202,7 @@ const probe = spawnSync(process.execPath, [sidecarProbe], {
   timeout: 60_000,
 });
 check(
-  "code sidecar resolves to dist and mounts under plain node",
+  "paint sidecar resolves to dist and mounts under plain node",
   probe.status === 0 && /dist[\\/]sidecar\.js\s*$/.test(probe.stdout),
   probe.stderr || probe.stdout,
 );
@@ -211,15 +216,6 @@ check(
   existsSync(join(scratch, "demo-sandbox", "vite.config.ts")) &&
     existsSync(join(scratch, "demo-sandbox", "src", "main.ts")) &&
     existsSync(join(scratch, "demo-sandbox", ".gitignore")),
-);
-// The committed, portable LSP setup must survive the tarball (dot-dir, executable
-// launcher) so a scaffolded demo has a working reader after `install`.
-const scaffoldLauncher = join(scratch, "demo-sandbox", ".aiui", "lsp", "typescript", "launch");
-check(
-  "scaffold ships the committed .aiui/lsp with an executable launcher",
-  existsSync(join(scratch, "demo-sandbox", ".aiui", "lsp", "manifest.json")) &&
-    existsSync(scaffoldLauncher) &&
-    (statSync(scaffoldLauncher).mode & 0o111) !== 0,
 );
 const demoAgain = run(["demo", "demo-sandbox", "--skip-install"]);
 check(

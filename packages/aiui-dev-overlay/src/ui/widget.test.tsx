@@ -140,12 +140,11 @@ describe("the unified widget (ui/widget.tsx)", () => {
     host.remove();
   });
 
-  it("hides the tab row for a single modality, and 🔍/⧉ without their urls", () => {
+  it("hides the tab row for a single modality, and 🔍 without its url", () => {
     const { q, widget, host } = mount({ tabLabels: ["Text"] });
     expect(q<HTMLElement>(".tabs")?.hidden).toBe(true);
-    // No debugUrl/codeUrl options → the affordances don't render at all.
+    // No debugUrl option → the affordance doesn't render at all.
     expect(q('a[title="Open the lowering debugger"]')).toBeNull();
-    expect(q('a[target="aiui-code"]')).toBeNull();
     widget.dispose();
     host.remove();
   });

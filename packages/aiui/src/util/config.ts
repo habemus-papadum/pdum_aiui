@@ -65,8 +65,6 @@ export interface AiuiConfig {
     bind?: ChannelBind;
   };
   sidecars?: {
-    /** Host the code reader sidecar (unset: auto-detect). */
-    code?: boolean;
     /** Host the iPad paint sidecar on the channel's port (default: true). */
     paint?: boolean;
   };

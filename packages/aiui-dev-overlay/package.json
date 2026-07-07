@@ -13,7 +13,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts",
-    "./reader": "./src/reader/index.ts",
     "./intent-pipeline": "./src/intent-pipeline/index.ts",
     "./debug-ui": "./src/debug-ui/index.ts"
   },
@@ -41,11 +40,6 @@
         "types": "./dist/vite.d.ts",
         "import": "./dist/vite.js",
         "default": "./dist/vite.js"
-      },
-      "./reader": {
-        "types": "./dist/reader/index.d.ts",
-        "import": "./dist/reader.js",
-        "default": "./dist/reader.js"
       },
       "./intent-pipeline": {
         "types": "./dist/intent-pipeline/index.d.ts",
@@ -88,7 +82,6 @@
     }
   },
   "dependencies": {
-    "@habemus-papadum/aiui-code": "workspace:^",
     "@habemus-papadum/aiui-paint": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^"
   },

@@ -4,7 +4,7 @@
  * The `aiui` CLI's library surface. Launch *policy* the CLI applies lives here
  * too, so sibling supervisors can reuse it instead of re-deriving it — the
  * first case is {@link resolveSidecars}, the `aiui claude` logic deciding
- * which session sidecars (the code reader) a channel server should host for a
+ * which session sidecars (e.g. the paint stream) a channel server should host for a
  * project root. The workbench imports it to give its debug channel the same
  * sidecar set a real session would get.
  *

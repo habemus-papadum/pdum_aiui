@@ -3,10 +3,8 @@
  *
  * Decides which session sidecars the workbench's debug channel should host —
  * by reusing `aiui claude`'s own policy (`resolveSidecars` from the aiui
- * package: the code reader auto-enables when the project has an LSP setup or
- * contains well-known languages) rather than re-deriving it here. Same
- * detection, same descriptors, so the workbench's channel serves exactly what
- * a real session's would.
+ * package) rather than re-deriving it here. Same detection, same descriptors,
+ * so the workbench's channel serves exactly what a real session's would.
  *
  * Spawned by vite.config.ts (via tsx, the same source-first trick as the
  * channel server) rather than imported: Vite bundles a config file but

@@ -29,6 +29,6 @@ code --install-extension packages/aiui-vscode/dist/aiui-vscode.vsix
 The extension POSTs a structured `SelectionContribution` to the channel web backend's
 `POST /session/publish`, targeted at the picked tab's `clientId`; the server relays it down the
 tab's `/session` websocket on the `"contribution"` topic (`from: "server"`), exactly the message
-the code reader publishes from its own socket. Formatting is deferred to lowering: the payload
+a browser-side contributor publishes from its own socket. Formatting is deferred to lowering: the payload
 carries verbatim text plus a `file:line:col` locator, and `composeIntent` decides how it reads
 in the final prompt.

@@ -1,7 +1,7 @@
 /**
  * The session bus (browser side): a persistent connection to the channel's
  * `/session` endpoint that lets multiple views of ONE session — the app tab, the
- * code reader, a future git viewer — share state and talk to each other.
+ * VS Code bridge, a future git viewer — share state and talk to each other.
  *
  * The channel process is the session (one per Claude Code session, one port), so
  * every view that dials this port is a peer. This client mirrors {@link

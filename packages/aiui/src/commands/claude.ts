@@ -161,11 +161,9 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   mcpArgs.push("--launch-info", JSON.stringify(launchInfo));
 
   // Tell the channel which session sidecars to host. The channel process
-  // inherits this session's cwd, so the project root is process.cwd(): the
-  // code reader's backend auto-enables when the project has an LSP setup or
-  // contains well-known languages (its backend bootstraps a setup lazily),
-  // and paint is always on (it rides the channel port — reachability is the
-  // bind's decision above). Three tiers, per name: `--aiui-sidecar` /
+  // inherits this session's cwd, so the project root is process.cwd(). Paint
+  // is always on (it rides the channel port — reachability is the bind's
+  // decision above). Three tiers, per name: `--aiui-sidecar` /
   // `--aiui-no-sidecar` flags win, then the `sidecars.*` config, then
   // auto-detection.
   const enable = [...aiuiArgs.sidecar];
@@ -275,9 +273,7 @@ aiui's own flags (everything else forwards to claude verbatim):
                                  whole network can reach the session's web
                                  surface — the iPad paint page included;
                                  trusted networks only)
-  --aiui-sidecar <name>          host this session sidecar (repeatable); the
-                                 \`code\` reader auto-enables when the project
-                                 has an LSP setup or well-known languages;
+  --aiui-sidecar <name>          host this session sidecar (repeatable);
                                  \`paint\` (iPad ink) is always on
   --aiui-no-sidecar <name>       don't host this session sidecar (repeatable)
 

@@ -136,16 +136,6 @@ describe("aiuiDevOverlay", () => {
     expect(code).toContain("mountIntentTool");
   });
 
-  it("code:true points the 'Code' button at the served reader route", () => {
-    process.env[PORT_ENV] = "50123";
-    expect(loadMount(aiuiDevOverlay({ code: true }))).toContain('codeUrl: "/__aiui/code"');
-  });
-
-  it("omits the 'Code' button when code is not set", () => {
-    process.env[PORT_ENV] = "50123";
-    expect(loadMount(aiuiDevOverlay({}))).not.toContain("codeUrl:");
-  });
-
   it("intentTool: false is a contributor view — bus + bridge, no turn host", () => {
     process.env[PORT_ENV] = "50123";
     const code = loadMount(aiuiDevOverlay({ intentTool: false, session: { role: "code" } }));
@@ -199,13 +189,10 @@ describe("the served pages (/__aiui routes)", () => {
     expect(get("/somewhere/else")).toBeUndefined();
   });
 
-  it("serves the reader route only when code: true; the debug route is always on", () => {
-    const withoutCode = serve(aiuiDevOverlay());
-    expect(withoutCode("/__aiui/code")).toBeUndefined();
-    expect(withoutCode("/__aiui/debug")?.status).toBe(200);
-
-    const withCode = serve(aiuiDevOverlay({ code: true }));
-    expect(withCode("/__aiui/code")?.body).toContain("aiui · code reader");
+  it("the debug route is always on; nothing else is served", () => {
+    const middleware = serve(aiuiDevOverlay());
+    expect(middleware("/__aiui/debug")?.status).toBe(200);
+    expect(middleware("/__aiui/code")).toBeUndefined();
   });
 
   it("the debug virtual module mounts the shared debug-ui page with the port", () => {

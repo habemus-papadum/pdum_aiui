@@ -49,7 +49,7 @@ export function runningFromSource(packageDir: string): boolean {
 
 /**
  * {@link runningFromSource} for a package resolved by name — the common case
- * ("is `@habemus-papadum/aiui-code` a source checkout here?").
+ * ("is `@habemus-papadum/aiui-dev-overlay` a source checkout here?").
  */
 export function packageFromSource(packageName: string): boolean {
   return runningFromSource(packageRoot(packageName));

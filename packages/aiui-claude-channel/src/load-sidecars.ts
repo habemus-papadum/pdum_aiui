@@ -7,7 +7,7 @@
  * and the export to call to build a {@link Sidecar}; the channel dynamic-imports
  * whatever specifier it's told, calls the factory with the descriptor's opaque
  * `options`, and hands the results to `startWebServer({ sidecars })`. The channel
- * never imports or references a concrete sidecar (e.g. the code reader) — the
+ * never imports or references a concrete sidecar (e.g. the paint stream) — the
  * `module` string is entirely the caller's choice.
  *
  * Everything here is best-effort and non-fatal: a descriptor that fails to

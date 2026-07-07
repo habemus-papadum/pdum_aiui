@@ -19,8 +19,8 @@
  *
  * Everything else the real channel hosts is fair game — including session
  * sidecars (`--sidecars`, the same descriptor contract as `mcp`): a client
- * under development against this server (the workbench's code reader) needs
- * the sidecar's endpoints on the very channel port it is pointed at.
+ * under development against this server needs the sidecar's endpoints on the
+ * very channel port it is pointed at.
  *
  * The server runs with `debug: true` (surfaced on `/health`,
  * `/debug/api/info`, and every hello ack, so clients can tell), traces to the
@@ -85,9 +85,9 @@ export interface ServeOptions {
    * JSON array of session sidecar descriptors to host (`--sidecars`) — the
    * exact contract `mcp` accepts (see load-sidecars.ts). A debug server hosts
    * sidecars for the same reason the real one does: a client under development
-   * (the workbench's code reader) needs the sidecar's endpoints on the channel
-   * port it is pointed at. Parse and load are best-effort — a bad value or one
-   * failing descriptor is logged to stderr and skipped, never fatal.
+   * needs the sidecar's endpoints on the channel port it is pointed at. Parse
+   * and load are best-effort — a bad value or one failing descriptor is logged
+   * to stderr and skipped, never fatal.
    */
   sidecars?: string;
 }

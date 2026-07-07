@@ -59,7 +59,7 @@ export interface AiuiArgs {
   /**
    * Names collected from repeatable `--aiui-sidecar <name>` flags — session
    * sidecars to force-enable even when they wouldn't auto-detect for this
-   * project (e.g. `--aiui-sidecar code`).
+   * project (e.g. `--aiui-sidecar paint`).
    */
   sidecar: string[];
   /**

@@ -27,15 +27,12 @@ into your live, permission-skipping Claude Code session (loaded via
 `--dangerously-load-development-channels`). Think about what that means:
 
 - Anything that can reach the channel's local web backend can steer your agent.
-- When the project has an LSP setup, the channel also hosts the [code reader](./code-reader)'s
-  backend on the same port — read-only access to the project's source files, served with
-  permissive CORS (any local page or process that can reach the port can read them).
-- The [iPad paint stream](./paint-stream) rides the same port too (its sidecar is on by default —
+- The [iPad paint stream](./paint-stream) rides the same port (its sidecar is on by default —
   it costs nothing until something connects).
 - **Who can reach that port is your `channel.bind` choice** — asked at first run, never silently
   widened. `loopback` (the default) keeps the whole surface this-machine-only; using the iPad then
   means tunneling the port yourself (Tailscale, `ssh -L`). `host` binds `0.0.0.0`: one port, and
-  everything on it — prompt injection, `/debug`, the code reader, the paint page — is reachable by
+  everything on it — prompt injection, `/debug`, the paint page — is reachable by
   **anyone on your network, unauthenticated**. That's the deliberate trusted-LAN posture: the
   boundary is your network, so choose it only where the network is genuinely yours alone (a home
   LAN — not café Wi-Fi, not an office network shared with other people).

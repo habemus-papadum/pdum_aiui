@@ -2,10 +2,8 @@
  * Deciding which **session sidecars** the channel should host for a launch.
  *
  * A sidecar is an extra backend the channel mounts alongside the intent
- * pipeline — the concrete one today is the code reader's server, which the
- * channel serves when the project has an LSP setup or contains well-known
- * languages one can be bootstrapped for. The channel takes no
- * dependency on any sidecar: `aiui claude` hands it a JSON array of
+ * pipeline — the concrete one today is the iPad paint stream. The channel takes
+ * no dependency on any sidecar: `aiui claude` hands it a JSON array of
  * {@link SidecarDescriptor}s on `--sidecars`, and the channel dynamic-imports
  * each `module`, calls `mod[export ?? "default"](options)`, and mounts the
  * result (a bad descriptor is logged + skipped there).
@@ -16,10 +14,6 @@
  */
 
 import { createRequire } from "node:module";
-import {
-  detectLanguages as defaultDetectLanguages,
-  loadManifest as defaultLoadManifest,
-} from "@habemus-papadum/aiui-lsp";
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -39,21 +33,11 @@ export interface SidecarDescriptor {
   options?: unknown;
 }
 
-/** Reads an LSP manifest for a project root; a truthy return means one exists. */
-type LoadManifest = (projectRoot: string) => unknown;
-
-/** Detects a project's well-known languages (the LSP bootstrap's own detector). */
-type DetectLanguages = (projectRoot: string) => string[];
-
 /** Resolves a package specifier to an absolute path the channel can `import()`. */
 type ResolveModule = (specifier: string) => string;
 
 /** Injectable seams, so the resolver is unit-testable without on-disk state. */
 export interface ResolveSidecarsDeps {
-  /** Defaults to `@habemus-papadum/aiui-lsp`'s `loadManifest`. */
-  loadManifest?: LoadManifest;
-  /** Defaults to `@habemus-papadum/aiui-lsp`'s `detectLanguages`. */
-  detectLanguages?: DetectLanguages;
   /**
    * Resolves a sidecar's package specifier to an ABSOLUTE path. Defaults to
    * `createRequire(import.meta.url).resolve`. This matters: the channel
@@ -68,43 +52,21 @@ export interface ResolveSidecarsDeps {
   log?: (message: string) => void;
 }
 
-/** The resolved (defaulted) detection seams handed to `autoEnable`. */
-interface DetectDeps {
-  loadManifest: LoadManifest;
-  detectLanguages: DetectLanguages;
-}
-
 /** A sidecar the CLI knows how to enable and construct, keyed by name. */
 interface KnownSidecar {
   name: string;
   /** Whether this sidecar auto-enables for the given project root. */
-  autoEnable: (root: string, deps: DetectDeps) => boolean;
+  autoEnable: (root: string) => boolean;
   /** Build the descriptor the channel will mount for this root. */
   descriptor: (root: string, resolveModule: ResolveModule) => SidecarDescriptor;
 }
 
 /**
  * The registry of sidecars the launcher can enable. Emit order follows this
- * list, so the resolver's output is stable regardless of flag order. The code
- * reader is auto-on whenever the project has an LSP setup OR contains
- * well-known languages the reader's backend can bootstrap servers for.
- * (Manifest-only detection was a chicken-and-egg: the bootstrap that CREATES a
- * manifest lives in the backend, which only runs if the sidecar mounts — so a
- * fresh project could never get the reader through `aiui claude`.) The paint
+ * list, so the resolver's output is stable regardless of flag order. The paint
  * stream is always on — see its entry.
  */
 const KNOWN_SIDECARS: KnownSidecar[] = [
-  {
-    name: "code",
-    autoEnable: (root, { loadManifest, detectLanguages }) =>
-      Boolean(loadManifest(root)) || detectLanguages(root).length > 0,
-    descriptor: (root, resolveModule) => ({
-      name: "code",
-      module: resolveModule("@habemus-papadum/aiui-code-server/sidecar"),
-      export: "codeReaderSidecar",
-      options: { root },
-    }),
-  },
   {
     // The iPad paint stream. Always on: it rides the channel's own port (no
     // process, no extra listener), so hosting it costs nothing. Whether an
@@ -138,19 +100,17 @@ export function resolveSidecars(
   opts: { enable: string[]; disable: string[] },
   deps: ResolveSidecarsDeps = {},
 ): SidecarDescriptor[] {
-  const loadManifest = deps.loadManifest ?? defaultLoadManifest;
-  const detectLanguages = deps.detectLanguages ?? defaultDetectLanguages;
   const resolveModule =
     deps.resolveModule ?? ((specifier: string) => nodeRequire.resolve(specifier));
   const log =
     deps.log ?? ((message: string) => process.stderr.write(`[aiui] warning: ${message}\n`));
   const enabled = new Set<string>();
 
-  // Auto-detected sidecars. A throwing detector (e.g. loadManifest on a corrupt
-  // manifest.json) must not kill the launch — warn and treat as not detected.
+  // Auto-detected sidecars. A throwing detector must not kill the launch —
+  // warn and treat as not detected.
   for (const known of KNOWN_SIDECARS) {
     try {
-      if (known.autoEnable(root, { loadManifest, detectLanguages })) {
+      if (known.autoEnable(root)) {
         enabled.add(known.name);
       }
     } catch (err) {
@@ -179,7 +139,7 @@ export function resolveSidecars(
       } catch (err) {
         // The sidecar's package isn't resolvable (e.g. not installed) — skip it
         // rather than failing the whole launch, but say so: silently dropping it
-        // would surface as "the reader is mysteriously absent".
+        // would surface as "the sidecar is mysteriously absent".
         log(
           `sidecar "${k.name}" disabled — its module failed to resolve: ${
             err instanceof Error ? err.message : String(err)

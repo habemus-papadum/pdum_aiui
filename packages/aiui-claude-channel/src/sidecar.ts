@@ -1,7 +1,7 @@
 /**
  * Session **sidecars** — extra HTTP (and optional websocket) surfaces the
  * channel hosts alongside its own endpoints, so one session process serves one
- * port. The code reader was the first sidecar and the iPad paint stream the
+ * port. The iPad paint stream is the concrete sidecar today and a git viewer the
  * second; a git viewer or another tool would be the next.
  *
  * The channel stays generic: it mounts a sidecar's routes on its Express app,

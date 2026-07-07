@@ -3,11 +3,11 @@
 VS Code extension: a selection provider for the aiui dev overlay — pick a connected browser tab
 and send editor selections into its session's turn.
 
-Like the code reader, this is a peer of the [session bus](../../docs/guide/multi-view-sessions.md):
-it contributes structured `SelectionContribution` payloads on the `"contribution"` topic, and the
-app tab renders them as chips and lets `composeIntent` decide how they read in the prompt at
-lowering time. Unlike the reader it holds no websocket — it goes through the channel web
-backend's session HTTP surface.
+A peer of the [session bus](../../docs/guide/multi-view-sessions.md): it contributes structured
+`SelectionContribution` payloads on the `"contribution"` topic, and the app tab renders them as
+chips and lets `composeIntent` decide how they read in the prompt at lowering time. Unlike a
+browser peer it holds no websocket — it goes through the channel web backend's session HTTP
+surface.
 
 ## What you get
 
