@@ -165,9 +165,55 @@ export function createReader(): CodeReader {
       info.initializationOptions,
     );
     clients.set(languageId, client);
+
+    // didOpen any of this language's models the server hasn't seen — after the
+    // first handshake AND after every reconnect (a fresh server has no state).
+    const openModels = () => {
+      for (const [uri, model] of models) {
+        if (model.getLanguageId() === languageId && !openDocs.has(uri)) {
+          openDocs.add(uri);
+          client.didOpen(uri, languageId, ++modelVersion, model.getValue());
+        }
+      }
+    };
+
+    // Redial on close: the channel restarts on `channel_reload`, and a dropped
+    // socket must not permanently kill navigation until a page reload. Probe the
+    // backend cheaply first (console hygiene — never dial a websocket blind),
+    // then re-run the handshake, with capped backoff while the backend is away.
+    let redialTimer: ReturnType<typeof setTimeout> | undefined;
+    let redialDelay = 1_000;
+    const scheduleRedial = () => {
+      if (redialTimer !== undefined) return;
+      redialTimer = setTimeout(() => {
+        redialTimer = undefined;
+        void redial();
+      }, redialDelay);
+    };
+    const redial = async () => {
+      try {
+        const res = await fetch(backendUrl(ROUTES.info));
+        if (!res.ok) throw new Error(`backend answered ${res.status}`);
+        await client.start();
+        redialDelay = 1_000;
+        openModels();
+      } catch {
+        redialDelay = Math.min(redialDelay * 2, 30_000);
+        scheduleRedial();
+      }
+    };
+
     client.onStatus((s) => {
       statusByLang.set(languageId, s);
       bumpServers();
+      if (s === "closed") {
+        // The fresh server won't know these documents — forget the didOpens so
+        // the reconnect replays them.
+        for (const [uri, model] of models) {
+          if (model.getLanguageId() === languageId) openDocs.delete(uri);
+        }
+        scheduleRedial();
+      }
     });
     client.onNotification("textDocument/publishDiagnostics", (params) => {
       const { uri, diagnostics: diags } = params as { uri: string; diagnostics: Diagnostic[] };
@@ -176,19 +222,12 @@ export function createReader(): CodeReader {
     });
     client
       .start()
-      .then(() => {
-        // didOpen any of this language's models created before the handshake.
-        for (const [uri, model] of models) {
-          if (model.getLanguageId() === languageId && !openDocs.has(uri)) {
-            openDocs.add(uri);
-            client.didOpen(uri, languageId, ++modelVersion, model.getValue());
-          }
-        }
-      })
+      .then(openModels)
       .catch((err) => {
         statusByLang.set(languageId, "error");
         bumpServers();
         console.error(`[aiui-code] LSP(${languageId}) failed to start:`, err);
+        scheduleRedial();
       });
     return client;
   }

@@ -16,7 +16,9 @@ function current(): ColorMode {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
-export function initSystemTheme(): void {
+/** Apply the system color mode now and follow changes. Returns a disposer that
+ * removes the media-query listener (a re-mount must not stack them). */
+export function initSystemTheme(): () => void {
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   const apply = () => {
     const mode: ColorMode = mq.matches ? "dark" : "light";
@@ -26,4 +28,5 @@ export function initSystemTheme(): void {
   };
   apply();
   mq.addEventListener("change", apply);
+  return () => mq.removeEventListener("change", apply);
 }

@@ -26,7 +26,12 @@ export interface MountCodeReaderOptions {
 export interface CodeReaderInstance {
   /** The live reader model: `selection()`, `currentFile()`, `reveal(range)`, … */
   readonly reader: CodeReader;
-  /** Unmount the reader and release its Solid root. */
+  /**
+   * Unmount the reader's UI (the Solid root + theme listener). The durable
+   * island underneath — Monaco, its models, the LSP clients — deliberately
+   * survives, so a re-mount (or an HMR swap) adopts it instead of paying the
+   * boot cost again; it is released only with the page.
+   */
   dispose(): void;
 }
 
@@ -38,7 +43,13 @@ export function mountCodeReader(
   if (opts?.backendOrigin !== undefined) {
     setBackendOrigin(opts.backendOrigin);
   }
-  initSystemTheme();
-  const dispose = render(() => <App />, el);
-  return { reader, dispose };
+  const disposeTheme = initSystemTheme();
+  const disposeRoot = render(() => <App />, el);
+  return {
+    reader,
+    dispose: () => {
+      disposeRoot();
+      disposeTheme();
+    },
+  };
 }

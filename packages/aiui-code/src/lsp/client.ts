@@ -98,7 +98,8 @@ export class LspClient {
   }
 
   /** Connect and run the `initialize`/`initialized` handshake. Idempotent-ish:
-   * a second call after a close reconnects. */
+   * a second call after a close reconnects (the reader does this — see the
+   * redial wiring in model/reader.ts). */
   async start(): Promise<InitializeResult> {
     this.setStatus("connecting");
     await this.open();
@@ -113,6 +114,11 @@ export class LspClient {
     })) as InitializeResult;
     this._capabilities = result.capabilities;
     this.sendNotification("initialized", {});
+    // Flush frames queued while connecting only NOW: the spec forbids other
+    // requests until the server has answered `initialize`.
+    const queued = this.queue;
+    this.queue = [];
+    for (const frame of queued) this.ws?.send(frame);
     this.setStatus("ready");
     return result;
   }
@@ -121,20 +127,24 @@ export class LspClient {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(this.url);
       this.ws = ws;
-      ws.addEventListener("open", () => {
-        for (const frame of this.queue) ws.send(frame);
-        this.queue = [];
-        resolve();
-      });
+      ws.addEventListener("open", () => resolve());
       ws.addEventListener("message", (ev) => this.onFrame(String(ev.data)));
       ws.addEventListener("error", () => {
-        if (this._status === "connecting") reject(new Error("lsp websocket failed to open"));
-        this.setStatus("error");
+        // Only a handshake failure is an ERROR state; a benign error event on an
+        // open socket is followed by `close`, which reports (and recovers) as
+        // "closed" — it must not latch the status chip red forever.
+        if (this._status === "connecting") {
+          reject(new Error("lsp websocket failed to open"));
+          this.setStatus("error");
+        }
       });
       ws.addEventListener("close", () => {
         this.setStatus("closed");
         for (const p of this.pending.values()) p.reject(new Error("lsp connection closed"));
         this.pending.clear();
+        // Queued frames belong to the dead connection (their pending entries
+        // were just rejected); a reconnect re-opens documents itself.
+        this.queue = [];
       });
     });
   }

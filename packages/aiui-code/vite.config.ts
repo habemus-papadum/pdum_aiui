@@ -44,7 +44,15 @@ function readerBackendPlugin(root: string): Plugin {
   };
 }
 
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
+  // Vitest (mode "test") evaluates this config to run the package's unit tests.
+  // Only the plain Solid transform belongs there: the dev-harness plugins below
+  // (readerBackendPlugin, the overlay) would stand up the real backend — and its
+  // LSP provisioning — during test collection.
+  if (mode === "test") {
+    return { plugins: [solid()] };
+  }
+
   // `vite build` → the publishable library (dist/index.js). In-repo consumers
   // (the dev overlay) bundle our SOURCE via the editable-deps convention; this
   // dist is only for standalone external consumers.

@@ -14,6 +14,7 @@ import {
   type FileTreeResponse,
   ROUTES,
   type Walkthrough,
+  type WalkthroughListResponse,
   type WalkthroughStep,
   walkthroughPath,
 } from "@habemus-papadum/aiui-code-protocol";
@@ -185,6 +186,14 @@ function registerTools(): void {
     run: () => codeGraph()?.outline.latest() ?? [],
   });
   registerTool({
+    name: "reload_tree",
+    description: "Re-fetch the project file tree (after adding or removing files).",
+    run: () => {
+      codeGraph()?.reloadTree();
+      return { ok: true };
+    },
+  });
+  registerTool({
     name: "back",
     description: "Jump back in the navigation history.",
     run: () => ({ moved: reader.back() }),
@@ -220,6 +229,10 @@ function registerTools(): void {
               title: { type: "string" },
               prose: { type: "string" },
               narration: { type: "string" },
+              diff: {
+                type: "object",
+                properties: { before: { type: "string" }, after: { type: "string" } },
+              },
             },
             required: ["file", "range", "prose"],
           },
@@ -243,9 +256,18 @@ function registerTools(): void {
     },
   });
   registerTool({
+    name: "list_walkthroughs",
+    description: "List the saved walkthroughs (id, title, step count) available to start.",
+    run: async () => {
+      const res = await fetch(backendUrl(ROUTES.walkthroughs));
+      if (!res.ok) throw new Error(`list walkthroughs: ${res.status}`);
+      return (await res.json()) as WalkthroughListResponse;
+    },
+  });
+  registerTool({
     name: "start_walkthrough",
     description: "Load a saved walkthrough by id and begin walking it in the reader.",
-    params: { id: "walkthrough id (see report().walkthroughs)" },
+    params: { id: "walkthrough id (see list_walkthroughs)" },
     run: async (args) => {
       const id = String(args?.id ?? "");
       const res = await fetch(backendUrl(walkthroughPath(id)));
