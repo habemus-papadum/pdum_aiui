@@ -54,7 +54,7 @@ export type Mode = "ink" | "correct";
 export type IntentEvent =
   | { at: number; type: "armed"; on: boolean }
   | { at: number; type: "mode"; mode: Mode }
-  | { at: number; type: "thread-open"; trigger: "talk" | "ink" | "shot" }
+  | { at: number; type: "thread-open"; trigger: "talk" | "ink" | "shot" | "contribution" }
   | { at: number; type: "thread-close"; reason: "send" | "cancel" | "timeout" }
   | { at: number; type: "talk-start"; segment: number }
   | { at: number; type: "talk-end"; segment: number; ms: number }

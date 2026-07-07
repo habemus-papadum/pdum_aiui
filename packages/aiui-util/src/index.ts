@@ -8,6 +8,7 @@
 
 export * from "./browser";
 export * from "./environment";
+export * from "./provenance";
 
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";

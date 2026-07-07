@@ -1,6 +1,11 @@
 # Code Reader — an LSP-backed reading, navigation, and walkthrough surface
 
-**Status:** proposal. A design to react to, not a spec to implement. Lives under `docs/proposals/`
+**Status:** proposal — now **partially built**. Tier 1 (the LSP-backed reader) and a Tier 3
+skeleton (AI-authored walkthroughs) are implemented in
+[`packages/aiui-code`](../../packages/aiui-code) against a Python demo project
+([`examples/py-demo`](../../examples/py-demo), pyright + numpy). See that package's README for what
+landed, the phasing below (P0/P1/P3 done; P1.5/P2/P4 open), and the one deliberate deviation (a
+small direct LSP client rather than `monaco-languageclient`). Lives under `docs/proposals/`
 (like `archive/`, readable on GitHub, not part of the docs-site nav).
 
 ## The gap

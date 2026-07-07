@@ -111,6 +111,27 @@ export type {
 } from "./selection";
 export { installSelectionWatcher } from "./selection";
 export type {
+  SessionBusApi,
+  SessionBusOptions,
+  SessionPeer,
+  SessionProbe,
+  SessionProbeResult,
+  SessionSocketFactory,
+  SessionSocketLike,
+} from "./session-bus";
+export { installSessionBus } from "./session-bus";
+export type {
+  SelectionContribution,
+  SessionContribution,
+  TextContribution,
+} from "./session-contrib";
+export {
+  contributionToText,
+  isShortSelection,
+  SESSION_CONTRIBUTION_TOPIC,
+  SHORT_SELECTION_CHARS,
+} from "./session-contrib";
+export type {
   BridgeTool,
   ToolsBridgeApi,
   ToolsBridgeOptions,

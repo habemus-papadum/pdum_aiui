@@ -55,6 +55,17 @@ export interface AiuiArgs {
    * `chrome.browserUrl` in config for this launch.
    */
   browserUrl?: string;
+  /**
+   * Names collected from repeatable `--aiui-sidecar <name>` flags — session
+   * sidecars to force-enable even when they wouldn't auto-detect for this
+   * project (e.g. `--aiui-sidecar code`).
+   */
+  sidecar: string[];
+  /**
+   * Names collected from repeatable `--aiui-no-sidecar <name>` flags — session
+   * sidecars to disable for this run. Disable wins over enable.
+   */
+  noSidecar: string[];
   /** Everything else, to forward verbatim to the wrapped tool. */
   passthrough: string[];
 }
@@ -99,6 +110,9 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
  *    dir instead of a named profile. Mutually exclusive with the above.
  *  - `--aiui-browser-url <url>` — attach the Chrome DevTools MCP to this
  *    endpoint (e.g. a tunneled remote browser) instead of managing one.
+ *  - `--aiui-sidecar <name>` / `--aiui-no-sidecar <name>` — force-enable /
+ *    disable a session sidecar by name. Both are repeatable and accumulate;
+ *    disable wins over enable when the same name appears in both.
  *
  * Any other `--aiui-*` flag throws, so a typo surfaces loudly instead of being
  * silently dropped or leaking into the child command.
@@ -113,6 +127,8 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
   let chromeProfile: string | undefined;
   let chromeDataDir: string | undefined;
   let browserUrl: string | undefined;
+  const sidecar: string[] = [];
+  const noSidecar: string[] = [];
   const passthrough: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -205,6 +221,26 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         browserUrl = value;
         break;
       }
+      case "--aiui-sidecar": {
+        if (value === undefined) {
+          value = args[++i];
+        }
+        if (!value) {
+          throw new Error("--aiui-sidecar requires a non-empty value");
+        }
+        sidecar.push(value);
+        break;
+      }
+      case "--aiui-no-sidecar": {
+        if (value === undefined) {
+          value = args[++i];
+        }
+        if (!value) {
+          throw new Error("--aiui-no-sidecar requires a non-empty value");
+        }
+        noSidecar.push(value);
+        break;
+      }
       default:
         throw new Error(`unknown aiui option: ${name}`);
     }
@@ -236,6 +272,8 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
     chromeProfile,
     chromeDataDir,
     browserUrl,
+    sidecar,
+    noSidecar,
     passthrough,
   };
 }

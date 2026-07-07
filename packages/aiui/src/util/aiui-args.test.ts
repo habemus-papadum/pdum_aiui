@@ -11,6 +11,8 @@ const none: AiuiArgs = {
   noBrowser: false,
   chromeProfile: undefined,
   chromeDataDir: undefined,
+  sidecar: [],
+  noSidecar: [],
   passthrough: [],
 };
 
@@ -180,6 +182,56 @@ describe("splitAiuiArgs", () => {
     expect(() =>
       splitAiuiArgs(["--aiui-browser-url", "http://x:1", "--aiui-chrome-data-dir", "/d"]),
     ).toThrow(/managed elsewhere/);
+  });
+
+  it("collects a single --aiui-sidecar in both forms", () => {
+    expect(splitAiuiArgs(["--aiui-sidecar", "code", "--resume"])).toEqual({
+      ...none,
+      sidecar: ["code"],
+      passthrough: ["--resume"],
+    });
+    expect(splitAiuiArgs(["--aiui-sidecar=code"])).toEqual({
+      ...none,
+      sidecar: ["code"],
+    });
+  });
+
+  it("collects a single --aiui-no-sidecar in both forms", () => {
+    expect(splitAiuiArgs(["--aiui-no-sidecar", "code", "--resume"])).toEqual({
+      ...none,
+      noSidecar: ["code"],
+      passthrough: ["--resume"],
+    });
+    expect(splitAiuiArgs(["--aiui-no-sidecar=code"])).toEqual({
+      ...none,
+      noSidecar: ["code"],
+    });
+  });
+
+  it("accumulates repeated sidecar flags, interleaved with passthrough", () => {
+    expect(
+      splitAiuiArgs([
+        "--aiui-sidecar",
+        "code",
+        "--resume",
+        "--aiui-sidecar",
+        "docs",
+        "-p",
+        "--aiui-no-sidecar",
+        "chrome",
+        "--aiui-no-sidecar=code",
+      ]),
+    ).toEqual({
+      ...none,
+      sidecar: ["code", "docs"],
+      noSidecar: ["chrome", "code"],
+      passthrough: ["--resume", "-p"],
+    });
+  });
+
+  it("throws when a sidecar flag has no value", () => {
+    expect(() => splitAiuiArgs(["--aiui-sidecar"])).toThrow(/requires a non-empty value/);
+    expect(() => splitAiuiArgs(["--aiui-no-sidecar="])).toThrow(/requires a non-empty value/);
   });
 
   it("preserves passthrough order around the aiui flag", () => {

@@ -63,6 +63,9 @@ guides, and a TypeDoc API reference automatically.
 - [The Web Intent Tool](./web-intent-tool) — the first layer-2 tool, designed and working.
 - [The DevTools Panel](./devtools) — monitor the channel, the transport, and lowering traces.
 - [The Agent's Browser](./chrome) — the shared session browser, Chrome for Testing, profiles.
+- [Language Servers](./lsp) — per-project, self-tested LSP setup and `aiui setup-lsp`.
+- [The Code Reader](./code-reader) — the LSP-backed reader, hosted inside the session as a channel sidecar.
+- [Multi-View Sessions](./multi-view-sessions) — several tabs of one session share arming, the prompt preview, and code selections.
 - [Remote Development](./remote) — session on a remote box, browser on yours.
 - [Configuration](./config) — config.json: locations, keys, precedence.
 - [Frontend for Agents](./frontend-for-agents) — how the code itself should be written.
