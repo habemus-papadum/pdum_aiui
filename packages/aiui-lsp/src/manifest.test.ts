@@ -7,7 +7,7 @@ import {
   type LspManifest,
   languageIdForPath,
   launcherPath,
-  legacyLspDir,
+  cacheLspDir,
   loadManifest,
   lspDir,
   manifestPath,
@@ -127,13 +127,13 @@ describe("languageIdForPath", () => {
 // --- path layout -----------------------------------------------------------
 
 describe("path helpers", () => {
-  it("canonical writer paths lay out under .aiui/lsp", () => {
+  it("committed writer paths lay out under .aiui/lsp", () => {
     const root = "/home/proj";
     expect(lspDir(root)).toBe(join(root, ".aiui", "lsp"));
     expect(manifestPath(root)).toBe(join(root, ".aiui", "lsp", "manifest.json"));
-    // legacy dir is the (read-only) back-compat location
-    expect(legacyLspDir(root)).toBe(join(root, ".aiui-cache", "lsp"));
-    // with no manifest on disk anywhere, launcherPath resolves to the canonical dir
+    // cache dir is the gitignored home of the automatic bootstrap
+    expect(cacheLspDir(root)).toBe(join(root, ".aiui-cache", "lsp"));
+    // with no manifest on disk anywhere, launcherPath resolves to the committed dir
     expect(launcherPath(root, sample().servers[0])).toBe(
       join(root, ".aiui", "lsp", "typescript/launch"),
     );
@@ -174,30 +174,30 @@ describe("loadManifest", () => {
     expect(() => loadManifest(root)).toThrow(/unsupported version/);
   });
 
-  // --- .aiui/lsp preference + .aiui-cache/lsp back-compat fallback ----------
+  // --- committed .aiui/lsp preference + .aiui-cache/lsp bootstrap fallback ---
 
-  const writeLegacyManifest = (m: LspManifest): void => {
-    mkdirSync(legacyLspDir(root), { recursive: true });
-    writeFileSync(join(legacyLspDir(root), "manifest.json"), JSON.stringify(m), "utf8");
+  const writeCacheManifest = (m: LspManifest): void => {
+    mkdirSync(cacheLspDir(root), { recursive: true });
+    writeFileSync(join(cacheLspDir(root), "manifest.json"), JSON.stringify(m), "utf8");
   };
 
-  it("reads a legacy .aiui-cache/lsp manifest when there is no canonical one", () => {
-    const legacy: LspManifest = {
+  it("reads a bootstrapped .aiui-cache/lsp manifest when there is no committed one", () => {
+    const bootstrapped: LspManifest = {
       version: 1,
       servers: [{ language: "python", languageId: "python", extensions: [".py"], launcher: "l" }],
     };
-    writeLegacyManifest(legacy);
-    expect(loadManifest(root)).toEqual(legacy);
-    // and the launcher resolves against the legacy dir it was found in
-    expect(launcherPath(root, legacy.servers[0])).toBe(join(legacyLspDir(root), "l"));
+    writeCacheManifest(bootstrapped);
+    expect(loadManifest(root)).toEqual(bootstrapped);
+    // and the launcher resolves against the cache dir it was found in
+    expect(launcherPath(root, bootstrapped.servers[0])).toBe(join(cacheLspDir(root), "l"));
   });
 
-  it("prefers the canonical .aiui/lsp manifest over a legacy one", () => {
-    writeLegacyManifest({
+  it("prefers the committed .aiui/lsp manifest over a bootstrapped one", () => {
+    writeCacheManifest({
       version: 1,
       servers: [{ language: "python", languageId: "python", extensions: [".py"], launcher: "l" }],
     });
-    // canonical manifest wins
+    // committed manifest wins
     writeManifest(root, sample());
     expect(loadManifest(root)).toEqual(sample());
     expect(launcherPath(root, sample().servers[0])).toBe(join(lspDir(root), "typescript/launch"));
@@ -213,19 +213,19 @@ describe("resolveLspDir", () => {
     if (root) rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns the canonical dir when nothing is on disk", () => {
+  it("returns the committed dir when nothing is on disk", () => {
     expect(resolveLspDir(root)).toBe(lspDir(root));
   });
 
-  it("returns the legacy dir when only it has a manifest", () => {
-    mkdirSync(legacyLspDir(root), { recursive: true });
-    writeFileSync(join(legacyLspDir(root), "manifest.json"), JSON.stringify(sample()), "utf8");
-    expect(resolveLspDir(root)).toBe(legacyLspDir(root));
+  it("returns the cache dir when only it has a manifest", () => {
+    mkdirSync(cacheLspDir(root), { recursive: true });
+    writeFileSync(join(cacheLspDir(root), "manifest.json"), JSON.stringify(sample()), "utf8");
+    expect(resolveLspDir(root)).toBe(cacheLspDir(root));
   });
 
-  it("prefers the canonical dir when both have a manifest", () => {
-    mkdirSync(legacyLspDir(root), { recursive: true });
-    writeFileSync(join(legacyLspDir(root), "manifest.json"), JSON.stringify(sample()), "utf8");
+  it("prefers the committed dir when both have a manifest", () => {
+    mkdirSync(cacheLspDir(root), { recursive: true });
+    writeFileSync(join(cacheLspDir(root), "manifest.json"), JSON.stringify(sample()), "utf8");
     writeManifest(root, sample());
     expect(resolveLspDir(root)).toBe(lspDir(root));
   });

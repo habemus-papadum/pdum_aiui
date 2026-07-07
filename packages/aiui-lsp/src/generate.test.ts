@@ -148,6 +148,43 @@ describe("ensureDefaultManifest", () => {
     expect(m.servers.map((s) => s.language)).toEqual(["python"]);
     expect(logs.some((l) => /provisioned python/.test(l))).toBe(true);
   });
+
+  // --- the provenance split: implicit bootstrap vs deliberate provision ------
+
+  it("bootstraps into the gitignored cache — never dirties the committable .aiui/", () => {
+    writeFileSync(join(root, "a.py"), "x = 1\n");
+    ensureDefaultManifest(root, { now: () => new Date(0) });
+    expect(existsSync(join(root, ".aiui-cache", "lsp", "manifest.json"))).toBe(true);
+    expect(existsSync(join(root, ".aiui"))).toBe(false);
+  });
+
+  it("home: 'committed' provisions into .aiui/lsp (the deliberate path)", () => {
+    writeFileSync(join(root, "a.py"), "x = 1\n");
+    ensureDefaultManifest(root, { now: () => new Date(0), home: "committed" });
+    expect(existsSync(join(root, ".aiui", "lsp", "manifest.json"))).toBe(true);
+    expect(existsSync(join(root, ".aiui-cache"))).toBe(false);
+  });
+
+  it("a committed provision proceeds despite an earlier cache bootstrap (and then wins reads)", () => {
+    writeFileSync(join(root, "a.py"), "x = 1\n");
+    ensureDefaultManifest(root, { now: () => new Date(0) }); // cache bootstrap
+    const committed = ensureDefaultManifest(root, {
+      now: () => new Date(60_000),
+      home: "committed",
+    });
+    expect(committed.createdAt).toBe("1970-01-01T00:01:00.000Z");
+    expect(existsSync(join(root, ".aiui", "lsp", "manifest.json"))).toBe(true);
+    // Reads now prefer the committed manifest.
+    expect(loadManifest(root)?.createdAt).toBe(committed.createdAt);
+  });
+
+  it("a cache bootstrap defers to an existing committed setup", () => {
+    writeFileSync(join(root, "a.py"), "x = 1\n");
+    const committed = ensureDefaultManifest(root, { now: () => new Date(0), home: "committed" });
+    const bootstrapped = ensureDefaultManifest(root, { now: () => new Date(60_000) });
+    expect(bootstrapped).toEqual(committed);
+    expect(existsSync(join(root, ".aiui-cache"))).toBe(false);
+  });
 });
 
 // --- detectLanguages -------------------------------------------------------

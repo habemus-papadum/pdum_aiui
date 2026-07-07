@@ -83,6 +83,9 @@ export function createMessageDecoder(onMessage: (json: string) => void): Message
 export interface LspChild {
   readonly stdin: { write(data: Buffer): void } | null;
   readonly stdout: { onData(cb: (chunk: Buffer) => void): void } | null;
+  /** Diagnostic output. Optional (test fakes may omit it) — but a host SHOULD
+   * drain it: an unread stderr pipe backs up (~64KB) and blocks a chatty server. */
+  readonly stderr?: { onData(cb: (chunk: Buffer) => void): void } | null;
   onError(cb: (err: Error) => void): void;
   onExit(cb: (code: number | null) => void): void;
   kill(): void;
@@ -113,9 +116,22 @@ export const spawnNodeChild: SpawnLspChild = (launch) => {
   return {
     stdin: child.stdin ? { write: (data: Buffer) => void child.stdin?.write(data) } : null,
     stdout: child.stdout ? { onData: (cb) => void child.stdout?.on("data", cb) } : null,
+    stderr: child.stderr ? { onData: (cb) => void child.stderr?.on("data", cb) } : null,
     onError: (cb) => void child.on("error", cb),
     onExit: (cb) => void child.on("exit", (code) => cb(code)),
-    kill: () => void child.kill(),
+    kill: () => {
+      // SIGTERM first (the launcher `exec`s the real server, so it lands there);
+      // escalate to SIGKILL for a server that traps or ignores it. `unref` so a
+      // pending escalation never holds a CLI open.
+      child.kill();
+      const escalate = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill("SIGKILL");
+        }
+      }, 3000);
+      escalate.unref?.();
+      child.once("exit", () => clearTimeout(escalate));
+    },
   };
 };
 
@@ -187,6 +203,13 @@ export function createLspProxy(launch: LspLaunch, opts: LspProxyOptions = {}): L
       }
     });
     child.stdout?.onData((chunk) => decoder.push(chunk));
+
+    // Drain stderr into the log: it's the server's diagnostic channel, and an
+    // unread pipe would back up and block a chatty server mid-handshake.
+    child.stderr?.onData((chunk) => {
+      const text = chunk.toString("utf8").trimEnd();
+      if (text) log(`lsp(${label}) stderr: ${text}`);
+    });
 
     // browser → server: frame each ws text frame and write to stdin.
     socket.onMessage((data) => {

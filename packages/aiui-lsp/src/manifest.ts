@@ -16,21 +16,27 @@
  *     <language>/launch      # executable: speaks LSP on stdio for this project
  *     <language>/SETUP.md     # human-readable "how it was set up + test results"
  *
- * `.aiui/lsp/` is **committable**: the launchers are portable (they resolve their
- * server from the project's own `node_modules`/venv at runtime, no absolute
- * machine paths), so a clone + install yields a working reader with no
- * `aiui setup-lsp` step. Setups written before the relocation lived under the
- * gitignored `.aiui-cache/lsp/`; reading still falls back there (see
- * {@link resolveLspDir}) so old checkouts keep working.
+ * Two homes, split by **provenance**:
+ *
+ *  - `.aiui/lsp/` — the **committed** setup, written by a deliberate act
+ *    (`aiui setup-lsp`, `aiui lsp provision`). The launchers are portable (they
+ *    resolve their server from the project's own `node_modules`/venv at runtime,
+ *    no absolute machine paths), so a clone + install yields a working reader.
+ *  - `.aiui-cache/lsp/` — the **gitignored** home of the automatic bootstrap
+ *    (`ensureDefaultManifest`): merely opening the reader on a fresh project must
+ *    never dirty the working tree with untested, committable launchers.
+ *
+ * Reads prefer the committed setup and fall back to the cache (see
+ * {@link resolveLspDir}); launcher paths resolve against whichever dir the
+ * manifest was found in.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Legacy project-local cache dir (pre-relocation). LSP setup used to live under
- * `<root>/.aiui-cache/lsp/`; it is now read-only back-compat — reads fall back to
- * it, writes go to the canonical {@link PROJECT_DIRNAME}. */
+/** The gitignored project cache dir (`.aiui-cache/`) — home of the automatic
+ * LSP bootstrap (see {@link cacheLspDir}). */
 export const PROJECT_CACHE_DIRNAME = ".aiui-cache";
-/** The committable project dir that holds the canonical LSP setup (`.aiui/`). */
+/** The committable project dir that holds the deliberate LSP setup (`.aiui/`). */
 export const PROJECT_DIRNAME = ".aiui";
 /** Subdirectory (of `.aiui`, or the legacy `.aiui-cache`) holding the LSP files. */
 export const LSP_SUBDIR = "lsp";
@@ -72,49 +78,49 @@ export interface LspManifest {
   servers: LspServerEntry[];
 }
 
-/** The canonical (write/default) LSP dir: `<projectRoot>/.aiui/lsp`. Writers use
- * this; reads tolerate the legacy location too (see {@link resolveLspDir}). */
+/** The committed LSP dir: `<projectRoot>/.aiui/lsp`. Deliberate setups
+ * (`aiui setup-lsp`, `aiui lsp provision`) write here. */
 export function lspDir(projectRoot: string): string {
   return join(projectRoot, PROJECT_DIRNAME, LSP_SUBDIR);
 }
 
-/** The legacy LSP dir: `<projectRoot>/.aiui-cache/lsp` (read-only back-compat). */
-export function legacyLspDir(projectRoot: string): string {
+/** The gitignored LSP dir: `<projectRoot>/.aiui-cache/lsp`. The automatic
+ * bootstrap writes here — opening the reader must never dirty the working tree. */
+export function cacheLspDir(projectRoot: string): string {
   return join(projectRoot, PROJECT_CACHE_DIRNAME, LSP_SUBDIR);
 }
 
 /**
- * The LSP dir to **read** from. Prefers the canonical `.aiui/lsp` when it holds a
- * manifest; otherwise falls back to the legacy `.aiui-cache/lsp` when THAT holds
- * one (so a setup written before the relocation still resolves); otherwise
- * returns the canonical dir (where a fresh setup will be written). Writers should
- * use {@link lspDir} directly — new setups always land in `.aiui/lsp`.
+ * The LSP dir to **read** from. Prefers the committed `.aiui/lsp` when it holds
+ * a manifest; otherwise falls back to the gitignored `.aiui-cache/lsp` (the
+ * automatic bootstrap's home) when THAT holds one; otherwise returns the
+ * committed dir (where a fresh deliberate setup will be written).
  */
 export function resolveLspDir(projectRoot: string): string {
-  const canonical = lspDir(projectRoot);
-  if (existsSync(join(canonical, MANIFEST_FILENAME))) return canonical;
-  const legacy = legacyLspDir(projectRoot);
-  if (existsSync(join(legacy, MANIFEST_FILENAME))) return legacy;
-  return canonical;
+  const committed = lspDir(projectRoot);
+  if (existsSync(join(committed, MANIFEST_FILENAME))) return committed;
+  const cache = cacheLspDir(projectRoot);
+  if (existsSync(join(cache, MANIFEST_FILENAME))) return cache;
+  return committed;
 }
 
-/** Canonical manifest path (writers): `<projectRoot>/.aiui/lsp/manifest.json`.
- * Reads resolve via {@link resolveLspDir}, honoring the legacy fallback. */
+/** Committed manifest path: `<projectRoot>/.aiui/lsp/manifest.json`. Reads
+ * resolve via {@link resolveLspDir}, honoring the cache fallback. */
 export function manifestPath(projectRoot: string): string {
   return join(lspDir(projectRoot), MANIFEST_FILENAME);
 }
 
 /** Absolute path to an entry's executable launcher, resolved against the dir the
- * manifest was actually found in (so a legacy `.aiui-cache/lsp` setup spawns from
- * there, and a canonical `.aiui/lsp` one from there). */
+ * manifest was actually found in (a bootstrapped `.aiui-cache/lsp` setup spawns
+ * from there, a committed `.aiui/lsp` one from there). */
 export function launcherPath(projectRoot: string, entry: LspServerEntry): string {
   return join(resolveLspDir(projectRoot), entry.launcher);
 }
 
 /** Read + parse + validate the manifest; `undefined` if it doesn't exist.
- * Prefers `.aiui/lsp`, falls back to the legacy `.aiui-cache/lsp` (see
- * {@link resolveLspDir}). Throws only on a present-but-corrupt manifest (a loud,
- * actionable failure). */
+ * Prefers the committed `.aiui/lsp`, falls back to the bootstrap's
+ * `.aiui-cache/lsp` (see {@link resolveLspDir}). Throws only on a
+ * present-but-corrupt manifest (a loud, actionable failure). */
 export function loadManifest(projectRoot: string): LspManifest | undefined {
   const path = join(resolveLspDir(projectRoot), MANIFEST_FILENAME);
   if (!existsSync(path)) return undefined;

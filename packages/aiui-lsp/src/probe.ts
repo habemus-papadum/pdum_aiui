@@ -113,9 +113,29 @@ export async function probeLauncher(opts: ProbeOptions): Promise<ProbeReport> {
     }
   });
   child.stdout?.onData((c) => decoder.push(c));
-  child.onError((e) => log.push(`error: ${e.message}`));
+  // The server's diagnostic channel: capture for the report (it's the whole
+  // point of `log`), and keep the pipe drained so a chatty server can't block.
+  child.stderr?.onData((c) => {
+    const text = c.toString("utf8").trimEnd();
+    if (text) log.push(text);
+  });
+
+  // A server that fails to start or dies mid-probe must settle the probe NOW
+  // with the real cause — not leave the pending request hanging until the
+  // timeout fires and misreports the most common setup failure as "timed out".
+  let failFast: ((e: Error) => void) | undefined;
+  const childFailure = new Promise<never>((_, reject) => {
+    failFast = reject;
+  });
+  child.onError((e) => {
+    log.push(`error: ${e.message}`);
+    failFast?.(new Error(`server failed to start: ${e.message}`));
+  });
   child.onExit((code) => {
-    if (code && code !== 0) log.push(`server exited with code ${code}`);
+    if (code && code !== 0) {
+      log.push(`server exited with code ${code}`);
+      failFast?.(new Error(`server exited with code ${code}`));
+    }
   });
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -127,7 +147,7 @@ export async function probeLauncher(opts: ProbeOptions): Promise<ProbeReport> {
   });
 
   try {
-    const report = await Promise.race([run(), timeout]);
+    const report = await Promise.race([run(), timeout, childFailure]);
     return report;
   } catch (err) {
     return { ok: false, results, log, error: msg(err) };

@@ -11,3 +11,7 @@ uv.lock
 
 # TypeScript half (web/) has no npm deps, but ignore installs defensively.
 web/node_modules/
+
+# aiui's gitignored per-project cache (auto-bootstrapped LSP setups land here;
+# this example's deliberate setup is the committed .aiui/lsp/).
+.aiui-cache/

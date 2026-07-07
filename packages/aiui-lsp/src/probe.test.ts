@@ -101,4 +101,52 @@ describe("probeLauncher", () => {
     expect(report.ok).toBe(false);
     expect(report.error).toMatch(/timed out/);
   });
+
+  it("settles immediately with the real cause when the server crashes on startup", async () => {
+    // The most common setup failure: the launcher starts but the server dies at
+    // once (bad interpreter, missing dep). The probe must report the exit — with
+    // captured stderr — right away, NOT stall the full timeout and say "timed out".
+    const crashing: LspChild = {
+      stdin: { write: () => {} },
+      stdout: { onData: () => {} },
+      stderr: {
+        onData: (cb) => queueMicrotask(() => cb(Buffer.from("ModuleNotFoundError: pyright\n"))),
+      },
+      onError: () => {},
+      onExit: (cb) => queueMicrotask(() => cb(127)),
+      kill: () => {},
+    };
+
+    const start = Date.now();
+    const report = await probeLauncher({
+      ...sampleOpts,
+      ops: ["documentSymbol"],
+      timeoutMs: 60_000, // the CLI's real timeout — the probe must not wait it out
+      spawn: () => crashing,
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.error).toMatch(/exited with code 127/);
+    expect(report.log.join("\n")).toContain("ModuleNotFoundError");
+    expect(Date.now() - start).toBeLessThan(5_000);
+  });
+
+  it("surfaces a spawn 'error' event (ENOENT) as the failure cause", async () => {
+    const enoent: LspChild = {
+      stdin: { write: () => {} },
+      stdout: { onData: () => {} },
+      onError: (cb) => queueMicrotask(() => cb(new Error("spawn launch ENOENT"))),
+      onExit: () => {},
+      kill: () => {},
+    };
+
+    const report = await probeLauncher({
+      ...sampleOpts,
+      timeoutMs: 60_000,
+      spawn: () => enoent,
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.error).toMatch(/failed to start: spawn launch ENOENT/);
+  });
 });

@@ -12,16 +12,20 @@ in the middle understands or rewrites LSP semantics.
 
 ## The descriptor: an index of executable launchers
 
-A project's setup lives under `.aiui/lsp/`, and it is **committable**: the launchers are
-**portable** — each resolves the project root from its own on-disk location and its server from
-the project's own `node_modules`/venv, with no absolute machine paths — so a clone + install
+A project's deliberate setup lives under `.aiui/lsp/`, and it is **committable**: the launchers
+are **portable** — each resolves the project root from its own on-disk location and its server
+from the project's own `node_modules`/venv, with no absolute machine paths — so a clone + install
 yields a working reader with no `aiui setup-lsp` step. The key decision: the on-disk record is an
 **index of executable launchers**, not a config blob. A thin `manifest.json` maps each language to
 a per-language `launch` script; the launcher is where all the real complexity lives (which
 interpreter, which env, which project flags), so it's independently runnable and independently
-testable. Each language also gets a human-readable `SETUP.md`. (Setups written before the
-relocation lived under the gitignored `.aiui-cache/lsp/`; reading falls back there for old
-checkouts.)
+testable. Each language also gets a human-readable `SETUP.md`.
+
+There is a second home, split by provenance: with **no** setup at all, opening the reader
+auto-bootstraps recipe launchers for the well-known languages into the **gitignored**
+`.aiui-cache/lsp/` — the reader works out of the box, and merely opening it never dirties your
+working tree with generated, untested files. A deliberate act (`aiui setup-lsp`,
+`aiui lsp provision`) records the committed `.aiui/lsp/` setup, which then takes precedence.
 
 ```
 .aiui/lsp/
@@ -66,8 +70,8 @@ failure — and exits non-zero if the launcher is broken.
 
 Two languages have **built-in recipes** — `python` (pyright) and `typescript`/`javascript`
 (typescript-language-server) — so the reader works out of the box: opening a project with no
-manifest auto-provisions them. For typescript the recipe records the bundled `tsserver` path as an
-`initializationOptions` value, so the target project needn't have TypeScript installed.
+manifest auto-provisions them into the gitignored `.aiui-cache/lsp/` (run `aiui lsp provision` to
+record a committed setup instead).
 
 Everything else is hand-authored by the setup skill, which carries concrete guidance for:
 

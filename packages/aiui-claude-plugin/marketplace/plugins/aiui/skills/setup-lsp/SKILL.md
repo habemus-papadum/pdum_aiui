@@ -27,8 +27,9 @@ done.
 `.aiui/lsp/` is **committable**, and that is the point: write **portable**
 launchers (resolve the server from the project itself, no absolute machine
 paths) so a clone + install yields a working reader with **no** `aiui setup-lsp`
-step. Do not write into the old `.aiui-cache/lsp/` (gitignored) — reads still
-fall back there for old checkouts, but every new setup goes under `.aiui/lsp/`.
+step. Do not write into `.aiui-cache/lsp/` (gitignored) — that is where the
+reader's *automatic* bootstrap lands so it never dirties the working tree; your
+deliberate, probe-tested setup goes under `.aiui/lsp/`, which takes precedence.
 Make sure `.aiui/` is tracked (not caught by a `.gitignore` `.aiui*` glob).
 
 ## Your tools (`aiui lsp …`)

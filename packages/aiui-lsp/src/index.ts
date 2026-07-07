@@ -17,7 +17,6 @@
 export type { EnsureOptions } from "./generate";
 export {
   ensureDefaultManifest,
-  hasManifest,
   provisionServer,
   writeLauncher,
   writeManifest,
@@ -25,10 +24,10 @@ export {
 } from "./generate";
 export type { LspManifest, LspServerEntry, LspVerification } from "./manifest";
 export {
+  cacheLspDir,
   LSP_SUBDIR,
   languageIdForPath,
   launcherPath,
-  legacyLspDir,
   loadManifest,
   lspDir,
   MANIFEST_FILENAME,

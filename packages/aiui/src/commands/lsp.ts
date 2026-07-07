@@ -98,6 +98,9 @@ export function runLspProvision(opts: ProvisionOptions = {}): void {
   const manifest = ensureDefaultManifest(root, {
     force: opts.force,
     onLog: (line) => logs.push(line),
+    // A deliberate act: record the setup in the committed .aiui/lsp (the
+    // implicit reader-backend bootstrap lands in the gitignored cache instead).
+    home: "committed",
   });
   if (opts.json) {
     console.log(JSON.stringify({ logs, manifest }, null, 2));

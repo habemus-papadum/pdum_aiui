@@ -21,11 +21,15 @@ src/pydemo/
 ## Setup
 
 ```sh
-bash setup.sh
+bash setup.sh   # Python: uv venv + editable install (pulls numpy>=1.26)
+npm install     # language servers: pyright + typescript-language-server
 ```
 
-This uses [`uv`](https://docs.astral.sh/uv/) to create a `.venv` and install the
-project (which pulls in `numpy>=1.26`), so pyright can resolve numpy's types.
+`setup.sh` uses [`uv`](https://docs.astral.sh/uv/) to create a `.venv` and install
+the project, so pyright can resolve numpy's types. `npm install` populates the
+`node_modules` that the committed `.aiui/lsp/*/launch` scripts resolve their
+language servers from — that pair is what makes "clone + install → working code
+reader" true here.
 
 ## Run
 
@@ -53,14 +57,15 @@ web/src/         TypeScript (typescript-language-server)
   index.ts       barrel re-exports + main() entry point
 ```
 
-The TypeScript is self-contained: it has **no npm dependencies** and only
+The TypeScript is self-contained: it has **no runtime npm dependencies** and only
 imports across its own files, so cross-file "go to definition" / "find
-references" have real targets without an `npm install`. `web/tsconfig.json` uses
+references" have real targets. `web/tsconfig.json` uses
 `moduleResolution: "Bundler"` (extensionless relative imports) and is
-type-clean under strict mode. Typecheck it with the repo-root TypeScript:
+type-clean under strict mode. Typecheck it with the example's own TypeScript
+(installed by `npm install` above):
 
 ```sh
-cd web && node ../../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
+cd web && ../node_modules/.bin/tsc --noEmit -p tsconfig.json
 ```
 
 It is typecheck-only — `index.ts`'s `main()` is conceptually runnable via a

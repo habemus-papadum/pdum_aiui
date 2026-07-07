@@ -55,6 +55,8 @@ export interface ResolveSidecarsDeps {
    * makes the import work in both the source-first workspace and an install.
    */
   resolveModule?: ResolveModule;
+  /** Warning sink for a sidecar that had to be dropped (defaults to stderr). */
+  log?: (message: string) => void;
 }
 
 /** A sidecar the CLI knows how to enable and construct, keyed by name. */
@@ -103,12 +105,23 @@ export function resolveSidecars(
   const loadManifest = deps.loadManifest ?? defaultLoadManifest;
   const resolveModule =
     deps.resolveModule ?? ((specifier: string) => nodeRequire.resolve(specifier));
+  const log =
+    deps.log ?? ((message: string) => process.stderr.write(`[aiui] warning: ${message}\n`));
   const enabled = new Set<string>();
 
-  // Auto-detected sidecars.
+  // Auto-detected sidecars. A throwing detector (e.g. loadManifest on a corrupt
+  // manifest.json) must not kill the launch — warn and treat as not detected.
   for (const known of KNOWN_SIDECARS) {
-    if (known.autoEnable(root, loadManifest)) {
-      enabled.add(known.name);
+    try {
+      if (known.autoEnable(root, loadManifest)) {
+        enabled.add(known.name);
+      }
+    } catch (err) {
+      log(
+        `sidecar "${known.name}" auto-detect failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
   // Force-enable, but only sidecars the CLI knows how to construct.
@@ -126,9 +139,15 @@ export function resolveSidecars(
     .map((k) => {
       try {
         return k.descriptor(root, resolveModule);
-      } catch {
+      } catch (err) {
         // The sidecar's package isn't resolvable (e.g. not installed) — skip it
-        // rather than failing the whole launch; the reader just won't be served.
+        // rather than failing the whole launch, but say so: silently dropping it
+        // would surface as "the reader is mysteriously absent".
+        log(
+          `sidecar "${k.name}" disabled — its module failed to resolve: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
         return undefined;
       }
     })
