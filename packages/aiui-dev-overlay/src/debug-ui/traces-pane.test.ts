@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { inSession, traceRowParts } from "./traces-pane";
+import { inSession, TracesPane, traceRowParts } from "./traces-pane";
 
 describe("inSession", () => {
   it("matches only the current session's traces; unlabeled traces are foreign", () => {
@@ -71,5 +72,49 @@ describe("cost in the row title", () => {
     expect(title).toContain("rewrite the beet essay · $0.0007");
     // No roll-up → no dangling separator.
     expect(traceRowParts({ id: "t2", format: "intent-v1" }).title.endsWith("intent-v1")).toBe(true);
+  });
+});
+
+describe("TracesPane with a pinned session (the ?session= deep link)", () => {
+  it("filters the list to the pinned label, not the answering server's own", async () => {
+    // The answering server is a NEW session ("serve·9·080000"); the deep link
+    // pins the one the turn came from. Without the pin, t1 would be current.
+    const fetchStub = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/debug/api/traces")) {
+        return new Response(
+          JSON.stringify({
+            session: "serve·9·080000",
+            traces: [
+              { id: "t1", session: "serve·9·080000", format: "intent-v1" },
+              { id: "t2", session: "workbench·1·120000", format: "intent-v1" },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      // The selected trace's live-follow poll.
+      return new Response(
+        JSON.stringify({ rev: 1, id: "t2", format: "intent-v1", threadId: "t", stages: [] }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    const pane = new TracesPane({
+      baseUrl: "http://127.0.0.1:1",
+      session: "workbench·1·120000",
+      fetch: fetchStub,
+    });
+    document.body.append(pane.root);
+    pane.activate();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    pane.deactivate();
+
+    const rows = [...pane.root.querySelectorAll(".aiui-dbgt-row")];
+    expect(rows).toHaveLength(1);
+    // The pinned session's row carries no badge (it IS the current session);
+    // the server's own would have been badged had "all sessions" shown it.
+    expect(rows[0].querySelector(".aiui-dbgt-badge")).toBeNull();
+    document.body.replaceChildren();
   });
 });

@@ -16,8 +16,11 @@
  *    and hands each a context for opening threads. The bundled
  *    {@link textModality} is the proof-of-concept: a textarea whose submit
  *    exercises the whole pipeline (widget → /ws → lowering → session).
- *  - **Debug affordance.** The 🔍 button opens the channel server's `/debug`
- *    viewer — the lowering-trace inspector — in a new tab.
+ *  - **Debug affordance.** The 🔍 button opens the lowering-trace debugger in
+ *    a new tab: the shared debug-ui viewer the Vite plugin serves at
+ *    `/__aiui/debug`, deep-linked to this page's channel session
+ *    (`?session=<label>`); without the plugin it falls back to the channel
+ *    server's built-in `/debug` page.
  *
  * The channel port arrives at serve time via the `aiuiDevOverlay()` Vite
  * plugin (this package's `./vite` export), which writes it to
@@ -185,6 +188,16 @@ export interface IntentToolOptions {
    * → no button.
    */
   codeUrl?: string;
+  /**
+   * URL of the **trace debugger** the 🔍 opens — the shared debug-ui viewer
+   * the `aiuiDevOverlay()` Vite plugin serves at `/__aiui/debug` (the plugin
+   * passes this option for you). The link is upgraded to
+   * `?session=<label>` once the channel's own session label is known (one
+   * fetch of `/debug/api/info`), so the viewer opens pinned to this page's
+   * session. Unset (a manual mount, no plugin) → the 🔍 falls back to the
+   * channel's built-in `/debug` viewer.
+   */
+  debugUrl?: string;
   /** Mount even outside a dev-like environment (demos, tests). */
   force?: boolean;
   /** Test hook: replaces the global `WebSocket`. */
@@ -425,14 +438,37 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   const title = document.createElement("span");
   title.className = "title";
   title.textContent = "aiui intent";
-  // The debug affordance: the channel server's lowering-trace viewer.
+  // The debug affordance: the lowering-trace debugger. Preferred target is the
+  // shared debug-ui viewer the Vite plugin serves (options.debugUrl, normally
+  // /__aiui/debug) — the same viewer the workbench and DevTools extension
+  // render; the channel's built-in /debug page is the no-plugin fallback.
   const debugLink = document.createElement("a");
   debugLink.className = "iconbtn";
   debugLink.textContent = "🔍";
   debugLink.title = "Open the lowering debugger";
   debugLink.target = "_blank";
   debugLink.rel = "noreferrer";
-  if (port !== undefined) {
+  const debugUrl =
+    typeof options.debugUrl === "string" && options.debugUrl.length > 0
+      ? options.debugUrl
+      : undefined;
+  if (debugUrl !== undefined) {
+    debugLink.href = debugUrl;
+    if (port !== undefined && typeof fetch === "function") {
+      // Upgrade the link with the channel's own session label so the viewer
+      // opens pinned to THIS page's session (the label survives in the URL
+      // even if the channel later restarts under a new one). Best-effort —
+      // the bare route already default-filters to the answering server.
+      void fetch(`http://127.0.0.1:${port}/debug/api/info`)
+        .then((res) => (res.ok ? (res.json() as Promise<{ session?: string }>) : undefined))
+        .then((info) => {
+          if (typeof info?.session === "string" && info.session !== "") {
+            debugLink.href = `${debugUrl}?session=${encodeURIComponent(info.session)}`;
+          }
+        })
+        .catch(() => {});
+    }
+  } else if (port !== undefined) {
     debugLink.href = `http://127.0.0.1:${port}/debug`;
   } else {
     debugLink.style.display = "none";

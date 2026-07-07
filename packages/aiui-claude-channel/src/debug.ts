@@ -14,6 +14,14 @@
  * that per-format pluggability is designed but not yet built (the manifest
  * carries `format`, so the app knows what it's looking at).
  *
+ * The inline `GET /debug` app below is the **dependency-free standalone
+ * fallback** (works with nothing but this server — curl-able, no Vite). The
+ * canonical trace debugger is the shared debug-ui viewer (the overlay
+ * package's `TracesPane`/`TraceView`), served by the `aiuiDevOverlay()` Vite
+ * plugin at `/__aiui/debug` — where the intent tool's 🔍 points — and embedded
+ * by the DevTools extension and the workbench. Both speak the same
+ * `/debug/api/*` routes; improvements should land in debug-ui first.
+ *
  * Routes:
  *   GET /debug                      the viewer app (self-contained HTML)
  *   GET /debug/api/traces           all trace manifests, newest first, plus
@@ -32,8 +40,9 @@
  *                                   pid, owning Claude session) plus, under
  *                                   `launch`, the launcher-provided session
  *                                   summary (see launch-info.ts), the live
- *                                   reload `generation`, and `debug: true` on a
- *                                   debug-mode server
+ *                                   reload `generation`, this server's trace
+ *                                   `session` label (the 🔍 deep-link source),
+ *                                   and `debug: true` on a debug-mode server
  *   POST /debug/api/reload          reload the lowering layer in place (drops +
  *                                   reconnects live sockets); returns the reload
  *                                   summary. 404 when reload isn't wired.
@@ -183,6 +192,9 @@ export function registerDebugRoutes(
       ...infoCache.value,
       ...(launchInfo ? { launch: launchInfo } : {}),
       ...(hooks.getGeneration ? { generation: hooks.getGeneration() } : {}),
+      // This server's trace session label — how the intent tool's 🔍 builds
+      // its `?session=` deep link without pulling the whole traces listing.
+      ...(hooks.session !== undefined ? { session: hooks.session } : {}),
       ...(hooks.debug === true ? { debug: true } : {}),
     });
   });

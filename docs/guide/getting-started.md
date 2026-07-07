@@ -143,8 +143,9 @@ context for the agent to select your tab, look at it, and know which code render
 ## 5. Inspect the lowering
 
 Every submission records a **lowering trace** — the inputs as they arrived, any intermediate
-representations, and the final prompt. The 🔍 button in the widget (or
-`http://127.0.0.1:$VITE_AIUI_PORT/debug`) opens the trace debugger:
+representations, and the final prompt. The 🔍 button in the widget opens the trace debugger at
+`/__aiui/debug`, pinned to your channel session (the channel also serves a standalone fallback at
+`http://127.0.0.1:$VITE_AIUI_PORT/debug`):
 
 ![The lowering debugger showing a trace's input and output stages](/lowering-debugger.png)
 

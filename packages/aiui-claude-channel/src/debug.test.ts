@@ -145,9 +145,15 @@ describe("web backend with traceDir", () => {
       registered?: boolean;
       pid?: number;
       generation?: number;
+      session?: string;
     };
-    // The reload generation rides along on info (0 before any reload).
-    expect(info).toEqual({ registered: false, pid: process.pid, generation: 0 });
+    // The reload generation rides along on info (0 before any reload), and so
+    // does this server's trace session label — the intent tool's 🔍 reads it
+    // here to build its `?session=` deep link (an untagged server labels as
+    // `channel·<pid>·<HHMMSS>`).
+    expect(info).toMatchObject({ registered: false, pid: process.pid, generation: 0 });
+    expect(info.session).toMatch(new RegExp(`^channel·${process.pid}·\\d{6}$`));
+    expect(Object.keys(info).sort()).toEqual(["generation", "pid", "registered", "session"]);
   });
 
   it("surfaces launch info under `launch`, and serves transport stats", async () => {

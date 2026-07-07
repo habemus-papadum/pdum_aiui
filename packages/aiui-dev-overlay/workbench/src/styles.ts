@@ -1,10 +1,8 @@
 /**
- * The workbench shell's stylesheet: header, split layout, and the
- * workbench-local chrome around the shared trace view (the trace-list rows) —
- * plus the spectra scenery. The dock is a single pane now (the trace view
- * subsumes the old Raw-frames/Prompt tabs), so there is no tab bar to style. The
- * intent overlay brings its own `mm-*` styles when it mounts, and the debug-ui
- * self-injects its `aiui-dbg-*` sheet; nothing here restyles either.
+ * The workbench shell's stylesheet: header, split layout, and the spectra
+ * scenery. The dock is the shared debug-ui {@link TracesPane}, which brings its
+ * own `aiui-dbgt-*` styles (as the trace view brings `aiui-dbg-*` and the
+ * intent overlay brings `mm-*`); nothing here restyles any of them.
  */
 export const STYLES = /* css */ `
   body { margin: 0; background: #0f1117; color: #e8e8ea; font: 14px/1.5 ui-sans-serif, system-ui; }
@@ -29,20 +27,6 @@ export const STYLES = /* css */ `
     border-left: 1px solid #262c3a; background: #12151d; font-size: 12px; }
   #wb-pane-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   #wb-pane-host > * { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-
-  .wb-traces-bar { display: flex; align-items: center; gap: 4px; padding: 6px 10px;
-    color: #9aa0aa; border-bottom: 1px solid #262c3a; }
-  .wb-trace-list { max-height: 30%; overflow-y: auto; border-bottom: 1px solid #262c3a; }
-  .wb-trace-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
-    background: transparent; border: none; color: #cfd3da; font: inherit; padding: 4px 10px;
-    cursor: pointer; }
-  .wb-trace-row:hover { background: #171b25; }
-  .wb-trace-row.selected { background: #1b2130; color: #e8e8ea; }
-  .wb-trace-row.dim { opacity: 0.55; }
-  .wb-badge { font-size: 10px; color: #ffd166; border: 1px solid #3a4152; border-radius: 999px;
-    padding: 0 7px; }
-  .wb-trace-view { flex: 1; overflow-y: auto; padding: 6px 10px; }
-  .wb-empty { padding: 16px; color: #6b7280; }
 
   /* ── spectra scenery (unchanged bones, now inside the left pane) ── */
   #wb-scenery header { padding: 18px 28px 6px; }

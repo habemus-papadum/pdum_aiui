@@ -1,9 +1,10 @@
 /**
  * The shared debug UI: framework-free DOM panes for inspecting the multimodal
- * intent pipeline, live. Two homes, one implementation — the workbench lab
- * (over a live {@link Engine}) and the DevTools extension (over a channel trace
- * it live-follows). Prototyped as the workbench inspector; graduated here so
- * both render intent debugging identically, off the same fixtures.
+ * intent pipeline, live. Three homes, one implementation — the workbench lab
+ * (over a live {@link Engine}), the DevTools extension (over a channel trace
+ * it live-follows), and the `/__aiui/debug` page the Vite plugin serves (the
+ * intent tool's 🔍). Prototyped as the workbench inspector; graduated here so
+ * all of them render intent debugging identically, off the same fixtures.
  *
  * The pieces:
  *  - {@link TraceView} — a whole channel trace rendered as a reading surface: a
@@ -11,6 +12,12 @@
  *    compact, directional, filterable cards (see trace-cards.ts for the pure
  *    classification/coalescing under it). Generic — an unknown stage still gets
  *    a sensible card — so it works for any modality the debugger records.
+ *  - {@link TracesPane} — the trace debugger's whole surface: the trace list
+ *    (session-filtered, follow-newest) over a live-followed {@link TraceView}.
+ *    The workbench dock and the `/__aiui/debug` page both mount exactly this.
+ *  - {@link mountDebugPage} — the `/__aiui/debug` bootstrap: a full-viewport
+ *    {@link TracesPane} against the injected channel port, honoring the
+ *    `?session=` pin.
  *  - {@link EventPanes} — events / IR / timing / export over an {@link IntentEvent}
  *    stream. A standalone view of one event log (the lab's dock still mounts it).
  *  - {@link renderJsonTree} — the dependency-free collapsible JSON widget the
@@ -24,6 +31,8 @@
  * @packageDocumentation
  */
 
+export type { MountDebugPageOptions } from "./debug-page";
+export { mountDebugPage } from "./debug-page";
 export type { EventPanesConfig } from "./event-panes";
 export { EventPanes } from "./event-panes";
 export type { JsonTreeOptions } from "./json-tree";
@@ -76,3 +85,5 @@ export {
 } from "./trace-cards";
 export type { TraceViewConfig } from "./trace-view";
 export { TraceView } from "./trace-view";
+export type { TracesPaneOptions } from "./traces-pane";
+export { inSession, TracesPane, traceRowParts } from "./traces-pane";

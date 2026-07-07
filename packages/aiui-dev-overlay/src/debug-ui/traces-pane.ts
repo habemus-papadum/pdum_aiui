@@ -1,15 +1,23 @@
 /**
- * The Traces pane: the DevTools panel's Intent pane, re-hosted.
+ * The traces pane: the trace debugger's whole surface — a trace list over
+ * `GET /debug/api/traces`, then `createTracePoll` + {@link TraceView}
+ * live-follow for the selection.
  *
- * Deliberately the same shared pieces the extension drives — a trace list over
- * `GET /debug/api/traces`, then `createTracePoll` + `TraceView` live-follow for
- * the selection — so any improvement to the shared debug-ui shows up here and
- * in DevTools at once, with only the list chrome (this file) workbench-local.
+ * Graduated from the workbench (its dock re-hosts this same class) so every
+ * home of the trace debugger — the workbench lab, the `/__aiui/debug` page the
+ * Vite plugin serves (the intent tool's 🔍), and the DevTools extension —
+ * renders traces off one implementation. Only page chrome stays host-local.
  *
- * Follow-newest is on by default: the workbench's whole point is watching the
- * turn you just spoke arrive, stage by stage, without ever touching a session.
+ * Follow-newest is on by default: the debugger's whole point is watching the
+ * turn you just spoke arrive, stage by stage. The list default-filters to the
+ * *current session* — the answering server's own label, or the explicit
+ * {@link TracesPaneOptions.session} pin (how a `?session=` deep link says
+ * "this turn's session", even after the channel restarts under a new label).
  */
-import { createTracePoll, TraceView } from "@habemus-papadum/aiui-dev-overlay/debug-ui";
+
+import { createTracePoll } from "./sources";
+import { injectDebugUiStyles } from "./styles";
+import { TraceView } from "./trace-view";
 
 interface TraceListEntry {
   id: string;
@@ -32,6 +40,12 @@ interface TraceListEntry {
 
 export interface TracesPaneOptions {
   baseUrl: string;
+  /**
+   * Pin the "current session" to this label instead of the answering server's
+   * own — the `?session=` deep-link contract (the intent tool's 🔍 passes the
+   * label of the channel it talked to).
+   */
+  session?: string;
   listIntervalMs?: number;
   followIntervalMs?: number;
   fetch?: typeof fetch;
@@ -75,7 +89,7 @@ export function traceRowParts(
   };
 }
 
-/** The default list view: only the answering server's own traces. */
+/** The default list view: only the current session's traces. */
 export function inSession(entry: TraceListEntry, currentSession?: string): boolean {
   return currentSession === undefined || entry.session === currentSession;
 }
@@ -98,15 +112,17 @@ export class TracesPane {
 
   constructor(opts: TracesPaneOptions) {
     this.opts = opts;
+    this.session = opts.session;
     // Wrap, don't alias: `this.fetchFn(...)` would invoke a bare native fetch
     // with `this` = the pane — "Illegal invocation", swallowed by the poll's
     // catch, and the list stays empty forever.
     this.fetchFn = opts.fetch ?? ((input, init) => fetch(input, init));
+    injectDebugUiStyles(document);
     this.root = document.createElement("div");
-    this.root.className = "wb-traces";
+    this.root.className = "aiui-dbgt";
 
     const bar = document.createElement("div");
-    bar.className = "wb-traces-bar";
+    bar.className = "aiui-dbgt-bar";
     const followLabel = document.createElement("label");
     const check = document.createElement("input");
     check.type = "checkbox";
@@ -115,8 +131,8 @@ export class TracesPane {
       this.follow = check.checked;
     });
     followLabel.append(check, document.createTextNode(" follow newest"));
-    // Default: only this server's traces; the toggle reveals every session in
-    // the cache, each badged with its producing session label.
+    // Default: only the current session's traces; the toggle reveals every
+    // session in the cache, each badged with its producing session label.
     const allLabel = document.createElement("label");
     const all = document.createElement("input");
     all.type = "checkbox";
@@ -128,9 +144,9 @@ export class TracesPane {
     bar.append(followLabel, allLabel);
 
     this.list = document.createElement("div");
-    this.list.className = "wb-trace-list";
+    this.list.className = "aiui-dbgt-list";
     this.viewHost = document.createElement("div");
-    this.viewHost.className = "wb-trace-view";
+    this.viewHost.className = "aiui-dbgt-view";
     this.view = new TraceView({
       blobUrl: (traceId, file) =>
         `${opts.baseUrl}/debug/blob/${encodeURIComponent(traceId)}/${encodeURIComponent(file)}`,
@@ -172,7 +188,9 @@ export class TracesPane {
       }
       const payload = (await res.json()) as { traces?: TraceListEntry[]; session?: string };
       this.entries = payload.traces ?? [];
-      this.session = payload.session;
+      // An explicit pin (the ?session= deep link) beats the answering server's
+      // own label — the link means "the session this turn came from".
+      this.session = this.opts.session ?? payload.session;
     } catch {
       return; // channel starting/restarting — next tick retries
     }
@@ -196,7 +214,7 @@ export class TracesPane {
       const { title, badges, dim } = traceRowParts(entry, this.session);
       const row = document.createElement("button");
       row.type = "button";
-      row.className = "wb-trace-row";
+      row.className = "aiui-dbgt-row";
       row.classList.toggle("selected", entry.id === this.selectedId);
       row.classList.toggle("dim", dim);
       const text = document.createElement("span");
@@ -204,13 +222,13 @@ export class TracesPane {
       row.append(text);
       for (const badge of badges) {
         const pill = document.createElement("span");
-        pill.className = "wb-badge";
+        pill.className = "aiui-dbgt-badge";
         pill.textContent = badge;
         row.append(pill);
       }
       row.addEventListener("click", () => {
         this.follow = false;
-        const check = this.root.querySelector<HTMLInputElement>(".wb-traces-bar input");
+        const check = this.root.querySelector<HTMLInputElement>(".aiui-dbgt-bar input");
         if (check) {
           check.checked = false;
         }
@@ -221,7 +239,7 @@ export class TracesPane {
     }
     if (this.visibleEntries().length === 0) {
       const empty = document.createElement("div");
-      empty.className = "wb-empty";
+      empty.className = "aiui-dbgt-empty";
       empty.textContent =
         this.entries.length > 0
           ? "no traces from this session yet — check “all sessions” to see older ones"

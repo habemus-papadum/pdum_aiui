@@ -73,6 +73,17 @@ const READER_ROUTE = "/__aiui/code";
 /** The virtual module that boots the reader page (imports `./reader`). */
 const READER_MOUNT_ID = "virtual:aiui-dev-overlay/reader";
 
+/**
+ * The route this plugin serves the trace debugger at (always, in dev): the
+ * shared debug-ui {@link TracesPane} against the injected channel port. The
+ * intent tool's 🔍 links here (with `?session=` pinning the channel's session);
+ * the channel's own `/debug` page remains the no-Vite standalone fallback.
+ */
+const DEBUG_ROUTE = "/__aiui/debug";
+
+/** The virtual module that boots the trace debugger page (imports `./debug-ui`). */
+const DEBUG_MOUNT_ID = "virtual:aiui-dev-overlay/debug";
+
 export interface AiuiDevOverlayOptions {
   /**
    * Auto-mount the intent tool (default `true`). Set `false` to keep only the
@@ -224,34 +235,43 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
     resolveId(id) {
       if (id === MOUNT_ID) return MOUNT_ID;
       if (id === READER_MOUNT_ID) return READER_MOUNT_ID;
+      if (id === DEBUG_MOUNT_ID) return DEBUG_MOUNT_ID;
       return undefined;
     },
-    // Serve the bundled reader page at READER_ROUTE (dev only, opt-in via `code`).
-    // The page is a thin shell: it seeds the channel port, pulls in Vite's HMR
-    // client, and boots the reader via the READER_MOUNT_ID virtual module. It
-    // deliberately does NOT go through transformIndexHtml (that path injects the
-    // turn-hosting intent tool — wrong for a contributor view); the reader mount
-    // installs the bus in `code` role itself.
+    // Serve the bundled reader page at READER_ROUTE (dev only, opt-in via
+    // `code`) and the trace debugger at DEBUG_ROUTE (dev only, always). Each
+    // page is a thin shell: it seeds the channel port, pulls in Vite's HMR
+    // client, and boots via its virtual mount module. They deliberately do NOT
+    // go through transformIndexHtml (that path injects the turn-hosting intent
+    // tool — wrong for a contributor/debugger view).
     configureServer(server) {
-      if (!options.code) return;
-      server.middlewares.use((req, res, next) => {
-        if ((req.url ?? "").split("?")[0] !== READER_ROUTE) {
-          next();
-          return;
-        }
+      const shell = (title: string, mountId: string): string => {
         const port = resolvePort();
         const seed = port === undefined ? "" : ` window.__AIUI__.port = ${port};`;
-        const html = [
+        return [
           "<!doctype html>",
           '<html lang="en"><head>',
           '<meta charset="utf-8" />',
           '<meta name="viewport" content="width=device-width, initial-scale=1" />',
-          "<title>aiui · code reader</title>",
+          `<title>${title}</title>`,
           `<script>window.__AIUI__ ??= { v: 1, frames: [] };${seed}</script>`,
           '<script type="module" src="/@vite/client"></script>',
-          `<script type="module" src="/@id/${READER_MOUNT_ID}"></script>`,
+          `<script type="module" src="/@id/${mountId}"></script>`,
           "</head><body></body></html>",
         ].join("\n");
+      };
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? "").split("?")[0];
+        const html =
+          path === DEBUG_ROUTE
+            ? shell("aiui · lowering traces", DEBUG_MOUNT_ID)
+            : options.code && path === READER_ROUTE
+              ? shell("aiui · code reader", READER_MOUNT_ID)
+              : undefined;
+        if (html === undefined) {
+          next();
+          return;
+        }
         res.statusCode = 200;
         res.setHeader("content-type", "text/html");
         res.end(html);
@@ -263,6 +283,14 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
         return [
           `import { mountReaderPage } from ${JSON.stringify(`${PKG}/reader`)};`,
           `mountReaderPage(${port === undefined ? "{}" : `{ port: ${port} }`});`,
+          "",
+        ].join("\n");
+      }
+      if (id === DEBUG_MOUNT_ID) {
+        const port = resolvePort();
+        return [
+          `import { mountDebugPage } from ${JSON.stringify(`${PKG}/debug-ui`)};`,
+          `mountDebugPage(${port === undefined ? "{}" : `{ port: ${port} }`});`,
           "",
         ].join("\n");
       }
@@ -280,6 +308,9 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
         ...(options.actor === undefined ? [] : [`actor: ${scriptString(options.actor)}`]),
         // When the reader is served here, point the "Code" button at our route.
         ...(options.code ? [`codeUrl: ${scriptString(READER_ROUTE)}`] : []),
+        // The 🔍 opens the trace debugger this plugin serves (the shared
+        // debug-ui viewer), not the channel's built-in /debug fallback.
+        `debugUrl: ${scriptString(DEBUG_ROUTE)}`,
         // `<` escaped so a config value can never close the module's <script>.
         ...(options.intent === undefined
           ? []

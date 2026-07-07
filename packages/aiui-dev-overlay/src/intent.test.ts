@@ -63,10 +63,53 @@ describe("mountIntentTool", () => {
     expect(document.getElementById(HOST_ID)).not.toBeNull();
   });
 
-  it("links the debug icon at the channel port", () => {
+  it("links the debug icon at the channel port (the no-plugin fallback)", () => {
     const handle = mountIntentTool({ force: true, port: 4567 });
     const link = handle.shadowRoot?.querySelector("a.iconbtn") as HTMLAnchorElement;
     expect(link.href).toBe("http://127.0.0.1:4567/debug");
+  });
+
+  it("prefers the plugin-served debug page, deep-linked to the channel's session", async () => {
+    // The 🔍 upgrade path: one /debug/api/info fetch supplies the session
+    // label the ?session= pin carries.
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ session: "serve·9·080000" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const handle = mountIntentTool({ force: true, port: 4567, debugUrl: "/__aiui/debug" });
+      const link = handle.shadowRoot?.querySelector("a.iconbtn") as HTMLAnchorElement;
+      // Immediately: the served page (which itself default-filters).
+      expect(link.getAttribute("href")).toBe("/__aiui/debug");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      // Upgraded: pinned to this channel's session label.
+      expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:4567/debug/api/info");
+      expect(link.getAttribute("href")).toBe(
+        `/__aiui/debug?session=${encodeURIComponent("serve·9·080000")}`,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("keeps the bare debug page link when the info fetch fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("channel down");
+    }) as unknown as typeof fetch;
+    try {
+      const handle = mountIntentTool({ force: true, port: 4567, debugUrl: "/__aiui/debug" });
+      const link = handle.shadowRoot?.querySelector("a.iconbtn") as HTMLAnchorElement;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(link.getAttribute("href")).toBe("/__aiui/debug");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("logs the mount and its port to the console", () => {

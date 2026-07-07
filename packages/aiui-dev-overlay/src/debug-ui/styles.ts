@@ -151,6 +151,24 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-json-number { color: #d0a8ff; }
 .aiui-dbg-json-boolean { color: #ffd166; }
 .aiui-dbg-json-null, .aiui-dbg-json-empty { color: #9aa0aa; }
+
+/* ── the traces pane (list + live-followed TraceView; see traces-pane.ts) ── */
+.aiui-dbgt { display: flex; flex-direction: column; min-height: 0; flex: 1;
+  color: #cfd3da; font: 12px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+.aiui-dbgt-bar { display: flex; align-items: center; gap: 4px; padding: 6px 10px;
+  color: #9aa0aa; border-bottom: 1px solid #262c3a; flex: none; }
+.aiui-dbgt-bar label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
+.aiui-dbgt-list { max-height: 30%; overflow-y: auto; border-bottom: 1px solid #262c3a; flex: none; }
+.aiui-dbgt-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  background: transparent; border: none; color: #cfd3da; font: inherit; padding: 4px 10px;
+  cursor: pointer; }
+.aiui-dbgt-row:hover { background: #171b25; }
+.aiui-dbgt-row.selected { background: #1b2130; color: #e8e8ea; }
+.aiui-dbgt-row.dim { opacity: 0.55; }
+.aiui-dbgt-badge { font-size: 10px; color: #ffd166; border: 1px solid #3a4152; border-radius: 999px;
+  padding: 0 7px; }
+.aiui-dbgt-view { flex: 1; overflow-y: auto; padding: 6px 10px; min-height: 0; }
+.aiui-dbgt-empty { padding: 16px; color: #6b7280; }
 `;
 
 /** Inject the debug-UI stylesheet into a document's head, at most once. */

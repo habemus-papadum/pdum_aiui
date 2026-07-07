@@ -67,24 +67,28 @@ describe("aiuiDevOverlay", () => {
     expect((plugin.resolveId as (id: string) => string | undefined)(MOUNT_ID)).toBe(MOUNT_ID);
     const code = loadMount(plugin);
     expect(code).toContain('from "@habemus-papadum/aiui-dev-overlay"');
-    expect(code).toContain("mountIntentTool({ force: true, port: 50123 })");
+    expect(code).toContain(
+      'mountIntentTool({ force: true, port: 50123, debugUrl: "/__aiui/debug" })',
+    );
   });
 
   it("serves a portless mount module when no channel is running", () => {
-    expect(loadMount(aiuiDevOverlay())).toContain("mountIntentTool({ force: true })");
+    expect(loadMount(aiuiDevOverlay())).toContain(
+      'mountIntentTool({ force: true, debugUrl: "/__aiui/debug" })',
+    );
   });
 
   it("passes the configured format to the mount", () => {
     process.env[PORT_ENV] = "50123";
     expect(loadMount(aiuiDevOverlay({ format: "text-concat" }))).toContain(
-      'mountIntentTool({ force: true, port: 50123, format: "text-concat" })',
+      'mountIntentTool({ force: true, port: 50123, format: "text-concat", debugUrl: "/__aiui/debug" })',
     );
   });
 
   it("passes the configured actor to the mount (trace provenance)", () => {
     process.env[PORT_ENV] = "50123";
     expect(loadMount(aiuiDevOverlay({ actor: "agent" }))).toContain(
-      'mountIntentTool({ force: true, port: 50123, actor: "agent" })',
+      'mountIntentTool({ force: true, port: 50123, actor: "agent", debugUrl: "/__aiui/debug" })',
     );
     // Omitted → not serialized: the widget resolves the actor at runtime
     // (the tab's aiui-actor opt-in toggle, else "human").
@@ -150,5 +154,69 @@ describe("aiuiDevOverlay", () => {
     // No hosting overlay: no mount, no keep/observer, not even the import.
     expect(code).not.toContain("mountIntentTool");
     expect(code).not.toContain("MutationObserver");
+  });
+});
+
+describe("the served pages (/__aiui routes)", () => {
+  const DEBUG_MOUNT_ID = "virtual:aiui-dev-overlay/debug";
+
+  /** Register the middleware and return a driver for one GET. */
+  function serve(plugin: Plugin): (url: string) => { status: number; body: string } | undefined {
+    let handler: ((req: { url?: string }, res: unknown, next: () => void) => void) | undefined;
+    (plugin.configureServer as (server: unknown) => void)({
+      middlewares: {
+        use(fn: (req: { url?: string }, res: unknown, next: () => void) => void) {
+          handler = fn;
+        },
+      },
+    });
+    return (url) => {
+      let out: { status: number; body: string } | undefined;
+      let nexted = false;
+      const res = {
+        statusCode: 200,
+        setHeader() {},
+        end(body: string) {
+          out = { status: this.statusCode, body };
+        },
+      };
+      handler?.({ url }, res, () => {
+        nexted = true;
+      });
+      return nexted ? undefined : out;
+    };
+  }
+
+  it("serves the trace debugger at /__aiui/debug, port-seeded, booting the debug-ui page", () => {
+    process.env[PORT_ENV] = "50123";
+    const get = serve(aiuiDevOverlay());
+    const page = get("/__aiui/debug?session=x");
+    expect(page?.status).toBe(200);
+    expect(page?.body).toContain("aiui · lowering traces");
+    expect(page?.body).toContain("window.__AIUI__.port = 50123;");
+    expect(page?.body).toContain(`/@id/${DEBUG_MOUNT_ID}`);
+    // Anything else falls through to the app.
+    expect(get("/somewhere/else")).toBeUndefined();
+  });
+
+  it("serves the reader route only when code: true; the debug route is always on", () => {
+    const withoutCode = serve(aiuiDevOverlay());
+    expect(withoutCode("/__aiui/code")).toBeUndefined();
+    expect(withoutCode("/__aiui/debug")?.status).toBe(200);
+
+    const withCode = serve(aiuiDevOverlay({ code: true }));
+    expect(withCode("/__aiui/code")?.body).toContain("aiui · code reader");
+  });
+
+  it("the debug virtual module mounts the shared debug-ui page with the port", () => {
+    process.env[PORT_ENV] = "50123";
+    const plugin = aiuiDevOverlay();
+    const code = (plugin.load as (id: string) => string | undefined)(DEBUG_MOUNT_ID);
+    expect(code).toContain('from "@habemus-papadum/aiui-dev-overlay/debug-ui"');
+    expect(code).toContain("mountDebugPage({ port: 50123 });");
+    delete process.env[PORT_ENV];
+    expect((aiuiDevOverlay().load as (id: string) => string | undefined)(DEBUG_MOUNT_ID)).toContain(
+      "mountDebugPage({});",
+    );
   });
 });

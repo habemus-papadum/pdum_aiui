@@ -18,9 +18,9 @@
  * final prompt is the selected trace's hero), so the dock is a single pane.
  */
 import { mountIntentTool, unmountIntentTool } from "@habemus-papadum/aiui-dev-overlay";
+import { TracesPane } from "@habemus-papadum/aiui-dev-overlay/debug-ui";
 import { WORKBENCH_APPS, type WorkbenchApp, type WorkbenchAppContext } from "./apps";
 import { STYLES } from "./styles";
-import { TracesPane } from "./traces-pane";
 
 const APP_STORAGE_KEY = "aiui-workbench-app";
 

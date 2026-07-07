@@ -394,10 +394,13 @@ that lost it.
 
 ![The lowering debugger](/lowering-debugger.png)
 
-Its **home is the [aiui DevTools panel](./devtools)** — debugging the lowering pipeline sits
-alongside the panel's transport and server monitors. The core viewer stays a plain server-side
-page at **`/debug`** (the widget's 🔍 button opens it directly, and the panel embeds it), so it
-also works **standalone** and **live** (it polls; you can watch a trace grow mid-session). The
+The viewer is **one shared implementation** (the overlay package's `debug-ui`), rendered
+wherever you debug: the widget's **🔍 button** opens it at **`/__aiui/debug`** — served by the
+`aiuiDevOverlay()` Vite plugin, deep-linked with `?session=<label>` so it opens pinned to the
+channel session the widget talks to — and the same panes are embedded in the
+[aiui DevTools panel](./devtools) and the workbench dock. The channel additionally serves a
+dependency-free fallback page at **`/debug`** (works with nothing but the channel — no Vite, no
+extension). Every home is **live** (it polls; you can watch a trace grow mid-session). The
 generic stage viewer covers every modality; the design allows a modality to ship a *custom* debug
 view keyed by its format (waveform scrubbing for audio, region overlays for screenshots) — the
 manifest already carries the format name, but the plug-in mechanism itself is not built yet.
