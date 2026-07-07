@@ -811,8 +811,10 @@ export class Preview {
         continue;
       }
       if (piece.kind === "code-selection") {
-        const label = piece.sourceLoc ?? `${piece.lines ?? "?"} lines`;
-        this.body.append(renderSelectionChip("⧉", label, undefined, piece.text));
+        // The code rides the chip alongside its location (an excerpt; hover
+        // for the whole thing) — a bare locator is opaque when debugging.
+        const loc = piece.sourceLoc ?? `${piece.lines ?? "?"} lines`;
+        this.body.append(renderSelectionChip("⧉", oneLine(piece.text ?? ""), loc, piece.text));
         this.body.append(document.createTextNode(" "));
         continue;
       }
@@ -911,6 +913,11 @@ export class Preview {
 
 /** Chip text is a reference, not a document — keep it one glanceable line. */
 const CHIP_EXCERPT_CHARS = 48;
+
+/** Collapse a (possibly multiline) selection to one whitespace-normal line. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
 
 /**
  * One selection chip in the transcript flow: `badge label · loc`, hover

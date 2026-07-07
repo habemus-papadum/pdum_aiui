@@ -72,6 +72,14 @@ import { sampleDimensions, VIDEO_FRAME_MIME, VIDEO_JPEG_QUALITY, VideoSampler } 
 
 /** How long to accumulate engine events before flushing an events chunk. */
 const EVENTS_DEBOUNCE_MS = 60;
+/** A code selection's excerpt in the mirror marker — one glanceable line. */
+const CODE_EXCERPT_CHARS = 48;
+
+/** Collapse a code selection to a one-line, length-capped marker excerpt. */
+function codeExcerpt(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > CODE_EXCERPT_CHARS ? `${flat.slice(0, CODE_EXCERPT_CHARS)}…` : flat;
+}
 /** How long to wait for a correction echo before falling back to plain replace. */
 const CORRECTION_TIMEOUT_MS = 8000;
 
@@ -1357,9 +1365,11 @@ export function multimodalModality(
               .items.filter((i) => i.kind === "text" || i.kind === "code-selection")
               .map((i) =>
                 // The reader's mirror is plain text: a contributed code
-                // selection shows as a compact marker, not its full rendering.
+                // selection shows as a compact marker — location plus a
+                // clipped excerpt (a bare locator is opaque when debugging),
+                // not its full rendering.
                 i.kind === "code-selection"
-                  ? `[code: ${i.sourceLoc ?? "selection"}]`
+                  ? `[code: ${i.sourceLoc ?? "selection"} “${codeExcerpt(i.text ?? "")}”]`
                   : (i.text ?? ""),
               )
               .join(" ")

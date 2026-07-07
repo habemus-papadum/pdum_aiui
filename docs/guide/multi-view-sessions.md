@@ -94,8 +94,8 @@ while the session is idle **arms it first** — selecting code and sending it *i
 As the host builds its turn it broadcasts a compact `preview` — the composed prompt text so far —
 into the shared `preview` slot. Every view can render it read-only. Dictate in the app tab and the
 sentence appears in the reader's panel; contribute a selection from the reader and a compact
-`[code: file:lines]` marker appears in the mirror (the app tab's own preview shows it as a chip).
-It's one prompt, mirrored.
+`[code: file:lines “excerpt…”]` marker appears in the mirror (the app tab's own preview shows it
+as a chip — the code excerpt with its location beside it). It's one prompt, mirrored.
 
 Only the **host** writes `preview` (an idle contributor never does), so there's no race on the slot.
 

@@ -197,7 +197,9 @@ export class EventPanes {
               return `“${item.text}”`;
             }
             if (item.kind === "code-selection") {
-              return `[code: ${item.sourceLoc ?? "selection"}]`;
+              return `[code: ${item.sourceLoc ?? "selection"} “${clip(
+                (item.text ?? "").replace(/\s+/g, " ").trim(),
+              )}”]`;
             }
             return `[${item.marker}]`;
           })

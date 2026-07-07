@@ -303,18 +303,22 @@ describe("selection chips in the transcript", () => {
     expect(body.querySelector(".mm-sel-chip")).toBeNull();
   });
 
-  it("renders a code-selection chip at its stream position, not the code text", () => {
+  it("renders a code-selection chip — excerpt AND location — at its stream position", () => {
     const { engine, preview } = mounted();
     const s1 = engine.talkStart() ?? 1;
     engine.talkEnd();
     engine.transcriptFinal(s1, "look at this helper", 90, "mock");
-    engine.codeSelection({ text: "function curb() {}", sourceLoc: "src/c.ts:1:1", lines: 1 });
+    engine.codeSelection({ text: "function curb()\n{}", sourceLoc: "src/c.ts:1:1", lines: 2 });
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     const chip = body.querySelector(".mm-sel-chip") as HTMLElement;
-    expect(chip.textContent).toContain("⧉ src/c.ts:1:1");
-    expect(chip.title).toBe("function curb() {}");
-    // The chip is a reference — the raw code never enters the transcript text.
-    expect(body.textContent).not.toContain("function curb() {}");
+    // The code rides the chip (whitespace-collapsed) with its location beside
+    // it — a bare locator is opaque when debugging — and the full text on hover.
+    expect(chip.textContent).toContain("⧉ function curb() {}");
+    expect(chip.textContent).toContain("src/c.ts:1:1");
+    expect(chip.title).toBe("function curb()\n{}");
+    // Still a chip, not transcript text: no .mm-seg carries the code.
+    const segs = [...body.querySelectorAll(".mm-seg")].map((s) => s.textContent);
+    expect(segs.join(" ")).not.toContain("function curb()");
     // And it does not become an editable chunk (it splits chunks like a shot).
     engine.setMode("correct");
     preview.setCorrectMode(true);
