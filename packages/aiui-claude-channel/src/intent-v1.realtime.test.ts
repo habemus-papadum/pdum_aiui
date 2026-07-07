@@ -8,7 +8,7 @@ import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format, type LoweredMessage } from "./intent-v1";
 import { LIVE_NUDGE_TEXT } from "./live-session";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
-import { createTraceStore } from "./trace";
+import { createTraceStore, listTraces } from "./trace";
 
 /** A scripted fake of the Gemini Live upstream. */
 interface FakeUpstream {
@@ -49,6 +49,7 @@ interface Driver {
   feedAudio(id: string, seq: number, bytes: Uint8Array): Promise<void>;
   feedShot(id: string, bytes: Uint8Array): Promise<void>;
   feedVideo(id: string, seq: number, bytes: Uint8Array): Promise<void>;
+  feedContext(selection: unknown): Promise<void>;
   fin(): Promise<void>;
   close(): Promise<void> | void;
   sent: Array<{ text: string }>;
@@ -60,14 +61,20 @@ interface DriveOptions {
   apiKey?: string;
   hello?: HelloMeta;
   withTrace?: boolean;
+  /** Trace into this cache dir (so the test can read stages via listTraces). */
+  cache?: string;
 }
 
 function drive(opts: DriveOptions): Driver {
   const sent: Driver["sent"] = [];
   const pushed: unknown[] = [];
-  const trace = opts.withTrace
-    ? createTraceStore(mkdtempSync(join(tmpdir(), "aiui-live-"))).begin("intent-v1", "t-live")
-    : undefined;
+  const trace =
+    opts.withTrace || opts.cache !== undefined
+      ? createTraceStore(opts.cache ?? mkdtempSync(join(tmpdir(), "aiui-live-"))).begin(
+          "intent-v1",
+          "t-live",
+        )
+      : undefined;
   const ctx: ThreadContext & {
     trace?: ReturnType<typeof createTraceStore>["begin"] extends never ? never : unknown;
   } = {
@@ -93,6 +100,8 @@ function drive(opts: DriveOptions): Driver {
     feedShot: (id, bytes) => send(bytes, { kind: "attachment", id, mime: "image/png" }, false),
     feedVideo: (id, seq, bytes) =>
       send(bytes, { kind: "video", id, seq, mime: "image/jpeg" }, false),
+    feedContext: (selection) =>
+      send(enc.encode(JSON.stringify({ selection })), { kind: "context" }, false),
     fin: () => send(new Uint8Array(0), undefined, true),
     close: () => processor.onClose?.(),
     sent,
@@ -283,5 +292,229 @@ describe("intent-v1 realtime submode (gemini)", () => {
         /corrections are off in realtime/.test((n as { text: string }).text),
       ),
     ).toBe(true);
+  });
+});
+
+/** The silent-context texts injected upstream (Gemini `clientContent` frames). */
+const contextTexts = (up: FakeUpstream): string[] =>
+  up.sent
+    .map(
+      (m) =>
+        (m as { clientContent?: { turns?: Array<{ parts?: Array<{ text?: string }> }> } })
+          .clientContent?.turns?.[0]?.parts?.[0]?.text,
+    )
+    .filter((t): t is string => typeof t === "string");
+
+describe("intent-v1 realtime submode — live selections (F2)", () => {
+  const openLive = (cache?: string) => {
+    const up = fakeUpstream();
+    const d = drive({
+      factory: up.factory,
+      apiKey: "k",
+      ...(cache !== undefined ? { cache } : {}),
+    });
+    up.open();
+    up.emit({ setupComplete: {} });
+    return { up, d };
+  };
+
+  it("injects an arriving app selection as a silent labeled item the moment it lands", async () => {
+    const { up, d } = openLive();
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      {
+        at: 2,
+        type: "app-selection",
+        marker: "sel_1",
+        text: "gradient stops",
+        sourceLoc: "src/Legend.tsx:41:8",
+      },
+    ]);
+    expect(contextTexts(up)).toEqual([
+      '[selection sel_1: "gradient stops" — on-screen selection authored at src/Legend.tsx:41:8]',
+    ]);
+    // Silent context only: nothing rode realtimeInput.text (that form is a
+    // spoken-reply-soliciting turn under manual VAD).
+    expect(
+      up.sent.some(
+        (m) => typeof (m as { realtimeInput?: { text?: string } }).realtimeInput?.text === "string",
+      ),
+    ).toBe(false);
+  });
+
+  it("a superseding re-emit under the SAME marker injects an update item", async () => {
+    const { up, d } = openLive();
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "app-selection", marker: "sel_1", text: "gradient" },
+      { at: 3, type: "app-selection", marker: "sel_1", text: "gradient stops" },
+    ]);
+    expect(contextTexts(up)).toEqual([
+      '[selection sel_1: "gradient" — on-screen selection]',
+      '[selection sel_1 updated: "gradient stops" — on-screen selection]',
+    ]);
+  });
+
+  it("a drop injects a retraction item (code selections too, with their label shape)", async () => {
+    const { up, d } = openLive();
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      {
+        at: 2,
+        type: "code-selection",
+        marker: "code_1",
+        text: "const a = 1;",
+        sourceLoc: "src/c.ts:12",
+      },
+      { at: 3, type: "code-selection-drop", marker: "code_1" },
+    ]);
+    expect(contextTexts(up)).toEqual([
+      "[selection code_1: src/c.ts:12 — 1 line of code the human contributed: `const a = 1;`]",
+      "[selection code_1 retracted — disregard it]",
+    ]);
+  });
+
+  it("resolves selection ids in submit_intent to the FULL renderings; the preamble stands down", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-live-sel-"));
+    const { up, d } = openLive(cache);
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      {
+        at: 2,
+        type: "app-selection",
+        marker: "sel_1",
+        text: "gradient stops",
+        sourceLoc: "src/Legend.tsx:41:8",
+      },
+      {
+        at: 3,
+        type: "code-selection",
+        marker: "code_1",
+        text: "const a = 1;",
+        sourceLoc: "src/c.ts:12",
+      },
+    ]);
+    // A stale legacy context chunk rides too — stream selections outrank it.
+    await d.feedContext({ text: "stale send-time selection" });
+    const finished = d.fin();
+    up.emit({
+      toolCall: {
+        functionCalls: [
+          {
+            id: "fc1",
+            name: "submit_intent",
+            args: {
+              segments: [
+                { text: "tint" },
+                { selection: "sel_1" },
+                { text: "to match" },
+                { selection: "code_1" },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    await finished;
+
+    expect(d.sent).toHaveLength(1);
+    const prompt = d.sent[0].text;
+    // The full renderings — the same short/long rule composeIntent uses.
+    expect(prompt).toContain(
+      'Regarding the on-screen selection "gradient stops" (authored at src/Legend.tsx:41:8)',
+    );
+    expect(prompt).toContain("Regarding `src/c.ts:12`: `const a = 1;`");
+    // The preamble graft is GONE on the tool-call path: no chronicle selection
+    // section, and the stale legacy chunk stood down (stream selections exist).
+    expect(prompt).not.toContain("It concerns this on-screen selection");
+    expect(prompt).not.toContain("stale send-time selection");
+    // The live resolved refs rows cover selection markers.
+    const [trace] = listTraces(cache);
+    const resolved = trace.stages.find((s) => s.label === "live resolved");
+    expect((resolved?.data as { refs: unknown[] }).refs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ marker: "sel_1", resolved: true }),
+        expect.objectContaining({ marker: "code_1", resolved: true }),
+      ]),
+    );
+  });
+
+  it("a retracted selection referenced anyway resolves to nothing and is reported", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-live-ret-"));
+    const { up, d } = openLive(cache);
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "app-selection", marker: "sel_1", text: "gradient stops" },
+      { at: 3, type: "app-selection-drop", marker: "sel_1" },
+    ]);
+    expect(contextTexts(up)).toContain("[selection sel_1 retracted — disregard it]");
+    const finished = d.fin();
+    up.emit({
+      toolCall: {
+        functionCalls: [
+          {
+            id: "fc1",
+            name: "submit_intent",
+            args: { segments: [{ text: "use" }, { selection: "sel_1" }, { text: "here" }] },
+          },
+        ],
+      },
+    });
+    await finished;
+    // The committed prompt honors the retraction: the selection is nowhere.
+    expect(d.sent).toHaveLength(1);
+    expect(d.sent[0].text).toBe("use here");
+    const [trace] = listTraces(cache);
+    const unresolved = trace.stages.find((s) => s.label === "live refs unresolved");
+    expect(unresolved?.data).toMatchObject({ missing: ["sel_1"] });
+    const resolved = trace.stages.find((s) => s.label === "live resolved");
+    expect((resolved?.data as { refs: unknown[] }).refs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ marker: "sel_1", resolved: false, retracted: true }),
+      ]),
+    );
+  });
+
+  it("the legacy context chunk (no stream events) still rides the preamble on the tool-call path", async () => {
+    const { up, d } = openLive();
+    await d.feedEvents([{ at: 1, type: "thread-open", trigger: "talk" }]);
+    await d.feedContext({ text: "legacy pick", cell: "flow" });
+    const finished = d.fin();
+    up.emit({
+      toolCall: {
+        functionCalls: [
+          { id: "fc1", name: "submit_intent", args: { segments: [{ text: "make it wider" }] } },
+        ],
+      },
+    });
+    await finished;
+    expect(d.sent).toHaveLength(1);
+    expect(d.sent[0].text).toContain(
+      'It concerns this on-screen selection: "legacy pick" (produced by cell flow).',
+    );
+    expect(d.sent[0].text).toContain("make it wider");
+  });
+
+  it("the fallback compose renders stream selections INLINE (the preamble stands down there too)", async () => {
+    const { up, d } = openLive();
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "talk-start", segment: 1 },
+    ]);
+    await d.feedAudio("seg_1", 0, new Uint8Array([1, 2]));
+    await d.feedEvents([{ at: 3, type: "talk-end", segment: 1, ms: 200 }]);
+    up.emit({ serverContent: { inputTranscription: { text: "make it match" } } });
+    up.emit({ serverContent: { turnComplete: true } });
+    await d.feedEvents([{ at: 4, type: "app-selection", marker: "sel_1", text: "the legend" }]);
+    await d.feedContext({ text: "stale legacy" });
+    // fin: the session dies, so the drain resolves null → composeIntent fallback.
+    const finished = d.fin();
+    up.error("connection reset");
+    await finished;
+    expect(d.sent).toHaveLength(1);
+    expect(d.sent[0].text).toContain("make it match");
+    expect(d.sent[0].text).toContain('Regarding the on-screen selection "the legend"');
+    expect(d.sent[0].text).not.toContain("It concerns this on-screen selection");
+    expect(d.sent[0].text).not.toContain("stale legacy");
   });
 });

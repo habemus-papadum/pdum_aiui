@@ -21,11 +21,12 @@
  * The one asymmetry worth stating: the model, not `composeIntent`, is the compiler.
  * The user talks and shares; when the human commits the thread (Enter → fin) the
  * channel injects {@link LIVE_NUDGE_TEXT} — the commit sentinel — and the model
- * answers it with `submit_intent({ segments: [{text?, image?}] })`: cleaned-up
- * prose interleaved with bare image ids, whose withheld shot metadata the channel
- * re-attaches as it resolves each ref (the live model never sees paths or element
- * info). The interface exposes exactly the acts the processor needs to make that
- * happen and nothing more.
+ * answers it with `submit_intent({ segments: [{text?, image?, selection?}] })`:
+ * cleaned-up prose interleaved with bare image and selection ids, whose withheld
+ * metadata (shot paths/elements, full selection text) the channel re-attaches as
+ * it resolves each ref (the live model never sees paths or element info, and only
+ * a clipped selection excerpt). The interface exposes exactly the acts the
+ * processor needs to make that happen and nothing more.
  */
 import type { CallCost } from "./cost";
 
@@ -54,12 +55,15 @@ export const LIVE_NUDGE_TEXT =
 export const LIVE_COMPOSER_INSTRUCTIONS =
   "You and a human are jointly composing an instruction for a coding agent. The human dictates " +
   "by voice — fragmentary, self-corrected — and shares screenshots and on-screen context as " +
-  "they go; images arrive labeled with bracketed ids like [image shot_3]. Build an accurate " +
+  "they go; images arrive labeled with bracketed ids like [image shot_3], and selections as " +
+  "bracketed text items like [selection sel_2: …] (an updated selection reuses its id; a " +
+  "retracted one must be disregarded). Build an accurate " +
   'picture of what they want done: resolve deictic references ("this slider", "here") against ' +
   "what you have seen, fold in corrections, drop rambling. Speak briefly — clarify and answer " +
   "in one short sentence. Your final message is the composed instruction: call submit_intent " +
-  "with segments[] interleaving the clear, cleaned-up instruction text with bare image ids " +
-  '(e.g. "shot_3") placed where each image belongs — a brief, not a transcript. Call ' +
+  "with segments[] interleaving the clear, cleaned-up instruction text with bare image and " +
+  'selection ids (e.g. "shot_3", "sel_2", "code_1") placed where each belongs — a brief, not ' +
+  "a transcript. Call " +
   `submit_intent ONLY after the exact client message "${LIVE_NUDGE_TEXT}" arrives — it is ` +
   "sent when the human commits. Never call it earlier, even if asked aloud to send.";
 
@@ -84,12 +88,14 @@ export interface LiveCapabilities {
 
 /**
  * The model's compilation result: `submit_intent`'s interleaved segments plus the
- * means to acknowledge the tool call. `text` and `image` are mutually exclusive per
- * segment (the model emits one or the other); `image` is a **bare marker**
- * (`"shot_3"`) the channel resolves back to a rendered `<screenshot>` block.
+ * means to acknowledge the tool call. `text`, `image`, and `selection` are mutually
+ * exclusive per segment (the model emits exactly one); `image` is a **bare marker**
+ * (`"shot_3"`) the channel resolves back to a rendered `<screenshot>` block, and
+ * `selection` a bare selection marker (`"sel_2"` / `"code_1"`) resolved back to the
+ * full selection rendering (the same short/long rule `composeIntent` uses).
  */
 export interface SubmitIntentCall {
-  segments: Array<{ text?: string; image?: string }>;
+  segments: Array<{ text?: string; image?: string; selection?: string }>;
   /** Send the tool response upstream (Gemini `toolResponse` / OpenAI `function_call_output`). */
   respond(ok: boolean): void;
 }
@@ -137,8 +143,16 @@ export interface LiveSession {
   injectLabeledImage(label: string, bytes: Uint8Array, mime: string): void;
   /** One ambient video frame (no-op where `!capabilities.video`). */
   appendVideoFrame(bytes: Uint8Array, mime: string): void;
-  /** An out-of-window immediate text turn (selection notes, advisories). */
-  injectText(text: string): void;
+  /**
+   * Add SILENT conversation context — a text item that does NOT solicit a
+   * reply (selection arrivals, updates, retractions — see intent-v1's
+   * realtime intake). OpenAI: a bare `conversation.item.create` with
+   * `input_text` and **no** `response.create` (items never auto-trigger a
+   * response). Gemini: `clientContent` with `turnComplete: false` — the
+   * incremental context append; `realtimeInput.text` would be answered
+   * immediately (spike finding 4), which a selection must never provoke.
+   */
+  injectContextText(text: string): void;
   /**
    * Send {@link LIVE_NUDGE_TEXT} — the commit sentinel, injected at fin. Per
    * {@link LIVE_COMPOSER_INSTRUCTIONS} it is the only message that authorizes

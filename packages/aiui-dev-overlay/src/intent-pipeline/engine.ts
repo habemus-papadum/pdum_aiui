@@ -835,8 +835,16 @@ export const SHORT_SELECTION_CHARS = 240;
  * inlined — "Regarding `file:line`: `code`" — the location and the code right
  * in the sentence; a **long** one becomes a fenced block under its location
  * header, set apart from the prose like a multi-line screenshot block.
+ *
+ * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
+ * re-attaches a selection the live model referenced by bare id (`code_1`)
+ * with THIS exact rendering — one implementation, per the defer-rendering
+ * rule. The parameter is the `ComposedItem` subset the rendering reads, so a
+ * caller need not fabricate a full item.
  */
-function renderCodeSelection(item: ComposedItem): string {
+export function renderCodeSelection(
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "lines">,
+): string {
   const text = item.text ?? "";
   const loc = item.sourceLoc !== undefined ? `\`${item.sourceLoc}\`` : "the selection";
   if (text.trim().length <= SHORT_SELECTION_CHARS) {
@@ -857,8 +865,15 @@ function renderCodeSelection(item: ComposedItem): string {
  * the selection actually sits in the stream. (The preamble path —
  * `selectionSections` in the channel's prompt-context — remains only for the
  * text modality's send-time `context` chunk.)
+ *
+ * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
+ * re-attaches a selection the live model referenced by bare id (`sel_2`)
+ * with THIS exact rendering — one implementation, per the defer-rendering
+ * rule. The parameter is the `ComposedItem` subset the rendering reads.
  */
-function renderAppSelection(item: ComposedItem): string {
+export function renderAppSelection(
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "tex">,
+): string {
   const attribution: string[] = [];
   if (item.sourceLoc !== undefined) {
     attribution.push(`authored at ${item.sourceLoc}`);

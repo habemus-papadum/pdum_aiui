@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { composeIntent, Engine } from "./engine";
+import { composeIntent, Engine, renderAppSelection, renderCodeSelection } from "./engine";
 
 function armedEngine(): Engine {
   let t = 0;
@@ -615,5 +615,47 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     const engine = new Engine({}, () => ++t);
     expect(engine.codeSelection({ text: "x" })).toBeUndefined();
     expect(engine.events).toHaveLength(0);
+  });
+});
+
+describe("selection render helpers (exported — the channel's live resolver re-uses them)", () => {
+  // The realtime submode resolves a bare selection id from `submit_intent`
+  // back to the SAME rendering composeIntent inlines — one implementation, so
+  // these pin that the exported helpers ARE that rendering.
+
+  it("renderAppSelection: short → inline sentence with the attribution parenthetical", () => {
+    expect(
+      renderAppSelection({
+        text: "the histogram title",
+        sourceLoc: "src/Hist.tsx:10:2",
+        cell: "hist",
+      }),
+    ).toBe(
+      'Regarding the on-screen selection "the histogram title" ' +
+        "(authored at src/Hist.tsx:10:2; produced by cell hist)",
+    );
+  });
+
+  it("renderAppSelection: long → fenced block (matches the compose inline form)", () => {
+    const long = "a very long run of selected page text ".repeat(10).trim();
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.appSelection({ text: long, sourceLoc: "src/Doc.tsx:3:1" });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt.trim()).toBe(
+      renderAppSelection({ text: long, sourceLoc: "src/Doc.tsx:3:1" }).trim(),
+    );
+  });
+
+  it("renderCodeSelection: short → inline; long → fenced under its locator", () => {
+    expect(renderCodeSelection({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1" })).toBe(
+      "Regarding `src/a.ts:5:1`: `const x = 1;`",
+    );
+    const code = Array.from({ length: 12 }, (_, i) => `line ${i} of something long enough`).join(
+      "\n",
+    );
+    const block = renderCodeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
+    expect(block).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
+    expect(block).toContain(`${code}\n\`\`\``);
   });
 });

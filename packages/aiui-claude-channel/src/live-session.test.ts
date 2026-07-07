@@ -23,4 +23,18 @@ describe("LIVE_COMPOSER_INSTRUCTIONS", () => {
     // The removed early trigger (a spoken "send it") must not creep back in.
     expect(LIVE_COMPOSER_INSTRUCTIONS).not.toMatch(/they say to send it/);
   });
+
+  it("teaches the selection label grammar alongside the image one (F2)", () => {
+    // Selections arrive as bracketed text items, same grammar family as
+    // [image shot_N]; both id families are placeable in segments[].
+    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain("[image shot_3]");
+    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain("[selection sel_2");
+    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain('"sel_2"');
+    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain('"code_1"');
+  });
+
+  it("states the update and retraction semantics (reuse the id; disregard retracted)", () => {
+    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/updated selection reuses its id/);
+    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/retracted one must be disregarded/);
+  });
 });

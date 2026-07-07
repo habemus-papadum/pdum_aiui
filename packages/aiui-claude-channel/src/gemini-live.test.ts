@@ -141,9 +141,24 @@ describe("openGeminiLiveSession", () => {
       },
     });
     const tools = (
-      up.sent[0] as { setup: { tools: Array<{ functionDeclarations: Array<{ name: string }> }> } }
+      up.sent[0] as {
+        setup: {
+          tools: Array<{
+            functionDeclarations: Array<{
+              name: string;
+              parameters: {
+                properties: { segments: { items: { properties: Record<string, unknown> } } };
+              };
+            }>;
+          }>;
+        };
+      }
     ).setup.tools;
     expect(tools[0].functionDeclarations[0].name).toBe("submit_intent");
+    // Segments may interleave text, image ids, AND selection ids (F2).
+    expect(
+      Object.keys(tools[0].functionDeclarations[0].parameters.properties.segments.items.properties),
+    ).toEqual(["text", "image", "selection"]);
   });
 
   it("sends the shared composer persona as the system instruction", () => {
@@ -185,6 +200,46 @@ describe("openGeminiLiveSession", () => {
     expect(labelIdx).toBeLessThan(videoIdx);
   });
 
+  it("injectContextText adds SILENT context: clientContent with turnComplete false, never realtimeInput", () => {
+    const up = fakeUpstream();
+    const { session } = collect(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    const label = '[selection sel_1: "gradient stops" — on-screen selection]';
+    session.injectContextText(label);
+    // The documented no-reply context append — a bare realtimeInput.text would
+    // be answered immediately under manual VAD (spike finding 4).
+    const frame = up.sent.find(
+      (m) => (m as { clientContent?: unknown }).clientContent !== undefined,
+    ) as {
+      clientContent: {
+        turns: Array<{ role: string; parts: Array<{ text: string }> }>;
+        turnComplete: boolean;
+      };
+    };
+    expect(frame).toBeDefined();
+    expect(frame.clientContent.turnComplete).toBe(false);
+    expect(frame.clientContent.turns[0].role).toBe("user");
+    expect(frame.clientContent.turns[0].parts[0].text).toBe(label);
+    expect(realtimeFrames(up).some((r) => r.text === label)).toBe(false);
+  });
+
+  it("injectContextText obeys the window rule (queued in an audio-less window, flushed on audio)", () => {
+    const up = fakeUpstream();
+    const { session } = collect(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    session.activityStart();
+    session.injectContextText("[selection sel_1 retracted — disregard it]");
+    expect(
+      up.sent.some((m) => (m as { clientContent?: unknown }).clientContent !== undefined),
+    ).toBe(false);
+    session.appendAudio(new Uint8Array([1, 2]));
+    expect(
+      up.sent.some((m) => (m as { clientContent?: unknown }).clientContent !== undefined),
+    ).toBe(true);
+  });
+
   it("declares 24 kHz input audio (the client rate; Gemini resamples)", () => {
     const up = fakeUpstream();
     const { session } = collect(up);
@@ -209,14 +264,18 @@ describe("openGeminiLiveSession", () => {
           {
             id: "fc1",
             name: "submit_intent",
-            args: { segments: [{ text: "wider" }, { image: "shot_1" }] },
+            args: { segments: [{ text: "wider" }, { image: "shot_1" }, { selection: "sel_1" }] },
           },
         ],
       },
     });
     const call = await session.drainToolCall(1000);
     expect(call).not.toBeNull();
-    expect(call?.segments).toEqual([{ text: "wider" }, { image: "shot_1" }]);
+    expect(call?.segments).toEqual([
+      { text: "wider" },
+      { image: "shot_1" },
+      { selection: "sel_1" },
+    ]);
     call?.respond(true);
     expect(up.sent).toContainEqual({
       toolResponse: {
