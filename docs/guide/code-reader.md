@@ -86,10 +86,13 @@ The channel doesn't decide which sidecars to run; the launcher does. On launch, 
 `resolveSidecars(process.cwd(), { enable, disable })` (`packages/aiui/src/util/sidecars.ts`) and
 hands the result to the channel's `mcp` command as `--sidecars <json>`, next to `--launch-info`.
 
-The `code` sidecar **auto-enables when the project has an LSP setup** — that is, when `loadManifest`
-from [`@habemus-papadum/aiui-lsp`](/packages/aiui-lsp/) finds a manifest for the cwd (see
-[Language Servers](./lsp)). So opening a project that Claude has already run `aiui setup-lsp` on gets
-a reader with no extra flag. Two flags override the auto-detection, both repeatable:
+The `code` sidecar **auto-enables when the project has an LSP setup or contains well-known
+languages** — that is, when `loadManifest` from
+[`@habemus-papadum/aiui-lsp`](/packages/aiui-lsp/) finds a manifest for the cwd, or
+`detectLanguages` finds python/typescript/javascript sources one could be bootstrapped for (see
+[Language Servers](./lsp)). A manifest can't be *required* here: the bootstrap that creates one
+lives in the reader's backend, which only runs once the sidecar mounts. Two flags override the
+auto-detection, both repeatable:
 
 ```sh
 aiui claude --aiui-sidecar code       # force the reader on, even without an LSP setup

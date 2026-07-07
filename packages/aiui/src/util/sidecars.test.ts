@@ -19,12 +19,18 @@ const codeDescriptor = (root: string) => ({
 });
 
 /**
- * Deps for a test: the manifest seam plus an identity `resolveModule`, so the
- * emitted `module` stays the bare specifier (the real default resolves it to an
- * absolute path — see sidecars.ts — which needs the package on disk).
+ * Deps for a test: the manifest + language-detection seams plus an identity
+ * `resolveModule`, so the emitted `module` stays the bare specifier (the real
+ * default resolves it to an absolute path — see sidecars.ts — which needs the
+ * package on disk). Detection defaults to "no languages" so the manifest cases
+ * stay pure.
  */
-const testDeps = (loadManifest: (root: string) => unknown) => ({
+const testDeps = (
+  loadManifest: (root: string) => unknown,
+  detectLanguages: (root: string) => string[] = () => [],
+) => ({
   loadManifest,
+  detectLanguages,
   resolveModule: (specifier: string) => specifier,
 });
 
@@ -77,5 +83,44 @@ describe("resolveSidecars", () => {
     expect(
       resolveSidecars("/proj", { enable: [], disable: [] }, testDeps(manifestAt("/elsewhere"))),
     ).toEqual([]);
+  });
+
+  // The chicken-and-egg guard: the backend's LSP bootstrap only runs once the
+  // sidecar mounts, so a manifest can't be required for the sidecar to mount.
+  it("auto-enables code for a manifest-less project with detectable languages", () => {
+    expect(
+      resolveSidecars(
+        "/proj",
+        { enable: [], disable: [] },
+        testDeps(noManifest, () => ["typescript"]),
+      ),
+    ).toEqual([codeDescriptor("/proj")]);
+  });
+
+  it("disable wins over language detection too", () => {
+    expect(
+      resolveSidecars(
+        "/proj",
+        { enable: [], disable: ["code"] },
+        testDeps(noManifest, () => ["python"]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("a throwing language detector is contained (warned, not fatal)", () => {
+    const warnings: string[] = [];
+    expect(
+      resolveSidecars(
+        "/proj",
+        { enable: [], disable: [] },
+        {
+          ...testDeps(noManifest, () => {
+            throw new Error("walk exploded");
+          }),
+          log: (m) => warnings.push(m),
+        },
+      ),
+    ).toEqual([]);
+    expect(warnings.join("\n")).toContain("walk exploded");
   });
 });
