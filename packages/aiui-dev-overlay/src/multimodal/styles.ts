@@ -20,7 +20,15 @@ export const STYLES = /* css */ `
     font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e8e8ea;
     cursor: grab; touch-action: none; }
   .mm-preview-body, .mm-correction-bar { cursor: auto; touch-action: auto; }
-  .mm-preview.visible { display: block; }
+  /* The visible transcript announces itself: a bright blue border with a slow
+     soft pulse (the pill's ring pulses in step) — the old 1px #262c3a border
+     disappeared against dark app content. Pure CSS, no state driving it. */
+  .mm-preview.visible { display: block; border-color: #8ab4f8; }
+  .mm-preview.visible:not(.correcting) { animation: mm-preview-pulse 2.4s ease-in-out infinite; }
+  @keyframes mm-preview-pulse {
+    0%, 100% { border-color: #8ab4f8; box-shadow: 0 0 0 0 rgba(138, 180, 248, 0.35); }
+    50% { border-color: #b7d0fa; box-shadow: 0 0 0 4px rgba(138, 180, 248, 0.10); }
+  }
   .mm-preview.correcting { border-color: #ffd166; bottom: 120px; width: min(720px, 80vw); }
   .mm-preview-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #9aa0aa; }
   .mm-preview.correcting .mm-preview-title::after { content: " — edit the text directly, or instruct below"; color: #ffd166; }

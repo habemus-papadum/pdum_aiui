@@ -83,7 +83,12 @@ const STYLES = `
     box-shadow: 0 2px 10px rgba(0,0,0,.35); cursor: grab; user-select: none;
     touch-action: none; color: #9aa0aa;
   }
-  .pill[data-ui-mode="ready"], .pill[data-ui-mode="composing"] { border-color: #8ab4f8; }
+  .pill[data-ui-mode="ready"], .pill[data-ui-mode="composing"] { border-color: #8ab4f8;
+    animation: ring-pulse-blue 2.4s ease-in-out infinite; }
+  @keyframes ring-pulse-blue {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(138, 180, 248, 0.35); }
+    50% { box-shadow: 0 0 0 4px rgba(138, 180, 248, 0.10); }
+  }
   .pill[data-ui-mode="talking"] { border-color: #ff5c87;
     animation: ring-pulse 1.2s ease-in-out infinite; }
   .pill[data-ui-mode="shooting"] { border-color: #f8b64c; }
