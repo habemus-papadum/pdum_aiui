@@ -196,8 +196,8 @@ talk to each other" substrate:
 
 - A **git viewer** could join as role `"git"` and contribute a hunk the same way the reader
   contributes a selection — no change to the reader, no change to the host.
-- A planned **iPad painting surface** (in design on its own branch) needs the same
-  **arming sync** across devices; it's another peer on the same `armed` slot.
+- The [iPad painting surface](./paint-stream) needs the same **arming sync** across
+  devices; it's another peer on the same `armed` slot.
 
 To add a view: mount `installSessionBus({ role })` (the Vite plugin does this for you), read
 `armed` / `preview` off the bus for a synced UI, and `publish` a

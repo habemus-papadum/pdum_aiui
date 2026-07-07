@@ -98,3 +98,20 @@ capture + the `RTCPeerConnection` offer/answer/ICE on the host, the iPad client'
 answer) is exercised by hand and via the guide's walkthrough; its verifiable core — the relay's
 signal routing — has unit tests, and the client's inline JS is syntax-checked. Bonjour discovery and
 automatic WebRTC→JPEG fallback remain documented seams, not implemented.
+
+## Coda: how it landed (the sidecar integration)
+
+The standalone LAN **relay process** described above was subsumed when the branch merged: the room
+logic became a host-neutral backend (`createPaintBackend`, `@habemus-papadum/aiui-paint/server`)
+with the same wire protocol, and two hosts ship in-repo —
+
+- the **channel sidecar** (`@habemus-papadum/aiui-paint/sidecar`, enabled with
+  `aiui claude --aiui-sidecar paint`): mounts the backend at `/paint` on the channel's loopback
+  server (where the app page already knows the port — the dev overlay auto-connects turn-hosting
+  views as paint hosts) and opens a separate LAN listener for the iPad; `aiui paint url` prints the
+  URL to open there;
+- the **demo's bespoke Express server** (`demo/serve.ts`), preserving the run-it-alone flow with no
+  channel or MCP server anywhere.
+
+The `aiui-paint` bin (the separate relay process) was retired in the same move; its two jobs are
+covered by the sidecar and the demo server. See the [guide](../guide/paint-stream.md).

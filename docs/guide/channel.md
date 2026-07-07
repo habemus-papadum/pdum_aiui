@@ -103,7 +103,10 @@ practical: edit, `channel_reload`, try again — no session restart.
 The channel is also a generic **host** for other session backends. A **sidecar** is an extra HTTP
 (and optional websocket) surface the channel mounts alongside its own — so one session process, on
 one port, can serve more than the intent pipeline. The first is the
-[code reader](./code-reader)'s backend; a git viewer would be the next.
+[code reader](./code-reader)'s backend; the second is the
+[iPad paint stream](./paint-stream) (which also opens its own LAN listener — the one sidecar that
+extends the surface beyond loopback, and opt-in for exactly that reason). A git viewer would be
+the next.
 
 The channel stays **sidecar-agnostic**: it takes no dependency on any concrete sidecar and hardcodes
 no names. The launcher (`aiui claude`) decides which to run and hands the channel a JSON array of

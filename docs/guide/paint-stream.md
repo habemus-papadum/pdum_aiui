@@ -13,10 +13,12 @@ works everywhere) or **WebRTC** (opt-in — smooth, low-latency, peer-to-peer). 
 identical either way.
 
 ::: danger Read before running
-The relay binds the **LAN** and is **unauthenticated** — by design, for a personal trusted network.
-Anyone who can reach the port can view and draw on the connected browser. Use it only on a network
-you trust, and don't run it on café Wi-Fi. It is a *separate* process from the channel MCP server;
-the channel server's loopback-only posture is unchanged. See [Read before running](./warning).
+The iPad-facing surface binds the **LAN** and is **unauthenticated** — by design, for a personal
+trusted network. Anyone who can reach the port can view and draw on the connected browser. Use it
+only on a network you trust, and don't run it on café Wi-Fi. The channel server itself stays
+**loopback-only**: when the paint sidecar is enabled it opens a *separate* LAN listener carrying
+only the paint surface — which is why the sidecar is **opt-in, never auto-enabled**. See
+[Read before running](./warning).
 :::
 
 ## The pieces
@@ -24,18 +26,46 @@ the channel server's loopback-only posture is unchanged. See [Read before runnin
 - **`@habemus-papadum/aiui-ink`** — a reusable canvas ink surface: local pointer inking or a remote
   stroke feed, per-stroke color and thickness, optional fade, screenshot compositing. Framework-free
   and useful on its own (handwriting math, sketching) independent of the stream.
-- **`@habemus-papadum/aiui-paint`** — the coordination layer: the wire protocol, the **relay**
-  server, the desktop **host** controller, the **iPad client** (served by the relay), and a CLI.
+- **`@habemus-papadum/aiui-paint`** — the coordination layer: the wire protocol, a host-neutral
+  **backend** (`createPaintBackend`, mountable on any HTTP server — the channel hosts it as a
+  [sidecar](./channel#sidecars), the demo hosts it on a bespoke Express server), the desktop
+  **host** controller, and the **iPad client** page (served by whichever host mounts the backend).
 
 ```
-   iPad (client)                relay (LAN)                 desktop browser (host)
-   ┌───────────────┐   ws /client   ┌──────────┐   ws /host   ┌────────────────────┐
+   iPad (client)              paint backend                desktop browser (host)
+   ┌───────────────┐   ws …/client  ┌──────────┐  ws …/host   ┌────────────────────┐
    │ live video    │◀───frames──────│  pairs a │◀───frames────│ getDisplayMedia →  │
    │ pen → strokes │────intents────▶│  host +  │────intents──▶│ JPEG frames        │
    │ arm · color   │                │  viewers │              │ applies strokes to │
-   │ scroll · pinch│    /sessions   └──────────┘              │ the ink layer      │
+   │ scroll · pinch│   …/sessions   └──────────┘              │ the ink layer      │
    └───────────────┘                                          └────────────────────┘
 ```
+
+## In an aiui session: the paint sidecar
+
+The integrated flow — the iPad draws into the intent tool of the app your agent session is serving —
+is one flag and one command:
+
+```sh
+aiui claude --aiui-sidecar paint    # opt-in: the LAN surface is deliberate (see the warning above)
+aiui paint url                      # prints the URL to open on the iPad
+```
+
+The channel then hosts the paint backend on two faces:
+
+- **loopback**, mounted at `/paint` on the channel's own server — the app page already knows that
+  port (`window.__AIUI__.port`), so the overlay's paint host connects with zero configuration: any
+  page served with the dev overlay (turn-hosting views) auto-joins as a paintable host when the
+  sidecar answers `GET /paint/info`;
+- **LAN**, a separate listener owned by the sidecar (preferred port 8788, OS-assigned when taken) —
+  the iPad's entrance, since an iPad can't reach the channel's loopback port. `aiui paint url` reads
+  each running channel's `/paint/info` and prints the LAN URL(s) to copy to the iPad (on a Mac,
+  Universal Clipboard pastes straight across).
+
+Arming from the iPad arms the intent turn; strokes land on the intent tool's ink layer and travel
+into screenshots and the prompt, exactly like mouse ink. When a viewer is waiting on the
+screen-capture gesture, the page shows a small **“Share screen with iPad”** button (see
+[below](#why-share-screen-and-not-on-connect)).
 
 ## Fastest path: the standalone demo
 
@@ -45,7 +75,8 @@ One command starts everything — no overlay, no channel server, nothing else to
 pnpm paint:demo
 ```
 
-It launches the relay **and** a small demo app together and prints two URLs: the demo to open on
+It launches a bespoke Express server hosting the paint backend **and** a small demo app together
+and prints two URLs: the demo to open on
 this machine, and the LAN URL to open on your iPad. (It does **not** auto-open a browser — that path
 pops a macOS "control Chrome" permission prompt; set `PAINT_DEMO_OPEN=1` if you want it back.) The
 demo is a large scrollable "document" (a grid with labelled landmark blocks so scrolling is
@@ -87,33 +118,44 @@ uses the real screen path on purpose, as a worked example of the gesture handsha
 
 ## Run it (wire it into your own app)
 
-**1. Start the relay** (on the machine running the browser):
-
-```sh
-pnpm paint            # or: aiui-paint  (the package bin)
-```
-
-It prints the LAN URLs to open and the security warning:
-
-```
-  Open the iPad client at one of:
-    http://10.0.0.7:8788/
-  ⚠️  This binds the LAN and is UNAUTHENTICATED — use only on a trusted network.
-```
-
-**2. Make a browser a host.** The desktop page has to run the host controller so it appears in the
-iPad's list. If your app mounts the intent overlay, wire it to the overlay's ink seam:
+**1. Host the backend.** The coordinator is host-neutral: `createPaintBackend()` returns an HTTP
+handler and a websocket-upgrade handler you mount on any server you own (this is exactly what the
+channel sidecar and the demo's `serve.ts` do — the demo is the copyable example):
 
 ```ts
-import { startPaintHost, hostWsUrl } from "@habemus-papadum/aiui-paint";
+import { createServer } from "node:http";
+import express from "express";
+import { createPaintBackend } from "@habemus-papadum/aiui-paint/server";
+
+const backend = createPaintBackend({ session: { project: "my app" } });
+const app = express();
+app.use((req, res, next) => {
+  if (!backend.handleHttp(req, res)) next();
+});
+const server = createServer(app);
+server.on("upgrade", (req, socket, head) => {
+  if (!backend.handleUpgrade(req, socket, head)) socket.destroy();
+});
+server.listen(8788, "0.0.0.0"); // the LAN bind is YOUR posture decision — see the warning
+```
+
+The backend serves the iPad client page at `/` (or under a `prefix` you pass), `/sessions`, and the
+`/host` + `/client` websockets. Dispose it (`backend.dispose()`) on shutdown.
+
+**2. Make a browser a host.** The desktop page has to run the host controller so it appears in the
+iPad's list. If your app mounts the intent overlay **and** the channel runs the paint sidecar, this
+is automatic (the overlay's `installPaintHost` probes `/paint/info` and wires the ink seam). Wiring
+it by hand against your own backend:
+
+```ts
+import { startPaintHost } from "@habemus-papadum/aiui-paint";
 
 const sink = window.__AIUI__?.remotePaint; // published by the multimodal intent tool
 if (sink) {
   startPaintHost({
-    relayUrl: "http://<your-mac>.local:8788",
+    relayUrl: "http://<your-mac>.local:8788", // your backend's base (path preserved if prefixed)
     ink: sink,
     label: document.title,
-    channelPort: window.__AIUI__?.port, // enriches the iPad's session list from the registry
   });
 }
 ```
@@ -131,7 +173,7 @@ startPaintHost({
 });
 ```
 
-**3. On the iPad**, open the printed URL in Safari, tap the browser you want, tap **Arm**, pick a
+**3. On the iPad**, open the backend's URL in Safari, tap the browser you want, tap **Arm**, pick a
 color and thickness, and draw. The first frame prompts the desktop once for screen-capture (auto-
 accepted in the session browser). The status line shows the active video mode (`jpeg`/`webrtc`).
 
@@ -211,7 +253,7 @@ surface.remoteEnd("s1", { x: 140, y: 20 });
 
 ## Limitations and seams
 
-- **JPEG is the default; WebRTC is opt-in** — the relay carries JPEG frames or WebRTC signaling (the
+- **JPEG is the default; WebRTC is opt-in** — the backend carries JPEG frames or WebRTC signaling (the
   `signal` passthrough) without caring which. WebRTC gives smooth video but there is no automatic
   fall-back from WebRTC to JPEG yet: if a peer connection fails, that viewer sees no video (control
   still works) until it rejoins or the host is set to `"jpeg"`.
