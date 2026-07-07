@@ -339,11 +339,16 @@ export interface PaintHost {
   close: () => void;
 }
 
-/** Derive the `ws://…/host` URL from an http(s) or ws(s) relay base. */
+/**
+ * Derive the `…/host` websocket URL from an http(s) or ws(s) backend base,
+ * PRESERVING the base's path — `http://127.0.0.1:4321/paint` (the channel
+ * sidecar) becomes `ws://127.0.0.1:4321/paint/host`; a bare origin (the
+ * standalone demo) becomes `ws://…/host`.
+ */
 export function hostWsUrl(relayUrl: string): string {
   const url = new URL(relayUrl);
   url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
-  url.pathname = "/host";
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/host`;
   url.search = "";
   return url.toString();
 }
@@ -408,14 +413,24 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
   // Acquire the screen-capture grant once; keep it for the host's lifetime so
   // viewers coming and going don't re-prompt. Broadcasts the resulting state so a
   // viewer sees "waiting for the desktop to share" instead of a black rectangle.
-  // Returns whether capture is live.
-  const ensureCapture = async (): Promise<boolean> => {
+  // Returns whether capture is live. Single-flight: two viewers joining at once
+  // must not race two getDisplayMedia prompts.
+  let capturing: Promise<boolean> | undefined;
+  const ensureCapture = (): Promise<boolean> => {
     if (captureState === "active") {
-      return true;
+      return Promise.resolve(true);
     }
-    captureState = await frames.start();
-    broadcastVideoStatus();
-    return captureState === "active";
+    capturing ??= frames
+      .start()
+      .then((state) => {
+        captureState = state;
+        broadcastVideoStatus();
+        return state === "active";
+      })
+      .finally(() => {
+        capturing = undefined;
+      });
+    return capturing;
   };
 
   const startViewLoop = (): void => {
@@ -427,12 +442,25 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
     }, 500);
   };
 
+  // A socket this far behind (bytes buffered) skips frames until it drains —
+  // video is latest-wins; unbounded buffering on a slow link is not.
+  const MAX_BUFFERED = 1_500_000;
+
   const startFrameLoop = async (): Promise<void> => {
-    if (frameTimer || !(await ensureCapture())) {
-      return; // already running, or capture denied — control still works
+    if (frameTimer) {
+      return; // already running
+    }
+    if (!(await ensureCapture())) {
+      return; // capture denied / needs a gesture — control still works
+    }
+    if (frameTimer) {
+      return; // a concurrent caller won the race during the await
     }
     frameTimer = setInterval(
       () => {
+        if (ws && ws.bufferedAmount > MAX_BUFFERED) {
+          return; // the relay link is backed up — skip this frame entirely
+        }
         void frames.capture().then((bytes) => {
           if (bytes && ws && ws.readyState === ws.OPEN) {
             // Browser WebSocket sends a typed array as a binary frame automatically.

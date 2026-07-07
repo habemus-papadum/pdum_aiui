@@ -17,13 +17,13 @@ export default defineConfig({
   build: {
     lib: {
       // Three entries: the browser-safe surface (protocol + host controller),
-      // the Node relay server behind `./relay`, and the CLI (`bin`). The relay
-      // and CLI import Node builtins (http/express/ws), kept out of the browser
-      // `index` bundle by their separate entries.
+      // the host-neutral Node backend behind `./server`, and the channel
+      // sidecar behind `./sidecar`. The Node entries import http/ws, kept out
+      // of the browser `index` bundle by their separate entries.
       entry: {
         index: "src/index.ts",
-        relay: "src/relay.ts",
-        cli: "src/cli.ts",
+        backend: "src/backend.ts",
+        sidecar: "src/sidecar.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
@@ -33,11 +33,6 @@ export default defineConfig({
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
       external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
-      output: {
-        // The bin is executed by plain `node` from an installed tarball; the
-        // shebang is prepended to the built cli chunk (not in the TS source).
-        banner: (chunk: { name: string }) => (chunk.name === "cli" ? "#!/usr/bin/env node" : ""),
-      },
     },
   },
 });

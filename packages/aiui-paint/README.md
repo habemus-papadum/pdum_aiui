@@ -4,18 +4,30 @@ View and **draw on a running browser app from an iPad** (or any second device) o
 shows a live view of a desktop browser and streams pen strokes + navigation back; the desktop applies
 them to its own ink layer — including, over the aiui intent overlay, straight into the intent tool.
 
-This package is the coordination layer: the wire **protocol**, a LAN **relay** server, the desktop
-**host** controller, a self-contained **iPad client** (served by the relay), and a CLI. It depends on
+This package is the coordination layer: the wire **protocol**, a host-neutral **backend**
+(`createPaintBackend` — mounted by the aiui channel as a [sidecar](../../docs/guide/channel.md), or
+by any server you own), the desktop **host** controller, and a self-contained **iPad client** page
+(served by whichever host mounts the backend). It depends on
 [`@habemus-papadum/aiui-ink`](../aiui-ink) for the standalone host path.
 
-> ⚠️ **Security:** the relay binds the LAN (`0.0.0.0`) and is **unauthenticated** — for a personal,
-> trusted network only. It is a separate process from the loopback channel MCP server, whose posture
-> it does not change.
+> ⚠️ **Security:** the iPad-facing surface binds the LAN and is **unauthenticated** — for a
+> personal, trusted network only. The aiui channel stays loopback-only; its paint sidecar opens a
+> separate LAN listener carrying only this surface, and is opt-in for exactly that reason.
+
+## In an aiui session
+
+```sh
+aiui claude --aiui-sidecar paint    # host the paint sidecar (opt-in: LAN exposure)
+aiui paint url                      # print the URL to open on the iPad
+```
+
+Pages served with the dev overlay auto-join as paintable hosts; ink drawn on the iPad lands in the
+intent tool's turn.
 
 ## Fastest way to try it: the standalone demo
 
 ```sh
-pnpm paint:demo        # from the repo — starts the relay + a demo app together
+pnpm paint:demo        # from the repo — a bespoke Express backend + a demo app together
 ```
 
 Draw on the demo's scrollable canvas with the mouse, then open the printed URL on an iPad to draw,
@@ -24,10 +36,23 @@ path — the iPad shows "waiting" until you do, since screen capture needs a use
 JPEG ⇄ WebRTC with the `video:` button. Source: `packages/aiui-paint/demo/` — a compact example of
 wiring `InkSurface` + `startPaintHost`, the capture-gesture handshake, and both transports.
 
-## Run the relay
+## Host the backend yourself
 
-```sh
-npx aiui-paint         # prints LAN URLs to open on the iPad, and the warning
+```ts
+import { createServer } from "node:http";
+import express from "express";
+import { createPaintBackend } from "@habemus-papadum/aiui-paint/server";
+
+const backend = createPaintBackend();
+const app = express();
+app.use((req, res, next) => {
+  if (!backend.handleHttp(req, res)) next();
+});
+const server = createServer(app);
+server.on("upgrade", (req, socket, head) => {
+  if (!backend.handleUpgrade(req, socket, head)) socket.destroy();
+});
+server.listen(8788, "0.0.0.0"); // the LAN bind is your posture decision
 ```
 
 ## Make a browser a host
@@ -64,8 +89,8 @@ than black. A host that renders its own content can pass a `canvas.captureStream
 ## Entry points
 
 - `@habemus-papadum/aiui-paint` — browser-safe: the protocol, `startPaintHost`, `InkSurface`.
-- `@habemus-papadum/aiui-paint/relay` — the Node relay (`startPaintRelay`) — `http`/`ws`/`express`.
-- `aiui-paint` (bin) — start the relay from the command line.
+- `@habemus-papadum/aiui-paint/server` — the host-neutral Node backend (`createPaintBackend`).
+- `@habemus-papadum/aiui-paint/sidecar` — that backend packaged as an aiui channel sidecar.
 
 Full walkthrough, gesture map, and architecture: the
 [iPad Paint Stream guide](../../docs/guide/paint-stream.md) and the

@@ -103,8 +103,11 @@ describe("inkSurfaceSink", () => {
 });
 
 describe("hostWsUrl", () => {
-  it("derives ws://…/host from an http base and strips path/query", () => {
-    expect(hostWsUrl("http://mac.local:8788/foo?x=1")).toBe("ws://mac.local:8788/host");
+  it("appends /host to the base, PRESERVING its path (the channel mounts at /paint)", () => {
+    expect(hostWsUrl("http://127.0.0.1:4321/paint")).toBe("ws://127.0.0.1:4321/paint/host");
+    expect(hostWsUrl("http://127.0.0.1:4321/paint/")).toBe("ws://127.0.0.1:4321/paint/host");
+    expect(hostWsUrl("http://mac.local:8788/foo?x=1")).toBe("ws://mac.local:8788/foo/host");
+    expect(hostWsUrl("http://mac.local:8788")).toBe("ws://mac.local:8788/host");
   });
   it("upgrades to wss for https/wss", () => {
     expect(hostWsUrl("https://mac.local:8788")).toBe("wss://mac.local:8788/host");

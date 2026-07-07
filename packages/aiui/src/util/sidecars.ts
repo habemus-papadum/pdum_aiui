@@ -104,6 +104,19 @@ const KNOWN_SIDECARS: KnownSidecar[] = [
       options: { root },
     }),
   },
+  {
+    // The iPad paint stream. NEVER auto-enabled: its sidecar opens an
+    // unauthenticated LAN listener (the iPad can't reach loopback), which must
+    // be a deliberate act — `aiui claude --aiui-sidecar paint`.
+    name: "paint",
+    autoEnable: () => false,
+    descriptor: (root, resolveModule) => ({
+      name: "paint",
+      module: resolveModule("@habemus-papadum/aiui-paint/sidecar"),
+      export: "paintSidecar",
+      options: { root },
+    }),
+  },
 ];
 
 /**

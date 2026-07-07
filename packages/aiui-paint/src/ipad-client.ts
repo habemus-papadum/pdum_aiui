@@ -103,8 +103,12 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
 
   function byId(id) { return document.getElementById(id); }
 
+  // The /client websocket lives NEXT TO this page, wherever it is mounted:
+  // served at "/" the socket is "/client"; served at "/paint/" (the channel
+  // sidecar) it is "/paint/client". Derive it from the page's own path.
   var proto = location.protocol === "https:" ? "wss://" : "ws://";
-  var ws = new WebSocket(proto + location.host + "/client");
+  var basePath = location.pathname.replace(/\\/+$/, "");
+  var ws = new WebSocket(proto + location.host + basePath + "/client");
   ws.binaryType = "blob";
 
   var sessionsScreen = byId("sessions");

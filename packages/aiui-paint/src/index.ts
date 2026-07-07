@@ -2,12 +2,15 @@
  * `aiui-paint` — iPad-to-browser remote paint stream.
  *
  * This is the **browser-safe** entry: the wire protocol and the desktop {@link
- * startPaintHost} controller. The Node relay server is a separate entry point
- * (`@habemus-papadum/aiui-paint/relay`) so its `http`/`express`/`ws` imports
- * stay out of the browser bundle. The iPad client is served by that relay.
+ * startPaintHost} controller. The Node coordinator is a separate entry point —
+ * `@habemus-papadum/aiui-paint/server` (the host-neutral `createPaintBackend`,
+ * mountable on any HTTP server) and `@habemus-papadum/aiui-paint/sidecar`
+ * (that backend packaged as an aiui channel sidecar) — so `http`/`ws` imports
+ * stay out of the browser bundle. The iPad client page is served by whichever
+ * host mounts the backend.
  *
  * See `docs/proposals/ipad_browser_paint_stream_plan.md` for the architecture
- * and how it relates to the original design proposal.
+ * and `docs/guide/paint-stream.md` for the flows.
  *
  * @packageDocumentation
  */

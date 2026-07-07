@@ -17,8 +17,9 @@
  * the note in `docs/guide/paint-stream.md`; this demo deliberately exercises the
  * real flow.)
  *
- * Launched by `demo/serve.ts` (`pnpm paint:demo`), which starts the relay and
- * this Vite app together and injects the relay port below.
+ * Launched by `demo/serve.ts` (`pnpm paint:demo`), which hosts the paint
+ * backend on a bespoke Express server and starts this Vite app together,
+ * injecting the backend port below.
  */
 import {
   type InkSink,

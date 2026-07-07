@@ -1,7 +1,47 @@
+import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
+import { createPaintBackend, type PaintBackend, type PaintBackendOptions } from "./backend";
 import { encode, type RelayToClient, type RelayToHost } from "./protocol";
-import { type PaintRelay, startPaintRelay } from "./relay";
+
+/**
+ * The kind of host a real deployment provides (the channel sidecar, the demo's
+ * Express server), reduced to its essentials: forward requests + upgrades to
+ * the backend, destroy what nothing claims.
+ */
+interface Harness {
+  backend: PaintBackend;
+  port: number;
+  close: () => Promise<void>;
+}
+
+async function startHarness(options: PaintBackendOptions = {}): Promise<Harness> {
+  const backend = createPaintBackend(options);
+  const server: Server = createServer((req, res) => {
+    if (!backend.handleHttp(req, res)) {
+      res.statusCode = 404;
+      res.end("not found");
+    }
+  });
+  server.on("upgrade", (req, socket, head) => {
+    if (!backend.handleUpgrade(req, socket, head)) {
+      socket.destroy();
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address !== null ? address.port : 0;
+  return {
+    backend,
+    port,
+    close: () =>
+      new Promise<void>((resolve) => {
+        backend.dispose();
+        server.closeAllConnections?.();
+        server.close(() => resolve());
+      }),
+  };
+}
 
 // A tiny websocket test client that records frames and lets a test await the
 // next JSON message matching a predicate (or the next binary frame).
@@ -82,30 +122,27 @@ class TestSocket {
   }
 }
 
-let relay: PaintRelay | undefined;
+let harness: Harness | undefined;
 const sockets: TestSocket[] = [];
 
 afterEach(async () => {
   for (const s of sockets.splice(0)) {
     s.close();
   }
-  await relay?.close();
-  relay = undefined;
+  await harness?.close();
+  harness = undefined;
 });
 
-const startRelay = async (): Promise<PaintRelay> => {
-  relay = await startPaintRelay({
-    host: "127.0.0.1",
-    port: 0,
-    serveClient: false,
+const startRelay = async (): Promise<Harness> => {
+  harness = await startHarness({
     resolveChannel: (port) =>
       port === 9999 ? { tag: "demo-tag", project: "/tmp/demo-project" } : undefined,
   });
-  return relay;
+  return harness;
 };
 
 const connect = async (path: string): Promise<TestSocket> => {
-  const s = new TestSocket(`ws://127.0.0.1:${relay?.port}${path}`);
+  const s = new TestSocket(`ws://127.0.0.1:${harness?.port}${path}`);
   sockets.push(s);
   await s.open();
   return s;
@@ -121,7 +158,7 @@ const registerHost = async (
   return host;
 };
 
-describe("paint relay", () => {
+describe("paint backend (relay semantics)", () => {
   it("advertises a registered host to a later client", async () => {
     await startRelay();
     await registerHost({ type: "register", label: "my app", channelPort: 9999 });
@@ -136,7 +173,7 @@ describe("paint relay", () => {
       project: "/tmp/demo-project",
       busy: false,
     });
-    expect(relay?.sessions()).toHaveLength(1);
+    expect(harness?.backend.sessions()).toHaveLength(1);
   });
 
   it("routes a join, forwards intents, and marks the host busy", async () => {
@@ -288,8 +325,8 @@ describe("paint relay", () => {
   });
 
   it("serves the iPad client and the HTTP endpoints", async () => {
-    relay = await startPaintRelay({ host: "127.0.0.1", port: 0 });
-    const base = `http://127.0.0.1:${relay.port}`;
+    harness = await startHarness();
+    const base = `http://127.0.0.1:${harness.port}`;
 
     const page = await fetch(`${base}/`);
     expect(page.headers.get("content-type")).toContain("text/html");
@@ -297,5 +334,46 @@ describe("paint relay", () => {
 
     expect(await (await fetch(`${base}/health`)).json()).toMatchObject({ ok: true });
     expect(await (await fetch(`${base}/sessions`)).json()).toEqual({ sessions: [] });
+  });
+
+  it("mounts under a prefix — pages, endpoints, and upgrades all move together", async () => {
+    harness = await startHarness({ prefix: "/paint" });
+    const base = `http://127.0.0.1:${harness.port}`;
+
+    // The page is served at <prefix>/ (and bare <prefix>); its inline JS derives
+    // the /client socket path from location.pathname, so no URL is hardcoded.
+    expect((await fetch(`${base}/paint/`)).status).toBe(200);
+    expect((await fetch(`${base}/paint`)).status).toBe(200);
+    expect((await fetch(`${base}/`)).status).toBe(404); // nothing at the root
+    expect(await (await fetch(`${base}/paint/sessions`)).json()).toEqual({ sessions: [] });
+
+    const host = await connect("/paint/host");
+    await host.nextJson((m) => m.type === "registered");
+    host.sendJson({ type: "register", label: "prefixed app" });
+    const client = await connect("/paint/client");
+    const sessions = await client.nextJson<{ sessions: Array<Record<string, unknown>> }>(
+      (m) => m.type === "sessions" && (m.sessions as unknown[]).length === 1,
+    );
+    expect(sessions.sessions[0]).toMatchObject({ label: "prefixed app" });
+  });
+
+  it("inherits the static session identity when a host doesn't announce its own", async () => {
+    harness = await startHarness({ session: { project: "/proj/demo", channelTag: "tag-1" } });
+    await registerHost({ type: "register", label: "app" });
+    const client = await connect("/client");
+    const sessions = await client.nextJson<{ sessions: Array<Record<string, unknown>> }>(
+      (m) => m.type === "sessions" && (m.sessions as unknown[]).length === 1,
+    );
+    expect(sessions.sessions[0]).toMatchObject({ project: "/proj/demo", channelTag: "tag-1" });
+  });
+
+  it("declines a malformed request-target instead of throwing", async () => {
+    harness = await startHarness();
+    const req = { url: "//[", method: "GET" } as never;
+    expect(harness.backend.handleHttp(req, {} as never)).toBe(false);
+    const socket = { destroy: () => {} } as never;
+    expect(harness.backend.handleUpgrade({ url: "//[" } as never, socket, Buffer.alloc(0))).toBe(
+      false,
+    );
   });
 });
