@@ -345,82 +345,110 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     return { u: cr.w > 0 ? clamp01(x / cr.w) : 0, v: cr.h > 0 ? clamp01(y / cr.h) : 0 };
   }
 
-  // ── pointer input: pen draws (armed), fingers navigate ───────────────────────
-  function isPen(type) { return type === "pen" || type === "mouse"; }
+  // ── pointer input ────────────────────────────────────────────────────────────
+  // A pencil always draws. Without a pencil a single finger draws; a mouse draws.
+  // Navigation is a TWO-finger gesture (drag = scroll, pinch = zoom) — never one
+  // finger. Palms are rejected: while the pencil is drawing all touches are
+  // ignored, once a pencil has been seen only it draws, and oversized touch
+  // contacts are dropped outright.
+  var hasPen = false;         // latches true once an Apple Pencil (pen) is used
+  var drawPointer = null;     // pointerId currently drawing, or null
+  var PALM_CONTACT = 60;      // px; a touch contact larger than this is a palm
+
   function pressureOf(e) { return (e.pointerType === "pen" || e.pointerType === "touch") ? e.pressure : undefined; }
   function coalesce(e) {
     if (typeof e.getCoalescedEvents === "function") { var c = e.getCoalescedEvents(); if (c.length) { return c; } }
     return [e];
   }
-  function touchPointers() {
-    var a = []; activePointers.forEach(function (p) { if (p.type === "touch") { a.push(p); } }); return a;
+  function isPalm(e) { return e.pointerType === "touch" && (e.width > PALM_CONTACT || e.height > PALM_CONTACT); }
+  function drawTouches() {
+    var a = []; activePointers.forEach(function (p) { if (p.type === "touch" && !p.palm) { a.push(p); } }); return a;
   }
-  function setPinchBaseline() {
-    var t = touchPointers();
-    if (t.length >= 2) { pinch.dist = dist(t[0], t[1]); pinch.cx = (t[0].x + t[1].x) / 2; pinch.cy = (t[0].y + t[1].y) / 2; }
+  function penDrawing() {
+    if (drawPointer === null) { return false; }
+    var p = activePointers.get(drawPointer);
+    return !!p && p.type === "pen";
   }
   function findStroke(id) { for (var i = 0; i < strokes.length; i++) { if (strokes[i].id === id) { return strokes[i]; } } return null; }
+  function removeStroke(id) { for (var i = 0; i < strokes.length; i++) { if (strokes[i].id === id) { strokes.splice(i, 1); return; } } }
+
+  function eventPoint(e) {
+    var n = toNorm(e.clientX, e.clientY);
+    var point = { u: n.u, v: n.v };
+    var pr = pressureOf(e);
+    if (pr !== undefined) { point.pressure = pr; }
+    return point;
+  }
+  function wireKind(t) { return t === "pen" ? "pen" : (t === "mouse" ? "mouse" : "touch"); }
+
+  function beginStroke(e, p) {
+    if (!state.armed) { return; }
+    var id = "s" + (++state.seq);
+    drawPointer = e.pointerId;
+    p.strokeId = id;
+    sendJson({ type: "strokeBegin", id: id, pointerType: wireKind(e.pointerType),
+      style: { color: state.color, width: state.width }, point: eventPoint(e) });
+    strokes.push({ id: id, color: state.color, width: state.width, pts: [{ x: e.clientX, y: e.clientY }], doneAt: null });
+  }
+  function cancelDraw() {
+    if (drawPointer === null) { return; }
+    var p = activePointers.get(drawPointer);
+    if (p && p.strokeId) { sendJson({ type: "strokeCancel", id: p.strokeId }); removeStroke(p.strokeId); p.strokeId = null; }
+    drawPointer = null;
+  }
+  function baselinePinch() {
+    var t = drawTouches();
+    if (t.length >= 2) { pinch.dist = dist(t[0], t[1]); pinch.cx = (t[0].x + t[1].x) / 2; pinch.cy = (t[0].y + t[1].y) / 2; }
+  }
 
   ink.addEventListener("pointerdown", function (e) {
     try { ink.setPointerCapture(e.pointerId); } catch (err) {}
-    var p = { x: e.clientX, y: e.clientY, type: e.pointerType, drawId: null };
+    var palm = isPalm(e);
+    var p = { x: e.clientX, y: e.clientY, type: e.pointerType, palm: palm, strokeId: null };
     activePointers.set(e.pointerId, p);
-    if (isPen(e.pointerType) && state.armed) {
-      var id = "s" + (++state.seq);
-      p.drawId = id;
-      var n = toNorm(e.clientX, e.clientY);
-      var point = { u: n.u, v: n.v };
-      var pr = pressureOf(e);
-      if (pr !== undefined) { point.pressure = pr; }
-      sendJson({ type: "strokeBegin", id: id, pointerType: e.pointerType === "mouse" ? "mouse" : "pen",
-        style: { color: state.color, width: state.width }, point: point });
-      strokes.push({ id: id, color: state.color, width: state.width, pts: [{ x: e.clientX, y: e.clientY }], doneAt: null });
+
+    if (e.pointerType === "pen") {
+      hasPen = true;
+      if (drawPointer !== null && drawPointer !== e.pointerId) { cancelDraw(); } // pencil supersedes a stray finger
+      beginStroke(e, p);
+      return;
     }
-    setPinchBaseline();
+    if (e.pointerType === "mouse") { beginStroke(e, p); return; }
+
+    // touch
+    if (palm || penDrawing()) { return; }         // ignore palms, and any finger while the pencil draws
+    var touches = drawTouches();                   // includes the finger just added
+    if (touches.length >= 2) { cancelDraw(); baselinePinch(); return; } // second finger → navigate
+    if (!hasPen) { beginStroke(e, p); }            // one finger draws only when there's no pencil
   });
 
   ink.addEventListener("pointermove", function (e) {
     var p = activePointers.get(e.pointerId);
     if (!p) { return; }
-    var prevX = p.x, prevY = p.y;
     p.x = e.clientX; p.y = e.clientY;
 
-    if (p.drawId) {
+    if (drawPointer === e.pointerId && p.strokeId) {
       var raw = coalesce(e);
       var out = [];
-      var s = findStroke(p.drawId);
+      var s = findStroke(p.strokeId);
       for (var i = 0; i < raw.length; i++) {
-        var n = toNorm(raw[i].clientX, raw[i].clientY);
-        var np = { u: n.u, v: n.v };
-        var pr = pressureOf(raw[i]);
-        if (pr !== undefined) { np.pressure = pr; }
-        out.push(np);
+        out.push(eventPoint(raw[i]));
         if (s) { s.pts.push({ x: raw[i].clientX, y: raw[i].clientY }); }
       }
-      sendJson({ type: "strokePoints", id: p.drawId, points: out });
+      sendJson({ type: "strokePoints", id: p.strokeId, points: out });
       return;
     }
-
-    var touches = touchPointers();
-    if (touches.length === 1) {
-      var cr = contentRect();
-      sendJson({ type: "scroll",
-        du: cr.w > 0 ? -(e.clientX - prevX) / cr.w : 0,
-        dv: cr.h > 0 ? -(e.clientY - prevY) / cr.h : 0 });
-    } else if (touches.length >= 2) {
-      handlePinch();
-    }
+    if (drawTouches().length >= 2) { navGesture(); }
   });
 
-  function handlePinch() {
-    var t = touchPointers();
+  function navGesture() {
+    var t = drawTouches();
     if (t.length < 2) { return; }
     var d = dist(t[0], t[1]);
     var cx = (t[0].x + t[1].x) / 2, cy = (t[0].y + t[1].y) / 2;
     if (pinch.dist > 0) {
       var scale = d / pinch.dist;
-      var n = toNorm(cx, cy);
-      if (Math.abs(scale - 1) > 0.01) { sendJson({ type: "zoom", centerU: n.u, centerV: n.v, scale: scale }); }
+      if (Math.abs(scale - 1) > 0.01) { var n = toNorm(cx, cy); sendJson({ type: "zoom", centerU: n.u, centerV: n.v, scale: scale }); }
       var cr = contentRect();
       var du = cr.w > 0 ? -(cx - pinch.cx) / cr.w : 0;
       var dv = cr.h > 0 ? -(cy - pinch.cy) / cr.h : 0;
@@ -433,13 +461,15 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     var p = activePointers.get(e.pointerId);
     if (!p) { return; }
     activePointers.delete(e.pointerId);
-    if (p.drawId) {
-      var n = toNorm(e.clientX, e.clientY);
-      sendJson({ type: "strokeEnd", id: p.drawId, point: { u: n.u, v: n.v } });
-      var s = findStroke(p.drawId);
-      if (s) { s.doneAt = performance.now(); }
+    if (drawPointer === e.pointerId) {
+      if (p.strokeId) {
+        sendJson({ type: "strokeEnd", id: p.strokeId, point: eventPoint(e) });
+        var s = findStroke(p.strokeId);
+        if (s) { s.doneAt = performance.now(); }
+      }
+      drawPointer = null;
     }
-    setPinchBaseline();
+    if (drawTouches().length >= 2) { baselinePinch(); } else { pinch.dist = 0; }
   }
   ink.addEventListener("pointerup", endPointer);
   ink.addEventListener("pointercancel", endPointer);

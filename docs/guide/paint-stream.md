@@ -54,7 +54,8 @@ obviously doing something):
 - **draw locally** with the mouse;
 - **draw from the iPad** — open the printed URL, pick *aiui paint demo*, tap **Arm**, and draw; the
   strokes land in document space, right where you drew relative to what the iPad shows;
-- **scroll** (one finger) and **pinch-zoom** (two fingers) around the document from the iPad.
+- **navigate** with **two fingers** — drag to scroll, pinch to zoom (one finger draws, so it never
+  scrolls); draw with the Apple Pencil, or one finger on a device without a pencil.
 - **send video** — click **Share screen** and pick this tab. Until you do, the iPad shows
   "waiting for the desktop to start sharing" rather than a black rectangle (see below). Switch
   **JPEG ⇄ WebRTC** live with the toolbar's `video:` button (or start at `…/?video=webrtc`).
@@ -162,9 +163,19 @@ Navigation is always available; drawing only happens while **armed**.
 
 | Input | Armed | Not armed |
 | --- | --- | --- |
-| Apple Pencil / mouse | Draw a stroke | — |
-| One finger drag | Scroll | Scroll |
-| Two fingers | Pinch-zoom + pan | Pinch-zoom + pan |
+| Apple Pencil (or mouse) | Draw a stroke | — |
+| One finger — **no pencil in use** | Draw a stroke | — |
+| One finger — **pencil in use** | ignored (palm rejection) | ignored |
+| Two-finger drag | Scroll | Scroll |
+| Two-finger pinch | Zoom (+ pan) | Zoom (+ pan) |
+
+**Drawing input.** An Apple Pencil always draws. On a device without one, a single finger draws.
+The client can't ask the browser "is a pencil paired?" — no API exposes that — so it infers: the
+first `pointerType: "pen"` event latches "pencil mode", after which fingers only navigate and the
+palm is ignored. While the pencil is actually down, all touches are dropped, so a resting palm never
+marks the canvas; oversized touch contacts are also filtered as a best-effort palm guard for the
+no-pencil case. **Navigation is two-finger only** — one finger never scrolls, which is what frees it
+to draw.
 
 Vertical scroll is the reliable one; zoom is approximate by default (the host accumulates a CSS
 transform) — an app with its own viewport model can pass a real `onZoom` handler to

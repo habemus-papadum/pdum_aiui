@@ -230,7 +230,8 @@ setInterval(renderStatus, 600);
 hintEl.innerHTML =
   "Draw here with your mouse. To draw from an iPad, open the " +
   `<code>http://&lt;this-mac&gt;:${__RELAY_PORT__}/</code> URL printed in your terminal, pick ` +
-  "<b>aiui paint demo</b>, tap <b>Arm</b>, then draw. One finger scrolls; two fingers pinch-zoom. " +
+  "<b>aiui paint demo</b>, tap <b>Arm</b>, then draw with the Apple Pencil or one finger. " +
+  "Two fingers scroll and pinch-zoom; your palm is ignored. " +
   "To send video, click <b>Share screen</b> and pick this tab — the iPad shows “waiting” until you do. " +
   "Switch JPEG⇄WebRTC with the <b>video:</b> button.";
 
