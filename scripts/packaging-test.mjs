@@ -24,6 +24,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -210,6 +211,15 @@ check(
   existsSync(join(scratch, "demo-sandbox", "vite.config.ts")) &&
     existsSync(join(scratch, "demo-sandbox", "src", "main.ts")) &&
     existsSync(join(scratch, "demo-sandbox", ".gitignore")),
+);
+// The committed, portable LSP setup must survive the tarball (dot-dir, executable
+// launcher) so a scaffolded demo has a working reader after `install`.
+const scaffoldLauncher = join(scratch, "demo-sandbox", ".aiui", "lsp", "typescript", "launch");
+check(
+  "scaffold ships the committed .aiui/lsp with an executable launcher",
+  existsSync(join(scratch, "demo-sandbox", ".aiui", "lsp", "manifest.json")) &&
+    existsSync(scaffoldLauncher) &&
+    (statSync(scaffoldLauncher).mode & 0o111) !== 0,
 );
 const demoAgain = run(["demo", "demo-sandbox", "--skip-install"]);
 check(

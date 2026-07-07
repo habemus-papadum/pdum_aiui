@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "createdAt": "2026-07-07T15:17:04.988Z",
+  "generation": 2,
+  "servers": [
+    {
+      "language": "typescript",
+      "languageId": "typescript",
+      "extensions": [
+        ".ts",
+        ".tsx",
+        ".mts",
+        ".cts",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs"
+      ],
+      "launcher": "typescript/launch",
+      "name": "typescript-language-server 5.3.0",
+      "doc": "typescript/SETUP.md"
+    }
+  ]
+}

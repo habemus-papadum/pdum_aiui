@@ -56,3 +56,4 @@ export type {
   SpawnLspChild,
 } from "./proxy";
 export { createLspProxy, createMessageDecoder, frameMessage, spawnNodeChild } from "./proxy";
+export { workspaceMemberDirs } from "./workspace";

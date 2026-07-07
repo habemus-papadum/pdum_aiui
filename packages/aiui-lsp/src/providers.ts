@@ -34,6 +34,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { workspaceMemberDirs } from "./workspace";
 
 const require = createRequire(import.meta.url);
 
@@ -216,7 +217,13 @@ const typescript: ProviderRecipe = {
 export const PROVIDERS: Record<string, ProviderRecipe> = { python, typescript };
 
 /** Scan a project (shallowly recursive, skipping heavy dirs) for extensions that
- * a built-in provider owns; returns the provider keys, in a stable order. */
+ * a built-in provider owns; returns the provider keys, in a stable order.
+ *
+ * Monorepo-aware: when `projectRoot` is a workspace root, only its member
+ * packages are scanned (so a top-level setup reflects the workspace's own
+ * languages, not an unrelated nested project elsewhere in the tree — e.g. a
+ * `packages/*` TS monorepo isn't dragged into Python by an `examples/` app).
+ * A plain project falls back to walking its own tree. */
 export function detectLanguages(projectRoot: string, maxDepth = 4): string[] {
   const extToProvider = new Map<string, string>();
   for (const [key, recipe] of Object.entries(PROVIDERS)) {
@@ -253,7 +260,9 @@ export function detectLanguages(projectRoot: string, maxDepth = 4): string[] {
       }
     }
   };
-  walk(projectRoot, 0);
+  // A workspace root reflects its members' languages; a plain project, its own tree.
+  const roots = workspaceMemberDirs(projectRoot) ?? [projectRoot];
+  for (const r of roots) walk(r, 0);
   return Object.keys(PROVIDERS).filter((k) => found.has(k));
 }
 

@@ -20,6 +20,7 @@
  * locally — no repeated downloads.
  */
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -130,14 +131,20 @@ export function demoDependencyRange(version: string): string {
   return /^\d+\.\d+\.\d+$/.test(version) ? `^${version}` : "latest";
 }
 
-/** Copy the template, restore `.gitignore`, and pin dependency ranges. */
+/** Copy the template, restore dot-paths npm strips, and pin dependency ranges. */
 export function scaffoldDemo(template: string, target: string): void {
   mkdirSync(target, { recursive: true });
   cpSync(template, target, { recursive: true });
-  // npm strips `.gitignore` files from tarballs, so the template ships it
-  // undotted and the scaffold puts the dot back.
+  // `npm install` strips dot-files/-dirs from an installed tarball, so the
+  // template ships them undotted and the scaffold puts the dot back: the
+  // `.gitignore`, and the committed `.aiui/lsp/` (portable LSP launchers) that
+  // give the scaffolded demo a working code reader after `install`.
   if (existsSync(join(target, "gitignore"))) {
     renameSync(join(target, "gitignore"), join(target, ".gitignore"));
+  }
+  if (existsSync(join(target, "aiui"))) {
+    renameSync(join(target, "aiui"), join(target, ".aiui"));
+    restoreLauncherExecBits(join(target, ".aiui", "lsp"));
   }
   const pkgFile = join(target, "package.json");
   writeFileSync(
@@ -147,6 +154,29 @@ export function scaffoldDemo(template: string, target: string): void {
       demoDependencyRange(VERSION),
     ),
   );
+}
+
+/**
+ * `npm install` normalizes file modes on an installed tarball (dropping the
+ * executable bit), so the committed LSP launchers arrive non-executable. The
+ * proxy `spawn()`s them directly, so restore +x on every launcher the manifest
+ * points at — otherwise the scaffolded reader's LSP fails with EACCES.
+ */
+function restoreLauncherExecBits(lspDir: string): void {
+  const manifestFile = join(lspDir, "manifest.json");
+  if (!existsSync(manifestFile)) return;
+  try {
+    const manifest = JSON.parse(readFileSync(manifestFile, "utf8")) as {
+      servers?: { launcher?: string }[];
+    };
+    for (const server of manifest.servers ?? []) {
+      if (!server.launcher) continue;
+      const launcher = join(lspDir, server.launcher);
+      if (existsSync(launcher)) chmodSync(launcher, 0o755);
+    }
+  } catch {
+    /* leave modes as-is — a broken manifest is the reader's problem to report */
+  }
 }
 
 /**
