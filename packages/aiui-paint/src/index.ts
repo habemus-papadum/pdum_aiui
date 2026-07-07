@@ -34,6 +34,7 @@ export {
   windowScroll,
 } from "./host";
 export type {
+  CaptureState,
   ClientToRelay,
   HostToRelay,
   NormPoint,
@@ -43,6 +44,7 @@ export type {
   RelayToHost,
   SessionInfo,
   Signal,
+  VideoStatus,
   ViewState,
   WireMessage,
   WireStyle,

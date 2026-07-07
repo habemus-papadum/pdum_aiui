@@ -199,6 +199,21 @@ describe("paint relay", () => {
     expect(view).toMatchObject({ armed: true, scrollY: 120 });
   });
 
+  it("forwards a host videoStatus to the viewer", async () => {
+    await startRelay();
+    const host = await registerHost();
+    const client = await connect("/client");
+    const { sessions } = await client.nextJson<{ sessions: Array<{ id: string }> }>(
+      (m) => m.type === "sessions" && (m.sessions as unknown[]).length === 1,
+    );
+    client.sendJson({ type: "join", host: sessions[0].id });
+    await host.nextJson((m) => m.type === "clientJoined");
+
+    host.sendJson({ type: "videoStatus", state: "needsGesture" });
+    const status = await client.nextJson((m) => m.type === "videoStatus");
+    expect(status.state).toBe("needsGesture");
+  });
+
   it("tells the client when the host disconnects", async () => {
     await startRelay();
     const host = await registerHost();

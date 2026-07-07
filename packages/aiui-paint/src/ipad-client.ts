@@ -45,6 +45,16 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
   #jpegView, #rtcView { position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; pointer-events: none; background: #000; }
   #ink { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  /* Overlay explaining why there's no video yet (waiting for the desktop to share).
+     pointer-events: none so drawing/scrolling still fall through to #ink; the panel
+     re-enables them so Retry is tappable. */
+  #videoNote { position: absolute; inset: 0; z-index: 3; display: none; align-items: center;
+    justify-content: center; padding: 24px; text-align: center; pointer-events: none; }
+  #videoNote.show { display: flex; }
+  #videoNote .panel { background: rgba(15,19,26,0.92); border: 1px solid #232838; border-radius: 14px;
+    padding: 18px 22px; max-width: 82%; pointer-events: auto; }
+  #videoNote .msg { font-size: 15px; line-height: 1.5; color: #cfd6e4; }
+  #videoRetry { margin-top: 14px; }
 
   #toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-wrap: wrap;
     background: #0f131a; border-top: 1px solid #1c2130; }
@@ -78,6 +88,7 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
       <img id="jpegView" alt="">
       <video id="rtcView" autoplay playsinline muted></video>
       <canvas id="ink"></canvas>
+      <div id="videoNote"><div class="panel"><div class="msg" id="videoNoteMsg"></div><button id="videoRetry" class="tool hidden">Retry</button></div></div>
     </div>
     <div id="toolbar">
       <button id="arm" class="tool">Arm</button>
@@ -108,11 +119,14 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
   var armBtn = byId("arm");
   var titleEl = byId("stageTitle");
   var statusEl = byId("status");
+  var noteEl = byId("videoNote");
+  var noteMsg = byId("videoNoteMsg");
+  var retryBtn = byId("videoRetry");
 
   var PALETTE = ["#ff5c87", "#ffd166", "#06d6a0", "#4cc9f0", "#b5179e", "#ffffff", "#111318"];
   var WIDTHS = [2, 4, 8, 14];
 
-  var state = { armed: false, color: PALETTE[0], width: WIDTHS[1], lastUrl: null, seq: 0 };
+  var state = { armed: false, color: PALETTE[0], width: WIDTHS[1], lastUrl: null, seq: 0, hostId: null };
   var activePointers = new Map();
   var strokes = [];
   var pinch = { dist: 0, cx: 0, cy: 0 };
@@ -142,6 +156,7 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
       var p = rtcView.play();
       if (p && p.catch) { p.catch(function () {}); }
       showRtc();
+      hideNote();
     };
     return pc;
   }
@@ -179,9 +194,29 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     var url = URL.createObjectURL(ev.data);
     jpegView.src = url;
     if (mediaMode !== "jpeg") { showJpeg(); }
+    hideNote();
     if (state.lastUrl) { URL.revokeObjectURL(state.lastUrl); }
     state.lastUrl = url;
   });
+
+  // ── "why no video" overlay ───────────────────────────────────────────────────
+  function showNote(text, retry) {
+    noteMsg.textContent = text;
+    retryBtn.classList.toggle("hidden", !retry);
+    noteEl.classList.add("show");
+  }
+  function hideNote() { noteEl.classList.remove("show"); }
+  retryBtn.addEventListener("click", function () {
+    if (state.hostId) { sendJson({ type: "join", host: state.hostId }); }
+  });
+  function onVideoStatus(s) {
+    if (s === "active") { hideNote(); }
+    else if (s === "needsGesture") {
+      showNote("Waiting for the desktop to start sharing — click “Share screen” on the computer.", true);
+    } else if (s === "denied") {
+      showNote("The desktop declined screen sharing — click “Share screen” there, then Retry.", true);
+    }
+  }
 
   function handleControl(m) {
     if (m.type === "sessions") { renderSessions(m.sessions || []); }
@@ -190,6 +225,7 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     else if (m.type === "hostGone") { showSessions(); hintEl.textContent = "The browser disconnected."; }
     else if (m.type === "signal") { handleSignal(m.data); }
     else if (m.type === "viewState") { updateStatus(m); }
+    else if (m.type === "videoStatus") { onVideoStatus(m.state); }
   }
 
   function updateStatus(v) {
@@ -222,7 +258,7 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
       if (s.busy) { bits.push("in use"); }
       meta.textContent = bits.join("   ·   ");
       card.appendChild(meta);
-      card.addEventListener("click", function () { sendJson({ type: "join", host: s.id }); });
+      card.addEventListener("click", function () { state.hostId = s.id; sendJson({ type: "join", host: s.id }); });
       listEl.appendChild(card);
     });
   }
@@ -233,6 +269,7 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     jpegView.removeAttribute("src");
     sessionsScreen.classList.add("hidden");
     stageScreen.classList.remove("hidden");
+    showNote("Connecting…", false);
     setTimeout(resizeInk, 0);
   }
   function showSessions() {
@@ -241,6 +278,7 @@ export const IPAD_CLIENT_HTML = `<!doctype html>
     stageScreen.classList.add("hidden");
     sessionsScreen.classList.remove("hidden");
     jpegView.removeAttribute("src");
+    hideNote();
     strokes = [];
   }
   byId("back").addEventListener("click", showSessions);

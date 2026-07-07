@@ -1,13 +1,16 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
   applyIntent,
+  type FrameSource,
   hostWsUrl,
   type InkSink,
   inkSurfaceSink,
   type NavHandlers,
   type RemoteInkTarget,
+  startPaintHost,
 } from "./host";
-import type { PaintIntent } from "./protocol";
+import type { CaptureState, PaintIntent } from "./protocol";
 
 /** An InkSink that records the calls it receives, sized 200×100. */
 function recordingSink(): InkSink & { calls: string[] } {
@@ -106,5 +109,92 @@ describe("hostWsUrl", () => {
   it("upgrades to wss for https/wss", () => {
     expect(hostWsUrl("https://mac.local:8788")).toBe("wss://mac.local:8788/host");
     expect(hostWsUrl("wss://mac.local")).toBe("wss://mac.local/host");
+  });
+});
+
+/** A fake browser WebSocket the host drives; records what it sent, injects messages. */
+class FakeSocket {
+  static instances: FakeSocket[] = [];
+  readonly OPEN = 1;
+  readyState = 1;
+  binaryType = "";
+  sentJson: Array<Record<string, unknown>> = [];
+  sentBinary = 0;
+  private listeners: Record<string, Array<(ev: unknown) => void>> = {};
+  constructor(readonly url: string) {
+    FakeSocket.instances.push(this);
+  }
+  addEventListener(type: string, fn: (ev: unknown) => void): void {
+    if (!this.listeners[type]) {
+      this.listeners[type] = [];
+    }
+    this.listeners[type].push(fn);
+  }
+  send(data: unknown): void {
+    if (typeof data === "string") {
+      this.sentJson.push(JSON.parse(data));
+    } else {
+      this.sentBinary++;
+    }
+  }
+  close(): void {
+    this.fire("close");
+  }
+  fire(type: string, ev: unknown = {}): void {
+    for (const fn of this.listeners[type] ?? []) {
+      fn(ev);
+    }
+  }
+  fireMessage(obj: unknown): void {
+    this.fire("message", { data: JSON.stringify(obj) });
+  }
+  has(pred: (m: Record<string, unknown>) => boolean): boolean {
+    return this.sentJson.some(pred);
+  }
+}
+
+/** A frame source that hands back a scripted sequence of capture states. */
+function scriptedSource(states: CaptureState[]): FrameSource {
+  let i = 0;
+  return {
+    start: async () => states[Math.min(i++, states.length - 1)],
+    capture: async () => new Uint8Array([1, 2, 3]),
+    stop: () => {},
+  };
+}
+
+const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+describe("startPaintHost capture handshake", () => {
+  it("reports needsGesture on join, then goes active after requestCapture", async () => {
+    FakeSocket.instances = [];
+    const host = startPaintHost({
+      relayUrl: "http://mac.local:8788",
+      ink: recordingSink(),
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      frameSource: scriptedSource(["needsGesture", "active"]),
+      video: "jpeg",
+    });
+    const sock = FakeSocket.instances[0];
+    sock.fire("open");
+    expect(sock.has((m) => m.type === "register")).toBe(true);
+
+    // A viewer joins. getDisplayMedia would need a gesture, so capture reports
+    // needsGesture, the host tells the room, and it sends NO frames.
+    sock.fireMessage({ type: "clientJoined", client: "c1" });
+    await flush();
+    expect(host.viewers()).toBe(1);
+    expect(host.captureState()).toBe("needsGesture");
+    expect(sock.has((m) => m.type === "videoStatus" && m.state === "needsGesture")).toBe(true);
+    expect(sock.sentBinary).toBe(0);
+
+    // The user clicks "Share screen" → requestCapture arms it → active.
+    const result = await host.requestCapture();
+    expect(result).toBe("active");
+    expect(host.captureState()).toBe("active");
+    expect(sock.has((m) => m.type === "videoStatus" && m.state === "active")).toBe(true);
+
+    host.close();
+    expect(host.captureState()).toBe("idle");
   });
 });

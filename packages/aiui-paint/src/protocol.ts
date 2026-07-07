@@ -104,6 +104,22 @@ export interface ViewState {
 }
 
 /**
+ * Screen-capture readiness the host reports, so the iPad shows *why* there is no
+ * video instead of a black rectangle. `getDisplayMedia` requires **transient**
+ * user activation (a recent click), which a viewer-join — a network event —
+ * never carries; `needsGesture` means "waiting for a click on the desktop", not
+ * a permanent failure. `idle` = no viewer yet; `active` = video flowing;
+ * `denied` = the desktop dismissed the picker.
+ */
+export type CaptureState = "idle" | "active" | "needsGesture" | "denied";
+
+/** Host → iPad (via the relay): the live-video state, or why it isn't flowing. */
+export interface VideoStatus {
+  type: "videoStatus";
+  state: CaptureState;
+}
+
+/**
  * Opaque WebRTC (or other) signaling, forwarded by the relay. The payload
  * (`data`) is untouched — SDP descriptions and ICE candidates for the host↔iPad
  * peer connection.
@@ -137,6 +153,7 @@ export type RelayToClient =
   | { type: "joinRejected"; reason: string }
   | { type: "hostGone" }
   | ViewState
+  | VideoStatus
   | Signal;
 
 /** browser host → relay. */
@@ -156,6 +173,7 @@ export type HostToRelay =
       channelPort?: number;
     }
   | ViewState
+  | VideoStatus
   | Signal;
 
 /** relay → browser host. */

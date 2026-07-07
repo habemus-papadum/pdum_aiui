@@ -203,9 +203,9 @@ export async function startPaintRelay(options: PaintRelayOptions = {}): Promise<
         broadcastSessions();
         return;
       }
-      // viewState → every viewer; signal → the one addressed viewer (WebRTC is
-      // point-to-point, so signaling can't broadcast — see Signal.peer).
-      if (message.type === "viewState") {
+      // viewState + videoStatus → every viewer; signal → the one addressed viewer
+      // (WebRTC is point-to-point, so signaling can't broadcast — see Signal.peer).
+      if (message.type === "viewState" || message.type === "videoStatus") {
         for (const client of conn.clients.values()) {
           send(client.ws, message);
         }

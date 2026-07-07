@@ -19,10 +19,10 @@ pnpm paint:demo        # from the repo — starts the relay + a demo app togethe
 ```
 
 Draw on the demo's scrollable canvas with the mouse, then open the printed URL on an iPad to draw,
-scroll, and pinch-zoom remotely. Switch JPEG ⇄ WebRTC with the toolbar's `video:` button. There is
-no screen-share prompt — the demo streams a canvas it renders itself (`canvas.captureStream()`), a
-compact example of wiring `InkSurface` + `startPaintHost` with a custom `FrameSource` in
-`packages/aiui-paint/demo/`.
+scroll, and pinch-zoom remotely. Click **Share screen** to send video (the real `getDisplayMedia`
+path — the iPad shows "waiting" until you do, since screen capture needs a user gesture). Switch
+JPEG ⇄ WebRTC with the `video:` button. Source: `packages/aiui-paint/demo/` — a compact example of
+wiring `InkSurface` + `startPaintHost`, the capture-gesture handshake, and both transports.
 
 ## Run the relay
 
@@ -49,11 +49,17 @@ Standalone (a plain ink surface, no overlay):
 import { InkSurface, inkSurfaceSink, startPaintHost } from "@habemus-papadum/aiui-paint";
 
 const surface = new InkSurface({ fadeSec: () => 0 });
-startPaintHost({ relayUrl: "http://your-mac.local:8788", ink: inkSurfaceSink(surface) });
+const host = startPaintHost({ relayUrl: "http://your-mac.local:8788", ink: inkSurfaceSink(surface) });
+
+// Screen capture (getDisplayMedia) needs a user gesture — call from a click, not on connect.
+shareButton.addEventListener("click", () => host.requestCapture());
 ```
 
 Video is **JPEG frames** by default; pass `video: "webrtc"` to `startPaintHost` for a smooth,
-low-latency WebRTC peer connection instead (control and ink are identical either way).
+low-latency WebRTC peer connection instead (control and ink are identical either way). Until capture
+is armed, the host reports `videoStatus: needsGesture` and the iPad shows "waiting to share" rather
+than black. A host that renders its own content can pass a `canvas.captureStream()`-backed
+`frameSource` and skip the gesture entirely.
 
 ## Entry points
 

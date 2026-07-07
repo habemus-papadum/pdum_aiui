@@ -68,6 +68,8 @@
         cursor: pointer;
       }
       #toolbar button:active { background: #232a3a; }
+      #share.on { border-color: #06d6a0; color: #06d6a0; }
+      #share.hot { background: #ff5c87; border-color: #ff5c87; color: #14060c; font-weight: 700; }
       .swatch { width: 24px; height: 24px; border-radius: 50%; padding: 0; }
       .swatch.sel { outline: 2px solid #fff; outline-offset: 2px; }
       .wbtn.sel { border-color: #fff; }
@@ -95,6 +97,7 @@
     <div id="toolbar">
       <span id="swatches"></span>
       <span id="widths"></span>
+      <button id="share" type="button">Share screen</button>
       <button id="videoToggle" type="button">video</button>
       <button id="clear" type="button">Clear</button>
       <span id="status">starting…</span>

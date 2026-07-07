@@ -55,18 +55,34 @@ obviously doing something):
 - **draw from the iPad** — open the printed URL, pick *aiui paint demo*, tap **Arm**, and draw; the
   strokes land in document space, right where you drew relative to what the iPad shows;
 - **scroll** (one finger) and **pinch-zoom** (two fingers) around the document from the iPad.
+- **send video** — click **Share screen** and pick this tab. Until you do, the iPad shows
+  "waiting for the desktop to start sharing" rather than a black rectangle (see below). Switch
+  **JPEG ⇄ WebRTC** live with the toolbar's `video:` button (or start at `…/?video=webrtc`).
 
-Switch **JPEG ⇄ WebRTC** live with the toolbar's `video:` button (or start at `…/?video=webrtc`).
-There is **no screen-share prompt**: rather than `getDisplayMedia`, the demo renders its own viewport
-(grid + landmarks + ink) into a canvas and streams that via `canvas.captureStream()` — which needs no
-user gesture and works from any origin, feeding both transports. The demo lives in
-`packages/aiui-paint/demo/` and is a compact, copyable example of wiring `InkSurface` +
-`startPaintHost` with a custom `FrameSource`.
+The demo lives in `packages/aiui-paint/demo/` — a compact, copyable example of wiring `InkSurface` +
+`startPaintHost`.
 
-> Note: a page that streams the **actual screen** with the default `displayCaptureSource`
-> (`getDisplayMedia`) must call it from a real user gesture (a click) and a secure context
-> (`https://` or `http://localhost`). The demo sidesteps both by streaming a canvas it renders itself
-> — the right move whenever the host already knows how to draw its own content.
+### Why "Share screen" (and not on connect)
+
+The demo streams the **real screen** with the default `displayCaptureSource` (`getDisplayMedia`).
+That call needs two things the browser enforces: a **secure context** (`https://` or
+`http://localhost` — both fine here) and, crucially, **transient user activation** — a *recent*
+click. A viewer joining is a network event carrying no activation, and a *past* interaction doesn't
+count (transient activation expires seconds after the gesture). So capture can't start on connect;
+it has to be armed from a fresh click. The library makes that graceful rather than a silent black
+screen:
+
+- the host pre-checks `navigator.userActivation` and, if there's no activation, reports
+  `videoStatus: needsGesture` to the iPad instead of firing a doomed prompt;
+- the iPad shows "waiting for the desktop to start sharing" with a **Retry**, while scroll/ink keep
+  working (control needs no capture);
+- **Share screen** calls `host.requestCapture()` from the click — capture arms, the grant is held
+  for the session, and video flows to every viewer (`videoStatus: active`).
+
+**Escape hatch:** a host that renders its own content can skip all of this by streaming a
+`canvas.captureStream()` from a custom `FrameSource` — no gesture, no picker, works from any origin.
+That's strictly simpler when it applies (the host already knows how to draw its content); this demo
+uses the real screen path on purpose, as a worked example of the gesture handshake.
 
 ## Run it (wire it into your own app)
 

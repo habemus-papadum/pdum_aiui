@@ -16,7 +16,13 @@
  * `applyIntent` and the sink adapters are pure and unit-tested; the socket +
  * screen-capture wiring is browser-only and exercised by hand / the example.
  */
-import { fromNorm, type NormPoint, type PaintIntent, type ViewState } from "./protocol";
+import {
+  type CaptureState,
+  fromNorm,
+  type NormPoint,
+  type PaintIntent,
+  type ViewState,
+} from "./protocol";
 
 /** Minimal px point the sink draws with. */
 export interface SinkPoint {
@@ -138,8 +144,14 @@ export function applyIntent(intent: PaintIntent, sink: InkSink, nav: NavHandlers
 
 /** A source of screen frames the host streams to viewers. */
 export interface FrameSource {
-  /** Acquire the capture (may prompt); resolves false if denied/unavailable. */
-  start(): Promise<boolean>;
+  /**
+   * Acquire the capture (may prompt). Resolves the resulting {@link CaptureState}:
+   * `"active"` once frames/tracks are available, `"needsGesture"` if it can't
+   * start without a fresh user gesture (e.g. `getDisplayMedia` off a network
+   * event), or `"denied"` if the user refused. A source that never needs a
+   * gesture (e.g. a canvas) resolves `"active"`/`"denied"` only.
+   */
+  start(): Promise<CaptureState>;
   /** Grab one JPEG frame, or undefined if the grant was lost (frame-streaming mode). */
   capture(): Promise<Uint8Array | undefined>;
   /**
@@ -156,15 +168,28 @@ const MAX_FRAME_EDGE = 1280;
 const FRAME_JPEG_QUALITY = 0.6;
 
 /**
- * The default frame source: `getDisplayMedia({ preferCurrentTab })` (the same
- * one-time grant the overlay's shot tool uses — auto-accepted in the session
- * browser), sampled to a downscaled JPEG. Browser-only.
+ * The default frame source: `getDisplayMedia({ preferCurrentTab })`, sampled to a
+ * downscaled JPEG. Browser-only.
+ *
+ * `getDisplayMedia` requires **transient user activation** — a recent click — and
+ * a secure context (`https:` or `http://localhost`). A viewer joining is a network
+ * event with no activation, so `start()` pre-checks `navigator.userActivation` and
+ * returns `"needsGesture"` rather than firing a call the browser will reject. Call
+ * {@link PaintHost.requestCapture} from a real click (a "Share screen" button) to
+ * acquire it. See the guide's note; a host that renders its own content can
+ * sidestep all of this with a `canvas.captureStream()` source instead.
  */
 export function displayCaptureSource(): FrameSource {
   let stream: MediaStream | undefined;
   let video: HTMLVideoElement | undefined;
   return {
     async start() {
+      // Transient activation is required; if the browser tells us there is none,
+      // don't fire a doomed prompt — report that a gesture is needed.
+      const activation = typeof navigator !== "undefined" ? navigator.userActivation : undefined;
+      if (activation && !activation.isActive) {
+        return "needsGesture";
+      }
       try {
         stream = await (
           navigator.mediaDevices as MediaDevices & {
@@ -180,9 +205,11 @@ export function displayCaptureSource(): FrameSource {
           stream = undefined;
           video = undefined;
         });
-        return true;
+        return "active";
       } catch {
-        return false;
+        // With activation we know the user dismissed the picker; without the API
+        // we can't tell a stale-gesture rejection from a refusal, so allow a retry.
+        return activation ? "denied" : "needsGesture";
       }
     },
     async capture() {
@@ -301,6 +328,14 @@ export interface PaintHost {
   id: () => string | undefined;
   /** Number of viewers currently joined. */
   viewers: () => number;
+  /** Current screen-capture state (drives the "share your screen" affordance). */
+  captureState: () => CaptureState;
+  /**
+   * Attempt to acquire screen capture now and stream to any waiting viewers.
+   * **Call this from a real user gesture** (e.g. a button click) — `getDisplayMedia`
+   * needs transient activation. Resolves the resulting {@link CaptureState}.
+   */
+  requestCapture: () => Promise<CaptureState>;
   close: () => void;
 }
 
@@ -345,11 +380,13 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
   const frames = options.frameSource ?? displayCaptureSource();
   let armed = false;
   let hostId: string | undefined;
-  let viewers = 0;
+  // Current viewers, by relay-assigned client id (so WebRTC can re-open peers for
+  // everyone once capture finally starts).
+  const viewerIds = new Set<string>();
+  let captureState: CaptureState = "idle";
   let ws: WebSocket | undefined;
   let frameTimer: ReturnType<typeof setInterval> | undefined;
   let viewTimer: ReturnType<typeof setInterval> | undefined;
-  let capturing = false;
   let closed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   // One RTCPeerConnection per viewer (WebRTC is point-to-point). Keyed by the
@@ -364,13 +401,21 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
     }
   };
 
+  const broadcastVideoStatus = (): void => {
+    sendJson({ type: "videoStatus", state: captureState });
+  };
+
   // Acquire the screen-capture grant once; keep it for the host's lifetime so
-  // viewers coming and going don't re-prompt. Returns whether capture is live.
+  // viewers coming and going don't re-prompt. Broadcasts the resulting state so a
+  // viewer sees "waiting for the desktop to share" instead of a black rectangle.
+  // Returns whether capture is live.
   const ensureCapture = async (): Promise<boolean> => {
-    if (!capturing) {
-      capturing = (await frames.start()) === true;
+    if (captureState === "active") {
+      return true;
     }
-    return capturing;
+    captureState = await frames.start();
+    broadcastVideoStatus();
+    return captureState === "active";
   };
 
   const startViewLoop = (): void => {
@@ -474,9 +519,9 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
     }
   };
 
-  const onClientJoined = (clientId: string): void => {
-    viewers += 1;
-    startViewLoop();
+  // Stream to one viewer using the active transport. Both paths call
+  // ensureCapture; if capture isn't live yet they no-op until requestCapture arms it.
+  const streamToViewer = (clientId: string): void => {
     if (videoMode === "webrtc") {
       void openPeer(clientId);
     } else {
@@ -484,12 +529,38 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
     }
   };
 
+  const onClientJoined = (clientId: string): void => {
+    viewerIds.add(clientId);
+    startViewLoop();
+    if (captureState === "active") {
+      broadcastVideoStatus(); // a viewer joining an already-sharing host learns it now
+    }
+    streamToViewer(clientId);
+  };
+
   const onClientLeft = (clientId: string): void => {
-    viewers = Math.max(0, viewers - 1);
+    viewerIds.delete(clientId);
     closePeer(clientId);
-    if (viewers === 0) {
+    if (viewerIds.size === 0) {
       stopLoops(); // capture stays acquired for the next viewer
     }
+  };
+
+  // Acquire capture from a user gesture (a button), then stream to everyone who
+  // was already waiting. The public entry point behind a "Share screen" button.
+  const requestCapture = async (): Promise<CaptureState> => {
+    const wasActive = captureState === "active";
+    await ensureCapture();
+    if (captureState === "active" && !wasActive) {
+      if (videoMode === "webrtc") {
+        for (const clientId of viewerIds) {
+          void openPeer(clientId);
+        }
+      } else {
+        void startFrameLoop();
+      }
+    }
+    return captureState;
   };
 
   const connect = (): void => {
@@ -534,7 +605,7 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       for (const clientId of [...peers.keys()]) {
         closePeer(clientId);
       }
-      viewers = 0;
+      viewerIds.clear(); // the capture grant survives the reconnect; the room does not
       if (!closed) {
         reconnectTimer = setTimeout(connect, 1000);
       }
@@ -547,7 +618,9 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
 
   return {
     id: () => hostId,
-    viewers: () => viewers,
+    viewers: () => viewerIds.size,
+    captureState: () => captureState,
+    requestCapture,
     close: () => {
       closed = true;
       if (reconnectTimer) {
@@ -558,7 +631,7 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
         closePeer(clientId);
       }
       frames.stop();
-      capturing = false;
+      captureState = "idle";
       ws?.close();
     },
   };
