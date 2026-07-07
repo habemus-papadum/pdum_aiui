@@ -66,4 +66,61 @@ describe("EventPanes", () => {
     expect(panes.root.querySelector<HTMLElement>(".aiui-dbg-ir")?.hidden).toBe(false);
     expect(panes.root.querySelector<HTMLElement>(".aiui-dbg-events")?.hidden).toBe(true);
   });
+
+  it("describes selection events (markers + drops) and places them on the IR timeline", () => {
+    const panes = new EventPanes();
+    panes.update([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      {
+        at: 2,
+        type: "app-selection",
+        marker: "sel_1",
+        text: "the histogram title",
+        sourceLoc: "src/Hist.tsx:10:2",
+      },
+      {
+        at: 3,
+        type: "transcript-final",
+        segment: 1,
+        text: "make it wider",
+        latencyMs: 5,
+        model: "mock",
+      },
+      {
+        at: 4,
+        type: "code-selection",
+        marker: "code_1",
+        text: "const x = 1;",
+        sourceLoc: "src/a.ts:5:1",
+      },
+      { at: 5, type: "code-selection-drop", marker: "code_1" },
+      { at: 6, type: "app-selection-drop", marker: "sel_1" },
+    ]);
+    const eventsText = paneText(panes, "events");
+    expect(eventsText).toContain("sel_1: “the histogram title” @ src/Hist.tsx:10:2");
+    expect(eventsText).toContain("code_1 @ src/a.ts:5:1");
+    expect(eventsText).toContain("code_1 retracted (✕ on the chip)");
+    expect(eventsText).toContain("sel_1 retracted (✕ on the chip)");
+    // Both drops retracted their items — the timeline shows only the text run.
+    const ir = paneText(panes, "ir");
+    expect(ir).toContain("“make it wider”");
+    expect(ir).not.toContain("sel_1");
+    expect(ir).not.toContain("code_1");
+  });
+
+  it("tolerates pre-marker streams (markerless selections, whole-turn drops)", () => {
+    const panes = new EventPanes();
+    panes.update([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "app-selection", text: "old style selection" },
+      { at: 3, type: "app-selection-drop" },
+      { at: 4, type: "app-selection", text: "the survivor" },
+    ]);
+    const eventsText = paneText(panes, "events");
+    expect(eventsText).toContain("app selection: “old style selection”");
+    expect(eventsText).toContain("app selection retracted (✕ on the chip)");
+    // The IR pane folds legacy latest-wins: the survivor sits on the timeline.
+    const ir = paneText(panes, "ir");
+    expect(ir).toContain("[sel: “the survivor”]");
+  });
 });

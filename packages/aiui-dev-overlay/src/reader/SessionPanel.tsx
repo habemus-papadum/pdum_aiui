@@ -203,6 +203,20 @@ export function SessionPanel(props: { reader: CodeReader }) {
                     >
                       {`⧉ ${item.marker}`}
                     </span>
+                  ) : item.kind === "app-selection" ? (
+                    // The app tab's on-screen selection: the same minimal pill
+                    // language as the app preview's chip (read-only here — the
+                    // mirror has no ✕); loc + excerpt ride the hover title.
+                    <span
+                      class="session-chip session-chip-sel"
+                      title={
+                        item.sourceLoc !== undefined
+                          ? `${item.sourceLoc}\n${item.excerpt}`
+                          : item.excerpt
+                      }
+                    >
+                      {`⌖ ${item.marker ?? "sel"}`}
+                    </span>
                   ) : (
                     <span class="session-chip session-chip-code" title={item.excerpt}>
                       {item.sourceLoc ?? "selection"}

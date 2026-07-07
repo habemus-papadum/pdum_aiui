@@ -1290,9 +1290,11 @@ describe("multimodalModality: selections on the wire", () => {
 
     const events = streamedEvents(sent);
     const types = events.map((e) => e.type);
-    // The selection opens the transcript, right after thread-open.
+    // The selection opens the transcript, right after thread-open — a marked
+    // positional event (the engine assigns `sel_N`, house style like shot_N).
     expect(types.indexOf("app-selection")).toBe(types.indexOf("thread-open") + 1);
     expect(events.find((e) => e.type === "app-selection")).toMatchObject({
+      marker: "sel_1",
       text: "the interesting selected words",
       sourceLoc: "src/App.tsx:10:2",
       cell: "flowCell",
@@ -1324,16 +1326,62 @@ describe("multimodalModality: selections on the wire", () => {
     await wait(50);
 
     // The panel chip's ✕ clears the watcher; with the thread open that must
-    // retract the turn's selection on the stream too.
+    // retract the turn's selection on the stream too — by ITS marker, exactly
+    // one (the shot-drop shape).
     const dismiss = handle.shadowRoot?.querySelector(".chip-dismiss") as HTMLButtonElement;
     dismiss.click();
     key("keydown", "Enter");
     await wait(150);
 
-    const types = streamedEvents(sent).map((e) => e.type);
-    expect(types).toContain("app-selection");
-    expect(types).toContain("app-selection-drop");
+    const events = streamedEvents(sent);
+    expect(events.find((e) => e.type === "app-selection")).toMatchObject({ marker: "sel_1" });
+    expect(events.find((e) => e.type === "app-selection-drop")).toMatchObject({
+      marker: "sel_1",
+    });
     para.remove();
+  });
+
+  it("a new selection after content is its own event; a refinement supersedes its marker", async () => {
+    const first = document.createElement("p");
+    first.textContent = "the first selected words";
+    const second = document.createElement("p");
+    second.setAttribute("data-source-loc", "src/App.tsx:21:4");
+    second.textContent = "a second, different selection";
+    const refined = document.createElement("p");
+    refined.textContent = "the second selection, refined by widening the drag";
+    document.body.append(first, second, refined);
+    const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 });
+
+    selectText(first);
+    await wait(200); // past the watcher's 150 ms debounce
+    key("keydown", "`");
+    key("keydown", " "); // thread opens, seeded with the first selection
+    await wait(50);
+    key("keyup", " "); // the mock transcript-final lands — contentful
+    await wait(50);
+
+    // Re-selecting AFTER content landed: a NEW positional event, fresh marker.
+    selectText(second);
+    await wait(250);
+    // Refining it with nothing contentful in between: SAME marker (one chip
+    // tracking the drag — no spam).
+    selectText(refined);
+    await wait(250);
+    key("keydown", "Enter");
+    await wait(150);
+
+    const selections = streamedEvents(sent).filter((e) => e.type === "app-selection");
+    expect(selections.map((e) => (e as { marker?: string }).marker)).toEqual([
+      "sel_1",
+      "sel_2",
+      "sel_2",
+    ]);
+    expect(selections.at(-1)).toMatchObject({
+      text: "the second selection, refined by widening the drag",
+    });
+    first.remove();
+    second.remove();
+    refined.remove();
   });
 
   it("ingests a bus selection contribution as a structured code-selection event", async () => {
@@ -1403,9 +1451,58 @@ describe("multimodalModality: selections on the wire", () => {
           sourceLoc: "src/c.ts:12:1",
           excerpt: "export function curb() {}",
           lines: 1,
+          marker: "code_1",
         },
       ],
     });
+  });
+
+  it("mirrors app selections to the session bus as structured items", async () => {
+    const slots = new Map<string, unknown>();
+    window.__AIUI__ = {
+      v: 1,
+      frames: [],
+      session: {
+        set: (slot: string, value: unknown) => void slots.set(slot, value),
+        get: (slot: string) => slots.get(slot),
+        on: () => () => {},
+        publish: () => {},
+        onPublish: () => () => {},
+        peers: () => [],
+        onPeers: () => () => {},
+        ready: () => true,
+        onReady: (handler: () => void) => {
+          handler();
+          return () => {};
+        },
+        clientId: () => "test",
+      },
+    } as unknown as typeof window.__AIUI__;
+
+    const para = document.createElement("p");
+    para.setAttribute("data-source-loc", "src/App.tsx:10:2");
+    para.textContent = "the interesting selected words";
+    document.body.append(para);
+    mountMultimodal({ transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 });
+
+    selectText(para);
+    await wait(200);
+    key("keydown", "`");
+    key("keydown", " "); // thread opens, seeded with the selection
+    await wait(50);
+    key("keyup", " ");
+    await wait(50);
+
+    // The mirror carries the selection as a structured item — locator +
+    // clipped excerpt + marker; the full text stays on the stream event.
+    const snapshot = slots.get("preview") as { items?: Array<Record<string, unknown>> };
+    const item = snapshot.items?.find((i) => i.kind === "app-selection");
+    expect(item).toMatchObject({
+      marker: "sel_1",
+      sourceLoc: "src/App.tsx:10:2",
+      excerpt: "the interesting selected words",
+    });
+    para.remove();
   });
 });
 

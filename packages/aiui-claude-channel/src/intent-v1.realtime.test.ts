@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format, type LoweredMessage } from "./intent-v1";
+import { LIVE_NUDGE_TEXT } from "./live-session";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 import { createTraceStore } from "./trace";
 
@@ -155,6 +156,14 @@ describe("intent-v1 realtime submode (gemini)", () => {
       },
     });
     await finished;
+
+    // The commit gate: fin injected the sentinel into the conversation — the
+    // only message the instructions authorize submit_intent to answer.
+    expect(
+      up.sent.some(
+        (m) => (m as { realtimeInput?: { text?: string } }).realtimeInput?.text === LIVE_NUDGE_TEXT,
+      ),
+    ).toBe(true);
 
     expect(d.sent).toHaveLength(1);
     const prompt = d.sent[0].text;

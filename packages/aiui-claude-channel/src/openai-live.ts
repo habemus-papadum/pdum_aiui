@@ -39,6 +39,7 @@
  */
 import { priceCall, usageFromRealtimeResponse } from "./cost";
 import {
+  LIVE_COMPOSER_INSTRUCTIONS,
   LIVE_NUDGE_TEXT,
   type LiveCapabilities,
   type LiveSession,
@@ -59,19 +60,6 @@ import {
 
 /** The flagship conversational model, degraded to the realtime submode's composer. */
 export const DEFAULT_OPENAI_LIVE_MODEL = "gpt-realtime-2";
-
-/**
- * The composer persona — the OpenAI-side twin of {@link ./gemini-live}'s, minus
- * the video mention (this engine has none). Terse: billed as input every turn.
- */
-export const OPENAI_LIVE_INSTRUCTIONS =
-  "You help a developer compose a request for a coding agent while they talk and share images " +
-  "of their app. Images arrive labeled with bracketed ids like [image shot_3]. Build an accurate " +
-  'picture of what they want done to the app; resolve deictic references ("this slider", "here") ' +
-  "against what you have seen, fold in corrections, and drop rambling. When they signal completion " +
-  "(they say to send it, or you are nudged), call submit_intent: its segments[] interleaves the " +
-  'cleaned-up request text with image refs (a bare id, e.g. "shot_3") placed where each image ' +
-  "belongs — a brief, not a transcript. Speak briefly otherwise.";
 
 /** The `submit_intent` tool as GA realtime declares it (standard JSON Schema). */
 const SUBMIT_INTENT_TOOL = {
@@ -104,7 +92,10 @@ export interface OpenAiLiveSessionOptions {
   voice?: () => string | undefined;
   /** Resolves the input-transcription model (feeds the chronicle). */
   transcriptionModel?: () => string;
-  /** The composer persona (short — billed every turn). */
+  /**
+   * The composer persona (short — billed every turn). Default:
+   * {@link LIVE_COMPOSER_INSTRUCTIONS}, the shared authoritative text.
+   */
   instructions?: string;
   /** Override the endpoint (tests). */
   url?: string;
@@ -342,7 +333,7 @@ export function openOpenAiLiveSession(
           session: {
             type: "realtime",
             model: options.model(),
-            instructions: options.instructions ?? OPENAI_LIVE_INSTRUCTIONS,
+            instructions: options.instructions ?? LIVE_COMPOSER_INSTRUCTIONS,
             output_modalities: ["audio"],
             audio: {
               input: {

@@ -42,6 +42,7 @@
 import WebSocket from "ws";
 import { priceCall, usageFromGeminiLive } from "./cost";
 import {
+  LIVE_COMPOSER_INSTRUCTIONS,
   LIVE_NUDGE_TEXT,
   type LiveCapabilities,
   type LiveSession,
@@ -67,21 +68,6 @@ const GEMINI_OUTPUT_RATE = 24000;
  * through — no channel-side resampler.
  */
 const GEMINI_INPUT_AUDIO_MIME = "audio/pcm;rate=24000";
-
-/**
- * The composer persona. Refined from the spike: labels arrive as `[image <id>]`,
- * the model refers to and returns bare ids, and `submit_intent` is a *brief* (a
- * cleaned-up rendering of intent), not a transcript. Kept terse — it is billed as
- * input tokens on every turn.
- */
-export const GEMINI_LIVE_INSTRUCTIONS =
-  "You help a developer compose a request for a coding agent while they talk and share images " +
-  "of their app. Images arrive labeled with bracketed ids like [image shot_3]. Build an accurate " +
-  'picture of what they want done to the app; resolve deictic references ("this slider", "here") ' +
-  "against what you have seen, fold in corrections, and drop rambling. When they signal completion " +
-  "(they say to send it, or you are nudged), call submit_intent: its segments[] interleaves the " +
-  'cleaned-up request text with image refs (a bare id, e.g. "shot_3") placed where each image ' +
-  "belongs — a brief, not a transcript. Speak briefly otherwise.";
 
 /** The `submit_intent` function declaration (the spike's exact schema). */
 const SUBMIT_INTENT_DECLARATION = {
@@ -158,7 +144,10 @@ export interface GeminiLiveSessionOptions {
   apiKey: string;
   /** Resolves the model id (bare, e.g. `gemini-3.1-flash-live-preview`) at open time. */
   model: () => string;
-  /** The composer persona (short — billed every turn). */
+  /**
+   * The composer persona (short — billed every turn). Default:
+   * {@link LIVE_COMPOSER_INSTRUCTIONS}, the shared authoritative text.
+   */
   instructions?: string;
   /** Override the endpoint (tests). */
   url?: string;
@@ -399,7 +388,7 @@ export function openGeminiLiveSession(
             model: `models/${options.model()}`,
             generationConfig: { responseModalities: ["AUDIO"] },
             systemInstruction: {
-              parts: [{ text: options.instructions ?? GEMINI_LIVE_INSTRUCTIONS }],
+              parts: [{ text: options.instructions ?? LIVE_COMPOSER_INSTRUCTIONS }],
             },
             tools: [{ functionDeclarations: [SUBMIT_INTENT_DECLARATION] }],
             realtimeInputConfig: { automaticActivityDetection: { disabled: true } },

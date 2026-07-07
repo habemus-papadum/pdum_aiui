@@ -209,7 +209,9 @@ it submitted".
 
 **The fallback ladder** (the part that makes realtime shippable at all):
 
-1. User says "send it" → model calls `submit_intent` on its own → commit.
+1. ~~User says "send it" → model calls `submit_intent` on its own → commit.~~ *(Superseded
+   July 2026 — §11: submit is commit-gated. The model may never fire on its own; step 2's
+   message is the only trigger.)*
 2. User presses **Enter** → channel injects a text nudge ("the user pressed send — call
    `submit_intent` now with what you have") and awaits the call with a drain timeout
    (analogous to today's `REALTIME_DRAIN_TIMEOUT_MS`).
@@ -411,3 +413,41 @@ Design deltas vs §4.3: the `submit_intent` schema is now `segments[]` (interlea
 `{text?, image?}`), not `{prompt, image_refs}` — the spike proved models emit it naturally and
 it preserves position without post-hoc splicing. Video frames stay unlabeled ambient context;
 only deliberate shots (drag or S) get labels and are referenceable.
+
+---
+
+## 11. Commit-gated submit (decided July 2026)
+
+*(Addendum — supersedes §4.3's ladder step 1. Landed with RT4, July 2026.)*
+
+The user's call: the session instructions must describe the **actual situation** — a human and
+the model jointly composing an instruction for a coding agent; the human dictates by voice and
+shares screenshots and on-screen context; the model's final output is the clear, composed
+instruction (referencing the images) — and the model must **not** fire `submit_intent` on its
+own judgment. Not on a spoken "send it", not on conversational momentum. The single trigger is
+an explicit, client-originated text message the channel injects into the conversation when the
+human commits the thread (Enter → `fin`). That message already existed as the step-2 "Enter
+nudge" (`LIVE_NUDGE_TEXT`, `aiui-claude-channel/src/live-session.ts`); it is now the **commit
+sentinel** — the only authorized trigger, not a fallback prod.
+
+Landed:
+
+- **One authoritative persona** — `LIVE_COMPOSER_INSTRUCTIONS` (`live-session.ts`, beside the
+  sentinel), shared by both engines; the per-engine `GEMINI_LIVE_INSTRUCTIONS` /
+  `OPENAI_LIVE_INSTRUCTIONS` duplicates are gone. It describes the co-composition situation and
+  **embeds the sentinel verbatim** (template-literal interpolation, so the gate text can never
+  drift from the message that springs it), with the plain rule: call `submit_intent` ONLY after
+  that exact message arrives; never earlier, even if asked aloud to send.
+- The processor (`intent-v1.ts`) passes the shared persona explicitly at open and records it on
+  the `live open` trace stage — the trace shows the instructions the session actually ran under.
+- The ladder loses its step 1: fin → sentinel (step 2, mechanism unchanged) → drain →
+  `composeIntent` fallback (step 3, unchanged) → Esc/cancel (step 4, unchanged).
+
+Deliberately unchanged (specced, not re-plumbed): a model that fires early despite the
+instructions is still tolerated — `drainToolCall` buffers the call and fin consumes it
+(forgiving beats fatal; the trace's `live tool call` stage timestamps the misbehavior). The
+pinned trace-stage names (`live nudge` et al.) and the seam method (`nudgeSubmit`) keep their
+names — the debug-ui pins the labels — even though the nudge is now the gate. The flagship
+veneer's `DEFAULT_VOICE_INSTRUCTIONS` (`realtime-voice.ts`) was rewritten to the same honest
+framing (the human is dictating for a coding agent; the veneer never restates the dictation),
+still toolless — flagship's composition remains `composeIntent`'s.

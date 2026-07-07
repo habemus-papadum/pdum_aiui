@@ -19,22 +19,49 @@
  * the turn store, and the fallback compiler (§4.3) all keep working unchanged.
  *
  * The one asymmetry worth stating: the model, not `composeIntent`, is the compiler.
- * The user talks and shares; when they signal completion the model emits
- * `submit_intent({ segments: [{text?, image?}] })` — cleaned-up prose interleaved
- * with bare image ids — and the channel re-attaches the withheld shot metadata as it
- * resolves each ref (the live model never sees paths or element info). The interface
- * exposes exactly the acts the processor needs to make that happen and nothing more.
+ * The user talks and shares; when the human commits the thread (Enter → fin) the
+ * channel injects {@link LIVE_NUDGE_TEXT} — the commit sentinel — and the model
+ * answers it with `submit_intent({ segments: [{text?, image?}] })`: cleaned-up
+ * prose interleaved with bare image ids, whose withheld shot metadata the channel
+ * re-attaches as it resolves each ref (the live model never sees paths or element
+ * info). The interface exposes exactly the acts the processor needs to make that
+ * happen and nothing more.
  */
 import type { CallCost } from "./cost";
 
 /**
- * The Enter-nudge text (§4.3 step 2) — a bare, immediately-answered turn asking
- * the model to compile now. The single source of truth both engines send and the
- * processor records on its `live nudge` trace stage, so the trace shows exactly
- * what the model was told.
+ * The **commit sentinel** — the client-originated text the channel injects into
+ * the conversation when the human commits the thread (Enter → fin), and the
+ * ONLY authorized trigger for `submit_intent`: {@link LIVE_COMPOSER_INSTRUCTIONS}
+ * quotes it verbatim and forbids calling the tool before it arrives (decided
+ * July 2026 — transcription-and-realtime-submodes.md §11). On the wire it is a
+ * bare, immediately-answered turn; the single source of truth both engines send
+ * and the processor records on its `live nudge` trace stage, so the trace shows
+ * exactly what the model was told.
  */
 export const LIVE_NUDGE_TEXT =
   "The user pressed send — call submit_intent now with what you have. No further questions.";
+
+/**
+ * The composer persona — the one authoritative system-instruction text, shared
+ * by both engines (gemini-live and openai-live default to it). It describes the
+ * actual situation: a human and the model jointly composing an instruction for a
+ * coding agent — voice dictation, labeled screenshots, on-screen context — and it
+ * embeds {@link LIVE_NUDGE_TEXT} verbatim so the commit gate can never drift from
+ * the message that springs it. Kept terse — instructions are billed as input
+ * tokens on every turn.
+ */
+export const LIVE_COMPOSER_INSTRUCTIONS =
+  "You and a human are jointly composing an instruction for a coding agent. The human dictates " +
+  "by voice — fragmentary, self-corrected — and shares screenshots and on-screen context as " +
+  "they go; images arrive labeled with bracketed ids like [image shot_3]. Build an accurate " +
+  'picture of what they want done: resolve deictic references ("this slider", "here") against ' +
+  "what you have seen, fold in corrections, drop rambling. Speak briefly — clarify and answer " +
+  "in one short sentence. Your final message is the composed instruction: call submit_intent " +
+  "with segments[] interleaving the clear, cleaned-up instruction text with bare image ids " +
+  '(e.g. "shot_3") placed where each image belongs — a brief, not a transcript. Call ' +
+  `submit_intent ONLY after the exact client message "${LIVE_NUDGE_TEXT}" arrives — it is ` +
+  "sent when the human commits. Never call it earlier, even if asked aloud to send.";
 
 /**
  * What one vendor's realtime engine can do, read by the processor (and, later,
@@ -112,7 +139,11 @@ export interface LiveSession {
   appendVideoFrame(bytes: Uint8Array, mime: string): void;
   /** An out-of-window immediate text turn (selection notes, advisories). */
   injectText(text: string): void;
-  /** The Enter nudge (§4.3 step 2): ask the model to call `submit_intent` now. */
+  /**
+   * Send {@link LIVE_NUDGE_TEXT} — the commit sentinel, injected at fin. Per
+   * {@link LIVE_COMPOSER_INSTRUCTIONS} it is the only message that authorizes
+   * `submit_intent`.
+   */
   nudgeSubmit(): void;
   /**
    * Resolve with the model's `submit_intent` call, or `null` if none arrives

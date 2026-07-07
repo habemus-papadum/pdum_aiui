@@ -194,26 +194,38 @@ export type IntentEvent =
     }
   | ({
       /**
-       * The on-screen selection riding this turn: text highlighted in the app
+       * An on-screen selection riding this turn: text highlighted in the app
        * *before* arming (while armed, drags ink — so the watcher's snapshot is
-       * the record of it). Emitted right after `thread-open`, so the turn's
-       * transcript *begins* with the selection chip; re-emitted (last wins)
-       * when the page selection changes while the thread is open. Lowered by
-       * the channel into the prompt's context preamble (the same wording the
-       * `text-concat` selection block uses), never the body: it is context
-       * about the intent, not the intent itself.
+       * the record of it), or re-selected mid-turn (tweak mode, correct mode).
+       * A first-class stream event, interleaved like text and shots: it
+       * composes into the prompt AT ITS POSITION and shows as a chip there in
+       * the preview. Emitted right after `thread-open` for the pre-arm
+       * snapshot, and again on each mid-turn selection.
+       *
+       * `marker` (`sel_1`, `sel_2`, … — the engine assigns, mirroring
+       * `shot_N`) is the selection's identity: a refinement of the SAME
+       * selection (nothing contentful in between — the watcher tracking a
+       * drag) re-emits under the same marker and the fold keeps the latest
+       * payload at the first position (one chip that tracks the drag); once
+       * anything else lands, a new selection gets a fresh marker and its own
+       * position. Absent only in pre-marker traces (consumers fold those
+       * latest-wins, the legacy behavior).
        */
       at: number;
       type: "app-selection";
+      marker?: string;
     } & AppSelection)
   | {
       /**
-       * Retract the turn's app selection (the chip's ✕ / a cleared watcher).
-       * Append-only like everything else: prior `app-selection` events stay in
-       * the stream and the trace; composition just stops carrying one.
+       * Retract exactly one app selection (the chip's ✕ / a cleared watcher):
+       * the one named by `marker`. Append-only like everything else: the
+       * `app-selection` events stay in the stream and the trace; composition
+       * just excludes the marker. A markerless drop (pre-marker traces)
+       * retracts the most recent selection, the legacy behavior.
        */
       at: number;
       type: "app-selection-drop";
+      marker?: string;
     }
   | ({
       /**
@@ -223,8 +235,24 @@ export type IntentEvent =
        * (short → inline sentence, long → fenced block) at compose time, so
        * the preview shows a chip, the trace shows the selection itself, and
        * corrections can never rewrite contributed code as if it were speech.
+       *
+       * `marker` (`code_1`, `code_2`, … — the engine assigns, mirroring
+       * `shot_N`) makes the chip retractable exactly like a shot; absent only
+       * in pre-marker traces (those can't be dropped, and nothing crashes).
        */
       at: number;
       type: "code-selection";
+      marker?: string;
     } & CodeSelection)
+  | {
+      /**
+       * Retract a code selection from the turn (the chip's ✕ — the same
+       * gesture as deleting a screenshot). Append-only like everything else:
+       * the `code-selection` event stays in the stream and the trace;
+       * `composeIntent` just excludes the marker from the composition.
+       */
+      at: number;
+      type: "code-selection-drop";
+      marker: string;
+    }
   | { at: number; type: "note"; text: string };
