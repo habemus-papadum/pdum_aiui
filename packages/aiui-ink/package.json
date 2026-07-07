@@ -1,14 +1,13 @@
 {
-  "name": "@habemus-papadum/aiui",
+  "name": "@habemus-papadum/aiui-ink",
   "version": "0.2.0+dev",
-  "description": "ai ui frontends",
+  "description": "Reusable canvas ink surface: local pointer inking or a remote stroke feed, with per-stroke color and thickness.",
   "type": "module",
   "license": "MIT",
-  "author": "Nehal Patel <nehal@alum.mit.edu>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
-    "directory": "packages/aiui"
+    "directory": "packages/aiui-ink"
   },
   "sideEffects": false,
   "exports": {
@@ -17,12 +16,8 @@
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
-  "bin": {
-    "aiui": "./dist/cli.js"
-  },
   "files": [
-    "dist",
-    "templates"
+    "dist"
   ],
   "publishConfig": {
     "access": "public",
@@ -41,20 +36,5 @@
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "@habemus-papadum/aiui-claude-plugin": "workspace:^",
-    "@habemus-papadum/aiui-code-server": "workspace:^",
-    "@habemus-papadum/aiui-devtools-extension": "workspace:^",
-    "@habemus-papadum/aiui-lsp": "workspace:^",
-    "@habemus-papadum/aiui-paint": "workspace:^",
-    "@habemus-papadum/aiui-util": "workspace:^",
-    "@inquirer/prompts": "^7.2.0",
-    "@puppeteer/browsers": "^2.10.5",
-    "chalk": "^5.3.0",
-    "commander": "^15.0.0",
-    "execa": "^9.6.1",
-    "vite": "^6.4.3"
   }
 }

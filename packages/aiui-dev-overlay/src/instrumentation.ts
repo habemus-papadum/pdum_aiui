@@ -35,6 +35,32 @@ export interface FrameMetric {
   error?: string;
 }
 
+/** A point the {@link RemotePaintSink} draws with, in viewport CSS pixels. */
+export interface RemoteInkPoint {
+  x: number;
+  y: number;
+  pressure?: number;
+}
+
+/**
+ * The seam an external controller uses to drive the intent tool's ink from a
+ * remote pen — published by the multimodal modality at `window.__AIUI__
+ * .remotePaint` when it mounts. `@habemus-papadum/aiui-paint`'s host consumes
+ * it (its `InkSink`): arming here arms the intent turn, and injected strokes
+ * land on the same ink layer local drawing uses (so they composite into shots
+ * and become part of the turn). The two packages agree by *shape* across the
+ * global — neither imports the other. Coordinates are viewport CSS px; the
+ * caller maps its normalized 0..1 wire coordinates against {@link size}.
+ */
+export interface RemotePaintSink {
+  setArmed(on: boolean): void;
+  beginStroke(id: string, style: { color: string; width: number }, point: RemoteInkPoint): void;
+  extendStroke(id: string, point: RemoteInkPoint): void;
+  endStroke(id: string, point?: RemoteInkPoint): void;
+  cancelStroke(id: string): void;
+  size(): { width: number; height: number };
+}
+
 /** The shape of `window.__AIUI__`. */
 export interface PageInstrumentation {
   /** Bump when this shape changes incompatibly. */
@@ -45,6 +71,8 @@ export interface PageInstrumentation {
   sourceRoot?: string;
   /** Recent frame metrics, oldest first (bounded ring). */
   frames: FrameMetric[];
+  /** Remote-paint seam, present while the multimodal intent tool is mounted. */
+  remotePaint?: RemotePaintSink;
 }
 
 declare global {

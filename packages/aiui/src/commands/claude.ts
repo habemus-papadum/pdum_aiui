@@ -258,7 +258,8 @@ aiui's own flags (everything else forwards to claude verbatim):
                                  (e.g. a tunnel from \`aiui browser --tunnel\`)
   --aiui-sidecar <name>          host this session sidecar (repeatable); the
                                  \`code\` reader auto-enables when the project
-                                 has an LSP setup or well-known languages
+                                 has an LSP setup or well-known languages;
+                                 \`paint\` (iPad ink, LAN) is opt-in only
   --aiui-no-sidecar <name>       don't host this session sidecar (repeatable)
 
 Durable settings live in config.json (project .aiui-cache/ + user cache) — see the

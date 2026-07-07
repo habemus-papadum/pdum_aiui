@@ -15,6 +15,7 @@ import { runConfigTui } from "./commands/config-tui";
 import { type DemoOptions, runDemo } from "./commands/demo";
 import { runLspList, runLspProbe, runLspProvision } from "./commands/lsp";
 import { runMcp } from "./commands/mcp";
+import { runPaintUrl } from "./commands/paint";
 import { runSetupLsp } from "./commands/setup-lsp";
 import { runVite } from "./commands/vite";
 
@@ -172,6 +173,19 @@ export function buildProgram(): Command {
     .helpOption(false)
     .argument("[args...]", "arguments forwarded to the aiui-claude-channel CLI")
     .action((args: string[]) => runMcp(args));
+
+  // `aiui paint …` — the iPad paint stream. `url` prints where the iPad should
+  // point its browser: each running channel that hosts the paint sidecar
+  // (`aiui claude --aiui-sidecar paint`) reports its LAN listener via
+  // `/paint/info`; this resolves them all so you can copy-paste the URL.
+  const paint = program
+    .command("paint")
+    .description("the iPad paint stream — url (where the iPad should connect)");
+  paint
+    .command("url")
+    .description("print the LAN URL(s) an iPad should open, per running paint-enabled channel")
+    .option("--json", "machine-readable targets")
+    .action((opts: { json?: boolean }) => runPaintUrl(opts));
 
   // `aiui lsp …` is the toolbox `setup-lsp` (and its skill) drive: inspect the
   // manifest, provision the built-in python/js recipes, and — the load-bearing

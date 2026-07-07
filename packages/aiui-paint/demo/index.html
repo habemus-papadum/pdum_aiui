@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>aiui paint — standalone demo</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        font-family: -apple-system, system-ui, sans-serif;
+        background: #0b0d12;
+        color: #e8ebf0;
+        /* the body itself scrolls — the "document" (#doc) is larger than the viewport */
+      }
+
+      /* The big scrollable canvas of the demo: a grid + landmarks so scrolling is
+         visibly doing something. Sized in JS to DOC_W × DOC_H. */
+      #doc {
+        position: relative;
+        background-color: #10131b;
+        background-image:
+          linear-gradient(#1b2230 1px, transparent 1px),
+          linear-gradient(90deg, #1b2230 1px, transparent 1px),
+          linear-gradient(#151b28 1px, transparent 1px),
+          linear-gradient(90deg, #151b28 1px, transparent 1px);
+        background-size: 200px 200px, 200px 200px, 40px 40px, 40px 40px;
+      }
+      .landmark {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border-radius: 16px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        opacity: 0.9;
+        user-select: none;
+        pointer-events: none;
+      }
+
+      /* The ink canvas (aiui-ink InkSurface) is placed absolutely inside #doc by JS. */
+
+      #toolbar {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        background: rgba(15, 19, 26, 0.92);
+        border: 1px solid #232838;
+        border-radius: 12px;
+        backdrop-filter: blur(6px);
+      }
+      #toolbar button {
+        background: #1a1f2b;
+        border: 1px solid #2a3040;
+        color: #e8ebf0;
+        border-radius: 9px;
+        padding: 6px 10px;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      #toolbar button:active { background: #232a3a; }
+      #share.on { border-color: #06d6a0; color: #06d6a0; }
+      #share.hot { background: #ff5c87; border-color: #ff5c87; color: #14060c; font-weight: 700; }
+      .swatch { width: 24px; height: 24px; border-radius: 50%; padding: 0; }
+      .swatch.sel { outline: 2px solid #fff; outline-offset: 2px; }
+      .wbtn.sel { border-color: #fff; }
+      #status { font-size: 12px; color: #9aa3b2; max-width: 42ch; line-height: 1.35; }
+      #hint {
+        position: fixed;
+        bottom: 12px;
+        left: 12px;
+        z-index: 10;
+        font-size: 12px;
+        color: #8b93a4;
+        background: rgba(15, 19, 26, 0.92);
+        border: 1px solid #232838;
+        border-radius: 10px;
+        padding: 8px 10px;
+        max-width: 60ch;
+        line-height: 1.4;
+      }
+      #hint code { color: #cfe8ff; }
+    </style>
+  </head>
+  <body>
+    <div id="doc"></div>
+
+    <div id="toolbar">
+      <span id="swatches"></span>
+      <span id="widths"></span>
+      <button id="share" type="button">Share screen</button>
+      <button id="videoToggle" type="button">video</button>
+      <button id="clear" type="button">Clear</button>
+      <span id="status">starting…</span>
+    </div>
+
+    <div id="hint"></div>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

@@ -30,6 +30,10 @@ into your live, permission-skipping Claude Code session (loaded via
 - When the project has an LSP setup, the channel also hosts the [code reader](./code-reader)'s
   backend on the same port — read-only access to the project's source files, served with
   permissive CORS (any local page or process that can reach the loopback port can read them).
+- With `--aiui-sidecar paint` (opt-in, never automatic), the channel additionally opens a separate
+  **LAN-bound, unauthenticated** listener for the [iPad paint stream](./paint-stream): anyone on
+  your network who finds it can watch the shared browser and draw into your armed prompt. Trusted
+  networks only.
 - The channel code itself runs inside your session's trust boundary. If you don't understand what
   this code does, **the custom channel could do anything to your computer**.
 

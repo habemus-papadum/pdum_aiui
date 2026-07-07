@@ -30,6 +30,7 @@
  */
 
 import { makeDraggable } from "../drag";
+import { getInstrumentation, type RemotePaintSink } from "../instrumentation";
 import type { IntentModality, IntentThread, IntentToolContext } from "../intent";
 import { toSelectionPayload } from "../intent";
 import {
@@ -164,6 +165,42 @@ export function multimodalModality(
         onAutoClear: () => engine.inkCleared(true),
       });
       layers.append(ink.canvas);
+
+      // ── remote-paint seam ────────────────────────────────────────────────────
+      // Publish an ink sink on window.__AIUI__ so an external controller (the
+      // aiui-paint host, driving strokes from an iPad) can arm this intent tool
+      // and inject strokes into the SAME ink layer local drawing uses — so a
+      // circle drawn on the iPad composites into a shot and joins the turn just
+      // like a local one. `renderHud` (below) is a hoisted declaration; the sink
+      // only fires post-mount.
+      const remotePaint: RemotePaintSink = {
+        setArmed(on) {
+          engine.setArmed(on);
+          if (on && engine.mode !== "ink") {
+            engine.setMode("ink");
+          }
+          renderHud();
+        },
+        beginStroke(id, style, point) {
+          if (engine.armed) {
+            ink.remoteBegin(id, style, point.x, point.y);
+          }
+        },
+        extendStroke(id, point) {
+          ink.remotePoint(id, point.x, point.y);
+        },
+        endStroke(id, point) {
+          ink.remoteEnd(id, point?.x, point?.y);
+        },
+        cancelStroke(id) {
+          ink.remoteCancel(id);
+        },
+        size: () => ({ width: window.innerWidth, height: window.innerHeight }),
+      };
+      const instrumentation = getInstrumentation();
+      if (instrumentation) {
+        instrumentation.remotePaint = remotePaint;
+      }
 
       const shots = new ShotTool(ink, (rect, components, viewport, thumb, bytes) => {
         // A capture can resolve long after the gesture — the first shot blocks
@@ -1505,6 +1542,9 @@ export function multimodalModality(
 
       return {
         unmount() {
+          if (instrumentation?.remotePaint === remotePaint) {
+            instrumentation.remotePaint = undefined;
+          }
           disposeBus?.();
           overlayTools.dispose();
           uninstallKeys();
