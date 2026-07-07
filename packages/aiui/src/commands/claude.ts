@@ -156,7 +156,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
 
   // Tell the channel which session sidecars to host. The channel process
   // inherits this session's cwd, so the project root is process.cwd(): the
-  // code reader's backend auto-enables when the project has an LSP setup, and
+  // code reader's backend auto-enables when the project has an LSP setup or
+  // contains well-known languages (its backend bootstraps a setup lazily), and
   // `--aiui-sidecar` / `--aiui-no-sidecar` force-enable / disable by name.
   const sidecars = resolveSidecars(process.cwd(), {
     enable: aiuiArgs.sidecar,
@@ -256,7 +257,8 @@ aiui's own flags (everything else forwards to claude verbatim):
   --aiui-browser-url <url>       attach to a browser at this DevTools endpoint
                                  (e.g. a tunnel from \`aiui browser --tunnel\`)
   --aiui-sidecar <name>          host this session sidecar (repeatable); the
-                                 \`code\` reader auto-enables with an LSP setup
+                                 \`code\` reader auto-enables when the project
+                                 has an LSP setup or well-known languages
   --aiui-no-sidecar <name>       don't host this session sidecar (repeatable)
 
 Durable settings live in config.json (project .aiui-cache/ + user cache) — see the
