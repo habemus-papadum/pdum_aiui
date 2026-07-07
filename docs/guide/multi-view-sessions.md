@@ -93,8 +93,9 @@ while the session is idle **arms it first** — selecting code and sending it *i
 
 As the host builds its turn it broadcasts a compact `preview` — the composed prompt text so far —
 into the shared `preview` slot. Every view can render it read-only. Dictate in the app tab and the
-sentence appears in the reader's panel; contribute a selection from the reader and the fenced code
-appears in the app tab's on-screen preview. It's one prompt, mirrored.
+sentence appears in the reader's panel; contribute a selection from the reader and a compact
+`[code: file:lines “excerpt…”]` marker appears in the mirror (the app tab's own preview shows it
+as a chip — the code excerpt with its location beside it). It's one prompt, mirrored.
 
 Only the **host** writes `preview` (an idle contributor never does), so there's no race on the slot.
 
@@ -112,8 +113,12 @@ you're not painting or dictating — **you're selecting code and talking**:
 
 ### Selection → context
 
-A selection is delivered as a message that reads like something you'd say — "regarding *this*
-code." How much of it travels depends on size (`SHORT_SELECTION_CHARS`, 240):
+A selection travels **structured** — the raw code plus its locator, as a `code-selection` event on
+the turn's stream — and *how it reads in the prompt is decided at lowering time*, not by the
+contributing view. The host's preview shows it as a chip (`⧉ web/src/vec3.ts:21`, hover for the
+code), the lowering trace records the selection itself as a named stage, and corrections can never
+rewrite contributed code as if it were speech. At compose time the short/long rule
+(`SHORT_SELECTION_CHARS`, 240) renders it:
 
 - **Short selection** → **inlined**: the location and the code go straight into the prompt —
   `` Regarding `web/src/vec3.ts:21`: `class Vec3 { … }` ``.
@@ -126,8 +131,9 @@ code." How much of it travels depends on size (`SHORT_SELECTION_CHARS`, 240):
   ```
   ````
 
-Both are plain turn text — they compose into the prompt exactly like a transcribed sentence, and
-show up in the shared preview immediately.
+Its cousin from the app tab — text highlighted on the *page* before arming — rides the same stream
+as an `app-selection` event and lowers into the prompt's context preamble ("It concerns this
+on-screen selection: …"); see [the web intent tool](/guide/web-intent-tool) for that flow.
 
 ## Host vs. contributor
 
@@ -196,15 +202,15 @@ talk to each other" substrate:
 
 - A **git viewer** could join as role `"git"` and contribute a hunk the same way the reader
   contributes a selection — no change to the reader, no change to the host.
-- A planned **iPad painting surface** (in design on its own branch) needs the same
-  **arming sync** across devices; it's another peer on the same `armed` slot.
+- The [iPad painting surface](./paint-stream) needs the same **arming sync** across
+  devices; it's another peer on the same `armed` slot.
 
 To add a view: mount `installSessionBus({ role })` (the Vite plugin does this for you), read
 `armed` / `preview` off the bus for a synced UI, and `publish` a
 [contribution](#selection-context) when the user wants to feed the turn. The
-[`SESSION_CONTRIBUTION_TOPIC`](/packages/aiui-dev-overlay/) contract and the
-`contributionToText` / `isShortSelection` helpers are shared so every contributor formats the same
-way.
+[`SESSION_CONTRIBUTION_TOPIC`](/packages/aiui-dev-overlay/) contract is shared, and a contributor
+sends the *raw* selection (text + locator) — rendering is the lowering's job, so every
+contributor's selection reads the same in the prompt without any formatting code of its own.
 
 ## Where the code lives
 

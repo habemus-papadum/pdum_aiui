@@ -18,8 +18,11 @@
  *  - shot PNGs and (for the `openai` transcriber) audio segments ride
  *    `chunk{kind:"attachment"}` raw-binary frames, correlated to their `shot`/
  *    `talk` event by id (`shot_N` / `seg_N`);
- *  - an optional `chunk{kind:"context"}` carries the page selection just before
- *    the thread's `fin` frame on send;
+ *  - the page selection rides the stream itself as an `app-selection` event,
+ *    emitted right after thread-open (whatever was highlighted before arming —
+ *    the engine reads the watcher's snapshot via its selection provider) and
+ *    re-emitted on mid-turn changes; the legacy `chunk{kind:"context"}` frame
+ *    is no longer sent (the server still accepts it from older clients);
  *  - the server lowers and pushes echoes back — a segment's `transcript-final`,
  *    a completed `correction` — which merge into the engine stream as if local.
  *
@@ -30,8 +33,9 @@
  */
 
 import { makeDraggable } from "../drag";
+import { getInstrumentation, type RemotePaintSink } from "../instrumentation";
 import type { IntentModality, IntentThread, IntentToolContext } from "../intent";
-import { toSelectionPayload } from "../intent";
+import { toAppSelection } from "../intent";
 import {
   type CorrectionTarget,
   composeIntent,
@@ -45,11 +49,7 @@ import {
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
 import type { Ack, VideoChunk } from "../protocol";
-import {
-  contributionToText,
-  SESSION_CONTRIBUTION_TOPIC,
-  type SessionContribution,
-} from "../session-contrib";
+import { SESSION_CONTRIBUTION_TOPIC, type SessionContribution } from "../session-contrib";
 import { intentTurnStore } from "../turn-store";
 import {
   clearIntentOverrides,
@@ -73,6 +73,14 @@ import { sampleDimensions, VIDEO_FRAME_MIME, VIDEO_JPEG_QUALITY, VideoSampler } 
 
 /** How long to accumulate engine events before flushing an events chunk. */
 const EVENTS_DEBOUNCE_MS = 60;
+/** A code selection's excerpt in the mirror marker — one glanceable line. */
+const CODE_EXCERPT_CHARS = 48;
+
+/** Collapse a code selection to a one-line, length-capped marker excerpt. */
+function codeExcerpt(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > CODE_EXCERPT_CHARS ? `${flat.slice(0, CODE_EXCERPT_CHARS)}…` : flat;
+}
 /** How long to wait for a correction echo before falling back to plain replace. */
 const CORRECTION_TIMEOUT_MS = 8000;
 
@@ -121,6 +129,26 @@ export function multimodalModality(
       const base: IntentPipelineConfig = effectiveConfig(viteOption, {});
       const config: IntentPipelineConfig = effectiveConfig(viteOption, loadIntentOverrides());
       const engine = new Engine(config);
+      // The turn's app selection. At thread-open the engine reads the host's
+      // selection watcher through this provider, so whatever was highlighted
+      // on the page BEFORE arming opens the turn as its `app-selection` event
+      // (the transcript begins with the selection chip, and the selection can
+      // never be lost to a send-time read). Mid-turn changes keep the event
+      // current (last wins); a cleared watcher (the panel chip's ✕) retracts it.
+      engine.selectionProvider = () => {
+        const snap = ctx.selection();
+        return snap !== undefined ? toAppSelection(snap) : undefined;
+      };
+      const offSelectionChange = ctx.onSelectionChange((snap) => {
+        if (!engine.threadOpen) {
+          return; // an app selection is context riding a turn, never a turn opener
+        }
+        if (snap !== undefined) {
+          engine.appSelection(toAppSelection(snap));
+        } else {
+          engine.appSelectionDrop();
+        }
+      });
       const audio = new AudioCapture();
       // The realtime (streaming) capture source, built lazily on the first
       // realtime talk. Injectable so jsdom tests supply a fake for the AudioWorklet.
@@ -164,6 +192,42 @@ export function multimodalModality(
         onAutoClear: () => engine.inkCleared(true),
       });
       layers.append(ink.canvas);
+
+      // ── remote-paint seam ────────────────────────────────────────────────────
+      // Publish an ink sink on window.__AIUI__ so an external controller (the
+      // aiui-paint host, driving strokes from an iPad) can arm this intent tool
+      // and inject strokes into the SAME ink layer local drawing uses — so a
+      // circle drawn on the iPad composites into a shot and joins the turn just
+      // like a local one. `renderHud` (below) is a hoisted declaration; the sink
+      // only fires post-mount.
+      const remotePaint: RemotePaintSink = {
+        setArmed(on) {
+          engine.setArmed(on);
+          if (on && engine.mode !== "ink") {
+            engine.setMode("ink");
+          }
+          renderHud();
+        },
+        beginStroke(id, style, point) {
+          if (engine.armed) {
+            ink.remoteBegin(id, style, point.x, point.y);
+          }
+        },
+        extendStroke(id, point) {
+          ink.remotePoint(id, point.x, point.y);
+        },
+        endStroke(id, point) {
+          ink.remoteEnd(id, point?.x, point?.y);
+        },
+        cancelStroke(id) {
+          ink.remoteCancel(id);
+        },
+        size: () => ({ width: window.innerWidth, height: window.innerHeight }),
+      };
+      const instrumentation = getInstrumentation();
+      if (instrumentation) {
+        instrumentation.remotePaint = remotePaint;
+      }
 
       const shots = new ShotTool(ink, (rect, components, viewport, thumb, bytes) => {
         // A capture can resolve long after the gesture — the first shot blocks
@@ -300,6 +364,11 @@ export function multimodalModality(
       const strip = new ConfigStrip((command) => dispatch(command));
       layers.append(strip.root);
       document.body.append(layers);
+      // Selections inside our own page-level layers are gestures (the
+      // correct-mode lasso in the preview body), never the "app selection" —
+      // without this, lassoing a transcript span silently REPLACED the
+      // watcher's snapshot of what the user had highlighted in the app.
+      ctx.ignoreSelectionsWithin(layers);
 
       // Both floating surfaces move out of the way by dragging (they cover app
       // content by construction). They sit above the ink canvas and shot veil,
@@ -572,22 +641,10 @@ export function multimodalModality(
           return;
         }
         await flushOutbox(thread);
-        const selection = ctx.selection();
-        if (selection) {
-          try {
-            reportBadAck(
-              "selection context",
-              await thread.sendChunk(
-                { kind: "context" },
-                { selection: toSelectionPayload(selection) },
-                false,
-              ),
-            );
-          } catch (error) {
-            rememberError(error);
-          }
-          ctx.clearSelection();
-        }
+        // The selection rode the stream as this turn's `app-selection` event
+        // (no more send-time `context` chunk); a selection is per-submission,
+        // so consume it now that the turn is committing.
+        ctx.clearSelection();
         try {
           const ack = await thread.finish();
           if (ack.ok) {
@@ -1342,8 +1399,16 @@ export function multimodalModality(
         }
         const text = engine.threadOpen
           ? composeIntent(currentThreadEvents(), config.correctionPolicy)
-              .items.filter((i) => i.kind === "text")
-              .map((i) => i.text ?? "")
+              .items.filter((i) => i.kind === "text" || i.kind === "code-selection")
+              .map((i) =>
+                // The reader's mirror is plain text: a contributed code
+                // selection shows as a compact marker — location plus a
+                // clipped excerpt (a bare locator is opaque when debugging),
+                // not its full rendering.
+                i.kind === "code-selection"
+                  ? `[code: ${i.sourceLoc ?? "selection"} “${codeExcerpt(i.text ?? "")}”]`
+                  : (i.text ?? ""),
+              )
               .join(" ")
               .trim()
           : "";
@@ -1460,7 +1525,19 @@ export function multimodalModality(
           if (!engine.armed) {
             engine.setArmed(true);
           }
-          engine.contribute(contributionToText(c));
+          if (c.kind === "selection") {
+            // Structured, not pre-rendered: the code-selection event shows as
+            // a chip in the preview and composeIntent decides how it reads in
+            // the prompt at lowering time (see session-contrib.ts).
+            engine.codeSelection({
+              text: c.text,
+              ...(c.sourceLoc !== undefined ? { sourceLoc: c.sourceLoc } : {}),
+              ...(c.url !== undefined ? { url: c.url } : {}),
+              ...(c.lines !== undefined ? { lines: c.lines } : {}),
+            });
+          } else {
+            engine.contribute(c.text);
+          }
           renderHud();
           broadcastPreview();
           ctx.setStatus(
@@ -1505,6 +1582,10 @@ export function multimodalModality(
 
       return {
         unmount() {
+          offSelectionChange();
+          if (instrumentation?.remotePaint === remotePaint) {
+            instrumentation.remotePaint = undefined;
+          }
           disposeBus?.();
           overlayTools.dispose();
           uninstallKeys();

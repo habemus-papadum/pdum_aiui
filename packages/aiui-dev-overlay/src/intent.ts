@@ -27,7 +27,7 @@
 import { makeDraggable } from "./drag";
 import { addError, dismissError, type OverlayError, type OverlayErrorInput } from "./errors";
 import { type ClientMeta, collectClientMeta, setChannelPort } from "./instrumentation";
-import type { IntentPipelineConfig } from "./intent-pipeline";
+import type { AppSelection, IntentPipelineConfig } from "./intent-pipeline";
 import { multimodalModality } from "./multimodal";
 import { isDevEnvironment } from "./overlay";
 import {
@@ -117,6 +117,19 @@ export interface IntentToolContext {
   selection(): SelectionSnapshot | undefined;
   /** Drop the attached selection — call after a submission consumes it. */
   clearSelection(): void;
+  /**
+   * Subscribe to selection changes (a new capture, or a clear). The multimodal
+   * modality uses this to keep an open turn's `app-selection` event current;
+   * returns an unsubscribe.
+   */
+  onSelectionChange(handler: (snapshot: SelectionSnapshot | undefined) => void): () => void;
+  /**
+   * Exclude a node's selections from capture — for page-level UI a modality
+   * mounts outside the tool's shadow host (the multimodal layers: a
+   * correct-mode lasso in the transcript preview is a gesture, not an "app
+   * selection").
+   */
+  ignoreSelectionsWithin(node: Node): void;
   /** The channel port in use, if known. */
   readonly port: number | undefined;
 }
@@ -543,10 +556,18 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   // Watch the page's selection so the modality can attach "the thing the user
   // highlighted" to its submission. Ignore selections inside our own host, and
   // re-render the chip whenever the snapshot changes (a new selection or a
-  // dismiss). `renderChip` is hoisted so `onChange` can name it here.
+  // dismiss). `renderChip` is hoisted so `onChange` can name it here; the
+  // subscriber set fans the same change out to modalities (the multimodal turn
+  // keeps its `app-selection` event current from it).
+  const selectionSubscribers = new Set<(snap: SelectionSnapshot | undefined) => void>();
   const watcher = installSelectionWatcher({
     ignoreWithin: [host],
-    onChange: (snap) => renderChip(snap),
+    onChange: (snap) => {
+      renderChip(snap);
+      for (const handler of selectionSubscribers) {
+        handler(snap);
+      }
+    },
   });
 
   function renderChip(snap: SelectionSnapshot | undefined): void {
@@ -599,6 +620,11 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     activeModalityLabel: () => modalities[activeIndex]?.label ?? "",
     selection: () => watcher.snapshot(),
     clearSelection: () => watcher.clear(),
+    onSelectionChange: (handler) => {
+      selectionSubscribers.add(handler);
+      return () => selectionSubscribers.delete(handler);
+    },
+    ignoreSelectionsWithin: (node) => watcher.addIgnored(node),
     async openThread(threadOptions): Promise<IntentThread> {
       if (port === undefined) {
         // The same one-mechanism rule as the connect failure below: toast it
@@ -774,6 +800,22 @@ export function toSelectionPayload(snap: SelectionSnapshot): Record<string, unkn
     ...(snap.cell !== undefined ? { cell: snap.cell } : {}),
     ...(snap.tex !== undefined ? { tex: snap.tex } : {}),
     url: snap.url,
+  };
+}
+
+/**
+ * The event form of an attached selection: the snapshot as the intent
+ * pipeline's `AppSelection` payload — no `at` (the event is stamped) and no
+ * `rects` (viewport geometry is for screenshot annotation, not the stream).
+ * The multimodal modality rides this on the turn's `app-selection` event.
+ */
+export function toAppSelection(snap: SelectionSnapshot): AppSelection {
+  return {
+    text: snap.text,
+    ...(snap.sourceLoc !== undefined ? { sourceLoc: snap.sourceLoc } : {}),
+    ...(snap.cell !== undefined ? { cell: snap.cell } : {}),
+    ...(snap.tex !== undefined ? { tex: snap.tex } : {}),
+    ...(snap.url !== "" ? { url: snap.url } : {}),
   };
 }
 

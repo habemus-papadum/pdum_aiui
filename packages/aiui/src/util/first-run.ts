@@ -2,15 +2,16 @@
  * First-run choices: settings that deserve a deliberate answer, not a silent
  * default.
  *
- * Two of `aiui claude`'s behaviors are pure personal preference with real
- * consequences: whether to launch with `--dangerously-skip-permissions`, and
+ * Three of `aiui claude`'s behaviors are pure personal preference with real
+ * consequences: whether to launch with `--dangerously-skip-permissions`,
  * whether to auto-dismiss the development-channel acknowledgement prompt by
- * typing into the user's terminal. Neither should be something the user
+ * typing into the user's terminal, and whether to host the iPad paint surface
+ * (an unauthenticated LAN listener). None should be something the user
  * "tagged along" with because a default existed — so the first interactive
  * launch asks (definitively: the prompts have no Enter-through default), and
  * the answers persist to the **user-level** config, after which nothing asks
  * again. Non-interactive sessions never prompt; unset values fall back to the
- * documented defaults (skip: true, nudge: true).
+ * documented defaults (skip: true, nudge: true, paint: false).
  */
 import { type AiuiConfig, updateUserConfig } from "./config";
 import { type Choice, choose } from "./prompt";
@@ -25,6 +26,15 @@ const SKIP_PERMISSIONS_QUESTION =
   "network, the browser) runs without asking you first. Fast, and dangerous. It's a personal\n" +
   "preference — aiui works fine either way. Saved as claude.skipPermissions in your user\n" +
   "config; edit or delete it there to change your mind.";
+
+const PAINT_SIDECAR_QUESTION =
+  "One-time setup — host the iPad paint surface?\n" +
+  "With sidecars.paint on, every `aiui claude` session also serves the iPad paint stream: a\n" +
+  "SEPARATE, UNAUTHENTICATED listener on your LAN (the channel itself stays loopback-only).\n" +
+  "Anyone on your network who finds it can watch the shared browser and draw into your armed\n" +
+  "prompt — fine on a home network, not on café Wi-Fi. `aiui paint url` prints the URL to open\n" +
+  "on the iPad. Saved as sidecars.paint in your user config; per-launch flags\n" +
+  "(--aiui-sidecar/--aiui-no-sidecar paint) always win.";
 
 const ENTER_NUDGE_QUESTION =
   "One-time setup — auto-dismiss Claude Code's channel prompt?\n" +
@@ -62,6 +72,14 @@ export async function ensureLaunchChoices(
     updated = persist(updated, "enterNudge", answer === "y");
   }
 
+  if (updated.sidecars?.paint === undefined) {
+    const answer = await ask(PAINT_SIDECAR_QUESTION, [
+      { key: "y", label: "yes — host the iPad paint surface on my (trusted) LAN" },
+      { key: "n", label: "no — I'll pass --aiui-sidecar paint when I want it" },
+    ]);
+    updated = persistSidecar(updated, "paint", answer === "y");
+  }
+
   return updated;
 }
 
@@ -75,4 +93,12 @@ function persist(
   });
   printNote(`wrote claude.${key}: ${value} to ${file}`);
   return { ...config, claude: { ...config.claude, [key]: value } };
+}
+
+function persistSidecar(config: AiuiConfig, key: "code" | "paint", value: boolean): AiuiConfig {
+  const file = updateUserConfig((c) => {
+    c.sidecars = { ...c.sidecars, [key]: value };
+  });
+  printNote(`wrote sidecars.${key}: ${value} to ${file}`);
+  return { ...config, sidecars: { ...config.sidecars, [key]: value } };
 }

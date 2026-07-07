@@ -223,6 +223,15 @@ the snapshot minus its capture timestamp: the selected `text`, its `rects` (for 
 annotation), `sourceLoc`, `cell`, `tex`, and `url`. The binary protocol is unchanged; this is
 entirely payload-level.
 
+The **multimodal modality** rides the same snapshot as a first-class stream event instead: at
+thread-open the engine reads the watcher through its selection provider and opens the turn with an
+`app-selection` event (text + `sourceLoc`/`cell`/`tex`), so whatever was highlighted *before
+arming* — the only time a selection is possible; while armed, drags ink — begins the transcript as
+a pinned chip in the preview. A mid-turn re-selection re-emits it (last wins), the chip's ✕
+retracts it with an `app-selection-drop`, and the trace shows each of these as events plus a named
+`app selection` stage. The legacy send-time `context {selection}` frame is no longer sent; the
+channel still accepts it from older clients as a fallback.
+
 Attribution reuses the same DOM contract the screenshot/`locate` pipeline reads, so app authors
 write nothing selection-specific: from the selection's start element, `closest('[data-source-loc]')`
 and `closest('[data-cell]')` give the authoring line and dataflow node, and `closest('[data-tex]')`
@@ -230,8 +239,10 @@ and `closest('[data-cell]')` give the authoring line and dataflow node, and `clo
 rendered math (a selection over an equation carries `\partial u/\partial t`, not mangled glyphs).
 Every field is optional; a page with no aiui instrumentation still yields text + rects.
 
-The `text-concat` processor keeps the last selection a thread carried and, on `fin`, folds it into
-the augmented prompt right after the tab/source block (and adds nothing when there is no selection):
+Whichever way it arrived — the text modality's payload block, the multimodal stream's
+`app-selection` event, or a legacy `context` frame — the selection lowers into the same preamble
+wording, folded in right after the tab/source block on `fin` (and adding nothing when there is no
+selection):
 
 ```
 It concerns this on-screen selection: "reaction-diffusion on the GPU" (authored at src/ui/App.tsx:35:13; produced by cell catalog).
@@ -296,7 +307,7 @@ sequenceDiagram
 
   User->>W: ` arm · hold Space
   W->>C: open socket · hello (meta.intent)
-  W->>C: events {thread-open, talk-start}
+  W->>C: events {thread-open, app-selection?, talk-start}
   User->>W: release Space (talk-end)
   W->>C: events {talk-end} — flushed now
   W->>C: attachment seg_N (raw audio bytes)
@@ -307,7 +318,6 @@ sequenceDiagram
   W->>C: attachment shot_N (raw PNG)
   Note over C: blob saved on arrival · shot path wired
   User->>W: Enter (send)
-  W->>C: context {selection} (optional)
   W->>C: bare fin
   Note over C: fin — reuse speculative compose
   C->>S: notification · shots inlined as <screenshot> blocks

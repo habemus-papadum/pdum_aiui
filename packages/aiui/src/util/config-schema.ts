@@ -104,6 +104,34 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
     ],
   },
   {
+    name: "sidecars",
+    summary: "which session sidecars `aiui claude` asks the channel to host",
+    fields: [
+      {
+        key: "code",
+        type: "boolean",
+        defaultText: "unset (auto: on when the project has an LSP setup or well-known languages)",
+        summary: "Host the code reader sidecar.",
+        doc:
+          "true forces the reader on even when auto-detection wouldn't; false disables it. " +
+          "Per-launch flags win: --aiui-sidecar code / --aiui-no-sidecar code.",
+      },
+      {
+        key: "paint",
+        type: "boolean",
+        default: false,
+        defaultText: "false (unset: the first interactive launch asks, then persists the answer)",
+        summary: "Host the iPad paint sidecar — opens an UNAUTHENTICATED LAN listener.",
+        doc:
+          "The iPad paint stream (docs/guide/paint-stream): the channel stays loopback-only, " +
+          "but this sidecar opens a separate LAN listener anyone on your network can reach — " +
+          "which is why it is never silently enabled. The first interactive launch asks and " +
+          "persists the answer at the user level. Per-launch flags win: --aiui-sidecar paint / " +
+          "--aiui-no-sidecar paint. `aiui paint url` prints the iPad URL.",
+      },
+    ],
+  },
+  {
     name: "chrome",
     summary: "the agent's browser and the Chrome DevTools MCP",
     fields: [

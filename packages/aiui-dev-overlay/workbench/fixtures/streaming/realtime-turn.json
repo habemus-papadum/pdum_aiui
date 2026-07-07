@@ -1,5 +1,5 @@
 {
-  "description": "One realtime (openai-realtime) dictation turn as an ordered WIRE sequence: interleaved client events / streamed audio frames and the server's delta→delta→final echoes, ending in a bare fin. Unlike the sibling *.json fixtures (pure IntentEvent[] streams replayed through composeIntent), this captures the streaming CONTRACT — audio frames carry seg_1's PCM in seq order while talk-start/talk-end stay the segment boundaries, and the partial deltas must NOT change the committed compose (only the final does). Replayed by realtime.test.ts.",
+  "description": "One realtime (openai-realtime) dictation turn as an ordered WIRE sequence: interleaved client events / streamed audio frames and the server's delta→delta→final echoes, ending in a bare fin. Unlike the sibling *.json fixtures (pure IntentEvent[] streams replayed through composeIntent), this captures the streaming CONTRACT — audio frames carry seg_1's PCM in seq order while talk-start/talk-end stay the segment boundaries; the partial deltas stream back WHILE the audio is still appending (before talk-end/commit — that's what makes the preview fill as you talk) and must NOT change the committed compose (only the final does). Replayed by realtime.test.ts.",
   "config": { "transcriber": "openai-realtime" },
   "steps": [
     {
@@ -22,16 +22,6 @@
       "bytes": [48, 0, 64, 0]
     },
     {
-      "dir": "c2s",
-      "chunk": { "kind": "audio", "id": "seg_1", "seq": 2, "mime": "audio/pcm;rate=24000" },
-      "bytes": [80, 0, 96, 0]
-    },
-    {
-      "dir": "c2s",
-      "chunk": { "kind": "events" },
-      "events": [{ "at": 4, "type": "talk-end", "segment": 1, "ms": 420 }]
-    },
-    {
       "dir": "s2c",
       "server": {
         "type": "conversation.item.input_audio_transcription.delta",
@@ -40,12 +30,22 @@
       }
     },
     {
+      "dir": "c2s",
+      "chunk": { "kind": "audio", "id": "seg_1", "seq": 2, "mime": "audio/pcm;rate=24000" },
+      "bytes": [80, 0, 96, 0]
+    },
+    {
       "dir": "s2c",
       "server": {
         "type": "conversation.item.input_audio_transcription.delta",
         "item_id": "item_1",
         "delta": "diffusion on the gpu"
       }
+    },
+    {
+      "dir": "c2s",
+      "chunk": { "kind": "events" },
+      "events": [{ "at": 4, "type": "talk-end", "segment": 1, "ms": 420 }]
     },
     {
       "dir": "s2c",

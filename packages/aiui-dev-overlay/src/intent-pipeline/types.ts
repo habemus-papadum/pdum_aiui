@@ -51,6 +51,42 @@ export interface LocatedComponent {
 
 export type Mode = "ink" | "correct";
 
+/**
+ * The payload of an `app-selection` event: what the user had highlighted on
+ * the page when the turn opened (the overlay's selection watcher snapshots it
+ * — see the overlay's selection.ts). The raw text plus the same DOM-contract
+ * attribution the screenshot locator reads (`data-source-loc` / `data-cell`).
+ */
+export interface AppSelection {
+  /** The selected text, trimmed and capped by the watcher. */
+  text: string;
+  /** `data-source-loc` (`file:line:col`) of the selection's start element. */
+  sourceLoc?: string;
+  /** `data-cell` (dataflow node) of the selection's start element. */
+  cell?: string;
+  /** TeX source when the selection is rendered mathematics. */
+  tex?: string;
+  /** `location.href` of the page the selection was made on. */
+  url?: string;
+}
+
+/**
+ * The payload of a `code-selection` event: code selected in another view of
+ * the session (the code reader) and contributed to the turn. Kept structured
+ * — raw text plus locator — so the LOWERING decides how it renders into the
+ * prompt; the contributing view makes no formatting decisions.
+ */
+export interface CodeSelection {
+  /** The selected code, verbatim. */
+  text: string;
+  /** `file:line:col` (or `file:startLine-endLine`) locator, if known. */
+  sourceLoc?: string;
+  /** The contributing view's `location.href`. */
+  url?: string;
+  /** Line count (derived from `text` when omitted). */
+  lines?: number;
+}
+
 export type IntentEvent =
   | { at: number; type: "armed"; on: boolean }
   | { at: number; type: "mode"; mode: Mode }
@@ -156,4 +192,39 @@ export type IntentEvent =
       type: "video-share";
       on: boolean;
     }
+  | ({
+      /**
+       * The on-screen selection riding this turn: text highlighted in the app
+       * *before* arming (while armed, drags ink — so the watcher's snapshot is
+       * the record of it). Emitted right after `thread-open`, so the turn's
+       * transcript *begins* with the selection chip; re-emitted (last wins)
+       * when the page selection changes while the thread is open. Lowered by
+       * the channel into the prompt's context preamble (the same wording the
+       * `text-concat` selection block uses), never the body: it is context
+       * about the intent, not the intent itself.
+       */
+      at: number;
+      type: "app-selection";
+    } & AppSelection)
+  | {
+      /**
+       * Retract the turn's app selection (the chip's ✕ / a cleared watcher).
+       * Append-only like everything else: prior `app-selection` events stay in
+       * the stream and the trace; composition just stops carrying one.
+       */
+      at: number;
+      type: "app-selection-drop";
+    }
+  | ({
+      /**
+       * Code contributed from another view of the session (the reader's
+       * "Add to prompt →", over the session bus). Structured on purpose:
+       * `composeIntent` — shared with the channel's lowering — renders it
+       * (short → inline sentence, long → fenced block) at compose time, so
+       * the preview shows a chip, the trace shows the selection itself, and
+       * corrections can never rewrite contributed code as if it were speech.
+       */
+      at: number;
+      type: "code-selection";
+    } & CodeSelection)
   | { at: number; type: "note"; text: string };

@@ -27,9 +27,17 @@ export type {
   CorrectionTarget,
   EngineListener,
 } from "./engine";
-export { composeIntent, Engine } from "./engine";
+export { composeIntent, Engine, SHORT_SELECTION_CHARS } from "./engine";
 export type { KeyCommand, KeyState } from "./keymap";
 export { installKeymap, isTypingTarget, keyCommand, TIER_BY_DIGIT } from "./keymap";
 export type { DiffRun } from "./patch";
 export { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
-export type { IntentEvent, LocatedCell, LocatedComponent, Mode, Rect } from "./types";
+export type {
+  AppSelection,
+  CodeSelection,
+  IntentEvent,
+  LocatedCell,
+  LocatedComponent,
+  Mode,
+  Rect,
+} from "./types";

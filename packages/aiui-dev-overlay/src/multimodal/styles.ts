@@ -66,6 +66,14 @@ export const STYLES = /* css */ `
   .mm-thumb-peek { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
     max-height: 50vh; border: 2px solid #ffd166; border-radius: 8px; background: #0f1117;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none; }
+  /* Selection chips: the app selection pinned at the transcript's start, a
+     code selection at its stream position. Same pill language as the degraded
+     shot chip; the color separates "context" (blue) from shots (amber). */
+  .mm-sel-chip { font-size: 11px; border: 1px solid #3a4152; border-radius: 999px;
+    padding: 1px 8px; display: inline-block; margin: 0 4px 0 0; vertical-align: middle;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: #8ab4f8; }
+  .mm-sel-chip .mm-sel-loc { color: #9aa0aa; margin-left: 6px; }
   .mm-correction-bar { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
   .mm-correction-bar textarea { background: #0f1117; color: #e8e8ea; border: 1px solid #3a4152;
     border-radius: 6px; padding: 6px 10px; font: inherit; resize: vertical; min-height: 2.6em; }

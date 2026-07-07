@@ -81,13 +81,24 @@ export interface CorrectionVoiceHooks {
 }
 
 interface Piece {
-  kind: "text" | "shot";
+  kind: "text" | "shot" | "code-selection";
   segment?: number;
   text?: string;
   final?: boolean;
   correction?: boolean;
   marker?: string;
   thumb?: string;
+  /** A code-selection piece's locator (`file:line:col` / `file:start-end`). */
+  sourceLoc?: string;
+  /** A code-selection piece's line count. */
+  lines?: number;
+}
+
+/** The turn's app selection, shown as a chip pinned at the transcript's start. */
+interface AppSelectionChip {
+  text: string;
+  sourceLoc?: string;
+  cell?: string;
 }
 
 export class Preview {
@@ -98,6 +109,8 @@ export class Preview {
   private readonly engine: Engine;
   private readonly voice: CorrectionVoiceHooks;
   private pieces: Piece[] = [];
+  /** The turn's app selection (last `app-selection` event; drop clears it). */
+  private appSel: AppSelectionChip | undefined;
   /** Per-text-piece diff runs, rendered during the post-correction flash. */
   private flash: Map<Piece, DiffRun[]> | undefined;
   private flashTimer: ReturnType<typeof setTimeout> | undefined;
@@ -594,6 +607,7 @@ export class Preview {
     switch (event.type) {
       case "thread-open":
         this.pieces = [];
+        this.appSel = undefined;
         break;
       case "thread-close":
         // Clear on EVERY close, send included. The transcript used to survive
@@ -601,8 +615,27 @@ export class Preview {
         // thumbs — reading as "my send did nothing". thread-open also clears,
         // but only fires on the first contentful act, one beat too late.
         this.pieces = [];
+        this.appSel = undefined;
         this.undoStack = [];
         this.stopWaiting();
+        break;
+      case "app-selection":
+        this.appSel = {
+          text: event.text,
+          ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
+          ...(event.cell !== undefined ? { cell: event.cell } : {}),
+        };
+        break;
+      case "app-selection-drop":
+        this.appSel = undefined;
+        break;
+      case "code-selection":
+        this.pieces.push({
+          kind: "code-selection",
+          text: event.text,
+          ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
+          lines: event.lines ?? event.text.split("\n").length,
+        });
         break;
       case "transcript-delta": {
         // Speech in correct mode streams into the bar's live zone, not the
@@ -763,12 +796,26 @@ export class Preview {
     // body with no mouseleave to clear it.
     this.hidePeek();
     this.body.replaceChildren();
+    // The app selection opens the transcript: whatever was highlighted on the
+    // page when the turn started rides the whole turn as a pinned chip.
+    if (this.appSel !== undefined) {
+      this.body.append(renderSelectionChip("about", this.appSel.text, this.appSel.sourceLoc));
+      this.body.append(document.createTextNode(" "));
+    }
     const target = this.engine.correctionTarget;
     const editing = this.correcting ? new Set(this.selectedChunk()) : undefined;
     let offset = 0;
     for (const piece of this.pieces) {
       if (piece.kind === "shot") {
         this.body.append(this.renderShot(piece));
+        continue;
+      }
+      if (piece.kind === "code-selection") {
+        // The code rides the chip alongside its location (an excerpt; hover
+        // for the whole thing) — a bare locator is opaque when debugging.
+        const loc = piece.sourceLoc ?? `${piece.lines ?? "?"} lines`;
+        this.body.append(renderSelectionChip("⧉", oneLine(piece.text ?? ""), loc, piece.text));
+        this.body.append(document.createTextNode(" "));
         continue;
       }
       const text = piece.text ?? "";
@@ -841,6 +888,11 @@ export class Preview {
     return wrap;
   }
 
+  /** Test/report hook: the app-selection chip currently pinned, if any. */
+  appSelection(): { text: string; sourceLoc?: string; cell?: string } | undefined {
+    return this.appSel;
+  }
+
   private showPeek(anchor: HTMLElement, src: string): void {
     this.hidePeek();
     const rect = anchor.getBoundingClientRect();
@@ -857,4 +909,39 @@ export class Preview {
     this.peek?.remove();
     this.peek = undefined;
   }
+}
+
+/** Chip text is a reference, not a document — keep it one glanceable line. */
+const CHIP_EXCERPT_CHARS = 48;
+
+/** Collapse a (possibly multiline) selection to one whitespace-normal line. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * One selection chip in the transcript flow: `badge label · loc`, hover
+ * showing the full text. Shared by the app-selection chip (pinned at the
+ * start, badge "about") and code-selection chips (badge "⧉", at their stream
+ * position) so both wear the same pill.
+ */
+function renderSelectionChip(
+  badge: string,
+  label: string,
+  loc?: string,
+  tooltip?: string,
+): HTMLElement {
+  const chip = document.createElement("span");
+  chip.className = "mm-sel-chip";
+  const excerpt =
+    label.length > CHIP_EXCERPT_CHARS ? `${label.slice(0, CHIP_EXCERPT_CHARS)}…` : label;
+  chip.textContent = badge === "about" ? `about: "${excerpt}"` : `${badge} ${excerpt}`;
+  if (loc !== undefined) {
+    const locEl = document.createElement("span");
+    locEl.className = "mm-sel-loc";
+    locEl.textContent = loc;
+    chip.append(locEl);
+  }
+  chip.title = tooltip ?? label;
+  return chip;
 }

@@ -677,3 +677,109 @@ describe("intent-v1 malformed input", () => {
     await expect(d.feedEvents(undefined as unknown as IntentEvent[])).rejects.toThrow(/events/);
   });
 });
+
+describe("intent-v1 lowering — selections", () => {
+  const seg = (at: number, text: string): IntentEvent => ({
+    at,
+    type: "transcript-final",
+    segment: 1,
+    text,
+    latencyMs: 5,
+    model: "mock",
+  });
+  const open = (at = 1): IntentEvent => ({ at, type: "thread-open", trigger: "talk" });
+
+  it("lowers the stream's app-selection event into the context preamble", async () => {
+    const d = drive();
+    await d.feedEvents([
+      open(),
+      {
+        at: 2,
+        type: "app-selection",
+        text: "reaction-diffusion on the GPU",
+        sourceLoc: "src/ui/App.tsx:35:13",
+        cell: "catalog",
+      },
+      seg(3, "make this wider"),
+    ]);
+    await d.fin();
+    expect(d.sent).toHaveLength(1);
+    // Identical wording to text-concat's selection block (prompt-context.ts).
+    expect(d.sent[0].text).toContain(
+      'It concerns this on-screen selection: "reaction-diffusion on the GPU" ' +
+        "(authored at src/ui/App.tsx:35:13; produced by cell catalog).",
+    );
+    // Context, not intent: the body itself is only the spoken words.
+    expect(d.sent[0].text.split("---")[1]?.trim()).toBe("make this wider");
+  });
+
+  it("prefers the stream's selection over a legacy context chunk, which stays the fallback", async () => {
+    const d = drive();
+    await d.feedContext({ text: "stale send-time selection" });
+    await d.feedEvents([
+      open(),
+      { at: 2, type: "app-selection", text: "the fresh selection" },
+      seg(3, "explain this"),
+    ]);
+    await d.fin();
+    expect(d.sent[0].text).toContain('It concerns this on-screen selection: "the fresh selection"');
+    expect(d.sent[0].text).not.toContain("stale send-time selection");
+
+    // An old client that only sends the context chunk still gets the preamble.
+    const legacy = drive();
+    await legacy.feedEvents([open(), seg(2, "explain this")]);
+    await legacy.feedContext({ text: "context-chunk selection", cell: "flow" });
+    await legacy.fin();
+    expect(legacy.sent[0].text).toContain(
+      'It concerns this on-screen selection: "context-chunk selection" (produced by cell flow).',
+    );
+  });
+
+  it("honors an app-selection-drop: the retracted selection never reaches the prompt", async () => {
+    const d = drive();
+    await d.feedEvents([
+      open(),
+      { at: 2, type: "app-selection", text: "changed my mind" },
+      seg(3, "just do the thing"),
+      { at: 4, type: "app-selection-drop" },
+    ]);
+    await d.fin();
+    expect(d.sent[0].text).toBe("just do the thing");
+  });
+
+  it("renders a code-selection event into the body at its position (short → inline)", async () => {
+    const d = drive();
+    await d.feedEvents([
+      open(),
+      seg(2, "rename this helper"),
+      {
+        at: 3,
+        type: "code-selection",
+        text: "export function curb() {}",
+        sourceLoc: "src/c.ts:12:1",
+        lines: 1,
+      },
+    ]);
+    await d.fin();
+    expect(d.sent[0].text).toBe(
+      "rename this helper Regarding `src/c.ts:12:1`: `export function curb() {}`",
+    );
+  });
+
+  it("records first-class trace stages for both selection kinds", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-sel-"));
+    const d = drive({ cache });
+    await d.feedEvents([
+      open(),
+      { at: 2, type: "app-selection", text: "the histogram title", cell: "hist" },
+      seg(3, "make it bigger"),
+      { at: 4, type: "code-selection", text: "const s = 1;", sourceLoc: "src/s.ts:1:1" },
+    ]);
+    await d.fin();
+    const [trace] = listTraces(cache);
+    const appStage = trace.stages.find((s) => s.label === "app selection");
+    expect(appStage?.data).toMatchObject({ text: "the histogram title", cell: "hist" });
+    const codeStage = trace.stages.find((s) => s.label === "code selection");
+    expect(codeStage?.data).toMatchObject({ text: "const s = 1;", sourceLoc: "src/s.ts:1:1" });
+  });
+});

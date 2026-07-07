@@ -60,6 +60,13 @@ export interface SelectionWatcher {
   snapshot(): SelectionSnapshot | undefined;
   /** Drop the current snapshot (explicit dismiss, or after a submission consumes it). */
   clear(): void;
+  /**
+   * Add a node whose selections to ignore, after the fact — for UI surfaces
+   * created later than the watcher (the multimodal modality's page-level
+   * layers: selecting in the transcript preview, e.g. the correct-mode lasso,
+   * must never become the "app selection").
+   */
+  addIgnored(node: Node): void;
   /** Stop listening and release everything. Idempotent. */
   dispose(): void;
 }
@@ -150,6 +157,7 @@ function isWithinIgnored(range: Range, ignore: Node[] | undefined): boolean {
 const NOOP_WATCHER: SelectionWatcher = {
   snapshot: () => undefined,
   clear() {},
+  addIgnored() {},
   dispose() {},
 };
 
@@ -164,6 +172,8 @@ export function installSelectionWatcher(opts: SelectionWatcherOptions = {}): Sel
   }
   const debounceMs = opts.debounceMs ?? DEFAULT_DEBOUNCE_MS;
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
+  // Own copy: addIgnored grows it after creation without mutating the caller's.
+  const ignored = [...(opts.ignoreWithin ?? [])];
 
   let current: SelectionSnapshot | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -196,7 +206,7 @@ export function installSelectionWatcher(opts: SelectionWatcherOptions = {}): Sel
     }
     const range = sel.getRangeAt(0);
     const text = sel.toString().trim();
-    if (text === "" || isWithinIgnored(range, opts.ignoreWithin)) {
+    if (text === "" || isWithinIgnored(range, ignored)) {
       return;
     }
     current = buildSnapshot(range, text);
@@ -215,6 +225,9 @@ export function installSelectionWatcher(opts: SelectionWatcherOptions = {}): Sel
   return {
     snapshot,
     clear,
+    addIgnored(node: Node): void {
+      ignored.push(node);
+    },
     dispose(): void {
       if (timer !== undefined) {
         clearTimeout(timer);

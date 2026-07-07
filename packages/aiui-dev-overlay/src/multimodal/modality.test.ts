@@ -1236,3 +1236,144 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(document.body.classList.contains("mm-armed")).toBe(false);
   });
 });
+
+describe("multimodalModality: selections on the wire", () => {
+  /** Make `el`'s text the live document selection and fire selectionchange. */
+  function selectText(el: HTMLElement): void {
+    const range = document.createRange();
+    range.selectNodeContents(el.firstChild ?? el);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+  }
+
+  it("opens the turn with the pre-arm page selection as an app-selection event, no context chunk", async () => {
+    const para = document.createElement("p");
+    para.setAttribute("data-cell", "flowCell");
+    para.setAttribute("data-source-loc", "src/App.tsx:10:2");
+    para.textContent = "the interesting selected words";
+    document.body.append(para);
+    const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 });
+
+    selectText(para); // BEFORE arming — the reported lost case
+    await wait(200); // past the watcher's 150 ms debounce
+
+    key("keydown", "`"); // arm
+    key("keydown", " "); // talk-start → thread-open
+    await wait(50);
+    key("keyup", " ");
+    await wait(50);
+    key("keydown", "Enter"); // send → fin
+    await wait(150);
+
+    const events = streamedEvents(sent);
+    const types = events.map((e) => e.type);
+    // The selection opens the transcript, right after thread-open.
+    expect(types.indexOf("app-selection")).toBe(types.indexOf("thread-open") + 1);
+    expect(events.find((e) => e.type === "app-selection")).toMatchObject({
+      text: "the interesting selected words",
+      sourceLoc: "src/App.tsx:10:2",
+      cell: "flowCell",
+    });
+    // The legacy send-time context frame is gone — the stream is the carrier.
+    const kinds = frames(sent).map(
+      (f) => (f.envelope as { chunk?: { kind?: string } }).chunk?.kind,
+    );
+    expect(kinds).not.toContain("context");
+    para.remove();
+  });
+
+  it("streams an app-selection-drop when the chip is dismissed mid-turn", async () => {
+    const para = document.createElement("p");
+    para.textContent = "context to retract";
+    document.body.append(para);
+    const { handle, sent } = mountMultimodal({
+      transcriber: "mock",
+      mockWordMs: 0,
+      mockTypoRate: 0,
+    });
+
+    selectText(para);
+    await wait(200);
+    key("keydown", "`");
+    key("keydown", " "); // thread opens with the app-selection
+    await wait(50);
+    key("keyup", " ");
+    await wait(50);
+
+    // The panel chip's ✕ clears the watcher; with the thread open that must
+    // retract the turn's selection on the stream too.
+    const dismiss = handle.shadowRoot?.querySelector(".chip-dismiss") as HTMLButtonElement;
+    dismiss.click();
+    key("keydown", "Enter");
+    await wait(150);
+
+    const types = streamedEvents(sent).map((e) => e.type);
+    expect(types).toContain("app-selection");
+    expect(types).toContain("app-selection-drop");
+    para.remove();
+  });
+
+  it("ingests a bus selection contribution as a structured code-selection event", async () => {
+    // A minimal fake session bus: enough for the modality to subscribe and for
+    // the test to inject the reader's publish.
+    const contribHandlers: Array<(payload: unknown, from: string) => void> = [];
+    const slots = new Map<string, unknown>();
+    window.__AIUI__ = {
+      v: 1,
+      frames: [],
+      session: {
+        set: (slot: string, value: unknown) => void slots.set(slot, value),
+        get: (slot: string) => slots.get(slot),
+        on: () => () => {},
+        publish: () => {},
+        onPublish: (topic: string, handler: (payload: unknown, from: string) => void) => {
+          if (topic === "contribution") {
+            contribHandlers.push(handler);
+          }
+          return () => {};
+        },
+        peers: () => [],
+        onPeers: () => () => {},
+        ready: () => true,
+        onReady: (handler: () => void) => {
+          handler();
+          return () => {};
+        },
+        clientId: () => "test",
+      },
+    } as unknown as typeof window.__AIUI__;
+
+    const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 });
+    contribHandlers[0]?.(
+      {
+        kind: "selection",
+        text: "export function curb() {}",
+        sourceLoc: "src/c.ts:12:1",
+        url: "http://localhost/code",
+        lines: 1,
+      },
+      "peer",
+    );
+    await wait(120); // socket connect + events flush
+
+    const events = streamedEvents(sent);
+    // Structured on the wire — not a pre-rendered transcript-final.
+    expect(events.find((e) => e.type === "code-selection")).toMatchObject({
+      text: "export function curb() {}",
+      sourceLoc: "src/c.ts:12:1",
+      lines: 1,
+    });
+    expect(
+      events.some(
+        (e) =>
+          e.type === "transcript-final" && (e as { text?: string }).text?.includes("Regarding"),
+      ),
+    ).toBe(false);
+    // The reader's mirror shows the compact marker: location + excerpt.
+    expect(slots.get("preview")).toMatchObject({
+      text: "[code: src/c.ts:12:1 “export function curb() {}”]",
+    });
+  });
+});

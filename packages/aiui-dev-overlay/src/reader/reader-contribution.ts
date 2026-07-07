@@ -5,7 +5,9 @@
  * in, a {@link SelectionContribution} (1-based human locator) out.
  *
  * The reader publishes this payload on {@link SESSION_CONTRIBUTION_TOPIC}; the
- * app-tab host formats it into the turn text (short → inline, long → fenced).
+ * app-tab host ingests it as a structured `code-selection` event (a chip in
+ * the preview), and `composeIntent` renders it into the prompt at lowering
+ * time (short → inline, long → fenced).
  */
 import type { SelectionSnapshot } from "@habemus-papadum/aiui-code";
 import type { SelectionContribution } from "../session-contrib";

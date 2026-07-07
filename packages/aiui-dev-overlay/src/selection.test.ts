@@ -205,3 +205,28 @@ describe("equation recovery", () => {
     expect(snap?.tex).toBeUndefined();
   });
 });
+
+describe("addIgnored (late-mounted overlay layers)", () => {
+  it("ignores selections inside a node added after the watcher was installed", () => {
+    document.body.innerHTML = `<p>app text</p><div id="layers"><span>overlay text</span></div>`;
+    watcher = installSelectionWatcher();
+    const layers = document.querySelector("#layers") as HTMLElement;
+
+    // Before the ignore: a selection in the layers IS captured.
+    select(layers.querySelector("span")?.firstChild as Text);
+    fireSelectionChange();
+    vi.advanceTimersByTime(150);
+    expect(watcher.snapshot()?.text).toBe("overlay text");
+
+    // After: it no longer replaces the snapshot (the app selection survives).
+    watcher.clear();
+    select(document.querySelector("p")?.firstChild as Text);
+    fireSelectionChange();
+    vi.advanceTimersByTime(150);
+    watcher.addIgnored(layers);
+    select(layers.querySelector("span")?.firstChild as Text);
+    fireSelectionChange();
+    vi.advanceTimersByTime(150);
+    expect(watcher.snapshot()?.text).toBe("app text");
+  });
+});

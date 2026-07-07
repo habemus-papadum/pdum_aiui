@@ -281,3 +281,58 @@ describe("chunk-scoped corrections", () => {
     expect(transcript).toContain("another curve here");
   });
 });
+
+describe("selection chips in the transcript", () => {
+  it("pins the app-selection chip at the start, updates it, and drops it", () => {
+    const { engine } = mounted();
+    engine.talkStart(); // opens the thread
+    engine.appSelection({ text: "the histogram title", sourceLoc: "src/App.tsx:10:2" });
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    let chip = body.querySelector(".mm-sel-chip") as HTMLElement;
+    expect(chip.textContent).toContain('about: "the histogram title"');
+    expect(chip.textContent).toContain("src/App.tsx:10:2");
+    // Pinned at the START of the transcript flow.
+    expect(body.firstElementChild).toBe(chip);
+
+    engine.appSelection({ text: "a different span" });
+    chip = body.querySelector(".mm-sel-chip") as HTMLElement;
+    expect(chip.textContent).toContain('about: "a different span"');
+    expect(body.querySelectorAll(".mm-sel-chip")).toHaveLength(1); // last wins, one chip
+
+    engine.appSelectionDrop();
+    expect(body.querySelector(".mm-sel-chip")).toBeNull();
+  });
+
+  it("renders a code-selection chip — excerpt AND location — at its stream position", () => {
+    const { engine, preview } = mounted();
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "look at this helper", 90, "mock");
+    engine.codeSelection({ text: "function curb()\n{}", sourceLoc: "src/c.ts:1:1", lines: 2 });
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    const chip = body.querySelector(".mm-sel-chip") as HTMLElement;
+    // The code rides the chip (whitespace-collapsed) with its location beside
+    // it — a bare locator is opaque when debugging — and the full text on hover.
+    expect(chip.textContent).toContain("⧉ function curb() {}");
+    expect(chip.textContent).toContain("src/c.ts:1:1");
+    expect(chip.title).toBe("function curb()\n{}");
+    // Still a chip, not transcript text: no .mm-seg carries the code.
+    const segs = [...body.querySelectorAll(".mm-seg")].map((s) => s.textContent);
+    expect(segs.join(" ")).not.toContain("function curb()");
+    // And it does not become an editable chunk (it splits chunks like a shot).
+    engine.setMode("correct");
+    preview.setCorrectMode(true);
+    const editArea = document.querySelector(".mm-edit-area") as HTMLTextAreaElement;
+    expect(editArea.value).toBe("look at this helper");
+  });
+
+  it("clears both chip kinds at thread boundaries", () => {
+    const { engine } = mounted();
+    engine.talkStart();
+    engine.appSelection({ text: "context" });
+    engine.codeSelection({ text: "code", sourceLoc: "a.ts:1:1" });
+    engine.send();
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    expect(body.querySelector(".mm-sel-chip")).toBeNull();
+  });
+});

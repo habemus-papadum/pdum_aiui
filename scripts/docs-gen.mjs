@@ -222,6 +222,7 @@ function main() {
           { text: "The Code Reader", link: "/guide/code-reader" },
           { text: "Multi-View Sessions", link: "/guide/multi-view-sessions" },
           { text: "Remote Development", link: "/guide/remote" },
+          { text: "iPad Paint Stream", link: "/guide/paint-stream" },
           {
             text: "Frontend for Agents",
             collapsed: false,
