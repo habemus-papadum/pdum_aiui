@@ -22,6 +22,15 @@
  * and the registration lifecycle. Registration is best-effort: no bridge (a
  * plain `mountIntentTool`, or an older channel) leaves everything working
  * locally through the returned handle.
+ *
+ * Deliberately NOT built on aiui-viz's `agentToolkit` (considered in proposal
+ * B2.2 and rejected): the two already speak the same bridge, the same ready
+ * event, and the same `window.__<ns>` convention — the only real difference
+ * is lifecycle. `agentToolkit` adopts its window handle forever (HMR-safe for
+ * long-lived notebook pages); the overlay mounts and unmounts inside other
+ * people's apps and tests, so it needs `dispose()` to unregister the
+ * namespace and drop the handle. Wrapping the toolkit to add that back would
+ * share ~30 lines and fork the semantics — dogfood theater, not reuse.
  */
 import type { IntentEvent, IntentPipelineConfig } from "./intent-pipeline";
 import type { BridgeTool } from "./tools-bridge";

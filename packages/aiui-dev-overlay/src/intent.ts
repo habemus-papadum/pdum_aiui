@@ -27,7 +27,6 @@
  * `window.__AIUI__.port`; pass `port` explicitly outside Vite. Reading
  * `import.meta.env` here cannot work in the shipped package — see vite.ts.
  */
-import { makeDraggable } from "./drag";
 import { addError, dismissError, type OverlayError, type OverlayErrorInput } from "./errors";
 import { type ClientMeta, collectClientMeta, setChannelPort } from "./instrumentation";
 import type { AppSelection, IntentPipelineConfig } from "./intent-pipeline";
@@ -46,6 +45,7 @@ import {
   type WebSocketFactory,
 } from "./protocol";
 import { installSelectionWatcher, type SelectionSnapshot } from "./selection";
+import { mountWidget } from "./ui/widget";
 
 /** Stable id for the injected host element; also the double-injection guard. */
 const HOST_ID = "aiui-intent-tool-host";
@@ -133,6 +133,21 @@ export interface IntentToolContext {
    * selection").
    */
   ignoreSelectionsWithin(node: Node): void;
+  /**
+   * Claim the widget pill's HUD slot — the always-visible left section of the
+   * single anchor (§B.4's merged widget) — for this modality's own content
+   * (arm control, state label, level meter). The slot lives in the tool's
+   * shadow root, so page-level stylesheets can't reach it: inject the
+   * content's CSS through `addStyle`. One claimant per mount; claiming hides
+   * the default "✳ aiui" label.
+   */
+  hudSlot(): { container: HTMLElement; addStyle(css: string): void };
+  /**
+   * Drive the widget's mode ring: the pill's `data-ui-mode` attribute (and
+   * so its border color). The modality that owns a mode model calls this
+   * with its derived UiMode after every event; undefined clears the ring.
+   */
+  setUiMode(mode: string | undefined): void;
   /** The channel port in use, if known. */
   readonly port: number | undefined;
 }
@@ -278,110 +293,6 @@ function bundledModalities(
   return [make(intent)];
 }
 
-const STYLES = `
-  :host { all: initial; }
-  .root {
-    position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
-    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-    font-size: 13px; line-height: 1.4; color: #e8e8ea;
-  }
-  .fab {
-    display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px;
-    border: none; border-radius: 999px; background: #1f2430; color: #e8e8ea;
-    box-shadow: 0 2px 10px rgba(0,0,0,.35); cursor: pointer; user-select: none;
-  }
-  .fab:hover { background: #2a3140; }
-  .panel {
-    position: absolute; right: 0; bottom: 44px; width: 320px;
-    border-radius: 12px; background: #1f2430;
-    box-shadow: 0 6px 24px rgba(0,0,0,.4); overflow: hidden;
-  }
-  .panel[hidden] { display: none; }
-  .head {
-    display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px;
-    cursor: grab; touch-action: none;
-  }
-  .fab { touch-action: none; }
-  .title { font-weight: 600; margin-right: auto; }
-  .iconbtn {
-    border: none; background: transparent; color: #9aa0aa; cursor: pointer;
-    font-size: 14px; line-height: 1; padding: 2px 4px; text-decoration: none;
-  }
-  .iconbtn:hover { color: #e8e8ea; }
-  .tabs { display: flex; gap: 4px; padding: 0 12px 8px; }
-  .tabs[hidden] { display: none; }
-  .tab {
-    border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer;
-    background: transparent; color: #9aa0aa; font-size: 12px;
-  }
-  .tab:hover { color: #e8e8ea; }
-  .tab.active { background: #2a3140; color: #e8e8ea; }
-  .chiprow { padding: 0 12px 8px; }
-  .chiprow[hidden] { display: none; }
-  .chip {
-    display: flex; align-items: center; gap: 6px; max-width: 100%;
-    border: 1px solid #2a3140; border-radius: 6px; padding: 4px 6px 4px 8px;
-    background: #171b24; color: #cfd3da; font-size: 11px;
-  }
-  .chip-label {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .chip-loc { color: #8ab4f8; flex-shrink: 0; }
-  .chip-dismiss {
-    margin-left: auto; flex-shrink: 0; border: none; background: transparent;
-    color: #9aa0aa; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px;
-  }
-  .chip-dismiss:hover { color: #e8e8ea; }
-  .body { padding: 0 12px 10px; }
-  .status {
-    padding: 6px 12px 10px; color: #9aa0aa; font-size: 11px;
-    min-height: 16px; word-break: break-word;
-  }
-  .status.error { color: #f28b82; }
-  textarea {
-    width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
-    border: 1px solid #2a3140; border-radius: 8px; padding: 8px;
-    background: #14171f; color: #e8e8ea; font: inherit;
-  }
-  textarea:focus { outline: 1px solid #8ab4f8; }
-  .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-  .hint { color: #9aa0aa; font-size: 11px; margin-right: auto; }
-  .send {
-    border: none; border-radius: 8px; padding: 6px 14px; cursor: pointer;
-    background: #8ab4f8; color: #14171f; font-weight: 600;
-  }
-  .send:hover { background: #a5c5fa; }
-  /* The error-toast column: anchored beside the fab (left of the root box) so
-     it never covers the panel, growing upward, newest nearest the fab. Toasts
-     are informational — they steal no focus and block nothing. */
-  .toasts {
-    position: absolute; right: calc(100% + 8px); bottom: 0;
-    width: 300px; max-width: calc(100vw - 96px);
-    display: flex; flex-direction: column; gap: 6px;
-  }
-  .toast {
-    border: 1px solid #5c2b31; border-radius: 10px; background: #241b20;
-    box-shadow: 0 4px 16px rgba(0,0,0,.35); padding: 8px 10px;
-    color: #e8e8ea; font-size: 12px;
-  }
-  .toast-head { display: flex; align-items: center; gap: 6px; }
-  .toast-source {
-    color: #f28b82; font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.06em;
-  }
-  .toast-count {
-    color: #9aa0aa; font-size: 10px; border: 1px solid #3a4152;
-    border-radius: 999px; padding: 0 6px;
-  }
-  .toast-dismiss {
-    margin-left: auto; border: none; background: transparent; color: #9aa0aa;
-    cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px;
-  }
-  .toast-dismiss:hover { color: #e8e8ea; }
-  .toast-msg { margin-top: 4px; word-break: break-word; }
-  .toast-detail { margin-top: 4px; color: #9aa0aa; font-size: 11px; word-break: break-word; }
-`;
-
 /**
  * Mount the intent tool into the current page.
  *
@@ -418,241 +329,110 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   const host = document.createElement("div");
   host.id = HOST_ID;
   const shadowRoot = host.attachShadow({ mode: "open" });
-  const style = document.createElement("style");
-  style.textContent = STYLES;
-  shadowRoot.appendChild(style);
+  document.body.appendChild(host);
 
-  const root = document.createElement("div");
-  root.className = "root";
-
-  const fab = document.createElement("button");
-  fab.type = "button";
-  fab.className = "fab";
-  fab.textContent = "✳ aiui";
-
-  const panel = document.createElement("div");
-  panel.className = "panel";
-  panel.hidden = true;
-
-  const head = document.createElement("div");
-  head.className = "head";
-  const title = document.createElement("span");
-  title.className = "title";
-  title.textContent = "aiui intent";
-  // The debug affordance: the lowering-trace debugger — the shared debug-ui
-  // viewer the Vite plugin serves (options.debugUrl, normally /__aiui/debug),
-  // the same viewer `aiui debug`, the workbench, and the DevTools extension
-  // render. Without a debugUrl (a manual mount, no plugin) the button hides:
-  // the channel serves no HTML, so there is nothing to link — `aiui debug` is
-  // the standalone way in.
-  const debugLink = document.createElement("a");
-  debugLink.className = "iconbtn";
-  debugLink.textContent = "🔍";
-  debugLink.title = "Open the lowering debugger";
-  debugLink.target = "_blank";
-  debugLink.rel = "noreferrer";
+  // ── the widget: one Solid-rendered anchor (ui/widget.tsx) ─────────────────
+  // Pill (HUD slot + expander) + panel (head/tabs/chip/body/status) + toast
+  // column, one draggable unit with the mode ring on the pill. The host owns
+  // every piece of state below as plain values and pushes projections into
+  // the widget's signals — reads never round-trip through Solid (batched
+  // writes read stale same-tick).
   const debugUrl =
     typeof options.debugUrl === "string" && options.debugUrl.length > 0
       ? options.debugUrl
       : undefined;
-  if (debugUrl !== undefined) {
-    debugLink.href = debugUrl;
-    if (port !== undefined && typeof fetch === "function") {
-      // Upgrade the link with the channel's own session label so the viewer
-      // opens pinned to THIS page's session (the label survives in the URL
-      // even if the channel later restarts under a new one). Best-effort —
-      // the bare route already default-filters to the answering server.
-      void fetch(`http://127.0.0.1:${port}/debug/api/info`)
-        .then((res) => (res.ok ? (res.json() as Promise<{ session?: string }>) : undefined))
-        .then((info) => {
-          if (typeof info?.session === "string" && info.session !== "") {
-            debugLink.href = `${debugUrl}?session=${encodeURIComponent(info.session)}`;
-          }
-        })
-        .catch(() => {});
-    }
-  } else {
-    debugLink.style.display = "none";
+  // One list, one renderer; everything error-shaped funnels through
+  // reportError: server `kind:"error"` pushes (wired per-socket in openThread),
+  // the synthetic connection-lost push protocol.ts fabricates, connect
+  // failures caught below, and modalities' own client-side failures. The
+  // toast column lives beside the pill so it is visible with the panel
+  // closed — the normal state while driving the multimodal modality.
+  let errors: OverlayError[] = [];
+  const widget = mountWidget(shadowRoot, {
+    title: "aiui intent",
+    // The debug affordance: the lowering-trace debugger — the shared debug-ui
+    // viewer the Vite plugin serves (options.debugUrl, normally /__aiui/debug).
+    // Without a debugUrl (a manual mount, no plugin) the 🔍 hides: the channel
+    // serves no HTML, so there is nothing to link — `aiui debug` is the
+    // standalone way in.
+    ...(debugUrl !== undefined ? { debugUrl } : {}),
+    // The "Code" affordance: open the code reader in a second tab. The two
+    // tabs share arming + the prompt preview over the session bus.
+    ...(typeof options.codeUrl === "string" && options.codeUrl.length > 0
+      ? { codeUrl: options.codeUrl }
+      : {}),
+    tabLabels: modalities.map((m) => m.label),
+    onTabSelect: (i) => selectTab(i),
+    onDismissSelection: () => watcher.clear(),
+    onDismissError: (id) => {
+      errors = dismissError(errors, id);
+      widget.setToasts(errors);
+    },
+  });
+  if (debugUrl !== undefined && port !== undefined && typeof fetch === "function") {
+    // Upgrade the 🔍 link with the channel's own session label so the viewer
+    // opens pinned to THIS page's session (the label survives in the URL
+    // even if the channel later restarts under a new one). Best-effort —
+    // the bare route already default-filters to the answering server.
+    void fetch(`http://127.0.0.1:${port}/debug/api/info`)
+      .then((res) => (res.ok ? (res.json() as Promise<{ session?: string }>) : undefined))
+      .then((info) => {
+        if (typeof info?.session === "string" && info.session !== "") {
+          widget.setDebugHref(`${debugUrl}?session=${encodeURIComponent(info.session)}`);
+        }
+      })
+      .catch(() => {});
   }
-  // The "Code" affordance: open the code reader in a second tab. The two tabs
-  // share arming + the prompt preview over the session bus, so you can arm here,
-  // switch to the reader, select code, and it joins this turn.
-  const codeLink = document.createElement("a");
-  codeLink.className = "iconbtn";
-  codeLink.textContent = "⧉ Code";
-  codeLink.title = "Open the code reader (shares this session)";
-  codeLink.target = "aiui-code";
-  codeLink.rel = "noreferrer";
-  if (typeof options.codeUrl === "string" && options.codeUrl.length > 0) {
-    codeLink.href = options.codeUrl;
-  } else {
-    codeLink.style.display = "none";
-  }
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.className = "iconbtn";
-  closeBtn.textContent = "✕";
-  closeBtn.setAttribute("aria-label", "Close");
-  head.append(title, debugLink, codeLink, closeBtn);
-
-  const tabs = document.createElement("div");
-  tabs.className = "tabs";
-  // The selection chip lives above the modality body: "about: '…' · file:line ✕".
-  const chipRow = document.createElement("div");
-  chipRow.className = "chiprow";
-  chipRow.hidden = true;
-  const body = document.createElement("div");
-  body.className = "body";
-  const status = document.createElement("div");
-  status.className = "status";
-
-  // The error-toast column (see errors.ts for the state rules). Lives beside
-  // the fab so it is visible with the panel closed — the panel-footer status
-  // line, the previous only surface, vanished with the panel.
-  const toasts = document.createElement("div");
-  toasts.className = "toasts";
-
-  panel.append(head, tabs, chipRow, body, status);
-  root.append(toasts, fab, panel);
-  shadowRoot.appendChild(root);
-  document.body.appendChild(host);
-
-  // The whole widget (fab + panel + toasts) moves out of the way by dragging
-  // the fab or the panel's header row; a sub-threshold press stays a click
-  // (fab toggle, ✕, 🔍 — see drag.ts). The panel body is not a grip: it holds
-  // the modality UI and the textarea, where dragging means selecting.
-  const undragFab = makeDraggable(root, { handle: fab });
-  const undragHead = makeDraggable(root, { handle: head });
 
   // The last status line is exposed on the context so the overlay's own agent
   // surface can report it (see multimodal/modality.ts).
   let lastStatusText = "";
   const setStatus = (text: string, isError = false): void => {
     lastStatusText = text;
-    status.textContent = text;
-    status.className = `status${isError ? " error" : ""}`;
-  };
-
-  // ── the generic error surface ──────────────────────────────────────────────
-  // One list, one renderer; everything error-shaped funnels through
-  // reportError: server `kind:"error"` pushes (wired per-socket in openThread),
-  // the synthetic connection-lost push protocol.ts fabricates, connect
-  // failures caught below, and modalities' own client-side failures.
-  let errors: OverlayError[] = [];
-  const renderToasts = (): void => {
-    toasts.replaceChildren();
-    for (const entry of errors) {
-      const toast = document.createElement("div");
-      toast.className = "toast";
-
-      const headRow = document.createElement("div");
-      headRow.className = "toast-head";
-      const sourceBadge = document.createElement("span");
-      sourceBadge.className = "toast-source";
-      sourceBadge.textContent = entry.source ?? "error";
-      headRow.appendChild(sourceBadge);
-      if (entry.count > 1) {
-        const count = document.createElement("span");
-        count.className = "toast-count";
-        count.textContent = `×${entry.count}`;
-        headRow.appendChild(count);
-      }
-      const dismiss = document.createElement("button");
-      dismiss.type = "button";
-      dismiss.className = "toast-dismiss";
-      dismiss.textContent = "✕";
-      dismiss.setAttribute("aria-label", "Dismiss error");
-      dismiss.addEventListener("click", () => {
-        errors = dismissError(errors, entry.id);
-        renderToasts();
-      });
-      headRow.appendChild(dismiss);
-      toast.appendChild(headRow);
-
-      const msg = document.createElement("div");
-      msg.className = "toast-msg";
-      msg.textContent = entry.message;
-      toast.appendChild(msg);
-
-      if (entry.detail !== undefined) {
-        const detail = document.createElement("div");
-        detail.className = "toast-detail";
-        detail.textContent = entry.detail;
-        toast.appendChild(detail);
-      }
-      toasts.appendChild(toast);
-    }
+    widget.setStatus(text, isError);
   };
   const reportError = (input: OverlayErrorInput): void => {
     errors = addError(errors, input);
-    renderToasts();
+    widget.setToasts(errors);
   };
   // Which modality tab is showing — tracked for the overlay's report.
   let activeIndex = 0;
 
   // Watch the page's selection so the modality can attach "the thing the user
   // highlighted" to its submission. Ignore selections inside our own host, and
-  // re-render the chip whenever the snapshot changes (a new selection or a
-  // dismiss). `renderChip` is hoisted so `onChange` can name it here; the
-  // subscriber set fans the same change out to modalities (the multimodal turn
-  // keeps its `app-selection` event current from it).
+  // re-project the chip whenever the snapshot changes (a new selection or a
+  // dismiss); the subscriber set fans the same change out to modalities (the
+  // multimodal turn keeps its `app-selection` event current from it).
   const selectionSubscribers = new Set<(snap: SelectionSnapshot | undefined) => void>();
+  const projectChip = (snap: SelectionSnapshot | undefined): void => {
+    widget.setChip(
+      snap === undefined
+        ? undefined
+        : {
+            text: snap.text,
+            ...(snap.sourceLoc !== undefined ? { sourceLoc: snap.sourceLoc } : {}),
+          },
+    );
+  };
   const watcher = installSelectionWatcher({
     ignoreWithin: [host],
     onChange: (snap) => {
-      renderChip(snap);
+      projectChip(snap);
       for (const handler of selectionSubscribers) {
         handler(snap);
       }
     },
   });
-
-  function renderChip(snap: SelectionSnapshot | undefined): void {
-    chipRow.replaceChildren();
-    chipRow.hidden = snap === undefined;
-    if (snap === undefined) {
-      return;
-    }
-    const chip = document.createElement("div");
-    chip.className = "chip";
-
-    const label = document.createElement("span");
-    label.className = "chip-label";
-    const trimmed = snap.text.length > 40 ? `${snap.text.slice(0, 40)}…` : snap.text;
-    label.textContent = `about: "${trimmed}"`;
-    chip.appendChild(label);
-
-    if (snap.sourceLoc !== undefined) {
-      const loc = document.createElement("span");
-      loc.className = "chip-loc";
-      loc.textContent = snap.sourceLoc;
-      chip.appendChild(loc);
-    }
-
-    const dismiss = document.createElement("button");
-    dismiss.type = "button";
-    dismiss.className = "chip-dismiss";
-    dismiss.textContent = "✕";
-    dismiss.setAttribute("aria-label", "Dismiss selection");
-    dismiss.addEventListener("click", () => watcher.clear());
-    chip.appendChild(dismiss);
-
-    chipRow.appendChild(chip);
-  }
-  renderChip(watcher.snapshot());
+  projectChip(watcher.snapshot());
 
   // One context per modality — openThread speaks that modality's format.
   const contextFor = (modality: IntentModality): IntentToolContext => ({
     port,
     setStatus: (text) => setStatus(text, /fail|error|no channel/i.test(text)),
     reportError,
-    openPanel: () => {
-      panel.hidden = false;
-    },
-    closePanel: () => {
-      panel.hidden = true;
-    },
-    panelOpen: () => !panel.hidden,
+    openPanel: () => widget.open(),
+    closePanel: () => widget.close(),
+    panelOpen: () => widget.isOpen(),
     lastStatus: () => lastStatusText,
     activeModalityLabel: () => modalities[activeIndex]?.label ?? "",
     selection: () => watcher.snapshot(),
@@ -662,6 +442,8 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
       return () => selectionSubscribers.delete(handler);
     },
     ignoreSelectionsWithin: (node) => watcher.addIgnored(node),
+    hudSlot: () => widget.claimHudSlot(),
+    setUiMode: (mode) => widget.setUiMode(mode),
     async openThread(threadOptions): Promise<IntentThread> {
       if (port === undefined) {
         // The same one-mechanism rule as the connect failure below: toast it
@@ -747,56 +529,35 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     },
   });
 
-  // Mount every modality; tabs switch which container is visible.
+  // Mount every modality into a vanilla container under the widget's body;
+  // tabs switch which container is visible (the tab row itself is
+  // widget-rendered — selectTab is its click handler).
   const mounted = modalities.map((modality, i) => {
     const container = document.createElement("div");
     container.hidden = i !== 0;
-    body.appendChild(container);
+    widget.body.appendChild(container);
     const cleanup = modality.mount(container, contextFor(modality));
-
-    const tab = document.createElement("button");
-    tab.type = "button";
-    tab.className = `tab${i === 0 ? " active" : ""}`;
-    tab.textContent = modality.label;
-    tab.addEventListener("click", () => {
-      activeIndex = i;
-      mounted.forEach((m, j) => {
-        m.container.hidden = j !== i;
-        m.tab.classList.toggle("active", j === i);
-      });
-    });
-    tabs.appendChild(tab);
-    return { container, tab, cleanup };
+    return { container, cleanup };
   });
-  if (modalities.length < 2) {
-    tabs.hidden = true;
+  function selectTab(i: number): void {
+    activeIndex = i;
+    widget.setActiveTab(i);
+    mounted.forEach((m, j) => {
+      m.container.hidden = j !== i;
+    });
   }
 
-  const open = (): void => {
-    panel.hidden = false;
-  };
-  const close = (): void => {
-    panel.hidden = true;
-  };
-  fab.addEventListener("click", () => {
-    panel.hidden = !panel.hidden;
-  });
-  closeBtn.addEventListener("click", close);
-
   const handle: IntentToolHandle = {
-    open,
-    close,
-    toggle: () => {
-      panel.hidden = !panel.hidden;
-    },
+    open: () => widget.open(),
+    close: () => widget.close(),
+    toggle: () => widget.toggle(),
     unmount() {
       for (const m of mounted) {
         if (m.cleanup && typeof m.cleanup === "object") {
           m.cleanup.unmount();
         }
       }
-      undragFab();
-      undragHead();
+      widget.dispose();
       watcher.dispose();
       host.remove();
       if (window.__aiuiIntentTool === handle) {

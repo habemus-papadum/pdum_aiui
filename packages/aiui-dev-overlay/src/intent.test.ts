@@ -36,13 +36,17 @@ function selectText(el: Element, start = 0, end?: number): void {
 }
 
 describe("mountIntentTool", () => {
-  it("mounts a shadow host with the fab and hidden panel", () => {
+  it("mounts a shadow host with the pill and hidden panel", async () => {
     const handle = mountIntentTool({ force: true, port: 4321 });
     const host = document.getElementById(HOST_ID);
     expect(host).not.toBeNull();
-    expect(handle.shadowRoot?.querySelector(".fab")?.textContent).toContain("aiui");
+    // The single anchor is the pill: its default label (no modality claimed
+    // the HUD slot here) plus the expander that unfolds the panel.
+    expect(handle.shadowRoot?.querySelector(".pill .pill-label")?.textContent).toContain("aiui");
+    expect(handle.shadowRoot?.querySelector(".pill .expander")).not.toBeNull();
     expect((handle.shadowRoot?.querySelector(".panel") as HTMLElement).hidden).toBe(true);
     handle.open();
+    await flush(); // panel visibility is Solid-projected — a batched, async write
     expect((handle.shadowRoot?.querySelector(".panel") as HTMLElement).hidden).toBe(false);
   });
 
@@ -65,9 +69,8 @@ describe("mountIntentTool", () => {
 
   it("hides the debug icon without a debugUrl (the channel serves no HTML to link)", () => {
     const handle = mountIntentTool({ force: true, port: 4567 });
-    const link = handle.shadowRoot?.querySelector("a.iconbtn") as HTMLAnchorElement;
-    expect(link.style.display).toBe("none");
-    expect(link.getAttribute("href")).toBeNull();
+    // No debugUrl (and no codeUrl) → the widget renders no icon link at all.
+    expect(handle.shadowRoot?.querySelector("a.iconbtn")).toBeNull();
   });
 
   it("prefers the plugin-served debug page, deep-linked to the channel's session", async () => {
@@ -395,7 +398,7 @@ describe("error toasts (the generic error surface)", () => {
     ...(handle.shadowRoot?.querySelectorAll(".toast") ?? []),
   ];
 
-  it("renders a dismissible toast from reportError, outside the panel", () => {
+  it("renders a dismissible toast from reportError, outside the panel", async () => {
     const { modality, ctx } = capturingModality();
     const handle = mountIntentTool({ force: true, port: 4321, modalities: [modality] });
 
@@ -404,6 +407,7 @@ describe("error toasts (the generic error surface)", () => {
       message: "transcription failed (401)",
       detail: "check OPENAI_API_KEY",
     });
+    await flush(); // the toast column is Solid-rendered — writes project async
 
     // Visible without opening the panel — the whole point of the toast surface.
     expect((handle.shadowRoot?.querySelector(".panel") as HTMLElement).hidden).toBe(true);
@@ -414,10 +418,11 @@ describe("error toasts (the generic error surface)", () => {
     expect(toast.querySelector(".toast-detail")?.textContent).toBe("check OPENAI_API_KEY");
 
     (toast.querySelector(".toast-dismiss") as HTMLButtonElement).click();
+    await flush();
     expect(toastsIn(handle)).toHaveLength(0);
   });
 
-  it("dedupes repeats into one toast with a ×N badge and caps the column", () => {
+  it("dedupes repeats into one toast with a ×N badge and caps the column", async () => {
     const { modality, ctx } = capturingModality();
     const handle = mountIntentTool({ force: true, port: 4321, modalities: [modality] });
 
@@ -425,6 +430,7 @@ describe("error toasts (the generic error surface)", () => {
     ctx().reportError({ source: "channel", message: "audio frame rejected: connection closed" });
     ctx().reportError({ source: "channel", message: "audio frame rejected: connection closed" });
     ctx().reportError({ source: "channel", message: "audio frame rejected: connection closed" });
+    await flush();
     expect(toastsIn(handle)).toHaveLength(1);
     expect(toastsIn(handle)[0].querySelector(".toast-count")?.textContent).toBe("×3");
 
@@ -432,6 +438,7 @@ describe("error toasts (the generic error surface)", () => {
     for (let i = 0; i < 5; i++) {
       ctx().reportError({ message: `distinct error ${i}` });
     }
+    await flush();
     expect(toastsIn(handle).length).toBeLessThanOrEqual(3);
   });
 
@@ -452,6 +459,7 @@ describe("error toasts (the generic error surface)", () => {
       source: "correction",
       message: "correction failed — applied as a plain replacement instead: 401",
     });
+    await flush();
 
     const [toast] = toastsIn(handle);
     expect(toast).toBeDefined();
@@ -471,6 +479,7 @@ describe("error toasts (the generic error surface)", () => {
 
     await ctx().openThread();
     drop(1012, "channel reload"); // the channel restarting out from under the turn
+    await flush();
 
     const [toast] = toastsIn(handle);
     expect(toast).toBeDefined();
@@ -489,6 +498,7 @@ describe("error toasts (the generic error surface)", () => {
     });
 
     await expect(ctx().openThread()).rejects.toThrow("unknown format");
+    await flush();
     const [toast] = toastsIn(handle);
     expect(toast).toBeDefined();
     expect(toast.querySelector(".toast-source")?.textContent).toBe("connection");
@@ -500,6 +510,7 @@ describe("error toasts (the generic error surface)", () => {
     const handle = mountIntentTool({ force: true, modalities: [modality] });
 
     await expect(ctx().openThread()).rejects.toThrow(/no channel port/);
+    await flush();
     const [toast] = toastsIn(handle);
     expect(toast?.querySelector(".toast-msg")?.textContent).toContain("no channel port");
   });

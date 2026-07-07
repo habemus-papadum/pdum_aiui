@@ -4,7 +4,9 @@
     "noEmit": true,
     "declaration": false,
     "emitDeclarationOnly": false,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web"
   },
   "include": ["src", "bench", "vite.config.ts"]
 }

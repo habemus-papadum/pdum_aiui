@@ -68,7 +68,7 @@ import { Ink } from "./ink";
 import { Preview } from "./preview";
 import { canvasJpegBytes, ShotTool } from "./shot";
 import { type SpeechAudioFactory, SpeechPlayer } from "./speech";
-import { STYLES } from "./styles";
+import { HUD_STYLES, STYLES } from "./styles";
 import { mockTranscriber, type Transcriber } from "./transcribe";
 import { UI_MODE_TABLE, type UiMode, uiMode } from "./ui-mode";
 import { sampleDimensions, VIDEO_FRAME_MIME, VIDEO_JPEG_QUALITY, VideoSampler } from "./video";
@@ -348,7 +348,15 @@ export function multimodalModality(
       });
       layers.append(preview.root);
 
-      // ── HUD (arm button + state + level meter) ───────────────────────────────
+      // ── HUD (arm button + state + level meter) — the widget pill's slot ──────
+      // The §B.4 merge: the HUD is no longer its own floating surface; it IS
+      // the left section of the intent widget's pill, riding the pill's drag,
+      // mode ring, and shadow-root style isolation (hence addStyle — page
+      // sheets can't reach the slot). The old key-cheat-sheet span retired
+      // into the panel help, which always carried the same text: it was the
+      // pill's noisiest tenant.
+      const hudSlot = ctx.hudSlot();
+      hudSlot.addStyle(HUD_STYLES);
       const hud = document.createElement("div");
       hud.className = "mm-hud";
       hud.innerHTML = `
@@ -356,9 +364,8 @@ export function multimodalModality(
         <span class="mm-state">off</span>
         <span class="mm-video" hidden>● video</span>
         <canvas class="mm-meter" width="60" height="14"></canvas>
-        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · V video · K config · ⏎ send · Esc out</span>
         <span class="mm-speaker" hidden></span>`;
-      layers.append(hud);
+      hudSlot.container.append(hud);
 
       // The quick-config strip (the K layer) sits just above the HUD. Clicks
       // on its chips/actions route into the same dispatch as the keymap
@@ -372,13 +379,11 @@ export function multimodalModality(
       // watcher's snapshot of what the user had highlighted in the app.
       ctx.ignoreSelectionsWithin(layers);
 
-      // Both floating surfaces move out of the way by dragging (they cover app
-      // content by construction). They sit above the ink canvas and shot veil,
-      // so a drag on them is never a stroke or a screenshot. The preview only
-      // drags by its frame/title — inside the transcript body a drag *is* the
-      // correction-targeting selection gesture, and the correction bar holds an
-      // input — both stay excluded.
-      const undragHud = makeDraggable(hud);
+      // The preview moves out of the way by dragging (it covers app content by
+      // construction) — but only by its frame/title: inside the transcript
+      // body a drag *is* the correction-targeting selection gesture, and the
+      // correction bar holds an input — both stay excluded. (The HUD rides
+      // the widget pill's drag now — one anchor, one grip.)
       const undragPreview = makeDraggable(preview.root, {
         exclude: (target) => target.closest(".mm-preview-body, .mm-correction-bar") !== null,
       });
@@ -386,7 +391,6 @@ export function multimodalModality(
       const stateLabel = hud.querySelector<HTMLSpanElement>(".mm-state");
       const videoBadge = hud.querySelector<HTMLSpanElement>(".mm-video");
       const meter = hud.querySelector<HTMLCanvasElement>(".mm-meter");
-      const keysLabel = hud.querySelector<HTMLSpanElement>(".mm-keys");
       const speakerLabel = hud.querySelector<HTMLSpanElement>(".mm-speaker");
       armButton?.addEventListener("click", () => engine.setArmed(!engine.armed));
 
@@ -418,10 +422,7 @@ export function multimodalModality(
           <b>D</b>+drag to screenshot a region (<b>S</b> grabs the whole viewport),
           <b>E</b> to correct, <b>V</b> to share your screen (live tiers only),
           <b>K</b> for quick config (tiers), <b>Enter</b> to send.
-          A ✳ badge sits bottom-left while active.`;
-        if (keysLabel) {
-          keysLabel.textContent = `${key} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · V video · K config · ⏎ send · Esc out`;
-        }
+          The ✳ pill shows the live state while active.`;
       };
       renderLabels();
 
@@ -490,12 +491,13 @@ export function multimodalModality(
           },
         },
         {
-          // The mode ring (§B.4): data-ui-mode drives the border color, one
-          // peripheral signal for the whole table. The armed/talking classes
-          // stay as raw-state hooks (the ✳ fill, the meter tint).
+          // The mode ring (§B.4): the widget pill's data-ui-mode drives the
+          // border color, one peripheral signal for the whole table. The
+          // armed/talking classes stay as raw-state hooks on the slot content
+          // (the ✳ fill, the meter tint).
           name: "mode-ring",
           apply: (mode) => {
-            hud.dataset.uiMode = mode;
+            ctx.setUiMode(mode === "off" ? undefined : mode);
             hud.classList.toggle("armed", engine.armed);
             hud.classList.toggle("talking", engine.talking);
           },
@@ -1664,7 +1666,6 @@ export function multimodalModality(
           disposeBus?.();
           overlayTools.dispose();
           uninstallKeys();
-          undragHud();
           undragPreview();
           window.removeEventListener("blur", onWindowBlur);
           window.removeEventListener("focus", onWindowFocus);
@@ -1678,6 +1679,8 @@ export function multimodalModality(
           audio.dispose();
           pcmSource?.dispose();
           speechPlayer.dispose();
+          hud.remove();
+          ctx.setUiMode(undefined);
           layers.remove();
           style.remove();
           document.body.classList.remove("mm-armed");
