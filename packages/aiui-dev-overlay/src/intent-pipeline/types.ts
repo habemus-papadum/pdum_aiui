@@ -72,7 +72,7 @@ export interface AppSelection {
 
 /**
  * The payload of a `code-selection` event: code selected in another view of
- * the session (the code reader) and contributed to the turn. Kept structured
+ * the session (e.g. a VS Code bridge) and contributed to the turn. Kept structured
  * — raw text plus locator — so the LOWERING decides how it renders into the
  * prompt; the contributing view makes no formatting decisions.
  */

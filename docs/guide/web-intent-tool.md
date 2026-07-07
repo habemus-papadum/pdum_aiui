@@ -12,12 +12,10 @@ another, and poke at it.
 ![The intent tool over a demo app](/intent-tool.png)
 
 ::: tip One turn, several tabs
-The tool can *host* a turn that other browser views of the same session contribute to — arm here,
-open the code reader with the **⧉ Code** button, and a selection there lands in this prompt. Enable
-that button with `aiuiDevOverlay({ code: true })`, which also serves the reader from this dev server
-at `/__aiui/code` (no separate reader process). The machinery — the session bus, arming sync, code
-contributions — is its own page: [Multi-View Sessions](./multi-view-sessions); the reader itself is
-[The Code Reader](./code-reader).
+The tool can *host* a turn that other views of the same session contribute to — arm here, and a
+code selection made in another view (e.g. a VS Code bridge) lands in this prompt as a structured
+`code-selection` event. The machinery — the session bus, arming sync, code contributions — is its
+own page: [Multi-View Sessions](./multi-view-sessions).
 :::
 
 ## Decisions

@@ -1,6 +1,6 @@
 /**
  * The session bus: the channel's relay for **multiple browser views of one
- * session** — the app tab, the code reader, a future git viewer or iPad surface —
+ * session** — the app tab, a VS Code bridge, a future git viewer or iPad surface —
  * building up a single prompt together.
  *
  * A channel process *is* a session (one per Claude Code session, one port), so
@@ -15,7 +15,7 @@
  *    NOT cache — a code selection contributed to the turn, a nudge — delivered to
  *    every other tab and gone.
  *  - **peers**: who else is here (role/label/url), pushed on join and leave so a
- *    view can show "code reader connected".
+ *    view can show "app tab connected".
  *
  * Deliberately dumb: the hub relays and caches opaque JSON; it does not interpret
  * `armed` or a contribution. The *meaning* lives in the tabs (the overlay's turn

@@ -41,7 +41,6 @@ Options (all optional):
 | `mount` | `true` | Set `false` to keep the port/source injection but mount from app code (custom modalities). |
 | `session` | `{ role: "app" }` | Session-bus role for this dev server's views (`app`, `code`, …). `false` skips the bus. See [Multi-view sessions](#multi-view-sessions). |
 | `intentTool` | `true` | `false` → a *contributor* view: joins the session bus but does **not** host a turn (no overlay). Pair with `session: { role: "code" }`. |
-| `codeUrl` | — | URL of the code reader; when set, the intent tool shows a **⧉ Code** button that opens it as a second, session-synced tab. |
 
 Every submission also carries **client context** on its hello — the tab's live url/title, the
 tab identity stamped by the aiui DevTools extension (`data-aiui-tab`), and the plugin-seeded
@@ -111,7 +110,7 @@ mountIntentTool({ modalities: [textModality(), shout] });
 
 Several browser views of one Claude Code session can share **arming**, the **prompt preview**, and
 **code contributions** over the channel's `/session` bus. The app tab *hosts* the turn; other
-views (the code reader, a git viewer) *contribute* to it — one prompt, several windows.
+views (a VS Code bridge, a git viewer) *contribute* to it — one prompt, several windows.
 
 `installSessionBus` (installed at `window.__AIUI__.session` by the Vite plugin) is the client:
 

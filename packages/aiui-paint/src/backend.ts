@@ -2,9 +2,9 @@
  * backend.ts — the paint-stream coordinator as a **host-neutral backend**.
  *
  * This is the relay's room logic (pair a desktop **host** with iPad **clients**,
- * relay intents/view-state/video/signaling between them) packaged the way
- * aiui-code-server packages the reader backend: two seams — an HTTP handler and
- * a websocket-upgrade handler — that a host process mounts wherever it likes.
+ * relay intents/view-state/video/signaling between them) packaged as a
+ * host-neutral backend: two seams — an HTTP handler and a websocket-upgrade
+ * handler — that a host process mounts wherever it likes.
  * It never listens on a port itself. Three hosts exist today:
  *
  *  - the **channel sidecar** (`./sidecar`): mounts it at `/paint` on the aiui

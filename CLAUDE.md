@@ -72,7 +72,7 @@ Every package's dev manifest points at **source**, and the `dist/` mapping lives
 Every conditional-exports object in `publishConfig` must end with a `"default"` condition.
 Without it, `require.resolve()` on the *installed* package throws
 `ERR_PACKAGE_PATH_NOT_EXPORTED` — and source-first dev masks this completely, because the dev
-`exports` are bare strings that match any condition (this silently broke the code sidecar for
+`exports` are bare strings that match any condition (this silently broke a sidecar subpath for
 installed consumers before PR #1's review caught it).
 
 So `workspace:^` deps behave like Python *editable installs*: edit a package, and every

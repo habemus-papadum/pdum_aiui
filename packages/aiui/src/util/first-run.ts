@@ -95,7 +95,7 @@ function persist(
   return { ...config, claude: { ...config.claude, [key]: value } };
 }
 
-function persistSidecar(config: AiuiConfig, key: "code" | "paint", value: boolean): AiuiConfig {
+function persistSidecar(config: AiuiConfig, key: "paint", value: boolean): AiuiConfig {
   const file = updateUserConfig((c) => {
     c.sidecars = { ...c.sidecars, [key]: value };
   });

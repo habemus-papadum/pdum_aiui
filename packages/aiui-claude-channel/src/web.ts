@@ -418,7 +418,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   });
 
   // The `/session` endpoint: the multi-view session bus. Every tab of the session
-  // (app, code reader, …) dials it; the hub relays shared arming + prompt preview
+  // (app, VS Code bridge, …) dials it; the hub relays shared arming + prompt preview
   // + contributions between them (see session-hub.ts). Plain JSON text frames.
   sessionWss.on("connection", (socket) => {
     liveSockets.add(socket);

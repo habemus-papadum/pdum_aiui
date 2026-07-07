@@ -58,8 +58,6 @@ export interface AiuiConfig {
     enterNudge?: boolean;
   };
   sidecars?: {
-    /** Host the code reader sidecar (unset: auto-detect). */
-    code?: boolean;
     /** Host the iPad paint sidecar — an unauthenticated LAN listener (default: false). */
     paint?: boolean;
   };

@@ -197,13 +197,6 @@ export interface IntentToolOptions {
   /** Channel port; defaults to the plugin-injected `window.__AIUI__.port`. */
   port?: number | string;
   /**
-   * URL of the **code reader** view. When set, the panel shows a "Code" button
-   * that opens it in a second tab; the two tabs share arming + the prompt
-   * preview over the session bus (see docs/guide/multi-view-sessions.md). Unset
-   * → no button.
-   */
-  codeUrl?: string;
-  /**
    * URL of the **trace debugger** the 🔍 opens — the shared debug-ui viewer
    * the `aiuiDevOverlay()` Vite plugin serves at `/__aiui/debug` (the plugin
    * passes this option for you). The link is upgraded to
@@ -356,11 +349,6 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     // serves no HTML, so there is nothing to link — `aiui debug` is the
     // standalone way in.
     ...(debugUrl !== undefined ? { debugUrl } : {}),
-    // The "Code" affordance: open the code reader in a second tab. The two
-    // tabs share arming + the prompt preview over the session bus.
-    ...(typeof options.codeUrl === "string" && options.codeUrl.length > 0
-      ? { codeUrl: options.codeUrl }
-      : {}),
     tabLabels: modalities.map((m) => m.label),
     onTabSelect: (i) => selectTab(i),
     onDismissSelection: () => watcher.clear(),

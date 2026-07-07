@@ -108,15 +108,6 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
     summary: "which session sidecars `aiui claude` asks the channel to host",
     fields: [
       {
-        key: "code",
-        type: "boolean",
-        defaultText: "unset (auto: on when the project has an LSP setup or well-known languages)",
-        summary: "Host the code reader sidecar.",
-        doc:
-          "true forces the reader on even when auto-detection wouldn't; false disables it. " +
-          "Per-launch flags win: --aiui-sidecar code / --aiui-no-sidecar code.",
-      },
-      {
         key: "paint",
         type: "boolean",
         default: false,

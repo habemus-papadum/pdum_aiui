@@ -158,7 +158,7 @@ export function multimodalModality(
 
       // The session bus (installed by the Vite plugin's mount module, or app
       // code): this modality is the turn HOST — it publishes `armed` + a prompt
-      // `preview` to the session's other views (the code reader) and ingests
+      // `preview` to the session's other views and ingests
       // their `contribution`s. Undefined without a bus (manual mount / no
       // channel): the turn just works locally, exactly as before.
       const bus = typeof window !== "undefined" ? window.__AIUI__?.session : undefined;

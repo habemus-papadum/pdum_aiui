@@ -36,8 +36,6 @@ export interface WidgetOptions {
   title: string;
   /** Initial 🔍 href; absent → the button hides (no plugin, no debug page). */
   debugUrl?: string;
-  /** The ⧉ Code reader URL; absent → the button hides. */
-  codeUrl?: string;
   /** Modality tab labels; fewer than two → the tab row hides. */
   tabLabels: string[];
   onTabSelect(index: number): void;
@@ -292,17 +290,6 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
                 rel="noreferrer"
               >
                 🔍
-              </a>
-            )}
-            {options.codeUrl !== undefined && (
-              <a
-                class="iconbtn"
-                href={options.codeUrl}
-                title="Open the code reader (shares this session)"
-                target="aiui-code"
-                rel="noreferrer"
-              >
-                ⧉ Code
               </a>
             )}
             <button

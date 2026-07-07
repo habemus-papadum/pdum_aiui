@@ -14,10 +14,8 @@ import {
 import { runConfigTui } from "./commands/config-tui";
 import { type DebugOptions, runDebug } from "./commands/debug";
 import { type DemoOptions, runDemo } from "./commands/demo";
-import { runLspList, runLspProbe, runLspProvision } from "./commands/lsp";
 import { runMcp } from "./commands/mcp";
 import { runPaintUrl } from "./commands/paint";
-import { runSetupLsp } from "./commands/setup-lsp";
 import { runVite } from "./commands/vite";
 
 import { VERSION } from "./util/version";
@@ -198,51 +196,6 @@ export function buildProgram(): Command {
     .description("print the LAN URL(s) an iPad should open, per running paint-enabled channel")
     .option("--json", "machine-readable targets")
     .action((opts: { json?: boolean }) => runPaintUrl(opts));
-
-  // `aiui lsp …` is the toolbox `setup-lsp` (and its skill) drive: inspect the
-  // manifest, provision the built-in python/js recipes, and — the load-bearing
-  // one — `probe`, a real LSP handshake against a launcher so a server is never
-  // recorded untested. All operate on the project at process.cwd().
-  const lsp = program
-    .command("lsp")
-    .description(
-      "inspect/provision/probe this project's language servers — list | provision | probe",
-    );
-  lsp
-    .command("list")
-    .description("print the current LSP manifest (languages, servers, launchers, verified status)")
-    .option("--json", "machine-readable manifest")
-    .action((opts: { json?: boolean }) => runLspList(opts));
-  lsp
-    .command("provision")
-    .description("bootstrap launchers for well-known languages (python/js) from built-in recipes")
-    .option("--force", "re-provision even if a manifest already exists")
-    .option("--json", "machine-readable result (logs + manifest)")
-    .action((opts: { force?: boolean; json?: boolean }) => runLspProvision(opts));
-  lsp
-    .command("probe")
-    .description(
-      "self-test a launcher: run a real LSP handshake + read-only ops; exits non-zero on failure",
-    )
-    .argument("<language>", "the language/languageId to probe, e.g. python or typescript")
-    .option("--file <relpath>", "sample file to open (default: first matching project file)")
-    .option("--position <line:col>", "0-based position for definition/references ops")
-    .option("--json", "machine-readable probe report")
-    .action((language: string, opts: { file?: string; position?: string; json?: boolean }) =>
-      runLspProbe(language, opts),
-    );
-
-  // `aiui setup-lsp` hands the LSP-configuration task to an interactive Claude
-  // Code session seeded to run the setup-lsp skill (see runSetupLsp). Extra args
-  // forward to `claude` (e.g. `aiui setup-lsp --resume`).
-  program
-    .command("setup-lsp")
-    .description("configure this project's language servers with Claude Code's help")
-    .allowUnknownOption()
-    .allowExcessArguments()
-    .helpOption(false)
-    .argument("[args...]", "extra arguments forwarded to claude")
-    .action((args: string[]) => runSetupLsp(args));
 
   return program;
 }

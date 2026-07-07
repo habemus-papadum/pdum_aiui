@@ -23,10 +23,10 @@ import { parseServeReadyLine } from "./src/serve-ready";
  *     so nothing can ever reach a Claude session. Its cwd is the workbench
  *     package, so workbench traces land in the workbench's own `.aiui-cache/`
  *     (gitignored) and never mix into the project's trace list. It hosts the
- *     same session sidecars a real `aiui claude` launch would (today: the
- *     code reader, with its LSP backend) — the CLI's own auto-detect policy,
- *     reused via a tsx runner (see resolveChannelSidecars) — so the demo
- *     scenery's code viewer has a live backend on the channel port.
+ *     same session sidecars a real `aiui claude` launch would — the CLI's own
+ *     auto-detect policy, reused via a tsx runner (see
+ *     resolveChannelSidecars) — so sidecar-backed features behave exactly as
+ *     they would in a real session.
  *  2. **The demo app's Vite server** (packages/aiui-demo), started
  *     programmatically with `VITE_AIUI_PORT` pointed at the debug channel — so
  *     the demo page's own intent overlay (ink, shots, locator, all of it)
@@ -128,16 +128,14 @@ function autoOpenBrowser(url: string): void {
 
 /**
  * Resolve which session sidecars the debug channel should host — `aiui
- * claude`'s own policy (`resolveSidecars`: the code reader auto-enables when
- * the project has an LSP setup or well-known languages), reused through the
- * aiui package instead of re-derived. Without this the channel would host no
- * sidecars, and the code reader in the demo scenery would fail to load —
- * the overlay fetches the reader's endpoints from the channel port.
+ * claude`'s own policy (`resolveSidecars`), reused through the aiui package
+ * instead of re-derived, so the workbench's channel serves exactly what a
+ * real session's would.
  *
  * Runs as a tsx child for the same reason as the browser sidecar (see
  * {@link autoOpenBrowser}): the config can't import workspace TS directly.
  * Resolves to the `--sidecars` JSON for `serve`, or undefined (none detected,
- * or resolution failed — the workbench runs on, just without the reader).
+ * or resolution failed — the workbench runs on, just without sidecars).
  */
 function resolveChannelSidecars(): Promise<string | undefined> {
   return new Promise((resolvePromise) => {
@@ -218,10 +216,9 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
       "--port",
       String(ports.channel),
       ...(record ? ["--record"] : []),
-      // The session sidecars a real launch would host (today: the code
-      // reader), so the demo scenery's code viewer finds its backend on the
-      // channel port. Resolved via aiui claude's own policy before the first
-      // start (see resolveChannelSidecars).
+      // The session sidecars a real launch would host, resolved via aiui
+      // claude's own policy before the first start (see
+      // resolveChannelSidecars).
       ...(sidecarsJson !== undefined ? ["--sidecars", sidecarsJson] : []),
     ];
     channelChild = spawn(cli.command, args, {

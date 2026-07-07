@@ -67,12 +67,6 @@ const PKG = "@habemus-papadum/aiui-dev-overlay";
  */
 const MOUNT_ID = "virtual:aiui-dev-overlay/mount";
 
-/** The route this plugin serves the bundled code reader at (when `code: true`). */
-const READER_ROUTE = "/__aiui/code";
-
-/** The virtual module that boots the reader page (imports `./reader`). */
-const READER_MOUNT_ID = "virtual:aiui-dev-overlay/reader";
-
 /**
  * The route this plugin serves the trace debugger at (always, in dev): the
  * shared debug-ui {@link TracesPane} against the injected channel port. The
@@ -96,14 +90,14 @@ export interface AiuiDevOverlayOptions {
   mount?: boolean;
   /**
    * Mount the turn-**hosting** intent tool (default `true`). Set `false` for a
-   * pure *contributor* view — the code reader, a git viewer — that joins the
-   * session bus (arming + preview + contributions) but must NOT host its own
-   * turn: it keeps the port injection, the tools bridge, and `installSessionBus`,
-   * and only skips `mountIntentTool`. Hosting from such a view is actively wrong
-   * — its armed ink-capture layer would sit over the code UI and swallow clicks,
-   * and two hosts would race on the shared `preview` slot. Pair with
-   * `session: { role: "code" }`. Distinct from `mount: false`, which drops the
-   * whole module (bus included).
+   * pure *contributor* view — a git viewer, an external-editor bridge — that
+   * joins the session bus (arming + preview + contributions) but must NOT host
+   * its own turn: it keeps the port injection, the tools bridge, and
+   * `installSessionBus`, and only skips `mountIntentTool`. Hosting from such a
+   * view is actively wrong — its armed ink-capture layer would sit over the
+   * view's UI and swallow clicks, and two hosts would race on the shared
+   * `preview` slot. Pair with `session: { role: "code" }`. Distinct from
+   * `mount: false`, which drops the whole module (bus included).
    */
   intentTool?: boolean;
   /**
@@ -139,15 +133,6 @@ export interface AiuiDevOverlayOptions {
    * bus entirely. (See docs/guide/multi-view-sessions.md.)
    */
   session?: false | { role?: string; label?: string };
-  /**
-   * Serve the bundled **code reader** (`@habemus-papadum/aiui-code`) from this
-   * dev server at `/__aiui/code`, and show the intent tool's "Code" button that
-   * opens it in a second tab. The reader is bundled into THIS app's dev server —
-   * no separate reader process — and talks to the channel's code sidecar over the
-   * injected port; the two tabs share arming + the prompt preview over the
-   * session bus. Off by default. (Replaces the old `codeUrl` external-URL option.)
-   */
-  code?: boolean;
   /** Channel port to inject; defaults to `process.env.VITE_AIUI_PORT`. */
   port?: number | string;
   /**
@@ -234,16 +219,14 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
     // can't see through the virtual mount module).
     resolveId(id) {
       if (id === MOUNT_ID) return MOUNT_ID;
-      if (id === READER_MOUNT_ID) return READER_MOUNT_ID;
       if (id === DEBUG_MOUNT_ID) return DEBUG_MOUNT_ID;
       return undefined;
     },
-    // Serve the bundled reader page at READER_ROUTE (dev only, opt-in via
-    // `code`) and the trace debugger at DEBUG_ROUTE (dev only, always). Each
-    // page is a thin shell: it seeds the channel port, pulls in Vite's HMR
-    // client, and boots via its virtual mount module. They deliberately do NOT
-    // go through transformIndexHtml (that path injects the turn-hosting intent
-    // tool — wrong for a contributor/debugger view).
+    // Serve the trace debugger at DEBUG_ROUTE (dev only, always). The page is a
+    // thin shell: it seeds the channel port, pulls in Vite's HMR client, and
+    // boots via its virtual mount module. It deliberately does NOT go through
+    // transformIndexHtml (that path injects the turn-hosting intent tool —
+    // wrong for a debugger view).
     configureServer(server) {
       const shell = (title: string, mountId: string): string => {
         const port = resolvePort();
@@ -263,11 +246,7 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
       server.middlewares.use((req, res, next) => {
         const path = (req.url ?? "").split("?")[0];
         const html =
-          path === DEBUG_ROUTE
-            ? shell("aiui · lowering traces", DEBUG_MOUNT_ID)
-            : options.code && path === READER_ROUTE
-              ? shell("aiui · code reader", READER_MOUNT_ID)
-              : undefined;
+          path === DEBUG_ROUTE ? shell("aiui · lowering traces", DEBUG_MOUNT_ID) : undefined;
         if (html === undefined) {
           next();
           return;
@@ -278,14 +257,6 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
       });
     },
     load(id) {
-      if (id === READER_MOUNT_ID) {
-        const port = resolvePort();
-        return [
-          `import { mountReaderPage } from ${JSON.stringify(`${PKG}/reader`)};`,
-          `mountReaderPage(${port === undefined ? "{}" : `{ port: ${port} }`});`,
-          "",
-        ].join("\n");
-      }
       if (id === DEBUG_MOUNT_ID) {
         const port = resolvePort();
         return [
@@ -306,8 +277,6 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
         ...(port === undefined ? [] : [`port: ${port}`]),
         ...(options.format === undefined ? [] : [`format: ${scriptString(options.format)}`]),
         ...(options.actor === undefined ? [] : [`actor: ${scriptString(options.actor)}`]),
-        // When the reader is served here, point the "Code" button at our route.
-        ...(options.code ? [`codeUrl: ${scriptString(READER_ROUTE)}`] : []),
         // The 🔍 opens the trace debugger this plugin serves (the shared
         // debug-ui viewer), not the channel's built-in /debug fallback.
         `debugUrl: ${scriptString(DEBUG_ROUTE)}`,
@@ -316,7 +285,7 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
           ? []
           : [`intent: ${JSON.stringify(options.intent).replace(/</g, "\\u003c")}`]),
       ];
-      // A contributor view (the reader) joins the bus but must not host a turn.
+      // A contributor view joins the bus but must not host a turn.
       const mountIntent = options.intentTool ?? true;
       const mountCall = `mountIntentTool({ ${args.join(", ")} })`;
       // Mount after `load`, not at module eval: this script runs before the
@@ -330,7 +299,7 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
       // `window.__AIUI__.tools` synchronously when they register. Without a
       // channel port it is a no-op.
       // The session bus (unless disabled): installs at module eval like the
-      // tools bridge, so the reader's panel / app toolkits find
+      // tools bridge, so peer views / app toolkits find
       // `window.__AIUI__.session` synchronously. `role` defaults to "app".
       const sessionArgs =
         options.session === false

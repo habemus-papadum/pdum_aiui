@@ -45,10 +45,8 @@
   "dependencies": {
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-claude-plugin": "workspace:^",
-    "@habemus-papadum/aiui-code-server": "workspace:^",
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-devtools-extension": "workspace:^",
-    "@habemus-papadum/aiui-lsp": "workspace:^",
     "@habemus-papadum/aiui-paint": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
     "@inquirer/prompts": "^7.2.0",

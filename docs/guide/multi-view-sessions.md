@@ -1,11 +1,10 @@
 # Multi-View Sessions
 
-One Claude Code session, several browser tabs. The app you're building in one tab, its
-[code reader](/packages/aiui-code/) in another, a future git viewer or
-[iPad surface](#the-general-pattern) in a third — all looking at the **same running session** and
-all building the **same prompt**. You arm the overlay once and every view knows it's armed; you
-select code in the reader and it lands in the turn you're dictating in the app tab; the
-prompt-so-far is visible everywhere.
+One Claude Code session, several views. The app you're building in one tab, an external editor
+(a VS Code bridge) beside it, a future git viewer or [iPad surface](#the-general-pattern) in a
+third — all looking at the **same running session** and all building the **same prompt**. You arm
+the overlay once and every view knows it's armed; you select code in your editor and it lands in
+the turn you're dictating in the app tab; the prompt-so-far is visible everywhere.
 
 This page explains the **session bus** that makes that work, and how to give a new view a seat at
 the session.
@@ -23,9 +22,9 @@ The design decision is a **single-owner turn with a contribution bus**, not a co
 - **One view hosts the turn** — the app tab's multimodal overlay owns the `Engine` (the
   append-only event log + thread state machine described in [Web Intent Tool](/guide/web-intent-tool)).
   It is the single writer of the prompt.
-- **Other views are contributors** — the reader doesn't host its own turn; it *contributes* to the
-  host's. A contribution is "this code is selected," delivered as a message the host folds into its
-  prompt exactly like a spoken sentence.
+- **Other views are contributors** — a code view doesn't host its own turn; it *contributes* to
+  the host's. A contribution is "this code is selected," delivered as a message the host folds into
+  its prompt exactly like a spoken sentence.
 
 This is deliberately simpler than a CRDT of co-authors, and it matches the interaction: you're
 still dictating one turn; the second tab just feeds it.
@@ -43,7 +42,7 @@ small relay behind it (`SessionHub`).
    app tab   ──ws──▶│  /session          SessionHub            │
    (host)          ◀│    · armed  (shared, last-writer-wins)   │
                     │    · preview (shared, last-writer-wins)  │
-   reader   ──ws──▶ │    · contribution (transient publish)    │
+   code view ──ws──▶│    · contribution (transient publish)    │
    (contributor)   ◀│    · peers (who's connected)             │
                     └─────────────────────────────────────────┘
 ```
@@ -71,18 +70,18 @@ care (an `applyingRemoteArm` flag).
 
 ## Arming, synced
 
-Arming is a shared boolean. Toggle it anywhere — the app overlay's arm button, the reader's session
-panel — and it reaches every view:
+Arming is a shared boolean. Toggle it anywhere — the app overlay's arm button, a contributor
+view's panel — and it reaches every view:
 
 ```mermaid
 sequenceDiagram
-  participant R as Reader (code)
+  participant C as Code view (contributor)
   participant Hub as SessionHub
   participant A as App (host)
-  R->>Hub: set("armed", true)
+  C->>Hub: set("armed", true)
   Hub-->>A: armed = true
   A->>A: engine.setArmed(true)  (guarded: no re-broadcast)
-  Note over A,R: both views now show "armed"
+  Note over A,C: both views now show "armed"
 ```
 
 The host applies a remote arm to its `Engine` and, because the `Engine` is what actually opens
@@ -93,23 +92,19 @@ while the session is idle **arms it first** — selecting code and sending it *i
 
 As the host builds its turn it broadcasts a compact `preview` — the composed prompt text so far —
 into the shared `preview` slot. Every view can render it read-only. Dictate in the app tab and the
-sentence appears in the reader's panel; contribute a selection from the reader and a compact
-`[code: file:lines “excerpt…”]` marker appears in the mirror (the app tab's own preview shows it
+sentence appears in a contributor's mirror; contribute a selection and a compact
+`[code: file:lines “excerpt…”]` marker appears there (the app tab's own preview shows it
 as a chip — the code excerpt with its location beside it). It's one prompt, mirrored.
 
 Only the **host** writes `preview` (an idle contributor never does), so there's no race on the slot.
 
-## Code mode
+## Code selections
 
-In the app tab's intent tool, a **⧉ Code** button opens the reader in a second tab. Turn it on with
-[`code: true`](#configuration): the app's own dev server then serves the reader at `/__aiui/code`
-(no separate reader process) and shows the button. The two tabs now share the session. In the reader
-you're not painting or dictating — **you're selecting code and talking**:
-
-- Select a range in the editor. The reader's **session panel** shows the location, an excerpt, and
-  whether it'll be *inlined* or *added to context*.
-- Hit **Add to prompt →**. The selection is published as a contribution; the host folds it into the
-  turn.
+Code enters the turn as a **selection contribution**: "this range of this file is selected", with
+the raw text and a locator. The planned source is a **VS Code extension** — select a range in the
+editor you already have open, send it, and the host folds it into the turn. (An earlier in-browser
+code reader played this role; it has been removed in favor of the editor you actually use. The
+message types and the lowering below are unchanged — a contributor is a contributor.)
 
 ### Selection → context
 
@@ -139,15 +134,15 @@ on-screen selection: …"); see [the web intent tool](/guide/web-intent-tool) fo
 
 A view's role is a config decision, made where it mounts the overlay:
 
-| | **Host** (the app tab) | **Contributor** (the reader) |
+| | **Host** (the app tab) | **Contributor** (a code view, a git viewer) |
 |---|---|---|
-| Mounts | the full intent tool (`Engine`, ink, talk, shots) | the session bus + a session panel only |
+| Mounts | the full intent tool (`Engine`, ink, talk, shots) | the session bus + a panel only |
 | Owns the turn? | yes — single writer of the prompt | no — publishes contributions to the host |
-| `session.role` | `"app"` (default) | `"code"` |
+| `session.role` | `"app"` (default) | `"code"`, `"git"`, … |
 | `intentTool` | `true` (default) | `false` |
 
 A contributor **must not** host a turn. Its armed overlay would drop an ink-capture layer over the
-code UI and swallow your clicks, and a second host would fight the first for the `preview` slot.
+view's UI and swallow your clicks, and a second host would fight the first for the `preview` slot.
 `intentTool: false` is precisely "join the bus, don't host": it keeps the port injection, the
 [page-tools bridge](/guide/web-intent-tool), and `installSessionBus`, and skips only
 `mountIntentTool`.
@@ -157,22 +152,7 @@ code UI and swallow your clicks, and a second host would fight the first for the
 The [`aiuiDevOverlay()`](/guide/web-intent-tool) Vite plugin wires the bus. Every served page joins
 by default (role `"app"`).
 
-**The app (host)** — serve the reader and show the Code button:
-
-```ts
-// app vite.config.ts
-aiuiDevOverlay({
-  // …locator, format, etc.
-  code: true, // serve the reader at /__aiui/code + show the ⧉ Code button
-})
-```
-
-That's the whole reader setup: the app's own dev server serves the reader page at `/__aiui/code`
-(no separate reader process), and its bootstrap joins the session bus as a `code`-role contributor
-for you — `intentTool: false`, a `SessionPanel`, no competing turn host. See
-[The Code Reader](./code-reader) for how that reader is wired.
-
-**A custom contributor** — the same pattern for a *new* view (a git viewer, an iPad surface) you
+**A custom contributor** — the pattern for a *new* view (a git viewer, an iPad surface) you
 build yourself: join under its role, don't host a turn.
 
 ```ts
@@ -188,20 +168,17 @@ Bus options at a glance:
 - `session: { role, label }` — how this view identifies to its peers. Default role `"app"`.
 - `session: false` — skip the bus entirely (single-view app).
 - `intentTool: false` — contributor view: bus + bridge, no turn host.
-- `code: true` — serve the bundled [code reader](./code-reader) at `/__aiui/code` and show the
-  host's ⧉ Code button.
 
-Launch the dev server through `aiui vite` (or with `VITE_AIUI_PORT` set) so the app tab and the
-reader tab it serves point at the same channel — that shared port is what puts them in the same
-session.
+Launch the dev server through `aiui vite` (or with `VITE_AIUI_PORT` set) so every view points at
+the same channel — that shared port is what puts them in the same session.
 
 ## The general pattern
 
-Nothing above is code-reader-specific. The bus is a generic "views of one session share state and
-talk to each other" substrate:
+Nothing above is specific to code selections. The bus is a generic "views of one session share
+state and talk to each other" substrate:
 
-- A **git viewer** could join as role `"git"` and contribute a hunk the same way the reader
-  contributes a selection — no change to the reader, no change to the host.
+- A **git viewer** could join as role `"git"` and contribute a hunk the same way a code view
+  contributes a selection — no change to the host.
 - The [iPad painting surface](./paint-stream) needs the same **arming sync** across
   devices; it's another peer on the same `armed` slot.
 
@@ -222,6 +199,3 @@ contributor's selection reads the same in the prompt without any formatting code
   `contributionToText`, `isShortSelection`) — shared by host and contributor.
 - **Host wiring** — the multimodal modality (`multimodal/modality.ts`): applies remote arm,
   broadcasts `preview`, ingests contributions via `Engine.contribute`.
-- **Contributor UI** — the reader's `SessionPanel`
-  (`packages/aiui-dev-overlay/src/reader/SessionPanel.tsx`; it lives in the overlay, not
-  aiui-code, which stays session-agnostic).
