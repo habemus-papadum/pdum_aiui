@@ -31,7 +31,10 @@
  *  - **Server → client:** `conversation.item.input_audio_transcription.delta
  *    { item_id, delta }` (partial — `delta` is *incremental*, so we accumulate),
  *    `…transcription.completed { item_id, transcript }` (final). `item_id`
- *    correlates events for one committed segment.
+ *    correlates events for one committed segment. Deltas start **while audio is
+ *    still appending** — well before the commit (that's the entire point of the
+ *    streaming tier: partials as you talk) — so an unseen `item_id` with no
+ *    committed segment to claim it belongs to the segment streaming right now.
  *
  * The upstream socket is injectable ({@link RealtimeSocketFactory}) so the unit
  * tests drive a scripted fake session with no network and no key — the same seam
@@ -62,7 +65,11 @@ export interface RealtimeResult {
 
 /** What a realtime session reports back, keyed by our own segment ordinal. */
 export interface RealtimeCallbacks {
-  /** A partial transcript for `segment` — cumulative text (not the raw delta). */
+  /**
+   * A partial transcript for `segment` — cumulative text (not the raw delta).
+   * Fires from the moment the model starts transcribing, i.e. while the
+   * segment's audio is still streaming, before its commit.
+   */
   onDelta(segment: number, cumulativeText: string): void;
   /** The final transcript for `segment`. */
   onFinal(segment: number, result: RealtimeResult): void;
@@ -173,6 +180,13 @@ export function openRealtimeSession(
   const pending: number[] = [];
   // Committed segments not yet bound to an upstream item_id, in commit order.
   const awaitingItem: number[] = [];
+  // The segment whose audio is streaming right now (appending, not yet
+  // committed) — where a pre-commit delta's unseen item_id binds.
+  let streamingSegment: number | undefined;
+  // Segments already bound to an item_id (until their `…completed`), so a
+  // second upstream item can never claim one — and commit() knows not to
+  // re-offer a pre-commit-bound segment via awaitingItem.
+  const boundSegments = new Set<number>();
   const commitAt = new Map<number, number>();
   const itemToSegment = new Map<string, number>();
   const cumulativeByItem = new Map<string, string>();
@@ -197,17 +211,24 @@ export function openRealtimeSession(
     }
   };
 
-  /** Bind an unseen upstream item to the oldest still-unbound committed segment. */
+  /**
+   * Bind an unseen upstream item to its segment: the oldest still-unbound
+   * committed segment first (items are created in buffer = commit order), and
+   * with none committed, the segment streaming audio right now — the GA models
+   * emit partials while audio is still appending, before any commit, and those
+   * deltas are exactly what makes the preview stream as you talk.
+   */
   const segmentForItem = (itemId: string): number | undefined => {
     const existing = itemToSegment.get(itemId);
     if (existing !== undefined) {
       return existing;
     }
-    const segment = awaitingItem.shift();
-    if (segment === undefined) {
+    const segment = awaitingItem.shift() ?? (dead ? undefined : streamingSegment);
+    if (segment === undefined || boundSegments.has(segment)) {
       return undefined;
     }
     itemToSegment.set(itemId, segment);
+    boundSegments.add(segment);
     return segment;
   };
 
@@ -219,6 +240,7 @@ export function openRealtimeSession(
     commitAt.delete(segment);
     itemToSegment.delete(itemId);
     cumulativeByItem.delete(itemId);
+    boundSegments.delete(segment);
     callbacks.onFinal(segment, result);
     settleDrainIfIdle();
   };
@@ -257,12 +279,15 @@ export function openRealtimeSession(
       }
       case "conversation.item.input_audio_transcription.delta": {
         const itemId = message.item_id ?? "";
+        // Accumulate BEFORE the binding check: a delta with no segment to bind
+        // to must still contribute its text, or the first bindable delta (and
+        // the `…completed` fallback text) would start from a truncated tail.
+        const cumulative = (cumulativeByItem.get(itemId) ?? "") + (message.delta ?? "");
+        cumulativeByItem.set(itemId, cumulative);
         const segment = segmentForItem(itemId);
         if (segment === undefined) {
           return;
         }
-        const cumulative = (cumulativeByItem.get(itemId) ?? "") + (message.delta ?? "");
-        cumulativeByItem.set(itemId, cumulative);
         callbacks.onDelta(segment, cumulative);
         return;
       }
@@ -334,9 +359,10 @@ export function openRealtimeSession(
       if (dead) {
         return;
       }
-      // Segment ordinal isn't carried upstream (the buffer is implicit); it is
-      // bound to an item_id at commit-order time. Append forwards bytes as-is.
-      void segment;
+      // Segment ordinal isn't carried upstream (the buffer is implicit) — it
+      // marks this segment as the streaming one, where a pre-commit delta's
+      // unseen item_id binds. Append forwards bytes as-is.
+      streamingSegment = segment;
       sendAudioMessage({ type: "input_audio_buffer.append", audio: textDecoderBase64(bytes) });
     },
     commit(segment) {
@@ -344,9 +370,14 @@ export function openRealtimeSession(
         callbacks.onError("realtime session unavailable", segment);
         return;
       }
+      if (streamingSegment === segment) {
+        streamingSegment = undefined; // committed — no longer the pre-commit bind target
+      }
       commitAt.set(segment, now());
       pending.push(segment);
-      awaitingItem.push(segment);
+      if (!boundSegments.has(segment)) {
+        awaitingItem.push(segment); // pre-commit deltas may have bound it already
+      }
       sendAudioMessage({ type: "input_audio_buffer.commit" });
     },
     drain(timeoutMs) {
