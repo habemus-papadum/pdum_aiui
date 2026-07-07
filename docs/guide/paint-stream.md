@@ -37,7 +37,28 @@ the channel server's loopback-only posture is unchanged. See [Read before runnin
    └───────────────┘                                          └────────────────────┘
 ```
 
-## Run it
+## Fastest path: the standalone demo
+
+One command starts everything — no overlay, no channel server, nothing else to set up:
+
+```sh
+pnpm paint:demo
+```
+
+It launches the relay **and** a small demo app together, then opens the demo on this machine and
+prints the LAN URL to open on your iPad. The demo is a large scrollable "document" (a grid with
+labelled landmark blocks so scrolling is obviously doing something):
+
+- **draw locally** with the mouse;
+- **draw from the iPad** — open the printed URL, pick *aiui paint demo*, tap **Arm**, and draw; the
+  strokes land in document space, right where you drew relative to what the iPad shows;
+- **scroll** (one finger) and **pinch-zoom** (two fingers) around the document from the iPad.
+
+Add `?video=webrtc` to the demo URL to stream over WebRTC instead of JPEG. The first iPad connection
+asks the demo tab to share its screen (auto-accepted in the session browser). The demo lives in
+`packages/aiui-paint/demo/` and is a compact, copyable example of wiring `InkSurface` + `startPaintHost`.
+
+## Run it (wire it into your own app)
 
 **1. Start the relay** (on the machine running the browser):
 

@@ -12,6 +12,16 @@ This package is the coordination layer: the wire **protocol**, a LAN **relay** s
 > trusted network only. It is a separate process from the loopback channel MCP server, whose posture
 > it does not change.
 
+## Fastest way to try it: the standalone demo
+
+```sh
+pnpm paint:demo        # from the repo — starts the relay + a demo app together
+```
+
+Draw on the demo's scrollable canvas with the mouse, then open the printed URL on an iPad to draw,
+scroll, and pinch-zoom remotely. Source: `packages/aiui-paint/demo/` — a compact example of wiring
+`InkSurface` + `startPaintHost`.
+
 ## Run the relay
 
 ```sh
