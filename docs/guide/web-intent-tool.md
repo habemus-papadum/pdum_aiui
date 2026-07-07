@@ -119,7 +119,8 @@ modality.
 
 ### Collection: the pluggable widget
 
-`mountIntentTool` renders the floating button + panel (Shadow-DOM isolated, dependency-free) and
+`mountIntentTool` renders the floating widget — one draggable pill whose panel unfolds above it
+(Shadow-DOM isolated, dependency-free) — and
 hosts any number of modalities as tabs. A modality is ~a function:
 
 ```ts
@@ -261,7 +262,7 @@ Failures never stay server-side (or die in a dropped ack): a generic `kind:"erro
 `connection`, …), and an optional remediation `detail`. Every server-side failure site routes
 through one helper (`pushError`); the flagship example is a stale `OPENAI_API_KEY`, which the
 channel alone can see, so the channel names it. The widget renders these as **dismissible toasts**
-beside the fab — visible with the panel closed (where the footer status line is not), deduped
+beside the widget pill — visible with the panel closed (where the footer status line is not), deduped
 (repeats become one toast with a ×N badge) and capped. Client-detected transport faults use the
 same surface: a channel that is down or refuses the hello toasts at `openThread`, an established
 socket closing out from under a turn (the channel stopping, or a reload dropping every connection)

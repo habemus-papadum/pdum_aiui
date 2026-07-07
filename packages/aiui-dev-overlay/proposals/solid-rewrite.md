@@ -1,9 +1,11 @@
 # Proposal: rewrite the dev overlay as a SolidJS widget
 
-Status: **proposed** (not started). The package was made *Solid-capable* first (deps +
-`vite-plugin-solid` + `jsxImportSource`, mirroring `aiui-viz`) so new components can be Solid `.tsx`
-today; this doc is the plan to migrate the **existing vanilla surface** onto the same SolidJS 2.0 +
-`aiui-viz` principles the rest of the project uses.
+Status: **superseded by [solid-rewrite-b2.md](./solid-rewrite-b2.md)** (July 2026), which revises
+this plan around the modal-kit extraction (`aiui-viz/modal`) and demotes cells to
+where-genuinely-async; kept for the original motivation and constraints. The package was made
+*Solid-capable* first (deps + `vite-plugin-solid` + `jsxImportSource`, mirroring `aiui-viz`) so new
+components can be Solid `.tsx` today; this doc was the plan to migrate the **existing vanilla
+surface** onto the same SolidJS 2.0 + `aiui-viz` principles the rest of the project uses.
 
 ## Why
 

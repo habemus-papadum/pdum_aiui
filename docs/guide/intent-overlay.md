@@ -33,7 +33,7 @@ Minimalist by design — one hand, no chords:
 
 | Key       | Action |
 | --------- | ------ |
-| `` ` ``   | arm / disarm the overlay (also the **✳ aiui** button) |
+| `` ` ``   | arm / disarm the overlay (also the **✳** button on the pill) |
 | **Space** | talk — *hold*-to-talk (default) or press-to-*toggle*, per config |
 | *drag*    | ink — no key; while armed, dragging draws |
 | **D**     | hold + drag a rectangle = region screenshot |
@@ -298,7 +298,7 @@ both surfaced in the overlay:
 
 - **Screen share (V).** Press **V** to share your screen with the live model — it samples the
   same display-capture stream a screenshot uses, at ~1 fps, as ambient context (a **● video**
-  badge shows on the HUD while it runs; deliberate **D**/**S** shots are still the *referenceable*
+  badge shows on the widget pill while it runs; deliberate **D**/**S** shots are still the *referenceable*
   images). The share is bounded by the turn (it ends on send/cancel/disarm) and pauses while the
   tab is in the background. Off a live tier, **V** just says *"video needs a live tier — K, then
   6/7"*.
@@ -313,7 +313,7 @@ for the design.
 
 ## Quick config: the K strip
 
-Press **K** while armed and a small strip opens above the HUD — the keyboard-speed door to the
+Press **K** while armed and a small strip opens above the widget pill — the keyboard-speed door to the
 tier dial, built for the "let me try this segment on `rapid`" moment when reaching for the Vite
 config or the JSON editor would break your flow. The strip is its own documentation:
 
