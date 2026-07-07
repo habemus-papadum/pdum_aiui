@@ -16,7 +16,14 @@
  */
 import { DEFAULT_INTENT_CONFIG, type IntentPipelineConfig } from "./config";
 import { applyCorrectionToLines } from "./patch";
-import type { IntentEvent, LocatedComponent, Mode, Rect } from "./types";
+import type {
+  AppSelection,
+  CodeSelection,
+  IntentEvent,
+  LocatedComponent,
+  Mode,
+  Rect,
+} from "./types";
 
 export type EngineListener = (event: IntentEvent, engine: Engine) => void;
 
@@ -111,12 +118,26 @@ export class Engine {
 
   // ── thread ─────────────────────────────────────────────────────────────────
 
+  /**
+   * The turn's app selection, read once at thread-open (set by the modality —
+   * it returns the selection watcher's current snapshot). Whatever was
+   * highlighted on the page when the turn's first contentful act happened
+   * becomes the turn's opening `app-selection` event, so the transcript
+   * *begins* with the selection chip and pre-arm selections can never be lost
+   * to a send-time read.
+   */
+  selectionProvider?: () => AppSelection | undefined;
+
   private ensureThread(trigger: "talk" | "ink" | "shot" | "contribution"): void {
     if (this.threadOpen || !this.armed) {
       return;
     }
     this.threadOpen = true;
     this.emit(this.stamp({ type: "thread-open", trigger }));
+    const selection = this.selectionProvider?.();
+    if (selection !== undefined && selection.text !== "") {
+      this.emit(this.stamp({ type: "app-selection", ...selection }));
+    }
   }
 
   /**
@@ -139,6 +160,46 @@ export class Engine {
       this.stamp({ type: "transcript-final", segment, text, latencyMs: 0, model: "contribution" }),
     );
     return segment;
+  }
+
+  /**
+   * Ingest a code selection contributed from ANOTHER view of the session (the
+   * reader's "Add to prompt →"). Same lifecycle as {@link contribute} — opens
+   * the thread if armed, no-op when not — but emits the structured
+   * `code-selection` event instead of pre-rendered text: how it reads in the
+   * prompt is `composeIntent`'s decision, made at lowering time.
+   */
+  codeSelection(selection: CodeSelection): boolean {
+    if (!this.armed || selection.text === "") {
+      return false;
+    }
+    this.ensureThread("contribution");
+    this.emit(this.stamp({ type: "code-selection", ...selection }));
+    return true;
+  }
+
+  /**
+   * Update the turn's app selection mid-thread (the page selection changed
+   * while the thread was open — e.g. re-selected during correct mode, when the
+   * ink canvas is down). Last one wins in composition; the thread-open capture
+   * itself goes through {@link selectionProvider}. No-op without an open
+   * thread — an app selection is context riding a turn, never a turn opener.
+   */
+  appSelection(selection: AppSelection): boolean {
+    if (!this.threadOpen || selection.text === "") {
+      return false;
+    }
+    this.emit(this.stamp({ type: "app-selection", ...selection }));
+    return true;
+  }
+
+  /** Retract the turn's app selection (the chip's ✕ / a cleared watcher). */
+  appSelectionDrop(): boolean {
+    if (!this.threadOpen) {
+      return false;
+    }
+    this.emit(this.stamp({ type: "app-selection-drop" }));
+    return true;
   }
 
   send(): void {
@@ -403,7 +464,7 @@ export class Engine {
 // ── the first IR pass, pure ──────────────────────────────────────────────────
 
 export interface ComposedItem {
-  kind: "text" | "shot";
+  kind: "text" | "shot" | "code-selection";
   text?: string;
   marker?: string;
   thumb?: string;
@@ -411,6 +472,10 @@ export interface ComposedItem {
   components?: LocatedComponent[];
   /** True for a whole-viewport shot (renders with no element metadata). */
   viewport?: boolean;
+  /** A code-selection item's locator (`file:line:col` / `file:start-end`). */
+  sourceLoc?: string;
+  /** A code-selection item's line count. */
+  lines?: number;
 }
 
 export interface ComposedIntent {
@@ -443,6 +508,15 @@ export interface ComposedIntent {
    * paths and element info are inlined in {@link prompt}).
    */
   meta: Record<string, string>;
+  /**
+   * The turn's effective app selection — the LAST `app-selection` event of
+   * the thread, unless an `app-selection-drop` retracted it. Deliberately NOT
+   * rendered into {@link prompt}: it is context about the intent, and the
+   * channel folds it into the prompt's context *preamble* (the same wording
+   * `text-concat`'s selection block uses — see the channel's prompt-context),
+   * so both modalities produce identical selection context.
+   */
+  appSelection?: AppSelection;
 }
 
 /** Options for {@link composeIntent}. */
@@ -498,11 +572,26 @@ export function composeIntent(
 
   const items: ComposedItem[] = [];
   const corrections: ComposedIntent["corrections"] = [];
+  // The turn's app selection: last one wins (a re-selection mid-thread
+  // supersedes), a drop retracts whatever was carried.
+  let appSelection: AppSelection | undefined;
   for (const event of scope) {
     if (event.type === "transcript-final" && !event.correction) {
       // One item per segment, deliberately unmerged: segments-as-lines is the
       // document shape the correction patches (and the corrector model) see.
       items.push({ kind: "text", text: event.text });
+    } else if (event.type === "app-selection") {
+      const { at: _at, type: _type, ...selection } = event;
+      appSelection = selection;
+    } else if (event.type === "app-selection-drop") {
+      appSelection = undefined;
+    } else if (event.type === "code-selection") {
+      items.push({
+        kind: "code-selection",
+        text: event.text,
+        ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
+        lines: event.lines ?? event.text.split("\n").length,
+      });
     } else if (event.type === "shot" && !droppedShots.has(event.marker)) {
       items.push({
         kind: "shot",
@@ -570,6 +659,8 @@ export function composeIntent(
       promptParts.push(item.text);
     } else if (item.kind === "shot" && item.marker) {
       promptParts.push(renderShot(item, options));
+    } else if (item.kind === "code-selection") {
+      promptParts.push(renderCodeSelection(item));
     }
   }
   if (policy === "note") {
@@ -585,7 +676,31 @@ export function composeIntent(
     components,
     prompt: promptParts.join(" ").trim(),
     meta: {},
+    ...(appSelection !== undefined ? { appSelection } : {}),
   };
+}
+
+// ── code-selection rendering (the deferred decision) ─────────────────────────
+
+/** At or below this many characters a code selection is inlined; above, fenced. */
+export const SHORT_SELECTION_CHARS = 240;
+
+/**
+ * One contributed code selection, rendered at its position in the prose. The
+ * short/long rule (formerly the bus host's `contributionToText`, now a compose
+ * pass so the decision happens at LOWERING time): a **short** selection is
+ * inlined — "Regarding `file:line`: `code`" — the location and the code right
+ * in the sentence; a **long** one becomes a fenced block under its location
+ * header, set apart from the prose like a multi-line screenshot block.
+ */
+function renderCodeSelection(item: ComposedItem): string {
+  const text = item.text ?? "";
+  const loc = item.sourceLoc !== undefined ? `\`${item.sourceLoc}\`` : "the selection";
+  if (text.trim().length <= SHORT_SELECTION_CHARS) {
+    return `Regarding ${loc}: \`${text.trim()}\``;
+  }
+  const n = item.lines ?? text.split("\n").length;
+  return `\nRegarding ${loc} (${n} lines):\n\`\`\`\n${text}\n\`\`\`\n`;
 }
 
 // ── shot rendering (the inline block) ────────────────────────────────────────

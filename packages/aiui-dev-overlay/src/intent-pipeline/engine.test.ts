@@ -326,3 +326,108 @@ describe("composeIntent", () => {
     expect(composeIntent(engine.events).transcript).toBe("new thread");
   });
 });
+
+describe("app selection (the pre-arm page selection riding the turn)", () => {
+  it("opens the turn with an app-selection event from the selection provider", () => {
+    const engine = armedEngine();
+    engine.selectionProvider = () => ({
+      text: "reaction-diffusion on the GPU",
+      sourceLoc: "src/App.tsx:35:13",
+      cell: "catalog",
+    });
+    engine.talkStart();
+    // Right after thread-open, before any transcript: the transcript BEGINS
+    // with the selection.
+    const types = engine.events.map((e) => e.type);
+    expect(types.indexOf("app-selection")).toBe(types.indexOf("thread-open") + 1);
+    expect(composeIntent(engine.events).appSelection).toEqual({
+      text: "reaction-diffusion on the GPU",
+      sourceLoc: "src/App.tsx:35:13",
+      cell: "catalog",
+    });
+  });
+
+  it("keeps the LAST app-selection (a re-selection supersedes) and honors a drop", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.appSelection({ text: "first" });
+    engine.appSelection({ text: "second", cell: "flow" });
+    expect(composeIntent(engine.events).appSelection).toEqual({ text: "second", cell: "flow" });
+
+    engine.appSelectionDrop();
+    expect(composeIntent(engine.events).appSelection).toBeUndefined();
+    // Append-only: the events stay in the stream for the trace.
+    expect(engine.events.filter((e) => e.type === "app-selection")).toHaveLength(2);
+  });
+
+  it("never renders the app selection into the prompt body (it is preamble context)", () => {
+    const engine = armedEngine();
+    const s1 = engine.talkStart();
+    engine.talkEnd();
+    engine.transcriptFinal(s1 ?? 1, "make this wider", 10, "mock");
+    engine.appSelection({ text: "the histogram title" });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt).toBe("make this wider");
+    expect(composed.appSelection?.text).toBe("the histogram title");
+  });
+
+  it("is a no-op without an open thread (context rides a turn, never opens one)", () => {
+    const engine = armedEngine();
+    expect(engine.appSelection({ text: "stray" })).toBe(false);
+    expect(engine.appSelectionDrop()).toBe(false);
+    expect(engine.threadOpen).toBe(false);
+    expect(engine.events.some((e) => e.type === "app-selection")).toBe(false);
+  });
+});
+
+describe("code selection (the reader's contribution, rendered at lowering time)", () => {
+  it("opens the thread like a contribution and inlines a short selection", () => {
+    const engine = armedEngine();
+    expect(engine.codeSelection({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1" })).toBe(true);
+    expect(engine.threadOpen).toBe(true);
+    expect(
+      engine.events.some((e) => e.type === "thread-open" && e.trigger === "contribution"),
+    ).toBe(true);
+    const composed = composeIntent(engine.events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["code-selection"]);
+    expect(composed.prompt).toBe("Regarding `src/a.ts:5:1`: `const x = 1;`");
+    // Structured code is NOT transcript text — corrections can't touch it.
+    expect(composed.transcript).toBe("");
+  });
+
+  it("fences a long selection under its location header", () => {
+    const engine = armedEngine();
+    const code = Array.from({ length: 12 }, (_, i) => `line ${i} of something long enough`).join(
+      "\n",
+    );
+    engine.codeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
+    expect(composed.prompt).toContain(`${code}\n\`\`\``);
+  });
+
+  it("keeps code selections out of the correction line space", () => {
+    const engine = armedEngine();
+    const s1 = engine.talkStart();
+    engine.talkEnd();
+    engine.transcriptFinal(s1 ?? 1, "rename the curb helper", 10, "mock");
+    engine.codeSelection({ text: "function curb() {}", sourceLoc: "src/c.ts:1:1" });
+    const s2 = engine.talkStart();
+    engine.talkEnd();
+    engine.transcriptFinal(s2 ?? 2, "and export it", 10, "mock");
+    // The plain replacement rewrites the first TEXT occurrence — the code
+    // item, though it also contains "curb", is not a candidate.
+    engine.correction({ from: 11, to: 15, original: "curb" }, "curve", "typed");
+
+    const composed = composeIntent(engine.events, "replace");
+    expect(composed.transcript).toBe("rename the curve helper and export it");
+    expect(composed.prompt).toContain("`function curb() {}`");
+  });
+
+  it("is a no-op when not armed (a contribution needs an armed turn to join)", () => {
+    let t = 0;
+    const engine = new Engine({}, () => ++t);
+    expect(engine.codeSelection({ text: "x" })).toBe(false);
+    expect(engine.events).toHaveLength(0);
+  });
+});

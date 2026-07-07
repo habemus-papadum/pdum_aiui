@@ -176,12 +176,31 @@ export class EventPanes {
       row.append(pathNode(this.doc, value, this.previewUrl));
       lowered.append(row);
     }
+    if (composed.appSelection !== undefined) {
+      // Not part of the body — the channel lowers it into the context
+      // preamble — but "did my selection make it in?" belongs on this pane.
+      const row = this.doc.createElement("div");
+      row.className = "aiui-dbg-stage-extra";
+      const sel = composed.appSelection;
+      row.textContent = `app selection → context preamble: “${clip(sel.text)}”${
+        sel.sourceLoc ? ` @ ${sel.sourceLoc}` : ""
+      }${sel.cell ? ` · cell ${sel.cell}` : ""}`;
+      lowered.append(row);
+    }
 
     pane.append(
       this.stage(
         "S1 · timeline",
         composed.items
-          .map((item) => (item.kind === "text" ? `“${item.text}”` : `[${item.marker}]`))
+          .map((item) => {
+            if (item.kind === "text") {
+              return `“${item.text}”`;
+            }
+            if (item.kind === "code-selection") {
+              return `[code: ${item.sourceLoc ?? "selection"}]`;
+            }
+            return `[${item.marker}]`;
+          })
           .join("  →  ") || "(empty)",
       ),
       this.stage(
@@ -289,6 +308,16 @@ function describe(event: IntentEvent): string {
       }${event.patch ? ", patched" : ", plain replace"}): “${event.original}” → “${event.instruction}”`;
     case "correction-undo":
       return "correction undone (Esc — the last diff popped)";
+    case "app-selection":
+      return `app selection: “${clip(event.text)}”${
+        event.sourceLoc ? ` @ ${event.sourceLoc}` : ""
+      }${event.cell ? ` · cell ${event.cell}` : ""}${event.tex ? " · TeX" : ""}`;
+    case "app-selection-drop":
+      return "app selection retracted (✕ on the chip)";
+    case "code-selection":
+      return `code selection${event.sourceLoc ? ` @ ${event.sourceLoc}` : ""} · ${
+        event.lines ?? event.text.split("\n").length
+      } line(s): “${clip(event.text)}”`;
     case "video-share":
       return event.on ? "video share ON (~1 fps)" : "video share off";
     case "note":

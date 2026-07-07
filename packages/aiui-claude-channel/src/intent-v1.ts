@@ -24,7 +24,11 @@
  *    arrival, and — when the hello asked for server-side transcription —
  *    transcribed here; the produced `transcript-final` event is both merged
  *    into the stream and pushed back to the client as a `lowered` message.
- *  - `context`  → JSON `{ selection }`: the on-screen selection, at most once.
+ *  - `context`  → JSON `{ selection }`: the on-screen selection, at most once —
+ *    the LEGACY carrier. Current clients ride the selection on the stream
+ *    itself as an `app-selection` event (emitted at thread-open, re-emitted on
+ *    change, retracted by `app-selection-drop`); the fin wrap prefers the
+ *    stream's selection and falls back to this chunk for older clients.
  *
  * A correction event that arrives without a `patch` while the hello selected
  * the OpenAI corrector is a request: the V4A diff runs here (against the current
@@ -1023,6 +1027,19 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         await resolveCorrection(event);
       } else {
         appendEvent(event);
+        // Selections are first-class in the trace: "did my selection make it
+        // in?" must be answerable from a named stage, not by digging through
+        // raw input frames. (The composed/fin stages then show what they
+        // lowered to.)
+        if (event.type === "app-selection") {
+          const { at: _at, type: _type, ...data } = event;
+          trace?.record({ kind: "ir", label: "app selection", data });
+        } else if (event.type === "code-selection") {
+          const { at: _at, type: _type, ...data } = event;
+          trace?.record({ kind: "ir", label: "code selection", data });
+        } else if (event.type === "app-selection-drop") {
+          trace?.record({ kind: "ir", label: "app selection dropped", data: {} });
+        }
         // talk-end is the segment-commit boundary for the streaming transcriber
         // (PTT stays the contract — no `last` flag on the audio frames). The
         // client flushes talk-end immediately past its 60 ms debounce so the
@@ -1257,8 +1274,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
 
     // A cancelled turn (or one with nothing to say) lowers to no notification.
     if (!cancelled && composed.prompt !== "") {
+      // The app selection: the stream's own `app-selection` event (folded by
+      // composeIntent — last one wins, drops honored) is the record; the
+      // legacy send-time `context` chunk stays as the fallback for older
+      // clients. Either way it lowers through selectionSections, so the
+      // wording is identical to text-concat's selection block.
       const prompt = wrapWithContext(
-        [...staticSections, ...selectionSections(selection)],
+        [...staticSections, ...selectionSections(composed.appSelection ?? selection)],
         composed.prompt,
       );
       const meta = Object.keys(composed.meta).length > 0 ? composed.meta : undefined;
@@ -1355,6 +1377,11 @@ function realtimeIntentProcessor(
   // transcripts). It is the fallback compiler's input and the trace's record.
   let events: IntentEvent[] = [];
   let selection: SelectionContext | undefined;
+  // The stream's own app selection (last `app-selection` event, drop honored) —
+  // preferred over the legacy `context` chunk at the fin wrap, same as the
+  // classic path (there composeIntent folds it; here the chronicle is folded
+  // incrementally because the tool-call path never runs composeIntent).
+  let chronicleSelection: SelectionContext | undefined;
   // Shot metadata kept keyed by label — NEVER sent to the live model; re-attached
   // by resolveSegments at fin (the `<screenshot>` block the agent gets).
   const shotRegistry = new Map<string, LabelEntry>();
@@ -1545,6 +1572,23 @@ function realtimeIntentProcessor(
         case "video-share":
           trace?.record({ kind: "info", label: "video-share", data: { on: event.on } });
           break;
+        case "app-selection": {
+          // First-class in the trace here too; the fin wrap folds the
+          // chronicle's effective app selection into the context preamble.
+          const { at: _at, type: _type, ...data } = event;
+          chronicleSelection = data;
+          trace?.record({ kind: "ir", label: "app selection", data });
+          break;
+        }
+        case "app-selection-drop":
+          chronicleSelection = undefined;
+          trace?.record({ kind: "ir", label: "app selection dropped", data: {} });
+          break;
+        case "code-selection": {
+          const { at: _at, type: _type, ...data } = event;
+          trace?.record({ kind: "ir", label: "code selection", data });
+          break;
+        }
         case "correction": {
           // Corrections are transcription-only; the client gates the UI, so a
           // stray request just gets a patchless echo (the chronicle stays uniform)
@@ -1686,7 +1730,10 @@ function realtimeIntentProcessor(
     }
 
     if (body !== "") {
-      const prompt = wrapWithContext([...staticSections, ...selectionSections(selection)], body);
+      const prompt = wrapWithContext(
+        [...staticSections, ...selectionSections(chronicleSelection ?? selection)],
+        body,
+      );
       ctx.push?.({
         kind: "lowered-prompt",
         threadId: ctx.threadId,
