@@ -23,8 +23,10 @@ stdio. Two consequences shape everything else:
   `page_tools_list` / `page_tools_call` (drive tools that live *in a web page*, see below) and
   `channel_reload` (hot-reload the server's own lowering layer after editing its source).
 
-Beside the stdio connection, the server opens a **web backend** on a loopback-only,
-OS-assigned port. That port is the address of the whole aiui world for this session.
+Beside the stdio connection, the server opens a **web backend** on an OS-assigned port — bound to
+loopback by default, or to the host interface when the user chose the trusted-LAN posture
+(`channel.bind: "host"` / `--aiui-bind host`; see [Read before running](./warning)). That port is
+the address of the whole aiui world for this session.
 
 The session talks to the process over stdio (tools out, notifications in); everything else — the
 page's overlay widget and tools bridge, the DevTools panel — reaches it through the loopback web
@@ -104,8 +106,8 @@ The channel is also a generic **host** for other session backends. A **sidecar**
 (and optional websocket) surface the channel mounts alongside its own — so one session process, on
 one port, can serve more than the intent pipeline. The first is the
 [code reader](./code-reader)'s backend; the second is the
-[iPad paint stream](./paint-stream) (which also opens its own LAN listener — the one sidecar that
-extends the surface beyond loopback, and opt-in for exactly that reason). A git viewer would be
+[iPad paint stream](./paint-stream) (always on — it rides the same port, and whether a second
+device can reach it is the channel bind's decision, not the sidecar's). A git viewer would be
 the next.
 
 The channel stays **sidecar-agnostic**: it takes no dependency on any concrete sidecar and hardcodes

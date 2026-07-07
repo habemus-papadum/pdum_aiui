@@ -18,4 +18,10 @@ describe("aiui-claude-channel cli", () => {
     const flags = serve?.options.map((option) => option.long).sort();
     expect(flags).toEqual(["--port", "--record", "--sidecars", "--tag"]);
   });
+
+  it("mcp declares --tag, --launch-info, --sidecars, and --bind", () => {
+    const mcp = buildProgram().commands.find((cmd) => cmd.name() === "mcp");
+    const flags = mcp?.options.map((option) => option.long).sort();
+    expect(flags).toEqual(["--bind", "--launch-info", "--sidecars", "--tag"]);
+  });
 });

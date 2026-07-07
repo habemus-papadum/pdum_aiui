@@ -44,7 +44,13 @@ describe("startWebServer", () => {
 
     const health = await fetch(`${base}/health`);
     expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({ ok: true, pid: process.pid });
+    // host reports the bound address (loopback unless the launcher widens it) —
+    // `aiui paint url` reads it to decide which URLs an iPad could open.
+    expect(await health.json()).toMatchObject({
+      ok: true,
+      pid: process.pid,
+      host: "127.0.0.1",
+    });
 
     const ok = await fetch(`${base}/prompt`, {
       method: "POST",

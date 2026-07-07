@@ -24,6 +24,7 @@ import { dirname, join } from "node:path";
 import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
 import { cacheDir } from "@habemus-papadum/aiui-util";
 import {
+  type ChannelBind,
   type ChromeChannel,
   type ChromeMode,
   CONFIG_SECTIONS,
@@ -35,8 +36,10 @@ import {
 } from "./config-schema";
 
 export {
+  CHANNEL_BINDS,
   CHROME_CHANNELS,
   CHROME_MODES,
+  type ChannelBind,
   type ChromeChannel,
   type ChromeMode,
   FOR_TESTING_MODES,
@@ -57,10 +60,14 @@ export interface AiuiConfig {
     /** Auto-dismiss Claude Code's development-channel prompt (util/enter-nudge.ts). */
     enterNudge?: boolean;
   };
+  channel?: {
+    /** Which interface the channel web server binds: loopback (default) or host (LAN). */
+    bind?: ChannelBind;
+  };
   sidecars?: {
     /** Host the code reader sidecar (unset: auto-detect). */
     code?: boolean;
-    /** Host the iPad paint sidecar — an unauthenticated LAN listener (default: false). */
+    /** Host the iPad paint sidecar on the channel's port (default: true). */
     paint?: boolean;
   };
   chrome?: {

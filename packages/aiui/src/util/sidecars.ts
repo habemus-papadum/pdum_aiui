@@ -85,12 +85,13 @@ interface KnownSidecar {
 
 /**
  * The registry of sidecars the launcher can enable. Emit order follows this
- * list, so the resolver's output is stable regardless of flag order. Today it
- * holds only the code reader, auto-on whenever the project has an LSP setup OR
- * contains well-known languages the reader's backend can bootstrap servers for.
+ * list, so the resolver's output is stable regardless of flag order. The code
+ * reader is auto-on whenever the project has an LSP setup OR contains
+ * well-known languages the reader's backend can bootstrap servers for.
  * (Manifest-only detection was a chicken-and-egg: the bootstrap that CREATES a
  * manifest lives in the backend, which only runs if the sidecar mounts — so a
- * fresh project could never get the reader through `aiui claude`.)
+ * fresh project could never get the reader through `aiui claude`.) The paint
+ * stream is always on — see its entry.
  */
 const KNOWN_SIDECARS: KnownSidecar[] = [
   {
@@ -105,11 +106,13 @@ const KNOWN_SIDECARS: KnownSidecar[] = [
     }),
   },
   {
-    // The iPad paint stream. NEVER auto-enabled: its sidecar opens an
-    // unauthenticated LAN listener (the iPad can't reach loopback), which must
-    // be a deliberate act — `aiui claude --aiui-sidecar paint`.
+    // The iPad paint stream. Always on: it rides the channel's own port (no
+    // process, no extra listener), so hosting it costs nothing. Whether an
+    // iPad can actually REACH it is the channel bind's decision (`channel.bind`
+    // / `--aiui-bind`, asked at first run) — the security posture lives there,
+    // not here. `--aiui-no-sidecar paint` / `sidecars.paint: false` turn it off.
     name: "paint",
-    autoEnable: () => false,
+    autoEnable: () => true,
     descriptor: (root, resolveModule) => ({
       name: "paint",
       module: resolveModule("@habemus-papadum/aiui-paint/sidecar"),

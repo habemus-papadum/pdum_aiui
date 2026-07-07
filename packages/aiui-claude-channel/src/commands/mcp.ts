@@ -30,6 +30,14 @@ export interface McpOptions {
    * descriptor that fails to load is logged to stderr and skipped, never fatal.
    */
   sidecars?: string;
+  /**
+   * Where the web backend binds: `"loopback"` (127.0.0.1, the default) or
+   * `"host"` (0.0.0.0 — the trusted-LAN posture: every unauthenticated channel
+   * route, sidecars included, becomes reachable from the network; the launcher
+   * only passes this on the user's explicit `channel.bind` / `--aiui-bind`
+   * choice). See docs/guide/warning.md.
+   */
+  bind?: "loopback" | "host";
 }
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
@@ -119,6 +127,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     launchInfo,
     sidecars,
     pageTools,
+    ...(options.bind === "host" ? { host: "0.0.0.0" } : {}),
     // The *explicit* --tag only (not the UUID minted above): the UUID is an
     // address for the registry, not a human label — an untagged server's
     // trace session labels as "channel·<pid>·<HHMMSS>" (see sessionLabel).
@@ -189,7 +198,9 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
 
   // Progress goes to stderr — stdout is the MCP protocol stream.
   process.stderr.write(
-    `[aiui-channel] up — tag=${tag} pid=${process.pid} ppid=${process.ppid} port=${web.port} cwd=${process.cwd()}\n`,
+    `[aiui-channel] up — tag=${tag} pid=${process.pid} ppid=${process.ppid} port=${web.port} bind=${
+      options.bind ?? "loopback"
+    } cwd=${process.cwd()}\n`,
   );
 
   await pushToSession("aiui channel connected", "startup");

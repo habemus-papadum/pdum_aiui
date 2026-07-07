@@ -34,6 +34,17 @@ export function buildProgram(): Command {
       "launcher-provided session summary (browser/DevTools MCP wiring), surfaced at /debug/api/info",
     )
     .option("--sidecars <json>", "JSON array of session sidecar descriptors to host")
+    .option(
+      "--bind <mode>",
+      "bind the web backend to 'loopback' (127.0.0.1, default) or 'host' (0.0.0.0 — " +
+        "every unauthenticated route becomes LAN-reachable; trusted networks only)",
+      (value) => {
+        if (value !== "loopback" && value !== "host") {
+          throw new InvalidArgumentError("expected 'loopback' or 'host'");
+        }
+        return value;
+      },
+    )
     .action(runMcp);
 
   program

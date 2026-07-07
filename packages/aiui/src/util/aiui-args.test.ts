@@ -234,6 +234,23 @@ describe("splitAiuiArgs", () => {
     expect(() => splitAiuiArgs(["--aiui-no-sidecar="])).toThrow(/requires a non-empty value/);
   });
 
+  it("consumes --aiui-bind in both forms", () => {
+    expect(splitAiuiArgs(["--aiui-bind", "host", "--resume"])).toEqual({
+      ...none,
+      bind: "host",
+      passthrough: ["--resume"],
+    });
+    expect(splitAiuiArgs(["--aiui-bind=loopback"])).toEqual({
+      ...none,
+      bind: "loopback",
+    });
+  });
+
+  it("rejects an --aiui-bind value that isn't loopback or host", () => {
+    expect(() => splitAiuiArgs(["--aiui-bind", "0.0.0.0"])).toThrow(/loopback, host/);
+    expect(() => splitAiuiArgs(["--aiui-bind"])).toThrow(/loopback, host/);
+  });
+
   it("preserves passthrough order around the aiui flag", () => {
     expect(splitAiuiArgs(["a", "--aiui-tag", "t", "b", "c"]).passthrough).toEqual(["a", "b", "c"]);
   });

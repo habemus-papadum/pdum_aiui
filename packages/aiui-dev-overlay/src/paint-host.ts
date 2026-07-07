@@ -1,6 +1,6 @@
 /**
  * The overlay's paint-host wiring: when the channel hosts the **paint sidecar**
- * (`aiui claude --aiui-sidecar paint`), connect this page as a paint host so an
+ * (on by default in `aiui claude`), connect this page as a paint host so an
  * iPad can view it and draw into the intent tool.
  *
  * The multimodal modality publishes the ink seam (`window.__AIUI__.remotePaint`

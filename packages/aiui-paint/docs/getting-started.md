@@ -4,9 +4,9 @@ View and **draw on a running browser app from an iPad** over the LAN: the iPad s
 desktop browser and streams pen strokes + navigation back, and the desktop applies them to its ink
 layer (including, over the aiui intent overlay, straight into the intent tool).
 
-> ⚠️ The iPad-facing surface binds the LAN and is **unauthenticated** — trusted networks only. The
-> aiui channel stays loopback-only; its paint sidecar opens a separate LAN listener carrying only
-> this surface, and is opt-in for exactly that reason.
+> ⚠️ The paint surface is **unauthenticated** — trusted networks only. In an aiui session it rides
+> the channel's one port; who can reach it is the channel's `channel.bind` choice (`loopback` =
+> this machine only, tunnel for the iPad; `host` = your whole LAN, everything on the port).
 
 ## Install
 
@@ -16,11 +16,12 @@ npm install @habemus-papadum/aiui-paint
 
 ## 1. Host the backend
 
-In an aiui session, one flag + one command:
+In an aiui session the channel hosts it by default — the iPad just needs the channel bound to the
+host interface (or a tunnel you own):
 
 ```sh
-aiui claude --aiui-sidecar paint    # the channel hosts it (opt-in: LAN exposure)
-aiui paint url                      # prints the URL to open on the iPad
+aiui claude          # first interactive launch asks where the channel binds ("host" for the iPad)
+aiui paint url       # prints the URL to open on the iPad
 ```
 
 Or mount it on a server you own:

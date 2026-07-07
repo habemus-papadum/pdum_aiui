@@ -9,7 +9,10 @@
  * and each thread of binary frames is decoded with that format's codec and fed
  * to its own processor, which pushes prompts into the session as it sees fit.
  * Binary frames keep audio/screenshot/video payloads raw (never base64'd). It
- * listens on an OS-assigned port, on loopback only.
+ * listens on an OS-assigned port, on loopback by default; the launcher can bind
+ * it to the host interface instead ({@link WebServerOptions.host} — the
+ * trusted-LAN posture that lets an iPad reach the paint surface, and everything
+ * else, without a tunnel; see docs/guide/warning.md).
  *
  * Nothing here may write to stdout: in the `mcp` command that stream carries the
  * MCP stdio protocol. Surface problems through the returned promise instead.
@@ -87,6 +90,15 @@ export interface WebServerOptions {
    * then simply re-wraps them and cycles connections).
    */
   loadFormats?: FormatLoader;
+  /**
+   * Address to bind. Defaults to `127.0.0.1` — every channel route is
+   * unauthenticated, so loopback is the safe posture. `0.0.0.0` is the
+   * deliberate trusted-LAN choice (`aiui claude --aiui-bind host` /
+   * `channel.bind: "host"`): the whole surface — prompt injection, `/debug`,
+   * every sidecar (including the iPad paint page) — becomes reachable by
+   * anyone on the network. See docs/guide/warning.md.
+   */
+  host?: string;
   /**
    * Server-level debug mode (the standalone `serve` command sets it). Surfaced
    * on `/health`, `/debug/api/info`, and every hello ack, so clients and tools
@@ -177,11 +189,13 @@ export interface WebServer {
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
- * Start the web backend on `127.0.0.1` — an OS-assigned free port unless
- * {@link WebServerOptions.port} pins one — resolving once it's listening.
+ * Start the web backend — on `127.0.0.1` unless {@link WebServerOptions.host}
+ * widens it, an OS-assigned free port unless {@link WebServerOptions.port}
+ * pins one — resolving once it's listening.
  */
 export async function startWebServer(options: WebServerOptions): Promise<WebServer> {
   const app = express();
+  const bindHost = options.host ?? "127.0.0.1";
   // Body parsing is scoped to the routes that need it (just `/prompt`), NOT
   // global: a sidecar's raw request handler (the reader reads its own POST
   // bodies off the stream) must reach the socket unconsumed.
@@ -212,6 +226,9 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       pid: process.pid,
       ppid: process.ppid,
       generation,
+      // The bound address, so tools can tell a loopback-only server from a
+      // LAN-exposed one (`aiui paint url` decides which URLs to print by it).
+      host: bindHost,
       pageTools: pageTools.summary(),
       session: sessionHub.summary(),
       ...(options.debug === true ? { debug: true } : {}),
@@ -500,7 +517,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   await new Promise<void>((resolveListen, rejectListen) => {
     httpServer.once("error", rejectListen);
-    httpServer.listen(options.port ?? 0, "127.0.0.1", () => {
+    httpServer.listen(options.port ?? 0, bindHost, () => {
       httpServer.removeListener("error", rejectListen);
       resolveListen();
     });
