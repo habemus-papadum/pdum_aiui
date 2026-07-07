@@ -20,6 +20,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "aiui": "tsx packages/aiui/src/cli.ts",
+    "paint": "tsx packages/aiui-paint/src/cli.ts",
     "new-package": "node scripts/new-package.mjs",
     "npm:list": "node scripts/npm-provision.mjs list",
     "npm:reserve": "node scripts/npm-provision.mjs reserve",

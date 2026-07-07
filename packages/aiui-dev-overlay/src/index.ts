@@ -26,6 +26,8 @@ export type {
   CollectClientMetaOptions,
   FrameMetric,
   PageInstrumentation,
+  RemoteInkPoint,
+  RemotePaintSink,
   TabInfo,
 } from "./instrumentation";
 export {

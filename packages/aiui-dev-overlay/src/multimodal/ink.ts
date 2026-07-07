@@ -15,9 +15,16 @@
  */
 import type { Rect } from "../intent-pipeline";
 
+/** The default pen when a stroke carries no style of its own (all local ink). */
+const DEFAULT_COLOR = "#ff5c87";
+const DEFAULT_WIDTH = 3;
+
 interface Stroke {
   points: Array<{ x: number; y: number }>;
   bornAt: number;
+  /** Per-stroke style; absent means the default pen (local strokes). */
+  color?: string;
+  width?: number;
 }
 
 export class Ink {
@@ -27,6 +34,8 @@ export class Ink {
   private readonly ctx: CanvasRenderingContext2D | null;
   private strokes: Stroke[] = [];
   private live: Stroke | undefined;
+  /** In-progress strokes fed from a remote pen (see {@link remoteBegin}). */
+  private liveRemote = new Map<string, Stroke>();
   private raf = 0;
   private fadeSec: () => number;
   private onStroke: (points: number, bounds: Rect) => void;
@@ -91,9 +100,10 @@ export class Ink {
   }
 
   clear(auto = false): void {
-    const had = this.strokes.length > 0 || this.live !== undefined;
+    const had = this.strokes.length > 0 || this.live !== undefined || this.liveRemote.size > 0;
     this.strokes = [];
     this.live = undefined;
+    this.liveRemote.clear();
     if (had && auto) {
       this.onAutoClear();
     }
@@ -101,6 +111,46 @@ export class Ink {
 
   hasInk(): boolean {
     return this.strokes.length > 0;
+  }
+
+  // ── remote pen: strokes fed from another device (e.g. an iPad over the paint
+  // stream). Points are in this page's viewport CSS pixels — the caller maps its
+  // normalized wire coords first. A completed remote stroke joins the engine the
+  // same way a local one does (via onStroke), so it composites into shots and
+  // becomes part of the intent turn.
+
+  remoteBegin(id: string, style: { color: string; width: number }, x: number, y: number): void {
+    this.liveRemote.set(id, {
+      points: [{ x, y }],
+      bornAt: performance.now(),
+      color: style.color,
+      width: style.width,
+    });
+  }
+
+  remotePoint(id: string, x: number, y: number): void {
+    this.liveRemote.get(id)?.points.push({ x, y });
+  }
+
+  remoteEnd(id: string, x?: number, y?: number): void {
+    const stroke = this.liveRemote.get(id);
+    if (!stroke) {
+      return;
+    }
+    this.liveRemote.delete(id);
+    if (x !== undefined && y !== undefined) {
+      stroke.points.push({ x, y });
+    }
+    if (stroke.points.length < 2) {
+      return; // a tap — nothing to commit (matches local finish)
+    }
+    stroke.bornAt = performance.now(); // fade clock starts at pen-up
+    this.strokes.push(stroke);
+    this.onStroke(stroke.points.length, bounds(stroke.points));
+  }
+
+  remoteCancel(id: string): void {
+    this.liveRemote.delete(id);
   }
 
   /** Draw current ink into another context (screenshot compositing). */
@@ -111,7 +161,10 @@ export class Ink {
     scale: number,
   ): void {
     for (const stroke of this.strokes) {
-      drawStroke(ctx, stroke.points, 1, scale, -offsetX, -offsetY);
+      drawStroke(ctx, stroke, 1, scale, -offsetX, -offsetY);
+    }
+    for (const stroke of this.liveRemote.values()) {
+      drawStroke(ctx, stroke, 1, scale, -offsetX, -offsetY);
     }
   }
 
@@ -143,12 +196,20 @@ export class Ink {
           continue;
         }
       }
-      drawStroke(ctx, stroke.points, alpha, 1, 0, 0);
+      drawStroke(ctx, stroke, alpha, 1, 0, 0);
     }
     if (this.live) {
-      drawStroke(ctx, this.live.points, 1, 1, 0, 0);
+      drawStroke(ctx, this.live, 1, 1, 0, 0);
     }
-    if (expired > 0 && expired === this.strokes.length && !this.live) {
+    for (const stroke of this.liveRemote.values()) {
+      drawStroke(ctx, stroke, 1, 1, 0, 0);
+    }
+    if (
+      expired > 0 &&
+      expired === this.strokes.length &&
+      !this.live &&
+      this.liveRemote.size === 0
+    ) {
       this.clear(true);
     }
   }
@@ -164,16 +225,17 @@ export class Ink {
 
 function drawStroke(
   ctx: CanvasRenderingContext2D,
-  points: Array<{ x: number; y: number }>,
+  stroke: Pick<Stroke, "points" | "color" | "width">,
   alpha: number,
   scale: number,
   dx: number,
   dy: number,
 ): void {
+  const points = stroke.points;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.strokeStyle = "#ff5c87";
-  ctx.lineWidth = 3 * scale;
+  ctx.strokeStyle = stroke.color ?? DEFAULT_COLOR;
+  ctx.lineWidth = (stroke.width ?? DEFAULT_WIDTH) * scale;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.beginPath();

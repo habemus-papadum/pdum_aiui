@@ -219,6 +219,7 @@ function main() {
           { text: "DevTools Panel", link: "/guide/devtools" },
           { text: "The Agent's Browser", link: "/guide/chrome" },
           { text: "Remote Development", link: "/guide/remote" },
+          { text: "iPad Paint Stream", link: "/guide/paint-stream" },
           {
             text: "Frontend for Agents",
             collapsed: false,

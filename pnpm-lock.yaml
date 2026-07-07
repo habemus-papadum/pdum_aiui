@@ -218,6 +218,33 @@ importers:
         specifier: ^0.25.0
         version: 0.25.12
 
+  packages/aiui-ink: {}
+
+  packages/aiui-paint:
+    dependencies:
+      '@habemus-papadum/aiui-claude-channel':
+        specifier: workspace:^
+        version: link:../aiui-claude-channel
+      '@habemus-papadum/aiui-ink':
+        specifier: workspace:^
+        version: link:../aiui-ink
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.0
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.6
+      '@types/ws':
+        specifier: ^8.5.0
+        version: 8.18.1
+
   packages/aiui-util:
     dependencies:
       '@puppeteer/browsers':
