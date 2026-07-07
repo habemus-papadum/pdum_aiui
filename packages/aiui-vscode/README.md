@@ -21,6 +21,21 @@ surface.
   selection — verbatim text plus a 1-based `file:line:col` / `file:start-end` locator — to the
   picked tab. A quick toast confirms delivery or explains the nack (tab gone, channel gone);
   with exactly one tab running anywhere, the first send picks it automatically.
+- **`aiui: Refresh Browser Tabs`**: revalidates the remembered tab and repaints the status bar.
+  Mostly unnecessary — the picker re-queries the registry and each channel's live peers every
+  time it opens, and every send revalidates first — but handy when you just want the status bar
+  to catch up.
+
+Channels are titled by their **Claude Code session name** where possible: a channel's `ppid` is
+the session that spawned it, matched via `claude agents --json` exactly like the CLI selector
+(falls back to the channel's registry name — "aiui workbench" — or its tag when `claude` isn't
+on the extension host's PATH).
+
+**Staleness is expected and handled**: a channel reload (source edit under watch, or
+`POST /debug/api/reload`) drops every websocket, and the overlay tab reconnects with a **new
+clientId**. Sends revalidate against live peers first and silently re-bind to the same tab (by
+id, then URL, then "it's the only tab"), so a reload doesn't cost you a re-pick — you only hear
+about it when the tab or channel is genuinely gone.
 
 ## How a selection travels
 
@@ -40,15 +55,20 @@ overlay's contribution handler).
 
 ## Install locally
 
+From the repo root, either flavor:
+
 ```sh
-pnpm --filter @habemus-papadum/aiui-vscode build   # bundle + stage dist/extension/
-pnpm --filter @habemus-papadum/aiui-vscode vsix    # pack dist/aiui-vscode.vsix
-code --install-extension packages/aiui-vscode/dist/aiui-vscode.vsix
+pnpm vscode:install   # pack dist/aiui-vscode.vsix and `code --install-extension` it
+pnpm vscode:link      # symlink dist/extension/ into ~/.vscode/extensions (live-dev)
 ```
 
-For a live-dev loop, skip the vsix: run **`Developer: Install Extension from Location…`** in
-VS Code and point it at `packages/aiui-vscode/dist/extension/` — rebuild, then
-**`Developer: Reload Window`**.
+then reload the VS Code window. `vscode:install` gives you a normal installed extension
+(reinstall to update). `vscode:link` is the live-dev loop: the staged folder is symlinked, so
+after any rebuild (`pnpm --filter @habemus-papadum/aiui-vscode build`) a window reload picks up
+the changes — no repackaging. Don't keep both installed at once. The same scripts exist on the
+package as `install:vsix` / `install:dir`, and the plain `vsix` script packs without
+installing; `Developer: Install Extension from Location…` pointed at
+`packages/aiui-vscode/dist/extension/` remains the manual equivalent of `vscode:link`.
 
 ## The npm package
 

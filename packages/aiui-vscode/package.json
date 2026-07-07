@@ -54,6 +54,11 @@
         "command": "aiui.sendSelection",
         "category": "aiui",
         "title": "Send Selection to Browser Tab"
+      },
+      {
+        "command": "aiui.refreshTabs",
+        "category": "aiui",
+        "title": "Refresh Browser Tabs"
       }
     ],
     "menus": {
@@ -70,7 +75,9 @@
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build && node build-extension.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "vsix": "node build-extension.mjs --vsix"
+    "vsix": "node build-extension.mjs --vsix",
+    "install:vsix": "node build-extension.mjs --vsix --install",
+    "install:dir": "node build-extension.mjs --link"
   },
   "dependencies": {
     "@habemus-papadum/aiui-util": "workspace:^"

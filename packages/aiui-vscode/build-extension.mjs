@@ -14,10 +14,17 @@
  * which npm ignores), and this script swaps the npm-specific fields out.
  *
  * `--vsix` additionally packs the staged folder into `dist/aiui-vscode.vsix`
- * with vsce (`--no-dependencies`: the bundle already inlined everything).
+ * with vsce (`--no-dependencies`: the bundle already inlined everything), and
+ * `--install` then hands that .vsix to `code --install-extension`. `--link`
+ * instead symlinks the staged folder into `~/.vscode/extensions/` — the
+ * live-dev install, where a rebuild + window reload picks up changes with no
+ * repackaging. The pnpm spellings: `install:vsix` and `install:dir` (or, from
+ * the repo root, `vscode:install` / `vscode:link`).
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
@@ -82,7 +89,40 @@ if (process.argv.includes("--vsix")) {
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+  if (process.argv.includes("--install")) {
+    const installed = spawnSync("code", ["--install-extension", `${here}dist/aiui-vscode.vsix`], {
+      stdio: "inherit",
+    });
+    if (installed.error) {
+      process.stderr.write(
+        "\ncould not run `code` — is the VS Code CLI on your PATH? " +
+          "(VS Code: ⇧⌘P → \"Shell Command: Install 'code' command in PATH\")\n",
+      );
+      process.exit(1);
+    }
+    if (installed.status !== 0) {
+      process.exit(installed.status ?? 1);
+    }
+    process.stdout.write("\nInstalled — reload the VS Code window to activate it.\n");
+  } else {
+    process.stdout.write(
+      "\nInstall it with: code --install-extension packages/aiui-vscode/dist/aiui-vscode.vsix\n",
+    );
+  }
+}
+
+if (process.argv.includes("--link")) {
+  // The live-dev install: VS Code loads any extensions-dir folder with a
+  // valid manifest, and it follows symlinks — so link the staged folder once
+  // and every rebuild lands on the next window reload. Unversioned link name
+  // on purpose: re-linking stays idempotent across version bumps.
+  const link = join(homedir(), ".vscode", "extensions", "habemus-papadum.aiui-vscode");
+  mkdirSync(join(homedir(), ".vscode", "extensions"), { recursive: true });
+  rmSync(link, { force: true, recursive: true });
+  symlinkSync(outDir, link, "dir");
   process.stdout.write(
-    "\nInstall it with: code --install-extension packages/aiui-vscode/dist/aiui-vscode.vsix\n",
+    `\nLinked ${link} → dist/extension/\n` +
+      "Reload the VS Code window to activate; after future rebuilds just reload again.\n" +
+      "(Uninstall the .vsix copy first if both are present, or VS Code sees two aiui extensions.)\n",
   );
 }
