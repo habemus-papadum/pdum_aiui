@@ -75,6 +75,13 @@ export interface LspServerEntry {
 export interface LspManifest {
   version: 1;
   createdAt?: string;
+  /**
+   * The bootstrap's launcher-recipe generation (see `BOOTSTRAP_GENERATION` in
+   * generate.ts). Only meaningful for cache manifests: a stale one is
+   * re-provisioned on the next bootstrap. Absent on hand-written or
+   * pre-generation manifests (treated as generation 1).
+   */
+  generation?: number;
   servers: LspServerEntry[];
 }
 
@@ -139,6 +146,7 @@ export function validateManifest(parsed: unknown, source = "<manifest>"): LspMan
   return {
     version: 1,
     ...(typeof m.createdAt === "string" ? { createdAt: m.createdAt } : {}),
+    ...(typeof m.generation === "number" ? { generation: m.generation } : {}),
     servers,
   };
 }

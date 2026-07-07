@@ -14,27 +14,35 @@ in the middle understands or rewrites LSP semantics.
 
 A project's deliberate setup lives under `.aiui/lsp/`, and it is **committable**: the launchers
 are **portable** — each resolves the project root from its own on-disk location and its server
-from the project's own `node_modules`/venv, with no absolute machine paths — so a clone + install
-yields a working reader with no `aiui setup-lsp` step. The key decision: the on-disk record is an
-**index of executable launchers**, not a config blob. A thin `manifest.json` maps each language to
-a per-language `launch` script; the launcher is where all the real complexity lives (which
+from the nearest `node_modules/.bin`/venv at or above that root (a workspace member finds its
+monorepo root's install), with no absolute machine paths — so a clone + install yields a working
+reader with no `aiui setup-lsp` step. The key decision: the on-disk record is an **index of
+executable launchers**, not a config blob. A thin `manifest.json` maps each language to a
+per-language `launch` script; the launcher is where all the real complexity lives (which
 interpreter, which env, which project flags), so it's independently runnable and independently
 testable. Each language also gets a human-readable `SETUP.md`.
 
 There is a second home, split by provenance: with **no** setup at all, opening the reader
 auto-bootstraps recipe launchers for the well-known languages into the **gitignored**
 `.aiui-cache/lsp/` — the reader works out of the box, and merely opening it never dirties your
-working tree with generated, untested files. A deliberate act (`aiui setup-lsp`,
-`aiui lsp provision`) records the committed `.aiui/lsp/` setup, which then takes precedence.
+working tree with generated, untested files. Because the cache is per-machine by definition, its
+launchers get one thing a committed launcher never does: when the project has no server install
+anywhere up its tree, they **fall back to the server that ships with aiui itself** (an absolute
+path baked at generation time) — that fallback is what makes the out-of-the-box promise real for
+projects that never added a language server to their dependencies. Cache manifests also record
+the recipe **generation**, so a bootstrap from older recipes is silently re-provisioned on the
+next mount. A deliberate act (`aiui setup-lsp`, `aiui lsp provision`) records the committed
+`.aiui/lsp/` setup, which then takes precedence — and, being portable, it refuses (with a
+`pnpm add -D …` hint) to record a launcher for a server the project hasn't installed.
 
 ```
 .aiui/lsp/
   manifest.json          # languages → launcher + extensions + initializationOptions + verified
   python/
-    launch               # executable, portable; ROOT=…; exec "$ROOT/node_modules/.bin/pyright-langserver" --stdio "$@"
+    launch               # executable, portable; walks up from ROOT to the nearest node_modules/.bin/pyright-langserver
     SETUP.md             # what the server is, how it was installed/configured, probe results
   typescript/
-    launch               # exec "$ROOT/node_modules/.bin/typescript-language-server" --stdio "$@"
+    launch               # same walk-up for typescript-language-server; speaks LSP on stdio
     SETUP.md
 ```
 

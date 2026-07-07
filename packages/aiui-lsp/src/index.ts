@@ -16,6 +16,7 @@
 
 export type { EnsureOptions } from "./generate";
 export {
+  BOOTSTRAP_GENERATION,
   ensureDefaultManifest,
   provisionServer,
   writeLauncher,
@@ -43,7 +44,7 @@ export {
 export type { ProbeOp, ProbeOpResult, ProbeOptions, ProbeReport } from "./probe";
 export { probeLauncher } from "./probe";
 
-export type { BuiltLauncher, ProviderRecipe } from "./providers";
+export type { BuildOptions, BuiltLauncher, ProviderRecipe } from "./providers";
 export { detectLanguages, PROVIDERS } from "./providers";
 export type {
   LspChild,

@@ -20,6 +20,7 @@ import {
   loadManifest,
   lspDir,
   MANIFEST_FILENAME,
+  resolveLspDir,
 } from "./manifest";
 import { type BuiltLauncher, detectLanguages, PROVIDERS } from "./providers";
 
@@ -69,6 +70,20 @@ export function writeManifest(
   return path;
 }
 
+/**
+ * The bootstrap's launcher-recipe generation, recorded in the manifests it
+ * writes. A **cache** manifest from an older generation is silently
+ * re-provisioned on the next {@link ensureDefaultManifest} — cache launchers
+ * are disposable by definition, and a broken one must not persist just because
+ * a manifest exists (generation 1's launchers assumed the server bin at the
+ * project root, which held for almost no real project). Committed setups are
+ * deliberate and never second-guessed by generation.
+ *
+ * Bump this whenever the recipes change in a way existing cache launchers
+ * should pick up.
+ */
+export const BOOTSTRAP_GENERATION = 2;
+
 export interface EnsureOptions {
   onLog?: (line: string) => void;
   /** Stamp for `createdAt`/docs (injectable for deterministic tests). */
@@ -88,7 +103,12 @@ export interface EnsureOptions {
 /**
  * Return the existing manifest, or bootstrap one from the built-in recipes for
  * whatever well-known languages the project contains. A language whose server
- * isn't installed is logged and skipped (the manifest still lists the others).
+ * isn't available is logged and skipped (the manifest still lists the others).
+ *
+ * The home decides the recipes' failure story (see providers.ts): a cache
+ * bootstrap bakes a fallback to the servers bundled with aiui-lsp, so it
+ * works in projects that never installed one; a committed provision stays
+ * portable and skips languages the project hasn't installed a server for.
  */
 export function ensureDefaultManifest(projectRoot: string, opts: EnsureOptions = {}): LspManifest {
   const log = opts.onLog ?? (() => {});
@@ -101,7 +121,17 @@ export function ensureDefaultManifest(projectRoot: string, opts: EnsureOptions =
     const satisfied = home === "cache" || existsSync(join(lspDir(projectRoot), MANIFEST_FILENAME));
     if (satisfied) {
       const existing = loadManifest(projectRoot);
-      if (existing) return existing;
+      if (existing) {
+        // …unless it is a stale-generation CACHE manifest: re-provision it in
+        // place. A committed manifest (which reads prefer) is returned as-is.
+        const fromCache = resolveLspDir(projectRoot) === cacheLspDir(projectRoot);
+        const stale = home === "cache" && fromCache && existing.generation !== BOOTSTRAP_GENERATION;
+        if (!stale) return existing;
+        log(
+          `lsp: cache bootstrap is generation ${existing.generation ?? 1}, ` +
+            `current is ${BOOTSTRAP_GENERATION} — re-provisioning`,
+        );
+      }
     }
   }
 
@@ -109,14 +139,19 @@ export function ensureDefaultManifest(projectRoot: string, opts: EnsureOptions =
   const servers: LspServerEntry[] = [];
   for (const key of detectLanguages(projectRoot)) {
     try {
-      const built = PROVIDERS[key].build(projectRoot);
+      const built = PROVIDERS[key].build(projectRoot, { bundledFallback: home === "cache" });
       servers.push(provisionServer(projectRoot, built, now, { dir }));
       log(`lsp: provisioned ${built.language} — ${built.name}`);
     } catch (err) {
       log(`lsp: skipped ${key} — ${msg(err)}`);
     }
   }
-  const manifest: LspManifest = { version: 1, createdAt: now.toISOString(), servers };
+  const manifest: LspManifest = {
+    version: 1,
+    createdAt: now.toISOString(),
+    generation: BOOTSTRAP_GENERATION,
+    servers,
+  };
   writeManifest(projectRoot, manifest, { dir });
   log(`lsp: wrote manifest with ${servers.length} server(s) (${home})`);
   return manifest;
