@@ -150,6 +150,68 @@ describe("openRealtimeSession", () => {
     ]);
   });
 
+  it("forwards deltas that arrive while the segment is still streaming (pre-commit)", () => {
+    const up = fakeUpstream();
+    const { session, deltas, finals } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.appendAudio(1, new Uint8Array([1, 2]));
+    // The GA models transcribe as audio appends — deltas land BEFORE the
+    // commit. This is the normal streaming case (the preview fills as you
+    // talk); dropping these was the bug where the preview stayed empty until
+    // release and then diff-flashed the whole utterance.
+    up.emit(delta("item_a", "make "));
+    up.emit(delta("item_a", "the plot"));
+    expect(deltas).toEqual([
+      { segment: 1, text: "make " },
+      { segment: 1, text: "make the plot" },
+    ]);
+    session.commit(1);
+    up.emit(delta("item_a", " wider"));
+    up.emit(completed("item_a", "make the plot wider"));
+    expect(deltas.at(-1)).toEqual({ segment: 1, text: "make the plot wider" });
+    expect(finals).toEqual([
+      { segment: 1, text: "make the plot wider", latencyMs: 0, model: "gpt-realtime-whisper" },
+    ]);
+  });
+
+  it("keeps a next segment's pre-commit deltas apart from a still-pending first", () => {
+    const up = fakeUpstream();
+    const { session, deltas, finals } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.appendAudio(1, new Uint8Array([1]));
+    up.emit(delta("item_a", "first"));
+    session.commit(1); // its final is still in flight…
+    session.appendAudio(2, new Uint8Array([2]));
+    up.emit(delta("item_b", "second")); // …when the NEXT segment starts streaming
+    expect(deltas).toEqual([
+      { segment: 1, text: "first" },
+      { segment: 2, text: "second" },
+    ]);
+    up.emit(completed("item_a", "first"));
+    session.commit(2);
+    up.emit(completed("item_b", "second"));
+    expect(finals.map((f) => ({ segment: f.segment, text: f.text }))).toEqual([
+      { segment: 1, text: "first" },
+      { segment: 2, text: "second" },
+    ]);
+  });
+
+  it("never truncates: text from an unbindable delta reaches the first bound one", () => {
+    const up = fakeUpstream();
+    const { session, deltas } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    // Nothing streaming, nothing committed — the delta can't bind (a stray),
+    // but its text must still accumulate for when the item does bind.
+    up.emit(delta("item_a", "hello "));
+    expect(deltas).toEqual([]);
+    session.commit(1);
+    up.emit(delta("item_a", "world"));
+    expect(deltas).toEqual([{ segment: 1, text: "hello world" }]);
+  });
+
   it("maps two committed segments to their finals in commit (FIFO) order", () => {
     const up = fakeUpstream();
     const { session, finals } = collect(up);
@@ -303,17 +365,18 @@ describe("intent-v1 realtime transcription (streaming)", () => {
     await d.feedAudio("seg_1", 1, new Uint8Array([30, 40]));
     expect(up.sent.filter((m) => m.type === "input_audio_buffer.append")).toHaveLength(2);
 
-    // talk-end is the commit boundary.
-    await d.feedEvents([{ at: 4, type: "talk-end", segment: 1, ms: 400 }]);
-    expect(up.sent.some((m) => m.type === "input_audio_buffer.commit")).toBe(true);
-
-    // Partial deltas are incremental upstream; the echo is the cumulative text.
+    // Partial deltas stream back DURING talk too (before any commit exists) —
+    // incremental upstream; the echo is the cumulative text, live in the preview.
     up.emit(delta("item_1", "make "));
     up.emit(delta("item_1", "the plot"));
     const deltas = pushedEvents(d.pushed).filter((e) => e.type === "transcript-delta");
     expect(
       deltas.map((e) => (e as Extract<IntentEvent, { type: "transcript-delta" }>).text),
     ).toEqual(["make ", "make the plot"]);
+
+    // talk-end is the commit boundary.
+    await d.feedEvents([{ at: 4, type: "talk-end", segment: 1, ms: 400 }]);
+    expect(up.sent.some((m) => m.type === "input_audio_buffer.commit")).toBe(true);
 
     // The completed event merges as a transcript-final and lowers into the prompt.
     up.emit(completed("item_1", "make the plot wider"));

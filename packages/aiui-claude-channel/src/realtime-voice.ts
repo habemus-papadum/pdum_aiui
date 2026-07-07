@@ -246,6 +246,11 @@ export function openRealtimeVoiceSession(
   // ── user transcription state (mirrors realtime.ts) ──────────────────────────
   const pending: number[] = []; // committed, awaiting their user transcript
   const awaitingItem: number[] = []; // committed, not yet bound to an item_id
+  // The segment whose audio is streaming right now (appending, not yet
+  // committed) — where a pre-commit delta's unseen item_id binds.
+  let streamingSegment: number | undefined;
+  // Segments already bound to an item_id (until their transcript completes).
+  const boundSegments = new Set<number>();
   const commitAt = new Map<number, number>();
   const itemToSegment = new Map<string, number>();
   const cumulativeByItem = new Map<string, string>();
@@ -275,17 +280,24 @@ export function openRealtimeVoiceSession(
     }
   };
 
-  /** Bind an unseen upstream item to the oldest still-unbound committed segment. */
+  /**
+   * Bind an unseen upstream item to its segment: the oldest still-unbound
+   * committed segment first (items are created in buffer = commit order), and
+   * with none committed, the segment streaming audio right now — input
+   * transcription partials arrive while audio is still appending, before any
+   * commit (see realtime.ts, whose binding this mirrors).
+   */
   const segmentForItem = (itemId: string): number | undefined => {
     const existing = itemToSegment.get(itemId);
     if (existing !== undefined) {
       return existing;
     }
-    const segment = awaitingItem.shift();
-    if (segment === undefined) {
+    const segment = awaitingItem.shift() ?? (dead ? undefined : streamingSegment);
+    if (segment === undefined || boundSegments.has(segment)) {
       return undefined;
     }
     itemToSegment.set(itemId, segment);
+    boundSegments.add(segment);
     return segment;
   };
 
@@ -297,6 +309,7 @@ export function openRealtimeVoiceSession(
     commitAt.delete(segment);
     itemToSegment.delete(itemId);
     cumulativeByItem.delete(itemId);
+    boundSegments.delete(segment);
     callbacks.onUserFinal(segment, result);
     settleDrainIfIdle();
   };
@@ -359,12 +372,15 @@ export function openRealtimeVoiceSession(
       }
       case "conversation.item.input_audio_transcription.delta": {
         const itemId = message.item_id ?? "";
+        // Accumulate BEFORE the binding check: a delta with no segment to bind
+        // to must still contribute its text, or the first bindable delta (and
+        // the completed's fallback text) would start from a truncated tail.
+        const cumulative = (cumulativeByItem.get(itemId) ?? "") + (message.delta ?? "");
+        cumulativeByItem.set(itemId, cumulative);
         const segment = segmentForItem(itemId);
         if (segment === undefined) {
           return;
         }
-        const cumulative = (cumulativeByItem.get(itemId) ?? "") + (message.delta ?? "");
-        cumulativeByItem.set(itemId, cumulative);
         callbacks.onUserDelta(segment, cumulative);
         return;
       }
@@ -472,7 +488,9 @@ export function openRealtimeVoiceSession(
       if (dead) {
         return;
       }
-      void segment;
+      // Marks this segment as the streaming one, where a pre-commit input
+      // transcription delta's unseen item_id binds.
+      streamingSegment = segment;
       sendReady({ type: "input_audio_buffer.append", audio: toBase64(bytes) });
     },
     commit(segment) {
@@ -480,9 +498,14 @@ export function openRealtimeVoiceSession(
         callbacks.onError("realtime voice session unavailable", segment);
         return;
       }
+      if (streamingSegment === segment) {
+        streamingSegment = undefined; // committed — no longer the pre-commit bind target
+      }
       commitAt.set(segment, now());
       pending.push(segment);
-      awaitingItem.push(segment);
+      if (!boundSegments.has(segment)) {
+        awaitingItem.push(segment); // pre-commit deltas may have bound it already
+      }
       sendReady({ type: "input_audio_buffer.commit" });
       // Ask the model to reply — unless the per-thread cap is hit. The user
       // transcript (the IR) is captured regardless of the cap; only the model's
