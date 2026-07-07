@@ -25,6 +25,8 @@
  *    `response.create`.
  *  - **Images:** `conversation.item.create` with an `input_text` label part and an
  *    `input_image` data-URL part (finding 8) — items never auto-trigger a response.
+ *  - **Silent context (selections):** an `input_text` item alone — no
+ *    `response.create`, so nothing is spoken back.
  *  - **The nudge:** an `input_text` item + `response.create`.
  *  - **The call:** a `function_call` item in `response.done.response.output`; its
  *    `arguments` (a JSON string) parse to `{ segments }`. `respond` writes a
@@ -73,7 +75,11 @@ const SUBMIT_INTENT_TOOL = {
         type: "array",
         items: {
           type: "object",
-          properties: { text: { type: "string" }, image: { type: "string" } },
+          properties: {
+            text: { type: "string" },
+            image: { type: "string" },
+            selection: { type: "string" },
+          },
         },
       },
     },
@@ -208,10 +214,11 @@ export function openOpenAiLiveSession(
     }
     const rawSegments = Array.isArray(parsed.segments) ? parsed.segments : [];
     const segments = rawSegments.map((s) => {
-      const seg = (s ?? {}) as { text?: unknown; image?: unknown };
+      const seg = (s ?? {}) as { text?: unknown; image?: unknown; selection?: unknown };
       return {
         ...(typeof seg.text === "string" ? { text: seg.text } : {}),
         ...(typeof seg.image === "string" ? { image: seg.image } : {}),
+        ...(typeof seg.selection === "string" ? { selection: seg.selection } : {}),
       };
     });
     let responded = false;
@@ -399,10 +406,13 @@ export function openOpenAiLiveSession(
       // No-op: this vendor has no video (capabilities.video === false). The
       // processor traces the drop; the engine simply ignores the frame.
     },
-    injectText(text) {
+    injectContextText(text) {
       if (dead) {
         return;
       }
+      // SILENT context: a bare text item with NO `response.create` chasing it —
+      // items never auto-trigger a response (finding 8), so this adds to the
+      // conversation without making the model speak.
       sendReady({
         type: "conversation.item.create",
         item: { type: "message", role: "user", content: [{ type: "input_text", text }] },

@@ -239,7 +239,8 @@ Per-thread, like today's flagship session, with three additions Gemini forces:
   through `initial_history_in_client_content`; on 2.5 via `send_client_content`.)
 - **During**: audio streams during PTT windows; video frames stream only while the share
   toggle is on; shots inject per capability; selection changes (companion doc §B.3,
-  selection-as-event) inject as text ("the user selected: …"). `GoAway{timeLeft}` → HUD meter
+  selection-as-event) inject as labeled text items the moment they arrive (§12 — the grammar,
+  update/retraction items, and the resolve rule). `GoAway{timeLeft}` → HUD meter
   turns amber, channel captures the latest `SessionResumptionUpdate.newHandle` and reconnects
   with `sessionResumption.handle` — the *thread* survives the connection.
 - **End**: tool call or ladder (§4.3), then close. `onClose` teardown extends today's (S2)
@@ -360,7 +361,7 @@ trace data, not vibes:
 | **RT1** | ✅ **Done** — vendor seam `LiveSession`/`LiveCapabilities`/`SubmitIntentCall` in `aiui-claude-channel/src/live-session.ts`; OpenAI engine is a **separate** `openai-live.ts` under the seam (borrowed from, not a refactor of, `realtime-voice.ts` — flagship left untouched by design; `submit_intent` tool + `input_image` turn-items + tool-call drain added). | M | RT0 |
 | **RT2** | ✅ **Done** — `gemini-live.ts`: manual-VAD setup per §5, `sessionResumption`+sliding-window compression, `usageMetadata`→`cost.ts` (`usageFromGeminiLive`, google), GoAway surfaced. Client 24 kHz is sent `audio/pcm;rate=24000` (**no resampler** — live-verified the API accepts it); the window-open-with-audio rule enforced by a pure `WindowOrderingGuard`. Reconnect-on-GoAway deferred (handle captured, not yet re-dialed). | L | RT1 |
 | **RT3** | Client media: `video` chunk kind, ShotTool-stream sampling at 1 fps, share toggle + `video-share` events, capability gating in the UI. | M | RT1 |
-| **RT4** | ✅ **Done** — realtime processor branch in `intent-v1.ts` (`submode:"realtime"`): chronicle accumulation, live injections (labeled shots/video), `submit_intent`→`resolveSegments` (shot metadata re-attached via a `renderShotBlock` mirror of engine.ts), the nudge→drain→`composeIntent` fallback ladder, and the pinned trace stages (`live open`/`live label shot_N`/`live nudge`/`live tool call`/`live resolved`/`live fallback`/`live reply`). Selection injected only into the fin preamble (not mid-session), corrections ignored (patchless echo + note). | L | RT1, WP3 (selection-as-event) |
+| **RT4** | ✅ **Done** — realtime processor branch in `intent-v1.ts` (`submode:"realtime"`): chronicle accumulation, live injections (labeled shots/video), `submit_intent`→`resolveSegments` (shot metadata re-attached via a `renderShotBlock` mirror of engine.ts), the nudge→drain→`composeIntent` fallback ladder, and the pinned trace stages (`live open`/`live label shot_N`/`live nudge`/`live tool call`/`live resolved`/`live fallback`/`live reply`). Selections stream into the conversation as labeled text items on arrival (§12, July 2026 — superseded the original fin-preamble graft), corrections ignored (patchless echo + note). | L | RT1, WP3 (selection-as-event) |
 | **RT5** | Ledger preview (§4.2) from shared primitives; HUD meters (session budget, cost, response cap). | M | RT3, WP2 (UiMode) |
 | **RT6** | Gate evaluation G1–G4 in the workbench; decision: promote `live` tier out of experimental, or park with findings recorded here. | M | RT2–RT5 |
 
@@ -451,3 +452,55 @@ names — the debug-ui pins the labels — even though the nudge is now the gate
 veneer's `DEFAULT_VOICE_INSTRUCTIONS` (`realtime-voice.ts`) was rewritten to the same honest
 framing (the human is dictating for a coding agent; the veneer never restates the dictation),
 still toolless — flagship's composition remains `composeIntent`'s.
+
+---
+
+## 12. Live selections (landed July 2026)
+
+*(Addendum — closes RT4's selection gap. Selections used to reach only the chronicle: the live
+model never saw them, the fin tool-call path grafted the chronicle's LATEST app selection into
+the context preamble, and code selections were dropped from that path's final prompt entirely.
+They now follow the shot pattern end-to-end: injected on arrival, referenceable by id,
+re-attached in full at resolve.)*
+
+- **Injection on arrival.** The seam gained `injectContextText(text)` — a conversation text item
+  that does NOT solicit a reply. OpenAI: a bare `conversation.item.create` + `input_text` with
+  **no** `response.create` (items never auto-trigger a response — §10 finding 8). Gemini:
+  `clientContent` with `turnComplete: false` — the documented incremental-context append; the
+  nudge's form (`realtimeInput.text`) is answered immediately under manual VAD (§10 finding 4),
+  so it cannot carry selection labels. On Gemini the frame rides the window-ordering guard as
+  "other": the audio-first window rule was only spike-verified for `realtimeInput` frames, so
+  `clientContent` is conservatively kept out of audio-less windows too. (The seam's unused
+  `injectText` was replaced by `injectContextText`: its stated purpose — selection notes,
+  advisories — is exactly this, minus the per-vendor solicitation ambiguity.)
+- **The label grammar** (owned by `live-resolve.ts`, same family as `[image shot_N]`):
+  - app — `[selection sel_2: "gradient stops" — on-screen selection authored at src/Legend.tsx:41:8]`
+  - code — ``[selection code_1: src/c.ts:12 — 3 lines of code the human contributed: `…`]``
+  - a superseding re-emit under the SAME marker — `[selection sel_2 updated: …]`
+  - a drop — `[selection sel_2 retracted — disregard it]`
+
+  Excerpts clip at 160 chars, marked `(clipped)` — enough to ground deictic speech; the full
+  text is re-attached at resolve. Attribution beyond the locator (cell, TeX) is withheld live
+  and re-attached at resolve too.
+- **Registry + resolution.** A `selectionRegistry` mirrors the shot registry (marker → the
+  latest payload; a drop marks the entry retracted rather than deleting it). Both vendors'
+  `submit_intent` schemas gained a `selection` segment field, so segments interleave
+  `{text}`/`{image:"shot_N"}`/`{selection:"sel_2"}`; `resolveSegments` replaces a selection id
+  with the FULL rendering — engine.ts's now-exported `renderAppSelection`/`renderCodeSelection`,
+  the same short/long rule `composeIntent` applies (one rendering, per the defer-rendering
+  rule). A retracted id resolves to NOTHING and joins `missingRefs` (the committed prompt honors
+  the retraction even though the conversation couldn't — §4.1); an unknown id renders a visible
+  `[selection sel_9 — not found]`. Marker namespaces are disjoint, so an id carried in the wrong
+  field still resolves. The `live resolved` trace stage's refs rows now cover selection markers
+  (retracted ones flagged), and each injection lands as a `live selection <marker>` stage.
+- **The preamble stands down.** The tool-call path's chronicle-selection graft is REMOVED: the
+  model saw every selection, so its composition is authoritative — a selection it chose not to
+  reference does not sneak back in. "Did my selection make it in?" stays answerable from the
+  trace: the selection event stages, the injection stages, and the resolve refs. Only the legacy
+  `context` chunk (older clients, no stream events) still lowers through the preamble — on both
+  the tool-call and fallback paths (the fallback's `composeIntent` renders stream selections
+  inline, as before).
+- **Instructions.** `LIVE_COMPOSER_INSTRUCTIONS` now teaches the selection label grammar,
+  update/retraction semantics, and id placement in `segments[]` alongside image ids — with the
+  sentinel embedding and the commit-gating sentences byte-identical to §11 (the drift guards
+  were extended, not loosened).
