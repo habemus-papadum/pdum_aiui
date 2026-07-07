@@ -37,3 +37,6 @@ pnpm-debug.log*
 
 # aiui-devtools-extension build output (tsc)
 packages/aiui-devtools-extension/extension/js/
+
+# Other developers' agent worktrees (each is its own checkout)
+.claude/worktrees/

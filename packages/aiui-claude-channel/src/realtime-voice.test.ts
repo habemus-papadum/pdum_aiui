@@ -133,6 +133,25 @@ describe("openRealtimeVoiceSession", () => {
     expect(userFinals).toEqual([{ segment: 1, text: "make it wider" }]);
   });
 
+  it("binds pre-commit input transcription deltas to the streaming segment", () => {
+    const up = fakeUpstream();
+    const { session, userDeltas, userFinals } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    // Deltas stream while the segment's audio is still appending — before the
+    // commit — and must reach the preview live (mirrors realtime.test.ts).
+    session.appendAudio(1, new Uint8Array([1, 2]));
+    up.emit(userDelta("item_a", "make "));
+    up.emit(userDelta("item_a", "it wider"));
+    expect(userDeltas).toEqual([
+      { segment: 1, text: "make " },
+      { segment: 1, text: "make it wider" },
+    ]);
+    session.commit(1);
+    up.emit(userDone("item_a", "make it wider"));
+    expect(userFinals).toEqual([{ segment: 1, text: "make it wider" }]);
+  });
+
   it("buffers model audio per response and hands back one WAV clip at response.done", () => {
     const up = fakeUpstream();
     const { audio } = collect(up);

@@ -1,0 +1,75 @@
+{
+  "name": "@habemus-papadum/aiui-paint",
+  "version": "0.2.0+dev",
+  "description": "iPad-to-browser remote paint stream: wire protocol, a host-neutral coordinator backend (channel sidecar or your own server), browser host controller, and the iPad client.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-paint"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/backend.ts",
+    "./sidecar": "./src/sidecar.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./server": {
+        "types": "./dist/backend.d.ts",
+        "import": "./dist/backend.js",
+        "default": "./dist/backend.js"
+      },
+      "./sidecar": {
+        "types": "./dist/sidecar.d.ts",
+        "import": "./dist/sidecar.js",
+        "default": "./dist/sidecar.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-ink": "workspace:^",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@types/express": "^5.0.0",
+    "@types/ws": "^8.5.0",
+    "express": "^5.1.0",
+    "vite": "^6.4.1"
+  },
+  "peerDependencies": {
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "express": "^5.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@habemus-papadum/aiui-claude-channel": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    }
+  }
+}

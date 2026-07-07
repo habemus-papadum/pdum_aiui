@@ -313,6 +313,7 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
             ].join(", ");
       // Import only what this view actually installs (kept alphabetical).
       const imports = [
+        ...(mountIntent ? ["installPaintHost"] : []),
         ...(sessionArgs === undefined ? [] : ["installSessionBus"]),
         "installToolsBridge",
         ...(mountIntent ? ["mountIntentTool"] : []),
@@ -321,6 +322,11 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
         `import { ${imports.join(", ")} } from ${JSON.stringify(PKG)};`,
         `installToolsBridge(${port === undefined ? "" : `{ port: ${port} }`});`,
         ...(sessionArgs === undefined ? [] : [`installSessionBus({ ${sessionArgs} });`]),
+        // The paint host (turn-hosting views only): a no-op unless the channel
+        // runs the paint sidecar; the iPad's ink lands in this intent tool.
+        ...(mountIntent
+          ? [`installPaintHost(${port === undefined ? "{}" : `{ port: ${port} }`});`]
+          : []),
         // A contributor view stops here: bus + bridge, no turn host.
         ...(mountIntent
           ? [

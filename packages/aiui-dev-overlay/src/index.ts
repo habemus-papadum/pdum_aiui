@@ -26,6 +26,8 @@ export type {
   CollectClientMetaOptions,
   FrameMetric,
   PageInstrumentation,
+  RemoteInkPoint,
+  RemotePaintSink,
   TabInfo,
 } from "./instrumentation";
 export {
@@ -84,6 +86,8 @@ export type {
   ThreadSocketState,
 } from "./overlay-tools";
 export { installOverlayTools, OVERLAY_TOOLS_NS } from "./overlay-tools";
+export type { PaintHostOptions } from "./paint-host";
+export { installPaintHost } from "./paint-host";
 export type {
   Ack,
   AttachmentChunk,

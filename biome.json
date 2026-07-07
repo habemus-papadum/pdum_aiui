@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/.aiui/lsp"]
+    "includes": ["**", "!**/.aiui/lsp", "!.claude/worktrees"]
   },
   "formatter": {
     "enabled": true,

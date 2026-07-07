@@ -88,7 +88,8 @@
     }
   },
   "dependencies": {
-    "@habemus-papadum/aiui-code": "workspace:^"
+    "@habemus-papadum/aiui-code": "workspace:^",
+    "@habemus-papadum/aiui-paint": "workspace:^"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
