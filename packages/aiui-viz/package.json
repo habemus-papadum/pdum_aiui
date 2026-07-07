@@ -29,15 +29,18 @@
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
       },
       "./plot": {
         "types": "./dist/plot.d.ts",
-        "import": "./dist/plot.js"
+        "import": "./dist/plot.js",
+        "default": "./dist/plot.js"
       },
       "./site": {
         "types": "./dist/site/index.d.ts",
-        "import": "./dist/site.js"
+        "import": "./dist/site.js",
+        "default": "./dist/site.js"
       }
     }
   },

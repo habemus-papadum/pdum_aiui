@@ -34,23 +34,28 @@
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
       },
       "./vite": {
         "types": "./dist/vite.d.ts",
-        "import": "./dist/vite.js"
+        "import": "./dist/vite.js",
+        "default": "./dist/vite.js"
       },
       "./reader": {
         "types": "./dist/reader/index.d.ts",
-        "import": "./dist/reader.js"
+        "import": "./dist/reader.js",
+        "default": "./dist/reader.js"
       },
       "./intent-pipeline": {
         "types": "./dist/intent-pipeline/index.d.ts",
-        "import": "./dist/intent-pipeline.js"
+        "import": "./dist/intent-pipeline.js",
+        "default": "./dist/intent-pipeline.js"
       },
       "./debug-ui": {
         "types": "./dist/debug-ui/index.d.ts",
-        "import": "./dist/debug-ui.js"
+        "import": "./dist/debug-ui.js",
+        "default": "./dist/debug-ui.js"
       }
     },
     "imports": {

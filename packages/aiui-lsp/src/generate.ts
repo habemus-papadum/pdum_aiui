@@ -98,8 +98,7 @@ export function ensureDefaultManifest(projectRoot: string, opts: EnsureOptions =
     // For a cache bootstrap any existing setup serves; a deliberate committed
     // provision is only satisfied by a committed manifest (an earlier bootstrap
     // in the cache must not block it).
-    const satisfied =
-      home === "cache" || existsSync(join(lspDir(projectRoot), MANIFEST_FILENAME));
+    const satisfied = home === "cache" || existsSync(join(lspDir(projectRoot), MANIFEST_FILENAME));
     if (satisfied) {
       const existing = loadManifest(projectRoot);
       if (existing) return existing;
