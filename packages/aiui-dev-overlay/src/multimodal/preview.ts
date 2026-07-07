@@ -39,10 +39,11 @@ import {
   type IntentEvent,
   wordDiff,
 } from "../intent-pipeline";
-import { isExtension, LiveDiffText, renderRuns } from "./diff-flash";
+import { isExtension, LiveDiffText, renderRuns, SETTLE_FLASH_MS } from "./diff-flash";
 
-/** Fallback flash duration when config.diffFlashMs is unset. */
-const DEFAULT_DIFF_FLASH_MS = 750;
+/** Fallback flash duration when config.diffFlashMs is unset — the house
+ * discrete-revision tempo, shared via the modal kit. */
+const DEFAULT_DIFF_FLASH_MS = SETTLE_FLASH_MS;
 
 /**
  * How long Enter waits for an in-flight spoken segment's transcript before

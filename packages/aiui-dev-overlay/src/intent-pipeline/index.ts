@@ -7,7 +7,9 @@
  *
  * Prototyped in the workbench, graduated here so the overlay's modality and the
  * channel's lowering processor share one implementation (and one set of
- * captured fixtures as the regression net). Zero DOM, zero deps.
+ * captured fixtures as the regression net). Zero DOM; the only dependency is
+ * the equally realm-free modal kit (`aiui-viz/modal`), which the keymap's
+ * layer resolution and `wordDiff` now come from.
  *
  * @packageDocumentation
  */

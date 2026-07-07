@@ -269,6 +269,9 @@ importers:
       '@habemus-papadum/aiui-paint':
         specifier: workspace:^
         version: link:../aiui-paint
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../aiui-viz
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7

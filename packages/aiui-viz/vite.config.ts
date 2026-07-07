@@ -22,10 +22,17 @@ export default defineConfig({
   plugins: [solid()],
   build: {
     lib: {
-      // Three entries: the core surface, the Observable Plot bridge (`./plot`),
-      // and the page-chrome porcelain (`./site`) — so @observablehq/plot and
-      // katex stay optional peers that core consumers never import.
-      entry: { index: "src/index.ts", plot: "src/plot.tsx", site: "src/site/index.ts" },
+      // Four entries: the core surface, the Observable Plot bridge (`./plot`),
+      // the page-chrome porcelain (`./site`) — so @observablehq/plot and
+      // katex stay optional peers that core consumers never import — and the
+      // modal interaction kit (`./modal`: framework-free, no Solid import, so
+      // node-side consumers can reach it through the overlay's intent pipeline).
+      entry: {
+        index: "src/index.ts",
+        plot: "src/plot.tsx",
+        site: "src/site/index.ts",
+        modal: "src/modal/index.ts",
+      },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },

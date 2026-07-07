@@ -13,7 +13,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./plot": "./src/plot.tsx",
-    "./site": "./src/site/index.ts"
+    "./site": "./src/site/index.ts",
+    "./modal": "./src/modal/index.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -41,6 +42,11 @@
         "types": "./dist/site/index.d.ts",
         "import": "./dist/site.js",
         "default": "./dist/site.js"
+      },
+      "./modal": {
+        "types": "./dist/modal/index.d.ts",
+        "import": "./dist/modal.js",
+        "default": "./dist/modal.js"
       }
     }
   },
