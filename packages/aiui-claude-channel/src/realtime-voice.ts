@@ -150,6 +150,13 @@ export interface RealtimeVoiceSession {
    */
   commit(segment: number): void;
   /**
+   * Drop `segment` without transcribing it — an accidental tap whose buffer is
+   * under the upstream's 100 ms commit minimum. Clears the upstream input
+   * buffer and unbinds anything a pre-commit delta may have bound to it; no
+   * `response.create` (a tap should not make the model speak).
+   */
+  discard(segment: number): void;
+  /**
    * Barge-in: cancel any in-flight model response (the human started talking over
    * it). No-op when nothing is speaking.
    */
@@ -254,6 +261,9 @@ export function openRealtimeVoiceSession(
   const commitAt = new Map<number, number>();
   const itemToSegment = new Map<string, number>();
   const cumulativeByItem = new Map<string, string>();
+  // Items whose segment was discarded (a Space tap): late upstream events for
+  // them must drop, never re-bind to whatever segment streams next.
+  const discardedItems = new Set<string>();
   const drainWaiters: Array<() => void> = [];
 
   // ── model-reply state ───────────────────────────────────────────────────────
@@ -288,6 +298,9 @@ export function openRealtimeVoiceSession(
    * commit (see realtime.ts, whose binding this mirrors).
    */
   const segmentForItem = (itemId: string): number | undefined => {
+    if (discardedItems.has(itemId)) {
+      return undefined;
+    }
     const existing = itemToSegment.get(itemId);
     if (existing !== undefined) {
       return existing;
@@ -519,6 +532,22 @@ export function openRealtimeVoiceSession(
           `flagship response cap reached (${maxResponses} spoken replies this turn) — ` +
             "the model will stop answering aloud; dictation still lowers to the session",
         );
+      }
+    },
+    discard(segment) {
+      if (streamingSegment === segment) {
+        streamingSegment = undefined;
+      }
+      boundSegments.delete(segment);
+      for (const [itemId, bound] of itemToSegment) {
+        if (bound === segment) {
+          itemToSegment.delete(itemId);
+          cumulativeByItem.delete(itemId);
+          discardedItems.add(itemId);
+        }
+      }
+      if (!dead) {
+        sendReady({ type: "input_audio_buffer.clear" });
       }
     },
     cancelActiveResponse() {

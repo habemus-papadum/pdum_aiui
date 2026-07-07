@@ -159,6 +159,17 @@ export interface SpeechMessage {
 const REALTIME_DRAIN_TIMEOUT_MS = 10_000;
 
 /**
+ * The upstream's commit minimum: OpenAI rejects `input_audio_buffer.commit`
+ * under 100 ms of audio ("buffer too small"). A Space tap released before the
+ * worklet delivers its first frames streams less than this (often zero), so
+ * talk-end discards such a segment instead of committing it — the debounce
+ * that keeps a changed mind from erroring.
+ */
+const MIN_REALTIME_COMMIT_MS = 100;
+/** PCM16 mono at the realtime session's 24 kHz: 48 bytes per millisecond. */
+const REALTIME_PCM_BYTES_PER_MS = 48;
+
+/**
  * How long the realtime submode's `fin` waits, after the Enter nudge, for the
  * model's `submit_intent` call before it falls back to composing over the
  * chronicle (§4.3 step 3). Generous — the spike measured Enter→tool-call well
@@ -964,6 +975,36 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         label: `realtime commit seg_${segment}`,
         data: { frames: buffered.chunks.length, bytes: buffered.bytes },
       });
+    }
+    // The Space-tap debounce: the upstream rejects a commit under 100 ms of
+    // audio ("buffer too small"), and a tapped-and-released key often streams
+    // zero frames. Discard instead of committing — clear the upstream buffer,
+    // resolve the segment as empty (the preview stops waiting), and record it
+    // in the trace. Quiet by design: an accidental tap is not an error.
+    const session = realtime ?? realtimeVoice;
+    const pcmBytes = buffered?.bytes ?? 0;
+    if (session !== undefined && pcmBytes < MIN_REALTIME_COMMIT_MS * REALTIME_PCM_BYTES_PER_MS) {
+      session.discard(segment);
+      const empty: IntentEvent = {
+        at: Date.now(),
+        type: "transcript-final",
+        segment,
+        text: "",
+        latencyMs: 0,
+        model: intent.model,
+      };
+      appendEvent(empty);
+      push([empty]);
+      trace?.record({
+        kind: "info",
+        label: `realtime discard seg_${segment}`,
+        data: {
+          bytes: pcmBytes,
+          ms: Math.round(pcmBytes / REALTIME_PCM_BYTES_PER_MS),
+          note: `under the ${MIN_REALTIME_COMMIT_MS} ms upstream commit minimum — not transcribed`,
+        },
+      });
+      return;
     }
     if (realtime !== undefined) {
       realtime.commit(segment);

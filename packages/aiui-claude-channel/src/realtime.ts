@@ -130,6 +130,13 @@ export interface RealtimeSession {
   /** Commit `segment` (talk-end): its buffer is transcribed as one item. */
   commit(segment: number): void;
   /**
+   * Drop `segment` without transcribing it — an accidental tap whose buffer is
+   * under the upstream's 100 ms commit minimum. Clears the upstream input
+   * buffer (so the stray frames can't prepend to the next segment) and unbinds
+   * anything a pre-commit delta may have bound to it.
+   */
+  discard(segment: number): void;
+  /**
    * Resolve once every committed-but-not-completed segment has produced its
    * final, or `timeoutMs` elapses — whichever first. Returns the ordinals still
    * outstanding at timeout (so the caller can finalize them loudly). Used at
@@ -190,6 +197,9 @@ export function openRealtimeSession(
   const commitAt = new Map<number, number>();
   const itemToSegment = new Map<string, number>();
   const cumulativeByItem = new Map<string, string>();
+  // Items whose segment was discarded (a Space tap): late upstream events for
+  // them must drop, never re-bind to whatever segment streams next.
+  const discardedItems = new Set<string>();
   const drainWaiters: Array<() => void> = [];
 
   const settleDrainIfIdle = (): void => {
@@ -219,6 +229,9 @@ export function openRealtimeSession(
    * deltas are exactly what makes the preview stream as you talk.
    */
   const segmentForItem = (itemId: string): number | undefined => {
+    if (discardedItems.has(itemId)) {
+      return undefined;
+    }
     const existing = itemToSegment.get(itemId);
     if (existing !== undefined) {
       return existing;
@@ -379,6 +392,22 @@ export function openRealtimeSession(
         awaitingItem.push(segment); // pre-commit deltas may have bound it already
       }
       sendAudioMessage({ type: "input_audio_buffer.commit" });
+    },
+    discard(segment) {
+      if (streamingSegment === segment) {
+        streamingSegment = undefined;
+      }
+      boundSegments.delete(segment);
+      for (const [itemId, bound] of itemToSegment) {
+        if (bound === segment) {
+          itemToSegment.delete(itemId);
+          cumulativeByItem.delete(itemId);
+          discardedItems.add(itemId);
+        }
+      }
+      if (!dead) {
+        sendAudioMessage({ type: "input_audio_buffer.clear" });
+      }
     },
     drain(timeoutMs) {
       if (pending.length === 0) {

@@ -133,6 +133,24 @@ describe("openRealtimeVoiceSession", () => {
     expect(userFinals).toEqual([{ segment: 1, text: "make it wider" }]);
   });
 
+  it("discard drops the segment without committing or asking for a reply", () => {
+    const up = fakeUpstream();
+    const { session, userDeltas, userFinals, errors } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.appendAudio(1, new Uint8Array([1, 2]));
+    session.discard(1);
+    const types = up.sent.map((m) => m.type);
+    expect(types).toContain("input_audio_buffer.clear");
+    expect(types).not.toContain("input_audio_buffer.commit");
+    expect(types).not.toContain("response.create"); // a tap must not make the model speak
+    // A late delta for the cleared buffer's item drops instead of binding ahead.
+    up.emit(userDelta("item_a", "hm"));
+    expect(userDeltas).toEqual([]);
+    expect(userFinals).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
   it("binds pre-commit input transcription deltas to the streaming segment", () => {
     const up = fakeUpstream();
     const { session, userDeltas, userFinals } = collect(up);
@@ -326,7 +344,7 @@ describe("intent-v1 flagship voice turn", () => {
       { at: 1, type: "thread-open", trigger: "talk" },
       { at: 2, type: "talk-start", segment: 1 },
     ]);
-    await d.feedAudio("seg_1", 0, new Uint8Array([10, 20]));
+    await d.feedAudio("seg_1", 0, new Uint8Array(4800).fill(10)); // 100 ms — commits
     await d.feedEvents([{ at: 3, type: "talk-end", segment: 1, ms: 300 }]);
     // The channel committed the buffer and asked for a reply.
     expect(up.sent.some((m) => m.type === "input_audio_buffer.commit")).toBe(true);

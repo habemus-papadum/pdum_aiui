@@ -198,6 +198,29 @@ describe("openRealtimeSession", () => {
     ]);
   });
 
+  it("discard clears the upstream buffer and tombstones a pre-commit item", () => {
+    const up = fakeUpstream();
+    const { session, deltas, finals } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.appendAudio(1, new Uint8Array([1, 2]));
+    up.emit(delta("item_a", "hm"));
+    expect(deltas).toEqual([{ segment: 1, text: "hm" }]);
+    session.discard(1);
+    expect(up.sent.some((m) => m.type === "input_audio_buffer.clear")).toBe(true);
+    expect(up.sent.some((m) => m.type === "input_audio_buffer.commit")).toBe(false);
+    // The discarded item's late events drop — even after a NEW segment starts
+    // streaming, they must not re-bind to it.
+    session.appendAudio(2, new Uint8Array([3]));
+    up.emit(delta("item_a", "mm"));
+    up.emit(completed("item_a", "hmm"));
+    expect(deltas).toHaveLength(1);
+    expect(finals).toEqual([]);
+    // The next segment's own item binds and streams cleanly.
+    up.emit(delta("item_b", "real talk"));
+    expect(deltas.at(-1)).toEqual({ segment: 2, text: "real talk" });
+  });
+
   it("never truncates: text from an unbindable delta reaches the first bound one", () => {
     const up = fakeUpstream();
     const { session, deltas } = collect(up);
@@ -360,9 +383,10 @@ describe("intent-v1 realtime transcription (streaming)", () => {
       { at: 2, type: "thread-open", trigger: "talk" },
       { at: 3, type: "talk-start", segment: 1 },
     ]);
-    // Audio streams DURING talk, in seq order.
-    await d.feedAudio("seg_1", 0, new Uint8Array([10, 20]));
-    await d.feedAudio("seg_1", 1, new Uint8Array([30, 40]));
+    // Audio streams DURING talk, in seq order — two frames of 50 ms each (a
+    // real utterance; under 100 ms total the tap debounce would discard it).
+    await d.feedAudio("seg_1", 0, new Uint8Array(2400).fill(10));
+    await d.feedAudio("seg_1", 1, new Uint8Array(2400).fill(30));
     expect(up.sent.filter((m) => m.type === "input_audio_buffer.append")).toHaveLength(2);
 
     // Partial deltas stream back DURING talk too (before any commit exists) —
@@ -397,6 +421,42 @@ describe("intent-v1 realtime transcription (streaming)", () => {
     expect(trace.stages.map((s) => s.label)).toContain("realtime commit seg_1");
   });
 
+  it("discards a sub-100ms segment instead of committing (the Space-tap debounce)", async () => {
+    const up = fakeUpstream();
+    const d = driveRealtime({ factory: up.factory, apiKey: "k" });
+    up.open();
+    up.emit({ type: "session.updated" });
+    await d.feedEvents([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "talk-start", segment: 1 },
+    ]);
+    // A tap: talk-end lands with barely any audio streamed (2 bytes ≈ 0 ms —
+    // the worklet often delivers nothing before the key is released).
+    await d.feedAudio("seg_1", 0, new Uint8Array([1, 2]));
+    await d.feedEvents([{ at: 3, type: "talk-end", segment: 1, ms: 40 }]);
+    // No commit went upstream (it would 400 "buffer too small"); the partial
+    // buffer was cleared so it can't prepend to the next utterance.
+    expect(up.sent.some((m) => m.type === "input_audio_buffer.commit")).toBe(false);
+    expect(up.sent.some((m) => m.type === "input_audio_buffer.clear")).toBe(true);
+    // The segment resolved QUIETLY: an empty final, no note, no error toast.
+    const events = pushedEvents(d.pushed);
+    expect(events.map((e) => e.type)).toEqual(["transcript-final"]);
+    expect((events[0] as Extract<IntentEvent, { type: "transcript-final" }>).text).toBe("");
+    expect(d.pushed.some((p) => (p as { kind?: string }).kind === "error")).toBe(false);
+
+    // A real utterance afterwards commits and transcribes normally.
+    await d.feedEvents([{ at: 4, type: "talk-start", segment: 2 }]);
+    await d.feedAudio("seg_2", 0, new Uint8Array(4800)); // exactly 100 ms of PCM16@24k
+    await d.feedEvents([{ at: 5, type: "talk-end", segment: 2, ms: 500 }]);
+    expect(up.sent.some((m) => m.type === "input_audio_buffer.commit")).toBe(true);
+    up.emit(completed("item_1", "the real utterance"));
+    const finals = pushedEvents(d.pushed).filter((e) => e.type === "transcript-final");
+    expect((finals.at(-1) as Extract<IntentEvent, { type: "transcript-final" }>).text).toBe(
+      "the real utterance",
+    );
+    expect((finals.at(-1) as Extract<IntentEvent, { type: "transcript-final" }>).segment).toBe(2);
+  });
+
   it("drains an in-flight final at fin (a fast Enter still gets the transcript)", async () => {
     const up = fakeUpstream();
     const d = driveRealtime({ factory: up.factory, apiKey: "k" });
@@ -406,7 +466,7 @@ describe("intent-v1 realtime transcription (streaming)", () => {
       { at: 1, type: "thread-open", trigger: "talk" },
       { at: 2, type: "talk-start", segment: 1 },
     ]);
-    await d.feedAudio("seg_1", 0, new Uint8Array([1, 2, 3]));
+    await d.feedAudio("seg_1", 0, new Uint8Array(4800).fill(1)); // 100 ms — commits
     await d.feedEvents([{ at: 3, type: "talk-end", segment: 1, ms: 200 }]);
 
     // fin arrives BEFORE the upstream completed — lower() awaits the drain.
@@ -461,8 +521,9 @@ describe("intent-v1 realtime transcription (streaming)", () => {
     await d.feedEvents([
       { at: 1, type: "thread-open", trigger: "talk" },
       { at: 2, type: "talk-start", segment: 1 },
-      { at: 3, type: "talk-end", segment: 1, ms: 200 },
     ]);
+    await d.feedAudio("seg_1", 0, new Uint8Array(4800).fill(1)); // 100 ms — commits
+    await d.feedEvents([{ at: 3, type: "talk-end", segment: 1, ms: 200 }]);
     up.error("connection reset");
     const events = pushedEvents(d.pushed);
     expect(events.map((e) => e.type)).toEqual(["transcript-final", "note"]);
@@ -494,6 +555,8 @@ interface StreamStep {
   chunk?: ChunkDescriptor;
   events?: IntentEvent[];
   bytes?: number[];
+  /** Expand `bytes` this many times (PCM is repetitive; keeps the JSON small). */
+  repeat?: number;
   server?: Record<string, unknown>;
   fin?: boolean;
 }
@@ -531,7 +594,12 @@ describe("intent-v1 realtime streaming fixture", () => {
         clientEvents.push(...step.events);
         await d.feedEvents(step.events);
       } else if (step.chunk?.kind === "audio" && step.bytes) {
-        await d.feedAudio(step.chunk.id, step.chunk.seq, new Uint8Array(step.bytes));
+        const repeat = step.repeat ?? 1;
+        const frame = new Uint8Array(step.bytes.length * repeat);
+        for (let i = 0; i < repeat; i++) {
+          frame.set(step.bytes, i * step.bytes.length);
+        }
+        await d.feedAudio(step.chunk.id, step.chunk.seq, frame);
       }
     }
 
