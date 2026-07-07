@@ -80,7 +80,7 @@ flowchart TB
     traces[("traces<br/>.aiui-cache")]
   end
   session["Claude Code session"]
-  viewer["/debug viewer<br/>+ DevTools panel"]
+  viewer["debug viewer (aiui debug ·<br/>/__aiui/debug · DevTools panel)"]
 
   widget -->|"binary /ws · hello"| proc
   app <-->|"/tools JSON"| ptools
@@ -96,7 +96,7 @@ Each piece is implemented against an abstraction independent of any particular m
 | ----- | ------------ | ----------- | -------- |
 | **Collection** (browser) | The UI that gathers the input and streams it | `IntentModality` | `aiui-dev-overlay` |
 | **Lowering** (server) | Converts the incoming stream into the final prompt | `ChannelFormat` (codec + `StreamProcessor`) | `aiui-claude-channel` |
-| **Debugging** (web app) | Renders the recorded lowering trace | trace viewer (+ per-format custom views, planned) | `aiui-claude-channel` |
+| **Debugging** (web app) | Renders the recorded lowering trace | trace viewer (+ per-format custom views, planned) | `aiui-dev-overlay` (`debug-ui`), over `aiui-claude-channel`'s `/debug/api` |
 
 The rich modalities (voice + pen + screenshots + component location, and the correction
 meta-loop) were **designed before they shipped** and now ship as the default overlay (see
@@ -395,12 +395,15 @@ that lost it.
 ![The lowering debugger](/lowering-debugger.png)
 
 The viewer is **one shared implementation** (the overlay package's `debug-ui`), rendered
-wherever you debug: the widget's **🔍 button** opens it at **`/__aiui/debug`** — served by the
-`aiuiDevOverlay()` Vite plugin, deep-linked with `?session=<label>` so it opens pinned to the
-channel session the widget talks to — and the same panes are embedded in the
-[aiui DevTools panel](./devtools) and the workbench dock. The channel additionally serves a
-dependency-free fallback page at **`/debug`** (works with nothing but the channel — no Vite, no
-extension). Every home is **live** (it polls; you can watch a trace grow mid-session). The
+wherever you debug — and the **channel itself serves no HTML** (it is a JSON/data server; every
+page belongs to a frontend process). The homes: the widget's **🔍 button** opens the viewer at
+**`/__aiui/debug`** — served by the `aiuiDevOverlay()` Vite plugin, deep-linked with
+`?session=<label>` so it opens pinned to the channel session the widget talks to; **`aiui
+debug`** serves it standalone — it picks a running channel (the same selector `aiui vite` uses)
+and the page's header offers a **channel switcher** fed by the channel's `/debug/api/channels`
+route, so one command hops across every channel on the machine; and the same panes are embedded
+in the [aiui DevTools panel](./devtools) and the workbench dock. Every home is **live** (it
+polls; you can watch a trace grow mid-session). The
 generic stage viewer covers every modality; the design allows a modality to ship a *custom* debug
 view keyed by its format (waveform scrubbing for audio, region overlays for screenshots) — the
 manifest already carries the format name, but the plug-in mechanism itself is not built yet.
@@ -414,7 +417,8 @@ To keep those apart, the overlay self-reports an **actor** on every thread's hel
 the tab it drives; remove the key to revert), or pinned with the `actor` option on the Vite
 plugin / `mountIntentTool`. It is deliberately **not** inferred from `navigator.webdriver` —
 that flag is browser-wide, and in the shared session browser it labeled the human's own turns
-as `agent`. The channel stamps the label on the trace manifest. Trace lists — `/debug`, the DevTools Intent pane, the workbench — badge any
+as `agent`. The channel stamps the label on the trace manifest. Trace lists — the debug viewer
+(`aiui debug` / `/__aiui/debug`), the DevTools Intent pane, the workbench — badge any
 non-human actor. There is no pruning yet; traces only accumulate.
 
 **Watching lowering without an agent: the workbench.** The in-repo workbench (`pnpm workbench`)

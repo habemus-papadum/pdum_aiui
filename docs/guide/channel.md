@@ -35,7 +35,7 @@ flowchart TB
   session["Claude Code session"]
   subgraph proc["Channel MCP server process"]
     core["lowering +<br/>page-tools router"]
-    surfaces["web backend (loopback)<br/>/ws · /tools · /prompt<br/>/health · /debug"]
+    surfaces["web backend (loopback)<br/>/ws · /tools · /prompt<br/>/health · /debug/api"]
     core --> surfaces
   end
   page["Page<br/>overlay widget<br/>+ tools bridge"]
@@ -45,7 +45,7 @@ flowchart TB
   session -->|"stdio · MCP tools out"| core
   core -->|"stdio · notifications in"| session
   page -->|"binary /ws · declare /tools"| surfaces
-  panel -->|"/debug + monitors"| surfaces
+  panel -->|"/debug/api + monitors"| surfaces
   proc -.->|"advertises port"| registry
   registry -.->|"discovery"| page
 ```
@@ -69,7 +69,7 @@ server to push a test prompt into.
 | `/session` | JSON frames | The **session bus**: several browser views of one session share arming + the prompt preview and pass code contributions between tabs. See [Multi-View Sessions](/guide/multi-view-sessions). |
 | `POST /prompt` | JSON | Push plain text into the session — the simplest integration and the end-to-end smoke test. |
 | `GET /health` | JSON | Liveness, plus page-tools and session summaries; served with a permissive CORS header so pages can probe capability before dialing a websocket. |
-| `/debug` | HTML + JSON API | The lowering-trace viewer; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
+| `/debug/api/*` | JSON + blobs | The lowering-trace **API** (the channel serves no HTML — viewers are frontend processes: `aiui debug`, the plugin's `/__aiui/debug` page, the DevTools panel). `/debug/api/channels` lists the machine's registry so a viewer can switch channels; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
 
 ## Lowering, traces, and what reaches the session
 
@@ -82,10 +82,10 @@ composed prompt — body text with `{shot_N}` tokens, file paths in metadata —
 session as a notification.
 
 Every stage is recorded by the tracing layer into the project-local cache
-(`.aiui-cache/traces/<id>/`), which is what the `/debug` viewer, the DevTools panel's Intent
-pane, and the standalone trace debugger render — including mid-turn, since stages now land as
-they happen. An abandoned thread (page closed mid-turn) is torn down and its trace marked
-`abandoned`.
+(`.aiui-cache/traces/<id>/`), which is what the trace debugger renders — the shared `debug-ui`
+viewer, whether opened via `aiui debug`, the `/__aiui/debug` page, or the DevTools panel's
+Intent pane — including mid-turn, since stages land as they happen. An abandoned thread (page
+closed mid-turn) is torn down and its trace marked `abandoned`.
 
 ## Hot reload
 

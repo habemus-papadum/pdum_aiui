@@ -169,6 +169,16 @@ export const DEBUG_UI_CSS = /* css */ `
   padding: 0 7px; }
 .aiui-dbgt-view { flex: 1; overflow-y: auto; padding: 6px 10px; min-height: 0; }
 .aiui-dbgt-empty { padding: 16px; color: #6b7280; }
+
+/* ── the standalone debug page's header (title + channel picker) ── */
+.aiui-dbgp-head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; flex: none;
+  border-bottom: 1px solid #262c3a; background: #12151d;
+  font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+.aiui-dbgp-title { color: #e8e8ea; font-weight: 600; }
+.aiui-dbgp-title::first-letter { color: #8ab4f8; }
+.aiui-dbgp-picker { margin-left: auto; max-width: 46vw; background: #0f1117; color: #cfd3da;
+  border: 1px solid #3a4152; border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 12px; }
+.aiui-dbgp-picker:disabled { opacity: 0.6; }
 `;
 
 /** Inject the debug-UI stylesheet into a document's head, at most once. */

@@ -1,29 +1,25 @@
 /**
- * The lowering debug tool: a small web app + JSON API served by the channel's
- * web backend, for inspecting the traces recorded by tracing.ts.
+ * The lowering debug API, served by the channel's web backend: the JSON/blob
+ * routes a trace viewer polls to inspect the traces recorded by tracing.ts —
+ * the compiler's `-emit-ir` for prompt lowering. When you disagree with how
+ * your intent was rendered, a viewer over these routes is where you find the
+ * stage that lost it.
  *
- * Open `http://127.0.0.1:<port>/debug` (the intent tool's 🔍 button links
- * here). The app lists lowering runs newest-first; selecting one shows every
- * recorded stage — inputs as received, intermediate representations, and the
- * final lowered prompt — with image blobs rendered inline. This is the
- * compiler's `-emit-ir` for prompt lowering: when you disagree with how your
- * intent was rendered, this is where you find the stage that lost it.
- *
- * The generic stage viewer covers every modality; a modality can later ship a
- * richer, custom view (waveforms for audio, region overlays for screenshots) —
- * that per-format pluggability is designed but not yet built (the manifest
- * carries `format`, so the app knows what it's looking at).
- *
- * The inline `GET /debug` app below is the **dependency-free standalone
- * fallback** (works with nothing but this server — curl-able, no Vite). The
- * canonical trace debugger is the shared debug-ui viewer (the overlay
- * package's `TracesPane`/`TraceView`), served by the `aiuiDevOverlay()` Vite
- * plugin at `/__aiui/debug` — where the intent tool's 🔍 points — and embedded
- * by the DevTools extension and the workbench. Both speak the same
- * `/debug/api/*` routes; improvements should land in debug-ui first.
+ * **The channel renders no HTML.** It is a data server; every page belongs to
+ * a frontend process. The viewer is ONE shared implementation — the overlay
+ * package's debug-ui (`TracesPane`/`TraceView`) — with three frontends:
+ * `aiui debug` (a standalone Vite server with a channel switcher, fed by
+ * GET /debug/api/channels), the `aiuiDevOverlay()` Vite plugin's
+ * `/__aiui/debug` page (where the intent tool's 🔍 points), and the DevTools
+ * extension's embedded panes. All of them speak the routes below; CORS is
+ * open on `/debug` (loopback-only server) precisely so any local page can.
  *
  * Routes:
- *   GET /debug                      the viewer app (self-contained HTML)
+ *   GET /debug                      a JSON pointer at the viewers (no page)
+ *   GET /debug/api/channels         every channel in this machine's registry
+ *                                   (dead processes pruned), `self: true` on
+ *                                   the answering one — how a viewer offers
+ *                                   "switch channel" from one reachable port
  *   GET /debug/api/traces           all trace manifests, newest first, plus
  *                                   this server's `session` label (see
  *                                   trace.ts) so lists can default-filter to
@@ -63,6 +59,7 @@ import { cacheDir as userCacheDir } from "@habemus-papadum/aiui-util";
 import type { Express } from "express";
 import type { FrameLog } from "./frame-log";
 import type { LaunchInfo } from "./launch-info";
+import { listMcpServers } from "./list";
 import type { TransportStats } from "./stats";
 import { selfChannelInfo } from "./tools";
 import { listTraces, readTrace, traceBlobPath } from "./trace";
@@ -174,8 +171,42 @@ export function registerDebugRoutes(
     next();
   });
 
+  // The channel renders no HTML — it is a JSON/data server (the rule; /health
+  // and friends are messages, not pages). The viewer is the shared debug-ui
+  // app: `aiui debug` serves it standalone, the aiuiDevOverlay() Vite plugin
+  // serves it at /__aiui/debug, and the DevTools panel embeds it. A GET here
+  // (an old bookmark, a curious curl) gets a pointer, not a page.
   app.get("/debug", (_req, res) => {
-    res.type("html").send(DEBUG_APP_HTML);
+    res.json({
+      ui: "the channel serves no HTML — run `aiui debug` (or open /__aiui/debug on your app's dev server)",
+      api: [
+        "/debug/api/info",
+        "/debug/api/channels",
+        "/debug/api/traces",
+        "/debug/api/traces/:id",
+        "/debug/api/traces/:id/live",
+        "/debug/api/frames?since=N",
+        "/debug/api/stats",
+        "/debug/blob/:id/:file",
+      ],
+    });
+  });
+
+  // Every channel this machine is running (the on-disk registry, pruned of
+  // dead processes) — how a connected debug viewer offers "switch channel":
+  // one reachable channel is enough to enumerate and hop to all the others.
+  app.get("/debug/api/channels", (_req, res) => {
+    res.json({
+      channels: listMcpServers().map((server) => ({
+        tag: server.tag,
+        port: server.port,
+        pid: server.pid,
+        ppid: server.ppid,
+        cwd: server.cwd,
+        startedAt: server.startedAt,
+        ...(server.pid === process.pid ? { self: true } : {}),
+      })),
+    });
   });
 
   // selfChannelInfo shells out to `claude agents --json`; cache it so a
@@ -319,247 +350,3 @@ export function registerDebugRoutes(
     }
   });
 }
-
-/** The viewer app: dependency-free HTML/CSS/JS in one string, dark themed. */
-const DEBUG_APP_HTML = /* html */ `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aiui · lowering traces</title>
-<style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; display: flex; height: 100vh;
-    background: #14171f; color: #e8e8ea;
-    font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
-  }
-  #list {
-    width: 300px; flex: none; overflow-y: auto;
-    border-right: 1px solid #2a3140; padding: 10px;
-  }
-  #list h1 { font-size: 13px; margin: 4px 6px 6px; color: #9aa0aa; font-weight: 600; }
-  #list .all-toggle {
-    display: flex; align-items: center; gap: 6px; margin: 0 6px 10px;
-    color: #9aa0aa; font-size: 11px; cursor: pointer; user-select: none;
-  }
-  #list .all-toggle input { margin: 0; accent-color: #8ab4f8; }
-  .trace {
-    padding: 8px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 4px;
-  }
-  .trace:hover { background: #1f2430; }
-  .trace.active { background: #2a3140; }
-  .trace .fmt { font-weight: 600; }
-  .trace .meta { color: #9aa0aa; font-size: 11px; }
-  .actor {
-    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
-    background: #3a2f14; color: #ffd166; font-size: 10px; font-weight: 600;
-    vertical-align: 1px;
-  }
-  /* Deliberately dimmer than .actor: session is context, not provenance. */
-  .session {
-    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
-    background: #222836; color: #7d8695; font-size: 10px; vertical-align: 1px;
-  }
-  #detail { flex: 1; overflow-y: auto; padding: 18px 22px; }
-  #detail .empty { color: #9aa0aa; margin-top: 40px; text-align: center; }
-  .stage { margin-bottom: 14px; border: 1px solid #2a3140; border-radius: 10px; overflow: hidden; }
-  .stage-head {
-    display: flex; gap: 8px; align-items: baseline;
-    padding: 6px 12px; background: #1f2430; font-size: 12px;
-  }
-  .kind { font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: .06em; }
-  .kind.input  { color: #8ab4f8; }
-  .kind.ir     { color: #d0a8ff; }
-  .kind.output { color: #7ee0a3; }
-  .kind.info   { color: #9aa0aa; }
-  .stage-head .at { margin-left: auto; color: #9aa0aa; font-size: 11px; }
-  .stage-body { padding: 10px 12px; }
-  .stage-body pre {
-    margin: 0; white-space: pre-wrap; word-break: break-word;
-    font: 12px/1.5 ui-monospace, monospace;
-  }
-  .stage-body img { max-width: 100%; border-radius: 6px; }
-  .stage-body a { color: #8ab4f8; }
-  #detail h2 { font-size: 15px; margin: 0 0 2px; }
-  #detail .sub { color: #9aa0aa; font-size: 12px; margin-bottom: 16px; }
-  .path { color: #ffd166; border-bottom: 1px dotted #ffd16688; }
-  .path.img { cursor: zoom-in; }
-  #peek {
-    position: fixed; z-index: 10; display: none; pointer-events: none;
-    background: #1f2430; border: 1px solid #3a4152; border-radius: 8px; padding: 4px;
-    box-shadow: 0 8px 30px #0009;
-  }
-  #peek img { display: block; max-width: 380px; max-height: 280px; border-radius: 5px; }
-  #peek .peek-err { color: #9aa0aa; font-size: 11px; padding: 4px 6px; }
-</style>
-</head>
-<body>
-  <nav id="list"><h1>lowering traces</h1>
-    <label class="all-toggle" title="include traces recorded by other/earlier server processes">
-      <input type="checkbox" id="all-sessions"> all sessions</label>
-    <div id="items"></div></nav>
-  <main id="detail"><div class="empty">Select a trace — newest are first.<br>
-    Send something from the intent tool to create one.</div></main>
-<script>
-const IMAGE = /\\.(png|jpe?g|gif|webp|svg)$/i;
-// Absolute unix paths (>= one directory deep) inside prompt/stage text. The
-// lowering convention hands the session attachments as absolute paths
-// (archive/channel-attachment-path-encoding.md), so the debugger makes them
-// tangible: highlighted, and — for images under the previewable roots —
-// hover to peek, click to open.
-const ABS_PATH = new RegExp("(^|[\\\\s\\"'({\\\\[=:,])(/(?:[\\\\w.@%+~-]+/)+[\\\\w.@%+~-]+)", "g");
-let active = null;
-
-// The session dimension: the listing reports which server process is serving
-// it ("session"), and each manifest carries the label of the process that
-// recorded it. The list defaults to this server's traces; the "all sessions"
-// toggle reveals the rest — earlier runs, other servers on the same cache —
-// each row then wearing a dim session pill ("unknown" for pre-label traces).
-let session = null;
-let allSessions = false;
-const allToggle = document.getElementById("all-sessions");
-allToggle.onchange = () => { allSessions = allToggle.checked; refresh(); };
-
-const peek = document.createElement("div");
-peek.id = "peek";
-document.body.append(peek);
-function previewUrl(path) { return "/debug/api/preview?path=" + encodeURIComponent(path); }
-function showPeek(path, x, y) {
-  peek.replaceChildren();
-  const img = document.createElement("img");
-  img.onerror = () => {
-    const err = document.createElement("div");
-    err.className = "peek-err";
-    err.textContent = "no preview (outside the previewable roots, or gone)";
-    peek.replaceChildren(err);
-  };
-  img.src = previewUrl(path);
-  peek.append(img);
-  peek.style.left = Math.min(x + 14, innerWidth - 400) + "px";
-  peek.style.top = Math.min(y + 14, innerHeight - 300) + "px";
-  peek.style.display = "block";
-}
-function hidePeek() { peek.style.display = "none"; }
-
-// Render text with absolute paths wrapped in interactive spans.
-function renderText(container, text) {
-  let last = 0;
-  ABS_PATH.lastIndex = 0;
-  for (let m = ABS_PATH.exec(text); m; m = ABS_PATH.exec(text)) {
-    const start = m.index + m[1].length;
-    container.append(document.createTextNode(text.slice(last, start)));
-    const path = m[2];
-    const span = document.createElement("span");
-    span.className = IMAGE.test(path) ? "path img" : "path";
-    span.textContent = path;
-    if (IMAGE.test(path)) {
-      span.onmouseenter = (e) => showPeek(path, e.clientX, e.clientY);
-      span.onmouseleave = hidePeek;
-      span.onclick = () => window.open(previewUrl(path), "_blank");
-    }
-    container.append(span);
-    last = start + path.length;
-  }
-  container.append(document.createTextNode(text.slice(last)));
-}
-
-async function refresh() {
-  const res = await fetch("/debug/api/traces");
-  const body = await res.json();
-  session = body.session || null;
-  // Default view: only this server's traces. A server that reports no label
-  // (an older channel) can't be filtered against, so everything shows.
-  const traces = (allSessions || session === null)
-    ? body.traces
-    : body.traces.filter((t) => t.session === session);
-  // First load with traces present: jump straight to the newest one.
-  if (!active && traces.length) { active = traces[0].id; show(active); }
-  const items = document.getElementById("items");
-  items.replaceChildren(...traces.map((t) => {
-    const div = document.createElement("div");
-    div.className = "trace" + (t.id === active ? " active" : "");
-    div.onclick = () => { active = t.id; show(t.id); refresh(); };
-    const fmt = document.createElement("div");
-    fmt.className = "fmt"; fmt.textContent = t.format;
-    // Provenance badge: non-human runs (agents, automation) get a pill so a
-    // human scanning the list can tell their own turns from an agent's.
-    if (t.actor && t.actor !== "human") {
-      const pill = document.createElement("span");
-      pill.className = "actor"; pill.textContent = t.actor;
-      fmt.append(pill);
-    }
-    // Under "all sessions" every row says whose it is; the default view is
-    // all-current-session, so the pill would be noise there.
-    if (allSessions) {
-      const pill = document.createElement("span");
-      pill.className = "session"; pill.textContent = t.session || "unknown";
-      fmt.append(pill);
-    }
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    // The list route serves a slimmed manifest — stageCount in place of the full
-    // stages array (see registerDebugRoutes). A one-line summary rides the
-    // manifest when the turn was glossed; show it in place of the raw count.
-    const n = t.stageCount != null ? t.stageCount : (t.stages ? t.stages.length : 0);
-    meta.textContent = new Date(t.startedAt).toLocaleTimeString()
-      + " · " + (t.summary ? t.summary : n + " stage" + (n === 1 ? "" : "s"))
-      + (t.status ? " · " + t.status : " · live");
-    div.append(fmt, meta);
-    return div;
-  }));
-  if (!traces.length) items.innerHTML = '<div class="trace"><div class="meta">no traces '
-    + (allSessions || session === null ? "yet" : "in this session yet") + '</div></div>';
-}
-
-async function show(id) {
-  const res = await fetch("/debug/api/traces/" + encodeURIComponent(id));
-  if (!res.ok) return;
-  const t = await res.json();
-  const main = document.getElementById("detail");
-  const frag = document.createDocumentFragment();
-  const h2 = document.createElement("h2");
-  h2.textContent = t.format + " — " + t.id;
-  const sub = document.createElement("div");
-  sub.className = "sub";
-  sub.textContent = "thread " + t.threadId
-    + (t.actor ? " · actor " + t.actor : "")
-    + " · started " + t.startedAt
-    + (t.endedAt ? " · ended " + t.endedAt : " · live");
-  frag.append(h2, sub);
-  for (const s of t.stages) {
-    const box = document.createElement("div"); box.className = "stage";
-    const head = document.createElement("div"); head.className = "stage-head";
-    const kind = document.createElement("span"); kind.className = "kind " + s.kind; kind.textContent = s.kind;
-    const label = document.createElement("span"); label.textContent = s.label;
-    const at = document.createElement("span"); at.className = "at";
-    at.textContent = new Date(s.at).toLocaleTimeString();
-    head.append(kind, label, at);
-    const body = document.createElement("div"); body.className = "stage-body";
-    if (s.file) {
-      const url = "/debug/blob/" + encodeURIComponent(t.id) + "/" + encodeURIComponent(s.file);
-      if (IMAGE.test(s.file)) {
-        const img = document.createElement("img"); img.src = url; img.alt = s.label;
-        body.append(img);
-      } else {
-        const a = document.createElement("a"); a.href = url; a.textContent = s.file;
-        body.append(a);
-      }
-    } else if (s.data !== undefined) {
-      const pre = document.createElement("pre");
-      renderText(pre, typeof s.data === "string" ? s.data : JSON.stringify(s.data, null, 2));
-      body.append(pre);
-    }
-    box.append(head, body);
-    frag.append(box);
-  }
-  main.replaceChildren(frag);
-}
-
-refresh();
-setInterval(refresh, 2000);
-</script>
-</body>
-</html>
-`;

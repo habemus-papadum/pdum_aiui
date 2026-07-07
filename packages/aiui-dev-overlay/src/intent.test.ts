@@ -63,10 +63,11 @@ describe("mountIntentTool", () => {
     expect(document.getElementById(HOST_ID)).not.toBeNull();
   });
 
-  it("links the debug icon at the channel port (the no-plugin fallback)", () => {
+  it("hides the debug icon without a debugUrl (the channel serves no HTML to link)", () => {
     const handle = mountIntentTool({ force: true, port: 4567 });
     const link = handle.shadowRoot?.querySelector("a.iconbtn") as HTMLAnchorElement;
-    expect(link.href).toBe("http://127.0.0.1:4567/debug");
+    expect(link.style.display).toBe("none");
+    expect(link.getAttribute("href")).toBeNull();
   });
 
   it("prefers the plugin-served debug page, deep-linked to the channel's session", async () => {
@@ -127,17 +128,25 @@ describe("mountIntentTool", () => {
   });
 
   it("resolves the port from the plugin-seeded window.__AIUI__", () => {
-    window.__AIUI__ = { v: 1, port: 7777, frames: [] };
-    const handle = mountIntentTool({ force: true });
-    const link = handle.shadowRoot?.querySelector("a.iconbtn") as HTMLAnchorElement;
-    expect(link.href).toBe("http://127.0.0.1:7777/debug");
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      window.__AIUI__ = { v: 1, port: 7777, frames: [] };
+      mountIntentTool({ force: true });
+      expect(info).toHaveBeenCalledWith("aiui: intent tool mounted — channel port 7777");
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it("prefers an explicit port over the seeded one", () => {
-    window.__AIUI__ = { v: 1, port: 7777, frames: [] };
-    const handle = mountIntentTool({ force: true, port: 8888 });
-    const link = handle.shadowRoot?.querySelector("a.iconbtn") as HTMLAnchorElement;
-    expect(link.href).toBe("http://127.0.0.1:8888/debug");
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      window.__AIUI__ = { v: 1, port: 7777, frames: [] };
+      mountIntentTool({ force: true, port: 8888 });
+      expect(info).toHaveBeenCalledWith("aiui: intent tool mounted — channel port 8888");
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it("hides the tab row for a single modality", () => {

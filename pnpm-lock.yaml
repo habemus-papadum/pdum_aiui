@@ -59,6 +59,9 @@ importers:
       '@habemus-papadum/aiui-code-server':
         specifier: workspace:^
         version: link:../aiui-code-server
+      '@habemus-papadum/aiui-dev-overlay':
+        specifier: workspace:^
+        version: link:../aiui-dev-overlay
       '@habemus-papadum/aiui-devtools-extension':
         specifier: workspace:^
         version: link:../aiui-devtools-extension

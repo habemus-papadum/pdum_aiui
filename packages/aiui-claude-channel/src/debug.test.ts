@@ -114,12 +114,36 @@ describe("web backend with traceDir", () => {
     expect(list.session).toMatch(/^channel·\d+·\d{6}$/);
   });
 
-  it("serves the viewer app and blobs, and 404s missing traces", async () => {
+  it("lists the machine's channels on /debug/api/channels (the switcher's feed)", async () => {
+    const { port } = await startTraced();
+    const body = (await (await fetch(`http://127.0.0.1:${port}/debug/api/channels`)).json()) as {
+      channels?: Array<{ tag: string; port: number; pid: number; cwd: string; self?: boolean }>;
+    };
+    // This test server never registered itself, so its own row may be absent —
+    // the shape is the contract: an array of registry rows, each addressable
+    // by port, with `self: true` only ever on the answering process's row.
+    expect(Array.isArray(body.channels)).toBe(true);
+    for (const entry of body.channels ?? []) {
+      expect(typeof entry.tag).toBe("string");
+      expect(typeof entry.port).toBe("number");
+      expect(typeof entry.cwd).toBe("string");
+      if (entry.self) {
+        expect(entry.pid).toBe(process.pid);
+      }
+    }
+  });
+
+  it("serves NO page at /debug — a JSON pointer at the viewers — plus blobs; 404s missing traces", async () => {
     const { cache, port } = await startTraced();
 
+    // The channel renders no HTML (the rule): GET /debug answers with where
+    // the actual viewers live and which API routes they speak.
     const page = await fetch(`http://127.0.0.1:${port}/debug`);
     expect(page.status).toBe(200);
-    expect(await page.text()).toContain("lowering traces");
+    expect(page.headers.get("content-type")).toContain("application/json");
+    const pointer = (await page.json()) as { ui?: string; api?: string[] };
+    expect(pointer.ui).toContain("aiui debug");
+    expect(pointer.api).toContain("/debug/api/traces");
 
     const missing = await fetch(`http://127.0.0.1:${port}/debug/api/traces/nope`);
     expect(missing.status).toBe(404);

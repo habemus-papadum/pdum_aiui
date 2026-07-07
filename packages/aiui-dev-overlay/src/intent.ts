@@ -19,8 +19,8 @@
  *  - **Debug affordance.** The 🔍 button opens the lowering-trace debugger in
  *    a new tab: the shared debug-ui viewer the Vite plugin serves at
  *    `/__aiui/debug`, deep-linked to this page's channel session
- *    (`?session=<label>`); without the plugin it falls back to the channel
- *    server's built-in `/debug` page.
+ *    (`?session=<label>`). Without the plugin the button hides — the channel
+ *    serves no HTML; `aiui debug` is the standalone way into the viewer.
  *
  * The channel port arrives at serve time via the `aiuiDevOverlay()` Vite
  * plugin (this package's `./vite` export), which writes it to
@@ -194,8 +194,9 @@ export interface IntentToolOptions {
    * passes this option for you). The link is upgraded to
    * `?session=<label>` once the channel's own session label is known (one
    * fetch of `/debug/api/info`), so the viewer opens pinned to this page's
-   * session. Unset (a manual mount, no plugin) → the 🔍 falls back to the
-   * channel's built-in `/debug` viewer.
+   * session. Unset (a manual mount, no plugin) → the 🔍 hides: the channel
+   * serves no HTML, so there is no page to link (`aiui debug` is the
+   * standalone viewer).
    */
   debugUrl?: string;
   /** Mount even outside a dev-like environment (demos, tests). */
@@ -438,10 +439,12 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   const title = document.createElement("span");
   title.className = "title";
   title.textContent = "aiui intent";
-  // The debug affordance: the lowering-trace debugger. Preferred target is the
-  // shared debug-ui viewer the Vite plugin serves (options.debugUrl, normally
-  // /__aiui/debug) — the same viewer the workbench and DevTools extension
-  // render; the channel's built-in /debug page is the no-plugin fallback.
+  // The debug affordance: the lowering-trace debugger — the shared debug-ui
+  // viewer the Vite plugin serves (options.debugUrl, normally /__aiui/debug),
+  // the same viewer `aiui debug`, the workbench, and the DevTools extension
+  // render. Without a debugUrl (a manual mount, no plugin) the button hides:
+  // the channel serves no HTML, so there is nothing to link — `aiui debug` is
+  // the standalone way in.
   const debugLink = document.createElement("a");
   debugLink.className = "iconbtn";
   debugLink.textContent = "🔍";
@@ -468,8 +471,6 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
         })
         .catch(() => {});
     }
-  } else if (port !== undefined) {
-    debugLink.href = `http://127.0.0.1:${port}/debug`;
   } else {
     debugLink.style.display = "none";
   }

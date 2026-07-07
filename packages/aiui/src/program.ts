@@ -12,6 +12,7 @@ import {
   type WriteOptions,
 } from "./commands/config";
 import { runConfigTui } from "./commands/config-tui";
+import { type DebugOptions, runDebug } from "./commands/debug";
 import { type DemoOptions, runDemo } from "./commands/demo";
 import { runLspList, runLspProbe, runLspProvision } from "./commands/lsp";
 import { runMcp } from "./commands/mcp";
@@ -60,6 +61,17 @@ export function buildProgram(): Command {
     .helpOption(false)
     .argument("[args...]", "arguments forwarded to vite")
     .action((args: string[]) => runVite(args));
+
+  // The standalone trace-debugger frontend: the channel serves no HTML, so
+  // this serves the shared debug-ui viewer against a picked running channel
+  // (with an in-page switcher for the rest of the machine's channels).
+  program
+    .command("debug")
+    .description("open the lowering-trace viewer for a running channel (switchable in-page)")
+    .option("--mcp <tag>", "target a channel by registry tag (skips the selector)")
+    .option("--port <port>", "UI port for the viewer's dev server (default 4747)")
+    .option("--no-open", "don't open the browser")
+    .action((opts: DebugOptions) => runDebug(opts));
 
   // Unlike its siblings, `aiui chrome` is a real subcommand (not a forwarding
   // wrapper): it manages the agent's browser — the Chrome for Testing install,

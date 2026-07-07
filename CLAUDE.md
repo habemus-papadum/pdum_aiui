@@ -22,8 +22,9 @@ transcript) at the center. Three layers:
    `.aiui-cache/` (gitignored). Debugging lives in the **aiui Chrome DevTools panel**
    (`aiui-devtools-extension`, loaded unpacked): server monitor + websocket latency/size metrics (from
    `window.__AIUI__` page instrumentation) + the trace debugger (the shared `debug-ui` viewer — the
-   widget's 🔍 opens it at `/__aiui/debug`, session-pinned; the channel's `/debug` is the
-   dependency-free standalone fallback).
+   widget's 🔍 opens it at `/__aiui/debug`, session-pinned; `aiui debug` serves it standalone with a
+   channel switcher). The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`,
+   `/health`); every page belongs to a frontend process.
 3. **Frontend for agents** — principles/utilities/Claude skills for agent-written scientific UI:
    SolidJS 2.0 (beta), Observable-style async dataflow in mainstream syntax, code debuggable by
    the agent's future self (source locators, self-installed debug hooks, HMR-mindful,
