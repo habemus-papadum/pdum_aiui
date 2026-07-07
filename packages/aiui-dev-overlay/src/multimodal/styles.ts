@@ -18,8 +18,16 @@ export const STYLES = /* css */ `
     align-items: center; background: #171b25; border: 1px solid #262c3a; border-radius: 999px;
     padding: 6px 14px 6px 6px; font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
     color: #9aa0aa; cursor: grab; touch-action: none; }
-  .mm-hud.armed { border-color: #8ab4f8; }
-  .mm-hud.talking { border-color: #ff5c87; }
+  /* The mode ring (§B.4): border color driven by the derived UiMode — one
+     peripheral signal that survives attention being on the page, not the HUD.
+     (.armed/.talking stay as raw-state hooks: the ✳ fill below, the meter tint.) */
+  .mm-hud[data-ui-mode="ready"], .mm-hud[data-ui-mode="composing"] { border-color: #8ab4f8; }
+  .mm-hud[data-ui-mode="talking"] { border-color: #ff5c87;
+    animation: mm-ring-pulse 1.2s ease-in-out infinite; }
+  .mm-hud[data-ui-mode="shooting"] { border-color: #f8b64c; }
+  .mm-hud[data-ui-mode="correcting"] { border-color: #b48af8; }
+  @keyframes mm-ring-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 92, 135, 0.45); }
+    50% { box-shadow: 0 0 0 5px rgba(255, 92, 135, 0.12); } }
   .mm-arm { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
     background: #232936; color: #e8e8ea; font-size: 15px; }
   .mm-hud.armed .mm-arm { background: #8ab4f8; color: #0f1117; }

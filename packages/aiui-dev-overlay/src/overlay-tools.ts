@@ -41,6 +41,8 @@ export type ThreadSocketState = "none" | "connecting" | "open" | "failed";
 export interface OverlayReport {
   armed: boolean;
   mode: string;
+  /** The derived UiMode (§B.4): off/ready/composing/shooting/talking/correcting. */
+  uiMode: string;
   talking: boolean;
   threadOpen: boolean;
   /** Label of the modality tab currently shown. */
