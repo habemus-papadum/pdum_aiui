@@ -23,6 +23,8 @@ import { ackEntry, createFrameLog, type FrameLogSink, inboundEntry, pushEntry } 
 import { defaultFormatLoader, type FormatLoader } from "./hot";
 import type { LaunchInfo } from "./launch-info";
 import { PageToolDirectory } from "./page-tools";
+import { SessionHub } from "./session-hub";
+import type { MountedSidecar, Sidecar } from "./sidecar";
 import { createTransportStats } from "./stats";
 import { createTraceStore, sessionLabel, type TraceStore } from "./trace";
 import { withTracing } from "./tracing";
@@ -70,6 +72,12 @@ export interface WebServerOptions {
    */
   pageTools?: PageToolDirectory;
   /**
+   * The session bus the `/session` websocket feeds — shared arming + prompt
+   * preview + contributions across a session's tabs (see {@link SessionHub}).
+   * Omitted, a fresh one is created (and returned on the handle).
+   */
+  sessionHub?: SessionHub;
+  /**
    * How {@link WebServer.reload} obtains a fresh base (untraced) format registry
    * for each reload generation. Defaults to the hot loader (see hot.ts): a source
    * run re-imports the lowering layer from disk; a packaged run rebuilds from the
@@ -101,6 +109,20 @@ export interface WebServerOptions {
    * loud `EADDRINUSE` rejection rather than a silent drift elsewhere.
    */
   port?: number;
+  /**
+   * Session sidecars to host alongside the channel's own endpoints — the code
+   * reader, a git viewer (see {@link Sidecar}). Each is mounted on the Express
+   * app under its own base path AFTER the channel's routes (so `/health`,
+   * `/prompt` and the websocket upgrades always win), offered unclaimed
+   * websocket upgrades, and disposed on {@link WebServer.close}. The launcher
+   * chooses and constructs these; the channel treats them opaquely.
+   */
+  sidecars?: Sidecar[];
+  /**
+   * Log sink for server-level messages (sidecar mounts, etc.). Defaults to a
+   * stderr writer — never stdout, which the `mcp` command's MCP protocol owns.
+   */
+  log?: (message: string) => void;
 }
 
 /** Normalize `ws`'s several binary shapes into a single Uint8Array frame. */
@@ -135,6 +157,8 @@ export interface WebServer {
    * still reach it.
    */
   pageTools: PageToolDirectory;
+  /** The session bus the `/session` websocket feeds (see {@link SessionHub}). */
+  sessionHub: SessionHub;
   /**
    * Reload the lowering layer in place: rebuild the format registry from freshly
    * (re-)loaded code, then drop every live websocket (they reconnect and
@@ -158,9 +182,18 @@ const errorMessage = (err: unknown): string => (err instanceof Error ? err.messa
  */
 export async function startWebServer(options: WebServerOptions): Promise<WebServer> {
   const app = express();
-  app.use(express.json());
+  // Body parsing is scoped to the routes that need it (just `/prompt`), NOT
+  // global: a sidecar's raw request handler (the reader reads its own POST
+  // bodies off the stream) must reach the socket unconsumed.
 
   const pageTools = options.pageTools ?? new PageToolDirectory();
+  const sessionHub = options.sessionHub ?? new SessionHub();
+
+  const log =
+    options.log ?? ((message: string) => process.stderr.write(`[aiui-channel] ${message}\n`));
+  // Sidecars are mounted just before `listen` (so the channel's own routes win);
+  // this list is populated by then and read by the upgrade handler below.
+  const mountedSidecars: MountedSidecar[] = [];
 
   // Bumps on every successful reload; surfaced on /health and /debug/api/info so
   // a page or panel can tell it's talking to freshly-reloaded code.
@@ -180,11 +213,12 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       ppid: process.ppid,
       generation,
       pageTools: pageTools.summary(),
+      session: sessionHub.summary(),
       ...(options.debug === true ? { debug: true } : {}),
     });
   });
 
-  app.post("/prompt", async (req, res) => {
+  app.post("/prompt", express.json(), async (req, res) => {
     const text = typeof req.body?.text === "string" ? req.body.text : "";
     if (!text) {
       res.status(400).json({ ok: false, error: "expected a non-empty 'text' field" });
@@ -254,13 +288,23 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   const wss = new WebSocketServer({ noServer: true });
   const toolsWss = new WebSocketServer({ noServer: true });
+  const sessionWss = new WebSocketServer({ noServer: true });
   httpServer.on("upgrade", (req, socket, head) => {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
     if (pathname === "/ws") {
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
     } else if (pathname === "/tools") {
       toolsWss.handleUpgrade(req, socket, head, (ws) => toolsWss.emit("connection", ws, req));
+    } else if (pathname === "/session") {
+      sessionWss.handleUpgrade(req, socket, head, (ws) => sessionWss.emit("connection", ws, req));
     } else {
+      // Offer the upgrade to each sidecar (e.g. the reader's `/lsp`); the first to
+      // claim it owns the socket. Nothing claims it → drop, as before.
+      for (const sidecar of mountedSidecars) {
+        if (sidecar.handleUpgrade?.(req, socket, head)) {
+          return;
+        }
+      }
       socket.destroy();
     }
   });
@@ -357,6 +401,35 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     socket.on("error", () => {});
   });
 
+  // The `/session` endpoint: the multi-view session bus. Every tab of the session
+  // (app, code reader, …) dials it; the hub relays shared arming + prompt preview
+  // + contributions between them (see session-hub.ts). Plain JSON text frames.
+  sessionWss.on("connection", (socket) => {
+    liveSockets.add(socket);
+    const clientId = sessionHub.addConnection((message) => {
+      if (socket.readyState === socket.OPEN) {
+        socket.send(JSON.stringify(message));
+      }
+    });
+    socket.on("message", (data, isBinary) => {
+      if (isBinary) {
+        return; // the session protocol is JSON text only
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(data.toString());
+      } catch {
+        return; // ignore garbage from a cooperative same-host client
+      }
+      sessionHub.handleClientMessage(clientId, parsed);
+    });
+    socket.on("close", () => {
+      liveSockets.delete(socket);
+      sessionHub.removeConnection(clientId);
+    });
+    socket.on("error", () => {});
+  });
+
   // Reload the lowering layer in place. Order matters for robustness: build the
   // fresh registry FIRST — if the freshly edited code throws (a syntax error the
   // agent just introduced), we reject here and leave the running server, its
@@ -397,6 +470,18 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     });
   }
 
+  // Mount sidecars LAST — after every channel route (`/health`, `/prompt`,
+  // `/debug`) — so a sidecar's path-scoped fallback can never shadow them. Each
+  // is isolated: a mount that throws is logged and skipped, never fatal.
+  for (const sidecar of options.sidecars ?? []) {
+    try {
+      mountedSidecars.push(await sidecar.mount(app, { log }));
+      log(`sidecar "${sidecar.name}" mounted`);
+    } catch (err) {
+      log(`sidecar "${sidecar.name}" failed to mount: ${errorMessage(err)}`);
+    }
+  }
+
   await new Promise<void>((resolveListen, rejectListen) => {
     httpServer.once("error", rejectListen);
     httpServer.listen(options.port ?? 0, "127.0.0.1", () => {
@@ -408,10 +493,16 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   const address = httpServer.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
 
-  const close = (): Promise<void> =>
-    new Promise((resolveClose) => {
-      toolsWss.close(() => wss.close(() => httpServer.close(() => resolveClose())));
+  const close = async (): Promise<void> => {
+    // Dispose sidecars first — let them kill spawned language servers / close a
+    // Vite server before we release the port.
+    await Promise.allSettled(mountedSidecars.map((s) => s.dispose?.()));
+    await new Promise<void>((resolveClose) => {
+      sessionWss.close(() =>
+        toolsWss.close(() => wss.close(() => httpServer.close(() => resolveClose()))),
+      );
     });
+  };
 
-  return { port, pageTools, reload, getGeneration: () => generation, close };
+  return { port, pageTools, sessionHub, reload, getGeneration: () => generation, close };
 }

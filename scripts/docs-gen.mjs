@@ -218,6 +218,9 @@ function main() {
           { text: "Web Intent Tool", link: "/guide/web-intent-tool" },
           { text: "DevTools Panel", link: "/guide/devtools" },
           { text: "The Agent's Browser", link: "/guide/chrome" },
+          { text: "Language Servers", link: "/guide/lsp" },
+          { text: "The Code Reader", link: "/guide/code-reader" },
+          { text: "Multi-View Sessions", link: "/guide/multi-view-sessions" },
           { text: "Remote Development", link: "/guide/remote" },
           {
             text: "Frontend for Agents",

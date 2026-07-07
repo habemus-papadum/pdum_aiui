@@ -1,30 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { packageRoot, runningFromSource } from "@habemus-papadum/aiui-util";
 
-// Resolve modules the way this package would at runtime.
-const nodeRequire = createRequire(import.meta.url);
-
-/**
- * Absolute root directory of an installed (or workspace-linked) dependency.
- *
- * Rather than resolve the package *through* the module system — which would hit
- * its `exports` map (forcing a built `dist/`, and normally blocking access to
- * `package.json`) — we ask Node for the `node_modules` dirs it would search and
- * read `package.json` straight off disk. This needs nothing special from the
- * target package (no `exports` entry) and works even when it has not been
- * built, so dev iteration requires no compile step.
- */
-export function packageRoot(packageName: string): string {
-  const segments = packageName.split("/");
-  for (const base of nodeRequire.resolve.paths(packageName) ?? []) {
-    const manifest = join(base, ...segments, "package.json");
-    if (existsSync(manifest)) {
-      return dirname(manifest);
-    }
-  }
-  throw new Error(`could not locate the "${packageName}" package (is it installed?)`);
-}
+// `packageRoot` (and the "still carries src/ → dev checkout" heuristic below)
+// moved to aiui-util as shared provenance logic; re-exported here so existing
+// importers keep resolving it from this module.
+export { packageRoot } from "@habemus-papadum/aiui-util";
 
 /** How to spawn a CLI: a program plus the args that precede any subcommand. */
 export interface CliInvocation {
@@ -57,7 +38,7 @@ export function resolvePackageCli(packageName: string, binName?: string): CliInv
     );
   }
 
-  if (existsSync(join(root, "src"))) {
+  if (runningFromSource(root)) {
     // dev: dist/cli.js -> src/cli.ts, run through tsx (no build needed).
     const srcRel = binRel.replace(/^\.?\/?dist\//, "src/").replace(/\.js$/, ".ts");
     return { command: process.execPath, args: ["--import", "tsx", resolve(root, srcRel)] };

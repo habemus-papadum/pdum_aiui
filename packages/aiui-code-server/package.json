@@ -1,0 +1,77 @@
+{
+  "name": "@habemus-papadum/aiui-code-server",
+  "version": "0.2.0+dev",
+  "description": "Backend for the aiui code reader: the /__aiui_code HTTP routes (file tree/read, walkthroughs, LSP servers), the LSP websocket byte-relay, a Vite dev-server plugin, and a channel sidecar. Node-only.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-code-server"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./vite": "./src/vite-plugin.ts",
+    "./sidecar": "./src/sidecar.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./vite": {
+        "types": "./dist/vite-plugin.d.ts",
+        "import": "./dist/vite-plugin.js"
+      },
+      "./sidecar": {
+        "types": "./dist/sidecar.d.ts",
+        "import": "./dist/sidecar.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-code-protocol": "workspace:^",
+    "@habemus-papadum/aiui-lsp": "workspace:^",
+    "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "express": "^5.1.0",
+    "vite": "^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@habemus-papadum/aiui-claude-channel": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@types/express": "^5.0.0",
+    "@types/ws": "^8.5.0",
+    "express": "^5.1.0",
+    "vite": "^6.4.1"
+  }
+}

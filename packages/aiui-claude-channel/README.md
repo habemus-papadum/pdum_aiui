@@ -94,6 +94,21 @@ Custom formats: hand `startWebServer` a registry —
 A `createProcessor` receives the thread's context (`threadId`, `sendPrompt`,
 `close`) and returns `{ onMessage(payload, { fin }) }`.
 
+### Other websocket endpoints
+
+The same web backend serves two JSON (text-frame) endpoints alongside `/ws`:
+
+- **`/tools`** — the page-tools bridge. A page's `agentToolkit` namespaces register here so the
+  session can list/call them as MCP tools (`PageToolDirectory`).
+- **`/session`** — the **session bus** (`SessionHub`): several browser views of one session share
+  arming + the prompt preview (last-writer-wins slots) and fan code contributions to each other
+  (transient publishes). A late-joining view gets a snapshot so it opens already in sync. The hub
+  relays and caches opaque JSON — it interprets nothing. `/health` advertises a `session` summary.
+  See the repo's **Multi-View Sessions** guide.
+
+Both are routed by pathname in a single `upgrade` handler; the binary `/ws` protocol above is
+unaffected.
+
 ## Client library
 
 `connectChannelClient` hides the framing and codecs — connect declaring a

@@ -1,0 +1,63 @@
+{
+  "name": "@habemus-papadum/aiui-code",
+  "version": "0.2.0+dev",
+  "description": "LSP-backed, Monaco-based read-only code reader for the aiui cockpit (frontend): navigate a project by definition/references/symbol, drive it as an agent tool, and walk AI-authored code tours. Talks to @habemus-papadum/aiui-code-server.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-code"
+  },
+  "sideEffects": [
+    "*.css",
+    "./src/model/graph.ts"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "setup:example": "bash ../../examples/py-demo/setup.sh"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-code-protocol": "workspace:^",
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "monaco-editor": "^0.55.0",
+    "vscode-languageserver-protocol": "^3.17.5"
+  },
+  "peerDependencies": {
+    "@solidjs/web": ">=2.0.0-beta.0 <2.0.0-experimental.0",
+    "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@habemus-papadum/aiui-code-server": "workspace:^",
+    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "3.0.0-next.5"
+  }
+}

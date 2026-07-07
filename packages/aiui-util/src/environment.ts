@@ -50,7 +50,7 @@ export function isSsh(env: NodeJS.ProcessEnv = process.env): boolean {
 
 /**
  * Why this environment is considered headless — a short human-readable
- * fragment for messages like "detected a headless environment (<reason>)" —
+ * fragment for messages like "detected a headless environment (`<reason>`)" —
  * or undefined when a GUI is presumed available. The checks run most-explicit
  * first (CI, then SSH, then the platform's display convention); see the
  * module doc for the reasoning behind each signal.

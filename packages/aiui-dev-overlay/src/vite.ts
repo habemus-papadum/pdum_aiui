@@ -67,6 +67,12 @@ const PKG = "@habemus-papadum/aiui-dev-overlay";
  */
 const MOUNT_ID = "virtual:aiui-dev-overlay/mount";
 
+/** The route this plugin serves the bundled code reader at (when `code: true`). */
+const READER_ROUTE = "/__aiui/code";
+
+/** The virtual module that boots the reader page (imports `./reader`). */
+const READER_MOUNT_ID = "virtual:aiui-dev-overlay/reader";
+
 export interface AiuiDevOverlayOptions {
   /**
    * Auto-mount the intent tool (default `true`). Set `false` to keep only the
@@ -77,6 +83,18 @@ export interface AiuiDevOverlayOptions {
    * forwarded to the agent.
    */
   mount?: boolean;
+  /**
+   * Mount the turn-**hosting** intent tool (default `true`). Set `false` for a
+   * pure *contributor* view — the code reader, a git viewer — that joins the
+   * session bus (arming + preview + contributions) but must NOT host its own
+   * turn: it keeps the port injection, the tools bridge, and `installSessionBus`,
+   * and only skips `mountIntentTool`. Hosting from such a view is actively wrong
+   * — its armed ink-capture layer would sit over the code UI and swallow clicks,
+   * and two hosts would race on the shared `preview` slot. Pair with
+   * `session: { role: "code" }`. Distinct from `mount: false`, which drops the
+   * whole module (bus included).
+   */
+  intentTool?: boolean;
   /**
    * The wire format the mounted tool speaks — selects the bundled modality set.
    * Omitted → the default `[multimodal (intent-v1), text]` (multimodal active,
@@ -101,6 +119,24 @@ export interface AiuiDevOverlayOptions {
    * Set it to force a fixed label for everything this dev server serves.
    */
   actor?: string;
+  /**
+   * The **session bus** role for the views this dev server serves — how a page
+   * identifies itself to the other tabs of the session (`app`, `code`, `git`,
+   * …). Every served page installs `window.__AIUI__.session`, dials the
+   * channel's `/session` endpoint, and shares arming + prompt preview +
+   * contributions with its peers. Omitted → role `"app"`; `false` skips the
+   * bus entirely. (See docs/guide/multi-view-sessions.md.)
+   */
+  session?: false | { role?: string; label?: string };
+  /**
+   * Serve the bundled **code reader** (`@habemus-papadum/aiui-code`) from this
+   * dev server at `/__aiui/code`, and show the intent tool's "Code" button that
+   * opens it in a second tab. The reader is bundled into THIS app's dev server —
+   * no separate reader process — and talks to the channel's code sidecar over the
+   * injected port; the two tabs share arming + the prompt preview over the
+   * session bus. Off by default. (Replaces the old `codeUrl` external-URL option.)
+   */
+  code?: boolean;
   /** Channel port to inject; defaults to `process.env.VITE_AIUI_PORT`. */
   port?: number | string;
   /**
@@ -186,9 +222,50 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
     // when a registry-installed consumer first loads the page (the scanner
     // can't see through the virtual mount module).
     resolveId(id) {
-      return id === MOUNT_ID ? MOUNT_ID : undefined;
+      if (id === MOUNT_ID) return MOUNT_ID;
+      if (id === READER_MOUNT_ID) return READER_MOUNT_ID;
+      return undefined;
+    },
+    // Serve the bundled reader page at READER_ROUTE (dev only, opt-in via `code`).
+    // The page is a thin shell: it seeds the channel port, pulls in Vite's HMR
+    // client, and boots the reader via the READER_MOUNT_ID virtual module. It
+    // deliberately does NOT go through transformIndexHtml (that path injects the
+    // turn-hosting intent tool — wrong for a contributor view); the reader mount
+    // installs the bus in `code` role itself.
+    configureServer(server) {
+      if (!options.code) return;
+      server.middlewares.use((req, res, next) => {
+        if ((req.url ?? "").split("?")[0] !== READER_ROUTE) {
+          next();
+          return;
+        }
+        const port = resolvePort();
+        const seed = port === undefined ? "" : ` window.__AIUI__.port = ${port};`;
+        const html = [
+          "<!doctype html>",
+          '<html lang="en"><head>',
+          '<meta charset="utf-8" />',
+          '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+          "<title>aiui · code reader</title>",
+          `<script>window.__AIUI__ ??= { v: 1, frames: [] };${seed}</script>`,
+          '<script type="module" src="/@vite/client"></script>',
+          `<script type="module" src="/@id/${READER_MOUNT_ID}"></script>`,
+          "</head><body></body></html>",
+        ].join("\n");
+        res.statusCode = 200;
+        res.setHeader("content-type", "text/html");
+        res.end(html);
+      });
     },
     load(id) {
+      if (id === READER_MOUNT_ID) {
+        const port = resolvePort();
+        return [
+          `import { mountReaderPage } from ${JSON.stringify(`${PKG}/reader`)};`,
+          `mountReaderPage(${port === undefined ? "{}" : `{ port: ${port} }`});`,
+          "",
+        ].join("\n");
+      }
       if (id !== MOUNT_ID) {
         return undefined;
       }
@@ -201,11 +278,15 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
         ...(port === undefined ? [] : [`port: ${port}`]),
         ...(options.format === undefined ? [] : [`format: ${scriptString(options.format)}`]),
         ...(options.actor === undefined ? [] : [`actor: ${scriptString(options.actor)}`]),
+        // When the reader is served here, point the "Code" button at our route.
+        ...(options.code ? [`codeUrl: ${scriptString(READER_ROUTE)}`] : []),
         // `<` escaped so a config value can never close the module's <script>.
         ...(options.intent === undefined
           ? []
           : [`intent: ${JSON.stringify(options.intent).replace(/</g, "\\u003c")}`]),
       ];
+      // A contributor view (the reader) joins the bus but must not host a turn.
+      const mountIntent = options.intentTool ?? true;
       const mountCall = `mountIntentTool({ ${args.join(", ")} })`;
       // Mount after `load`, not at module eval: this script runs before the
       // app's own modules, and apps that build their DOM during startup
@@ -217,16 +298,41 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
       // precedes the app's modules in the document, so page toolkits find
       // `window.__AIUI__.tools` synchronously when they register. Without a
       // channel port it is a no-op.
+      // The session bus (unless disabled): installs at module eval like the
+      // tools bridge, so the reader's panel / app toolkits find
+      // `window.__AIUI__.session` synchronously. `role` defaults to "app".
+      const sessionArgs =
+        options.session === false
+          ? undefined
+          : [
+              ...(port === undefined ? [] : [`port: ${port}`]),
+              `role: ${scriptString(options.session?.role ?? "app")}`,
+              ...(options.session && options.session.label !== undefined
+                ? [`label: ${scriptString(options.session.label)}`]
+                : []),
+            ].join(", ");
+      // Import only what this view actually installs (kept alphabetical).
+      const imports = [
+        ...(sessionArgs === undefined ? [] : ["installSessionBus"]),
+        "installToolsBridge",
+        ...(mountIntent ? ["mountIntentTool"] : []),
+      ];
       return [
-        `import { installToolsBridge, mountIntentTool } from ${JSON.stringify(PKG)};`,
+        `import { ${imports.join(", ")} } from ${JSON.stringify(PKG)};`,
         `installToolsBridge(${port === undefined ? "" : `{ port: ${port} }`});`,
-        `const mount = () => ${mountCall};`,
-        "const keep = () => {",
-        "  mount();",
-        "  new MutationObserver(mount).observe(document.body, { childList: true });",
-        "};",
-        'if (document.readyState === "complete") keep();',
-        'else window.addEventListener("load", keep, { once: true });',
+        ...(sessionArgs === undefined ? [] : [`installSessionBus({ ${sessionArgs} });`]),
+        // A contributor view stops here: bus + bridge, no turn host.
+        ...(mountIntent
+          ? [
+              `const mount = () => ${mountCall};`,
+              "const keep = () => {",
+              "  mount();",
+              "  new MutationObserver(mount).observe(document.body, { childList: true });",
+              "};",
+              'if (document.readyState === "complete") keep();',
+              'else window.addEventListener("load", keep, { once: true });',
+            ]
+          : []),
         "",
       ].join("\n");
     },

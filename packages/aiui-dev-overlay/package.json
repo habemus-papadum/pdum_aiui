@@ -13,6 +13,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts",
+    "./reader": "./src/reader/index.ts",
     "./intent-pipeline": "./src/intent-pipeline/index.ts",
     "./debug-ui": "./src/debug-ui/index.ts"
   },
@@ -39,6 +40,10 @@
         "types": "./dist/vite.d.ts",
         "import": "./dist/vite.js"
       },
+      "./reader": {
+        "types": "./dist/reader/index.d.ts",
+        "import": "./dist/reader.js"
+      },
       "./intent-pipeline": {
         "types": "./dist/intent-pipeline/index.d.ts",
         "import": "./dist/intent-pipeline.js"
@@ -59,21 +64,36 @@
   },
   "peerDependencies": {
     "@babel/core": "^7.29.0",
+    "@solidjs/web": ">=2.0.0-beta.0 <2.0.0-experimental.0",
+    "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0",
     "vite": ">=6"
   },
   "peerDependenciesMeta": {
     "@babel/core": {
       "optional": true
     },
+    "@solidjs/web": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     }
   },
+  "dependencies": {
+    "@habemus-papadum/aiui-code": "workspace:^"
+  },
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
     "@types/babel__core": "^7.20.5",
     "jsdom": "^29.0.0",
-    "vite": "^6.4.1"
+    "monaco-editor": "^0.55.0",
+    "solid-js": "2.0.0-beta.15",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "3.0.0-next.5"
   }
 }
