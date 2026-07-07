@@ -85,9 +85,9 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // aiui may prompt (first-run choices, CfT offers) or type into the terminal.
   const interactive = isInteractiveSession(passthrough) && !isCi();
   if (interactive) {
-    // Settings that deserve a deliberate answer — skip-permissions and the
-    // enter nudge — are asked once, definitively, and persisted to the user
-    // config; every later launch reads the choice silently.
+    // Settings that deserve a deliberate answer — skip-permissions, the enter
+    // nudge, and the channel bind — are asked once, definitively, and persisted
+    // to the user config; every later launch reads the choice silently.
     config = await ensureLaunchChoices(config);
   }
 
@@ -123,6 +123,12 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   if (tag) {
     mcpArgs.push("--tag", tag);
   }
+  // Where the channel's web backend binds. loopback (the default) keeps every
+  // route this-machine-only; host puts the whole unauthenticated surface —
+  // iPad paint page, prompt injection, /debug — on the network (the trusted-LAN
+  // posture; asked at first run, see docs/guide/warning). Flag, then config.
+  const bind = aiuiArgs.bind ?? config.channel?.bind ?? "loopback";
+  mcpArgs.push("--bind", bind);
   const mcpServers: Record<string, { command: string; args: string[] }> = {
     [CHANNEL_SERVER_ID]: { command: channel.command, args: mcpArgs },
   };
@@ -155,10 +161,11 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   mcpArgs.push("--launch-info", JSON.stringify(launchInfo));
 
   // Tell the channel which session sidecars to host. The channel process
-  // inherits this session's cwd, so the project root is process.cwd().
-  // Three tiers, per name: `--aiui-sidecar` / `--aiui-no-sidecar` flags win,
-  // then the `sidecars.*` config (e.g. sidecars.paint from the first-run
-  // prompt), then auto-detection.
+  // inherits this session's cwd, so the project root is process.cwd(). Paint
+  // is always on (it rides the channel port — reachability is the bind's
+  // decision above). Three tiers, per name: `--aiui-sidecar` /
+  // `--aiui-no-sidecar` flags win, then the `sidecars.*` config, then
+  // auto-detection.
   const enable = [...aiuiArgs.sidecar];
   const disable = [...aiuiArgs.noSidecar];
   for (const [name, on] of Object.entries(config.sidecars ?? {})) {
@@ -261,8 +268,13 @@ aiui's own flags (everything else forwards to claude verbatim):
   --aiui-chrome-data-dir <path>  explicit browser user data dir
   --aiui-browser-url <url>       attach to a browser at this DevTools endpoint
                                  (e.g. a tunnel from \`aiui browser --tunnel\`)
+  --aiui-bind <loopback|host>    where the channel's web server binds: loopback
+                                 (this machine only, the default) or host (your
+                                 whole network can reach the session's web
+                                 surface — the iPad paint page included;
+                                 trusted networks only)
   --aiui-sidecar <name>          host this session sidecar (repeatable);
-                                 \`paint\` (iPad ink, LAN) is opt-in only
+                                 \`paint\` (iPad ink) is always on
   --aiui-no-sidecar <name>       don't host this session sidecar (repeatable)
 
 Durable settings live in config.json (project .aiui-cache/ + user cache) — see the

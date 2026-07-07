@@ -246,6 +246,23 @@ export function classifyStage(stage: TraceStageLike): StageClass {
   if (label === "correction failed") {
     return fail("out", "❌", "correction failed");
   }
+  // Selections are first-class stages ("did my selection make it in?"): both
+  // kinds arrive FROM the browser (in lane), on the always-shown context
+  // bucket. The drop stages are the chips' ✕ — same lane, same bucket. Old
+  // traces (markerless events, the retired single-selection form) classify
+  // identically; the card body degrades, never crashes.
+  if (label === "app selection") {
+    return norm("in", "context", "⌖", "app selection");
+  }
+  if (label === "app selection dropped") {
+    return norm("in", "context", "⌖", "app selection dropped");
+  }
+  if (label === "code selection") {
+    return norm("in", "context", "⧉", "code selection");
+  }
+  if (label === "code selection dropped") {
+    return norm("in", "context", "⧉", "code selection dropped");
+  }
   if (label === "merged events") {
     return norm("internal", "events", "📜", "merged events");
   }

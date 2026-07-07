@@ -63,15 +63,18 @@ interface KnownSidecar {
 
 /**
  * The registry of sidecars the launcher can enable. Emit order follows this
- * list, so the resolver's output is stable regardless of flag order.
+ * list, so the resolver's output is stable regardless of flag order. The paint
+ * stream is always on — see its entry.
  */
 const KNOWN_SIDECARS: KnownSidecar[] = [
   {
-    // The iPad paint stream. NEVER auto-enabled: its sidecar opens an
-    // unauthenticated LAN listener (the iPad can't reach loopback), which must
-    // be a deliberate act — `aiui claude --aiui-sidecar paint`.
+    // The iPad paint stream. Always on: it rides the channel's own port (no
+    // process, no extra listener), so hosting it costs nothing. Whether an
+    // iPad can actually REACH it is the channel bind's decision (`channel.bind`
+    // / `--aiui-bind`, asked at first run) — the security posture lives there,
+    // not here. `--aiui-no-sidecar paint` / `sidecars.paint: false` turn it off.
     name: "paint",
-    autoEnable: () => false,
+    autoEnable: () => true,
     descriptor: (root, resolveModule) => ({
       name: "paint",
       module: resolveModule("@habemus-papadum/aiui-paint/sidecar"),

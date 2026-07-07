@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { openGeminiLiveSession, parseTimeLeftMs, WindowOrderingGuard } from "./gemini-live";
-import type { LiveSessionCallbacks } from "./live-session";
+import {
+  LIVE_COMPOSER_INSTRUCTIONS,
+  LIVE_NUDGE_TEXT,
+  type LiveSessionCallbacks,
+} from "./live-session";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 
 /** A scripted fake of the Gemini Live upstream (mirrors realtime.test.ts). */
@@ -137,9 +141,43 @@ describe("openGeminiLiveSession", () => {
       },
     });
     const tools = (
-      up.sent[0] as { setup: { tools: Array<{ functionDeclarations: Array<{ name: string }> }> } }
+      up.sent[0] as {
+        setup: {
+          tools: Array<{
+            functionDeclarations: Array<{
+              name: string;
+              parameters: {
+                properties: { segments: { items: { properties: Record<string, unknown> } } };
+              };
+            }>;
+          }>;
+        };
+      }
     ).setup.tools;
     expect(tools[0].functionDeclarations[0].name).toBe("submit_intent");
+    // Segments may interleave text, image ids, AND selection ids (F2).
+    expect(
+      Object.keys(tools[0].functionDeclarations[0].parameters.properties.segments.items.properties),
+    ).toEqual(["text", "image", "selection"]);
+  });
+
+  it("sends the shared composer persona as the system instruction", () => {
+    const up = fakeUpstream();
+    collect(up);
+    up.open();
+    const setup = (
+      up.sent[0] as { setup: { systemInstruction: { parts: Array<{ text: string }> } } }
+    ).setup;
+    expect(setup.systemInstruction.parts[0].text).toBe(LIVE_COMPOSER_INSTRUCTIONS);
+  });
+
+  it("nudgeSubmit sends the commit sentinel as a bare out-of-window text turn", () => {
+    const up = fakeUpstream();
+    const { session } = collect(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    session.nudgeSubmit();
+    expect(realtimeFrames(up).some((r) => r.text === LIVE_NUDGE_TEXT)).toBe(true);
   });
 
   it("obeys the window rule: a label injected before audio is flushed after the first audio", () => {
@@ -160,6 +198,46 @@ describe("openGeminiLiveSession", () => {
     expect(audioIdx).toBeGreaterThanOrEqual(0);
     expect(audioIdx).toBeLessThan(labelIdx);
     expect(labelIdx).toBeLessThan(videoIdx);
+  });
+
+  it("injectContextText adds SILENT context: clientContent with turnComplete false, never realtimeInput", () => {
+    const up = fakeUpstream();
+    const { session } = collect(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    const label = '[selection sel_1: "gradient stops" — on-screen selection]';
+    session.injectContextText(label);
+    // The documented no-reply context append — a bare realtimeInput.text would
+    // be answered immediately under manual VAD (spike finding 4).
+    const frame = up.sent.find(
+      (m) => (m as { clientContent?: unknown }).clientContent !== undefined,
+    ) as {
+      clientContent: {
+        turns: Array<{ role: string; parts: Array<{ text: string }> }>;
+        turnComplete: boolean;
+      };
+    };
+    expect(frame).toBeDefined();
+    expect(frame.clientContent.turnComplete).toBe(false);
+    expect(frame.clientContent.turns[0].role).toBe("user");
+    expect(frame.clientContent.turns[0].parts[0].text).toBe(label);
+    expect(realtimeFrames(up).some((r) => r.text === label)).toBe(false);
+  });
+
+  it("injectContextText obeys the window rule (queued in an audio-less window, flushed on audio)", () => {
+    const up = fakeUpstream();
+    const { session } = collect(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    session.activityStart();
+    session.injectContextText("[selection sel_1 retracted — disregard it]");
+    expect(
+      up.sent.some((m) => (m as { clientContent?: unknown }).clientContent !== undefined),
+    ).toBe(false);
+    session.appendAudio(new Uint8Array([1, 2]));
+    expect(
+      up.sent.some((m) => (m as { clientContent?: unknown }).clientContent !== undefined),
+    ).toBe(true);
   });
 
   it("declares 24 kHz input audio (the client rate; Gemini resamples)", () => {
@@ -186,14 +264,18 @@ describe("openGeminiLiveSession", () => {
           {
             id: "fc1",
             name: "submit_intent",
-            args: { segments: [{ text: "wider" }, { image: "shot_1" }] },
+            args: { segments: [{ text: "wider" }, { image: "shot_1" }, { selection: "sel_1" }] },
           },
         ],
       },
     });
     const call = await session.drainToolCall(1000);
     expect(call).not.toBeNull();
-    expect(call?.segments).toEqual([{ text: "wider" }, { image: "shot_1" }]);
+    expect(call?.segments).toEqual([
+      { text: "wider" },
+      { image: "shot_1" },
+      { selection: "sel_1" },
+    ]);
     call?.respond(true);
     expect(up.sent).toContainEqual({
       toolResponse: {

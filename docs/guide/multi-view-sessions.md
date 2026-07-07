@@ -189,6 +189,17 @@ To add a view: mount `installSessionBus({ role })` (the Vite plugin does this fo
 sends the *raw* selection (text + locator) — rendering is the lowering's job, so every
 contributor's selection reads the same in the prompt without any formatting code of its own.
 
+A contributor doesn't have to be a browser view holding a socket. The channel's web backend
+exposes the bus to external same-host tools: `GET /session/peers` lists the connected views, and
+`POST /session/publish` injects a server-originated publish (`from: "server"`), targeted at one
+view's `clientId`, a role, or everyone — acked with who it reached, nacked when nothing matched.
+The **VS Code extension** (`packages/aiui-vscode`) is the first such provider: it discovers
+channels through the on-disk registry, shows a status-bar picker over each channel's `app` tabs,
+and sends the editor selection as the same `SelectionContribution` the reader publishes.
+Standalone debug servers (`serve` — e.g. the workbench's channel, named "aiui workbench")
+register in the same registry marked `debug: true`: every selector shows the mark, none
+auto-picks one, and a human choosing one deliberately works exactly like a real session.
+
 ## Where the code lives
 
 - **Channel** — `SessionHub` (`packages/aiui-claude-channel/src/session-hub.ts`) and the

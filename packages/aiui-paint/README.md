@@ -10,15 +10,20 @@ by any server you own), the desktop **host** controller, and a self-contained **
 (served by whichever host mounts the backend). It depends on
 [`@habemus-papadum/aiui-ink`](../aiui-ink) for the standalone host path.
 
-> ⚠️ **Security:** the iPad-facing surface binds the LAN and is **unauthenticated** — for a
-> personal, trusted network only. The aiui channel stays loopback-only; its paint sidecar opens a
-> separate LAN listener carrying only this surface, and is opt-in for exactly that reason.
+> ⚠️ **Security:** the paint surface is **unauthenticated** — for a personal, trusted network
+> only. In an aiui session it rides the channel's one port; who can reach it is the channel's
+> `channel.bind` choice (`loopback` = this machine only, tunnel for the iPad; `host` = your whole
+> LAN, everything on the port). See the repo's
+> [Read before running](../../docs/guide/warning.md).
 
 ## In an aiui session
 
+The sidecar is hosted by default; the iPad needs the channel bound to the host interface (or a
+tunnel you own):
+
 ```sh
-aiui claude --aiui-sidecar paint    # host the paint sidecar (opt-in: LAN exposure)
-aiui paint url                      # print the URL to open on the iPad
+aiui claude          # first interactive launch asks where the channel binds ("host" for the iPad)
+aiui paint url       # print the URL to open on the iPad
 ```
 
 Pages served with the dev overlay auto-join as paintable hosts; ink drawn on the iPad lands in the

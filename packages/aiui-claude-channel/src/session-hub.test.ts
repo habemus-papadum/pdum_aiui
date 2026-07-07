@@ -114,6 +114,53 @@ describe("SessionHub", () => {
     expect(a.received.some((m) => m.type === "peers")).toBe(false);
   });
 
+  it("lists greeted peers and delivers a server-originated publish", () => {
+    const hub = new SessionHub({ newId: seqIds(), log: () => {} });
+    const app = fakeConn();
+    const code = fakeConn();
+    const mute = fakeConn(); // connected but never greeted → not addressable
+    const idApp = hub.addConnection(app.send);
+    const idCode = hub.addConnection(code.send);
+    hub.addConnection(mute.send);
+    hub.handleClientMessage(idApp, { type: "hello", role: "app", label: "Demo" });
+    hub.handleClientMessage(idCode, { type: "hello", role: "code" });
+
+    expect(
+      hub
+        .peers()
+        .map((p) => p.role)
+        .sort(),
+    ).toEqual(["app", "code"]);
+
+    // Target one view by clientId: only it receives, and the return names it.
+    app.received.length = 0;
+    code.received.length = 0;
+    const payload = { kind: "selection", text: "Vec3" };
+    const sent = hub.publishFromServer("contribution", payload, { clientId: idApp });
+    expect(sent.map((p) => p.clientId)).toEqual([idApp]);
+    expect(app.received).toEqual([
+      { v: 1, type: "publish", topic: "contribution", payload, from: "server" },
+    ]);
+    expect(code.received).toHaveLength(0);
+
+    // Target by role, and miss entirely: an unknown target sends to nobody.
+    expect(hub.publishFromServer("nudge", undefined, { role: "code" })).toEqual([
+      { clientId: idCode, role: "code" },
+    ]);
+    expect(hub.publishFromServer("nudge", undefined, { clientId: "nope" })).toEqual([]);
+    expect(hub.publishFromServer("nudge", undefined, { role: "git" })).toEqual([]);
+
+    // No target → every greeted view; the un-greeted connection (which does see
+    // ordinary peer-list broadcasts) is not addressable and hears no publish.
+    expect(
+      hub
+        .publishFromServer("nudge", undefined)
+        .map((p) => p.clientId)
+        .sort(),
+    ).toEqual([idApp, idCode].sort());
+    expect(mute.received.filter((m) => m.type === "publish")).toHaveLength(0);
+  });
+
   it("summarizes clients, slots, and roles", () => {
     const hub = new SessionHub({ newId: seqIds(), log: () => {} });
     const a = fakeConn();

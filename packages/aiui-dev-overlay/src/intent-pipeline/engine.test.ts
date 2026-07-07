@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { composeIntent, Engine } from "./engine";
+import { composeIntent, Engine, renderAppSelection, renderCodeSelection } from "./engine";
 
 function armedEngine(): Engine {
   let t = 0;
@@ -364,8 +364,8 @@ describe("composeIntent", () => {
   });
 });
 
-describe("app selection (the pre-arm page selection riding the turn)", () => {
-  it("opens the turn with an app-selection event from the selection provider", () => {
+describe("app selection (a positional stream event, interleaved like text and shots)", () => {
+  it("opens the turn with a marked app-selection event from the selection provider", () => {
     const engine = armedEngine();
     engine.selectionProvider = () => ({
       text: "reaction-diffusion on the GPU",
@@ -374,41 +374,168 @@ describe("app selection (the pre-arm page selection riding the turn)", () => {
     });
     engine.talkStart();
     // Right after thread-open, before any transcript: the transcript BEGINS
-    // with the selection.
+    // with the selection — and the engine assigned its marker (house style).
     const types = engine.events.map((e) => e.type);
     expect(types.indexOf("app-selection")).toBe(types.indexOf("thread-open") + 1);
-    expect(composeIntent(engine.events).appSelection).toEqual({
+    expect(engine.events.find((e) => e.type === "app-selection")).toMatchObject({
+      marker: "sel_1",
+    });
+    const composed = composeIntent(engine.events);
+    expect(composed.items[0]).toMatchObject({
+      kind: "app-selection",
+      marker: "sel_1",
       text: "reaction-diffusion on the GPU",
       sourceLoc: "src/App.tsx:35:13",
       cell: "catalog",
     });
   });
 
-  it("keeps the LAST app-selection (a re-selection supersedes) and honors a drop", () => {
-    const engine = armedEngine();
-    engine.talkStart();
-    engine.appSelection({ text: "first" });
-    engine.appSelection({ text: "second", cell: "flow" });
-    expect(composeIntent(engine.events).appSelection).toEqual({ text: "second", cell: "flow" });
-
-    engine.appSelectionDrop();
-    expect(composeIntent(engine.events).appSelection).toBeUndefined();
-    // Append-only: the events stay in the stream for the trace.
-    expect(engine.events.filter((e) => e.type === "app-selection")).toHaveLength(2);
-  });
-
-  it("never renders the app selection into the prompt body (it is preamble context)", () => {
+  it("composes multiple interleaved selections at their stream positions", () => {
     const engine = armedEngine();
     const s1 = engine.talkStart();
     engine.talkEnd();
     engine.transcriptFinal(s1 ?? 1, "make this wider", 10, "mock");
-    engine.appSelection({ text: "the histogram title" });
+    engine.appSelection({ text: "the histogram title", sourceLoc: "src/Hist.tsx:10:2" });
+    const s2 = engine.talkStart();
+    engine.talkEnd();
+    engine.transcriptFinal(s2 ?? 2, "and match this", 10, "mock");
+    engine.appSelection({ text: "the legend caption" });
+
     const composed = composeIntent(engine.events);
-    expect(composed.prompt).toBe("make this wider");
-    expect(composed.appSelection?.text).toBe("the histogram title");
+    expect(composed.items.map((i) => i.kind)).toEqual([
+      "text",
+      "app-selection",
+      "text",
+      "app-selection",
+    ]);
+    expect(composed.items[1]).toMatchObject({ marker: "sel_1", text: "the histogram title" });
+    expect(composed.items[3]).toMatchObject({ marker: "sel_2", text: "the legend caption" });
   });
 
-  it("is a no-op without an open thread (context rides a turn, never opens one)", () => {
+  it("renders selections INLINE in the prompt at their positions (short/long rule)", () => {
+    const engine = armedEngine();
+    const s1 = engine.talkStart();
+    engine.talkEnd();
+    engine.transcriptFinal(s1 ?? 1, "make this wider", 10, "mock");
+    engine.appSelection({
+      text: "the histogram title",
+      sourceLoc: "src/Hist.tsx:10:2",
+      cell: "hist",
+    });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt).toBe(
+      "make this wider " +
+        'Regarding the on-screen selection "the histogram title" ' +
+        "(authored at src/Hist.tsx:10:2; produced by cell hist)",
+    );
+    // Selection text is never transcript text — corrections can't touch it.
+    expect(composed.transcript).toBe("make this wider");
+  });
+
+  it("fences a long selection and carries the TeX attribution", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    const long = "a very long run of selected page text ".repeat(10).trim();
+    engine.appSelection({ text: long, sourceLoc: "src/Doc.tsx:3:1", tex: "\\frac{a}{b}" });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt).toContain(
+      "Regarding this on-screen selection " +
+        "(authored at src/Doc.tsx:3:1; rendered mathematics — TeX source: \\frac{a}{b}):\n" +
+        `\`\`\`\n${long}\n\`\`\``,
+    );
+  });
+
+  it("supersedes per marker: a refinement with nothing contentful between re-uses the marker", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.talkEnd();
+    engine.appSelection({ text: "the histo" });
+    engine.appSelection({ text: "the histogram title", cell: "hist" }); // the drag widened
+    const selections = engine.events.filter((e) => e.type === "app-selection");
+    expect(selections.map((e) => (e as { marker?: string }).marker)).toEqual(["sel_1", "sel_1"]);
+    // One item, at the FIRST event's position, carrying the LATEST payload.
+    const composed = composeIntent(engine.events);
+    const items = composed.items.filter((i) => i.kind === "app-selection");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ marker: "sel_1", text: "the histogram title", cell: "hist" });
+  });
+
+  it("a contentful event in between mints a fresh marker (a NEW selection)", () => {
+    const engine = armedEngine();
+    const s1 = engine.talkStart();
+    engine.talkEnd();
+    engine.appSelection({ text: "first" });
+    engine.transcriptFinal(s1 ?? 1, "spoken words", 10, "mock");
+    engine.appSelection({ text: "second" });
+    const selections = engine.events.filter((e) => e.type === "app-selection");
+    expect(selections.map((e) => (e as { marker?: string }).marker)).toEqual(["sel_1", "sel_2"]);
+    expect(
+      composeIntent(engine.events)
+        .items.filter((i) => i.kind === "app-selection")
+        .map((i) => i.text),
+    ).toEqual(["first", "second"]);
+  });
+
+  it("drops retract exactly one selection, by marker", () => {
+    const engine = armedEngine();
+    const s1 = engine.talkStart();
+    engine.talkEnd();
+    engine.appSelection({ text: "keep me not" });
+    engine.transcriptFinal(s1 ?? 1, "between", 10, "mock");
+    engine.appSelection({ text: "keep me" });
+
+    expect(engine.appSelectionDrop("sel_1")).toBe(true);
+    expect(engine.events.at(-1)).toMatchObject({ type: "app-selection-drop", marker: "sel_1" });
+    const composed = composeIntent(engine.events);
+    const items = composed.items.filter((i) => i.kind === "app-selection");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ marker: "sel_2", text: "keep me" });
+    // Append-only: both selection events stay in the stream for the trace.
+    expect(engine.events.filter((e) => e.type === "app-selection")).toHaveLength(2);
+    // A markerless drop (the watcher clearing) retracts the latest carried one.
+    expect(engine.appSelectionDrop()).toBe(true);
+    expect(engine.events.at(-1)).toMatchObject({ type: "app-selection-drop", marker: "sel_2" });
+    expect(composeIntent(engine.events).items.some((i) => i.kind === "app-selection")).toBe(false);
+    // Nothing left to retract → no event.
+    expect(engine.appSelectionDrop()).toBe(false);
+  });
+
+  it("a dropped marker is never re-used: the next selection is a new chip", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.talkEnd();
+    engine.appSelection({ text: "first" });
+    engine.appSelectionDrop();
+    engine.appSelection({ text: "second" });
+    const selections = engine.events.filter((e) => e.type === "app-selection");
+    expect(selections.map((e) => (e as { marker?: string }).marker)).toEqual(["sel_1", "sel_2"]);
+    const items = composeIntent(engine.events).items.filter((i) => i.kind === "app-selection");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ marker: "sel_2", text: "second" });
+  });
+
+  it("folds pre-marker streams latest-wins without crashing (old traces)", () => {
+    // A stream captured before markers existed: markerless events, and the
+    // retired whole-turn drop. No data is worth preserving; nothing may die.
+    const legacy = composeIntent([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "app-selection", text: "first" },
+      { at: 3, type: "app-selection", text: "second", cell: "flow" },
+    ]);
+    const items = legacy.items.filter((i) => i.kind === "app-selection");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ text: "second", cell: "flow" });
+
+    const droppedAll = composeIntent([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "app-selection", text: "was here" },
+      { at: 3, type: "app-selection-drop" },
+    ]);
+    expect(droppedAll.items.some((i) => i.kind === "app-selection")).toBe(false);
+    expect(droppedAll.prompt).toBe("");
+  });
+
+  it("is a no-op without an open thread (a selection rides a turn, never opens one)", () => {
     const engine = armedEngine();
     expect(engine.appSelection({ text: "stray" })).toBe(false);
     expect(engine.appSelectionDrop()).toBe(false);
@@ -420,16 +547,38 @@ describe("app selection (the pre-arm page selection riding the turn)", () => {
 describe("code selection (the reader's contribution, rendered at lowering time)", () => {
   it("opens the thread like a contribution and inlines a short selection", () => {
     const engine = armedEngine();
-    expect(engine.codeSelection({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1" })).toBe(true);
+    expect(engine.codeSelection({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1" })).toBe(
+      "code_1",
+    );
     expect(engine.threadOpen).toBe(true);
     expect(
       engine.events.some((e) => e.type === "thread-open" && e.trigger === "contribution"),
     ).toBe(true);
     const composed = composeIntent(engine.events);
     expect(composed.items.map((i) => i.kind)).toEqual(["code-selection"]);
+    expect(composed.items[0]).toMatchObject({ marker: "code_1" });
     expect(composed.prompt).toBe("Regarding `src/a.ts:5:1`: `const x = 1;`");
     // Structured code is NOT transcript text — corrections can't touch it.
     expect(composed.transcript).toBe("");
+  });
+
+  it("code-selection-drop retracts exactly one chip, like deleting a screenshot", () => {
+    const engine = armedEngine();
+    const first = engine.codeSelection({ text: "const a = 1;", sourceLoc: "src/a.ts:1:1" });
+    engine.codeSelection({ text: "const b = 2;", sourceLoc: "src/b.ts:2:2" });
+    expect(first).toBe("code_1");
+    engine.dropCodeSelection(first ?? "");
+
+    const composed = composeIntent(engine.events);
+    // The retracted selection vanishes from the composition; the kept one stays.
+    expect(composed.items.map((i) => i.kind)).toEqual(["code-selection"]);
+    expect(composed.items[0]).toMatchObject({ marker: "code_2" });
+    expect(composed.prompt).toBe("Regarding `src/b.ts:2:2`: `const b = 2;`");
+    // ...but the event itself stays in the stream (append-only; traces keep it).
+    expect(engine.events.some((e) => e.type === "code-selection" && e.marker === "code_1")).toBe(
+      true,
+    );
+    expect(engine.events.at(-1)).toMatchObject({ type: "code-selection-drop", marker: "code_1" });
   });
 
   it("fences a long selection under its location header", () => {
@@ -464,7 +613,49 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
   it("is a no-op when not armed (a contribution needs an armed turn to join)", () => {
     let t = 0;
     const engine = new Engine({}, () => ++t);
-    expect(engine.codeSelection({ text: "x" })).toBe(false);
+    expect(engine.codeSelection({ text: "x" })).toBeUndefined();
     expect(engine.events).toHaveLength(0);
+  });
+});
+
+describe("selection render helpers (exported — the channel's live resolver re-uses them)", () => {
+  // The realtime submode resolves a bare selection id from `submit_intent`
+  // back to the SAME rendering composeIntent inlines — one implementation, so
+  // these pin that the exported helpers ARE that rendering.
+
+  it("renderAppSelection: short → inline sentence with the attribution parenthetical", () => {
+    expect(
+      renderAppSelection({
+        text: "the histogram title",
+        sourceLoc: "src/Hist.tsx:10:2",
+        cell: "hist",
+      }),
+    ).toBe(
+      'Regarding the on-screen selection "the histogram title" ' +
+        "(authored at src/Hist.tsx:10:2; produced by cell hist)",
+    );
+  });
+
+  it("renderAppSelection: long → fenced block (matches the compose inline form)", () => {
+    const long = "a very long run of selected page text ".repeat(10).trim();
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.appSelection({ text: long, sourceLoc: "src/Doc.tsx:3:1" });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt.trim()).toBe(
+      renderAppSelection({ text: long, sourceLoc: "src/Doc.tsx:3:1" }).trim(),
+    );
+  });
+
+  it("renderCodeSelection: short → inline; long → fenced under its locator", () => {
+    expect(renderCodeSelection({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1" })).toBe(
+      "Regarding `src/a.ts:5:1`: `const x = 1;`",
+    );
+    const code = Array.from({ length: 12 }, (_, i) => `line ${i} of something long enough`).join(
+      "\n",
+    );
+    const block = renderCodeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
+    expect(block).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
+    expect(block).toContain(`${code}\n\`\`\``);
   });
 });

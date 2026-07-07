@@ -44,7 +44,13 @@ describe("startWebServer", () => {
 
     const health = await fetch(`${base}/health`);
     expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({ ok: true, pid: process.pid });
+    // host reports the bound address (loopback unless the launcher widens it) —
+    // `aiui paint url` reads it to decide which URLs an iPad could open.
+    expect(await health.json()).toMatchObject({
+      ok: true,
+      pid: process.pid,
+      host: "127.0.0.1",
+    });
 
     const ok = await fetch(`${base}/prompt`, {
       method: "POST",
@@ -519,5 +525,119 @@ describe("startWebServer reload (hot-reload the lowering layer in place)", () =>
       },
       { timeout: 2000 },
     );
+  });
+});
+
+describe("startWebServer session bus HTTP surface (/session/peers + /session/publish)", () => {
+  let server: WebServer | undefined;
+  const openSockets: WebSocket[] = [];
+
+  afterEach(async () => {
+    for (const ws of openSockets.splice(0)) {
+      ws.close();
+    }
+    await server?.close();
+    server = undefined;
+  });
+
+  /** A raw `/session` view: greets with `hello`, records every hub push. */
+  async function openView(hello: Record<string, unknown>) {
+    if (!server) {
+      throw new Error("server not started");
+    }
+    const ws = new WebSocket(`ws://127.0.0.1:${server.port}/session`);
+    openSockets.push(ws);
+    const received: Array<Record<string, unknown>> = [];
+    ws.on("message", (data) => received.push(JSON.parse(data.toString())));
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    ws.send(JSON.stringify({ v: 1, type: "hello", ...hello }));
+    // The snapshot reply names this connection — the id external callers target.
+    await vi.waitFor(() => expect(received.some((m) => m.type === "snapshot")).toBe(true));
+    const snapshot = received.find((m) => m.type === "snapshot") as { clientId: string };
+    return { ws, received, clientId: snapshot.clientId };
+  }
+
+  it("lists peers and delivers a targeted server publish end to end", async () => {
+    server = await startWebServer({ onPrompt: () => {} });
+    const base = `http://127.0.0.1:${server.port}`;
+
+    // Nothing connected yet: an empty peer list, and a publish has nobody to reach.
+    expect(await (await fetch(`${base}/session/peers`)).json()).toEqual({
+      ok: true,
+      peers: [],
+      armed: false,
+    });
+
+    const app = await openView({ role: "app", label: "Demo", url: "http://localhost:5173/" });
+    const peers = await (await fetch(`${base}/session/peers`)).json();
+    expect(peers.peers).toEqual([
+      { clientId: app.clientId, role: "app", label: "Demo", url: "http://localhost:5173/" },
+    ]);
+
+    // The cached `armed` slot rides along on both routes.
+    app.ws.send(JSON.stringify({ v: 1, type: "set", slot: "armed", value: true }));
+    await vi.waitFor(async () => {
+      expect((await (await fetch(`${base}/session/peers`)).json()).armed).toBe(true);
+    });
+
+    const payload = { kind: "selection", text: "const x = 1;", sourceLoc: "src/a.ts:1:1" };
+    const res = await fetch(`${base}/session/publish`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId: app.clientId, topic: "contribution", payload }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      delivered: [
+        { clientId: app.clientId, role: "app", label: "Demo", url: "http://localhost:5173/" },
+      ],
+      armed: true,
+    });
+    await vi.waitFor(() => expect(app.received.some((m) => m.type === "publish")).toBe(true));
+    expect(app.received.find((m) => m.type === "publish")).toEqual({
+      v: 1,
+      type: "publish",
+      topic: "contribution",
+      payload,
+      from: "server",
+    });
+  });
+
+  it("nacks a publish nobody matches and rejects a missing topic", async () => {
+    server = await startWebServer({ onPrompt: () => {} });
+    const base = `http://127.0.0.1:${server.port}`;
+    const app = await openView({ role: "app" });
+
+    const missing = await fetch(`${base}/session/publish`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId: "nope", topic: "contribution", payload: {} }),
+    });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("nope"),
+    });
+
+    const wrongRole = await fetch(`${base}/session/publish`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "git", topic: "contribution" }),
+    });
+    expect(wrongRole.status).toBe(404);
+
+    const noTopic = await fetch(`${base}/session/publish`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId: app.clientId }),
+    });
+    expect(noTopic.status).toBe(400);
+
+    // None of the misses leaked anything to the connected view.
+    expect(app.received.filter((m) => m.type === "publish")).toHaveLength(0);
   });
 });

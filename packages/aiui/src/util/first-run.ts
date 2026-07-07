@@ -5,15 +5,17 @@
  * Three of `aiui claude`'s behaviors are pure personal preference with real
  * consequences: whether to launch with `--dangerously-skip-permissions`,
  * whether to auto-dismiss the development-channel acknowledgement prompt by
- * typing into the user's terminal, and whether to host the iPad paint surface
- * (an unauthenticated LAN listener). None should be something the user
- * "tagged along" with because a default existed — so the first interactive
- * launch asks (definitively: the prompts have no Enter-through default), and
- * the answers persist to the **user-level** config, after which nothing asks
- * again. Non-interactive sessions never prompt; unset values fall back to the
- * documented defaults (skip: true, nudge: true, paint: false).
+ * typing into the user's terminal, and whether the channel's web server binds
+ * loopback-only or the host interface (the trusted-LAN posture that makes the
+ * whole unauthenticated surface — iPad paint page included — reachable from
+ * the network). None should be something the user "tagged along" with because
+ * a default existed — so the first interactive launch asks (definitively: the
+ * prompts have no Enter-through default), and the answers persist to the
+ * **user-level** config, after which nothing asks again. Non-interactive
+ * sessions never prompt; unset values fall back to the documented defaults
+ * (skip: true, nudge: true, bind: loopback).
  */
-import { type AiuiConfig, updateUserConfig } from "./config";
+import { type AiuiConfig, type ChannelBind, updateUserConfig } from "./config";
 import { type Choice, choose } from "./prompt";
 import { printNote } from "./ui";
 
@@ -27,14 +29,15 @@ const SKIP_PERMISSIONS_QUESTION =
   "preference — aiui works fine either way. Saved as claude.skipPermissions in your user\n" +
   "config; edit or delete it there to change your mind.";
 
-const PAINT_SIDECAR_QUESTION =
-  "One-time setup — host the iPad paint surface?\n" +
-  "With sidecars.paint on, every `aiui claude` session also serves the iPad paint stream: a\n" +
-  "SEPARATE, UNAUTHENTICATED listener on your LAN (the channel itself stays loopback-only).\n" +
-  "Anyone on your network who finds it can watch the shared browser and draw into your armed\n" +
-  "prompt — fine on a home network, not on café Wi-Fi. `aiui paint url` prints the URL to open\n" +
-  "on the iPad. Saved as sidecars.paint in your user config; per-launch flags\n" +
-  "(--aiui-sidecar/--aiui-no-sidecar paint) always win.";
+const CHANNEL_BIND_QUESTION =
+  "One-time setup — where should the channel's web server bind?\n" +
+  "Binding the HOST interface puts the session's whole web surface on your network,\n" +
+  "UNAUTHENTICATED — the iPad paint page (`aiui paint url` prints its URL), but also prompt\n" +
+  "injection, /debug, and every sidecar. That's the simple, single-port way to use the iPad —\n" +
+  "on a network that is yours alone (a home LAN), not on café Wi-Fi. LOOPBACK keeps everything\n" +
+  "this-machine-only; reaching it from an iPad is then up to you — tunnel the channel port\n" +
+  "however you like (Tailscale, `ssh -L`). Saved as channel.bind in your user config;\n" +
+  "--aiui-bind wins per launch.";
 
 const ENTER_NUDGE_QUESTION =
   "One-time setup — auto-dismiss Claude Code's channel prompt?\n" +
@@ -72,12 +75,12 @@ export async function ensureLaunchChoices(
     updated = persist(updated, "enterNudge", answer === "y");
   }
 
-  if (updated.sidecars?.paint === undefined) {
-    const answer = await ask(PAINT_SIDECAR_QUESTION, [
-      { key: "y", label: "yes — host the iPad paint surface on my (trusted) LAN" },
-      { key: "n", label: "no — I'll pass --aiui-sidecar paint when I want it" },
+  if (updated.channel?.bind === undefined) {
+    const answer = await ask(CHANNEL_BIND_QUESTION, [
+      { key: "h", label: "host — reachable on my (trusted) network; the iPad just works" },
+      { key: "l", label: "loopback — this machine only; I'll tunnel when I want the iPad" },
     ]);
-    updated = persistSidecar(updated, "paint", answer === "y");
+    updated = persistBind(updated, answer === "h" ? "host" : "loopback");
   }
 
   return updated;
@@ -95,10 +98,10 @@ function persist(
   return { ...config, claude: { ...config.claude, [key]: value } };
 }
 
-function persistSidecar(config: AiuiConfig, key: "paint", value: boolean): AiuiConfig {
+function persistBind(config: AiuiConfig, value: ChannelBind): AiuiConfig {
   const file = updateUserConfig((c) => {
-    c.sidecars = { ...c.sidecars, [key]: value };
+    c.channel = { ...c.channel, bind: value };
   });
-  printNote(`wrote sidecars.${key}: ${value} to ${file}`);
-  return { ...config, sidecars: { ...config.sidecars, [key]: value } };
+  printNote(`wrote channel.bind: ${value} to ${file}`);
+  return { ...config, channel: { ...config.channel, bind: value } };
 }

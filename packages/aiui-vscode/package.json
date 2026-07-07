@@ -1,0 +1,84 @@
+{
+  "name": "@habemus-papadum/aiui-vscode",
+  "version": "0.2.0+dev",
+  "description": "VS Code extension: a selection provider for the aiui dev overlay — pick a connected browser tab and send editor selections to it.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-vscode"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "displayName": "aiui",
+  "publisher": "habemus-papadum",
+  "categories": [
+    "Other"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiui.pickBrowserTab",
+        "category": "aiui",
+        "title": "Pick Browser Tab"
+      },
+      {
+        "command": "aiui.sendSelection",
+        "category": "aiui",
+        "title": "Send Selection to Browser Tab"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "aiui.sendSelection",
+          "when": "editorHasSelection",
+          "group": "9_aiui"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build && node build-extension.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "vsix": "node build-extension.mjs --vsix"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-util": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0"
+  }
+}

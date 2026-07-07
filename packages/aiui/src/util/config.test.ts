@@ -81,6 +81,14 @@ describe("readConfigFile", () => {
     );
   });
 
+  it("accepts and validates channel.bind", () => {
+    const path = write("bind.json", { channel: { bind: "host" } });
+    expect(readConfigFile(path)?.channel?.bind).toBe("host");
+    expect(() => readConfigFile(write("bad.json", { channel: { bind: "0.0.0.0" } }))).toThrow(
+      /invalid channel.bind "0\.0\.0\.0"/,
+    );
+  });
+
   it("accepts and validates claude.enterNudge", () => {
     const path = write("nudge.json", { claude: { enterNudge: false } });
     expect(readConfigFile(path)?.claude?.enterNudge).toBe(false);
@@ -162,6 +170,7 @@ describe("loadAiuiConfig", () => {
   it("is empty when neither file exists", () => {
     expect(loadAiuiConfig(join(dir, "empty-project"))).toEqual({
       claude: {},
+      channel: {},
       sidecars: {},
       chrome: {},
     });

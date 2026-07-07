@@ -10,11 +10,12 @@
  *    here can emit a `notifications/claude/channel` — lowered prompts land on
  *    **stdout** as delimited blocks instead. There is no code path to a
  *    session.
- *  - **No `registerServer`.** A debug server must not pollute the shared
- *    registry that `aiui vite` / `quick` select real sessions from — if it
- *    did, a prompt meant for a session could be routed here (or a human could
- *    pick a server that answers to nobody). It is reachable only by its
- *    printed port.
+ *  - **Registered as `debug`.** The server joins the shared registry like a
+ *    real one (so selectors — `quick`, `aiui vite`, the VS Code extension —
+ *    can offer it), but its entry carries `debug: true` and an optional
+ *    display `--name` ("aiui workbench"). Every selector marks such entries,
+ *    and nothing *auto*-picks one (see select.ts): connecting a tool to a
+ *    server that answers to nobody is always a human's deliberate choice.
  *
  * Everything else the real channel hosts is fair game — including session
  * sidecars (`--sidecars`, the same descriptor contract as `mcp`): a client
@@ -44,19 +45,27 @@
  *   --- end ---
  */
 
+import { randomUUID } from "node:crypto";
 import { channelSourceDir, watchChannelSource } from "../hot";
 import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
 import { createJsonlRecorder, type JsonlRecorder } from "../recording";
+import { registerServer } from "../registry";
 import type { Sidecar } from "../sidecar";
 import { projectCacheDir } from "../trace";
 import { startWebServer } from "../web";
 
 export interface ServeOptions {
   /**
-   * Label for stderr logging and the trace session label (see trace.ts's
-   * `sessionLabel`) — a debug server is never registered.
+   * The registry address (defaults to a UUID, like `mcp`), doubling as the
+   * stderr-logging and trace-session label (see trace.ts's `sessionLabel`).
    */
   tag?: string;
+  /**
+   * Display name for the registry entry (`--name`, e.g. "aiui workbench") —
+   * how selectors title this server, since a debug server has no owning
+   * Claude Code session to be recognised by.
+   */
+  name?: string;
   /** Record every frame-log entry as JSONL under `<cache>/recordings/`. */
   record?: boolean;
   /**
@@ -167,6 +176,15 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
   // sockets drop with 1012 and the next turn runs the new code. The workbench
   // spawns serve with the flag set, so pipeline edits apply without a restart.
   // POST /debug/api/reload remains the always-on manual trigger.
+  // Join the shared registry, marked as debug (see the header: selectors show
+  // the mark, and never auto-pick a debug entry). Same lifecycle as `mcp`:
+  // remove on close, with an exit backstop for paths that skip close().
+  const registration = registerServer(web.port, options.tag ?? randomUUID(), {
+    debug: true,
+    ...(options.name !== undefined ? { name: options.name } : {}),
+  });
+  process.once("exit", registration.remove);
+
   let stopWatch: (() => void) | undefined;
   if (process.env.AIUI_CHANNEL_WATCH === "1") {
     const srcDir = channelSourceDir();
@@ -205,6 +223,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     }
     closed = true;
     stopWatch?.();
+    registration.remove();
     await web.close().catch(() => {});
     await recorder?.close();
   };
@@ -224,9 +243,9 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     `AIUI_CHANNEL_SERVE ${JSON.stringify({ port: web.port, pid: process.pid, debug: true })}\n`,
   );
   process.stderr.write(
-    `[aiui-channel serve] up — ${options.tag !== undefined ? `tag=${options.tag} ` : ""}` +
-      `pid=${process.pid} port=${web.port} cache=${cacheDir} ` +
-      "(debug: not registered, no MCP — prompts print to stdout)\n",
+    `[aiui-channel serve] up — ${options.name !== undefined ? `name=${JSON.stringify(options.name)} ` : ""}` +
+      `tag=${registration.entry.tag} pid=${process.pid} port=${web.port} cache=${cacheDir} ` +
+      "(registered as debug, no MCP — prompts print to stdout)\n",
   );
 
   return { port: web.port, close };

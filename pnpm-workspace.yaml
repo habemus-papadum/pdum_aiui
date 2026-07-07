@@ -5,4 +5,10 @@ packages:
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)
 allowBuilds:
+  # @vscode/vsce (aiui-vscode's .vsix packager) drags these two in; neither
+  # build script matters for `vsce package` — keytar's native build backs the
+  # legacy credential store, vsce-sign's postinstall fetches its marketplace
+  # signing binary — so both are explicitly denied, not trusted.
+  "@vscode/vsce-sign": false
   esbuild: true
+  keytar: false

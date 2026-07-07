@@ -25,10 +25,13 @@
  *    transcribed here; the produced `transcript-final` event is both merged
  *    into the stream and pushed back to the client as a `lowered` message.
  *  - `context`  → JSON `{ selection }`: the on-screen selection, at most once —
- *    the LEGACY carrier. Current clients ride the selection on the stream
- *    itself as an `app-selection` event (emitted at thread-open, re-emitted on
- *    change, retracted by `app-selection-drop`); the fin wrap prefers the
- *    stream's selection and falls back to this chunk for older clients.
+ *    the LEGACY carrier. Current clients ride selections on the stream itself
+ *    as positional `app-selection` events (marker `sel_N`; one at thread-open,
+ *    one per mid-turn selection, each retractable by marker via
+ *    `app-selection-drop`), which `composeIntent` renders INLINE in the body
+ *    at their stream position. Only this legacy chunk still lowers through the
+ *    context preamble (`selectionSections`) — and only when the stream carried
+ *    no `app-selection` events of its own.
  *
  * A correction event that arrives without a `patch` while the hello selected
  * the OpenAI corrector is a request: the V4A diff runs here (against the current
@@ -69,8 +72,19 @@ import { type Corrector, openaiCorrector } from "./correct";
 import type { CallCost } from "./cost";
 import type { ChunkDescriptor } from "./frame";
 import { DEFAULT_GEMINI_LIVE_MODEL, openGeminiLiveSession } from "./gemini-live";
-import { type LabelEntry, resolveSegments } from "./live-resolve";
-import { LIVE_NUDGE_TEXT, type LiveSession, type LiveSessionCallbacks } from "./live-session";
+import {
+  type LabelEntry,
+  resolveSegments,
+  type SelectionEntry,
+  selectionInjectionLabel,
+  selectionRetractionLabel,
+} from "./live-resolve";
+import {
+  LIVE_COMPOSER_INSTRUCTIONS,
+  LIVE_NUDGE_TEXT,
+  type LiveSession,
+  type LiveSessionCallbacks,
+} from "./live-session";
 import { DEFAULT_OPENAI_LIVE_MODEL, openOpenAiLiveSession } from "./openai-live";
 import {
   asSelection,
@@ -589,7 +603,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // (its bytes are saved then, not at fin) and wired into the matching shot
   // event so fin does no disk I/O.
   const shotPaths = new Map<string, string>();
+  // The LEGACY context-chunk selection (older clients). Ignored the moment the
+  // stream carries its own `app-selection` events — those render inline in the
+  // body, and the preamble section must not duplicate them.
   let selection: SelectionContext | undefined;
+  let streamHasSelection = false;
   let engagedSilenceTrim = false;
   let engagedImageDownscale = false;
 
@@ -1073,13 +1091,27 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         // raw input frames. (The composed/fin stages then show what they
         // lowered to.)
         if (event.type === "app-selection") {
+          // The stream carries its own selections now: they render INLINE in
+          // the body (composeIntent), so the legacy context-chunk preamble
+          // must stand down for this turn or the selection would ride twice.
+          streamHasSelection = true;
           const { at: _at, type: _type, ...data } = event;
           trace?.record({ kind: "ir", label: "app selection", data });
         } else if (event.type === "code-selection") {
           const { at: _at, type: _type, ...data } = event;
           trace?.record({ kind: "ir", label: "code selection", data });
         } else if (event.type === "app-selection-drop") {
-          trace?.record({ kind: "ir", label: "app selection dropped", data: {} });
+          trace?.record({
+            kind: "ir",
+            label: "app selection dropped",
+            data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
+          });
+        } else if (event.type === "code-selection-drop") {
+          trace?.record({
+            kind: "ir",
+            label: "code selection dropped",
+            data: { marker: event.marker },
+          });
         }
         // talk-end is the segment-commit boundary for the streaming transcriber
         // (PTT stays the contract — no `last` flag on the audio frames). The
@@ -1315,13 +1347,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
 
     // A cancelled turn (or one with nothing to say) lowers to no notification.
     if (!cancelled && composed.prompt !== "") {
-      // The app selection: the stream's own `app-selection` event (folded by
-      // composeIntent — last one wins, drops honored) is the record; the
-      // legacy send-time `context` chunk stays as the fallback for older
-      // clients. Either way it lowers through selectionSections, so the
-      // wording is identical to text-concat's selection block.
+      // App selections are stream events, folded by composeIntent into the
+      // BODY at their positions (marker-keyed latest-wins, drops honored) —
+      // already part of composed.prompt. The preamble's selection section
+      // survives only for the legacy send-time `context` chunk (older
+      // clients), and stands down when the stream carried its own selections.
       const prompt = wrapWithContext(
-        [...staticSections, ...selectionSections(composed.appSelection ?? selection)],
+        [...staticSections, ...selectionSections(streamHasSelection ? undefined : selection)],
         composed.prompt,
       );
       const meta = Object.keys(composed.meta).length > 0 ? composed.meta : undefined;
@@ -1389,8 +1421,9 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
  * The classic {@link intentProcessor} above assembles a document and lets
  * `composeIntent` compile it; here a live conversational session
  * ({@link LiveSession}, Gemini or OpenAI) is held per-thread, the *model* composes
- * via `submit_intent`, and the channel re-attaches the withheld shot metadata as
- * it resolves the call. The event stream stays the IR of record — the chronicle —
+ * via `submit_intent`, and the channel re-attaches the withheld metadata — shot
+ * paths/elements, full selection renderings — as it resolves the call. The event
+ * stream stays the IR of record — the chronicle —
  * so the trace debugger keeps working and the fin ladder's step-3 fallback
  * (`composeIntent` over the transcripts) is free.
  *
@@ -1418,14 +1451,26 @@ function realtimeIntentProcessor(
   // transcripts). It is the fallback compiler's input and the trace's record.
   let events: IntentEvent[] = [];
   let selection: SelectionContext | undefined;
-  // The stream's own app selection (last `app-selection` event, drop honored) —
-  // preferred over the legacy `context` chunk at the fin wrap, same as the
-  // classic path (there composeIntent folds it; here the chronicle is folded
-  // incrementally because the tool-call path never runs composeIntent).
-  let chronicleSelection: SelectionContext | undefined;
+  // Whether the stream carried its own app selections. The live model sees each
+  // one as an injected labeled item (below), so the context preamble stands
+  // down on BOTH fin paths: the tool-call body is the model's composition
+  // (authoritative — a selection it chose not to reference does not sneak back
+  // in) and the step-3 fallback's composeIntent renders every carried selection
+  // INLINE. Only the legacy `context` chunk (older clients, no stream events)
+  // still lowers through the preamble.
+  let chronicleHasSelection = false;
   // Shot metadata kept keyed by label — NEVER sent to the live model; re-attached
   // by resolveSegments at fin (the `<screenshot>` block the agent gets).
   const shotRegistry = new Map<string, LabelEntry>();
+  // Selection payloads keyed by marker (`sel_N`/`code_N`) — the live model sees
+  // only the clipped injection label; the LATEST payload under a marker is
+  // re-attached (full rendering) by resolveSegments at fin. Drops mark entries
+  // retracted rather than deleting them, so a referenced-anyway retraction is
+  // caught and reported at resolve.
+  const selectionRegistry = new Map<string, SelectionEntry>();
+  // Pre-marker clients: whether an id-less selection label was injected (its
+  // markerless drop then retracts "it" rather than naming a marker).
+  let unmarkedSelectionInjected = false;
   // Synthetic, increasing segment ordinals for the model's user-transcript turns
   // (the chronicle needs monotonic segment numbers so the preview fills in order).
   let userSeq = 0;
@@ -1552,6 +1597,7 @@ function realtimeIntentProcessor(
             {
               apiKey: apiKey ?? "",
               model: () => intent.liveModel,
+              instructions: LIVE_COMPOSER_INSTRUCTIONS,
               ...(options.geminiLiveSocketFactory !== undefined
                 ? { socketFactory: options.geminiLiveSocketFactory }
                 : {}),
@@ -1562,6 +1608,7 @@ function realtimeIntentProcessor(
             {
               apiKey: apiKey ?? "",
               model: () => intent.liveModel,
+              instructions: LIVE_COMPOSER_INSTRUCTIONS,
               ...(options.openaiLiveSocketFactory !== undefined
                 ? { socketFactory: options.openaiLiveSocketFactory }
                 : {}),
@@ -1575,6 +1622,9 @@ function realtimeIntentProcessor(
         vendor: intent.liveVendor,
         model: intent.liveModel,
         capabilities: session.capabilities,
+        // The persona actually sent at open (passed above), so the trace shows
+        // the instructions this session ran under — including the commit gate.
+        instructions: LIVE_COMPOSER_INSTRUCTIONS,
       },
     });
   } else {
@@ -1589,6 +1639,55 @@ function realtimeIntentProcessor(
     push([{ at: Date.now(), type: "note", text: message }]);
     pushError(ctx, { source: "voice", message, detail: keyHint });
   }
+
+  // ── selection injection (F2: the moment a selection event arrives) ──────────
+  // The counterpart of the labeled-shot injection below: a compact bracketed
+  // text item ([selection sel_2: …] — live-resolve owns the grammar) rides the
+  // conversation as SILENT context, so the model can ground deictic speech and
+  // reference the id in submit_intent; the full rendering is re-attached at
+  // resolve. A re-emit under the same marker injects an update; a drop injects
+  // an explicit retraction (append-only conversation — nothing can be unseen).
+  const injectSelection = (
+    marker: string | undefined,
+    entry: SelectionEntry,
+    updated: boolean,
+  ): void => {
+    if (session === undefined) {
+      return; // keyless: the chronicle/trace still record the event itself
+    }
+    const text = selectionInjectionLabel(marker, entry, updated);
+    session.injectContextText(text);
+    if (marker === undefined) {
+      unmarkedSelectionInjected = true;
+    }
+    trace?.record({
+      kind: "info",
+      label: `live selection ${marker ?? "(unmarked)"}`,
+      data: { text },
+    });
+  };
+  const injectRetraction = (marker: string | undefined): void => {
+    if (session === undefined) {
+      return;
+    }
+    const text = selectionRetractionLabel(marker);
+    session.injectContextText(text);
+    trace?.record({
+      kind: "info",
+      label: `live selection ${marker ?? "(unmarked)"} retracted`,
+      data: { text },
+    });
+  };
+  /** The most recent still-carried marker of one kind (for markerless drops). */
+  const latestCarriedMarker = (kind: "app" | "code"): string | undefined => {
+    let found: string | undefined;
+    for (const [marker, entry] of selectionRegistry) {
+      if (entry.kind === kind && entry.retracted !== true) {
+        found = marker;
+      }
+    }
+    return found;
+  };
 
   // ── routing (chronicle accumulation + live injections) ───────────────────────
   const onEventsChunk = (bytes: Uint8Array): void => {
@@ -1614,20 +1713,71 @@ function realtimeIntentProcessor(
           trace?.record({ kind: "info", label: "video-share", data: { on: event.on } });
           break;
         case "app-selection": {
-          // First-class in the trace here too; the fin wrap folds the
-          // chronicle's effective app selection into the context preamble.
-          const { at: _at, type: _type, ...data } = event;
-          chronicleSelection = data;
-          trace?.record({ kind: "ir", label: "app selection", data });
+          // First-class in the trace here too — and injected into the live
+          // conversation on arrival (a labeled item under its marker; a
+          // superseding re-emit under the SAME marker injects an update).
+          chronicleHasSelection = true;
+          const { at: _at, type: _type, marker, ...data } = event;
+          trace?.record({
+            kind: "ir",
+            label: "app selection",
+            data: { ...(marker !== undefined ? { marker } : {}), ...data },
+          });
+          const entry: SelectionEntry = { kind: "app", item: data };
+          const updated = marker !== undefined && selectionRegistry.has(marker);
+          if (marker !== undefined) {
+            selectionRegistry.set(marker, entry);
+          }
+          injectSelection(marker, entry, updated);
           break;
         }
-        case "app-selection-drop":
-          chronicleSelection = undefined;
-          trace?.record({ kind: "ir", label: "app selection dropped", data: {} });
+        case "app-selection-drop": {
+          // Retract exactly one: a marker'd drop only clears its own marker
+          // (a markerless drop — pre-marker clients — clears whatever rides).
+          // The registry entry stays, marked retracted (a referenced-anyway id
+          // is caught at resolve), and the model is told to disregard it.
+          trace?.record({
+            kind: "ir",
+            label: "app selection dropped",
+            data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
+          });
+          const marker = event.marker ?? latestCarriedMarker("app");
+          const entry = marker !== undefined ? selectionRegistry.get(marker) : undefined;
+          if (entry !== undefined && entry.retracted !== true) {
+            entry.retracted = true;
+            injectRetraction(marker);
+          } else if (marker === undefined && unmarkedSelectionInjected) {
+            unmarkedSelectionInjected = false;
+            injectRetraction(undefined);
+          }
           break;
+        }
         case "code-selection": {
-          const { at: _at, type: _type, ...data } = event;
-          trace?.record({ kind: "ir", label: "code selection", data });
+          const { at: _at, type: _type, marker, ...data } = event;
+          trace?.record({
+            kind: "ir",
+            label: "code selection",
+            data: { ...(marker !== undefined ? { marker } : {}), ...data },
+          });
+          const entry: SelectionEntry = { kind: "code", item: data };
+          const updated = marker !== undefined && selectionRegistry.has(marker);
+          if (marker !== undefined) {
+            selectionRegistry.set(marker, entry);
+          }
+          injectSelection(marker, entry, updated);
+          break;
+        }
+        case "code-selection-drop": {
+          trace?.record({
+            kind: "ir",
+            label: "code selection dropped",
+            data: { marker: event.marker },
+          });
+          const entry = selectionRegistry.get(event.marker);
+          if (entry !== undefined && entry.retracted !== true) {
+            entry.retracted = true;
+            injectRetraction(event.marker);
+          }
           break;
         }
         case "correction": {
@@ -1727,7 +1877,8 @@ function realtimeIntentProcessor(
       return;
     }
 
-    // Step 2: nudge, then await the model's submit_intent.
+    // The commit gate: inject the sentinel — per the instructions, the ONLY
+    // message that authorizes submit_intent — then await the model's call.
     session.nudgeSubmit();
     trace?.record({ kind: "info", label: "live nudge", data: { text: LIVE_NUDGE_TEXT } });
     const call = await session.drainToolCall(LIVE_DRAIN_TIMEOUT_MS);
@@ -1735,7 +1886,10 @@ function realtimeIntentProcessor(
     let body: string;
     if (call !== null && call.segments.length > 0) {
       trace?.record({ kind: "ir", label: "live tool call", data: { segments: call.segments } });
-      const resolved = resolveSegments(call.segments, shotRegistry, composeOptions);
+      const resolved = resolveSegments(call.segments, shotRegistry, {
+        ...composeOptions,
+        selections: selectionRegistry,
+      });
       body = resolved.body;
       call.respond(true);
       if (resolved.missingRefs.length > 0) {
@@ -1745,14 +1899,20 @@ function realtimeIntentProcessor(
           data: { missing: resolved.missingRefs },
         });
       }
-      // One ref row per marker (the viewer counts resolved via `resolved === true
-      // || path`), a resolved marker carrying the shot path it re-attached.
+      // One ref row per marker — shots AND selections (the viewer counts
+      // resolved via `resolved === true || path`): a resolved shot carries the
+      // path it re-attached; a retracted selection the model referenced anyway
+      // is marked so "did my retraction hold?" reads off this row.
       const refs = [
         ...resolved.resolvedMarkers.map((marker) => {
           const path = shotRegistry.get(marker)?.path;
           return { marker, resolved: true, ...(path !== undefined ? { path } : {}) };
         }),
-        ...resolved.missingRefs.map((marker) => ({ marker, resolved: false })),
+        ...resolved.missingRefs.map((marker) => ({
+          marker,
+          resolved: false,
+          ...(selectionRegistry.get(marker)?.retracted === true ? { retracted: true } : {}),
+        })),
       ];
       trace?.record({ kind: "ir", label: "live resolved", data: { body, refs } });
     } else {
@@ -1771,8 +1931,15 @@ function realtimeIntentProcessor(
     }
 
     if (body !== "") {
+      // Stream selections never ride the preamble: the model saw each one as
+      // an injected labeled item, so on the tool-call path its composition is
+      // authoritative (a selection it chose not to reference stays out), and
+      // the fallback's composeIntent renders every carried selection INLINE.
+      // Only the legacy `context` chunk (older clients, no stream events)
+      // still lowers through the preamble — on both paths.
+      const preambleSelection = chronicleHasSelection ? undefined : selection;
       const prompt = wrapWithContext(
-        [...staticSections, ...selectionSections(chronicleSelection ?? selection)],
+        [...staticSections, ...selectionSections(preambleSelection)],
         body,
       );
       ctx.push?.({
@@ -1812,6 +1979,7 @@ function realtimeIntentProcessor(
       // the upstream live session so its WebSocket is not leaked (the S2 teardown).
       events = [];
       shotRegistry.clear();
+      selectionRegistry.clear();
       session?.close();
     },
   };

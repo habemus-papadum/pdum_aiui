@@ -27,11 +27,15 @@ into your live, permission-skipping Claude Code session (loaded via
 `--dangerously-load-development-channels`). Think about what that means:
 
 - Anything that can reach the channel's local web backend can steer your agent.
-- With the paint sidecar enabled (`--aiui-sidecar paint`, or `sidecars.paint` in config — asked at
-  first run, never silently on), the channel additionally opens a separate
-  **LAN-bound, unauthenticated** listener for the [iPad paint stream](./paint-stream): anyone on
-  your network who finds it can watch the shared browser and draw into your armed prompt. Trusted
-  networks only.
+- The [iPad paint stream](./paint-stream) rides the same port (its sidecar is on by default —
+  it costs nothing until something connects).
+- **Who can reach that port is your `channel.bind` choice** — asked at first run, never silently
+  widened. `loopback` (the default) keeps the whole surface this-machine-only; using the iPad then
+  means tunneling the port yourself (Tailscale, `ssh -L`). `host` binds `0.0.0.0`: one port, and
+  everything on it — prompt injection, `/debug`, the paint page — is reachable by
+  **anyone on your network, unauthenticated**. That's the deliberate trusted-LAN posture: the
+  boundary is your network, so choose it only where the network is genuinely yours alone (a home
+  LAN — not café Wi-Fi, not an office network shared with other people).
 - The channel code itself runs inside your session's trust boundary. If you don't understand what
   this code does, **the custom channel could do anything to your computer**.
 
@@ -77,5 +81,5 @@ credentials you can revoke.
       `claude.skipPermissions` in [config.json](./config)). Choosing a specific
       `--permission-mode` is still open.
 - [ ] Document the channel's exact attack surface (what listens where, who can connect).
-- [ ] Narrow the channel backend to loopback-only authenticated clients (partially done: it binds
-      to `127.0.0.1`).
+- [ ] Narrow the channel backend to authenticated clients (partially done: it binds to
+      `127.0.0.1` unless `channel.bind: "host"` deliberately widens it).

@@ -19,12 +19,8 @@ const testDeps = () => ({
 });
 
 describe("resolveSidecars", () => {
-  it("emits nothing by default — no sidecar auto-enables today", () => {
-    expect(resolveSidecars("/proj", { enable: [], disable: [] }, testDeps())).toEqual([]);
-  });
-
-  it("force-enables paint by name (it is opt-in only: LAN listener)", () => {
-    const out = resolveSidecars("/proj", { enable: ["paint"], disable: [] }, testDeps());
+  it("emits the always-on paint sidecar by default (no flags)", () => {
+    const out = resolveSidecars("/proj", { enable: [], disable: [] }, testDeps());
     expect(out).toEqual([paintDescriptor("/proj")]);
     // The exact contract shape, threading the root into options.
     expect(out[0]).toEqual({
@@ -35,6 +31,10 @@ describe("resolveSidecars", () => {
     });
   });
 
+  it("disable turns off the always-on paint", () => {
+    expect(resolveSidecars("/proj", { enable: [], disable: ["paint"] }, testDeps())).toEqual([]);
+  });
+
   it("disable wins over an explicit enable of the same name", () => {
     expect(resolveSidecars("/proj", { enable: ["paint"], disable: ["paint"] }, testDeps())).toEqual(
       [],
@@ -42,8 +42,8 @@ describe("resolveSidecars", () => {
   });
 
   it("ignores enable names the CLI doesn't know how to construct", () => {
-    expect(
-      resolveSidecars("/proj", { enable: ["bogus", "paint"], disable: [] }, testDeps()),
-    ).toEqual([paintDescriptor("/proj")]);
+    expect(resolveSidecars("/proj", { enable: ["bogus"], disable: [] }, testDeps())).toEqual([
+      paintDescriptor("/proj"),
+    ]);
   });
 });

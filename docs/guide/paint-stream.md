@@ -13,12 +13,12 @@ with **JPEG frames** over the websocket as the simple, works-everywhere option �
 backup when WebRTC can't run or its connection fails. Control and ink are identical either way.
 
 ::: danger Read before running
-The iPad-facing surface binds the **LAN** and is **unauthenticated** — by design, for a personal
-trusted network. Anyone who can reach the port can view and draw on the connected browser. Use it
-only on a network you trust, and don't run it on café Wi-Fi. The channel server itself stays
-**loopback-only**: when the paint sidecar is enabled it opens a *separate* LAN listener carrying
-only the paint surface — which is why the sidecar is **opt-in, never auto-enabled**. See
-[Read before running](./warning).
+The paint surface is **unauthenticated** — by design, for a personal trusted network. Anyone who
+can reach the port can view and draw on the connected browser. In an aiui session it rides the
+channel's **one port**, so who can reach it is the channel's bind decision (`channel.bind`, asked
+at first run): `loopback` keeps everything this-machine-only (the iPad then needs a tunnel you
+own — Tailscale, `ssh -L`); `host` puts the whole channel surface on your LAN. Use `host` only on
+a network you trust, and don't run it on café Wi-Fi. See [Read before running](./warning).
 :::
 
 ## The pieces
@@ -43,34 +43,33 @@ only the paint surface — which is why the sidecar is **opt-in, never auto-enab
 
 ## In an aiui session: the paint sidecar
 
-The integrated flow — the iPad draws into the intent tool of the app your agent session is serving —
-is one flag and one command:
+The paint sidecar is **on by default** — it rides the channel's own web server (mounted at
+`/paint`, one port, no extra process or listener), so hosting it costs nothing until something
+connects. The integrated flow — the iPad draws into the intent tool of the app your agent session
+is serving — is one choice and one command:
 
 ```sh
-aiui claude --aiui-sidecar paint    # opt-in: the LAN surface is deliberate (see the warning above)
-aiui paint url                      # prints the URL to open on the iPad
+aiui claude          # first interactive launch asks where the channel binds; answer "host"
+aiui paint url       # prints the URL to open on the iPad
 ```
 
-To make it permanent, answer the first-run prompt (the first interactive `aiui claude` asks, the
-same way it asks about skip-permissions) or set it directly — the durable switch is
-[`sidecars.paint`](./config#all-keys):
+Everything hangs off the channel's **bind**:
 
-```sh
-aiui config set sidecars.paint true   # every launch hosts the paint surface
-```
-
-Per-launch flags always win over the config (`--aiui-no-sidecar paint` for one session off).
-
-The channel then hosts the paint backend on two faces:
-
-- **loopback**, mounted at `/paint` on the channel's own server — the app page already knows that
-  port (`window.__AIUI__.port`), so the overlay's paint host connects with zero configuration: any
+- The **desktop browser** connects locally either way: the app page already knows the channel port
+  (`window.__AIUI__.port`), so the overlay's paint host connects with zero configuration — any
   page served with the dev overlay (turn-hosting views) auto-joins as a paintable host when the
-  sidecar answers `GET /paint/info`;
-- **LAN**, a separate listener owned by the sidecar (preferred port 8788, OS-assigned when taken) —
-  the iPad's entrance, since an iPad can't reach the channel's loopback port. `aiui paint url` reads
-  each running channel's `/paint/info` and prints the LAN URL(s) to copy to the iPad (on a Mac,
-  Universal Clipboard pastes straight across).
+  sidecar answers `GET /paint/info`.
+- The **iPad** opens `http://<your-machine>:<channelPort>/paint/`. With `channel.bind: "host"`
+  (the trusted-LAN posture — see the warning above) that URL works from anywhere on your network;
+  `aiui paint url` prints the exact LAN URL(s) to copy across (on a Mac, Universal Clipboard
+  pastes straight to the iPad). With the default `loopback` bind, nothing off this machine can
+  reach the port — getting the iPad there is then a tunnel of your own making (Tailscale, an
+  `ssh -L <port>:127.0.0.1:<channelPort>` forward from a machine the iPad can reach, …), and
+  `aiui paint url` reminds you of that instead of printing LAN URLs.
+
+The durable switch is [`channel.bind`](./config#all-keys) (asked once at first run, like
+skip-permissions); `--aiui-bind host|loopback` overrides it per launch. To turn the sidecar itself
+off, set `sidecars.paint false` or pass `--aiui-no-sidecar paint`.
 
 Arming from the iPad arms the intent turn; strokes land on the intent tool's ink layer and travel
 into screenshots and the prompt, exactly like mouse ink. When a viewer is waiting on the
@@ -271,4 +270,5 @@ surface.remoteEnd("s1", { x: 140, y: 20 });
   isn't available at all), the host falls back to JPEG frame streaming for the room; with several
   viewers in mixed states, whoever receives frames displays frames.
 - **No Bonjour discovery** — Safari web pages can't browse mDNS, so the CLI prints LAN URLs instead.
-- **One trust boundary** — no auth, no encryption. LAN only.
+- **One trust boundary** — no auth, no encryption. The network you expose it to (or tunnel it
+  over) *is* the boundary.

@@ -98,4 +98,24 @@ describe("registerServer", () => {
     expect(existsSync(reg.file)).toBe(false);
     expect(() => reg.remove()).not.toThrow();
   });
+
+  it("round-trips the debug marker and display name (absent by default)", () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-cache-"));
+    vi.stubEnv("AIUI_CACHE", cache);
+
+    const plain = registerServer(1111, "real");
+    expect(plain.entry.debug).toBeUndefined();
+    expect(plain.entry.name).toBeUndefined();
+    plain.remove();
+
+    const dbg = registerServer(2222, "wb", { debug: true, name: "aiui workbench" });
+    expect(readEntry(dbg.file)).toEqual(dbg.entry);
+    expect(dbg.entry).toMatchObject({ tag: "wb", debug: true, name: "aiui workbench" });
+
+    // Junk in the optional fields is dropped, not fatal — older/foreign writers.
+    writeFileSync(dbg.file, JSON.stringify({ ...dbg.entry, name: 42, debug: "yes" }));
+    const reread = readEntry(dbg.file);
+    expect(reread?.name).toBeUndefined();
+    expect(reread?.debug).toBeUndefined();
+  });
 });

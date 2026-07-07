@@ -7,21 +7,25 @@ import { agentsByPid, type ClaudeAgent, listClaudeAgents } from "./agents";
 import type { RunningServer } from "./registry";
 
 /**
- * Render a server as a selector row. Prefers the owning Claude Code session's
- * name (matched by `ppid`) over a raw pid, since that's how a user recognises
- * which session a channel belongs to; falls back to the pid when the session
- * isn't known.
+ * Render a server as a selector row. Prefers the entry's own display name
+ * (debug servers name themselves — "aiui workbench"), then the owning Claude
+ * Code session's name (matched by `ppid`, how a user recognises which session
+ * a channel belongs to), then the raw pid. Debug entries are always marked:
+ * picking one means prompts print to that server's stdout, not a session.
  */
 export function serverLabel(server: RunningServer, agents: Map<number, ClaudeAgent>): string {
   const agent = agents.get(server.ppid);
-  const who = agent ? agent.name : `pid ${server.ppid}`;
-  return `${who}  ·  ${server.cwd}  ·  port ${server.port}`;
+  const who = server.name ?? (agent ? agent.name : `pid ${server.ppid}`);
+  const mark = server.debug === true ? "  ·  debug" : "";
+  return `${who}  ·  ${server.cwd}  ·  port ${server.port}${mark}`;
 }
 
 /**
  * Prompt the user to pick one of the given running servers, labelling each with
- * its Claude Code session name, working directory, and port. With a single
- * server there's nothing to choose, so it's returned directly.
+ * its name (or Claude Code session), working directory, and port. With a single
+ * *real* server there's nothing to choose, so it's returned directly — but a
+ * lone **debug** server still prompts: connecting to a server that answers to
+ * nobody must be a deliberate choice, never a silent default.
  *
  * @throws if `servers` is empty — callers should handle "none running" before
  * reaching the widget.
@@ -30,7 +34,7 @@ export async function selectMcpServer(servers: RunningServer[]): Promise<Running
   if (servers.length === 0) {
     throw new Error("no running aiui MCP servers to choose from");
   }
-  if (servers.length === 1) {
+  if (servers.length === 1 && servers[0].debug !== true) {
     return servers[0];
   }
   const agents = agentsByPid(listClaudeAgents());

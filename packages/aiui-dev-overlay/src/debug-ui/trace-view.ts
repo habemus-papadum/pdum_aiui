@@ -409,6 +409,30 @@ export class TraceView {
       case "correction failed":
         info(String(data?.message ?? "correction failed"));
         return;
+      // Selections: one line of substance — marker (when the stage has one;
+      // old traces don't), text excerpt, locator. Every field is optional so
+      // a pre-marker (or retired-shape) stage renders degraded, not broken.
+      case "app selection": {
+        const marker = typeof data?.marker === "string" ? `${data.marker} · ` : "";
+        const loc = typeof data?.sourceLoc === "string" ? ` @ ${data.sourceLoc}` : "";
+        const cell = typeof data?.cell === "string" ? ` · cell ${data.cell}` : "";
+        info(`${marker}“${clip(String(data?.text ?? ""), 80)}”${loc}${cell}`);
+        return;
+      }
+      case "code selection": {
+        const marker = typeof data?.marker === "string" ? `${data.marker} · ` : "";
+        const loc = typeof data?.sourceLoc === "string" ? `${data.sourceLoc} · ` : "";
+        info(`${marker}${loc}“${clip(String(data?.text ?? ""), 80)}”`);
+        return;
+      }
+      case "app selection dropped":
+      case "code selection dropped":
+        info(
+          typeof data?.marker === "string"
+            ? `${data.marker} retracted (✕ on the chip)`
+            : "retracted (✕ on the chip)",
+        );
+        return;
       case "transcription failed":
         info(String(data?.message ?? "transcription failed"));
         return;

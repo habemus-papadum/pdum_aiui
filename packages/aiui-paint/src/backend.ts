@@ -8,9 +8,8 @@
  * It never listens on a port itself. Three hosts exist today:
  *
  *  - the **channel sidecar** (`./sidecar`): mounts it at `/paint` on the aiui
- *    channel's loopback server (where the app page already knows the port) AND
- *    on a separate LAN listener for the iPad — the channel's loopback-only
- *    posture is untouched;
+ *    channel's one server (where the app page already knows the port; whether
+ *    an iPad can reach it is the channel's bind decision);
  *  - the **standalone demo** (`demo/serve.ts`): a bespoke Express server;
  *  - anything else that can forward a request and an upgrade.
  *

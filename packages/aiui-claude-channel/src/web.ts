@@ -8,8 +8,14 @@
  * frame.ts): the client's initial hello picks a format out of the registry,
  * and each thread of binary frames is decoded with that format's codec and fed
  * to its own processor, which pushes prompts into the session as it sees fit.
- * Binary frames keep audio/screenshot/video payloads raw (never base64'd). It
- * listens on an OS-assigned port, on loopback only.
+ * Binary frames keep audio/screenshot/video payloads raw (never base64'd). The
+ * session bus (`/session`, see session-hub.ts) also gets a small HTTP surface —
+ * `GET /session/peers` + `POST /session/publish` — so external tools on this
+ * machine (the VS Code extension) can see the connected views and hand them a
+ * contribution. It listens on an OS-assigned port, on loopback by default; the
+ * launcher can bind it to the host interface instead ({@link WebServerOptions.host}
+ * — the trusted-LAN posture that lets an iPad reach the paint surface, and
+ * everything else, without a tunnel; see docs/guide/warning.md).
  *
  * Nothing here may write to stdout: in the `mcp` command that stream carries the
  * MCP stdio protocol. Surface problems through the returned promise instead.
@@ -87,6 +93,15 @@ export interface WebServerOptions {
    * then simply re-wraps them and cycles connections).
    */
   loadFormats?: FormatLoader;
+  /**
+   * Address to bind. Defaults to `127.0.0.1` — every channel route is
+   * unauthenticated, so loopback is the safe posture. `0.0.0.0` is the
+   * deliberate trusted-LAN choice (`aiui claude --aiui-bind host` /
+   * `channel.bind: "host"`): the whole surface — prompt injection, `/debug`,
+   * every sidecar (including the iPad paint page) — becomes reachable by
+   * anyone on the network. See docs/guide/warning.md.
+   */
+  host?: string;
   /**
    * Server-level debug mode (the standalone `serve` command sets it). Surfaced
    * on `/health`, `/debug/api/info`, and every hello ack, so clients and tools
@@ -177,11 +192,13 @@ export interface WebServer {
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
- * Start the web backend on `127.0.0.1` — an OS-assigned free port unless
- * {@link WebServerOptions.port} pins one — resolving once it's listening.
+ * Start the web backend — on `127.0.0.1` unless {@link WebServerOptions.host}
+ * widens it, an OS-assigned free port unless {@link WebServerOptions.port}
+ * pins one — resolving once it's listening.
  */
 export async function startWebServer(options: WebServerOptions): Promise<WebServer> {
   const app = express();
+  const bindHost = options.host ?? "127.0.0.1";
   // Body parsing is scoped to the routes that need it (just `/prompt`), NOT
   // global: a sidecar's raw request handler (the reader reads its own POST
   // bodies off the stream) must reach the socket unconsumed.
@@ -212,6 +229,9 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       pid: process.pid,
       ppid: process.ppid,
       generation,
+      // The bound address, so tools can tell a loopback-only server from a
+      // LAN-exposed one (`aiui paint url` decides which URLs to print by it).
+      host: bindHost,
       pageTools: pageTools.summary(),
       session: sessionHub.summary(),
       ...(options.debug === true ? { debug: true } : {}),
@@ -230,6 +250,46 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     } catch (err) {
       res.status(500).json({ ok: false, error: errorMessage(err) });
     }
+  });
+
+  // The session bus's HTTP surface, for external same-host providers (the VS
+  // Code extension) that contribute to the turn without holding a `/session`
+  // socket of their own: `GET /session/peers` lists the connected views (so a
+  // tool can offer "which browser tab?"), and `POST /session/publish` injects a
+  // server-originated publish, targeted at one view (`clientId`), a role, or
+  // everyone. Both report the cached `armed` slot so callers can phrase their
+  // feedback; delivery is not gated on it — the overlay's contribution handler
+  // arms the turn itself when a contribution lands.
+  app.get("/session/peers", (_req, res) => {
+    // Readable cross-origin for the same reason as /health: harmless loopback
+    // metadata a debug page may want to render.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json({ ok: true, peers: sessionHub.peers(), armed: sessionHub.get("armed") === true });
+  });
+
+  app.post("/session/publish", express.json(), (req, res) => {
+    const topic = typeof req.body?.topic === "string" ? req.body.topic : "";
+    if (!topic) {
+      res.status(400).json({ ok: false, error: "expected a non-empty 'topic' field" });
+      return;
+    }
+    const clientId = typeof req.body?.clientId === "string" ? req.body.clientId : undefined;
+    const role = typeof req.body?.role === "string" ? req.body.role : undefined;
+    const delivered = sessionHub.publishFromServer(topic, req.body?.payload, {
+      ...(clientId !== undefined ? { clientId } : {}),
+      ...(role !== undefined ? { role } : {}),
+    });
+    if (delivered.length === 0) {
+      const wanted =
+        clientId !== undefined
+          ? `view "${clientId}"`
+          : role !== undefined
+            ? `a "${role}" view`
+            : "any connected view";
+      res.status(404).json({ ok: false, error: `no connected session view matches ${wanted}` });
+      return;
+    }
+    res.json({ ok: true, delivered, armed: sessionHub.get("armed") === true });
   });
 
   const httpServer = createServer(app);
@@ -500,7 +560,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   await new Promise<void>((resolveListen, rejectListen) => {
     httpServer.once("error", rejectListen);
-    httpServer.listen(options.port ?? 0, "127.0.0.1", () => {
+    httpServer.listen(options.port ?? 0, bindHost, () => {
       httpServer.removeListener("error", rejectListen);
       resolveListen();
     });
