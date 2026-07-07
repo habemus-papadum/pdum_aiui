@@ -11,6 +11,7 @@
 import * as vscode from "vscode";
 import {
   type ChannelEntry,
+  channelLabel,
   fetchPeers,
   listChannels,
   publishSelection,
@@ -26,6 +27,10 @@ interface Target {
   clientId: string;
   label: string;
   url?: string;
+  /** The channel's display title (name/tag, marked when debug). */
+  channel?: string;
+  /** The tab belongs to a debug server (never silently auto-picked). */
+  debug?: boolean;
 }
 
 const TARGET_KEY = "aiui.target";
@@ -33,6 +38,20 @@ const TARGET_KEY = "aiui.target";
 /** A short human name for a peer (title, else URL, else id). */
 function peerLabel(peer: SessionPeer): string {
   return peer.label ?? peer.url ?? peer.clientId;
+}
+
+/** The persisted pick for one of a channel's tabs. */
+function targetFor(channel: ChannelEntry, peer: SessionPeer): Target {
+  return {
+    port: channel.port,
+    tag: channel.tag,
+    cwd: channel.cwd,
+    clientId: peer.clientId,
+    label: peerLabel(peer),
+    channel: channelLabel(channel),
+    ...(peer.url !== undefined ? { url: peer.url } : {}),
+    ...(channel.debug === true ? { debug: true } : {}),
+  };
 }
 
 /** A channel's browser tabs that can ingest a selection (the overlay hosts). */
@@ -59,7 +78,7 @@ export function activate(context: vscode.ExtensionContext): void {
       status.tooltip = new vscode.MarkdownString(
         `aiui — sending selections to **${target.label}**\n\n` +
           `${target.url ?? ""}\n\n` +
-          `channel \`${target.tag}\` · port ${target.port}\n\n\`${target.cwd}\`\n\n` +
+          `channel \`${target.channel ?? target.tag}\` · port ${target.port}\n\n\`${target.cwd}\`\n\n` +
           `_Click to pick a different browser tab._`,
       );
     } else {
@@ -84,7 +103,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const items: TabItem[] = [];
     for (const channel of channels) {
       items.push({
-        label: `${channel.tag} — ${channel.cwd}`,
+        label: `${channelLabel(channel)} — ${channel.cwd}`,
         kind: vscode.QuickPickItemKind.Separator,
       });
       let tabs: SessionPeer[];
@@ -108,14 +127,7 @@ export function activate(context: vscode.ExtensionContext): void {
         items.push({
           label: `$(browser) ${peerLabel(peer)}`,
           description: peer.url,
-          target: {
-            port: channel.port,
-            tag: channel.tag,
-            cwd: channel.cwd,
-            clientId: peer.clientId,
-            label: peerLabel(peer),
-            ...(peer.url !== undefined ? { url: peer.url } : {}),
-          },
+          target: targetFor(channel, peer),
         });
       }
     }
@@ -132,7 +144,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   /**
    * The target to send to: the remembered one, else — when exactly one tab
-   * exists anywhere — that tab (silently), else whatever the picker returns.
+   * exists anywhere and it belongs to a real session — that tab (silently),
+   * else whatever the picker returns. A debug server's tab is never a silent
+   * default: it stays a deliberate, marked pick.
    */
   async function resolveTarget(): Promise<Target | undefined> {
     const remembered = getTarget();
@@ -143,18 +157,9 @@ export function activate(context: vscode.ExtensionContext): void {
     const found: Target[] = [];
     for (const channel of channels) {
       const tabs = await appTabs(channel).catch(() => []);
-      found.push(
-        ...tabs.map((peer) => ({
-          port: channel.port,
-          tag: channel.tag,
-          cwd: channel.cwd,
-          clientId: peer.clientId,
-          label: peerLabel(peer),
-          ...(peer.url !== undefined ? { url: peer.url } : {}),
-        })),
-      );
+      found.push(...tabs.map((peer) => targetFor(channel, peer)));
     }
-    if (found.length === 1 && found[0]) {
+    if (found.length === 1 && found[0] && found[0].debug !== true) {
       await setTarget(found[0]);
       return found[0];
     }

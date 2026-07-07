@@ -219,6 +219,9 @@ view's `clientId`, a role, or everyone — acked with who it reached, nacked whe
 The **VS Code extension** (`packages/aiui-vscode`) is the first such provider: it discovers
 channels through the on-disk registry, shows a status-bar picker over each channel's `app` tabs,
 and sends the editor selection as the same `SelectionContribution` the reader publishes.
+Standalone debug servers (`serve` — e.g. the workbench's channel, named "aiui workbench")
+register in the same registry marked `debug: true`: every selector shows the mark, none
+auto-picks one, and a human choosing one deliberately works exactly like a real session.
 
 ## Where the code lives
 

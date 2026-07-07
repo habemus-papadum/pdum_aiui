@@ -1,8 +1,10 @@
 /**
  * The on-disk registry of running aiui channel MCP servers.
  *
- * Each live `aiui-claude-channel mcp` process advertises itself by writing a
- * small JSON file into the shared cache (`cacheDir("mcp")`), named `<pid>.json`.
+ * Each live channel server process advertises itself by writing a small JSON
+ * file into the shared cache (`cacheDir("mcp")`), named `<pid>.json` — the
+ * real `mcp` servers, and the standalone `serve` debug servers, which register
+ * with `debug: true` so selectors can mark them (and never auto-pick one).
  * The file records enough to find and talk to the server's web backend, and to
  * tell whether the process behind it is still alive. A server removes its own
  * file on exit; {@link listMcpServers} prunes any left behind by a hard kill.
@@ -37,6 +39,19 @@ export interface RegistryEntry {
   cwd: string;
   /** ISO-8601 timestamp of when the server started. */
   startedAt: string;
+  /**
+   * Human-chosen display name (e.g. the workbench names its channel
+   * "aiui workbench"). Selectors prefer it over pids; absent on servers that
+   * are recognisable by their owning Claude Code session instead.
+   */
+  name?: string;
+  /**
+   * A standalone debug server (`serve`): structurally unable to reach a Claude
+   * Code session — lowered prompts print to its stdout. Selectors must mark
+   * these, and nothing may *auto*-pick one; a human choosing it deliberately
+   * is fine (see select.ts).
+   */
+  debug?: boolean;
 }
 
 /** A registry entry paired with the file it was read from. */
@@ -138,15 +153,31 @@ export function readEntry(file: string): RegistryEntry | null {
   ) {
     return null;
   }
-  return { tag: e.tag, pid: e.pid, ppid: e.ppid, port: e.port, cwd: e.cwd, startedAt: e.startedAt };
+  return {
+    tag: e.tag,
+    pid: e.pid,
+    ppid: e.ppid,
+    port: e.port,
+    cwd: e.cwd,
+    startedAt: e.startedAt,
+    // Optional fields tolerate older writers: absent is simply "a real server".
+    ...(typeof e.name === "string" ? { name: e.name } : {}),
+    ...(e.debug === true ? { debug: true } : {}),
+  };
 }
 
 /**
  * Advertise the current process as a running channel server by writing its
  * registry file, and hand back a {@link RegisteredServer} whose `remove()`
  * deletes it again. The caller owns wiring `remove()` into its shutdown path.
+ * Debug servers pass `{ debug: true }` (and usually a display `name`) so every
+ * selector can mark them.
  */
-export function registerServer(port: number, tag: string): RegisteredServer {
+export function registerServer(
+  port: number,
+  tag: string,
+  options: { name?: string; debug?: boolean } = {},
+): RegisteredServer {
   const entry: RegistryEntry = {
     tag,
     pid: process.pid,
@@ -154,6 +185,8 @@ export function registerServer(port: number, tag: string): RegisteredServer {
     port,
     cwd: process.cwd(),
     startedAt: new Date().toISOString(),
+    ...(options.name !== undefined ? { name: options.name } : {}),
+    ...(options.debug === true ? { debug: true } : {}),
   };
   const file = registryFileFor(entry.pid);
   writeFileSync(file, `${JSON.stringify(entry, null, 2)}\n`);

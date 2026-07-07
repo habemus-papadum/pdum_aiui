@@ -33,6 +33,14 @@ export interface ChannelEntry {
   cwd: string;
   /** ISO-8601 start timestamp. */
   startedAt: string;
+  /** Display name the server chose for itself (e.g. "aiui workbench"). */
+  name?: string;
+  /**
+   * A standalone debug server (`aiui-claude-channel serve`, e.g. the
+   * workbench's): fully usable as a selection target, but marked in the
+   * picker and sorted after real sessions.
+   */
+  debug?: boolean;
 }
 
 /** A connected session view, as reported by `GET /session/peers`. */
@@ -94,7 +102,16 @@ function readEntry(file: string): ChannelEntry | null {
   ) {
     return null;
   }
-  return { tag: e.tag, pid: e.pid, ppid: e.ppid, port: e.port, cwd: e.cwd, startedAt: e.startedAt };
+  return {
+    tag: e.tag,
+    pid: e.pid,
+    ppid: e.ppid,
+    port: e.port,
+    cwd: e.cwd,
+    startedAt: e.startedAt,
+    ...(typeof e.name === "string" ? { name: e.name } : {}),
+    ...(e.debug === true ? { debug: true } : {}),
+  };
 }
 
 /** Is a process with this PID alive? (`EPERM` still means "alive".) */
@@ -135,7 +152,8 @@ function affinity(cwd: string, workspaceDir: string | undefined): number {
 
 /**
  * The currently running channel servers: every registry entry whose process is
- * still alive, workspace-affine first, then newest first.
+ * still alive — workspace-affine first, real sessions before debug servers,
+ * then newest first.
  */
 export function listChannels(options: ListChannelsOptions = {}): ChannelEntry[] {
   const dir = options.dir ?? registryDir();
@@ -152,8 +170,14 @@ export function listChannels(options: ListChannelsOptions = {}): ChannelEntry[] 
   return entries.sort(
     (a, b) =>
       affinity(b.cwd, options.workspaceDir) - affinity(a.cwd, options.workspaceDir) ||
+      Number(a.debug === true) - Number(b.debug === true) ||
       b.startedAt.localeCompare(a.startedAt),
   );
+}
+
+/** How a picker titles a channel: its own name, else its tag, marked if debug. */
+export function channelLabel(channel: ChannelEntry): string {
+  return `${channel.name ?? channel.tag}${channel.debug === true ? " · debug" : ""}`;
 }
 
 /** List a channel's connected session views. Throws on an unreachable server. */

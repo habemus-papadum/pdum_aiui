@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { fetchPeers, listChannels, publishSelection } from "./channels";
+import { channelLabel, fetchPeers, listChannels, publishSelection } from "./channels";
 import { selectionToContribution } from "./contribution";
 
 function entry(overrides: Partial<Record<string, unknown>> = {}): string {
@@ -53,11 +53,50 @@ describe("listChannels", () => {
     expect(channels.map((c) => c.tag)).toEqual(["exact-newer", "exact", "ancestor", "elsewhere"]);
   });
 
+  it("carries the debug marker + name through, sorting debug after real sessions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aiui-vscode-registry-"));
+    writeFileSync(
+      join(dir, "1.json"),
+      entry({
+        pid: 1,
+        tag: "wb",
+        name: "aiui workbench",
+        debug: true,
+        startedAt: "2026-07-07T12:00:00Z",
+      }),
+    );
+    writeFileSync(
+      join(dir, "2.json"),
+      entry({ pid: 2, tag: "real", startedAt: "2026-07-07T09:00:00Z" }),
+    );
+
+    const channels = listChannels({ dir, isAlive: () => true, workspaceDir: "/w/app" });
+    // Same affinity; the older REAL session still outranks the newer debug one.
+    expect(channels.map((c) => c.tag)).toEqual(["real", "wb"]);
+    expect(channels[1]).toMatchObject({ name: "aiui workbench", debug: true });
+  });
+
   it("treats a missing registry directory as nothing running", () => {
     const dir = join(mkdtempSync(join(tmpdir(), "aiui-vscode-registry-")), "absent");
     expect(listChannels({ dir })).toEqual([]);
     // And reading never creates it.
     expect(() => mkdirSync(dir)).not.toThrow();
+  });
+});
+
+describe("channelLabel", () => {
+  it("prefers the display name and marks debug", () => {
+    const base = {
+      pid: 1,
+      ppid: 1,
+      port: 1,
+      cwd: "/w",
+      startedAt: "2026-07-07T00:00:00Z",
+    };
+    expect(channelLabel({ ...base, tag: "abc-123" })).toBe("abc-123");
+    expect(channelLabel({ ...base, tag: "wb", name: "aiui workbench", debug: true })).toBe(
+      "aiui workbench · debug",
+    );
   });
 });
 

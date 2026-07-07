@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { connectChannelClient } from "../client";
 import type { FrameLogEntry } from "../frame-log";
+import { listMcpServers } from "../list";
 import { parsePort, runServe, type ServeHandle } from "./serve";
 
 const freshCache = () => mkdtempSync(join(tmpdir(), "aiui-serve-"));
@@ -37,6 +38,9 @@ describe("runServe (standalone debug channel server)", () => {
       return true;
     }) as typeof process.stdout.write);
     errSpy = vi.spyOn(process.stderr, "write").mockImplementation((() => true) as never);
+    // The server registers itself (as debug) — keep that out of the real
+    // shared registry.
+    vi.stubEnv("AIUI_CACHE", freshCache());
   });
 
   afterEach(async () => {
@@ -44,6 +48,7 @@ describe("runServe (standalone debug channel server)", () => {
     handle = undefined;
     outSpy.mockRestore();
     errSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it("prints the machine-parseable ready line first, exactly once, and serves in debug mode", async () => {
@@ -111,6 +116,32 @@ describe("runServe (standalone debug channel server)", () => {
     ).json()) as { traces: unknown[]; session?: string };
     expect(list.traces).toEqual([]);
     expect(list.session).toMatch(/^wb·\d+·\d{6}$/);
+  });
+
+  it("registers as a debug server (name + tag) and removes its entry on close", async () => {
+    handle = await runServe({ cacheDir: freshCache(), tag: "wb", name: "aiui workbench" });
+
+    const [server, ...rest] = listMcpServers();
+    expect(rest).toEqual([]);
+    expect(server).toMatchObject({
+      tag: "wb",
+      name: "aiui workbench",
+      debug: true,
+      pid: process.pid,
+      port: handle.port,
+    });
+
+    await handle.close();
+    handle = undefined;
+    expect(listMcpServers()).toEqual([]);
+  });
+
+  it("defaults the registry tag to a UUID when untagged", async () => {
+    handle = await runServe({ cacheDir: freshCache() });
+    const [server] = listMcpServers();
+    expect(server?.tag).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/);
+    expect(server?.debug).toBe(true);
+    expect(server?.name).toBeUndefined();
   });
 
   it("does not create a recording without --record", async () => {

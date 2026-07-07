@@ -14,7 +14,9 @@ backend's session HTTP surface.
 - **A status bar item** showing the browser tab this window sends to. Click it (or run
   `aiui: Pick Browser Tab`) to choose: the picker lists every running channel server (from the
   same on-disk registry `aiui` tools use, `~/.cache/aiui/mcp/`) and the overlay tabs connected
-  to each.
+  to each. Debug channels — the workbench's "aiui workbench" — appear too, marked `· debug`
+  and sorted after real sessions; they're never auto-picked but work exactly the same once
+  chosen.
 - **`aiui: Send Selection to Browser Tab`** (also in the editor context menu): sends the current
   selection — verbatim text plus a 1-based `file:line:col` / `file:start-end` locator — to the
   picked tab. A quick toast confirms delivery or explains the nack (tab gone, channel gone);
