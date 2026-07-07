@@ -1028,13 +1028,14 @@ describe("multimodalModality: advanced config panel", () => {
     await wait(50);
   }
 
-  it("gear opens the editor over the full effective config", () => {
+  it("gear opens the editor over the full effective config", async () => {
     // Explicit mock for both seams (the shipped defaults are the real `openai`
     // backends) so the assertion below tests a subset present, not the default.
     const { handle } = mountMultimodal({ transcriber: "mock", corrector: "mock", mockWordMs: 0 });
     const panel = q<HTMLElement>(handle, ".mm-config");
     expect(panel.hidden).toBe(true);
     q<HTMLButtonElement>(handle, ".mm-gear").click();
+    await flush(); // hidden rides a signal now (Solid batches writes)
     expect(panel.hidden).toBe(false);
     const editor = q<HTMLTextAreaElement>(handle, ".mm-config-editor");
     const shown = JSON.parse(editor.value);
@@ -1051,6 +1052,7 @@ describe("multimodalModality: advanced config panel", () => {
     edited.talkMode = "toggle";
     editor.value = JSON.stringify(edited);
     q<HTMLButtonElement>(handle, ".mm-config-apply").click();
+    await flush(); // the message div renders from a signal
 
     // Persisted as a minimal delta, with a success message shown.
     expect(loadIntentOverrides()).toEqual({ talkMode: "toggle" });
@@ -1067,6 +1069,7 @@ describe("multimodalModality: advanced config panel", () => {
     const editor = q<HTMLTextAreaElement>(handle, ".mm-config-editor");
     editor.value = JSON.stringify({ talkMdoe: "toggle" }); // typo
     q<HTMLButtonElement>(handle, ".mm-config-apply").click();
+    await flush(); // the message div renders from a signal
 
     expect(q<HTMLElement>(handle, ".mm-config-msg").textContent).toContain(
       'unknown config key "talkMdoe"',
@@ -1077,12 +1080,13 @@ describe("multimodalModality: advanced config panel", () => {
     expect(helloIntent(sent)).toMatchObject({ talkMode: "hold" }); // unchanged
   });
 
-  it("rejects a type mismatch loudly, naming the expected type", () => {
+  it("rejects a type mismatch loudly, naming the expected type", async () => {
     const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
     q<HTMLButtonElement>(handle, ".mm-gear").click();
     const editor = q<HTMLTextAreaElement>(handle, ".mm-config-editor");
     editor.value = JSON.stringify({ inkFadeSec: "wide" });
     q<HTMLButtonElement>(handle, ".mm-config-apply").click();
+    await flush(); // the message div renders from a signal
 
     const msg = q<HTMLElement>(handle, ".mm-config-msg").textContent ?? "";
     expect(msg).toContain('"inkFadeSec"');
@@ -1146,6 +1150,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     key("keydown", "k");
     expect(stripOpen()).toBe(true);
     key("keydown", "3"); // rapid
+    await flush(); // the strip content is Solid-rendered (batched writes)
     expect(activeChip()).toContain("rapid");
 
     // Session-scoped: NOTHING persisted — a reload would return to the file config.
@@ -1158,17 +1163,19 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(helloIntents(sent)[0]).toMatchObject({ tier: "rapid", transcriber: "mock" });
   });
 
-  it("clicking a tier chip (or an action) works like its key — the strip is mouse-operable", () => {
+  it("clicking a tier chip (or an action) works like its key — the strip is mouse-operable", async () => {
     mountMultimodal(MOCK);
     key("keydown", "`"); // arm
     key("keydown", "k"); // open the strip
     expect(stripOpen()).toBe(true);
+    await flush(); // the chips are Solid-rendered (batched writes)
 
     // Click the rapid chip: same dispatch as pressing 3. (Regression: chips
     // used to be display-only spans — under the armed crosshair cursor they
     // read as broken buttons, and the mouse path silently did nothing.)
     const rapid = strip()?.querySelector<HTMLElement>('[data-tier="rapid"]');
     rapid?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flush();
     expect(activeChip()).toContain("rapid");
     expect(loadIntentOverrides()).toEqual({}); // still session-only
 
@@ -1188,6 +1195,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
 
     key("keydown", "k");
     key("keydown", "5"); // flagship — but a thread is open
+    await flush(); // the strip content is Solid-rendered (batched writes)
     expect(strip()?.querySelector(".mm-strip-pending")?.textContent).toContain("flagship");
     expect(helloIntents(sent)[0]?.tier).toBeUndefined(); // this thread keeps its config
 
@@ -1205,7 +1213,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(loadIntentOverrides()).toEqual({}); // still session-only
   });
 
-  it("S persists the session layer for the site as a minimal delta", () => {
+  it("S persists the session layer for the site as a minimal delta", async () => {
     mountMultimodal(MOCK);
     key("keydown", "`");
     key("keydown", "k");
@@ -1213,6 +1221,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(loadIntentOverrides()).toEqual({});
     key("keydown", "s"); // save
     expect(loadIntentOverrides()).toEqual({ tier: "rapid" });
+    await flush(); // the strip content is Solid-rendered (batched writes)
     expect(strip()?.textContent).toContain("saved for this site");
   });
 

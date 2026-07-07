@@ -14,10 +14,14 @@
  * that differ from the DEFAULT+Vite base), persisted per-origin in localStorage
  * so un-overridden keys keep tracking the base. "Reset to defaults" clears that
  * layer. The pure pieces (validate / delta / load / save) are exported for the
- * modality and its tests; {@link mountAdvancedConfig} is the DOM.
- *
- * Framework-free, browser-safe.
+ * modality and its tests — framework-free, unchanged by the Solid port;
+ * {@link mountAdvancedConfig} is the DOM, Solid-rendered since proposal B2.2
+ * (display state — panel visibility, the apply/reset message — lives in
+ * signals created INSIDE the render root, ui/widget.tsx-style; the JSON
+ * textarea stays an imperative island because the user's caret lives there).
  */
+import { render } from "@solidjs/web";
+import { createSignal } from "solid-js";
 import {
   DEFAULT_TIER,
   expandTier,
@@ -304,6 +308,28 @@ export interface AdvancedConfigHandle {
 }
 
 /**
+ * Inline cssText for the panel's pieces — deliberately local (the gear panel
+ * is the one surface styled off styles.ts), carried over verbatim from the
+ * vanilla implementation. The message's `color` is appended reactively.
+ */
+const GEAR_STYLE =
+  "margin-top:8px;border:1px solid #2a3140;background:#171b24;color:#9aa0aa;border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit;font-size:12px;";
+const EDITOR_STYLE =
+  "width:100%;box-sizing:border-box;min-height:180px;resize:vertical;font:12px/1.5 ui-monospace,monospace;" +
+  "background:#14171f;color:#e8e8ea;border:1px solid #2a3140;border-radius:8px;padding:8px;white-space:pre;";
+const ROW_STYLE = "display:flex;align-items:center;gap:8px;margin-top:6px;";
+const APPLY_STYLE =
+  "border:none;border-radius:6px;padding:5px 12px;cursor:pointer;background:#8ab4f8;color:#14171f;font:inherit;font-weight:600;";
+const RESET_STYLE =
+  "border:1px solid #2a3140;border-radius:6px;padding:5px 12px;cursor:pointer;background:transparent;color:#9aa0aa;font:inherit;";
+const MSG_STYLE = "margin-left:auto;font-size:11px;text-align:right;max-width:60%;";
+const HINT_STYLE = "margin-top:6px;font-size:11px;color:#6b7280;line-height:1.5;";
+
+/** The hint's exact wording, kept out of JSX so whitespace can't drift. */
+const HINT_TEXT =
+  "Full effective config (DEFAULT ← tier preset ← Vite intent option ← your edits). Set `tier` to a preset (mock/standard/rapid/premium/flagship); explicit fine fields still win. Unknown keys and type mismatches are rejected. Most knobs apply live; transcriber/corrector/model take effect on the next talk. Persisted for this site.";
+
+/**
  * Render the gear + advanced JSON editor into `container` (the widget panel's
  * body). The panel owns its own state; the returned handle only exposes
  * `open()`. Applying validates and persists the delta, then calls `onApply`
@@ -320,81 +346,51 @@ export function mountAdvancedConfig(
   // included (the panel diffs the editor against this).
   const base = effectiveConfig(opts.viteOption, {});
 
-  const gear = document.createElement("button");
-  gear.type = "button";
-  gear.className = "mm-gear";
-  gear.textContent = "⚙ advanced config";
-  gear.style.cssText =
-    "margin-top:8px;border:1px solid #2a3140;background:#171b24;color:#9aa0aa;border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit;font-size:12px;";
-
-  const panel = document.createElement("div");
-  panel.className = "mm-config";
-  panel.hidden = true;
-  panel.style.cssText = "margin-top:8px;";
-
-  const editor = document.createElement("textarea");
-  editor.className = "mm-config-editor";
-  editor.spellcheck = false;
-  editor.style.cssText =
-    "width:100%;box-sizing:border-box;min-height:180px;resize:vertical;font:12px/1.5 ui-monospace,monospace;" +
-    "background:#14171f;color:#e8e8ea;border:1px solid #2a3140;border-radius:8px;padding:8px;white-space:pre;";
-
-  const row = document.createElement("div");
-  row.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:6px;";
-  const apply = document.createElement("button");
-  apply.type = "button";
-  apply.className = "mm-config-apply";
-  apply.textContent = "Apply";
-  apply.style.cssText =
-    "border:none;border-radius:6px;padding:5px 12px;cursor:pointer;background:#8ab4f8;color:#14171f;font:inherit;font-weight:600;";
-  const reset = document.createElement("button");
-  reset.type = "button";
-  reset.className = "mm-config-reset";
-  reset.textContent = "Reset to defaults";
-  reset.style.cssText =
-    "border:1px solid #2a3140;border-radius:6px;padding:5px 12px;cursor:pointer;background:transparent;color:#9aa0aa;font:inherit;";
-  const msg = document.createElement("div");
-  msg.className = "mm-config-msg";
-  msg.style.cssText =
-    "margin-left:auto;font-size:11px;color:#9aa0aa;text-align:right;max-width:60%;";
-  row.append(apply, reset, msg);
-
-  const hint = document.createElement("div");
-  hint.className = "mm-config-hint";
-  hint.style.cssText = "margin-top:6px;font-size:11px;color:#6b7280;line-height:1.5;";
-  hint.textContent =
-    "Full effective config (DEFAULT ← tier preset ← Vite intent option ← your edits). Set `tier` to a preset (mock/standard/rapid/premium/flagship); explicit fine fields still win. Unknown keys and type mismatches are rejected. Most knobs apply live; transcriber/corrector/model take effect on the next talk. Persisted for this site.";
-
-  panel.append(editor, row, hint);
-  container.append(gear, panel);
+  // Display state lives in signals created INSIDE the render root (the
+  // ui/widget.tsx capture pattern — signals created outside never propagate);
+  // the plain `openFlag` stays the synchronous truth the gear toggle reads
+  // (Solid 2 batches writes, so a same-tick signal read-back would be stale).
+  // The textarea is an imperative island: `refresh()` writes its value
+  // through the ref, so `open()` and the click handlers keep the vanilla
+  // panel's synchronous editor contents.
+  interface PanelApi {
+    setOpen(value: boolean): void;
+    setMsg(value: { text: string; error: boolean }): void;
+  }
+  let api: PanelApi | undefined;
+  let editorEl: HTMLTextAreaElement | undefined;
+  let openFlag = false;
 
   const refresh = (): void => {
-    editor.value = JSON.stringify(opts.effective, null, 2);
+    if (editorEl) {
+      editorEl.value = JSON.stringify(opts.effective, null, 2);
+    }
   };
-  const setMsg = (text: string, isError: boolean): void => {
-    msg.textContent = text;
-    msg.style.color = isError ? "#f28b82" : "#7ee0a3";
-  };
-  refresh();
-
-  gear.addEventListener("click", () => {
-    panel.hidden = !panel.hidden;
-    if (!panel.hidden) {
+  const setPanelOpen = (value: boolean): void => {
+    openFlag = value;
+    if (value) {
       refresh();
     }
-  });
+    api?.setOpen(value);
+  };
 
-  apply.addEventListener("click", () => {
+  const applyClick = (): void => {
+    if (!editorEl || !api) {
+      return;
+    }
     let parsed: unknown;
     try {
-      parsed = JSON.parse(editor.value);
+      parsed = JSON.parse(editorEl.value);
     } catch (error) {
-      setMsg(`invalid JSON: ${error instanceof Error ? error.message : String(error)}`, true);
+      api.setMsg({
+        text: `invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        error: true,
+      });
       return;
     }
     const result = validateIntentConfig(parsed);
     if (!result.ok) {
-      setMsg(result.error, true);
+      api.setMsg({ text: result.error, error: true });
       return;
     }
     const overrides = overridesForApply(result.config, base);
@@ -403,25 +399,84 @@ export function mountAdvancedConfig(
     opts.onApply(effectiveConfig(opts.viteOption, overrides));
     refresh();
     const count = Object.keys(overrides).length;
-    setMsg(
-      count === 0
-        ? "applied — no overrides (matches base)"
-        : `applied ✓ (${count} override${count === 1 ? "" : "s"})`,
-      false,
-    );
-  });
+    api.setMsg({
+      text:
+        count === 0
+          ? "applied — no overrides (matches base)"
+          : `applied ✓ (${count} override${count === 1 ? "" : "s"})`,
+      error: false,
+    });
+  };
 
-  reset.addEventListener("click", () => {
+  const resetClick = (): void => {
     clearIntentOverrides(storageKey);
     opts.onApply(effectiveConfig(opts.viteOption, {}));
     refresh();
-    setMsg("reset to defaults ✓", false);
-  });
+    api?.setMsg({ text: "reset to defaults ✓", error: false });
+  };
+
+  const Panel = () => {
+    const [open, setOpen] = createSignal(false);
+    const [msg, setMsg] = createSignal<{ text: string; error: boolean } | undefined>(undefined);
+    api = { setOpen, setMsg: (value) => setMsg(value) };
+    // Initial #9aa0aa until the first apply/reset speaks — then red on error,
+    // green on success, exactly the vanilla setMsg colors.
+    const msgColor = (): string => {
+      const m = msg();
+      return m === undefined ? "#9aa0aa" : m.error ? "#f28b82" : "#7ee0a3";
+    };
+    return (
+      <>
+        <button
+          type="button"
+          class="mm-gear"
+          style={GEAR_STYLE}
+          onClick={() => setPanelOpen(!openFlag)}
+        >
+          ⚙ advanced config
+        </button>
+        <div class="mm-config" style="margin-top:8px;" hidden={!open()}>
+          <textarea
+            class="mm-config-editor"
+            spellcheck={false}
+            style={EDITOR_STYLE}
+            ref={(el: HTMLTextAreaElement) => (editorEl = el)}
+          />
+          <div style={ROW_STYLE}>
+            <button type="button" class="mm-config-apply" style={APPLY_STYLE} onClick={applyClick}>
+              Apply
+            </button>
+            <button type="button" class="mm-config-reset" style={RESET_STYLE} onClick={resetClick}>
+              Reset to defaults
+            </button>
+            <div class="mm-config-msg" style={`${MSG_STYLE}color:${msgColor()};`}>
+              {msg()?.text ?? ""}
+            </div>
+          </div>
+          <div class="mm-config-hint" style={HINT_STYLE}>
+            {HINT_TEXT}
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // Render into an inert wrapper appended to the container: the widget
+  // panel's body holds vanilla siblings (the modality help), and the wrapper
+  // keeps Solid's root off their DOM (ui/widget.tsx's precedent). The
+  // component body runs synchronously during render(), so the api and the
+  // editor ref are populated before mountAdvancedConfig returns.
+  const mount = document.createElement("div");
+  container.append(mount);
+  render(Panel, mount);
+  if (!api || !editorEl) {
+    throw new Error("advanced config render did not capture its mount points");
+  }
+  refresh();
 
   return {
     open(): void {
-      panel.hidden = false;
-      refresh();
+      setPanelOpen(true);
     },
   };
 }

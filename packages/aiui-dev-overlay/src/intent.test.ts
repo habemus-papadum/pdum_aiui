@@ -37,11 +37,16 @@ function selectText(el: Element, start = 0, end?: number): void {
 
 describe("mountIntentTool", () => {
   it("mounts a shadow host with the pill and hidden panel", async () => {
-    const handle = mountIntentTool({ force: true, port: 4321 });
+    // Text modality only, so no modality claims the HUD slot and the pill
+    // wears its default label. (The default set's multimodal modality claims
+    // the slot at mount; this test used to see the label anyway by reading
+    // the DOM before Solid's batched hud-claim write flushed — B2.2's extra
+    // render roots flush it during mount now, exposing the stale premise.)
+    const handle = mountIntentTool({ force: true, port: 4321, modalities: [textModality()] });
     const host = document.getElementById(HOST_ID);
     expect(host).not.toBeNull();
-    // The single anchor is the pill: its default label (no modality claimed
-    // the HUD slot here) plus the expander that unfolds the panel.
+    // The single anchor is the pill: its default label plus the expander
+    // that unfolds the panel.
     expect(handle.shadowRoot?.querySelector(".pill .pill-label")?.textContent).toContain("aiui");
     expect(handle.shadowRoot?.querySelector(".pill .expander")).not.toBeNull();
     expect((handle.shadowRoot?.querySelector(".panel") as HTMLElement).hidden).toBe(true);
