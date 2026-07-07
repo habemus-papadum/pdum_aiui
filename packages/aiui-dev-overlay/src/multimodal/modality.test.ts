@@ -1392,9 +1392,19 @@ describe("multimodalModality: selections on the wire", () => {
           e.type === "transcript-final" && (e as { text?: string }).text?.includes("Regarding"),
       ),
     ).toBe(false);
-    // The reader's mirror shows the compact marker: location + excerpt.
+    // The reader's mirror travels structured (defer-rendering: the panel
+    // renders its own chips from `items`); `text` stays as the legacy flat
+    // rendering with the compact marker.
     expect(slots.get("preview")).toMatchObject({
       text: "[code: src/c.ts:12:1 “export function curb() {}”]",
+      items: [
+        {
+          kind: "code-selection",
+          sourceLoc: "src/c.ts:12:1",
+          excerpt: "export function curb() {}",
+          lines: 1,
+        },
+      ],
     });
   });
 });

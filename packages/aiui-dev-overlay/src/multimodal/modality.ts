@@ -56,7 +56,12 @@ import {
   keyCommand,
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
-import { SESSION_CONTRIBUTION_TOPIC, type SessionContribution } from "../session-contrib";
+import {
+  type PreviewItem,
+  type PreviewSnapshot,
+  SESSION_CONTRIBUTION_TOPIC,
+  type SessionContribution,
+} from "../session-contrib";
 import { intentTurnStore } from "../turn-store";
 import {
   clearIntentOverrides,
@@ -748,33 +753,61 @@ export function multimodalModality(
       };
 
       // The prompt-so-far, broadcast to the session's other views so the code
-      // reader can mirror it (read-only). Deduped — only a real text change is
+      // reader can mirror it (read-only). Deduped — only a real change is
       // worth a bus message.
       let lastPreview = "";
       const broadcastPreview = (): void => {
         if (!bus) {
           return;
         }
-        const text = engine.threadOpen
-          ? composeIntent(currentThreadEvents(), config.correctionPolicy)
-              .items.filter((i) => i.kind === "text" || i.kind === "code-selection")
-              .map((i) =>
-                // The reader's mirror is plain text: a contributed code
-                // selection shows as a compact marker — location plus a
-                // clipped excerpt (a bare locator is opaque when debugging),
-                // not its full rendering.
-                i.kind === "code-selection"
-                  ? `[code: ${i.sourceLoc ?? "selection"} “${codeExcerpt(i.text ?? "")}”]`
-                  : (i.text ?? ""),
-              )
-              .join(" ")
-              .trim()
-          : "";
-        if (text === lastPreview) {
+        // The mirror travels STRUCTURED (the defer-rendering rule applies to
+        // mirrors too: intent crosses the bus as data; presentation is each
+        // surface's own decision — the reader renders chips, not our prose).
+        // Shots ride as their marker only (pixels stay in this tab); code
+        // selections as locator + clipped excerpt (the full text already
+        // rides the stream as the code-selection event). `text` remains the
+        // legacy flat rendering so older views keep working.
+        const composed = engine.threadOpen
+          ? composeIntent(currentThreadEvents(), config.correctionPolicy).items
+          : [];
+        const items: PreviewItem[] = composed.map((i) =>
+          i.kind === "shot"
+            ? {
+                kind: "shot",
+                marker: i.marker ?? "shot",
+                ...(i.viewport ? { viewport: true } : {}),
+              }
+            : i.kind === "code-selection"
+              ? {
+                  kind: "code-selection",
+                  ...(i.sourceLoc !== undefined ? { sourceLoc: i.sourceLoc } : {}),
+                  excerpt: codeExcerpt(i.text ?? ""),
+                  ...(i.lines !== undefined ? { lines: i.lines } : {}),
+                }
+              : { kind: "text", text: i.text ?? "" },
+        );
+        const text = items
+          .flatMap((i) =>
+            i.kind === "text"
+              ? [i.text]
+              : i.kind === "code-selection"
+                ? [`[code: ${i.sourceLoc ?? "selection"} “${i.excerpt}”]`]
+                : [],
+          )
+          .join(" ")
+          .trim();
+        const fingerprint = JSON.stringify(items);
+        if (fingerprint === lastPreview) {
           return;
         }
-        lastPreview = text;
-        bus.set("preview", { text, threadOpen: engine.threadOpen, armed: engine.armed });
+        lastPreview = fingerprint;
+        const snapshot: PreviewSnapshot = {
+          text,
+          items,
+          threadOpen: engine.threadOpen,
+          armed: engine.armed,
+        };
+        bus.set("preview", snapshot);
       };
 
       // ── wire + lifecycle listener (preview & inspector subscribe separately) ─
