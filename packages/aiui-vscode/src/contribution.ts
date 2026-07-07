@@ -4,10 +4,11 @@
  *
  * This mirrors the session bus's wire contract: `SelectionContribution` and
  * the `"contribution"` topic from aiui-dev-overlay's session-contrib.ts (the
- * source of truth), and the 0-based-LSP → 1-based-human locator conventions of
- * the reader's reader-contribution.ts. Per the project's rule, the payload is
- * structured and verbatim — how a selection reads in the final prompt is
- * decided at lowering time by `composeIntent`, never here.
+ * source of truth), including its locator convention — 0-based editor/LSP
+ * coordinates in, 1-based human-readable `file:line:col` / `file:start-end`
+ * out. Per the project's rule, the payload is structured and verbatim — how a
+ * selection reads in the final prompt is decided at lowering time by
+ * `composeIntent`, never here.
  *
  * Deliberately free of the `vscode` module so it unit-tests without an
  * extension host and ships in the npm library build.
