@@ -14,25 +14,6 @@ export const STYLES = /* css */ `
   .mm-shot-box { position: fixed; display: none; border: 1.5px dashed #ffd166;
     background: rgba(255, 209, 102, 0.08); pointer-events: none; }
 
-  .mm-hud { position: fixed; left: 16px; bottom: 16px; z-index: 2147483643; display: flex; gap: 10px;
-    align-items: center; background: #171b25; border: 1px solid #262c3a; border-radius: 999px;
-    padding: 6px 14px 6px 6px; font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
-    color: #9aa0aa; cursor: grab; touch-action: none; }
-  .mm-hud.armed { border-color: #8ab4f8; }
-  .mm-hud.talking { border-color: #ff5c87; }
-  .mm-arm { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
-    background: #232936; color: #e8e8ea; font-size: 15px; }
-  .mm-hud.armed .mm-arm { background: #8ab4f8; color: #0f1117; }
-  .mm-state { min-width: 90px; color: #e8e8ea; }
-  /* The screen-share badge (realtime submode): a pulsing red dot beside the
-     state label while the ~1fps sampler is running; hidden (attr) when off. */
-  .mm-video { color: #ff5c87; font-size: 11px; font-weight: 600; white-space: nowrap;
-    animation: mm-video-pulse 1.6s ease-in-out infinite; }
-  .mm-video[hidden] { display: none; }
-  @keyframes mm-video-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-  .mm-meter { border-radius: 3px; background: #0f1117; }
-  .mm-keys { opacity: 0.7; }
-
   .mm-preview { position: fixed; left: 50%; transform: translateX(-50%); bottom: 64px;
     z-index: 2147483642; width: min(560px, 70vw); background: #171b25ee; border: 1px solid #262c3a;
     border-radius: 12px; padding: 10px 14px; display: none;
@@ -114,4 +95,28 @@ export const STYLES = /* css */ `
   .mm-strip-note { margin-top: 6px; color: #7ee0a3; }
   .mm-strip-actions { margin-top: 6px; color: #6b7280; }
   .mm-strip-actions b { color: #9aa0aa; }
+`;
+
+/**
+ * The HUD slot content's stylesheet — injected into the intent widget's
+ * shadow root via `ctx.hudSlot().addStyle` (page-level sheets can't reach a
+ * shadow tree). Content only: the pill provides the chrome — position,
+ * background, the data-ui-mode ring, and the drag grip live in ui/widget.tsx.
+ * The armed/talking classes here are raw-state hooks (✳ fill), not the ring.
+ */
+export const HUD_STYLES = /* css */ `
+  .mm-hud { display: inline-flex; align-items: center; gap: 10px;
+    font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #9aa0aa; }
+  .mm-arm { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+    background: #232936; color: #e8e8ea; font-size: 15px; }
+  .mm-hud.armed .mm-arm { background: #8ab4f8; color: #0f1117; }
+  .mm-state { min-width: 90px; color: #e8e8ea; }
+  /* The screen-share badge (realtime submode): a pulsing red dot beside the
+     state label while the ~1fps sampler is running; hidden (attr) when off. */
+  .mm-video { color: #ff5c87; font-size: 11px; font-weight: 600; white-space: nowrap;
+    animation: mm-video-pulse 1.6s ease-in-out infinite; }
+  .mm-video[hidden] { display: none; }
+  @keyframes mm-video-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  .mm-meter { border-radius: 3px; background: #0f1117; }
+  .mm-speaker { font-size: 11px; white-space: nowrap; }
 `;

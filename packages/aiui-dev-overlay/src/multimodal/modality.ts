@@ -32,6 +32,7 @@
  * no pixels.
  */
 
+import { createReconciler } from "@habemus-papadum/aiui-viz/modal";
 import { makeDraggable } from "../drag";
 import { getInstrumentation, type RemotePaintSink } from "../instrumentation";
 import type { IntentModality, IntentThread, IntentToolContext } from "../intent";
@@ -67,8 +68,9 @@ import { Ink } from "./ink";
 import { Preview } from "./preview";
 import { canvasJpegBytes, ShotTool } from "./shot";
 import { type SpeechAudioFactory, SpeechPlayer } from "./speech";
-import { STYLES } from "./styles";
+import { HUD_STYLES, STYLES } from "./styles";
 import { mockTranscriber, type Transcriber } from "./transcribe";
+import { UI_MODE_TABLE, type UiMode, uiMode } from "./ui-mode";
 import { sampleDimensions, VIDEO_FRAME_MIME, VIDEO_JPEG_QUALITY, VideoSampler } from "./video";
 
 /** How long to accumulate engine events before flushing an events chunk. */
@@ -346,7 +348,15 @@ export function multimodalModality(
       });
       layers.append(preview.root);
 
-      // ── HUD (arm button + state + level meter) ───────────────────────────────
+      // ── HUD (arm button + state + level meter) — the widget pill's slot ──────
+      // The §B.4 merge: the HUD is no longer its own floating surface; it IS
+      // the left section of the intent widget's pill, riding the pill's drag,
+      // mode ring, and shadow-root style isolation (hence addStyle — page
+      // sheets can't reach the slot). The old key-cheat-sheet span retired
+      // into the panel help, which always carried the same text: it was the
+      // pill's noisiest tenant.
+      const hudSlot = ctx.hudSlot();
+      hudSlot.addStyle(HUD_STYLES);
       const hud = document.createElement("div");
       hud.className = "mm-hud";
       hud.innerHTML = `
@@ -354,9 +364,8 @@ export function multimodalModality(
         <span class="mm-state">off</span>
         <span class="mm-video" hidden>● video</span>
         <canvas class="mm-meter" width="60" height="14"></canvas>
-        <span class="mm-keys">${armKeyLabel(config)} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · V video · K config · ⏎ send · Esc out</span>
         <span class="mm-speaker" hidden></span>`;
-      layers.append(hud);
+      hudSlot.container.append(hud);
 
       // The quick-config strip (the K layer) sits just above the HUD. Clicks
       // on its chips/actions route into the same dispatch as the keymap
@@ -370,13 +379,11 @@ export function multimodalModality(
       // watcher's snapshot of what the user had highlighted in the app.
       ctx.ignoreSelectionsWithin(layers);
 
-      // Both floating surfaces move out of the way by dragging (they cover app
-      // content by construction). They sit above the ink canvas and shot veil,
-      // so a drag on them is never a stroke or a screenshot. The preview only
-      // drags by its frame/title — inside the transcript body a drag *is* the
-      // correction-targeting selection gesture, and the correction bar holds an
-      // input — both stay excluded.
-      const undragHud = makeDraggable(hud);
+      // The preview moves out of the way by dragging (it covers app content by
+      // construction) — but only by its frame/title: inside the transcript
+      // body a drag *is* the correction-targeting selection gesture, and the
+      // correction bar holds an input — both stay excluded. (The HUD rides
+      // the widget pill's drag now — one anchor, one grip.)
       const undragPreview = makeDraggable(preview.root, {
         exclude: (target) => target.closest(".mm-preview-body, .mm-correction-bar") !== null,
       });
@@ -384,7 +391,6 @@ export function multimodalModality(
       const stateLabel = hud.querySelector<HTMLSpanElement>(".mm-state");
       const videoBadge = hud.querySelector<HTMLSpanElement>(".mm-video");
       const meter = hud.querySelector<HTMLCanvasElement>(".mm-meter");
-      const keysLabel = hud.querySelector<HTMLSpanElement>(".mm-keys");
       const speakerLabel = hud.querySelector<HTMLSpanElement>(".mm-speaker");
       armButton?.addEventListener("click", () => engine.setArmed(!engine.armed));
 
@@ -416,36 +422,107 @@ export function multimodalModality(
           <b>D</b>+drag to screenshot a region (<b>S</b> grabs the whole viewport),
           <b>E</b> to correct, <b>V</b> to share your screen (live tiers only),
           <b>K</b> for quick config (tiers), <b>Enter</b> to send.
-          A ✳ badge sits bottom-left while active.`;
-        if (keysLabel) {
-          keysLabel.textContent = `${key} arm · Space talk · drag ink · D region-shot · S viewport-shot · C clear · E correct · V video · K config · ⏎ send · Esc out`;
-        }
+          The ✳ pill shows the live state while active.`;
       };
       renderLabels();
 
       let shooting = false;
+      /** The one derived answer to "what mode am I in" (ui-mode.ts). */
+      const currentUiMode = (): UiMode =>
+        uiMode({
+          armed: engine.armed,
+          mode: engine.mode,
+          talking: engine.talking,
+          threadOpen: engine.threadOpen,
+          shooting,
+        });
+
+      // The invariant half of the old renderHud, as kit reconciler surfaces:
+      // asserted from state after EVERY dispatch and engine event, never
+      // toggled at transitions — one missed transition costs a frame, not a
+      // wedged UI. Two passes because the guards may clear `shooting`, and
+      // the UiMode the surface pass renders must be computed after they run.
+      const enforceGuards = createReconciler<UiMode>([
+        {
+          // "No armed+ink state → no veil." The veil is stranded when D's
+          // keyup never arrives — classically the first shot's
+          // getDisplayMedia picker stealing focus mid-hold — and a stranded
+          // veil is a full-viewport crosshair overlay the user can't click
+          // through, surviving disarm.
+          name: "shot-veil",
+          apply: () => {
+            if (shooting && (!engine.armed || engine.mode !== "ink")) {
+              shots.setArmed(false);
+              shooting = false;
+            }
+          },
+        },
+        {
+          // The screen share is bounded by the turn: it can't outlive the
+          // thread (send/cancel/timeout) or a disarm.
+          name: "video-share",
+          apply: () => {
+            if (videoSampler.sharing && (!engine.armed || !engine.threadOpen)) {
+              videoSampler.stop();
+            }
+          },
+        },
+      ]);
+      const enforceSurfaces = createReconciler<UiMode>([
+        {
+          // Disarming always closes the quick-config strip (a layer, not a
+          // mode — so it isn't in the mode table; it just can't outlive arm).
+          name: "config-strip",
+          apply: (mode) => {
+            if (mode === "off") {
+              strip.hide();
+            }
+          },
+        },
+        {
+          // Cursors are part of the mode contract: the crosshair comes from
+          // the mode table's cursor column, not from scattered toggles.
+          name: "cursor",
+          apply: (mode) => {
+            document.body.classList.toggle(
+              "mm-armed",
+              UI_MODE_TABLE.modes[mode].cursor === "crosshair",
+            );
+          },
+        },
+        {
+          // The mode ring (§B.4): the widget pill's data-ui-mode drives the
+          // border color, one peripheral signal for the whole table. The
+          // armed/talking classes stay as raw-state hooks on the slot content
+          // (the ✳ fill, the meter tint).
+          name: "mode-ring",
+          apply: (mode) => {
+            ctx.setUiMode(mode === "off" ? undefined : mode);
+            hud.classList.toggle("armed", engine.armed);
+            hud.classList.toggle("talking", engine.talking);
+          },
+        },
+        {
+          // Ink owns the pointer exactly while composing-shaped (ink mode, no
+          // veil): ready/composing/talking — you can keep sketching mid-REC.
+          name: "ink-routing",
+          apply: (mode) => {
+            ink.setActive(mode === "ready" || mode === "composing" || mode === "talking");
+          },
+        },
+        {
+          name: "preview",
+          apply: (mode) => {
+            preview.setCorrectMode(mode === "correcting");
+            preview.root.classList.toggle("visible", mode !== "off");
+          },
+        },
+      ]);
+
       function renderHud(): void {
-        if (!engine.armed) {
-          strip.hide(); // disarming always closes the quick-config strip
-        }
-        // Enforce "no armed+ink state → no veil" here, where every dispatch
-        // and engine event lands. The veil is stranded when D's keyup never
-        // arrives — classically the first shot's getDisplayMedia picker
-        // stealing focus mid-hold — and a stranded veil is a full-viewport
-        // crosshair overlay the user can't click through, surviving disarm.
-        if (shooting && (!engine.armed || engine.mode !== "ink")) {
-          shots.setArmed(false);
-          shooting = false;
-        }
-        // The screen share is bounded by the turn: it can't outlive the thread
-        // (send/cancel/timeout) or a disarm. Enforce it here — where every
-        // dispatch and engine event lands — the same way the shot veil is.
-        if (videoSampler.sharing && (!engine.armed || !engine.threadOpen)) {
-          videoSampler.stop();
-        }
-        document.body.classList.toggle("mm-armed", engine.armed);
-        hud.classList.toggle("armed", engine.armed);
-        hud.classList.toggle("talking", engine.talking);
+        enforceGuards(currentUiMode());
+        const mode = currentUiMode();
+        enforceSurfaces(mode);
         if (stateLabel) {
           stateLabel.textContent = !engine.armed
             ? "off"
@@ -454,9 +531,6 @@ export function multimodalModality(
         if (videoBadge) {
           videoBadge.hidden = !videoSampler.sharing;
         }
-        ink.setActive(engine.armed && engine.mode === "ink" && !shooting);
-        preview.setCorrectMode(engine.armed && engine.mode === "correct");
-        preview.root.classList.toggle("visible", engine.armed);
       }
 
       // A focus steal mid-D-hold (the display-capture picker, a cmd-tab) eats
@@ -1466,6 +1540,9 @@ export function multimodalModality(
       const buildReport = (): OverlayReport => ({
         armed: engine.armed,
         mode: engine.mode,
+        // The derived §B.4 mode — the ONE answer to "what mode am I in",
+        // shared with the HUD ring and the reconciler surfaces.
+        uiMode: currentUiMode(),
         talking: engine.talking,
         threadOpen: engine.threadOpen,
         activeModality: ctx.activeModalityLabel(),
@@ -1589,7 +1666,6 @@ export function multimodalModality(
           disposeBus?.();
           overlayTools.dispose();
           uninstallKeys();
-          undragHud();
           undragPreview();
           window.removeEventListener("blur", onWindowBlur);
           window.removeEventListener("focus", onWindowFocus);
@@ -1603,6 +1679,8 @@ export function multimodalModality(
           audio.dispose();
           pcmSource?.dispose();
           speechPlayer.dispose();
+          hud.remove();
+          ctx.setUiMode(undefined);
           layers.remove();
           style.remove();
           document.body.classList.remove("mm-armed");

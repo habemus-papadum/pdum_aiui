@@ -9,6 +9,8 @@ import { composeIntent, Engine } from "../intent-pipeline";
 import { Preview } from "./preview";
 
 const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** The body is Solid-rendered now — writes are batched, DOM lands post-flush. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function mounted(diffFlashMs?: number): { engine: Engine; preview: Preview } {
   const engine = new Engine(diffFlashMs !== undefined ? { diffFlashMs } : {});
@@ -28,11 +30,13 @@ describe("streaming deltas in the transcript", () => {
     const segment = engine.talkStart() ?? 1;
     engine.transcriptDelta(segment, "make the");
     engine.transcriptDelta(segment, "make the curb"); // extension — no flash
+    await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     expect(body.querySelector(".mm-diff-del")).toBeNull();
     expect(body.textContent).toContain("make the curb");
 
     engine.transcriptDelta(segment, "make the curve"); // the model revised itself
+    await flush();
     expect(body.querySelector(".mm-diff-del")?.textContent?.trim()).toBe("curb");
     expect(body.querySelector(".mm-diff-add")?.textContent?.trim()).toBe("curve");
 
@@ -41,12 +45,13 @@ describe("streaming deltas in the transcript", () => {
     expect(body.textContent).toContain("make the curve");
   });
 
-  it("a final that disagrees with its last delta flashes the same way", () => {
+  it("a final that disagrees with its last delta flashes the same way", async () => {
     const { engine } = mounted(30);
     const segment = engine.talkStart() ?? 1;
     engine.transcriptDelta(segment, "tighten the curb");
     engine.talkEnd();
     engine.transcriptFinal(segment, "tighten the curve", 100, "rt");
+    await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     expect(body.querySelector(".mm-diff-add")?.textContent?.trim()).toBe("curve");
   });
@@ -105,7 +110,7 @@ describe("chunk-at-a-time editing (the top box)", () => {
 });
 
 describe("the correction bar's live zone", () => {
-  it("routes correct-mode deltas to the live zone, folding the final into the textarea", () => {
+  it("routes correct-mode deltas to the live zone, folding the final into the textarea", async () => {
     const { engine, preview } = mounted();
     const s1 = engine.talkStart() ?? 1;
     engine.talkEnd();
@@ -123,6 +128,7 @@ describe("the correction bar's live zone", () => {
 
     const s2 = engine.talkStart() ?? 2;
     engine.transcriptDelta(s2, "curve");
+    await flush(); // the body is Solid-rendered — let any (wrong) piece land
     const live = document.querySelector(".mm-correction-live") as HTMLElement;
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     expect(live.textContent).toBe("curve");
@@ -283,10 +289,11 @@ describe("chunk-scoped corrections", () => {
 });
 
 describe("selection chips in the transcript", () => {
-  it("pins the app-selection chip at the start, updates it, and drops it", () => {
+  it("pins the app-selection chip at the start, updates it, and drops it", async () => {
     const { engine } = mounted();
     engine.talkStart(); // opens the thread
     engine.appSelection({ text: "the histogram title", sourceLoc: "src/App.tsx:10:2" });
+    await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     let chip = body.querySelector(".mm-sel-chip") as HTMLElement;
     expect(chip.textContent).toContain('about: "the histogram title"');
@@ -295,20 +302,23 @@ describe("selection chips in the transcript", () => {
     expect(body.firstElementChild).toBe(chip);
 
     engine.appSelection({ text: "a different span" });
+    await flush();
     chip = body.querySelector(".mm-sel-chip") as HTMLElement;
     expect(chip.textContent).toContain('about: "a different span"');
     expect(body.querySelectorAll(".mm-sel-chip")).toHaveLength(1); // last wins, one chip
 
     engine.appSelectionDrop();
+    await flush();
     expect(body.querySelector(".mm-sel-chip")).toBeNull();
   });
 
-  it("renders a code-selection chip — excerpt AND location — at its stream position", () => {
+  it("renders a code-selection chip — excerpt AND location — at its stream position", async () => {
     const { engine, preview } = mounted();
     const s1 = engine.talkStart() ?? 1;
     engine.talkEnd();
     engine.transcriptFinal(s1, "look at this helper", 90, "mock");
     engine.codeSelection({ text: "function curb()\n{}", sourceLoc: "src/c.ts:1:1", lines: 2 });
+    await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     const chip = body.querySelector(".mm-sel-chip") as HTMLElement;
     // The code rides the chip (whitespace-collapsed) with its location beside
@@ -326,13 +336,16 @@ describe("selection chips in the transcript", () => {
     expect(editArea.value).toBe("look at this helper");
   });
 
-  it("clears both chip kinds at thread boundaries", () => {
+  it("clears both chip kinds at thread boundaries", async () => {
     const { engine } = mounted();
     engine.talkStart();
     engine.appSelection({ text: "context" });
     engine.codeSelection({ text: "code", sourceLoc: "a.ts:1:1" });
-    engine.send();
+    await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    expect(body.querySelectorAll(".mm-sel-chip")).toHaveLength(2); // both chips rendered
+    engine.send();
+    await flush();
     expect(body.querySelector(".mm-sel-chip")).toBeNull();
   });
 });

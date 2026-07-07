@@ -1,10 +1,13 @@
 # Proposal B2: modal-kit-first Solid rewrite of the dev overlay
 
-Status: **proposed** (not started). Revision of [solid-rewrite.md](./solid-rewrite.md) (hereafter
-**B1**); supersedes it once accepted. Companion inputs: the viz-side design brief
-`packages/aiui-viz/handoff/modal-interaction-lessons.md` (the bug rules and the kit sketch this
-plan makes concrete) and this package's `handoff/pipeline-and-interaction-model.md` (whose WP2 —
-`UiMode` + the unified widget — becomes a milestone of this plan rather than a separate rework).
+Status: **in progress** — B2.0 (kit), B2.1 (UiMode + reconciler + unified widget, including the
+one-project Solid test infrastructure) landed July 2026; B2.2/B2.3 underway. Execution notes and
+deviations are recorded at the bottom ([Execution log](#execution-log-july-2026)). Revision of
+[solid-rewrite.md](./solid-rewrite.md) (hereafter **B1**), which it supersedes. Companion inputs:
+the viz-side design brief `packages/aiui-viz/handoff/modal-interaction-lessons.md` (the bug rules
+and the kit sketch this plan makes concrete) and this package's
+`handoff/pipeline-and-interaction-model.md` (whose WP2 — `UiMode` + the unified widget — becomes a
+milestone of this plan rather than a separate rework).
 
 ## What changed from B1
 
@@ -251,3 +254,32 @@ merges land.
 3. **Meter rendering** — keep the canvas island (recommended: zero behavior risk) vs a
    CSS-transform bar driven by the same interval. Decide in B2.4 when `capture.ts` is extracted;
    not a design question, just a cleanup opportunity.
+
+## Execution log (July 2026)
+
+Decisions made while landing the milestones, so the doc stays honest:
+
+- **B2.0 landed as specified** (`aiui-viz/modal`, wordDiff/diff-flash lift with the `mm-*`
+  defaults, overlay keymap as three declarative layers behind the byte-identical `keyCommand`).
+  One upgrade over the extraction: `isTypingTarget` also matches
+  `contenteditable="plaintext-only"` now.
+- **B2.1 landed with the widget as an imperative-handle seam** (`ui/widget.tsx`'s
+  `WidgetHandle`): the host keeps state in plain values and pushes projections into signals
+  created *inside* the render root. Two hard-won Solid-2 facts are now load-bearing test infra:
+  (1) signals created outside the render root never propagate; (2) Vitest's node export
+  conditions resolved `@solidjs/web` to its **server** build, whose `insert()` is inert —
+  components rendered once and never updated. The overlay's vite config now inlines the solid
+  packages under test and resolves `browser`/`development` conditions (a sentinel `external`
+  regex defeats vite-plugin-solid's forced externalization). Solid component tests run in the
+  same project as the vanilla suite (`solid({ include: /\.tsx$/ })` keeps the transform off plain
+  `.ts`, whose `import.meta.url` it rewrites).
+- **`overlay-tools.ts` stays independent of `agentToolkit`** (B2.2 scope cut, documented in its
+  header): the two already share the bridge, the ready event, and the `window.__<ns>` convention;
+  the only difference is lifecycle (`dispose()` vs adopt-forever), and wrapping the toolkit to
+  add disposal back would fork semantics to share ~30 lines. Dogfood theater — rejected.
+- **The HUD slot content stays a small vanilla template** (deliberate residue): five lines of
+  innerHTML inside the pill's slot, driven synchronously by renderHud's content half. Solid-izing
+  it buys consistency but makes every HUD assertion async for no functional gain; revisit when
+  B2.4 extracts `capture.ts` and the meter island gets a formal home.
+- **The key-cheat-sheet span retired** into the panel help (§B.4 called it the pill's noisiest
+  tenant; the help block already carried the same text).

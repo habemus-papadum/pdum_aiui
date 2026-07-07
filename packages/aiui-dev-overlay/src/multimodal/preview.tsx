@@ -30,7 +30,22 @@
  * Graduated from the workbench. It renders into a light-DOM layer (not a shadow
  * root) precisely so native selection resolves against its text — the
  * hard-won reason correction uses `Selection` instead of a lasso (field-notes).
+ *
+ * Rendering split (proposal B2.3): the event stream still folds into a plain
+ * `Piece[]` on the class (the pure reducer, unchanged), but the transcript
+ * BODY is Solid-rendered — a keyed `<For>` over the pieces, so a streaming
+ * delta updates one text node instead of rebuilding every span. Signals live
+ * INSIDE the render root (Solid 2 signals created outside never propagate —
+ * see ui/widget.tsx's WidgetApi pattern); the class writes them from stream
+ * events via {@link Preview.publish}. Everything editable stays an imperative
+ * island exactly as before — the chunk editor with its caret seeding, the
+ * correction bar and its live zone, the chunk picker, the hover peek, and
+ * every commit/wait/flash timer keep their own state and clocks (the
+ * animation doctrine: Solid renders structure; islands own their time).
  */
+import { createFocusTracker } from "@habemus-papadum/aiui-viz/modal";
+import { render } from "@solidjs/web";
+import { createEffect, createMemo, createSignal, For, untrack } from "solid-js";
 import {
   applyCorrectionToLines,
   type CorrectionTarget,
@@ -39,10 +54,11 @@ import {
   type IntentEvent,
   wordDiff,
 } from "../intent-pipeline";
-import { isExtension, LiveDiffText, renderRuns } from "./diff-flash";
+import { isExtension, LiveDiffText, renderRuns, SETTLE_FLASH_MS } from "./diff-flash";
 
-/** Fallback flash duration when config.diffFlashMs is unset. */
-const DEFAULT_DIFF_FLASH_MS = 750;
+/** Fallback flash duration when config.diffFlashMs is unset — the house
+ * discrete-revision tempo, shared via the modal kit. */
+const DEFAULT_DIFF_FLASH_MS = SETTLE_FLASH_MS;
 
 /**
  * How long Enter waits for an in-flight spoken segment's transcript before
@@ -82,6 +98,13 @@ export interface CorrectionVoiceHooks {
 
 interface Piece {
   kind: "text" | "shot" | "code-selection";
+  /**
+   * The keyed-`<For>` identity: `text:<segment>` / `shot:<marker>` /
+   * `code:<seq>` (and `text:patch:<seq>` for lines a patch introduced).
+   * Stable for the piece's whole life, so its DOM row persists across stream
+   * events — the point of the Solid port.
+   */
+  key: string;
   segment?: number;
   text?: string;
   final?: boolean;
@@ -101,6 +124,20 @@ interface AppSelectionChip {
   cell?: string;
 }
 
+/**
+ * The imperative seam into the render root: plain setters over signals
+ * created INSIDE the component (see the module doc). `tick` is the stream
+ * clock — every published change bumps it, and the body's derived views
+ * (per-piece text, flash runs, the mark window, the editing highlight)
+ * re-read the class state under it; memo equality keeps untouched pieces'
+ * DOM writes at zero.
+ */
+interface PreviewViewApi {
+  setPieces(next: Piece[]): void;
+  setAppSel(sel: AppSelectionChip | undefined): void;
+  tick(): void;
+}
+
 export class Preview {
   readonly root: HTMLDivElement;
   private readonly body: HTMLDivElement;
@@ -109,9 +146,13 @@ export class Preview {
   private readonly engine: Engine;
   private readonly voice: CorrectionVoiceHooks;
   private pieces: Piece[] = [];
+  /** Uniquifier for pieces without a natural key (code chips, patch-added lines). */
+  private pieceSeq = 0;
   /** The turn's app selection (last `app-selection` event; drop clears it). */
   private appSel: AppSelectionChip | undefined;
-  /** Per-text-piece diff runs, rendered during the post-correction flash. */
+  /** Per-text-piece diff runs, rendered during the post-correction flash.
+   * Island state, NOT a signal: the settle timer below owns its clock and the
+   * render root only re-reads it on {@link publish}'s tick. */
   private flash: Map<Piece, DiffRun[]> | undefined;
   private flashTimer: ReturnType<typeof setTimeout> | undefined;
   private correcting = false;
@@ -144,10 +185,15 @@ export class Preview {
   private readonly chunkPicker: HTMLDivElement;
   /** Which text chunk the editor holds; -1 = the last (the default). */
   private editChunk = -1;
-  /** Which box last held focus — where a dictated final folds in. */
-  private lastFocus: "top" | "bottom" = "bottom";
+  /** Which box last held focus — where a dictated final folds in. Tracked
+   * state, never a DOM query (the kit's rule: activeElement lies during
+   * transitions — focus steals, blur-before-click ordering). */
+  private readonly focus = createFocusTracker<"top" | "bottom">("bottom");
   /** Corrections applied during THIS correct-mode session (abort undoes them all). */
   private sessionCorrections = 0;
+  /** Setters captured from inside the render root (see {@link PreviewViewApi}). */
+  private readonly view: PreviewViewApi;
+  private readonly disposeRender: () => void;
 
   constructor(engine: Engine, voice: CorrectionVoiceHooks = {}) {
     this.engine = engine;
@@ -158,6 +204,9 @@ export class Preview {
     this.body = document.createElement("div");
     this.body.className = "mm-preview-body";
     this.root.append(this.body);
+    const { view, dispose } = this.mountBody();
+    this.view = view;
+    this.disposeRender = dispose;
 
     // Correct mode's chunk editor. It deliberately holds ONE contiguous run
     // of text (a "chunk" — consecutive segments with no shot between them),
@@ -178,7 +227,7 @@ export class Preview {
     this.editArea.className = "mm-edit-area";
     this.editArea.style.display = "none";
     this.editArea.addEventListener("focus", () => {
-      this.lastFocus = "top";
+      this.focus.set("top");
     });
     this.editArea.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
@@ -236,7 +285,7 @@ export class Preview {
       }
     });
     this.correctionInput.addEventListener("focus", () => {
-      this.lastFocus = "bottom";
+      this.focus.set("bottom");
     });
 
     engine.onEvent((event) => this.apply(event));
@@ -258,7 +307,7 @@ export class Preview {
       this.seedEditArea();
       this.correctionBar.style.display = "flex";
       this.correctionInput.focus();
-      this.lastFocus = "bottom";
+      this.focus.set("bottom");
       if (!this.voice.talking?.()) {
         this.voice.start?.();
       }
@@ -270,7 +319,7 @@ export class Preview {
       this.syncManualEdits();
       this.teardownBar();
     } else {
-      this.render();
+      this.publish();
     }
   }
 
@@ -395,7 +444,7 @@ export class Preview {
     this.correctionBar.style.display = "none";
     this.editArea.style.display = "none";
     this.chunkPicker.style.display = "none";
-    this.render();
+    this.publish();
   }
 
   // ── the top box: one text chunk as an editable textarea ────────────────────
@@ -476,7 +525,7 @@ export class Preview {
     const at = Math.min(caret, this.editArea.value.length);
     this.editArea.setSelectionRange(at, at);
     this.renderChunkPicker();
-    this.render(); // the body highlights the chunk under edit
+    this.publish(); // the body highlights the chunk under edit
   }
 
   /** One chip per chunk; hidden while the turn has fewer than two. */
@@ -580,9 +629,9 @@ export class Preview {
     }
     this.flashTimer = setTimeout(() => {
       this.flash = undefined;
-      this.render();
+      this.publish();
     }, this.engine.settings.diffFlashMs ?? DEFAULT_DIFF_FLASH_MS);
-    this.render();
+    this.publish();
   }
 
   /** A dictated final folds into whichever box last held the caret. */
@@ -590,7 +639,7 @@ export class Preview {
     if (this.correctionBar.style.display === "none" || text === "") {
       return; // editor dismissed while the segment was in flight — drop it
     }
-    const input = this.lastFocus === "top" ? this.editArea : this.correctionInput;
+    const input = this.focus.last() === "top" ? this.editArea : this.correctionInput;
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
     const before = input.value.slice(0, start);
@@ -632,6 +681,7 @@ export class Preview {
       case "code-selection":
         this.pieces.push({
           kind: "code-selection",
+          key: `code:${++this.pieceSeq}`,
           text: event.text,
           ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
           lines: event.lines ?? event.text.split("\n").length,
@@ -688,7 +738,12 @@ export class Preview {
         }
         break;
       case "shot":
-        this.pieces.push({ kind: "shot", marker: event.marker, thumb: event.thumb });
+        this.pieces.push({
+          kind: "shot",
+          key: `shot:${event.marker}`,
+          marker: event.marker,
+          thumb: event.thumb,
+        });
         break;
       case "shot-drop":
         this.pieces = this.pieces.filter((p) => !(p.kind === "shot" && p.marker === event.marker));
@@ -696,13 +751,13 @@ export class Preview {
       default:
         break;
     }
-    this.render();
+    this.publish();
   }
 
   private textPiece(segment: number): Piece {
     let piece = this.pieces.find((p) => p.kind === "text" && p.segment === segment);
     if (!piece) {
-      piece = { kind: "text", segment, text: "" };
+      piece = { kind: "text", key: `text:${segment}`, segment, text: "" };
       this.pieces.push(piece);
     }
     return piece;
@@ -730,7 +785,7 @@ export class Preview {
     const settle = Math.min(450, this.engine.settings.diffFlashMs ?? DEFAULT_DIFF_FLASH_MS);
     this.flashTimer = setTimeout(() => {
       this.flash = undefined;
-      this.render();
+      this.publish();
     }, settle);
   }
 
@@ -763,6 +818,7 @@ export class Preview {
     if (lines.length > textPieces.length) {
       const extra: Piece = {
         kind: "text",
+        key: `text:patch:${++this.pieceSeq}`,
         text: lines.slice(textPieces.length).join(" "),
         final: true,
       };
@@ -779,73 +835,168 @@ export class Preview {
     }
     this.flashTimer = setTimeout(() => {
       this.flash = undefined;
-      this.render();
+      this.publish();
     }, this.engine.settings.diffFlashMs ?? DEFAULT_DIFF_FLASH_MS);
     return true;
   }
 
   // ── rendering ───────────────────────────────────────────────────────────────
 
-  /** Drop the body-attached peek (the modality calls this on unmount too). */
+  /** Drop the peek and the render root (the modality calls this on unmount). */
   dispose(): void {
     this.hidePeek();
+    this.disposeRender();
   }
 
-  private render(): void {
+  /**
+   * Push the class-held view-model into the render root's signals — the
+   * Solid-era `render()`: one snapshot per stream event, DOM updates on the
+   * next flush. Only called from stream events, timers, and user gestures
+   * (never from inside the render root — writes in owned scopes throw).
+   */
+  private publish(): void {
     // A re-render can remove the hovered thumb; its peek would linger on the
-    // body with no mouseleave to clear it.
+    // body with no mouseleave to clear it (the old full-teardown render hid
+    // it every event — keep that exact behavior).
     this.hidePeek();
-    this.body.replaceChildren();
-    // The app selection opens the transcript: whatever was highlighted on the
-    // page when the turn started rides the whole turn as a pinned chip.
-    if (this.appSel !== undefined) {
-      this.body.append(renderSelectionChip("about", this.appSel.text, this.appSel.sourceLoc));
-      this.body.append(document.createTextNode(" "));
+    this.view.setPieces([...this.pieces]);
+    this.view.setAppSel(this.appSel);
+    this.view.tick();
+  }
+
+  /**
+   * Mount the Solid body: a keyed `<For>` over the pieces. Each piece keeps
+   * one DOM row for its whole life ({@link Piece.key}); per-row memos re-read
+   * the class state on every {@link publish} tick but their equality gates
+   * the DOM writes, so a streaming delta touches exactly one text node — the
+   * point of the port (no more `replaceChildren` teardown per event).
+   */
+  private mountBody(): { view: PreviewViewApi; dispose: () => void } {
+    let view: PreviewViewApi | undefined;
+    const PreviewBody = () => {
+      // Signals INSIDE the render root; the class writes through `view`.
+      const [pieces, setPieces] = createSignal<Piece[]>([]);
+      const [appSel, setAppSel] = createSignal<AppSelectionChip | undefined>(undefined);
+      const [rev, setRev] = createSignal(0);
+      view = { setPieces, setAppSel, tick: () => setRev((n) => n + 1) };
+
+      // The lasso target (setCorrectionTarget emits no event — the mark
+      // lands on the next stream tick, exactly as the old render did).
+      const target = createMemo(() => {
+        rev();
+        return this.engine.correctionTarget;
+      });
+      // The chunk currently in the editor, highlighted while correcting.
+      const editing = createMemo(() => {
+        rev();
+        pieces();
+        return this.correcting ? new Set(this.selectedChunk()) : undefined;
+      });
+      // Per-text-piece offsets over the joined transcript (the mark window's
+      // coordinates and the spans' data-off, spaces counted as before).
+      const offsets = createMemo(() => {
+        rev();
+        const map = new Map<Piece, number>();
+        let offset = 0;
+        for (const piece of pieces()) {
+          if (piece.kind === "text") {
+            map.set(piece, offset);
+            offset += (piece.text ?? "").length + 1; // the joining space
+          }
+        }
+        return map;
+      });
+      // Follow the stream: pin the scroll after every published change
+      // (effects run post-flush, when the DOM has the new content).
+      createEffect(
+        () => rev(),
+        () => {
+          this.body.scrollTop = this.body.scrollHeight;
+        },
+      );
+
+      // The app selection opens the transcript: whatever was highlighted on
+      // the page when the turn started rides the whole turn as a pinned chip.
+      const chip = createMemo(() => {
+        const sel = appSel();
+        return sel === undefined
+          ? undefined
+          : [renderSelectionChip("about", sel.text, sel.sourceLoc), " "];
+      });
+
+      /** One streaming text segment: class/text/mark/flash all reactive. */
+      const textRow = (piece: Piece) => {
+        const text = createMemo(() => {
+          rev();
+          return piece.text ?? "";
+        });
+        const cls = createMemo(() => {
+          rev();
+          const base = piece.final ? "mm-seg final" : "mm-seg";
+          // `editing` marks the chunk currently in the editor.
+          return editing()?.has(piece) ? `${base} editing` : base;
+        });
+        const off = createMemo(() => offsets().get(piece) ?? 0);
+        const runs = createMemo(() => {
+          rev();
+          return this.flash?.get(piece);
+        });
+        const content = () => {
+          const flashRuns = runs();
+          if (flashRuns) {
+            // The flash view: deletions struck pink, additions green (shared
+            // renderer — the same visual language as every other diff moment).
+            return Array.from(renderRuns(flashRuns).childNodes);
+          }
+          const value = text();
+          const t = target();
+          const offset = off();
+          if (t && t.from < offset + value.length && t.to > offset) {
+            const from = Math.max(0, t.from - offset);
+            const to = Math.min(value.length, t.to - offset);
+            return [value.slice(0, from), <mark>{value.slice(from, to)}</mark>, value.slice(to)];
+          }
+          return value;
+        };
+        return (
+          <>
+            <span class={cls()} data-off={String(off())}>
+              {content()}
+            </span>{" "}
+          </>
+        );
+      };
+
+      return (
+        <>
+          {chip()}
+          <For each={pieces()} keyed={(piece) => piece.key}>
+            {(item) => {
+              // A deliberate one-shot read (hence untrack): identity per key
+              // is stable — the reducer mutates pieces in place — so this row
+              // callback runs once per piece's life and `kind` never changes.
+              const piece = untrack(item);
+              if (piece.kind === "shot") {
+                return this.renderShot(piece);
+              }
+              if (piece.kind === "code-selection") {
+                // The code rides the chip alongside its location (an excerpt;
+                // hover for the whole thing) — a bare locator is opaque when
+                // debugging. Static for the piece's life, built once.
+                const loc = piece.sourceLoc ?? `${piece.lines ?? "?"} lines`;
+                return <>{renderSelectionChip("⧉", oneLine(piece.text ?? ""), loc, piece.text)} </>;
+              }
+              return textRow(piece);
+            }}
+          </For>
+        </>
+      );
+    };
+    const dispose = render(PreviewBody, this.body);
+    if (!view) {
+      throw new Error("preview body render did not capture its setters");
     }
-    const target = this.engine.correctionTarget;
-    const editing = this.correcting ? new Set(this.selectedChunk()) : undefined;
-    let offset = 0;
-    for (const piece of this.pieces) {
-      if (piece.kind === "shot") {
-        this.body.append(this.renderShot(piece));
-        continue;
-      }
-      if (piece.kind === "code-selection") {
-        // The code rides the chip alongside its location (an excerpt; hover
-        // for the whole thing) — a bare locator is opaque when debugging.
-        const loc = piece.sourceLoc ?? `${piece.lines ?? "?"} lines`;
-        this.body.append(renderSelectionChip("⧉", oneLine(piece.text ?? ""), loc, piece.text));
-        this.body.append(document.createTextNode(" "));
-        continue;
-      }
-      const text = piece.text ?? "";
-      const span = document.createElement("span");
-      span.className = piece.final ? "mm-seg final" : "mm-seg";
-      if (editing?.has(piece)) {
-        span.classList.add("editing"); // the chunk currently in the editor
-      }
-      span.dataset.off = String(offset);
-      const runs = this.flash?.get(piece);
-      if (runs) {
-        // The flash view: deletions struck pink, additions green (shared
-        // renderer — the same visual language as every other diff moment).
-        span.append(renderRuns(runs));
-      } else if (target && target.from < offset + text.length && target.to > offset) {
-        const from = Math.max(0, target.from - offset);
-        const to = Math.min(text.length, target.to - offset);
-        span.append(document.createTextNode(text.slice(0, from)));
-        const mark = document.createElement("mark");
-        mark.textContent = text.slice(from, to);
-        span.append(mark);
-        span.append(document.createTextNode(text.slice(to)));
-      } else {
-        span.textContent = text;
-      }
-      this.body.append(span);
-      this.body.append(document.createTextNode(" "));
-      offset += text.length + 1; // the joining space
-    }
-    this.body.scrollTop = this.body.scrollHeight;
+    return { view, dispose };
   }
 
   /**
@@ -853,7 +1004,8 @@ export class Preview {
    * chip), a hover **peek** (a fixed-position enlargement — the body is a
    * scroll container, so an absolutely-positioned child would clip), and a
    * hover **✕** that retracts the shot from the turn via {@link Engine.dropShot}
-   * — took the wrong screenshot, remove it before sending.
+   * — took the wrong screenshot, remove it before sending. An imperative
+   * island: built once per shot piece, its listeners live as long as its row.
    */
   private renderShot(piece: Piece): HTMLElement {
     const wrap = document.createElement("span");

@@ -49,7 +49,7 @@ describe("LiveDiffText", () => {
 
   it("revisions flash the word-diff, then settle to the clean text", async () => {
     const host = document.createElement("div");
-    const live = new LiveDiffText(host, () => 20);
+    const live = new LiveDiffText(host, { flashMs: () => 20 });
     live.update("make the curb");
     live.update("make the curve"); // the model rewrote its hypothesis
     expect(host.querySelector(".mm-diff-del")?.textContent?.trim()).toBe("curb");

@@ -47,6 +47,16 @@ function streamedEvents(sent: Uint8Array[]): IntentEvent[] {
   return events;
 }
 
+/**
+ * Query the tool's shadow root. The HUD (`.mm-hud` with arm/state/video/meter/
+ * speaker) lives INSIDE the widget pill's slot since the unified-widget
+ * rewrite (proposal B2), so it is reachable only through the handle's shadow
+ * root — `document.querySelector` sees none of it. The page-level layers
+ * (preview, veil, strip) still mount into `document.body`.
+ */
+const q = <T extends Element>(handle: { shadowRoot?: ShadowRoot | null }, sel: string): T =>
+  handle.shadowRoot?.querySelector(sel) as T;
+
 /** Mount the multimodal modality alone (no text tab), wired to a fake socket. */
 function mountMultimodal(config: Parameters<typeof multimodalModality>[0], ackOk = true) {
   const { factory, sent, push } = fakeSocketFactory(() => ({ ok: ackOk }));
@@ -137,15 +147,20 @@ describe("multimodalModality: the mic is only for the channel transcriber", () =
   it("mock: Space starts the turn synchronously and never touches the mic", async () => {
     const mic = neverResolvingMic();
     try {
-      const { sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 });
+      const { handle, sent } = mountMultimodal({
+        transcriber: "mock",
+        mockWordMs: 0,
+        mockTypoRate: 0,
+      });
 
       key("keydown", "`"); // arm
       key("keydown", " "); // talk-start — the mock path has no mic await, so this
       //                      runs to completion synchronously in the dispatch.
 
       // Talking is live already, without the getUserMedia promise ever settling —
-      // the mock path has no await, so renderHud() ran synchronously in dispatch.
-      expect(document.querySelector(".mm-state")?.textContent).toContain("REC");
+      // the mock path has no await, so renderHud() ran synchronously in dispatch
+      // (the state label is vanilla-written into the pill's HUD slot: no flush).
+      expect(q(handle, ".mm-state")?.textContent).toContain("REC");
       expect(mic.calls()).toBe(0); // the mock never reads audio
 
       // And it still streams the turn + a transcript on talk-end — audio untouched.
@@ -758,7 +773,7 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
   it("V streams video-share + sampled JPEG frames; disarm stops the sampler", async () => {
     const restore = stubCapture();
     try {
-      const { sent } = mountLive();
+      const { handle, sent } = mountLive();
       key("keydown", "`"); // arm
       key("keydown", "v"); // video-toggle → videoShare(true) opens the thread, sampler starts
       await wait(120); // socket connect + grant + immediate frame + a few 20ms intervals
@@ -780,15 +795,15 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
       );
       expect([...(firstVideo?.payload ?? [])]).toEqual([0x89, 0x50, 0x4e, 0x47]);
 
-      // The badge shows while sharing.
-      expect(document.querySelector<HTMLElement>(".mm-video")?.hidden).toBe(false);
+      // The badge shows while sharing (vanilla-written by renderHud: no flush).
+      expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(false);
 
       key("keydown", "`"); // disarm → renderHud stops the sampler (share can't outlive the turn)
       await wait(60); // let the stop + any in-flight upload settle
       const settled = videoChunks(sent).length;
       await wait(60); // three more 20ms intervals would have fired if it were still running
       expect(videoChunks(sent).length).toBe(settled); // frozen — nothing new after disarm
-      expect(document.querySelector<HTMLElement>(".mm-video")?.hidden).toBe(true);
+      expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(true);
     } finally {
       restore();
     }
@@ -797,7 +812,7 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
   it("toggling V off stops sampling and records the OFF edge (thread stays open)", async () => {
     const restore = stubCapture();
     try {
-      const { sent } = mountLive();
+      const { handle, sent } = mountLive();
       key("keydown", "`");
       key("keydown", "v"); // on
       await wait(80);
@@ -808,7 +823,7 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
       const settled = videoChunks(sent).length;
       await wait(60);
       expect(videoChunks(sent).length).toBe(settled); // no more frames
-      expect(document.querySelector<HTMLElement>(".mm-video")?.hidden).toBe(true);
+      expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(true);
       const shares = streamedEvents(sent).filter((e) => e.type === "video-share");
       expect(shares.map((e) => (e as { on?: boolean }).on)).toEqual([true, false]);
     } finally {
@@ -899,7 +914,7 @@ async function openThread(): Promise<void> {
 describe("multimodalModality: speech playback (premium/flagship audio-back)", () => {
   it("plays a pushed speech clip, shows the speaker line, clears on end", async () => {
     const audio = fakeSpeechAudio();
-    const { push } = mountWithSpeech({}, audio.factory);
+    const { handle, push } = mountWithSpeech({}, audio.factory);
     await openThread();
 
     push({ kind: "speech", id: "ack_0", mime: "audio/mpeg", data: btoa("clip"), label: "sent" });
@@ -908,7 +923,7 @@ describe("multimodalModality: speech playback (premium/flagship audio-back)", ()
     expect(audio.created).toHaveLength(1);
     expect(audio.created[0].src).toBe(`data:audio/mpeg;base64,${btoa("clip")}`);
     expect(audio.created[0].played).toBe(true);
-    const speaker = document.querySelector(".mm-speaker") as HTMLElement;
+    const speaker = q<HTMLElement>(handle, ".mm-speaker");
     expect(speaker.hidden).toBe(false);
     expect(speaker.textContent).toContain("sent");
 
@@ -1000,9 +1015,6 @@ describe("multimodalModality: advanced config panel", () => {
     uninstallStorage();
   });
 
-  const q = <T extends Element>(handle: { shadowRoot?: ShadowRoot | null }, sel: string): T =>
-    handle.shadowRoot?.querySelector(sel) as T;
-
   /** The `meta.intent` on the connection's hello frame. */
   function helloIntent(sent: Uint8Array[]): Record<string, unknown> | undefined {
     const hello = frames(sent)[0]?.envelope as { meta?: { intent?: Record<string, unknown> } };
@@ -1016,13 +1028,14 @@ describe("multimodalModality: advanced config panel", () => {
     await wait(50);
   }
 
-  it("gear opens the editor over the full effective config", () => {
+  it("gear opens the editor over the full effective config", async () => {
     // Explicit mock for both seams (the shipped defaults are the real `openai`
     // backends) so the assertion below tests a subset present, not the default.
     const { handle } = mountMultimodal({ transcriber: "mock", corrector: "mock", mockWordMs: 0 });
     const panel = q<HTMLElement>(handle, ".mm-config");
     expect(panel.hidden).toBe(true);
     q<HTMLButtonElement>(handle, ".mm-gear").click();
+    await flush(); // hidden rides a signal now (Solid batches writes)
     expect(panel.hidden).toBe(false);
     const editor = q<HTMLTextAreaElement>(handle, ".mm-config-editor");
     const shown = JSON.parse(editor.value);
@@ -1039,6 +1052,7 @@ describe("multimodalModality: advanced config panel", () => {
     edited.talkMode = "toggle";
     editor.value = JSON.stringify(edited);
     q<HTMLButtonElement>(handle, ".mm-config-apply").click();
+    await flush(); // the message div renders from a signal
 
     // Persisted as a minimal delta, with a success message shown.
     expect(loadIntentOverrides()).toEqual({ talkMode: "toggle" });
@@ -1055,6 +1069,7 @@ describe("multimodalModality: advanced config panel", () => {
     const editor = q<HTMLTextAreaElement>(handle, ".mm-config-editor");
     editor.value = JSON.stringify({ talkMdoe: "toggle" }); // typo
     q<HTMLButtonElement>(handle, ".mm-config-apply").click();
+    await flush(); // the message div renders from a signal
 
     expect(q<HTMLElement>(handle, ".mm-config-msg").textContent).toContain(
       'unknown config key "talkMdoe"',
@@ -1065,12 +1080,13 @@ describe("multimodalModality: advanced config panel", () => {
     expect(helloIntent(sent)).toMatchObject({ talkMode: "hold" }); // unchanged
   });
 
-  it("rejects a type mismatch loudly, naming the expected type", () => {
+  it("rejects a type mismatch loudly, naming the expected type", async () => {
     const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
     q<HTMLButtonElement>(handle, ".mm-gear").click();
     const editor = q<HTMLTextAreaElement>(handle, ".mm-config-editor");
     editor.value = JSON.stringify({ inkFadeSec: "wide" });
     q<HTMLButtonElement>(handle, ".mm-config-apply").click();
+    await flush(); // the message div renders from a signal
 
     const msg = q<HTMLElement>(handle, ".mm-config-msg").textContent ?? "";
     expect(msg).toContain('"inkFadeSec"');
@@ -1134,6 +1150,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     key("keydown", "k");
     expect(stripOpen()).toBe(true);
     key("keydown", "3"); // rapid
+    await flush(); // the strip content is Solid-rendered (batched writes)
     expect(activeChip()).toContain("rapid");
 
     // Session-scoped: NOTHING persisted — a reload would return to the file config.
@@ -1146,17 +1163,19 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(helloIntents(sent)[0]).toMatchObject({ tier: "rapid", transcriber: "mock" });
   });
 
-  it("clicking a tier chip (or an action) works like its key — the strip is mouse-operable", () => {
+  it("clicking a tier chip (or an action) works like its key — the strip is mouse-operable", async () => {
     mountMultimodal(MOCK);
     key("keydown", "`"); // arm
     key("keydown", "k"); // open the strip
     expect(stripOpen()).toBe(true);
+    await flush(); // the chips are Solid-rendered (batched writes)
 
     // Click the rapid chip: same dispatch as pressing 3. (Regression: chips
     // used to be display-only spans — under the armed crosshair cursor they
     // read as broken buttons, and the mouse path silently did nothing.)
     const rapid = strip()?.querySelector<HTMLElement>('[data-tier="rapid"]');
     rapid?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flush();
     expect(activeChip()).toContain("rapid");
     expect(loadIntentOverrides()).toEqual({}); // still session-only
 
@@ -1176,6 +1195,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
 
     key("keydown", "k");
     key("keydown", "5"); // flagship — but a thread is open
+    await flush(); // the strip content is Solid-rendered (batched writes)
     expect(strip()?.querySelector(".mm-strip-pending")?.textContent).toContain("flagship");
     expect(helloIntents(sent)[0]?.tier).toBeUndefined(); // this thread keeps its config
 
@@ -1193,7 +1213,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(loadIntentOverrides()).toEqual({}); // still session-only
   });
 
-  it("S persists the session layer for the site as a minimal delta", () => {
+  it("S persists the session layer for the site as a minimal delta", async () => {
     mountMultimodal(MOCK);
     key("keydown", "`");
     key("keydown", "k");
@@ -1201,6 +1221,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(loadIntentOverrides()).toEqual({});
     key("keydown", "s"); // save
     expect(loadIntentOverrides()).toEqual({ tier: "rapid" });
+    await flush(); // the strip content is Solid-rendered (batched writes)
     expect(strip()?.textContent).toContain("saved for this site");
   });
 

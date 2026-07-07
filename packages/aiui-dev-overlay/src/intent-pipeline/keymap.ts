@@ -28,10 +28,23 @@
  * priority; every other key still means what it always means (Space talks), so
  * the strip is a layer, not a mode.
  *
- * The decision logic is pure ({@link keyCommand}) so the design is unit-
- * testable; installKeymap() is the thin DOM binding around it.
+ * The decision logic is the modal kit's layered resolution
+ * (`aiui-viz/modal`): three declarative {@link KeyLayer}s — arm (backtick,
+ * always live), the config strip (active while open, everything unclaimed
+ * falls through), and the armed base — resolved top-down by the kit's pure
+ * `resolveKey`, wrapped in {@link keyCommand} so the decision stays one
+ * unit-testable function of (state, key, phase, repeat). installKeymap() is
+ * the thin DOM binding around it.
  */
+import {
+  isTypingTarget,
+  type KeyClaim,
+  type KeyLayer,
+  resolveKey,
+} from "@habemus-papadum/aiui-viz/modal";
 import type { IntentTier } from "./config";
+
+export { isTypingTarget };
 
 /** The strip's digit row: 1..5, cheapest tier first (matches the tier ladder). */
 export const TIER_BY_DIGIT: readonly IntentTier[] = [
@@ -82,6 +95,123 @@ export type KeyCommand =
    */
   | { cmd: "swallow" };
 
+const command = (cmd: KeyCommand): KeyClaim<KeyCommand> => ({ command: cmd });
+
+/** Fire once on keydown, pass repeats/keyup — the tiny keyboard's usual shape. */
+const onPress = (cmd: KeyCommand) => (_state: KeyState, _key: string, repeat: boolean) =>
+  repeat ? ("pass" as const) : command(cmd);
+
+/** Backtick arms/disarms from anywhere — above every other layer. */
+const armLayer: KeyLayer<KeyState, KeyCommand> = {
+  name: "arm",
+  bindings: [{ keys: ["`"], down: onPress({ cmd: "arm-toggle" }) }],
+  fallback: "pass",
+};
+
+/**
+ * The strip's own keys, claimed only while it is open. Anything not claimed
+ * here falls through to the normal armed layer below — except S, which the
+ * strip claims for "save" (shadowing the viewport screenshot until it closes).
+ * Because S now fires on keydown and the strip's save IS that keydown handler,
+ * claiming it here is all it takes — there is no keyup to swallow anymore. (D
+ * is deliberately NOT shadowed: the region veil stays reachable, and a D held
+ * across the strip opening still disarms cleanly on its own keyup below.)
+ */
+const stripLayer: KeyLayer<KeyState, KeyCommand> = {
+  name: "config-strip",
+  active: (state) => state.armed && !!state.configOpen,
+  bindings: [
+    {
+      keys: TIER_BY_DIGIT.map((_, index) => String(index + 1)),
+      down: (_state, key, repeat) =>
+        repeat ? "pass" : command({ cmd: "config-tier", tier: TIER_BY_DIGIT[Number(key) - 1] }),
+    },
+    { keys: ["s", "S"], down: onPress({ cmd: "config-save" }) },
+    { keys: ["r", "R"], down: onPress({ cmd: "config-reset" }) },
+    { keys: ["g", "G"], down: onPress({ cmd: "config-advanced" }) },
+    // Picking a rung already changed the mode — Enter (like Esc/K) just closes.
+    { keys: ["Escape", "Enter", "k", "K"], down: onPress({ cmd: "config-close" }) },
+  ],
+  fallback: "pass",
+};
+
+/** The armed base layer — the tiny keyboard itself. */
+const armedLayer: KeyLayer<KeyState, KeyCommand> = {
+  name: "armed",
+  active: (state) => state.armed,
+  bindings: [
+    {
+      keys: [" "],
+      down: (state, _key, repeat) => {
+        if (state.talkMode === "hold") {
+          if (!repeat && !state.talking) {
+            return command({ cmd: "talk-start" });
+          }
+          // Swallow every other armed-Space down (repeats — including the ones
+          // that arrive while talk-start's mic acquisition is still in flight
+          // and `talking` is not yet true) so the page never scrolls.
+          return "swallow";
+        }
+        if (!repeat) {
+          return command({ cmd: state.talking ? "talk-end" : "talk-start" });
+        }
+        // Toggle mode: repeats are equally scroll-y — swallow them too.
+        return "swallow";
+      },
+      up: (state) =>
+        // Release ALWAYS ends the hold — not just while `talking`. The
+        // silence endpointer auto-splits a held Space into utterance
+        // segments, so a release can land in the gap between one segment's
+        // end and the next one's start; an unconditional talk-end is what
+        // stops the auto-restart there (the modality's talkEnd is a no-op
+        // when nothing is recording).
+        state.talkMode === "hold" ? command({ cmd: "talk-end" }) : "pass",
+    },
+    {
+      // The region shot: arm the crosshair veil on the way down, disarm on the
+      // way up. A drag that pointerup already completed just disarms; a drag
+      // still in flight finishes on its own pointerup (see shot.ts).
+      keys: ["d", "D"],
+      down: onPress({ cmd: "shoot-arm" }),
+      up: () => command({ cmd: "shoot-release" }),
+    },
+    // The whole-viewport shot: a single press, fired on keydown. No veil, no
+    // hold, no keyup handling — so it can never race a drag the way the old
+    // S-tap-vs-S-drag heuristic did (see the header note).
+    { keys: ["s", "S"], down: onPress({ cmd: "shoot-viewport" }) },
+    { keys: ["c", "C"], down: onPress({ cmd: "ink-clear" }) },
+    { keys: ["e", "E"], down: onPress({ cmd: "correct-toggle" }) },
+    {
+      // The realtime submode's screen share. Only in ink mode (correct mode
+      // owns the pointer/keys for text selection), fired on keydown. The
+      // command always emits here — whether it *does* anything is gated on the
+      // effective submode in the modality's dispatch (a live tier only), which
+      // is where config is known; a non-live tier just shows a hint.
+      keys: ["v", "V"],
+      down: (state, _key, repeat) =>
+        !repeat && state.mode === "ink" ? command({ cmd: "video-toggle" }) : "pass",
+    },
+    { keys: ["k", "K"], down: onPress({ cmd: "config-toggle" }) },
+    {
+      keys: ["Enter"],
+      down: (state, _key, repeat) => {
+        if (repeat) {
+          return "pass";
+        }
+        // In correct mode Enter means "done editing — back to ink", NEVER
+        // "send the turn": the user's hands are on Enter to commit edits, and
+        // one stray press must not fire the whole prompt into the session.
+        return command(state.mode === "correct" ? { cmd: "correct-toggle" } : { cmd: "send" });
+      },
+    },
+    { keys: ["Escape"], down: onPress({ cmd: "step-out" }) },
+  ],
+  fallback: "pass",
+};
+
+/** Top-down: backtick above the strip above the armed base. */
+const KEY_STACK: readonly KeyLayer<KeyState, KeyCommand>[] = [armLayer, stripLayer, armedLayer];
+
 /** Map one key event to a command, or undefined to let the page have it. */
 export function keyCommand(
   state: KeyState,
@@ -92,141 +222,14 @@ export function keyCommand(
   if (state.typing) {
     return undefined;
   }
-  if (key === "`" && phase === "down" && !repeat) {
-    return { cmd: "arm-toggle" };
-  }
-  if (!state.armed) {
+  const claim = resolveKey(KEY_STACK, state, key, phase, repeat);
+  if (claim === "pass") {
     return undefined;
   }
-
-  // The strip's own keys, checked first while it is open. Anything not claimed
-  // here falls through to the normal armed keymap below — except S, which the
-  // strip claims for "save" (shadowing the viewport screenshot until it closes).
-  // Because S now fires on keydown and the strip's save IS that keydown handler,
-  // claiming it here is all it takes — there is no keyup to swallow anymore. (D
-  // is deliberately NOT shadowed: the region veil stays reachable, and a D held
-  // across the strip opening still disarms cleanly on its own keyup below.)
-  if (state.configOpen && phase === "down" && !repeat) {
-    const digit = Number.parseInt(key, 10);
-    if (digit >= 1 && digit <= TIER_BY_DIGIT.length) {
-      return { cmd: "config-tier", tier: TIER_BY_DIGIT[digit - 1] };
-    }
-    switch (key) {
-      case "s":
-      case "S":
-        return { cmd: "config-save" };
-      case "r":
-      case "R":
-        return { cmd: "config-reset" };
-      case "g":
-      case "G":
-        return { cmd: "config-advanced" };
-      case "Escape":
-      case "Enter": // picking a rung already changed the mode — Enter just closes
-      case "k":
-      case "K":
-        return { cmd: "config-close" };
-    }
+  if (claim === "swallow") {
+    return { cmd: "swallow" };
   }
-  if ((key === "k" || key === "K") && phase === "down" && !repeat) {
-    return { cmd: "config-toggle" };
-  }
-
-  switch (key) {
-    case " ":
-      if (state.talkMode === "hold") {
-        if (phase === "down" && !repeat && !state.talking) {
-          return { cmd: "talk-start" };
-        }
-        if (phase === "up") {
-          // Release ALWAYS ends the hold — not just while `talking`. The
-          // silence endpointer auto-splits a held Space into utterance
-          // segments, so a release can land in the gap between one segment's
-          // end and the next one's start; an unconditional talk-end is what
-          // stops the auto-restart there (the modality's talkEnd is a no-op
-          // when nothing is recording).
-          return { cmd: "talk-end" };
-        }
-        // Swallow every other armed-Space down (repeats — including the ones
-        // that arrive while talk-start's mic acquisition is still in flight
-        // and `talking` is not yet true) so the page never scrolls.
-        return { cmd: "swallow" };
-      }
-      if (phase === "down" && !repeat) {
-        return state.talking ? { cmd: "talk-end" } : { cmd: "talk-start" };
-      }
-      // Toggle mode: repeats are equally scroll-y — swallow them too.
-      return phase === "down" ? { cmd: "swallow" } : undefined;
-    case "d":
-    case "D":
-      // The region shot: arm the crosshair veil on the way down, disarm on the
-      // way up. A drag that pointerup already completed just disarms; a drag
-      // still in flight finishes on its own pointerup (see shot.ts).
-      if (phase === "down" && !repeat) {
-        return { cmd: "shoot-arm" };
-      }
-      if (phase === "up") {
-        return { cmd: "shoot-release" };
-      }
-      return undefined;
-    case "s":
-    case "S":
-      // The whole-viewport shot: a single press, fired on keydown. No veil, no
-      // hold, no keyup handling — so it can never race a drag the way the old
-      // S-tap-vs-S-drag heuristic did (see the header note).
-      return phase === "down" && !repeat ? { cmd: "shoot-viewport" } : undefined;
-    case "c":
-    case "C":
-      return phase === "down" && !repeat ? { cmd: "ink-clear" } : undefined;
-    case "e":
-    case "E":
-      return phase === "down" && !repeat ? { cmd: "correct-toggle" } : undefined;
-    case "v":
-    case "V":
-      // The realtime submode's screen share. Only in ink mode (correct mode
-      // owns the pointer/keys for text selection), fired on keydown. The
-      // command always emits here — whether it *does* anything is gated on the
-      // effective submode in the modality's dispatch (a live tier only), which
-      // is where config is known; a non-live tier just shows a hint.
-      return phase === "down" && !repeat && state.mode === "ink"
-        ? { cmd: "video-toggle" }
-        : undefined;
-    case "Enter":
-      if (phase === "down" && !repeat) {
-        // In correct mode Enter means "done editing — back to ink", NEVER
-        // "send the turn": the user's hands are on Enter to commit edits, and
-        // one stray press must not fire the whole prompt into the session.
-        return state.mode === "correct" ? { cmd: "correct-toggle" } : { cmd: "send" };
-      }
-      return undefined;
-    case "Escape":
-      return phase === "down" && !repeat ? { cmd: "step-out" } : undefined;
-    default:
-      return undefined;
-  }
-}
-
-/**
- * True when the key event is aimed at something text-editable, so the keymap
- * must not swallow it. Covers native inputs/textareas, `contenteditable`
- * (which is what most web editors — ProseMirror, Lexical, Quill, CodeMirror —
- * ultimately focus), ARIA textboxes, and, via composedPath, inputs hidden
- * inside shadow DOM (where event.target at the document is only the host).
- * Known hole: a widget that handles keys on a plain non-editable element;
- * nothing observable distinguishes it from the page. Editors inside iframes
- * are unreachable by this listener entirely, hence naturally safe.
- */
-export function isTypingTarget(event: KeyboardEvent): boolean {
-  const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
-  if (!target || typeof target.closest !== "function") {
-    return false;
-  }
-  return (
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.isContentEditable ||
-    target.closest('[contenteditable=""], [contenteditable="true"], [role="textbox"]') !== null
-  );
+  return claim.command;
 }
 
 /** Bind the pure keymap to the document; returns an uninstall function. */

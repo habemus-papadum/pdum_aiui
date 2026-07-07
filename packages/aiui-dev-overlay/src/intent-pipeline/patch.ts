@@ -10,10 +10,12 @@
  * single-document subset: one `*** Update File:` section, `@@` hunks with
  * ` `/`-`/`+` lines.
  *
- * `wordDiff` is the presentation half: a word-level LCS between before/after
- * used to flash the pink/green inline view for a beat before settling on the
- * clean text.
+ * `wordDiff` — the word-level LCS the pink/green flash renders — now lives in
+ * the modal kit (`aiui-viz/modal`, one diff + one tempo for every aiui
+ * surface); it is re-exported here so the channel and the pipeline's own
+ * consumers keep one import site.
  */
+export { type DiffRun, wordDiff } from "@habemus-papadum/aiui-viz/modal";
 
 /** One parsed hunk: consecutive context/del/add lines. */
 interface Hunk {
@@ -146,57 +148,4 @@ export function applyCorrectionToLines(
   const next = [...lines];
   next[at] = next[at].replace(correction.original, correction.instruction);
   return { lines: next, applied: true };
-}
-
-// ── the pretty half ──────────────────────────────────────────────────────────
-
-export interface DiffRun {
-  kind: "same" | "del" | "add";
-  text: string;
-}
-
-/** Word-level diff (LCS) of two strings, merged into runs for rendering. */
-export function wordDiff(before: string, after: string): DiffRun[] {
-  const a = before.split(/\s+/).filter(Boolean);
-  const b = after.split(/\s+/).filter(Boolean);
-  // LCS table (transcripts are short; O(n·m) is nothing).
-  const lcs: number[][] = Array.from({ length: a.length + 1 }, () =>
-    new Array<number>(b.length + 1).fill(0),
-  );
-  for (let i = a.length - 1; i >= 0; i--) {
-    for (let j = b.length - 1; j >= 0; j--) {
-      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
-    }
-  }
-  const runs: DiffRun[] = [];
-  const push = (kind: DiffRun["kind"], word: string) => {
-    const last = runs.at(-1);
-    if (last?.kind === kind) {
-      last.text += ` ${word}`;
-    } else {
-      runs.push({ kind, text: word });
-    }
-  };
-  let i = 0;
-  let j = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      push("same", a[i]);
-      i++;
-      j++;
-    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-      push("del", a[i]);
-      i++;
-    } else {
-      push("add", b[j]);
-      j++;
-    }
-  }
-  for (; i < a.length; i++) {
-    push("del", a[i]);
-  }
-  for (; j < b.length; j++) {
-    push("add", b[j]);
-  }
-  return runs;
 }
