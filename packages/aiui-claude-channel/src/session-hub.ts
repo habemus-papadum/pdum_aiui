@@ -13,7 +13,11 @@
  *    with the others. A `set` is cached and broadcast to every *other* tab.
  *  - **transient publishes** (`publish`): fire-and-forget broadcasts the hub does
  *    NOT cache — a code selection contributed to the turn, a nudge — delivered to
- *    every other tab and gone.
+ *    every other tab and gone. A publish can also originate *outside* the bus:
+ *    an external same-host tool (the VS Code extension) posts to the web
+ *    backend's `POST /session/publish`, which calls
+ *    {@link SessionHub.publishFromServer} to hand the message to a chosen view
+ *    (`from: "server"`).
  *  - **peers**: who else is here (role/label/url), pushed on join and leave so a
  *    view can show "code reader connected".
  *
@@ -208,6 +212,45 @@ export class SessionHub {
   /** The current value of one shared-state slot, if set (server-side reads). */
   get(slot: string): unknown {
     return this.state.get(slot)?.value;
+  }
+
+  /** The greeted peers, for external listing (`GET /session/peers`). */
+  peers(): SessionPeerInfo[] {
+    return this.peerList();
+  }
+
+  /**
+   * A server-originated publish: an external same-host tool (the VS Code
+   * extension, a CLI) contributing to the session through the web backend
+   * instead of holding a `/session` socket of its own. Targets one view by
+   * `clientId`, every greeted view with `role`, or — no target — every greeted
+   * view. Returns the peers actually sent to, so the HTTP caller can be told
+   * whether anything was reachable (`from` is `"server"`, which can never
+   * collide with a connection id — those are UUIDs).
+   */
+  publishFromServer(
+    topic: string,
+    payload: unknown,
+    target: { clientId?: string; role?: string } = {},
+  ): SessionPeerInfo[] {
+    const matches = [...this.connections.values()].filter(
+      (c) =>
+        c.greeted &&
+        (target.clientId === undefined || c.clientId === target.clientId) &&
+        (target.role === undefined || c.info.role === target.role),
+    );
+    const message: SessionServerMessage = { v: 1, type: "publish", topic, payload, from: "server" };
+    for (const conn of matches) {
+      try {
+        conn.send(message);
+      } catch {
+        // A send racing a close is harmless; the close path cleans up.
+      }
+    }
+    if (matches.length > 0) {
+      this.log(`session: server published "${topic}" to ${matches.length} view(s)`);
+    }
+    return matches.map((c) => c.info);
   }
 
   /** Send a message to every connection except `except`. */
