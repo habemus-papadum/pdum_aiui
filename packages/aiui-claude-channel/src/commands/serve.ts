@@ -16,6 +16,11 @@
  *    pick a server that answers to nobody). It is reachable only by its
  *    printed port.
  *
+ * Everything else the real channel hosts is fair game — including session
+ * sidecars (`--sidecars`, the same descriptor contract as `mcp`): a client
+ * under development against this server (the workbench's code reader) needs
+ * the sidecar's endpoints on the very channel port it is pointed at.
+ *
  * The server runs with `debug: true` (surfaced on `/health`,
  * `/debug/api/info`, and every hello ack, so clients can tell), traces to the
  * project-local cache as usual, and — with `--record` — appends every
@@ -40,7 +45,9 @@
  */
 
 import { channelSourceDir, watchChannelSource } from "../hot";
+import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
 import { createJsonlRecorder, type JsonlRecorder } from "../recording";
+import type { Sidecar } from "../sidecar";
 import { projectCacheDir } from "../trace";
 import { startWebServer } from "../web";
 
@@ -65,6 +72,15 @@ export interface ServeOptions {
    * hard, explained failure instead of a silent drift (see {@link runServe}).
    */
   port?: number;
+  /**
+   * JSON array of session sidecar descriptors to host (`--sidecars`) — the
+   * exact contract `mcp` accepts (see load-sidecars.ts). A debug server hosts
+   * sidecars for the same reason the real one does: a client under development
+   * (the workbench's code reader) needs the sidecar's endpoints on the channel
+   * port it is pointed at. Parse and load are best-effort — a bad value or one
+   * failing descriptor is logged to stderr and skipped, never fatal.
+   */
+  sidecars?: string;
 }
 
 /**
@@ -100,6 +116,14 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     process.stderr.write(`[aiui-channel serve] recording frames to ${recorder.path}\n`);
   }
 
+  // Resolve the supervisor's sidecar descriptors into live sidecars, exactly
+  // like `mcp` does (load-sidecars.ts logs failures to stderr — stdout stays
+  // the ready-line + lowered-prompt protocol).
+  let sidecars: Sidecar[] | undefined;
+  if (options.sidecars !== undefined) {
+    sidecars = await loadSidecars(parseSidecarDescriptors(options.sidecars));
+  }
+
   let web: Awaited<ReturnType<typeof startWebServer>>;
   try {
     web = await startWebServer({
@@ -115,6 +139,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       },
       traceDir: cacheDir,
       debug: true,
+      sidecars,
       // Names this run's trace session ("channel·…" when untagged), so /debug's
       // list separates a debug server's traces from a real session's.
       ...(options.tag !== undefined ? { tag: options.tag } : {}),

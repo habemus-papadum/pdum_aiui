@@ -11,6 +11,7 @@
     "bench": "tsx bench/transcribe-bench.ts"
   },
   "devDependencies": {
+    "@habemus-papadum/aiui": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",

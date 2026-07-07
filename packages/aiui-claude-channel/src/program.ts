@@ -51,6 +51,7 @@ export function buildProgram(): Command {
     )
     .option("--tag <tag>", "label used in stderr logging (a debug server is never registered)")
     .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/")
+    .option("--sidecars <json>", "JSON array of session sidecar descriptors to host")
     // The validator is the pure parsePort (tested in serve.test.ts); re-wrapped
     // here so commander renders a bad value as a usage error, not a crash.
     .option(

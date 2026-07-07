@@ -107,8 +107,9 @@ one port, can serve more than the intent pipeline. The first is the
 
 The channel stays **sidecar-agnostic**: it takes no dependency on any concrete sidecar and hardcodes
 no names. The launcher (`aiui claude`) decides which to run and hands the channel a JSON array of
-descriptors on `aiui-claude-channel mcp --sidecars <json>`. Each descriptor names an importable
-module and the export to call as a factory:
+descriptors on `aiui-claude-channel mcp --sidecars <json>` (the standalone debug server takes the
+same flag, `serve --sidecars <json>` — how the workbench's channel hosts the code reader). Each
+descriptor names an importable module and the export to call as a factory:
 
 ```ts
 interface SidecarDescriptor {
@@ -134,9 +135,11 @@ callable, that throws, or that returns something that isn't a sidecar is **logge
 skipped** — the channel starts anyway. (Malformed `--sidecars` JSON is tolerated the same way.)
 
 Which sidecars are on for a launch — and the `--aiui-sidecar` / `--aiui-no-sidecar` flags that
-override auto-detection — is the launcher's call. See [The Code Reader](./code-reader) for the worked
-example (the `Sidecar` interface lives in `packages/aiui-claude-channel/src/sidecar.ts`; the
-descriptor loader in `load-sidecars.ts`).
+override auto-detection — is the launcher's call. The auto-detect policy (`resolveSidecars`) is
+exported from the aiui package so other supervisors can reuse it verbatim — the workbench does, for
+its debug channel. See [The Code Reader](./code-reader) for the worked example (the `Sidecar`
+interface lives in `packages/aiui-claude-channel/src/sidecar.ts`; the descriptor loader in
+`load-sidecars.ts`).
 
 ## Keys and degradation
 

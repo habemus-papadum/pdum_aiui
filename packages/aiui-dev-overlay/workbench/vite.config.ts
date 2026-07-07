@@ -22,7 +22,11 @@ import { parseServeReadyLine } from "./src/serve-ready";
  *     models, corrections, lowering, traces — but has no MCP client attached,
  *     so nothing can ever reach a Claude session. Its cwd is the workbench
  *     package, so workbench traces land in the workbench's own `.aiui-cache/`
- *     (gitignored) and never mix into the project's trace list.
+ *     (gitignored) and never mix into the project's trace list. It hosts the
+ *     same session sidecars a real `aiui claude` launch would (today: the
+ *     code reader, with its LSP backend) — the CLI's own auto-detect policy,
+ *     reused via a tsx runner (see resolveChannelSidecars) — so the demo
+ *     scenery's code viewer has a live backend on the channel port.
  *  2. **The demo app's Vite server** (packages/aiui-demo), started
  *     programmatically with `VITE_AIUI_PORT` pointed at the debug channel — so
  *     the demo page's own intent overlay (ink, shots, locator, all of it)
@@ -122,6 +126,63 @@ function autoOpenBrowser(url: string): void {
   });
 }
 
+/**
+ * Resolve which session sidecars the debug channel should host — `aiui
+ * claude`'s own policy (`resolveSidecars`: the code reader auto-enables when
+ * the project has an LSP setup or well-known languages), reused through the
+ * aiui package instead of re-derived. Without this the channel would host no
+ * sidecars, and the code reader in the demo scenery would fail to load —
+ * the overlay fetches the reader's endpoints from the channel port.
+ *
+ * Runs as a tsx child for the same reason as the browser sidecar (see
+ * {@link autoOpenBrowser}): the config can't import workspace TS directly.
+ * Resolves to the `--sidecars` JSON for `serve`, or undefined (none detected,
+ * or resolution failed — the workbench runs on, just without the reader).
+ */
+function resolveChannelSidecars(): Promise<string | undefined> {
+  return new Promise((resolvePromise) => {
+    const script = resolve(workbenchDir, "src/resolve-sidecars-cli.ts");
+    const child = spawn(process.execPath, ["--import", "tsx", script, repoRoot], {
+      cwd: workbenchDir,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      out += chunk.toString("utf8");
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      for (const line of chunk.toString("utf8").split("\n")) {
+        if (line.trim() !== "") {
+          console.error(`  [channel] ${line}`);
+        }
+      }
+    });
+    child.on("error", (error) => {
+      console.error(`  [channel] sidecar resolution failed to start: ${error.message}`);
+      resolvePromise(undefined);
+    });
+    child.on("exit", (code) => {
+      const json = out.trim();
+      if (code !== 0 || json === "") {
+        if (code !== 0) {
+          console.error(
+            `  [channel] sidecar resolution exited with code ${code} — hosting no sidecars`,
+          );
+        }
+        resolvePromise(undefined);
+        return;
+      }
+      try {
+        const descriptors = JSON.parse(json) as unknown[];
+        resolvePromise(descriptors.length > 0 ? json : undefined);
+      } catch {
+        console.error("  [channel] sidecar resolution printed malformed JSON — hosting none");
+        resolvePromise(undefined);
+      }
+    });
+  });
+}
+
 interface ServersState {
   channel?: { port: number; record: boolean };
   demo?: { url: string };
@@ -137,6 +198,12 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
   // death is deliberate (respawn, don't report). shuttingDown wins over both.
   let restartPending = false;
   let shuttingDown = false;
+  // The `--sidecars` JSON for the channel, resolved once (asynchronously, see
+  // configureServer) before the first start; every (re)start reuses it.
+  // `undefined` doubles as "not resolved yet" — startChannel must not run
+  // before sidecarsResolved, or a restart would silently drop the sidecars.
+  let sidecarsJson: string | undefined;
+  let sidecarsResolved = false;
 
   const startChannel = (): void => {
     const cli = channelCliInvocation();
@@ -151,6 +218,11 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
       "--port",
       String(ports.channel),
       ...(record ? ["--record"] : []),
+      // The session sidecars a real launch would host (today: the code
+      // reader), so the demo scenery's code viewer finds its backend on the
+      // channel port. Resolved via aiui claude's own policy before the first
+      // start (see resolveChannelSidecars).
+      ...(sidecarsJson !== undefined ? ["--sidecars", sidecarsJson] : []),
     ];
     channelChild = spawn(cli.command, args, {
       cwd: workbenchDir, // traces + recordings land in the workbench's own .aiui-cache
@@ -271,7 +343,17 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
           console.error(`  [workbench] ${portTakenHint("workbench", ports)}`);
         }
       });
-      startChannel();
+      // The channel start waits for sidecar resolution (~one tsx boot): the
+      // sidecar set is part of the serve args, so starting early would bring
+      // the channel up readerless — and a later source-edit restart would
+      // keep it that way.
+      void resolveChannelSidecars().then((json) => {
+        sidecarsJson = json;
+        sidecarsResolved = true;
+        if (!shuttingDown && channelChild === undefined) {
+          startChannel();
+        }
+      });
       // Full-restart watch over the channel-side source. The channel's own
       // hot reload deliberately re-imports only one module level (see the
       // boundary documented in aiui-claude-channel's reloadable.ts) — deep
@@ -302,8 +384,11 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
             if (channelChild && channelChild.exitCode === null) {
               restartPending = true;
               channelChild.kill("SIGTERM");
-            } else {
-              startChannel(); // also recovers a crashed channel on the next edit
+            } else if (sidecarsResolved) {
+              // Also recovers a crashed channel on the next edit. Before the
+              // sidecars resolve there is nothing to recover — the pending
+              // resolution above does the first start.
+              startChannel();
             }
           }, 400);
         }),

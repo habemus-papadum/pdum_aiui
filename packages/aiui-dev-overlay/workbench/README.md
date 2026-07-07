@@ -2,8 +2,10 @@
 
 The workbench runs the **entire intent pipeline with no agent on the other end**. Its dev server
 owns a **debug channel server** (`aiui-claude-channel serve`) that does everything the real one
-does — voice models, the correction micro-pipeline, diffs, lowering, trace recording — but has no
-MCP client attached, so a turn can never reach a Claude session. Instead, the final lowered
+does — voice models, the correction micro-pipeline, diffs, lowering, trace recording, and the
+session sidecars an `aiui claude` launch would host (today: the code reader with its LSP
+backend, auto-detected by the CLI's own policy) — but has no MCP client attached, so a turn can
+never reach a Claude session. Instead, the final lowered
 prompt is pushed back over the websocket (and printed to the terminal), and the page shows you
 everything: half the window is a real app under the shipping intent overlay, the other half is
 trace instrumentation.
@@ -121,7 +123,8 @@ scaffolding:
 | `src/serve-ready.ts` | the `AIUI_CHANNEL_SERVE` ready-line contract with the spawned server |
 | `src/ports.ts` | the fixed 49222/49223/49224 port layout + `WORKBENCH_*PORT` overrides |
 | `src/open-browser.ts` / `open-browser-cli.ts` | the browser sidecar: the `WORKBENCH_BROWSER` mapping + session-browser open (shared plumbing from `aiui-util`), and its tsx-spawned runner |
-| `vite.config.ts` | spawns the debug channel (`serve --tag workbench --port …`) + the demo app's Vite server; `/wb/api/servers`; the browser sidecar |
+| `src/resolve-sidecars-cli.ts` | tsx-spawned runner that reuses `aiui claude`'s sidecar auto-detect (`resolveSidecars` from the aiui package) to build the channel's `--sidecars` |
+| `vite.config.ts` | spawns the debug channel (`serve --tag workbench --port … --sidecars …`) + the demo app's Vite server; `/wb/api/servers`; the browser sidecar |
 | `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark (REST + realtime legs) |
 | `fixtures/` | captured interaction event-streams; replayed by the overlay's `intent-pipeline/fixtures.test.ts` |
 

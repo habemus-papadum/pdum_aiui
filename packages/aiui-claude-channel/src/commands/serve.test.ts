@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { connectChannelClient } from "../client";
 import type { FrameLogEntry } from "../frame-log";
@@ -129,6 +130,21 @@ describe("runServe (standalone debug channel server)", () => {
       ok: boolean;
     };
     expect(health.ok).toBe(true);
+  });
+
+  it("--sidecars hosts descriptors on the debug server (same contract as mcp)", async () => {
+    // A real module on disk, reached by absolute path — the shape launchers
+    // hand over (load-sidecars dynamic-imports whatever specifier it's given).
+    const fixture = fileURLToPath(new URL("./serve-sidecar.fixture.mjs", import.meta.url));
+    handle = await runServe({
+      cacheDir: freshCache(),
+      sidecars: JSON.stringify([
+        { name: "test", module: fixture, export: "testSidecar", options: { root: "/proj" } },
+      ]),
+    });
+
+    const res = await fetch(`http://127.0.0.1:${handle.port}/__test_sidecar`);
+    expect(await res.json()).toEqual({ root: "/proj" });
   });
 
   it("fails loudly — not by drifting — when the requested port is taken", async () => {
