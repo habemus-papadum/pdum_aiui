@@ -196,7 +196,7 @@ talk to each other" substrate:
 
 - A **git viewer** could join as role `"git"` and contribute a hunk the same way the reader
   contributes a selection — no change to the reader, no change to the host.
-- The [iPad painting surface](/proposals/ipad_browser_paint_stream_design) needs the same
+- A planned **iPad painting surface** (in design on its own branch) needs the same
   **arming sync** across devices; it's another peer on the same `armed` slot.
 
 To add a view: mount `installSessionBus({ role })` (the Vite plugin does this for you), read
@@ -216,4 +216,6 @@ way.
   `contributionToText`, `isShortSelection`) — shared by host and contributor.
 - **Host wiring** — the multimodal modality (`multimodal/modality.ts`): applies remote arm,
   broadcasts `preview`, ingests contributions via `Engine.contribute`.
-- **Contributor UI** — the reader's `SessionPanel` (`packages/aiui-code/src/ui/SessionPanel.tsx`).
+- **Contributor UI** — the reader's `SessionPanel`
+  (`packages/aiui-dev-overlay/src/reader/SessionPanel.tsx`; it lives in the overlay, not
+  aiui-code, which stays session-agnostic).

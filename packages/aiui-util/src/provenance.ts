@@ -1,13 +1,11 @@
 /**
  * Was a package obtained as an editable **source checkout** (this monorepo) or
- * **installed** from a published tarball? The two call for different serving
- * strategies when the channel hosts a bundled frontend as a sidecar: run it
- * live from source (Vite middleware, HMR) in a dev checkout, serve prebuilt
- * `dist/` assets once installed.
+ * **installed** from a published tarball? `resolvePackageCli` (in the aiui CLI)
+ * uses this to decide how to spawn a workspace CLI: through tsx straight from
+ * `src/` in a dev checkout, or plain `node` on `dist/` once installed.
  *
- * The signal is a filesystem fact, not an env var, and it's the same one
- * `resolvePackageCli` uses to choose tsx-vs-dist: a published tarball ships only
- * its `dist/` (the `files` allowlist excludes `src/`), so a package directory
+ * The signal is a filesystem fact, not an env var: a published tarball ships
+ * only its `dist/` (the `files` allowlist excludes `src/`), so a package directory
  * that still carries a `src/` folder is a dev checkout. Locate a package's root
  * with {@link packageRoot}, then ask {@link runningFromSource} about it — or use
  * {@link packageFromSource} for both in one call.

@@ -189,7 +189,8 @@ export function installSessionBus(opts: SessionBusOptions = {}): () => void {
     try {
       socket.send(JSON.stringify(message));
     } catch {
-      // A send racing a close just gets retried on the next (re)connect.
+      // A send racing a close is dropped (nothing queues it); the reconnect's
+      // snapshot re-syncs shared state, so views converge on the hub's view.
     }
   };
 
