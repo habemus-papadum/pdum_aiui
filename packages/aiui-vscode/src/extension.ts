@@ -3,15 +3,24 @@
  * tab this window sends selections to (click to change, like the git branch
  * picker), and the `aiui: Send Selection to Browser Tab` command.
  *
- * Everything that doesn't need the `vscode` module lives in channels.ts and
- * contribution.ts; this file is the thin host glue. build-extension.mjs
- * bundles it to CJS for the .vsix — the npm artifact ships only the library
- * (index.ts), whose build never includes this file's `vscode` import.
+ * Nothing here caches the world: the picker queries the registry + each
+ * channel's live peers when it opens, and every send revalidates the
+ * remembered tab first. That revalidation matters because a channel reload
+ * (an edit under `AIUI_CHANNEL_WATCH`, or `POST /debug/api/reload`) drops all
+ * websockets — the tab reconnects with a NEW clientId — so a remembered id
+ * goes stale while the tab itself is fine; the send re-binds to it silently
+ * instead of nagging.
+ *
+ * Everything that doesn't need the `vscode` module lives in channels.ts,
+ * agents.ts, and contribution.ts; this file is the thin host glue.
+ * build-extension.mjs bundles it to CJS for the .vsix — the npm artifact
+ * ships only the library (index.ts), whose build never includes this file's
+ * `vscode` import.
  */
 import * as vscode from "vscode";
+import { claudeSessionNames } from "./agents";
 import {
   type ChannelEntry,
-  channelLabel,
   fetchPeers,
   listChannels,
   publishSelection,
@@ -27,7 +36,7 @@ interface Target {
   clientId: string;
   label: string;
   url?: string;
-  /** The channel's display title (name/tag, marked when debug). */
+  /** The channel's display title (name / Claude session / tag, marked when debug). */
   channel?: string;
   /** The tab belongs to a debug server (never silently auto-picked). */
   debug?: boolean;
@@ -40,24 +49,71 @@ function peerLabel(peer: SessionPeer): string {
   return peer.label ?? peer.url ?? peer.clientId;
 }
 
+/**
+ * How the picker titles a channel: its own display name ("aiui workbench"),
+ * else the owning Claude Code session's name (the channel's `ppid` is that
+ * session — matched via `claude agents --json`, exactly like the CLI
+ * selector), else the tag. Debug servers are always marked.
+ */
+function channelTitle(channel: ChannelEntry, agents: Map<number, string>): string {
+  const who = channel.name ?? agents.get(channel.ppid) ?? channel.tag;
+  return `${who}${channel.debug === true ? " · debug" : ""}`;
+}
+
 /** The persisted pick for one of a channel's tabs. */
-function targetFor(channel: ChannelEntry, peer: SessionPeer): Target {
+function targetFor(channel: ChannelEntry, peer: SessionPeer, agents: Map<number, string>): Target {
   return {
     port: channel.port,
     tag: channel.tag,
     cwd: channel.cwd,
     clientId: peer.clientId,
     label: peerLabel(peer),
-    channel: channelLabel(channel),
+    channel: channelTitle(channel, agents),
     ...(peer.url !== undefined ? { url: peer.url } : {}),
     ...(channel.debug === true ? { debug: true } : {}),
   };
 }
 
 /** A channel's browser tabs that can ingest a selection (the overlay hosts). */
-async function appTabs(channel: ChannelEntry): Promise<SessionPeer[]> {
+async function appTabs(channel: Pick<ChannelEntry, "port">): Promise<SessionPeer[]> {
   const { peers } = await fetchPeers(channel.port);
   return peers.filter((p) => p.role === "app");
+}
+
+/** Why a remembered target no longer resolves. */
+type Stale = { reason: "channel-gone" | "tab-gone" };
+
+/**
+ * Re-resolve a remembered target against the channel's LIVE peers: same
+ * clientId → still good; otherwise re-bind by URL, or — the common
+ * single-tab case after a channel reload handed the tab a fresh clientId —
+ * to the only app tab left. Anything else is honestly stale.
+ */
+async function revalidateTarget(target: Target): Promise<Target | Stale> {
+  let tabs: SessionPeer[];
+  try {
+    tabs = await appTabs({ port: target.port });
+  } catch {
+    return { reason: "channel-gone" };
+  }
+  const rebind = (peer: SessionPeer): Target => ({
+    ...target,
+    clientId: peer.clientId,
+    label: peerLabel(peer),
+    ...(peer.url !== undefined ? { url: peer.url } : {}),
+  });
+  const same = tabs.find((p) => p.clientId === target.clientId);
+  if (same) {
+    return rebind(same); // refresh label/url too — titles drift
+  }
+  const byUrl = target.url !== undefined ? tabs.filter((p) => p.url === target.url) : [];
+  if (byUrl.length === 1 && byUrl[0]) {
+    return rebind(byUrl[0]);
+  }
+  if (tabs.length === 1 && tabs[0]) {
+    return rebind(tabs[0]);
+  }
+  return { reason: "tab-gone" };
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -90,7 +146,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const workspaceDir = (): string | undefined => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-  /** One QuickPick over every channel's app tabs, grouped per channel. */
+  /**
+   * One QuickPick over every channel's app tabs, grouped per channel — always
+   * built from a fresh registry read + live peer queries at the moment it
+   * opens (nothing to refresh by hand; `aiui: Refresh Browser Tabs` exists
+   * for the status bar's sake, not the picker's).
+   */
   async function pickBrowserTab(): Promise<Target | undefined> {
     const channels = listChannels({ workspaceDir: workspaceDir() });
     if (channels.length === 0) {
@@ -99,11 +160,12 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       return undefined;
     }
+    const agents = await claudeSessionNames();
     type TabItem = vscode.QuickPickItem & { target?: Target };
     const items: TabItem[] = [];
     for (const channel of channels) {
       items.push({
-        label: `${channelLabel(channel)} — ${channel.cwd}`,
+        label: `${channelTitle(channel, agents)} — ${channel.cwd}`,
         kind: vscode.QuickPickItemKind.Separator,
       });
       let tabs: SessionPeer[];
@@ -127,7 +189,7 @@ export function activate(context: vscode.ExtensionContext): void {
         items.push({
           label: `$(browser) ${peerLabel(peer)}`,
           description: peer.url,
-          target: targetFor(channel, peer),
+          target: targetFor(channel, peer, agents),
         });
       }
     }
@@ -154,10 +216,11 @@ export function activate(context: vscode.ExtensionContext): void {
       return remembered;
     }
     const channels = listChannels({ workspaceDir: workspaceDir() });
+    const agents = await claudeSessionNames();
     const found: Target[] = [];
     for (const channel of channels) {
       const tabs = await appTabs(channel).catch(() => []);
-      found.push(...tabs.map((peer) => targetFor(channel, peer)));
+      found.push(...tabs.map((peer) => targetFor(channel, peer, agents)));
     }
     if (found.length === 1 && found[0] && found[0].debug !== true) {
       await setTarget(found[0]);
@@ -166,15 +229,37 @@ export function activate(context: vscode.ExtensionContext): void {
     return pickBrowserTab();
   }
 
+  /** Explain a stale target once, drop it, and leave the picker one click away. */
+  async function dropStale(target: Target, stale: Stale): Promise<void> {
+    const detail =
+      stale.reason === "channel-gone"
+        ? `its channel (port ${target.port}) is not running anymore`
+        : "the tab is no longer connected";
+    void vscode.window.showWarningMessage(
+      `aiui: "${target.label}" — ${detail}. Pick a browser tab again.`,
+    );
+    await setTarget(undefined);
+  }
+
   async function sendSelection(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.selection.isEmpty) {
       void vscode.window.showWarningMessage("aiui: nothing selected.");
       return;
     }
-    const target = await resolveTarget();
-    if (!target) {
+    const resolved = await resolveTarget();
+    if (!resolved) {
       return; // the picker already explained itself
+    }
+    // Send-time revalidation: a channel reload re-ids the tab; re-bind
+    // silently rather than failing a send at the very moment it was wanted.
+    const live = await revalidateTarget(resolved);
+    if ("reason" in live) {
+      await dropStale(resolved, live);
+      return;
+    }
+    if (live.clientId !== resolved.clientId || live.label !== resolved.label) {
+      await setTarget(live);
     }
     const document = editor.document;
     const sel = editor.selection;
@@ -191,12 +276,12 @@ export function activate(context: vscode.ExtensionContext): void {
       `vscode://file/${document.uri.fsPath}:${sel.start.line + 1}:${sel.start.character + 1}`,
     );
     try {
-      const result = await publishSelection(target.port, target.clientId, contribution);
+      const result = await publishSelection(live.port, live.clientId, contribution);
       if (result.ok) {
-        void vscode.window.showInformationMessage(`aiui: selection sent to ${target.label}.`);
+        void vscode.window.showInformationMessage(`aiui: selection sent to ${live.label}.`);
       } else {
-        // The tab went away (or was never reachable): let the ack's reason
-        // through and make the stale pick obvious.
+        // Revalidated a moment ago and still nacked — a genuine race; let the
+        // server's reason through.
         void vscode.window.showWarningMessage(
           `aiui: not delivered — ${result.error ?? "no view matched"}. Pick a browser tab again.`,
         );
@@ -210,9 +295,31 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
+  /** Revalidate the remembered tab and repaint the status bar, quietly. */
+  async function refreshTabs(): Promise<void> {
+    const target = getTarget();
+    if (target) {
+      const live = await revalidateTarget(target);
+      if ("reason" in live) {
+        await dropStale(target, live);
+      } else {
+        await setTarget(live);
+      }
+    } else {
+      renderStatus();
+    }
+    const tabCount = (
+      await Promise.all(
+        listChannels({ workspaceDir: workspaceDir() }).map((c) => appTabs(c).catch(() => [])),
+      )
+    ).flat().length;
+    vscode.window.setStatusBarMessage(`aiui: ${tabCount} browser tab(s) connected`, 3000);
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand("aiui.pickBrowserTab", () => pickBrowserTab()),
     vscode.commands.registerCommand("aiui.sendSelection", () => sendSelection()),
+    vscode.commands.registerCommand("aiui.refreshTabs", () => refreshTabs()),
   );
   renderStatus();
 }
