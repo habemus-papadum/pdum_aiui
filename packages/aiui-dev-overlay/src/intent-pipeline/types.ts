@@ -49,7 +49,7 @@ export interface LocatedComponent {
   containment?: "enclosed" | "within";
 }
 
-export type Mode = "ink" | "correct";
+export type Mode = "ink" | "correct" | "tweak";
 
 /**
  * The payload of an `app-selection` event: what the user had highlighted on

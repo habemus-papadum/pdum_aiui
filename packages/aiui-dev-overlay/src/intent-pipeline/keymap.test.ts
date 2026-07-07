@@ -155,3 +155,72 @@ describe("keyCommand: the config strip layer", () => {
     expect(keyCommand(open, "c", "down", false)).toEqual({ cmd: "ink-clear" });
   });
 });
+
+describe("keyCommand: tweak mode (the explicit handover)", () => {
+  const tweak: KeyState = { ...base, mode: "tweak" };
+
+  it("T enters tweak from armed ink mode, once per press (repeats/keyups pass)", () => {
+    expect(keyCommand(base, "t", "down", false)).toEqual({ cmd: "tweak-toggle" });
+    expect(keyCommand(base, "T", "down", false)).toEqual({ cmd: "tweak-toggle" });
+    expect(keyCommand(base, "t", "down", true)).toBeUndefined(); // key-repeat
+    expect(keyCommand(base, "t", "up", false)).toBeUndefined(); // keyup
+  });
+
+  it("T is inert in correct mode (it owns its keys) and while disarmed", () => {
+    expect(keyCommand({ ...base, mode: "correct" }, "t", "down", false)).toBeUndefined();
+    expect(keyCommand({ ...base, armed: false }, "t", "down", false)).toBeUndefined();
+  });
+
+  it("in tweak: T resumes, Esc steps out, backtick still arm-toggles; repeats pass", () => {
+    expect(keyCommand(tweak, "t", "down", false)).toEqual({ cmd: "tweak-toggle" });
+    expect(keyCommand(tweak, "T", "down", false)).toEqual({ cmd: "tweak-toggle" });
+    expect(keyCommand(tweak, "Escape", "down", false)).toEqual({ cmd: "step-out" });
+    // The arm layer sits above the tweak layer — backtick works from anywhere.
+    expect(keyCommand(tweak, "`", "down", false)).toEqual({ cmd: "arm-toggle" });
+    // A held T (or Esc) must not toggle in and out on every repeat.
+    expect(keyCommand(tweak, "t", "down", true)).toBeUndefined();
+    expect(keyCommand(tweak, "Escape", "down", true)).toBeUndefined();
+  });
+
+  it("the page keeps EVERYTHING else — rule §3.2's exhaustiveness, flipped", () => {
+    // The whole tiny keyboard falls through to the app: the handover is the
+    // point of the mode. Assert every key, both phases — an accidental claim
+    // here would swallow a keystroke the user aimed at their own UI.
+    const pageKeys = [
+      " ",
+      "d",
+      "D",
+      "s",
+      "S",
+      "c",
+      "C",
+      "e",
+      "E",
+      "v",
+      "V",
+      "k",
+      "K",
+      "Enter",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "0",
+    ];
+    for (const k of pageKeys) {
+      expect(keyCommand(tweak, k, "down", false)).toBeUndefined();
+      expect(keyCommand(tweak, k, "up", false)).toBeUndefined();
+    }
+    // Even the config strip's layer yields during tweak: a stale configOpen
+    // flag must not let the digit row claim keys the page owns.
+    const tweakWithStrip: KeyState = { ...tweak, configOpen: true };
+    expect(keyCommand(tweakWithStrip, "1", "down", false)).toBeUndefined();
+    expect(keyCommand(tweakWithStrip, "s", "down", false)).toBeUndefined();
+    expect(keyCommand(tweakWithStrip, "Enter", "down", false)).toBeUndefined();
+  });
+});

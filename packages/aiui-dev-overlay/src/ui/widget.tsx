@@ -90,6 +90,9 @@ const STYLES = `
     animation: ring-pulse 1.2s ease-in-out infinite; }
   .pill[data-ui-mode="shooting"] { border-color: #f8b64c; }
   .pill[data-ui-mode="correcting"] { border-color: #b48af8; }
+  /* §B.4: dashed gray = capture released (tweak mode — the page has the
+     pointer and keyboard; T or Esc resumes). */
+  .pill[data-ui-mode="tweaking"] { border-color: #6b7280; border-style: dashed; }
   @keyframes ring-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 92, 135, 0.45); }
     50% { box-shadow: 0 0 0 5px rgba(255, 92, 135, 0.12); } }
   .hud-slot { display: inline-flex; align-items: center; gap: 10px; }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { composeIntent, Engine } from "./engine";
 
 function armedEngine(): Engine {
@@ -71,6 +71,43 @@ describe("Engine thread lifecycle", () => {
     expect(engine.armed).toBe(true);
     engine.stepOut();
     expect(engine.armed).toBe(false);
+  });
+
+  it("steps out of tweak back to ink with the thread still open (§B.5)", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.talkEnd();
+    engine.setMode("tweak");
+    expect(engine.events.at(-1)).toMatchObject({ type: "mode", mode: "tweak" });
+    engine.stepOut();
+    // Tweak steps back to composing, not straight to cancel — the excursion
+    // must never cost the turn.
+    expect(engine.mode).toBe("ink");
+    expect(engine.threadOpen).toBe(true);
+    expect(engine.events.some((e) => e.type === "thread-close")).toBe(false);
+  });
+
+  it("suspends the idle auto-end timer during tweak and re-arms it on resume", () => {
+    vi.useFakeTimers();
+    try {
+      const engine = new Engine({ autoEndSec: 1 });
+      engine.setArmed(true);
+      engine.talkStart();
+      engine.talkEnd(); // idle now — the auto-end timer is armed
+      engine.setMode("tweak");
+      // Way past autoEndSec: the user is adjusting the app, not idling — the
+      // thread must survive the whole excursion.
+      vi.advanceTimersByTime(10_000);
+      expect(engine.threadOpen).toBe(true);
+      expect(engine.events.some((e) => e.type === "thread-close")).toBe(false);
+      // Leaving tweak emits the mode event, which re-runs the scheduler.
+      engine.setMode("ink");
+      vi.advanceTimersByTime(1_001);
+      expect(engine.threadOpen).toBe(false);
+      expect(engine.events.at(-1)).toMatchObject({ type: "thread-close", reason: "timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("videoShare opens a thread on the first ON and records both edges", () => {

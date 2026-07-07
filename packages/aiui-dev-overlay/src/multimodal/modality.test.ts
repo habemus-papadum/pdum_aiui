@@ -1398,3 +1398,138 @@ describe("multimodalModality: selections on the wire", () => {
     });
   });
 });
+
+describe("multimodalModality: tweak mode (the §B.5 handover)", () => {
+  const MOCK = { transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 } as const;
+
+  /** The overlay's own agent report — the one answer to "what mode am I in". */
+  const report = () => {
+    const r = window.__aiui_overlay?.report();
+    if (!r) {
+      throw new Error("overlay tools not installed");
+    }
+    return r;
+  };
+
+  /** Arm + speak one mock segment, leaving an open, composing thread. */
+  async function composeTurn(): Promise<void> {
+    key("keydown", "`");
+    key("keydown", " ");
+    await wait(50); // socket connect + hello
+    key("keyup", " ");
+    await wait(50); // mock transcript-final lands
+  }
+
+  it("T releases pointer + keyboard mid-thread: the page keeps a Space, untouched", async () => {
+    const { handle } = mountMultimodal(MOCK);
+    await composeTurn();
+    expect(report().threadOpen).toBe(true);
+    const inkCanvas = document.querySelector<HTMLElement>(".mm-ink");
+    expect(inkCanvas?.style.pointerEvents).toBe("auto"); // composing owns the pointer
+
+    key("keydown", "t"); // the handover
+    expect(report().mode).toBe("tweak");
+    expect(report().uiMode).toBe("tweaking");
+    expect(q(handle, ".mm-state")?.textContent).toContain("tweak");
+    // The pointer went back to the app (ink-routing) and the crosshair
+    // dropped with it (no cursor in tweaking's mode-table row).
+    expect(inkCanvas?.style.pointerEvents).toBe("none");
+    expect(document.body.classList.contains("mm-armed")).toBe(false);
+
+    // A Space aimed at the app's own UI: unclaimed (no preventDefault), no talk.
+    const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    document.dispatchEvent(space);
+    await wait(20);
+    expect(space.defaultPrevented).toBe(false); // the page got it
+    expect(report().talking).toBe(false);
+
+    // Enter passes too — nothing must be able to send from inside tweak.
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    document.dispatchEvent(enter);
+    await wait(20);
+    expect(enter.defaultPrevented).toBe(false);
+    expect(report().threadOpen).toBe(true); // nothing sent, nothing closed
+  });
+
+  it("entering tweak mid-D-hold cancels the veil — nothing is stranded", async () => {
+    mountMultimodal(MOCK);
+    await composeTurn();
+    const veil = document.querySelector<HTMLElement>(".mm-shot-veil");
+    key("keydown", "d"); // arm the region veil
+    expect(veil?.style.display).toBe("block");
+
+    key("keydown", "t"); // handover — the shot-veil guard must clear the hold
+    expect(report().uiMode).toBe("tweaking");
+    expect(veil?.style.display).toBe("none");
+
+    // D's keyup arrives during tweak and falls through to the page, harmlessly.
+    key("keyup", "d");
+    expect(veil?.style.display).toBe("none");
+  });
+
+  it("T again resumes the SAME turn: Space talks, and the thread never closed", async () => {
+    const { sent } = mountMultimodal(MOCK);
+    await composeTurn();
+    key("keydown", "t"); // out…
+    await wait(20);
+    key("keydown", "t"); // …and back
+    expect(report().mode).toBe("ink");
+    expect(report().uiMode).toBe("composing");
+
+    key("keydown", " "); // Space talks again (mock: synchronous)
+    expect(report().talking).toBe(true);
+    key("keyup", " ");
+    await wait(50);
+    key("keydown", "Enter"); // send
+    await wait(120);
+
+    const events = streamedEvents(sent);
+    const types = events.map((e) => e.type);
+    // One thread for the whole excursion: opened once, closed once (the send).
+    expect(types.filter((t) => t === "thread-open")).toHaveLength(1);
+    expect(types.filter((t) => t === "thread-close")).toHaveLength(1);
+    // Both segments — one either side of the excursion — rode the same stream,
+    // and the excursion itself is IN it (the mode events, so the trace shows it).
+    expect(types.filter((t) => t === "transcript-final")).toHaveLength(2);
+    const modes = events.filter((e) => e.type === "mode").map((e) => (e as { mode?: string }).mode);
+    expect(modes).toEqual(["tweak", "ink"]);
+  });
+
+  it("Esc steps out of tweak back to composing — one rung, never a cancel", async () => {
+    mountMultimodal(MOCK);
+    await composeTurn();
+    key("keydown", "t");
+    expect(report().uiMode).toBe("tweaking");
+    key("keydown", "Escape");
+    expect(report().uiMode).toBe("composing");
+    expect(report().threadOpen).toBe(true);
+  });
+
+  it("a selection made during tweak appends to the open turn — the point of the mode", async () => {
+    const para = document.createElement("p");
+    para.setAttribute("data-source-loc", "src/App.tsx:7:3");
+    para.textContent = "select different text mid-tweak";
+    document.body.append(para);
+    const { sent } = mountMultimodal(MOCK);
+    await composeTurn();
+    key("keydown", "t"); // handover — the pointer is the app's again
+
+    // The user re-selects on the page; the watcher stays live (§B.5: selection
+    // events are not gated on mode — they ride the open thread).
+    const range = document.createRange();
+    range.selectNodeContents(para.firstChild ?? para);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    await wait(250); // the watcher's 150 ms debounce + the events flush
+
+    const selections = streamedEvents(sent).filter((e) => e.type === "app-selection");
+    expect(selections.at(-1)).toMatchObject({
+      text: "select different text mid-tweak",
+      sourceLoc: "src/App.tsx:7:3",
+    });
+    expect(report().threadOpen).toBe(true); // …and the turn is still open for more
+    para.remove();
+  });
+});

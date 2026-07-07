@@ -103,9 +103,9 @@ export class Engine {
     this.emit(this.stamp({ type: "mode", mode }));
   }
 
-  /** Esc, one level at a time: correct → ink → cancel thread → disarm. */
+  /** Esc, one level at a time: correct → ink, tweak → ink, ink+thread → cancel, → disarm. */
   stepOut(): void {
-    if (this.mode === "correct") {
+    if (this.mode === "correct" || this.mode === "tweak") {
       this.setMode("ink");
       return;
     }
@@ -227,7 +227,12 @@ export class Engine {
       clearTimeout(this.idleTimer);
       this.idleTimer = undefined;
     }
-    if (this.settings.autoEndSec > 0 && this.threadOpen && !this.talking) {
+    // SUSPENDED during tweak (§B.5): the user handed the pointer/keyboard back
+    // to the app on purpose — adjusting a slider is not "idle silence", and the
+    // open turn must survive the excursion. No special resume plumbing needed:
+    // leaving tweak emits a `mode` event, which re-runs this scheduler and
+    // re-arms the timer naturally.
+    if (this.settings.autoEndSec > 0 && this.threadOpen && !this.talking && this.mode !== "tweak") {
       this.idleTimer = setTimeout(() => {
         if (this.threadOpen && !this.talking) {
           this.closeThread("timeout");

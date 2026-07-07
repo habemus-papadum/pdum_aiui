@@ -283,3 +283,12 @@ Decisions made while landing the milestones, so the doc stays honest:
   B2.4 extracts `capture.ts` and the meter island gets a formal home.
 - **The key-cheat-sheet span retired** into the panel help (§B.4 called it the pill's noisiest
   tenant; the help block already carried the same text).
+- **WP4 (tweak mode) landed as the kit proof — at the promised price.** One mode-table row
+  (`tweaking: { escParent: "composing" }`, deliberately cursorless — the crosshair is released
+  with the pointer) plus one keymap layer (`tweakLayer`: T and Esc claimed, `fallback: "pass"` —
+  the explicit handover; the strip/armed layers gain a `mode !== "tweak"` guard so the page
+  keeps every other key). Around them, only routing: one `Mode` value, one `stepOut` rung, one
+  dispatch case, one ring style. The idle auto-end timer suspends by gating its scheduler on the
+  mode — the `mode` event emitted on resume re-runs it, so re-arming costs nothing. **Zero new
+  reconciler surfaces**: ink-routing, cursor, veil guard, and the state label all derived the
+  right tweak behavior from the existing rows, which was the bet the kit was supposed to win.

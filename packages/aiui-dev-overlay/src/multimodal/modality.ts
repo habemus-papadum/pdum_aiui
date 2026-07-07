@@ -350,7 +350,8 @@ export function multimodalModality(
         const key = armKeyLabel(config);
         help.innerHTML = `Press <b>${key}</b> to arm, then <b>Space</b> to talk, drag to sketch,
           <b>D</b>+drag to screenshot a region (<b>S</b> grabs the whole viewport),
-          <b>E</b> to correct, <b>V</b> to share your screen (live tiers only),
+          <b>E</b> to correct, <b>T</b> to tweak the app mid-turn (T/Esc resumes),
+          <b>V</b> to share your screen (live tiers only),
           <b>K</b> for quick config (tiers), <b>Enter</b> to send.
           The ✳ pill shows the live state while active.`;
       };
@@ -612,6 +613,22 @@ export function multimodalModality(
             }
             engine.setMode(engine.mode === "correct" ? "ink" : "correct");
             break;
+          case "tweak-toggle":
+            // Tweak mode (§B.5): hand the pointer and keyboard back to the app
+            // mid-turn, then resume composing the SAME turn. The thread and
+            // its socket stay open, and selection stays live — the
+            // onSelectionChange subscription above gates on threadOpen, never
+            // on mode, so a re-selection during tweak appends its
+            // app-selection event to the open turn. The reconciler surfaces
+            // release the rest from the mode itself: ink-routing drops the
+            // pointer (tweaking isn't composing-shaped), the cursor surface
+            // clears the crosshair (no cursor in tweaking's table row), and
+            // the veil guard cancels a mid-hold shot.
+            engine.setMode(engine.mode === "tweak" ? "ink" : "tweak");
+            if (engine.mode === "tweak") {
+              ctx.setStatus("tweak — the page has the keyboard; T or Esc resumes the turn");
+            }
+            break;
           case "video-toggle":
             // Screen share is realtime-only: the live model is what watches the
             // ~1 fps frames. Off a live tier, name the fix and do nothing else.
@@ -632,6 +649,9 @@ export function multimodalModality(
               preview.abortEdit();
               break;
             }
+            // The ink-mode guard above matters for tweak too: stepping out of
+            // tweak lands back in ink/composing with nothing to clear — the
+            // excursion drew no ink, and the turn's strokes must survive it.
             if (engine.mode === "ink" && engine.threadOpen) {
               ink.clear();
             }
