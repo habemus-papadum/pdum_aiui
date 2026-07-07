@@ -31,6 +31,14 @@ describe("uiMode (the §B.4 derivation)", () => {
     expect(uiMode({ ...base, mode: "correct", talking: true })).toBe("correcting");
   });
 
+  it("tweak mode wins the same way — it releases pointer and keys wholesale (§B.5)", () => {
+    expect(uiMode({ ...base, mode: "tweak", threadOpen: true })).toBe("tweaking");
+    // The engine holds exactly one mode, so tweak (like correct) shadows the
+    // shell flags — a stale shooting/talking flag can't misreport the handover.
+    expect(uiMode({ ...base, mode: "tweak", shooting: true, talking: true })).toBe("tweaking");
+    expect(uiMode({ ...base, mode: "tweak", armed: false })).toBe("off");
+  });
+
   it("the table's Esc ladder steps every mode toward off", () => {
     // Walk each mode up its escParent chain; every chain must terminate at
     // off (no cycles, no dead ends) — the mechanical form of "Esc always
@@ -47,9 +55,12 @@ describe("uiMode (the §B.4 derivation)", () => {
     }
   });
 
-  it("every armed mode asserts the crosshair; off asserts nothing", () => {
+  it("every armed mode asserts the crosshair — except tweaking, which released the pointer", () => {
     for (const [name, spec] of Object.entries(UI_MODE_TABLE.modes)) {
-      expect(spec.cursor).toBe(name === "off" ? undefined : "crosshair");
+      // No cursor for off (nothing armed) and none for tweaking (the
+      // crosshair is capture's cursor; tweak hands capture back to the page).
+      const bare = name === "off" || name === "tweaking";
+      expect(spec.cursor).toBe(bare ? undefined : "crosshair");
     }
   });
 });

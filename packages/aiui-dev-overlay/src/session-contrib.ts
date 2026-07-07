@@ -18,6 +18,31 @@ export const SESSION_CONTRIBUTION_TOPIC = "contribution";
 
 export { SHORT_SELECTION_CHARS };
 
+/**
+ * One structured item of the shared `preview` bus slot — the turn the app tab
+ * is building, mirrored for other views (the code reader's SessionPanel) to
+ * render THEMSELVES. Structure, not prose, crosses the bus on purpose: the
+ * defer-rendering rule (intent inputs travel structured; presentation is each
+ * surface's own decision) applies to mirrors too. Shots travel as their
+ * marker only — pixels stay in the app tab; a mirror shows a chip. Code
+ * selections travel as locator + a clipped excerpt (the mirror is a glance,
+ * not the document — the full text already rides the stream as the
+ * `code-selection` event).
+ */
+export type PreviewItem =
+  | { kind: "text"; text: string }
+  | { kind: "shot"; marker: string; viewport?: boolean }
+  | { kind: "code-selection"; sourceLoc?: string; excerpt: string; lines?: number };
+
+/** The `preview` slot's payload. `text` is the legacy flat rendering, kept so
+ * older views keep working; views that know `items` render chips from it. */
+export interface PreviewSnapshot {
+  text: string;
+  items?: PreviewItem[];
+  threadOpen: boolean;
+  armed: boolean;
+}
+
 /** A source selection contributed from another view (e.g. a code selection). */
 export interface SelectionContribution {
   kind: "selection";

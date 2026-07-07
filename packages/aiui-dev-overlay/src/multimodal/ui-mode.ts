@@ -11,22 +11,32 @@
  * `shooting` flag in, one name out. Nothing stores it; storing a derived mode
  * is how presentation drifts from truth.
  *
- * Precedence (first match wins): correcting > shooting > talking > composing
- * > ready. `correcting` first because correct mode re-owns pointer and keys
- * wholesale (and the veil guard clears `shooting` on entry); `shooting` above
+ * Precedence (first match wins): correcting/tweaking > shooting > talking >
+ * composing > ready. `correcting` and `tweaking` first (they never compete —
+ * the engine holds exactly one mode) because each re-routes pointer and keys
+ * wholesale: correct mode re-owns them, tweak mode releases them to the app
+ * (and the veil guard clears `shooting` on entering either); `shooting` above
  * `talking` because the veil is the more transient, more consequential
  * surface — it owns every pointer event while up, and the ring should say so
  * even mid-REC (ink stays drawable while talking, so talking otherwise looks
  * like composing).
  */
 import type { ModeTable } from "@habemus-papadum/aiui-viz/modal";
+import type { Mode } from "../intent-pipeline";
 
-export type UiMode = "off" | "ready" | "composing" | "shooting" | "talking" | "correcting";
+export type UiMode =
+  | "off"
+  | "ready"
+  | "composing"
+  | "shooting"
+  | "talking"
+  | "correcting"
+  | "tweaking";
 
 /** The raw predicates the projection reads (engine fields + shell flags). */
 export interface UiModeInputs {
   armed: boolean;
-  mode: "ink" | "correct";
+  mode: Mode;
   talking: boolean;
   threadOpen: boolean;
   /** The shot veil is armed (D held / drag in flight) — shell-owned. */
@@ -39,6 +49,9 @@ export function uiMode(inputs: UiModeInputs): UiMode {
   }
   if (inputs.mode === "correct") {
     return "correcting";
+  }
+  if (inputs.mode === "tweak") {
+    return "tweaking";
   }
   if (inputs.shooting) {
     return "shooting";
@@ -54,16 +67,19 @@ export function uiMode(inputs: UiModeInputs): UiMode {
  * by the reconciler — the mode-wide crosshair is part of the mode contract,
  * lessons rule 10) and the ring color via {@link RING_CLASS}-equivalent
  * `data-ui-mode` styling. `escParent` documents the §B.4 ladder the dispatch
- * implements with engine verbs (correct → ink → cancel thread → disarm);
- * step-out keeps its verb form because "cancel the thread" and "leave correct
- * mode" are engine transitions, not UiMode writes — the column is here so the
- * ladder has one declarative home (and so tweak mode, when it lands, is one
- * new row).
+ * implements with engine verbs (correct → ink, tweak → ink, cancel thread,
+ * disarm); step-out keeps its verb form because "cancel the thread" and
+ * "leave correct mode" are engine transitions, not UiMode writes — the column
+ * is here so the ladder has one declarative home (tweak mode landed as
+ * exactly the one new row this comment promised).
  *
  * Cursor note: every armed mode asserts the crosshair — including correcting
  * (the lasso is a crosshair gesture) — matching the historical `body.mm-armed`
  * behavior; surfaces that must opt out (the config strip's chips) assert
- * their own cursor, per the same rule.
+ * their own cursor, per the same rule. The one exception is `tweaking`: the
+ * crosshair is capture's cursor, and tweak releases capture — pointer and
+ * keyboard belong to the page, so the page's own cursors must show (hence no
+ * cursor in its row).
  */
 export const UI_MODE_TABLE: ModeTable<UiMode> = {
   initial: "off",
@@ -74,5 +90,6 @@ export const UI_MODE_TABLE: ModeTable<UiMode> = {
     shooting: { escParent: "composing", cursor: "crosshair" },
     talking: { escParent: "composing", cursor: "crosshair" },
     correcting: { escParent: "composing", cursor: "crosshair" },
+    tweaking: { escParent: "composing" },
   },
 };

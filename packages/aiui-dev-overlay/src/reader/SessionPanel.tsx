@@ -14,9 +14,9 @@
  * down on cleanup (this component is freely hot-swapped).
  */
 import type { CodeReader } from "@habemus-papadum/aiui-code";
-import { createSignal, onCleanup, Show } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { SessionBusApi, SessionPeer } from "../session-bus";
-import type { SelectionContribution } from "../session-contrib";
+import type { PreviewSnapshot, SelectionContribution } from "../session-contrib";
 import { SESSION_CONTRIBUTION_TOPIC, SHORT_SELECTION_CHARS } from "../session-contrib";
 import {
   excerpt,
@@ -26,11 +26,7 @@ import {
 } from "./reader-contribution";
 
 /** The `preview` slot the app tab publishes as it builds its turn. */
-interface PreviewState {
-  text: string;
-  threadOpen: boolean;
-  armed: boolean;
-}
+type PreviewState = PreviewSnapshot;
 
 /** Read the bus without depending on the overlay's global type augmentation. */
 function locateBus(): SessionBusApi | undefined {
@@ -180,14 +176,43 @@ export function SessionPanel(props: { reader: CodeReader }) {
 
         <span class="session-section-label">prompt preview</span>
         <Show
-          when={preview()?.text}
+          when={preview()?.items?.length || preview()?.text}
           fallback={
             <div class="session-preview session-empty">
               nothing yet — arm and talk in the app tab
             </div>
           }
         >
-          <div class="session-preview">{preview()?.text}</div>
+          {/* Structured mirror (one visual language with the app tab's
+              preview): text runs as text, shots and code selections as chips.
+              A publisher without `items` (older overlay) falls back to the
+              flat text rendering. */}
+          <Show
+            when={preview()?.items?.length}
+            fallback={<div class="session-preview">{preview()?.text}</div>}
+          >
+            <div class="session-preview">
+              <For each={preview()?.items ?? []}>
+                {(item) =>
+                  item.kind === "text" ? (
+                    <span>{`${item.text} `}</span>
+                  ) : item.kind === "shot" ? (
+                    <span
+                      class="session-chip session-chip-shot"
+                      title={item.viewport ? "viewport screenshot" : "region screenshot"}
+                    >
+                      {`⧉ ${item.marker}`}
+                    </span>
+                  ) : (
+                    <span class="session-chip session-chip-code" title={item.excerpt}>
+                      {item.sourceLoc ?? "selection"}
+                      <span class="session-chip-excerpt">{` ${item.excerpt}`}</span>
+                    </span>
+                  )
+                }
+              </For>
+            </div>
+          </Show>
         </Show>
 
         <span class="session-section-label">current selection</span>

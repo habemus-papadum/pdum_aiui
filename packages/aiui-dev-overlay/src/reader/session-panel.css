@@ -104,6 +104,30 @@
   font-size: 11.5px;
   line-height: 1.45;
 }
+/* Structured mirror chips — the same pill language (and colors) as the app
+   tab's preview: amber for shots, blue for code selections. */
+.session-chip {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+  margin: 0 4px 2px 0;
+  font-size: 10.5px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.session-chip-shot {
+  color: #ffd166;
+}
+.session-chip-code {
+  color: #8ab4f8;
+}
+.session-chip-excerpt {
+  color: var(--text-dim);
+}
 .session-empty {
   color: var(--text-faint);
   font-style: italic;

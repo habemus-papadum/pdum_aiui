@@ -42,6 +42,7 @@ Minimalist by design — one hand, no chords:
 | **E**     | correct mode — select transcript text, then speak or type the fix |
 | **V**     | share your screen — [live tiers only](#live-tiers-67--experimental); samples the display at ~1 fps for the live model |
 | **K**     | quick config — the [tier strip](#quick-config-the-k-strip): switch tiers, save/reset, open the editor |
+| **T**     | [tweak mode](#tweak-mode-adjust-the-app-mid-turn) — hand the pointer and keyboard back to the app mid-turn; **T** (or **Esc**) resumes |
 | **Enter** | send — finalize and lower the turn |
 | **Esc**   | step out one level (see the escape ladder below) |
 
@@ -60,8 +61,9 @@ It closes when you:
   seconds. Useful if you dislike reaching for Enter; risky if you pause to think mid-turn.
 
 **The escape ladder.** `Esc` steps out exactly one level at a time, so a mis-step is one tap
-to undo rather than a full reset: `correct mode → ink → cancel the thread → disarm`. Press it
-until you're where you want to be.
+to undo rather than a full reset: `correct mode → ink`, `tweak mode → ink`, then
+`cancel the thread → disarm`. Press it until you're where you want to be — stepping out of
+correct or tweak mode always lands back in composing, never straight at a cancel.
 
 ## Talking (dictation)
 
@@ -152,6 +154,21 @@ follow from corrections being patches:
   transcript, so a later correction can target text an earlier one produced. If a patch can't be
   produced or won't apply, the overlay falls back to a plain replacement of the selected text —
   the correction still lands.
+
+## Tweak mode: adjust the app mid-turn
+
+An armed thread owns the pointer (drags ink) and most of the keyboard — but sometimes the turn
+*needs* the app mid-composition: nudge a slider, click a button, select different text, then keep
+talking about the result. Disarming would cancel the thread; **T** doesn't. It hands the pointer
+and keyboard back to the app while the turn stays open — an **explicit handover**, not a
+guessing game about which keys you meant for whom: in tweak mode the overlay claims only **T**
+and **Esc** (both resume composing; Esc is the same one-rung step-out as leaving correct mode),
+and *everything* else — Space, D, S, C, E, V, K, Enter, the strip digits — falls through to the
+page. The pill's ring goes **dashed gray** while capture is released, so a glance tells you the
+crosshair is gone on purpose. The thread and its channel socket stay open the whole time, the
+idle auto-end timer (if you enable it) is suspended, and a selection you make while tweaking
+rides the open turn as a `selection` update — adjust, re-select, press **T**, and finish the
+same thought.
 
 ## What runs where: the channel (real) vs mock
 

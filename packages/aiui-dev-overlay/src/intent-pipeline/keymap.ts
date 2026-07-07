@@ -10,8 +10,9 @@
  *   E      enter/exit correct mode (the meta layer)
  *   V      toggle screen share (realtime/live tiers only — the ~1fps ambient sampler)
  *   K      open/close the config strip (the quick-config layer)
+ *   T      enter/exit tweak mode (hand the pointer + keyboard back to the app)
  *   Enter  send — finalize the thread (in correct mode: done editing, back to ink)
- *   Esc    step out one level (correct → ink → cancel thread → disarm)
+ *   Esc    step out one level (correct → ink, tweak → ink, cancel thread, disarm)
  *
  * The two screenshot gestures ride two keys ON PURPOSE. They were once both on
  * S — hold-and-drag for a region, a bare tap for the viewport — but a tap and a
@@ -29,12 +30,13 @@
  * the strip is a layer, not a mode.
  *
  * The decision logic is the modal kit's layered resolution
- * (`aiui-viz/modal`): three declarative {@link KeyLayer}s — arm (backtick,
+ * (`aiui-viz/modal`): four declarative {@link KeyLayer}s — arm (backtick,
  * always live), the config strip (active while open, everything unclaimed
- * falls through), and the armed base — resolved top-down by the kit's pure
- * `resolveKey`, wrapped in {@link keyCommand} so the decision stays one
- * unit-testable function of (state, key, phase, repeat). installKeymap() is
- * the thin DOM binding around it.
+ * falls through), the tweak handover (active in tweak mode: only T and Esc
+ * are claimed, the page keeps the rest), and the armed base — resolved
+ * top-down by the kit's pure `resolveKey`, wrapped in {@link keyCommand} so
+ * the decision stays one unit-testable function of (state, key, phase,
+ * repeat). installKeymap() is the thin DOM binding around it.
  */
 import {
   isTypingTarget,
@@ -43,6 +45,7 @@ import {
   resolveKey,
 } from "@habemus-papadum/aiui-viz/modal";
 import type { IntentTier } from "./config";
+import type { Mode } from "./types";
 
 export { isTypingTarget };
 
@@ -59,7 +62,7 @@ export const TIER_BY_DIGIT: readonly IntentTier[] = [
 
 export interface KeyState {
   armed: boolean;
-  mode: "ink" | "correct";
+  mode: Mode;
   talking: boolean;
   talkMode: "hold" | "toggle";
   /** True when focus is in a text input — keys must not fire. */
@@ -77,6 +80,12 @@ export type KeyCommand =
   | { cmd: "shoot-viewport" } // S: capture the whole viewport now — no veil, no hold
   | { cmd: "ink-clear" }
   | { cmd: "correct-toggle" }
+  /**
+   * T: enter/exit tweak mode (§B.5) — hand the pointer and keyboard back to
+   * the app mid-turn (adjust a slider, click a button, re-select text), then
+   * resume composing the same thread. The engine mode flips ink ⇄ tweak.
+   */
+  | { cmd: "tweak-toggle" }
   | { cmd: "video-toggle" } // V: toggle the realtime submode's screen share (dispatch gates on submode)
   | { cmd: "send" }
   | { cmd: "step-out" }
@@ -119,7 +128,7 @@ const armLayer: KeyLayer<KeyState, KeyCommand> = {
  */
 const stripLayer: KeyLayer<KeyState, KeyCommand> = {
   name: "config-strip",
-  active: (state) => state.armed && !!state.configOpen,
+  active: (state) => state.armed && !!state.configOpen && state.mode !== "tweak",
   bindings: [
     {
       keys: TIER_BY_DIGIT.map((_, index) => String(index + 1)),
@@ -135,10 +144,29 @@ const stripLayer: KeyLayer<KeyState, KeyCommand> = {
   fallback: "pass",
 };
 
-/** The armed base layer — the tiny keyboard itself. */
+/**
+ * Tweak mode (§B.5) — the EXPLICIT handover. While the engine is in tweak
+ * the page owns the keyboard: this layer claims ONLY T (resume composing)
+ * and Esc (step out), and the strip/armed layers below deactivate on
+ * `mode === "tweak"`, so Space, D, S, C, E, V, K, Enter, and the strip's
+ * digits ALL fall through to the app — that handover is the whole point of
+ * the mode; `isTypingTarget` guarding alone can't express it. The arm layer
+ * above stays live: backtick still disarms from anywhere, tweak included.
+ */
+const tweakLayer: KeyLayer<KeyState, KeyCommand> = {
+  name: "tweak",
+  active: (state) => state.armed && state.mode === "tweak",
+  bindings: [
+    { keys: ["t", "T"], down: onPress({ cmd: "tweak-toggle" }) },
+    { keys: ["Escape"], down: onPress({ cmd: "step-out" }) },
+  ],
+  fallback: "pass",
+};
+
+/** The armed base layer — the tiny keyboard itself (inert during tweak). */
 const armedLayer: KeyLayer<KeyState, KeyCommand> = {
   name: "armed",
-  active: (state) => state.armed,
+  active: (state) => state.armed && state.mode !== "tweak",
   bindings: [
     {
       keys: [" "],
@@ -193,6 +221,13 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
     },
     { keys: ["k", "K"], down: onPress({ cmd: "config-toggle" }) },
     {
+      // Tweak mode's entrance (§B.5). Only from ink mode — correct mode owns
+      // its own keys wholesale; once in tweak, the tweak layer above owns T.
+      keys: ["t", "T"],
+      down: (state, _key, repeat) =>
+        !repeat && state.mode === "ink" ? command({ cmd: "tweak-toggle" }) : "pass",
+    },
+    {
       keys: ["Enter"],
       down: (state, _key, repeat) => {
         if (repeat) {
@@ -209,8 +244,13 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
   fallback: "pass",
 };
 
-/** Top-down: backtick above the strip above the armed base. */
-const KEY_STACK: readonly KeyLayer<KeyState, KeyCommand>[] = [armLayer, stripLayer, armedLayer];
+/** Top-down: backtick above the strip above the tweak handover above the armed base. */
+const KEY_STACK: readonly KeyLayer<KeyState, KeyCommand>[] = [
+  armLayer,
+  stripLayer,
+  tweakLayer,
+  armedLayer,
+];
 
 /** Map one key event to a command, or undefined to let the page have it. */
 export function keyCommand(
