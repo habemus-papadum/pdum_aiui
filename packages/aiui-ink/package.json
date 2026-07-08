@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-ink",
-  "version": "0.3.0",
+  "version": "0.3.0+dev",
   "description": "Reusable canvas ink surface: local pointer inking or a remote stroke feed, with per-stroke color and thickness.",
   "type": "module",
   "license": "MIT",

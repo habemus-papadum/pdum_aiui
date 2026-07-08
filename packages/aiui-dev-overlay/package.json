@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-dev-overlay",
-  "version": "0.3.0",
+  "version": "0.3.0+dev",
   "description": "Browser-side dev overlay: a Shadow-DOM floating tool surface you import and mount.",
   "type": "module",
   "license": "MIT",

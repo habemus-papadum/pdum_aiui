@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-paint",
-  "version": "0.3.0",
+  "version": "0.3.0+dev",
   "description": "iPad-to-browser remote paint stream: wire protocol, a host-neutral coordinator backend (channel sidecar or your own server), browser host controller, and the iPad client.",
   "type": "module",
   "license": "MIT",
