@@ -7,43 +7,25 @@
  * log rides `chunk{kind:"events"}` JSON frames batched on a short debounce;
  * shot PNGs and whole audio segments ride `chunk{kind:"attachment"}` frames;
  * streamed PCM and sampled video frames ride `audio`/`video` chunks. Inbound,
- * the server's lowered echoes (`transcript-final`s, completed `correction`s,
- * pushed `speech` clips) merge into the engine stream as if local — guarded by
- * the `merging` reentrancy flag so a merge never re-streams itself. The
- * correction micro-pipeline (mock local / channel round-trip with its waiters
- * and timeout) lives here too, because its channel leg IS a wire round-trip.
+ * the server's lowered echoes (`transcript-delta`s/`-final`s, pushed `speech`
+ * clips) merge into the engine stream as if local — guarded by the `merging`
+ * reentrancy flag so a merge never re-streams itself.
  *
- * Owns its state (socket promise, outbox, debounce timer, pending correction
- * waiters); talks to the engine and the host context only through
- * {@link WireDeps}.
+ * Owns its state (socket promise, outbox, debounce timer); talks to the
+ * engine and the host context only through {@link WireDeps}.
  */
 
 import type { OverlayErrorInput } from "../../errors";
 import type { IntentThread, OpenThreadOptions } from "../../intent";
-import {
-  type CorrectionTarget,
-  composeIntent,
-  type Engine,
-  type IntentEvent,
-  type IntentPipelineConfig,
-} from "../../intent-pipeline";
+import type { Engine, IntentEvent, IntentPipelineConfig } from "../../intent-pipeline";
 import type { ThreadSocketState } from "../../overlay-tools";
 import type { Ack, VideoChunk } from "../../protocol";
 import { REALTIME_PCM_MIME } from "../audio";
-import { type CorrectionDiff, mockCorrector } from "../correct";
 import type { SpeechClip } from "../speech";
 import { VIDEO_FRAME_MIME } from "../video";
 
 /** How long to accumulate engine events before flushing an events chunk. */
 const EVENTS_DEBOUNCE_MS = 60;
-/** How long to wait for a correction echo before falling back to plain replace. */
-const CORRECTION_TIMEOUT_MS = 8000;
-
-interface PendingDiff {
-  resolve: (diff: CorrectionDiff) => void;
-  reject: (error: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
-}
 
 /** What the wire needs from its composer (modality.ts). */
 export interface WireDeps {
@@ -90,8 +72,6 @@ export interface Wire {
   uploadAudio(segment: number, seq: number, bytes: Uint8Array): Promise<void>;
   /** One sampled screen frame → a `video` chunk on `vid_N`, in seq order. */
   uploadVideo(share: number, seq: number, bytes: Uint8Array): Promise<void>;
-  /** The correction micro-pipeline — assign to `engine.correctionPipeline`. */
-  correctionPipeline(target: CorrectionTarget, instruction: string, via: "speech" | "typed"): void;
   /** The send path: flush, consume the selection, `fin`, surface the ack. */
   finalizeThread(): Promise<void>;
   /** Close the socket without `fin` (a cancel) and reset the wire state. */
@@ -110,7 +90,6 @@ export function createWire(deps: WireDeps): Wire {
   const outbox: IntentEvent[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
   let merging = false;
-  const pendingDiffs: PendingDiff[] = [];
 
   const rememberError = (error: unknown): void => {
     const message = error instanceof Error ? error.message : String(error);
@@ -322,10 +301,6 @@ export function createWire(deps: WireDeps): Wire {
       clearTimeout(flushTimer);
       flushTimer = undefined;
     }
-    for (const pending of pendingDiffs.splice(0)) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error("thread ended before the correction echo arrived"));
-    }
   }
 
   // ── server → client: merge lowered echoes as if they happened locally ────
@@ -362,170 +337,24 @@ export function createWire(deps: WireDeps): Wire {
         if (event.type === "transcript-delta") {
           engine.transcriptDelta(event.segment, event.text);
         } else if (event.type === "transcript-final") {
-          // Fills the preview for an uploaded segment; if a correction target
-          // is still lassoed, the engine chains it into a correction.
+          // Fills the preview for an uploaded segment.
           engine.transcriptFinal(event.segment, event.text, event.latencyMs, event.model);
-        } else if (event.type === "correction") {
-          resolveCorrectionEcho(event);
         } else if (event.type === "note") {
           setStatus(event.text);
+        } else if (event.type === "linter-note") {
+          // The lint: a 💡 chip in the accumulator preview (via the engine
+          // stream) and the status line; the spoken clip rides `speech`.
+          engine.ingestLinter(event);
+          setStatus(`💡 ${event.text}`);
+        } else if (event.type === "linter-tool-call" || event.type === "linter-tool-result") {
+          // Trace/debug material — chronicled so the turn store and the
+          // debugger see it; no chip renders (the trace viewer is its surface).
+          engine.ingestLinter(event);
         }
       }
     } finally {
       merging = false;
     }
-  }
-
-  function resolveCorrectionEcho(echo: Extract<IntentEvent, { type: "correction" }>): void {
-    const waiter = pendingDiffs.shift();
-    if (!waiter) {
-      return;
-    }
-    clearTimeout(waiter.timer);
-    if (echo.patch) {
-      waiter.resolve({
-        patch: echo.patch,
-        model: echo.model ?? config().correctionModel,
-        latencyMs: echo.latencyMs ?? 0,
-      });
-    } else {
-      // No patch → the pipeline's plain-replacement fallback (never vanish).
-      waiter.reject(new Error("correction echo had no patch"));
-    }
-  }
-
-  const noteCorrectionFailure = (error: unknown): void => {
-    const message = error instanceof Error ? error.message : String(error);
-    // A silent log entry (push, not emit) — never streamed nor rendered.
-    engine.events.push({
-      at: Date.now(),
-      type: "note",
-      text: `correction pipeline failed (${config().corrector}): ${message} — applied as plain replacement`,
-    });
-    // ...and a user-facing status, so the fallback to plain replacement is
-    // never silent about why the model correction didn't land. The toast
-    // repeats it because correcting happens with the panel closed (the
-    // preview is page-level) — a status line nobody can see is not "loud".
-    setStatus(`correction applied as plain replacement — ${message}`);
-    reportError({
-      source: "correction",
-      message: `correction applied as plain replacement — ${message}`,
-    });
-  };
-
-  /**
-   * Apply a resolved correction to the preview + local doc WITHOUT
-   * re-streaming it. Used for the channel corrector: the server already
-   * produced this correction from the patchless request (it runs the diff
-   * and merges the completed correction into its OWN stream), so streaming
-   * the resolution too would make the server apply it twice.
-   */
-  const applyCorrectionLocally = (
-    target: CorrectionTarget,
-    instruction: string,
-    via: "speech" | "typed",
-    diff?: CorrectionDiff,
-  ): void => {
-    const wasMerging = merging;
-    merging = true;
-    try {
-      engine.correction(target, instruction, via, diff);
-    } finally {
-      merging = wasMerging;
-    }
-  };
-
-  // ── the correction micro-pipeline (mock local / channel round-trip) ──────
-  const correctionPipeline = (
-    target: CorrectionTarget,
-    instruction: string,
-    via: "speech" | "typed",
-  ): void => {
-    const allLines = composeIntent(engine.events, config().correctionPolicy)
-      .items.filter((item) => item.kind === "text")
-      .map((item) => item.text ?? "");
-    // Scope the model's document to the active chunk (see the correction
-    // event's `scope`): the patch stays context-anchored, so it lands in
-    // the full transcript regardless.
-    const docLines = target.scope
-      ? allLines.slice(
-          Math.max(0, target.scope.fromLine),
-          Math.min(allLines.length, target.scope.toLine),
-        )
-      : allLines;
-    if (config().corrector === "mock") {
-      // Local patch: this correction event is the server's ONLY copy, so it
-      // streams normally (the server, in mock mode, passes it through).
-      void mockCorrector()
-        .diff({ docLines, selected: target.original, instruction })
-        .then((diff) => engine.correction(target, instruction, via, diff))
-        .catch((error: unknown) => {
-          noteCorrectionFailure(error);
-          engine.correction(target, instruction, via);
-        });
-    } else {
-      // Channel: the patchless request (sent inside requestChannelCorrection)
-      // is what the server composes from; its echoed resolution is applied
-      // locally only. A no-patch/timeout echo → plain replacement, also local.
-      void requestChannelCorrection(target, instruction, via)
-        .then((diff) => applyCorrectionLocally(target, instruction, via, diff))
-        .catch((error: unknown) => {
-          noteCorrectionFailure(error);
-          applyCorrectionLocally(target, instruction, via, undefined);
-        });
-    }
-  };
-
-  /**
-   * Channel corrector: stream the patchless correction as a request (an
-   * events chunk, transient — not the engine's own event) and await the
-   * server's patched echo. On timeout / no-patch, the pipeline above falls
-   * back to plain replacement.
-   */
-  function requestChannelCorrection(
-    target: CorrectionTarget,
-    instruction: string,
-    via: "speech" | "typed",
-  ): Promise<CorrectionDiff> {
-    return new Promise<CorrectionDiff>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const index = pendingDiffs.findIndex((p) => p.timer === timer);
-        if (index >= 0) {
-          pendingDiffs.splice(index, 1);
-        }
-        reject(new Error("correction timed out awaiting the channel echo"));
-      }, CORRECTION_TIMEOUT_MS);
-      const entry: PendingDiff = { resolve, reject, timer };
-      pendingDiffs.push(entry);
-      const reqEvent: IntentEvent = {
-        at: Date.now(),
-        type: "correction",
-        from: target.from,
-        to: target.to,
-        original: target.original,
-        instruction,
-        via,
-        ...(target.scope !== undefined ? { scope: target.scope } : {}),
-      };
-      void (async () => {
-        const thread = await getThread();
-        if (!thread) {
-          const index = pendingDiffs.indexOf(entry);
-          if (index >= 0) {
-            pendingDiffs.splice(index, 1);
-          }
-          clearTimeout(timer);
-          reject(new Error("no channel connected"));
-          return;
-        }
-        await flushOutbox(thread);
-        try {
-          await thread.sendChunk({ kind: "events" }, { events: [reqEvent] }, false);
-        } catch {
-          // The timeout (or a later echo) settles this; nothing else to do.
-        }
-      })();
-    });
   }
 
   return {
@@ -536,7 +365,6 @@ export function createWire(deps: WireDeps): Wire {
     uploadAttachment,
     uploadAudio,
     uploadVideo,
-    correctionPipeline,
     finalizeThread,
     cancelThread,
     dispose: () => {

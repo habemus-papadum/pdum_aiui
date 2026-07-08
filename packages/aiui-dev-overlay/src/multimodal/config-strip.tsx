@@ -42,11 +42,17 @@ export interface ConfigStripState {
 
 /** The tier a config runs, for display: explicit `tier` or the default rung. */
 export function displayTier(config: IntentPipelineConfig): IntentTier {
-  return config.tier ?? "standard";
+  return config.tier ?? "rapid";
+}
+
+/** The linter setting a config runs, for display (absent → off). */
+export function displayLinter(config: IntentPipelineConfig): "off" | "openai" | "gemini" {
+  return config.linter ?? "off";
 }
 
 /** The action row's clickable entries, keyed by their `data-cmd` stamp. */
 const ACTION_COMMANDS: Record<string, KeyCommand> = {
+  linter: { cmd: "config-linter" },
   save: { cmd: "config-save" },
   reset: { cmd: "config-reset" },
   advanced: { cmd: "config-advanced" },
@@ -129,6 +135,16 @@ export class ConfigStrip {
                   </span>
                 )}
               </For>
+            </div>
+          )}
+          {state() !== undefined && (
+            <div class="mm-strip-linter">
+              <span
+                class={`mm-tier-chip${displayLinter((state() as ConfigStripState).config) !== "off" ? " active" : ""}`}
+                data-cmd="linter"
+              >
+                <b>L</b> 💡 linter: {displayLinter((state() as ConfigStripState).config)}
+              </span>
             </div>
           )}
           {state()?.pendingTier !== undefined && (

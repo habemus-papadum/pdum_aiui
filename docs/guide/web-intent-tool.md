@@ -323,40 +323,15 @@ sequenceDiagram
   C-->>W: ack (closed) → "sent ✓"
 ```
 
-#### The correction meta-loop
+#### Corrections are spoken (the append-only model)
 
-Fixing a mis-transcription is a **patch**, not a retype, and where the diff runs depends on the
-`corrector` config. The `mock` corrector builds the patch in the browser and streams the
-correction already carrying it — the channel just appends it. The default `openai` corrector
-streams a *patchless* correction as a **request**: the channel runs the V4A diff, echoes the
-completed correction back, and holds the one patched copy (the client applies the echo locally and
-never re-sends, so no patched twin appears on the wire). Either way a malformed or non-applying
-patch degrades to a plain replacement — a correction never silently vanishes.
-
-```mermaid
-sequenceDiagram
-  autonumber
-  actor User
-  participant W as Widget
-  participant C as Channel
-  participant AI as OpenAI
-
-  User->>W: E · select transcript text · speak or type the fix
-  alt corrector = mock (offline)
-    W->>W: local V4A patch (mockCorrector)
-    W->>C: events {correction WITH patch}
-    Note over C: appended as-is — no diff run
-  else corrector = openai (default)
-    W->>C: events {correction, no patch} = request
-    C->>AI: diff · gpt-4o-mini · V4A · temp 0
-    AI-->>C: patch
-    Note over C: validate the patch applies
-    C-->>W: lowered {correction + patch} echo
-    W->>W: apply echo locally · diff flash (pink del / green add)
-    Note over C: server keeps one patched copy (never applied twice)
-  end
-  Note over C,W: malformed / won't-apply → patchless echo → plain replacement (never vanishes)
-```
+There is no correction round-trip anymore. The event stream is append-only, the preview is a
+read-only render of the compiler's accumulator, and a mis-transcription is fixed by *saying*
+the fix — new content the compiler (and the agent) reads in context. The optional
+[prompt linter](./prompt-linting) is the machine ally here: it sees the exact transcription
+the compiler will use and flags contradictions at each pause. (Historical traces from the
+corrector era — `correction`/`correction-undo` events, V4A patches — still fold and render in
+the debugger; `composeIntent` keeps that pure replay path.)
 
 ### The overlay dogfoods its own agent surface
 

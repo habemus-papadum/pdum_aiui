@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sampleDimensions, VIDEO_MAX_WIDTH, VideoSampler } from "./video";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -102,5 +102,36 @@ describe("VideoSampler", () => {
     release(Uint8Array.of(9)); // ...now it resolves
     await wait(5);
     expect(frames).toHaveLength(0);
+  });
+});
+
+describe("dynamic cadence (the fps slider's thunk)", () => {
+  it("re-reads the interval thunk before every gap — a change lands on the next frame", async () => {
+    vi.useFakeTimers();
+    try {
+      let interval = 100;
+      const sent: number[] = [];
+      const sampler = new VideoSampler({
+        captureFrame: () => Promise.resolve(new Uint8Array([1])),
+        sendFrame: (seq) => sent.push(seq),
+        intervalMs: () => interval,
+      });
+      sampler.start();
+      await vi.advanceTimersByTimeAsync(0); // the immediate first frame
+      expect(sent).toEqual([0]);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sent).toEqual([0, 1]);
+
+      interval = 1000; // the slider moved — no restart needed
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sent).toEqual([0, 1, 2]); // this gap was already armed at 100
+      await vi.advanceTimersByTimeAsync(999);
+      expect(sent).toEqual([0, 1, 2]); // the new 1000 ms gap holds…
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sent).toEqual([0, 1, 2, 3]); // …and fires on schedule
+      sampler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  LIVE_COMPOSER_INSTRUCTIONS,
-  LIVE_NUDGE_TEXT,
-  type LiveSessionCallbacks,
-} from "./live-session";
+import { LINTER_INSTRUCTIONS, type LiveSessionCallbacks } from "./live-session";
 import { openOpenAiLiveSession } from "./openai-live";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 
@@ -42,13 +38,11 @@ function fakeUpstream(): FakeUpstream {
 const b64 = (bytes: number[]): string => Buffer.from(bytes).toString("base64");
 
 function collect(up: FakeUpstream) {
-  const userTranscripts: string[] = [];
   const replyTranscripts: string[] = [];
   const replyAudio: Array<{ mime: string }> = [];
   const usages: Array<{ provider: string }> = [];
   const errors: string[] = [];
   const cb: LiveSessionCallbacks = {
-    onUserTranscript: (text) => userTranscripts.push(text),
     onReplyTranscript: (text) => replyTranscripts.push(text),
     onReplyAudio: (_bytes, mime) => replyAudio.push({ mime }),
     onInterrupted: () => {},
@@ -59,13 +53,13 @@ function collect(up: FakeUpstream) {
     { apiKey: "k", model: () => "gpt-realtime-2", socketFactory: up.factory },
     cb,
   );
-  return { session, userTranscripts, replyTranscripts, replyAudio, usages, errors };
+  return { session, replyTranscripts, replyAudio, usages, errors };
 }
 
 const types = (up: FakeUpstream): string[] => up.sent.map((m) => m.type as string);
 
 describe("openOpenAiLiveSession", () => {
-  it("configures a realtime session with manual VAD, input transcription, and submit_intent", () => {
+  it("configures a realtime session with manual VAD, read_file, and NO input transcription", () => {
     const up = fakeUpstream();
     collect(up);
     up.open();
@@ -75,54 +69,32 @@ describe("openOpenAiLiveSession", () => {
         type: "realtime",
         model: "gpt-realtime-2",
         output_modalities: ["audio"],
-        audio: {
-          input: { turn_detection: null, transcription: { model: "gpt-4o-mini-transcribe" } },
-        },
+        audio: { input: { turn_detection: null } },
       },
     });
-    const tools = (
+    const session = (
       up.sent[0] as {
         session: {
-          tools: Array<{
-            name: string;
-            parameters: {
-              properties: { segments: { items: { properties: Record<string, unknown> } } };
-            };
-          }>;
+          instructions: string;
+          tools: Array<{ name: string }>;
+          audio: { input: Record<string, unknown> };
         };
       }
-    ).session.tools;
-    expect(tools[0].name).toBe("submit_intent");
-    // Segments may interleave text, image ids, AND selection ids (F2).
-    expect(Object.keys(tools[0].parameters.properties.segments.items.properties)).toEqual([
-      "text",
-      "image",
-      "selection",
-    ]);
+    ).session;
+    // The STT session owns the chronicle — no vendor input transcription.
+    expect(session.audio.input.transcription).toBeUndefined();
+    expect(session.tools.map((t) => t.name)).toEqual(["read_file"]);
     // The persona is the shared authoritative text (one place, both vendors).
-    const instructions = (up.sent[0] as { session: { instructions: string } }).session.instructions;
-    expect(instructions).toBe(LIVE_COMPOSER_INSTRUCTIONS);
+    expect(session.instructions).toBe(LINTER_INSTRUCTIONS);
   });
 
-  it("has no video and no-ops appendVideoFrame", () => {
-    const up = fakeUpstream();
-    const { session } = collect(up);
-    up.open();
-    up.emit({ type: "session.updated" });
-    expect(session.capabilities.video).toBe(false);
-    expect(session.capabilities.imageInjection).toBe("turn-item");
-    const before = up.sent.length;
-    session.appendVideoFrame(new Uint8Array([1, 2, 3]), "image/jpeg");
-    expect(up.sent.length).toBe(before);
-  });
-
-  it("activityEnd commits the buffer and asks for a response", () => {
+  it("activityEnd past the commit floor commits the buffer and asks for a response", () => {
     const up = fakeUpstream();
     const { session } = collect(up);
     up.open();
     up.emit({ type: "session.updated" });
     session.activityStart();
-    session.appendAudio(new Uint8Array([1, 2]));
+    session.appendAudio(new Uint8Array(200 * 48)); // 200 ms — over the floor
     session.activityEnd();
     expect(types(up)).toContain("input_audio_buffer.append");
     expect(types(up)).toContain("input_audio_buffer.commit");
@@ -163,67 +135,11 @@ describe("openOpenAiLiveSession", () => {
     expect(up.sent.filter((m) => m.type === "response.create").length).toBe(before);
   });
 
-  it("nudgeSubmit posts the commit sentinel as a text item and a response.create", () => {
+  it("surfaces the reply audio, reply transcript, and usage", () => {
     const up = fakeUpstream();
-    const { session } = collect(up);
+    const { replyTranscripts, replyAudio, usages } = collect(up);
     up.open();
     up.emit({ type: "session.updated" });
-    session.nudgeSubmit();
-    expect(types(up)).toContain("conversation.item.create");
-    expect(types(up)).toContain("response.create");
-    const item = up.sent.find((m) => m.type === "conversation.item.create") as {
-      item: { content: Array<{ type: string; text?: string }> };
-    };
-    expect(item.item.content[0]).toEqual({ type: "input_text", text: LIVE_NUDGE_TEXT });
-  });
-
-  it("delivers a function_call from response.done through drainToolCall; respond writes function_call_output", async () => {
-    const up = fakeUpstream();
-    const { session } = collect(up);
-    up.open();
-    up.emit({ type: "session.updated" });
-    up.emit({
-      type: "response.done",
-      response: {
-        id: "resp_1",
-        output: [
-          {
-            type: "function_call",
-            name: "submit_intent",
-            call_id: "call_1",
-            arguments: JSON.stringify({
-              segments: [{ text: "wider" }, { image: "shot_1" }, { selection: "code_1" }],
-            }),
-          },
-        ],
-      },
-    });
-    const call = await session.drainToolCall(1000);
-    expect(call?.segments).toEqual([
-      { text: "wider" },
-      { image: "shot_1" },
-      { selection: "code_1" },
-    ]);
-    call?.respond(true);
-    const out = up.sent.find(
-      (m) =>
-        m.type === "conversation.item.create" &&
-        (m as { item?: { type?: string } }).item?.type === "function_call_output",
-    ) as { item: { call_id: string; output: string } };
-    expect(out.item.call_id).toBe("call_1");
-    expect(JSON.parse(out.item.output)).toEqual({ ok: true });
-  });
-
-  it("surfaces the user transcript, reply audio, reply transcript, and usage", () => {
-    const up = fakeUpstream();
-    const { userTranscripts, replyTranscripts, replyAudio, usages } = collect(up);
-    up.open();
-    up.emit({ type: "session.updated" });
-    up.emit({
-      type: "conversation.item.input_audio_transcription.completed",
-      item_id: "item_1",
-      transcript: "make it wider",
-    });
     up.emit({
       type: "response.output_audio.delta",
       response_id: "resp_1",
@@ -232,7 +148,7 @@ describe("openOpenAiLiveSession", () => {
     up.emit({
       type: "response.output_audio_transcript.done",
       response_id: "resp_1",
-      transcript: "on it",
+      transcript: "clear so far",
     });
     up.emit({
       type: "response.done",
@@ -241,19 +157,121 @@ describe("openOpenAiLiveSession", () => {
         usage: { input_tokens: 100, output_tokens: 40, input_token_details: { audio_tokens: 50 } },
       },
     });
-    expect(userTranscripts).toEqual(["make it wider"]);
     expect(replyAudio).toEqual([{ mime: "audio/wav" }]);
-    expect(replyTranscripts).toEqual(["on it"]);
+    expect(replyTranscripts).toEqual(["clear so far"]);
     expect(usages).toEqual([{ provider: "openai" }]);
   });
 
-  it("an upstream error is surfaced and drain resolves null", async () => {
+  it("an upstream error is surfaced loudly (once)", () => {
     const up = fakeUpstream();
     const { session, errors } = collect(up);
     up.open();
     up.emit({ type: "session.updated" });
     up.error("connection reset");
     expect(errors).toEqual(["connection reset"]);
-    await expect(session.drainToolCall(1000)).resolves.toBeNull();
+    expect(session).toBeTruthy();
+  });
+});
+
+// ── linter mode (the prompt-linter pivot) ────────────────────────────────────
+
+function collectLinter(up: FakeUpstream) {
+  const toolCalls: Array<{ tool: string; args: Record<string, unknown> }> = [];
+  const replyTranscripts: string[] = [];
+  let lastRespond: ((result: string) => void) | undefined;
+  const cb: LiveSessionCallbacks = {
+    onReplyTranscript: (text) => replyTranscripts.push(text),
+    onReplyAudio: () => {},
+    onInterrupted: () => {},
+    onUsage: () => {},
+    onError: () => {},
+    onToolCall: (call) => {
+      toolCalls.push({ tool: call.tool, args: call.args });
+      lastRespond = call.respond;
+    },
+  };
+  const session = openOpenAiLiveSession(
+    { apiKey: "k", model: () => "gpt-realtime-2", socketFactory: up.factory },
+    cb,
+  );
+  return { session, toolCalls, replyTranscripts, respond: (r: string) => lastRespond?.(r) };
+}
+
+describe("openOpenAiLiveSession (linter mode)", () => {
+  it("routes a read_file call to onToolCall; respond writes output THEN response.create", () => {
+    const up = fakeUpstream();
+    const { toolCalls, respond } = collectLinter(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    up.emit({
+      type: "response.done",
+      response: {
+        id: "r1",
+        output: [
+          {
+            type: "function_call",
+            name: "read_file",
+            call_id: "c9",
+            arguments: JSON.stringify({ path: "src/a.ts" }),
+          },
+        ],
+      },
+    });
+    expect(toolCalls).toEqual([{ tool: "read_file", args: { path: "src/a.ts" } }]);
+
+    respond("const a = 1;");
+    // THE RESUME RULE, asserted as wire ORDER: the output item first, then a
+    // fresh response.create — a written tool result never resumes on its own.
+    const tail = up.sent.slice(-2);
+    expect(tail[0]).toMatchObject({
+      type: "conversation.item.create",
+      item: { type: "function_call_output", call_id: "c9", output: "const a = 1;" },
+    });
+    expect(tail[1]).toEqual({ type: "response.create" });
+  });
+
+  it("accepts ambient video frames as unlabeled input_image items", () => {
+    const up = fakeUpstream();
+    const { session } = collectLinter(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    expect(session.capabilities.video).toBe(true);
+    session.appendVideoFrame(new Uint8Array([1, 2, 3]), "image/jpeg");
+    const item = up.sent.at(-1) as {
+      type: string;
+      item: { content: Array<{ type: string; image_url?: string }> };
+    };
+    expect(item.type).toBe("conversation.item.create");
+    expect(item.item.content).toHaveLength(1); // unlabeled — no text part
+    expect(item.item.content[0].type).toBe("input_image");
+    expect(item.item.content[0].image_url).toContain("data:image/jpeg;base64,");
+  });
+
+  it("clears (never commits) a window under the 100 ms floor; a real window commits", () => {
+    const up = fakeUpstream();
+    const { session } = collectLinter(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    // A tap: 40 ms of audio (48 bytes/ms) — under the floor.
+    session.activityStart();
+    session.appendAudio(new Uint8Array(40 * 48));
+    session.activityEnd();
+    expect(types(up)).toContain("input_audio_buffer.clear");
+    expect(types(up)).not.toContain("input_audio_buffer.commit");
+
+    // A real window: 200 ms — commits and solicits the lint.
+    session.appendAudio(new Uint8Array(200 * 48));
+    session.activityEnd();
+    expect(types(up)).toContain("input_audio_buffer.commit");
+    expect(types(up).filter((t) => t === "response.create")).toHaveLength(1);
+  });
+
+  it("cancelActiveResponse sends response.cancel (client-side barge-in)", () => {
+    const up = fakeUpstream();
+    const { session } = collectLinter(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.cancelActiveResponse();
+    expect(up.sent.at(-1)).toEqual({ type: "response.cancel" });
   });
 });

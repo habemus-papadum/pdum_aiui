@@ -26,7 +26,6 @@ export type {
   ComposedIntent,
   ComposedItem,
   ComposeOptions,
-  CorrectionTarget,
   EngineListener,
 } from "./engine";
 export {

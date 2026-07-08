@@ -47,9 +47,6 @@ export type {
 } from "./intent";
 export { mountIntentTool, textModality, unmountIntentTool } from "./intent";
 export type {
-  CorrectionDiff,
-  CorrectionInput,
-  Corrector,
   ShotPixels,
   ShotSink,
   SpeechAudioElement,
@@ -64,13 +61,11 @@ export {
   Ink,
   locateComponents,
   MULTIMODAL_STYLES,
-  mockCorrector,
   mockTranscriber,
   multimodalModality,
   Preview,
   ShotTool,
   SpeechPlayer,
-  SYSTEM_PROMPT,
 } from "./multimodal";
 export type { DevOverlayHandle, DevOverlayOptions } from "./overlay";
 export {

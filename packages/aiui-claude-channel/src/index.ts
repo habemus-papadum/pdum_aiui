@@ -41,15 +41,6 @@ export {
 export { jsonCodec, type PayloadCodec, rawCodec } from "./codec";
 export { CHANNEL_CONFIG } from "./commands/config";
 export {
-  type CorrectionDiff,
-  type CorrectionInput,
-  type Corrector,
-  mockCorrector,
-  type OpenAiCorrectorOptions,
-  openaiCorrector,
-  SYSTEM_PROMPT,
-} from "./correct";
-export {
   type ChunkDescriptor,
   type DecodedFrame,
   decodeFrame,
@@ -105,19 +96,17 @@ export {
 } from "./launch-info";
 export { dirRank, type ListOptions, listMcpServers, sortServers } from "./list";
 export {
-  type LabelEntry,
-  type ResolvedSegments,
-  type ResolveOptions,
-  renderShotBlock,
-  resolveSegments,
+  SELECTION_EXCERPT_CHARS,
+  type SelectionEntry,
+  selectionInjectionLabel,
+  selectionRetractionLabel,
 } from "./live-resolve";
 export {
-  LIVE_COMPOSER_INSTRUCTIONS,
-  LIVE_NUDGE_TEXT,
+  LINTER_INSTRUCTIONS,
+  type LinterToolCall,
   type LiveCapabilities,
   type LiveSession,
   type LiveSessionCallbacks,
-  type SubmitIntentCall,
 } from "./live-session";
 export {
   type LoadSidecarsOptions,

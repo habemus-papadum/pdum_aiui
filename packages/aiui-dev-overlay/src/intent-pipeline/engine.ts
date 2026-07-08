@@ -27,14 +27,6 @@ import type {
 
 export type EngineListener = (event: IntentEvent, engine: Engine) => void;
 
-export interface CorrectionTarget {
-  from: number;
-  to: number;
-  original: string;
-  /** The transcript-line window the fix is scoped to (the active chunk). */
-  scope?: { fromLine: number; toLine: number };
-}
-
 export class Engine {
   readonly settings: IntentPipelineConfig;
   events: IntentEvent[] = [];
@@ -42,8 +34,6 @@ export class Engine {
   mode: Mode = "ink";
   talking = false;
   threadOpen = false;
-  /** Set while correct mode has a lassoed range awaiting its instruction. */
-  correctionTarget: CorrectionTarget | undefined;
 
   private listeners: EngineListener[] = [];
   private segmentCounter = 0;
@@ -60,6 +50,25 @@ export class Engine {
 
   onEvent(listener: EngineListener): void {
     this.listeners.push(listener);
+  }
+
+  /**
+   * Merge a server-produced LINTER event (a note / tool call / result) into
+   * the stream. Advisory only: `composeIntent` skips every `linter-*` kind,
+   * so ingestion changes the preview's chips and the trace — never the
+   * prompt. A lint that arrives after its thread closed is dropped (nothing
+   * to advise on anymore).
+   */
+  ingestLinter(
+    event: Extract<
+      IntentEvent,
+      { type: "linter-note" | "linter-tool-call" | "linter-tool-result" }
+    >,
+  ): void {
+    if (!this.threadOpen) {
+      return;
+    }
+    this.emit(event);
   }
 
   private emit(event: IntentEvent): void {
@@ -89,7 +98,6 @@ export class Engine {
         this.closeThread("cancel");
       }
       this.mode = "ink";
-      this.correctionTarget = undefined;
     }
     this.emit(this.stamp({ type: "armed", on }));
   }
@@ -99,13 +107,10 @@ export class Engine {
       return;
     }
     this.mode = mode;
-    if (mode !== "correct") {
-      this.correctionTarget = undefined;
-    }
     this.emit(this.stamp({ type: "mode", mode }));
   }
 
-  /** Esc, one level at a time: correct/tweak/vscode → ink, ink+thread → cancel, → disarm. */
+  /** Esc, one level at a time: tweak/vscode → ink, ink+thread → cancel, → disarm. */
   stepOut(): void {
     if (this.mode !== "ink") {
       this.setMode("ink");
@@ -307,7 +312,6 @@ export class Engine {
 
   private closeThread(reason: "send" | "cancel" | "timeout"): void {
     this.threadOpen = false;
-    this.correctionTarget = undefined;
     this.emit(this.stamp({ type: "thread-close", reason }));
   }
 
@@ -367,17 +371,8 @@ export class Engine {
   }
 
   transcriptFinal(segment: number, text: string, latencyMs: number, model: string): void {
-    // A segment spoken in correct mode (or at a selected target) belongs to
-    // the correction, not the content — flag it so composition excludes it.
-    // It does NOT auto-submit: the spoken words land in the correction input
-    // (where typing and talking coexist) and Enter is the single commit
-    // gesture, so any lassoed target stays set until commit or dismissal.
-    if (this.correctionTarget || this.mode === "correct") {
-      this.emit(
-        this.stamp({ type: "transcript-final", segment, text, latencyMs, model, correction: true }),
-      );
-      return;
-    }
+    // (The event's `correction` flag survives in the type for historical
+    // traces; nothing sets it since correct mode was removed — append-only.)
     this.emit(this.stamp({ type: "transcript-final", segment, text, latencyMs, model }));
   }
 
@@ -398,6 +393,7 @@ export class Engine {
     thumb?: string,
     path?: string,
     viewport?: boolean,
+    takenAt?: number,
   ): string {
     this.ensureThread("shot");
     // Identifier-shaped (underscore) so the marker doubles as an attachment id.
@@ -411,6 +407,9 @@ export class Engine {
         thumb,
         path,
         ...(viewport ? { viewport: true } : {}),
+        // The GESTURE's wall-clock (see the event doc) — capture is async, so
+        // this event's own `at` trails the moment the user actually shot.
+        ...(takenAt !== undefined ? { takenAt } : {}),
       }),
     );
     return marker;
@@ -435,85 +434,6 @@ export class Engine {
     this.emit(this.stamp({ type: "video-share", on }));
   }
 
-  // ── corrections (the meta layer) ───────────────────────────────────────────
-
-  /**
-   * The correction micro-pipeline hook (set by main.ts): receives the target
-   * + instruction, asks a Corrector for a patch, then calls
-   * {@link correction} with the diff. Without a hook (unit tests), the
-   * instruction becomes a plain replacement correction directly.
-   */
-  correctionPipeline?: (
-    target: CorrectionTarget,
-    instruction: string,
-    via: "speech" | "typed",
-  ) => void;
-
-  setCorrectionTarget(target: CorrectionTarget | undefined): void {
-    this.correctionTarget = target;
-  }
-
-  /** Route an instruction for a target into the pipeline (or straight through). */
-  submitCorrection(target: CorrectionTarget, instruction: string, via: "speech" | "typed"): void {
-    if (this.correctionPipeline) {
-      this.correctionPipeline(target, instruction, via);
-    } else {
-      this.correction(target, instruction, via);
-    }
-  }
-
-  /**
-   * Undo the most recent still-active correction of the current thread (an
-   * Escape in the correction box). Emits a `correction-undo` event — the
-   * stream stays append-only; compose pops the correction from the applied
-   * set. Returns false (and emits nothing) when there is nothing to undo,
-   * which is the caller's cue to step out instead.
-   */
-  undoCorrection(): boolean {
-    let start = -1;
-    for (let i = this.events.length - 1; i >= 0; i--) {
-      if (this.events[i].type === "thread-open") {
-        start = i;
-        break;
-      }
-    }
-    let active = 0;
-    for (const event of start === -1 ? this.events : this.events.slice(start)) {
-      if (event.type === "correction") {
-        active += 1;
-      } else if (event.type === "correction-undo") {
-        active -= 1;
-      }
-    }
-    if (active <= 0) {
-      return false;
-    }
-    this.emit(this.stamp({ type: "correction-undo" }));
-    return true;
-  }
-
-  correction(
-    target: CorrectionTarget,
-    instruction: string,
-    via: "speech" | "typed",
-    diff?: { patch: string; model: string; latencyMs: number },
-  ): void {
-    this.emit(
-      this.stamp({
-        type: "correction",
-        from: target.from,
-        to: target.to,
-        original: target.original,
-        instruction,
-        via,
-        ...(target.scope !== undefined ? { scope: target.scope } : {}),
-        patch: diff?.patch,
-        model: diff?.model,
-        latencyMs: diff?.latencyMs,
-      }),
-    );
-  }
-
   /**
    * Rehydrate the stream from a recovered turn (HMR/reload turn recovery — see
    * the overlay's turn-store.ts). Replays each event through the current
@@ -533,7 +453,6 @@ export class Engine {
     this.talking = false;
     this.threadOpen = state.threadOpen;
     this.mode = state.mode ?? "ink";
-    this.correctionTarget = undefined;
     let maxSegment = 0;
     let maxShot = 0;
     let maxSel = 0;
@@ -571,6 +490,8 @@ export class Engine {
 export interface ComposedItem {
   kind: "text" | "shot" | "code-selection" | "app-selection";
   text?: string;
+  /** A text item's source segment ordinal — the accumulator view's stable key. */
+  segment?: number;
   /** The item's stream identity (`shot_N` / `sel_N` / `code_N`) — absent for
    * text runs and for selections from pre-marker traces. */
   marker?: string;
@@ -579,6 +500,8 @@ export interface ComposedItem {
   components?: LocatedComponent[];
   /** True for a whole-viewport shot (renders with no element metadata). */
   viewport?: boolean;
+  /** A shot item's capture-gesture wall-clock (see the shot event's doc). */
+  takenAt?: number;
   /** A selection item's locator (`file:line:col` / `file:start-end`). */
   sourceLoc?: string;
   /** A code-selection item's line count. */
@@ -671,6 +594,11 @@ export function composeIntent(
   const droppedShots = new Set<string>();
   const droppedSelections = new Set<string>();
   const droppedCode = new Set<string>();
+  // The timestamp-interleave inputs: each segment's talk window (wall-clock
+  // bounds) and its `transcript-delta` timeline — (arrival time, cumulative
+  // text length) samples the split pass below maps a shot's `takenAt` onto.
+  const windows = new Map<number, { start: number; end?: number }>();
+  const deltaTimelines = new Map<number, Array<{ at: number; len: number }>>();
   for (const event of scope) {
     if (event.type === "shot-drop") {
       droppedShots.add(event.marker);
@@ -678,6 +606,17 @@ export function composeIntent(
       droppedSelections.add(event.marker);
     } else if (event.type === "code-selection-drop") {
       droppedCode.add(event.marker);
+    } else if (event.type === "talk-start") {
+      windows.set(event.segment, { start: event.at });
+    } else if (event.type === "talk-end") {
+      const window = windows.get(event.segment);
+      if (window !== undefined) {
+        window.end = event.at;
+      }
+    } else if (event.type === "transcript-delta") {
+      const timeline = deltaTimelines.get(event.segment) ?? [];
+      timeline.push({ at: event.at, len: event.text.length });
+      deltaTimelines.set(event.segment, timeline);
     }
   }
 
@@ -694,7 +633,7 @@ export function composeIntent(
     if (event.type === "transcript-final" && !event.correction) {
       // One item per segment, deliberately unmerged: segments-as-lines is the
       // document shape the correction patches (and the corrector model) see.
-      items.push({ kind: "text", text: event.text });
+      items.push({ kind: "text", text: event.text, segment: event.segment });
     } else if (event.type === "app-selection") {
       if (event.marker !== undefined && droppedSelections.has(event.marker)) {
         continue;
@@ -747,6 +686,7 @@ export function composeIntent(
         path: event.path,
         components: event.components,
         ...(event.viewport ? { viewport: true } : {}),
+        ...(event.takenAt !== undefined ? { takenAt: event.takenAt } : {}),
       });
     } else if (event.type === "correction") {
       corrections.push({
@@ -793,6 +733,76 @@ export function composeIntent(
     }
   }
 
+  // ── the timestamp interleave: place anchored shots INSIDE their segment ────
+  // A shot taken mid-window used to compose BEFORE that segment's entire text
+  // (finals arrive late; position was arrival order). With `takenAt` (the
+  // gesture's wall-clock) and the segment's delta timeline, the compiler —
+  // the ONLY place allowed to reorder the accumulator — splits the segment's
+  // text at the offset the deltas had reached when the shot was taken,
+  // nudged to a word boundary. Fallbacks are byte-identical to the old
+  // behavior: no takenAt (legacy streams), no matching talk window (an idle
+  // shot), or no deltas for the segment → the shot keeps its arrival
+  // position.
+  //
+  // Deltas TRAIL speech by the transcriber's latency, so a naive
+  // takenAt-vs-arrival comparison lands the split systematically EARLY —
+  // the words you had already spoken at the gesture hadn't arrived yet
+  // (observed ~1 s off in practice). {@link deltaLagEstimate} compensates
+  // with a per-segment estimate measured from data the stream already
+  // carries. Honest scope note: this is a research area, not a solved
+  // problem — the estimate is coarse (see the helper's doc), and the right
+  // long-term anchor is probably audio-time-aligned transcription.
+  const anchoredShots = new Map<number, ComposedItem[]>();
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind !== "shot" || item.takenAt === undefined) {
+      continue;
+    }
+    const segment = segmentContaining(windows, item.takenAt);
+    if (segment === undefined || !deltaTimelines.has(segment)) {
+      continue;
+    }
+    if (!items.some((t) => t.kind === "text" && t.segment === segment)) {
+      continue; // the segment never produced text — nothing to split
+    }
+    items.splice(i, 1);
+    anchoredShots.set(segment, [item, ...(anchoredShots.get(segment) ?? [])]);
+  }
+  if (anchoredShots.size > 0) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const target = items[i];
+      if (target.kind !== "text" || target.segment === undefined) {
+        continue;
+      }
+      const shots = anchoredShots.get(target.segment);
+      if (shots === undefined) {
+        continue;
+      }
+      const text = target.text ?? "";
+      const timeline = deltaTimelines.get(target.segment) ?? [];
+      const lag = deltaLagEstimate(windows.get(target.segment), timeline);
+      // Oldest shot first; each split offset is nudged to the end of the word
+      // it lands in (and past a sentence end just ahead), so a screenshot
+      // never interrupts a word — and rarely a sentence.
+      const placed: ComposedItem[] = [];
+      let consumed = 0;
+      for (const shot of shots.sort((a, b) => (a.takenAt ?? 0) - (b.takenAt ?? 0))) {
+        const offset = nudgeToBoundary(text, deltaOffsetAt(timeline, (shot.takenAt ?? 0) + lag));
+        const head = text.slice(consumed, Math.max(consumed, offset)).trim();
+        if (head !== "") {
+          placed.push({ kind: "text", text: head, segment: target.segment });
+        }
+        placed.push(shot);
+        consumed = Math.max(consumed, offset);
+      }
+      const tail = text.slice(consumed).trim();
+      if (tail !== "") {
+        placed.push({ kind: "text", text: tail, segment: target.segment });
+      }
+      items.splice(i, 1, ...placed);
+    }
+  }
+
   const components = items.flatMap((item) => item.components ?? []);
   const transcript = items
     .filter((item) => item.kind === "text")
@@ -826,6 +836,129 @@ export function composeIntent(
     prompt: promptParts.join(" ").trim(),
     meta: {},
   };
+}
+
+// ── the timestamp interleave's pure helpers ──────────────────────────────────
+
+/**
+ * How long after a talk window closes a shot still anchors to that segment
+ * (placed after its text). Finals arrive well after the release; without
+ * this grace a shot taken in that gap composes BEFORE the words it followed
+ * (the event beat the final into the stream).
+ */
+const POST_WINDOW_ANCHOR_GRACE_MS = 3000;
+
+/**
+ * The delta-lag fallback/ceiling, in ms. `at` stamps are wall-clock
+ * milliseconds by wire contract, so absolute bounds are legitimate here.
+ */
+const DEFAULT_DELTA_LAG_MS = 800;
+const MAX_DELTA_LAG_MS = 2000;
+
+/** The segment whose talk window contains `at` — or whose window closed
+ * within {@link POST_WINDOW_ANCHOR_GRACE_MS} before it (the latest match
+ * wins; an in-window match beats a post-window one). */
+function segmentContaining(
+  windows: ReadonlyMap<number, { start: number; end?: number }>,
+  at: number,
+): number | undefined {
+  let found: number | undefined;
+  let trailing: number | undefined;
+  for (const [segment, window] of windows) {
+    if (at >= window.start && (window.end === undefined || at <= window.end)) {
+      found = segment;
+    } else if (
+      window.end !== undefined &&
+      at > window.end &&
+      at - window.end <= POST_WINDOW_ANCHOR_GRACE_MS
+    ) {
+      trailing = segment;
+    }
+  }
+  return found ?? trailing;
+}
+
+/**
+ * Estimate how far this segment's deltas TRAILED the speech they
+ * transcribe, from data the stream already carries. Two observable anchors:
+ *
+ *  - **tail** — the last words are spoken at the window close (talk-end);
+ *    the delta carrying them arrives one speech→text latency later. Clean:
+ *    no onset contamination.
+ *  - **head** — speech starts around the window open; the first delta
+ *    arrives one latency later. Contaminated by the user's speech-onset
+ *    delay (and the transcriber's warm-up), so it OVERestimates.
+ *
+ * Prefer the tail when it is measurable (deltas usually straggle past the
+ * release), fall back to the head, then to a fixed default; clamp to a sane
+ * band. Research note (deliberately unsolved here): the right long-term
+ * anchor is per-word audio-offset alignment, which no vendor exposes today.
+ */
+function deltaLagEstimate(
+  window: { start: number; end?: number } | undefined,
+  timeline: ReadonlyArray<{ at: number; len: number }>,
+): number {
+  const first = timeline[0]?.at;
+  const last = timeline[timeline.length - 1]?.at;
+  if (window === undefined || first === undefined || last === undefined) {
+    return DEFAULT_DELTA_LAG_MS;
+  }
+  const tail = window.end !== undefined ? last - window.end : Number.NEGATIVE_INFINITY;
+  const head = first - window.start;
+  const measured = tail > 0 ? tail : head;
+  if (measured <= 0) {
+    return DEFAULT_DELTA_LAG_MS;
+  }
+  return Math.min(measured, MAX_DELTA_LAG_MS);
+}
+
+/**
+ * The cumulative text length the segment's deltas had reached by `at` — the
+ * split offset a shot taken at that moment anchors to. Deltas carry
+ * CUMULATIVE text, so the last sample at-or-before `at` is the answer; no
+ * sample yet → 0 (the shot precedes the segment's words).
+ */
+function deltaOffsetAt(timeline: ReadonlyArray<{ at: number; len: number }>, at: number): number {
+  let len = 0;
+  for (const sample of timeline) {
+    if (sample.at > at) {
+      break;
+    }
+    len = sample.len;
+  }
+  return len;
+}
+
+/** How far past the word end the boundary nudge will reach for a sentence
+ * end. Small on purpose: snapping a shot past a whole clause would move it
+ * further from the gesture than the latency error it exists to absorb. */
+const SENTENCE_SNAP_CHARS = 24;
+
+/**
+ * Advance an offset to the end of the word it lands in (never split a
+ * word) — and, when a sentence ends within {@link SENTENCE_SNAP_CHARS}
+ * ahead, on past it: dictation pauses (and shots) cluster at sentence
+ * boundaries, so the nearby period is more often the true seam than the
+ * mid-sentence word the latency math landed on. Forward-only — never pull
+ * a shot before words already spoken.
+ */
+function nudgeToBoundary(text: string, offset: number): number {
+  if (offset <= 0) {
+    return 0;
+  }
+  if (offset >= text.length) {
+    return text.length;
+  }
+  let i = offset;
+  while (i < text.length && !/\s/.test(text[i])) {
+    i++;
+  }
+  const ahead = text.slice(i, i + SENTENCE_SNAP_CHARS);
+  const sentence = ahead.match(/^(.*?[.!?]["')\]]?)(\s|$)/);
+  if (sentence !== null) {
+    return i + sentence[1].length;
+  }
+  return i;
 }
 
 // ── selection rendering (the deferred decision) ──────────────────────────────

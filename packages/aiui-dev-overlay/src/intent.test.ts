@@ -176,14 +176,17 @@ describe("mountIntentTool", () => {
     );
   });
 
-  it("defaults to the multimodal set: [Multimodal, Text], multimodal active", () => {
+  it("defaults to the multimodal modality alone — no Text tab, no tab row", () => {
     const handle = mountIntentTool({ force: true, port: 1 });
     const tabs = [...(handle.shadowRoot?.querySelectorAll(".tab") ?? [])];
-    expect(tabs.map((t) => t.textContent)).toEqual(["Multimodal", "Text"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Multimodal"]);
     expect(tabs[0].classList.contains("active")).toBe(true);
-    // The tab row is visible (two modalities), and the text tab's textarea exists.
-    expect((handle.shadowRoot?.querySelector(".tabs") as HTMLElement).hidden).toBe(false);
-    expect(handle.shadowRoot?.querySelector("textarea")).not.toBeNull();
+    // One modality → the tab row hides (nothing to switch between).
+    expect((handle.shadowRoot?.querySelector(".tabs") as HTMLElement).hidden).toBe(true);
+    // The text modality still mounts by name (the de-surfaced escape hatch).
+    unmountIntentTool();
+    const textOnly = mountIntentTool({ force: true, port: 1, format: "text-concat" });
+    expect(textOnly.shadowRoot?.querySelector("textarea")).not.toBeNull();
   });
 
   it("mounts custom modalities with tabs", () => {

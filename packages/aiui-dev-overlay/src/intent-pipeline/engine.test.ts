@@ -58,11 +58,11 @@ describe("Engine thread lifecycle", () => {
     ).toHaveLength(1);
   });
 
-  it("steps out one level at a time: correct → ink → cancel → disarm", () => {
+  it("steps out one level at a time: tweak → ink → cancel → disarm", () => {
     const engine = armedEngine();
     engine.talkStart();
     engine.talkEnd();
-    engine.setMode("correct");
+    engine.setMode("tweak");
     engine.stepOut();
     expect(engine.mode).toBe("ink");
     expect(engine.threadOpen).toBe(true);
@@ -155,24 +155,32 @@ describe("Engine thread lifecycle", () => {
     expect(engine.events.at(-1)).toMatchObject({ type: "video-share", on: false });
     expect(engine.threadOpen).toBe(true); // off doesn't close the thread (send/cancel do)
   });
-
-  it("flags a segment spoken at a correction target and keeps the target for commit", () => {
-    const engine = armedEngine();
-    const segment = engine.talkStart();
-    engine.transcriptFinal(segment ?? 1, "make the curb thicker", 100, "mock");
-    engine.setCorrectionTarget({ from: 9, to: 13, original: "curb" });
-    const fix = engine.talkStart();
-    engine.talkEnd();
-    engine.transcriptFinal(fix ?? 2, "curve", 80, "mock");
-    // Flagged as correction speech (not content), but NOT auto-submitted: the
-    // words land in the correction bar, where typing and talking coexist and
-    // Enter is the single commit gesture — so the target survives.
-    const final = engine.events.filter((e) => e.type === "transcript-final").at(-1);
-    expect(final).toMatchObject({ text: "curve", correction: true });
-    expect(engine.events.some((e) => e.type === "correction")).toBe(false);
-    expect(engine.correctionTarget).toEqual({ from: 9, to: 13, original: "curb" });
-  });
 });
+
+/**
+ * Correct mode was removed in the append-only pivot, but `correction` /
+ * `correction-undo` EVENTS remain in the vocabulary so historical traces
+ * still compose — these fixtures push the raw events a legacy stream holds.
+ */
+function pushCorrection(
+  engine: Engine,
+  target: { from: number; to: number; original: string },
+  instruction: string,
+  diff?: { patch: string; model: string; latencyMs: number },
+): void {
+  engine.events.push({
+    at: Date.now(),
+    type: "correction",
+    from: target.from,
+    to: target.to,
+    original: target.original,
+    instruction,
+    via: "typed",
+    ...(diff !== undefined
+      ? { patch: diff.patch, model: diff.model, latencyMs: diff.latencyMs }
+      : {}),
+  });
+}
 
 describe("composeIntent", () => {
   it("interleaves text and shots and applies replace-corrections", () => {
@@ -186,7 +194,7 @@ describe("composeIntent", () => {
     const s2 = engine.talkStart();
     engine.talkEnd();
     engine.transcriptFinal(s2 ?? 2, "and move the legend below", 90, "mock");
-    engine.correction({ from: 9, to: 18, original: "base line" }, "baseline", "typed");
+    pushCorrection(engine, { from: 9, to: 18, original: "base line" }, "baseline");
 
     const composed = composeIntent(engine.events, "replace");
     expect(composed.transcript).toBe("make the baseline thicker and move the legend below");
@@ -335,7 +343,7 @@ describe("composeIntent", () => {
     engine.transcriptFinal(s2 ?? 2, "and the curb should be amber", 90, "mock");
 
     // The pipeline's diff touches BOTH lines — beyond the selected span.
-    engine.correction({ from: 9, to: 13, original: "curb" }, "curve", "speech", {
+    pushCorrection(engine, { from: 9, to: 13, original: "curb" }, "curve", {
       patch: [
         "*** Begin Patch",
         "*** Update File: transcript",
@@ -361,7 +369,7 @@ describe("composeIntent", () => {
     const s1 = engine.talkStart();
     engine.talkEnd();
     engine.transcriptFinal(s1 ?? 1, "color the peek amber", 90, "mock");
-    engine.correction({ from: 10, to: 14, original: "peek" }, "peak", "typed", {
+    pushCorrection(engine, { from: 10, to: 14, original: "peek" }, "peak", {
       patch: "*** Begin Patch\n*** Update File: transcript\n@@\n-no such line\n+x\n*** End Patch",
       model: "mock",
       latencyMs: 2,
@@ -375,7 +383,7 @@ describe("composeIntent", () => {
     const s1 = engine.talkStart();
     engine.talkEnd();
     engine.transcriptFinal(s1 ?? 1, "color the peek amber", 90, "mock");
-    engine.correction({ from: 10, to: 14, original: "peek" }, "peak", "typed");
+    pushCorrection(engine, { from: 10, to: 14, original: "peek" }, "peak");
 
     const composed = composeIntent(engine.events, "note");
     expect(composed.transcript).toBe("color the peek amber");
@@ -637,7 +645,7 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     engine.transcriptFinal(s2 ?? 2, "and export it", 10, "mock");
     // The plain replacement rewrites the first TEXT occurrence — the code
     // item, though it also contains "curb", is not a candidate.
-    engine.correction({ from: 11, to: 15, original: "curb" }, "curve", "typed");
+    pushCorrection(engine, { from: 11, to: 15, original: "curb" }, "curve");
 
     const composed = composeIntent(engine.events, "replace");
     expect(composed.transcript).toBe("rename the curve helper and export it");
@@ -691,5 +699,192 @@ describe("selection render helpers (exported — the channel's live resolver re-
     const block = renderCodeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
     expect(block).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
     expect(block).toContain(`${code}\n\`\`\``);
+  });
+});
+
+describe("the timestamp interleave (takenAt anchoring)", () => {
+  /**
+   * Streams are built from RAW events with realistic wall-clock stamps —
+   * the lag compensation reasons in milliseconds (the wire contract for
+   * `at`), which the engine verbs' synthetic tick clock can't express.
+   *
+   * The fixture: talk-start at t=1000; the user speaks immediately, and the
+   * transcriber's deltas arrive ~800 ms behind the speech they transcribe
+   * (first delta at 1800 → measured lag 800).
+   */
+  const T0 = 1000;
+  const LAG = 800;
+  function longWindowStream(
+    finalText: string,
+    cumulative: Array<[number, string]>,
+    endAt: number = T0 + 5000,
+  ): IntentEvent[] {
+    return [
+      { at: T0 - 10, type: "armed", on: true },
+      { at: T0 - 5, type: "thread-open", trigger: "talk" },
+      { at: T0, type: "talk-start", segment: 1 },
+      ...cumulative.map(
+        ([at, text]): IntentEvent => ({ at, type: "transcript-delta", segment: 1, text }),
+      ),
+      { at: endAt, type: "talk-end", segment: 1, ms: endAt - T0 },
+      {
+        at: endAt + 600,
+        type: "transcript-final",
+        segment: 1,
+        text: finalText,
+        latencyMs: 600,
+        model: "rt",
+      },
+    ];
+  }
+  const shotAt = (takenAt: number, at: number): IntentEvent => ({
+    at,
+    type: "shot",
+    marker: "shot_1",
+    rect: { x: 0, y: 0, w: 10, h: 10 },
+    components: [],
+    takenAt,
+  });
+
+  it("compensates for delta lag: the split reflects the words SPOKEN by the gesture", () => {
+    // Cumulative deltas, each arriving LAG after the words were spoken:
+    //   spoken by 1500: "make the legend"            → delta at 2300
+    //   spoken by 2600: "…wider and"                 → delta at 3400
+    //   spoken by 4000: "…move it below"             → delta at 4800
+    // Release at T0+4000; the last delta straggles in one LAG later, so the
+    // estimator's clean TAIL anchor measures exactly 800 ms.
+    const events = longWindowStream(
+      "make the legend wider and move it below",
+      [
+        [T0 + 1500 + LAG, "make the legend"],
+        [T0 + 2600 + LAG, "make the legend wider and"],
+        [T0 + 4000 + LAG, "make the legend wider and move it below"],
+      ],
+      T0 + 4000,
+    );
+    // The shot gesture lands at t=3600 — the user had just said "…wider and"
+    // (arrival-time math alone would put the split one delta EARLY, after
+    // just "make the legend": at 3600 only the first delta had arrived).
+    events.splice(6, 0, shotAt(T0 + 2600 + 50, T0 + 2600 + 120));
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot", "text"]);
+    expect(composed.items[0].text).toBe("make the legend wider and");
+    expect(composed.items[2].text).toBe("move it below");
+    expect(composed.transcript).toBe("make the legend wider and move it below");
+  });
+
+  it("nudges a mid-word offset to the word's end — a shot never splits a word", () => {
+    const events = longWindowStream("tighten the baseline now please", [
+      [T0 + 500 + LAG, "tighten the base"], // 16 chars — mid-"baseline"
+      [T0 + 2000 + LAG, "tighten the baseline now please"],
+    ]);
+    events.splice(5, 0, shotAt(T0 + 500 + 10, T0 + 600));
+    const composed = composeIntent(events);
+    expect(composed.items[0].text).toBe("tighten the baseline");
+    expect(composed.items[1].kind).toBe("shot");
+    expect(composed.items[2].text).toBe("now please");
+  });
+
+  it("snaps forward past a sentence end just ahead — shots cluster at sentence seams", () => {
+    const events = longWindowStream("make it wider. also fix the legend", [
+      [T0 + 700 + LAG, "make it wi"], // mid-"wider", sentence end 4 chars past the word
+      [T0 + 2500 + LAG, "make it wider. also fix the legend"],
+    ]);
+    events.splice(5, 0, shotAt(T0 + 700, T0 + 800));
+    const composed = composeIntent(events);
+    // Word-end alone would split after "wider." mid-clause boundary…
+    // the snap carries it past the period, never further.
+    expect(composed.items[0].text).toBe("make it wider.");
+    expect(composed.items[1].kind).toBe("shot");
+    expect(composed.items[2].text).toBe("also fix the legend");
+  });
+
+  it("anchors a shot taken JUST AFTER release to the end of that segment's text", () => {
+    // The today-bug this fixes: the shot event reaches the stream before the
+    // final does, so arrival order used to compose the image BEFORE the
+    // words it followed.
+    const events = longWindowStream("look at the resulting pattern", [
+      [T0 + 900 + LAG, "look at the resulting pattern"],
+    ]);
+    // Taken 400 ms after talk-end (the final lands 600 ms after) — the shot
+    // event arrives BEFORE the final in stream order.
+    events.splice(5, 0, shotAt(T0 + 5400, T0 + 5450));
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot"]);
+    expect(composed.items[0].text).toBe("look at the resulting pattern");
+  });
+
+  it("keeps arrival order for legacy shots (no takenAt) and long-idle shots", () => {
+    // Legacy: no takenAt — byte-identical to the old fold.
+    const legacy = longWindowStream("make this wider", [[T0 + 500 + LAG, "make this wider"]]);
+    legacy.splice(3, 0, {
+      at: T0 + 100,
+      type: "shot",
+      marker: "shot_1",
+      rect: { x: 0, y: 0, w: 10, h: 10 },
+      components: [],
+    });
+    expect(composeIntent(legacy).items.map((i) => i.kind)).toEqual(["shot", "text"]);
+
+    // Idle: takenAt far outside any window (past the post-release grace) —
+    // arrival order too.
+    const idle = longWindowStream("look at this", [[T0 + 500 + LAG, "look at this"]]);
+    idle.push(shotAt(T0 + 60_000, T0 + 60_050));
+    expect(composeIntent(idle).items.map((i) => i.kind)).toEqual(["text", "shot"]);
+  });
+
+  it("a shot taken before any words in the window stays ahead of the text", () => {
+    // A short utterance: release at T0+1400, its one delta straggling in a
+    // LAG later (the tail anchor again measures 800 ms).
+    const events = longWindowStream(
+      "the words came later",
+      [[T0 + 1400 + LAG, "the words came later"]],
+      T0 + 1400,
+    );
+    // Taken right at window open — even lag-shifted, no delta precedes it.
+    events.splice(3, 0, shotAt(T0 + 5, T0 + 60));
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["shot", "text"]);
+    expect(composed.items[1].text).toBe("the words came later");
+  });
+});
+
+describe("linter events (observations, never content)", () => {
+  it("composeIntent ignores all linter-* kinds — the fold is unchanged by them", () => {
+    const engine = armedEngine();
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "make the plot wider", 90, "rt");
+    const without = composeIntent(engine.events);
+
+    engine.events.push(
+      { at: 100, type: "linter-note", text: "ambiguous: which plot?", segment: s1 },
+      { at: 101, type: "linter-tool-call", tool: "read_file", args: { path: "src/plot.ts" } },
+      {
+        at: 102,
+        type: "linter-tool-result",
+        tool: "read_file",
+        ok: true,
+        summary: "src/plot.ts — 2.1KB",
+      },
+    );
+    const withLinter = composeIntent(engine.events);
+    expect(withLinter.prompt).toBe(without.prompt);
+    expect(withLinter.transcript).toBe(without.transcript);
+    expect(withLinter.items).toEqual(without.items);
+  });
+
+  it("linter events are not contentful: a selection refinement keeps its marker across them", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.appSelection({ text: "the histogram title" });
+    // A lint lands between the selection and its refinement — the refinement
+    // must still supersede under the SAME marker (one chip tracking a drag).
+    engine.events.push({ at: 50, type: "linter-note", text: "clear so far" });
+    engine.appSelection({ text: "the histogram title and axis" });
+    const markers = engine.events
+      .filter((e) => e.type === "app-selection")
+      .map((e) => (e as { marker?: string }).marker);
+    expect(markers).toEqual(["sel_1", "sel_1"]);
   });
 });

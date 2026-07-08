@@ -122,101 +122,111 @@ describe("computeOverrides (the persisted delta)", () => {
 
 describe("tiers: expansion + merge precedence", () => {
   it("expands each tier into its expected fine fields (the expansion table)", () => {
-    // mock — offline, keyless, both seams mock.
-    expect(expandTier("mock")).toMatchObject({ transcriber: "mock", corrector: "mock" });
-    // standard (the default) reproduces today's REST-mini backends.
-    expect(expandTier("standard")).toMatchObject({
-      transcriber: "openai",
-      model: "gpt-4o-mini-transcribe",
-      corrector: "openai",
-      correctionModel: "gpt-4o-mini",
-      audioBack: "off",
-    });
-    // rapid — streaming STT, no voice back.
+    // mock — offline, keyless, unsurfaced (tests/dev only).
+    expect(expandTier("mock")).toMatchObject({ transcriber: "mock" });
+    // rapid — streaming whisper, no voice back. The default.
     expect(expandTier("rapid")).toMatchObject({
       transcriber: "openai-realtime",
       realtimeModel: "gpt-realtime-whisper",
       audioBack: "off",
     });
-    // premium — rapid + spoken TTS acks.
+    // premium — the higher-quality streaming model + spoken TTS acks.
     expect(expandTier("premium")).toMatchObject({
       transcriber: "openai-realtime",
+      realtimeModel: "gpt-4o-mini-transcribe",
       audioBack: "acks",
       ttsModel: "gpt-4o-mini-tts",
     });
-    // flagship — the conversational voice model.
+  });
+
+  it("legacy tier names expand exactly as their pre-pivot presets read", () => {
+    // Old persisted configs / hellos keep meaning what they meant.
+    expect(expandTier("standard")).toMatchObject({
+      transcriber: "openai",
+      model: "gpt-4o-mini-transcribe",
+      audioBack: "off",
+    });
     expect(expandTier("flagship")).toMatchObject({
       transcriber: "openai-voice",
       audioBack: "voice",
       realtimeVoiceModel: "gpt-realtime-2",
       realtimeVoice: "cedar",
-      realtimeTools: "none",
+    });
+    expect(expandTier("live-gemini")).toMatchObject({
+      submode: "realtime",
+      liveVendor: "gemini",
+      liveModel: "gemini-3.1-flash-live-preview",
+    });
+    expect(expandTier("live-openai")).toMatchObject({
+      submode: "realtime",
+      liveVendor: "openai",
+      liveModel: "gpt-realtime-2",
     });
   });
 
-  it("an absent/unknown tier expands to the bare defaults (standard behavior)", () => {
+  it("an absent/unknown tier expands to the bare defaults", () => {
     expect(expandTier(undefined).transcriber).toBe(DEFAULT_INTENT_CONFIG.transcriber);
     expect(expandTier("bogus").transcriber).toBe(DEFAULT_INTENT_CONFIG.transcriber);
   });
 
   it("effectiveConfig layers DEFAULT ← tier preset ← explicit; a bare tier picks the preset", () => {
-    const flagship = effectiveConfig({ tier: "flagship" }, {});
-    expect(flagship.transcriber).toBe("openai-voice");
-    expect(flagship.audioBack).toBe("voice");
-    expect(flagship.realtimeVoiceModel).toBe("gpt-realtime-2");
+    const premium = effectiveConfig({ tier: "premium" }, {});
+    expect(premium.transcriber).toBe("openai-realtime");
+    expect(premium.audioBack).toBe("acks");
+    expect(premium.ttsModel).toBe("gpt-4o-mini-tts");
   });
 
   it("an explicit fine field WINS over the tier preset (choice #4)", () => {
-    // flagship runs the voice model, but `model` is pinned to whisper-1.
-    const cfg = effectiveConfig({ tier: "flagship", model: "whisper-1" }, {});
-    expect(cfg.transcriber).toBe("openai-voice"); // from the preset
-    expect(cfg.model).toBe("whisper-1"); // explicit wins
+    // premium runs gpt-4o-mini-transcribe, but realtimeModel is pinned back.
+    const cfg = effectiveConfig({ tier: "premium", realtimeModel: "gpt-realtime-whisper" }, {});
+    expect(cfg.audioBack).toBe("acks"); // from the preset
+    expect(cfg.realtimeModel).toBe("gpt-realtime-whisper"); // explicit wins
   });
 
-  it("no tier reproduces standard exactly (today's default, unchanged)", () => {
+  it("no tier expands to rapid (streaming whisper — the default rung)", () => {
     const cfg = effectiveConfig({}, {});
-    expect(cfg.transcriber).toBe("openai");
-    expect(cfg.model).toBe("gpt-4o-mini-transcribe");
-    expect(cfg.corrector).toBe("openai");
+    expect(cfg.transcriber).toBe("openai-realtime");
+    expect(cfg.realtimeModel).toBe("gpt-realtime-whisper");
     expect(cfg.audioBack).toBe("off");
+    expect(cfg.linter).toBe("off");
   });
 });
 
 describe("tiers: the switch delta trap (overridesForApply)", () => {
-  const base = effectiveConfig({}, {}); // DEFAULT+standard, vite intent = {}
+  const base = effectiveConfig({}, {}); // DEFAULT+rapid, vite intent = {}
 
-  it("the exact scenario: set tier rapid (no transcriber override) → switch flagship applies", () => {
-    // Set tier rapid — the persisted delta is JUST {tier}, no frozen fine fields.
+  it("the exact scenario: set tier premium (no transcriber override) → switch back applies", () => {
+    // Set tier premium — the persisted delta is JUST {tier}, no frozen fine fields.
+    const premiumDelta = overridesForApply({ tier: "premium" }, base);
+    expect(premiumDelta).toEqual({ tier: "premium" });
+    expect("realtimeModel" in premiumDelta).toBe(false);
+
+    // Now switch to rapid — rapid's fields apply, not premium's frozen ones.
     const rapidDelta = overridesForApply({ tier: "rapid" }, base);
     expect(rapidDelta).toEqual({ tier: "rapid" });
-    expect("transcriber" in rapidDelta).toBe(false);
-
-    // Now switch to flagship — flagship's fields apply, not rapid's frozen ones.
-    const flagshipDelta = overridesForApply({ tier: "flagship" }, base);
-    expect(flagshipDelta).toEqual({ tier: "flagship" });
-    const effective = effectiveConfig({}, flagshipDelta);
-    expect(effective.transcriber).toBe("openai-voice");
-    expect(effective.audioBack).toBe("voice");
+    const effective = effectiveConfig({}, rapidDelta);
+    expect(effective.realtimeModel).toBe("gpt-realtime-whisper");
+    expect(effective.audioBack).toBe("off");
   });
 
   it("a panel switch drops stale tier-controlled fields that match the new preset", () => {
     // The editor still literally holds the previous tier's expansion; switching to
-    // flagship with those fields present must NOT freeze redundant ones.
-    const editedFullFlagship = { ...effectiveConfig({ tier: "flagship" }, {}) };
-    const delta = overridesForApply(editedFullFlagship, base);
-    // Only the tier survives — every fine field equals flagship's preset, so it is
+    // premium with those fields present must NOT freeze redundant ones.
+    const editedFullPremium = { ...effectiveConfig({ tier: "premium" }, {}) };
+    const delta = overridesForApply(editedFullPremium, base);
+    // Only the tier survives — every fine field equals premium's preset, so it is
     // re-derived by expansion rather than frozen as an override.
-    expect(delta.tier).toBe("flagship");
+    expect(delta.tier).toBe("premium");
     expect(delta.transcriber).toBeUndefined();
     expect(delta.audioBack).toBeUndefined();
-    expect(delta.realtimeVoiceModel).toBeUndefined();
+    expect(delta.ttsModel).toBeUndefined();
   });
 
   it("keeps an explicit fine field that diverges from the new tier's preset", () => {
-    // Switching to flagship AND pinning model=whisper-1 in one apply: model is not
-    // set by flagship's preset, so it diverges and is kept.
-    const delta = overridesForApply({ tier: "flagship", model: "whisper-1" }, base);
-    expect(delta).toMatchObject({ tier: "flagship", model: "whisper-1" });
+    // Switching to premium AND pinning model=whisper-1 in one apply: model is not
+    // set by premium's preset, so it diverges and is kept.
+    const delta = overridesForApply({ tier: "premium", model: "whisper-1" }, base);
+    expect(delta).toMatchObject({ tier: "premium", model: "whisper-1" });
     expect(effectiveConfig({}, delta).model).toBe("whisper-1");
   });
 
@@ -225,16 +235,13 @@ describe("tiers: the switch delta trap (overridesForApply)", () => {
     expect(overridesForApply({ talkMode: "toggle" }, base)).toEqual({ talkMode: "toggle" });
   });
 
-  it("TIER_PRESETS covers every tier the schema accepts", () => {
-    expect(Object.keys(TIER_PRESETS).sort()).toEqual([
-      "flagship",
-      "live-gemini",
-      "live-openai",
-      "mock",
-      "premium",
-      "rapid",
-      "standard",
-    ]);
+  it("TIER_PRESETS holds exactly the current tiers; legacy names still expand", () => {
+    expect(Object.keys(TIER_PRESETS).sort()).toEqual(["mock", "premium", "rapid"]);
+    // The schema also accepts the retired names — those expand via the alias
+    // table (asserted above), never to bare defaults.
+    for (const legacy of ["standard", "flagship", "live-gemini", "live-openai"]) {
+      expect(expandTier(legacy)).not.toEqual(expandTier("definitely-unknown"));
+    }
   });
 });
 
@@ -243,7 +250,6 @@ describe("layering + persistence", () => {
     const effective = effectiveConfig({ mockWordMs: 99 }, { talkMode: "toggle" });
     expect(effective.talkMode).toBe("toggle"); // override
     expect(effective.mockWordMs).toBe(99); // vite option
-    expect(effective.corrector).toBe(DEFAULT_INTENT_CONFIG.corrector); // default
   });
 
   it("round-trips overrides through localStorage under the aiui key", () => {

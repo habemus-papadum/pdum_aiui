@@ -542,3 +542,50 @@ describe("cost accounting in the view", () => {
     );
   });
 });
+
+describe("linter cards (the 💡 lane)", () => {
+  it("classifies the linter's trace labels onto the linter bucket with honest lanes", () => {
+    expect(classifyStage({ kind: "info", label: "linter open" })).toMatchObject({
+      category: "config",
+      icon: "💡",
+    });
+    expect(classifyStage({ kind: "info", label: "linter note" })).toMatchObject({
+      direction: "out",
+      category: "linter",
+    });
+    expect(classifyStage({ kind: "ir", label: "linter tool call read_file" })).toMatchObject({
+      direction: "out",
+      category: "linter",
+      title: "linter → read_file",
+    });
+    expect(classifyStage({ kind: "ir", label: "linter tool result" })).toMatchObject({
+      direction: "in",
+      category: "linter",
+    });
+    expect(classifyStage({ kind: "ir", label: "linter transcript seg_2" })).toMatchObject({
+      direction: "in",
+      category: "linter",
+      title: "transcript seg_2",
+    });
+    expect(classifyStage({ kind: "info", label: "linter transcript timeout" })).toMatchObject({
+      error: true,
+    });
+    expect(classifyStage({ kind: "info", label: "linter error" })).toMatchObject({
+      error: true,
+      direction: "out",
+    });
+  });
+
+  it("keeps the flow chatter coalesced and the persisted share frames on the video bucket", () => {
+    expect(classifyStage({ kind: "info", label: "linter turn end" })).toMatchObject({
+      coalesceKey: "linter-flow",
+    });
+    expect(classifyStage({ kind: "info", label: "linter turn merged" })).toMatchObject({
+      coalesceKey: "linter-flow",
+    });
+    expect(classifyStage({ kind: "ir", label: "video vid_1 #7" })).toMatchObject({
+      category: "video",
+      coalesceKey: "video-in",
+    });
+  });
+});

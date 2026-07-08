@@ -11,8 +11,6 @@
  * @packageDocumentation
  */
 export { AudioCapture } from "./audio";
-export type { CorrectionDiff, CorrectionInput, Corrector } from "./correct";
-export { mockCorrector, SYSTEM_PROMPT } from "./correct";
 export { Ink } from "./ink";
 export { multimodalModality } from "./modality";
 export { Preview } from "./preview";

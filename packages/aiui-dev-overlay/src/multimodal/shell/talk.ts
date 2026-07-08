@@ -7,15 +7,20 @@
  * from the live config: the REST lane ({@link AudioCapture} — one
  * MediaRecorder run per segment, whole blob uploaded, or transcribed locally
  * by the mock) and the realtime lane (a {@link PcmSource} streaming Int16 PCM
- * frames while you talk). On top sits the silence endpointer that turns
- * held/hands-free listening into utterance-sized segments, and the two
- * listening surfaces that want it (the MAIN Space loop and the CORRECTION
- * box). The mic-permission degraded paths live here too: no mic / no
- * AudioWorklet names the fix and never silently switches backends.
+ * frames while you talk). The mic-permission degraded paths live here too:
+ * no mic / no AudioWorklet names the fix and never silently switches
+ * backends.
  *
- * Owns its state (capture sources, listening flags, endpointer timer,
- * `heardVoice`); talks to the engine, the wire, and the host context only
- * through {@link TalkDeps}.
+ * A talk window is bounded ONLY by the explicit gestures (Space hold/toggle,
+ * window blur). The ~900 ms silence endpointer that used to auto-split a
+ * hold into utterance segments — REST pseudo-streaming, and the correction
+ * bar's hands-free segmenter — was REMOVED in the append-only pivot along
+ * with correct mode itself: streaming transcription delivers deltas during
+ * the window, and segment placement is the compiler's job now, at the
+ * semantic level rather than the audio-waveform level.
+ *
+ * Owns its state (capture sources, listening flag); talks to the engine, the
+ * wire, and the host context only through {@link TalkDeps}.
  */
 
 import type { OverlayErrorInput } from "../../errors";
@@ -55,28 +60,19 @@ export interface TalkDeps {
   uploadAudio: (segment: number, seq: number, bytes: Uint8Array) => Promise<void>;
 }
 
-/** The talk surface modality.ts (dispatch, HUD meter, preview hooks) drives. */
+/** The talk surface modality.ts (dispatch, HUD meter) drives. */
 export interface Talk {
   /** The current mic level (whichever lane is live) — feeds the HUD meter. */
   level(): number;
-  /** Whether any surface still wants the mic (main loop or correction box). */
+  /** Whether the main loop still wants the mic. */
   listening(): boolean;
-  /**
-   * Whether the CURRENT segment has heard voice — the correction bar's
-   * empty-Enter needs it (see CorrectionVoiceHooks.heard).
-   */
-  heardVoice(): boolean;
   /** Space pressed: start the main listening loop. */
   startMainListening(): void;
   /** Space released: stop wanting to listen, then end the segment. */
   stopMainListening(): void;
-  /** The correction bar opened: go live hands-free. */
-  startCorrectionListening(): void;
-  /** The correction bar closed (Enter/Esc): stop its lane. */
-  stopCorrectionListening(): void;
-  /** Window blur: away = mic off, whichever surfaces were listening. */
+  /** Window blur: away = mic off (the window commits, never discards). */
   stopAllListening(): void;
-  /** Unmount: stop the endpointer and release both capture lanes. */
+  /** Unmount: release both capture lanes. */
   dispose(): void;
 }
 
@@ -116,110 +112,36 @@ export function createTalk(deps: TalkDeps): Talk {
     typoRate: () => config().mockTypoRate,
   });
 
-  // ── silence-endpointed listening (main loop + correction box) ────────────
-  // Utterances end on *silence*: once the level meter has heard voice, ~a
-  // second of quiet ends the segment and — while listening is still wanted
-  // — immediately starts the next one. Two surfaces want it:
-  //  - the MAIN loop (Space held / toggled): each utterance uploads and
-  //    transcribes as you pause, so REST behaves like streaming — the
-  //    preview fills utterance by utterance instead of all-at-release;
-  //  - the CORRECTION box, which has no push-to-talk boundary at all
-  //    (Space types spaces there) — silence is its only segmenter.
-  // Done browser-side off the existing AnalyserNode/worklet level (server
-  // VAD would only cover the realtime tiers; this covers REST too). The
-  // mock's level is always 0, so mock segments end only on the explicit
-  // gestures — which keeps every test deterministic.
-  const ENDPOINT_VOICE_LEVEL = 0.05;
-  const ENDPOINT_SILENCE_MS = 900;
   let mainListening = false;
-  let correctionListening = false;
-  const listening = (): boolean => mainListening || correctionListening;
-  let endpointTimer: ReturnType<typeof setInterval> | undefined;
-  const stopEndpointer = (): void => {
-    if (endpointTimer) {
-      clearInterval(endpointTimer);
-      endpointTimer = undefined;
-    }
-  };
-  // Whether the CURRENT segment has heard voice — mount-scoped because the
-  // correction bar's empty-Enter needs it (see CorrectionVoiceHooks.heard):
-  // hands-free listening keeps a silent segment open, so `engine.talking`
-  // alone can't distinguish "just spoke" from "sitting in silence".
-  let heardVoice = false;
+  const listening = (): boolean => mainListening;
   const level = (): number => (usesPcmStream(config()) ? (pcmSource?.level() ?? 0) : audio.level());
-  const startEndpointer = (): void => {
-    if (endpointTimer) {
-      return; // one poller serves however many surfaces are listening
-    }
-    let lastVoicedAt = Date.now();
-    endpointTimer = setInterval(() => {
-      if (!listening() || !engine.talking) {
-        heardVoice = false; // between segments — a stale flag must not end the next one early
-        return;
-      }
-      if (level() > ENDPOINT_VOICE_LEVEL) {
-        heardVoice = true;
-        lastVoicedAt = Date.now();
-        return;
-      }
-      if (heardVoice && Date.now() - lastVoicedAt > ENDPOINT_SILENCE_MS) {
-        heardVoice = false; // this utterance is over; transcribe it…
-        void talkEnd().then(() => {
-          if (listening()) {
-            void talkStart(); // …and keep listening for the next one
-          }
-        });
-      }
-    }, 100);
-  };
-  // Main-loop listening (Space pressed): the endpointer auto-splits the hold
-  // into utterance segments (pseudo-streaming on the REST tier).
+
+  // Main-loop listening (Space pressed/toggled): one talk window per gesture.
   const startMainListening = (): void => {
     mainListening = true;
-    startEndpointer();
     void talkStart();
   };
-  // Space released (possibly in the gap between auto-split segments
-  // — the keymap sends this unconditionally): stop wanting to listen
-  // FIRST so an in-flight silence-restart can't reopen the mic.
+  // Space released — the keymap sends this unconditionally.
   const stopMainListening = (): void => {
     mainListening = false;
-    if (!listening()) {
-      stopEndpointer();
-    }
     void talkEnd();
   };
-  const startCorrectionListening = (): void => {
-    correctionListening = true;
-    startEndpointer();
-    void talkStart();
-  };
-  const stopCorrectionListening = (): void => {
-    correctionListening = false;
-    if (!listening()) {
-      stopEndpointer();
-    }
-    void talkEnd();
-  };
-  // Window blur STOPS ALL LISTENING. The auto-restarting hands-free mic has
-  // no idea the user turned away — it once transcribed an entire spoken
-  // conversation held in another window, segment by segment, on the API
-  // bill. Away = mic off (the composer's blur handler re-arms the correction
-  // lane on refocus).
+  // Window blur STOPS LISTENING. The open window ENDS (commits — talkEnd
+  // uploads/flushes; it never discards): the user turned away mid-thought,
+  // and a mic left open on another window once transcribed a whole spoken
+  // conversation on the API bill. Away = mic off.
   const stopAllListening = (): void => {
     mainListening = false;
-    correctionListening = false;
-    stopEndpointer();
     void talkEnd();
   };
 
   // ── talk plumbing (mock local / channel upload / realtime stream) ─────────
   async function talkStart(): Promise<void> {
     // Barge-in: talking over a playing ack/reply cuts it off locally (the
-    // channel cancels the upstream flagship response in parallel).
+    // channel cancels the upstream response in parallel).
     deps.bargeIn();
-    // The realtime STT transcriber AND the flagship voice session both stream
-    // PCM during talk — a separate capture path (AudioWorklet, not
+    // The realtime STT transcriber AND the conversational voice sessions
+    // stream PCM during talk — a separate capture path (AudioWorklet, not
     // MediaRecorder). Read dynamically so an advanced-config switch applies on
     // the next talk.
     if (usesPcmStream(config())) {
@@ -374,14 +296,10 @@ export function createTalk(deps: TalkDeps): Talk {
   return {
     level,
     listening,
-    heardVoice: () => heardVoice,
     startMainListening,
     stopMainListening,
-    startCorrectionListening,
-    stopCorrectionListening,
     stopAllListening,
     dispose: () => {
-      stopEndpointer();
       audio.dispose();
       pcmSource?.dispose();
     },

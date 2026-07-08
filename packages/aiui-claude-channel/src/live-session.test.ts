@@ -1,40 +1,38 @@
-import { describe, expect, it } from "vitest";
-import { LIVE_COMPOSER_INSTRUCTIONS, LIVE_NUDGE_TEXT } from "./live-session";
-
 /**
- * The commit-gate drift guards (transcription-and-realtime-submodes.md §11): the
- * instructions are the ONE authoritative persona both engines send, and they must
- * quote the commit sentinel verbatim — the model is gated on the exact message
- * the channel injects at fin, so the two constants may never drift apart.
+ * The linter persona is a LOAD-BEARING prompt (docs/guide/prompt-linting.md
+ * publishes it verbatim) — these tests pin the teachings the sidecar's wire
+ * behavior depends on, so an edit that drops one fails a named test instead
+ * of silently degrading the lint.
  */
-describe("LIVE_COMPOSER_INSTRUCTIONS", () => {
-  it("quotes the commit sentinel verbatim", () => {
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain(`"${LIVE_NUDGE_TEXT}"`);
-  });
+import { describe, expect, it } from "vitest";
+import { LINTER_INSTRUCTIONS } from "./live-session";
 
-  it("states the gating discipline: only after the sentinel, never earlier", () => {
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/ONLY after/);
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/Never call it earlier/);
-  });
-
-  it("describes the co-composition situation, not a generic assistant", () => {
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/jointly composing an instruction/);
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/coding agent/);
-    // The removed early trigger (a spoken "send it") must not creep back in.
-    expect(LIVE_COMPOSER_INSTRUCTIONS).not.toMatch(/they say to send it/);
-  });
-
-  it("teaches the selection label grammar alongside the image one (F2)", () => {
-    // Selections arrive as bracketed text items, same grammar family as
-    // [image shot_N]; both id families are placeable in segments[].
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain("[image shot_3]");
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain("[selection sel_2");
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain('"sel_2"');
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toContain('"code_1"');
+describe("LINTER_INSTRUCTIONS", () => {
+  it("teaches the label grammar: images, selections, AND the transcript item", () => {
+    expect(LINTER_INSTRUCTIONS).toContain("[image shot_3]");
+    expect(LINTER_INSTRUCTIONS).toContain("[selection sel_2");
+    expect(LINTER_INSTRUCTIONS).toContain('[transcript seg_N: "…"]');
   });
 
   it("states the update and retraction semantics (reuse the id; disregard retracted)", () => {
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/updated selection reuses its id/);
-    expect(LIVE_COMPOSER_INSTRUCTIONS).toMatch(/retracted one must be disregarded/);
+    expect(LINTER_INSTRUCTIONS).toMatch(/updated selection reuses its id/i);
+    expect(LINTER_INSTRUCTIONS).toMatch(/retracted one must be disregarded/i);
+  });
+
+  it("forbids composing: the model observes, the compiler assembles", () => {
+    expect(LINTER_INSTRUCTIONS).toMatch(/never write or rewrite the briefing/i);
+    expect(LINTER_INSTRUCTIONS).toMatch(/separate compiler assembles it verbatim/i);
+    expect(LINTER_INSTRUCTIONS).toMatch(/never summarize/i);
+    expect(LINTER_INSTRUCTIONS).toMatch(/never answer the task/i);
+  });
+
+  it("caps the lint at one or two short sentences, with a quiet default", () => {
+    expect(LINTER_INSTRUCTIONS).toMatch(/AT MOST one or two short spoken sentences/);
+    expect(LINTER_INSTRUCTIONS).toContain('"clear so far"');
+  });
+
+  it("scopes read_file to verification, not browsing", () => {
+    expect(LINTER_INSTRUCTIONS).toContain("read_file");
+    expect(LINTER_INSTRUCTIONS).toMatch(/verify suspicions, don't browse/);
   });
 });

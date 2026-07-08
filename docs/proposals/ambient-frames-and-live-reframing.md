@@ -55,6 +55,11 @@ it — likely both, shared like `composeIntent`).
 
 ## 3 · Reframing what realtime models are *for*
 
+> **Superseded:** this section grew into its own design sketch —
+> [Realtime Models as Prompt Linters](./realtime_prompt_linter_design.md) (with a first-steps
+> plan in [realtime_pivot_plan.md](./realtime_pivot_plan.md)). Kept below as the original
+> framing.
+
 The uneasy observation: realtime models may be miscast as **prompt composers**. Referencing a
 specific frame in a continuous video is exactly what attention over a long multimodal session
 is bad at — our label grammar mitigates but doesn't remove that. Where realtime models shine

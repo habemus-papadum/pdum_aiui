@@ -115,7 +115,14 @@ export const DEBUG_UI_CSS = /* css */ `
   padding: 0 6px; border-radius: 999px; background: #1b2130; border: 1px solid #3a4152;
   color: #c58af9; font-size: 11px; white-space: nowrap; }
 /* realtime submode: the saved keyframes of a coalesced video-stream card */
-.aiui-dbg-video-thumbs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.aiui-dbg-video-thumbs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 4px;
+  margin-top: 6px; padding-bottom: 4px; scrollbar-width: thin; }
+.aiui-dbg-video-more { margin-top: 4px; font: 11px ui-sans-serif, system-ui, sans-serif;
+  color: #8ab4f8; background: none; border: 1px solid #3a4152; border-radius: 4px;
+  padding: 2px 8px; cursor: pointer; }
+.aiui-dbg-peek { position: fixed; z-index: 2147483647; max-width: min(720px, 70vw);
+  max-height: 60vh; border: 1px solid #3a4152; border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55); background: #14161d; pointer-events: none; }
 .aiui-dbg-video-thumbs img { max-height: 64px; border-radius: 4px; border: 1px solid #2a3140;
   cursor: zoom-in; }
 

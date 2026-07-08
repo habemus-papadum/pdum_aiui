@@ -43,6 +43,13 @@ export type ShotSink = (
   viewport: boolean,
   thumb?: string,
   bytes?: Uint8Array,
+  /**
+   * Wall-clock of the capture GESTURE (pointerup / the S press), not of this
+   * callback — capture is async (compositor beat, encode, the first shot's
+   * picker), and the compiler anchors the shot into the transcript by when
+   * the user actually shot.
+   */
+  takenAt?: number,
 ) => void;
 
 export class ShotTool {
@@ -81,7 +88,7 @@ export class ShotTool {
       this.start = undefined;
       this.box.style.display = "none";
       if (rect && rect.w > 8 && rect.h > 8) {
-        void this.capture(rect);
+        void this.capture(rect, false, Date.now());
       }
       // If D came up mid-drag, its disarm was deferred to this pointerup so the
       // capture above could still run; hide the veil now. grab()'s compositor
@@ -148,7 +155,11 @@ export class ShotTool {
     // Deliberately no locator: "the whole viewport" frames everything, so
     // element metadata adds bulk without a reference point (and skipping the
     // lookup keeps S instant).
-    await this.capture({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }, true);
+    await this.capture(
+      { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight },
+      true,
+      Date.now(),
+    );
   }
 
   private update(e: PointerEvent): void {
@@ -170,10 +181,10 @@ export class ShotTool {
     return { x, y, w: Math.abs(e.clientX - this.start.x), h: Math.abs(e.clientY - this.start.y) };
   }
 
-  private async capture(rect: Rect, viewport = false): Promise<void> {
+  private async capture(rect: Rect, viewport = false, takenAt?: number): Promise<void> {
     const components = viewport ? [] : locateComponents(rect);
     const pixels = await this.grab(rect);
-    this.onShot(rect, components, viewport, pixels?.thumb, pixels?.bytes);
+    this.onShot(rect, components, viewport, pixels?.thumb, pixels?.bytes, takenAt);
   }
 
   private async ensureStream(): Promise<HTMLVideoElement | undefined> {

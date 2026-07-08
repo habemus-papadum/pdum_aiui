@@ -44,7 +44,7 @@ pnpm workbench       # the intent overlay's offline lab (mock backends, no chann
 ```
 
 `pnpm workbench` runs the **intent workbench** — the pipeline mounted on instrumented scenery with
-the [mock transcriber/corrector](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench#the-mock-backends)
+the [mock transcriber](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench#the-mock-backends)
 as its defaults, for latency/accuracy measurement, pipeline-config research, and fixture capture.
 It's where the mocking infrastructure lives; the shipping overlay defaults to the real
 channel-side backends.

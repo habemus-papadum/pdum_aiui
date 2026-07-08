@@ -26,11 +26,6 @@ describe("uiMode (the §B.4 derivation)", () => {
     expect(uiMode({ ...base, shooting: true })).toBe("shooting");
   });
 
-  it("correct mode wins outright — it re-owns pointer and keys wholesale", () => {
-    expect(uiMode({ ...base, mode: "correct", threadOpen: true })).toBe("correcting");
-    expect(uiMode({ ...base, mode: "correct", talking: true })).toBe("correcting");
-  });
-
   it("tweak mode wins the same way — it releases pointer and keys wholesale (§B.5)", () => {
     expect(uiMode({ ...base, mode: "tweak", threadOpen: true })).toBe("tweaking");
     // The engine holds exactly one mode, so tweak (like correct) shadows the

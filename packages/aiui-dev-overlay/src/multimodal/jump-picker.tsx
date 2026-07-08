@@ -169,7 +169,10 @@ export class JumpPicker {
           return;
         }
         const box = this.root.getBoundingClientRect();
-        const left = Math.min(at.x, Math.max(VIEWPORT_MARGIN, window.innerWidth - box.width - VIEWPORT_MARGIN));
+        const left = Math.min(
+          at.x,
+          Math.max(VIEWPORT_MARGIN, window.innerWidth - box.width - VIEWPORT_MARGIN),
+        );
         const top = Math.min(
           at.y + OFFSET_Y,
           Math.max(VIEWPORT_MARGIN, window.innerHeight - box.height - VIEWPORT_MARGIN),

@@ -15,7 +15,9 @@
  * owns the canvas plumbing next to its ShotTool.
  */
 
-/** How often the sampler grabs a frame while sharing (~1 fps — Gemini Live's cap). */
+/** The fallback frame cadence when none is configured (ms per frame). The
+ * shipped default is `videoFrameIntervalMs` (5000 — one frame every five
+ * seconds; the share's slider adjusts it live). */
 export const VIDEO_SAMPLE_INTERVAL_MS = 1000;
 /** Frames are downscaled to at most this width (aspect kept) before encoding. */
 export const VIDEO_MAX_WIDTH = 1024;
@@ -55,8 +57,13 @@ export interface VideoSamplerDeps {
   captureFrame(): Promise<Uint8Array | undefined>;
   /** Deliver one captured frame with its per-share `seq` (increasing from 0). */
   sendFrame(seq: number, bytes: Uint8Array): void;
-  /** Sampling cadence; defaults to {@link VIDEO_SAMPLE_INTERVAL_MS}. Tests shorten it. */
-  intervalMs?: number;
+  /**
+   * Sampling cadence in ms — a number, or a THUNK read before each tick so a
+   * live config change (the share's fps slider) takes effect on the very
+   * next frame without restarting the share. Defaults to
+   * {@link VIDEO_SAMPLE_INTERVAL_MS}.
+   */
+  intervalMs?: number | (() => number);
 }
 
 /**
@@ -72,7 +79,7 @@ export class VideoSampler {
   private _sharing = false;
   private paused = false;
   private seq = 0;
-  private timer: ReturnType<typeof setInterval> | undefined;
+  private timer: ReturnType<typeof setTimeout> | undefined;
   /** Guards against overlapping ticks when a `captureFrame` outlives its interval. */
   private inFlight = false;
 
@@ -126,16 +133,30 @@ export class VideoSampler {
 
   private arm(): void {
     this.clearTimer();
-    void this.tick(); // an immediate first frame — don't make the model wait a second
-    this.timer = setInterval(
-      () => void this.tick(),
-      this.deps.intervalMs ?? VIDEO_SAMPLE_INTERVAL_MS,
-    );
+    void this.tick(); // an immediate first frame — don't make the model wait
+    this.schedule();
+  }
+
+  /** A setTimeout CHAIN (not setInterval): the cadence thunk is re-read for
+   * every gap, so the slider's change lands on the next frame. */
+  private schedule(): void {
+    this.timer = setTimeout(() => {
+      void this.tick();
+      if (this._sharing && !this.paused) {
+        this.schedule();
+      }
+    }, this.currentInterval());
+  }
+
+  private currentInterval(): number {
+    const raw =
+      typeof this.deps.intervalMs === "function" ? this.deps.intervalMs() : this.deps.intervalMs;
+    return raw !== undefined && raw > 0 ? raw : VIDEO_SAMPLE_INTERVAL_MS;
   }
 
   private clearTimer(): void {
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = undefined;
     }
   }

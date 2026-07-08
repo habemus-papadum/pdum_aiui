@@ -40,13 +40,13 @@
  * network and no key (the house pattern).
  */
 import { priceCall, usageFromRealtimeResponse } from "./cost";
+import { READ_FILE_TOOL_OPENAI } from "./linter-tools";
 import {
-  LIVE_COMPOSER_INSTRUCTIONS,
-  LIVE_NUDGE_TEXT,
+  LINTER_INSTRUCTIONS,
+  type LinterToolCall,
   type LiveCapabilities,
   type LiveSession,
   type LiveSessionCallbacks,
-  type SubmitIntentCall,
 } from "./live-session";
 import {
   closeSuffix,
@@ -54,42 +54,27 @@ import {
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
 } from "./realtime";
-import {
-  DEFAULT_VOICE_TRANSCRIPTION_MODEL,
-  OPENAI_REALTIME_VOICE_URL,
-  pcm16ToWav,
-  REALTIME_VOICE_RATE,
-} from "./realtime-voice";
+import { OPENAI_REALTIME_VOICE_URL, pcm16ToWav, REALTIME_VOICE_RATE } from "./realtime-voice";
 
 /** The flagship conversational model, degraded to the realtime submode's composer. */
 export const DEFAULT_OPENAI_LIVE_MODEL = "gpt-realtime-2";
 
-/** The `submit_intent` tool as GA realtime declares it (standard JSON Schema). */
-const SUBMIT_INTENT_TOOL = {
-  type: "function",
-  name: "submit_intent",
-  description: "Deliver the composed request to the coding agent as interleaved segments.",
-  parameters: {
-    type: "object",
-    properties: {
-      segments: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            text: { type: "string" },
-            image: { type: "string" },
-            selection: { type: "string" },
-          },
-        },
-      },
-    },
-    required: ["segments"],
-  },
-} as const;
+/**
+ * OpenAI's capability grade. "video" means the engine ACCEPTS ambient frames
+ * — they inject as unlabeled turn-boundary `input_image` items, not a
+ * stream, so the injection grade stays honest.
+ */
+const OPENAI_CAPABILITIES: LiveCapabilities = { video: true, imageInjection: "turn-item" };
 
-/** OpenAI's capability grade: no video, images inject as turn-boundary items. */
-const OPENAI_CAPABILITIES: LiveCapabilities = { video: false, imageInjection: "turn-item" };
+/**
+ * The manual-commit floor: OpenAI rejects `input_audio_buffer.commit` under
+ * ~100 ms of buffered audio ("buffer too small"), which kills the session's
+ * turn. Under the floor the window's audio is CLEARED instead of committed —
+ * an accidental tap is not a lint opportunity.
+ */
+export const OPENAI_MIN_COMMIT_MS = 100;
+/** PCM16 mono at 24 kHz: bytes per millisecond (24000 * 2 / 1000). */
+const PCM_BYTES_PER_MS = 48;
 
 export interface OpenAiLiveSessionOptions {
   apiKey: string;
@@ -97,11 +82,9 @@ export interface OpenAiLiveSessionOptions {
   model: () => string;
   /** Resolves the output voice id (undefined → the model default). */
   voice?: () => string | undefined;
-  /** Resolves the input-transcription model (feeds the chronicle). */
-  transcriptionModel?: () => string;
   /**
-   * The composer persona (short — billed every turn). Default:
-   * {@link LIVE_COMPOSER_INSTRUCTIONS}, the shared authoritative text.
+   * The linter persona (short — billed every turn). Default:
+   * {@link LINTER_INSTRUCTIONS}, the shared authoritative text.
    */
   instructions?: string;
   /** Override the endpoint (tests). */
@@ -149,24 +132,12 @@ export function openOpenAiLiveSession(
   let ready = false;
   let dead = false;
   const outbox: string[] = [];
+  /** Bytes appended since the last commit/clear — the commit-floor meter. */
+  let windowBytes = 0;
 
   // Reply state, keyed by the upstream response id.
   const audioByResponse = new Map<string, Uint8Array[]>();
   const transcriptByResponse = new Map<string, string>();
-
-  // The tool-call drain (same buffering contract as gemini-live).
-  let bufferedCall: SubmitIntentCall | null = null;
-  let drainResolver: ((call: SubmitIntentCall | null) => void) | null = null;
-
-  const settleDrain = (call: SubmitIntentCall | null): void => {
-    if (drainResolver) {
-      const resolve = drainResolver;
-      drainResolver = null;
-      resolve(call);
-    } else {
-      bufferedCall = call;
-    }
-  };
 
   const sendReady = (message: object): void => {
     const text = JSON.stringify(message);
@@ -183,7 +154,6 @@ export function openOpenAiLiveSession(
     }
     dead = true;
     callbacks.onError(message, data);
-    settleDrain(null);
   };
 
   /** A finished response's buffered audio (WAV-wrapped) + its transcript. */
@@ -200,46 +170,41 @@ export function openOpenAiLiveSession(
     }
   };
 
-  const buildToolCall = (item: {
+  /** A linter-mode function call: respond writes the output THEN resumes. */
+  const buildLinterCall = (item: {
     call_id?: string;
     name?: string;
     arguments?: unknown;
-  }): SubmitIntentCall => {
-    let parsed: { segments?: unknown } = {};
+  }): LinterToolCall => {
+    let parsed: Record<string, unknown> = {};
     if (typeof item.arguments === "string") {
       try {
-        parsed = JSON.parse(item.arguments);
+        parsed = JSON.parse(item.arguments) as Record<string, unknown>;
       } catch {
         parsed = {};
       }
     }
-    const rawSegments = Array.isArray(parsed.segments) ? parsed.segments : [];
-    const segments = rawSegments.map((s) => {
-      const seg = (s ?? {}) as { text?: unknown; image?: unknown; selection?: unknown };
-      return {
-        ...(typeof seg.text === "string" ? { text: seg.text } : {}),
-        ...(typeof seg.image === "string" ? { image: seg.image } : {}),
-        ...(typeof seg.selection === "string" ? { selection: seg.selection } : {}),
-      };
-    });
     let responded = false;
     return {
-      segments,
-      respond: (ok: boolean) => {
+      tool: item.name ?? "",
+      args: parsed,
+      respond: (result: string) => {
         if (responded || dead) {
           return;
         }
         responded = true;
-        // Write the tool result — terminal for our flow (we close right after),
-        // so no `response.create` chases it.
         sendReady({
           type: "conversation.item.create",
           item: {
             type: "function_call_output",
             call_id: item.call_id,
-            output: JSON.stringify({ ok }),
+            output: result,
           },
         });
+        // THE RESUME RULE: a written tool result never re-triggers the
+        // response on its own — the model only reads it and speaks once a
+        // fresh response is created.
+        sendReady({ type: "response.create" });
       },
     };
   };
@@ -263,13 +228,6 @@ export function openOpenAiLiveSession(
         ready = true;
         for (const queued of outbox.splice(0)) {
           socket.send(queued);
-        }
-        return;
-      }
-      case "conversation.item.input_audio_transcription.completed": {
-        const transcript = message.transcript ?? "";
-        if (transcript.trim() !== "") {
-          callbacks.onUserTranscript(transcript.trim());
         }
         return;
       }
@@ -309,8 +267,9 @@ export function openOpenAiLiveSession(
             call_id?: string;
             arguments?: unknown;
           };
-          if (item.type === "function_call" && item.name === "submit_intent") {
-            settleDrain(buildToolCall(item));
+          // Tool calls (read_file) route through the generic callback.
+          if (item.type === "function_call" && callbacks.onToolCall) {
+            callbacks.onToolCall(buildLinterCall(item));
             break;
           }
         }
@@ -337,25 +296,26 @@ export function openOpenAiLiveSession(
       if (typeof voice === "string" && voice !== "") {
         output.voice = voice;
       }
+      // The session declares read_file and NO vendor input transcription —
+      // the STT session owns the chronicle, and the sidecar injects
+      // `[transcript seg_N: …]` items instead (double-transcribing the same
+      // audio would double the cost for a worse record).
       socket.send(
         JSON.stringify({
           type: "session.update",
           session: {
             type: "realtime",
             model: options.model(),
-            instructions: options.instructions ?? LIVE_COMPOSER_INSTRUCTIONS,
+            instructions: options.instructions ?? LINTER_INSTRUCTIONS,
             output_modalities: ["audio"],
             audio: {
               input: {
                 format: { type: "audio/pcm", rate: REALTIME_VOICE_RATE },
-                transcription: {
-                  model: options.transcriptionModel?.() ?? DEFAULT_VOICE_TRANSCRIPTION_MODEL,
-                },
                 turn_detection: null,
               },
               output,
             },
-            tools: [SUBMIT_INTENT_TOOL],
+            tools: [READ_FILE_TOOL_OPENAI],
           },
         }),
       );
@@ -383,12 +343,22 @@ export function openOpenAiLiveSession(
       if (dead) {
         return;
       }
+      windowBytes += pcm24k.length;
       sendReady({ type: "input_audio_buffer.append", audio: toBase64(pcm24k) });
     },
     activityEnd() {
       if (dead) {
         return;
       }
+      // The commit floor: a tapped-and-released window under ~100 ms cannot
+      // be committed ("buffer too small" kills the turn) — clear it instead;
+      // no response is solicited for an accidental tap.
+      if (windowBytes < OPENAI_MIN_COMMIT_MS * PCM_BYTES_PER_MS) {
+        windowBytes = 0;
+        sendReady({ type: "input_audio_buffer.clear" });
+        return;
+      }
+      windowBytes = 0;
       sendReady({ type: "input_audio_buffer.commit" });
       sendReady({ type: "response.create" });
     },
@@ -410,9 +380,20 @@ export function openOpenAiLiveSession(
         },
       });
     },
-    appendVideoFrame() {
-      // No-op: this vendor has no video (capabilities.video === false). The
-      // processor traces the drop; the engine simply ignores the frame.
+    appendVideoFrame(bytes, mime) {
+      if (dead) {
+        return;
+      }
+      // An unlabeled turn-boundary item — the ambient-context grade of the
+      // labeled-shot injection (items never auto-trigger a response).
+      sendReady({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_image", image_url: `data:${mime};base64,${toBase64(bytes)}` }],
+        },
+      });
     },
     injectContextText(text) {
       if (dead) {
@@ -426,43 +407,11 @@ export function openOpenAiLiveSession(
         item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
       });
     },
-    nudgeSubmit() {
+    cancelActiveResponse() {
       if (dead) {
         return;
       }
-      sendReady({
-        type: "conversation.item.create",
-        item: {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text: LIVE_NUDGE_TEXT }],
-        },
-      });
-      sendReady({ type: "response.create" });
-    },
-    drainToolCall(timeoutMs) {
-      if (bufferedCall !== null) {
-        const call = bufferedCall;
-        bufferedCall = null;
-        return Promise.resolve(call);
-      }
-      if (dead) {
-        return Promise.resolve(null);
-      }
-      return new Promise<SubmitIntentCall | null>((resolve) => {
-        let settled = false;
-        const finish = (call: SubmitIntentCall | null): void => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          clearTimeout(timer);
-          drainResolver = null;
-          resolve(call);
-        };
-        const timer = setTimeout(() => finish(null), timeoutMs);
-        drainResolver = finish;
-      });
+      sendReady({ type: "response.cancel" });
     },
     close() {
       dead = true;
@@ -471,7 +420,6 @@ export function openOpenAiLiveSession(
       } catch {
         // best-effort — the socket may already be closing
       }
-      settleDrain(null);
     },
   };
 }

@@ -217,6 +217,7 @@ export class TraceView {
       img.style.maxHeight = `${THUMB_MAX}px`;
       img.alt = path ?? "screenshot";
       img.addEventListener("click", () => this.doc.defaultView?.open(url, "_blank"));
+      attachImagePeek(img, url, this.doc);
       fig.append(img);
     } else {
       const missing = this.el("div", "aiui-dbg-shot-missing");
@@ -591,6 +592,7 @@ export class TraceView {
       img.style.maxHeight = `${THUMB_MAX}px`;
       img.alt = file;
       img.addEventListener("click", () => this.doc.defaultView?.open(url, "_blank"));
+      attachImagePeek(img, url, this.doc);
       box.append(img);
     } else if (isPlayableAudioFile(file)) {
       const audio = this.doc.createElement("audio");
@@ -626,10 +628,11 @@ export class TraceView {
   }
 
   /**
-   * The saved keyframes of a coalesced video-stream card: a few thumbnails
-   * (capped at 6) gathered across the run's stages, with a "+N more" note when
-   * the run saved more than fit. The card covers hundreds of ~1fps frames; only
-   * every ~10th is persisted, so this is a sparse, honest sample.
+   * The saved frames of a coalesced video-stream card, as a lazy HORIZONTAL
+   * strip. Every sampled frame persists now (the sidecar-era channel saves
+   * them all), so the strip opens with the first dozen and a "show all N"
+   * control renders the rest on demand (`loading="lazy"` keeps the fetch
+   * cost proportional to scrolling). Hover peeks a frame; click opens it.
    */
   private renderVideoThumbs(trace: LiveTrace, card: TraceCard, box: HTMLElement): void {
     const stages = card.indices
@@ -638,25 +641,37 @@ export class TraceView {
     const saved = savedFrameFiles(stages);
     if (saved.length === 0) {
       const note = this.el("div", "aiui-dbg-card-info");
-      note.textContent = "no saved keyframes";
+      note.textContent = "no saved frames";
       box.append(note);
       return;
     }
-    const cap = 6;
+    const initial = 12;
     const thumbs = this.el("div", "aiui-dbg-video-thumbs");
-    for (const file of saved.slice(0, cap)) {
+    const appendFrame = (file: string): void => {
       const url = this.config.blobUrl?.(trace.id ?? "", file) ?? file;
       const img = this.doc.createElement("img");
       img.src = url;
       img.loading = "lazy";
       img.alt = file;
       img.addEventListener("click", () => this.doc.defaultView?.open(url, "_blank"));
+      attachImagePeek(img, url, this.doc);
       thumbs.append(img);
+    };
+    for (const file of saved.slice(0, initial)) {
+      appendFrame(file);
     }
     box.append(thumbs);
-    if (saved.length > cap) {
-      const more = this.el("div", "aiui-dbg-card-sub");
-      more.textContent = `… +${saved.length - cap} more saved`;
+    if (saved.length > initial) {
+      const more = this.doc.createElement("button");
+      more.type = "button";
+      more.className = "aiui-dbg-video-more";
+      more.textContent = `show all ${saved.length} frames`;
+      more.addEventListener("click", () => {
+        for (const file of saved.slice(initial)) {
+          appendFrame(file);
+        }
+        more.remove();
+      });
       box.append(more);
     }
   }
@@ -729,4 +744,31 @@ function shotCaption(path: string | undefined, block: string): string {
   const elements = [...block.matchAll(/<element\b[^>]*\bname="([^"]*)"/g)].map((m) => m[1]);
   const id = path ? (shotBlobName(path) ?? path.split(/[\\/]/).pop() ?? path) : "screenshot";
   return elements.length > 0 ? `${id} · ${elements.join(", ")}` : id;
+}
+
+/**
+ * Hover **peek** for a thumbnail: while the pointer rests on `el`, a
+ * fixed-position enlargement of `src` floats above the viewport bottom-left
+ * of the anchor (the card list scrolls, so an absolutely-positioned child
+ * would clip — the overlay preview's mm-thumb-peek lesson). Click stays the
+ * "open full size" gesture; the peek is glanceable triage.
+ */
+export function attachImagePeek(el: HTMLElement, src: string, doc: Document): void {
+  let peek: HTMLImageElement | undefined;
+  const hide = (): void => {
+    peek?.remove();
+    peek = undefined;
+  };
+  el.addEventListener("mouseenter", () => {
+    hide();
+    peek = doc.createElement("img");
+    peek.className = "aiui-dbg-peek";
+    peek.src = src;
+    const rect = el.getBoundingClientRect();
+    const win = doc.defaultView;
+    peek.style.left = `${Math.max(8, rect.left)}px`;
+    peek.style.bottom = `${(win?.innerHeight ?? 0) - rect.top + 8}px`;
+    doc.body.append(peek);
+  });
+  el.addEventListener("mouseleave", hide);
 }

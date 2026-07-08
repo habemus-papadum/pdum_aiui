@@ -9,7 +9,6 @@ import {
   createChannelConnection,
   type FormatRegistry,
 } from "./channel";
-import { type Corrector, mockCorrector } from "./correct";
 import { type ChunkDescriptor, encodeFrame, PROTOCOL_VERSION } from "./frame";
 import { createIntentV1Format } from "./intent-v1";
 import { createTraceStore, listTraces } from "./trace";
@@ -29,7 +28,6 @@ import { withTracing } from "./tracing";
 
 const enc = new TextEncoder();
 const TID = "thread-1";
-type Correction = Extract<IntentEvent, { type: "correction" }>;
 
 interface Harness {
   hello(intent: unknown): Promise<ChannelResponse>;
@@ -84,82 +82,10 @@ const traced = (format: ChannelFormat, cache: string): ChannelFormat =>
   ) as ChannelFormat;
 
 describe("intent-v1 wire contract", () => {
-  it("replays a patchless-correction turn: request → echo → context → bare fin, applied once", async () => {
-    const cache = mkdtempSync(join(tmpdir(), "aiui-int-"));
-    const mc = mockCorrector();
-    let diffCalls = 0;
-    const countingCorrector: Corrector = {
-      name: "counting",
-      diff(input) {
-        diffCalls += 1;
-        return mc.diff(input);
-      },
-    };
-    const h = harness(traced(createIntentV1Format({ corrector: countingCorrector }), cache));
-    await h.hello({ corrector: "openai", correctionPolicy: "replace" });
-
-    // A dictation turn plus the PATCHLESS correction request — the only
-    // correction the reconciled client puts on the wire (it applies our echo
-    // locally rather than re-sending the patched twin).
-    await h.events([
-      { at: 1, type: "armed", on: true },
-      { at: 2, type: "thread-open", trigger: "talk" },
-      { at: 3, type: "talk-start", segment: 1 },
-      { at: 4, type: "talk-end", segment: 1, ms: 200 },
-      {
-        at: 5,
-        type: "transcript-final",
-        segment: 1,
-        text: "make the base line curve a bit thicker",
-        latencyMs: 100,
-        model: "mock",
-      },
-      {
-        at: 6,
-        type: "correction",
-        from: 9,
-        to: 18,
-        original: "base line",
-        instruction: "baseline",
-        via: "typed",
-      },
-    ]);
-
-    // The server diffed once and echoed the completed (patched) correction.
-    expect(diffCalls).toBe(1);
-    expect(h.pushed).toHaveLength(1);
-    const echoed = (h.pushed[0] as { events: IntentEvent[] }).events[0] as Correction;
-    expect(echoed.patch).toContain("*** Begin Patch");
-
-    // Context rides its own frame, just before the bare chunkless terminator.
-    await h.context({ text: "the plot", sourceLoc: "src/ui/App.tsx:5:1" });
-    const ack = await h.bareFin();
-    expect(ack).toMatchObject({ ok: true, threadId: TID, closed: true });
-
-    // Exactly one correction in the merged stream, applied exactly once.
-    const [trace] = listTraces(cache);
-    const merged = trace.stages.find((s) => s.label === "merged events")?.data as IntentEvent[];
-    expect(merged.filter((e) => e.type === "correction")).toHaveLength(1);
-    expect(h.prompts).toHaveLength(1);
-    expect(h.prompts[0].text).toContain("baseline");
-    expect(h.prompts[0].text).not.toContain("base line");
-    expect(h.prompts[0].text.match(/baseline/g)).toHaveLength(1);
-    // The context frame folded its selection into the lowered prompt.
-    expect(h.prompts[0].text).toContain('on-screen selection: "the plot"');
-
-    // The fin also pushed the committed prompt back to the client (the
-    // additive `lowered-prompt` message), byte-for-byte what the session got.
-    expect(h.pushed.at(-1)).toEqual({
-      kind: "lowered-prompt",
-      threadId: TID,
-      prompt: h.prompts[0].text,
-    });
-  });
-
   it("tears down an abandoned turn: onClose marks the trace abandoned, sends nothing", async () => {
     const cache = mkdtempSync(join(tmpdir(), "aiui-int-"));
-    const h = harness(traced(createIntentV1Format({ corrector: mockCorrector() }), cache));
-    await h.hello({ corrector: "openai", correctionPolicy: "replace" });
+    const h = harness(traced(createIntentV1Format({}), cache));
+    await h.hello({ transcriber: "openai" });
 
     // A turn that streams a full dictation but never sends the terminating fin.
     await h.events([

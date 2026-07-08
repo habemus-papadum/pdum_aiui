@@ -2,13 +2,14 @@
 
 The intent overlay is the default modality of the [web intent tool](./web-intent-tool): a
 floating widget over your app that collects a **multimodal turn** — dictation, pen ink,
-region screenshots, and a select-and-speak correction loop — and streams it to the running
-channel, where it is [lowered](./prompt-lowering) into a prompt for your Claude Code session.
-Text is still there as an escape hatch, but the overlay is the thing you reach for when
-"make *this* wider" is easier said than typed.
+region screenshots, on-screen selections — and streams it to the running channel, where it is
+[lowered](./prompt-lowering) into a prompt for your Claude Code session. An optional
+[**prompt linter**](./prompt-linting) — a realtime model — watches you compose and speaks up
+at each pause. The overlay is the thing you reach for when "make *this* wider" is easier said
+than typed. (A plain-text modality still exists under `format: "text-concat"`, but it left
+the default widget when the overlay went multimodal-first.)
 
-This page is **how to use it** — the keys, the turn lifecycle, the correction loop, and the
-knobs. The [Web Intent Tool](./web-intent-tool) page is the design (how the three pieces —
+This page is **how to use it** — the keys, the turn lifecycle, the preview, and the knobs. The [Web Intent Tool](./web-intent-tool) page is the design (how the three pieces —
 collection, lowering, debugging — fit together and how a modality plugs in); this page assumes
 you already have the tool mounted (see [Getting Started](./getting-started)) and want to drive it.
 
@@ -39,10 +40,9 @@ Minimalist by design — one hand, no chords:
 | **D**     | hold + drag a rectangle = region screenshot |
 | **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
-| **E**     | correct mode — select transcript text, then speak or type the fix |
 | **J**     | [VS Code jump mode](#vs-code-jump-mode-double-click-to-source) — double-click an element, pick a jump target (its source, or a containing cell), land in VS Code; **J** (or **Esc**) resumes |
-| **V**     | share your screen — [live tiers only](#live-tiers-67--experimental); samples the display at ~1 fps for the live model |
-| **K**     | quick config — the [tier strip](#quick-config-the-k-strip): switch tiers, save/reset, open the editor |
+| **V**     | share your screen with the [prompt linter](./prompt-linting) — sampled frames as ambient context (needs the linter on: **K**, then **L**) |
+| **K**     | quick config — the [strip](#quick-config-the-k-strip): tier digits, the **L** linter chip, save/reset, the editor |
 | **T**     | [tweak mode](#tweak-mode-adjust-the-app-mid-turn) — hand the pointer and keyboard back to the app mid-turn; **T** (or **Esc**) resumes |
 | **H**     | help — the whole keymap as a table (the pill's **?** icon is the mouse path to the same) |
 | **Enter** | send — finalize and lower the turn |
@@ -70,10 +70,9 @@ It closes when you:
   seconds. Useful if you dislike reaching for Enter; risky if you pause to think mid-turn.
 
 **The escape ladder.** `Esc` steps out exactly one level at a time, so a mis-step is one tap
-to undo rather than a full reset: `correct mode → ink`, `tweak mode → ink`, `VS Code mode →
-ink`, then `cancel the thread → disarm`. Press it until you're where you want to be — stepping
-out of correct, tweak, or VS Code mode always lands back in composing, never straight at a
-cancel.
+to undo rather than a full reset: `tweak mode → ink`, `VS Code mode → ink`, then `cancel the
+thread → disarm`. Press it until you're where you want to be — stepping out of tweak or VS
+Code mode always lands back in composing, never straight at a cancel.
 
 ## Talking (dictation)
 
@@ -82,11 +81,13 @@ key-release is a clean, pause-bounded segment boundary — exactly the unit spee
 and because a walkie-talkie key can't be left open by accident. Press-to-toggle is available as a
 config choice if holding a key while you also draw or shoot feels awkward.
 
-The transcript **preview** streams above the widget as you go, with shot thumbnails inline. How
-live it feels depends on which transcriber runs (see [What runs where](#what-runs-where-the-channel-real-vs-mock)):
-the default channel-side REST transcriber has no partials, so the preview fills in all at once when
-the segment's transcript lands; the **experimental** `openai-realtime` transcriber streams partial
-deltas *while you speak* (the preview fills as you talk); the mock streams word-by-word.
+The transcript **preview** streams above the widget as you go, with shot thumbnails inline.
+Transcription is **streaming**: partial deltas fill the preview *while you speak* (rendered
+dim until the segment's final lands), and the final snaps in a fraction of a second after you
+release Space. The preview is a **read-only render of the compiler's accumulator** — the same
+fold (`composeIntent`) that produces the committed prompt — so what you see is what will be
+sent, by construction. There is no transcript editor: a correction is *spoken* (see
+[the append-only model](#corrections-are-spoken)).
 
 ## Ink
 
@@ -118,52 +119,29 @@ full-size peek, and hover's **✕** retracts it from the turn — took the wrong
 it before sending. Retraction is an event like everything else (`shot-drop`), so the channel's
 lowering drops the image too; the original shot stays visible in the trace.
 
-## The correction meta-loop
+**Shots land where you took them, not where the transcript caught up.** A shot taken
+mid-sentence carries the gesture's wall-clock (`takenAt`); the compiler maps it onto the
+segment's streaming-delta timeline and splits the text at that point (nudged to a word
+boundary — and past a sentence end just ahead, where dictation pauses cluster), so the image
+sits in the prose where you were speaking when you shot it — in the preview and in the
+lowered prompt alike. Because transcript deltas *trail* the speech they transcribe, the
+compiler compensates with a per-segment latency estimate measured from the stream itself
+(how far the last delta trailed the release); it's an honest estimate, not ground truth —
+per-word audio alignment is the open research direction.
 
-Speech-to-text mangles domain words — and the overlay makes fixing them a first-class gesture
-rather than a retype. Press **E** to enter correct mode: a **two-box editor** opens over the turn
-(in correct mode Enter never sends the turn).
+## Corrections are spoken {#corrections-are-spoken}
 
-**The top box edits one text chunk at a time** — a contiguous run of dictated segments with no
-screenshot in between (any number of pauses or Space presses). It opens on the **last** chunk;
-when the turn has several, a chip row picks which chunk is in the editor, and the rendered
-transcript above stays visible the whole time — screenshots never disappear, and corrector diffs
-still flash inline, with the chunk under edit highlighted. Click for a caret and type; dictate
-with the caret here and the words insert at the caret. To *insert* text, this is the way — don't
-instruct, just edit. Direct edits become locally-patched correction events at the next boundary
-(send, commit, or switching chunks), so the lowered prompt always includes them.
+The event stream is **append-only** and there is no transcript editor. If speech-to-text
+mangles a word — or the [prompt linter](./prompt-linting) flags one — **say the fix**:
+*"it's Vite, not beat."* The correction becomes new content the agent reads in context, which
+in practice models handle at least as reliably as a silently-rewritten transcript — and the
+trace shows exactly what was said, in order, with nothing rewritten after the fact.
 
-**The bottom box is for replacement instructions** — "curve", or "it's Vite, not beat". The mic
-listens hands-free (Space types spaces); spoken words stream into the live line and fold in at
-whichever box last held the caret. A selection in the **top** box at send time is the marked
-span; with none, the instruction addresses the whole transcript and the corrector fixes every
-affected occurrence. **Tab** hops between the boxes.
-
-- **Enter in the bottom box with an instruction** sends it: the box clears, *applying fix…*
-  pulses, and the patch flashes its pink/green diff when it lands. Keep going, fix after fix.
-- **Enter with an empty box** means *done editing*: manual edits fold in, the session commits,
-  and you're back in ink mode. (Enter in the top box is just a newline — it's an editor.)
-- **Escape aborts the whole edit**: every diff applied this session — corrector patches and
-  manual edits alike — is undone via real `correction-undo` stream events (so the lowered prompt
-  agrees with what you see), and you're back in ink where you started.
-
-A correction is a **patch, not a string replace** — which is what lets it be smarter than
-"swap these characters." The transcript (one segment per line), your selection, and the
-instruction go to the corrector, which answers with a diff; the overlay flashes the change
-inline (pink deletions, green additions) for a beat, then settles on the clean text. Two things
-follow from corrections being patches:
-
-- **The corrector reads two instruction modes.** A *replacement* is verbatim content for the
-  selected span — select "curb", say "curve", the span is swapped and nothing else is touched.
-  A *description* instead *talks about* the change — *"no, it's not beat, it's Vite, the
-  frontend build tool."* Here the selection is only the example occurrence: the corrector infers
-  the intended edit, fixes **every** affected occurrence across the whole transcript, and uses the
-  explanatory context (that it's spelled "Vite", that it's a build tool) without letting it leak
-  into the text.
-- **Corrections compound and never silently vanish.** Each fix patches the *already-corrected*
-  transcript, so a later correction can target text an earlier one produced. If a patch can't be
-  produced or won't apply, the overlay falls back to a plain replacement of the selected text —
-  the correction still lands.
+(The earlier releases had a two-box transcript editor on **E** backed by a patch-writing
+corrector model. It was removed in the append-only pivot: the editor's complexity — lassoed
+spans, patch echoes, undo stacks — bought little over just speaking the fix, and it fought
+the "preview = compiler accumulator" invariant. Historical traces containing `correction`
+events still compose and render in the debugger.)
 
 ## Tweak mode: adjust the app mid-turn
 
@@ -172,8 +150,8 @@ An armed thread owns the pointer (drags ink) and most of the keyboard — but so
 talking about the result. Disarming would cancel the thread; **T** doesn't. It hands the pointer
 and keyboard back to the app while the turn stays open — an **explicit handover**, not a
 guessing game about which keys you meant for whom: in tweak mode the overlay claims only **T**
-and **Esc** (both resume composing; Esc is the same one-rung step-out as leaving correct mode),
-and *everything* else — Space, D, S, C, E, J, V, K, Enter, the strip digits — falls through to
+and **Esc** (both resume composing; Esc is the same one-rung step-out as leaving VS Code mode),
+and *everything* else — Space, D, S, C, J, V, K, Enter, the strip digits — falls through to
 the page. The pill's ring goes **dashed gray** while capture is released, so a glance tells you
 the crosshair is gone on purpose. The thread and its channel socket stay open the whole time,
 the idle auto-end timer (if you enable it) is suspended, and a selection you make while tweaking
@@ -228,46 +206,34 @@ sends selections back into the turn — but the mode itself needs only VS Code i
 
 ## What runs where: the channel (real) vs mock
 
-The two model-backed steps — transcription and the correction diff — each run in one of two
-places, chosen by config. **The real, channel-side path is the default**; mock is the explicit
-offline choice.
+Transcription runs in one of two places, chosen by config. **The real, channel-side path is
+the default**; mock is the explicit offline choice.
 
-- **`openai` (channel-side) — the default.** The real transcription and correction run in the
-  **channel process**, not the page: when a talk segment or a correction request reaches the
-  channel it calls OpenAI and echoes the result back to the widget to merge into its preview.
-  It's a REST round-trip with no partials, so a segment's transcript fills in all at once, on the
-  order of ~1–1.5 s after you release Space (that latency floor is what the audio-stack work is
-  measuring). The key lives with the channel — read from `OPENAI_API_KEY` in the environment
-  `aiui claude` runs in, **never** from the page or `config.json` — and `aiui claude`
+- **`openai-realtime` (channel-side) — the default.** The page streams PCM to a per-thread
+  realtime session the channel holds open, and partial transcript deltas echo back **while you
+  speak**; the final lands a fraction of a second after you release Space. The key lives with
+  the channel — read from `OPENAI_API_KEY` in the environment `aiui claude` runs in, **never**
+  from the page or `config.json` — and `aiui claude`
   [preflights it](./config#the-intent-pipeline-openai-key) at launch. If the channel has no key
   (or a stale one), the step does **not** silently fall back: the widget's status says
-  transcription or correction is *unavailable* and how to fix it. The overlay still mounts and
-  everything else — ink, shots, composing, sending — keeps working.
-- **`mock` (local, offline, no key) — for development.** Transcription streams canned phrases (with
-  injectable typos, so the correction loop has something to fix) and corrections are built locally;
-  nothing leaves the browser. It's the explicit offline/dev choice — set `transcriber: "mock"` and
-  `corrector: "mock"` (see [Configuring the pipeline](#configuring-the-pipeline)) — and it's what
-  the [intent workbench lab](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench)
-  defaults to, so the whole loop runs there with no channel and no key.
+  transcription is *unavailable* and how to fix it. The overlay still mounts and everything
+  else — ink, shots, composing, sending — keeps working. It needs the mic **and** an
+  `AudioWorklet` (a context lacking either says so out loud — no silent fallback). Knobs:
+  `realtimeModel` (per tier) and `realtimeDelay` (`minimal`…`xhigh`, a latency/accuracy
+  trade-off).
+- **`mock` (local, offline, no key) — for development.** Transcription streams canned phrases;
+  nothing leaves the browser. It's the explicit offline/dev choice — set
+  `transcriber: "mock"` — and it's what the
+  [intent workbench lab](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench)
+  defaults to, so the whole loop runs there with no channel and no key. (It is deliberately
+  not on the K strip; set it in config.)
 
-### Realtime transcription (experimental)
-
-`transcriber: "openai-realtime"` swaps the REST round-trip for a **streaming** session: instead of
-recording a whole segment and uploading it, the page streams PCM to a per-thread realtime session
-the channel holds open, and partial transcript deltas echo back **while you speak** — the preview
-fills as you talk, and the final lands a fraction of a second after you release Space rather than
-after the ~1–1.5 s REST floor. It is the same `openai` posture in every other way (the key lives in
-the channel; a keyless channel or an upstream error degrades *loudly* — the widget says so, never a
-silent switch to mock). It's opt-in and still a spike: it needs the mic **and** an `AudioWorklet`
-(so it can't start in a context that lacks either — again, said out loud, no silent fallback), and
-its models/latency are still being measured (the workbench bench's realtime leg). Knobs:
-`realtimeModel` (default `gpt-realtime-whisper`) and `realtimeDelay`
-(`minimal`…`xhigh`, a latency/accuracy trade-off). The `rapid`, `premium`, and `flagship`
-[tiers](#tiers-one-dial-for-the-whole-ladder) set these (and their spoken-audio siblings) for you —
-this subsection is the manual path.
+(The pre-pivot REST transcriber — `transcriber: "openai"`, whole-segment uploads with a
+~1–1.5 s floor and no partials — is retired from every tier; the value still resolves for old
+persisted configs.)
 
 When you **send**, the whole turn is lowered in the channel into a single prompt: the dictated
-text, the corrections applied, and each screenshot **inlined at its position in the prose** as an
+text and each screenshot **inlined at its position in the prose** as an
 indented block —
 
 ```xml
@@ -291,65 +257,29 @@ can inspect in the debugger:
 
 ![The lowering debugger showing a multimodal trace](/lowering-debugger.png)
 
-## Tiers: one dial for the whole ladder
+## Tiers: one dial for transcription
 
-The pipeline has a dozen model knobs — transcriber, transcription model, corrector, TTS, realtime
-voice — and `tier` is a single **cost-sized dial** over all of them: pick a rung and the tier
-expands into the fine-grained fields for you.
+The pipeline has several model knobs — transcriber, models, TTS — and `tier` is a single
+**cost-sized dial** over them. Transcription is streaming in both rungs; they differ by model
+and whether anything is spoken back:
 
-The five rungs, cheapest first:
+| `tier` | Backend | What you feel |
+| --- | --- | --- |
+| `rapid` *(default)* | `gpt-realtime-whisper` (streaming STT) | partials as you talk; the final snaps in well under a second. No voice back. |
+| `premium` | `gpt-4o-mini-transcribe` over the same streaming endpoint + `gpt-4o-mini-tts` spoken acks | higher transcription quality, and it says "sent" back to you — eyes on the app, not the preview. |
 
-| `tier` | Backend | $/active-hr (~10 min speech) | What you feel |
-| --- | --- | --- | --- |
-| `mock` | mock STT + mock corrector | $0 | canned transcript; no key, no network — pure offline dev. |
-| `standard` *(default)* | `gpt-4o-mini-transcribe` + `gpt-4o-mini` | ~$0.03 (cents) | dictate, and it catches up ~1.4 s after you release. Today's behavior, unchanged. |
-| `rapid` | `gpt-realtime-whisper` (streaming STT) + `gpt-4o-mini` | ~$0.17 (dimes) | same silence, but the final snaps in ~2× faster (~655 ms). No partials, no voice back. |
-| `premium` | `rapid` + `gpt-4o-mini-tts` spoken acks | ~$0.18 (dimes) | it says "sent" back to you — keep your eyes on the app, not the preview. |
-| `flagship` | `gpt-realtime-2` (audio+text conversational) | ~$1–6 (dollars) | spoken answers, barge-in, model turn-detection. Text is still the source of truth. |
-
-`tier` defaults to `standard` — an absent tier *is* standard — which reproduces today's exact
-REST-mini behavior, so there is zero billing surprise for anyone who never touches it.
-
-What actually changes per rung is the audio path — how your voice reaches the channel, and
-whether anything is spoken back. `rapid` swaps the release-time blob upload for PCM streamed while
-you talk; `premium` adds a spoken ack after send; `flagship` swaps in a model that answers aloud
-(its input transcription still feeds the prompt, so text stays the source of truth):
-
-```mermaid
-flowchart TB
-  subgraph mock["mock · $0 · offline"]
-    direction LR
-    m1["canned transcript<br/>no key · no network"]
-  end
-  subgraph standard["standard (default) · release→final ~1.4s"]
-    direction LR
-    s1["record whole<br/>segment"] --> s2["seg_N blob<br/>at release"] --> s3["REST transcribe<br/>gpt-4o-mini-transcribe"] --> s4["transcript-final<br/>echo"]
-  end
-  subgraph rapid["rapid · release→final ~0.7s"]
-    direction LR
-    r1["stream PCM<br/>during talk"] --> r2["realtime session<br/>gpt-realtime-whisper"] --> r3["commit<br/>at release"] --> r4["transcript-final<br/>echo"]
-  end
-  subgraph premium["premium · rapid + spoken ack ~1.1s"]
-    direction LR
-    p1["rapid<br/>input path"] --> p2["fin"] --> p3["TTS<br/>gpt-4o-mini-tts"] --> p4["speech message<br/>widget says 'sent'"]
-  end
-  subgraph flagship["flagship · model speaks replies"]
-    direction LR
-    f1["rapid-style<br/>PCM input"] --> f2["gpt-realtime-2<br/>response.create"] --> f3["audio deltas<br/>→ WAV speech"] --> f4["plays reply aloud<br/>barge-in cancels"]
-  end
-  m1 ~~~ s1
-  s1 ~~~ r1
-  r1 ~~~ p1
-  p1 ~~~ f1
-```
+`tier` defaults to `rapid` — an absent tier *is* rapid. A third, unsurfaced rung — `mock` —
+exists for tests and offline development (set it in config; it has no strip digit).
+[**Prompt linting**](./prompt-linting) is deliberately **not** a tier: it's an orthogonal
+on/off + vendor switch (`linter`), so any tier can lint.
 
 **The merge rule: preset first, then your explicit knobs.** The effective config is
 `DEFAULT ← tier preset ← explicit fine fields` — the tier preset fills in over the defaults, and
 your explicit fields (the Vite `intent` option unioned with any gear-panel/agent overrides) fill
 in over the preset. A tier only *supplies* the fields it owns; anything you name explicitly still
-wins. So `{ tier: "flagship", model: "whisper-1" }` runs the flagship voice model but pins `model`
-to `whisper-1`. Switching `tier` **re-derives** the fields that tier owns — you don't inherit the
-old tier's fields frozen in.
+wins. So `{ tier: "premium", realtimeModel: "gpt-realtime-whisper" }` keeps premium's spoken
+acks but pins the model. Switching `tier` **re-derives** the fields that tier owns — you don't
+inherit the old tier's fields frozen in.
 
 **Setting it — four doors, one validated path.** Set `tier` any of the ways you set the other
 knobs:
@@ -357,34 +287,16 @@ knobs:
 - the Vite option — `aiuiDevOverlay({ intent: { tier: "premium" } })`;
 - the [**K strip**](#quick-config-the-k-strip) — a digit while armed, session-scoped;
 - the gear (**⚙ advanced config**) panel — edit `tier` in the JSON;
-- the agent's `aiui_overlay set_config` tool — `{ config: { tier: "flagship" } }`.
+- the agent's `aiui_overlay set_config` tool — `{ config: { tier: "premium" } }`.
 
 All four go through the same validated config path.
 
-### Live tiers (6/7) — experimental
-
-Two further rungs — `live-gemini` (digit **6**) and `live-openai` (digit **7**) — switch the
-overlay into its **realtime submode**: instead of assembling a document and lowering it on Enter,
-the channel holds a live conversational session (Gemini Live / GPT realtime) that hears you
-continuously and, at the end, *composes the prompt itself*. (The internals — what each vendor
-actually receives on the wire, how shot/selection ids resolve, the gotchas — are in
-[Realtime Live Mode](./realtime-live).) Two interaction differences follow, both surfaced in
-the overlay:
-
-- **Screen share (V).** Press **V** to share your screen with the live model — it samples the
-  same display-capture stream a screenshot uses, at ~1 fps, as ambient context (a **● video**
-  badge shows on the widget pill while it runs; deliberate **D**/**S** shots are still the *referenceable*
-  images). The share is bounded by the turn (it ends on send/cancel/disarm) and pauses while the
-  tab is in the background. Off a live tier, **V** just says *"video needs a live tier — K, then
-  6/7"*.
-- **No correction mode — just say the fix.** The lasso→patch correction loop (**E**) is a
-  transcription-mode feature; in a live tier there is no document to patch, so the native
-  correction is simply talking (*"no, the **left** legend"*). **E** is inert there and says so.
-
-This submode is experimental and the more expensive, higher-latency path; transcription mode
-(the five rungs above) remains the default. See
-[`handoff/transcription-and-realtime-submodes.md`](https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-dev-overlay/handoff/transcription-and-realtime-submodes.md)
-for the design.
+**Retired rungs** (`standard`, `flagship`, `live-gemini`, `live-openai`) still *resolve* — an
+old persisted config keeps meaning what it meant, with the channel translating the composer/
+voice-era selections onto the linter world (the trace's `intent config` stage records every
+such coercion). The model-composes "realtime submode" behind the old live tiers was removed
+outright; see [Realtime Live Mode](./realtime-live) for the history and
+[Prompt Linting](./prompt-linting) for what replaced it.
 
 ## Quick config: the K strip
 
@@ -394,15 +306,18 @@ config or the JSON editor would break your flow. The strip is its own documentat
 
 ```
 TIER   session — unsaved
-[1 mock] [2 standard] [3 rapid] [4 premium] [5 flagship] [6 live-gemini] [7 live-openai]
+[1 rapid] [2 premium]
+[L 💡 linter: off]
 S save for site · R reset to file · G editor · Esc close
 ```
 
-- **1–7** pick a tier, cheapest first — the same ladder as the table above (6/7 are the
-  experimental [live tiers](#live-tiers-67--experimental)), so the digit *is* the price dial. The
-  switch is **session-scoped**: it takes effect immediately but persists
+- **1–2** pick a tier, cheapest first — the same ladder as the table above, so the digit *is*
+  the price dial. The switch is **session-scoped**: it takes effect immediately but persists
   nowhere, and a reload returns you to the file (Vite) config plus whatever you saved earlier.
   Your explicit fine fields still win over the preset, exactly as everywhere else.
+- **L** cycles the [prompt linter](./prompt-linting): **off → openai → gemini**. Orthogonal to
+  the tier and session-scoped like a digit; a mid-thread change applies on the next turn (this
+  thread's session is already running).
 - **Mid-thread, the switch waits.** A thread's opening hello already told the channel which
   pipeline to run, so a tier picked while a thread is open applies **when that thread closes**
   (send or cancel) — the strip says so, and the next thread's hello carries it. No thread open →
@@ -418,22 +333,15 @@ S save for site · R reset to file · G editor · Esc close
 The layering, in full: `DEFAULT ← tier preset ← Vite intent ← saved overrides ← session`. The
 strip's digits write only the last layer; **S** folds it into the saved one; **R** empties both.
 
-**Degradation is loud — a paid tier never quietly downgrades.** A keyless `premium` says *"spoken
-confirmation unavailable — no OPENAI_API_KEY (premium tier)"* rather than silently becoming
-`rapid`; a keyless `flagship` says flagship needs `OPENAI_API_KEY` rather than falling back to
-REST. Same posture the pipeline already takes for keyless transcription (see
+**Degradation is loud — a paid feature never quietly downgrades.** A keyless `premium` says
+*"spoken confirmation unavailable — no OPENAI_API_KEY (premium tier)"* rather than silently
+becoming `rapid`; a keyless linter says which key is missing and that dictation still works.
+Same posture the pipeline already takes for keyless transcription (see
 [What runs where](#what-runs-where-the-channel-real-vs-mock)).
 
 **What it feels like in practice** (measured live, 2026-07-05, against real OpenAI calls). On
-`premium`, the spoken "sent" ack lands ~1.1 s after you send (~14 KB per ack). On `flagship`, your
-transcript — the IR the prompt is lowered from — lands ~0.5–0.9 s after you release, and the
-model's spoken reply is playable ~1.4–1.6 s after release, at ~0.6–0.8¢ per spoken turn for short
-utterances.
-
-**Flagship reaches nothing on the page yet.** v1 ships `realtimeTools: "none"` — the voice model
-can talk and be interrupted (barge-in ducks/cancels the reply the moment you talk over it) but has
-no page tools; wiring the conversational model to on-page actions is a later, separately-reviewed
-phase.
+`premium`, the spoken "sent" ack lands ~1.1 s after you send (~14 KB per ack); streaming
+transcript finals land ~0.5–0.9 s after you release Space.
 
 ## Configuring the pipeline
 
@@ -443,19 +351,19 @@ choice as a knob — and graduates here as a superset: the same knobs, plus rese
 ride along so they can be measured before they're designed for.
 
 **Where the knobs live.** You set them in config, not through the widget. Client-side choices
-(talk mode, ink fade, arming rebind, transcriber/corrector choice) ride the modality options —
+(talk mode, ink fade, arming rebind, transcriber choice) ride the modality options —
 `aiuiDevOverlay({ intent: { … } })` in your Vite config, or the `mountIntentTool` options
-outside Vite. The fields the **channel** honors — `transcriber`, `model`, `corrector`,
-`correctionModel`, `correctionPolicy`, and the `passes` switches — travel to the server on the
-connection's hello, so the lowering reads exactly the configuration the client declared and the
-trace records the whole thing.
+outside Vite. The fields the **channel** honors — `transcriber`, the models, `linter` and its
+siblings, and the `passes` switches — travel to the server on the connection's hello, so the
+lowering reads exactly the configuration the client declared and the trace records the whole
+thing.
 
 **Minimal visible UI, one power tool.** The shipping widget's visible surface is the arm button,
 a state readout, a mic level meter, the transcript preview, a keymap reminder — and a gear
 (**⚙ advanced config**) opening a raw-JSON editor over the *full effective* config. The editor is
 strictly validated like `config.json` (an unknown key or wrong type rejects loudly, naming the
 key — nothing is silently dropped), applies live where a knob is read dynamically (talk mode, ink
-fade, arming rebind; transcriber/corrector changes take effect on the next talk), and persists
+fade, arming rebind; transcriber/model changes take effect on the next talk), and persists
 only your overrides per origin (reset clears them). The next thread's hello carries the effective
 config, so traces always record what actually ran. A *curated* settings row of on-screen toggles
 is still deliberately deferred — which knobs earn visible UI is exactly what the lab's T1–T7
@@ -465,27 +373,24 @@ The knobs, with their defaults:
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| `tier` | `standard` | The cost dial — one preset over the model knobs below; see [Tiers](#tiers-one-dial-for-the-whole-ladder). |
+| `tier` | `rapid` | The cost dial — one preset over the model knobs below; see [Tiers](#tiers-one-dial-for-transcription). |
 | `talkMode` | `hold` | Space is hold-to-talk (`hold`) or press-to-toggle (`toggle`). |
 | `inkFadeSec` | `6` | Seconds until ink fades; `0` keeps strokes until you clear them. |
 | `autoEndSec` | `0` | Idle seconds before a turn auto-ends; `0` means explicit Enter only. |
-| `transcriber` | `openai` | `openai` (channel-side REST — the default), `openai-realtime` (experimental streaming, partials as you speak), `openai-voice` (the flagship conversational session — streams PCM like `openai-realtime`, but the channel holds a `gpt-realtime-2` model that answers aloud; its input transcription still feeds the lowered prompt), or `mock` (local, offline). |
-| `model` | `gpt-4o-mini-transcribe` | OpenAI transcription model (when `transcriber: openai`). |
-| `realtimeModel` | `gpt-realtime-whisper` | Realtime transcription model (when `transcriber: openai-realtime`). |
-| `realtimeDelay` | *(model default)* | Realtime latency/accuracy trade-off: `minimal`…`xhigh` (when `transcriber: openai-realtime`). |
-| `audioBack` | `off` | Spoken audio back to you: `off` (silent), `acks` (premium — short TTS confirmations), `voice` (flagship — native conversational speech). Also the client-side mute — set `off` to silence audio-back regardless of tier. |
-| `correctionPolicy` | `replace` | A correction rewrites the transcript (`replace`) or rides along as a note for the lowering model (`note`). |
-| `corrector` | `openai` | `openai` (a chat model writes the diff — the default) or `mock` (local patch, offline). |
-| `correctionModel` | `gpt-4o-mini` | Chat model that emits the correction patch (when `corrector: openai`). |
+| `transcriber` | `openai-realtime` | `openai-realtime` (channel-side streaming — the default; partials as you speak) or `mock` (local, offline). |
+| `realtimeModel` | `gpt-realtime-whisper` | Streaming transcription model (`rapid`; `premium` sets `gpt-4o-mini-transcribe`). |
+| `realtimeDelay` | *(model default)* | Streaming latency/accuracy trade-off: `minimal`…`xhigh`. |
+| `audioBack` | `off` | Spoken audio back to you: `off` (silent) or `acks` (premium — short TTS confirmations). Also the client-side mute — set `off` to silence audio-back (including the linter's spoken notes) regardless of tier. |
+| `linter` | `off` | The [prompt linter](./prompt-linting): `off`, `openai`, or `gemini`. |
+| `linterModel` | *(vendor default)* | Linter model id (`gpt-realtime-2` / `gemini-3.1-flash-live-preview`). |
+| `linterInstructions` | *(built-in persona)* | Replaces the [published linter persona](./prompt-linting#the-prompt). |
+| `videoFrameIntervalMs` | `5000` | Screen-share cadence in ms per frame; the slider beside the ● badge writes it live. |
 | `arming` | `{ key: "`", enabled: true }` | The arm/disarm key, and whether keyboard arming is on at all. |
 
-The spoken-audio tiers carry a small cluster of fine fields you normally never set by hand — `tier`
-fills them in — but they're there to override one when you want: `ttsModel` (premium TTS model,
-default `gpt-4o-mini-tts`) and `ttsVoice` (its voice id); and, for flagship, `realtimeVoiceModel`
-(default `gpt-realtime-2`), `realtimeVoice` (voice id, e.g. `cedar`/`marin`), `realtimeTools`
-(`"none"` in v1 — the flagship model gets no page tools yet), and `realtimeReasoning`
-(`minimal`|`low`|`medium`|`high`, the flagship reasoning effort — carried in config, not yet wired
-to the wire in v1).
+The spoken-audio fields you normally never set by hand — `tier` fills them in — but they're
+there to override one when you want: `ttsModel` (premium's TTS model, default
+`gpt-4o-mini-tts`) and `ttsVoice` (its voice id); `realtimeVoice` also names the linter's
+spoken voice on the OpenAI vendor.
 
 Research knobs ship **without UI** and default off: `passes` (the lowering's condition/polish
 slots — `silenceTrim`, `imageDownscale`), `silenceGate` (client-side dead-air trimming before a
@@ -494,6 +399,8 @@ the pipeline is already shaped for behavior the lab is still measuring.
 
 ## See also
 
+- [Prompt Linting](./prompt-linting) — the realtime observer, its verbatim persona, the
+  `read_file` tool, and the cost model.
 - [The Web Intent Tool](./web-intent-tool) — the design behind the overlay: modalities,
   lowering, traces, and how a modality plugs in.
 - [The intent pipeline (OpenAI key)](./config#the-intent-pipeline-openai-key) — the key story

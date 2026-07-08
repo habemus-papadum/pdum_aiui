@@ -7,14 +7,16 @@
  *   D      hold + drag a rect = region screenshot (release without a drag = nothing)
  *   S      whole-viewport screenshot (fires on press)
  *   C      clear ink
- *   E      enter/exit correct mode (the meta layer)
  *   J      enter/exit VS Code jump mode (double-click opens the jump picker)
  *   V      toggle screen share (realtime/live tiers only — the ~1fps ambient sampler)
  *   K      open/close the config strip (the quick-config layer)
  *   T      enter/exit tweak mode (hand the pointer + keyboard back to the app)
  *   H      toggle the help panel (the keymap, as a table)
- *   Enter  send — finalize the thread (in correct mode: done editing, back to ink)
- *   Esc    step out one level (correct/tweak/vscode → ink, cancel thread, disarm)
+ *   Enter  send — finalize the thread
+ *   Esc    step out one level (tweak/vscode → ink, cancel thread, disarm)
+ *
+ * (E — correct mode — was removed in the append-only pivot: a correction is
+ * spoken, new content the compiler reconciles; there is no transcript editor.)
  *
  * Every binding carries a display {@link KeyHint} (the kit's hint column), so
  * the always-on cheat sheet and the H help table are generated from the SAME
@@ -50,9 +52,9 @@
 import {
   isTypingTarget,
   type KeyClaim,
-  keyHints,
   type KeyHint,
   type KeyLayer,
+  keyHints,
   resolveKey,
 } from "@habemus-papadum/aiui-viz/modal";
 import type { IntentTier } from "./config";
@@ -60,16 +62,10 @@ import type { Mode } from "./types";
 
 export { isTypingTarget };
 
-/** The strip's digit row: 1..5, cheapest tier first (matches the tier ladder). */
-export const TIER_BY_DIGIT: readonly IntentTier[] = [
-  "mock",
-  "standard",
-  "rapid",
-  "premium",
-  "flagship",
-  "live-gemini",
-  "live-openai",
-];
+/** The strip's digit row, cheapest tier first. `mock` is deliberately NOT
+ * here — it is the test/offline preset, reachable through the advanced
+ * editor (G), never the strip. */
+export const TIER_BY_DIGIT: readonly IntentTier[] = ["rapid", "premium"];
 
 export interface KeyState {
   armed: boolean;
@@ -92,7 +88,6 @@ export type KeyCommand =
   | { cmd: "shoot-release" } // D up: disarm the veil (a drag already in flight still finishes)
   | { cmd: "shoot-viewport" } // S: capture the whole viewport now — no veil, no hold
   | { cmd: "ink-clear" }
-  | { cmd: "correct-toggle" }
   /**
    * T: enter/exit tweak mode (§B.5) — hand the pointer and keyboard back to
    * the app mid-turn (adjust a slider, click a button, re-select text), then
@@ -120,6 +115,7 @@ export type KeyCommand =
   | { cmd: "step-out" }
   | { cmd: "config-toggle" }
   | { cmd: "config-tier"; tier: IntentTier }
+  | { cmd: "config-linter" }
   | { cmd: "config-save" }
   | { cmd: "config-reset" }
   | { cmd: "config-advanced" }
@@ -146,7 +142,7 @@ const armLayer: KeyLayer<KeyState, KeyCommand> = {
     {
       keys: ["`"],
       down: onPress({ cmd: "arm-toggle" }),
-      hint: (state) => ({ key: "`", label: state.armed ? "disarm" : "arm", icon: "✳" }),
+      hint: (state) => ({ key: "`", label: state.armed ? "disarm" : "arm", icon: "💪" }),
     },
   ],
   fallback: "pass",
@@ -170,11 +166,28 @@ const stripLayer: KeyLayer<KeyState, KeyCommand> = {
       keys: TIER_BY_DIGIT.map((_, index) => String(index + 1)),
       down: (_state, key, repeat) =>
         repeat ? "pass" : command({ cmd: "config-tier", tier: TIER_BY_DIGIT[Number(key) - 1] }),
-      hint: { key: "1–7", label: "pick a tier", icon: "🎚" },
+      hint: { key: "1–2", label: "pick a tier", icon: "🎚" },
     },
-    { keys: ["s", "S"], down: onPress({ cmd: "config-save" }), hint: { key: "S", label: "save for site", icon: "💾" } },
-    { keys: ["r", "R"], down: onPress({ cmd: "config-reset" }), hint: { key: "R", label: "reset to file", icon: "↺" } },
-    { keys: ["g", "G"], down: onPress({ cmd: "config-advanced" }), hint: { key: "G", label: "advanced editor", icon: "🧰" } },
+    {
+      keys: ["l", "L"],
+      down: onPress({ cmd: "config-linter" }),
+      hint: { key: "L", label: "linter: off → openai → gemini", icon: "💡" },
+    },
+    {
+      keys: ["s", "S"],
+      down: onPress({ cmd: "config-save" }),
+      hint: { key: "S", label: "save for site", icon: "💾" },
+    },
+    {
+      keys: ["r", "R"],
+      down: onPress({ cmd: "config-reset" }),
+      hint: { key: "R", label: "reset to file", icon: "↺" },
+    },
+    {
+      keys: ["g", "G"],
+      down: onPress({ cmd: "config-advanced" }),
+      hint: { key: "G", label: "advanced editor", icon: "🧰" },
+    },
     // Picking a rung already changed the mode — Enter (like Esc/K) just closes.
     {
       keys: ["Escape", "Enter", "k", "K"],
@@ -233,8 +246,16 @@ const jumpPickerLayer: KeyLayer<KeyState, KeyCommand> = {
         repeat ? "pass" : command({ cmd: "jump-commit", index: Number(key) - 1 }),
       hint: { key: "1–9", label: "jump to row" },
     },
-    { keys: ["Enter"], down: onPress({ cmd: "jump-commit" }), hint: { key: "⏎", label: "open in VS Code", icon: "↗" } },
-    { keys: ["Escape"], down: onPress({ cmd: "jump-close" }), hint: { key: "esc", label: "dismiss" } },
+    {
+      keys: ["Enter"],
+      down: onPress({ cmd: "jump-commit" }),
+      hint: { key: "⏎", label: "open in VS Code", icon: "↗" },
+    },
+    {
+      keys: ["Escape"],
+      down: onPress({ cmd: "jump-close" }),
+      hint: { key: "esc", label: "dismiss" },
+    },
   ],
   fallback: "pass",
 };
@@ -321,17 +342,8 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
       hint: { key: "C", label: "clear ink", icon: "🧹" },
     },
     {
-      keys: ["e", "E"],
-      down: onPress({ cmd: "correct-toggle" }),
-      hint: (state) =>
-        state.mode === "correct"
-          ? { key: "E", label: "done correcting", icon: "📝" }
-          : { key: "E", label: "correct the text", icon: "📝" },
-    },
-    {
-      // VS Code jump mode's entrance. Only from ink mode, exactly like tweak
-      // — correct mode owns its own keys wholesale; once in vscode mode, the
-      // vscode layer above owns J.
+      // VS Code jump mode's entrance. Only from ink mode, exactly like tweak;
+      // once in vscode mode, the vscode layer above owns J.
       keys: ["j", "J"],
       down: (state, _key, repeat) =>
         !repeat && state.mode === "ink" ? command({ cmd: "vscode-toggle" }) : "pass",
@@ -339,11 +351,11 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
         state.mode === "ink" ? { key: "J", label: "jump to code", icon: "↗" } : undefined,
     },
     {
-      // The realtime submode's screen share. Only in ink mode (correct mode
-      // owns the pointer/keys for text selection), fired on keydown. The
-      // command always emits here — whether it *does* anything is gated on the
-      // effective submode in the modality's dispatch (a live tier only), which
-      // is where config is known; a non-live tier just shows a hint.
+      // The realtime submode's screen share. Only in ink mode, fired on
+      // keydown. The command always emits here — whether it *does* anything
+      // is gated on the effective submode in the modality's dispatch (a live
+      // tier only), which is where config is known; a non-live tier just
+      // shows a hint.
       keys: ["v", "V"],
       down: (state, _key, repeat) =>
         !repeat && state.mode === "ink" ? command({ cmd: "video-toggle" }) : "pass",
@@ -356,8 +368,8 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
       hint: { key: "K", label: "tiers & config", icon: "⚙️" },
     },
     {
-      // Tweak mode's entrance (§B.5). Only from ink mode — correct mode owns
-      // its own keys wholesale; once in tweak, the tweak layer above owns T.
+      // Tweak mode's entrance (§B.5). Only from ink mode; once in tweak, the
+      // tweak layer above owns T.
       keys: ["t", "T"],
       down: (state, _key, repeat) =>
         !repeat && state.mode === "ink" ? command({ cmd: "tweak-toggle" }) : "pass",
@@ -366,27 +378,16 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
     },
     {
       // H — the universal help convention: the keymap you are reading, as a
-      // panel. Everywhere the armed base is live (ink AND correct); the
-      // handover modes deliberately leave H to the page.
+      // panel. Live wherever the armed base is; the handover modes
+      // deliberately leave H to the page.
       keys: ["h", "H"],
       down: onPress({ cmd: "help-toggle" }),
       hint: { key: "H", label: "help", icon: "❓" },
     },
     {
       keys: ["Enter"],
-      down: (state, _key, repeat) => {
-        if (repeat) {
-          return "pass";
-        }
-        // In correct mode Enter means "done editing — back to ink", NEVER
-        // "send the turn": the user's hands are on Enter to commit edits, and
-        // one stray press must not fire the whole prompt into the session.
-        return command(state.mode === "correct" ? { cmd: "correct-toggle" } : { cmd: "send" });
-      },
-      hint: (state) =>
-        state.mode === "correct"
-          ? { key: "⏎", label: "done editing" }
-          : { key: "⏎", label: "send the turn", icon: "📤" },
+      down: onPress({ cmd: "send" }),
+      hint: { key: "⏎", label: "send the turn", icon: "📤" },
     },
     {
       keys: ["Escape"],
@@ -427,7 +428,7 @@ export interface KeymapHelpSection {
 /**
  * The whole keymap as help-table data, generated by running the REAL layer
  * stack against one representative state per mode/layer — the table can't
- * drift from the bindings. Meta-layer sections (correct, the strip, the
+ * drift from the bindings. Meta-layer sections (the strip, the
  * picker) are diffed against their surrounding state, so each shows what it
  * *changes*, not ten repeated rows.
  */
@@ -456,11 +457,6 @@ export function keymapHelp(talkMode: "hold" | "toggle" = "hold"): KeymapHelpSect
       title: "off",
       note: "arm to start a turn (the ✳ button works too)",
       hints: rows({ armed: false }),
-    },
-    {
-      title: "correct mode",
-      note: "E — select transcript text, then speak or type the fix",
-      hints: minus(rows({ mode: "correct" }), base),
     },
     {
       title: "tweak mode",

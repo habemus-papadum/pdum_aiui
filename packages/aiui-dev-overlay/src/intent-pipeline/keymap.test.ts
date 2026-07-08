@@ -55,7 +55,6 @@ describe("keyCommand", () => {
     expect(keyCommand(base, "s", "down", false)).toEqual({ cmd: "shoot-viewport" });
     expect(keyCommand(base, "S", "up", false)).toBeUndefined();
     expect(keyCommand(base, "c", "down", false)).toEqual({ cmd: "ink-clear" });
-    expect(keyCommand(base, "e", "down", false)).toEqual({ cmd: "correct-toggle" });
     // J enters VS Code jump mode; V toggles the realtime screen share (the
     // modality gates the latter on submode).
     expect(keyCommand(base, "j", "down", false)).toEqual({ cmd: "vscode-toggle" });
@@ -67,12 +66,12 @@ describe("keyCommand", () => {
     expect(keyCommand(base, "x", "down", false)).toBeUndefined();
   });
 
-  it("V toggles the screen share only on ink-mode keydown, never repeats/keyup/correct", () => {
+  it("V toggles the screen share only on ink-mode keydown, never repeats/keyup", () => {
     expect(keyCommand(base, "v", "down", false)).toEqual({ cmd: "video-toggle" });
     expect(keyCommand(base, "v", "down", true)).toBeUndefined(); // key-repeat
     expect(keyCommand(base, "v", "up", false)).toBeUndefined(); // keyup
-    // Inert in correct mode (that mode owns the pointer/keys for text selection).
-    expect(keyCommand({ ...base, mode: "correct" }, "v", "down", false)).toBeUndefined();
+    // Inert in the handover modes (the page owns the key there).
+    expect(keyCommand({ ...base, mode: "tweak" }, "v", "down", false)).toBeUndefined();
     // Nothing while disarmed.
     expect(keyCommand({ ...base, armed: false }, "v", "down", false)).toBeUndefined();
   });
@@ -101,31 +100,14 @@ describe("keyCommand: the config strip layer", () => {
     expect(keyCommand({ ...base, typing: true }, "k", "down", false)).toBeUndefined();
   });
 
-  it("digits 1..5 pick tiers, cheapest first, matching TIER_BY_DIGIT", () => {
-    expect(TIER_BY_DIGIT).toEqual([
-      "mock",
-      "standard",
-      "rapid",
-      "premium",
-      "flagship",
-      "live-gemini",
-      "live-openai",
-    ]);
-    expect(keyCommand(open, "1", "down", false)).toEqual({ cmd: "config-tier", tier: "mock" });
-    expect(keyCommand(open, "3", "down", false)).toEqual({ cmd: "config-tier", tier: "rapid" });
-    expect(keyCommand(open, "5", "down", false)).toEqual({ cmd: "config-tier", tier: "flagship" });
-    expect(keyCommand(open, "6", "down", false)).toEqual({
-      cmd: "config-tier",
-      tier: "live-gemini",
-    });
-    expect(keyCommand(open, "7", "down", false)).toEqual({
-      cmd: "config-tier",
-      tier: "live-openai",
-    });
-    expect(keyCommand(open, "8", "down", false)).toBeUndefined();
+  it("digits 1..2 pick tiers, cheapest first, matching TIER_BY_DIGIT (mock unsurfaced)", () => {
+    expect(TIER_BY_DIGIT).toEqual(["rapid", "premium"]);
+    expect(keyCommand(open, "1", "down", false)).toEqual({ cmd: "config-tier", tier: "rapid" });
+    expect(keyCommand(open, "2", "down", false)).toEqual({ cmd: "config-tier", tier: "premium" });
+    expect(keyCommand(open, "3", "down", false)).toBeUndefined();
     expect(keyCommand(open, "0", "down", false)).toBeUndefined();
     // Digits mean nothing when the strip is closed.
-    expect(keyCommand(base, "3", "down", false)).toBeUndefined();
+    expect(keyCommand(base, "1", "down", false)).toBeUndefined();
   });
 
   it("S saves, R resets, G opens the advanced editor, Esc/K close", () => {
@@ -169,8 +151,8 @@ describe("keyCommand: tweak mode (the explicit handover)", () => {
     expect(keyCommand(base, "t", "up", false)).toBeUndefined(); // keyup
   });
 
-  it("T is inert in correct mode (it owns its keys) and while disarmed", () => {
-    expect(keyCommand({ ...base, mode: "correct" }, "t", "down", false)).toBeUndefined();
+  it("T is inert in vscode mode (the handover owns the keys) and while disarmed", () => {
+    expect(keyCommand({ ...base, mode: "vscode" }, "t", "down", false)).toBeUndefined();
     expect(keyCommand({ ...base, armed: false }, "t", "down", false)).toBeUndefined();
   });
 
@@ -240,8 +222,8 @@ describe("keyCommand: vscode jump mode (the tweak-shaped handover with the dblcl
     expect(keyCommand(base, "j", "up", false)).toBeUndefined(); // keyup
   });
 
-  it("J is inert in correct mode (it owns its keys) and while disarmed", () => {
-    expect(keyCommand({ ...base, mode: "correct" }, "j", "down", false)).toBeUndefined();
+  it("J is inert in tweak mode (the handover owns the keys) and while disarmed", () => {
+    expect(keyCommand({ ...base, mode: "tweak" }, "j", "down", false)).toBeUndefined();
     expect(keyCommand({ ...base, armed: false }, "j", "down", false)).toBeUndefined();
   });
 
@@ -298,12 +280,9 @@ describe("keyCommand: vscode jump mode (the tweak-shaped handover with the dblcl
 });
 
 describe("keyCommand: H (the universal help convention)", () => {
-  it("H toggles help wherever the armed base is live (ink AND correct)", () => {
+  it("H toggles help wherever the armed base is live", () => {
     expect(keyCommand(base, "h", "down", false)).toEqual({ cmd: "help-toggle" });
     expect(keyCommand(base, "H", "down", false)).toEqual({ cmd: "help-toggle" });
-    expect(keyCommand({ ...base, mode: "correct" }, "h", "down", false)).toEqual({
-      cmd: "help-toggle",
-    });
   });
 
   it("H stays the page's in the handover modes, and does nothing disarmed", () => {
@@ -345,12 +324,13 @@ describe("intentKeyHints / keymapHelp (the displayed keymap IS the working keyma
     expect(labels({ ...base, armed: false })).toEqual(["arm"]);
   });
 
-  it("keymapHelp diffs the meta layers: correct mode shows what CHANGED, the strip its own rows", () => {
+  it("keymapHelp diffs the meta layers: the strip shows its own rows", () => {
     const sections = keymapHelp();
     const byTitle = new Map(sections.map((s) => [s.title, s.hints.map((h) => h.label)]));
-    expect(byTitle.get("correct mode")).toEqual(["done correcting", "done editing"]);
+    expect(byTitle.has("correct mode")).toBe(false); // removed in the append-only pivot
     expect(byTitle.get("config strip")).toEqual([
       "pick a tier",
+      "linter: off → openai → gemini",
       "save for site",
       "reset to file",
       "advanced editor",

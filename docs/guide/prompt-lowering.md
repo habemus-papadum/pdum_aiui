@@ -122,6 +122,31 @@ it:
 - **Debugging tools.** When a lowered prompt goes wrong, you should be able to find *which stage*
   lost the intent.
 
+## The prompts (the surfacing principle)
+
+**Every prompt this system sends is documented** — a lowering pipeline whose own model calls
+were secret would be an odd artifact. The live prompts today, and where each is published:
+
+- **The prompt-linter persona** — verbatim in [Prompt Linting](./prompt-linting#the-prompt)
+  (`LINTER_INSTRUCTIONS`, `live-session.ts`).
+- **The injection label grammar** — `[image shot_N]`, `[selection sel_N: "…" — …]`
+  (`updated` / `retracted` variants), `[transcript seg_N: "…"]` — described in
+  [Prompt Linting](./prompt-linting#what-the-linter-sees-exactly) and
+  [Realtime Live Mode](./realtime-live); the labels are built in `live-resolve.ts` and the
+  linter sidecar.
+- **The turn summarizer** — each sent turn is glossed for the trace list by `gpt-4o-mini`
+  under exactly: *"Summarize this request to a coding agent in one line, ≤ 12 words, no
+  quotes."* (`SUMMARY_SYSTEM_PROMPT`, `summarize.ts`; screenshots are stripped and the body
+  clipped to 1000 chars before it goes.)
+- **The lowered-prompt context wrapper** — the committed body is enclosed in
+  `<context>…</context>` sections carrying the tab identity, source hints, and (legacy
+  clients) the selection preamble; the shape lives in `prompt-context.ts` and is visible on
+  every trace's final stage.
+- **The premium ack phrases** — the TTS "sent" confirmation text (`ACK_PHRASES`,
+  `intent-v1.ts`).
+
+If a change adds a model call, its prompt belongs in the docs next to the feature it powers.
+
 ## Open questions
 
 Deliberately unresolved — documentation stubs for later clarification:

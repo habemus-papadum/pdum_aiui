@@ -86,7 +86,11 @@ const objectOf =
 
 /** The known keys of IntentPipelineConfig and how to type-check each. */
 const SCHEMA: Record<string, FieldCheck> = {
-  tier: oneOf(["mock", "standard", "rapid", "premium", "flagship"]),
+  // Surfaced tiers plus the LEGACY names (standard/flagship/live-*) so a
+  // persisted config from before the linter pivot still validates — the
+  // pre-pivot SCHEMA silently discarded whole override sets over exactly
+  // this kind of gap (it never knew the live tiers).
+  tier: oneOf(["mock", "rapid", "premium", "standard", "flagship", "live-gemini", "live-openai"]),
   talkMode: oneOf(["hold", "toggle"]),
   inkFadeSec: num,
   autoEndSec: num,
@@ -96,9 +100,6 @@ const SCHEMA: Record<string, FieldCheck> = {
   realtimeDelay: oneOf(["minimal", "low", "medium", "high", "xhigh"]),
   mockWordMs: num,
   mockTypoRate: num,
-  correctionPolicy: oneOf(["replace", "note"]),
-  corrector: oneOf(["mock", "openai"]),
-  correctionModel: str,
   audioBack: oneOf(["off", "acks", "voice"]),
   ttsModel: str,
   ttsVoice: str,
@@ -106,11 +107,19 @@ const SCHEMA: Record<string, FieldCheck> = {
   realtimeVoice: str,
   realtimeTools: oneOf(["none", "submit_intent", "page"]),
   realtimeReasoning: oneOf(["minimal", "low", "medium", "high"]),
+  linter: oneOf(["off", "openai", "gemini"]),
+  linterModel: str,
+  linterInstructions: str,
+  videoFrameIntervalMs: num,
   arming: objectOf({ key: str, enabled: bool }),
   silenceGate: objectOf({ enabled: bool, thresholdDb: num, minSilenceMs: num }),
   priming: objectOf({ sources: strArray }),
   passes: objectOf({ silenceTrim: bool, imageDownscale: bool }),
-  diffFlashMs: num,
+  shotFormat: oneOf(["xml", "text"]),
+  // Legacy realtime-submode fields (pre-linter configs must still validate).
+  submode: oneOf(["transcription", "realtime"]),
+  liveVendor: oneOf(["gemini", "openai"]),
+  liveModel: str,
 };
 
 const KNOWN_KEYS = Object.keys(SCHEMA);
@@ -327,7 +336,7 @@ const HINT_STYLE = "margin-top:6px;font-size:11px;color:#6b7280;line-height:1.5;
 
 /** The hint's exact wording, kept out of JSX so whitespace can't drift. */
 const HINT_TEXT =
-  "Full effective config (DEFAULT ← tier preset ← Vite intent option ← your edits). Set `tier` to a preset (mock/standard/rapid/premium/flagship); explicit fine fields still win. Unknown keys and type mismatches are rejected. Most knobs apply live; transcriber/corrector/model take effect on the next talk. Persisted for this site.";
+  "Full effective config (DEFAULT ← tier preset ← Vite intent option ← your edits). Set `tier` to a preset (mock/standard/rapid/premium/flagship); explicit fine fields still win. Unknown keys and type mismatches are rejected. Most knobs apply live; transcriber/model take effect on the next talk. Persisted for this site.";
 
 /**
  * Render the gear + advanced JSON editor into `container` (the widget panel's

@@ -54,6 +54,7 @@ export type CardCategory =
   | "media"
   | "compose"
   | "corrections"
+  | "linter"
   | "speech"
   | "cost"
   | "errors"
@@ -68,6 +69,7 @@ export const TOGGLE_CATEGORIES: readonly CardCategory[] = [
   "media",
   "compose",
   "corrections",
+  "linter",
   "speech",
   "cost",
   "errors",
@@ -103,6 +105,7 @@ export const CATEGORY_META: Record<CardCategory, { icon: string; label: string }
   media: { icon: "🖼", label: "media" },
   compose: { icon: "🧮", label: "compose" },
   corrections: { icon: "🩹", label: "fixes" },
+  linter: { icon: "💡", label: "linter" },
   speech: { icon: "🔊", label: "speech" },
   cost: { icon: "💰", label: "cost" },
   errors: { icon: "⚠", label: "errors" },
@@ -288,7 +291,59 @@ export function classifyStage(stage: TraceStageLike): StageClass {
     return norm("out", "speech", "🗣", "voice reply");
   }
 
-  // ── the realtime submode: the live-session composer ────────────────────────
+  // ── the prompt linter (the live sidecar) ───────────────────────────────────
+  // The vantage stays the browser↔server pipeline, one conversation further
+  // upstream: `in`/blue is what WE feed the linter (transcripts, labels,
+  // selections, tool results); `out`/green is what it answers (notes, tool
+  // calls). All on the 💡 bucket so "what did the linter see/say?" is one chip.
+  if (label === "linter open") {
+    return norm("internal", "config", "💡", "linter open");
+  }
+  if (label === "linter disabled") {
+    return fail("internal", "⚠", "linter disabled");
+  }
+  if (label === "linter note") {
+    return norm("out", "linter", "💡", "linter note");
+  }
+  if (/^linter tool call /.test(label)) {
+    return norm("out", "linter", "🛠", label.replace("linter tool call", "linter →"));
+  }
+  if (label === "linter tool result") {
+    return norm("in", "linter", "📄", "tool result → linter");
+  }
+  if (/^linter transcript seg_/.test(label)) {
+    return norm("in", "linter", "📝", label.replace("linter ", ""));
+  }
+  if (/^linter label shot_/.test(label)) {
+    return norm("in", "linter", "🏷", `${id ?? "shot"} shown to linter`);
+  }
+  if (label === "linter selection" || label === "linter selection retracted") {
+    return norm("in", "linter", "⌖", label);
+  }
+  if (
+    label === "linter turn end" ||
+    label === "linter turn merged" ||
+    label === "linter interrupted" ||
+    label === "linter go-away"
+  ) {
+    return { ...norm("internal", "linter", "💡", label), coalesceKey: "linter-flow" };
+  }
+  if (label === "linter transcript timeout") {
+    return fail("internal", "⚠", "linter transcript timeout");
+  }
+  if (label === "linter error") {
+    return fail("out", "❌", "linter error");
+  }
+  if (label === "linter close") {
+    return norm("internal", "linter", "💡", "linter close");
+  }
+  if (/^video vid_/.test(label)) {
+    // A persisted share frame (every frame is saved now); coalesces into one
+    // strip card per share, behind the `video` chip.
+    return { ...norm("in", "video", "🎞", "video frames"), coalesceKey: "video-in" };
+  }
+
+  // ── the retired realtime submode (HISTORICAL traces still render) ──────────
   // A realtime turn's cards ride the same lanes, read one conversation further
   // upstream — the vantage is still the browser, but "the server" is now the
   // live model (Gemini/OpenAI). `in`/blue is what WE stream to it (video, a

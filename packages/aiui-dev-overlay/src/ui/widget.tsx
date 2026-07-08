@@ -52,7 +52,7 @@ export interface WidgetHandle {
    * content). Claiming hides the default "✳ aiui" label. `addStyle` injects
    * the content's CSS into the shadow root. One claimant per mount.
    */
-  claimHudSlot(): { container: HTMLElement; addStyle(css: string): void };
+  claimHudSlot(): { container: HTMLElement; below: HTMLElement; addStyle(css: string): void };
   /** Drive the pill's mode ring (`data-ui-mode`); undefined clears it. */
   setUiMode(mode: string | undefined): void;
   setStatus(text: string, error: boolean): void;
@@ -103,6 +103,11 @@ const STYLES = `
     50% { box-shadow: 0 0 0 5px rgba(255, 92, 135, 0.12); } }
   .hud-slot { display: inline-flex; align-items: center; gap: 10px; }
   .hud-slot:empty { display: none; }
+  /* The below-pill slot: content UNDER the pill inside the draggable root.
+     The root is bottom-anchored, so anything here slides the PILL up rather
+     than growing past the viewport edge — and it rides every drag. The slot
+     itself is invisible; its tenant owns its own show/hide. */
+  .below-slot { display: block; }
   .pill-label { color: #e8e8ea; white-space: nowrap; }
   /* The help icon: a small circled ? — opens the panel (whose body is the
      keymap table); H is the keyboard path to the same. */
@@ -251,6 +256,7 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
 
   let bodyEl: HTMLElement | undefined;
   let hudSlotEl: HTMLElement | undefined;
+  let belowSlotEl: HTMLElement | undefined;
   let rootEl: HTMLElement | undefined;
   let pillEl: HTMLElement | undefined;
   let headEl: HTMLElement | undefined;
@@ -381,6 +387,7 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
             ?
           </button>
         </div>
+        <div class="below-slot" ref={(el: HTMLElement) => (belowSlotEl = el)} />
       </div>
     );
   };
@@ -398,11 +405,12 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
   const undragPill = rootEl && pillEl ? makeDraggable(rootEl, { handle: pillEl }) : undefined;
   const undragHead = rootEl && headEl ? makeDraggable(rootEl, { handle: headEl }) : undefined;
 
-  if (!bodyEl || !hudSlotEl || !api) {
+  if (!bodyEl || !hudSlotEl || !belowSlotEl || !api) {
     throw new Error("widget render did not produce its mount points");
   }
   const body = bodyEl;
   const hudSlot = hudSlotEl;
+  const belowSlot = belowSlotEl;
   const signals = api;
   const setPanel = (value: boolean): void => {
     openFlag = value;
@@ -415,6 +423,7 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
       signals.setHudClaimed(true);
       return {
         container: hudSlot,
+        below: belowSlot,
         addStyle(css: string) {
           const extra = document.createElement("style");
           extra.textContent = css;

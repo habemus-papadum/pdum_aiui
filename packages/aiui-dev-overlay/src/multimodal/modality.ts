@@ -44,11 +44,7 @@
  * session-bus host role, turn recovery, and unmount.
  */
 
-import {
-  blurExitTarget,
-  createReconciler,
-  type KeyHint,
-} from "@habemus-papadum/aiui-viz/modal";
+import { blurExitTarget, createReconciler, type KeyHint } from "@habemus-papadum/aiui-viz/modal";
 import { makeDraggable } from "../drag";
 import { getInstrumentation, type RemotePaintSink } from "../instrumentation";
 import type { IntentModality, IntentToolContext } from "../intent";
@@ -57,9 +53,9 @@ import {
   composeIntent,
   Engine,
   type IntentEvent,
-  intentKeyHints,
   type IntentPipelineConfig,
   type IntentTier,
+  intentKeyHints,
   isTypingTarget,
   type KeyCommand,
   keyCommand,
@@ -85,14 +81,14 @@ import {
 import { type PcmSource, WorkletPcmSource } from "./audio";
 import { ConfigStrip, type ConfigStripState } from "./config-strip";
 import { Ink } from "./ink";
+import { JumpPicker } from "./jump-picker";
+import { CHEAT_STYLES, CheatSheet, KEYMAP_HELP_STYLES, KeymapHelp } from "./keymap-ui";
 import { Preview } from "./preview";
 import { createCapture } from "./shell/capture";
 import { createTalk } from "./shell/talk";
 import { createWire } from "./shell/wire";
 import { type SpeechAudioFactory, SpeechPlayer } from "./speech";
 import { HUD_STYLES, STYLES } from "./styles";
-import { JumpPicker } from "./jump-picker";
-import { CheatSheet, KEYMAP_HELP_STYLES, KeymapHelp } from "./keymap-ui";
 import { UI_MODE_TABLE, type UiMode, uiMode } from "./ui-mode";
 import { jumpTargets } from "./vscode";
 
@@ -201,9 +197,6 @@ export function multimodalModality(
         clearSelection: () => ctx.clearSelection(),
         enqueueSpeech: (clip) => speechPlayer.enqueue(clip),
       });
-      // The correction micro-pipeline (mock local / channel round-trip) lives
-      // on the wire — its channel leg is a wire round-trip (see shell/wire.ts).
-      engine.correctionPipeline = wire.correctionPipeline;
 
       // ── page-level interaction layers (light DOM: native selection must
       // resolve against the preview text, per field-notes) ────────────────────
@@ -272,6 +265,9 @@ export function multimodalModality(
         ...(deps.videoSampleIntervalMs !== undefined
           ? { videoSampleIntervalMs: deps.videoSampleIntervalMs }
           : {}),
+        // The live cadence (the fps slider writes videoFrameIntervalMs; the
+        // sampler re-reads this thunk before every tick).
+        videoFrameIntervalMs: () => config.videoFrameIntervalMs ?? 5000,
       });
       layers.append(capture.veil);
 
@@ -291,16 +287,7 @@ export function multimodalModality(
         uploadAudio: wire.uploadAudio,
       });
 
-      // The preview borrows the talk plumbing for the correction bar: the mic
-      // goes live hands-free while the bar is open, streamed speech renders in
-      // its live zone, and Enter ends the segment before committing. The hooks
-      // live in shell/talk.ts and only fire on user interaction, post-mount.
-      const preview = new Preview(engine, {
-        start: talk.startCorrectionListening,
-        stop: talk.stopCorrectionListening,
-        talking: () => engine.talking,
-        heard: talk.heardVoice,
-      });
+      const preview = new Preview(engine);
       layers.append(preview.root);
 
       // ── HUD (arm button + state + level meter) — the widget pill's slot ──────
@@ -318,6 +305,8 @@ export function multimodalModality(
         <button class="mm-arm" title="arm/disarm">✳</button>
         <span class="mm-state">off</span>
         <span class="mm-video" hidden>● video</span>
+        <input class="mm-fps" type="range" min="0" max="4" step="1" hidden
+          title="frame cadence" />
         <canvas class="mm-meter" width="60" height="14"></canvas>
         <span class="mm-speaker" hidden></span>`;
       hudSlot.container.append(hud);
@@ -332,9 +321,42 @@ export function multimodalModality(
       const picker = new JumpPicker((command) => dispatch(command));
       layers.append(picker.root, picker.highlight);
       // The always-present condensed cheat sheet (renderHud re-asserts it
-      // from the live keymap rows — see keymap-ui.tsx).
-      const cheat = new CheatSheet();
-      layers.append(cheat.root);
+      // from the live keymap rows — see keymap-ui.tsx). It mounts in the
+      // widget's BELOW-PILL slot: under the pill, inside the draggable
+      // bottom-anchored root — so showing it slides the pill up, and it
+      // follows the pill wherever it's dragged. Tapping a cap synthesizes
+      // its key through the SAME pure resolver a keydown uses (the kit's
+      // tapKey pattern), so a click can never drift from what the key does.
+      // The down→up fallback makes hold-gesture keys click-toggles: tapping
+      // 🎙 while talking resolves the down to "swallow", so the up's
+      // talk-end runs instead.
+      const tapKey = (key: string): void => {
+        if (key === (config.arming?.key ?? "`") || key === "`") {
+          dispatch({ cmd: "arm-toggle" });
+          return;
+        }
+        const state = {
+          armed: engine.armed,
+          mode: engine.mode,
+          talking: engine.talking,
+          talkMode: config.talkMode,
+          typing: false,
+          configOpen: strip.open,
+          pickerOpen: picker.open,
+        };
+        const down = keyCommand(state, key, "down", false);
+        if (down !== undefined && down.cmd !== "swallow") {
+          dispatch(down);
+          return;
+        }
+        const up = keyCommand(state, key, "up", false);
+        if (up !== undefined && up.cmd !== "swallow") {
+          dispatch(up);
+        }
+      };
+      hudSlot.addStyle(CHEAT_STYLES);
+      const cheat = new CheatSheet(tapKey);
+      hudSlot.below.append(cheat.root);
       // How a committed jump navigates (injected in jsdom, which can't).
       const navigate = deps.navigate ?? ((url: string) => window.location.assign(url));
       document.body.append(layers);
@@ -346,15 +368,29 @@ export function multimodalModality(
 
       // The preview moves out of the way by dragging (it covers app content by
       // construction) — but only by its frame/title: inside the transcript
-      // body a drag *is* the correction-targeting selection gesture, and the
-      // correction bar holds an input — both stay excluded. (The HUD rides
-      // the widget pill's drag now — one anchor, one grip.)
+      // body a drag selects text the reader may want to copy — it stays
+      // excluded. (The HUD rides the widget pill's drag now — one anchor,
+      // one grip.)
       const undragPreview = makeDraggable(preview.root, {
-        exclude: (target) => target.closest(".mm-preview-body, .mm-correction-bar") !== null,
+        exclude: (target) => target.closest(".mm-preview-body") !== null,
       });
       const armButton = hud.querySelector<HTMLButtonElement>(".mm-arm");
       const stateLabel = hud.querySelector<HTMLSpanElement>(".mm-state");
       const videoBadge = hud.querySelector<HTMLSpanElement>(".mm-video");
+      // The share's cadence slider: five steps over the useful range. Writes
+      // the SESSION layer (like a tier digit) — the sampler's thunk reads the
+      // effective config before each tick, so it applies mid-share.
+      const FPS_STEPS = [500, 1000, 2000, 5000, 10000] as const;
+      const fpsSlider = hud.querySelector<HTMLInputElement>(".mm-fps");
+      const fpsLabel = (ms: number): string =>
+        ms >= 1000 ? `1 frame / ${ms / 1000}s` : `${1000 / ms} frames/s`;
+      fpsSlider?.addEventListener("input", () => {
+        const ms = FPS_STEPS[Number(fpsSlider.value)] ?? 5000;
+        sessionOverrides = { ...sessionOverrides, videoFrameIntervalMs: ms };
+        applyEffective(recomputeEffective());
+        fpsSlider.title = fpsLabel(ms);
+        ctx.setStatus(`video cadence → ${fpsLabel(ms)} (session only)`);
+      });
       const meter = hud.querySelector<HTMLCanvasElement>(".mm-meter");
       const speakerLabel = hud.querySelector<HTMLSpanElement>(".mm-speaker");
       armButton?.addEventListener("click", () => engine.setArmed(!engine.armed));
@@ -492,7 +528,6 @@ export function multimodalModality(
         {
           name: "preview",
           apply: (mode) => {
-            preview.setCorrectMode(mode === "correcting");
             preview.root.classList.toggle("visible", mode !== "off");
           },
         },
@@ -509,6 +544,15 @@ export function multimodalModality(
         }
         if (videoBadge) {
           videoBadge.hidden = !capture.sharing();
+        }
+        if (fpsSlider) {
+          fpsSlider.hidden = !capture.sharing();
+          if (!fpsSlider.matches(":active")) {
+            const ms = config.videoFrameIntervalMs ?? 5000;
+            const step = FPS_STEPS.findIndex((v) => v >= ms);
+            fpsSlider.value = String(step === -1 ? FPS_STEPS.length - 1 : step);
+            fpsSlider.title = fpsLabel(ms);
+          }
         }
         if (meter) {
           meter.hidden = !engine.armed; // an idle meter is just a gap in the pill
@@ -537,11 +581,9 @@ export function multimodalModality(
       // the keyup itself: treat window blur as D-up. setArmed(false) already
       // defers the hide when a drag is genuinely in flight.
       //
-      // Blur also STOPS ALL LISTENING. The auto-restarting hands-free mic has
-      // no idea the user turned away — it once transcribed an entire spoken
-      // conversation held in another window, segment by segment, on the API
-      // bill. Away = mic off; refocusing re-arms it when the correction
-      // editor is still open (the one surface that listens without a held key).
+      // Blur also STOPS LISTENING. A mic left open on another window once
+      // transcribed an entire spoken conversation, segment by segment, on the
+      // API bill. Away = mic off (the open window commits, never discards).
       const onWindowBlur = (): void => {
         if (capture.shooting()) {
           capture.cancelShot();
@@ -567,9 +609,6 @@ export function multimodalModality(
         }
       };
       const onWindowFocus = (): void => {
-        if (engine.armed && engine.mode === "correct" && !engine.talking) {
-          talk.startCorrectionListening();
-        }
         capture.resumeShare();
       };
       window.addEventListener("blur", onWindowBlur);
@@ -643,6 +682,22 @@ export function multimodalModality(
         strip.render(stripState());
         ctx.setStatus(`tier → ${tier} — this session only (K, then S to save)`);
       };
+      // L cycles the linter: off → openai → gemini → off. Orthogonal to the
+      // tier; a mid-thread change applies like any session override — the
+      // NEXT thread's hello carries it (this thread's session is already up).
+      const cycleLinter = (): void => {
+        const order = ["off", "openai", "gemini"] as const;
+        const current = config.linter ?? "off";
+        const next = order[(order.indexOf(current) + 1) % order.length];
+        sessionOverrides = { ...sessionOverrides, linter: next };
+        applyEffective(recomputeEffective());
+        strip.render(stripState());
+        ctx.setStatus(
+          next === "off"
+            ? "linter off — this session only (K, then S to save)"
+            : `linter → ${next} — lints each pause on the next turn (session only)`,
+        );
+      };
 
       // ── keymap: reuse the pure keyCommand, but own arming (rebind/disable) ────
       const dispatch = (command: KeyCommand): void => {
@@ -656,6 +711,9 @@ export function multimodalModality(
             break;
           case "config-close":
             strip.hide();
+            break;
+          case "config-linter":
+            cycleLinter();
             break;
           case "config-tier":
             if (engine.threadOpen) {
@@ -711,20 +769,6 @@ export function multimodalModality(
             ink.clear();
             engine.inkCleared(false);
             break;
-          case "correct-toggle":
-            // The lasso→patch correction loop is a transcription-mode feature:
-            // the realtime submode holds a live conversation with no editable
-            // document to patch — the native fix there is just talking ("no, the
-            // LEFT legend"). Gate at dispatch (needs the effective submode); the
-            // keymap stays submode-agnostic.
-            if (config.submode === "realtime") {
-              ctx.setStatus(
-                "corrections are a transcription-mode feature — in live mode just say the fix",
-              );
-              break;
-            }
-            engine.setMode(engine.mode === "correct" ? "ink" : "correct");
-            break;
           case "tweak-toggle":
             // Tweak mode (§B.5): hand the pointer and keyboard back to the app
             // mid-turn, then resume composing the SAME turn. The thread and
@@ -774,7 +818,9 @@ export function multimodalModality(
             // numbered row directly. A digit past the list (or nothing
             // selectable) is a no-op — the picker already names the miss.
             const target =
-              command.index !== undefined ? picker.targetAt(command.index) : picker.selectedTarget();
+              command.index !== undefined
+                ? picker.targetAt(command.index)
+                : picker.selectedTarget();
             if (target?.url === undefined) {
               break;
             }
@@ -789,10 +835,11 @@ export function multimodalModality(
             break;
           }
           case "video-toggle":
-            // Screen share is realtime-only: the live model is what watches the
-            // ~1 fps frames. Off a live tier, name the fix and do nothing else.
-            if (config.submode !== "realtime") {
-              ctx.setStatus("video needs a live tier — K, then 6/7");
+            // Screen share feeds the LINTER: the live model is what watches
+            // the sampled frames. With the linter off (and no legacy realtime
+            // submode), name the fix and do nothing else.
+            if ((config.linter ?? "off") === "off" && config.submode !== "realtime") {
+              ctx.setStatus("video needs the linter — K, then L");
               break;
             }
             void capture.toggleVideoShare();
@@ -802,14 +849,8 @@ export function multimodalModality(
             ink.clear();
             break;
           case "step-out":
-            // In correct mode Esc aborts the whole edit session (every applied
-            // diff undone) — same semantics as Esc inside either editor box.
-            if (engine.mode === "correct") {
-              preview.abortEdit();
-              break;
-            }
-            // The ink-mode guard above matters for tweak too: stepping out of
-            // tweak lands back in ink/composing with nothing to clear — the
+            // The ink-mode guard matters for tweak: stepping out of tweak
+            // lands back in ink/composing with nothing to clear — the
             // excursion drew no ink, and the turn's strokes must survive it.
             if (engine.mode === "ink" && engine.threadOpen) {
               ink.clear();
@@ -832,7 +873,7 @@ export function multimodalModality(
       // ── advanced config panel (gear → raw JSON over the full effective config) ─
       // Apply mutates the live config in place: dynamic reads (mock cadence, ink
       // fade, talk mode, transcriber/corrector) pick it up, engine.settings is
-      // synced (autoEndSec, correctionPolicy, diffFlashMs the preview reads), the
+      // synced (autoEndSec), the
       // keymap is rebound (arming key/enabled), and the labels refresh. The next
       // thread's hello carries the new config because openThread reads it fresh.
       const applyEffective = (effective: IntentPipelineConfig): void => {
@@ -923,9 +964,7 @@ export function multimodalModality(
         // selections — code and app — as locator + clipped excerpt (the full
         // text already rides the stream as its event). `text` remains the
         // legacy flat rendering so older views keep working.
-        const composed = engine.threadOpen
-          ? composeIntent(currentThreadEvents(), config.correctionPolicy).items
-          : [];
+        const composed = engine.threadOpen ? composeIntent(currentThreadEvents()).items : [];
         const items: PreviewItem[] = composed.map((i) =>
           i.kind === "shot"
             ? {

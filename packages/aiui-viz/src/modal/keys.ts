@@ -34,7 +34,14 @@
 /** A binding's (or layer's) answer for one key event. */
 export type KeyClaim<C> = { command: C } | "swallow" | "pass";
 
-/** A binding's display row for cheat sheets and help: key cap + meaning. */
+/**
+ * A binding's display row for cheat sheets and help: key cap + meaning.
+ *
+ * The house pattern for condensed surfaces: render the ICON only, reveal the
+ * key (a kbd pill) + label on hover, and execute on click by synthesizing
+ * `tapKey` through the same resolver real keydowns use — so a tap can never
+ * drift from what the key does.
+ */
 export interface KeyHint {
   /** Display key cap, e.g. "␣", "D", "esc", "↑↓". */
   key: string;
@@ -42,6 +49,12 @@ export interface KeyHint {
   label: string;
   /** Optional pictogram for the condensed cheat sheet (an emoji works). */
   icon?: string;
+  /**
+   * The real `KeyboardEvent.key` a UI tap synthesizes to EXECUTE this row.
+   * {@link keyHints} fills it from the binding's first key; a synthetic
+   * gesture row (e.g. "drag") has none and renders non-clickable.
+   */
+  tapKey?: string;
 }
 
 export interface KeyBinding<S, C> {
@@ -142,7 +155,9 @@ export function keyHints<S, C>(stack: readonly KeyLayer<S, C>[], state: S): KeyH
       }
       const hint = typeof binding.hint === "function" ? binding.hint(state) : binding.hint;
       if (hint !== undefined) {
-        hints.push(hint);
+        // The binding's first key is what a UI tap synthesizes (the hint may
+        // override; a display-only row can set tapKey itself or stay inert).
+        hints.push({ tapKey: binding.keys[0], ...hint });
       }
     }
     if (layer.fallback === "swallow") {

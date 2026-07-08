@@ -14,7 +14,9 @@ export const STYLES = /* css */ `
   .mm-shot-box { position: fixed; display: none; border: 1.5px dashed #ffd166;
     background: rgba(255, 209, 102, 0.08); pointer-events: none; }
 
-  .mm-preview { position: fixed; left: 50%; transform: translateX(-50%); bottom: 64px;
+  /* bottom clears the widget's tallest resting state (pill + the below-pill
+     cheat sheet at ~110px); both are draggable, this is just the rest pose. */
+  .mm-preview { position: fixed; left: 50%; transform: translateX(-50%); bottom: 136px;
     z-index: 2147483642; width: min(560px, 70vw); background: #171b25ee; border: 1px solid #262c3a;
     border-radius: 12px; padding: 10px 14px; display: none;
     font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e8e8ea;
@@ -65,6 +67,10 @@ export const STYLES = /* css */ `
     white-space: nowrap; }
   .mm-sel-app { color: #8ab4f8; }
   .mm-sel-code { color: #a5c8ff; }
+  /* A linter note: read-only advice, visually distinct from content chips. */
+  .mm-lint-chip { font-size: 11px; border: 1px dashed #6b5d2e; border-radius: 999px;
+    padding: 1px 8px; display: inline-block; vertical-align: middle;
+    white-space: nowrap; color: #ffd166; }
   /* The selection peek: the mm-thumb-peek pattern (fixed-position, body-
      attached) as a card — source location + the selected text, clamped by CSS
      (the full text stays in the DOM; nothing is JS-truncated). */
@@ -113,6 +119,7 @@ export const STYLES = /* css */ `
   .mm-tier-chip.active { border-color: #8ab4f8; color: #8ab4f8; }
   .mm-tier-chip.active b { color: #8ab4f8; }
   .mm-tier-chip.pending { border-style: dashed; border-color: #ffd166; color: #ffd166; }
+  .mm-strip-linter { margin-top: 6px; }
   .mm-strip-pending { margin-top: 6px; color: #ffd166; }
   .mm-strip-note { margin-top: 6px; color: #7ee0a3; }
   .mm-strip-actions { margin-top: 6px; color: #6b7280; }
@@ -146,22 +153,9 @@ export const STYLES = /* css */ `
     background: rgba(55, 148, 255, 0.08); }
   .mm-jump-highlight.visible { display: block; }
 
-  /* The always-present condensed cheat sheet: one key-cap pill (+ icon) per
-     live binding in the CURRENT state, above the pill while armed (labels
-     are tooltips — glanceable, not read). Sits where the config strip opens;
-     the strip replaces it while open. */
-  .mm-cheat { position: fixed; left: 16px; bottom: 62px; z-index: 2147483642; display: none;
-    gap: 7px; align-items: center; flex-wrap: wrap; max-width: min(640px, 92vw);
-    background: #171b25ee; border: 1px solid #262c3a; border-radius: 999px;
-    padding: 4px 12px; cursor: default;
-    font: 11px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #9aa0aa; }
-  .mm-cheat.visible { display: inline-flex; }
-  .mm-keycap { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-  .mm-keycap kbd { display: inline-block; min-width: 12px; text-align: center;
-    border: 1px solid #3a4152; border-bottom-width: 2px; border-radius: 4px;
-    padding: 0 4px; font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: #cfd3da; background: #232936; }
-  .mm-keyicon { font-size: 11px; }
+  /* (The condensed cheat sheet moved into the widget's below-pill slot —
+     its styles are CHEAT_STYLES in keymap-ui.tsx, injected into the shadow
+     root via hudSlot.addStyle.) */
 `;
 
 /**
@@ -187,6 +181,9 @@ export const HUD_STYLES = /* css */ `
   .mm-video[hidden] { display: none; }
   @keyframes mm-video-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .mm-meter { border-radius: 3px; background: #0f1117; }
+  /* The share's cadence slider — tiny, only visible while sharing. */
+  .mm-fps { width: 56px; height: 12px; accent-color: #ff5c87; cursor: pointer; }
+  .mm-fps[hidden] { display: none; }
   .mm-meter[hidden] { display: none; }
   .mm-speaker { font-size: 11px; white-space: nowrap; }
 `;

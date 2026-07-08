@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import { describe, expect, it } from "vitest";
 import type { ChannelFormat, ThreadContext } from "./channel";
-import { type Corrector, mockCorrector } from "./correct";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format, type LoweredPromptMessage } from "./intent-v1";
 import { defaultFormats } from "./processors";
@@ -42,7 +41,6 @@ interface Driver {
 interface DriveOptions {
   hello?: HelloMeta;
   transcriber?: Transcriber;
-  corrector?: Corrector;
   /** Test seam for the post-send turn summarizer (see summarize.ts). */
   summarizer?: Summarizer;
   /** Force the env key (e.g. `""` to exercise the keyless/degraded seam). */
@@ -75,7 +73,6 @@ function drive(opts: DriveOptions = {}): Driver {
 
   let format: ChannelFormat = createIntentV1Format({
     ...(opts.transcriber !== undefined ? { transcriber: opts.transcriber } : {}),
-    ...(opts.corrector !== undefined ? { corrector: opts.corrector } : {}),
     ...(opts.summarizer !== undefined ? { summarizer: opts.summarizer } : {}),
     ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
   });
@@ -105,7 +102,7 @@ function drive(opts: DriveOptions = {}): Driver {
 }
 
 const openaiHello = (over: Record<string, unknown> = {}): HelloMeta => ({
-  intent: { transcriber: "openai", corrector: "openai", correctionPolicy: "replace", ...over },
+  intent: { transcriber: "openai", ...over },
 });
 
 describe("intent-v1 registration", () => {
@@ -432,158 +429,6 @@ describe("intent-v1 server transcription", () => {
       message: expect.stringMatching(/transcription failed.*401/),
       detail: expect.stringMatching(/OPENAI_API_KEY/),
     });
-  });
-});
-
-describe("intent-v1 server correction", () => {
-  const base = (): IntentEvent[] => [
-    { at: 1, type: "armed", on: true },
-    { at: 2, type: "thread-open", trigger: "talk" },
-    { at: 3, type: "talk-start", segment: 1 },
-    { at: 4, type: "talk-end", segment: 1, ms: 300 },
-    {
-      at: 5,
-      type: "transcript-final",
-      segment: 1,
-      text: "make the base line curve a bit thicker",
-      latencyMs: 300,
-      model: "mock",
-    },
-  ];
-
-  it("runs the diff for a patchless correction and pushes the completed event", async () => {
-    const d = drive({ hello: openaiHello({ corrector: "openai" }), corrector: mockCorrector() });
-    await d.feedEvents([
-      ...base(),
-      {
-        at: 6,
-        type: "correction",
-        from: 9,
-        to: 18,
-        original: "base line",
-        instruction: "baseline",
-        via: "typed",
-      },
-    ]);
-
-    expect(d.pushed).toHaveLength(1);
-    const event = (d.pushed[0] as { events: IntentEvent[] }).events[0] as Extract<
-      IntentEvent,
-      { type: "correction" }
-    >;
-    expect(event.type).toBe("correction");
-    expect(event.original).toBe("base line");
-    expect(event.instruction).toBe("baseline");
-    expect(event.via).toBe("typed");
-    expect(event.patch).toContain("*** Begin Patch");
-    expect(event.model).toBe("mock");
-    expect(typeof event.latencyMs).toBe("number");
-
-    await d.fin();
-    expect(d.sent[0].text).toContain("baseline");
-    expect(d.sent[0].text).not.toContain("base line");
-  });
-
-  it("pushes the correction without a patch when the diff is malformed (no silent loss)", async () => {
-    const badCorrector: Corrector = {
-      name: "bad",
-      async diff() {
-        // A patch whose context matches nothing in the document → won't apply.
-        return {
-          patch:
-            "*** Begin Patch\n*** Update File: transcript\n@@\n-no such line\n+x\n*** End Patch",
-          model: "bad",
-          latencyMs: 1,
-        };
-      },
-    };
-    const d = drive({ hello: openaiHello({ corrector: "openai" }), corrector: badCorrector });
-    await d.feedEvents([
-      ...base(),
-      {
-        at: 6,
-        type: "correction",
-        from: 9,
-        to: 18,
-        original: "base line",
-        instruction: "baseline",
-        via: "typed",
-      },
-    ]);
-
-    expect(d.pushed).toHaveLength(2);
-    const event = (d.pushed[0] as { events: IntentEvent[] }).events[0] as Extract<
-      IntentEvent,
-      { type: "correction" }
-    >;
-    expect(event.patch).toBeUndefined();
-    // The fallback is no longer silent about WHY: the generic error push names
-    // the cause (here: the model's patch would not apply).
-    expect(d.pushed[1]).toMatchObject({
-      kind: "error",
-      threadId: "t-1",
-      source: "correction",
-      message: expect.stringMatching(/plain replacement/),
-    });
-
-    // Falls back to plain first-occurrence replacement — the correction still lands.
-    await d.fin();
-    expect(d.sent[0].text).toContain("baseline");
-  });
-
-  it("pushes an error naming the cause when the corrector itself throws (stale key)", async () => {
-    const throwing: Corrector = {
-      name: "throws",
-      async diff() {
-        throw new Error("Incorrect API key provided (401)");
-      },
-    };
-    const d = drive({ hello: openaiHello({ corrector: "openai" }), corrector: throwing });
-    await d.feedEvents([
-      ...base(),
-      {
-        at: 6,
-        type: "correction",
-        from: 9,
-        to: 18,
-        original: "base line",
-        instruction: "baseline",
-        via: "typed",
-      },
-    ]);
-
-    // The patchless fallback still lands (never a vanished correction)…
-    const echoed = (d.pushed[0] as { events: IntentEvent[] }).events[0] as Extract<
-      IntentEvent,
-      { type: "correction" }
-    >;
-    expect(echoed.patch).toBeUndefined();
-    // …and the API error surfaces with the remediation hint instead of dying
-    // in the catch (the failure mode this feature exists for).
-    expect(d.pushed[1]).toMatchObject({
-      kind: "error",
-      source: "correction",
-      message: expect.stringMatching(/Incorrect API key.*401/),
-      detail: expect.stringMatching(/OPENAI_API_KEY/),
-    });
-  });
-
-  it("passes a correction that already carries a patch straight through", async () => {
-    // Mock-transcriber turns (the captured fixtures) carry their own patch and
-    // must not trigger a server diff — the corrector below would throw if asked.
-    const throwingCorrector: Corrector = {
-      name: "throws",
-      async diff() {
-        throw new Error("should not be called");
-      },
-    };
-    const d = drive({ hello: openaiHello({ corrector: "openai" }), corrector: throwingCorrector });
-    await d.feedEvents(loadFixture("dictation-typed-correction.json"));
-    await d.fin();
-    // No server-produced events (the client's patch was used as-is) — the only
-    // push is the fin's lowered-prompt.
-    expect(d.pushed.map((m) => (m as { kind: string }).kind)).toEqual(["lowered-prompt"]);
-    expect(d.sent[0].text).toContain("baseline");
   });
 });
 

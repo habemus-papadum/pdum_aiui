@@ -16,34 +16,125 @@
  * content inside a vanilla class facade; the signal lives INSIDE the render
  * root; visibility toggles stay synchronous classList on the light-DOM root.
  */
+
+import type { KeyHint } from "@habemus-papadum/aiui-viz/modal";
 import { render } from "@solidjs/web";
 import { createSignal, For, Show } from "solid-js";
-import type { KeyHint } from "@habemus-papadum/aiui-viz/modal";
 import type { KeymapHelpSection } from "../intent-pipeline";
 
-/** One key-cap pill (+ optional icon); the label rides as a tooltip. */
-const Cap = (props: { hint: KeyHint }) => (
-  <span class="mm-keycap" title={props.hint.label}>
-    <kbd>{props.hint.key}</kbd>
-    <Show when={props.hint.icon !== undefined}>
-      <span class="mm-keyicon">{props.hint.icon}</span>
-    </Show>
-  </span>
-);
+/**
+ * One cheat-sheet cap — the kit's condensed-surface pattern (see
+ * {@link KeyHint.tapKey}): the ICON alone renders; hovering reveals the key
+ * as a kbd pill + label (the shared tooltip); clicking synthesizes the key
+ * through the same resolver a real keydown uses. A row with no icon falls
+ * back to its key cap; a row with no tapKey (a gesture like "drag") renders
+ * inert.
+ */
+const Cap = (props: {
+  hint: KeyHint;
+  onTap?: (key: string) => void;
+  onHover: (hint: KeyHint | undefined, el?: HTMLElement) => void;
+}) => {
+  let el: HTMLButtonElement | undefined;
+  const tappable = () => props.hint.tapKey !== undefined && props.onTap !== undefined;
+  return (
+    <button
+      type="button"
+      class={tappable() ? "mm-keycap" : "mm-keycap inert"}
+      ref={(node: HTMLButtonElement) => (el = node)}
+      onMouseEnter={() => props.onHover(props.hint, el)}
+      onMouseLeave={() => props.onHover(undefined)}
+      onClick={() => {
+        const key = props.hint.tapKey;
+        if (key !== undefined) {
+          props.onTap?.(key);
+        }
+      }}
+    >
+      <Show when={props.hint.icon !== undefined} fallback={<kbd>{props.hint.key}</kbd>}>
+        <span class="mm-keyicon">{props.hint.icon}</span>
+      </Show>
+    </button>
+  );
+};
 
-/** The condensed, always-present per-mode key strip (page-level layers). */
+/**
+ * The shadow-root styles for {@link CheatSheet} (inject via hudSlot.addStyle).
+ * The sheet lives in the widget's BELOW-PILL slot — in flow inside the
+ * draggable, bottom-anchored root — so it slides the pill up and follows
+ * drags for free. `max-width` is what makes it a compact block instead of a
+ * screen-wide bar: the caps flex-wrap into two-ish rows.
+ */
+export const CHEAT_STYLES = /* css */ `
+  .mm-cheat-wrap { position: relative; display: none; }
+  .mm-cheat-wrap.visible { display: block; }
+  .mm-cheat { display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+    max-width: 196px; width: max-content; margin-top: 6px;
+    background: #171b25ee; border: 1px solid #262c3a; border-radius: 12px;
+    padding: 6px 8px; cursor: default;
+    font: 11px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #9aa0aa; }
+  .mm-keycap { display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 22px; border: 1px solid transparent; border-radius: 6px;
+    background: none; padding: 0; cursor: pointer; }
+  .mm-keycap:hover { border-color: #3a4152; background: #232936; }
+  .mm-keycap.inert { cursor: default; }
+  .mm-keycap kbd, .mm-cheat-tip kbd { display: inline-block; min-width: 12px; text-align: center;
+    border: 1px solid #3a4152; border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 4px; font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #cfd3da; background: #232936; }
+  .mm-keyicon { font-size: 13px; line-height: 1; }
+  /* The hover tooltip: the key as a kbd pill + the label, floated above the
+     hovered cap (the pattern's "hover reveals the key"). */
+  .mm-cheat-tip { position: absolute; bottom: calc(100% + 2px); left: 0;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    background: #171b25; border: 1px solid #3a4152; border-radius: 999px;
+    padding: 3px 10px; pointer-events: none; z-index: 1;
+    font: 11px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #cfd3da; }
+`;
+
+/**
+ * The condensed, always-present per-mode key sheet (the widget's below-pill
+ * slot): icon-only caps that wrap into a compact block. Hover a cap and a
+ * pill tooltip shows its key + label; click it and `onTap` synthesizes the
+ * key through the modality's resolver — the same table the keyboard reads.
+ */
 export class CheatSheet {
   readonly root: HTMLDivElement;
   private readonly setHints: (hints: KeyHint[]) => void;
 
-  constructor() {
+  constructor(onTap?: (key: string) => void) {
     this.root = document.createElement("div");
-    this.root.className = "mm-cheat";
+    this.root.className = "mm-cheat-wrap";
     let setHints: ((hints: KeyHint[]) => void) | undefined;
     const Sheet = () => {
       const [hints, set] = createSignal<KeyHint[]>([]);
-      setHints = (next) => set(next);
-      return <For each={hints()}>{(hint) => <Cap hint={hint} />}</For>;
+      const [tip, setTip] = createSignal<{ hint: KeyHint; x: number } | undefined>(undefined);
+      setHints = (next) => {
+        set(next);
+        setTip(undefined); // the hovered cap may be gone after a re-render
+      };
+      const onHover = (hint: KeyHint | undefined, el?: HTMLElement): void => {
+        if (hint === undefined || el === undefined) {
+          setTip(undefined);
+          return;
+        }
+        setTip({ hint, x: el.offsetLeft });
+      };
+      return (
+        <>
+          <Show when={tip() !== undefined}>
+            <span class="mm-cheat-tip" style={{ left: `${tip()?.x ?? 0}px` }}>
+              <kbd>{tip()?.hint.key}</kbd>
+              <span>{tip()?.hint.label}</span>
+            </span>
+          </Show>
+          <div class="mm-cheat">
+            <For each={hints()}>
+              {(hint) => <Cap hint={hint} onTap={onTap} onHover={onHover} />}
+            </For>
+          </div>
+        </>
+      );
     };
     render(Sheet, this.root);
     if (!setHints) {
@@ -52,7 +143,7 @@ export class CheatSheet {
     this.setHints = setHints;
   }
 
-  /** Re-assert the strip from the current state's rows (renderHud calls this). */
+  /** Re-assert the sheet from the current state's rows (renderHud calls this). */
   update(hints: KeyHint[], visible: boolean): void {
     this.setHints(hints);
     this.root.classList.toggle("visible", visible && hints.length > 0);

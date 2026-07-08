@@ -45,13 +45,13 @@
 
 import WebSocket from "ws";
 import { priceCall, usageFromGeminiLive } from "./cost";
+import { READ_FILE_DECLARATION_GEMINI } from "./linter-tools";
 import {
-  LIVE_COMPOSER_INSTRUCTIONS,
-  LIVE_NUDGE_TEXT,
+  LINTER_INSTRUCTIONS,
+  type LinterToolCall,
   type LiveCapabilities,
   type LiveSession,
   type LiveSessionCallbacks,
-  type SubmitIntentCall,
 } from "./live-session";
 import {
   captureUnexpectedResponse,
@@ -77,29 +77,6 @@ const GEMINI_OUTPUT_RATE = 24000;
  * through — no channel-side resampler.
  */
 const GEMINI_INPUT_AUDIO_MIME = "audio/pcm;rate=24000";
-
-/** The `submit_intent` function declaration (the spike's exact schema). */
-const SUBMIT_INTENT_DECLARATION = {
-  name: "submit_intent",
-  description: "Deliver the composed request to the coding agent as interleaved segments.",
-  parameters: {
-    type: "OBJECT",
-    properties: {
-      segments: {
-        type: "ARRAY",
-        items: {
-          type: "OBJECT",
-          properties: {
-            text: { type: "STRING" },
-            image: { type: "STRING" },
-            selection: { type: "STRING" },
-          },
-        },
-      },
-    },
-    required: ["segments"],
-  },
-} as const;
 
 /** One outbound realtime frame (audio/text/video/activity signals, or a tool response). */
 type OutboundFrame = Record<string, unknown>;
@@ -158,8 +135,8 @@ export interface GeminiLiveSessionOptions {
   /** Resolves the model id (bare, e.g. `gemini-3.1-flash-live-preview`) at open time. */
   model: () => string;
   /**
-   * The composer persona (short — billed every turn). Default:
-   * {@link LIVE_COMPOSER_INSTRUCTIONS}, the shared authoritative text.
+   * The linter persona (short — billed every turn). Default:
+   * {@link LINTER_INSTRUCTIONS}, the shared authoritative text.
    */
   instructions?: string;
   /** Override the endpoint (tests). */
@@ -230,25 +207,10 @@ export function openGeminiLiveSession(
 
   // Per-turn accumulation. Gemini has no response ids; a turn is bounded by
   // `serverContent.turnComplete`, so we buffer until it and flush one clip /
-  // one user transcript / one reply transcript per turn.
-  let pendingUserText = "";
+  // one reply transcript per turn. (No user-transcript lane: linter sessions
+  // run without vendor input transcription.)
   let pendingReplyText = "";
   let replyAudio: Uint8Array[] = [];
-
-  // The tool-call drain: a call that lands before `drainToolCall` is awaited is
-  // buffered here so a fast model never races the drain.
-  let bufferedCall: SubmitIntentCall | null = null;
-  let drainResolver: ((call: SubmitIntentCall | null) => void) | null = null;
-
-  const settleDrain = (call: SubmitIntentCall | null): void => {
-    if (drainResolver) {
-      const resolve = drainResolver;
-      drainResolver = null;
-      resolve(call);
-    } else {
-      bufferedCall = call;
-    }
-  };
 
   // Send once ready; the setup handshake that produces readiness bypasses the
   // queue (it goes out in `onOpen`). Everything the guard admits flows here.
@@ -269,11 +231,6 @@ export function openGeminiLiveSession(
   };
 
   const flushTurn = (): void => {
-    const user = pendingUserText.trim();
-    pendingUserText = "";
-    if (user !== "") {
-      callbacks.onUserTranscript(user);
-    }
     if (replyAudio.length > 0) {
       callbacks.onReplyAudio(pcm16ToWav(concatChunks(replyAudio), GEMINI_OUTPUT_RATE), "audio/wav");
       replyAudio = [];
@@ -285,43 +242,30 @@ export function openGeminiLiveSession(
     }
   };
 
-  /** A hard fault: flush whatever the user already said (chronicle), then idle. */
+  /** A hard fault: surface it loudly, then idle. */
   const fail = (message: string, data?: unknown): void => {
     if (dead) {
       return;
     }
     dead = true;
-    const user = pendingUserText.trim();
-    pendingUserText = "";
-    if (user !== "") {
-      callbacks.onUserTranscript(user);
-    }
     callbacks.onError(message, data);
-    settleDrain(null);
   };
 
-  const buildToolCall = (fc: { id?: string; name?: string; args?: unknown }): SubmitIntentCall => {
-    const args = (fc.args ?? {}) as { segments?: unknown };
-    const rawSegments = Array.isArray(args.segments) ? args.segments : [];
-    const segments = rawSegments.map((s) => {
-      const seg = (s ?? {}) as { text?: unknown; image?: unknown; selection?: unknown };
-      return {
-        ...(typeof seg.text === "string" ? { text: seg.text } : {}),
-        ...(typeof seg.image === "string" ? { image: seg.image } : {}),
-        ...(typeof seg.selection === "string" ? { selection: seg.selection } : {}),
-      };
-    });
+  /** A linter-mode function call: toolResponse carries the result string. */
+  const buildLinterCall = (fc: { id?: string; name?: string; args?: unknown }): LinterToolCall => {
     let responded = false;
     return {
-      segments,
-      respond: (ok: boolean) => {
+      tool: fc.name ?? "",
+      args: (fc.args ?? {}) as Record<string, unknown>,
+      respond: (result: string) => {
         if (responded || dead) {
           return;
         }
         responded = true;
+        // Gemini resumes on its own after the toolResponse — no extra frame.
         sendReady({
           toolResponse: {
-            functionResponses: [{ id: fc.id, name: fc.name ?? "submit_intent", response: { ok } }],
+            functionResponses: [{ id: fc.id, name: fc.name, response: { result } }],
           },
         });
       },
@@ -352,9 +296,6 @@ export function openGeminiLiveSession(
         }
       | undefined;
     if (serverContent !== undefined) {
-      if (typeof serverContent.inputTranscription?.text === "string") {
-        pendingUserText += serverContent.inputTranscription.text;
-      }
       if (typeof serverContent.outputTranscription?.text === "string") {
         pendingReplyText += serverContent.outputTranscription.text;
       }
@@ -376,10 +317,14 @@ export function openGeminiLiveSession(
     const toolCall = message.toolCall as
       | { functionCalls?: Array<{ id?: string; name?: string; args?: unknown }> }
       | undefined;
-    if (toolCall !== undefined) {
-      const fc = (toolCall.functionCalls ?? []).find((c) => c.name === "submit_intent");
-      if (fc !== undefined) {
-        settleDrain(buildToolCall(fc));
+    if (toolCall !== undefined && callbacks.onToolCall) {
+      // Tool calls (read_file) route through the generic callback; Gemini
+      // resumes automatically once the toolResponse is written.
+      for (const call of toolCall.functionCalls ?? []) {
+        if (call.name === undefined) {
+          continue;
+        }
+        callbacks.onToolCall(buildLinterCall(call));
       }
     }
     if (message.usageMetadata !== undefined) {
@@ -400,17 +345,20 @@ export function openGeminiLiveSession(
 
   const socket = factory(url, options.apiKey, {
     onOpen: () => {
+      // The session declares read_file and NO input transcription — the STT
+      // session owns the chronicle, and the sidecar injects
+      // `[transcript seg_N: …]` context items instead. Output transcription
+      // stays: the reply text IS the linter note.
       socket.send(
         JSON.stringify({
           setup: {
             model: `models/${options.model()}`,
             generationConfig: { responseModalities: ["AUDIO"] },
             systemInstruction: {
-              parts: [{ text: options.instructions ?? LIVE_COMPOSER_INSTRUCTIONS }],
+              parts: [{ text: options.instructions ?? LINTER_INSTRUCTIONS }],
             },
-            tools: [{ functionDeclarations: [SUBMIT_INTENT_DECLARATION] }],
+            tools: [{ functionDeclarations: [READ_FILE_DECLARATION_GEMINI] }],
             realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
-            inputAudioTranscription: {},
             outputAudioTranscription: {},
             sessionResumption: {},
             contextWindowCompression: { slidingWindow: {} },
@@ -488,35 +436,9 @@ export function openGeminiLiveSession(
         clientContent: { turns: [{ role: "user", parts: [{ text }] }], turnComplete: false },
       });
     },
-    nudgeSubmit() {
-      if (dead) {
-        return;
-      }
-      emit("other", { realtimeInput: { text: LIVE_NUDGE_TEXT } });
-    },
-    drainToolCall(timeoutMs) {
-      if (bufferedCall !== null) {
-        const call = bufferedCall;
-        bufferedCall = null;
-        return Promise.resolve(call);
-      }
-      if (dead) {
-        return Promise.resolve(null);
-      }
-      return new Promise<SubmitIntentCall | null>((resolve) => {
-        let settled = false;
-        const finish = (call: SubmitIntentCall | null): void => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          clearTimeout(timer);
-          drainResolver = null;
-          resolve(call);
-        };
-        const timer = setTimeout(() => finish(null), timeoutMs);
-        drainResolver = finish;
-      });
+    cancelActiveResponse() {
+      // No client-side cancel on the Gemini Live wire; barge-in is the
+      // server's own `interrupted` signal (new window audio triggers it).
     },
     close() {
       dead = true;
@@ -525,7 +447,6 @@ export function openGeminiLiveSession(
       } catch {
         // best-effort — the socket may already be closing
       }
-      settleDrain(null);
     },
   };
 }

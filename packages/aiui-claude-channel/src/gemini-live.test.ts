@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openGeminiLiveSession, parseTimeLeftMs, WindowOrderingGuard } from "./gemini-live";
-import {
-  LIVE_COMPOSER_INSTRUCTIONS,
-  LIVE_NUDGE_TEXT,
-  type LiveSessionCallbacks,
-} from "./live-session";
+import { LINTER_INSTRUCTIONS, type LiveSessionCallbacks } from "./live-session";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 
 /** A scripted fake of the Gemini Live upstream (mirrors realtime.test.ts). */
@@ -40,7 +36,6 @@ function fakeUpstream(): FakeUpstream {
 }
 
 function collect(up: FakeUpstream) {
-  const userTranscripts: string[] = [];
   const replyTranscripts: string[] = [];
   const replyAudio: Array<{ bytes: Uint8Array; mime: string }> = [];
   const usages: Array<{ provider: string; model: string }> = [];
@@ -48,7 +43,6 @@ function collect(up: FakeUpstream) {
   const goAways: number[] = [];
   let interrupted = 0;
   const cb: LiveSessionCallbacks = {
-    onUserTranscript: (text) => userTranscripts.push(text),
     onReplyTranscript: (text) => replyTranscripts.push(text),
     onReplyAudio: (bytes, mime) => replyAudio.push({ bytes, mime }),
     onInterrupted: () => {
@@ -64,7 +58,6 @@ function collect(up: FakeUpstream) {
   );
   return {
     session,
-    userTranscripts,
     replyTranscripts,
     replyAudio,
     usages,
@@ -124,7 +117,7 @@ describe("parseTimeLeftMs", () => {
 // ── the engine over the scripted fake ────────────────────────────────────────
 
 describe("openGeminiLiveSession", () => {
-  it("configures manual VAD, transcription, submit_intent, and compression on open", () => {
+  it("configures manual VAD, read_file, NO input transcription, and compression on open", () => {
     const up = fakeUpstream();
     collect(up);
     up.open();
@@ -134,50 +127,24 @@ describe("openGeminiLiveSession", () => {
         model: "models/gemini-3.1-flash-live-preview",
         generationConfig: { responseModalities: ["AUDIO"] },
         realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
-        inputAudioTranscription: {},
         outputAudioTranscription: {},
         sessionResumption: {},
         contextWindowCompression: { slidingWindow: {} },
       },
     });
-    const tools = (
+    const setup = (
       up.sent[0] as {
         setup: {
-          tools: Array<{
-            functionDeclarations: Array<{
-              name: string;
-              parameters: {
-                properties: { segments: { items: { properties: Record<string, unknown> } } };
-              };
-            }>;
-          }>;
+          inputAudioTranscription?: object;
+          systemInstruction: { parts: Array<{ text: string }> };
+          tools: Array<{ functionDeclarations: Array<{ name: string }> }>;
         };
       }
-    ).setup.tools;
-    expect(tools[0].functionDeclarations[0].name).toBe("submit_intent");
-    // Segments may interleave text, image ids, AND selection ids (F2).
-    expect(
-      Object.keys(tools[0].functionDeclarations[0].parameters.properties.segments.items.properties),
-    ).toEqual(["text", "image", "selection"]);
-  });
-
-  it("sends the shared composer persona as the system instruction", () => {
-    const up = fakeUpstream();
-    collect(up);
-    up.open();
-    const setup = (
-      up.sent[0] as { setup: { systemInstruction: { parts: Array<{ text: string }> } } }
     ).setup;
-    expect(setup.systemInstruction.parts[0].text).toBe(LIVE_COMPOSER_INSTRUCTIONS);
-  });
-
-  it("nudgeSubmit sends the commit sentinel as a bare out-of-window text turn", () => {
-    const up = fakeUpstream();
-    const { session } = collect(up);
-    up.open();
-    up.emit({ setupComplete: {} });
-    session.nudgeSubmit();
-    expect(realtimeFrames(up).some((r) => r.text === LIVE_NUDGE_TEXT)).toBe(true);
+    // The STT session owns the chronicle — no vendor input transcription.
+    expect(setup.inputAudioTranscription).toBeUndefined();
+    expect(setup.systemInstruction.parts[0].text).toBe(LINTER_INSTRUCTIONS);
+    expect(setup.tools[0].functionDeclarations.map((d) => d.name)).toEqual(["read_file"]);
   });
 
   it("obeys the window rule: a label injected before audio is flushed after the first audio", () => {
@@ -253,67 +220,16 @@ describe("openGeminiLiveSession", () => {
     expect(audio.mimeType).toBe("audio/pcm;rate=24000");
   });
 
-  it("delivers a submit_intent tool call through drainToolCall; respond sends toolResponse", async () => {
+  it("accumulates the reply (transcript + audio) per turn and flushes at turnComplete", () => {
     const up = fakeUpstream();
-    const { session } = collect(up);
-    up.open();
-    up.emit({ setupComplete: {} });
-    up.emit({
-      toolCall: {
-        functionCalls: [
-          {
-            id: "fc1",
-            name: "submit_intent",
-            args: { segments: [{ text: "wider" }, { image: "shot_1" }, { selection: "sel_1" }] },
-          },
-        ],
-      },
-    });
-    const call = await session.drainToolCall(1000);
-    expect(call).not.toBeNull();
-    expect(call?.segments).toEqual([
-      { text: "wider" },
-      { image: "shot_1" },
-      { selection: "sel_1" },
-    ]);
-    call?.respond(true);
-    expect(up.sent).toContainEqual({
-      toolResponse: {
-        functionResponses: [{ id: "fc1", name: "submit_intent", response: { ok: true } }],
-      },
-    });
-  });
-
-  it("buffers a tool call that arrives before the drain is awaited", async () => {
-    const up = fakeUpstream();
-    const { session } = collect(up);
-    up.open();
-    up.emit({ setupComplete: {} });
-    up.emit({
-      toolCall: { functionCalls: [{ id: "fc1", name: "submit_intent", args: { segments: [] } }] },
-    });
-    await expect(session.drainToolCall(1000)).resolves.not.toBeNull();
-  });
-
-  it("drainToolCall resolves null on timeout", async () => {
-    const up = fakeUpstream();
-    const { session } = collect(up);
-    up.open();
-    up.emit({ setupComplete: {} });
-    await expect(session.drainToolCall(0)).resolves.toBeNull();
-  });
-
-  it("accumulates transcripts + audio per turn and flushes them at turnComplete", () => {
-    const up = fakeUpstream();
-    const { session, userTranscripts, replyTranscripts, replyAudio } = collect(up);
+    const { session, replyTranscripts, replyAudio } = collect(up);
     up.open();
     up.emit({ setupComplete: {} });
     session.activityStart();
     session.appendAudio(new Uint8Array([1]));
     session.activityEnd();
-    up.emit({ serverContent: { inputTranscription: { text: "make it " } } });
-    up.emit({ serverContent: { inputTranscription: { text: "wider" } } });
-    up.emit({ serverContent: { outputTranscription: { text: "on it" } } });
+    up.emit({ serverContent: { outputTranscription: { text: "clear " } } });
+    up.emit({ serverContent: { outputTranscription: { text: "so far" } } });
     up.emit({
       serverContent: {
         modelTurn: {
@@ -322,10 +238,9 @@ describe("openGeminiLiveSession", () => {
       },
     });
     // Nothing flushed until turnComplete.
-    expect(userTranscripts).toEqual([]);
+    expect(replyTranscripts).toEqual([]);
     up.emit({ serverContent: { turnComplete: true } });
-    expect(userTranscripts).toEqual(["make it wider"]);
-    expect(replyTranscripts).toEqual(["on it"]);
+    expect(replyTranscripts).toEqual(["clear so far"]);
     expect(replyAudio).toHaveLength(1);
     expect(replyAudio[0].mime).toBe("audio/wav");
     expect(String.fromCharCode(...replyAudio[0].bytes.subarray(0, 4))).toBe("RIFF");
@@ -374,13 +289,92 @@ describe("openGeminiLiveSession", () => {
     expect(goAways).toEqual([9000]);
   });
 
-  it("an upstream error is surfaced and drain then resolves null", async () => {
+  it("an upstream error is surfaced loudly (once)", () => {
     const up = fakeUpstream();
     const { session, errors } = collect(up);
     up.open();
     up.emit({ setupComplete: {} });
     up.error("connection reset");
     expect(errors).toEqual(["connection reset"]);
-    await expect(session.drainToolCall(1000)).resolves.toBeNull();
+    expect(session).toBeTruthy();
+  });
+});
+
+// ── linter mode (the prompt-linter pivot) ────────────────────────────────────
+
+function collectLinter(up: FakeUpstream) {
+  const toolCalls: Array<{ tool: string; args: Record<string, unknown> }> = [];
+  const replyTranscripts: string[] = [];
+  let lastRespond: ((result: string) => void) | undefined;
+  const cb: LiveSessionCallbacks = {
+    onReplyTranscript: (text) => replyTranscripts.push(text),
+    onReplyAudio: () => {},
+    onInterrupted: () => {},
+    onUsage: () => {},
+    onError: () => {},
+    onToolCall: (call) => {
+      toolCalls.push({ tool: call.tool, args: call.args });
+      lastRespond = call.respond;
+    },
+  };
+  const session = openGeminiLiveSession(
+    {
+      apiKey: "k",
+      model: () => "gemini-3.1-flash-live-preview",
+      socketFactory: up.factory,
+    },
+    cb,
+  );
+  return { session, toolCalls, replyTranscripts, respond: (r: string) => lastRespond?.(r) };
+}
+
+describe("openGeminiLiveSession (linter mode)", () => {
+  it("sets up read_file + the linter persona, and drops input transcription", () => {
+    const up = fakeUpstream();
+    collectLinter(up);
+    up.open();
+    const setup = up.sent[0].setup as {
+      systemInstruction: { parts: Array<{ text: string }> };
+      tools: Array<{ functionDeclarations: Array<{ name: string }> }>;
+      inputAudioTranscription?: object;
+      outputAudioTranscription?: object;
+    };
+    expect(setup.systemInstruction.parts[0].text).toBe(LINTER_INSTRUCTIONS);
+    expect(setup.tools[0].functionDeclarations.map((d) => d.name)).toEqual(["read_file"]);
+    // The STT session owns the chronicle — no vendor input transcription…
+    expect(setup.inputAudioTranscription).toBeUndefined();
+    // …but output transcription stays: the reply text IS the linter note.
+    expect(setup.outputAudioTranscription).toEqual({});
+  });
+
+  it("routes a read_file call to onToolCall; respond writes a toolResponse with the result", () => {
+    const up = fakeUpstream();
+    const { toolCalls, respond } = collectLinter(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    up.emit({
+      toolCall: {
+        functionCalls: [{ id: "fc1", name: "read_file", args: { path: "src/a.ts" } }],
+      },
+    });
+    expect(toolCalls).toEqual([{ tool: "read_file", args: { path: "src/a.ts" } }]);
+
+    respond("const a = 1;");
+    // Gemini resumes on its own after the toolResponse — exactly one frame.
+    expect(up.sent.at(-1)).toEqual({
+      toolResponse: {
+        functionResponses: [{ id: "fc1", name: "read_file", response: { result: "const a = 1;" } }],
+      },
+    });
+  });
+
+  it("cancelActiveResponse is a safe no-op (no client-side cancel on this wire)", () => {
+    const up = fakeUpstream();
+    const { session } = collectLinter(up);
+    up.open();
+    up.emit({ setupComplete: {} });
+    const before = up.sent.length;
+    session.cancelActiveResponse();
+    expect(up.sent.length).toBe(before);
   });
 });

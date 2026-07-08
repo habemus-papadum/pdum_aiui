@@ -154,26 +154,26 @@ anywhere but OpenAI**:
 | `unverified` | Present but not checked (CI/non-interactive) or the check couldn't complete (offline, timeout). | A note that it's unverified, not known-bad; launch continues. |
 
 **Degradation, not refusal.** A bad or missing key never blocks the launch — the intent modality
-still mounts, but transcription and correction are then **unavailable** until the key is set: the
-widget says so rather than silently switching to the mock backends (those are the explicit offline
-choice, `transcriber`/`corrector: "mock"`). The launcher only informs (the same posture as the
+still mounts, but transcription (and the linter, if enabled) are then **unavailable** until the
+key is set: the widget says so rather than silently switching to the mock backend (that is the
+explicit offline choice, `transcriber: "mock"`). The launcher only informs (the same posture as the
 browser-side degradations). CI and other non-interactive sessions skip
 the network check silently. Either way the outcome (a *status*, never the key) is recorded in the
 channel's launch summary at `GET /debug/api/info`, so the [DevTools panel](./devtools) can
 explain a degraded pipeline.
 
-**Pipeline configuration lives in the overlay, not here.** Which transcription/correction models,
-the corrector policy, silence gating, keyword priming — all of that is `IntentPipelineConfig`,
-owned and configured by the overlay (`aiuiDevOverlay({ intent: { … } })` plus channel-side
-config), not by `aiui claude` flags. This includes the transcriber choice — `transcriber: "openai"`
-(REST, the default), the experimental `"openai-realtime"` (streaming — partial transcripts as you
-speak, using the same channel key), `"openai-voice"` (the flagship conversational session — the
-model talks back, though its input transcription still feeds the prompt), or `"mock"` (offline).
-The easy way to pick a rung is the `tier` field — a cost-sized preset over these fields, from
-`mock` (offline) up to `flagship` (spoken answers); see the overlay guide's
-[Tiers](./intent-overlay#tiers-one-dial-for-the-whole-ladder). The launcher's whole job is
-preflighting this key and passing the environment through. The
-[Using the intent overlay](./intent-overlay) guide page covers those knobs.
+**Pipeline configuration lives in the overlay, not here.** Which transcription models, the
+[prompt linter](./prompt-linting), silence gating, keyword priming — all of that is
+`IntentPipelineConfig`, owned and configured by the overlay
+(`aiuiDevOverlay({ intent: { … } })` plus channel-side config), not by `aiui claude` flags.
+Transcription is streaming (`transcriber: "openai-realtime"` — partial transcripts as you
+speak, using the same channel key; `"mock"` is the offline choice). The easy way to pick a
+rung is the `tier` field — `rapid` (the default) or `premium`; see the overlay guide's
+[Tiers](./intent-overlay#tiers-one-dial-for-transcription). The linter is orthogonal
+(`linter: "off" | "openai" | "gemini"`; a Gemini linter needs `GEMINI_API_KEY` in the same
+environment). The launcher's whole job is preflighting the OpenAI key and passing the
+environment through. The [Using the intent overlay](./intent-overlay) guide page covers those
+knobs.
 
 ## State aiui keeps (and how it affects behavior)
 

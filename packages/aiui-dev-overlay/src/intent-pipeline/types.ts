@@ -49,7 +49,13 @@ export interface LocatedComponent {
   containment?: "enclosed" | "within";
 }
 
-export type Mode = "ink" | "correct" | "tweak" | "vscode";
+/**
+ * The engine's interaction modes. (Historical note: a `"correct"` mode — the
+ * two-box transcript editor — existed until the append-only pivot removed it;
+ * `correction` EVENTS remain in the stream vocabulary below so historical
+ * traces still fold, but nothing emits them anymore.)
+ */
+export type Mode = "ink" | "tweak" | "vscode";
 
 /**
  * The payload of an `app-selection` event: what the user had highlighted on
@@ -120,6 +126,15 @@ export type IntentEvent =
        * hyphens).
        */
       marker: string;
+      /**
+       * Wall-clock of the capture GESTURE (pointerup / S keydown) — not of
+       * this event's emission, which trails it by the compositor wait +
+       * encode (and by the getDisplayMedia picker on the first shot). The
+       * compiler uses it to place the shot INSIDE a still-open segment's
+       * text via the `transcript-delta` timeline; absent (legacy streams,
+       * idle shots) → arrival-order placement.
+       */
+      takenAt?: number;
       rect: Rect;
       components: LocatedComponent[];
       /**
@@ -257,4 +272,25 @@ export type IntentEvent =
       type: "code-selection-drop";
       marker: string;
     }
-  | { at: number; type: "note"; text: string };
+  | { at: number; type: "note"; text: string }
+  /**
+   * A prompt-linter observation — the realtime model's spoken diagnostic,
+   * folded into the stream so the trace and the preview both carry what the
+   * linter said. NEVER composed into the prompt: the compiler's fold skips
+   * every `linter-*` kind (the linter observes the briefing; it does not
+   * write it). `segment` correlates the note to the talk window it lints.
+   */
+  | { at: number; type: "linter-note"; text: string; segment?: number }
+  /**
+   * The linter asked to use a tool (e.g. `read_file`) — the request half,
+   * recorded first-class so the trace shows exactly what the linter did.
+   * Trace/debug material only: the compiler skips it, and the client renders
+   * no chip for it (the trace viewer is its surface).
+   */
+  | { at: number; type: "linter-tool-call"; tool: string; args: Record<string, unknown> }
+  /**
+   * The tool's answer to a `linter-tool-call` — `summary` is a short human
+   * gloss (`"src/x.ts — 4.1KB"` / an error string), never the content (which
+   * lives in the trace stage's data). Compiler-skipped like its request.
+   */
+  | { at: number; type: "linter-tool-result"; tool: string; ok: boolean; summary: string };

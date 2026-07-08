@@ -139,9 +139,12 @@ export interface IntentToolContext {
    * (arm control, state label, level meter). The slot lives in the tool's
    * shadow root, so page-level stylesheets can't reach it: inject the
    * content's CSS through `addStyle`. One claimant per mount; claiming hides
-   * the default "✳ aiui" label.
+   * the default "✳ aiui" label. `below` is the BELOW-PILL slot: content
+   * placed there renders under the pill INSIDE the draggable, bottom-anchored
+   * root — so it slides the pill up rather than covering the page, and it
+   * follows every drag (the cheat sheet lives there).
    */
-  hudSlot(): { container: HTMLElement; addStyle(css: string): void };
+  hudSlot(): { container: HTMLElement; below: HTMLElement; addStyle(css: string): void };
   /**
    * Drive the widget's mode ring: the pill's `data-ui-mode` attribute (and
    * so its border color). The modality that owns a mode model calls this
@@ -164,23 +167,24 @@ export interface IntentModality {
 
 export interface IntentToolOptions {
   /**
-   * The intent inputs to offer. Defaults to the bundled multimodal modality
-   * (active) plus the text modality as an escape hatch — see {@link
-   * bundledModalities}.
+   * The intent inputs to offer. Defaults to just the bundled multimodal
+   * modality — see {@link bundledModalities}. (The text modality remains
+   * available by name via `format: "text-concat"` or explicitly here; it
+   * left the default set when the widget went multimodal-first.)
    */
   modalities?: IntentModality[];
   /**
    * Pick the bundled modality set by wire-format name: `intent-v1` (the
    * multimodal default), or `text-concat` (text only — the escape hatch). The
    * `aiuiDevOverlay()` Vite plugin's `format` option lands here. Omitted →
-   * the default set `[multimodal, text]`. Ignored when `modalities` is given;
+   * the multimodal modality alone. Ignored when `modalities` is given;
    * unknown names throw. Custom modalities can't be named this way (they are
    * functions) — pass `modalities` instead.
    */
   format?: string;
   /**
    * Client-side pipeline config for the bundled multimodal modality (talk mode,
-   * ink fade, transcriber/corrector choice, arming rebind, research knobs). The
+   * ink fade, transcriber choice, arming rebind, research knobs). The
    * `aiuiDevOverlay({ intent })` Vite option lands here; JSON-serializable.
    */
   intent?: Partial<IntentPipelineConfig>;
@@ -266,15 +270,16 @@ const BUNDLED_MODALITIES: Record<
 
 /**
  * Resolve the `format` option to the modality set the tool mounts. Omitted →
- * the default `[multimodal, text]` (multimodal active, text as the escape
- * hatch). A named format → that single bundled modality; unknown names throw.
+ * the multimodal modality alone (the Text tab left the default set in the
+ * linter pivot; `format: "text-concat"` still mounts it). A named format →
+ * that single bundled modality; unknown names throw.
  */
 function bundledModalities(
   format: string | undefined,
   intent?: Partial<IntentPipelineConfig>,
 ): IntentModality[] {
   if (format === undefined) {
-    return [multimodalModality(intent), textModality()];
+    return [multimodalModality(intent)];
   }
   const make = BUNDLED_MODALITIES[format];
   if (!make) {

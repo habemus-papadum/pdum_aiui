@@ -42,6 +42,12 @@ export interface CaptureDeps {
    * frames flow within a `wait()`.
    */
   videoSampleIntervalMs?: number;
+  /**
+   * Live cadence from the effective config (`videoFrameIntervalMs`) — read
+   * before every tick, so the share's fps slider applies immediately. The
+   * test seam above wins when present.
+   */
+  videoFrameIntervalMs?: () => number;
 }
 
 /** The capture surface modality.ts (dispatch, reconciler, HUD, report) drives. */
@@ -77,7 +83,7 @@ export interface Capture {
 export function createCapture(deps: CaptureDeps): Capture {
   const { engine, ink, uploadAttachment, uploadVideo, setStatus, reportError, renderHud } = deps;
 
-  const shots = new ShotTool(ink, (rect, components, viewport, thumb, bytes) => {
+  const shots = new ShotTool(ink, (rect, components, viewport, thumb, bytes, takenAt) => {
     // A capture can resolve long after the gesture — the first shot blocks
     // on the getDisplayMedia picker — by which time the turn may have been
     // sent or cancelled (send disarms). A disarmed engine means this shot
@@ -88,8 +94,9 @@ export function createCapture(deps: CaptureDeps): Capture {
     }
     // No dev-proxy: the channel assigns the on-disk path from the uploaded
     // bytes, so the shot event carries no path — its marker correlates it
-    // with the attachment frame.
-    const marker = engine.shotDone(rect, components, thumb, undefined, viewport);
+    // with the attachment frame. `takenAt` (the gesture's wall-clock) rides
+    // the event so the compiler can anchor the shot into the transcript.
+    const marker = engine.shotDone(rect, components, thumb, undefined, viewport, takenAt);
     if (bytes) {
       void uploadAttachment(marker, "image/png", bytes);
     }
@@ -106,7 +113,11 @@ export function createCapture(deps: CaptureDeps): Capture {
   const videoSampler = new VideoSampler({
     captureFrame: () => captureVideoFrame(),
     sendFrame: (seq, bytes) => void uploadVideo(videoShareOrdinal, seq, bytes),
-    ...(deps.videoSampleIntervalMs !== undefined ? { intervalMs: deps.videoSampleIntervalMs } : {}),
+    ...(deps.videoSampleIntervalMs !== undefined
+      ? { intervalMs: deps.videoSampleIntervalMs }
+      : deps.videoFrameIntervalMs !== undefined
+        ? { intervalMs: deps.videoFrameIntervalMs }
+        : {}),
   });
 
   let shooting = false;

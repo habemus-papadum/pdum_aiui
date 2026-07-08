@@ -7,7 +7,7 @@ import { fakeSocketFactory } from "../test-support/fake-socket";
 import { installLocalStorage } from "../test-support/local-storage";
 import { INTENT_CONFIG_STORAGE_KEY, loadIntentOverrides } from "./advanced-config";
 import type { PcmSource } from "./audio";
-import { multimodalModality, type MultimodalDeps } from "./modality";
+import { type MultimodalDeps, multimodalModality } from "./modality";
 import type { SpeechAudioElement } from "./speech";
 
 afterEach(() => {
@@ -360,67 +360,6 @@ describe("multimodalModality: lowered echoes merge in", () => {
     await flush();
     expect(body.textContent).toContain("reaction diffusion on the GPU");
   });
-
-  it("applies a correction echo's patch and does not re-stream the resolution", async () => {
-    const { sent, push } = mountMultimodal({
-      transcriber: "mock",
-      corrector: "openai",
-      mockWordMs: 0,
-      mockTypoRate: 0,
-      diffFlashMs: 0,
-    });
-    const CANNED = "make the baseline curve a bit thicker and color it amber";
-
-    key("keydown", "`"); // arm
-    key("keydown", " ");
-    await wait(30);
-    key("keyup", " "); // mock transcription → CANNED lands in the preview
-    await wait(60);
-    key("keydown", "e"); // correct mode → the document opens in the top editor
-    await wait(20);
-
-    // Mark the whole document in the top editor (send-time selection).
-    const editArea = document.querySelector(".mm-edit-area") as HTMLTextAreaElement;
-    editArea.setSelectionRange(0, editArea.value.length);
-
-    // Type the fix + Enter → a patchless correction REQUEST goes to the server.
-    const input = document.querySelector(".mm-correction-bar textarea") as HTMLTextAreaElement;
-    input.value = "corrected";
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    await wait(30);
-
-    const requestCorrections = streamedEvents(sent).filter((e) => e.type === "correction");
-    expect(requestCorrections).toHaveLength(1);
-    expect((requestCorrections[0] as { patch?: string }).patch).toBeUndefined();
-
-    // Server echoes the completed correction with a patch; the client applies it.
-    push({
-      kind: "lowered",
-      events: [
-        {
-          at: Date.now(),
-          type: "correction",
-          from: 0,
-          to: CANNED.length,
-          original: CANNED,
-          instruction: "corrected",
-          via: "typed",
-          patch: `*** Begin Patch\n*** Update File: transcript\n@@\n-${CANNED}\n+the corrected line\n*** End Patch`,
-          model: "gpt-4o-mini",
-          latencyMs: 1200,
-        },
-      ],
-    });
-    await wait(20);
-
-    const body = document.querySelector(".mm-preview-body") as HTMLElement;
-    expect(body.textContent).toContain("the corrected line");
-    // The resolution must NOT have been re-streamed (server already merged it).
-    const streamedPatched = streamedEvents(sent).filter(
-      (e) => e.type === "correction" && (e as { patch?: string }).patch !== undefined,
-    );
-    expect(streamedPatched).toHaveLength(0);
-  });
 });
 
 describe("multimodalModality: degradation", () => {
@@ -501,60 +440,6 @@ describe("multimodalModality: degradation", () => {
 
     const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
     expect(status).toMatch(/OPENAI_API_KEY/);
-  });
-
-  it("says why a correction fell back to plain replacement (channel corrector, no patch echo)", async () => {
-    const { handle, sent, push } = mountMultimodal({
-      transcriber: "mock",
-      corrector: "openai",
-      mockWordMs: 0,
-      mockTypoRate: 0,
-      diffFlashMs: 0,
-    });
-    const CANNED = "make the baseline curve a bit thicker and color it amber";
-
-    key("keydown", "`"); // arm
-    key("keydown", " ");
-    await wait(30);
-    key("keyup", " "); // mock transcription → CANNED lands in the preview
-    await wait(60);
-    key("keydown", "e"); // correct mode
-
-    // Mark the whole document in the TOP editor (the span a fix targets now
-    // lives in the edit area's native selection, read at send time).
-    const editArea = document.querySelector(".mm-edit-area") as HTMLTextAreaElement;
-    editArea.setSelectionRange(0, editArea.value.length);
-
-    const input = document.querySelector(".mm-correction-bar textarea") as HTMLTextAreaElement;
-    input.value = "corrected";
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    await wait(30);
-
-    // Confirm the patchless request was sent, then have the server echo a
-    // completed correction WITHOUT a patch (its diff-failure fallback).
-    expect(streamedEvents(sent).filter((e) => e.type === "correction")).toHaveLength(1);
-    push({
-      kind: "lowered",
-      events: [
-        {
-          at: Date.now(),
-          type: "correction",
-          from: 0,
-          to: CANNED.length,
-          original: CANNED,
-          instruction: "corrected",
-          via: "typed",
-          // no patch → the client applies a plain replacement and must say why
-        },
-      ],
-    });
-    await wait(20);
-
-    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
-    expect(status).toMatch(/plain replacement/i);
-    // The correction still landed (never silently vanishes).
-    const body = document.querySelector(".mm-preview-body") as HTMLElement;
-    expect(body.textContent).toContain("corrected");
   });
 });
 
@@ -789,27 +674,77 @@ describe("multimodalModality: help (H) and the condensed cheat sheet", () => {
     expect(handle.shadowRoot?.querySelector(".panel")?.hasAttribute("hidden")).toBe(true);
   });
 
-  it("the cheat sheet shows the CURRENT state's keys while armed, and hides when off", async () => {
-    mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
-    const cheat = (): Element | null => document.querySelector(".mm-cheat");
-    expect(cheat()?.classList.contains("visible")).toBe(false); // off → the ? teaches
+  it("the cheat sheet shows the CURRENT state's icons while armed, and hides when off", async () => {
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    // The sheet lives in the widget's below-pill slot (shadow root) so it
+    // rides the draggable root under the pill.
+    const wrap = (): Element | null =>
+      handle.shadowRoot?.querySelector(".below-slot .mm-cheat-wrap") ?? null;
+    const caps = (): HTMLButtonElement[] => [
+      ...(wrap()?.querySelectorAll<HTMLButtonElement>(".mm-keycap") ?? []),
+    ];
+    expect(wrap()?.classList.contains("visible")).toBe(false); // off → the ? teaches
 
     key("keydown", "`");
     await flush();
-    expect(cheat()?.classList.contains("visible")).toBe(true);
-    const caps = [...(cheat()?.querySelectorAll("kbd") ?? [])].map((k) => k.textContent);
-    expect(caps).toContain("D");
-    expect(caps).toContain("J");
-    expect(caps).toContain("drag"); // the pointer gesture gets a row while ink owns it
+    expect(wrap()?.classList.contains("visible")).toBe(true);
+    // Icons only — no kbd caps in the sheet body (keys live in the tooltip).
+    const icons = caps().map((c) => c.textContent);
+    expect(icons).toContain("📸"); // D — region shot
+    expect(icons.some((i) => i?.includes("✏️"))).toBe(true); // the drag gesture row
+    // Icon-only caps; an iconless row (esc) falls back to its key cap — the
+    // one kbd allowed in the body.
+    const kbds = [...(wrap()?.querySelectorAll(".mm-cheat kbd") ?? [])].map((k) => k.textContent);
+    expect(kbds).toEqual(["esc"]);
 
     key("keydown", "t"); // tweak: the handover shrinks the sheet to its claims
     await flush();
-    const tweakCaps = [...(cheat()?.querySelectorAll("kbd") ?? [])].map((k) => k.textContent);
-    expect(tweakCaps).toEqual(["`", "T", "esc"]);
+    expect(caps().length).toBe(3); // arm · T · esc
 
     key("keydown", "`"); // disarm hides it
     await flush();
-    expect(cheat()?.classList.contains("visible")).toBe(false);
+    expect(wrap()?.classList.contains("visible")).toBe(false);
+  });
+
+  it("cheat caps execute on click and reveal their key pill on hover", async () => {
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`");
+    await flush();
+    const wrap = (): Element | null =>
+      handle.shadowRoot?.querySelector(".below-slot .mm-cheat-wrap") ?? null;
+    const capFor = (icon: string): HTMLButtonElement | undefined =>
+      [...(wrap()?.querySelectorAll<HTMLButtonElement>(".mm-keycap") ?? [])].find((c) =>
+        c.textContent?.includes(icon),
+      );
+
+    // Hover: the tooltip shows the KEY as a kbd pill + the label.
+    const shot = capFor("🖼");
+    expect(shot).toBeDefined();
+    shot?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await flush();
+    const tip = wrap()?.querySelector(".mm-cheat-tip");
+    expect(tip?.querySelector("kbd")?.textContent).toBe("S");
+    expect(tip?.textContent).toContain("viewport shot");
+    shot?.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+    await flush();
+    expect(wrap()?.querySelector(".mm-cheat-tip")).toBeNull();
+
+    // Click: the cap executes its command through the SAME resolver the
+    // keyboard uses — ⚙️ (K) opens the config strip, ✕-free and stub-free.
+    capFor("⚙️")?.click();
+    await flush();
+    expect(document.querySelector(".mm-config-strip")?.classList.contains("visible")).toBe(true);
+
+    // The talk cap (🎙, a HOLD key) click-toggles via the down→up fallback.
+    key("keydown", "Escape"); // close the strip first (it claims digits/S)
+    await flush();
+    capFor("🎙")?.click();
+    await wait(30);
+    const state = (): string => handle.shadowRoot?.querySelector(".mm-state")?.textContent ?? "";
+    expect(state()).toContain("REC");
+    capFor("🎙")?.click();
+    await wait(30);
+    expect(state()).not.toContain("REC");
   });
 });
 
@@ -1038,7 +973,7 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
     }
   });
 
-  it("V off a non-live tier is inert with a hint (dispatch gates on submode)", async () => {
+  it("V with the linter off is inert with a hint (dispatch gates on linter)", async () => {
     const restore = stubCapture();
     try {
       const { handle, sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
@@ -1048,21 +983,10 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
       expect(videoChunks(sent)).toHaveLength(0);
       expect(streamedEvents(sent).some((e) => e.type === "video-share")).toBe(false);
       const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
-      expect(status).toMatch(/live tier/i);
+      expect(status).toMatch(/needs the linter/i);
     } finally {
       restore();
     }
-  });
-
-  it("E is inert in the realtime submode — corrections are a transcription feature", async () => {
-    const { handle } = mountLive();
-    key("keydown", "`");
-    key("keydown", "e"); // correct-toggle → gated
-    await wait(10);
-    // No correct mode entered (the preview never gains the `correcting` class).
-    expect(document.querySelector(".mm-preview.correcting")).toBeNull();
-    const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
-    expect(status).toMatch(/just say the fix/i);
   });
 });
 
@@ -1236,9 +1160,9 @@ describe("multimodalModality: advanced config panel", () => {
   }
 
   it("gear opens the editor over the full effective config", async () => {
-    // Explicit mock for both seams (the shipped defaults are the real `openai`
-    // backends) so the assertion below tests a subset present, not the default.
-    const { handle } = mountMultimodal({ transcriber: "mock", corrector: "mock", mockWordMs: 0 });
+    // Explicit mock (the shipped default is the real `openai` backend) so the
+    // assertion below tests a subset present, not the default.
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
     const panel = q<HTMLElement>(handle, ".mm-config");
     expect(panel.hidden).toBe(true);
     q<HTMLButtonElement>(handle, ".mm-gear").click();
@@ -1247,7 +1171,7 @@ describe("multimodalModality: advanced config panel", () => {
     const editor = q<HTMLTextAreaElement>(handle, ".mm-config-editor");
     const shown = JSON.parse(editor.value);
     // Every known key is present — it's the whole effective config, not a subset.
-    expect(shown).toMatchObject({ talkMode: "hold", transcriber: "mock", corrector: "mock" });
+    expect(shown).toMatchObject({ talkMode: "hold", transcriber: "mock" });
   });
 
   it("applies a valid edit live + persists it; the next hello reflects it", async () => {
@@ -1319,7 +1243,7 @@ describe("multimodalModality: advanced config panel", () => {
     expect(helloIntent(sent)).toMatchObject({
       talkMode: "toggle", // persisted override
       mockWordMs: 99, // vite intent option
-      corrector: "openai", // DEFAULT (the shipped real backend)
+      model: "gpt-4o-mini-transcribe", // DEFAULT (untouched by either layer)
     });
   });
 });
@@ -1356,9 +1280,9 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(stripOpen()).toBe(false);
     key("keydown", "k");
     expect(stripOpen()).toBe(true);
-    key("keydown", "3"); // rapid
+    key("keydown", "2"); // premium
     await flush(); // the strip content is Solid-rendered (batched writes)
-    expect(activeChip()).toContain("rapid");
+    expect(activeChip()).toContain("premium");
 
     // Session-scoped: NOTHING persisted — a reload would return to the file config.
     expect(loadIntentOverrides()).toEqual({});
@@ -1367,7 +1291,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     // (transcriber: mock) still wins over the preset.
     key("keydown", " ");
     await wait(50);
-    expect(helloIntents(sent)[0]).toMatchObject({ tier: "rapid", transcriber: "mock" });
+    expect(helloIntents(sent)[0]).toMatchObject({ tier: "premium", transcriber: "mock" });
   });
 
   it("clicking a tier chip (or an action) works like its key — the strip is mouse-operable", async () => {
@@ -1401,9 +1325,9 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     await wait(50);
 
     key("keydown", "k");
-    key("keydown", "5"); // flagship — but a thread is open
+    key("keydown", "2"); // premium — but a thread is open
     await flush(); // the strip content is Solid-rendered (batched writes)
-    expect(strip()?.querySelector(".mm-strip-pending")?.textContent).toContain("flagship");
+    expect(strip()?.querySelector(".mm-strip-pending")?.textContent).toContain("premium");
     expect(helloIntents(sent)[0]?.tier).toBeUndefined(); // this thread keeps its config
 
     key("keydown", "Escape"); // close the strip (not the thread)
@@ -1416,7 +1340,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     await wait(50);
     const hellos = helloIntents(sent);
     expect(hellos).toHaveLength(2);
-    expect(hellos[1]).toMatchObject({ tier: "flagship" });
+    expect(hellos[1]).toMatchObject({ tier: "premium" });
     expect(loadIntentOverrides()).toEqual({}); // still session-only
   });
 
@@ -1424,10 +1348,10 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     mountMultimodal(MOCK);
     key("keydown", "`");
     key("keydown", "k");
-    key("keydown", "3"); // rapid, session layer
+    key("keydown", "2"); // premium, session layer
     expect(loadIntentOverrides()).toEqual({});
     key("keydown", "s"); // save
-    expect(loadIntentOverrides()).toEqual({ tier: "rapid" });
+    expect(loadIntentOverrides()).toEqual({ tier: "premium" });
     await flush(); // the strip content is Solid-rendered (batched writes)
     expect(strip()?.textContent).toContain("saved for this site");
   });
@@ -1437,7 +1361,7 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     const { sent } = mountMultimodal(MOCK);
     key("keydown", "`");
     key("keydown", "k");
-    key("keydown", "5"); // flagship, session layer
+    key("keydown", "2"); // premium, session layer
     key("keydown", "r"); // reset everything
     expect(loadIntentOverrides()).toEqual({});
 

@@ -322,5 +322,11 @@ function describe(event: IntentEvent): string {
       return event.on ? "video share ON (~1 fps)" : "video share off";
     case "note":
       return event.text;
+    case "linter-note":
+      return `💡 linter${event.segment !== undefined ? ` (seg ${event.segment})` : ""}: ${clip(event.text)}`;
+    case "linter-tool-call":
+      return `💡 linter → ${event.tool}(${clip(JSON.stringify(event.args))})`;
+    case "linter-tool-result":
+      return `💡 ${event.tool} ${event.ok ? "→" : "✗"} ${clip(event.summary)}`;
   }
 }

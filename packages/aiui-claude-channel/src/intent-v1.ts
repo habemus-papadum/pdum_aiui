@@ -33,10 +33,10 @@
  *    context preamble (`selectionSections`) — and only when the stream carried
  *    no `app-selection` events of its own.
  *
- * A correction event that arrives without a `patch` while the hello selected
- * the OpenAI corrector is a request: the V4A diff runs here (against the current
- * composed transcript) and the completed correction is merged and pushed back.
- * A thread that ends in `cancel` (or never fins) lowers to nothing.
+ * A thread that ends in `cancel` (or never fins) lowers to nothing. (The
+ * corrector round-trip — patchless `correction` requests answered with V4A
+ * diffs — was retired with correct mode in the append-only pivot; legacy
+ * correction events in old traces still fold at compose time.)
  *
  * **Incremental lowering (streaming-turns.md §2).** The cheap, pure, and
  * pre-warmable work happens as events arrive, not at `fin`, so `fin` is a
@@ -53,7 +53,6 @@
  * StreamProcessor.onClose} and lowers to nothing.
  */
 import {
-  applyPatch,
   type ComposedIntent,
   composeIntent,
   DEFAULT_INTENT_CONFIG,
@@ -68,24 +67,13 @@ import {
   type ThreadContext,
 } from "./channel";
 import { rawCodec } from "./codec";
-import { type Corrector, openaiCorrector } from "./correct";
 import type { CallCost } from "./cost";
 import type { ChunkDescriptor } from "./frame";
-import { DEFAULT_GEMINI_LIVE_MODEL, openGeminiLiveSession } from "./gemini-live";
-import {
-  type LabelEntry,
-  resolveSegments,
-  type SelectionEntry,
-  selectionInjectionLabel,
-  selectionRetractionLabel,
-} from "./live-resolve";
-import {
-  LIVE_COMPOSER_INSTRUCTIONS,
-  LIVE_NUDGE_TEXT,
-  type LiveSession,
-  type LiveSessionCallbacks,
-} from "./live-session";
-import { DEFAULT_OPENAI_LIVE_MODEL, openOpenAiLiveSession } from "./openai-live";
+import { DEFAULT_GEMINI_LIVE_MODEL } from "./gemini-live";
+import { createLinterSidecar, type LinterSidecar } from "./linter-sidecar";
+import type { SelectionEntry } from "./live-resolve";
+import type { LiveSession, LiveSessionCallbacks } from "./live-session";
+import { DEFAULT_OPENAI_LIVE_MODEL } from "./openai-live";
 import {
   asSelection,
   promptContextSections,
@@ -99,11 +87,7 @@ import {
   type RealtimeSession,
   type RealtimeSocketFactory,
 } from "./realtime";
-import {
-  DEFAULT_VOICE_INSTRUCTIONS,
-  openRealtimeVoiceSession,
-  type RealtimeVoiceSession,
-} from "./realtime-voice";
+
 import { openaiSpeaker, type Speaker } from "./speak";
 import { openaiSummarizer, type Summarizer } from "./summarize";
 import type { TraceHandle } from "./trace";
@@ -117,7 +101,7 @@ import {
 
 /**
  * A server-produced batch of intent events, pushed to the client to merge into
- * its own stream (transcripts it did not compute, completed correction diffs).
+ * its own stream (transcripts it did not compute).
  * Distinguished from a per-frame ack by its `kind` field.
  */
 export interface LoweredMessage {
@@ -184,15 +168,6 @@ const MIN_REALTIME_COMMIT_MS = 100;
 const REALTIME_PCM_BYTES_PER_MS = 48;
 
 /**
- * How long the realtime submode's `fin` waits, after the Enter nudge, for the
- * model's `submit_intent` call before it falls back to composing over the
- * chronicle (§4.3 step 3). Generous — the spike measured Enter→tool-call well
- * inside a few seconds — because the fallback is a genuine degradation (the model
- * didn't compose), so we give it real room first.
- */
-const LIVE_DRAIN_TIMEOUT_MS = 12_000;
-
-/**
  * The realtime submode's stale-key hint, the Gemini twin of {@link OPENAI_KEY_HINT}.
  * The single most common cause of "the live tier stopped working" is a missing or
  * revoked GEMINI_API_KEY in the channel process's environment — a condition only
@@ -235,9 +210,6 @@ interface ResolvedIntent {
   realtimeModel: string;
   /** Realtime latency/accuracy knob (`minimal`…`xhigh`); undefined → model default. */
   realtimeDelay: string | undefined;
-  corrector: "mock" | "openai";
-  correctionModel: string;
-  correctionPolicy: "replace" | "note";
   passes: { silenceTrim: boolean; imageDownscale: boolean };
   /** Spoken audio back to the human: `off` | `acks` (premium TTS) | `voice` (flagship). */
   audioBack: "off" | "acks" | "voice";
@@ -255,6 +227,16 @@ interface ResolvedIntent {
   realtimeReasoning: string | undefined;
   /** How screenshots render in the lowered body (see ComposeOptions.shotFormat). */
   shotFormat: "xml" | "text";
+  /** The prompt linter: off, or which live vendor observes the composition. */
+  linter: "off" | "openai" | "gemini";
+  /** Linter model id; undefined → the vendor default. */
+  linterModel: string | undefined;
+  /** Linter persona override; undefined → LINTER_INSTRUCTIONS. */
+  linterInstructions: string | undefined;
+  /** Ambient screen-frame cadence while sharing (ms per frame). */
+  videoFrameIntervalMs: number;
+  /** Legacy translations applied while resolving (each one human-readable). */
+  coerced: string[];
 }
 
 /** The premium TTS default model, and the flagship conversational default. */
@@ -294,8 +276,6 @@ export interface IntentV1Options {
    * in place of the real REST transcriber.
    */
   transcriber?: Transcriber;
-  /** Test seam override — used whenever the hello selects `corrector: openai`. */
-  corrector?: Corrector;
   /**
    * Test seam override for the realtime upstream socket — used whenever the hello
    * selects `transcriber: openai-realtime`, in place of the real `ws` connection.
@@ -308,24 +288,22 @@ export interface IntentV1Options {
    */
   speaker?: Speaker;
   /**
-   * Test seam override for the flagship voice upstream socket — used whenever the
-   * hello selects `transcriber: openai-voice`, in place of the real `ws`
-   * connection. Present (even keyless) → the voice path is exercised offline.
-   */
-  realtimeVoiceSocketFactory?: RealtimeSocketFactory;
-  /**
-   * Test seam override for the realtime submode's **Gemini** upstream socket
-   * (`submode: realtime`, `liveVendor: gemini`), in place of the real `ws`
-   * connection. Present (even keyless) → the live path runs offline (the house
-   * pattern; see gemini-live.ts).
+   * Test seam override for the linter's **Gemini** upstream socket
+   * (`linter: "gemini"`), in place of the real `ws` connection. Present (even
+   * keyless) → the linter runs offline (the house pattern; see gemini-live.ts).
    */
   geminiLiveSocketFactory?: RealtimeSocketFactory;
   /**
-   * Test seam override for the realtime submode's **OpenAI** upstream socket
-   * (`submode: realtime`, `liveVendor: openai`). Present (even keyless) → the
-   * degraded live path runs offline.
+   * Test seam override for the linter's **OpenAI** upstream socket
+   * (`linter: "openai"`). Present (even keyless) → the linter runs offline.
    */
   openaiLiveSocketFactory?: RealtimeSocketFactory;
+  /**
+   * Test seam override replacing the linter's whole engine with a scripted
+   * {@link LiveSession} — the sidecar's state machine is then exercised with
+   * no vendor dialect at all.
+   */
+  linterSessionFactory?: (callbacks: LiveSessionCallbacks) => LiveSession;
   /**
    * Test seam override for the post-send turn summarizer (see summarize.ts). Its
    * mere presence enables summaries even with no key; absent + keyless → no
@@ -342,7 +320,9 @@ export interface IntentV1Options {
  * carries only `tier` (or a sparse partial), each field's default is the tier's
  * preset value — the shared `expandTier` from the pipeline package, so both sides
  * agree on what a tier means (model-tiers.md, "Channel side"). Absent tier →
- * `standard`, which reproduces today's REST-mini defaults exactly.
+ * `standard` (the quiet REST legacy — a sparse hello without a key must not
+ * degrade loudly; the REST retirement will flip this to `rapid`); legacy
+ * names (standard, flagship, live-*) expand via the shared alias table.
  */
 function resolveIntent(raw: unknown): ResolvedIntent {
   const cfg = (raw !== null && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -366,7 +346,7 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     ["gemini", "openai"] as const,
     preset.liveVendor ?? "gemini",
   );
-  return {
+  const resolved: ResolvedIntent = {
     tier,
     submode: oneOf(
       cfg.submode,
@@ -387,13 +367,6 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     model: str(cfg.model, preset.model),
     realtimeModel: str(cfg.realtimeModel, preset.realtimeModel ?? DEFAULT_REALTIME_MODEL),
     realtimeDelay: optStr(cfg.realtimeDelay ?? preset.realtimeDelay),
-    corrector: oneOf(cfg.corrector, ["mock", "openai"] as const, preset.corrector),
-    correctionModel: str(cfg.correctionModel, preset.correctionModel),
-    correctionPolicy: oneOf(
-      cfg.correctionPolicy,
-      ["replace", "note"] as const,
-      preset.correctionPolicy,
-    ),
     passes: {
       silenceTrim: passes.silenceTrim === true,
       imageDownscale: passes.imageDownscale === true,
@@ -417,7 +390,45 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     ),
     realtimeReasoning: optStr(cfg.realtimeReasoning ?? preset.realtimeReasoning),
     shotFormat: oneOf(cfg.shotFormat, ["xml", "text"] as const, "xml"),
+    linter: oneOf(cfg.linter, ["off", "openai", "gemini"] as const, preset.linter ?? "off"),
+    linterModel: optStr(cfg.linterModel ?? preset.linterModel),
+    linterInstructions: optStr(cfg.linterInstructions ?? preset.linterInstructions),
+    videoFrameIntervalMs:
+      typeof cfg.videoFrameIntervalMs === "number" && cfg.videoFrameIntervalMs > 0
+        ? cfg.videoFrameIntervalMs
+        : (preset.videoFrameIntervalMs ?? 5000),
+    coerced: [],
   };
+  // ── legacy coercions (the linter pivot) — every translation is recorded ──
+  // and lands on the `intent config` trace stage, so a hello that meant the
+  // old world shows exactly how it was read into the new one.
+  if (resolved.transcriber === "openai-voice") {
+    // The flagship voice veneer is retired: transcription is streaming STT,
+    // and the spoken companion is the LINTER (which keeps the chosen voice).
+    resolved.transcriber = "openai-realtime";
+    if (resolved.linter === "off") {
+      resolved.linter = "openai";
+    }
+    resolved.coerced.push(
+      "transcriber openai-voice → openai-realtime + linter openai (voice veneer retired)",
+    );
+  }
+  if (resolved.submode === "realtime") {
+    // The composer submode is retired: the compiler composes everywhere; the
+    // live vendor the hello picked becomes the prompt LINTER, keeping the
+    // model they chose.
+    if (resolved.linter === "off") {
+      resolved.linter = resolved.liveVendor;
+    }
+    if (resolved.linterModel === undefined) {
+      resolved.linterModel = resolved.liveModel;
+    }
+    resolved.submode = "transcription";
+    resolved.coerced.push(
+      `submode realtime → linter ${resolved.linter} (the model-composes path retired; the compiler composes everywhere)`,
+    );
+  }
+  return resolved;
 }
 
 // ── the cleanup passes (openai-audio-stack.md) ───────────────────────────────
@@ -512,23 +523,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   const promptCwd = process.env.AIUI_PROMPT_CWD || process.cwd();
   const composeOptions = { cwd: promptCwd, shotFormat: intent.shotFormat };
 
-  // The realtime submode is a different processor entirely — the model composes,
-  // not composeIntent — so it forks here, sharing only the resolved config, the
-  // trace, and the prompt cwd. Everything below this branch is transcription mode.
-  // The live engine gets its VENDOR's key; the OpenAI key rides along for the
-  // OpenAI-backed extras (the post-send summarizer).
-  if (intent.submode === "realtime") {
-    const liveApiKey = intent.liveVendor === "gemini" ? geminiApiKey : apiKey;
-    return realtimeIntentProcessor(
-      ctx,
-      options,
-      intent,
-      { liveApiKey, apiKey },
-      trace,
-      composeOptions,
-    );
-  }
-
   // Resolve the pipe seams once. `openai` requested but keyless (and no test
   // override) → the seam is absent and that stage degrades (no transcript /
   // plain-replacement correction) rather than failing the turn.
@@ -537,13 +531,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       ? (options.transcriber ??
         (apiKey
           ? openaiTranscriber({ model: () => intent.model, apiKey, fetch: options.fetch })
-          : undefined))
-      : undefined;
-  const corrector: Corrector | undefined =
-    intent.corrector === "openai"
-      ? (options.corrector ??
-        (apiKey
-          ? openaiCorrector({ model: () => intent.correctionModel, apiKey, fetch: options.fetch })
           : undefined))
       : undefined;
 
@@ -556,15 +543,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   const realtimeReady =
     realtimeEnabled &&
     ((apiKey !== undefined && apiKey !== "") || options.realtimeSocketFactory !== undefined);
-
-  // The flagship conversational voice session (openai-voice): same per-thread WS
-  // shape, but the model answers aloud. Its input transcription still feeds the
-  // IR, so it is a superset of `rapid`, not a replacement. Keyless with no test
-  // factory → absent + loud, never a silent downgrade to REST.
-  const voiceEnabled = intent.transcriber === "openai-voice";
-  const voiceReady =
-    voiceEnabled &&
-    ((apiKey !== undefined && apiKey !== "") || options.realtimeVoiceSocketFactory !== undefined);
 
   // The premium TTS-ack speaker (audioBack:"acks"): a REST seam, keyed like the
   // transcriber/corrector. Keyless → absent, and the ack degrades loudly at
@@ -596,21 +574,19 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       model: intent.model,
       realtimeModel: intent.realtimeModel,
       realtimeDelay: intent.realtimeDelay,
-      corrector: intent.corrector,
-      correctionModel: intent.correctionModel,
-      correctionPolicy: intent.correctionPolicy,
       passes: intent.passes,
       audioBack: intent.audioBack,
       ttsModel: intent.ttsModel,
       realtimeVoiceModel: intent.realtimeVoiceModel,
       realtimeVoice: intent.realtimeVoice,
       realtimeTools: intent.realtimeTools,
+      linter: intent.linter,
+      linterModel: intent.linterModel,
       transcriberReady: transcriber !== undefined,
       realtimeReady,
-      correctorReady: corrector !== undefined,
       speakerReady: speaker !== undefined,
-      voiceReady,
       summarizerReady: summarizer !== undefined,
+      ...(intent.coerced.length > 0 ? { coerced: intent.coerced } : {}),
     },
   });
 
@@ -633,9 +609,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // The per-thread realtime session (assigned once the helpers it calls back into
   // exist, below). Segments stream PCM into it during talk and commit at talk-end.
   let realtime: RealtimeSession | undefined;
-  // The per-thread flagship voice session (openai-voice). Mutually exclusive with
-  // `realtime` — a hello selects one transcriber. Same PCM-append/commit shape.
-  let realtimeVoice: RealtimeVoiceSession | undefined;
   // Monotonic id for TTS-ack clips pushed to the client (`ack_0`, `ack_1`, …).
   let ackSeq = 0;
   // Accumulated PCM frames per streaming segment — saved as one blob at commit so
@@ -693,7 +666,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
    * pushes, or spends). fin reuses this when the log is unchanged since.
    */
   const recompose = (): void => {
-    lastComposed = composeIntent(events, intent.correctionPolicy, composeOptions);
+    lastComposed = composeIntent(events, "replace", composeOptions);
     composedSeq = mutationSeq;
     trace?.record({
       kind: "ir",
@@ -751,89 +724,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     });
   };
 
-  /** Run the correction diff for a patchless request, or fall back on failure. */
-  const resolveCorrection = async (
-    request: Extract<IntentEvent, { type: "correction" }>,
-  ): Promise<void> => {
-    // Document = segments-as-lines from the current composed state (the same
-    // shape the corrector model and the applier share — field-notes contract),
-    // narrowed to the request's chunk scope when it carries one: the model
-    // only ever sees the chunk the user was editing, so "fix every occurrence"
-    // can't leak across an image boundary. The patch stays context-anchored,
-    // so it applies to the full document unchanged.
-    const composed = composeIntent(events, intent.correctionPolicy, composeOptions);
-    const allLines = composed.items
-      .filter((item) => item.kind === "text")
-      .map((item) => item.text ?? "");
-    const docLines = request.scope
-      ? allLines.slice(
-          Math.max(0, request.scope.fromLine),
-          Math.min(allLines.length, request.scope.toLine),
-        )
-      : allLines;
-    // Trace the whole round-trip: "why didn't my fix apply?" must be
-    // answerable from the trace viewer, not reconstructed from toasts.
-    trace?.record({
-      kind: "ir",
-      label: "correction request",
-      data: { selected: request.original, instruction: request.instruction, docLines },
-    });
-    try {
-      const diff = await corrector?.diff({
-        docLines,
-        selected: request.original,
-        instruction: request.instruction,
-      });
-      if (!diff) {
-        throw new Error("corrector unavailable");
-      }
-      // Validate the patch actually applies; a patch that does not is treated
-      // as malformed and dropped so the client falls back to plain replacement.
-      applyPatch(docLines, diff.patch);
-      trace?.record({
-        kind: "ir",
-        label: "correction patch",
-        // The call's cost rides the patch stage itself (one card in the
-        // viewer), but still moves the manifest roll-up below.
-        data: {
-          model: diff.model,
-          latencyMs: diff.latencyMs,
-          patch: diff.patch,
-          ...(diff.cost ? { cost: diff.cost } : {}),
-        },
-      });
-      if (diff.cost?.usd !== undefined) {
-        trace?.addCost(diff.cost.usd);
-      }
-      const completed: IntentEvent = {
-        ...request,
-        patch: diff.patch,
-        model: diff.model,
-        latencyMs: diff.latencyMs,
-      };
-      appendEvent(completed);
-      push([completed]);
-    } catch (error) {
-      // Corrections never silently vanish: push the request through without a
-      // patch (plain first-occurrence replacement downstream) — and say WHY.
-      // Before the error push, the cause (an invalid key 401, a patch that
-      // wouldn't apply) died here in this catch; the client could only report
-      // "the echo had no patch".
-      const fallback: IntentEvent = { ...request, patch: undefined };
-      appendEvent(fallback);
-      push([fallback]);
-      const message = error instanceof Error ? error.message : String(error);
-      trace?.record({ kind: "info", label: "correction failed", data: { message } });
-      pushError(ctx, {
-        source: "correction",
-        message: `correction failed — applied as a plain replacement instead: ${message}`,
-        detail: OPENAI_KEY_HINT,
-      });
-    }
-    // The merged stream just changed — refresh the speculative compose.
-    recompose();
-  };
-
   /**
    * Finalize a segment we could not transcribe: echo an empty `transcript-final`
    * (so the client's preview resolves instead of waiting for an echo that will
@@ -864,6 +754,62 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       ...(error.detail !== undefined ? { detail: error.detail } : {}),
     });
   };
+
+  // ── the prompt-linter sidecar (linter != "off") ──────────────────────────────
+  // Purely advisory: it observes the same turn through a live session in
+  // linter mode and speaks one short diagnostic per pause. Keyless → disabled
+  // LOUDLY, once, and dictation still works (the promise in the error text).
+  let sidecar: LinterSidecar | undefined;
+  if (intent.linter !== "off") {
+    const vendor = intent.linter;
+    const linterKey = vendor === "gemini" ? geminiApiKey : apiKey;
+    const linterSocketFactory =
+      vendor === "gemini" ? options.geminiLiveSocketFactory : options.openaiLiveSocketFactory;
+    if (
+      (linterKey !== undefined && linterKey !== "") ||
+      linterSocketFactory !== undefined ||
+      options.linterSessionFactory !== undefined
+    ) {
+      sidecar = createLinterSidecar({
+        vendor,
+        apiKey: linterKey ?? "",
+        ...(intent.linterModel !== undefined ? { model: intent.linterModel } : {}),
+        ...(intent.linterInstructions !== undefined
+          ? { instructions: intent.linterInstructions }
+          : {}),
+        ...(intent.realtimeVoice !== undefined ? { voice: intent.realtimeVoice } : {}),
+        promptCwd,
+        appendEvent: (event) => appendEvent(event as unknown as IntentEvent),
+        push: (produced) => push(produced as unknown as IntentEvent[]),
+        pushSpeech,
+        recordCost,
+        onError: (message, data) =>
+          pushError(ctx, {
+            source: "linter",
+            message,
+            detail: vendor === "gemini" ? GEMINI_KEY_HINT : OPENAI_KEY_HINT,
+            ...(data !== undefined ? { data } : {}),
+          }),
+        ...(trace !== undefined ? { record: (stage) => trace.record(stage) } : {}),
+        ...(linterSocketFactory !== undefined ? { socketFactory: linterSocketFactory } : {}),
+        ...(options.linterSessionFactory !== undefined
+          ? { openSession: options.linterSessionFactory }
+          : {}),
+      });
+    } else {
+      const message =
+        vendor === "gemini"
+          ? "prompt linter disabled — the channel process has no GEMINI_API_KEY; dictation still works"
+          : "prompt linter disabled — the channel process has no OPENAI_API_KEY; dictation still works";
+      push([{ at: Date.now(), type: "note", text: message }]);
+      pushError(ctx, {
+        source: "linter",
+        message,
+        detail: vendor === "gemini" ? GEMINI_KEY_HINT : OPENAI_KEY_HINT,
+      });
+      trace?.record({ kind: "info", label: "linter disabled", data: { vendor, reason: "no key" } });
+    }
+  }
 
   // ── realtime (streaming) transcription session ───────────────────────────────
   // Opened here, at processor construction (≈ thread-open), so the handshake +
@@ -897,6 +843,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           };
           appendEvent(produced);
           push([produced]);
+          sidecar?.onTranscriptFinal(segment, result.text);
           recomposeIfStale();
         },
         onError: (message, segment) => {
@@ -912,75 +859,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
             pushError(ctx, {
               source: "transcription",
               message: `realtime transcription: ${message}`,
-              detail: OPENAI_KEY_HINT,
-            });
-          }
-        },
-      },
-    );
-  }
-
-  // ── flagship conversational voice session (openai-voice) ─────────────────────
-  // Same lifecycle as the STT session above, but the model answers aloud. The
-  // input transcription (onUserFinal) feeds compose exactly like `rapid`, so the
-  // IR never depends on the model speaking; the model's audio (onAudio) rides the
-  // additive `speech` message and its spoken reply (onReplyTranscript) is surfaced
-  // to the widget + trace. Function calling is `none` in v1 (nothing reaches the
-  // page). Keyless/error take the same loud finalizeSilentSegment posture.
-  if (voiceReady) {
-    realtimeVoice = openRealtimeVoiceSession(
-      {
-        apiKey: apiKey ?? "",
-        model: () => intent.realtimeVoiceModel,
-        voice: () => intent.realtimeVoice,
-        transcriptionModel: () => intent.model,
-        instructions: DEFAULT_VOICE_INSTRUCTIONS,
-        ...(options.realtimeVoiceSocketFactory !== undefined
-          ? { socketFactory: options.realtimeVoiceSocketFactory }
-          : {}),
-      },
-      {
-        onUserDelta: (segment, text) => {
-          push([{ at: Date.now(), type: "transcript-delta", segment, text }]);
-        },
-        onUserFinal: (segment, result) => {
-          const produced: IntentEvent = {
-            at: Date.now(),
-            type: "transcript-final",
-            segment,
-            text: result.text,
-            latencyMs: result.latencyMs,
-            model: result.model,
-          };
-          appendEvent(produced);
-          push([produced]);
-          recomposeIfStale();
-        },
-        onAudio: (clip) => {
-          pushSpeech(`reply_${clip.responseId}`, clip.mime, clip.bytes);
-        },
-        onReplyTranscript: (text) => {
-          // What the human was told — a status note (the widget shows it) and the
-          // trace records it; never the IR (text stays the single source of truth).
-          push([{ at: Date.now(), type: "note", text: `🔊 ${text}` }]);
-          trace?.record({ kind: "info", label: "voice reply", data: { text } });
-        },
-        onUsage: (cost, responseId) => {
-          // Conversational responses re-bill the whole context each time — the
-          // per-response accounting is exactly where the money goes.
-          recordCost(`voice response ${responseId}`, cost);
-        },
-        onError: (message, segment) => {
-          if (segment !== undefined) {
-            finalizeSilentSegment(`seg_${segment}`, `flagship voice failed: ${message}`, {
-              source: "voice",
-              detail: OPENAI_KEY_HINT,
-            });
-          } else {
-            push([{ at: Date.now(), type: "note", text: `flagship voice: ${message}` }]);
-            pushError(ctx, {
-              source: "voice",
-              message: `flagship voice: ${message}`,
               detail: OPENAI_KEY_HINT,
             });
           }
@@ -1018,7 +896,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     // zero frames. Discard instead of committing — clear the upstream buffer,
     // resolve the segment as empty (the preview stops waiting), and record it
     // in the trace. Quiet by design: an accidental tap is not an error.
-    const session = realtime ?? realtimeVoice;
+    const session = realtime;
     const pcmBytes = buffered?.bytes ?? 0;
     if (session !== undefined && pcmBytes < MIN_REALTIME_COMMIT_MS * REALTIME_PCM_BYTES_PER_MS) {
       session.discard(segment);
@@ -1045,17 +923,14 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     }
     if (realtime !== undefined) {
       realtime.commit(segment);
-    } else if (realtimeVoice !== undefined) {
-      realtimeVoice.commit(segment);
-    } else if (realtimeEnabled || voiceEnabled) {
-      // Keyless realtime/voice: no session to commit into. Same loud note as REST
+    } else if (realtimeEnabled) {
+      // Keyless realtime: no session to commit into. Same loud note as REST
       // keyless — the preview resolves and the widget can say why.
       finalizeSilentSegment(
         `seg_${segment}`,
-        `${voiceEnabled ? "flagship voice" : "server-side realtime transcription"} is unavailable — ` +
+        "server-side realtime transcription is unavailable — " +
           "the channel process has no OPENAI_API_KEY. " +
           'Set it and relaunch `aiui claude`, or use transcriber:"mock" for offline work.',
-        { source: voiceEnabled ? "voice" : "transcription" },
       );
     }
   };
@@ -1089,61 +964,73 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     copy.set(bytes);
     buffered.chunks.push(copy);
     buffered.bytes += copy.length;
-    // Only one of the two sessions is ever active (a hello picks one transcriber).
     realtime?.appendAudio(segment, copy);
-    realtimeVoice?.appendAudio(segment, copy);
+    sidecar?.onAudioFrame(copy);
   };
+
+  // The linter's selection view: latest payload per marker, so a re-emit under
+  // the same marker labels as "updated" (the grammar the persona describes).
+  const selectionRegistry = new Map<string, SelectionEntry>();
 
   const onEventsChunk = async (bytes: Uint8Array): Promise<void> => {
     for (const event of readEventBatch(decodeJson(bytes))) {
-      // A patchless correction under the OpenAI corrector is a diff request; the
-      // completed correction is pushed into this same stream (and echoed). Every
-      // other event — including a correction that already carries its patch — is
-      // appended in arrival order. The client applies our echo locally and never
-      // re-sends the correction, so no patched twin appears on the wire.
-      if (event.type === "correction" && event.patch === undefined && corrector !== undefined) {
-        await resolveCorrection(event);
-      } else {
-        appendEvent(event);
-        // Selections are first-class in the trace: "did my selection make it
-        // in?" must be answerable from a named stage, not by digging through
-        // raw input frames. (The composed/fin stages then show what they
-        // lowered to.)
-        if (event.type === "app-selection") {
-          // The stream carries its own selections now: they render INLINE in
-          // the body (composeIntent), so the legacy context-chunk preamble
-          // must stand down for this turn or the selection would ride twice.
-          streamHasSelection = true;
-          const { at: _at, type: _type, ...data } = event;
-          trace?.record({ kind: "ir", label: "app selection", data });
-        } else if (event.type === "code-selection") {
-          const { at: _at, type: _type, ...data } = event;
-          trace?.record({ kind: "ir", label: "code selection", data });
-        } else if (event.type === "app-selection-drop") {
-          trace?.record({
-            kind: "ir",
-            label: "app selection dropped",
-            data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
-          });
-        } else if (event.type === "code-selection-drop") {
-          trace?.record({
-            kind: "ir",
-            label: "code selection dropped",
-            data: { marker: event.marker },
-          });
+      appendEvent(event);
+      // Selections are first-class in the trace: "did my selection make it
+      // in?" must be answerable from a named stage, not by digging through
+      // raw input frames. (The composed/fin stages then show what they
+      // lowered to.)
+      if (event.type === "app-selection") {
+        // The stream carries its own selections now: they render INLINE in
+        // the body (composeIntent), so the legacy context-chunk preamble
+        // must stand down for this turn or the selection would ride twice.
+        streamHasSelection = true;
+        const { at: _at, type: _type, marker, ...data } = event;
+        trace?.record({ kind: "ir", label: "app selection", data: { ...data, marker } });
+        const entry: SelectionEntry = { kind: "app", item: data };
+        const updated = marker !== undefined && selectionRegistry.has(marker);
+        if (marker !== undefined) {
+          selectionRegistry.set(marker, entry);
         }
-        // talk-end is the segment-commit boundary for the streaming transcriber
-        // (PTT stays the contract — no `last` flag on the audio frames). The
-        // client flushes talk-end immediately past its 60 ms debounce so the
-        // upstream buffer commits promptly.
-        if ((realtimeEnabled || voiceEnabled) && event.type === "talk-end") {
-          commitRealtimeSegment(event.segment);
+        sidecar?.onSelection(marker, entry, updated);
+      } else if (event.type === "code-selection") {
+        const { at: _at, type: _type, marker, ...data } = event;
+        trace?.record({ kind: "ir", label: "code selection", data: { ...data, marker } });
+        const entry: SelectionEntry = { kind: "code", item: data };
+        const updated = marker !== undefined && selectionRegistry.has(marker);
+        if (marker !== undefined) {
+          selectionRegistry.set(marker, entry);
         }
-        // Barge-in: a new talk while the flagship model is still speaking cancels
-        // its reply upstream (the overlay ducks local playback in parallel).
-        if (voiceEnabled && event.type === "talk-start") {
-          realtimeVoice?.cancelActiveResponse();
-        }
+        sidecar?.onSelection(marker, entry, updated);
+      } else if (event.type === "app-selection-drop") {
+        trace?.record({
+          kind: "ir",
+          label: "app selection dropped",
+          data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
+        });
+        sidecar?.onSelectionDrop(event.marker);
+      } else if (event.type === "code-selection-drop") {
+        trace?.record({
+          kind: "ir",
+          label: "code selection dropped",
+          data: { marker: event.marker },
+        });
+        sidecar?.onSelectionDrop(event.marker);
+      }
+      // talk-end is the segment-commit boundary for the streaming transcriber
+      // (PTT stays the contract — no `last` flag on the audio frames). The
+      // client flushes talk-end immediately past its 60 ms debounce so the
+      // upstream buffer commits promptly.
+      if (realtimeEnabled && event.type === "talk-end") {
+        commitRealtimeSegment(event.segment);
+      }
+      // The linter observes the same boundaries (and a client-produced final —
+      // the mock transcriber — feeds its transcript wait like a server one).
+      if (event.type === "talk-start") {
+        sidecar?.onTalkStart(event.segment);
+      } else if (event.type === "talk-end") {
+        sidecar?.onTalkEnd(event.segment);
+      } else if (event.type === "transcript-final" && !event.correction) {
+        sidecar?.onTranscriptFinal(event.segment, event.text);
       }
     }
     // A shot event may share its batch with (or arrive after) its bytes — wire
@@ -1232,8 +1119,26 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         shotPaths.set(id, path);
         applyShotPaths();
       }
+      sidecar?.onShot(id, conditioned.bytes, mime);
     }
     // Any other attachment id has no place in the compose and no blob to save.
+  };
+
+  /**
+   * One sampled screen frame (the share's ambient context). EVERY frame
+   * persists to the trace (the viewer's video strip shows the whole share),
+   * and the linter — the only consumer of ambient sight — gets it forwarded.
+   */
+  const onVideoChunk = (
+    chunk: Extract<ChunkDescriptor, { kind: "video" }>,
+    bytes: Uint8Array,
+  ): void => {
+    trace?.recordBlob(
+      { kind: "ir", label: `video ${chunk.id} #${chunk.seq}` },
+      bytes,
+      `${chunk.id}_${chunk.seq}.jpg`,
+    );
+    sidecar?.onVideoFrame(bytes, chunk.mime);
   };
 
   const onContextChunk = (bytes: Uint8Array): void => {
@@ -1308,7 +1213,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     // Drain the committed-but-not-final segments before composing; any that miss
     // the window are finalized loudly so the compose (and the preview) resolve.
     // The STT and voice sessions are mutually exclusive; drain whichever is live.
-    const streamSession = realtime ?? realtimeVoice;
+    const streamSession = realtime;
     if (streamSession !== undefined) {
       const timedOut = await streamSession.drain(REALTIME_DRAIN_TIMEOUT_MS);
       for (const segment of timedOut) {
@@ -1335,7 +1240,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       composed = lastComposed;
       reused = true;
     } else {
-      composed = composeIntent(events, intent.correctionPolicy, composeOptions);
+      composed = composeIntent(events, "replace", composeOptions);
       reused = false;
     }
     trace?.record({ kind: "info", label: "fin compose", data: { reused } });
@@ -1396,7 +1301,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     // The turn committed — the upstream socket(s) have no more segments to handle,
     // so close (idempotent; onClose closes them for abandoned turns).
     realtime?.close();
-    realtimeVoice?.close();
+    sidecar?.close();
     ctx.close();
   };
 
@@ -1410,6 +1315,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         await onAttachmentChunk(chunk, bytes);
       } else if (chunk?.kind === "audio") {
         onAudioChunk(chunk, bytes);
+      } else if (chunk?.kind === "video") {
+        onVideoChunk(chunk, bytes);
       } else if (chunk?.kind === "context") {
         onContextChunk(bytes);
       }
@@ -1430,594 +1337,9 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       lastComposed = undefined;
       audioFrames.clear();
       realtime?.close();
-      realtimeVoice?.close();
+      sidecar?.close();
     },
   };
 }
 
-/**
- * The **realtime submode** processor (transcription-and-realtime-submodes.md §4).
- * The classic {@link intentProcessor} above assembles a document and lets
- * `composeIntent` compile it; here a live conversational session
- * ({@link LiveSession}, Gemini or OpenAI) is held per-thread, the *model* composes
- * via `submit_intent`, and the channel re-attaches the withheld metadata — shot
- * paths/elements, full selection renderings — as it resolves the call. The event
- * stream stays the IR of record — the chronicle —
- * so the trace debugger keeps working and the fin ladder's step-3 fallback
- * (`composeIntent` over the transcripts) is free.
- *
- * Shares only the resolved config, the trace, and the prompt cwd with the classic
- * path; everything below is its own thin assembly (companion doc §B.3: two
- * assemblies over one parts bin, not one component with mode flags).
- */
-function realtimeIntentProcessor(
-  ctx: ThreadContext,
-  options: IntentV1Options,
-  intent: ResolvedIntent,
-  keys: {
-    /** The live vendor's own key (GEMINI_API_KEY for gemini, OPENAI_API_KEY for openai). */
-    liveApiKey: string | undefined;
-    /** The OpenAI key, for the OpenAI-backed extras (the post-send summarizer). */
-    apiKey: string | undefined;
-  },
-  trace: TraceHandle | undefined,
-  composeOptions: { cwd: string; shotFormat: "xml" | "text" },
-): StreamProcessor {
-  const { liveApiKey, apiKey } = keys;
-  const liveKeyed = liveApiKey !== undefined && liveApiKey !== "";
-  const keyed = apiKey !== undefined && apiKey !== "";
-  const keyHint = intent.liveVendor === "gemini" ? GEMINI_KEY_HINT : OPENAI_KEY_HINT;
-  const keyName = intent.liveVendor === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
-
-  // Pre-warm the tab/source preamble (hello-fixed) exactly like the classic path;
-  // the model composes the body, the channel still owns context + commitment.
-  const staticSections = promptContextSections(ctx.hello);
-
-  // The chronicle: every event in arrival order (client acts + server-produced
-  // transcripts). It is the fallback compiler's input and the trace's record.
-  let events: IntentEvent[] = [];
-  let selection: SelectionContext | undefined;
-  // Whether the stream carried its own app selections. The live model sees each
-  // one as an injected labeled item (below), so the context preamble stands
-  // down on BOTH fin paths: the tool-call body is the model's composition
-  // (authoritative — a selection it chose not to reference does not sneak back
-  // in) and the step-3 fallback's composeIntent renders every carried selection
-  // INLINE. Only the legacy `context` chunk (older clients, no stream events)
-  // still lowers through the preamble.
-  let chronicleHasSelection = false;
-  // Shot metadata kept keyed by label — NEVER sent to the live model; re-attached
-  // by resolveSegments at fin (the `<screenshot>` block the agent gets).
-  const shotRegistry = new Map<string, LabelEntry>();
-  // Selection payloads keyed by marker (`sel_N`/`code_N`) — the live model sees
-  // only the clipped injection label; the LATEST payload under a marker is
-  // re-attached (full rendering) by resolveSegments at fin. Drops mark entries
-  // retracted rather than deleting them, so a referenced-anyway retraction is
-  // caught and reported at resolve.
-  const selectionRegistry = new Map<string, SelectionEntry>();
-  // Pre-marker clients: whether an id-less selection label was injected (its
-  // markerless drop then retracts "it" rather than naming a marker).
-  let unmarkedSelectionInjected = false;
-  // Synthetic, increasing segment ordinals for the model's user-transcript turns
-  // (the chronicle needs monotonic segment numbers so the preview fills in order).
-  let userSeq = 0;
-  // Ambient video: count every frame, persist every 10th as a named artifact.
-  let videoCount = 0;
-  let videoUnsupportedNoted = false;
-
-  const push = (produced: IntentEvent[]): void => {
-    ctx.push?.({
-      kind: "lowered",
-      threadId: ctx.threadId,
-      events: produced,
-    } satisfies LoweredMessage);
-  };
-  const pushSpeech = (id: string, mime: string, bytes: Uint8Array, label?: string): void => {
-    ctx.push?.({
-      kind: "speech",
-      threadId: ctx.threadId,
-      id,
-      mime,
-      data: Buffer.from(bytes).toString("base64"),
-      ...(label !== undefined ? { label } : {}),
-    } satisfies SpeechMessage);
-    trace?.record({
-      kind: "info",
-      label: `speech ${id}`,
-      data: { mime, bytes: bytes.length, ...(label !== undefined ? { text: label } : {}) },
-    });
-  };
-  const recordCost = (what: string, cost: CallCost | undefined): void => {
-    if (!cost) {
-      return;
-    }
-    trace?.record({ kind: "info", label: `cost: ${what}`, data: cost });
-    if (cost.usd !== undefined) {
-      trace?.addCost(cost.usd);
-    }
-  };
-
-  // The post-send summarizer (the one-line trace gloss), same posture as the
-  // classic path: enabled whenever there's a key or a test seam, best-effort.
-  const summarizer: Summarizer | undefined =
-    options.summarizer ??
-    (keyed
-      ? openaiSummarizer({
-          apiKey: apiKey as string,
-          ...(options.fetch ? { fetch: options.fetch } : {}),
-        })
-      : undefined);
-  const summarize = async (body: string): Promise<void> => {
-    if (summarizer === undefined || body === "") {
-      return;
-    }
-    try {
-      const result = await summarizer.summarize(body);
-      trace?.setSummary(result.text);
-      if (result.cost?.usd !== undefined) {
-        trace?.addCost(result.cost.usd);
-      }
-    } catch {
-      // best-effort: the trace list just shows the timestamp for this turn
-    }
-  };
-
-  // ── open the live session (or degrade loudly) ────────────────────────────────
-  const factory =
-    intent.liveVendor === "gemini"
-      ? options.geminiLiveSocketFactory
-      : options.openaiLiveSocketFactory;
-  const liveReady = liveKeyed || factory !== undefined;
-
-  let replySeq = 0;
-  const callbacks: LiveSessionCallbacks = {
-    onUserTranscript: (text) => {
-      // The model's user-transcript for one turn → a synthetic transcript-final,
-      // so the client preview fills and the fallback compiler has a document.
-      const produced: IntentEvent = {
-        at: Date.now(),
-        type: "transcript-final",
-        segment: userSeq++,
-        text,
-        latencyMs: 0,
-        model: intent.liveModel,
-      };
-      events.push(produced);
-      push([produced]);
-    },
-    onReplyTranscript: (text) => {
-      // What the human was told — a status note (the widget shows it) + the trace;
-      // never the IR (the committed prompt is submit_intent / the fallback).
-      push([{ at: Date.now(), type: "note", text: `🔊 ${text}` }]);
-      trace?.record({ kind: "info", label: "live reply", data: { text } });
-    },
-    onReplyAudio: (bytes, mime) => {
-      pushSpeech(`reply_${replySeq++}`, mime, bytes);
-    },
-    onInterrupted: () => {
-      trace?.record({ kind: "info", label: "live interrupted", data: {} });
-    },
-    onUsage: (cost) => {
-      // A live turn re-bills its context every response — where the money goes.
-      recordCost("live response", cost);
-    },
-    onError: (message, data) => {
-      push([{ at: Date.now(), type: "note", text: `${intent.liveVendor} realtime: ${message}` }]);
-      // The trace gets the failure too — with the structured upstream payload
-      // when the engine had one — so a dead session is debuggable after the fact.
-      trace?.record({
-        kind: "info",
-        label: "live error",
-        data: { message, ...(data !== undefined ? { upstream: data } : {}) },
-      });
-      pushError(ctx, {
-        source: "voice",
-        message: `${intent.liveVendor} realtime: ${message}`,
-        detail: keyHint,
-        ...(data !== undefined ? { data } : {}),
-      });
-    },
-    onGoAway: (msLeft) => {
-      const text = `live session winding down in ~${Math.round(msLeft / 1000)}s (${intent.liveVendor} GoAway)`;
-      push([{ at: Date.now(), type: "note", text }]);
-      trace?.record({ kind: "info", label: "live goaway", data: { msLeft } });
-    },
-  };
-
-  let session: LiveSession | undefined;
-  if (liveReady) {
-    session =
-      intent.liveVendor === "gemini"
-        ? openGeminiLiveSession(
-            {
-              apiKey: liveApiKey ?? "",
-              model: () => intent.liveModel,
-              instructions: LIVE_COMPOSER_INSTRUCTIONS,
-              ...(options.geminiLiveSocketFactory !== undefined
-                ? { socketFactory: options.geminiLiveSocketFactory }
-                : {}),
-            },
-            callbacks,
-          )
-        : openOpenAiLiveSession(
-            {
-              apiKey: liveApiKey ?? "",
-              model: () => intent.liveModel,
-              instructions: LIVE_COMPOSER_INSTRUCTIONS,
-              ...(options.openaiLiveSocketFactory !== undefined
-                ? { socketFactory: options.openaiLiveSocketFactory }
-                : {}),
-            },
-            callbacks,
-          );
-    trace?.record({
-      kind: "info",
-      label: "live open",
-      data: {
-        vendor: intent.liveVendor,
-        model: intent.liveModel,
-        capabilities: session.capabilities,
-        // The persona actually sent at open (passed above), so the trace shows
-        // the instructions this session ran under — including the commit gate.
-        instructions: LIVE_COMPOSER_INSTRUCTIONS,
-      },
-    });
-  } else {
-    // Keyless with no test factory: absent + loud (never a silent downgrade to a
-    // transcription tier), immediately — the tier promised a live conversation.
-    trace?.record({
-      kind: "info",
-      label: "live open",
-      data: { vendor: intent.liveVendor, model: intent.liveModel, ready: false },
-    });
-    const message = `${intent.liveVendor} realtime is unavailable — the channel process has no ${keyName}.`;
-    push([{ at: Date.now(), type: "note", text: message }]);
-    pushError(ctx, { source: "voice", message, detail: keyHint });
-  }
-
-  // ── selection injection (F2: the moment a selection event arrives) ──────────
-  // The counterpart of the labeled-shot injection below: a compact bracketed
-  // text item ([selection sel_2: …] — live-resolve owns the grammar) rides the
-  // conversation as SILENT context, so the model can ground deictic speech and
-  // reference the id in submit_intent; the full rendering is re-attached at
-  // resolve. A re-emit under the same marker injects an update; a drop injects
-  // an explicit retraction (append-only conversation — nothing can be unseen).
-  const injectSelection = (
-    marker: string | undefined,
-    entry: SelectionEntry,
-    updated: boolean,
-  ): void => {
-    if (session === undefined) {
-      return; // keyless: the chronicle/trace still record the event itself
-    }
-    const text = selectionInjectionLabel(marker, entry, updated);
-    session.injectContextText(text);
-    if (marker === undefined) {
-      unmarkedSelectionInjected = true;
-    }
-    trace?.record({
-      kind: "info",
-      label: `live selection ${marker ?? "(unmarked)"}`,
-      data: { text },
-    });
-  };
-  const injectRetraction = (marker: string | undefined): void => {
-    if (session === undefined) {
-      return;
-    }
-    const text = selectionRetractionLabel(marker);
-    session.injectContextText(text);
-    trace?.record({
-      kind: "info",
-      label: `live selection ${marker ?? "(unmarked)"} retracted`,
-      data: { text },
-    });
-  };
-  /** The most recent still-carried marker of one kind (for markerless drops). */
-  const latestCarriedMarker = (kind: "app" | "code"): string | undefined => {
-    let found: string | undefined;
-    for (const [marker, entry] of selectionRegistry) {
-      if (entry.kind === kind && entry.retracted !== true) {
-        found = marker;
-      }
-    }
-    return found;
-  };
-
-  // ── routing (chronicle accumulation + live injections) ───────────────────────
-  const onEventsChunk = (bytes: Uint8Array): void => {
-    for (const event of readEventBatch(decodeJson(bytes))) {
-      events.push(event);
-      switch (event.type) {
-        case "talk-start":
-          session?.activityStart();
-          break;
-        case "talk-end":
-          session?.activityEnd();
-          break;
-        case "shot":
-          // Merge the shot's metadata into the registry (the bytes/path arrive on
-          // its attachment frame); the model never sees any of it.
-          shotRegistry.set(event.marker, {
-            ...shotRegistry.get(event.marker),
-            components: event.components,
-            ...(event.viewport !== undefined ? { viewport: event.viewport } : {}),
-          });
-          break;
-        case "video-share":
-          trace?.record({ kind: "info", label: "video-share", data: { on: event.on } });
-          break;
-        case "app-selection": {
-          // First-class in the trace here too — and injected into the live
-          // conversation on arrival (a labeled item under its marker; a
-          // superseding re-emit under the SAME marker injects an update).
-          chronicleHasSelection = true;
-          const { at: _at, type: _type, marker, ...data } = event;
-          trace?.record({
-            kind: "ir",
-            label: "app selection",
-            data: { ...(marker !== undefined ? { marker } : {}), ...data },
-          });
-          const entry: SelectionEntry = { kind: "app", item: data };
-          const updated = marker !== undefined && selectionRegistry.has(marker);
-          if (marker !== undefined) {
-            selectionRegistry.set(marker, entry);
-          }
-          injectSelection(marker, entry, updated);
-          break;
-        }
-        case "app-selection-drop": {
-          // Retract exactly one: a marker'd drop only clears its own marker
-          // (a markerless drop — pre-marker clients — clears whatever rides).
-          // The registry entry stays, marked retracted (a referenced-anyway id
-          // is caught at resolve), and the model is told to disregard it.
-          trace?.record({
-            kind: "ir",
-            label: "app selection dropped",
-            data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
-          });
-          const marker = event.marker ?? latestCarriedMarker("app");
-          const entry = marker !== undefined ? selectionRegistry.get(marker) : undefined;
-          if (entry !== undefined && entry.retracted !== true) {
-            entry.retracted = true;
-            injectRetraction(marker);
-          } else if (marker === undefined && unmarkedSelectionInjected) {
-            unmarkedSelectionInjected = false;
-            injectRetraction(undefined);
-          }
-          break;
-        }
-        case "code-selection": {
-          const { at: _at, type: _type, marker, ...data } = event;
-          trace?.record({
-            kind: "ir",
-            label: "code selection",
-            data: { ...(marker !== undefined ? { marker } : {}), ...data },
-          });
-          const entry: SelectionEntry = { kind: "code", item: data };
-          const updated = marker !== undefined && selectionRegistry.has(marker);
-          if (marker !== undefined) {
-            selectionRegistry.set(marker, entry);
-          }
-          injectSelection(marker, entry, updated);
-          break;
-        }
-        case "code-selection-drop": {
-          trace?.record({
-            kind: "ir",
-            label: "code selection dropped",
-            data: { marker: event.marker },
-          });
-          const entry = selectionRegistry.get(event.marker);
-          if (entry !== undefined && entry.retracted !== true) {
-            entry.retracted = true;
-            injectRetraction(event.marker);
-          }
-          break;
-        }
-        case "correction": {
-          // Corrections are transcription-only; the client gates the UI, so a
-          // stray request just gets a patchless echo (the chronicle stays uniform)
-          // and a note — never the V4A pipeline.
-          const echo: IntentEvent = { ...event, patch: undefined };
-          push([
-            echo,
-            {
-              at: Date.now(),
-              type: "note",
-              text: "corrections are off in realtime mode — talk to adjust instead",
-            },
-          ]);
-          trace?.record({ kind: "info", label: "correction ignored (realtime)", data: {} });
-          break;
-        }
-        default:
-          break;
-      }
-    }
-  };
-
-  const onAttachmentChunk = (
-    chunk: Extract<ChunkDescriptor, { kind: "attachment" }>,
-    bytes: Uint8Array,
-  ): void => {
-    if (!chunk.id.startsWith("shot_")) {
-      return; // realtime streams audio as `audio` chunks; only shots arrive here
-    }
-    // Save the shot artifact (the path the resolved prompt hands the agent), wire
-    // it into the registry, and inject the labeled image into the live session.
-    const path = trace?.recordBlob(
-      { kind: "ir", label: `attachment ${chunk.id}` },
-      bytes,
-      `${chunk.id}.png`,
-    );
-    shotRegistry.set(chunk.id, {
-      ...shotRegistry.get(chunk.id),
-      ...(path !== undefined ? { path } : {}),
-    });
-    session?.injectLabeledImage(chunk.id, bytes, chunk.mime);
-    trace?.record({
-      kind: "info",
-      label: `live label ${chunk.id}`,
-      data: { mime: chunk.mime, hasPath: path !== undefined },
-    });
-  };
-
-  const onVideoChunk = (
-    chunk: Extract<ChunkDescriptor, { kind: "video" }>,
-    bytes: Uint8Array,
-  ): void => {
-    videoCount += 1;
-    // Persist every 10th frame as a named artifact (the decorator already blobs
-    // every frame as input-N.bin; this gives the debugger legible video stills).
-    if (videoCount % 10 === 1) {
-      trace?.recordBlob(
-        { kind: "ir", label: `video sample ${chunk.id}` },
-        bytes,
-        `${chunk.id}_${chunk.seq}.jpg`,
-      );
-    }
-    if (session?.capabilities.video) {
-      session.appendVideoFrame(bytes, chunk.mime);
-    } else if (session !== undefined && !videoUnsupportedNoted) {
-      // The degraded vendor (OpenAI) has no video — say so once, then drop silently.
-      videoUnsupportedNoted = true;
-      trace?.record({
-        kind: "info",
-        label: "live video unsupported",
-        data: { vendor: intent.liveVendor },
-      });
-      push([
-        {
-          at: Date.now(),
-          type: "note",
-          text: `${intent.liveVendor} realtime has no video — screen frames ignored`,
-        },
-      ]);
-    }
-  };
-
-  const onContextChunk = (bytes: Uint8Array): void => {
-    selection = asSelection(decodeJson(bytes)) ?? selection;
-  };
-
-  // ── the fin ladder (§4.3) ────────────────────────────────────────────────────
-  const lower = async (): Promise<void> => {
-    trace?.record({ kind: "ir", label: "chronicle", data: events });
-    const cancelled = endedInCancel(events);
-    if (cancelled || session === undefined) {
-      // Cancelled, or keyless (already toasted at open): lower to nothing.
-      session?.close();
-      ctx.close();
-      return;
-    }
-
-    // The commit gate: inject the sentinel — per the instructions, the ONLY
-    // message that authorizes submit_intent — then await the model's call.
-    session.nudgeSubmit();
-    trace?.record({ kind: "info", label: "live nudge", data: { text: LIVE_NUDGE_TEXT } });
-    const call = await session.drainToolCall(LIVE_DRAIN_TIMEOUT_MS);
-
-    let body: string;
-    if (call !== null && call.segments.length > 0) {
-      trace?.record({ kind: "ir", label: "live tool call", data: { segments: call.segments } });
-      const resolved = resolveSegments(call.segments, shotRegistry, {
-        ...composeOptions,
-        selections: selectionRegistry,
-      });
-      body = resolved.body;
-      call.respond(true);
-      if (resolved.missingRefs.length > 0) {
-        trace?.record({
-          kind: "info",
-          label: "live refs unresolved",
-          data: { missing: resolved.missingRefs },
-        });
-      }
-      // One ref row per marker — shots AND selections (the viewer counts
-      // resolved via `resolved === true || path`): a resolved shot carries the
-      // path it re-attached; a retracted selection the model referenced anyway
-      // is marked so "did my retraction hold?" reads off this row.
-      const refs = [
-        ...resolved.resolvedMarkers.map((marker) => {
-          const path = shotRegistry.get(marker)?.path;
-          return { marker, resolved: true, ...(path !== undefined ? { path } : {}) };
-        }),
-        ...resolved.missingRefs.map((marker) => ({
-          marker,
-          resolved: false,
-          ...(selectionRegistry.get(marker)?.retracted === true ? { retracted: true } : {}),
-        })),
-      ];
-      trace?.record({ kind: "ir", label: "live resolved", data: { body, refs } });
-    } else {
-      // Step 3: the model didn't compose — fall back to composeIntent over the
-      // chronicle (the transcription compiler on the transcripts we kept). Loud.
-      const composed = composeIntent(events, intent.correctionPolicy, composeOptions);
-      body = composed.prompt;
-      const reason =
-        call === null ? "no submit_intent before send" : "submit_intent had no segments";
-      trace?.record({ kind: "info", label: "live fallback", data: { fallback: true, reason } });
-      pushError(ctx, {
-        source: "voice",
-        message: `the live model didn't compose a prompt (${reason}) — composed one from the transcript instead`,
-        detail: keyHint,
-      });
-    }
-
-    if (body !== "") {
-      // Stream selections never ride the preamble: the model saw each one as
-      // an injected labeled item, so on the tool-call path its composition is
-      // authoritative (a selection it chose not to reference stays out), and
-      // the fallback's composeIntent renders every carried selection INLINE.
-      // Only the legacy `context` chunk (older clients, no stream events)
-      // still lowers through the preamble — on both paths.
-      const preambleSelection = chronicleHasSelection ? undefined : selection;
-      const prompt = wrapWithContext(
-        [...staticSections, ...selectionSections(preambleSelection)],
-        body,
-      );
-      ctx.push?.({
-        kind: "lowered-prompt",
-        threadId: ctx.threadId,
-        prompt,
-      } satisfies LoweredPromptMessage);
-      await ctx.sendPrompt(prompt);
-      // Gloss the turn for the trace list — detached; the fin ack never waits on it.
-      void summarize(body);
-    }
-    session.close();
-    ctx.close();
-  };
-
-  return {
-    async onMessage(payload: unknown, meta: MessageMeta) {
-      const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(0);
-      const chunk = meta.chunk;
-      if (chunk?.kind === "events") {
-        onEventsChunk(bytes);
-      } else if (chunk?.kind === "attachment") {
-        onAttachmentChunk(chunk, bytes);
-      } else if (chunk?.kind === "audio") {
-        session?.appendAudio(bytes);
-      } else if (chunk?.kind === "video") {
-        onVideoChunk(chunk, bytes);
-      } else if (chunk?.kind === "context") {
-        onContextChunk(bytes);
-      }
-      if (meta.fin) {
-        await lower();
-      }
-    },
-    onClose() {
-      // Abandoned turn (socket dropped before fin): drop the chronicle and close
-      // the upstream live session so its WebSocket is not leaked (the S2 teardown).
-      events = [];
-      shotRegistry.clear();
-      selectionRegistry.clear();
-      session?.close();
-    },
-  };
-}
-
-/** The built-in `intent-v1` format (real env-keyed seams). */
 export const intentV1Format: ChannelFormat = createIntentV1Format();
