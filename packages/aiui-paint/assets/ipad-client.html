@@ -10,7 +10,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none;
     font-family: -apple-system, system-ui, sans-serif; background: #0b0d12; color: #e8ebf0; }
   .screen { position: fixed; inset: 0; display: flex; flex-direction: column; }
-  .hidden { display: none !important; }
+  .hidden { display: none; }
 
   /* sessions screen */
   #sessions { padding: 24px; gap: 12px; overflow-y: auto; }
@@ -24,7 +24,6 @@
   .card-meta { color: #8b93a4; font-size: 13px; margin-top: 4px; }
 
   /* stage screen */
-  #stageWrap { }
   #stageHeader { display: flex; align-items: center; gap: 12px; padding: 8px 12px;
     background: #0f131a; border-bottom: 1px solid #1c2130; }
   #stageTitle { font-size: 15px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -67,7 +66,7 @@
 
   <div id="stageWrap" class="screen hidden">
     <div id="stageHeader">
-      <button id="back" class="tool">Back</button>
+      <button id="back" type="button" class="tool">Back</button>
       <span id="stageTitle">browser</span>
       <span id="status"></span>
     </div>
@@ -75,10 +74,10 @@
       <img id="jpegView" alt="">
       <video id="rtcView" autoplay playsinline muted></video>
       <canvas id="ink"></canvas>
-      <div id="videoNote"><div class="panel"><div class="msg" id="videoNoteMsg"></div><button id="videoRetry" class="tool hidden">Retry</button></div></div>
+      <div id="videoNote"><div class="panel"><div class="msg" id="videoNoteMsg"></div><button id="videoRetry" type="button" class="tool hidden">Retry</button></div></div>
     </div>
     <div id="toolbar">
-      <button id="arm" class="tool">Arm</button>
+      <button id="arm" type="button" class="tool">Arm</button>
       <span id="swatches"></span>
       <span id="widths"></span>
     </div>
@@ -93,41 +92,41 @@
   // The /client websocket lives NEXT TO this page, wherever it is mounted:
   // served at "/" the socket is "/client"; served at "/paint/" (the channel
   // sidecar) it is "/paint/client". Derive it from the page's own path.
-  var proto = location.protocol === "https:" ? "wss://" : "ws://";
-  var basePath = location.pathname.replace(/\/+$/, "");
-  var ws = new WebSocket(proto + location.host + basePath + "/client");
+  const proto = location.protocol === "https:" ? "wss://" : "ws://";
+  const basePath = location.pathname.replace(/\/+$/, "");
+  const ws = new WebSocket(`${proto + location.host + basePath}/client`);
   ws.binaryType = "blob";
 
-  var sessionsScreen = byId("sessions");
-  var stageScreen = byId("stageWrap");
-  var listEl = byId("list");
-  var hintEl = byId("hint");
-  var jpegView = byId("jpegView");
-  var rtcView = byId("rtcView");
+  const sessionsScreen = byId("sessions");
+  const stageScreen = byId("stageWrap");
+  const listEl = byId("list");
+  const hintEl = byId("hint");
+  const jpegView = byId("jpegView");
+  const rtcView = byId("rtcView");
   rtcView.muted = true;
-  var ink = byId("ink");
-  var ictx = ink.getContext("2d");
-  var armBtn = byId("arm");
-  var titleEl = byId("stageTitle");
-  var statusEl = byId("status");
-  var noteEl = byId("videoNote");
-  var noteMsg = byId("videoNoteMsg");
-  var retryBtn = byId("videoRetry");
+  const ink = byId("ink");
+  const ictx = ink.getContext("2d");
+  const armBtn = byId("arm");
+  const titleEl = byId("stageTitle");
+  const statusEl = byId("status");
+  const noteEl = byId("videoNote");
+  const noteMsg = byId("videoNoteMsg");
+  const retryBtn = byId("videoRetry");
 
-  var PALETTE = ["#ff5c87", "#ffd166", "#06d6a0", "#4cc9f0", "#b5179e", "#ffffff", "#111318"];
-  var WIDTHS = [2, 4, 8, 14];
+  const PALETTE = ["#ff5c87", "#ffd166", "#06d6a0", "#4cc9f0", "#b5179e", "#ffffff", "#111318"];
+  const WIDTHS = [2, 4, 8, 14];
 
-  var state = { armed: false, color: PALETTE[0], width: WIDTHS[1], lastUrl: null, seq: 0, hostId: null };
-  var activePointers = new Map();
-  var strokes = [];
-  var pinch = { dist: 0, cx: 0, cy: 0 };
+  const state = { armed: false, color: PALETTE[0], width: WIDTHS[1], lastUrl: null, seq: 0, hostId: null };
+  const activePointers = new Map();
+  let strokes = [];
+  const pinch = { dist: 0, cx: 0, cy: 0 };
 
   function sendJson(obj) { if (ws.readyState === 1) { ws.send(JSON.stringify(obj)); } }
   function clamp01(n) { return n < 0 ? 0 : (n > 1 ? 1 : n); }
-  function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+  function dist(a, b) { const dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
 
   // ── media: JPEG frames (an img) or WebRTC (a video), whichever the host sends ─
-  var mediaMode = "none";           // "jpeg" | "webrtc"
+  let mediaMode = "none";           // "jpeg" | "webrtc"
   function showJpeg() { mediaMode = "jpeg"; rtcView.classList.add("hidden"); jpegView.classList.remove("hidden"); }
   function showRtc() { mediaMode = "webrtc"; jpegView.classList.add("hidden"); rtcView.classList.remove("hidden"); }
   function mediaSize() {
@@ -136,16 +135,16 @@
   }
 
   // ── WebRTC receive: the host is the offerer; we answer and show the video ────
-  var RTC_CONFIG = { iceServers: [] };
-  var pc = null;
+  const RTC_CONFIG = { iceServers: [] };
+  let pc = null;
   function ensurePc() {
     if (pc) { return pc; }
     pc = new RTCPeerConnection(RTC_CONFIG);
     pc.onicecandidate = (e) => { if (e.candidate) { sendJson({ type: "signal", data: { candidate: e.candidate } }); } };
     pc.ontrack = (e) => {
       rtcView.srcObject = e.streams[0];
-      var p = rtcView.play();
-      if (p && p.catch) { p.catch(() => {}); }
+      const p = rtcView.play();
+      if (p?.catch) { p.catch(() => {}); }
       showRtc();
       hideNote();
     };
@@ -154,7 +153,7 @@
   function handleSignal(data) {
     if (!data) { return; }
     if (data.description) {
-      var c = ensurePc();
+      const c = ensurePc();
       c.setRemoteDescription(data.description).then(() => {
         if (data.description.type === "offer") {
           return c.createAnswer().then((a) => c.setLocalDescription(a)).then(() => {
@@ -177,12 +176,13 @@
   ws.addEventListener("close", () => { hintEl.textContent = "Disconnected from relay."; });
   ws.addEventListener("message", (ev) => {
     if (typeof ev.data === "string") {
-      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      let m;
+      try { m = JSON.parse(ev.data); } catch { return; }
       handleControl(m);
       return;
     }
     // A binary JPEG frame (frame-streaming mode).
-    var url = URL.createObjectURL(ev.data);
+    const url = URL.createObjectURL(ev.data);
     jpegView.src = url;
     if (mediaMode !== "jpeg") { showJpeg(); }
     hideNote();
@@ -205,19 +205,19 @@
     // between "the human dismissed the picker" and "the browser/OS refused
     // with no picker at all" (wrong launch flags, missing screen-recording
     // grant) is only visible here.
-    var suffix = detail ? "\n(" + detail + ")" : "";
+    const suffix = detail ? `\n(${detail})` : "";
     if (s === "active") { hideNote(); }
     else if (s === "needsGesture") {
-      showNote("Waiting for the desktop to start sharing — click “Share screen” on the computer." + suffix, true);
+      showNote(`Waiting for the desktop to start sharing — click “Share screen” on the computer.${suffix}`, true);
     } else if (s === "denied") {
-      showNote("The desktop could not share its screen — click “Share screen” there, then Retry." + suffix, true);
+      showNote(`The desktop could not share its screen — click “Share screen” there, then Retry.${suffix}`, true);
     }
   }
 
   function handleControl(m) {
     if (m.type === "sessions") { renderSessions(m.sessions || []); }
     else if (m.type === "joined") { showStage(m.label || "browser"); }
-    else if (m.type === "joinRejected") { hintEl.textContent = "Could not connect: " + (m.reason || "unknown"); }
+    else if (m.type === "joinRejected") { hintEl.textContent = `Could not connect: ${m.reason || "unknown"}`; }
     else if (m.type === "hostGone") { showSessions(); hintEl.textContent = "The browser disconnected."; }
     else if (m.type === "signal") { handleSignal(m.data); }
     else if (m.type === "viewState") { updateStatus(m); }
@@ -225,10 +225,10 @@
   }
 
   function updateStatus(v) {
-    var pct = v.scrollHeight > v.viewportHeight
+    const pct = v.scrollHeight > v.viewportHeight
       ? Math.round((v.scrollY / (v.scrollHeight - v.viewportHeight)) * 100) : 0;
-    var mode = mediaMode === "none" ? "connecting" : mediaMode;
-    statusEl.textContent = (v.armed ? "armed" : "idle") + "  ·  " + mode + "  ·  scroll " + pct + "%";
+    const mode = mediaMode === "none" ? "connecting" : mediaMode;
+    statusEl.textContent = `${v.armed ? "armed" : "idle"}  ·  ${mode}  ·  scroll ${pct}%`;
   }
 
   // ── sessions list ────────────────────────────────────────────────────────────
@@ -240,17 +240,17 @@
     }
     hintEl.textContent = "Tap a browser to connect.";
     sessions.forEach((s) => {
-      var card = document.createElement("button");
+      const card = document.createElement("button");
       card.className = "card";
-      var t = document.createElement("div");
+      const t = document.createElement("div");
       t.className = "card-title";
       t.textContent = s.label || "browser";
       card.appendChild(t);
-      var meta = document.createElement("div");
+      const meta = document.createElement("div");
       meta.className = "card-meta";
-      var bits = [];
+      const bits = [];
       if (s.project) { bits.push(s.project); }
-      if (s.channelTag) { bits.push("session " + s.channelTag); }
+      if (s.channelTag) { bits.push(`session ${s.channelTag}`); }
       if (s.busy) { bits.push("in use"); }
       meta.textContent = bits.join("   ·   ");
       card.appendChild(meta);
@@ -287,10 +287,10 @@
     armBtn.textContent = state.armed ? "Armed" : "Arm";
   });
 
-  var swatchWrap = byId("swatches");
-  var swatchEls = [];
+  const swatchWrap = byId("swatches");
+  const swatchEls = [];
   PALETTE.forEach((c) => {
-    var b = document.createElement("button");
+    const b = document.createElement("button");
     b.className = "tool swatch";
     b.style.background = c;
     b.addEventListener("click", () => {
@@ -303,15 +303,15 @@
     if (c === state.color) { b.classList.add("sel"); }
   });
 
-  var widthWrap = byId("widths");
-  var widthEls = [];
+  const widthWrap = byId("widths");
+  const widthEls = [];
   WIDTHS.forEach((w) => {
-    var b = document.createElement("button");
+    const b = document.createElement("button");
     b.className = "tool wbtn";
-    var dot = document.createElement("span");
+    const dot = document.createElement("span");
     dot.className = "wdot";
-    dot.style.width = Math.max(4, w) + "px";
-    dot.style.height = Math.max(4, w) + "px";
+    dot.style.width = `${Math.max(4, w)}px`;
+    dot.style.height = `${Math.max(4, w)}px`;
     b.appendChild(dot);
     b.addEventListener("click", () => {
       state.width = w;
@@ -325,19 +325,19 @@
 
   // ── coordinate mapping (letterboxed video content rect) ──────────────────────
   function contentRect() {
-    var sw = ink.clientWidth, sh = ink.clientHeight;
-    var m = mediaSize();
-    var nw = m.w, nh = m.h;
+    const sw = ink.clientWidth, sh = ink.clientHeight;
+    const m = mediaSize();
+    const nw = m.w, nh = m.h;
     if (!nw || !nh) { return { x: 0, y: 0, w: sw, h: sh }; }
-    var scale = Math.min(sw / nw, sh / nh);
-    var w = nw * scale, h = nh * scale;
+    const scale = Math.min(sw / nw, sh / nh);
+    const w = nw * scale, h = nh * scale;
     return { x: (sw - w) / 2, y: (sh - h) / 2, w: w, h: h };
   }
   function toNorm(clientX, clientY) {
-    var r = ink.getBoundingClientRect();
-    var cr = contentRect();
-    var x = clientX - r.left - cr.x;
-    var y = clientY - r.top - cr.y;
+    const r = ink.getBoundingClientRect();
+    const cr = contentRect();
+    const x = clientX - r.left - cr.x;
+    const y = clientY - r.top - cr.y;
     return { u: cr.w > 0 ? clamp01(x / cr.w) : 0, v: cr.h > 0 ? clamp01(y / cr.h) : 0 };
   }
 
@@ -347,31 +347,31 @@
   // finger. Palms are rejected: while the pencil is drawing all touches are
   // ignored, once a pencil has been seen only it draws, and oversized touch
   // contacts are dropped outright.
-  var hasPen = false;         // latches true once an Apple Pencil (pen) is used
-  var drawPointer = null;     // pointerId currently drawing, or null
-  var PALM_CONTACT = 60;      // px; a touch contact larger than this is a palm
+  let hasPen = false;         // latches true once an Apple Pencil (pen) is used
+  let drawPointer = null;     // pointerId currently drawing, or null
+  const PALM_CONTACT = 60;      // px; a touch contact larger than this is a palm
 
   function pressureOf(e) { return (e.pointerType === "pen" || e.pointerType === "touch") ? e.pressure : undefined; }
   function coalesce(e) {
-    if (typeof e.getCoalescedEvents === "function") { var c = e.getCoalescedEvents(); if (c.length) { return c; } }
+    if (typeof e.getCoalescedEvents === "function") { const c = e.getCoalescedEvents(); if (c.length) { return c; } }
     return [e];
   }
   function isPalm(e) { return e.pointerType === "touch" && (e.width > PALM_CONTACT || e.height > PALM_CONTACT); }
   function drawTouches() {
-    var a = []; activePointers.forEach((p) => { if (p.type === "touch" && !p.palm) { a.push(p); } }); return a;
+    const a = []; activePointers.forEach((p) => { if (p.type === "touch" && !p.palm) { a.push(p); } }); return a;
   }
   function penDrawing() {
     if (drawPointer === null) { return false; }
-    var p = activePointers.get(drawPointer);
+    const p = activePointers.get(drawPointer);
     return !!p && p.type === "pen";
   }
-  function findStroke(id) { for (var i = 0; i < strokes.length; i++) { if (strokes[i].id === id) { return strokes[i]; } } return null; }
-  function removeStroke(id) { for (var i = 0; i < strokes.length; i++) { if (strokes[i].id === id) { strokes.splice(i, 1); return; } } }
+  function findStroke(id) { for (let i = 0; i < strokes.length; i++) { if (strokes[i].id === id) { return strokes[i]; } } return null; }
+  function removeStroke(id) { for (let i = 0; i < strokes.length; i++) { if (strokes[i].id === id) { strokes.splice(i, 1); return; } } }
 
   function eventPoint(e) {
-    var n = toNorm(e.clientX, e.clientY);
-    var point = { u: n.u, v: n.v };
-    var pr = pressureOf(e);
+    const n = toNorm(e.clientX, e.clientY);
+    const point = { u: n.u, v: n.v };
+    const pr = pressureOf(e);
     if (pr !== undefined) { point.pressure = pr; }
     return point;
   }
@@ -379,7 +379,7 @@
 
   function beginStroke(e, p) {
     if (!state.armed) { return; }
-    var id = "s" + (++state.seq);
+    const id = `s${++state.seq}`;
     drawPointer = e.pointerId;
     p.strokeId = id;
     sendJson({ type: "strokeBegin", id: id, pointerType: wireKind(e.pointerType),
@@ -388,19 +388,19 @@
   }
   function cancelDraw() {
     if (drawPointer === null) { return; }
-    var p = activePointers.get(drawPointer);
-    if (p && p.strokeId) { sendJson({ type: "strokeCancel", id: p.strokeId }); removeStroke(p.strokeId); p.strokeId = null; }
+    const p = activePointers.get(drawPointer);
+    if (p?.strokeId) { sendJson({ type: "strokeCancel", id: p.strokeId }); removeStroke(p.strokeId); p.strokeId = null; }
     drawPointer = null;
   }
   function baselinePinch() {
-    var t = drawTouches();
+    const t = drawTouches();
     if (t.length >= 2) { pinch.dist = dist(t[0], t[1]); pinch.cx = (t[0].x + t[1].x) / 2; pinch.cy = (t[0].y + t[1].y) / 2; }
   }
 
   ink.addEventListener("pointerdown", (e) => {
-    try { ink.setPointerCapture(e.pointerId); } catch (err) {}
-    var palm = isPalm(e);
-    var p = { x: e.clientX, y: e.clientY, type: e.pointerType, palm: palm, strokeId: null };
+    try { ink.setPointerCapture(e.pointerId); } catch (_err) {}
+    const palm = isPalm(e);
+    const p = { x: e.clientX, y: e.clientY, type: e.pointerType, palm: palm, strokeId: null };
     activePointers.set(e.pointerId, p);
 
     if (e.pointerType === "pen") {
@@ -413,21 +413,21 @@
 
     // touch
     if (palm || penDrawing()) { return; }         // ignore palms, and any finger while the pencil draws
-    var touches = drawTouches();                   // includes the finger just added
+    const touches = drawTouches();                   // includes the finger just added
     if (touches.length >= 2) { cancelDraw(); baselinePinch(); return; } // second finger → navigate
     if (!hasPen) { beginStroke(e, p); }            // one finger draws only when there's no pencil
   });
 
   ink.addEventListener("pointermove", (e) => {
-    var p = activePointers.get(e.pointerId);
+    const p = activePointers.get(e.pointerId);
     if (!p) { return; }
     p.x = e.clientX; p.y = e.clientY;
 
     if (drawPointer === e.pointerId && p.strokeId) {
-      var raw = coalesce(e);
-      var out = [];
-      var s = findStroke(p.strokeId);
-      for (var i = 0; i < raw.length; i++) {
+      const raw = coalesce(e);
+      const out = [];
+      const s = findStroke(p.strokeId);
+      for (let i = 0; i < raw.length; i++) {
         out.push(eventPoint(raw[i]));
         if (s) { s.pts.push({ x: raw[i].clientX, y: raw[i].clientY }); }
       }
@@ -438,29 +438,29 @@
   });
 
   function navGesture() {
-    var t = drawTouches();
+    const t = drawTouches();
     if (t.length < 2) { return; }
-    var d = dist(t[0], t[1]);
-    var cx = (t[0].x + t[1].x) / 2, cy = (t[0].y + t[1].y) / 2;
+    const d = dist(t[0], t[1]);
+    const cx = (t[0].x + t[1].x) / 2, cy = (t[0].y + t[1].y) / 2;
     if (pinch.dist > 0) {
-      var scale = d / pinch.dist;
-      if (Math.abs(scale - 1) > 0.01) { var n = toNorm(cx, cy); sendJson({ type: "zoom", centerU: n.u, centerV: n.v, scale: scale }); }
-      var cr = contentRect();
-      var du = cr.w > 0 ? -(cx - pinch.cx) / cr.w : 0;
-      var dv = cr.h > 0 ? -(cy - pinch.cy) / cr.h : 0;
+      const scale = d / pinch.dist;
+      if (Math.abs(scale - 1) > 0.01) { const n = toNorm(cx, cy); sendJson({ type: "zoom", centerU: n.u, centerV: n.v, scale: scale }); }
+      const cr = contentRect();
+      const du = cr.w > 0 ? -(cx - pinch.cx) / cr.w : 0;
+      const dv = cr.h > 0 ? -(cy - pinch.cy) / cr.h : 0;
       if (du || dv) { sendJson({ type: "scroll", du: du, dv: dv }); }
     }
     pinch.dist = d; pinch.cx = cx; pinch.cy = cy;
   }
 
   function endPointer(e) {
-    var p = activePointers.get(e.pointerId);
+    const p = activePointers.get(e.pointerId);
     if (!p) { return; }
     activePointers.delete(e.pointerId);
     if (drawPointer === e.pointerId) {
       if (p.strokeId) {
         sendJson({ type: "strokeEnd", id: p.strokeId, point: eventPoint(e) });
-        var s = findStroke(p.strokeId);
+        const s = findStroke(p.strokeId);
         if (s) { s.doneAt = performance.now(); }
       }
       drawPointer = null;
@@ -471,9 +471,9 @@
   ink.addEventListener("pointercancel", endPointer);
 
   // ── predictive ink (fades once the authoritative frame catches up) ───────────
-  var FADE_MS = 500;
+  const FADE_MS = 500;
   function resizeInk() {
-    var dpr = window.devicePixelRatio || 1;
+    const dpr = window.devicePixelRatio || 1;
     ink.width = Math.round(ink.clientWidth * dpr);
     ink.height = Math.round(ink.clientHeight * dpr);
   }
@@ -481,15 +481,15 @@
 
   function drawInk() {
     if (ictx) {
-      var dpr = window.devicePixelRatio || 1;
+      const dpr = window.devicePixelRatio || 1;
       ictx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ictx.clearRect(0, 0, ink.width, ink.height);
-      var r = ink.getBoundingClientRect();
-      var now = performance.now();
-      var alive = [];
-      for (var i = 0; i < strokes.length; i++) {
-        var s = strokes[i];
-        var alpha = 1;
+      const r = ink.getBoundingClientRect();
+      const now = performance.now();
+      const alive = [];
+      for (let i = 0; i < strokes.length; i++) {
+        const s = strokes[i];
+        let alpha = 1;
         if (s.doneAt) {
           alpha = Math.max(0, 1 - (now - s.doneAt) / FADE_MS);
           if (alpha <= 0) { continue; }
@@ -517,7 +517,7 @@
     } else {
       ictx.beginPath();
       ictx.moveTo(s.pts[0].x - r.left, s.pts[0].y - r.top);
-      for (var i = 1; i < s.pts.length; i++) { ictx.lineTo(s.pts[i].x - r.left, s.pts[i].y - r.top); }
+      for (let i = 1; i < s.pts.length; i++) { ictx.lineTo(s.pts[i].x - r.left, s.pts[i].y - r.top); }
       ictx.stroke();
     }
     ictx.restore();

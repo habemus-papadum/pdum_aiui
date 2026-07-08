@@ -218,6 +218,7 @@ function main() {
           { text: "Prompt Lowering", link: "/guide/prompt-lowering" },
           { text: "The Channel MCP Server", link: "/guide/channel" },
           { text: "Web Intent Tool", link: "/guide/web-intent-tool" },
+          { text: "The Transcription Layer", link: "/guide/transcription" },
           { text: "Realtime Live Mode", link: "/guide/realtime-live" },
           { text: "Realtime: the Wire", link: "/guide/realtime-vendors" },
           { text: "DevTools Panel", link: "/guide/devtools" },

@@ -95,6 +95,21 @@ export interface CodeSelection {
   lines?: number;
 }
 
+/**
+ * One transcribed word, positioned in the SEGMENT'S OWN AUDIO — milliseconds
+ * from the segment's first sample (the talk-start instant, since capture
+ * begins there) — plus the model's confidence when the vendor reports one.
+ * Word timestamps are the precise anchor for compile-time media interleaving
+ * (they replace the delta-arrival latency estimate when present), and
+ * logprobs drive the preview's confidence heat map.
+ */
+export interface TranscriptWord {
+  text: string;
+  startMs?: number;
+  endMs?: number;
+  logprob?: number;
+}
+
 export type IntentEvent =
   | { at: number; type: "armed"; on: boolean }
   | { at: number; type: "mode"; mode: Mode }
@@ -110,6 +125,8 @@ export type IntentEvent =
       text: string;
       latencyMs: number;
       model: string;
+      /** Word-level timestamps + confidence, when the transcriber reports them. */
+      words?: TranscriptWord[];
       /** Set when this segment was spoken while a correction target was lassoed. */
       correction?: boolean;
     }

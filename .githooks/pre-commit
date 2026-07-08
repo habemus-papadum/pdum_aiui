@@ -1,0 +1,11 @@
+#!/bin/sh
+# Biome gate — CI runs `biome check .` and fails the build on any lint/format
+# error, so catch it here first. `--staged` checks exactly what this commit
+# ships; fixable errors: run `pnpm format` (repo-wide `biome check --write`)
+# and re-stage. Bypass for a genuine emergency: `git commit --no-verify`.
+pnpm exec biome check --staged --no-errors-on-unmatched || {
+  echo ""
+  echo "✖ biome found problems in the staged files."
+  echo "  Fix: pnpm format   (then re-stage)   ·   bypass: git commit --no-verify"
+  exit 1
+}

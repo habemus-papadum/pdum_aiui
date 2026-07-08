@@ -24,25 +24,20 @@
  */
 import { render } from "@solidjs/web";
 import { createSignal, For } from "solid-js";
-import type { IntentPipelineConfig, IntentTier, KeyCommand } from "../intent-pipeline";
-import { TIER_BY_DIGIT } from "../intent-pipeline";
+import type { IntentPipelineConfig, KeyCommand } from "../intent-pipeline";
+import { engineOf, TRANSCRIPTION_ENGINES } from "../intent-pipeline";
 
 export interface ConfigStripState {
-  /** The effective config right now (the strip shows its tier rung). */
+  /** The effective config right now (the strip shows its engine). */
   config: IntentPipelineConfig;
-  /** A tier picked mid-thread, applying when the open thread closes. */
-  pendingTier?: IntentTier;
+  /** An engine picked mid-thread, applying when the open thread closes. */
+  pendingEngine?: string;
   /** True when unsaved session overrides are in effect (lost on reload). */
   sessionDirty: boolean;
   /** True when saved (persisted) overrides exist for this origin. */
   saved: boolean;
   /** A one-line confirmation from the last action ("saved ✓", …). */
   note?: string;
-}
-
-/** The tier a config runs, for display: explicit `tier` or the default rung. */
-export function displayTier(config: IntentPipelineConfig): IntentTier {
-  return config.tier ?? "rapid";
 }
 
 /** The linter setting a config runs, for display (absent → off). */
@@ -77,9 +72,9 @@ export class ConfigStrip {
     if (onCommand) {
       this.root.addEventListener("click", (event) => {
         const target = event.target as Element | null;
-        const chip = target?.closest("[data-tier]");
+        const chip = target?.closest("[data-engine]");
         if (chip) {
-          onCommand({ cmd: "config-tier", tier: chip.getAttribute("data-tier") as IntentTier });
+          onCommand({ cmd: "config-engine", index: Number(chip.getAttribute("data-engine")) });
           return;
         }
         const action = target?.closest("[data-cmd]")?.getAttribute("data-cmd");
@@ -108,13 +103,13 @@ export class ConfigStrip {
             ? "saved for this site"
             : "from the file config";
       };
-      const chipClass = (tier: IntentTier): string => {
+      const chipClass = (engineId: string): string => {
         const s = state();
         let classes = "mm-tier-chip";
-        if (s !== undefined && tier === displayTier(s.config)) {
+        if (s !== undefined && engineId === engineOf(s.config)?.id) {
           classes += " active";
         }
-        if (s !== undefined && tier === s.pendingTier) {
+        if (s !== undefined && engineId === s.pendingEngine) {
           classes += " pending";
         }
         return classes;
@@ -123,15 +118,16 @@ export class ConfigStrip {
         <>
           {state() !== undefined && (
             <div class="mm-strip-title">
-              tier <span class="mm-strip-layer">{layer()}</span>
+              transcriber <span class="mm-strip-layer">{layer()}</span>
             </div>
           )}
           {state() !== undefined && (
             <div class="mm-strip-tiers">
-              <For each={TIER_BY_DIGIT}>
-                {(tier, index) => (
-                  <span class={chipClass(tier)} data-tier={tier}>
-                    <b>{index() + 1}</b> {tier}
+              <For each={TRANSCRIPTION_ENGINES}>
+                {(engine, index) => (
+                  <span class={chipClass(engine.id)} data-engine={String(index())}>
+                    <b>{index() + 1}</b> {engine.icon} {engine.label}
+                    <i class="mm-engine-shape"> {engine.shape}</i>
                   </span>
                 )}
               </For>
@@ -147,9 +143,9 @@ export class ConfigStrip {
               </span>
             </div>
           )}
-          {state()?.pendingTier !== undefined && (
+          {state()?.pendingEngine !== undefined && (
             <div class="mm-strip-pending">
-              → {state()?.pendingTier} applies when this thread closes
+              → {state()?.pendingEngine} applies when this thread closes
             </div>
           )}
           {state()?.note !== undefined && <div class="mm-strip-note">{state()?.note}</div>}
@@ -198,4 +194,13 @@ export class ConfigStrip {
   render(state: ConfigStripState): void {
     this.setState(state);
   }
+}
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
 }

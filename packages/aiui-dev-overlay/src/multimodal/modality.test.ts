@@ -353,7 +353,7 @@ describe("multimodalModality: lowered echoes merge in", () => {
           segment: 1,
           text: "reaction diffusion on the GPU",
           latencyMs: 900,
-          model: "gpt-4o-mini-transcribe",
+          model: "gpt-4o-transcribe",
         },
       ],
     });
@@ -427,7 +427,7 @@ describe("multimodalModality: degradation", () => {
           segment: 1,
           text: "",
           latencyMs: 0,
-          model: "gpt-4o-mini-transcribe",
+          model: "gpt-4o-transcribe",
         },
         {
           at: Date.now(),
@@ -659,17 +659,18 @@ function mountLive(over: Record<string, unknown> = {}) {
 }
 
 describe("multimodalModality: help (H) and the condensed cheat sheet", () => {
-  it("H toggles the panel; its body is the keymap table", async () => {
+  it("? toggles the panel; its body is the keymap table (H is hands-free talk)", async () => {
     const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
-    key("keydown", "`"); // arm — H lives in the armed base layer
-    key("keydown", "h");
+    key("keydown", "`"); // arm — ? lives in the armed base layer
+    key("keydown", "?");
     await flush();
     expect(handle.shadowRoot?.querySelector(".panel")?.hasAttribute("hidden")).toBe(false);
     const help = handle.shadowRoot?.querySelector(".mm-keymap-help");
     expect(help?.textContent).toContain("armed");
     expect(help?.textContent).toContain("hold to talk");
+    expect(help?.textContent).toContain("hands-free talk");
     expect(help?.textContent).toContain("VS Code jump mode");
-    key("keydown", "h");
+    key("keydown", "?");
     await flush();
     expect(handle.shadowRoot?.querySelector(".panel")?.hasAttribute("hidden")).toBe(true);
   });
@@ -735,14 +736,18 @@ describe("multimodalModality: help (H) and the condensed cheat sheet", () => {
     await flush();
     expect(document.querySelector(".mm-config-strip")?.classList.contains("visible")).toBe(true);
 
-    // The talk cap (🎙, a HOLD key) click-toggles via the down→up fallback.
+    // Hands-free (🙌 = H, a real toggle) click-toggles; push-to-talk (🎙 =
+    // Space) is deliberately keyboard-only — its cap is inert.
     key("keydown", "Escape"); // close the strip first (it claims digits/S)
     await flush();
+    const state = (): string => handle.shadowRoot?.querySelector(".mm-state")?.textContent ?? "";
     capFor("🎙")?.click();
     await wait(30);
-    const state = (): string => handle.shadowRoot?.querySelector(".mm-state")?.textContent ?? "";
+    expect(state()).not.toContain("REC"); // inert: a mouse can't "hold"
+    capFor("🙌")?.click();
+    await wait(30);
     expect(state()).toContain("REC");
-    capFor("🎙")?.click();
+    capFor("🙌")?.click();
     await wait(30);
     expect(state()).not.toContain("REC");
   });
@@ -1109,7 +1114,8 @@ describe("multimodalModality: tiers via set_config (the agent path)", () => {
     expect(rapid.ok).toBe(true);
     // The persisted delta is JUST {tier} — no transcriber override frozen in.
     expect(loadIntentOverrides()).toEqual({ tier: "rapid" });
-    expect(rapid.config.transcriber).toBe("openai-realtime");
+    // Tiers no longer pin a transcriber — the DEFAULT (Scribe) shows through.
+    expect(rapid.config.transcriber).toBe("elevenlabs");
 
     // Switching to flagship re-derives flagship's fields (not rapid's frozen ones).
     const flagship = overlay?.call("set_config", { config: { tier: "flagship" } }) as SetConfigOk;
@@ -1280,18 +1286,23 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(stripOpen()).toBe(false);
     key("keydown", "k");
     expect(stripOpen()).toBe(true);
-    key("keydown", "2"); // premium
+    key("keydown", "2"); // GPT-4o Transcribe (request-response)
     await flush(); // the strip content is Solid-rendered (batched writes)
-    expect(activeChip()).toContain("premium");
+    expect(activeChip()).toContain("GPT-4o Transcribe");
 
     // Session-scoped: NOTHING persisted — a reload would return to the file config.
     expect(loadIntentOverrides()).toEqual({});
 
-    // The next thread's hello carries the session tier; the Vite fine field
-    // (transcriber: mock) still wins over the preset.
+    // The next thread's hello carries the session engine's fields. (The
+    // engine bundle SETS transcriber — unlike the old tier presets, picking
+    // an engine overrides an explicit vite transcriber deliberately: the
+    // strip's whole point is switching backends.)
     key("keydown", " ");
     await wait(50);
-    expect(helloIntents(sent)[0]).toMatchObject({ tier: "premium", transcriber: "mock" });
+    expect(helloIntents(sent)[0]).toMatchObject({
+      transcriber: "openai-realtime",
+      realtimeModel: "gpt-4o-transcribe",
+    });
   });
 
   it("clicking a tier chip (or an action) works like its key — the strip is mouse-operable", async () => {
@@ -1301,13 +1312,13 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     expect(stripOpen()).toBe(true);
     await flush(); // the chips are Solid-rendered (batched writes)
 
-    // Click the rapid chip: same dispatch as pressing 3. (Regression: chips
+    // Click the Scribe chip: same dispatch as pressing 3. (Regression: chips
     // used to be display-only spans — under the armed crosshair cursor they
     // read as broken buttons, and the mouse path silently did nothing.)
-    const rapid = strip()?.querySelector<HTMLElement>('[data-tier="rapid"]');
-    rapid?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const scribe = strip()?.querySelector<HTMLElement>('[data-engine="2"]');
+    scribe?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flush();
-    expect(activeChip()).toContain("rapid");
+    expect(activeChip()).toContain("Scribe v2");
     expect(loadIntentOverrides()).toEqual({}); // still session-only
 
     // Click "Esc close" in the action row: closes the strip like the key.
@@ -1325,12 +1336,15 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     await wait(50);
 
     key("keydown", "k");
-    key("keydown", "2"); // premium — but a thread is open
-    await flush(); // the strip content is Solid-rendered (batched writes)
-    expect(strip()?.querySelector(".mm-strip-pending")?.textContent).toContain("premium");
-    expect(helloIntents(sent)[0]?.tier).toBeUndefined(); // this thread keeps its config
+    key("keydown", "2"); // GPT-4o Transcribe — but a thread is open
+    await flush(); // picking auto-dismisses; reopen to see the pending note
+    expect(stripOpen()).toBe(false);
+    key("keydown", "k");
+    await flush();
+    expect(strip()?.querySelector(".mm-strip-pending")?.textContent).toContain("GPT-4o Transcribe");
+    expect(helloIntents(sent)[0]?.realtimeModel).not.toBe("gpt-4o-transcribe"); // this thread keeps its config
 
-    key("keydown", "Escape"); // close the strip (not the thread)
+    key("keydown", "Escape"); // close the reopened strip (not the thread)
     expect(stripOpen()).toBe(false);
     key("keydown", "Enter"); // send → thread closes (and disarms) → the pending tier lands
     await wait(120);
@@ -1340,7 +1354,10 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     await wait(50);
     const hellos = helloIntents(sent);
     expect(hellos).toHaveLength(2);
-    expect(hellos[1]).toMatchObject({ tier: "premium" });
+    expect(hellos[1]).toMatchObject({
+      transcriber: "openai-realtime",
+      realtimeModel: "gpt-4o-transcribe",
+    });
     expect(loadIntentOverrides()).toEqual({}); // still session-only
   });
 
@@ -1348,10 +1365,11 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     mountMultimodal(MOCK);
     key("keydown", "`");
     key("keydown", "k");
-    key("keydown", "2"); // premium, session layer
+    key("keydown", "2"); // GPT-4o Transcribe, session layer (auto-dismisses)
     expect(loadIntentOverrides()).toEqual({});
+    key("keydown", "k"); // reopen for the save
     key("keydown", "s"); // save
-    expect(loadIntentOverrides()).toEqual({ tier: "premium" });
+    expect(loadIntentOverrides()).toMatchObject({ realtimeModel: "gpt-4o-transcribe" });
     await flush(); // the strip content is Solid-rendered (batched writes)
     expect(strip()?.textContent).toContain("saved for this site");
   });
@@ -1361,7 +1379,8 @@ describe("multimodalModality: the quick-config strip (the K layer)", () => {
     const { sent } = mountMultimodal(MOCK);
     key("keydown", "`");
     key("keydown", "k");
-    key("keydown", "2"); // premium, session layer
+    key("keydown", "2"); // GPT-4o Transcribe, session layer (auto-dismisses)
+    key("keydown", "k"); // reopen for the reset
     key("keydown", "r"); // reset everything
     expect(loadIntentOverrides()).toEqual({});
 

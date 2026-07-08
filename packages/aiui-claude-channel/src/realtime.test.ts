@@ -15,6 +15,7 @@ import {
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
   type UnexpectedResponseSource,
+  wordsFromTokenLogprobs,
 } from "./realtime";
 import { createTraceStore, listTraces } from "./trace";
 import { withTracing } from "./tracing";
@@ -721,5 +722,33 @@ describe("captureUnexpectedResponse", () => {
     const { errors } = reject(401, "");
     expect(errors[0].message).toBe("upstream rejected the connection (HTTP 401)");
     expect(errors[0].data).toBeUndefined();
+  });
+});
+
+describe("wordsFromTokenLogprobs (the whisper heat-map fold)", () => {
+  it("folds token logprobs to word level, worst token wins", () => {
+    const words = wordsFromTokenLogprobs("make the baseline", [
+      { token: "make", logprob: -0.01 },
+      { token: " the", logprob: -0.2 },
+      { token: " base", logprob: -0.9 },
+      { token: "line", logprob: -0.1 },
+    ]);
+    expect(words).toEqual([
+      { text: "make", logprob: -0.01 },
+      { text: "the", logprob: -0.2 },
+      { text: "baseline", logprob: -0.9 }, // min of its two tokens
+    ]);
+    // No timestamps on this wire — words carry only confidence.
+    expect(words?.every((w) => w.startMs === undefined)).toBe(true);
+  });
+
+  it("degrades to undefined on malformed input or token/text drift", () => {
+    expect(wordsFromTokenLogprobs("hi", undefined)).toBeUndefined();
+    expect(wordsFromTokenLogprobs("hi", [])).toBeUndefined();
+    expect(wordsFromTokenLogprobs("hi", [{ token: 3, logprob: -1 }])).toBeUndefined();
+    // Tokens that don't reassemble the transcript must not mislabel words.
+    expect(
+      wordsFromTokenLogprobs("something else", [{ token: "hi", logprob: -0.5 }]),
+    ).toBeUndefined();
   });
 });

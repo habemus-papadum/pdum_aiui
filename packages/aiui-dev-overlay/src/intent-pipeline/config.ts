@@ -51,9 +51,17 @@ export interface IntentPipelineConfig {
    * offline/developer choice: local, no key, no network, canned output (the
    * workbench lab overrides to it so it runs without a channel).
    */
-  transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice";
+  transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice" | "elevenlabs";
   /** OpenAI transcription model (when transcriber = openai). */
   model: string;
+  /**
+   * Domain vocabulary the transcriber is biased toward — product names,
+   * acronyms, code identifiers. A SLOT today (nothing in the UI writes it):
+   * wired to ElevenLabs `keyterms` and the request-response engine's prompt
+   * ("Keywords: …"); `gpt-realtime-whisper` does not support prompting, so
+   * the field is documented-inert there. See docs/guide/transcription.md.
+   */
+  keywords?: string[];
   /**
    * Realtime transcription model (when transcriber = openai-realtime). Absent →
    * the channel default (`gpt-realtime-whisper`).
@@ -172,9 +180,17 @@ export const DEFAULT_INTENT_CONFIG: IntentPipelineConfig = {
   talkMode: "hold",
   inkFadeSec: 0,
   autoEndSec: 0,
-  transcriber: "openai-realtime",
+  // Scribe v2 is the default WHEN AVAILABLE — word timestamps + logprobs
+  // make it the richest engine. The channel falls back to Realtime Whisper
+  // (with a visible note) when it has no ELEVEN_LABS_API_KEY, so a
+  // keyless-for-ElevenLabs setup still dictates out of the box.
+  transcriber: "elevenlabs",
   model: "gpt-4o-mini-transcribe",
   realtimeModel: "gpt-realtime-whisper",
+  // The delay dial trades latency for accuracy; the accumulator preview
+  // absorbs slow finals gracefully (deltas keep it live), so default to the
+  // accuracy end. See docs/guide/transcription.md.
+  realtimeDelay: "xhigh",
   mockWordMs: 140,
   mockTypoRate: 0.07,
   audioBack: "off",
@@ -206,9 +222,10 @@ export const TIER_PRESETS: Record<IntentTier, Partial<IntentPipelineConfig>> = {
     transcriber: "mock",
     audioBack: "off",
   },
+  // The legacy tiers no longer pin a transcriber (the ENGINE picker owns
+  // that choice now; the default rides DEFAULT_INTENT_CONFIG) — a tier is
+  // just its audio-back posture.
   rapid: {
-    transcriber: "openai-realtime",
-    realtimeModel: "gpt-realtime-whisper",
     audioBack: "off",
   },
   premium: {
@@ -251,6 +268,82 @@ const LEGACY_TIER_EXPANSIONS: Record<string, Partial<IntentPipelineConfig>> = {
     audioBack: "voice",
   },
 };
+
+// ── the transcription ENGINES (the strip's picker) ───────────────────────────
+
+/**
+ * The strip's engine row: which transcription BACKEND runs, presented by its
+ * real interaction shape — streaming (live deltas over a session socket) vs
+ * request-response (one bounded round-trip per segment) — rather than by a
+ * price rung. Each entry is a bundle of fine fields applied as session
+ * overrides; explicit config still wins. See docs/guide/transcription.md.
+ */
+export interface TranscriptionEngine {
+  id: string;
+  /** The strip label, e.g. "Realtime Whisper". */
+  label: string;
+  /** The interaction shape, shown beside the label. */
+  shape: "streaming" | "request-response";
+  /** The pictogram (streaming ⚡ / request-response ⇄ carry the shape). */
+  icon: string;
+  overrides: Partial<IntentPipelineConfig>;
+  /**
+   * The config fields THIS engine's wire actually reads — **parameters are
+   * per-model, not a standardized set**. Every vendor rejects (or silently
+   * ignores) knobs it doesn't own — `delay` is whisper-only, `keyterms` is
+   * Scribe-only, `include` logprobs is 4o-only — so each session builder
+   * consumes exactly its engine's fields and the rest never touch its wire.
+   * This list is the authoritative record of that ownership (and what the
+   * docs table renders).
+   */
+  params: readonly (keyof IntentPipelineConfig)[];
+}
+
+export const TRANSCRIPTION_ENGINES: readonly TranscriptionEngine[] = [
+  {
+    id: "realtime-whisper",
+    label: "Realtime Whisper",
+    shape: "streaming",
+    icon: "⚡",
+    overrides: {
+      transcriber: "openai-realtime",
+      realtimeModel: "gpt-realtime-whisper",
+      realtimeDelay: "xhigh",
+    },
+    params: ["realtimeModel", "realtimeDelay"],
+  },
+  {
+    // Probed live (July 2026): the 4o-transcribe models over the SAME
+    // realtime session stream deltas AND return token logprobs — which
+    // gpt-realtime-whisper never does, include or not. So this engine is the
+    // higher-accuracy streaming rung with the confidence heat map (full 4o;
+    // the mini and the REST request-response forms remain config-only).
+    // NOTE: `realtimeDelay` is whisper-only — the channel omits it for this
+    // model (the wire rejects it).
+    id: "gpt4o-transcribe",
+    label: "GPT-4o Transcribe",
+    shape: "streaming",
+    icon: "🎯",
+    overrides: { transcriber: "openai-realtime", realtimeModel: "gpt-4o-transcribe" },
+    params: ["realtimeModel"], // logprobs are implicit; delay is whisper-only
+  },
+  {
+    id: "scribe-v2",
+    label: "Scribe v2",
+    shape: "streaming",
+    icon: "🎬",
+    overrides: { transcriber: "elevenlabs" },
+    params: ["keywords"], // Scribe keyterms; timestamps/no_verbatim are built in
+  },
+];
+
+/** The engine a config is running, for display: the one whose EVERY override
+ * field matches (two engines share a transcriber but differ by model). */
+export function engineOf(config: IntentPipelineConfig): TranscriptionEngine | undefined {
+  return TRANSCRIPTION_ENGINES.find((e) =>
+    Object.entries(e.overrides).every(([k, v]) => config[k as keyof IntentPipelineConfig] === v),
+  );
+}
 
 /** The default tier when none is set: `rapid` (streaming whisper, no voice back). */
 export const DEFAULT_TIER: IntentTier = DEFAULT_INTENT_CONFIG.tier ?? "rapid";

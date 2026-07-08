@@ -35,6 +35,7 @@ import {
   composeIntent,
   type Engine,
   type IntentEvent,
+  type TranscriptWord,
 } from "../intent-pipeline";
 import { LiveDiffText } from "./diff-flash";
 
@@ -46,6 +47,8 @@ interface Piece {
   provisional?: boolean;
   /** A linter note riding the stream (💡 chip) — never composed content. */
   linter?: { text: string; segment?: number };
+  /** The segment's word-level confidence data (final rows, when reported). */
+  words?: TranscriptWord[];
 }
 
 /** The imperative seam into the render root (signals live INSIDE it). */
@@ -134,12 +137,36 @@ export class Preview {
     // Uniquify repeated keys: the compiler may split one segment's text
     // around a timestamp-anchored shot, yielding several text items for the
     // same segment — each occurrence gets its own stable row.
+    // Word-level confidence per segment (the heat map's data), from the
+    // latest transcript-final that carried words.
+    const wordsBySegment = new Map<number, TranscriptWord[]>();
+    for (const event of this.engine.events) {
+      if (event.type === "transcript-final" && event.words !== undefined) {
+        wordsBySegment.set(event.segment, event.words);
+      }
+    }
     const seen = new Map<string, number>();
     const pieces: Piece[] = items.map((item, index) => {
       const base = keyOf(item, index);
       const n = seen.get(base) ?? 0;
       seen.set(base, n + 1);
-      return { item, key: n === 0 ? base : `${base}#${n}` };
+      const words =
+        item.kind === "text" && item.segment !== undefined
+          ? wordsBySegment.get(item.segment)
+          : undefined;
+      // Heat only for UNSPLIT rows (the words map 1:1 onto the text); a
+      // compiler-split row falls back to plain rendering.
+      const heat =
+        words !== undefined &&
+        n === 0 &&
+        words.map((w) => w.text).join(" ").length >= (item.text ?? "").length;
+      // The `:w` suffix is LOAD-BEARING: a keyed row's SHAPE is decided once
+      // (the untrack in the render body), so the delta tail's plain row would
+      // otherwise survive the final and the heat branch would be unreachable —
+      // words changing the KEY forces the <For> to rebuild the row as a heat
+      // row (the bug the first live run exposed).
+      const key = `${n === 0 ? base : `${base}#${n}`}${heat ? ":w" : ""}`;
+      return { item, key, ...(heat ? { words } : {}) };
     });
     // Provisional tails: streaming segments the fold has no final for yet.
     const finalized = new Set(
@@ -154,9 +181,11 @@ export class Preview {
         });
       }
     }
-    // Linter notes: advisory chips the compiler never composes — appended
-    // after the content (the lint is about the latest pause). Scanned from
-    // the thread's events since the fold deliberately skips them.
+    // Linter notes: advisory chips the compiler never composes. Each chip
+    // ANCHORS to the turn it lints — inserted right after the last piece of
+    // its segment (a lint arrives a beat after the words, but it belongs to
+    // them, not to whatever streamed since). Segmentless notes append at the
+    // end. Scanned from the thread's events since the fold skips them.
     const events = this.engine.events;
     let start = 0;
     for (let i = events.length - 1; i >= 0; i--) {
@@ -174,14 +203,31 @@ export class Preview {
       if (this.dismissedLints.has(key)) {
         continue;
       }
-      pieces.push({
+      const piece: Piece = {
         item: { kind: "text", text: event.text },
         key,
         linter: {
           text: event.text,
           ...(event.segment !== undefined ? { segment: event.segment } : {}),
         },
-      });
+      };
+      let anchor = -1;
+      if (event.segment !== undefined) {
+        for (let j = pieces.length - 1; j >= 0; j--) {
+          if (
+            pieces[j].item.segment === event.segment ||
+            pieces[j].linter?.segment === event.segment
+          ) {
+            anchor = j;
+            break;
+          }
+        }
+      }
+      if (anchor === -1) {
+        pieces.push(piece);
+      } else {
+        pieces.splice(anchor + 1, 0, piece);
+      }
     }
     return pieces;
   }
@@ -225,6 +271,67 @@ export class Preview {
       );
 
       /**
+       * The thread-wide logprob RANGE — a derived cell over everything the
+       * transcriber has reported so far. Each heat row normalizes its words
+       * against THIS, so the gradation is relative to the turn's own
+       * confidence distribution (an absolute scale would wash out: vendors
+       * sit in different logprob bands).
+       */
+      const logprobRange = createMemo(() => {
+        let min = Number.POSITIVE_INFINITY;
+        let max = Number.NEGATIVE_INFINITY;
+        for (const piece of pieces()) {
+          for (const word of piece.words ?? []) {
+            if (word.logprob !== undefined) {
+              min = Math.min(min, word.logprob);
+              max = Math.max(max, word.logprob);
+            }
+          }
+        }
+        return min < max ? { min, max } : undefined;
+      });
+
+      /** A final row WITH word confidence: per-word spans, tinted where the
+       * model was unsure — the low-confidence words are exactly where a
+       * spoken correction (or the linter) is likely needed. */
+      const heatRow = (key: string) => {
+        const current = createMemo(() => pieces().find((p) => p.key === key));
+        return (
+          <>
+            <span class="mm-seg final">
+              <For each={current()?.words ?? []}>
+                {(word) => {
+                  const range = logprobRange();
+                  let alpha = 0;
+                  if (range !== undefined && word.logprob !== undefined) {
+                    const normalized = (word.logprob - range.min) / (range.max - range.min);
+                    alpha = (1 - normalized) * 0.45;
+                  }
+                  return (
+                    <>
+                      <span
+                        class="mm-heat-word"
+                        style={
+                          alpha > 0.04
+                            ? { background: `rgba(255, 92, 135, ${alpha.toFixed(3)})` }
+                            : {}
+                        }
+                        title={
+                          word.logprob !== undefined ? `logprob ${word.logprob.toFixed(2)}` : ""
+                        }
+                      >
+                        {word.text}
+                      </span>{" "}
+                    </>
+                  );
+                }}
+              </For>
+            </span>{" "}
+          </>
+        );
+      };
+
+      /**
        * One text run of the accumulator (final or provisional tail) — an
        * imperative island around the kit's {@link LiveDiffText}: extensions
        * render clean, and any REVISION — a streaming self-correction, a
@@ -266,6 +373,9 @@ export class Preview {
             if (piece.item.kind === "code-selection" || piece.item.kind === "app-selection") {
               return this.renderSelectionPiece(piece);
             }
+            if (piece.words?.some((w) => w.logprob !== undefined)) {
+              return heatRow(piece.key);
+            }
             return textRow(piece.key);
           }}
         </For>
@@ -290,8 +400,11 @@ export class Preview {
     wrap.className = "mm-thumb-wrap";
     const chip = document.createElement("span");
     chip.className = "mm-lint-chip";
-    const clipped = note.text.length > 42 ? `${note.text.slice(0, 42)}…` : note.text;
-    chip.textContent = `💡 ${clipped}`;
+    // A tiny marker like every other chip (⌖ sel_1, ⧉ code_1): the glyph IS
+    // the chip; the substance rides the hover peek and the title. Inline
+    // text would push the transcript around for advice that is, by design,
+    // not content.
+    chip.textContent = "💡";
     chip.title = note.text;
     wrap.append(chip);
     wrap.addEventListener("mouseenter", () => {
@@ -451,4 +564,13 @@ export class Preview {
     this.peek?.remove();
     this.peek = undefined;
   }
+}
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
 }

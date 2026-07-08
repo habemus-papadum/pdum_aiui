@@ -675,3 +675,12 @@ export function textModality(): IntentModality {
     },
   };
 }
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
+}

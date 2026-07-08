@@ -36,7 +36,10 @@ const Cap = (props: {
   onHover: (hint: KeyHint | undefined, el?: HTMLElement) => void;
 }) => {
   let el: HTMLButtonElement | undefined;
-  const tappable = () => props.hint.tapKey !== undefined && props.onTap !== undefined;
+  // An EMPTY tapKey is a binding's explicit "keyboard-only" marker (e.g.
+  // push-to-talk Space — a mouse can't hold a cap); undefined means the row
+  // simply has no key (a gesture like drag). Both render inert.
+  const tappable = () => !!props.hint.tapKey && props.onTap !== undefined;
   return (
     <button
       type="button"
@@ -46,7 +49,7 @@ const Cap = (props: {
       onMouseLeave={() => props.onHover(undefined)}
       onClick={() => {
         const key = props.hint.tapKey;
-        if (key !== undefined) {
+        if (key) {
           props.onTap?.(key);
         }
       }}
@@ -225,3 +228,12 @@ export const KEYMAP_HELP_STYLES = /* css */ `
   .mm-help-icon { text-align: center; font-size: 11px; }
   .mm-help-label { color: #9aa0aa; }
 `;
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
+}

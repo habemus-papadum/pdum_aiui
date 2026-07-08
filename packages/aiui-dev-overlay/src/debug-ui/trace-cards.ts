@@ -266,6 +266,12 @@ export function classifyStage(stage: TraceStageLike): StageClass {
   if (label === "code selection dropped") {
     return norm("in", "context", "⧉", "code selection dropped");
   }
+  if (/^stt final seg_/.test(label)) {
+    // The per-final capability receipt: words / timestamps / logprob range at
+    // a glance (the heat-map debugging lesson — never dig merged-events JSON
+    // to learn whether the vendor sent confidence).
+    return norm("internal", "events", "📝", label);
+  }
   if (label === "merged events") {
     return norm("internal", "events", "📜", "merged events");
   }

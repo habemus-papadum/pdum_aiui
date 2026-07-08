@@ -233,7 +233,7 @@ describe("linter chips (💡 advice in the accumulator)", () => {
     await flush();
     const body = document.querySelector(".mm-preview-body") as HTMLElement;
     const chip = body.querySelector(".mm-lint-chip") as HTMLElement;
-    expect(chip.textContent).toContain("💡");
+    expect(chip.textContent).toBe("💡"); // glyph-only, like every other chip
     expect(chip.title).toBe("ambiguous: which plot?");
     expect(composeIntent(engine.events).prompt).toBe(before); // advisory only
   });
@@ -258,5 +258,76 @@ describe("linter chips (💡 advice in the accumulator)", () => {
     engine.send(); // thread closes
     engine.ingestLinter({ at: 502, type: "linter-note", text: "too late" });
     expect(engine.events.some((e) => e.type === "linter-note")).toBe(false);
+  });
+});
+
+describe("the confidence heat map (word logprobs end-to-end in the view)", () => {
+  it("renders heat even when DELTAS streamed first (the row must be rebuilt)", async () => {
+    // The live-run bug: the delta tail creates the row as plain text; the
+    // final (same segment) must not be trapped in that row's shape.
+    const { engine } = mounted();
+    const s1 = engine.talkStart() ?? 1;
+    engine.transcriptDelta(s1, "make the");
+    engine.transcriptDelta(s1, "make the baseline");
+    await flush();
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "make the baseline wider", 90, "gpt-4o-transcribe", [
+      { text: "make", logprob: -0.01 },
+      { text: "the", logprob: -0.02 },
+      { text: "baseline", logprob: -1.1 },
+      { text: "wider", logprob: -0.05 },
+    ]);
+    await flush();
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    expect([...body.querySelectorAll(".mm-heat-word")].map((w) => w.textContent)).toEqual([
+      "make",
+      "the",
+      "baseline",
+      "wider",
+    ]);
+  });
+
+  it("renders per-word heat spans for a final that carries words", async () => {
+    const { engine } = mounted();
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    // Exactly what wire.mergeLowered feeds the engine for a server final.
+    engine.transcriptFinal(s1, "make the baseline wider", 90, "gpt-4o-transcribe", [
+      { text: "make", logprob: -0.01 },
+      { text: "the", logprob: -0.02 },
+      { text: "baseline", logprob: -1.1 }, // the unsure one
+      { text: "wider", logprob: -0.05 },
+    ]);
+    await flush();
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    const words = [...body.querySelectorAll(".mm-heat-word")] as HTMLElement[];
+    expect(words.map((w) => w.textContent)).toEqual(["make", "the", "baseline", "wider"]);
+    // The unsure word carries the strongest tint; a confident one carries none.
+    const unsure = words[2];
+    expect(unsure.style.background).toContain("rgba(255, 92, 135");
+    expect(unsure.title).toContain("-1.10");
+    expect(words[0].style.background).toBe("");
+  });
+});
+
+describe("linter chip anchoring (the chip belongs to its turn)", () => {
+  it("keeps a segment's chip after ITS text, not at the end of the accumulator", async () => {
+    const { engine } = mounted();
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "first thing I said", 90, "mock");
+    // The lint for seg 1 arrives a beat late — AFTER the user resumed:
+    const s2 = engine.talkStart() ?? 2;
+    engine.transcriptFinal(s2, "second thing entirely", 90, "mock");
+    engine.ingestLinter({ at: 900, type: "linter-note", text: "which thing?", segment: s1 });
+    await flush();
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    const order = [...body.querySelectorAll(".mm-seg, .mm-lint-chip")].map((el) =>
+      el.classList.contains("mm-lint-chip")
+        ? el.textContent?.slice(0, 5)
+        : el.textContent?.slice(0, 5),
+    );
+    // 💡 sits between the two texts — anchored to seg 1.
+    expect(order).toEqual(["first", "💡", "secon"]);
   });
 });

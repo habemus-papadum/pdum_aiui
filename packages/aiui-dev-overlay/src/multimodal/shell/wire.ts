@@ -312,10 +312,13 @@ export function createWire(deps: WireDeps): Wire {
       typeof msg.mime === "string" &&
       typeof msg.data === "string"
     ) {
-      // A spoken clip (a premium ack / a flagship reply). Play it unless the
-      // client muted audio-back (audioBack:"off"); read live so a config
-      // switch takes effect immediately.
-      if (config().audioBack !== "off") {
+      // A spoken clip. The gate depends on WHOSE voice it is: a linter note
+      // (`lint_N`) is the linter's product and plays whenever the linter is
+      // on — `audioBack` is the TTS-ack knob and must not mute it (the
+      // silent-linter bug). Everything else (acks) honors audioBack. Read
+      // live so a config switch takes effect immediately.
+      const isLinterClip = typeof msg.id === "string" && msg.id.startsWith("lint_");
+      if (isLinterClip ? (config().linter ?? "off") !== "off" : config().audioBack !== "off") {
         enqueueSpeech({
           id: typeof msg.id === "string" ? msg.id : "speech",
           mime: msg.mime,
@@ -337,8 +340,15 @@ export function createWire(deps: WireDeps): Wire {
         if (event.type === "transcript-delta") {
           engine.transcriptDelta(event.segment, event.text);
         } else if (event.type === "transcript-final") {
-          // Fills the preview for an uploaded segment.
-          engine.transcriptFinal(event.segment, event.text, event.latencyMs, event.model);
+          // Fills the preview for an uploaded segment (word timestamps +
+          // logprobs ride along for the heat map and the compiler's anchors).
+          engine.transcriptFinal(
+            event.segment,
+            event.text,
+            event.latencyMs,
+            event.model,
+            event.words,
+          );
         } else if (event.type === "note") {
           setStatus(event.text);
         } else if (event.type === "linter-note") {
@@ -371,4 +381,13 @@ export function createWire(deps: WireDeps): Wire {
       void cancelThread();
     },
   };
+}
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
 }

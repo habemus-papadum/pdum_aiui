@@ -589,3 +589,13 @@ describe("linter cards (the 💡 lane)", () => {
     });
   });
 });
+
+describe("stt final receipts (the words/logprobs glance)", () => {
+  it("classifies per-final stt stages onto the events lane", () => {
+    expect(classifyStage({ kind: "info", label: "stt final seg_2" })).toMatchObject({
+      category: "events",
+      icon: "📝",
+      title: "stt final seg_2",
+    });
+  });
+});

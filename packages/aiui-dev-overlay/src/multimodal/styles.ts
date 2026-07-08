@@ -67,6 +67,9 @@ export const STYLES = /* css */ `
     white-space: nowrap; }
   .mm-sel-app { color: #8ab4f8; }
   .mm-sel-code { color: #a5c8ff; }
+  /* Confidence heat: low-logprob words carry a warm tint (alpha scales with
+     how unsure the transcriber was, normalized over the turn). */
+  .mm-heat-word { border-radius: 3px; padding: 0 1px; }
   /* A linter note: read-only advice, visually distinct from content chips. */
   .mm-lint-chip { font-size: 11px; border: 1px dashed #6b5d2e; border-radius: 999px;
     padding: 1px 8px; display: inline-block; vertical-align: middle;

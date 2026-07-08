@@ -277,9 +277,20 @@ export function openOpenAiLiveSession(
         return;
       }
       case "error": {
+        // A cancel with nothing in flight is a NO-OP, not a fault: the
+        // sidecar barge-ins on every talk-start (usually there is no reply
+        // to cancel), and OpenAI answers the miss with this error event.
+        // Surfacing it would toast the user once per utterance.
+        const err = message.error as { code?: string; message?: string } | undefined;
+        if (
+          err?.code === "response_cancel_not_active" ||
+          /no active response/i.test(err?.message ?? "")
+        ) {
+          return;
+        }
         // The full error object (type/code/param) rides as structured data so
         // the client's details expander shows what OpenAI actually returned.
-        fail(message.error?.message ?? "openai live session error", message.error);
+        fail(err?.message ?? "openai live session error", message.error);
         return;
       }
       default:

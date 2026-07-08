@@ -52,14 +52,15 @@ import { toAppSelection } from "../intent";
 import {
   composeIntent,
   Engine,
+  engineOf,
   type IntentEvent,
   type IntentPipelineConfig,
-  type IntentTier,
   intentKeyHints,
   isTypingTarget,
   type KeyCommand,
   keyCommand,
   keymapHelp,
+  TRANSCRIPTION_ENGINES,
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
 import {
@@ -538,9 +539,20 @@ export function multimodalModality(
         const mode = currentUiMode();
         enforceSurfaces(mode);
         if (stateLabel) {
+          // The active backends ride the state label while armed — which
+          // transcriber (its engine icon) and which linter, at a glance;
+          // hover for the full names.
+          const activeEngine = engineOf(config);
+          const linter = config.linter ?? "off";
+          const backends = !engine.armed
+            ? ""
+            : ` · ${activeEngine?.icon ?? "?"}${linter !== "off" ? ` 💡${linter}` : ""}`;
           stateLabel.textContent = !engine.armed
             ? "off"
-            : `${engine.mode}${engine.talking ? " · REC" : ""}${engine.threadOpen ? " · thread" : ""}`;
+            : `${engine.mode}${engine.talking ? " · REC" : ""}${engine.threadOpen ? " · thread" : ""}${backends}`;
+          stateLabel.title = !engine.armed
+            ? ""
+            : `transcriber: ${activeEngine?.label ?? config.transcriber} (${activeEngine?.shape ?? "?"}) · linter: ${linter}`;
         }
         if (videoBadge) {
           videoBadge.hidden = !capture.sharing();
@@ -663,24 +675,33 @@ export function multimodalModality(
       // layer, R clears both. localStorage is read fresh on recompute — storage
       // is the single source of truth for the persisted layer.
       let sessionOverrides: Partial<IntentPipelineConfig> = {};
-      // A tier picked while a thread is open: the thread's hello already told
-      // the channel which pipeline to run, so the switch waits for thread-close.
-      let pendingTier: IntentTier | undefined;
+      // An engine picked while a thread is open: the thread's hello already
+      // told the channel which pipeline to run, so the switch waits for
+      // thread-close.
+      let pendingEngine: number | undefined;
       const recomputeEffective = (): IntentPipelineConfig =>
         effectiveConfig(viteOption, { ...loadIntentOverrides(), ...sessionOverrides });
       const stripState = (note?: string): ConfigStripState => ({
         config,
-        ...(pendingTier !== undefined ? { pendingTier } : {}),
+        ...(pendingEngine !== undefined
+          ? { pendingEngine: TRANSCRIPTION_ENGINES[pendingEngine]?.label }
+          : {}),
         sessionDirty: Object.keys(sessionOverrides).length > 0,
         saved: Object.keys(loadIntentOverrides()).length > 0,
         ...(note !== undefined ? { note } : {}),
       });
-      const applyTier = (tier: IntentTier): void => {
-        sessionOverrides = { ...sessionOverrides, tier };
-        pendingTier = undefined;
+      const applyEngine = (index: number): void => {
+        const engine = TRANSCRIPTION_ENGINES[index];
+        if (engine === undefined) {
+          return;
+        }
+        sessionOverrides = { ...sessionOverrides, ...engine.overrides };
+        pendingEngine = undefined;
         applyEffective(recomputeEffective());
         strip.render(stripState());
-        ctx.setStatus(`tier → ${tier} — this session only (K, then S to save)`);
+        ctx.setStatus(
+          `transcriber → ${engine.label} (${engine.shape}) — this session only (K, then S to save)`,
+        );
       };
       // L cycles the linter: off → openai → gemini → off. Orthogonal to the
       // tier; a mid-thread change applies like any session override — the
@@ -715,14 +736,19 @@ export function multimodalModality(
           case "config-linter":
             cycleLinter();
             break;
-          case "config-tier":
+          case "config-engine":
             if (engine.threadOpen) {
-              pendingTier = command.tier;
-              strip.render(stripState());
-              ctx.setStatus(`tier → ${command.tier} — applies when this thread closes`);
+              pendingEngine = command.index;
+              ctx.setStatus(
+                `transcriber → ${TRANSCRIPTION_ENGINES[command.index]?.label} — applies when this thread closes`,
+              );
             } else {
-              applyTier(command.tier);
+              applyEngine(command.index);
             }
+            // Picking an engine IS the strip's terminal act — auto-dismiss
+            // (the status line above carries the confirmation).
+            strip.hide();
+            renderHud();
             break;
           case "config-save": {
             // Fold everything explicit (persisted + session) into the persisted
@@ -736,7 +762,7 @@ export function multimodalModality(
           case "config-reset":
             clearIntentOverrides();
             sessionOverrides = {};
-            pendingTier = undefined;
+            pendingEngine = undefined;
             applyEffective(effectiveConfig(viteOption, {}));
             strip.render(stripState("reset to the file config ✓"));
             ctx.setStatus("config reset to the file (Vite) config");
@@ -905,7 +931,7 @@ export function multimodalModality(
         effective: config,
         onApply: (effective) => {
           sessionOverrides = {};
-          pendingTier = undefined;
+          pendingEngine = undefined;
           applyEffective(effective);
           if (strip.open) {
             strip.render(stripState());
@@ -926,9 +952,9 @@ export function multimodalModality(
         const overrides = overridesForApply(result.config, base);
         saveIntentOverrides(overrides);
         // The agent set the persisted layer explicitly — the session layer (and
-        // any tier waiting on thread-close) yields to it, like a panel Apply.
+        // any engine waiting on thread-close) yields to it, like a panel Apply.
         sessionOverrides = {};
-        pendingTier = undefined;
+        pendingEngine = undefined;
         const effective = effectiveConfig(viteOption, overrides);
         applyEffective(effective);
         if (strip.open) {
@@ -1031,10 +1057,10 @@ export function multimodalModality(
           } else {
             void wire.cancelThread();
           }
-          // A tier picked mid-thread lands now — before any next thread opens,
-          // so the next hello carries it.
-          if (pendingTier !== undefined) {
-            applyTier(pendingTier);
+          // An engine picked mid-thread lands now — before any next thread
+          // opens, so the next hello carries it.
+          if (pendingEngine !== undefined) {
+            applyEngine(pendingEngine);
           }
         }
         // Persist the turn while a thread is open (transcript + shot refs + thread
@@ -1275,4 +1301,13 @@ function bindKeys(
     document.removeEventListener("keydown", down, true);
     document.removeEventListener("keyup", up, true);
   };
+}
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
 }

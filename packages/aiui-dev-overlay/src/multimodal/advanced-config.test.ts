@@ -124,12 +124,10 @@ describe("tiers: expansion + merge precedence", () => {
   it("expands each tier into its expected fine fields (the expansion table)", () => {
     // mock — offline, keyless, unsurfaced (tests/dev only).
     expect(expandTier("mock")).toMatchObject({ transcriber: "mock" });
-    // rapid — streaming whisper, no voice back. The default.
-    expect(expandTier("rapid")).toMatchObject({
-      transcriber: "openai-realtime",
-      realtimeModel: "gpt-realtime-whisper",
-      audioBack: "off",
-    });
+    // rapid — just the silent audio-back posture: tiers no longer pin a
+    // transcriber (the engine picker owns that; the default is Scribe).
+    expect(expandTier("rapid")).toMatchObject({ audioBack: "off" });
+    expect(expandTier("rapid").transcriber).toBe("elevenlabs"); // from DEFAULT
     // premium — the higher-quality streaming model + spoken TTS acks.
     expect(expandTier("premium")).toMatchObject({
       transcriber: "openai-realtime",
@@ -183,10 +181,10 @@ describe("tiers: expansion + merge precedence", () => {
     expect(cfg.realtimeModel).toBe("gpt-realtime-whisper"); // explicit wins
   });
 
-  it("no tier expands to rapid (streaming whisper — the default rung)", () => {
+  it("no tier: the default engine is Scribe (the channel falls back keylessly)", () => {
     const cfg = effectiveConfig({}, {});
-    expect(cfg.transcriber).toBe("openai-realtime");
-    expect(cfg.realtimeModel).toBe("gpt-realtime-whisper");
+    expect(cfg.transcriber).toBe("elevenlabs");
+    expect(cfg.realtimeModel).toBe("gpt-realtime-whisper"); // the fallback's model
     expect(cfg.audioBack).toBe("off");
     expect(cfg.linter).toBe("off");
   });

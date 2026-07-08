@@ -110,8 +110,13 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
   let windowOpen = false;
   /** The segment whose transcript the armed wait is for. */
   let pendingEnd: { segment: number; timer: ReturnType<typeof setTimeout> } | undefined;
-  /** The most recent segment — linter notes correlate to it. */
+  /** The most recent segment (barge-in bookkeeping). */
   let lastSegment: number | undefined;
+  /** The segment whose turn most recently ENDED — the one a lint is ABOUT.
+   * Distinct from lastSegment: a reply can land after the user already
+   * resumed (a new segment), and the note must anchor to the turn it
+   * judged, not the one in progress. */
+  let lintedSegment: number | undefined;
   let noteSeq = 0;
   const stats = { segments: 0, merged: 0, timeouts: 0, notes: 0, toolCalls: 0, frames: 0 };
 
@@ -168,11 +173,11 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
         at: Date.now(),
         type: "linter-note",
         text,
-        ...(lastSegment !== undefined ? { segment: lastSegment } : {}),
+        ...(lintedSegment !== undefined ? { segment: lintedSegment } : {}),
       };
       options.appendEvent(note);
       options.push([note]);
-      record({ kind: "info", label: "linter note", data: { text, segment: lastSegment } });
+      record({ kind: "info", label: "linter note", data: { text, segment: lintedSegment } });
     },
     onReplyAudio: (bytes, mime) => {
       options.pushSpeech(`lint_${noteSeq++}`, mime, bytes);
@@ -227,13 +232,14 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
   });
 
   /** End the linter's vendor turn (the window closes; the model may speak). */
-  const endTurn = (): void => {
+  const endTurn = (segment?: number): void => {
     if (!windowOpen) {
       return;
     }
     windowOpen = false;
+    lintedSegment = segment ?? lastSegment;
     session.activityEnd();
-    record({ kind: "info", label: "linter turn end", data: { segment: lastSegment } });
+    record({ kind: "info", label: "linter turn end", data: { segment: lintedSegment } });
   };
 
   return {
@@ -282,7 +288,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
           pendingEnd = undefined;
           stats.timeouts += 1;
           record({ kind: "info", label: "linter transcript timeout", data: { segment } });
-          endTurn();
+          endTurn(segment);
         }, TRANSCRIPT_WAIT_MS),
       };
     },
@@ -308,7 +314,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
         });
       }
       if (awaited) {
-        endTurn();
+        endTurn(segment);
       }
     },
     onShot(label, bytes, mime) {

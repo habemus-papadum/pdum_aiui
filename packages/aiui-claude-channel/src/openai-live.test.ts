@@ -275,3 +275,47 @@ describe("openOpenAiLiveSession (linter mode)", () => {
     expect(up.sent.at(-1)).toEqual({ type: "response.cancel" });
   });
 });
+
+describe("benign cancel-miss (the sidecar barge-ins on every talk-start)", () => {
+  it("swallows 'no active response' cancel errors instead of failing the session", () => {
+    const up = fakeUpstream();
+    const { session } = collectLinter(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.cancelActiveResponse();
+    up.emit({
+      type: "error",
+      error: {
+        code: "response_cancel_not_active",
+        message: "Cancellation failed: no active response found",
+      },
+    });
+    // The session is still alive and usable — no onError fired (collectLinter
+    // has no error sink; a fail() would have marked the session dead and the
+    // next send would be dropped).
+    session.activityStart();
+    session.appendAudio(new Uint8Array(200 * 48));
+    session.activityEnd();
+    expect(types(up)).toContain("input_audio_buffer.commit");
+  });
+
+  it("still surfaces real errors loudly", () => {
+    const up = fakeUpstream();
+    const errors: string[] = [];
+    const cb: LiveSessionCallbacks = {
+      onReplyTranscript: () => {},
+      onReplyAudio: () => {},
+      onInterrupted: () => {},
+      onUsage: () => {},
+      onError: (m) => errors.push(m),
+    };
+    openOpenAiLiveSession(
+      { apiKey: "k", model: () => "gpt-realtime-2", socketFactory: up.factory },
+      cb,
+    );
+    up.open();
+    up.emit({ type: "session.updated" });
+    up.emit({ type: "error", error: { code: "invalid_request_error", message: "bad session" } });
+    expect(errors).toEqual(["bad session"]);
+  });
+});

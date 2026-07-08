@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { intentKeyHints, type KeyState, keyCommand, keymapHelp, TIER_BY_DIGIT } from "./keymap";
+import { ENGINE_DIGITS, intentKeyHints, type KeyState, keyCommand, keymapHelp } from "./keymap";
 
 const base: KeyState = {
   armed: true,
@@ -38,13 +38,28 @@ describe("keyCommand", () => {
     expect(keyCommand(base, " ", "up", false)).toEqual({ cmd: "talk-end" });
   });
 
-  it("toggle mode: space down flips, space up is inert", () => {
-    const toggle: KeyState = { ...base, talkMode: "toggle" };
-    expect(keyCommand(toggle, " ", "down", false)).toEqual({ cmd: "talk-start" });
-    expect(keyCommand({ ...toggle, talking: true }, " ", "down", false)).toEqual({
+  it("Space is hold-only — the retired talkMode knob changes nothing", () => {
+    // Toggling lives on H now; a `toggle` talkMode in persisted config is
+    // inert (Space still holds), so old configs can't resurrect the
+    // hold-vs-toggle mode confusion.
+    const legacy: KeyState = { ...base, talkMode: "toggle" };
+    expect(keyCommand(legacy, " ", "down", false)).toEqual({ cmd: "talk-start" });
+    expect(keyCommand({ ...legacy, talking: true }, " ", "down", false)).toEqual({
+      cmd: "swallow",
+    });
+    expect(keyCommand({ ...legacy, talking: true }, " ", "up", false)).toEqual({
       cmd: "talk-end",
     });
-    expect(keyCommand({ ...toggle, talking: true }, " ", "up", false)).toBeUndefined();
+  });
+
+  it("H is the hands-free toggle: press to open the mic, press again to close", () => {
+    expect(keyCommand(base, "h", "down", false)).toEqual({ cmd: "talk-start" });
+    expect(keyCommand({ ...base, talking: true }, "h", "down", false)).toEqual({
+      cmd: "talk-end",
+    });
+    expect(keyCommand(base, "h", "down", true)).toEqual({ cmd: "swallow" }); // key-repeat
+    expect(keyCommand({ ...base, mode: "tweak" }, "h", "down", false)).toBeUndefined();
+    expect(keyCommand({ ...base, armed: false }, "h", "down", false)).toBeUndefined();
   });
 
   it("maps the rest of the tiny keyboard", () => {
@@ -100,11 +115,12 @@ describe("keyCommand: the config strip layer", () => {
     expect(keyCommand({ ...base, typing: true }, "k", "down", false)).toBeUndefined();
   });
 
-  it("digits 1..2 pick tiers, cheapest first, matching TIER_BY_DIGIT (mock unsurfaced)", () => {
-    expect(TIER_BY_DIGIT).toEqual(["rapid", "premium"]);
-    expect(keyCommand(open, "1", "down", false)).toEqual({ cmd: "config-tier", tier: "rapid" });
-    expect(keyCommand(open, "2", "down", false)).toEqual({ cmd: "config-tier", tier: "premium" });
-    expect(keyCommand(open, "3", "down", false)).toBeUndefined();
+  it("digits pick transcription engines by index (mock unsurfaced)", () => {
+    expect(ENGINE_DIGITS).toBe(3);
+    expect(keyCommand(open, "1", "down", false)).toEqual({ cmd: "config-engine", index: 0 });
+    expect(keyCommand(open, "2", "down", false)).toEqual({ cmd: "config-engine", index: 1 });
+    expect(keyCommand(open, "3", "down", false)).toEqual({ cmd: "config-engine", index: 2 });
+    expect(keyCommand(open, "4", "down", false)).toBeUndefined();
     expect(keyCommand(open, "0", "down", false)).toBeUndefined();
     // Digits mean nothing when the strip is closed.
     expect(keyCommand(base, "1", "down", false)).toBeUndefined();
@@ -280,9 +296,8 @@ describe("keyCommand: vscode jump mode (the tweak-shaped handover with the dblcl
 });
 
 describe("keyCommand: H (the universal help convention)", () => {
-  it("H toggles help wherever the armed base is live", () => {
-    expect(keyCommand(base, "h", "down", false)).toEqual({ cmd: "help-toggle" });
-    expect(keyCommand(base, "H", "down", false)).toEqual({ cmd: "help-toggle" });
+  it("? toggles help wherever the armed base is live (H is hands-free talk now)", () => {
+    expect(keyCommand(base, "?", "down", false)).toEqual({ cmd: "help-toggle" });
   });
 
   it("H stays the page's in the handover modes, and does nothing disarmed", () => {
@@ -329,7 +344,7 @@ describe("intentKeyHints / keymapHelp (the displayed keymap IS the working keyma
     const byTitle = new Map(sections.map((s) => [s.title, s.hints.map((h) => h.label)]));
     expect(byTitle.has("correct mode")).toBe(false); // removed in the append-only pivot
     expect(byTitle.get("config strip")).toEqual([
-      "pick a tier",
+      "pick a transcriber",
       "linter: off → openai → gemini",
       "save for site",
       "reset to file",

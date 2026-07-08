@@ -18,9 +18,12 @@ export type { IntentPipelineConfig, IntentTier } from "./config";
 export {
   DEFAULT_INTENT_CONFIG,
   DEFAULT_TIER,
+  engineOf,
   expandTier,
   TIER_CONTROLLED_KEYS,
   TIER_PRESETS,
+  TRANSCRIPTION_ENGINES,
+  type TranscriptionEngine,
 } from "./config";
 export type {
   ComposedIntent,
@@ -37,12 +40,12 @@ export {
 } from "./engine";
 export type { KeyCommand, KeymapHelpSection, KeyState } from "./keymap";
 export {
+  ENGINE_DIGITS,
   installKeymap,
   intentKeyHints,
   isTypingTarget,
   keyCommand,
   keymapHelp,
-  TIER_BY_DIGIT,
 } from "./keymap";
 export type { DiffRun } from "./patch";
 export { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
@@ -54,4 +57,5 @@ export type {
   LocatedComponent,
   Mode,
   Rect,
+  TranscriptWord,
 } from "./types";

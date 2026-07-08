@@ -3,7 +3,7 @@
  * hand and no chords:
  *
  *   `      arm / disarm the overlay (also the ✳ button)
- *   Space  talk — hold-to-talk or toggle, per settings.talkMode
+ *   Space  push-to-talk (hold); H is the hands-free toggle
  *   D      hold + drag a rect = region screenshot (release without a drag = nothing)
  *   S      whole-viewport screenshot (fires on press)
  *   C      clear ink
@@ -57,20 +57,23 @@ import {
   keyHints,
   resolveKey,
 } from "@habemus-papadum/aiui-viz/modal";
-import type { IntentTier } from "./config";
+import { TRANSCRIPTION_ENGINES } from "./config";
 import type { Mode } from "./types";
 
 export { isTypingTarget };
 
-/** The strip's digit row, cheapest tier first. `mock` is deliberately NOT
- * here — it is the test/offline preset, reachable through the advanced
- * editor (G), never the strip. */
-export const TIER_BY_DIGIT: readonly IntentTier[] = ["rapid", "premium"];
+/** The strip's digit row picks a transcription ENGINE (see
+ * TRANSCRIPTION_ENGINES in config.ts) — the backend by its real interaction
+ * shape, not a price rung. `mock` is deliberately NOT here — it is the
+ * test/offline preset, reachable through the advanced editor (G). */
+export const ENGINE_DIGITS = TRANSCRIPTION_ENGINES.length;
 
 export interface KeyState {
   armed: boolean;
   mode: Mode;
   talking: boolean;
+  /** RETIRED knob (Space is always hold; H is the hands-free toggle) — kept
+   * so persisted configs and the hello schema stay valid. */
   talkMode: "hold" | "toggle";
   /** True when focus is in a text input — keys must not fire. */
   typing: boolean;
@@ -109,12 +112,12 @@ export type KeyCommand =
    */
   | { cmd: "jump-commit"; index?: number }
   | { cmd: "jump-close" } // Esc while the picker is open: dismiss it, stay in jump mode
-  | { cmd: "help-toggle" } // H: open/close the help panel (the keymap as a table)
+  | { cmd: "help-toggle" } // ?: open/close the help panel (the keymap as a table)
   | { cmd: "video-toggle" } // V: toggle the realtime submode's screen share (dispatch gates on submode)
   | { cmd: "send" }
   | { cmd: "step-out" }
   | { cmd: "config-toggle" }
-  | { cmd: "config-tier"; tier: IntentTier }
+  | { cmd: "config-engine"; index: number }
   | { cmd: "config-linter" }
   | { cmd: "config-save" }
   | { cmd: "config-reset" }
@@ -163,10 +166,10 @@ const stripLayer: KeyLayer<KeyState, KeyCommand> = {
     state.armed && !!state.configOpen && state.mode !== "tweak" && state.mode !== "vscode",
   bindings: [
     {
-      keys: TIER_BY_DIGIT.map((_, index) => String(index + 1)),
+      keys: TRANSCRIPTION_ENGINES.map((_, index) => String(index + 1)),
       down: (_state, key, repeat) =>
-        repeat ? "pass" : command({ cmd: "config-tier", tier: TIER_BY_DIGIT[Number(key) - 1] }),
-      hint: { key: "1–2", label: "pick a tier", icon: "🎚" },
+        repeat ? "pass" : command({ cmd: "config-engine", index: Number(key) - 1 }),
+      hint: { key: `1–${ENGINE_DIGITS}`, label: "pick a transcriber", icon: "🎚" },
     },
     {
       keys: ["l", "L"],
@@ -288,35 +291,40 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
   active: (state) => state.armed && state.mode !== "tweak" && state.mode !== "vscode",
   bindings: [
     {
+      // Space is PUSH-TO-TALK, unconditionally. (It was once configurable as
+      // a press-to-toggle; holding and toggling on one key bred mode
+      // confusion — a tap mid-session read as a tiny hold — so toggling
+      // moved to its own key: H, hands-free talk.)
       keys: [" "],
       down: (state, _key, repeat) => {
-        if (state.talkMode === "hold") {
-          if (!repeat && !state.talking) {
-            return command({ cmd: "talk-start" });
-          }
-          // Swallow every other armed-Space down (repeats — including the ones
-          // that arrive while talk-start's mic acquisition is still in flight
-          // and `talking` is not yet true) so the page never scrolls.
-          return "swallow";
+        if (!repeat && !state.talking) {
+          return command({ cmd: "talk-start" });
         }
-        if (!repeat) {
-          return command({ cmd: state.talking ? "talk-end" : "talk-start" });
-        }
-        // Toggle mode: repeats are equally scroll-y — swallow them too.
+        // Swallow every other armed-Space down (repeats — including the ones
+        // that arrive while talk-start's mic acquisition is still in flight
+        // and `talking` is not yet true) so the page never scrolls.
         return "swallow";
       },
-      up: (state) =>
-        // Release ALWAYS ends the hold — not just while `talking`. The
-        // silence endpointer auto-splits a held Space into utterance
-        // segments, so a release can land in the gap between one segment's
-        // end and the next one's start; an unconditional talk-end is what
-        // stops the auto-restart there (the modality's talkEnd is a no-op
-        // when nothing is recording).
-        state.talkMode === "hold" ? command({ cmd: "talk-end" }) : "pass",
+      up: () =>
+        // Release ALWAYS ends the hold — not just while `talking`: a release
+        // can land while the mic acquisition is still in flight, and the
+        // unconditional talk-end is what keeps a quick tap from leaving the
+        // mic open (the modality's talkEnd is a no-op when nothing records).
+        command({ cmd: "talk-end" }),
+      // Keyboard-only by design: a mouse "hold" on a cheat cap is not a
+      // gesture worth supporting, so the cap renders inert (empty tapKey).
+      hint: { key: "␣", label: "hold to talk", icon: "🎙", tapKey: "" },
+    },
+    {
+      // H — HANDS-FREE talk: one press opens the mic, the next closes it.
+      // The toggle lives on its own key so Space stays a pure hold.
+      keys: ["h", "H"],
+      down: (state, _key, repeat) =>
+        repeat ? "swallow" : command({ cmd: state.talking ? "talk-end" : "talk-start" }),
       hint: (state) => ({
-        key: "␣",
-        label: state.talkMode === "hold" ? "hold to talk" : "talk on/off",
-        icon: "🎙",
+        key: "H",
+        label: state.talking ? "stop hands-free talk" : "hands-free talk",
+        icon: "🙌",
       }),
     },
     {
@@ -377,12 +385,13 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
         state.mode === "ink" ? { key: "T", label: "tweak the app", icon: "🔧" } : undefined,
     },
     {
-      // H — the universal help convention: the keymap you are reading, as a
-      // panel. Live wherever the armed base is; the handover modes
-      // deliberately leave H to the page.
-      keys: ["h", "H"],
+      // ? — help: the keymap you are reading, as a panel. (It lived on H
+      // until H became hands-free talk; the pill's ? button is the mouse
+      // path to the same.) Live wherever the armed base is; the handover
+      // modes deliberately leave it to the page.
+      keys: ["?"],
       down: onPress({ cmd: "help-toggle" }),
-      hint: { key: "H", label: "help", icon: "❓" },
+      hint: { key: "?", label: "help", icon: "❓" },
     },
     {
       keys: ["Enter"],

@@ -68,6 +68,7 @@ import {
 } from "./channel";
 import { rawCodec } from "./codec";
 import type { CallCost } from "./cost";
+import { ELEVENLABS_COMMIT_FLOOR_MS, openElevenLabsRealtimeSession } from "./elevenlabs-realtime";
 import type { ChunkDescriptor } from "./frame";
 import { DEFAULT_GEMINI_LIVE_MODEL } from "./gemini-live";
 import { createLinterSidecar, type LinterSidecar } from "./linter-sidecar";
@@ -84,6 +85,7 @@ import {
 import {
   DEFAULT_REALTIME_MODEL,
   openRealtimeSession,
+  type RealtimeCallbacks,
   type RealtimeSession,
   type RealtimeSocketFactory,
 } from "./realtime";
@@ -173,6 +175,11 @@ const REALTIME_PCM_BYTES_PER_MS = 48;
  * revoked GEMINI_API_KEY in the channel process's environment — a condition only
  * the server can see, so the server names it.
  */
+const ELEVENLABS_KEY_HINT =
+  "If this keeps happening, check the ELEVEN_LABS_API_KEY in the environment the channel " +
+  "process was launched from (a missing/stale key fails every Scribe call) — fix it and " +
+  "relaunch `aiui claude`, or pick another transcriber (K, then a digit).";
+
 const GEMINI_KEY_HINT =
   "If this keeps happening, check the GEMINI_API_KEY in the environment the channel " +
   "process was launched from (a missing/stale key fails every Gemini Live call) — fix it and " +
@@ -204,8 +211,10 @@ interface ResolvedIntent {
   liveVendor: "gemini" | "openai";
   /** Realtime model id (bare, e.g. `gemini-3.1-flash-live-preview`). */
   liveModel: string;
-  transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice";
+  transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice" | "elevenlabs";
   model: string;
+  /** Domain-vocabulary bias (the keywords slot — see docs/guide/transcription.md). */
+  keywords: string[] | undefined;
   /** Realtime transcription model (when transcriber = `openai-realtime`). */
   realtimeModel: string;
   /** Realtime latency/accuracy knob (`minimal`…`xhigh`); undefined → model default. */
@@ -287,6 +296,14 @@ export interface IntentV1Options {
    * (the premium tier's TTS acks), in place of the real REST speaker.
    */
   speaker?: Speaker;
+  /** ElevenLabs key (Scribe v2); defaults to `process.env.ELEVEN_LABS_API_KEY`. */
+  elevenLabsApiKey?: string;
+  /**
+   * Test seam override for the Scribe v2 upstream socket — used whenever the
+   * hello selects `transcriber: elevenlabs`. Present (even keyless) → the
+   * path runs offline.
+   */
+  elevenLabsSocketFactory?: RealtimeSocketFactory;
   /**
    * Test seam override for the linter's **Gemini** upstream socket
    * (`linter: "gemini"`), in place of the real `ws` connection. Present (even
@@ -361,9 +378,13 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     ),
     transcriber: oneOf(
       cfg.transcriber,
-      ["mock", "openai", "openai-realtime", "openai-voice"] as const,
+      ["mock", "openai", "openai-realtime", "openai-voice", "elevenlabs"] as const,
       preset.transcriber,
     ),
+    keywords:
+      Array.isArray(cfg.keywords) && cfg.keywords.every((k) => typeof k === "string")
+        ? (cfg.keywords as string[])
+        : undefined,
     model: str(cfg.model, preset.model),
     realtimeModel: str(cfg.realtimeModel, preset.realtimeModel ?? DEFAULT_REALTIME_MODEL),
     realtimeDelay: optStr(cfg.realtimeDelay ?? preset.realtimeDelay),
@@ -539,10 +560,44 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // overlaps the arm→talk gap. Keyless with no test factory → the session is
   // absent and the segment degrades loudly (the REST-keyless posture), never a
   // silent switch to mock. A test factory forces the path on with no key.
-  const realtimeEnabled = intent.transcriber === "openai-realtime";
+  const elevenLabsKey = options.elevenLabsApiKey ?? process.env.ELEVEN_LABS_API_KEY;
+  // Scribe is the shipped DEFAULT — so its keyless posture is a graceful,
+  // VISIBLE fallback to Realtime Whisper (a note, not an error storm), not
+  // the loud per-segment degradation an explicit choice gets. An explicit
+  // choice is indistinguishable from the default on the wire; the fallback
+  // fires only when whisper is actually available, so "neither key" still
+  // degrades loudly below.
+  if (
+    intent.transcriber === "elevenlabs" &&
+    (elevenLabsKey === undefined || elevenLabsKey === "") &&
+    options.elevenLabsSocketFactory === undefined &&
+    ((apiKey !== undefined && apiKey !== "") || options.realtimeSocketFactory !== undefined)
+  ) {
+    intent.transcriber = "openai-realtime";
+    intent.coerced.push(
+      "transcriber elevenlabs → openai-realtime (no ELEVEN_LABS_API_KEY; Scribe is the default, whisper is the fallback)",
+    );
+    ctx.push?.({
+      kind: "lowered",
+      threadId: ctx.threadId,
+      events: [
+        {
+          at: Date.now(),
+          type: "note",
+          text: "🎬 Scribe unavailable (no ELEVEN_LABS_API_KEY) — transcribing with ⚡ Realtime Whisper",
+        },
+      ],
+    } satisfies LoweredMessage);
+  }
+  const realtimeEnabled =
+    intent.transcriber === "openai-realtime" || intent.transcriber === "elevenlabs";
   const realtimeReady =
-    realtimeEnabled &&
-    ((apiKey !== undefined && apiKey !== "") || options.realtimeSocketFactory !== undefined);
+    intent.transcriber === "openai-realtime"
+      ? (apiKey !== undefined && apiKey !== "") || options.realtimeSocketFactory !== undefined
+      : intent.transcriber === "elevenlabs"
+        ? (elevenLabsKey !== undefined && elevenLabsKey !== "") ||
+          options.elevenLabsSocketFactory !== undefined
+        : false;
 
   // The premium TTS-ack speaker (audioBack:"acks"): a REST seam, keyed like the
   // transcriber/corrector. Keyless → absent, and the ack degrades loudly at
@@ -818,53 +873,97 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // REST path's `transcript-final`. Keyless/error take the same loud
   // finalizeSilentSegment posture — never a silent drop, never a silent switch.
   if (realtimeReady) {
-    realtime = openRealtimeSession(
-      {
-        apiKey: apiKey ?? "",
-        model: () => intent.realtimeModel,
-        delay: () => intent.realtimeDelay,
-        ...(options.realtimeSocketFactory !== undefined
-          ? { socketFactory: options.realtimeSocketFactory }
-          : {}),
+    // Both streaming engines implement the same RealtimeSession seam and share
+    // this ONE callbacks wiring — the vendor difference is confined to the open.
+    const sttCallbacks: RealtimeCallbacks = {
+      onDelta: (segment, text) => {
+        push([{ at: Date.now(), type: "transcript-delta", segment, text }]);
       },
-      {
-        onDelta: (segment, text) => {
-          push([{ at: Date.now(), type: "transcript-delta", segment, text }]);
-        },
-        onFinal: (segment, result) => {
-          recordCost(`realtime transcription seg_${segment}`, result.cost);
-          const produced: IntentEvent = {
-            at: Date.now(),
-            type: "transcript-final",
-            segment,
-            text: result.text,
-            latencyMs: result.latencyMs,
+      onFinal: (segment, result) => {
+        recordCost(`realtime transcription seg_${segment}`, result.cost);
+        const produced: IntentEvent = {
+          at: Date.now(),
+          type: "transcript-final",
+          segment,
+          text: result.text,
+          latencyMs: result.latencyMs,
+          model: result.model,
+          // Word timestamps + logprobs (Scribe v2 today): the compiler's
+          // exact media anchor and the preview's confidence heat map.
+          ...(result.words !== undefined && result.words.length > 0 ? { words: result.words } : {}),
+        };
+        appendEvent(produced);
+        push([produced]);
+        sidecar?.onTranscriptFinal(segment, result.text);
+        // A glanceable per-final stage: "did words/logprobs/timestamps come
+        // back?" must be answerable from the card list, not by digging the
+        // merged-events JSON (the debugging lesson of the heat-map chase).
+        const logprobs = (result.words ?? [])
+          .map((w) => w.logprob)
+          .filter((v): v is number => v !== undefined);
+        trace?.record({
+          kind: "info",
+          label: `stt final seg_${segment}`,
+          data: {
             model: result.model,
-          };
-          appendEvent(produced);
-          push([produced]);
-          sidecar?.onTranscriptFinal(segment, result.text);
-          recomposeIfStale();
-        },
-        onError: (message, segment) => {
-          if (segment !== undefined) {
-            finalizeSilentSegment(`seg_${segment}`, `realtime transcription failed: ${message}`, {
-              source: "transcription",
-              detail: OPENAI_KEY_HINT,
-            });
-          } else {
-            // Session-wide fault before any commit (a refused upstream
-            // handshake is where a bad key shows up on this path).
-            push([{ at: Date.now(), type: "note", text: `realtime transcription: ${message}` }]);
-            pushError(ctx, {
-              source: "transcription",
-              message: `realtime transcription: ${message}`,
-              detail: OPENAI_KEY_HINT,
-            });
-          }
-        },
+            chars: result.text.length,
+            words: result.words?.length,
+            withTimestamps: result.words?.some((w) => w.startMs !== undefined) === true,
+            ...(logprobs.length > 0
+              ? {
+                  logprobs: {
+                    n: logprobs.length,
+                    min: Math.min(...logprobs),
+                    max: Math.max(...logprobs),
+                  },
+                }
+              : { logprobs: "none" }),
+          },
+        });
+        recomposeIfStale();
       },
-    );
+      onError: (message, segment) => {
+        const hint = intent.transcriber === "elevenlabs" ? ELEVENLABS_KEY_HINT : OPENAI_KEY_HINT;
+        if (segment !== undefined) {
+          finalizeSilentSegment(`seg_${segment}`, `realtime transcription failed: ${message}`, {
+            source: "transcription",
+            detail: hint,
+          });
+        } else {
+          // Session-wide fault before any commit (a refused upstream
+          // handshake is where a bad key shows up on this path).
+          push([{ at: Date.now(), type: "note", text: `realtime transcription: ${message}` }]);
+          pushError(ctx, {
+            source: "transcription",
+            message: `realtime transcription: ${message}`,
+            detail: hint,
+          });
+        }
+      },
+    };
+    realtime =
+      intent.transcriber === "elevenlabs"
+        ? openElevenLabsRealtimeSession(
+            {
+              apiKey: elevenLabsKey ?? "",
+              ...(intent.keywords !== undefined ? { keyterms: () => intent.keywords } : {}),
+              ...(options.elevenLabsSocketFactory !== undefined
+                ? { socketFactory: options.elevenLabsSocketFactory }
+                : {}),
+            },
+            sttCallbacks,
+          )
+        : openRealtimeSession(
+            {
+              apiKey: apiKey ?? "",
+              model: () => intent.realtimeModel,
+              delay: () => intent.realtimeDelay,
+              ...(options.realtimeSocketFactory !== undefined
+                ? { socketFactory: options.realtimeSocketFactory }
+                : {}),
+            },
+            sttCallbacks,
+          );
   }
 
   /** Commit a streaming segment at talk-end: save its accumulated PCM, then commit. */
@@ -898,7 +997,15 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     // in the trace. Quiet by design: an accidental tap is not an error.
     const session = realtime;
     const pcmBytes = buffered?.bytes ?? 0;
-    if (session !== undefined && pcmBytes < MIN_REALTIME_COMMIT_MS * REALTIME_PCM_BYTES_PER_MS) {
+    // The discard floor is ENGINE-specific: OpenAI rejects commits under
+    // ~100 ms ("buffer too small"); ElevenLabs FATALLY closes the session
+    // under 300 ms, so its session refuses commits below its own 500 ms
+    // safety floor. Discarding here at the same floor keeps a 100–500 ms
+    // tap on the consistent path (one traced discard) instead of a
+    // commit the session would refuse into a silent empty final.
+    const commitFloorMs =
+      intent.transcriber === "elevenlabs" ? ELEVENLABS_COMMIT_FLOOR_MS : MIN_REALTIME_COMMIT_MS;
+    if (session !== undefined && pcmBytes < commitFloorMs * REALTIME_PCM_BYTES_PER_MS) {
       session.discard(segment);
       const empty: IntentEvent = {
         at: Date.now(),
@@ -916,7 +1023,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         data: {
           bytes: pcmBytes,
           ms: Math.round(pcmBytes / REALTIME_PCM_BYTES_PER_MS),
-          note: `under the ${MIN_REALTIME_COMMIT_MS} ms upstream commit minimum — not transcribed`,
+          note: `under the ${commitFloorMs} ms upstream commit minimum — not transcribed`,
         },
       });
       return;
@@ -1073,12 +1180,34 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           appendEvent(produced);
           push([produced]);
         } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          // A too-short segment (an accidental tap — OpenAI: "Audio file is
+          // too short. Minimum audio length is 0.1 seconds.") is not a fault
+          // worth a toast: resolve it as an empty final QUIETLY (trace only),
+          // exactly like the streaming engines' commit-floor discard.
+          if (/too short|minimum audio/i.test(message)) {
+            const empty: IntentEvent = {
+              at: Date.now(),
+              type: "transcript-final",
+              segment: ordinalOf(id),
+              text: "",
+              latencyMs: 0,
+              model: intent.model,
+            };
+            appendEvent(empty);
+            push([empty]);
+            trace?.record({
+              kind: "info",
+              label: `transcription discard ${id}`,
+              data: { message, note: "segment under the vendor minimum — not an error" },
+            });
+            return;
+          }
           // A live transcription failure (an invalid key, a REST error): don't
           // reject the frame into silence — echo a note the widget surfaces,
           // and an error push naming the likeliest fix (the stale-key hint).
           // Also record it in the trace: the toast is ephemeral, and a trace
           // whose transcript is silently empty is undebuggable after the fact.
-          const message = error instanceof Error ? error.message : String(error);
           trace?.record({ kind: "info", label: `transcription failed ${id}`, data: { message } });
           finalizeSilentSegment(id, `transcription failed: ${message}`, {
             source: "transcription",

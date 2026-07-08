@@ -49,6 +49,21 @@ export const OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?intent=tran
 /** The default realtime transcription model (a natively-streaming whisper). */
 export const DEFAULT_REALTIME_MODEL = "gpt-realtime-whisper";
 
+/**
+ * One transcribed word with its position in the SEGMENT'S OWN AUDIO —
+ * milliseconds from the segment's first sample — plus the model's confidence
+ * when the vendor reports one. Timings are segment-relative (not session
+ * clock): a vendor that gives per-word timestamps (ElevenLabs Scribe) reports
+ * them against the committed segment's audio, so they compose directly with the
+ * segment's own boundaries.
+ */
+export interface TranscriptWord {
+  text: string;
+  startMs?: number;
+  endMs?: number;
+  logprob?: number;
+}
+
 /** One realtime transcript result (mirrors {@link ./transcribe}.TranscriptResult). */
 export interface RealtimeResult {
   text: string;
@@ -61,6 +76,13 @@ export interface RealtimeResult {
    * price catalog — in which case the usage is still accounted in the trace.
    */
   cost?: CallCost;
+  /**
+   * Per-word timings + confidence, when the vendor emits them (ElevenLabs
+   * Scribe with `include_timestamps`). Absent on transports that only return a
+   * flat transcript (the OpenAI realtime path). Segment-relative — see
+   * {@link TranscriptWord}.
+   */
+  words?: TranscriptWord[];
 }
 
 /** What a realtime session reports back, keyed by our own segment ordinal. */
@@ -116,6 +138,63 @@ export interface RealtimeSocketHandlers {
  * The reason is where vendors state the actual error, so it leads the text
  * a human reads.
  */
+/**
+ * Fold OpenAI's TOKEN-level transcription logprobs into WORD-level
+ * {@link TranscriptWord}s (no timestamps on this wire — words carry only
+ * `logprob`). Tokens concatenate to the transcript; a word's confidence is
+ * its WORST token (min logprob) — one unsure token is what makes a word
+ * worth re-speaking, and averaging would hide it. Tolerant by design:
+ * malformed/absent logprobs → undefined (the final simply carries no words),
+ * and any drift between token concatenation and the final text ends the
+ * fold early rather than mislabeling words.
+ */
+export function wordsFromTokenLogprobs(text: string, raw: unknown): TranscriptWord[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return undefined;
+  }
+  const tokens: Array<{ token: string; logprob: number }> = [];
+  for (const entry of raw) {
+    const t = (entry ?? {}) as { token?: unknown; logprob?: unknown };
+    if (typeof t.token !== "string" || typeof t.logprob !== "number") {
+      return undefined;
+    }
+    tokens.push({ token: t.token, logprob: t.logprob });
+  }
+  const words: TranscriptWord[] = [];
+  let wordText = "";
+  let worst = Number.POSITIVE_INFINITY;
+  const flush = (): void => {
+    const trimmed = wordText.trim();
+    if (trimmed !== "") {
+      words.push({ text: trimmed, logprob: worst });
+    }
+    wordText = "";
+    worst = Number.POSITIVE_INFINITY;
+  };
+  for (const { token, logprob } of tokens) {
+    // A token may span a word boundary ("… readings" arrives as " readings"):
+    // split on whitespace, flushing the word in progress at each gap.
+    const parts = token.split(/(\s+)/);
+    for (const part of parts) {
+      if (part === "") {
+        continue;
+      }
+      if (/^\s+$/.test(part)) {
+        flush();
+      } else {
+        wordText += part;
+        worst = Math.min(worst, logprob);
+      }
+    }
+  }
+  flush();
+  // Sanity: the folded words must reassemble the transcript's words, or the
+  // labeling would lie — degrade to no words instead.
+  const rebuilt = words.map((w) => w.text).join(" ");
+  const normalized = text.trim().split(/\s+/).join(" ");
+  return rebuilt === normalized ? words : undefined;
+}
+
 export function closeSuffix(code?: number, reason?: string): string {
   const trimmed = reason?.trim() ?? "";
   if (code === undefined && trimmed === "") {
@@ -405,11 +484,14 @@ export function openRealtimeSession(
         // GA `…completed` events may carry usage (audio tokens dominate);
         // price per segment when they do, tolerate their absence.
         const usage = usageFromTranscription((message as { usage?: unknown }).usage);
+        const text = message.transcript ?? cumulativeByItem.get(itemId) ?? "";
+        const words = wordsFromTokenLogprobs(text, (message as { logprobs?: unknown }).logprobs);
         completeSegment(segment, itemId, {
-          text: message.transcript ?? cumulativeByItem.get(itemId) ?? "",
+          text,
           latencyMs: Math.max(0, now() - started),
           model: options.model(),
           ...(usage ? { cost: priceCall("openai", options.model(), usage) } : {}),
+          ...(words !== undefined ? { words } : {}),
         });
         return;
       }
@@ -425,10 +507,13 @@ export function openRealtimeSession(
   const socket = factory(url, options.apiKey, {
     onOpen: () => {
       const delay = options.delay?.();
-      const transcription: Record<string, unknown> = { model: options.model() };
-      // `delay` is optional and OpenAI rejects an empty value — include it only
-      // when the config actually set one of the allowed levels.
-      if (typeof delay === "string" && delay !== "") {
+      const model = options.model();
+      const transcription: Record<string, unknown> = { model };
+      // `delay` is a gpt-realtime-whisper-ONLY knob: the 4o-transcribe models
+      // over this same wire reject it ("The 'delay' parameter is not
+      // supported for this model"), and OpenAI also rejects an empty value —
+      // include it only for the model that supports it, and only when set.
+      if (model === "gpt-realtime-whisper" && typeof delay === "string" && delay !== "") {
         transcription.delay = delay;
       }
       socket.send(
@@ -443,6 +528,10 @@ export function openRealtimeSession(
                 turn_detection: null,
               },
             },
+            // Token-level confidence on every completed transcript — the
+            // preview's heat map consumes it (folded to word level below).
+            // No timestamps on this wire; word timing stays vendor-absent.
+            include: ["item.input_audio_transcription.logprobs"],
           },
         }),
       );

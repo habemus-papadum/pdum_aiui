@@ -41,6 +41,19 @@ export {
 export { jsonCodec, type PayloadCodec, rawCodec } from "./codec";
 export { CHANNEL_CONFIG } from "./commands/config";
 export {
+  buildElevenLabsUrl,
+  convertWords,
+  DEFAULT_ELEVENLABS_MODEL,
+  ELEVENLABS_COMMIT_FLOOR_MS,
+  ELEVENLABS_ERROR_TYPES,
+  ELEVENLABS_KEEPALIVE_MS,
+  ELEVENLABS_REALTIME_URL,
+  type ElevenLabsRealtimeSessionOptions,
+  elevenLabsSocketFactory,
+  isErrorType,
+  openElevenLabsRealtimeSession,
+} from "./elevenlabs-realtime";
+export {
   type ChunkDescriptor,
   type DecodedFrame,
   decodeFrame,
@@ -149,6 +162,7 @@ export {
   type RealtimeSocket,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
+  type TranscriptWord,
 } from "./realtime";
 export {
   DEFAULT_MAX_RESPONSES,

@@ -23,6 +23,7 @@ import type {
   LocatedComponent,
   Mode,
   Rect,
+  TranscriptWord,
 } from "./types";
 
 export type EngineListener = (event: IntentEvent, engine: Engine) => void;
@@ -370,10 +371,25 @@ export class Engine {
     this.emit(this.stamp({ type: "transcript-delta", segment, text }));
   }
 
-  transcriptFinal(segment: number, text: string, latencyMs: number, model: string): void {
+  transcriptFinal(
+    segment: number,
+    text: string,
+    latencyMs: number,
+    model: string,
+    words?: TranscriptWord[],
+  ): void {
     // (The event's `correction` flag survives in the type for historical
     // traces; nothing sets it since correct mode was removed — append-only.)
-    this.emit(this.stamp({ type: "transcript-final", segment, text, latencyMs, model }));
+    this.emit(
+      this.stamp({
+        type: "transcript-final",
+        segment,
+        text,
+        latencyMs,
+        model,
+        ...(words !== undefined && words.length > 0 ? { words } : {}),
+      }),
+    );
   }
 
   // ── ink & shots ────────────────────────────────────────────────────────────
@@ -599,6 +615,10 @@ export function composeIntent(
   // text length) samples the split pass below maps a shot's `takenAt` onto.
   const windows = new Map<number, { start: number; end?: number }>();
   const deltaTimelines = new Map<number, Array<{ at: number; len: number }>>();
+  // Word-level timestamps (when the transcriber reports them) — the PRECISE
+  // anchor: a word's startMs is measured in the segment's own audio, whose
+  // first sample is the talk-start instant. No latency estimate needed.
+  const wordsBySegment = new Map<number, TranscriptWord[]>();
   for (const event of scope) {
     if (event.type === "shot-drop") {
       droppedShots.add(event.marker);
@@ -617,6 +637,8 @@ export function composeIntent(
       const timeline = deltaTimelines.get(event.segment) ?? [];
       timeline.push({ at: event.at, len: event.text.length });
       deltaTimelines.set(event.segment, timeline);
+    } else if (event.type === "transcript-final" && event.words !== undefined) {
+      wordsBySegment.set(event.segment, event.words);
     }
   }
 
@@ -781,13 +803,24 @@ export function composeIntent(
       const text = target.text ?? "";
       const timeline = deltaTimelines.get(target.segment) ?? [];
       const lag = deltaLagEstimate(windows.get(target.segment), timeline);
+      const words = wordsBySegment.get(target.segment);
+      const windowStart = windows.get(target.segment)?.start;
       // Oldest shot first; each split offset is nudged to the end of the word
       // it lands in (and past a sentence end just ahead), so a screenshot
-      // never interrupts a word — and rarely a sentence.
+      // never interrupts a word — and rarely a sentence. Word timestamps,
+      // when present, anchor exactly; the delta-timeline lag estimate is the
+      // fallback.
       const placed: ComposedItem[] = [];
       let consumed = 0;
       for (const shot of shots.sort((a, b) => (a.takenAt ?? 0) - (b.takenAt ?? 0))) {
-        const offset = nudgeToBoundary(text, deltaOffsetAt(timeline, (shot.takenAt ?? 0) + lag));
+        const exact =
+          words !== undefined && windowStart !== undefined
+            ? wordOffsetAt(text, words, windowStart, shot.takenAt ?? 0)
+            : undefined;
+        const offset = nudgeToBoundary(
+          text,
+          exact ?? deltaOffsetAt(timeline, (shot.takenAt ?? 0) + lag),
+        );
         const head = text.slice(consumed, Math.max(consumed, offset)).trim();
         if (head !== "") {
           placed.push({ kind: "text", text: head, segment: target.segment });
@@ -927,6 +960,41 @@ function deltaOffsetAt(timeline: ReadonlyArray<{ at: number; len: number }>, at:
     len = sample.len;
   }
   return len;
+}
+
+/**
+ * The EXACT interleave anchor: how many characters of `text` had been SPOKEN
+ * by wall-clock `at`, from the transcriber's word timestamps. A word's
+ * startMs is relative to the segment's first audio sample (the talk-start
+ * instant, `windowStart`); the offset is the length of the words spoken
+ * strictly before `at`, located against `text` by matching the words in
+ * order (vendor word text and the final text can differ in spacing — the
+ * search is per-word, tolerant). Undefined when no word carries a timestamp
+ * (the caller falls back to the delta-timeline estimate).
+ */
+function wordOffsetAt(
+  text: string,
+  words: ReadonlyArray<TranscriptWord>,
+  windowStart: number,
+  at: number,
+): number | undefined {
+  let offset: number | undefined;
+  let cursor = 0;
+  for (const word of words) {
+    if (word.startMs === undefined || word.text.trim() === "") {
+      continue;
+    }
+    const found = text.indexOf(word.text, cursor);
+    if (found === -1) {
+      continue; // final text diverged from this word — keep aligning on the rest
+    }
+    if (windowStart + word.startMs > at) {
+      return offset ?? 0; // this word was spoken after the gesture
+    }
+    cursor = found + word.text.length;
+    offset = cursor;
+  }
+  return offset;
 }
 
 /** How far past the word end the boundary nudge will reach for a sentence

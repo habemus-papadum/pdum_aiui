@@ -88,9 +88,14 @@ export interface Talk {
  *    which `transcriber` its preset left in place.
  */
 function usesPcmStream(config: IntentPipelineConfig): boolean {
+  // Every STREAMING transcriber consumes live PCM frames; only the
+  // request-response paths (REST `openai`, and `mock`) record a whole-segment
+  // blob. Spelled as an exclusion so a NEW streaming engine can't silently
+  // fall into the blob path again (the ElevenLabs zero-bytes bug: this was a
+  // hardcoded include-list that didn't know the new engine — no PCM, no mic
+  // meter, 0-byte commits).
   return (
-    config.transcriber === "openai-realtime" ||
-    config.transcriber === "openai-voice" ||
+    (config.transcriber !== "openai" && config.transcriber !== "mock") ||
     config.submode === "realtime"
   );
 }
@@ -304,4 +309,13 @@ export function createTalk(deps: TalkDeps): Talk {
       pcmSource?.dispose();
     },
   };
+}
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
 }

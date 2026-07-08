@@ -370,3 +370,23 @@ describe("lifecycle + posture", () => {
     expect(d.sent[0].text).toContain("legacy live turn");
   });
 });
+
+describe("the Scribe default's whisper fallback", () => {
+  it("falls back to openai-realtime with a NOTE (not an error) when only the OpenAI side is available", async () => {
+    const d = drive(
+      { transcriber: "elevenlabs" },
+      {
+        apiKey: "sk-present",
+        elevenLabsApiKey: "",
+        // The OpenAI realtime seam is present → whisper is genuinely available.
+        realtimeSocketFactory: () => ({ send: () => {}, close: () => {} }),
+      },
+    );
+    await d.feedEvents([...opening()]);
+    const notes = eventsOf(d.pushed, "note").map((n) => (n as { text?: string }).text ?? "");
+    expect(notes.some((t) => /Scribe unavailable/.test(t) && /Realtime Whisper/.test(t))).toBe(
+      true,
+    );
+    expect(d.pushed.some((m) => (m as { kind?: string }).kind === "error")).toBe(false);
+  });
+});

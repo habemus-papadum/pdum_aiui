@@ -68,6 +68,15 @@ export interface WidgetHandle {
   dispose(): void;
 }
 
+/**
+ * When THIS module was evaluated — the stale-tab tell. Hover the pill: if
+ * the stamp predates your last edit, the tab runs old code (the mounted
+ * closures survive HMR; see the decline() guards). With those guards in
+ * place this should never lag, but a glanceable receipt beats re-deriving
+ * that from behavior.
+ */
+const LOADED_AT = new Date().toLocaleTimeString();
+
 const STYLES = `
   :host { all: initial; }
   .root {
@@ -374,7 +383,12 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
           <div class="body" ref={(el: HTMLElement) => (bodyEl = el)} />
           <div class={`status${status().error ? " error" : ""}`}>{status().text}</div>
         </div>
-        <div class="pill" data-ui-mode={mode()} ref={(el: HTMLElement) => (pillEl = el)}>
+        <div
+          class="pill"
+          data-ui-mode={mode()}
+          title={`aiui overlay · code loaded ${LOADED_AT}`}
+          ref={(el: HTMLElement) => (pillEl = el)}
+        >
           <span class="hud-slot" ref={(el: HTMLElement) => (hudSlotEl = el)} />
           {!hudClaimed() && <span class="pill-label">✳ aiui</span>}
           <button
@@ -451,4 +465,13 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
 
 function truncate(text: string): string {
   return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+}
+
+// HMR guard: the mounted intent tool holds RUNNING closures from this module,
+// and a hot swap would strand them on stale code while fresh modules load
+// around them (the silent-stale-tab footgun: pushes flow, the view ignores
+// them). Declining makes any edit here a full page reload — mount-once code
+// has no meaningful hot path.
+if (import.meta.hot) {
+  import.meta.hot.decline();
 }
