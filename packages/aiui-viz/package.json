@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-viz",
-  "version": "0.2.0+dev",
+  "version": "0.3.0",
   "description": "Reactive scientific-visualization utilities for agent-written frontends: Observable-style async cells for SolidJS 2.0, worker streaming, durable HMR registries, and the agent tool surface.",
   "type": "module",
   "license": "MIT",
