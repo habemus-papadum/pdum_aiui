@@ -24,6 +24,7 @@
     "vscode:install": "pnpm --filter @habemus-papadum/aiui-vscode install:vsix",
     "vscode:link": "pnpm --filter @habemus-papadum/aiui-vscode install:dir",
     "new-package": "node scripts/new-package.mjs",
+    "skills:check": "node scripts/bundle-skill-docs.mjs --check",
     "npm:list": "node scripts/npm-provision.mjs list",
     "npm:reserve": "node scripts/npm-provision.mjs reserve",
     "npm:trust": "node scripts/npm-provision.mjs trust",

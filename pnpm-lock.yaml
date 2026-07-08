@@ -239,9 +239,18 @@ importers:
       '@habemus-papadum/aiui-util':
         specifier: workspace:^
         version: link:../../aiui-util
+      '@solidjs/web':
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
+      solid-js:
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15
       vite:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+      vite-plugin-solid:
+        specifier: 3.0.0-next.5
+        version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-devtools-extension:
     devDependencies:
@@ -293,12 +302,18 @@ importers:
 
   packages/aiui-viz:
     devDependencies:
+      '@duckdb/duckdb-wasm':
+        specifier: 1.33.1-dev45.0
+        version: 1.33.1-dev45.0
       '@observablehq/plot':
         specifier: ^0.6.17
         version: 0.6.17
       '@solidjs/web':
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
+      '@uwdata/mosaic-plot':
+        specifier: ^0.28.1
+        version: 0.28.1
       katex:
         specifier: ^0.17.0
         version: 0.17.0

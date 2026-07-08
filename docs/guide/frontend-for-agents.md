@@ -78,8 +78,8 @@ When a human points at the running app, the tooling must answer two different qu
 - **"Which code *authored* this element?"** — solved by compile-time stamping: every rendered
   element carries `data-source-loc="src/ui/Controls.tsx:81:9"`.
 - **"Which computation *produced* this value?"** — solved by cell attribution: elements that
-  render a cell's value carry `data-cell="analysis"`, and a live registry maps cell names to
-  their state and definition site.
+  render a cell's value carry `data-cell="analysis"` (plus `data-cell-loc`, the cell's
+  definition site), and a live registry maps cell names to their state and definition site.
 
 Together they turn "make *this* wider" into a file, a line, and a dataflow node — without the
 scientific code carrying any affordances for it (identity is injected at compile time; the

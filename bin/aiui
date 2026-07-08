@@ -1,0 +1,14 @@
+#!/bin/sh
+# The source-run `aiui` for this checkout: no build, no global install — it
+# execs the workspace CLI through the repo's own tsx. On PATH after
+# `eval "$(./aiui env)"` (which prepends this bin/ dir); the repo-root ./aiui
+# symlink points here so that bootstrap line works before any activation.
+self="$0"
+resolved="$(readlink -f -- "$self" 2>/dev/null || echo "$self")"
+root="$(CDPATH='' cd -- "$(dirname -- "$resolved")/.." && pwd)"
+tsx="$root/node_modules/.bin/tsx"
+if [ ! -x "$tsx" ]; then
+  echo "aiui: $tsx not found — run \`pnpm install\` in $root first" >&2
+  exit 1
+fi
+exec "$tsx" "$root/packages/aiui/src/cli.ts" "$@"

@@ -49,8 +49,16 @@ export function CellView<T>(props: {
         )}
       </Match>
       <Match when={showValue()}>
-        {/* data-cell: the element → cell attribution stamp (see PRINCIPLES §7) */}
-        <div style={{ position: "relative" }} data-cell={props.of.cellName}>
+        {/* data-cell / data-cell-loc: the element → cell attribution stamp
+            (see PRINCIPLES §7) — the name, plus the cell's *definition* site
+            ("file:line", babel-injected) so DOM-contract consumers (the dev
+            overlay's shot locator and VS Code jump mode) can open the
+            `cell(...)` call without a runtime registry lookup. */}
+        <div
+          style={{ position: "relative" }}
+          data-cell={props.of.cellName}
+          data-cell-loc={props.of.loc}
+        >
           <div class={props.of.loading() ? "cell-body cell-body-loading" : "cell-body"}>
             {props.children(() => props.of.latest() as T)}
           </div>

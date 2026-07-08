@@ -39,6 +39,13 @@ export interface OverlayErrorInput {
   source?: string;
   /** Optional second line — remediation, an upstream error body, a close reason. */
   detail?: string;
+  /**
+   * Optional structured payload — the raw upstream error exactly as the server
+   * saw it (an API error object, a close code + reason). Rendered behind the
+   * toast's collapsed "details" expander via {@link formatErrorData}, so the
+   * human can read what the API actually said, not just our one-line gloss.
+   */
+  data?: unknown;
 }
 
 /** One live toast: the input plus identity, repeat count, and freshness. */
@@ -83,6 +90,7 @@ export function addError(
     const bumped: OverlayError = {
       ...existing,
       ...(input.detail !== undefined ? { detail: input.detail } : {}),
+      ...(input.data !== undefined ? { data: input.data } : {}),
       count: existing.count + 1,
       at: now,
     };
@@ -99,9 +107,32 @@ export function addError(
     message: input.message,
     ...(input.source !== undefined ? { source: input.source } : {}),
     ...(input.detail !== undefined ? { detail: input.detail } : {}),
+    ...(input.data !== undefined ? { data: input.data } : {}),
   };
   const next = [...list, entry];
   return next.length > cap ? next.slice(next.length - cap) : next;
+}
+
+/**
+ * Render a toast's structured `data` for the details expander: objects
+ * pretty-print as 2-space JSON; a string that *parses* as JSON pretty-prints
+ * the same way (upstream bodies often arrive as raw text); any other string
+ * shows verbatim. Pure — the widget just drops the result in a `<pre>`.
+ */
+export function formatErrorData(data: unknown): string {
+  if (typeof data === "string") {
+    try {
+      return JSON.stringify(JSON.parse(data), null, 2);
+    } catch {
+      return data;
+    }
+  }
+  try {
+    return JSON.stringify(data, null, 2) ?? String(data);
+  } catch {
+    // circular or otherwise unserializable — the expander still shows something
+    return String(data);
+  }
 }
 
 /** Dismiss a toast by id, returning the new list (unknown ids are a no-op). */

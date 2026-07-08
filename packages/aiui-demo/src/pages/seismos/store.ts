@@ -28,7 +28,7 @@ import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { durable } from "@habemus-papadum/aiui-viz";
 import { Coordinator, loadParquet, Selection, wasmConnector } from "@uwdata/vgplot";
 import { type Accessor, createSignal, type Setter } from "solid-js";
-import { fetchWithProgress, instantiateDuckDB } from "./duckdb";
+import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "./duckdb";
 import type { MagBin } from "./gr";
 import { MagHistogramClient } from "./stats-client";
 
@@ -209,7 +209,7 @@ export const store: SeismosStore = durable("seismos:store", () => {
       return [] as BorderPoint[];
     });
     report(0.04);
-    const db: AsyncDuckDB = await instantiateDuckDB();
+    const db: AsyncDuckDB = await instantiateDuckDB(BUNDLES);
     const mosaicCon = await db.connect();
     queryCon = await db.connect();
     // Hand Mosaic our locally-bundled instance (no jsDelivr): the connector uses

@@ -87,6 +87,39 @@ describe("Engine thread lifecycle", () => {
     expect(engine.events.some((e) => e.type === "thread-close")).toBe(false);
   });
 
+  it("steps out of vscode mode back to ink with the thread still open", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.talkEnd();
+    engine.setMode("vscode");
+    expect(engine.events.at(-1)).toMatchObject({ type: "mode", mode: "vscode" });
+    engine.stepOut();
+    // Like tweak: the jump excursion steps back to composing, never to cancel.
+    expect(engine.mode).toBe("ink");
+    expect(engine.threadOpen).toBe(true);
+    expect(engine.events.some((e) => e.type === "thread-close")).toBe(false);
+  });
+
+  it("suspends the idle auto-end timer during vscode mode, like tweak", () => {
+    vi.useFakeTimers();
+    try {
+      const engine = new Engine({ autoEndSec: 1 });
+      engine.setArmed(true);
+      engine.talkStart();
+      engine.talkEnd(); // idle now — the auto-end timer is armed
+      engine.setMode("vscode");
+      // The user jumped off to their editor — not "idle silence"; the open
+      // turn must survive the whole excursion.
+      vi.advanceTimersByTime(10_000);
+      expect(engine.threadOpen).toBe(true);
+      engine.setMode("ink");
+      vi.advanceTimersByTime(1_001);
+      expect(engine.threadOpen).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("suspends the idle auto-end timer during tweak and re-arms it on resume", () => {
     vi.useFakeTimers();
     try {
@@ -421,12 +454,13 @@ describe("app selection (a positional stream event, interleaved like text and sh
       text: "the histogram title",
       sourceLoc: "src/Hist.tsx:10:2",
       cell: "hist",
+      cellLoc: "src/model/cells.ts:7",
     });
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toBe(
       "make this wider " +
         'Regarding the on-screen selection "the histogram title" ' +
-        "(authored at src/Hist.tsx:10:2; produced by cell hist)",
+        "(authored at src/Hist.tsx:10:2; produced by cell hist defined at src/model/cells.ts:7)",
     );
     // Selection text is never transcript text — corrections can't touch it.
     expect(composed.transcript).toBe("make this wider");

@@ -485,6 +485,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
             message: msg.message,
             ...(msg.source !== undefined ? { source: msg.source } : {}),
             ...(msg.detail !== undefined ? { detail: msg.detail } : {}),
+            ...(msg.data !== undefined ? { data: msg.data } : {}),
           });
         }
       });
@@ -600,6 +601,7 @@ export function toAppSelection(snap: SelectionSnapshot): AppSelection {
     text: snap.text,
     ...(snap.sourceLoc !== undefined ? { sourceLoc: snap.sourceLoc } : {}),
     ...(snap.cell !== undefined ? { cell: snap.cell } : {}),
+    ...(snap.cellLoc !== undefined ? { cellLoc: snap.cellLoc } : {}),
     ...(snap.tex !== undefined ? { tex: snap.tex } : {}),
     ...(snap.url !== "" ? { url: snap.url } : {}),
   };

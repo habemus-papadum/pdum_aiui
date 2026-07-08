@@ -44,7 +44,11 @@
  * session-bus host role, turn recovery, and unmount.
  */
 
-import { createReconciler } from "@habemus-papadum/aiui-viz/modal";
+import {
+  blurExitTarget,
+  createReconciler,
+  type KeyHint,
+} from "@habemus-papadum/aiui-viz/modal";
 import { makeDraggable } from "../drag";
 import { getInstrumentation, type RemotePaintSink } from "../instrumentation";
 import type { IntentModality, IntentToolContext } from "../intent";
@@ -53,11 +57,13 @@ import {
   composeIntent,
   Engine,
   type IntentEvent,
+  intentKeyHints,
   type IntentPipelineConfig,
   type IntentTier,
   isTypingTarget,
   type KeyCommand,
   keyCommand,
+  keymapHelp,
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
 import {
@@ -85,7 +91,10 @@ import { createTalk } from "./shell/talk";
 import { createWire } from "./shell/wire";
 import { type SpeechAudioFactory, SpeechPlayer } from "./speech";
 import { HUD_STYLES, STYLES } from "./styles";
+import { JumpPicker } from "./jump-picker";
+import { CheatSheet, KEYMAP_HELP_STYLES, KeymapHelp } from "./keymap-ui";
 import { UI_MODE_TABLE, type UiMode, uiMode } from "./ui-mode";
+import { jumpTargets } from "./vscode";
 
 /** A selection's excerpt in the mirror item — one glanceable line. */
 const CODE_EXCERPT_CHARS = 48;
@@ -111,6 +120,11 @@ export interface MultimodalDeps {
    * shorten it so a couple of sampled frames flow within a `wait()`.
    */
   videoSampleIntervalMs?: number;
+  /**
+   * How a vscode-mode jump navigates to its `vscode://` deep link; defaults
+   * to `window.location.assign`. Injected in jsdom, which can't navigate.
+   */
+  navigate?: (url: string) => void;
 }
 
 /**
@@ -313,6 +327,16 @@ export function multimodalModality(
       // (`dispatch` is defined below; strip clicks can only happen post-mount).
       const strip = new ConfigStrip((command) => dispatch(command));
       layers.append(strip.root);
+      // The jump picker (vscode mode's double-click popup) and its on-page
+      // bounding-box highlight — same dispatch-routing shape as the strip.
+      const picker = new JumpPicker((command) => dispatch(command));
+      layers.append(picker.root, picker.highlight);
+      // The always-present condensed cheat sheet (renderHud re-asserts it
+      // from the live keymap rows — see keymap-ui.tsx).
+      const cheat = new CheatSheet();
+      layers.append(cheat.root);
+      // How a committed jump navigates (injected in jsdom, which can't).
+      const navigate = deps.navigate ?? ((url: string) => window.location.assign(url));
       document.body.append(layers);
       // Selections inside our own page-level layers are gestures (the
       // correct-mode lasso in the preview body), never the "app selection" —
@@ -351,20 +375,24 @@ export function multimodalModality(
         onIdle: () => setSpeaker(undefined),
       });
 
-      // ── the panel body: a short help block (interaction is page-level) ───────
-      const help = document.createElement("div");
-      help.className = "mm-help";
-      help.style.cssText = "color:#cfd3da;font-size:12px;line-height:1.6;";
-      container.append(help);
-      // Re-rendered on an advanced-config apply (the arm key may have changed).
+      // ── the panel body: the keymap, as a table (H / the pill's ? toggles) ────
+      // Generated from the SAME binding rows the resolver reads (keymapHelp),
+      // so the help can't drift from the keys. Re-rendered on an
+      // advanced-config apply — the arm key may be rebound, talk mode may flip.
+      hudSlot.addStyle(KEYMAP_HELP_STYLES);
+      const helpUi = new KeymapHelp();
+      container.append(helpUi.root);
+      // The arm layer displays backtick; honor a rebound (or disabled → ✳
+      // button-only) arming key wherever its row shows.
+      const armHintKey = (hints: KeyHint[]): KeyHint[] =>
+        hints.map((h) => (h.key === "`" ? { ...h, key: armKeyLabel(config) } : h));
       const renderLabels = (): void => {
-        const key = armKeyLabel(config);
-        help.innerHTML = `Press <b>${key}</b> to arm, then <b>Space</b> to talk, drag to sketch,
-          <b>D</b>+drag to screenshot a region (<b>S</b> grabs the whole viewport),
-          <b>E</b> to correct, <b>T</b> to tweak the app mid-turn (T/Esc resumes),
-          <b>V</b> to share your screen (live tiers only),
-          <b>K</b> for quick config (tiers), <b>Enter</b> to send.
-          The ✳ pill shows the live state while active.`;
+        helpUi.render(
+          keymapHelp(config.talkMode).map((section) => ({
+            ...section,
+            hints: armHintKey(section.hints),
+          })),
+        );
       };
       renderLabels();
 
@@ -420,6 +448,17 @@ export function multimodalModality(
           },
         },
         {
+          // The jump picker can't outlive jump mode: leaving vscode mode by
+          // ANY exit (J, Esc, blur-exit, disarm) closes it — asserted from
+          // state like every surface here, never toggled at transitions.
+          name: "jump-picker",
+          apply: (mode) => {
+            if (mode !== "vscode") {
+              picker.hide();
+            }
+          },
+        },
+        {
           // Cursors are part of the mode contract: the crosshair comes from
           // the mode table's cursor column, not from scattered toggles.
           name: "cursor",
@@ -471,6 +510,27 @@ export function multimodalModality(
         if (videoBadge) {
           videoBadge.hidden = !capture.sharing();
         }
+        if (meter) {
+          meter.hidden = !engine.armed; // an idle meter is just a gap in the pill
+        }
+        // The condensed cheat sheet: the CURRENT state's live keymap rows,
+        // hidden while disarmed (the pill's ? teaches the off state) and
+        // while the config strip is open (it displays its own bindings).
+        const hints = intentKeyHints({
+          armed: engine.armed,
+          mode: engine.mode,
+          talking: engine.talking,
+          talkMode: config.talkMode,
+          typing: false,
+          configOpen: strip.open,
+          pickerOpen: picker.open,
+        });
+        // Ink's drag gesture is pointer-side, not a key — give it a row
+        // whenever ink owns the pointer.
+        if (mode === "ready" || mode === "composing" || mode === "talking") {
+          hints.splice(1, 0, { key: "drag", label: "sketch ink", icon: "✏️" });
+        }
+        cheat.update(armHintKey(hints), engine.armed && !strip.open);
       }
 
       // A focus steal mid-D-hold (the display-capture picker, a cmd-tab) eats
@@ -494,6 +554,17 @@ export function multimodalModality(
         // wrong context and wasted frames. Refocus resumes it (onWindowFocus)
         // if the share is still on — pause/resume is a no-op when not sharing.
         capture.pauseShare();
+        // A mode that exists to take you OUT of the page must not survive the
+        // excursion: vscode mode's jump lands in the editor (blurring this
+        // window), and returning to the tab must resume composing, not a
+        // forgotten double-click trap. Declared per-mode in the mode table
+        // (blurExits) and resolved by the kit — never hand-patched per mode;
+        // stepOut is the same one-level transition the column's target names.
+        const mode = currentUiMode();
+        if (blurExitTarget(UI_MODE_TABLE, mode) !== null) {
+          engine.stepOut();
+          ctx.setStatus(`${mode} mode ended — the jump left this window`);
+        }
       };
       const onWindowFocus = (): void => {
         if (engine.armed && engine.mode === "correct" && !engine.talking) {
@@ -503,6 +574,36 @@ export function multimodalModality(
       };
       window.addEventListener("blur", onWindowBlur);
       window.addEventListener("focus", onWindowFocus);
+
+      // ── VS Code jump mode: double-click → the jump picker ────────────────────
+      // Active only while the engine is in vscode mode (J). Capture-phase, and
+      // the gesture is claimed wholesale (preventDefault/stopPropagation) — in
+      // this mode a double-click means "show me where this can jump", never
+      // whatever the app would do with it; single clicks still belong to the
+      // page, exactly like tweak mode. The click doesn't navigate: it opens
+      // the picker over ./vscode.ts's two chains (stamped element ancestors +
+      // containing cells at their definition sites), nearest element
+      // preselected, and the commit happens in dispatch (jump-commit below).
+      // An unstamped click still opens the picker — which NAMES the miss —
+      // so "nothing happened" is never ambiguous with "no source location".
+      const widgetRoot = hudSlot.container.getRootNode();
+      const widgetHost = widgetRoot instanceof ShadowRoot ? widgetRoot.host : undefined;
+      const onDblClick = (event: MouseEvent): void => {
+        if (!engine.armed || engine.mode !== "vscode") {
+          return;
+        }
+        const target = event.target instanceof Element ? event.target : null;
+        if (target === null || layers.contains(target) || widgetHost?.contains(target)) {
+          return; // our own surfaces are not the app
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        picker.openAt(jumpTargets(target, window.__AIUI__?.sourceRoot), {
+          x: event.clientX,
+          y: event.clientY,
+        });
+      };
+      document.addEventListener("dblclick", onDblClick, true);
 
       const meterCtx = meter?.getContext("2d") ?? null;
       const meterTimer = setInterval(() => {
@@ -640,6 +741,53 @@ export function multimodalModality(
               ctx.setStatus("tweak — the page has the keyboard; T or Esc resumes the turn");
             }
             break;
+          case "vscode-toggle":
+            // VS Code jump mode: a tweak-shaped handover whose one claimed
+            // gesture is the double-click — it opens the jump picker (the
+            // capture-phase listener above; chains from ./vscode.ts).
+            // Pointer and keys otherwise belong to the page, exactly like
+            // tweak.
+            engine.setMode(engine.mode === "vscode" ? "ink" : "vscode");
+            if (engine.mode === "vscode") {
+              ctx.setStatus(
+                "vscode — double-click an element to pick a jump target; J or Esc resumes",
+              );
+            }
+            break;
+          case "jump-move":
+            picker.move(command.delta);
+            break;
+          case "jump-close":
+            picker.hide();
+            break;
+          case "help-toggle":
+            // H — the universal help convention: the keymap table lives in
+            // the widget panel (the pill's ? is the mouse path to the same).
+            if (ctx.panelOpen()) {
+              ctx.closePanel();
+            } else {
+              ctx.openPanel();
+            }
+            break;
+          case "jump-commit": {
+            // Enter commits the picker's selection; a digit commits that
+            // numbered row directly. A digit past the list (or nothing
+            // selectable) is a no-op — the picker already names the miss.
+            const target =
+              command.index !== undefined ? picker.targetAt(command.index) : picker.selectedTarget();
+            if (target?.url === undefined) {
+              break;
+            }
+            picker.hide();
+            ctx.setStatus(
+              `vscode → ${target.kind === "cell" ? `cell ${target.label} @ ${target.loc ?? ""}` : (target.loc ?? "")}`,
+            );
+            // The jump blurs this window when the editor takes focus; the
+            // blur handler steps out of vscode mode (blurExits in the mode
+            // table), so returning to the tab resumes composing.
+            navigate(target.url);
+            break;
+          }
           case "video-toggle":
             // Screen share is realtime-only: the live model is what watches the
             // ~1 fps frames. Off a live tier, name the fix and do nothing else.
@@ -677,6 +825,7 @@ export function multimodalModality(
         config,
         () => engine,
         () => strip.open,
+        () => picker.open,
         dispatch,
       );
 
@@ -701,6 +850,7 @@ export function multimodalModality(
           config,
           () => engine,
           () => strip.open,
+          () => picker.open,
           dispatch,
         );
         renderLabels();
@@ -998,6 +1148,7 @@ export function multimodalModality(
           undragPreview();
           window.removeEventListener("blur", onWindowBlur);
           window.removeEventListener("focus", onWindowFocus);
+          document.removeEventListener("dblclick", onDblClick, true);
           talk.dispose(); // endpointer + both mic lanes
           capture.dispose(); // video sampler + shot tool
           clearInterval(meterTimer);
@@ -1035,6 +1186,7 @@ function bindKeys(
   config: IntentPipelineConfig,
   getEngine: () => Engine,
   isConfigOpen: () => boolean,
+  isPickerOpen: () => boolean,
   dispatch: (command: KeyCommand) => void,
 ): () => void {
   const armKey = config.arming?.key ?? "`";
@@ -1062,6 +1214,7 @@ function bindKeys(
         talkMode: config.talkMode,
         typing: false,
         configOpen: isConfigOpen(),
+        pickerOpen: isPickerOpen(),
       },
       event.key,
       phase,

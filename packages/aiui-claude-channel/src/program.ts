@@ -64,6 +64,17 @@ export function buildProgram(): Command {
     .option("--name <name>", 'display name selectors show for this server (e.g. "aiui workbench")')
     .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/")
     .option("--sidecars <json>", "JSON array of session sidecar descriptors to host")
+    .option(
+      "--bind <mode>",
+      "bind the web backend to 'loopback' (127.0.0.1, default) or 'host' (0.0.0.0 — " +
+        "every unauthenticated route becomes LAN-reachable; trusted networks only)",
+      (value) => {
+        if (value !== "loopback" && value !== "host") {
+          throw new InvalidArgumentError("expected 'loopback' or 'host'");
+        }
+        return value;
+      },
+    )
     // The validator is the pure parsePort (tested in serve.test.ts); re-wrapped
     // here so commander renders a bad value as a usage error, not a crash.
     .option(

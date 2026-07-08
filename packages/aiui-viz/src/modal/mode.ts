@@ -19,6 +19,10 @@
  *  - per-mode `cursor` — cursors are part of the mode contract (lessons §3
  *    rule 10); the reconciler asserts them from here rather than surfaces
  *    toggling them ad hoc.
+ *  - `blurExits` — whether leaving the window ends the mode (`blurExitTarget`
+ *    reads it). Modes whose purpose is a round-trip out of the page (a
+ *    jump-to-editor mode) declare it here instead of hand-writing a blur
+ *    listener per mode.
  *
  * Keymap *layers* are deliberately not a column: a layer (a config strip, a
  * dialog) claims a few keys while every other key keeps its meaning — that is
@@ -34,6 +38,15 @@ export interface ModeSpec<M extends string> {
   escParent: M | null;
   /** CSS cursor this mode asserts on its owning surface (via the reconciler). */
   cursor?: string;
+  /**
+   * True when leaving the window ends this mode: on window blur the app
+   * should step out (to `escParent`, the same one-level transition Esc
+   * takes — {@link blurExitTarget} resolves it). For modes whose purpose is
+   * a round-trip out of the page — a jump-to-editor mode — coming back must
+   * not resume the mode; a gesture left armed across the excursion is a trap
+   * the user has forgotten about.
+   */
+  blurExits?: boolean;
   /** Entry effect — dispatch commands / start effects; never mutate state directly. */
   onEnter?: (from: M) => void;
   /** Exit effect — release what `onEnter` acquired. Must be idempotent. */
@@ -48,6 +61,20 @@ export interface ModeTable<M extends string> {
 /** The Esc ladder, mechanically: the mode Esc steps out to, or null. */
 export function escTarget<M extends string>(table: ModeTable<M>, mode: M): M | null {
   return table.modes[mode].escParent;
+}
+
+/**
+ * Where window blur steps out to from `mode`, or null when blur means
+ * nothing here (the common case). A mode opts in with
+ * {@link ModeSpec.blurExits}; the target is its `escParent` — blur is the
+ * page-focus sibling of Esc's one-level step-out, never a jump to root.
+ * Bind it once per surface: on the window's blur event, transition to the
+ * returned mode when non-null (however the app performs transitions — an
+ * engine verb, a signal write) instead of hand-writing per-mode listeners.
+ */
+export function blurExitTarget<M extends string>(table: ModeTable<M>, mode: M): M | null {
+  const spec = table.modes[mode];
+  return spec.blurExits === true ? spec.escParent : null;
 }
 
 /**

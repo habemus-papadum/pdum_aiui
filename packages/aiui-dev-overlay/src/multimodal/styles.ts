@@ -117,6 +117,51 @@ export const STYLES = /* css */ `
   .mm-strip-note { margin-top: 6px; color: #7ee0a3; }
   .mm-strip-actions { margin-top: 6px; color: #6b7280; }
   .mm-strip-actions b { color: #9aa0aa; }
+
+  /* The jump picker (VS Code jump mode's double-click popup) and the on-page
+     bounding-box highlight that tracks its selection. Same cursor opt-out
+     rationale as the strip. VS Code blue matches the mode's pill ring. */
+  .mm-jump-picker { position: fixed; z-index: 2147483645; display: none; min-width: 240px;
+    max-width: min(420px, 90vw); background: #171b25ee; border: 1px solid #262c3a;
+    border-radius: 10px; padding: 8px 0 4px; box-shadow: 0 6px 24px rgba(0,0,0,.4);
+    font: 12px/1.6 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #cfd3da;
+    cursor: default; }
+  .mm-jump-picker.visible { display: block; }
+  .mm-jump-group { padding: 0 12px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #9aa0aa; }
+  .mm-jump-group:not(:first-child) { margin-top: 6px; }
+  .mm-jump-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 12px;
+    cursor: pointer; white-space: nowrap; }
+  .mm-jump-row b { color: #9aa0aa; font-weight: 600; min-width: 10px; }
+  .mm-jump-label { color: #e8e8ea; }
+  .mm-jump-loc { color: #8ab4f8; overflow: hidden; text-overflow: ellipsis; }
+  .mm-jump-row.active { background: #26437a; }
+  .mm-jump-row.active b, .mm-jump-row.active .mm-jump-loc { color: #cfe1ff; }
+  .mm-jump-row.disabled { cursor: default; }
+  .mm-jump-row.disabled .mm-jump-label, .mm-jump-row.disabled .mm-jump-loc { color: #6b7280; }
+  .mm-jump-hint { margin-top: 6px; padding: 4px 12px 2px; color: #6b7280;
+    border-top: 1px solid #262c3a; }
+  .mm-jump-highlight { position: fixed; z-index: 2147483644; display: none;
+    pointer-events: none; border: 2px solid #3794ff; border-radius: 4px;
+    background: rgba(55, 148, 255, 0.08); }
+  .mm-jump-highlight.visible { display: block; }
+
+  /* The always-present condensed cheat sheet: one key-cap pill (+ icon) per
+     live binding in the CURRENT state, above the pill while armed (labels
+     are tooltips — glanceable, not read). Sits where the config strip opens;
+     the strip replaces it while open. */
+  .mm-cheat { position: fixed; left: 16px; bottom: 62px; z-index: 2147483642; display: none;
+    gap: 7px; align-items: center; flex-wrap: wrap; max-width: min(640px, 92vw);
+    background: #171b25ee; border: 1px solid #262c3a; border-radius: 999px;
+    padding: 4px 12px; cursor: default;
+    font: 11px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #9aa0aa; }
+  .mm-cheat.visible { display: inline-flex; }
+  .mm-keycap { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+  .mm-keycap kbd { display: inline-block; min-width: 12px; text-align: center;
+    border: 1px solid #3a4152; border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 4px; font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #cfd3da; background: #232936; }
+  .mm-keyicon { font-size: 11px; }
 `;
 
 /**
@@ -127,12 +172,14 @@ export const STYLES = /* css */ `
  * The armed/talking classes here are raw-state hooks (✳ fill), not the ring.
  */
 export const HUD_STYLES = /* css */ `
-  .mm-hud { display: inline-flex; align-items: center; gap: 10px;
+  .mm-hud { display: inline-flex; align-items: center; gap: 6px;
     font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #9aa0aa; }
   .mm-arm { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
     background: #232936; color: #e8e8ea; font-size: 15px; }
   .mm-hud.armed .mm-arm { background: #8ab4f8; color: #0f1117; }
-  .mm-state { min-width: 90px; color: #e8e8ea; }
+  /* No reserved width: the pill hugs its content ("off" sits tight against
+     the ✳ and the ?; the meter only appears while armed). */
+  .mm-state { color: #e8e8ea; }
   /* The screen-share badge (realtime submode): a pulsing red dot beside the
      state label while the ~1fps sampler is running; hidden (attr) when off. */
   .mm-video { color: #ff5c87; font-size: 11px; font-weight: 600; white-space: nowrap;
@@ -140,5 +187,6 @@ export const HUD_STYLES = /* css */ `
   .mm-video[hidden] { display: none; }
   @keyframes mm-video-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .mm-meter { border-radius: 3px; background: #0f1117; }
+  .mm-meter[hidden] { display: none; }
   .mm-speaker { font-size: 11px; white-space: nowrap; }
 `;

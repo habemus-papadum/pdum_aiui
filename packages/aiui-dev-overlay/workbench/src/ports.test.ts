@@ -8,8 +8,8 @@ import {
 } from "./ports";
 
 describe("resolveWorkbenchPorts", () => {
-  it("defaults to the fixed 49222/49223/49224 layout", () => {
-    expect(resolveWorkbenchPorts({})).toEqual({ workbench: 49222, channel: 49223, demo: 49224 });
+  it("defaults to the fixed 49222/49223 layout", () => {
+    expect(resolveWorkbenchPorts({})).toEqual({ workbench: 49222, channel: 49223 });
     expect(resolveWorkbenchPorts({})).toEqual(WORKBENCH_PORT_DEFAULTS);
   });
 
@@ -17,15 +17,13 @@ describe("resolveWorkbenchPorts", () => {
     expect(resolveWorkbenchPorts({ WORKBENCH_CHANNEL_PORT: "50001" })).toEqual({
       workbench: 49222,
       channel: 50001,
-      demo: 49224,
     });
     expect(
       resolveWorkbenchPorts({
         WORKBENCH_PORT: "50000",
         WORKBENCH_CHANNEL_PORT: "50001",
-        WORKBENCH_DEMO_PORT: "50002",
       }),
-    ).toEqual({ workbench: 50000, channel: 50001, demo: 50002 });
+    ).toEqual({ workbench: 50000, channel: 50001 });
   });
 
   it("ignores empty-string overrides (unset-ish env)", () => {
@@ -34,13 +32,13 @@ describe("resolveWorkbenchPorts", () => {
 
   it("throws (naming the var) on a set-but-invalid override instead of falling back", () => {
     for (const bad of ["abc", "0", "65536", "-1", "49222.5", "0x10", " "]) {
-      expect(() => resolveWorkbenchPorts({ WORKBENCH_DEMO_PORT: bad })).toThrow(
-        /WORKBENCH_DEMO_PORT.*integer between 1 and 65535/,
+      expect(() => resolveWorkbenchPorts({ WORKBENCH_CHANNEL_PORT: bad })).toThrow(
+        /WORKBENCH_CHANNEL_PORT.*integer between 1 and 65535/,
       );
     }
   });
 
-  it("does not read anything but the three documented vars", () => {
+  it("does not read anything but the two documented vars", () => {
     expect(resolveWorkbenchPorts({ WORKBENCH_RECORD: "1", PORT: "9999" })).toEqual(
       WORKBENCH_PORT_DEFAULTS,
     );
@@ -64,7 +62,7 @@ describe("portTakenHint", () => {
 describe("isPortTakenError", () => {
   it("matches Node's EADDRINUSE and Vite's strictPort message, nothing else", () => {
     expect(isPortTakenError(Object.assign(new Error("listen"), { code: "EADDRINUSE" }))).toBe(true);
-    expect(isPortTakenError(new Error("Port 49224 is already in use"))).toBe(true);
+    expect(isPortTakenError(new Error("Port 49223 is already in use"))).toBe(true);
     expect(isPortTakenError(new Error("connect ECONNREFUSED"))).toBe(false);
     expect(isPortTakenError(undefined)).toBe(false);
     expect(isPortTakenError("already in use")).toBe(false); // not an Error

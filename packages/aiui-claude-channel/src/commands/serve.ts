@@ -46,6 +46,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { createChannelLog } from "../channel-log";
 import { channelSourceDir, watchChannelSource } from "../hot";
 import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
 import { createJsonlRecorder, type JsonlRecorder } from "../recording";
@@ -90,6 +91,15 @@ export interface ServeOptions {
    * to stderr and skipped, never fatal.
    */
   sidecars?: string;
+  /**
+   * Where the web backend binds — the exact contract `mcp` accepts:
+   * `"loopback"` (127.0.0.1, the default) or `"host"` (0.0.0.0 — the
+   * trusted-LAN posture: every unauthenticated route, sidecars included,
+   * becomes network-reachable; a supervisor passes this only on the user's
+   * own `channel.bind` choice, the same knob a real `aiui claude` launch
+   * obeys). See docs/guide/warning.md.
+   */
+  bind?: "loopback" | "host";
 }
 
 /**
@@ -118,6 +128,10 @@ export interface ServeHandle {
 /** Run the standalone debug channel server until a signal (or `close()`). */
 export async function runServe(options: ServeOptions = {}): Promise<ServeHandle> {
   const cacheDir = options.cacheDir ?? projectCacheDir();
+
+  // The always-on diagnostic log (lifecycle + error pushes → <cache>/logs/),
+  // same as `mcp` — a debug server's failures deserve a durable copy too.
+  const channelLog = createChannelLog(cacheDir);
 
   let recorder: JsonlRecorder | undefined;
   if (options.record === true) {
@@ -152,11 +166,17 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       // Names this run's trace session ("channel·…" when untagged), so /debug's
       // list separates a debug server's traces from a real session's.
       ...(options.tag !== undefined ? { tag: options.tag } : {}),
-      ...(recorder !== undefined ? { frameSink: recorder.sink } : {}),
+      // The recorder (when on) and the diagnostic log share the one sink seam.
+      frameSink: (entry) => {
+        recorder?.sink(entry);
+        channelLog.frameSink(entry);
+      },
+      ...(options.bind === "host" ? { host: "0.0.0.0" } : {}),
       ...(options.port !== undefined ? { port: options.port } : {}),
     });
   } catch (error) {
     await recorder?.close();
+    await channelLog.close();
     // A fixed port exists to be predictable, so a collision must explain
     // itself — the raw EADDRINUSE stack says which port but not what to do.
     if (
@@ -222,10 +242,12 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       return;
     }
     closed = true;
+    channelLog.log("shutdown");
     stopWatch?.();
     registration.remove();
     await web.close().catch(() => {});
     await recorder?.close();
+    await channelLog.close();
   };
   // `once`, not `on`: after our graceful pass the default handler is back, so
   // a second Ctrl-C during a wedged shutdown still kills the process.
@@ -247,6 +269,13 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       `tag=${registration.entry.tag} pid=${process.pid} port=${web.port} cache=${cacheDir} ` +
       "(registered as debug, no MCP — prompts print to stdout)\n",
   );
+  channelLog.log("up", {
+    tag: registration.entry.tag,
+    pid: process.pid,
+    port: web.port,
+    debug: true,
+    ...(options.name !== undefined ? { name: options.name } : {}),
+  });
 
   return { port: web.port, close };
 }

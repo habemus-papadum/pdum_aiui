@@ -105,9 +105,9 @@ export class Engine {
     this.emit(this.stamp({ type: "mode", mode }));
   }
 
-  /** Esc, one level at a time: correct → ink, tweak → ink, ink+thread → cancel, → disarm. */
+  /** Esc, one level at a time: correct/tweak/vscode → ink, ink+thread → cancel, → disarm. */
   stepOut(): void {
-    if (this.mode === "correct" || this.mode === "tweak") {
+    if (this.mode !== "ink") {
       this.setMode("ink");
       return;
     }
@@ -316,12 +316,14 @@ export class Engine {
       clearTimeout(this.idleTimer);
       this.idleTimer = undefined;
     }
-    // SUSPENDED during tweak (§B.5): the user handed the pointer/keyboard back
-    // to the app on purpose — adjusting a slider is not "idle silence", and the
-    // open turn must survive the excursion. No special resume plumbing needed:
-    // leaving tweak emits a `mode` event, which re-runs this scheduler and
-    // re-arms the timer naturally.
-    if (this.settings.autoEndSec > 0 && this.threadOpen && !this.talking && this.mode !== "tweak") {
+    // SUSPENDED during tweak (§B.5) and vscode mode: the user handed the
+    // pointer/keyboard back to the app (or jumped off to their editor) on
+    // purpose — that excursion is not "idle silence", and the open turn must
+    // survive it. No special resume plumbing needed: leaving either mode emits
+    // a `mode` event, which re-runs this scheduler and re-arms the timer
+    // naturally.
+    const excursion = this.mode === "tweak" || this.mode === "vscode";
+    if (this.settings.autoEndSec > 0 && this.threadOpen && !this.talking && !excursion) {
       this.idleTimer = setTimeout(() => {
         if (this.threadOpen && !this.talking) {
           this.closeThread("timeout");
@@ -583,6 +585,8 @@ export interface ComposedItem {
   lines?: number;
   /** An app-selection item's producing dataflow cell (`data-cell`). */
   cell?: string;
+  /** That cell's definition site (`file:line` — the `cell(...)` call), when stamped. */
+  cellLoc?: string;
   /** An app-selection item's TeX source (selected rendered mathematics). */
   tex?: string;
 }
@@ -701,6 +705,7 @@ export function composeIntent(
         text: event.text,
         ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
         ...(event.cell !== undefined ? { cell: event.cell } : {}),
+        ...(event.cellLoc !== undefined ? { cellLoc: event.cellLoc } : {}),
         ...(event.tex !== undefined ? { tex: event.tex } : {}),
         ...(event.marker !== undefined ? { marker: event.marker } : {}),
       };
@@ -872,14 +877,18 @@ export function renderCodeSelection(
  * rule. The parameter is the `ComposedItem` subset the rendering reads.
  */
 export function renderAppSelection(
-  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "tex">,
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "cellLoc" | "tex">,
 ): string {
   const attribution: string[] = [];
   if (item.sourceLoc !== undefined) {
     attribution.push(`authored at ${item.sourceLoc}`);
   }
   if (item.cell !== undefined) {
-    attribution.push(`produced by cell ${item.cell}`);
+    // The definition site (the `cell(...)` call) rides along when stamped —
+    // the file an agent should open for "the computation behind this".
+    attribution.push(
+      `produced by cell ${item.cell}${item.cellLoc !== undefined ? ` defined at ${item.cellLoc}` : ""}`,
+    );
   }
   if (item.tex !== undefined) {
     attribution.push(`rendered mathematics — TeX source: ${item.tex}`);

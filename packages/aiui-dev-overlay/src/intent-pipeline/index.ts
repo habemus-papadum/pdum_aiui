@@ -36,8 +36,15 @@ export {
   renderCodeSelection,
   SHORT_SELECTION_CHARS,
 } from "./engine";
-export type { KeyCommand, KeyState } from "./keymap";
-export { installKeymap, isTypingTarget, keyCommand, TIER_BY_DIGIT } from "./keymap";
+export type { KeyCommand, KeymapHelpSection, KeyState } from "./keymap";
+export {
+  installKeymap,
+  intentKeyHints,
+  isTypingTarget,
+  keyCommand,
+  keymapHelp,
+  TIER_BY_DIGIT,
+} from "./keymap";
 export type { DiffRun } from "./patch";
 export { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
 export type {

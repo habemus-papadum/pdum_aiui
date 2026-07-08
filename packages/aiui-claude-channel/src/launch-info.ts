@@ -49,6 +49,9 @@ export interface ChromeDevtoolsInfo {
  *  - "missing"    — not set in the launcher's environment.
  *  - "unverified" — present but not checked (CI/non-interactive) or the check
  *                   couldn't complete (offline, timeout, transient error).
+ *
+ * `GEMINI_API_KEY` (the realtime submode's Gemini Live engine) reports through
+ * the same status vocabulary — see {@link LaunchInfo.geminiKey}.
  */
 export type OpenAiKeyStatus = "valid" | "invalid" | "missing" | "unverified";
 
@@ -63,6 +66,12 @@ export interface LaunchInfo {
    * why transcription/correction are unavailable.
    */
   openaiKey?: OpenAiKeyStatus;
+  /**
+   * The GEMINI_API_KEY preflight's outcome (same vocabulary, status only) —
+   * the key the realtime submode's Gemini Live engine needs. Absent when no
+   * launcher recorded it.
+   */
+  geminiKey?: OpenAiKeyStatus;
 }
 
 /**

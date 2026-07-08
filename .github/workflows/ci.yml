@@ -56,6 +56,9 @@ jobs:
       - name: Lockstep version invariant
         run: node scripts/versioning.mjs current
 
+      - name: Skill markdown links resolve (bundled at pack time)
+        run: node scripts/bundle-skill-docs.mjs --check
+
       - name: Build all packages
         run: pnpm -r run build
 

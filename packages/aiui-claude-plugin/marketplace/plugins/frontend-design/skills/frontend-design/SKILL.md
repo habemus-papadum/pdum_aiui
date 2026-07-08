@@ -6,15 +6,30 @@ description: How to write reactive scientific-visualization frontends in aiui pr
 # aiui frontend design
 
 **Sources of truth** (read when depth is needed; if this digest ever disagrees, trust them and
-say so): `docs/guide/frontend-for-agents.md` (concepts) →
-`docs/guide/frontend-design-choices.md` (design, with code refs) →
-`docs/guide/frontend-hard-won.md` (gotcha ledger) →
-`docs/guide/frontend-style-guide.md` (authoring conventions: page structure, TOC, plotting,
-math, porcelain/plumbing). Library: `packages/aiui-viz` — plumbing on the root barrel (`cell`,
-`CellView`, `workerStream`/`fromWorker`, `durable`, `agentToolkit`), porcelain on subpaths
-(`…/plot` → `PlotFigure`; `…/site` → `SiteHeader`, `TocRail`, `TeX`, `colorMode` — katex/plot
-are optional peers only those subpaths need). Reference apps: `packages/aiui-demo` (morphogen +
-aztec notebooks).
+say so): [frontend-for-agents.md](../../../../../../../docs/guide/frontend-for-agents.md)
+(concepts) →
+[frontend-design-choices.md](../../../../../../../docs/guide/frontend-design-choices.md)
+(design, with code refs) →
+[frontend-hard-won.md](../../../../../../../docs/guide/frontend-hard-won.md) (gotcha ledger —
+includes the Mosaic/DuckDB-WASM section) →
+[frontend-style-guide.md](../../../../../../../docs/guide/frontend-style-guide.md) (authoring
+conventions: page structure, TOC, plotting, math, porcelain/plumbing). (In the pdum_aiui repo
+these links are the live guide docs; in a packaged install they point at copies bundled with
+this skill. Same content published at https://habemus-papadum.github.io/pdum_aiui/.) And
+always: the **installed package's own `.d.ts`/docblocks** — every export documents its
+contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the module headers.
+
+Library surface (`@habemus-papadum/aiui-viz`): plumbing on the root barrel (`cell`, `CellView`,
+`workerStream`/`fromWorker`, `durable`, `agentToolkit`), porcelain on subpaths, one per
+heavyweight optional peer — `…/plot` → `PlotFigure` (Observable Plot); `…/mosaic` →
+`MosaicView` (Mosaic/vgplot bridge: coordinator + reactive directive-list spec in, connected
+Plot out, marks disconnected on dispose); `…/duckdb` → `instantiateDuckDB` +
+`fetchWithProgress` (DuckDB-WASM from app-bundled `?url` assets — the four asset imports stay
+in YOUR app, see the module docblock); `…/site` → `SiteHeader`, `TocRail`, `TeX`, `colorMode`;
+`…/modal` → the framework-free modal interaction kit. Reference apps: `packages/aiui-demo` —
+morphogen + aztec notebooks (cells/workers/Plot), **seismos** (the Mosaic + DuckDB reference:
+Parquet → DuckDB-WASM → crossfilter Selection → coordinated vgplot views; its NOTES.md is the
+stack's field ledger).
 
 ## The structure (non-negotiable)
 
@@ -39,8 +54,8 @@ Every async value is a `cell(deps, compute)`: deps returning `undefined` holds; 
 return a value, promise, or async iterable (streaming is the default — commit partials; gate
 expensive consumers with `settledOnly` or `stream: "latest"`). Cancellation is supersession —
 pass `ctx.signal` into fetches/workers; an explicit cancel is "set deps to undefined". Render
-cell values through `<CellView of={cell}>` (loading/error/keep-last chrome + the `data-cell`
-attribution stamp come free). Long computations live in workers speaking the
+cell values through `<CellView of={cell}>` (loading/error/keep-last chrome + the `data-cell` /
+`data-cell-loc` attribution stamps come free). Long computations live in workers speaking the
 `workerStream` protocol: **yield a macrotask between chunks** (`setTimeout 0` — else cancel is
 never delivered), stream the cheap phase early, keep the math in a pure realm-free module with
 unit tests, post errors as `{type:"error"}`. Don't emit the final value as both partial and done.
@@ -93,8 +108,14 @@ colors are *per-mode*: same hex in dark, they diverge in light.
 ## Charts
 
 Follow the dataviz skill (validate palettes against the actual surface; fixed categorical
-assignment; legends for ≥2 series). Keep imperative chart libs behind one bridge component
-(`@habemus-papadum/aiui-viz/plot` for Observable Plot); d3 contributes scales to plain JSX.
+assignment; legends for ≥2 series). Keep imperative chart libs behind one bridge component;
+d3 contributes scales to plain JSX. Division of labor: **Plot** (`aiui-viz/plot`) for a chart
+*of a cell's value*; **Mosaic** (`aiui-viz/mosaic` + `aiui-viz/duckdb`) when the data lives in
+a database **table** and views coordinate through Selections (brushing filters, aggregation
+pushed down to DuckDB). Mosaic durables: the DuckDB instance, coordinator, and Selections live
+in the store; specs are reactive thunks (theme reads rebuild views against the surviving
+coordinator). Pin `@duckdb/duckdb-wasm` to the exact version `@uwdata/mosaic-core` uses (one
+deduped copy), and read the hard-won doc's Mosaic section before writing a custom MosaicClient.
 
 ## Definition of done
 

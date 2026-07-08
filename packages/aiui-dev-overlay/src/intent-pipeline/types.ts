@@ -49,7 +49,7 @@ export interface LocatedComponent {
   containment?: "enclosed" | "within";
 }
 
-export type Mode = "ink" | "correct" | "tweak";
+export type Mode = "ink" | "correct" | "tweak" | "vscode";
 
 /**
  * The payload of an `app-selection` event: what the user had highlighted on
@@ -64,6 +64,8 @@ export interface AppSelection {
   sourceLoc?: string;
   /** `data-cell` (dataflow node) of the selection's start element. */
   cell?: string;
+  /** That cell's definition site (`file:line` — the `cell(...)` call), when stamped. */
+  cellLoc?: string;
   /** TeX source when the selection is rendered mathematics. */
   tex?: string;
   /** `location.href` of the page the selection was made on. */

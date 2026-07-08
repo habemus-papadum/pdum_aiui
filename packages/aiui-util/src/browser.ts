@@ -144,12 +144,19 @@ export async function launchSessionBrowser(opts: {
     // Chrome scopes mic permission per-origin (every dev-server PORT is its
     // own origin), and the getDisplayMedia share picker can never be
     // persisted at all.
-    //  - fake-ui: auto-accept getUserMedia permission prompts. The *default,
-    //    real* devices are used — fake devices only come from the separate
-    //    --use-fake-device-for-media-stream, deliberately not passed.
-    "--use-fake-ui-for-media-stream",
-    //  - auto-accept the current-tab share the shot tool asks for
-    //    (getDisplayMedia({ preferCurrentTab: true })) — no picker dialog.
+    //  - auto-accept camera/microphone permission prompts (the *default, real*
+    //    devices — fake devices only come from the separate
+    //    --use-fake-device-for-media-stream, deliberately not passed). NOT the
+    //    older --use-fake-ui-for-media-stream: that flag also hijacks the
+    //    getDisplayMedia picker and auto-selects the ENTIRE SCREEN, which
+    //    needs macOS Screen Recording permission the CfT binary doesn't have —
+    //    every capture then dies with NotReadableError ("Could not start
+    //    video source"), silently defeating the tab-capture flag below (this
+    //    broke the paint host's screen share; verified against CfT 150).
+    "--auto-accept-camera-and-microphone-capture",
+    //  - auto-accept the current-tab share the shot tool and the paint host
+    //    ask for (getDisplayMedia({ preferCurrentTab: true })) — no picker
+    //    dialog, and tab capture needs no OS-level screen-recording grant.
     "--auto-accept-this-tab-capture",
   ];
   if (opts.extensionDir) {

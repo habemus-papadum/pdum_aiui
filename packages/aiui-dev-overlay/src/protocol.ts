@@ -97,6 +97,12 @@ export interface ErrorMessage extends ServerMessage {
   message: string;
   /** Optional second line: remediation, upstream error body, close reason. */
   detail?: string;
+  /**
+   * Optional structured payload — the raw upstream error (API error body,
+   * WebSocket close code + reason) exactly as the server saw it. Rendered
+   * behind the toast's details expander.
+   */
+  data?: unknown;
 }
 
 /** Narrow a {@link ServerMessage} to an {@link ErrorMessage} (kind + a real message). */

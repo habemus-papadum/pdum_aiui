@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type KeyState, keyCommand, TIER_BY_DIGIT } from "./keymap";
+import { intentKeyHints, type KeyState, keyCommand, keymapHelp, TIER_BY_DIGIT } from "./keymap";
 
 const base: KeyState = {
   armed: true,
@@ -56,7 +56,10 @@ describe("keyCommand", () => {
     expect(keyCommand(base, "S", "up", false)).toBeUndefined();
     expect(keyCommand(base, "c", "down", false)).toEqual({ cmd: "ink-clear" });
     expect(keyCommand(base, "e", "down", false)).toEqual({ cmd: "correct-toggle" });
-    // V toggles the realtime screen share (the modality gates on submode).
+    // J enters VS Code jump mode; V toggles the realtime screen share (the
+    // modality gates the latter on submode).
+    expect(keyCommand(base, "j", "down", false)).toEqual({ cmd: "vscode-toggle" });
+    expect(keyCommand(base, "J", "down", false)).toEqual({ cmd: "vscode-toggle" });
     expect(keyCommand(base, "v", "down", false)).toEqual({ cmd: "video-toggle" });
     expect(keyCommand(base, "V", "down", false)).toEqual({ cmd: "video-toggle" });
     expect(keyCommand(base, "Enter", "down", false)).toEqual({ cmd: "send" });
@@ -196,6 +199,8 @@ describe("keyCommand: tweak mode (the explicit handover)", () => {
       "C",
       "e",
       "E",
+      "j",
+      "J",
       "v",
       "V",
       "k",
@@ -222,5 +227,164 @@ describe("keyCommand: tweak mode (the explicit handover)", () => {
     expect(keyCommand(tweakWithStrip, "1", "down", false)).toBeUndefined();
     expect(keyCommand(tweakWithStrip, "s", "down", false)).toBeUndefined();
     expect(keyCommand(tweakWithStrip, "Enter", "down", false)).toBeUndefined();
+  });
+});
+
+describe("keyCommand: vscode jump mode (the tweak-shaped handover with the dblclick jump)", () => {
+  const vscode: KeyState = { ...base, mode: "vscode" };
+
+  it("J enters vscode mode from armed ink mode, once per press (repeats/keyups pass)", () => {
+    expect(keyCommand(base, "j", "down", false)).toEqual({ cmd: "vscode-toggle" });
+    expect(keyCommand(base, "J", "down", false)).toEqual({ cmd: "vscode-toggle" });
+    expect(keyCommand(base, "j", "down", true)).toBeUndefined(); // key-repeat
+    expect(keyCommand(base, "j", "up", false)).toBeUndefined(); // keyup
+  });
+
+  it("J is inert in correct mode (it owns its keys) and while disarmed", () => {
+    expect(keyCommand({ ...base, mode: "correct" }, "j", "down", false)).toBeUndefined();
+    expect(keyCommand({ ...base, armed: false }, "j", "down", false)).toBeUndefined();
+  });
+
+  it("in vscode mode: J resumes, Esc steps out, backtick still arm-toggles; repeats pass", () => {
+    expect(keyCommand(vscode, "j", "down", false)).toEqual({ cmd: "vscode-toggle" });
+    expect(keyCommand(vscode, "J", "down", false)).toEqual({ cmd: "vscode-toggle" });
+    expect(keyCommand(vscode, "Escape", "down", false)).toEqual({ cmd: "step-out" });
+    expect(keyCommand(vscode, "`", "down", false)).toEqual({ cmd: "arm-toggle" });
+    expect(keyCommand(vscode, "j", "down", true)).toBeUndefined();
+    expect(keyCommand(vscode, "Escape", "down", true)).toBeUndefined();
+  });
+
+  it("the page keeps EVERYTHING else — the same exhaustive handover as tweak", () => {
+    // The double-click is the mode's only claimed gesture (pointer-side, in
+    // the modality); the keyboard belongs to the page except V/Esc above.
+    const pageKeys = [
+      " ",
+      "d",
+      "D",
+      "s",
+      "S",
+      "c",
+      "C",
+      "e",
+      "E",
+      "t",
+      "T",
+      "v",
+      "V",
+      "k",
+      "K",
+      "Enter",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "0",
+    ];
+    for (const k of pageKeys) {
+      expect(keyCommand(vscode, k, "down", false)).toBeUndefined();
+      expect(keyCommand(vscode, k, "up", false)).toBeUndefined();
+    }
+    // The strip layer yields during vscode mode too, like tweak.
+    const vscodeWithStrip: KeyState = { ...vscode, configOpen: true };
+    expect(keyCommand(vscodeWithStrip, "1", "down", false)).toBeUndefined();
+    expect(keyCommand(vscodeWithStrip, "s", "down", false)).toBeUndefined();
+    expect(keyCommand(vscodeWithStrip, "Enter", "down", false)).toBeUndefined();
+  });
+});
+
+describe("keyCommand: H (the universal help convention)", () => {
+  it("H toggles help wherever the armed base is live (ink AND correct)", () => {
+    expect(keyCommand(base, "h", "down", false)).toEqual({ cmd: "help-toggle" });
+    expect(keyCommand(base, "H", "down", false)).toEqual({ cmd: "help-toggle" });
+    expect(keyCommand({ ...base, mode: "correct" }, "h", "down", false)).toEqual({
+      cmd: "help-toggle",
+    });
+  });
+
+  it("H stays the page's in the handover modes, and does nothing disarmed", () => {
+    expect(keyCommand({ ...base, mode: "tweak" }, "h", "down", false)).toBeUndefined();
+    expect(keyCommand({ ...base, mode: "vscode" }, "h", "down", false)).toBeUndefined();
+    expect(keyCommand({ ...base, armed: false }, "h", "down", false)).toBeUndefined();
+  });
+});
+
+describe("intentKeyHints / keymapHelp (the displayed keymap IS the working keymap)", () => {
+  const labels = (state: KeyState): string[] => intentKeyHints(state).map((h) => h.label);
+
+  it("armed ink mode lists the whole tiny keyboard, mode entrances included", () => {
+    const rows = labels(base);
+    expect(rows).toContain("hold to talk");
+    expect(rows).toContain("hold + drag: region shot");
+    expect(rows).toContain("jump to code");
+    expect(rows).toContain("screen share (live)");
+    expect(rows).toContain("tweak the app");
+    expect(rows).toContain("help");
+    expect(rows).toContain("send the turn");
+  });
+
+  it("the handover modes shrink to their claimed keys (plus the arm row)", () => {
+    expect(labels({ ...base, mode: "tweak" })).toEqual(["disarm", "resume the turn", "resume"]);
+    expect(labels({ ...base, mode: "vscode" })).toEqual(["disarm", "resume the turn", "resume"]);
+    // The open picker's rows take over (its Escape shadows the vscode one).
+    expect(labels({ ...base, mode: "vscode", pickerOpen: true })).toEqual([
+      "disarm",
+      "pick a row",
+      "jump to row",
+      "open in VS Code",
+      "dismiss",
+      "resume the turn",
+    ]);
+  });
+
+  it("disarmed, the only row is how to arm", () => {
+    expect(labels({ ...base, armed: false })).toEqual(["arm"]);
+  });
+
+  it("keymapHelp diffs the meta layers: correct mode shows what CHANGED, the strip its own rows", () => {
+    const sections = keymapHelp();
+    const byTitle = new Map(sections.map((s) => [s.title, s.hints.map((h) => h.label)]));
+    expect(byTitle.get("correct mode")).toEqual(["done correcting", "done editing"]);
+    expect(byTitle.get("config strip")).toEqual([
+      "pick a tier",
+      "save for site",
+      "reset to file",
+      "advanced editor",
+      "close",
+    ]);
+    expect(byTitle.get("off")).toEqual(["arm"]);
+    // Enter/Esc claimed by the strip shadow the armed rows — the armed
+    // section still shows them (it is computed in the armed base state).
+    expect(byTitle.get("armed")).toContain("send the turn");
+  });
+});
+
+describe("keyCommand: the jump-picker layer (vscode mode's double-click popup)", () => {
+  const open: KeyState = { ...base, mode: "vscode", pickerOpen: true };
+
+  it("claims arrows (repeats included — held ↓ scrolls), digits, Enter, Esc", () => {
+    expect(keyCommand(open, "ArrowDown", "down", false)).toEqual({ cmd: "jump-move", delta: 1 });
+    expect(keyCommand(open, "ArrowUp", "down", false)).toEqual({ cmd: "jump-move", delta: -1 });
+    expect(keyCommand(open, "ArrowDown", "down", true)).toEqual({ cmd: "jump-move", delta: 1 });
+    expect(keyCommand(open, "Enter", "down", false)).toEqual({ cmd: "jump-commit" });
+    expect(keyCommand(open, "3", "down", false)).toEqual({ cmd: "jump-commit", index: 2 });
+    // Esc dismisses the picker — NOT a step-out: jump mode survives.
+    expect(keyCommand(open, "Escape", "down", false)).toEqual({ cmd: "jump-close" });
+  });
+
+  it("J still exits jump mode from under the popup (unclaimed → the vscode layer)", () => {
+    expect(keyCommand(open, "j", "down", false)).toEqual({ cmd: "vscode-toggle" });
+  });
+
+  it("is inert while the picker is closed, and outside vscode mode", () => {
+    const closed: KeyState = { ...base, mode: "vscode" };
+    expect(keyCommand(closed, "ArrowDown", "down", false)).toBeUndefined();
+    expect(keyCommand(closed, "1", "down", false)).toBeUndefined();
+    // A stale pickerOpen outside vscode mode claims nothing.
+    expect(keyCommand({ ...base, pickerOpen: true }, "ArrowDown", "down", false)).toBeUndefined();
   });
 });

@@ -36,7 +36,9 @@ Everything below explains the same loop piece by piece, for wiring aiui into you
 
 - The [Claude Code](https://claude.com/claude-code) CLI (`claude`) on your PATH, logged in.
 - The `aiui` CLI: `npm install -D @habemus-papadum/aiui` in your project (or, working on this
-  repo itself: `pnpm install && pnpm build`, then the `./aiui` wrapper / `pnpm aiui`).
+  repo itself: `pnpm install`, then the source-run `./aiui` wrapper / `pnpm aiui` — no build
+  needed; `eval "$(./aiui env)"` puts it on your PATH as plain `aiui`, see
+  [Developing](./development#activate-your-shell-optional-venv-style)).
 - A Vite-based web app you're developing. **No app handy?** Use the
   [disposable demo](#the-quickest-start-a-disposable-demo) above. (Repo developers also have
   `pnpm demo`, which serves `packages/aiui-demo` straight from the checkout — handy, but agent

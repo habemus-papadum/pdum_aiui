@@ -53,7 +53,12 @@ import {
   type LiveSessionCallbacks,
   type SubmitIntentCall,
 } from "./live-session";
-import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
+import {
+  captureUnexpectedResponse,
+  closeSuffix,
+  type RealtimeSocketFactory,
+  type RealtimeSocketHandlers,
+} from "./realtime";
 import { pcm16ToWav } from "./realtime-voice";
 
 /** The v1beta bidirectional-generate endpoint (key rides the query string). */
@@ -192,7 +197,11 @@ export const geminiLiveSocketFactory: RealtimeSocketFactory = (url, apiKey, hand
   ws.on("open", () => handlers.onOpen());
   ws.on("message", (data: unknown) => handlers.onMessage(String(data)));
   ws.on("error", (err: Error) => handlers.onError(err.message));
-  ws.on("close", () => handlers.onClose());
+  // Gemini reports auth/quota faults in the close frame's reason ("API key not
+  // valid. …"), so the code/reason must reach the session — a bare onClose()
+  // reduces every failure to "session closed" with the cause discarded.
+  ws.on("close", (code: number, reason: Buffer) => handlers.onClose(code, reason.toString()));
+  captureUnexpectedResponse(ws, handlers);
   return {
     send: (text) => ws.send(text),
     close: () => ws.close(),
@@ -277,7 +286,7 @@ export function openGeminiLiveSession(
   };
 
   /** A hard fault: flush whatever the user already said (chronicle), then idle. */
-  const fail = (message: string): void => {
+  const fail = (message: string, data?: unknown): void => {
     if (dead) {
       return;
     }
@@ -287,7 +296,7 @@ export function openGeminiLiveSession(
     if (user !== "") {
       callbacks.onUserTranscript(user);
     }
-    callbacks.onError(message);
+    callbacks.onError(message, data);
     settleDrain(null);
   };
 
@@ -410,10 +419,18 @@ export function openGeminiLiveSession(
       );
     },
     onMessage: handleMessage,
-    onError: (message: string) => fail(message),
-    onClose: () => {
+    onError: (message: string, data?: unknown) => fail(message, data),
+    onClose: (code?: number, reason?: string) => {
+      // The close frame is where Gemini states the actual fault ("API key not
+      // valid …" rides `reason`) — surface it verbatim, plus the structured
+      // form for the client's details expander.
       if (!dead) {
-        fail("gemini live session closed");
+        fail(
+          `gemini live session closed${closeSuffix(code, reason)}`,
+          code !== undefined || (reason !== undefined && reason !== "")
+            ? { closeCode: code, closeReason: reason }
+            : undefined,
+        );
       }
     },
   } satisfies RealtimeSocketHandlers);

@@ -34,6 +34,16 @@
 /** A binding's (or layer's) answer for one key event. */
 export type KeyClaim<C> = { command: C } | "swallow" | "pass";
 
+/** A binding's display row for cheat sheets and help: key cap + meaning. */
+export interface KeyHint {
+  /** Display key cap, e.g. "␣", "D", "esc", "↑↓". */
+  key: string;
+  /** Short meaning, e.g. "talk", "region shot". */
+  label: string;
+  /** Optional pictogram for the condensed cheat sheet (an emoji works). */
+  icon?: string;
+}
+
 export interface KeyBinding<S, C> {
   /** `KeyboardEvent.key` values this binding matches, exactly (list both cases for letters). */
   keys: readonly string[];
@@ -41,6 +51,14 @@ export interface KeyBinding<S, C> {
   down?: (state: S, key: string, repeat: boolean) => KeyClaim<C>;
   /** Answer for keyup; omitted = "pass". */
   up?: (state: S, key: string) => KeyClaim<C>;
+  /**
+   * Display metadata for cheat sheets and help ({@link keyHints}) — declared
+   * on the binding itself, so what the UI shows can never drift from what
+   * the key does. The function form lets a state-dependent binding describe
+   * itself per state (Enter: "send" vs "done editing"); returning undefined
+   * hides the binding in that state.
+   */
+  hint?: KeyHint | ((state: S) => KeyHint | undefined);
 }
 
 export interface KeyLayer<S, C> {
@@ -95,6 +113,43 @@ export function resolveKey<S, C>(
     // pass it.
   }
   return "pass";
+}
+
+/**
+ * The active hint rows for a state, resolved through the stack top-down with
+ * claim shadowing: a key bound by a higher active layer hides the same key's
+ * hints below (a strip claiming S for "save" hides the base layer's S
+ * "viewport shot"), exactly mirroring {@link resolveKey}'s precedence — a
+ * binding with no hint still shadows. Order: layers top-down, bindings in
+ * declaration order; a swallow-fallback layer ends the walk (nothing below
+ * is reachable). Drive per-mode cheat sheets and help tables from THIS, so
+ * the displayed keymap and the working keymap are the same table.
+ */
+export function keyHints<S, C>(stack: readonly KeyLayer<S, C>[], state: S): KeyHint[] {
+  const hints: KeyHint[] = [];
+  const claimed = new Set<string>();
+  for (const layer of stack) {
+    if (layer.active && !layer.active(state)) {
+      continue;
+    }
+    for (const binding of layer.bindings) {
+      const fresh = binding.keys.some((key) => !claimed.has(key));
+      for (const key of binding.keys) {
+        claimed.add(key);
+      }
+      if (!fresh) {
+        continue;
+      }
+      const hint = typeof binding.hint === "function" ? binding.hint(state) : binding.hint;
+      if (hint !== undefined) {
+        hints.push(hint);
+      }
+    }
+    if (layer.fallback === "swallow") {
+      break;
+    }
+  }
+  return hints;
 }
 
 /**

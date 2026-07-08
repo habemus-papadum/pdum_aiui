@@ -117,8 +117,13 @@ export interface LiveSessionCallbacks {
   onInterrupted(): void;
   /** What one turn/response cost, already priced against the engine's provider. */
   onUsage(cost: CallCost): void;
-  /** A failure — surfaced loudly (the keyless/degraded posture the other seams use). */
-  onError(message: string): void;
+  /**
+   * A failure — surfaced loudly (the keyless/degraded posture the other seams
+   * use). `data` optionally carries the structured upstream payload (the API's
+   * error object, a close code + reason) for the client's details expander —
+   * the human should get to read what the API actually said.
+   */
+  onError(message: string, data?: unknown): void;
   /**
    * The connection is being asked to wind down within `msLeft` (Gemini `GoAway`);
    * the session budget meter turns amber. Optional — OpenAI has no equivalent.

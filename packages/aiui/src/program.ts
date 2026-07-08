@@ -14,6 +14,7 @@ import {
 import { runConfigTui } from "./commands/config-tui";
 import { type DebugOptions, runDebug } from "./commands/debug";
 import { type DemoOptions, runDemo } from "./commands/demo";
+import { runEnv } from "./commands/env";
 import { runMcp } from "./commands/mcp";
 import { runPaintUrl } from "./commands/paint";
 import { runVite } from "./commands/vite";
@@ -135,6 +136,14 @@ export function buildProgram(): Command {
     .option("--profile <name>", "named profile under .aiui-cache/chrome/")
     .option("--data-dir <path>", "explicit Chrome user data dir")
     .action((url: string, opts: Pick<BrowserOptions, "profile" | "dataDir">) => runOpen(url, opts));
+
+  // Shell activation, venv-style: `eval "$(aiui env)"` puts the project's
+  // executable dirs on PATH and exports the root .env/.env.dev files into the
+  // current shell (shell code on stdout, human summary on stderr).
+  program
+    .command("env")
+    .description('print shell code to activate this checkout — use as: eval "$(aiui env)"')
+    .action(() => runEnv());
 
   // The two-level config.json, self-documenting: every subcommand renders from
   // the same schema table validation uses (util/config-schema.ts). Bare

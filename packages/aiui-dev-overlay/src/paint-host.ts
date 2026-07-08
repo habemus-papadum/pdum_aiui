@@ -106,13 +106,16 @@ export function installPaintHost(opts: PaintHostOptions = {}): () => void {
 
     // The "share screen" affordance: getDisplayMedia needs a real click, and a
     // viewer joining is a network event. Poll the cheap host getters and show a
-    // button exactly while a viewer is waiting on the gesture.
+    // button while a viewer is waiting on the gesture — and KEEP it up after a
+    // failed attempt ("denied"), with the failure in the label: a click that
+    // silently made the button vanish while the capture had actually thrown
+    // (wrong browser flags, a missing OS grant) cost a real debugging session.
     shareTimer = setInterval(() => {
-      const wanted = host.viewers() > 0 && host.captureState() === "needsGesture";
+      const state = host.captureState();
+      const wanted = host.viewers() > 0 && (state === "needsGesture" || state === "denied");
       if (wanted && !shareBtn) {
         shareBtn = document.createElement("button");
         shareBtn.type = "button";
-        shareBtn.textContent = "📺 Share screen with iPad";
         shareBtn.setAttribute(
           "style",
           [
@@ -128,15 +131,34 @@ export function installPaintHost(opts: PaintHostOptions = {}): () => void {
             "font:14px/-apple-system, system-ui, sans-serif",
             "cursor:pointer",
             "box-shadow:0 4px 18px rgba(0,0,0,0.4)",
+            "max-width:340px",
+            "text-align:left",
+            "white-space:pre-line",
           ].join(";"),
         );
         shareBtn.addEventListener("click", () => {
-          void host.requestCapture();
+          void host.requestCapture().then((result) => {
+            if (result !== "active") {
+              console.warn(
+                `[aiui] screen share did not start (${result})${host.captureError() ? ` — ${host.captureError()}` : ""}`,
+              );
+            }
+          });
         });
         document.body.appendChild(shareBtn);
       } else if (!wanted && shareBtn) {
         shareBtn.remove();
         shareBtn = undefined;
+      }
+      if (shareBtn) {
+        const error = host.captureError();
+        const label =
+          state === "denied"
+            ? `⚠️ Screen share failed — click to retry${error !== undefined ? `\n${error}` : ""}`
+            : "📺 Share screen with iPad";
+        if (shareBtn.textContent !== label) {
+          shareBtn.textContent = label;
+        }
       }
     }, 1000);
 

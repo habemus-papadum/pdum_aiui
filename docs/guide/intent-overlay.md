@@ -40,11 +40,20 @@ Minimalist by design — one hand, no chords:
 | **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
 | **E**     | correct mode — select transcript text, then speak or type the fix |
+| **J**     | [VS Code jump mode](#vs-code-jump-mode-double-click-to-source) — double-click an element, pick a jump target (its source, or a containing cell), land in VS Code; **J** (or **Esc**) resumes |
 | **V**     | share your screen — [live tiers only](#live-tiers-67--experimental); samples the display at ~1 fps for the live model |
 | **K**     | quick config — the [tier strip](#quick-config-the-k-strip): switch tiers, save/reset, open the editor |
 | **T**     | [tweak mode](#tweak-mode-adjust-the-app-mid-turn) — hand the pointer and keyboard back to the app mid-turn; **T** (or **Esc**) resumes |
+| **H**     | help — the whole keymap as a table (the pill's **?** icon is the mouse path to the same) |
 | **Enter** | send — finalize and lower the turn |
 | **Esc**   | step out one level (see the escape ladder below) |
+
+**You never have to memorize this table.** While armed, a condensed **cheat sheet** floats above
+the pill showing exactly the keys live in the *current* mode — key caps with a pictogram each,
+labels on hover — so a handover mode shows only its two keys, the jump picker its four, and so
+on. Both the cheat sheet and the **H** table are generated from the same declarative binding
+rows the key resolver reads (the modal kit's hint column), so what they show and what the keys
+do can never drift apart.
 
 K is deliberately the only key configuration costs this layer: the tier digits, save, reset,
 and the advanced editor all live *inside* the strip it opens, which shows its own bindings.
@@ -61,9 +70,10 @@ It closes when you:
   seconds. Useful if you dislike reaching for Enter; risky if you pause to think mid-turn.
 
 **The escape ladder.** `Esc` steps out exactly one level at a time, so a mis-step is one tap
-to undo rather than a full reset: `correct mode → ink`, `tweak mode → ink`, then
-`cancel the thread → disarm`. Press it until you're where you want to be — stepping out of
-correct or tweak mode always lands back in composing, never straight at a cancel.
+to undo rather than a full reset: `correct mode → ink`, `tweak mode → ink`, `VS Code mode →
+ink`, then `cancel the thread → disarm`. Press it until you're where you want to be — stepping
+out of correct, tweak, or VS Code mode always lands back in composing, never straight at a
+cancel.
 
 ## Talking (dictation)
 
@@ -163,12 +173,58 @@ talking about the result. Disarming would cancel the thread; **T** doesn't. It h
 and keyboard back to the app while the turn stays open — an **explicit handover**, not a
 guessing game about which keys you meant for whom: in tweak mode the overlay claims only **T**
 and **Esc** (both resume composing; Esc is the same one-rung step-out as leaving correct mode),
-and *everything* else — Space, D, S, C, E, V, K, Enter, the strip digits — falls through to the
-page. The pill's ring goes **dashed gray** while capture is released, so a glance tells you the
-crosshair is gone on purpose. The thread and its channel socket stay open the whole time, the
-idle auto-end timer (if you enable it) is suspended, and a selection you make while tweaking
+and *everything* else — Space, D, S, C, E, J, V, K, Enter, the strip digits — falls through to
+the page. The pill's ring goes **dashed gray** while capture is released, so a glance tells you
+the crosshair is gone on purpose. The thread and its channel socket stay open the whole time,
+the idle auto-end timer (if you enable it) is suspended, and a selection you make while tweaking
 rides the open turn as a `selection` update — adjust, re-select, press **T**, and finish the
 same thought.
+
+## VS Code jump mode: double-click to source
+
+**J** enters the same kind of handover as tweak — pointer and keyboard go back to the app, the
+pill's ring goes **dashed blue** — with exactly one gesture claimed for the overlay:
+**double-click**. The click doesn't navigate; it opens the **jump picker**, a popup at the
+click point listing everything that spot can jump to:
+
+```
+┌──────────────────────────────────────────┐
+│ ELEMENT                                  │
+│ ▸ 1 input     src/ui/Controls.tsx:42:7   │  ← nearest stamp, preselected
+│   2 section   src/ui/Controls.tsx:12:3   │
+│   3 div       src/App.tsx:8:5            │
+│ CELL — DEFINED AT                        │
+│   4 catalog   src/model/graph.ts:77      │
+│   5 dashboard src/model/graph.ts:31      │
+│ ↑↓ pick · 1–9 jump · ⏎ open · esc close  │
+└──────────────────────────────────────────┘
+```
+
+- **Elements** are the stamped ancestors of what you clicked (`data-source-loc`), nearest →
+  outermost: "which code authored this", at increasing levels of containment. The nearest is
+  preselected, so double-click + **Enter** is still the one-beat fast path.
+- **Cells** are the containing dataflow cells (`data-cell`), each at its **definition** site —
+  the `cell(...)` call (`data-cell-loc`), not the JSX that renders its value (that JSX is
+  already one of the element rows).
+- **↑/↓** move the selection, **1–9** commit a numbered row directly, **Enter** commits,
+  **Esc** dismisses (you stay in jump mode); clicking a row commits too. As the selection
+  moves, the corresponding element's **bounding box lights up on the page** — containment stops
+  being abstract, you see exactly which box each row is.
+- **Misses are named, never silent.** An unstamped click still opens the picker, which says
+  "no source location on or around this element"; a cell with no recorded definition shows
+  grayed instead of vanishing.
+
+Committing opens **VS Code at that file:line** — the `vscode://file/…` URL is computed on the
+fly from the stamp and the dev server's source root, nothing precomputed. The jump takes you
+*out of the browser* — VS Code steals focus — so the mode **ends itself on window blur**: when
+you come back to the tab you're composing again, not still in a double-click trap you forgot
+about. (Declared in the mode table as `blurExits`, the same declarative column that drives
+cursors and the Esc ladder.) The turn survives the round trip exactly like a tweak excursion:
+thread open, socket open, idle timer suspended.
+
+Works best alongside the [VS Code extension](./vscode) — jumps land in the same editor that
+sends selections back into the turn — but the mode itself needs only VS Code installed: the
+`vscode://` URL scheme is handled by the editor directly.
 
 ## What runs where: the channel (real) vs mock
 
@@ -310,8 +366,10 @@ All four go through the same validated config path.
 Two further rungs — `live-gemini` (digit **6**) and `live-openai` (digit **7**) — switch the
 overlay into its **realtime submode**: instead of assembling a document and lowering it on Enter,
 the channel holds a live conversational session (Gemini Live / GPT realtime) that hears you
-continuously and, at the end, *composes the prompt itself*. Two interaction differences follow,
-both surfaced in the overlay:
+continuously and, at the end, *composes the prompt itself*. (The internals — what each vendor
+actually receives on the wire, how shot/selection ids resolve, the gotchas — are in
+[Realtime Live Mode](./realtime-live).) Two interaction differences follow, both surfaced in
+the overlay:
 
 - **Screen share (V).** Press **V** to share your screen with the live model — it samples the
   same display-capture stream a screenshot uses, at ~1 fps, as ambient context (a **● video**

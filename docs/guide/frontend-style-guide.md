@@ -15,15 +15,16 @@ The library splits along a deliberate seam:
   *behavior*, the worker protocol, `durable`, `agentToolkit`. This is the layer the
   [design-choices](./frontend-design-choices) document is about.
 - **Porcelain** — the conveniences this style guide is about: the Plot bridge
-  (`aiui-viz/plot`), the page chrome, math, and theming machinery (`aiui-viz/site`). Each
-  porcelain surface sits on its own subpath so its heavyweight dependency (Plot, KaTeX — and
-  eventually Mosaic/DuckDB, see below) stays an optional peer.
+  (`aiui-viz/plot`), the Mosaic bridge and DuckDB glue (`aiui-viz/mosaic`, `aiui-viz/duckdb`),
+  the page chrome, math, and theming machinery (`aiui-viz/site`). Each porcelain surface sits
+  on its own subpath so its heavyweight dependency (Plot, Mosaic, DuckDB-WASM, KaTeX) stays an
+  optional peer.
 
 **Porcelain grows by extraction, not speculation.** A pattern is first built and proven inside a
 reference notebook (where it may be rough), then promoted to the library once a second page
-wants it. `TeX`, `TocRail`, and `SiteHeader` all followed that path; the Mosaic bridge is
-currently mid-trajectory (in the demo, heading for a subpath). One package holds both layers for
-now — if porcelain ever outgrows it, the seam is already drawn.
+wants it. `TeX`, `TocRail`, `SiteHeader`, and the Mosaic/DuckDB pair (proven in seismos) all
+followed that path. One package holds both layers for now — if porcelain ever outgrows it, the
+seam is already drawn.
 
 ## Document structure: the page is a short paper
 
@@ -113,8 +114,12 @@ The **seismos** notebook is the reference for this stack (Parquet → DuckDB-WAS
 selections → coordinated vgplot views, with a live Gutenberg–Richter fit off the filtered
 selection) and its bridge follows the same island discipline as `PlotFigure`:
 Mosaic owns its plots' internals and reactivity; Solid renders the shells; the shared Selection
-objects and the database connection are durable roots. As with all porcelain, the proven pattern
-graduates to a library subpath once stable.
+objects and the database connection are durable roots. The proven pattern has graduated:
+`aiui-viz/mosaic` exports `MosaicView` (coordinator + reactive directive-list spec in, a
+connected Plot out, marks disconnected on dispose), and `aiui-viz/duckdb` exports
+`instantiateDuckDB` + `fetchWithProgress` — the app keeps only the four `?url` asset imports
+that make the wasm/worker bundles its own same-origin files (a library cannot own those; see
+the module docblock). Both are optional-peer subpaths, like `aiui-viz/plot`.
 
 ## Theming
 

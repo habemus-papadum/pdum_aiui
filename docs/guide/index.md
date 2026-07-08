@@ -61,6 +61,7 @@ guides, and a TypeDoc API reference automatically.
 - [Getting Started](./getting-started) — run the whole loop: session, app, intent tool.
 - [Prompt Lowering](./prompt-lowering) — the core idea, mechanism, and research program.
 - [The Web Intent Tool](./web-intent-tool) — the first layer-2 tool, designed and working.
+- [VS Code Integration](./vscode) — send editor selections into the turn; double-click the page to jump to source.
 - [The DevTools Panel](./devtools) — monitor the channel, the transport, and lowering traces.
 - [The Agent's Browser](./chrome) — the shared session browser, Chrome for Testing, profiles.
 - [Multi-View Sessions](./multi-view-sessions) — several tabs of one session share arming, the prompt preview, and code selections.

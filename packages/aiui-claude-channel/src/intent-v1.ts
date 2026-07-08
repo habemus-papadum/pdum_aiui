@@ -279,6 +279,14 @@ const OPENAI_KEY_HINT =
 export interface IntentV1Options {
   /** OpenAI key; defaults to `process.env.OPENAI_API_KEY`. */
   apiKey?: string;
+  /**
+   * Gemini key, used only by the realtime submode's Gemini Live engine;
+   * defaults to `process.env.GEMINI_API_KEY`. Deliberately its own slot —
+   * the OpenAI key must never be sent to Gemini (it fails every call with a
+   * close-frame auth error), which is exactly what happened when the two
+   * shared one field.
+   */
+  geminiApiKey?: string;
   /** Injected fetch for the real seams (defaults to the global). */
   fetch?: FetchLike;
   /**
@@ -494,6 +502,7 @@ export function createIntentV1Format(options: IntentV1Options = {}): ChannelForm
 function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamProcessor {
   const intent = resolveIntent(ctx.hello?.intent);
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
+  const geminiApiKey = options.geminiApiKey ?? process.env.GEMINI_API_KEY;
   const trace = traceOf(ctx);
   // The base every prompt path (screenshots AND source locations) relativizes
   // against — the agent's working directory. Defaults to this process's cwd
@@ -506,8 +515,18 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // The realtime submode is a different processor entirely — the model composes,
   // not composeIntent — so it forks here, sharing only the resolved config, the
   // trace, and the prompt cwd. Everything below this branch is transcription mode.
+  // The live engine gets its VENDOR's key; the OpenAI key rides along for the
+  // OpenAI-backed extras (the post-send summarizer).
   if (intent.submode === "realtime") {
-    return realtimeIntentProcessor(ctx, options, intent, apiKey, trace, composeOptions);
+    const liveApiKey = intent.liveVendor === "gemini" ? geminiApiKey : apiKey;
+    return realtimeIntentProcessor(
+      ctx,
+      options,
+      intent,
+      { liveApiKey, apiKey },
+      trace,
+      composeOptions,
+    );
   }
 
   // Resolve the pipe seams once. `openai` requested but keyless (and no test
@@ -1435,10 +1454,17 @@ function realtimeIntentProcessor(
   ctx: ThreadContext,
   options: IntentV1Options,
   intent: ResolvedIntent,
-  apiKey: string | undefined,
+  keys: {
+    /** The live vendor's own key (GEMINI_API_KEY for gemini, OPENAI_API_KEY for openai). */
+    liveApiKey: string | undefined;
+    /** The OpenAI key, for the OpenAI-backed extras (the post-send summarizer). */
+    apiKey: string | undefined;
+  },
   trace: TraceHandle | undefined,
   composeOptions: { cwd: string; shotFormat: "xml" | "text" },
 ): StreamProcessor {
+  const { liveApiKey, apiKey } = keys;
+  const liveKeyed = liveApiKey !== undefined && liveApiKey !== "";
   const keyed = apiKey !== undefined && apiKey !== "";
   const keyHint = intent.liveVendor === "gemini" ? GEMINI_KEY_HINT : OPENAI_KEY_HINT;
   const keyName = intent.liveVendor === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
@@ -1540,7 +1566,7 @@ function realtimeIntentProcessor(
     intent.liveVendor === "gemini"
       ? options.geminiLiveSocketFactory
       : options.openaiLiveSocketFactory;
-  const liveReady = keyed || factory !== undefined;
+  const liveReady = liveKeyed || factory !== undefined;
 
   let replySeq = 0;
   const callbacks: LiveSessionCallbacks = {
@@ -1574,12 +1600,20 @@ function realtimeIntentProcessor(
       // A live turn re-bills its context every response — where the money goes.
       recordCost("live response", cost);
     },
-    onError: (message) => {
+    onError: (message, data) => {
       push([{ at: Date.now(), type: "note", text: `${intent.liveVendor} realtime: ${message}` }]);
+      // The trace gets the failure too — with the structured upstream payload
+      // when the engine had one — so a dead session is debuggable after the fact.
+      trace?.record({
+        kind: "info",
+        label: "live error",
+        data: { message, ...(data !== undefined ? { upstream: data } : {}) },
+      });
       pushError(ctx, {
         source: "voice",
         message: `${intent.liveVendor} realtime: ${message}`,
         detail: keyHint,
+        ...(data !== undefined ? { data } : {}),
       });
     },
     onGoAway: (msLeft) => {
@@ -1595,7 +1629,7 @@ function realtimeIntentProcessor(
       intent.liveVendor === "gemini"
         ? openGeminiLiveSession(
             {
-              apiKey: apiKey ?? "",
+              apiKey: liveApiKey ?? "",
               model: () => intent.liveModel,
               instructions: LIVE_COMPOSER_INSTRUCTIONS,
               ...(options.geminiLiveSocketFactory !== undefined
@@ -1606,7 +1640,7 @@ function realtimeIntentProcessor(
           )
         : openOpenAiLiveSession(
             {
-              apiKey: apiKey ?? "",
+              apiKey: liveApiKey ?? "",
               model: () => intent.liveModel,
               instructions: LIVE_COMPOSER_INSTRUCTIONS,
               ...(options.openaiLiveSocketFactory !== undefined

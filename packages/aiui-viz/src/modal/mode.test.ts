@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { escTarget, type ModeTable, runTransition } from "./mode";
+import { blurExitTarget, escTarget, type ModeTable, runTransition } from "./mode";
 
 // The overlay's ladder shape in miniature: idle → armed → ink. Effects log
 // into an array so ordering (exit before enter) is observable.
@@ -19,6 +19,7 @@ function makeTable(log: string[]): ModeTable<M> {
       },
       ink: {
         escParent: "armed",
+        blurExits: true,
         onEnter: (from) => log.push(`ink.enter(from ${from})`),
         onExit: (to) => log.push(`ink.exit(to ${to})`),
       },
@@ -32,6 +33,17 @@ describe("escTarget", () => {
     expect(escTarget(table, "ink")).toBe("armed");
     expect(escTarget(table, "armed")).toBe("idle");
     expect(escTarget(table, "idle")).toBeNull(); // the root: Esc means nothing here
+  });
+});
+
+describe("blurExitTarget", () => {
+  it("resolves blur to the escParent for opted-in modes, null everywhere else", () => {
+    const table = makeTable([]);
+    // ink opted in (blurExits): blur is Esc's page-focus sibling — one level.
+    expect(blurExitTarget(table, "ink")).toBe("armed");
+    // The common case: blur means nothing.
+    expect(blurExitTarget(table, "armed")).toBeNull();
+    expect(blurExitTarget(table, "idle")).toBeNull();
   });
 });
 

@@ -1,12 +1,11 @@
 /**
- * The workbench's fixed port layout. `pnpm workbench` starts three servers,
- * and every one of them binds a **known** loopback port — you usually run
+ * The workbench's fixed port layout. `pnpm workbench` starts two servers,
+ * and both bind a **known** loopback port — you usually run
  * exactly one workbench, so a bookmark, a curl, or a DevTools "open
  * 127.0.0.1:492xx" should never require reading startup logs first:
  *
- *   49222  workbench UI (the Vite server that owns the other two)   WORKBENCH_PORT
- *   49223  debug channel server (`aiui-claude-channel serve`)       WORKBENCH_CHANNEL_PORT
- *   49224  demo app dev server (the iframe scenery)                 WORKBENCH_DEMO_PORT
+ *   49222  workbench UI (the Vite server that owns the channel)   WORKBENCH_PORT
+ *   49223  debug channel server (`aiui-claude-channel serve`)     WORKBENCH_CHANNEL_PORT
  *
  * The block sits in the IANA dynamic/private range (49152–65535), high enough
  * to dodge the dev-server folk ports (3000, 5173, 8080…) and anything a
@@ -25,30 +24,26 @@
  * stays the single source of truth.
  */
 
-/** Which of the three servers a port belongs to. */
-export type WorkbenchServerId = "workbench" | "channel" | "demo";
+/** Which of the two servers a port belongs to. */
+export type WorkbenchServerId = "workbench" | "channel";
 
 export interface WorkbenchPorts {
   /** The workbench UI's own Vite server. */
   workbench: number;
   /** The spawned debug channel server (`aiui-claude-channel serve --port …`). */
   channel: number;
-  /** The demo app's programmatically-started Vite server. */
-  demo: number;
 }
 
 /** The env var that overrides each server's port. */
 export const WORKBENCH_PORT_ENV: Record<WorkbenchServerId, string> = {
   workbench: "WORKBENCH_PORT",
   channel: "WORKBENCH_CHANNEL_PORT",
-  demo: "WORKBENCH_DEMO_PORT",
 };
 
-/** The default layout: three consecutive ports, one glance to know them all. */
+/** The default layout: two consecutive ports, one glance to know them all. */
 export const WORKBENCH_PORT_DEFAULTS: WorkbenchPorts = {
   workbench: 49222,
   channel: 49223,
-  demo: 49224,
 };
 
 /** A strictly-decimal integer in the TCP port range [1, 65535]. */
@@ -93,7 +88,7 @@ export function resolveWorkbenchPorts(
  * error, so the EADDRINUSE detail is still there for the curious.
  */
 export function portTakenHint(id: WorkbenchServerId, ports: WorkbenchPorts): string {
-  const what = { workbench: "workbench UI", channel: "debug channel", demo: "demo app" }[id];
+  const what = { workbench: "workbench UI", channel: "debug channel" }[id];
   return (
     `${what} port ${ports[id]} is already in use — is another workbench running? ` +
     `Stop it, or run this one elsewhere with ${WORKBENCH_PORT_ENV[id]}=<port>.`

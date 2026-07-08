@@ -11,17 +11,13 @@ export const STYLES = /* css */ `
     border-bottom: 1px solid #262c3a; background: #12151d; }
   #wb-header h1 { font-size: 15px; margin: 0; } #wb-header h1 span { color: #8ab4f8; }
   .wb-tagline { color: #6b7280; font-size: 11px; }
-  #wb-app-pick { margin-left: auto; background: #0f1117; color: #e8e8ea; border: 1px solid #3a4152;
-    border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 12px; }
-  .wb-chip { font-size: 11px; color: #9aa0aa; border: 1px solid #3a4152; border-radius: 999px;
-    padding: 2px 10px; }
+  .wb-chip { margin-left: auto; font-size: 11px; color: #9aa0aa; border: 1px solid #3a4152;
+    border-radius: 999px; padding: 2px 10px; }
   .wb-chip.ok { color: #7ee0a3; border-color: #2c4a3a; }
   .wb-chip.err { color: #f28b82; border-color: #5a2c33; }
 
   #wb-split { display: flex; flex: 1; min-height: 0; }
   #wb-app { flex: 1; min-width: 0; overflow: auto; position: relative; }
-  .wb-app-frame { width: 100%; height: 100%; border: none; display: block; }
-  .wb-app-note { padding: 24px; color: #9aa0aa; }
 
   #wb-dock { width: 46%; min-width: 420px; display: flex; flex-direction: column;
     border-left: 1px solid #262c3a; background: #12151d; font-size: 12px; }

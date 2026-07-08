@@ -16,13 +16,22 @@
  * `--vsix` additionally packs the staged folder into `dist/aiui-vscode.vsix`
  * with vsce (`--no-dependencies`: the bundle already inlined everything), and
  * `--install` then hands that .vsix to `code --install-extension`. `--link`
- * instead symlinks the staged folder into `~/.vscode/extensions/` — the
+ * instead symlinks the staged folder into `~/.vscode/extensions/` (and, when
+ * this host is a VS Code remote, `~/.vscode-server/extensions/` too) — the
  * live-dev install, where a rebuild + window reload picks up changes with no
  * repackaging. The pnpm spellings: `install:vsix` and `install:dir` (or, from
  * the repo root, `vscode:install` / `vscode:link`).
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,13 +77,23 @@ const manifest = {
   publisher: pkg.publisher,
   license: pkg.license,
   repository: pkg.repository,
+  homepage: pkg.homepage,
+  bugs: pkg.bugs,
+  // The icon is copied next to the manifest below (pkg.icon points at media/).
+  icon: "icon.png",
   engines: { vscode: pkg.engines.vscode },
   categories: pkg.categories,
+  // Everything this extension touches — the channel registry on disk, the
+  // channels' loopback ports, the `claude` CLI — lives where `aiui claude`
+  // runs, so in a remote window (SSH / WSL / containers) the extension must
+  // run in the remote extension host, never the local UI host.
+  extensionKind: pkg.extensionKind,
   activationEvents: pkg.activationEvents,
   contributes: pkg.contributes,
   main: "./extension.cjs",
 };
 writeFileSync(`${outDir}/package.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+copyFileSync(`${here}${pkg.icon}`, `${outDir}/icon.png`);
 copyFileSync(`${here}README.md`, `${outDir}/README.md`);
 copyFileSync(`${here}../../LICENSE`, `${outDir}/LICENSE`);
 
@@ -116,13 +135,25 @@ if (process.argv.includes("--link")) {
   // valid manifest, and it follows symlinks — so link the staged folder once
   // and every rebuild lands on the next window reload. Unversioned link name
   // on purpose: re-linking stays idempotent across version bumps.
-  const link = join(homedir(), ".vscode", "extensions", "habemus-papadum.aiui-vscode");
-  mkdirSync(join(homedir(), ".vscode", "extensions"), { recursive: true });
-  rmSync(link, { force: true, recursive: true });
-  symlinkSync(outDir, link, "dir");
+  //
+  // Two extension roots can exist on a machine: `~/.vscode/extensions` (a
+  // local VS Code) and `~/.vscode-server/extensions` (this host is somebody's
+  // VS Code remote — Remote-SSH / tunnels — whose server scans its own
+  // directory, never the local one). Link into the local root always, and
+  // into the server root whenever the server has run here.
+  const roots = [join(homedir(), ".vscode", "extensions")];
+  if (existsSync(join(homedir(), ".vscode-server"))) {
+    roots.push(join(homedir(), ".vscode-server", "extensions"));
+  }
+  for (const root of roots) {
+    const link = join(root, "habemus-papadum.aiui-vscode");
+    mkdirSync(root, { recursive: true });
+    rmSync(link, { force: true, recursive: true });
+    symlinkSync(outDir, link, "dir");
+    process.stdout.write(`\nLinked ${link} → dist/extension/\n`);
+  }
   process.stdout.write(
-    `\nLinked ${link} → dist/extension/\n` +
-      "Reload the VS Code window to activate; after future rebuilds just reload again.\n" +
+    "Reload the VS Code window to activate; after future rebuilds just reload again.\n" +
       "(Uninstall the .vsix copy first if both are present, or VS Code sees two aiui extensions.)\n",
   );
 }

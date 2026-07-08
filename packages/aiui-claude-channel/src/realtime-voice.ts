@@ -48,6 +48,7 @@
  */
 import { type CallCost, priceCall, usageFromRealtimeResponse } from "./cost";
 import {
+  closeSuffix,
   openaiRealtimeSocketFactory,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
@@ -495,9 +496,9 @@ export function openRealtimeVoiceSession(
     },
     onMessage: handleMessage,
     onError: (message: string) => fail(message),
-    onClose: () => {
+    onClose: (code?: number, reason?: string) => {
       if (!dead) {
-        fail("realtime voice session closed");
+        fail(`realtime voice session closed${closeSuffix(code, reason)}`);
       }
     },
   } satisfies RealtimeSocketHandlers);

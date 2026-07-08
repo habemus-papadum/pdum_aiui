@@ -4,7 +4,8 @@ import type { ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createServer, defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
+import solid from "vite-plugin-solid";
 import {
   isPortTakenError,
   portTakenHint,
@@ -14,38 +15,31 @@ import {
 import { parseServeReadyLine } from "./src/serve-ready";
 
 /**
- * The workbench dev server owns two child servers, so `pnpm workbench` is the
- * whole story:
+ * The workbench dev server owns one child server, so `pnpm workbench` is the
+ * whole story: **a debug channel server** — `aiui-claude-channel serve`
+ * (spawned from workspace source via tsx). It runs the entire real pipeline —
+ * voice models, corrections, lowering, traces — but has no MCP client
+ * attached, so nothing can ever reach a Claude session. Its cwd is the
+ * workbench package, so workbench traces land in the workbench's own
+ * `.aiui-cache/` (gitignored) and never mix into the project's trace list. It
+ * hosts the same session sidecars a real `aiui claude` launch would, and
+ * binds per the user's own `channel.bind` config — both the CLI's own policy,
+ * reused via a tsx runner (see resolveChannelSettings) — so sidecar-backed
+ * features (and LAN reachability, e.g. an iPad on the paint page) behave
+ * exactly as they would in a real session.
  *
- *  1. **A debug channel server** — `aiui-claude-channel serve` (spawned from
- *     workspace source via tsx). It runs the entire real pipeline — voice
- *     models, corrections, lowering, traces — but has no MCP client attached,
- *     so nothing can ever reach a Claude session. Its cwd is the workbench
- *     package, so workbench traces land in the workbench's own `.aiui-cache/`
- *     (gitignored) and never mix into the project's trace list. It hosts the
- *     same session sidecars a real `aiui claude` launch would — the CLI's own
- *     auto-detect policy, reused via a tsx runner (see
- *     resolveChannelSidecars) — so sidecar-backed features behave exactly as
- *     they would in a real session.
- *  2. **The demo app's Vite server** (packages/aiui-demo), started
- *     programmatically with `VITE_AIUI_PORT` pointed at the debug channel — so
- *     the demo page's own intent overlay (ink, shots, locator, all of it)
- *     streams its turns to the workbench's channel. The workbench embeds it in
- *     an iframe when the demo app is the selected scenery.
- *
- * All three servers bind **fixed, known ports** (see src/ports.ts for the
+ * Both servers bind **fixed, known ports** (see src/ports.ts for the
  * rationale and the env overrides):
  *
  *   49222  workbench UI        WORKBENCH_PORT
  *   49223  debug channel       WORKBENCH_CHANNEL_PORT
- *   49224  demo app            WORKBENCH_DEMO_PORT
  *
  * strictPort everywhere — a taken port fails loudly with an "is another
  * workbench running?" hint instead of drifting somewhere random. The fixed
  * values are requests, though, not assumptions: the channel's actual port is
- * still read off its `AIUI_CHANNEL_SERVE` ready line (src/serve-ready.ts) and
- * the demo's off its bound address, so `GET /wb/api/servers` — how the page
- * discovers both children — reports ground truth, never the config.
+ * still read off its `AIUI_CHANNEL_SERVE` ready line (src/serve-ready.ts), so
+ * `GET /wb/api/servers` — how the page discovers the child — reports ground
+ * truth, never the config.
  *
  * Lowered prompts the channel prints to stdout are forwarded to this terminal
  * with a `[channel]` prefix; `WORKBENCH_RECORD=1` passes `--record` through
@@ -66,7 +60,6 @@ import { parseServeReadyLine } from "./src/serve-ready";
 
 const workbenchDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(workbenchDir, "../../..");
-const demoRoot = resolve(repoRoot, "packages/aiui-demo");
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -126,20 +119,30 @@ function autoOpenBrowser(url: string): void {
   });
 }
 
+/** How the debug channel should launch, per `aiui claude`'s own policy. */
+interface ChannelSettings {
+  /** The `--sidecars` JSON for `serve`, or undefined (none detected / resolution failed). */
+  sidecarsJson?: string;
+  /** The user's `channel.bind` from the aiui config — obeyed, never forced. */
+  bind: "loopback" | "host";
+}
+
 /**
- * Resolve which session sidecars the debug channel should host — `aiui
- * claude`'s own policy (`resolveSidecars`), reused through the aiui package
- * instead of re-derived, so the workbench's channel serves exactly what a
- * real session's would.
+ * Resolve the debug channel's launch settings — which session sidecars to
+ * host (`resolveSidecars`) and where to bind (`channel.bind` from the layered
+ * aiui config) — by reusing `aiui claude`'s own policy through the aiui
+ * package instead of re-deriving it, so the workbench's channel behaves
+ * exactly as a real session's would (a LAN iPad reaches the paint page iff
+ * the user's config says `bind: host`).
  *
  * Runs as a tsx child for the same reason as the browser sidecar (see
  * {@link autoOpenBrowser}): the config can't import workspace TS directly.
- * Resolves to the `--sidecars` JSON for `serve`, or undefined (none detected,
- * or resolution failed — the workbench runs on, just without sidecars).
+ * Any failure degrades to `{ bind: "loopback" }` with no sidecars — the
+ * workbench runs on, on the safe default.
  */
-function resolveChannelSidecars(): Promise<string | undefined> {
+function resolveChannelSettings(): Promise<ChannelSettings> {
   return new Promise((resolvePromise) => {
-    const script = resolve(workbenchDir, "src/resolve-sidecars-cli.ts");
+    const script = resolve(workbenchDir, "src/resolve-channel-settings-cli.ts");
     const child = spawn(process.execPath, ["--import", "tsx", script, repoRoot], {
       cwd: workbenchDir,
       stdio: ["ignore", "pipe", "pipe"],
@@ -156,26 +159,31 @@ function resolveChannelSidecars(): Promise<string | undefined> {
       }
     });
     child.on("error", (error) => {
-      console.error(`  [channel] sidecar resolution failed to start: ${error.message}`);
-      resolvePromise(undefined);
+      console.error(`  [channel] settings resolution failed to start: ${error.message}`);
+      resolvePromise({ bind: "loopback" });
     });
     child.on("exit", (code) => {
       const json = out.trim();
       if (code !== 0 || json === "") {
         if (code !== 0) {
           console.error(
-            `  [channel] sidecar resolution exited with code ${code} — hosting no sidecars`,
+            `  [channel] settings resolution exited with code ${code} — loopback, no sidecars`,
           );
         }
-        resolvePromise(undefined);
+        resolvePromise({ bind: "loopback" });
         return;
       }
       try {
-        const descriptors = JSON.parse(json) as unknown[];
-        resolvePromise(descriptors.length > 0 ? json : undefined);
+        const parsed = JSON.parse(json) as { sidecars?: unknown[]; bind?: unknown };
+        resolvePromise({
+          ...(Array.isArray(parsed.sidecars) && parsed.sidecars.length > 0
+            ? { sidecarsJson: JSON.stringify(parsed.sidecars) }
+            : {}),
+          bind: parsed.bind === "host" ? "host" : "loopback",
+        });
       } catch {
-        console.error("  [channel] sidecar resolution printed malformed JSON — hosting none");
-        resolvePromise(undefined);
+        console.error("  [channel] settings resolution printed malformed JSON — defaults");
+        resolvePromise({ bind: "loopback" });
       }
     });
   });
@@ -183,7 +191,6 @@ function resolveChannelSidecars(): Promise<string | undefined> {
 
 interface ServersState {
   channel?: { port: number; record: boolean };
-  demo?: { url: string };
   error?: string;
 }
 
@@ -191,17 +198,16 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
   const state: ServersState = {};
   const record = process.env.WORKBENCH_RECORD === "1";
   let channelChild: ChildProcess | undefined;
-  let demoServer: ViteDevServer | undefined;
   // Set while a source-edit restart is in flight: tells the exit handler this
   // death is deliberate (respawn, don't report). shuttingDown wins over both.
   let restartPending = false;
   let shuttingDown = false;
-  // The `--sidecars` JSON for the channel, resolved once (asynchronously, see
-  // configureServer) before the first start; every (re)start reuses it.
-  // `undefined` doubles as "not resolved yet" — startChannel must not run
-  // before sidecarsResolved, or a restart would silently drop the sidecars.
-  let sidecarsJson: string | undefined;
-  let sidecarsResolved = false;
+  // The channel's launch settings (sidecars + bind), resolved once
+  // (asynchronously, see configureServer) before the first start; every
+  // (re)start reuses them. `undefined` doubles as "not resolved yet" —
+  // startChannel must not run before it lands, or a restart would silently
+  // drop the sidecars and the configured bind.
+  let channelSettings: ChannelSettings | undefined;
 
   const startChannel = (): void => {
     const cli = channelCliInvocation();
@@ -220,10 +226,14 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
       "--port",
       String(ports.channel),
       ...(record ? ["--record"] : []),
-      // The session sidecars a real launch would host, resolved via aiui
-      // claude's own policy before the first start (see
-      // resolveChannelSidecars).
-      ...(sidecarsJson !== undefined ? ["--sidecars", sidecarsJson] : []),
+      // The session sidecars a real launch would host, and the user's own
+      // channel.bind — both resolved via aiui claude's policy before the first
+      // start (see resolveChannelSettings). bind:"host" is what lets a LAN
+      // iPad reach the paint page; the workbench obeys it, never forces it.
+      ...(channelSettings?.sidecarsJson !== undefined
+        ? ["--sidecars", channelSettings.sidecarsJson]
+        : []),
+      ...(channelSettings?.bind === "host" ? ["--bind", "host"] : []),
     ];
     channelChild = spawn(cli.command, args, {
       cwd: workbenchDir, // traces + recordings land in the workbench's own .aiui-cache
@@ -270,7 +280,6 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
         if (ready) {
           state.channel = { port: ready.port, record };
           console.log(`  [channel] debug server ready on 127.0.0.1:${ready.port}`);
-          void startDemo(ready.port);
         } else if (line.trim() !== "") {
           console.log(`  [channel] ${line}`); // lowered prompts + serve chatter
         }
@@ -285,40 +294,6 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
         }
       }
     });
-  };
-
-  const startDemo = async (channelPort: number): Promise<void> => {
-    if (demoServer) {
-      return; // a channel *restart* re-announces readiness; the demo is already up
-    }
-    try {
-      // The demo's own vite.config.ts runs its aiuiDevOverlay plugin, which
-      // reads VITE_AIUI_PORT from the env — point it at the debug channel
-      // before the config loads, and the demo page's intent tool streams here.
-      process.env.VITE_AIUI_PORT = String(channelPort);
-      demoServer = await createServer({
-        root: demoRoot,
-        // strictPort: the demo's URL is part of the promised layout (49224 by
-        // default) — better to fail with the hint below than to come up on a
-        // port nothing else expects.
-        server: { port: ports.demo, strictPort: true, host: "127.0.0.1" },
-        clearScreen: false,
-      });
-      await demoServer.listen();
-      const address = demoServer.httpServer?.address();
-      if (address && typeof address === "object") {
-        state.demo = { url: `http://127.0.0.1:${address.port}/` };
-        console.log(`  [demo] morphogen dev server ready at ${state.demo.url}`);
-      }
-    } catch (error) {
-      state.error = `demo app failed to start: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
-      console.error(`  [demo] ${state.error}`);
-      if (isPortTakenError(error)) {
-        console.error(`  [demo] ${portTakenHint("demo", ports)}`);
-      }
-    }
   };
 
   return {
@@ -344,13 +319,12 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
           console.error(`  [workbench] ${portTakenHint("workbench", ports)}`);
         }
       });
-      // The channel start waits for sidecar resolution (~one tsx boot): the
-      // sidecar set is part of the serve args, so starting early would bring
-      // the channel up readerless — and a later source-edit restart would
-      // keep it that way.
-      void resolveChannelSidecars().then((json) => {
-        sidecarsJson = json;
-        sidecarsResolved = true;
+      // The channel start waits for settings resolution (~one tsx boot): the
+      // sidecar set and the bind are part of the serve args, so starting early
+      // would bring the channel up sidecar-less on the wrong interface — and a
+      // later source-edit restart would keep it that way.
+      void resolveChannelSettings().then((settings) => {
+        channelSettings = settings;
         if (!shuttingDown && channelChild === undefined) {
           startChannel();
         }
@@ -385,9 +359,9 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
             if (channelChild && channelChild.exitCode === null) {
               restartPending = true;
               channelChild.kill("SIGTERM");
-            } else if (sidecarsResolved) {
+            } else if (channelSettings !== undefined) {
               // Also recovers a crashed channel on the next edit. Before the
-              // sidecars resolve there is nothing to recover — the pending
+              // settings resolve there is nothing to recover — the pending
               // resolution above does the first start.
               startChannel();
             }
@@ -407,7 +381,6 @@ function workbenchServers(ports: WorkbenchPorts): Plugin {
           watcher.close();
         }
         channelChild?.kill("SIGTERM");
-        void demoServer?.close();
       });
     },
   };
@@ -427,16 +400,26 @@ export default defineConfig(() => {
   if (env.GEMINI_API_KEY) {
     process.env.GEMINI_API_KEY = env.GEMINI_API_KEY;
   }
-  // The fixed port layout (49222/49223/49224 unless WORKBENCH_*PORT overrides
+  // The fixed port layout (49222/49223 unless WORKBENCH_*PORT overrides
   // — see src/ports.ts). Resolved here, once, so a bad override fails the
   // whole launch immediately with the offending var named.
   const ports = resolveWorkbenchPorts();
   return {
-    plugins: [workbenchServers(ports)],
+    // The overlay package's absolute path, for main.ts to seed
+    // window.__AIUI__.sourceRoot (scenery's hand-written data-source-loc
+    // stamps are overlay-package-relative) — what makes vscode-mode jumps
+    // resolve to real vscode://file/ URLs without the aiuiDevOverlay plugin.
+    define: { __WB_SOURCE_ROOT__: JSON.stringify(resolve(workbenchDir, "..")) },
+    // solid(): the workbench page itself is plain TS, but it imports the
+    // overlay from workspace SOURCE (the editable-install convention), and the
+    // overlay's widget is Solid-rendered .tsx — without the Solid transform,
+    // esbuild compiles that JSX to React.createElement and the overlay dies at
+    // mount with "React is not defined".
+    plugins: [solid(), workbenchServers(ports)],
     // strictPort: the workbench promises its user a known address; a taken
     // port must fail loudly (with the [workbench] hint from the plugin), not
     // slide to 49223 and displace its own channel server. The explicit
-    // 127.0.0.1 matches the channel + demo (Vite's default "localhost" can
+    // 127.0.0.1 matches the channel (Vite's default "localhost" can
     // resolve to ::1 only, and then http://127.0.0.1:49222/ — the address we
     // print and document — would refuse connections).
     server: { host: "127.0.0.1", port: ports.workbench, strictPort: true },

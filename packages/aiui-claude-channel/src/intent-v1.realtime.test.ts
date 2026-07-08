@@ -15,9 +15,13 @@ interface FakeUpstream {
   factory: RealtimeSocketFactory;
   sent: Array<Record<string, unknown>>;
   closed: boolean;
+  /** The key the factory was handed (which env slot reached the engine). */
+  apiKey?: string;
   open(): void;
   emit(message: Record<string, unknown>): void;
   error(message: string): void;
+  /** A server-initiated close, optionally carrying the vendor's code + reason. */
+  closeUpstream(code?: number, reason?: string): void;
 }
 
 function fakeUpstream(): FakeUpstream {
@@ -25,8 +29,9 @@ function fakeUpstream(): FakeUpstream {
   const up: FakeUpstream = {
     sent: [],
     closed: false,
-    factory: (_url, _apiKey, h) => {
+    factory: (_url, apiKey, h) => {
       handlers = h;
+      up.apiKey = apiKey;
       return {
         send: (text) => up.sent.push(JSON.parse(text)),
         close: () => {
@@ -38,6 +43,7 @@ function fakeUpstream(): FakeUpstream {
     open: () => handlers?.onOpen(),
     emit: (message) => handlers?.onMessage(JSON.stringify(message)),
     error: (message) => handlers?.onError(message),
+    closeUpstream: (code, reason) => handlers?.onClose(code, reason),
   };
   return up;
 }
@@ -59,6 +65,8 @@ interface Driver {
 interface DriveOptions {
   factory?: RealtimeSocketFactory;
   apiKey?: string;
+  /** The Gemini-slot key; defaults to `apiKey` so gemini-vendor tests stay hermetic. */
+  geminiApiKey?: string;
   hello?: HelloMeta;
   withTrace?: boolean;
   /** Trace into this cache dir (so the test can read stages via listTraces). */
@@ -85,9 +93,11 @@ function drive(opts: DriveOptions): Driver {
     close: () => {},
     ...(trace !== undefined ? { trace } : {}),
   };
+  const geminiApiKey = opts.geminiApiKey ?? opts.apiKey;
   const format: ChannelFormat = createIntentV1Format({
     ...(opts.factory !== undefined ? { geminiLiveSocketFactory: opts.factory } : {}),
     ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+    ...(geminiApiKey !== undefined ? { geminiApiKey } : {}),
   });
   const processor: StreamProcessor = format.createProcessor(ctx);
   const send = (payload: Uint8Array, chunk: ChunkDescriptor | undefined, fin: boolean) =>
@@ -232,6 +242,29 @@ describe("intent-v1 realtime submode (gemini)", () => {
     await d.fin();
     expect(d.sent).toEqual([]);
     expect(up.closed).toBe(true);
+  });
+
+  it("hands the gemini engine the GEMINI key slot, never the OpenAI key", async () => {
+    const up = fakeUpstream();
+    drive({ factory: up.factory, apiKey: "sk-openai", geminiApiKey: "gm-live" });
+    // The session opens eagerly at thread creation; the factory saw the key.
+    expect(up.apiKey).toBe("gm-live");
+  });
+
+  it("surfaces the upstream close reason — the real API error — on the error push", async () => {
+    const up = fakeUpstream();
+    const d = drive({ factory: up.factory, apiKey: "k" });
+    up.open();
+    up.emit({ setupComplete: {} });
+    await d.feedEvents([{ at: 1, type: "thread-open", trigger: "talk" }]);
+    const reason = "API key not valid. Please pass a valid API key.";
+    up.closeUpstream(1008, reason);
+    const err = d.pushed.find((m) => (m as { kind?: string }).kind === "error") as
+      | { message: string; data?: unknown }
+      | undefined;
+    expect(err?.message).toContain(reason);
+    expect(err?.message).toContain("1008");
+    expect(err?.data).toEqual({ closeCode: 1008, closeReason: reason });
   });
 
   it("keyless realtime degrades LOUDLY at open (no silent downgrade) and sends nothing", async () => {

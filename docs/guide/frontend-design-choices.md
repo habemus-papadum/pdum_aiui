@@ -201,7 +201,10 @@ of the list/call pair.
 
 `CellView` (`aiui-viz/src/cell-view.tsx`) — the wrapper giving every async value its notebook
 chrome (spinner + progress before the first value, keep-last-render dimmed under a progress
-stripe, error box with retry) — also stamps `data-cell` with its cell's name. One deliberate
+stripe, error box with retry) — also stamps `data-cell` with its cell's name and
+`data-cell-loc` with its definition site (the `cell(...)` call's `file:line`, babel-injected),
+so DOM-contract consumers — the shot locator, the overlay's VS Code jump mode — can open the
+cell's source without a registry lookup. One deliberate
 library seam: CellView ships *behavior and class names*, never styles — the consumer owns the
 CSS for `cell-body`, `cell-pending`, `cell-error`, `progress-stripe` and friends (the demo's
 `styles.css` is the worked example), so the library imposes no theme. That makes the

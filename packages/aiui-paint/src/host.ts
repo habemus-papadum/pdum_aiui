@@ -152,6 +152,14 @@ export interface FrameSource {
    * gesture (e.g. a canvas) resolves `"active"`/`"denied"` only.
    */
   start(): Promise<CaptureState>;
+  /**
+   * The last `start()` failure, verbatim (`"NotReadableError: Could not start
+   * video source"`), or undefined after a success / before any attempt. Rides
+   * the `videoStatus` broadcast so the viewer can show *why* — a capture that
+   * fails with no picker (wrong browser flags, a missing OS screen-recording
+   * grant) is otherwise indistinguishable from the user dismissing it.
+   */
+  lastError?(): string | undefined;
   /** Grab one JPEG frame, or undefined if the grant was lost (frame-streaming mode). */
   capture(): Promise<Uint8Array | undefined>;
   /**
@@ -182,6 +190,7 @@ const FRAME_JPEG_QUALITY = 0.6;
 export function displayCaptureSource(): FrameSource {
   let stream: MediaStream | undefined;
   let video: HTMLVideoElement | undefined;
+  let lastError: string | undefined;
   return {
     async start() {
       // Transient activation is required; if the browser tells us there is none,
@@ -201,16 +210,25 @@ export function displayCaptureSource(): FrameSource {
         el.muted = true;
         await el.play();
         video = el;
+        lastError = undefined;
         stream.getVideoTracks()[0]?.addEventListener("ended", () => {
           stream = undefined;
           video = undefined;
         });
         return "active";
-      } catch {
-        // With activation we know the user dismissed the picker; without the API
+      } catch (error) {
+        // Keep the real reason: a NotAllowedError is the user dismissing the
+        // picker, but a NotReadableError with no picker shown is an environment
+        // bug (browser flags, OS screen-recording grant) — the difference is
+        // exactly what a human debugging "share does nothing" needs to see.
+        lastError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        // With activation we know the attempt itself failed; without the API
         // we can't tell a stale-gesture rejection from a refusal, so allow a retry.
         return activation ? "denied" : "needsGesture";
       }
+    },
+    lastError() {
+      return lastError;
     },
     async capture() {
       if (!video) {
@@ -333,6 +351,8 @@ export interface PaintHost {
   viewers: () => number;
   /** Current screen-capture state (drives the "share your screen" affordance). */
   captureState: () => CaptureState;
+  /** The last capture failure, verbatim (see {@link FrameSource.lastError}). */
+  captureError: () => string | undefined;
   /**
    * Attempt to acquire screen capture now and stream to any waiting viewers.
    * **Call this from a real user gesture** (e.g. a button click) — `getDisplayMedia`
@@ -410,7 +430,12 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
   };
 
   const broadcastVideoStatus = (): void => {
-    sendJson({ type: "videoStatus", state: captureState });
+    const detail = frames.lastError?.();
+    sendJson({
+      type: "videoStatus",
+      state: captureState,
+      ...(detail !== undefined ? { detail } : {}),
+    });
   };
 
   // Acquire the screen-capture grant once; keep it for the host's lifetime so
@@ -427,6 +452,13 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       .start()
       .then((state) => {
         captureState = state;
+        if (state !== "active" && state !== "needsGesture") {
+          // Loud on the host page too: the viewer gets the detail over the
+          // relay, but the person clicking "Share screen" is HERE.
+          console.warn(
+            `[aiui-paint] screen capture ${state}${frames.lastError?.() ? ` — ${frames.lastError()}` : ""}`,
+          );
+        }
         broadcastVideoStatus();
         return state === "active";
       })
@@ -512,6 +544,9 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
       if (pc.connectionState === "failed") {
         // WebRTC couldn't get through (ICE, network) — JPEG over the already-
         // working relay socket is the backup, for as long as viewers remain.
+        console.warn(
+          `[aiui-paint] WebRTC to viewer ${clientId} failed (ICE/network) — falling back to JPEG frame streaming`,
+        );
         closePeer(clientId);
         void startFrameLoop();
       } else if (pc.connectionState === "closed") {
@@ -660,6 +695,7 @@ export function startPaintHost(options: PaintHostOptions): PaintHost {
     id: () => hostId,
     viewers: () => viewerIds.size,
     captureState: () => captureState,
+    captureError: () => frames.lastError?.(),
     requestCapture,
     close: () => {
       closed = true;

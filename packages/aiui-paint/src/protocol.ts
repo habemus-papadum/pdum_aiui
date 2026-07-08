@@ -117,6 +117,14 @@ export type CaptureState = "idle" | "active" | "needsGesture" | "denied";
 export interface VideoStatus {
   type: "videoStatus";
   state: CaptureState;
+  /**
+   * The upstream failure, verbatim (`"NotReadableError: Could not start video
+   * source"`), when the state is a failure state. Diagnostics for the human on
+   * the viewer — a denied-with-no-picker environment bug (wrong browser flags,
+   * a missing OS screen-recording grant) is indistinguishable from a genuine
+   * dismissal without it.
+   */
+  detail?: string;
 }
 
 /**

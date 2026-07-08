@@ -78,14 +78,18 @@ Load unpacked, once per profile), since branded Chrome ignores `--load-extension
 
 ### Media prompts are pre-answered
 
-The session browser launches with `--use-fake-ui-for-media-stream` and
-`--auto-accept-this-tab-capture`: microphone permission prompts auto-accept (the *real* default
-mic — no fake devices), and the intent tool's current-tab screenshot capture skips the share
-picker. Without these, dictation re-prompts per **origin** — every dev-server port is a distinct
-origin — and Chrome never persists screen-share consent at all. This is a deliberate posture
-choice for a dev browser that already runs an unauthenticated debug port (see
-[the warning](./warning)): treat every page you open in it as able to hear the mic and see the
-tab without asking.
+The session browser launches with `--auto-accept-camera-and-microphone-capture` and
+`--auto-accept-this-tab-capture`: microphone/camera permission prompts auto-accept (the *real*
+default devices — no fakes), and the current-tab capture the shot tool and the paint host ask
+for (`getDisplayMedia({ preferCurrentTab: true })`) skips the share picker — tab capture needs
+no macOS Screen Recording grant. Without these, dictation re-prompts per **origin** — every
+dev-server port is a distinct origin — and Chrome never persists screen-share consent at all.
+(Not the older `--use-fake-ui-for-media-stream`: that flag also hijacks the `getDisplayMedia`
+picker and auto-selects the *entire screen*, which fails with `NotReadableError` when the CfT
+binary lacks the macOS Screen Recording permission — it silently broke the paint host's screen
+share.) This is a deliberate posture choice for a dev browser that already runs an
+unauthenticated debug port (see [the warning](./warning)): treat every page you open in it as
+able to hear the mic and see the tab without asking.
 
 ### The managed install
 

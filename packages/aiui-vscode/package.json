@@ -9,6 +9,10 @@
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
     "directory": "packages/aiui-vscode"
   },
+  "homepage": "https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/habemus-papadum/pdum_aiui/issues"
+  },
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
@@ -34,12 +38,16 @@
   },
   "displayName": "aiui",
   "publisher": "habemus-papadum",
+  "icon": "media/icon.png",
   "categories": [
     "Other"
   ],
   "engines": {
     "vscode": "^1.90.0"
   },
+  "extensionKind": [
+    "workspace"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],

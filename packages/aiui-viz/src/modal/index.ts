@@ -43,8 +43,10 @@ export {
   isTypingTarget,
   type KeyBinding,
   type KeyClaim,
+  type KeyHint,
   type KeyLayer,
+  keyHints,
   resolveKey,
 } from "./keys";
-export { escTarget, type ModeSpec, type ModeTable, runTransition } from "./mode";
+export { blurExitTarget, escTarget, type ModeSpec, type ModeTable, runTransition } from "./mode";
 export { createReconciler, type ReconcilerOptions, type SurfaceRule } from "./reconcile";

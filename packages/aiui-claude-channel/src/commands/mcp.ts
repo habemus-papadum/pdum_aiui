@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createChannelLog } from "../channel-log";
 import { channelSourceDir, watchChannelSource } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
 import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
@@ -121,12 +122,18 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // Lowering traces + the /debug viewer live in the project-local cache
   // (.aiui-cache/ under this server's cwd — gitignored, readable by the
   // Claude Code session running in the same directory).
+  const cacheDir = projectCacheDir();
+  // The diagnostic log: as an MCP subprocess this process's stderr is
+  // effectively invisible, so lifecycle + every error push also land in
+  // .aiui-cache/logs/ where a human (or the agent) can read them post-mortem.
+  const channelLog = createChannelLog(cacheDir);
   web = await startWebServer({
     onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
-    traceDir: projectCacheDir(),
+    traceDir: cacheDir,
     launchInfo,
     sidecars,
     pageTools,
+    frameSink: channelLog.frameSink,
     ...(options.bind === "host" ? { host: "0.0.0.0" } : {}),
     // The *explicit* --tag only (not the UUID minted above): the UUID is an
     // address for the registry, not a human label — an untagged server's
@@ -177,10 +184,12 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
       return;
     }
     shuttingDown = true;
+    channelLog.log("shutdown");
     stopWatch?.();
     registration.remove();
     await web?.close().catch(() => {});
     await mcp.close().catch(() => {});
+    await channelLog.close();
   };
 
   process.on("exit", () => {
@@ -200,8 +209,16 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   process.stderr.write(
     `[aiui-channel] up — tag=${tag} pid=${process.pid} ppid=${process.ppid} port=${web.port} bind=${
       options.bind ?? "loopback"
-    } cwd=${process.cwd()}\n`,
+    } cwd=${process.cwd()} log=${channelLog.path}\n`,
   );
+  channelLog.log("up", {
+    tag,
+    pid: process.pid,
+    ppid: process.ppid,
+    port: web.port,
+    bind: options.bind ?? "loopback",
+    cwd: process.cwd(),
+  });
 
   await pushToSession("aiui channel connected", "startup");
 }

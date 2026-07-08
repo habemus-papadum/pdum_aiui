@@ -8,10 +8,13 @@ import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from 
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format } from "./intent-v1";
 import {
+  captureUnexpectedResponse,
+  closeSuffix,
   openRealtimeSession,
   type RealtimeCallbacks,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
+  type UnexpectedResponseSource,
 } from "./realtime";
 import { createTraceStore, listTraces } from "./trace";
 import { withTracing } from "./tracing";
@@ -624,5 +627,99 @@ describe("intent-v1 realtime streaming fixture", () => {
     expect(d.sent).toHaveLength(1);
     expect(d.sent[0].text).toBe(expected);
     expect(d.sent[0].text).toBe("reaction diffusion on the GPU");
+  });
+});
+
+// ── the upstream-fault surfaces (close frames, rejected handshakes) ──────────
+
+describe("closeSuffix", () => {
+  it("renders code + reason, code alone, reason alone, and nothing", () => {
+    expect(closeSuffix(1008, "API key not valid.")).toBe(" (1008: API key not valid.)");
+    expect(closeSuffix(1006, "")).toBe(" (1006)");
+    expect(closeSuffix(1006)).toBe(" (1006)");
+    expect(closeSuffix(undefined, "going away")).toBe(" (going away)");
+    expect(closeSuffix()).toBe("");
+    expect(closeSuffix(undefined, "  ")).toBe("");
+  });
+});
+
+describe("captureUnexpectedResponse", () => {
+  /** Drive the listener with a scripted rejected handshake. */
+  function reject(statusCode: number, body: string) {
+    const errors: Array<{ message: string; data?: unknown }> = [];
+    let destroyed = false;
+    const handlers: RealtimeSocketHandlers = {
+      onOpen: () => {},
+      onMessage: () => {},
+      onError: (message, data) => errors.push({ message, ...(data !== undefined ? { data } : {}) }),
+      onClose: () => {},
+    };
+    let fire:
+      | ((
+          request: { destroy(): void },
+          response: Parameters<Parameters<UnexpectedResponseSource["on"]>[1]>[1],
+        ) => void)
+      | undefined;
+    const source: UnexpectedResponseSource = {
+      on: (_event, listener) => {
+        fire = listener;
+        return source;
+      },
+    };
+    captureUnexpectedResponse(source, handlers);
+    const dataListeners: Array<(chunk: Buffer) => void> = [];
+    const endListeners: Array<() => void> = [];
+    fire?.(
+      { destroy: () => (destroyed = true) },
+      {
+        statusCode,
+        on: (event: "data" | "end", listener: unknown) => {
+          if (event === "data") {
+            dataListeners.push(listener as (chunk: Buffer) => void);
+          } else {
+            endListeners.push(listener as () => void);
+          }
+          return undefined;
+        },
+      },
+    );
+    for (const l of dataListeners) {
+      l(Buffer.from(body));
+    }
+    for (const l of endListeners) {
+      l();
+    }
+    return { errors, destroyed: () => destroyed };
+  }
+
+  it("surfaces the API's JSON error body — message inline, full object as data", () => {
+    const body = JSON.stringify({
+      error: {
+        code: 403,
+        message: "API key not valid. Please pass a valid API key.",
+        status: "PERMISSION_DENIED",
+      },
+    });
+    const { errors, destroyed } = reject(403, body);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toBe(
+      "upstream rejected the connection (HTTP 403): API key not valid. Please pass a valid API key.",
+    );
+    expect((errors[0].data as { error: { status: string } }).error.status).toBe(
+      "PERMISSION_DENIED",
+    );
+    expect(destroyed()).toBe(true);
+  });
+
+  it("passes a non-JSON body through as capped raw text", () => {
+    const { errors } = reject(502, "Bad Gateway");
+    expect(errors[0].message).toBe("upstream rejected the connection (HTTP 502): Bad Gateway");
+    expect(errors[0].data).toBe("Bad Gateway");
+  });
+
+  it("reports status alone when the body is empty", () => {
+    const { errors } = reject(401, "");
+    expect(errors[0].message).toBe("upstream rejected the connection (HTTP 401)");
+    expect(errors[0].data).toBeUndefined();
   });
 });

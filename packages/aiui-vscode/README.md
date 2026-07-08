@@ -53,6 +53,21 @@ The server acks once the message is on the tab's websocket; it reports the sessi
 slot alongside, but never gates on it — a contribution arms the turn on arrival (see the
 overlay's contribution handler).
 
+## The other direction: the overlay's VS Code mode
+
+The dev overlay closes the loop back into this editor: with the intent tool armed, **J** enters
+**VS Code jump mode** — a tweak-style handover (dashed blue ring) where **double-clicking** an
+element opens the **jump picker**: the stamped element ancestors of the click point
+(`data-source-loc`, nearest preselected) plus the containing cells at their *definition* sites
+(`data-cell-loc`, the `cell(...)` call). Arrows/digits/Enter pick a row — the selected row's
+bounding box lights up on the page — and committing opens VS Code there, via a `vscode://file/…`
+URL computed on the fly from the same DOM attribution contract this extension's selections ride
+in on. A click with nothing to open is named in the picker ("no source location on or around
+this element"), never a silent no-op, and the mode ends itself when the jump blurs the window,
+so returning to the tab resumes composing. Details in
+[Using the Intent Overlay](../../docs/guide/intent-overlay.md) and
+[VS Code Integration](../../docs/guide/vscode.md).
+
 ## Install locally
 
 From the repo root, either flavor:
@@ -69,6 +84,20 @@ the changes — no repackaging. Don't keep both installed at once. The same scri
 package as `install:vsix` / `install:dir`, and the plain `vsix` script packs without
 installing; `Developer: Install Extension from Location…` pointed at
 `packages/aiui-vscode/dist/extension/` remains the manual equivalent of `vscode:link`.
+
+## Remote windows (SSH / WSL / containers)
+
+The extension is a **workspace extension** (`"extensionKind": ["workspace"]`): everything it
+touches — the channel registry, each channel's loopback port, the `claude` CLI — lives where
+`aiui claude` runs, so in a remote window it runs in the remote extension host, next to the
+session, and none of the discovery changes. Install it **on the remote box**: run either
+command above from a checkout there, inside the remote window's integrated terminal — the
+`code` shim in a remote terminal installs into the remote server, and `vscode:link` links into
+`~/.vscode-server/extensions/` as well as `~/.vscode/extensions/` when the host is a VS Code
+remote. Selection chips deep-link back through `vscode://vscode-remote/…` (instead of
+`vscode://file/…`), so clicking one in your local browser reopens the file in the remote
+workspace. The rest of the remote story — session browser tunnel, port forwards — is
+[Remote Development](../../docs/guide/remote.md).
 
 ## The npm package
 

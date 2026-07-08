@@ -12,9 +12,21 @@
  * `ssh -L` — see docs/guide/paint-stream).
  *
  * A channel without the paint sidecar simply doesn't answer `/paint/info`.
+ *
+ * Several sessions in the same directory produce indistinguishable rows unless
+ * each is labelled with the Claude Code session it belongs to, so every target
+ * is named the way the interactive selector names servers: the registry
+ * entry's own display name, else the owning Claude session's name (matched by
+ * `ppid` via `claude agents --json --all`), else nothing — best-effort, the
+ * URLs never depend on it.
  */
 import { networkInterfaces } from "node:os";
-import { listMcpServers } from "@habemus-papadum/aiui-claude-channel";
+import {
+  agentsByPid,
+  type ClaudeAgent,
+  listClaudeAgents,
+  listMcpServers,
+} from "@habemus-papadum/aiui-claude-channel";
 import chalk from "chalk";
 
 /** One channel's paint surface, as printed. */
@@ -22,6 +34,8 @@ interface PaintTarget {
   cwd: string;
   pid: number;
   port: number;
+  /** Display name: the registry entry's own, else the owning Claude session's. */
+  session?: string;
   /** Whether the channel is bound beyond loopback (LAN-reachable). */
   lan: boolean;
   urls: string[];
@@ -86,11 +100,22 @@ async function queryChannel(
 
 export async function runPaintUrl(opts: { json?: boolean } = {}): Promise<void> {
   const servers = listMcpServers();
+  // One `claude agents` call names every target; skipped when nothing is
+  // running so the command stays instant in the common empty case.
+  const agents =
+    servers.length > 0 ? agentsByPid(listClaudeAgents()) : new Map<number, ClaudeAgent>();
   const targets: PaintTarget[] = [];
   for (const server of servers) {
     const paint = await queryChannel(server.port);
     if (paint) {
-      targets.push({ cwd: server.cwd, pid: server.pid, port: server.port, ...paint });
+      const session = server.name ?? agents.get(server.ppid)?.name;
+      targets.push({
+        cwd: server.cwd,
+        pid: server.pid,
+        port: server.port,
+        ...(session !== undefined ? { session } : {}),
+        ...paint,
+      });
     }
   }
 
@@ -114,7 +139,8 @@ export async function runPaintUrl(opts: { json?: boolean } = {}): Promise<void> 
 
   for (const target of targets) {
     console.log("");
-    console.log(`${chalk.bold(target.cwd)} ${chalk.dim(`(channel :${target.port})`)}`);
+    const who = target.session !== undefined ? `${chalk.bold(target.session)}  ·  ` : "";
+    console.log(`${who}${chalk.bold(target.cwd)} ${chalk.dim(`(channel :${target.port})`)}`);
     for (const url of target.urls.length ? target.urls : ["(no LAN address found)"]) {
       console.log(`  ${chalk.cyan(url)}`);
     }

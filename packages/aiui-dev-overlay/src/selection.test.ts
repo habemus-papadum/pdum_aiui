@@ -38,7 +38,7 @@ afterEach(() => {
 describe("installSelectionWatcher", () => {
   it("snapshots a non-collapsed selection with source-loc and cell attribution", () => {
     document.body.innerHTML = `
-      <section data-cell="catalog">
+      <section data-cell="catalog" data-cell-loc="src/model/graph.ts:77">
         <p data-source-loc="src/ui/App.tsx:32:9">reaction-diffusion on the GPU is fun</p>
       </section>`;
     const p = document.querySelector("p") as HTMLElement;
@@ -53,6 +53,8 @@ describe("installSelectionWatcher", () => {
     expect(snap?.text).toBe("reaction-diffusion");
     expect(snap?.sourceLoc).toBe("src/ui/App.tsx:32:9");
     expect(snap?.cell).toBe("catalog");
+    // The cell's DEFINITION site (data-cell-loc), not its rendering JSX.
+    expect(snap?.cellLoc).toBe("src/model/graph.ts:77");
     expect(snap?.url).toBe(location.href);
     // jsdom has no Range.getClientRects, so rects degrade to [].
     expect(snap?.rects).toEqual([]);

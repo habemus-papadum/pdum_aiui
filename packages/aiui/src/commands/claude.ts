@@ -23,6 +23,7 @@ import {
 import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
+import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-preflight";
 import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
 import { resolveSidecars } from "../util/sidecars";
@@ -103,6 +104,14 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   if (interactive) {
     reportOpenAiPreflight(openaiKey);
   }
+  // Same preflight for the Gemini key (the realtime submode's Gemini Live
+  // engine, also channel-side). A bad key would otherwise surface as an opaque
+  // closed WebSocket deep in a live session; a missing one is only a note —
+  // the default transcription tiers don't need it.
+  const geminiKey = await preflightGeminiKey({ verify: interactive });
+  if (interactive) {
+    reportGeminiPreflight(geminiKey);
+  }
 
   if (!ensureClaudeOnPath()) {
     return;
@@ -157,6 +166,7 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     launcher: "aiui claude",
     chromeDevtools: chromeInfo,
     openaiKey,
+    geminiKey,
   };
   mcpArgs.push("--launch-info", JSON.stringify(launchInfo));
 

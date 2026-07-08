@@ -24,7 +24,7 @@
 import { render } from "@solidjs/web";
 import { createSignal, For } from "solid-js";
 import { makeDraggable } from "../drag";
-import type { OverlayError } from "../errors";
+import { formatErrorData, type OverlayError } from "../errors";
 
 /** What the chip row renders — the selection snapshot's display projection. */
 export interface WidgetChip {
@@ -96,18 +96,28 @@ const STYLES = `
   /* §B.4: dashed gray = capture released (tweak mode — the page has the
      pointer and keyboard; T or Esc resumes). */
   .pill[data-ui-mode="tweaking"] { border-color: #6b7280; border-style: dashed; }
+  /* vscode jump mode: capture released too (dashed), but VS Code blue — the
+     one claimed gesture is the double-click jump; J or Esc resumes. */
+  .pill[data-ui-mode="vscode"] { border-color: #3794ff; border-style: dashed; }
   @keyframes ring-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 92, 135, 0.45); }
     50% { box-shadow: 0 0 0 5px rgba(255, 92, 135, 0.12); } }
   .hud-slot { display: inline-flex; align-items: center; gap: 10px; }
   .hud-slot:empty { display: none; }
   .pill-label { color: #e8e8ea; white-space: nowrap; }
+  /* The help icon: a small circled ? — opens the panel (whose body is the
+     keymap table); H is the keyboard path to the same. */
   .expander {
-    border: none; background: transparent; color: #9aa0aa; cursor: pointer;
-    font-size: 12px; line-height: 1; padding: 2px 4px;
+    border: 1px solid #3a4152; background: transparent; color: #9aa0aa; cursor: pointer;
+    width: 18px; height: 18px; border-radius: 50%; font-size: 11px; line-height: 1;
+    padding: 0; display: inline-flex; align-items: center; justify-content: center;
   }
-  .expander:hover { color: #e8e8ea; }
+  .expander:hover { color: #e8e8ea; border-color: #8ab4f8; }
+  /* Wide and short (not a 320px tower): the body's main tenant — the keymap
+     help — lays out as fixed-height COLUMNS, and the panel must fit them
+     side by side; the viewport cap keeps small screens sane. */
   .panel {
-    position: absolute; left: 0; bottom: calc(100% + 8px); width: 320px;
+    position: absolute; left: 0; bottom: calc(100% + 8px);
+    width: min(660px, calc(100vw - 48px));
     border-radius: 12px; background: #1f2430;
     box-shadow: 0 6px 24px rgba(0,0,0,.4); overflow: hidden;
   }
@@ -195,6 +205,18 @@ const STYLES = `
   .toast-dismiss:hover { color: #e8e8ea; }
   .toast-msg { margin-top: 4px; word-break: break-word; }
   .toast-detail { margin-top: 4px; color: #9aa0aa; font-size: 11px; word-break: break-word; }
+  /* The structured-payload expander: collapsed by default (the message line
+     already carries the human summary), a <pre> of pretty-printed JSON when
+     opened — the raw upstream error, scrollable rather than truncated. */
+  .toast-data { margin-top: 4px; font-size: 11px; }
+  .toast-data summary { cursor: pointer; color: #9aa0aa; user-select: none; }
+  .toast-data summary:hover { color: #e8e8ea; }
+  .toast-data pre {
+    margin: 4px 0 0; padding: 6px; max-height: 180px; overflow: auto;
+    background: #14171f; border: 1px solid #2a3140; border-radius: 6px;
+    color: #c8cdd6; font-size: 10px; line-height: 1.4;
+    white-space: pre-wrap; word-break: break-word;
+  }
 `;
 
 /**
@@ -279,6 +301,12 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
                 </div>
                 <div class="toast-msg">{entry.message}</div>
                 {entry.detail !== undefined && <div class="toast-detail">{entry.detail}</div>}
+                {entry.data !== undefined && (
+                  <details class="toast-data">
+                    <summary>details</summary>
+                    <pre>{formatErrorData(entry.data)}</pre>
+                  </details>
+                )}
               </div>
             )}
           </For>
@@ -346,10 +374,11 @@ export function mountWidget(shadowRoot: ShadowRoot, options: WidgetOptions): Wid
           <button
             type="button"
             class="expander"
-            aria-label="Toggle panel"
+            aria-label="Help & panel"
+            title="help (H)"
             onClick={() => setPanelOpen(!openFlag)}
           >
-            {open() ? "▾" : "▴"}
+            ?
           </button>
         </div>
       </div>

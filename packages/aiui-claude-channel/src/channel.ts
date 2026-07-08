@@ -66,6 +66,13 @@ export interface ChannelErrorMessage {
   message: string;
   /** Optional second line: remediation hints, the upstream error body, etc. */
   detail?: string;
+  /**
+   * Optional structured payload — the raw upstream error (an API error body, a
+   * WebSocket close code + reason) exactly as the server saw it. The overlay
+   * renders it behind an expander so the human can read what the API actually
+   * said instead of only our gloss. JSON-serializable.
+   */
+  data?: unknown;
 }
 
 /**
@@ -78,7 +85,7 @@ export interface ChannelErrorMessage {
  */
 export function pushError(
   ctx: Pick<ThreadContext, "threadId" | "push">,
-  error: { source?: string; message: string; detail?: string },
+  error: { source?: string; message: string; detail?: string; data?: unknown },
 ): void {
   ctx.push?.({
     kind: "error",
@@ -86,6 +93,7 @@ export function pushError(
     message: error.message,
     ...(error.source !== undefined ? { source: error.source } : {}),
     ...(error.detail !== undefined ? { detail: error.detail } : {}),
+    ...(error.data !== undefined ? { data: error.data } : {}),
   } satisfies ChannelErrorMessage);
 }
 

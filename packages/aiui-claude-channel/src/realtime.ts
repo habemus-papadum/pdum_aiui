@@ -95,8 +95,98 @@ export interface RealtimeSocket {
 export interface RealtimeSocketHandlers {
   onOpen(): void;
   onMessage(text: string): void;
-  onError(message: string): void;
-  onClose(): void;
+  /**
+   * A transport fault. `data` optionally carries the structured upstream
+   * payload (e.g. a rejected handshake's HTTP status + response body) so the
+   * session can surface what the API actually said, not just a summary line.
+   */
+  onError(message: string, data?: unknown): void;
+  /**
+   * The socket closed. Vendors report *why* in the close frame — Gemini puts
+   * the real error text ("API key not valid …") in `reason` — so the factory
+   * forwards both when it has them; handlers that ignore them are unchanged.
+   */
+  onClose(code?: number, reason?: string): void;
+}
+
+/**
+ * Render a close frame's code/reason as a parenthesized suffix for a
+ * "session closed" fault message — `" (1007: API key not valid …)"` — or ""
+ * when the factory had neither (a scripted test fake, an abrupt teardown).
+ * The reason is where vendors state the actual error, so it leads the text
+ * a human reads.
+ */
+export function closeSuffix(code?: number, reason?: string): string {
+  const trimmed = reason?.trim() ?? "";
+  if (code === undefined && trimmed === "") {
+    return "";
+  }
+  if (code === undefined) {
+    return ` (${trimmed})`;
+  }
+  return trimmed === "" ? ` (${code})` : ` (${code}: ${trimmed})`;
+}
+
+/**
+ * The slice of `ws`'s `unexpected-response` event this module reads — the
+ * request (to abort) and a readable response with a status code. Structural,
+ * so the unit test drives it with plain emitters instead of a real socket.
+ */
+export interface UnexpectedResponseSource {
+  on(
+    event: "unexpected-response",
+    listener: (
+      request: { destroy(): void },
+      response: {
+        statusCode?: number | undefined;
+        on(event: "data", listener: (chunk: Buffer) => void): unknown;
+        on(event: "end", listener: () => void): unknown;
+      },
+    ) => void,
+  ): unknown;
+}
+
+/**
+ * Attach a `ws` `unexpected-response` listener that reads the rejected
+ * handshake's HTTP status and body and reports them through `onError`. Without
+ * a listener, `ws` reduces a rejected upgrade to `"Unexpected server response:
+ * 403"` — discarding the response body where the API states the actual problem.
+ * The body is capped (these are small JSON error payloads) and parsed when it
+ * is JSON so the structured form rides `onError`'s `data`.
+ */
+export function captureUnexpectedResponse(
+  ws: UnexpectedResponseSource,
+  handlers: RealtimeSocketHandlers,
+): void {
+  ws.on("unexpected-response", (request, response) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    response.on("data", (chunk: Buffer) => {
+      if (size < 4096) {
+        chunks.push(chunk);
+        size += chunk.length;
+      }
+    });
+    response.on("end", () => {
+      const body = Buffer.concat(chunks).toString("utf8").slice(0, 4096).trim();
+      let data: unknown = body === "" ? undefined : body;
+      let summary = body;
+      try {
+        const parsed = JSON.parse(body) as { error?: { message?: unknown } };
+        data = parsed;
+        if (typeof parsed?.error?.message === "string") {
+          summary = parsed.error.message;
+        }
+      } catch {
+        // not JSON — the raw (capped) text is still better than nothing
+      }
+      handlers.onError(
+        `upstream rejected the connection (HTTP ${response.statusCode})${summary ? `: ${summary}` : ""}`,
+        data,
+      );
+      request.destroy();
+    });
+  });
 }
 
 /** Builds the upstream socket for one session (real `ws` in prod, a fake in tests). */
@@ -159,7 +249,8 @@ export const openaiRealtimeSocketFactory: RealtimeSocketFactory = (url, apiKey, 
   ws.on("open", () => handlers.onOpen());
   ws.on("message", (data: unknown) => handlers.onMessage(String(data)));
   ws.on("error", (err: Error) => handlers.onError(err.message));
-  ws.on("close", () => handlers.onClose());
+  ws.on("close", (code: number, reason: Buffer) => handlers.onClose(code, reason.toString()));
+  captureUnexpectedResponse(ws, handlers);
   return {
     send: (text) => ws.send(text),
     close: () => ws.close(),
@@ -358,11 +449,12 @@ export function openRealtimeSession(
     },
     onMessage: handleMessage,
     onError: (message) => fail(message),
-    onClose: () => {
+    onClose: (code, reason) => {
       // A clean close after a drain finds nothing pending (a no-op fail). A close
-      // mid-flight finalizes the outstanding segments loudly.
+      // mid-flight finalizes the outstanding segments loudly — with the vendor's
+      // close reason, which is where the actual error text lives.
       if (!dead) {
-        fail("realtime session closed");
+        fail(`realtime session closed${closeSuffix(code, reason)}`);
       }
     },
   });

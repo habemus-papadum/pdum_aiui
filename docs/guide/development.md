@@ -12,6 +12,25 @@ Setting up to work **on this repo**. (To *use* the tools, start at
 pnpm install
 ```
 
+## Activate your shell (optional, venv-style)
+
+```sh
+eval "$(./aiui env)"
+```
+
+This is the repo's `. .venv/bin/activate`: it prepends `bin/` (the source-run `aiui` shim —
+no build needed) and the workspace `node_modules/.bin` (`tsx`, `vite`, `vitest`, `biome`) to
+your PATH, and exports the root `.env` / `.env.dev` files (`OPENAI_API_KEY`,
+`GEMINI_API_KEY`) into the current shell — so `aiui claude` picks the keys up without a
+manual `export`. Undo with `aiui_deactivate`. The script is idempotent and prints what it did
+(key *names* only) to stderr.
+
+There's no pnpm-native equivalent (`pnpm exec` scopes one command, `pnpm bin` just prints the
+path). For automatic activation on `cd` — the zsh-friendly version — install
+[direnv](https://direnv.net), hook it into your shell (`eval "$(direnv hook zsh)"` in
+`~/.zshrc`), and run `direnv allow` once: the checked-in `.envrc` does the same PATH + dotenv
+setup, and undoes it when you leave the directory.
+
 ## Working in the repo
 
 ```sh
@@ -131,3 +150,28 @@ The scaffold ships a `README.md` and a `docs/` folder with a starter page. The n
 `pnpm docs:gen` (or `docs:dev`) automatically picks the package up: its README becomes the
 overview, its `docs/*.md` become guides, and its exports become an API reference — no doc
 config to touch. See [The Documentation System](./documentation) for the full picture.
+
+## Every string boundary is a compiler you can't see
+
+When program text crosses into another language's string literal — JS inside a TS template
+literal, shell emitted by `aiui env`, JSON riding a CLI flag — escape processing happens once
+**per layer**, and the inner program sits in the blind spot of every tool: tsc doesn't parse it,
+Biome doesn't lint it, your editor doesn't highlight it. This bit for real: the iPad paint
+client once lived in a TS template literal, and a `"\n"` typed into its inline JS shipped a raw
+*newline* inside a string literal — a SyntaxError that left every viewer stuck on
+"Connecting…", with nothing anywhere to say why.
+
+The rules, in order of preference:
+
+1. **Don't embed — load a real file** of the target language. The paint client is now
+   `packages/aiui-paint/assets/ipad-client.html`, read at import with a path computed from
+   `import.meta.url` and shipped via the package's `files` (an eager, module-level read makes a
+   missing asset fail at import, where `pnpm test:packaging` catches it). Note: Vite's
+   `?raw` import is not an option for anything that must also run under tsx (`aiui claude`, the
+   workbench) — tsx doesn't support it.
+2. **If you must emit code as strings** (the generator is the point, e.g. `aiui env`'s shell
+   output), keep the generator trivial and **test the emitted artifact by parsing or executing
+   it** — `aiui env`'s output round-trips through a real `sh` in its tests; the paint client's
+   inline script is parsed with `new Function` in its.
+3. **If you must hand-author inside a literal**, state the escaping rules in a comment at the
+   top of the literal *and* enforce them with a test. A comment alone already failed once.

@@ -11,11 +11,12 @@
  * `shooting` flag in, one name out. Nothing stores it; storing a derived mode
  * is how presentation drifts from truth.
  *
- * Precedence (first match wins): correcting/tweaking > shooting > talking >
- * composing > ready. `correcting` and `tweaking` first (they never compete —
- * the engine holds exactly one mode) because each re-routes pointer and keys
- * wholesale: correct mode re-owns them, tweak mode releases them to the app
- * (and the veil guard clears `shooting` on entering either); `shooting` above
+ * Precedence (first match wins): correcting/tweaking/vscode > shooting >
+ * talking > composing > ready. The engine-mode trio first (they never compete
+ * — the engine holds exactly one mode) because each re-routes pointer and
+ * keys wholesale: correct mode re-owns them, tweak and vscode modes release
+ * them to the app (vscode keeps only the double-click gesture; and the veil
+ * guard clears `shooting` on entering any of them); `shooting` above
  * `talking` because the veil is the more transient, more consequential
  * surface — it owns every pointer event while up, and the ring should say so
  * even mid-REC (ink stays drawable while talking, so talking otherwise looks
@@ -31,7 +32,8 @@ export type UiMode =
   | "shooting"
   | "talking"
   | "correcting"
-  | "tweaking";
+  | "tweaking"
+  | "vscode";
 
 /** The raw predicates the projection reads (engine fields + shell flags). */
 export interface UiModeInputs {
@@ -52,6 +54,9 @@ export function uiMode(inputs: UiModeInputs): UiMode {
   }
   if (inputs.mode === "tweak") {
     return "tweaking";
+  }
+  if (inputs.mode === "vscode") {
+    return "vscode";
   }
   if (inputs.shooting) {
     return "shooting";
@@ -76,10 +81,11 @@ export function uiMode(inputs: UiModeInputs): UiMode {
  * Cursor note: every armed mode asserts the crosshair — including correcting
  * (the lasso is a crosshair gesture) — matching the historical `body.mm-armed`
  * behavior; surfaces that must opt out (the config strip's chips) assert
- * their own cursor, per the same rule. The one exception is `tweaking`: the
- * crosshair is capture's cursor, and tweak releases capture — pointer and
- * keyboard belong to the page, so the page's own cursors must show (hence no
- * cursor in its row).
+ * their own cursor, per the same rule. The exceptions are `tweaking` and
+ * `vscode`: the crosshair is capture's cursor, and both release capture —
+ * pointer and keyboard belong to the page (vscode mode claims only the
+ * double-click), so the page's own cursors must show (hence no cursor in
+ * their rows).
  */
 export const UI_MODE_TABLE: ModeTable<UiMode> = {
   initial: "off",
@@ -91,5 +97,10 @@ export const UI_MODE_TABLE: ModeTable<UiMode> = {
     talking: { escParent: "composing", cursor: "crosshair" },
     correcting: { escParent: "composing", cursor: "crosshair" },
     tweaking: { escParent: "composing" },
+    // blurExits: the mode's whole purpose is a round-trip out of the page (a
+    // jump lands you in the editor, blurring this window) — coming back must
+    // resume composing, not a forgotten double-click trap. The modality's
+    // blur handler consults the column via the kit's blurExitTarget.
+    vscode: { escParent: "composing", blurExits: true },
   },
 };

@@ -51,26 +51,23 @@ rationale), so you never have to fish addresses out of startup logs:
 | --- | --- | --- |
 | **49222** | the workbench UI itself | `WORKBENCH_PORT` |
 | **49223** | the debug channel server (`aiui-claude-channel serve --port …`) | `WORKBENCH_CHANNEL_PORT` |
-| **49224** | the demo app's dev server (iframe scenery) | `WORKBENCH_DEMO_PORT` |
 
-All three are strict: a taken port fails **loudly** at startup with an "is another workbench
+Both are strict: a taken port fails **loudly** at startup with an "is another workbench
 running?" hint instead of drifting to a random port. The overrides (same `WORKBENCH_*` convention
 as `WORKBENCH_RECORD`) are how you run a second workbench side by side. The page itself still
-discovers the children through `GET /wb/api/servers`, which reports the ports actually bound —
-the channel's arrives on its `AIUI_CHANNEL_SERVE` ready line (`src/serve-ready.ts`), never assumed
+discovers the channel through `GET /wb/api/servers`, which reports the port actually bound —
+it arrives on the child's `AIUI_CHANNEL_SERVE` ready line (`src/serve-ready.ts`), never assumed
 from the config.
 
 ## The layout
 
-**Left — the app.** Pluggable scenery (`src/apps.ts`), two registrations today:
-
-- **spectra (inline)** — the self-annotated absorption viewer (`src/scenery.ts`), mounted in-page;
-  the workbench mounts the shipping intent overlay over itself (arm `` ` ``, Space talk, drag
-  ink, D region-shot, S viewport-shot, E correct, K tiers, ⏎ send).
-- **morphogen demo (iframe)** — the real `packages/aiui-demo` app, whose dev server the workbench
-  starts programmatically with `VITE_AIUI_PORT` pointed at the debug channel. The demo brings its
-  *own* overlay, source locator, and agent-tool surface, so this exercises full fidelity —
-  including component location — against a real Solid app.
+**Left — the app**: **spectra**, the self-annotated absorption viewer (`src/scenery.ts`),
+mounted in-page and hand-stamped with `data-cell` / `data-source-loc` the way the source-locator
+plugin stamps a real app. The workbench mounts the shipping intent overlay over itself (arm
+`` ` ``, Space talk, drag ink, D region-shot, S viewport-shot, E correct, K tiers, ⏎ send).
+(An iframe-hosted second app — the morphogen demo, bringing its own overlay — existed for a
+while and was removed: one scenery kept the lab simpler, and full-fidelity locator coverage is
+exercised in the demo app itself via `pnpm demo`.)
 
 **Right — the dock**, one view over the owned channel: the lowering
 **`TraceView`** — the same component the DevTools extension embeds, so
@@ -102,7 +99,7 @@ from your own turns.
 
 | Command | What |
 | --- | --- |
-| `pnpm dev` | the workbench (also spawns the debug channel + the demo app's dev server) |
+| `pnpm dev` | the workbench (also spawns the debug channel server) |
 | `pnpm test` | vitest — feed/pane helpers + the `bench/` unit tests |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm bench` | the standalone transcription benchmark (no GUI; REST latency/RTF/WER + a realtime-streaming leg; see the [audio-stack notes](./docs/openai-audio-stack.md)) |
@@ -115,15 +112,14 @@ scaffolding:
 
 | Lab file | What it owns |
 | --- | --- |
-| `src/main.ts` | the shell: header, app slot, dock tabs, server discovery |
-| `src/apps.ts` | the pluggable scenery registry (inline vs iframe hosting) |
+| `src/main.ts` | the shell: header, app slot, dock, server discovery |
 | `src/scenery.ts` | the spectra app-under-test, self-annotated with `data-cell` / `data-source-loc` |
 | `src/traces-pane.ts` | the dock's trace list + selection chrome (rendering is the shared debug-ui `TraceView`) |
 | `src/serve-ready.ts` | the `AIUI_CHANNEL_SERVE` ready-line contract with the spawned server |
-| `src/ports.ts` | the fixed 49222/49223/49224 port layout + `WORKBENCH_*PORT` overrides |
+| `src/ports.ts` | the fixed 49222/49223 port layout + `WORKBENCH_*PORT` overrides |
 | `src/open-browser.ts` / `open-browser-cli.ts` | the browser sidecar: the `WORKBENCH_BROWSER` mapping + session-browser open (shared plumbing from `aiui-util`), and its tsx-spawned runner |
 | `src/resolve-sidecars-cli.ts` | tsx-spawned runner that reuses `aiui claude`'s sidecar auto-detect (`resolveSidecars` from the aiui package) to build the channel's `--sidecars` |
-| `vite.config.ts` | spawns the debug channel (`serve --tag workbench --port … --sidecars …`) + the demo app's Vite server; `/wb/api/servers`; the browser sidecar |
+| `vite.config.ts` | spawns the debug channel (`serve --tag workbench --port … --sidecars …`); `/wb/api/servers`; the browser sidecar |
 | `bench/transcribe-bench.ts` | say-synthesized latency/RTF/WER benchmark (REST + realtime legs) |
 | `fixtures/` | captured interaction event-streams; replayed by the overlay's `intent-pipeline/fixtures.test.ts` |
 

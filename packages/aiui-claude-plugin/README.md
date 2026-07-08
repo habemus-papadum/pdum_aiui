@@ -29,6 +29,19 @@ marketplace/
     session-browser/    .claude-plugin/plugin.json + skills/
 ```
 
+### Doc links: relative in dev, bundled at pack time
+
+Skill markdown links into the repo's `docs/guide/` with ordinary **relative links** — in a
+checkout they are the live docs, so there is no build step and nothing to go stale (the same
+source-first rule as the workspace's editable installs). Self-containment happens at **pack
+time**: the package's `prepack` hook (`scripts/bundle-skill-docs.mjs pack`) finds every
+relative link that escapes the package, copies its target into a `references/` folder beside
+the linking file (markdown copies get a GENERATED banner), and rewrites the link — so the
+shipped tarball's skills work with no repo around them. `postpack` restores the markdown;
+nothing generated is ever committed (leftover `references/` folders after a local pack are
+gitignored and wiped by the next pack). The links themselves are the manifest — add a relative
+link, and packing bundles it. CI runs `pnpm skills:check` to catch links that don't resolve.
+
 ## Install
 
 ```sh

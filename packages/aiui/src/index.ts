@@ -11,6 +11,11 @@
  * @packageDocumentation
  */
 
+// The layered config loader (user config ← project config), for supervisors
+// that must obey the same settings a real `aiui claude` launch would — the
+// workbench reads `channel.bind` through this so its debug channel binds the
+// way the user configured the real one.
+export { type AiuiConfig, loadAiuiConfig } from "./util/config";
 export {
   type ResolveSidecarsDeps,
   resolveSidecars,

@@ -1,15 +1,16 @@
 /**
  * The workbench: the full intent pipeline with **no agent on the other end**.
  *
- * Layout: the left half hosts a real app (pluggable — see apps.ts), the right
- * half is trace instrumentation. The page mounts the *shipping* intent overlay
- * (arm with `` ` ``, talk, ink, shoot, K for tiers — nothing lab-specific), and
- * every turn streams to a **debug channel server this dev server owns** (see
- * vite.config.ts): real transcription, real corrections, real lowering, real
- * traces — but structurally incapable of reaching a Claude session. The final
- * lowered prompt comes back over the websocket instead, so the payoff is
- * *inspection*: watch the raw frames, the trace stages, and the prompt that
- * would have been injected, without ever triggering an agent.
+ * Layout: the left half hosts the spectra scenery (see scenery.ts — a real-ish
+ * app hand-stamped the way the source-locator plugin stamps a real one), the
+ * right half is trace instrumentation. The page mounts the *shipping* intent
+ * overlay (arm with `` ` ``, talk, ink, shoot, K for tiers — nothing
+ * lab-specific), and every turn streams to a **debug channel server this dev
+ * server owns** (see vite.config.ts): real transcription, real corrections,
+ * real lowering, real traces — but structurally incapable of reaching a Claude
+ * session. The final lowered prompt comes back over the websocket instead, so
+ * the payoff is *inspection*: watch the raw frames, the trace stages, and the
+ * prompt that would have been injected, without ever triggering an agent.
  *
  * The dock is the shared debug-ui {@link TraceView} — the same component the
  * DevTools extension embeds — so improving it improves every host at once. It
@@ -17,12 +18,22 @@
  * subsumes all three (per-frame wire data lives in the trace stages, and the
  * final prompt is the selected trace's hero), so the dock is a single pane.
  */
-import { mountIntentTool, unmountIntentTool } from "@habemus-papadum/aiui-dev-overlay";
+import {
+  getInstrumentation,
+  installPaintHost,
+  mountIntentTool,
+} from "@habemus-papadum/aiui-dev-overlay";
 import { TracesPane } from "@habemus-papadum/aiui-dev-overlay/debug-ui";
-import { WORKBENCH_APPS, type WorkbenchApp, type WorkbenchAppContext } from "./apps";
+import { mountScenery } from "./scenery";
 import { STYLES } from "./styles";
 
-const APP_STORAGE_KEY = "aiui-workbench-app";
+// The overlay package's absolute path, define-injected by vite.config.ts. In a
+// real app the aiuiDevOverlay Vite plugin seeds `window.__AIUI__.sourceRoot`;
+// the workbench runs no plugin, so it seeds the root itself — scenery.ts's
+// hand-written `data-source-loc` stamps ("workbench/src/…") are relative to
+// the overlay package, and without a root the vscode jump picker's rows have
+// no `vscode://file/…` URL to commit (they render grayed).
+declare const __WB_SOURCE_ROOT__: string;
 
 const style = document.createElement("style");
 style.textContent = STYLES;
@@ -34,7 +45,6 @@ document.body.innerHTML = `
     <header id="wb-header">
       <h1>aiui <span>workbench</span></h1>
       <span class="wb-tagline">full pipeline · no agent · trace everything</span>
-      <select id="wb-app-pick" title="scenery app"></select>
       <span id="wb-status" class="wb-chip">starting servers…</span>
     </header>
     <div id="wb-split">
@@ -53,42 +63,11 @@ function must<T extends Element>(selector: string): T {
   return el;
 }
 const appHost = must<HTMLDivElement>("#wb-app");
-const appPick = must<HTMLSelectElement>("#wb-app-pick");
 const status = must<HTMLSpanElement>("#wb-status");
 const paneHost = must<HTMLDivElement>("#wb-pane-host");
 
-for (const app of WORKBENCH_APPS) {
-  const option = document.createElement("option");
-  option.value = app.id;
-  option.textContent = app.label;
-  appPick.append(option);
-}
-appPick.value = localStorage.getItem(APP_STORAGE_KEY) ?? WORKBENCH_APPS[0].id;
-if (!WORKBENCH_APPS.some((app) => app.id === appPick.value)) {
-  appPick.value = WORKBENCH_APPS[0].id;
-}
-
 // ── the app slot (left pane) ─────────────────────────────────────────────────
-const appCtx: WorkbenchAppContext = {};
-let cleanupApp: (() => void) | undefined;
-let channelPort: number | undefined;
-
-function mountSelectedApp(): void {
-  const app: WorkbenchApp = WORKBENCH_APPS.find((a) => a.id === appPick.value) ?? WORKBENCH_APPS[0];
-  localStorage.setItem(APP_STORAGE_KEY, app.id);
-  cleanupApp?.();
-  cleanupApp = app.mount(appHost, appCtx);
-  // Inline apps get the workbench page's own overlay; iframe apps bring their
-  // own (their dev server points at the same debug channel) — mounting both
-  // would put two armed keymaps on one screen.
-  if (app.overlay === "workbench" && channelPort !== undefined) {
-    mountIntentTool({ force: true, port: channelPort });
-  } else {
-    unmountIntentTool();
-  }
-}
-appPick.addEventListener("change", mountSelectedApp);
-mountSelectedApp(); // scenery renders immediately; the overlay follows the port
+mountScenery(appHost); // scenery renders immediately; the overlay follows the port
 
 // ── the dock (right pane) ────────────────────────────────────────────────────
 // One pane: the shared TraceView, live-following the newest turn. The tab bar is
@@ -101,25 +80,22 @@ function buildDock(baseUrl: string): void {
 }
 
 // ── server discovery ─────────────────────────────────────────────────────────
-async function waitForServers(): Promise<void> {
+// Poll until the dev server reports its channel child, then wire the page up.
+// The polling loop ONLY discovers (its catch is "dev server still coming up");
+// the wiring runs after it resolves, where a mount bug fails loudly on the
+// console instead of being swallowed and retried forever.
+async function discoverChannelPort(): Promise<number> {
   for (;;) {
     try {
       const res = await fetch("/wb/api/servers");
       const servers = (await res.json()) as {
         channel?: { port: number; record: boolean };
-        demo?: { url: string };
         error?: string;
       };
-      if (servers.demo) {
-        appCtx.demoUrl = servers.demo.url;
-      }
       if (servers.channel) {
-        channelPort = servers.channel.port;
-        status.textContent = `channel :${channelPort} · debug${servers.channel.record ? " · REC" : ""}`;
+        status.textContent = `channel :${servers.channel.port} · debug${servers.channel.record ? " · REC" : ""}`;
         status.classList.add("ok");
-        buildDock(`http://127.0.0.1:${channelPort}`);
-        mountSelectedApp(); // now that the port is known, the overlay can mount
-        return;
+        return servers.channel.port;
       }
       if (servers.error) {
         status.textContent = servers.error;
@@ -131,4 +107,20 @@ async function waitForServers(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
-void waitForServers();
+
+void discoverChannelPort().then((channelPort) => {
+  buildDock(`http://127.0.0.1:${channelPort}`);
+  mountIntentTool({ force: true, port: channelPort });
+  // The two page-side hookups the aiuiDevOverlay Vite plugin would otherwise
+  // own (the workbench mounts manually, so it supplies them itself):
+  //  - the source root, for vscode-mode jumps (see the declare above);
+  //  - the paint host, so an iPad (or any /paint/ viewer) can see this page
+  //    and draw into the intent tool. The channel hosts the paint sidecar via
+  //    `aiui claude`'s own auto-detect policy (vite.config.ts), but it binds
+  //    loopback — a physical iPad needs a tunnel to reach 127.0.0.1:49223.
+  const instrumentation = getInstrumentation();
+  if (instrumentation) {
+    instrumentation.sourceRoot ??= __WB_SOURCE_ROOT__;
+  }
+  installPaintHost({ port: channelPort });
+});

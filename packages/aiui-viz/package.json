@@ -13,6 +13,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./plot": "./src/plot.tsx",
+    "./mosaic": "./src/mosaic.tsx",
+    "./duckdb": "./src/duckdb.ts",
     "./site": "./src/site/index.ts",
     "./modal": "./src/modal/index.ts"
   },
@@ -38,6 +40,16 @@
         "import": "./dist/plot.js",
         "default": "./dist/plot.js"
       },
+      "./mosaic": {
+        "types": "./dist/mosaic.d.ts",
+        "import": "./dist/mosaic.js",
+        "default": "./dist/mosaic.js"
+      },
+      "./duckdb": {
+        "types": "./dist/duckdb.d.ts",
+        "import": "./dist/duckdb.js",
+        "default": "./dist/duckdb.js"
+      },
       "./site": {
         "types": "./dist/site/index.d.ts",
         "import": "./dist/site.js",
@@ -56,13 +68,21 @@
     "test": "vitest run"
   },
   "peerDependencies": {
+    "@duckdb/duckdb-wasm": ">=1.29",
     "@observablehq/plot": "^0.6",
     "@solidjs/web": ">=2.0.0-beta.0 <2.0.0-experimental.0",
+    "@uwdata/mosaic-plot": ">=0.28",
     "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0",
     "katex": "^0.16 || ^0.17"
   },
   "peerDependenciesMeta": {
+    "@duckdb/duckdb-wasm": {
+      "optional": true
+    },
     "@observablehq/plot": {
+      "optional": true
+    },
+    "@uwdata/mosaic-plot": {
       "optional": true
     },
     "katex": {
@@ -70,8 +90,10 @@
     }
   },
   "devDependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev45.0",
     "@observablehq/plot": "^0.6.17",
     "@solidjs/web": "2.0.0-beta.15",
+    "@uwdata/mosaic-plot": "^0.28.1",
     "solid-js": "2.0.0-beta.15",
     "vite-plugin-solid": "3.0.0-next.5",
     "katex": "^0.17.0"

@@ -39,7 +39,9 @@
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "node ../../scripts/bundle-skill-docs.mjs pack",
+    "postpack": "node ../../scripts/bundle-skill-docs.mjs restore"
   },
   "dependencies": {
     "commander": "^15.0.0"

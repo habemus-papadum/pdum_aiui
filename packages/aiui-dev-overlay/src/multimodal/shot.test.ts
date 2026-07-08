@@ -88,6 +88,32 @@ describe("locateComponents (enclosure locator: data-source-loc / data-cell)", ()
     expect(components[0].containment).toBe("within");
   });
 
+  it("a cell's source is its DEFINITION site (data-cell-loc) when stamped, else the JSX approximation", () => {
+    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/repo/app" };
+    const host = annotated(
+      document.body,
+      { loc: "src/ui/Panel.tsx:4:1" },
+      { x: 0, y: 0, w: 100, h: 100 },
+    );
+    // A CellView wrapper carrying the cell's definition site — it must win
+    // over the stamped JSX inside it (the old approximation). This is the loc
+    // that flows into LocatedCell.source and from there, verbatim, into the
+    // composed prompt's <cell source="…"> — the def site, not the usage site.
+    const catalog = annotated(host, { cell: "catalog" }, { x: 10, y: 10, w: 50, h: 50 });
+    catalog.setAttribute("data-cell-loc", "src/model/graph.ts:77");
+    annotated(catalog, { loc: "src/ui/CatalogView.tsx:12:3" }, { x: 12, y: 12, w: 10, h: 10 });
+    // A cell with no data-cell-loc (pre-stamp CellView, or a manual data-cell
+    // attribute): the first stamped descendant still approximates it.
+    const ticks = annotated(host, { cell: "ticks" }, { x: 70, y: 10, w: 20, h: 20 });
+    annotated(ticks, { loc: "src/ui/Ticks.tsx:9:5" }, { x: 71, y: 11, w: 5, h: 5 });
+
+    const [component] = locateComponents({ x: 0, y: 0, w: 110, h: 110 });
+    expect(component.cells).toEqual([
+      { name: "catalog", source: "/repo/app/src/model/graph.ts:77" },
+      { name: "ticks", source: "/repo/app/src/ui/Ticks.tsx:9:5" },
+    ]);
+  });
+
   it("passes the relative stamp through when no sourceRoot is known", () => {
     annotated(
       document.body,

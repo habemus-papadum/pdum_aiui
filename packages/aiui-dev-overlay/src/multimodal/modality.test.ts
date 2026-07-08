@@ -7,7 +7,7 @@ import { fakeSocketFactory } from "../test-support/fake-socket";
 import { installLocalStorage } from "../test-support/local-storage";
 import { INTENT_CONFIG_STORAGE_KEY, loadIntentOverrides } from "./advanced-config";
 import type { PcmSource } from "./audio";
-import { multimodalModality } from "./modality";
+import { multimodalModality, type MultimodalDeps } from "./modality";
 import type { SpeechAudioElement } from "./speech";
 
 afterEach(() => {
@@ -58,13 +58,17 @@ const q = <T extends Element>(handle: { shadowRoot?: ShadowRoot | null }, sel: s
   handle.shadowRoot?.querySelector(sel) as T;
 
 /** Mount the multimodal modality alone (no text tab), wired to a fake socket. */
-function mountMultimodal(config: Parameters<typeof multimodalModality>[0], ackOk = true) {
+function mountMultimodal(
+  config: Parameters<typeof multimodalModality>[0],
+  ackOk = true,
+  deps?: MultimodalDeps,
+) {
   const { factory, sent, push } = fakeSocketFactory(() => ({ ok: ackOk }));
   const handle = mountIntentTool({
     force: true,
     port: 4321,
     webSocketFactory: factory,
-    modalities: [multimodalModality(config)],
+    modalities: [multimodalModality(config, deps)],
   });
   return { handle, sent, push };
 }
@@ -768,6 +772,209 @@ function mountLive(over: Record<string, unknown> = {}) {
   });
   return { handle, sent, push, pcm };
 }
+
+describe("multimodalModality: help (H) and the condensed cheat sheet", () => {
+  it("H toggles the panel; its body is the keymap table", async () => {
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`"); // arm — H lives in the armed base layer
+    key("keydown", "h");
+    await flush();
+    expect(handle.shadowRoot?.querySelector(".panel")?.hasAttribute("hidden")).toBe(false);
+    const help = handle.shadowRoot?.querySelector(".mm-keymap-help");
+    expect(help?.textContent).toContain("armed");
+    expect(help?.textContent).toContain("hold to talk");
+    expect(help?.textContent).toContain("VS Code jump mode");
+    key("keydown", "h");
+    await flush();
+    expect(handle.shadowRoot?.querySelector(".panel")?.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("the cheat sheet shows the CURRENT state's keys while armed, and hides when off", async () => {
+    mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    const cheat = (): Element | null => document.querySelector(".mm-cheat");
+    expect(cheat()?.classList.contains("visible")).toBe(false); // off → the ? teaches
+
+    key("keydown", "`");
+    await flush();
+    expect(cheat()?.classList.contains("visible")).toBe(true);
+    const caps = [...(cheat()?.querySelectorAll("kbd") ?? [])].map((k) => k.textContent);
+    expect(caps).toContain("D");
+    expect(caps).toContain("J");
+    expect(caps).toContain("drag"); // the pointer gesture gets a row while ink owns it
+
+    key("keydown", "t"); // tweak: the handover shrinks the sheet to its claims
+    await flush();
+    const tweakCaps = [...(cheat()?.querySelectorAll("kbd") ?? [])].map((k) => k.textContent);
+    expect(tweakCaps).toEqual(["`", "T", "esc"]);
+
+    key("keydown", "`"); // disarm hides it
+    await flush();
+    expect(cheat()?.classList.contains("visible")).toBe(false);
+  });
+});
+
+describe("multimodalModality: vscode jump mode (J — double-click opens the jump picker)", () => {
+  /** A dblclick as the browser fires it (bubbles up to the document listener). */
+  const dblclick = (el: Element): void => {
+    el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  };
+  const pickerEl = (): Element | null => document.querySelector(".mm-jump-picker");
+  const pickerOpen = (): boolean => pickerEl()?.classList.contains("visible") ?? false;
+
+  it("J enters the mode; double-click opens the picker; Enter commits the nearest stamp", async () => {
+    const opened: string[] = [];
+    // The Vite plugin seeds sourceRoot in real pages; getInstrumentation ??=
+    // keeps a pre-seeded global, so set it before mount.
+    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/home/me/app" };
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 }, true, {
+      navigate: (url) => opened.push(url),
+    });
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="vsc-fixture" data-source-loc="src/App.tsx:5:3"><span id="vsc-leaf">x</span></div>`,
+    );
+    try {
+      key("keydown", "`"); // arm
+      key("keydown", "j"); // enter vscode jump mode
+      await flush();
+      expect(q<HTMLElement>(handle, ".mm-state")?.textContent).toContain("vscode");
+
+      dblclick(document.getElementById("vsc-leaf") as Element);
+      await flush();
+      // Two-step: the click itself never navigates — the picker opens, the
+      // nearest stamp listed and the selection highlight up.
+      expect(opened).toEqual([]);
+      expect(pickerOpen()).toBe(true);
+      expect(pickerEl()?.textContent).toContain("src/App.tsx:5:3");
+      expect(document.querySelector(".mm-jump-highlight")?.classList.contains("visible")).toBe(
+        true,
+      );
+
+      key("keydown", "Enter"); // commit the preselected nearest element
+      await flush();
+      expect(opened).toEqual(["vscode://file/home/me/app/src/App.tsx:5:3"]);
+      expect(pickerOpen()).toBe(false);
+      expect(handle.shadowRoot?.querySelector(".status")?.textContent).toContain(
+        "vscode → src/App.tsx:5:3",
+      );
+
+      // The jump lands in the editor → this window blurs → the mode ends
+      // (blurExits in the mode table): returning to the tab resumes composing.
+      window.dispatchEvent(new Event("blur"));
+      await flush();
+      expect(q<HTMLElement>(handle, ".mm-state")?.textContent).toContain("ink");
+      // Still armed — blur stepped out one level, not to off.
+      expect(q<HTMLElement>(handle, ".mm-state")?.textContent).not.toBe("off");
+    } finally {
+      document.getElementById("vsc-fixture")?.remove();
+    }
+  });
+
+  it("lists cells at their DEFINITION sites; arrows + Enter commit; Esc dismisses; misses are NAMED", async () => {
+    const opened: string[] = [];
+    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/home/me/app" };
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 }, true, {
+      navigate: (url) => opened.push(url),
+    });
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="vsc-fixture">
+         <p id="vsc-bare">unstamped</p>
+         <div data-cell="dashboard" data-cell-loc="src/model.ts:10">
+           <div data-cell="catalog" data-cell-loc="src/model.ts:20">
+             <span id="vsc-cell-leaf" data-source-loc="src/View.tsx:9:5">point</span>
+           </div>
+         </div>
+       </div>`,
+    );
+    try {
+      key("keydown", "`");
+      key("keydown", "j");
+      await flush();
+
+      // Unstamped: the picker still opens and NAMES the miss; Esc dismisses
+      // it without leaving jump mode.
+      dblclick(document.getElementById("vsc-bare") as Element);
+      await flush();
+      expect(pickerOpen()).toBe(true);
+      expect(pickerEl()?.textContent).toContain("no source location on or around this element");
+      key("keydown", "Escape");
+      await flush();
+      expect(pickerOpen()).toBe(false);
+      expect(q<HTMLElement>(handle, ".mm-state")?.textContent).toContain("vscode");
+
+      // A stamped leaf inside nested cells: one element row + both cells at
+      // their definition sites, nearest cell first.
+      dblclick(document.getElementById("vsc-cell-leaf") as Element);
+      await flush();
+      const text = pickerEl()?.textContent ?? "";
+      expect(text).toContain("src/View.tsx:9:5");
+      expect(text).toContain("catalog");
+      expect(text).toContain("src/model.ts:20");
+      expect(text).toContain("dashboard");
+      expect(text).toContain("src/model.ts:10");
+
+      // ↓ ↓ walks nearest element → catalog → dashboard; Enter commits the
+      // OUTERMOST cell at its definition site.
+      key("keydown", "ArrowDown");
+      key("keydown", "ArrowDown");
+      key("keydown", "Enter");
+      await flush();
+      expect(opened).toEqual(["vscode://file/home/me/app/src/model.ts:10"]);
+      expect(handle.shadowRoot?.querySelector(".status")?.textContent).toContain(
+        "cell dashboard @ src/model.ts:10",
+      );
+    } finally {
+      document.getElementById("vsc-fixture")?.remove();
+    }
+  });
+
+  it("digits commit their numbered row directly", async () => {
+    const opened: string[] = [];
+    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/home/me/app" };
+    mountMultimodal({ transcriber: "mock", mockWordMs: 0 }, true, {
+      navigate: (url) => opened.push(url),
+    });
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="vsc-fixture" data-source-loc="src/App.tsx:5:3">
+         <section data-source-loc="src/Panel.tsx:12:5"><span id="vsc-leaf">x</span></section>
+       </div>`,
+    );
+    try {
+      key("keydown", "`");
+      key("keydown", "j");
+      dblclick(document.getElementById("vsc-leaf") as Element);
+      await flush();
+      key("keydown", "2"); // row 2: the OUTER element (nearest is row 1)
+      await flush();
+      expect(opened).toEqual(["vscode://file/home/me/app/src/App.tsx:5:3"]);
+    } finally {
+      document.getElementById("vsc-fixture")?.remove();
+    }
+  });
+
+  it("double-clicks OUTSIDE vscode mode belong to the page — no picker, no jump", async () => {
+    const opened: string[] = [];
+    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/home/me/app" };
+    mountMultimodal({ transcriber: "mock", mockWordMs: 0 }, true, {
+      navigate: (url) => opened.push(url),
+    });
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="vsc-fixture" data-source-loc="src/App.tsx:5:3"></div>`,
+    );
+    try {
+      key("keydown", "`"); // armed, but ink mode — the gesture is the page's
+      dblclick(document.getElementById("vsc-fixture") as Element);
+      await flush();
+      expect(opened).toEqual([]);
+      expect(pickerOpen()).toBe(false);
+    } finally {
+      document.getElementById("vsc-fixture")?.remove();
+    }
+  });
+});
 
 describe("multimodalModality: realtime submode screen share (V)", () => {
   it("V streams video-share + sampled JPEG frames; disarm stops the sampler", async () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { addError, dismissError, ERROR_TOAST_CAP, type OverlayError } from "./errors";
+import {
+  addError,
+  dismissError,
+  ERROR_TOAST_CAP,
+  formatErrorData,
+  type OverlayError,
+} from "./errors";
 
 describe("addError", () => {
   it("appends a new error with id/count/timestamp", () => {
@@ -62,5 +68,46 @@ describe("dismissError", () => {
     const [a, b] = list;
     expect(dismissError(list, a.id).map((e) => e.message)).toEqual(["b"]);
     expect(dismissError(list, 999)).toEqual([a, b]);
+  });
+});
+
+describe("addError structured data", () => {
+  it("carries data onto the entry and refreshes it on a dedupe", () => {
+    const first = addError([], { message: "m", source: "voice", data: { closeCode: 1006 } });
+    expect(first[0].data).toEqual({ closeCode: 1006 });
+    const second = addError(first, {
+      message: "m",
+      source: "voice",
+      data: { closeCode: 1008, closeReason: "API key not valid." },
+    });
+    expect(second).toHaveLength(1);
+    expect(second[0].count).toBe(2);
+    expect(second[0].data).toEqual({ closeCode: 1008, closeReason: "API key not valid." });
+  });
+
+  it("a dedupe without data keeps the previous data (like detail)", () => {
+    const first = addError([], { message: "m", data: { a: 1 } });
+    const second = addError(first, { message: "m" });
+    expect(second[0].data).toEqual({ a: 1 });
+  });
+});
+
+describe("formatErrorData", () => {
+  it("pretty-prints objects as 2-space JSON", () => {
+    expect(formatErrorData({ error: { code: 403 } })).toBe(
+      '{\n  "error": {\n    "code": 403\n  }\n}',
+    );
+  });
+
+  it("pretty-prints a string that parses as JSON, passes other strings verbatim", () => {
+    expect(formatErrorData('{"a":1}')).toBe('{\n  "a": 1\n}');
+    expect(formatErrorData("Bad Gateway")).toBe("Bad Gateway");
+  });
+
+  it("stringifies the unserializable instead of throwing", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(formatErrorData(circular)).toBe("[object Object]");
+    expect(formatErrorData(undefined)).toBe("undefined");
   });
 });

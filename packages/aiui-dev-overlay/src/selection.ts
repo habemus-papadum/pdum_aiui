@@ -28,6 +28,8 @@
  * none); multi-range selections (Firefox Ctrl-select) take range 0.
  */
 
+import { cellSourceLoc } from "./multimodal/vscode";
+
 /** A highlight rectangle in viewport coordinates (from `getClientRects`). */
 export interface SelectionRect {
   x: number;
@@ -46,6 +48,8 @@ export interface SelectionSnapshot {
   sourceLoc?: string;
   /** `data-cell` (dataflow node) of the selection's start element, if stamped. */
   cell?: string;
+  /** That cell's definition site (`file:line` — the `cell(...)` call), if resolvable. */
+  cellLoc?: string;
   /** TeX source when the selection is rendered mathematics. */
   tex?: string;
   /** `location.href` when the snapshot was taken. */
@@ -132,13 +136,19 @@ function rectsOf(range: Range): SelectionRect[] {
 function buildSnapshot(range: Range, text: string): SelectionSnapshot {
   const startEl = startElementOf(range);
   const sourceLoc = startEl?.closest("[data-source-loc]")?.getAttribute("data-source-loc");
-  const cell = startEl?.closest("[data-cell]")?.getAttribute("data-cell");
+  const cellEl = startEl?.closest("[data-cell]") ?? null;
+  const cell = cellEl?.getAttribute("data-cell");
+  // The cell's DEFINITION site (the `cell(...)` call): the same resolution
+  // the shot locator and the jump picker use — data-cell-loc first, then
+  // the JSX-stamp approximation.
+  const cellLoc = cellEl !== null && cell != null ? cellSourceLoc(cellEl) : undefined;
   const tex = texOf(startEl);
   return {
     text: text.length > MAX_TEXT ? text.slice(0, MAX_TEXT) : text,
     rects: rectsOf(range),
     ...(sourceLoc != null ? { sourceLoc } : {}),
     ...(cell != null ? { cell } : {}),
+    ...(cellLoc !== undefined ? { cellLoc } : {}),
     ...(tex !== undefined ? { tex } : {}),
     url: typeof location !== "undefined" ? location.href : "",
     at: Date.now(),

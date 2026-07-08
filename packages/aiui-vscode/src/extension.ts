@@ -50,6 +50,20 @@ function peerLabel(peer: SessionPeer): string {
 }
 
 /**
+ * A deep link back to the selection (1-based line/col). Locally that's
+ * `vscode://file/…`; in a remote window the extension runs in the remote host
+ * (see `extensionKind`) and the document's path exists only on that machine,
+ * so the link routes through the `vscode-remote` authority — clicking it from
+ * the local browser reopens the file in the remote workspace.
+ */
+function selectionUrl(uri: vscode.Uri, line: number, character: number): string {
+  if (uri.scheme === "vscode-remote") {
+    return `vscode://vscode-remote/${uri.authority}${uri.path}:${line}:${character}`;
+  }
+  return `vscode://file/${uri.fsPath}:${line}:${character}`;
+}
+
+/**
  * How the picker titles a channel: its own display name ("aiui workbench"),
  * else the owning Claude Code session's name (the channel's `ppid` is that
  * session — matched via `claude agents --json`, exactly like the CLI
@@ -273,7 +287,7 @@ export function activate(context: vscode.ExtensionContext): void {
         endLine: sel.end.line,
         endCharacter: sel.end.character,
       },
-      `vscode://file/${document.uri.fsPath}:${sel.start.line + 1}:${sel.start.character + 1}`,
+      selectionUrl(document.uri, sel.start.line + 1, sel.start.character + 1),
     );
     try {
       const result = await publishSelection(live.port, live.clientId, contribution);

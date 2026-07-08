@@ -49,6 +49,7 @@ import {
   type SubmitIntentCall,
 } from "./live-session";
 import {
+  closeSuffix,
   openaiRealtimeSocketFactory,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
@@ -176,12 +177,12 @@ export function openOpenAiLiveSession(
     }
   };
 
-  const fail = (message: string): void => {
+  const fail = (message: string, data?: unknown): void => {
     if (dead) {
       return;
     }
     dead = true;
-    callbacks.onError(message);
+    callbacks.onError(message, data);
     settleDrain(null);
   };
 
@@ -317,7 +318,9 @@ export function openOpenAiLiveSession(
         return;
       }
       case "error": {
-        fail(message.error?.message ?? "openai live session error");
+        // The full error object (type/code/param) rides as structured data so
+        // the client's details expander shows what OpenAI actually returned.
+        fail(message.error?.message ?? "openai live session error", message.error);
         return;
       }
       default:
@@ -358,10 +361,15 @@ export function openOpenAiLiveSession(
       );
     },
     onMessage: handleMessage,
-    onError: (message: string) => fail(message),
-    onClose: () => {
+    onError: (message: string, data?: unknown) => fail(message, data),
+    onClose: (code?: number, reason?: string) => {
       if (!dead) {
-        fail("openai live session closed");
+        fail(
+          `openai live session closed${closeSuffix(code, reason)}`,
+          code !== undefined || (reason !== undefined && reason !== "")
+            ? { closeCode: code, closeReason: reason }
+            : undefined,
+        );
       }
     },
   } satisfies RealtimeSocketHandlers);

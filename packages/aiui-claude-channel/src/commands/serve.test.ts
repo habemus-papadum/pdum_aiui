@@ -67,8 +67,19 @@ describe("runServe (standalone debug channel server)", () => {
     const health = (await (await fetch(`http://127.0.0.1:${handle.port}/health`)).json()) as {
       ok: boolean;
       debug?: boolean;
+      host?: string;
     };
     expect(health).toMatchObject({ ok: true, debug: true });
+    // The default posture: loopback only.
+    expect(health.host).toBe("127.0.0.1");
+  });
+
+  it("binds 0.0.0.0 with bind:'host' (the same contract as `mcp --bind`)", async () => {
+    handle = await runServe({ cacheDir: freshCache(), bind: "host" });
+    const health = (await (await fetch(`http://127.0.0.1:${handle.port}/health`)).json()) as {
+      host?: string;
+    };
+    expect(health.host).toBe("0.0.0.0");
   });
 
   it("prints lowered prompts to stdout as delimited blocks (the 'session' is stdout)", async () => {

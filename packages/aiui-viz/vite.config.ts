@@ -22,14 +22,19 @@ export default defineConfig({
   plugins: [solid()],
   build: {
     lib: {
-      // Four entries: the core surface, the Observable Plot bridge (`./plot`),
-      // the page-chrome porcelain (`./site`) — so @observablehq/plot and
-      // katex stay optional peers that core consumers never import — and the
-      // modal interaction kit (`./modal`: framework-free, no Solid import, so
-      // node-side consumers can reach it through the overlay's intent pipeline).
+      // One entry per export subpath: the core surface; the Observable Plot
+      // bridge (`./plot`); the Mosaic/vgplot bridge (`./mosaic`) and the
+      // DuckDB-WASM instantiation glue (`./duckdb`) — so @observablehq/plot,
+      // @uwdata/mosaic-plot, @duckdb/duckdb-wasm, and katex stay optional
+      // peers that core consumers never import; the page-chrome porcelain
+      // (`./site`); and the modal interaction kit (`./modal`: framework-free,
+      // no Solid import, so node-side consumers can reach it through the
+      // overlay's intent pipeline).
       entry: {
         index: "src/index.ts",
         plot: "src/plot.tsx",
+        mosaic: "src/mosaic.tsx",
+        duckdb: "src/duckdb.ts",
         site: "src/site/index.ts",
         modal: "src/modal/index.ts",
       },

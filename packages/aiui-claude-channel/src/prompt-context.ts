@@ -28,6 +28,8 @@ export interface SelectionContext {
   sourceLoc?: string;
   /** `data-cell` (dataflow node) of the selection's origin element. */
   cell?: string;
+  /** That cell's definition site (`file:line` — the `cell(...)` call), when stamped. */
+  cellLoc?: string;
   /** TeX source when the selection is rendered mathematics. */
   tex?: string;
   /** The page URL the selection came from. */
@@ -58,12 +60,14 @@ export const asSelection = (payload: unknown): SelectionContext | undefined => {
   }
   const sourceLoc = str(raw.sourceLoc);
   const cell = str(raw.cell);
+  const cellLoc = str(raw.cellLoc);
   const tex = str(raw.tex);
   const url = str(raw.url);
   return {
     text,
     ...(sourceLoc !== undefined ? { sourceLoc } : {}),
     ...(cell !== undefined ? { cell } : {}),
+    ...(cellLoc !== undefined ? { cellLoc } : {}),
     ...(tex !== undefined ? { tex } : {}),
     ...(url !== undefined ? { url } : {}),
   };
@@ -138,7 +142,11 @@ export function selectionSections(selection: SelectionContext | undefined): stri
     attribution.push(`authored at ${selection.sourceLoc}`);
   }
   if (selection.cell !== undefined) {
-    attribution.push(`produced by cell ${selection.cell}`);
+    attribution.push(
+      `produced by cell ${selection.cell}${
+        selection.cellLoc !== undefined ? ` defined at ${selection.cellLoc}` : ""
+      }`,
+    );
   }
   const lines = [
     `It concerns this on-screen selection: "${selection.text}"${

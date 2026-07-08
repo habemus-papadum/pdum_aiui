@@ -413,12 +413,13 @@ function cellFrontier(host: Element, sourceRoot: string | undefined): LocatedCel
     if (!name) {
       continue;
     }
-    // A cell element usually carries no stamp of its own (the source-locator
-    // stamps JSX host elements; `data-cell` comes from the dataflow runtime).
-    // Fall back to the first stamped element *inside* the cell: that is where
-    // the cell's UI is authored — an approximation, but exactly the file an
-    // agent should open first for "this cell".
+    // Best stamp first: `data-cell-loc` is the cell's *definition* site (the
+    // `cell(...)` call — CellView stamps it from the babel-injected loc);
+    // then the element's own JSX stamp; then the first stamped element
+    // *inside* the cell — where the cell's UI is authored, an approximation,
+    // but exactly the file an agent should open first for "this cell".
     const stamp =
+      el.getAttribute("data-cell-loc") ??
       el.getAttribute("data-source-loc") ??
       el.querySelector("[data-source-loc]")?.getAttribute("data-source-loc");
     frontier.push({ name, ...(stamp ? { source: absoluteSource(stamp, sourceRoot) } : {}) });

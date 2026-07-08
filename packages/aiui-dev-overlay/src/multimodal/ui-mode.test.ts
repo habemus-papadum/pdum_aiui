@@ -39,6 +39,18 @@ describe("uiMode (the §B.4 derivation)", () => {
     expect(uiMode({ ...base, mode: "tweak", armed: false })).toBe("off");
   });
 
+  it("vscode mode wins the same way — the tweak-shaped handover with the dblclick jump", () => {
+    expect(uiMode({ ...base, mode: "vscode", threadOpen: true })).toBe("vscode");
+    expect(uiMode({ ...base, mode: "vscode", shooting: true, talking: true })).toBe("vscode");
+    expect(uiMode({ ...base, mode: "vscode", armed: false })).toBe("off");
+  });
+
+  it("vscode is the one blur-exiting mode: the jump leaves the window, so blur steps out", () => {
+    for (const [name, spec] of Object.entries(UI_MODE_TABLE.modes)) {
+      expect(spec.blurExits).toBe(name === "vscode" ? true : undefined);
+    }
+  });
+
   it("the table's Esc ladder steps every mode toward off", () => {
     // Walk each mode up its escParent chain; every chain must terminate at
     // off (no cycles, no dead ends) — the mechanical form of "Esc always
@@ -55,11 +67,11 @@ describe("uiMode (the §B.4 derivation)", () => {
     }
   });
 
-  it("every armed mode asserts the crosshair — except tweaking, which released the pointer", () => {
+  it("every armed mode asserts the crosshair — except tweaking/vscode, which released the pointer", () => {
     for (const [name, spec] of Object.entries(UI_MODE_TABLE.modes)) {
-      // No cursor for off (nothing armed) and none for tweaking (the
-      // crosshair is capture's cursor; tweak hands capture back to the page).
-      const bare = name === "off" || name === "tweaking";
+      // No cursor for off (nothing armed) and none for tweaking/vscode (the
+      // crosshair is capture's cursor; both hand capture back to the page).
+      const bare = name === "off" || name === "tweaking" || name === "vscode";
       expect(spec.cursor).toBe(bare ? undefined : "crosshair");
     }
   });
