@@ -2,8 +2,8 @@
 
 ## Version management — do NOT touch versions
 
-The `version` field in every `package.json` (the root and each `packages/*`) is managed
-**exclusively** by the CI release pipeline. Do not edit it, and do not run
+The `version` field in every `package.json` (the root and every workspace member — `packages/*` and
+`demos/*` alike) is managed **exclusively** by the CI release pipeline. Do not edit it, and do not run
 `node scripts/versioning.mjs set`. Between releases the tree carries an `X.Y.Z+dev` marker; the
 pipeline writes the clean `X.Y.Z` at release time. If you think a version change is needed, tell the
 user — do not make it.
@@ -32,6 +32,7 @@ pnpm typecheck   # tsc --noEmit
 pnpm lint        # Biome (also enforced in CI)
 ./aiui <cmd>     # run the aiui CLI from source via tsx (e.g. `./aiui claude`)
 pnpm new-package <name> (--public | --private | --no-publish) [--no-reserve]
+pnpm new-demo <name>    # scaffold demos/<name> — an in-repo demo app on workspace:^ deps
 pnpm npm:list    # the packages release.yml would publish
 pnpm npm:reserve # reserve npm name(s) — placeholder publish (local auth); prereq for trust
 pnpm npm:trust   # attach the OIDC trusted publisher to npm name(s) (npm >= 11.15.0)
@@ -41,11 +42,15 @@ pnpm npm:trust   # attach the OIDC trusted publisher to npm name(s) (npm >= 11.1
 `--public` / `--private` / `--no-publish` convention and the trusted-publishing setup. A publishable
 `new-package` auto-reserves its npm name (opt out with `--no-reserve`).
 
+`new-demo` takes no level: demos are never published, but they *are* full workspace members, so they
+join version lockstep like everything else — see [CLAUDE.md](./CLAUDE.md) → *In-repo demo apps*.
+
 ## Architecture
 
 - pnpm workspace; every `packages/*` is an independent npm package under `@habemus-papadum`.
-- **Lockstep versioning**: all packages share one version, enforced by
-  `node scripts/versioning.mjs current` (checked in CI).
+  `demos/*` are workspace members too, but never published (`pnpm new-demo`).
+- **Lockstep versioning**: all workspace members share one version, enforced by
+  `node scripts/versioning.mjs current` (checked in CI) — demos included.
 - Internal dependencies use `workspace:^` (never hand-pinned).
 - **Editable (source-first) deps**: dev manifests point `exports`/`main`/`types` at
   `src/index.ts`; the `dist/` mapping lives in `publishConfig` and is swapped in by pnpm at

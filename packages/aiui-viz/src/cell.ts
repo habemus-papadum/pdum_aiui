@@ -271,7 +271,27 @@ export function cell<D, T>(
   ) as Accessor<Box>;
 
   const read = (() => memo()) as Cell<T>;
-  read.latest = () => last()?.value;
+  read.latest = () => {
+    const boxed = last();
+    if (boxed) return boxed.value;
+    // Hold the invariant `state() === "ready"` ⟹ `latest() !== undefined`.
+    // A *synchronous* compute returns straight out of the memo while `setLast`
+    // is still queued a microtask behind it (see above), and `settled` starts
+    // life `true` — so between those two points the cell reads "ready" with an
+    // empty `last`. CellView renders its children on "ready" and hands them
+    // `latest()` as an `Accessor<T>`; they dereference it. Serve the memo in
+    // that window. Async computes never reach here with an empty `last`: their
+    // wrappers setLast() before setSettled(true).
+    //
+    // Any throw means "no value yet" — a NotReadyError from a held upstream,
+    // or a genuine compute error. Both are reported through state()/error(),
+    // and latest() is contractually non-throwing.
+    try {
+      return memo();
+    } catch {
+      return undefined;
+    }
+  };
   read.state = () => box().state;
   read.error = () => box().error;
   read.loading = () => {

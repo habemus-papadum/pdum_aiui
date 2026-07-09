@@ -22,9 +22,11 @@
     "format": "biome check --write .",
     "aiui": "tsx packages/aiui/src/cli.ts",
     "paint:demo": "tsx packages/aiui-paint/demo/serve.ts",
+    "vscode:vsix": "pnpm --filter @habemus-papadum/aiui-vscode install:vsix",
     "vscode:install": "pnpm --filter @habemus-papadum/aiui-vscode install:vsix",
     "vscode:link": "pnpm --filter @habemus-papadum/aiui-vscode install:dir",
     "new-package": "node scripts/new-package.mjs",
+    "new-demo": "tsx scripts/new-demo.ts",
     "skills:check": "node scripts/bundle-skill-docs.mjs --check",
     "npm:list": "node scripts/npm-provision.mjs list",
     "npm:reserve": "node scripts/npm-provision.mjs reserve",
@@ -35,6 +37,8 @@
     "docs:build": "pnpm docs:gen && vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "demo": "tsx packages/aiui/src/cli.ts vite packages/aiui-demo",
+    "test-app": "tsx packages/aiui/src/cli.ts vite packages/aiui-test-app",
+    "test-app:channel": "tsx packages/aiui/src/cli.ts mcp serve --name \"aiui test app\" --tag aiui-test-app --port 49317",
     "workbench": "pnpm --filter @habemus-papadum/aiui-workbench dev"
   },
   "devDependencies": {

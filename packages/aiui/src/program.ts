@@ -183,7 +183,11 @@ export function buildProgram(): Command {
   // `aiui mcp <args...>` forwards to the aiui-claude-channel CLI, so the
   // user-facing channel commands live under `aiui` (e.g. `aiui mcp quick`)
   // without duplicating them or moving them off the package that owns the
-  // in-process MCP server.
+  // in-process MCP server. The subcommands that launch a channel (`serve`,
+  // `mcp`) additionally get this project's channel settings — `channel.bind`
+  // and `sidecars.*` — resolved exactly as `aiui claude` resolves them, so a
+  // standalone channel hosts the same sidecars (paint) and binds the same way
+  // as a session's. See util/channel-launch.
   program
     .command("mcp")
     .description("run a channel command (forwards to aiui-claude-channel), e.g. `aiui mcp quick`")

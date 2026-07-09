@@ -132,4 +132,16 @@ describe("scaffoldApp (against the real shipped template)", () => {
     };
     expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("^1.4.0");
   });
+
+  it("honors an explicit range — what `pnpm new-demo` uses for workspace links", () => {
+    const target = join(dir, "in-repo");
+    scaffoldApp(templateRoot() as string, target, "1.4.0", "workspace:^");
+    const pkg = JSON.parse(readFileSync(join(target, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("workspace:^");
+    expect(pkg.devDependencies["@habemus-papadum/aiui"]).toBe("workspace:^");
+    expect(pkg.devDependencies["@habemus-papadum/aiui-dev-overlay"]).toBe("workspace:^");
+  });
 });

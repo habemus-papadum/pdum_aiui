@@ -10,6 +10,7 @@ import {
 import { execa } from "execa";
 import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { syncChromeForTesting } from "../util/cft";
+import { channelLaunchFlags, resolveChannelLaunch } from "../util/channel-launch";
 import {
   buildDevtoolsExtension,
   CHROME_SERVER_ID,
@@ -26,7 +27,6 @@ import { ensureLaunchChoices } from "../util/first-run";
 import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-preflight";
 import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
-import { resolveSidecars } from "../util/sidecars";
 import { printError, printWarning } from "../util/ui";
 import { VERSION } from "../util/version";
 import { commandExists } from "../util/which";
@@ -132,12 +132,22 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   if (tag) {
     mcpArgs.push("--tag", tag);
   }
-  // Where the channel's web backend binds. loopback (the default) keeps every
-  // route this-machine-only; host puts the whole unauthenticated surface —
-  // iPad paint page, prompt injection, /debug — on the network (the trusted-LAN
-  // posture; asked at first run, see docs/guide/warning). Flag, then config.
-  const bind = aiuiArgs.bind ?? config.channel?.bind ?? "loopback";
-  mcpArgs.push("--bind", bind);
+  // Where the channel's web backend binds, and which session sidecars it hosts.
+  // Both are resolved by the shared launcher (util/channel-launch), so a
+  // standalone `aiui mcp serve` is configured identically to a session's
+  // channel. bind: loopback (the default) keeps every route this-machine-only;
+  // host puts the whole unauthenticated surface — iPad paint page, prompt
+  // injection, /debug — on the network (the trusted-LAN posture; asked at first
+  // run, see docs/guide/warning). The channel process inherits this session's
+  // cwd, so the project root sidecars resolve against is process.cwd().
+  const launch = resolveChannelLaunch({
+    root: process.cwd(),
+    config,
+    bind: aiuiArgs.bind,
+    sidecar: aiuiArgs.sidecar,
+    noSidecar: aiuiArgs.noSidecar,
+  });
+  mcpArgs.push(...channelLaunchFlags(launch));
   const mcpServers: Record<string, { command: string; args: string[] }> = {
     [CHANNEL_SERVER_ID]: { command: channel.command, args: mcpArgs },
   };
@@ -170,24 +180,6 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   };
   mcpArgs.push("--launch-info", JSON.stringify(launchInfo));
 
-  // Tell the channel which session sidecars to host. The channel process
-  // inherits this session's cwd, so the project root is process.cwd(). Paint
-  // is always on (it rides the channel port — reachability is the bind's
-  // decision above). Three tiers, per name: `--aiui-sidecar` /
-  // `--aiui-no-sidecar` flags win, then the `sidecars.*` config, then
-  // auto-detection.
-  const enable = [...aiuiArgs.sidecar];
-  const disable = [...aiuiArgs.noSidecar];
-  for (const [name, on] of Object.entries(config.sidecars ?? {})) {
-    if (on === undefined || enable.includes(name) || disable.includes(name)) {
-      continue; // a per-launch flag beats the durable setting
-    }
-    (on ? enable : disable).push(name);
-  }
-  const sidecars = resolveSidecars(process.cwd(), { enable, disable });
-  if (sidecars.length > 0) {
-    mcpArgs.push("--sidecars", JSON.stringify(sidecars));
-  }
   const mcpConfig = JSON.stringify({ mcpServers });
 
   // The base aiui plugin and the frontend-design principles always load. The

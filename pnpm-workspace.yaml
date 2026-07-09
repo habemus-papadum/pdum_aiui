@@ -1,6 +1,11 @@
 packages:
   - "packages/*"
   - "packages/aiui-dev-overlay/workbench"
+  # In-repo demo apps (`pnpm new-demo <name>`): never published, but full workspace
+  # members so their `@habemus-papadum/*` deps resolve to source via `workspace:^`.
+  # Note this also enrolls them in version lockstep — scripts/versioning.mjs reads
+  # the globs in this list, so every demo carries the shared version.
+  - "demos/*"
 
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)

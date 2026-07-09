@@ -102,6 +102,40 @@ artifact is unchanged. Rules that keep this working:
   is keyed by the lockfile, not package contents, so a linked package would be served stale (see
   the comment in `packages/aiui-dev-overlay/src/vite.ts`).
 
+## In-repo demo apps — `pnpm new-demo <name>`
+
+`demos/<slug>` holds demo apps that live in source control and consume the workspace. They are the
+internal twin of `pnpm create @habemus-papadum/aiui`: **the same template**
+(`packages/create-aiui/templates/app`), scaffolded by `scripts/new-demo.ts` with two substitutions —
+`workspace:^` instead of a published range, and `../../bin/aiui` instead of the bare `aiui` bin
+(which resolves to `dist/cli.js` and so does not exist in a fresh checkout). The script *imports*
+create-aiui's `scaffoldApp` rather than copying the starter, so the two paths cannot drift; that is
+why it is TypeScript run through tsx while its sibling `new-package.mjs` is plain node. Fix the
+template once, both scaffolders get it.
+
+```sh
+pnpm new-demo spectra          # -> demos/spectra
+pnpm install                   # link the new workspace member
+pnpm -C demos/spectra claude   # terminal 1 — Claude Code + channel
+pnpm -C demos/spectra dev      # terminal 2 — Vite + the intent tool
+```
+
+Three things follow from `demos/*` being a workspace glob in `pnpm-workspace.yaml`:
+
+- **Demos are never published.** The template's `package.json` already carries `"private": true` —
+  npm's own opt-out, which makes `pnpm -r publish` skip them. No `publishConfig` belongs in a demo.
+  `scripts/packaging-test.mjs` reads `packages/` directly, so demos stay out of it for free.
+- **Demos are in version lockstep.** `scripts/versioning.mjs` derives its package set from the
+  `packages:` globs, so every demo carries the shared `X.Y.Z+dev` or `pnpm version:check` fails in
+  CI. `new-demo` stamps it; the release pipeline rewrites it. Don't hand-edit it (see AGENTS.md).
+- **Demos are typechecked by CI.** Each gets a `typecheck` script, so `pnpm -r typecheck` keeps them
+  compiling against the packages they demo — a demo that stops building is a signal, not noise.
+
+Unlike a scaffolded sandbox, a demo is not its own git repo and ships no `.gitignore` / `.envrc`
+(the root `.gitignore` already covers `node_modules/`, `dist/`, `.aiui-cache/`), and it drops the
+`"aiui": { "scaffold": true }` marker — which makes `create-aiui` classify it as `occupied` and
+refuse to touch it. Exactly right.
+
 ## Publication convention
 
 > **Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC) —

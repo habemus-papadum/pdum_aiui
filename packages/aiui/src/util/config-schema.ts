@@ -132,7 +132,7 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
   },
   {
     name: "sidecars",
-    summary: "which session sidecars `aiui claude` asks the channel to host",
+    summary: "which session sidecars a launched channel hosts",
     fields: [
       {
         key: "paint",

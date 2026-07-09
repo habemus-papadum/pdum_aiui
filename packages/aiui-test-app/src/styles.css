@@ -1,0 +1,293 @@
+/*
+ * styles.css — small, hand-rolled, and light/dark aware.
+ *
+ * The `cell-*`, `progress-stripe*`, and `btn*` rules style CellView's markup:
+ * the component ships stable class names and leaves the look to the host app.
+ */
+
+:root {
+  --bg: #fbfbfd;
+  --panel: #ffffff;
+  --ink: #16181d;
+  --muted: #6b7280;
+  --line: #e3e6ec;
+  --bar: #c7d2e8;
+  --truth: #2563eb;
+  --fitted: #db2777;
+  --accent: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --ink: #e8eaee;
+    --muted: #9aa1ad;
+    --line: #2a2f3a;
+    --bar: #39415a;
+    --truth: #7aa2ff;
+    --fitted: #ff7ab8;
+    --accent: #7aa2ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    15px / 1.5 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+.app {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 20px 56px;
+}
+
+.masthead h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.masthead p {
+  margin: 0 0 24px;
+  max-width: 62ch;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+code,
+kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}
+
+kbd {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rail {
+  display: grid;
+  gap: 20px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px 18px;
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
+/* --- chart ---------------------------------------------------------------- */
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.bar {
+  fill: var(--bar);
+}
+
+.curve-truth {
+  fill: none;
+  stroke: var(--truth);
+  stroke-width: 2;
+}
+
+.curve-fitted {
+  fill: none;
+  stroke: var(--fitted);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.axis {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.legend {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.swatch-bar {
+  height: 10px;
+  background: var(--bar);
+}
+.swatch-truth {
+  background: var(--truth);
+}
+.swatch-fitted {
+  background: linear-gradient(90deg, var(--fitted) 60%, transparent 60%);
+}
+
+/* --- tables, sliders, lists ----------------------------------------------- */
+
+.kv {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.kv th,
+.kv td {
+  text-align: right;
+  padding: 3px 0;
+  font-weight: 400;
+}
+
+.kv thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.kv tbody th {
+  text-align: left;
+  color: var(--muted);
+}
+
+.note {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+
+.slider {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.slider-label b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.preview {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+/* --- CellView chrome ------------------------------------------------------- */
+
+.cell-body-loading {
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
+.cell-pending,
+.cell-error {
+  padding: 18px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.cell-error {
+  color: #d14343;
+}
+
+.progress-stripe {
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-stripe-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 90ms linear;
+}
+
+.btn {
+  font: inherit;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

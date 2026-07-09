@@ -83,8 +83,18 @@ export function appNameFrom(target: string): string {
  * Copy the template, restore the dot-paths npm strips from published tarballs
  * (`gitignore` → `.gitignore`, `envrc` → `.envrc`), and resolve the tokens:
  * the app's name (from the directory) and the aiui dependency range.
+ *
+ * `range` defaults to what this build should pin to, and exists so a caller can
+ * override it: this repo's own `pnpm new-demo` scaffolds the same template into
+ * `demos/<slug>` with `workspace:^`, resolving aiui packages from the checkout
+ * instead of the registry. One template, both paths.
  */
-export function scaffoldApp(template: string, target: string, version: string): void {
+export function scaffoldApp(
+  template: string,
+  target: string,
+  version: string,
+  range: string = dependencyRange(version),
+): void {
   mkdirSync(target, { recursive: true });
   cpSync(template, target, { recursive: true });
   for (const undotted of ["gitignore", "envrc"]) {
@@ -97,7 +107,7 @@ export function scaffoldApp(template: string, target: string, version: string): 
     pkgFile,
     readFileSync(pkgFile, "utf8")
       .replaceAll("__APP_NAME__", appNameFrom(target))
-      .replaceAll("__AIUI_VERSION_RANGE__", dependencyRange(version)),
+      .replaceAll("__AIUI_VERSION_RANGE__", range),
   );
 }
 
