@@ -1,27 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAgo, formatBytes, formatMs, percentile, summarizeRtt } from "./stats.js";
-
-describe("percentile (nearest rank)", () => {
-  it("handles empty, single, and typical arrays", () => {
-    expect(percentile([], 95)).toBe(0);
-    expect(percentile([7], 50)).toBe(7);
-    const sorted = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    expect(percentile(sorted, 50)).toBe(5);
-    expect(percentile(sorted, 95)).toBe(10);
-    expect(percentile(sorted, 100)).toBe(10);
-  });
-});
-
-describe("summarizeRtt", () => {
-  it("is null with no samples", () => {
-    expect(summarizeRtt([])).toBeNull();
-  });
-
-  it("computes count/avg/p50/p95 from unsorted input", () => {
-    const summary = summarizeRtt([30, 10, 20]);
-    expect(summary).toEqual({ count: 3, avgMs: 20, p50Ms: 20, p95Ms: 30 });
-  });
-});
+import { formatAgo, formatBytes, formatMs } from "./stats.js";
 
 describe("formatters", () => {
   it("formatBytes picks sane units", () => {

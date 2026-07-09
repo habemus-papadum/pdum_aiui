@@ -2,7 +2,7 @@
 
 **Internal, never published.** A deliberately small SolidJS app for exercising the
 [intent overlay](../../docs/guide/intent-overlay.md) and the [channel](../../docs/guide/channel.md)
-without the weight of `aiui-demo` (no workers, no DuckDB, no Mosaic, no multi-page routing).
+without the weight of `demos/gallery` (no workers, no DuckDB, no Mosaic, no multi-page routing).
 
 It fits a **mixture of two Gaussians**: draw a sample, bin it, measure it, and recover the
 parameters with EM — five computation cells, four widgets, one file of mathematics.

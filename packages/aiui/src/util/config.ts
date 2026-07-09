@@ -91,6 +91,8 @@ export interface AiuiConfig {
     headless?: boolean;
     /** Rebuild the aiui-devtools-extension on every launch in a dev checkout. */
     buildExtension?: boolean;
+    /** Mark session-browser documents as auto-accepting display capture. */
+    autoCapture?: boolean;
   };
 }
 

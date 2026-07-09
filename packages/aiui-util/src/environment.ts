@@ -2,7 +2,7 @@
  * Where is this process running — CI? over SSH? a machine with no display?
  *
  * Several commands adapt to their surroundings: `aiui claude` leaves the
- * Chrome DevTools MCP off under CI, and `aiui vite` / `pnpm workbench` only
+ * Chrome DevTools MCP off under CI, and `aiui vite` only
  * auto-open their dev server in the session browser when there is a display
  * to show it on. Those decisions share the detection logic here — kept pure
  * (`env` and `platform` are parameters defaulting to the real ones) so every

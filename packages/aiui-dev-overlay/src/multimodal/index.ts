@@ -5,7 +5,7 @@
  * integration is `mountIntentTool` / `aiuiDevOverlay()`, which pick this
  * modality up by its `intent-v1` format. The individual pieces (Ink, ShotTool,
  * Preview, the transcriber/corrector seams, the layer STYLES) are exported so
- * the **workbench lab** can drive them directly against its own mocks and
+ * an offline harness can drive them directly against its own mocks and
  * dev-proxy model calls — same surfaces, different host.
  *
  * @packageDocumentation

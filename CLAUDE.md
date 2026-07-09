@@ -20,10 +20,10 @@ transcript) at the center. Three layers:
    (`mountIntentTool` in `aiui-dev-overlay`) — dev-gated, stateless, pluggable modalities; text PoC
    today, speech + screenshots + DOM capture next. Lowering runs are traced to the project-local
    `.aiui-cache/` (gitignored). Debugging lives in the **aiui Chrome DevTools panel**
-   (`aiui-devtools-extension`, loaded unpacked): server monitor + websocket latency/size metrics (from
-   `window.__AIUI__` page instrumentation) + the trace debugger (the shared `debug-ui` viewer — the
-   widget's 🔍 opens it at `/__aiui/debug`, session-pinned; `aiui debug` serves it standalone with a
-   channel switcher). The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`,
+   (`aiui-devtools-extension`, loaded unpacked): a server monitor + the trace debugger, live-following
+   one trace (the shared `debug-ui` viewer — the widget's 🔍 opens it at `/__aiui/debug`,
+   session-pinned; `aiui debug` serves it standalone with a channel switcher). The panel reads
+   `window.__AIUI__` page instrumentation only to discover the channel port. The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`,
    `/health`); every page belongs to a frontend process. (One sidecar exception: the paint
    sidecar's self-contained iPad client page at `/paint/` — an iPad has no frontend process.)
 3. **Frontend for agents** — principles/utilities/Claude skills for agent-written scientific UI:
@@ -119,6 +119,16 @@ pnpm install                   # link the new workspace member
 pnpm -C demos/spectra claude   # terminal 1 — Claude Code + channel
 pnpm -C demos/spectra dev      # terminal 2 — Vite + the intent tool
 ```
+
+**There is exactly one starter template.** It used to be two: `aiui demo` scaffolded a throwaway
+playground from `packages/aiui/templates/demo`, predating `create-aiui`. That command and its
+template are gone — scaffolding is `create-aiui`'s job, and `pnpm new-demo` is its in-repo twin.
+
+**`demos/gallery` is the one demo that was not scaffolded.** It is the reference notebooks
+(morphogen · aztec · seismos), formerly `packages/aiui-demo`, moved into `demos/` because it is a
+demo, not a published package. `pnpm demo` serves it. It is deliberately far richer than the
+starter — workers, WebGL, DuckDB/Mosaic, the modal kit — and it is *not* a template: nothing
+scaffolds from it.
 
 Three things follow from `demos/*` being a workspace glob in `pnpm-workspace.yaml`:
 

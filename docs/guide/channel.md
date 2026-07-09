@@ -112,7 +112,7 @@ the next.
 The channel stays **sidecar-agnostic**: it takes no dependency on any concrete sidecar and hardcodes
 no names. The launcher (`aiui claude`) decides which to run and hands the channel a JSON array of
 descriptors on `aiui-claude-channel mcp --sidecars <json>` (the standalone debug server takes the
-same flag, `serve --sidecars <json>` — how the workbench's channel hosts the same sidecars a real
+same flag, `serve --sidecars <json>` — so a debug channel hosts the same sidecars a real
 session would). Each descriptor names an importable module and the export to call as a factory:
 
 ```ts
@@ -140,8 +140,7 @@ skipped** — the channel starts anyway. (Malformed `--sidecars` JSON is tolerat
 
 Which sidecars are on for a launch — and the `--aiui-sidecar` / `--aiui-no-sidecar` flags that
 override auto-detection — is the launcher's call. The auto-detect policy (`resolveSidecars`) is
-exported from the aiui package so other supervisors can reuse it verbatim — the workbench does, for
-its debug channel. See [The iPad Paint Stream](./paint-stream) for the worked example (the
+exported from the aiui package so other supervisors can reuse it verbatim. See [The iPad Paint Stream](./paint-stream) for the worked example (the
 `Sidecar` interface lives in `packages/aiui-claude-channel/src/sidecar.ts`; the descriptor loader
 in `load-sidecars.ts`).
 

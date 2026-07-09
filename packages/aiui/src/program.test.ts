@@ -6,7 +6,7 @@ describe("aiui cli", () => {
     expect(buildProgram().name()).toBe("aiui");
   });
 
-  it("registers the browser, chrome, claude, clean, config, debug, demo, env, mcp, open, paint, and vite subcommands", () => {
+  it("registers the browser, chrome, claude, clean, config, debug, env, mcp, open, paint, and vite subcommands", () => {
     const names = buildProgram()
       .commands.map((cmd) => cmd.name())
       .sort();
@@ -17,13 +17,18 @@ describe("aiui cli", () => {
       "clean",
       "config",
       "debug",
-      "demo",
       "env",
       "mcp",
       "open",
       "paint",
       "vite",
     ]);
+  });
+
+  // Scaffolding lives in create-aiui (`npm create @habemus-papadum/aiui`), not
+  // here — one starter template, not two.
+  it("no longer registers a demo scaffolder", () => {
+    expect(buildProgram().commands.map((cmd) => cmd.name())).not.toContain("demo");
   });
 
   it("gives aiui config its tui, show, get, set, and unset subcommands", () => {

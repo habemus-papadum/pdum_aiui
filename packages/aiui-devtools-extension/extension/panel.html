@@ -47,37 +47,36 @@
   td.mono { font-family: ui-monospace, monospace; }
   .ok-cell { color: #7ee0a3; } .err-cell { color: #f28b82; }
   .hint { color: #9aa0aa; }
-  #traces-frame { width: 100%; height: calc(100vh - 90px); border: 0; border-radius: 8px; background: #14171f; }
   #port-row { padding: 6px 12px; border-top: 1px solid #2a3140; color: #9aa0aa; flex: none; }
   #port-row input {
     width: 70px; background: #14171f; color: #e8e8ea; border: 1px solid #2a3140;
     border-radius: 6px; padding: 2px 6px; font: inherit;
   }
-  #tab-intent { display: flex; flex-direction: column; height: calc(100vh - 90px); }
-  #intent-controls { display: flex; align-items: center; gap: 8px; flex: none; margin-bottom: 6px; }
-  #intent-controls label { color: #9aa0aa; display: flex; align-items: center; gap: 6px; }
-  #intent-controls input[type="checkbox"] { margin: 0; accent-color: #8ab4f8; }
-  #intent-controls select {
+  /* :not([hidden]) keeps this id rule from out-specifying section[hidden] above,
+     which would leave the pane rendered while its tab is inactive. */
+  #tab-traces:not([hidden]) { display: flex; flex-direction: column; height: calc(100vh - 90px); }
+  #trace-controls { display: flex; align-items: center; gap: 8px; flex: none; margin-bottom: 6px; }
+  #trace-controls label { color: #9aa0aa; display: flex; align-items: center; gap: 6px; }
+  #trace-controls input[type="checkbox"] { margin: 0; accent-color: #8ab4f8; }
+  #trace-controls select {
     background: #14171f; color: #e8e8ea; border: 1px solid #2a3140;
     border-radius: 6px; padding: 2px 6px; font: inherit; max-width: 340px;
   }
-  #intent-controls button {
+  #trace-controls button {
     background: #1f2430; color: #9aa0aa; border: 1px solid #2a3140;
     border-radius: 6px; padding: 2px 8px; cursor: pointer; font: inherit;
   }
-  #intent-controls button:hover { color: #e8e8ea; }
-  #intent-note { margin: 0 0 8px; color: #ffd166; }
-  #intent-note:empty { display: none; }
-  #intent-view { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+  #trace-controls button:hover { color: #e8e8ea; }
+  #trace-note { margin: 0 0 8px; color: #ffd166; }
+  #trace-note:empty { display: none; }
+  #trace-view { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 </style>
 </head>
 <body>
   <header>
     <div class="brand"><span>aiui</span> devtools</div>
     <button type="button" class="tab active" data-tab="server">Server</button>
-    <button type="button" class="tab" data-tab="transport">Transport</button>
     <button type="button" class="tab" data-tab="traces">Traces</button>
-    <button type="button" class="tab" data-tab="intent">Intent</button>
     <div id="status">looking for a channel…</div>
   </header>
   <main>
@@ -89,28 +88,18 @@
       <h2>Recent frames (server view)</h2>
       <table id="server-frames"><tbody></tbody></table>
     </section>
-    <section id="tab-transport" hidden>
-      <h2>Client → server (as the page measured it)</h2>
-      <div class="cards" id="client-cards"></div>
-      <h2>Recent frames (page view)</h2>
-      <table id="client-frames"><tbody></tbody></table>
-      <p class="hint" id="transport-hint"></p>
-    </section>
     <section id="tab-traces" hidden>
-      <iframe id="traces-frame" title="lowering traces"></iframe>
-    </section>
-    <section id="tab-intent" hidden>
-      <div id="intent-controls">
+      <div id="trace-controls">
         <label>trace
-          <select id="intent-trace"><option value="">— select a trace —</option></select>
+          <select id="trace-select"><option value="">— select a trace —</option></select>
         </label>
         <label title="include traces recorded by other/earlier channel servers">
-          <input type="checkbox" id="intent-all-sessions" /> all sessions
+          <input type="checkbox" id="trace-all-sessions" /> all sessions
         </label>
-        <button type="button" id="intent-refresh" title="reload the trace list">↻</button>
+        <button type="button" id="trace-refresh" title="reload the trace list">↻</button>
       </div>
-      <p class="hint" id="intent-note"></p>
-      <div id="intent-view"></div>
+      <p class="hint" id="trace-note"></p>
+      <div id="trace-view"></div>
     </section>
   </main>
   <div id="port-row" hidden>

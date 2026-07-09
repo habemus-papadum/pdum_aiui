@@ -45,7 +45,7 @@
  *   GET /debug/api/stats            server-side transport counters (see stats.ts)
  *   GET /debug/api/frames?since=N   the protocol frame log (see frame-log.ts):
  *                                   `{seq, entries}` with the entries recorded
- *                                   after seq N — the workbench's raw-JSON pane
+ *                                   after seq N — a raw-JSON debug pane
  *                                   polls this with its last seen seq
  *   GET /debug/api/preview?path=…   an image from disk, for hover previews of
  *                                   absolute paths mentioned in lowered prompts

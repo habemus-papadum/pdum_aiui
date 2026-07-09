@@ -171,15 +171,15 @@ Ground rules (the same ones the starter ships with):
   intent tool and connects it to this session's channel; its \`locator\` option stamps JSX with
   \`data-source-loc\` and injects \`cell()\` identities. The loop stops working without it.
 - **Keep the architecture's split.** \`src/model/store.ts\` holds the *durable roots* (signals
-  created via \`durable()\` — they survive hot edits). \`src/model/graph.ts\` is *disposable logic*:
-  the cell graph, rebuilt over the roots on every hot edit, plus the agent tools registered next to
-  the capabilities they expose. UI components in \`src/ui/\` are freely hot-swappable. New state goes
-  in store.ts; new dataflow goes in graph.ts as \`cell()\`s rendered through \`CellView\`.
-- **Keyboard interactions go through the modal kit** (\`@habemus-papadum/aiui-viz/modal\`, wired in
-  \`src/model/modal.ts\`): modes as a \`ModeTable\` row, keys as bindings in a \`KeyLayer\`. Never
-  scatter ad-hoc \`addEventListener("keydown", …)\` calls — extend the table and the layers.
+  created via \`durableSignal()\` — they survive hot edits). \`src/model/graph.ts\` is *disposable
+  logic*: the cell graph, built by \`hotCellGraph()\` and rebuilt over the roots on every hot edit,
+  plus the agent tools registered next to the capabilities they expose. UI components in \`src/ui/\`
+  are freely hot-swappable and read cells through the \`graph()\` accessor, never by importing one
+  directly. New state goes in store.ts; new dataflow goes in graph.ts as \`cell()\`s rendered
+  through \`CellView\`.
 - **Expose what you build.** When you add an operation the user can do, register a matching agent
   tool in \`graph.ts\` (\`agentToolkit\`) so your future self can drive and inspect it.
+  \`registerStandardTools(kit)\` already gives you \`locate\` and the \`cells\` attribution table.
 - Run the dev server with \`pnpm dev\` from this directory (\`bin/aiui vite dev\` — it injects the
   channel port as \`VITE_AIUI_PORT\`). Plain \`vite\` also serves the app, but the intent tool won't
   find the channel.

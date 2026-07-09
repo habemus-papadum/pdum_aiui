@@ -260,6 +260,22 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
           "~0.3s of tsc so the auto-loaded DevTools panel is never stale. Only relevant in a " +
           "dev checkout of pdum_aiui.",
       },
+      {
+        key: "autoCapture",
+        type: "boolean",
+        default: true,
+        summary: "Let session-browser pages take the screen-capture grant without a click.",
+        doc:
+          "The session browser launches with --auto-accept-this-tab-capture, so getDisplayMedia " +
+          "resolves there with no picker and no user gesture — but a page cannot detect that " +
+          '(display-capture is not a permission; permissions.query always answers "prompt"), and ' +
+          "guessing wrong opens a dialog that cannot be aborted. `aiui vite` therefore defines " +
+          'window.__AIUI_CAPTURE__ = "auto" over CDP in exactly the browser it launched. The ' +
+          "intent tool then takes the grant on arm rather than on the first screenshot, and the " +
+          'paint host never needs its "Share screen with iPad" button. false suppresses the ' +
+          "marker: capture waits for a real click, as it did before. Never set it on a browser " +
+          "aiui did not launch. See docs/guide/screen-capture.md.",
+      },
     ],
   },
 ];

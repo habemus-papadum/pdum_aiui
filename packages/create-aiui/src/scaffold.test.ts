@@ -93,7 +93,6 @@ describe("scaffoldApp (against the real shipped template)", () => {
       "src/model/store.ts",
       "src/model/rose.ts",
       "src/model/graph.ts",
-      "src/model/modal.ts",
       "src/ui/App.tsx",
       "src/ui/Banner.tsx",
       "src/ui/Picture.tsx",

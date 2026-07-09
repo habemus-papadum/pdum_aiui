@@ -14,16 +14,15 @@ npx aiui open http://localhost:5173
 
 The scaffolded app opens on a banner that explains itself: the page is alive, arm the ✳ aiui
 overlay and start talking about the app you want. Its starter content — a Maurer rose driven by
-one slider, two modal keyboard commands (**T** tunes the angle with the arrow keys, **R** cycles
-the petal count) — is scenery built to be rebuilt, but its *shape* is the
+two sliders — is scenery built to be rebuilt, but its *shape* is the
 [frontend-for-agents](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-for-agents)
 methodology in miniature:
 
-- **durable roots** (`src/model/store.ts`) — interaction state that survives hot edits;
+- **durable roots** (`src/model/store.ts`) — `durableSignal()` interaction state that survives
+  hot edits;
 - a **disposable cell graph** + agent tools (`src/model/graph.ts`) — Observable-style dataflow
-  over the roots, rebuilt on every hot edit, with the app's operations exposed as tools;
-- a **modal shell** on the `@habemus-papadum/aiui-viz/modal` kit (`src/model/modal.ts`) — modes,
-  key layers, and surfaces as data, with a hint bar derived from the working keymap;
+  over the roots, built by `hotCellGraph()` and rebuilt on every hot edit, with the app's
+  operations exposed as tools;
 - an `.envrc` (direnv), a `.gitignore`, a `CLAUDE.md` with the agent's ground rules, and its own
   git repo so agent churn is versioned in the sandbox and nowhere else.
 
@@ -31,11 +30,12 @@ Re-running the command on an existing scaffold **continues** it (tops up `node_m
 the loop) — it never overwrites your or the agent's changes. Anything else at the target path is
 refused.
 
-## How `aiui demo` relates
+This is the **only** starter aiui ships. (An older `aiui demo` subcommand scaffolded a second,
+throwaway playground; it was removed in favour of one template that people actually build on.)
 
-`npx @habemus-papadum/aiui demo` scaffolds a *disposable playground* — deliberately throwaway
-scenery with no framework code, for trying the loop. `create-aiui` scaffolds a *starting point* —
-the same loop plus the viz methodology, for building something you mean to keep.
+Advanced pieces the starter deliberately omits — the modal interaction kit
+(`@habemus-papadum/aiui-viz/modal`), Web Worker cells, the Observable Plot and Mosaic bridges —
+are shown in the repo's `demos/gallery` reference notebooks.
 
 ## Development notes
 

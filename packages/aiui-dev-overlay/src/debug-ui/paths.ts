@@ -18,7 +18,7 @@ const ABS_PATH = /(^|[\s"'({[=:,])(\/(?:[\w.@%+~-]+\/)+[\w.@%+~-]+)/g;
 /** Resolves an absolute image path to a servable preview URL. */
 export type PreviewUrl = (path: string) => string;
 
-/** The lab default: the workbench dev server's preview proxy. */
+/** Default: a host that serves image previews at `/api/preview?path=…`. */
 export const defaultPreviewUrl: PreviewUrl = (path) =>
   `/api/preview?path=${encodeURIComponent(path)}`;
 

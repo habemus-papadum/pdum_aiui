@@ -3,23 +3,32 @@
  * (on by default in `aiui claude`), connect this page as a paint host so an
  * iPad can view it and draw into the intent tool.
  *
- * The multimodal modality publishes the ink seam (`window.__AIUI__.remotePaint`
- * — see instrumentation.ts): arming from the iPad arms the intent turn, and
- * remote strokes land on the same ink layer local drawing uses. This module
- * supplies the other half nothing else owns in the channel flow: *starting* the
- * `aiui-paint` host against the channel's `/paint` routes.
+ * The multimodal modality publishes two seams on `window.__AIUI__` (see
+ * instrumentation.ts), and this module is the other half of both:
+ *
+ *  - `remotePaint` — arming from the iPad arms the intent turn, and remote
+ *    strokes land on the same ink layer local drawing uses.
+ *  - `displayCapture` — the document's ONE `getDisplayMedia` grant. The iPad's
+ *    video streams from the same MediaStream the screenshots grab frames from.
+ *    A grant belongs to a *document*, not to a client or a port: a second call
+ *    doesn't reuse the first, it opens a second independent stream. So the page
+ *    asks once, and everyone reads it.
  *
  * Mirrors the session bus's shape: probe before dialing (`GET /paint/info` —
  * only a channel with the sidecar answers), no-op without a channel port, and
- * a disposer that tears everything down. The remotePaint seam may be installed
- * after us (mount order), so we poll briefly for it.
+ * a disposer that tears everything down. The seams may be installed after us
+ * (mount order), so we poll briefly for them.
  *
- * Screen capture needs a user gesture (`getDisplayMedia`); when a viewer is
- * waiting on one, this module shows a small fixed "Share screen with iPad"
- * button and hides it once capture starts (or every viewer leaves).
+ * The "Share screen with iPad" button is the fallback, not the path. In the
+ * session browser `getDisplayMedia` is auto-accepted (see the capture marker),
+ * so a viewer joining acquires the grant off that network event and no button
+ * ever appears. In a browser that would open a picker, capture reports
+ * `needsGesture` and the button appears to supply the click.
  */
 import { startPaintHost } from "@habemus-papadum/aiui-paint";
-import { getInstrumentation } from "./instrumentation";
+import { getInstrumentation, type PageInstrumentation } from "./instrumentation";
+import { paintFrameSource } from "./multimodal/display-capture";
+import { canvasJpegBytes } from "./multimodal/shot";
 
 export interface PaintHostOptions {
   /** Channel port; defaults to the plugin-injected `window.__AIUI__.port`. */
@@ -79,9 +88,9 @@ export function installPaintHost(opts: PaintHostOptions = {}): () => void {
       if (disposed) {
         return;
       }
-      const sink = getInstrumentation()?.remotePaint;
-      if (sink) {
-        start(sink);
+      const inst = getInstrumentation();
+      if (inst?.remotePaint) {
+        start(inst);
         return;
       }
       if (triesLeft > 0) {
@@ -91,25 +100,34 @@ export function installPaintHost(opts: PaintHostOptions = {}): () => void {
     findSeam(SEAM_POLL_TRIES);
   })();
 
-  const start = (sink: NonNullable<ReturnType<typeof getInstrumentation>>["remotePaint"]): void => {
+  const start = (inst: PageInstrumentation): void => {
+    const sink = inst.remotePaint;
     if (!sink) {
       return;
     }
+    // Both seams are published by the same mount, so `displayCapture` is here
+    // whenever `remotePaint` is. Absent (a page with no intent tool), paint
+    // falls back to its own getDisplayMedia — its default frame source.
+    const grant = inst.displayCapture;
     const host = startPaintHost({
       relayUrl: base,
       // RemotePaintSink and aiui-paint's InkSink agree by shape (the packages
-      // deliberately don't import each other — see instrumentation.ts).
+      // deliberately don't import each other — see instrumentation.ts); so do
+      // the broker's frame source and aiui-paint's FrameSource.
       ink: sink,
       label: opts.label ?? document.title,
       channelPort: port,
+      ...(grant ? { frameSource: paintFrameSource(grant, canvasJpegBytes) } : {}),
     });
 
-    // The "share screen" affordance: getDisplayMedia needs a real click, and a
-    // viewer joining is a network event. Poll the cheap host getters and show a
-    // button while a viewer is waiting on the gesture — and KEEP it up after a
-    // failed attempt ("denied"), with the failure in the label: a click that
-    // silently made the button vanish while the capture had actually thrown
-    // (wrong browser flags, a missing OS grant) cost a real debugging session.
+    // The "share screen" affordance: in a browser that opens a picker,
+    // getDisplayMedia needs a real click, and a viewer joining is a network
+    // event. Poll the cheap host getters and show a button while a viewer is
+    // waiting on the gesture — and KEEP it up after a failed attempt
+    // ("denied"), with the failure in the label: a click that silently made the
+    // button vanish while the capture had actually thrown (wrong browser flags,
+    // a missing OS grant) cost a real debugging session. Where capture is
+    // auto-accepted the state goes straight to "active" and this never fires.
     shareTimer = setInterval(() => {
       const state = host.captureState();
       const wanted = host.viewers() > 0 && (state === "needsGesture" || state === "denied");
@@ -168,6 +186,9 @@ export function installPaintHost(opts: PaintHostOptions = {}): () => void {
       }
       shareBtn?.remove();
       shareBtn = undefined;
+      // host.close() stops its frame source. When that source is the shared
+      // grant, stopping it is a no-op by design — the shot tool still holds it,
+      // and only the modality's unmount ends it.
       host.close();
     };
   };

@@ -17,6 +17,7 @@
 
 import type { OverlayErrorInput } from "../../errors";
 import type { Engine } from "../../intent-pipeline";
+import { createDisplayCapture, type DisplayCapture } from "../display-capture";
 import type { Ink } from "../ink";
 import { canvasJpegBytes, ShotTool } from "../shot";
 import { sampleDimensions, VIDEO_JPEG_QUALITY, VideoSampler } from "../video";
@@ -48,12 +49,33 @@ export interface CaptureDeps {
    * test seam above wins when present.
    */
   videoFrameIntervalMs?: () => number;
+  /**
+   * The document's display-capture broker. Injected by tests (jsdom has no
+   * `getDisplayMedia`); otherwise created here and published on
+   * `window.__AIUI__.displayCapture` by the composer, so the paint host streams
+   * the iPad's video from the same grant.
+   */
+  displayCapture?: DisplayCapture;
 }
 
 /** The capture surface modality.ts (dispatch, reconciler, HUD, report) drives. */
 export interface Capture {
   /** The shot veil element — the composer appends it to the page layers. */
   veil: HTMLElement;
+  /** The document's one display-capture grant (published on the page seam). */
+  grant: DisplayCapture;
+  /**
+   * Armed and the browser auto-accepts capture: take the grant now, so the
+   * first shot is instant and its blur lands at arm rather than mid-gesture.
+   * A no-op under the `"gesture"` policy — a picker nobody asked for.
+   */
+  prewarmGrant(): void;
+  /**
+   * True while a `getDisplayMedia` call's own blur/focus pair is arriving.
+   * EVERY capture call blurs the window, dialog or no dialog, and the blur
+   * handler must not mistake that for the user leaving (it stops the mic).
+   */
+  blurIsSelfInflicted(): boolean;
   /** The shot veil is armed (D held / drag in flight) — feeds `uiMode`. */
   shooting(): boolean;
   /** D pressed: arm the crosshair veil (ink mode only). */
@@ -83,24 +105,29 @@ export interface Capture {
 export function createCapture(deps: CaptureDeps): Capture {
   const { engine, ink, uploadAttachment, uploadVideo, setStatus, reportError, renderHud } = deps;
 
-  const shots = new ShotTool(ink, (rect, components, viewport, thumb, bytes, takenAt) => {
-    // A capture can resolve long after the gesture — the first shot blocks
-    // on the getDisplayMedia picker — by which time the turn may have been
-    // sent or cancelled (send disarms). A disarmed engine means this shot
-    // has no turn to join: drop it, or the straggler event lands after the
-    // preview cleared and its thumb haunts the next arm.
-    if (!engine.armed) {
-      return;
-    }
-    // No dev-proxy: the channel assigns the on-disk path from the uploaded
-    // bytes, so the shot event carries no path — its marker correlates it
-    // with the attachment frame. `takenAt` (the gesture's wall-clock) rides
-    // the event so the compiler can anchor the shot into the transcript.
-    const marker = engine.shotDone(rect, components, thumb, undefined, viewport, takenAt);
-    if (bytes) {
-      void uploadAttachment(marker, "image/png", bytes);
-    }
-  });
+  const grant = deps.displayCapture ?? createDisplayCapture();
+  const shots = new ShotTool(
+    ink,
+    (rect, components, viewport, thumb, bytes, takenAt) => {
+      // A capture can resolve long after the gesture — a cold shot blocks on
+      // the getDisplayMedia picker — by which time the turn may have been sent
+      // or cancelled (send disarms). A disarmed engine means this shot has no
+      // turn to join: drop it, or the straggler event lands after the preview
+      // cleared and its thumb haunts the next arm.
+      if (!engine.armed) {
+        return;
+      }
+      // No dev-proxy: the channel assigns the on-disk path from the uploaded
+      // bytes, so the shot event carries no path — its marker correlates it
+      // with the attachment frame. `takenAt` (the gesture's wall-clock) rides
+      // the event so the compiler can anchor the shot into the transcript.
+      const marker = engine.shotDone(rect, components, thumb, undefined, viewport, takenAt);
+      if (bytes) {
+        void uploadAttachment(marker, "image/png", bytes);
+      }
+    },
+    grant,
+  );
 
   // ── the realtime submode's screen sampler (V) ────────────────────────────
   // While sharing (a live tier only), sample the SAME display-capture stream
@@ -216,6 +243,9 @@ export function createCapture(deps: CaptureDeps): Capture {
 
   return {
     veil: shots.veil,
+    grant,
+    prewarmGrant: () => grant.prewarm(),
+    blurIsSelfInflicted: () => grant.blurIsSelfInflicted(),
     shooting: () => shooting,
     armShot,
     releaseShot,
@@ -230,6 +260,9 @@ export function createCapture(deps: CaptureDeps): Capture {
     dispose: () => {
       videoSampler.dispose();
       shots.dispose();
+      // The one place the grant ends: it outlives every individual consumer
+      // (the paint host streams from it too), but not the page.
+      grant.dispose();
     },
   };
 }

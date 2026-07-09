@@ -15,7 +15,7 @@
  *  2. **Env files** are exported — `.env`, `.env.local`, `.env.dev`,
  *     `.env.dev.local` from the workspace root, later files winning (the
  *     same "dev"-mode order and file-beats-inherited-export convention as the
- *     workbench's `loadEnv`; a stale shell export can't shadow the file).
+ *     channel's own env loading; a stale shell export can't shadow the file).
  *
  * The output also defines `aiui_deactivate` — restore the pre-activation PATH
  * and unset the file-sourced vars (values that pre-existed in the shell are

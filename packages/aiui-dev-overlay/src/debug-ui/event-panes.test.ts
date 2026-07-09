@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-// Real captured interaction streams (workbench inspector → export). Imported
+// Real captured interaction streams (recorded in the retired workbench lab). Imported
 // statically so vite resolves them at the module's location — jsdom mangles the
 // runtime `import.meta.url` these tests would otherwise resolve against.
-import cancelTurn from "../../workbench/fixtures/cancel-turn.json";
-import fullTurnSend from "../../workbench/fixtures/full-turn-send.json";
-import plainDictation from "../../workbench/fixtures/plain-dictation.json";
+import cancelTurn from "../../fixtures/cancel-turn.json";
+import fullTurnSend from "../../fixtures/full-turn-send.json";
+import plainDictation from "../../fixtures/plain-dictation.json";
 import type { IntentEvent } from "../intent-pipeline";
 import { EventPanes } from "./event-panes";
 import { staticSource } from "./sources";

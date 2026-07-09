@@ -4,7 +4,7 @@ The level-2 document: what we actually built, how it works, and why — written 
 designs frameworks for a living. [Frontend for agents](./frontend-for-agents) is the conceptual
 overview; [Hard-won details](./frontend-hard-won) is the ledger of low-level findings this page
 occasionally leans on; the [Style guide](./frontend-style-guide) carries the authoring
-conventions built on these mechanisms. Code lives in `packages/aiui-viz` (the library) and `packages/aiui-demo`
+conventions built on these mechanisms. Code lives in `packages/aiui-viz` (the library) and `demos/gallery`
 (two reference notebooks — morphogen, aztec — that exercise everything below).
 
 ## 1 · The cell: a thin layer over an async-first reactive core
@@ -33,8 +33,10 @@ const analysis = cell(
   `isPending()` is false *between* yields; "is this run finished" needs its own bookkeeping.
 - **Non-throwing introspection** — `state()` / `latest()` / `error()`. Raw reads throw before the
   first value, and an errored memo reads as `undefined` *and drops its previous value*, so the
-  cell caches the last value produced by any run (surviving errors) and exposes a six-state
-  machine (`unresolved · pending · streaming · refreshing · ready · errored`).
+  cell caches the last value produced by any run (surviving errors) and exposes a seven-state
+  machine (`unresolved · pending · streaming · refreshing · held · ready · errored`). `held` is
+  the explicit deps gate with a value in hand — distinct from `refreshing` (a new value is
+  actually coming), so a cancelled computation reads as calm, not as perpetually loading.
 - **Deps gating** — `deps` returning `undefined | null | false` holds the cell, implemented as
   the idiomatic 2.0 "not yet" (throw `NotReadyError`). Reading another pending cell inside `deps`
   holds automatically — the old `ready()` combinator dissolved into the framework.
@@ -51,9 +53,14 @@ as plain inputs if you need them; the cell layer is about *dataflow semantics*, 
 **Consequence worth stating:** cancellation almost disappears as a concept. Input changes
 supersede; supersession aborts; the worker protocol translates abort into a `cancel` message. The
 demo's one explicit cancel button sets the deps signal to `undefined` — "hold until further
-notice" — and the same machinery does the rest while `latest()` keeps the last result on screen.
+notice" — and the same machinery does the rest while `latest()` keeps the last result on screen,
+with the cell reporting `held` so the UI shows it quietly rather than as endless loading.
 
 ## 2 · Identity: names are injected, not written
+
+> How these stamps are *consumed* — the resolution ladders that turn a text selection or a drag
+> rectangle into elements, cells, and source locations in the composed prompt — is its own
+> concepts page: [Attribution: gesture → source](./attribution).
 
 Attribution, the registry, and HMR all need stable identity, and nobody should have to write it.
 A compile-time pass — the dev overlay's source-locator (`packages/aiui-dev-overlay/src/source-locator.ts`,
@@ -78,7 +85,7 @@ attributes plus a registry would serve an agent identically.
 ## 3 · HMR: durable roots, a disposable graph, and a box
 
 The architecture that makes "edit under a running experiment" safe has three parts
-(reference: `aiui-demo/src/model/store.ts` and `graph.ts`; background: the archived
+(reference: `demos/gallery/src/model/store.ts` and `graph.ts`; background: the archived
 *HMR for agentic coding* notes in the repo's `archive/`):
 
 **Durable roots** are owned by a keyed, idempotent registry:
@@ -137,7 +144,7 @@ edits hot-apply instead of bubbling to a full reload.
 ## 4 · Imperative islands and cadence bridges
 
 A 60 Hz render loop does not belong in a reactive graph. The pattern
-(`aiui-demo/src/sim/`, mirrored by aztec's player):
+(`demos/gallery/src/sim/`, mirrored by aztec's player):
 
 - The engine is a plain imperative class; the rAF loop never touches signals.
 - **Inbound:** effects push parameter changes in — `createEffect(params, p => engine.setParams(p))`.

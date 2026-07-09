@@ -14,6 +14,8 @@
  * dev-tool state, same spirit as the observability handles.
  */
 
+import { type Accessor, createSignal, type Setter } from "solid-js";
+
 interface DurableRegistry {
   entries: Map<string, unknown>;
 }
@@ -43,4 +45,34 @@ export function disposeDurable(key: string, dispose?: (value: unknown) => void):
     dispose?.(reg.entries.get(key));
     reg.entries.delete(key);
   }
+}
+
+/** A signal that survives hot edits: `{ get, set }` rather than a tuple. */
+export interface SignalBox<T> {
+  get: Accessor<T>;
+  set: Setter<T>;
+}
+
+/**
+ * The durable roots of an app are almost always signals — the slider position,
+ * the selected sample, the camera. `durableSignal` is `createSignal` wrapped in
+ * `durable()`: created once, *adopted* by every re-evaluated module, so a hot
+ * edit never resets what the user touched.
+ *
+ * ```ts
+ * export const angleStep = durableSignal("param:angleStep", 71);
+ * ```
+ *
+ * Keys share one page-wide namespace (the durable registry), so prefix them per
+ * page in a multi-notebook app: `durableSignal("seismos:year", 1994)`.
+ */
+export function durableSignal<T>(
+  key: string,
+  // biome-ignore lint/complexity/noBannedTypes: mirrors createSignal's own Exclude<T, Function> overload
+  initial: Exclude<T, Function>,
+): SignalBox<T> {
+  return durable(key, () => {
+    const [get, set] = createSignal<T>(initial);
+    return { get, set };
+  });
 }

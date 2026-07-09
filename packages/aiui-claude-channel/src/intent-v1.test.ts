@@ -15,9 +15,7 @@ import { mockTranscriber, type Transcriber } from "./transcribe";
 
 const enc = new TextEncoder();
 
-const fixturesDir = fileURLToPath(
-  new URL("../../aiui-dev-overlay/workbench/fixtures/", import.meta.url),
-);
+const fixturesDir = fileURLToPath(new URL("../../aiui-dev-overlay/fixtures/", import.meta.url));
 const loadFixture = (name: string): IntentEvent[] =>
   JSON.parse(readFileSync(join(fixturesDir, name), "utf8")) as IntentEvent[];
 

@@ -43,7 +43,7 @@ pdum_aiui itself, `pnpm aiui <cmd>` or `./aiui <cmd>` are the same CLI run from 
 
 ## What else is running? (other channels)
 
-Every channel server — real sessions and debug ones (workbench, `serve`) — registers
+Every channel server — real sessions and debug ones (`serve`) — registers
 itself in `~/.cache/aiui/mcp/<pid>.json` (dead entries are pruned on read). To enumerate:
 
 - **`aiui paint url --json`** — every running paint-capable channel with cwd, port, the

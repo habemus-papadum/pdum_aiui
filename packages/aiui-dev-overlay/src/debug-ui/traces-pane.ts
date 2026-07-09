@@ -3,8 +3,8 @@
  * `GET /debug/api/traces`, then `createTracePoll` + {@link TraceView}
  * live-follow for the selection.
  *
- * Graduated from the workbench (its dock re-hosts this same class) so every
- * home of the trace debugger — the workbench lab, the `/__aiui/debug` page the
+ * Graduated from the retired workbench lab so every
+ * home of the trace debugger — the `/__aiui/debug` page the
  * Vite plugin serves (the intent tool's 🔍), and the DevTools extension —
  * renders traces off one implementation. Only page chrome stays host-local.
  *

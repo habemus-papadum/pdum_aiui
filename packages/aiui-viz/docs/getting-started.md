@@ -69,4 +69,4 @@ self.onmessage = (e: MessageEvent<WorkerRequest<Float32Array>>) => {
 
 For the full choreography (macrotask yields so `cancel` is observed, streaming the cheap result
 early, keeping the math pure and headlessly testable), read the demo's
-[`PRINCIPLES.md`](../../aiui-demo/PRINCIPLES.md) §4 and its `analysis/` worker.
+[`PRINCIPLES.md`](../../../demos/gallery/PRINCIPLES.md) §4 and its `analysis/` worker.

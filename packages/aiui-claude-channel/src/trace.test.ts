@@ -22,9 +22,7 @@ describe("projectCacheDir", () => {
 
 describe("sessionLabel", () => {
   it("is <tag>·<pid>·<HHMMSS> from the process-start wall clock", () => {
-    expect(sessionLabel("workbench", 4242, new Date(2026, 6, 5, 9, 5, 7))).toBe(
-      "workbench·4242·090507",
-    );
+    expect(sessionLabel("lab", 4242, new Date(2026, 6, 5, 9, 5, 7))).toBe("lab·4242·090507");
   });
 
   it("falls back to 'channel' for an untagged server", () => {

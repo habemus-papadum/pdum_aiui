@@ -1,7 +1,7 @@
 /**
  * Self-contained styles for the shared debug UI.
  *
- * The panes were prototyped in the workbench, where the lab's own stylesheet
+ * The panes were prototyped in the retired workbench lab, where the lab's own stylesheet
  * dressed them (`wb-insp-*`). Graduated here, the debug UI must look right in
  * two homes that share no CSS — the lab dock and the DevTools extension panel —
  * so it ships its own styles under an `aiui-dbg-` prefix and injects them once
@@ -125,6 +125,20 @@ export const DEBUG_UI_CSS = /* css */ `
   box-shadow: 0 8px 32px rgba(0,0,0,0.55); background: #14161d; pointer-events: none; }
 .aiui-dbg-video-thumbs img { max-height: 64px; border-radius: 4px; border: 1px solid #2a3140;
   cursor: zoom-in; }
+
+/* streaming-STT partials → an inline word diff (same palette as the patch diff:
+   one visual language for "text changed in front of you"). A struck-through run
+   on a CUMULATIVE partial means the vendor revised itself — the thing to see. */
+.aiui-dbg-diff { margin: 4px 0 0; padding: 5px 7px; background: #14171f; border-radius: 6px;
+  font: 11px/1.6 ui-sans-serif, system-ui, sans-serif; word-break: break-word; }
+.aiui-dbg-diff-same { color: #cfd3da; }
+.aiui-dbg-diff-del { color: #ff5c87; background: #ff5c8722; border-radius: 3px;
+  text-decoration: line-through; }
+.aiui-dbg-diff-add { color: #7ee0a3; background: #7ee0a322; border-radius: 3px; }
+
+/* the hero showing a speculative (not-yet-sent) prompt */
+.aiui-dbg-hero-preview { margin-bottom: 6px; color: #ffd166; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em; }
 
 /* correction patch → a real diff (mirrors the overlay's mm-diff palette) */
 .aiui-dbg-patch { margin: 6px 0 0; padding: 6px 8px; background: #14171f; border-radius: 6px;

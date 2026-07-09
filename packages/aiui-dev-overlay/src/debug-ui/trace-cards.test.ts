@@ -13,6 +13,7 @@ import {
   formatDuration,
   formatUsd,
   isImageFile,
+  isPartialLabel,
   isPlayableAudioFile,
   liveOpenLine,
   liveResolvedSummary,
@@ -21,8 +22,10 @@ import {
   noPromptMessage,
   parsePatchLines,
   parseShotBlocks,
+  previousPartialText,
   savedFrameFiles,
   shotBlobName,
+  speculativePromptText,
   splitLoweredPrompt,
   traceDurationMs,
   traceOutcome,
@@ -597,5 +600,73 @@ describe("stt final receipts (the words/logprobs glance)", () => {
       icon: "📝",
       title: "stt final seg_2",
     });
+  });
+});
+
+describe("streaming transcript partials", () => {
+  const partial = (segment: number, text: string): TraceStageLike => ({
+    kind: "ir",
+    label: `stt partial seg_${segment}`,
+    data: { chars: text.length, text },
+  });
+
+  it("classifies partials onto the events lane, uncoalesced", () => {
+    expect(classifyStage(partial(2, "hello"))).toMatchObject({
+      category: "events",
+      icon: "✍",
+      title: "stt partial seg_2",
+      coalesceKey: null,
+    });
+  });
+
+  it("recognizes partial labels, and not the finals they sit beside", () => {
+    expect(isPartialLabel("stt partial seg_10")).toBe(true);
+    expect(isPartialLabel("stt final seg_1")).toBe(false);
+    expect(isPartialLabel("composed (speculative)")).toBe(false);
+  });
+
+  it("finds the previous partial for the same segment, ignoring other segments", () => {
+    const stages = [
+      partial(1, "one alpha"),
+      partial(2, "two alpha"),
+      { kind: "input", label: "frame 7 audio" } as TraceStageLike,
+      partial(2, "two beta"),
+    ];
+    expect(previousPartialText(stages, 3)).toBe("two alpha");
+    // The segment's first partial has no predecessor — everything reads as added.
+    expect(previousPartialText(stages, 1)).toBe("");
+    expect(previousPartialText(stages, 0)).toBe("");
+  });
+
+  it("is tolerant of missing stages and malformed data", () => {
+    expect(previousPartialText(undefined, 0)).toBe("");
+    const stages = [
+      { kind: "ir", label: "stt partial seg_1", data: { text: 42 } } as TraceStageLike,
+      partial(1, "real"),
+    ];
+    expect(previousPartialText(stages, 1)).toBe("");
+  });
+});
+
+describe("speculativePromptText (the hero's in-flight fallback)", () => {
+  const spec = (transcript: string, prompt: string): TraceStageLike => ({
+    kind: "ir",
+    label: "composed (speculative)",
+    data: { transcript, prompt },
+  });
+
+  it("returns the freshest non-empty speculative prompt", () => {
+    expect(speculativePromptText([spec("a", "prompt one"), spec("ab", "prompt two")])).toBe(
+      "prompt two",
+    );
+  });
+
+  it("skips the empty prompts a turn opens with", () => {
+    expect(speculativePromptText([spec("", ""), spec("a", "real"), spec("a", "")])).toBe("real");
+  });
+
+  it("is empty when nothing composed yet", () => {
+    expect(speculativePromptText(undefined)).toBe("");
+    expect(speculativePromptText([{ kind: "info", label: "intent config" }])).toBe("");
   });
 });

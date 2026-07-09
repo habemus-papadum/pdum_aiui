@@ -5,7 +5,7 @@ stands on its own: **principles, utilities, examples, and skills for writing fro
 AI agents write well, debug well, and iterate on fast**, aimed at scientific/technical
 visualization. It began as an aspiration; it is now a working methodology with a library
 (`@habemus-papadum/aiui-viz`), two reference apps (the morphogen and aztec notebooks in
-`packages/aiui-demo`), and a ledger of engineering findings.
+`demos/gallery`), and a ledger of engineering findings.
 
 This page is the **concepts** — what the pieces are and what we demand of them. Three companion
 pages go deeper: [Design choices](./frontend-design-choices) explains, at
@@ -13,6 +13,9 @@ framework-designer level, exactly what we built and why; [Hard-won details](./fr
 is the ledger of paid-for technical knowledge underneath it; the
 [Style guide](./frontend-style-guide) is the authoring conventions — page structure, TOC,
 plotting, math — that make every notebook in a lab read as one publication.
+
+If you just want to *use* the library — write a cell, depend on another cell, stream a computation,
+display it — start at the [User guide](./frontend-user-guide) instead. It assumes none of this page.
 
 ## The premise
 
@@ -136,7 +139,7 @@ better instrumented than a human team would ever bother to make it.
 
 - **Library** — `@habemus-papadum/aiui-viz` (`packages/aiui-viz`): cells, the CellView wrapper,
   the worker protocol, the durable registry, the tool surface.
-- **Reference apps** — `packages/aiui-demo`: morphogen (reaction-diffusion) and aztec (domino
+- **Reference apps** — `demos/gallery`: morphogen (reaction-diffusion) and aztec (domino
   tilings), each a full notebook built the intended way; `PRINCIPLES.md` there maps file layout
   to methodology.
 - **Design choices** — [the level-2 page](./frontend-design-choices); **ledger** —

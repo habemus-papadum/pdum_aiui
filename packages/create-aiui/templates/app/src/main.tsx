@@ -17,10 +17,9 @@
  * mounted by the aiuiDevOverlay() plugin (vite.config.ts — the entire
  * integration); the app splits along HMR lines:
  *
- *   src/model/store.ts   durable roots — the slider and mode survive hot edits
+ *   src/model/store.ts   durable roots — the sliders survive hot edits
  *   src/model/rose.ts    pure math (the picture)
  *   src/model/graph.ts   the cell graph (dataflow) + the agent tools
- *   src/model/modal.ts   keyboard modes: T to tune, R to re-flower
  *   src/ui/              components — freely hot-swappable
  *
  * Everything you can see is scenery, built to be rebuilt. Start talking.
@@ -30,7 +29,6 @@
 import { render } from "@solidjs/web";
 import "./styles.css";
 import "./model/graph"; // builds the cell graph + registers agent tools
-import "./model/modal"; // installs the keymap + mode surfaces
 import { App } from "./ui/App";
 
 render(() => <App />, document.getElementById("root") as HTMLElement);

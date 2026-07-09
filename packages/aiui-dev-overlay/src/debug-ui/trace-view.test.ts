@@ -414,3 +414,81 @@ describe("TraceView — empty", () => {
     expect(view.root.querySelector(".aiui-dbg-filters")?.hasAttribute("hidden")).toBe(true);
   });
 });
+
+describe("streaming partials + the in-flight prompt hero", () => {
+  /** A turn still in flight: partials arriving, nothing committed, no lowered prompt. */
+  const inFlight = (): LiveTrace => ({
+    rev: 1,
+    id: "trace-99",
+    format: "intent-v1",
+    status: "abandoned",
+    startedAt: "2026-07-09T13:39:39.000Z",
+    stages: [
+      { kind: "info", label: "client context", data: { actor: "human" } },
+      { kind: "ir", label: "composed (speculative)", data: { transcript: "", prompt: "" } },
+      { kind: "ir", label: "stt partial seg_1", data: { chars: 11, text: "draw a wide" } },
+      { kind: "input", label: "frame 7 audio", file: "input-7.bin" },
+      // The vendor revises itself: "wide" → "circle", and the text SHRINKS.
+      { kind: "ir", label: "stt partial seg_1", data: { chars: 13, text: "draw a circle" } },
+      { kind: "ir", label: "stt partial seg_1", data: { chars: 6, text: "draw a" } },
+      {
+        kind: "ir",
+        label: "composed (speculative)",
+        data: { transcript: "draw a circle", prompt: "please draw a circle" },
+      },
+    ],
+  });
+
+  const mount = (trace: LiveTrace): HTMLElement => {
+    const view = new TraceView({});
+    view.update(trace);
+    return view.root;
+  };
+
+  it("renders each partial as a word diff against the segment's previous partial", () => {
+    const root = mount(inFlight());
+    const diffs = root.querySelectorAll(".aiui-dbg-diff");
+    expect(diffs.length).toBe(3);
+
+    // First partial: no predecessor, so every word is an addition.
+    expect(diffs[0].querySelectorAll(".aiui-dbg-diff-del").length).toBe(0);
+    expect(diffs[0].textContent).toContain("draw a wide");
+
+    // Second: "wide" struck, "circle" added — the revision, made visible.
+    expect([...diffs[1].querySelectorAll(".aiui-dbg-diff-del")].map((e) => e.textContent)).toEqual([
+      "wide",
+    ]);
+    expect([...diffs[1].querySelectorAll(".aiui-dbg-diff-add")].map((e) => e.textContent)).toEqual([
+      "circle",
+    ]);
+
+    // Third: a cumulative partial that got SHORTER — pure deletion, no additions.
+    expect([...diffs[2].querySelectorAll(".aiui-dbg-diff-del")].map((e) => e.textContent)).toEqual([
+      "circle",
+    ]);
+    expect(diffs[2].querySelectorAll(".aiui-dbg-diff-add").length).toBe(0);
+  });
+
+  it("falls back to the freshest speculative prompt, badged as not-yet-sent", () => {
+    const root = mount(inFlight());
+    expect(root.querySelector(".aiui-dbg-hero-none")).toBeNull();
+    expect(root.querySelector(".aiui-dbg-hero-preview")?.textContent).toContain("not yet sent");
+    expect(root.querySelector(".aiui-dbg-hero-body")?.textContent).toContain(
+      "please draw a circle",
+    );
+  });
+
+  it("prefers the real lowered prompt over the speculative one, with no badge", () => {
+    const trace = inFlight();
+    trace.status = "completed";
+    trace.stages?.push({ kind: "output", label: "lowered prompt", data: { text: "the real one" } });
+    const root = mount(trace);
+    expect(root.querySelector(".aiui-dbg-hero-preview")).toBeNull();
+    expect(root.querySelector(".aiui-dbg-hero-body")?.textContent).toContain("the real one");
+  });
+
+  it("still says 'no prompt' when nothing has composed yet", () => {
+    const root = mount({ rev: 1, id: "t", status: "abandoned", stages: [] });
+    expect(root.querySelector(".aiui-dbg-hero-none")?.textContent).toContain("no prompt");
+  });
+});

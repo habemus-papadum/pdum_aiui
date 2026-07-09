@@ -130,13 +130,13 @@ describe("runServe (standalone debug channel server)", () => {
   });
 
   it("registers as a debug server (name + tag) and removes its entry on close", async () => {
-    handle = await runServe({ cacheDir: freshCache(), tag: "wb", name: "aiui workbench" });
+    handle = await runServe({ cacheDir: freshCache(), tag: "wb", name: "aiui debug" });
 
     const [server, ...rest] = listMcpServers();
     expect(rest).toEqual([]);
     expect(server).toMatchObject({
       tag: "wb",
-      name: "aiui workbench",
+      name: "aiui debug",
       debug: true,
       pid: process.pid,
       port: handle.port,

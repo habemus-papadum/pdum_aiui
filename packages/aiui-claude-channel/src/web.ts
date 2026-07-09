@@ -119,7 +119,7 @@ export interface WebServerOptions {
    * Fixed loopback port to bind. Defaults to 0 — an OS-assigned free port —
    * which is right everywhere a human isn't typing the URL by hand (registered
    * servers are discovered through the registry; parallel tests must never
-   * collide). A caller that wants a *known* address (the workbench's debug
+   * collide). A caller that wants a *known* address (a pinned debug
    * channel, via `serve --port`) passes one, accepting that a taken port is a
    * loud `EADDRINUSE` rejection rather than a silent drift elsewhere.
    */

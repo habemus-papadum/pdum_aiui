@@ -17,7 +17,7 @@
  * `pnpm test:e2e` (vitest.e2e.config.ts) and, in CI, the weekly openai-e2e.yml.
  * Gated on `OPENAI_API_KEY` (describe.skipIf) so forks and offline runs stay
  * green. Near-zero tokens — one short session. Latency curves and model
- * comparisons live in the workbench bench, not here.
+ * comparisons were measured by hand in the retired workbench lab, not here.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

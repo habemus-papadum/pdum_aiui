@@ -5,7 +5,7 @@ are*, [design choices](./frontend-design-choices) says *how they're built and wh
 [ledger](./frontend-hard-won) records *what it cost to learn*, this page says **how a notebook
 page should look and read**: the conventions an author (human or agent) follows so every page in
 a lab feels like one publication. The reference implementations are the notebooks in
-`packages/aiui-demo`; the components live in `@habemus-papadum/aiui-viz`.
+`demos/gallery`; the components live in `@habemus-papadum/aiui-viz`.
 
 ## Plumbing and porcelain
 

@@ -7,6 +7,7 @@
  */
 
 export * from "./browser";
+export * from "./capture-marker";
 export * from "./environment";
 export * from "./provenance";
 

@@ -1,9 +1,9 @@
 # The shared debug UI (`src/debug-ui/`)
 
 Internals note. The debug UI is the intent pipeline's `-emit-ir`: framework-free DOM panes that
-render the multimodal intent stream and its lowering passes, live. It was prototyped as the
-workbench's inspector dock and graduated here (`./debug-ui` subpath) so **two homes render intent
-debugging identically off one implementation** — the workbench *lab* (over a live `Engine`) and the
+render the multimodal intent stream and its lowering passes, live. It was prototyped in the
+since-retired workbench lab and graduated here (`./debug-ui` subpath) so **every home renders
+intent debugging identically off one implementation** — the standalone `/debug` page and the
 DevTools extension's **Intent** pane (over a channel trace it live-follows). Dependency-free;
 browser-safe (DOM + the `intent-pipeline` core only).
 
@@ -12,7 +12,7 @@ browser-safe (DOM + the `intent-pipeline` core only).
 The panes never know where their events come from. A `DebugSource` is just
 `subscribe(cb: (events: IntentEvent[]) => void): () => void`, and two adapters implement it:
 
-- **`engineSource(engine)`** — the lab's case. Replays `engine.events` on subscribe and forwards
+- **`engineSource(engine)`** — the live-engine case. Replays `engine.events` on subscribe and forwards
   each new one. (The `Engine` has no `off`; the source keeps a `live` flag so unsubscribe is real
   from its side without touching the pipeline.)
 - **`traceLiveSource({ baseUrl, traceId })`** — the extension's case. Polls the channel's

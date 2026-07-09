@@ -372,7 +372,7 @@ already stamped the DOM.
 `discoverSessionBrowser()` reads and probes at `/json/version`. The endpoint is **loopback and
 unauthenticated** — documented as deliberate in [Read before running](../guide/warning.md). Any
 local process can attach. The repo even contains a dependency-free CDP client to copy verbatim:
-`packages/aiui-demo/scripts/rasterize-cdp.mjs`, whose header already notes it works against a
+`demos/gallery/scripts/rasterize-cdp.mjs`, whose header already notes it works against a
 running session browser.
 
 ```
@@ -735,7 +735,7 @@ Repo:
 `packages/aiui-dev-overlay/src/intent-pipeline/{types,engine}.ts`,
 `packages/aiui-dev-overlay/src/multimodal/shot.ts:350-451` (`locateComponents` — the ~60 lines to
 inline), `packages/aiui-util/src/browser.ts:55-206` (port discovery + launch flags),
-`packages/aiui-demo/scripts/rasterize-cdp.mjs` (a dependency-free CDP client, copyable verbatim),
+`demos/gallery/scripts/rasterize-cdp.mjs` (a dependency-free CDP client, copyable verbatim),
 `packages/aiui-dev-overlay/src/intent-pipeline/engine.ts:1135-1182` (`renderShot` — the
 `<screenshot>` block to reproduce),
 `packages/aiui-dev-overlay/handoff/pipeline-and-interaction-model.md:477` (the prior rejection of a

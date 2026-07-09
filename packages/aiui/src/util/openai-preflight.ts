@@ -14,7 +14,7 @@
  * blocks the launch; the modality still mounts, but transcription/correction are
  * unavailable until the key is set (the widget says so — `mock` is the explicit
  * offline choice, not a silent fallback). The most valuable case this catches is the one that
- * bit the bench twice (see workbench field-notes, "Keys & config"): a **stale
+ * bit the bench twice (archive/workbench/field-notes.md, "Keys & config"): a **stale
  * shell export** shadowing the real key, which surfaces as a confusing 401 deep
  * in the pipeline rather than a clear message up front.
  *

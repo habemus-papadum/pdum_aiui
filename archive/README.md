@@ -6,7 +6,7 @@ to delete outright someday.
 
 - `agentic_ui_workflow/` — early sketches of the agentic frontend loop (HMR discipline,
   observable web workers, frontend debugging). Distilled into the *Frontend for Agents* guide
-  pages and the `aiui-viz` / `aiui-demo` implementations.
+  pages and the `aiui-viz` / `demos/gallery` implementations.
 - `reactive-flows/` — the solid-cells design lineage (motivation, two SolidJS iterations).
   Distilled into `aiui-viz`'s cell implementation.
 - Loose files — one-off design notes (attachment path encoding, tab routing, early desiderata

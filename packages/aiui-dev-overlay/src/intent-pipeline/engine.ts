@@ -1115,6 +1115,14 @@ export function renderAppSelection(
 const MAX_CELLS_IN_PROMPT = 4;
 
 /**
+ * Elements listed per shot before collapsing behind `elements-omitted`. A huge
+ * drag legitimately frames many panels (the locator reports what was framed);
+ * the prompt needs reference points, not a full inventory, and document order
+ * keeps the visually-first panels.
+ */
+const MAX_ELEMENTS_IN_PROMPT = 8;
+
+/**
  * One shot, inlined as a block at its position in the prose. Two styles,
  * chosen by {@link ComposeOptions.shotFormat}:
  *
@@ -1161,7 +1169,10 @@ function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
   if (components.length === 0) {
     return `<screenshot ${attrs.join(" ")}/>`;
   }
-  const lines = components.map((c) => {
+  if (components.length > MAX_ELEMENTS_IN_PROMPT) {
+    attrs.push(`elements-omitted="${components.length - MAX_ELEMENTS_IN_PROMPT}"`);
+  }
+  const lines = components.slice(0, MAX_ELEMENTS_IN_PROMPT).map((c) => {
     const el: string[] = [`name="${escapeXml(c.component)}"`];
     if (c.source && c.source !== "unknown") {
       el.push(`source="${escapeXml(relativizePath(c.source, cwd))}"`);
@@ -1199,7 +1210,8 @@ function renderShotText(item: ComposedItem, cwd: string | undefined): string {
   if (components.length === 0) {
     return `${head}]`;
   }
-  const refs = components.map((c) => {
+  const omitted = components.length - MAX_ELEMENTS_IN_PROMPT;
+  const refs = components.slice(0, MAX_ELEMENTS_IN_PROMPT).map((c) => {
     const where = c.source && c.source !== "unknown" ? ` @ ${relativizePath(c.source, cwd)}` : "";
     const anchor = c.containment === "within" ? "within " : "";
     let ref = `  ${anchor}${c.component}${where}`;
@@ -1215,6 +1227,9 @@ function renderShotText(item: ComposedItem, cwd: string | undefined): string {
     }
     return ref;
   });
+  if (omitted > 0) {
+    refs.push(`  +${omitted} more elements`);
+  }
   // Same separation rule as the XML form: multi-line blocks stand apart.
   return `\n${[head, ...refs, "]"].join("\n")}\n`;
 }

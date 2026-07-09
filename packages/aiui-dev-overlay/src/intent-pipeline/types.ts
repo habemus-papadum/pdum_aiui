@@ -3,11 +3,11 @@
  * {@link IntentEvent} on one append-only stream. Every "IR stage" is a pure
  * function over that stream (see engine.ts/composeIntent) — which is the whole
  * point: design the passes by watching them run on real interaction. The
- * inspector (in the workbench lab) renders the stream raw; these event shapes
+ * inspector panes (debug-ui) render the stream raw; these event shapes
  * are also the fixture format and, from P2, the wire contract.
  *
  * Framework-free and browser-safe by construction — no DOM, no deps. Config
- * (the old `WorkbenchSettings`) lives in {@link ./config}.
+ * lives in {@link ./config}.
  */
 
 export interface Rect {

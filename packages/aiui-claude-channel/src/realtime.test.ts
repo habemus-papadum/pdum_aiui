@@ -9,9 +9,11 @@ import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format } from "./intent-v1";
 import {
   captureUnexpectedResponse,
+  checkRealtimeConfigEcho,
   closeSuffix,
   openRealtimeSession,
   type RealtimeCallbacks,
+  type RealtimeDiagnostic,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
   type UnexpectedResponseSource,
@@ -84,17 +86,19 @@ describe("openRealtimeSession", () => {
     const deltas: Array<{ segment: number; text: string }> = [];
     const finals: Array<{ segment: number; text: string; latencyMs: number; model: string }> = [];
     const errors: Array<{ message: string; segment?: number }> = [];
+    const diagnostics: RealtimeDiagnostic[] = [];
     const cb: RealtimeCallbacks = {
       onDelta: (segment, text) => deltas.push({ segment, text }),
       onFinal: (segment, result) => finals.push({ segment, ...result }),
       onError: (message, segment) =>
         errors.push({ message, ...(segment !== undefined ? { segment } : {}) }),
+      onDiagnostic: (event) => diagnostics.push(event),
     };
     const session = openRealtimeSession(
       { apiKey: "k", model: () => "gpt-realtime-whisper", socketFactory: up.factory, now },
       cb,
     );
-    return { session, deltas, finals, errors };
+    return { session, deltas, finals, errors, diagnostics };
   }
 
   it("configures a GA transcription session on open (pcm/24k, turn_detection null)", () => {
@@ -570,10 +574,7 @@ interface StreamFixture {
 }
 
 const fixturePath = fileURLToPath(
-  new URL(
-    "../../aiui-dev-overlay/workbench/fixtures/streaming/realtime-turn.json",
-    import.meta.url,
-  ),
+  new URL("../../aiui-dev-overlay/fixtures/streaming/realtime-turn.json", import.meta.url),
 );
 
 describe("intent-v1 realtime streaming fixture", () => {
@@ -750,5 +751,145 @@ describe("wordsFromTokenLogprobs (the whisper heat-map fold)", () => {
     expect(
       wordsFromTokenLogprobs("something else", [{ token: "hi", logprob: -0.5 }]),
     ).toBeUndefined();
+  });
+});
+
+// ── protocol observability: no silent drops ──────────────────────────────────
+//
+// Mirrors the ElevenLabs post-mortem. Scribe self-committed utterances for
+// months and this class of `default: return` hid it. OpenAI's `turn_detection:
+// null` should prevent the same thing — but "should" is what we said about
+// `commit_strategy=manual`, which did not exist. So: verify the echo, surface
+// the unknown, and never drop a finished transcript in silence.
+
+describe("realtime protocol observability", () => {
+  function collect(up: FakeUpstream) {
+    const finals: Array<{ segment: number; text: string }> = [];
+    const errors: Array<{ message: string; segment?: number }> = [];
+    const diagnostics: RealtimeDiagnostic[] = [];
+    const session = openRealtimeSession(
+      { apiKey: "k", model: () => "gpt-realtime-whisper", socketFactory: up.factory, now: () => 0 },
+      {
+        onDelta: () => {},
+        onFinal: (segment, result) => finals.push({ segment, text: result.text }),
+        onError: (message, segment) =>
+          errors.push({ message, ...(segment !== undefined ? { segment } : {}) }),
+        onDiagnostic: (e) => diagnostics.push(e),
+      },
+    );
+    return { session, finals, errors, diagnostics };
+  }
+
+  it("surfaces the session.updated config echo", () => {
+    const up = fakeUpstream();
+    const { diagnostics } = collect(up);
+    up.open();
+    up.emit({
+      type: "session.updated",
+      session: {
+        audio: {
+          input: { turn_detection: null, transcription: { model: "gpt-realtime-whisper" } },
+        },
+      },
+    });
+    expect(diagnostics).toContainEqual(expect.objectContaining({ kind: "config-echo" }));
+    expect(diagnostics.filter((d) => d.kind === "config-mismatch")).toEqual([]);
+  });
+
+  it("flags a server that kept turn_detection on — it owns the boundary, not our PTT", () => {
+    const up = fakeUpstream();
+    const { diagnostics } = collect(up);
+    up.open();
+    up.emit({
+      type: "session.updated",
+      session: { audio: { input: { turn_detection: { type: "server_vad" } } } },
+    });
+    expect(diagnostics).toContainEqual({
+      kind: "config-mismatch",
+      param: "turn_detection",
+      requested: null,
+      echoed: { type: "server_vad" },
+    });
+  });
+
+  it("handles conversation.item.input_audio_transcription.failed (previously ignored entirely)", () => {
+    const up = fakeUpstream();
+    const { session, errors } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.appendAudio(1, new Uint8Array(200 * 48));
+    session.commit(1);
+    up.emit({
+      type: "conversation.item.input_audio_transcription.failed",
+      item_id: "item_a",
+      error: { message: "audio too short" },
+    });
+    expect(errors).toEqual([{ message: "audio too short", segment: 1 }]);
+    // The segment left `pending`, so a drain settles rather than hanging.
+    return expect(session.drain(5)).resolves.toEqual([]);
+  });
+
+  it("reports a completed transcript that binds to no segment instead of dropping it", () => {
+    const up = fakeUpstream();
+    const { session, finals, diagnostics } = collect(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.appendAudio(1, new Uint8Array(200 * 48));
+    session.commit(1);
+    up.emit(completed("item_a", "the real one")); // binds + finalizes segment 1
+    // A SECOND item inside the same segment — the OpenAI shape of a self-commit.
+    up.emit(completed("item_b", "the orphan"));
+    expect(finals).toEqual([{ segment: 1, text: "the real one" }]);
+    expect(diagnostics).toContainEqual({
+      kind: "orphan-result",
+      messageType: "conversation.item.input_audio_transcription.completed",
+      chars: "the orphan".length,
+    });
+  });
+
+  it("reports an unknown message type rather than returning silently", () => {
+    const up = fakeUpstream();
+    const { diagnostics } = collect(up);
+    up.open();
+    up.emit({ type: "input_audio_buffer.speech_started" });
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        kind: "unhandled",
+        messageType: "input_audio_buffer.speech_started",
+      }),
+    );
+  });
+});
+
+describe("checkRealtimeConfigEcho", () => {
+  const ok = { audio: { input: { turn_detection: null, transcription: { model: "m" } } } };
+
+  it("passes a faithful echo", () => {
+    expect(checkRealtimeConfigEcho({ model: "m", turnDetection: null }, ok)).toEqual([]);
+  });
+
+  it("flags a non-null turn_detection", () => {
+    expect(
+      checkRealtimeConfigEcho(
+        { model: "m", turnDetection: null },
+        { audio: { input: { turn_detection: { type: "semantic_vad" } } } },
+      ),
+    ).toEqual([{ param: "turn_detection", requested: null, echoed: { type: "semantic_vad" } }]);
+  });
+
+  it("flags a silently substituted model", () => {
+    expect(
+      checkRealtimeConfigEcho(
+        { model: "gpt-realtime-whisper", turnDetection: null },
+        { audio: { input: { turn_detection: null, transcription: { model: "whisper-1" } } } },
+      ),
+    ).toEqual([
+      { param: "transcription.model", requested: "gpt-realtime-whisper", echoed: "whisper-1" },
+    ]);
+  });
+
+  it("says nothing when there is no echo to read", () => {
+    expect(checkRealtimeConfigEcho({ model: "m", turnDetection: null }, undefined)).toEqual([]);
+    expect(checkRealtimeConfigEcho({ model: "m", turnDetection: null }, {})).toEqual([]);
   });
 });

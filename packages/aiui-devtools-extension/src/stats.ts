@@ -3,38 +3,6 @@
  * chrome.* so they're unit-testable under plain vitest.
  */
 
-/** Aggregate view of a set of round-trip times. */
-export interface RttSummary {
-  count: number;
-  avgMs: number;
-  p50Ms: number;
-  p95Ms: number;
-}
-
-/** Nearest-rank percentile of an ascending-sorted array. */
-export function percentile(sortedAsc: number[], p: number): number {
-  if (sortedAsc.length === 0) {
-    return 0;
-  }
-  const rank = Math.ceil((p / 100) * sortedAsc.length);
-  return sortedAsc[Math.min(sortedAsc.length, Math.max(1, rank)) - 1];
-}
-
-/** Summarize round-trip times; null when there are none. */
-export function summarizeRtt(rtts: number[]): RttSummary | null {
-  if (rtts.length === 0) {
-    return null;
-  }
-  const sorted = [...rtts].sort((a, b) => a - b);
-  const sum = sorted.reduce((acc, ms) => acc + ms, 0);
-  return {
-    count: sorted.length,
-    avgMs: sum / sorted.length,
-    p50Ms: percentile(sorted, 50),
-    p95Ms: percentile(sorted, 95),
-  };
-}
-
 /** Human byte size: 998 B, 12.3 KB, 4.0 MB. */
 export function formatBytes(bytes: number): string {
   if (bytes < 1000) {

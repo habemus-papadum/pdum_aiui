@@ -1,6 +1,6 @@
 /**
  * The intent pipeline's configuration — one object, deliberately wider than any
- * UI. It began as the workbench's `WorkbenchSettings` (every contested
+ * UI. It began, in the retired workbench lab, as a settings drawer (every contested
  * interaction-design choice as a knob, argued by toggling) and graduates here
  * as a **superset**: the same visible toggles, plus research knobs that ship
  * without UI so they can be measured before they are designed for.
@@ -9,7 +9,7 @@
  * modality options (`aiuiDevOverlay({ intent: {...} })` → widget); the
  * **server-side** knobs (real transcription/correction models, silence gating,
  * priming) live in the channel's config; the hello frame carries the client's
- * view so a trace records the whole configuration. The lab (workbench) exposes
+ * view so a trace records the whole configuration. A debug harness can expose
  * everything by default via its settings drawer + a raw-JSON advanced panel;
  * the shipping overlay exposes a curated few. Same type throughout.
  *
@@ -31,7 +31,7 @@ export interface IntentPipelineConfig {
    */
   tier?: "mock" | "rapid" | "premium";
 
-  // ── the visible toggles (were WorkbenchSettings) ───────────────────────────
+  // ── the visible toggles ────────────────────────────────────────────────────
   /** Space bar behavior: hold-to-talk (walkie-talkie) or press-to-toggle. */
   talkMode: "hold" | "toggle";
   /** Seconds until ink strokes fade out; 0 = persist until cleared. */
@@ -49,7 +49,7 @@ export interface IntentPipelineConfig {
    * interrupted (model-tiers.md; its input transcription still feeds the IR, so
    * the lowered prompt never depends on the voice model). `mock` is the explicit
    * offline/developer choice: local, no key, no network, canned output (the
-   * workbench lab overrides to it so it runs without a channel).
+   * offline harness can override to it to run without a channel).
    */
   transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice" | "elevenlabs";
   /** OpenAI transcription model (when transcriber = openai). */
@@ -172,7 +172,7 @@ export interface IntentPipelineConfig {
  * The shipped defaults. Transcription and correction default to the **real**
  * `openai` backends (channel-side), so an overlay launched through `aiui claude`
  * works against the channel out of the box. `mock` is never a default here — it
- * is the explicit offline choice a developer opts into (the workbench lab
+ * is the explicit offline choice a developer opts into (an offline harness
  * overrides these two back to `mock` so it runs with no channel and no key). The
  * `mock*` cadence/typo knobs below only matter once `transcriber: "mock"`.
  */

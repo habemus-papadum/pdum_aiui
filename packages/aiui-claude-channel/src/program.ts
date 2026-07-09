@@ -61,7 +61,7 @@ export function buildProgram(): Command {
       "run a standalone debug channel server (no MCP; registered as debug) that prints lowered prompts to stdout",
     )
     .option("--tag <tag>", "registry address + stderr/trace label (defaults to a UUID)")
-    .option("--name <name>", 'display name selectors show for this server (e.g. "aiui workbench")')
+    .option("--name <name>", 'display name selectors show for this server (e.g. "aiui debug")')
     .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/")
     .option("--sidecars <json>", "JSON array of session sidecar descriptors to host")
     .option(

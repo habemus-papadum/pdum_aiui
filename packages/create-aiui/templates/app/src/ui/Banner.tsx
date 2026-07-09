@@ -16,9 +16,8 @@ export function Banner() {
         session, and the agent edits this app's source while you watch it hot-reload.
       </p>
       <p>
-        The rose below is placeholder scenery. Play with it — drag the slider, press <kbd>T</kbd> to
-        tune from the keyboard, <kbd>R</kbd> for a new petal count — then describe the app you
-        actually want built here: <i>“turn this into a heart-rate dashboard”</i>,{" "}
+        The rose below is placeholder scenery. Play with it — drag the sliders — then describe the
+        app you actually want built here: <i>“turn this into a heart-rate dashboard”</i>,{" "}
         <i>“I want to explore protein structures”</i>, <i>“make me a tide chart for my harbor”</i>.
         Everything on this page, banner included, is meant to be rebuilt around your idea.
       </p>

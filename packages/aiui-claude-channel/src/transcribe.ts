@@ -1,8 +1,8 @@
 /**
  * The transcription seam — server-side, where the OpenAI key belongs.
  *
- * The workbench proved this seam page-side against a dev-server `/api/transcribe`
- * proxy (see `workbench/src/transcribe.ts`); graduating the lowering into the
+ * The retired workbench lab proved this seam page-side against a dev-server
+ * `/api/transcribe` proxy; graduating the lowering into the
  * channel moves the real call here, keyed by the channel process's environment.
  * A segment's raw bytes + container MIME go in, a timed transcript comes out.
  *
@@ -13,7 +13,7 @@
  *    the measured `latencyMs` is the design datum the audio-stack notes track.
  *
  * `fetch` is injected so tests exercise the real request shape without a
- * network (the reason the workbench's proxy existed is the same reason the key
+ * network (the reason that lab proxy existed is the same reason the key
  * lives here and not on the page).
  */
 
@@ -46,7 +46,7 @@ export interface Transcriber {
 
 /**
  * OpenAI sniffs an uploaded audio file by its **filename extension**, not the
- * content-type header (a workbench field-note that cost a round of confusing
+ * content-type header (an archive/workbench/field-notes.md finding that cost a round of confusing
  * 400s): name the multipart file to match the container or transcription
  * rejects it. Map the leading MIME type to the extension OpenAI expects.
  */

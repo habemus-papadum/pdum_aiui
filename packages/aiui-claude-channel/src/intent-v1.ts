@@ -115,7 +115,7 @@ export interface LoweredMessage {
 /**
  * The turn's final lowered prompt, pushed to the client just before it is sent
  * into the session — exactly what the fin commit hands `sendPrompt`, so a
- * client (the workbench, a widget's "what did I just send?" affordance) can
+ * client (a debug viewer, a widget's "what did I just send?" affordance) can
  * show the committed prompt without polling the trace API. Pushed to every
  * client, unconditionally: the push protocol is additive, and old clients
  * ignore unknown kinds by design. A cancelled or empty turn pushes nothing
@@ -539,8 +539,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // The base every prompt path (screenshots AND source locations) relativizes
   // against — the agent's working directory. Defaults to this process's cwd
   // (right for `aiui claude`, whose channel runs in the project); a supervisor
-  // whose cwd is elsewhere overrides via AIUI_PROMPT_CWD (the workbench spawns
-  // its channel in the workbench package but wants repo-root-relative paths).
+  // whose cwd is elsewhere overrides via AIUI_PROMPT_CWD (a supervisor that
+  // spawns its channel in a subdirectory but wants repo-root-relative paths).
   const promptCwd = process.env.AIUI_PROMPT_CWD || process.cwd();
   const composeOptions = { cwd: promptCwd, shotFormat: intent.shotFormat };
 
@@ -878,6 +878,18 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     const sttCallbacks: RealtimeCallbacks = {
       onDelta: (segment, text) => {
         push([{ at: Date.now(), type: "transcript-delta", segment, text }]);
+        // The vendor's running text for the still-uncommitted segment, recorded
+        // verbatim. Every engine behind this seam re-sends the CUMULATIVE text
+        // (RealtimeCallbacks.onDelta's contract), so a partial that gets SHORTER
+        // is the vendor revising itself — not a dropped frame and not something
+        // this side patched. Without these stages that distinction is
+        // unfalsifiable after the fact, since deltas are pushed and discarded.
+        // Recorded only; the fold still composes from `transcript-final` alone.
+        trace?.record({
+          kind: "ir",
+          label: `stt partial seg_${segment}`,
+          data: { chars: text.length, text },
+        });
       },
       onFinal: (segment, result) => {
         recordCost(`realtime transcription seg_${segment}`, result.cost);
@@ -938,6 +950,28 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
             message: `realtime transcription: ${message}`,
             detail: hint,
           });
+        }
+      },
+      // Vendor-protocol observability. None of these change the turn; they exist
+      // so a wire behaviour we didn't model (Scribe self-committing utterances,
+      // a query param silently ignored, a message type we've never seen) leaves
+      // a mark in the trace instead of vanishing into a `default: return`.
+      onDiagnostic: (event) => {
+        trace?.record({
+          kind: "info",
+          label:
+            event.kind === "vendor-commit"
+              ? `stt vendor commit seg_${event.segment}`
+              : `stt ${event.kind}`,
+          data: event,
+        });
+        // A param we set that the vendor did not confirm means the behaviour we
+        // think we configured is not in force — loud, not just traced.
+        if (event.kind === "config-mismatch") {
+          console.warn(
+            `[aiui] ${intent.transcriber}: config param "${event.param}" not confirmed by the server ` +
+              `(requested ${JSON.stringify(event.requested)}, echoed ${JSON.stringify(event.echoed)})`,
+          );
         }
       },
     };

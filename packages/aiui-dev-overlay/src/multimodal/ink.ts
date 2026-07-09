@@ -9,7 +9,7 @@
  *  - a region shot "freezes" overlapping ink by compositing it into the
  *    captured image (see shot.ts), so what you circled travels with pixels.
  *
- * Graduated from the workbench. The canvas is a page-level overlay layer (not
+ * Graduated from the retired workbench lab. The canvas is a page-level overlay layer (not
  * inside a shadow root) so it can sit above the app under development; its
  * `mm-ink` class is styled by the modality's injected STYLES.
  */

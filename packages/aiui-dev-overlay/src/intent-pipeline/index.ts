@@ -5,7 +5,7 @@
  * correction diff machinery, and the {@link composeIntent} pass that folds a
  * thread's events into the lowered Option-C body + meta.
  *
- * Prototyped in the workbench, graduated here so the overlay's modality and the
+ * Prototyped in the since-retired workbench lab, graduated here so the overlay's modality and the
  * channel's lowering processor share one implementation (and one set of
  * captured fixtures as the regression net). Zero DOM; the only dependency is
  * the equally realm-free modal kit (`aiui-viz/modal`), which the keymap's

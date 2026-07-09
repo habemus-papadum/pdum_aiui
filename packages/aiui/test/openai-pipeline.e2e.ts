@@ -9,32 +9,32 @@
  *      `say` + `afconvert`; CI runners are Linux, so the fixture is committed,
  *      never generated in CI) POSTed to `/v1/audio/transcriptions`. Asserts a
  *      200 and non-empty text; records the latency.
- *  (b) correction diff — the workbench's V4A correction prompt sent to
+ *  (b) correction diff — the overlay's V4A correction prompt sent to
  *      `/v1/chat/completions`, asserting the returned patch **parses and
- *      applies** via the workbench patch applier. Not that it's the *right*
+ *      applies** via the overlay's patch applier. Not that it's the *right*
  *      edit — only that the round trip yields an applicable V4A patch.
  *
  * Marker: `*.e2e.ts`, so `pnpm test` never collects it; it runs via
  * `pnpm test:e2e` (see vitest.e2e.config.ts) and, in CI, the weekly
  * openai-e2e.yml. Gated on `OPENAI_API_KEY`: with no key the whole suite skips
  * (describe.skipIf), so forks and offline runs stay green. Quality, latency
- * curves and model comparisons stay in the workbench's bench/corpus runner —
+ * curves and model comparisons were measured in the retired workbench lab —
  * this is only a "the wire still works" smoke.
  */
 import { readFileSync } from "node:fs";
 import { openaiSpeaker, SYSTEM_PROMPT } from "@habemus-papadum/aiui-claude-channel";
 import { describe, expect, it } from "vitest";
-// The correction prompt + V4A applier graduated from the workbench into the
+// The correction prompt + V4A applier graduated from the retired workbench lab into the
 // shared packages (multimodal-intent-graduation.md P1): the SYSTEM_PROMPT is
 // re-exported by the channel's corrector seam (a dependency here); `applyPatch`
 // graduated to the intent-pipeline core — imported by relative source path since
-// aiui-dev-overlay is not a dependency of this package (as the workbench import
+// aiui-dev-overlay is not a dependency of this package (as an overlay import
 // was before).
 import { applyPatch } from "../../aiui-dev-overlay/src/intent-pipeline/patch";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// The models the workbench settled on as defaults (openai-audio-stack.md,
+// The models the workbench lab settled on as defaults (archive/workbench/openai-audio-stack.md,
 // field-notes.md): mini transcribe for STT, mini chat at temperature 0 for the
 // correction diff. Cheapest tokens that still exercise the real request shape.
 const TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
@@ -50,7 +50,7 @@ describe.skipIf(!OPENAI_API_KEY)("openai intent pipeline · real round-trip (e2e
     const form = new FormData();
     form.append("model", TRANSCRIBE_MODEL);
     // The filename EXTENSION is load-bearing: OpenAI sniffs the container by
-    // name, not content-type (workbench field-notes). ".wav" must match the file.
+    // name, not content-type (archive/workbench/field-notes.md). ".wav" must match the file.
     form.append("file", new File([bytes], "segment.wav", { type: "audio/wav" }));
 
     const started = performance.now();
@@ -84,7 +84,7 @@ describe.skipIf(!OPENAI_API_KEY)("openai intent pipeline · real round-trip (e2e
         authorization: `Bearer ${OPENAI_API_KEY}`,
         "content-type": "application/json",
       },
-      // Mirrors workbench/src/correct.ts openaiCorrector: same SYSTEM_PROMPT,
+      // Mirrors the retired lab's openaiCorrector: same SYSTEM_PROMPT,
       // same user framing (TRANSCRIPT / SELECTED / INSTRUCTION), temperature 0.
       body: JSON.stringify({
         model: CORRECT_MODEL,

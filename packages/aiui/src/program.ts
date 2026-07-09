@@ -13,7 +13,6 @@ import {
 } from "./commands/config";
 import { runConfigTui } from "./commands/config-tui";
 import { type DebugOptions, runDebug } from "./commands/debug";
-import { type DemoOptions, runDemo } from "./commands/demo";
 import { runEnv } from "./commands/env";
 import { runMcp } from "./commands/mcp";
 import { runPaintUrl } from "./commands/paint";
@@ -104,15 +103,9 @@ export function buildProgram(): Command {
     .option("--remote-port <port>", "fixed port on the tunnel's remote side (default: 9222)")
     .action((opts: BrowserOptions) => runBrowser(opts));
 
-  // A disposable, npx-able playground: scaffolds a sample app into the user's
-  // own directory (its own git repo — agent edits stay in the sandbox) and is
-  // safe to re-run: an existing demo continues instead of being re-scaffolded.
-  program
-    .command("demo")
-    .description("scaffold a runnable demo playground (safe to re-run; default dir: aiui-demo)")
-    .argument("[dir]", "target directory (default: aiui-demo)")
-    .option("--skip-install", "scaffold only — don't run npm install")
-    .action((dir: string | undefined, opts: DemoOptions) => runDemo(dir, opts));
+  // (There is no `aiui demo`. Scaffolding a playground is `create-aiui`'s job —
+  // `npm create @habemus-papadum/aiui@latest my-app` — so there is exactly one
+  // starter template in the repo, and it is the one people actually build on.)
 
   // Reset aiui's on-disk state to a fresh-install slate — the two cache roots
   // (this repo's .aiui-cache/ and the user cache, including the managed Chrome

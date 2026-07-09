@@ -52,8 +52,8 @@ describe("serverLabel", () => {
   });
 
   it("prefers the entry's own name, and always marks debug servers", () => {
-    expect(serverLabel(server({ ppid: 555, name: "aiui workbench", debug: true }), agents)).toBe(
-      "aiui workbench  ·  /repo  ·  port 4000  ·  debug",
+    expect(serverLabel(server({ ppid: 555, name: "aiui debug", debug: true }), agents)).toBe(
+      "aiui debug  ·  /repo  ·  port 4000  ·  debug",
     );
     // The name wins even over a known session; debug marks without a name too.
     expect(serverLabel(server({ ppid: 100, name: "custom" }), agents)).toBe(
@@ -76,7 +76,7 @@ describe("selectMcpServer auto-pick", () => {
 
   it("still prompts for a lone debug server — never a silent default", async () => {
     const { select } = await import("@inquirer/prompts");
-    const debug = server({ tag: "wb", name: "aiui workbench", debug: true });
+    const debug = server({ tag: "wb", name: "aiui debug", debug: true });
     vi.mocked(select).mockClear();
     vi.mocked(select).mockResolvedValueOnce(debug);
     await expect(selectMcpServer([debug])).resolves.toBe(debug);

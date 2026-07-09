@@ -1,6 +1,6 @@
 {
   "name": "pdum_aiui",
-  "version": "0.4.0",
+  "version": "0.4.0+dev",
   "private": true,
   "type": "module",
   "description": "pdum_aiui — a lockstep-versioned TypeScript monorepo.",
@@ -36,10 +36,9 @@
     "docs:dev": "pnpm docs:gen && vitepress dev docs",
     "docs:build": "pnpm docs:gen && vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "demo": "tsx packages/aiui/src/cli.ts vite packages/aiui-demo",
+    "demo": "tsx packages/aiui/src/cli.ts vite demos/gallery",
     "test-app": "tsx packages/aiui/src/cli.ts vite packages/aiui-test-app",
-    "test-app:channel": "tsx packages/aiui/src/cli.ts mcp serve --name \"aiui test app\" --tag aiui-test-app --port 49317",
-    "workbench": "pnpm --filter @habemus-papadum/aiui-workbench dev"
+    "test-app:channel": "tsx packages/aiui/src/cli.ts mcp serve --name \"aiui test app\" --tag aiui-test-app --port 49317"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.2",

@@ -266,6 +266,30 @@ export function classifyStage(stage: TraceStageLike): StageClass {
   if (label === "code selection dropped") {
     return norm("in", "context", "⧉", "code selection dropped");
   }
+  // ── vendor-protocol diagnostics (the realtime sessions' onDiagnostic) ───────
+  if (/^stt vendor commit seg_/.test(label)) {
+    // The vendor closed an utterance we never asked it to close. Not an error —
+    // but the reason a segment's transcript is a concatenation, and the single
+    // most useful card when a long segment reads oddly.
+    return norm("out", "events", "✂", label.replace(/^stt /, ""));
+  }
+  if (label === "stt config-mismatch" || label === "stt orphan-result") {
+    // A param the server did not confirm, or a finished transcript that matched
+    // no segment. Both mean we are not running the protocol we think we are.
+    return fail("out", "⚠", label.replace(/^stt /, "stt "));
+  }
+  if (label === "stt config-echo") {
+    return norm("out", "config", "🔎", "stt config echo");
+  }
+  if (label === "stt unhandled") {
+    return norm("out", "events", "👽", "stt unhandled message");
+  }
+  if (isPartialLabel(label)) {
+    // One card per vendor revision, deliberately NOT coalesced: the sequence is
+    // the diagnostic. Each renders as a diff against the segment's previous
+    // partial, so a cumulative transcript that shrinks shows up as red.
+    return norm("internal", "events", "✍", label);
+  }
   if (/^stt final seg_/.test(label)) {
     // The per-final capability receipt: words / timestamps / logprob range at
     // a glance (the heat-map debugging lesson — never dig merged-events JSON
@@ -516,6 +540,64 @@ export function loweredPromptText(stage: TraceStageLike | undefined): string {
   }
   if (data && typeof data === "object" && typeof (data as { text?: unknown }).text === "string") {
     return (data as { text: string }).text;
+  }
+  return "";
+}
+
+/**
+ * The freshest **speculative** prompt: what the accumulator had rendered the
+ * last time it folded. The channel records `{ transcript, prompt }` on every
+ * `recompose()` — i.e. after each interaction that mutates the event log (a
+ * committed segment, a wired screenshot, a selection) — so a trace still in
+ * flight (or one that was abandoned) already carries the prompt as it stood.
+ * The hero falls back to this when no `lowered prompt` stage exists yet, which
+ * is what makes the prompt watchable while the turn is still happening rather
+ * than only after it commits.
+ *
+ * Partials never reach the fold, so this text tracks committed segments only —
+ * it does not include words currently being spoken.
+ */
+export function speculativePromptText(stages: TraceStageLike[] | undefined): string {
+  if (!Array.isArray(stages)) {
+    return "";
+  }
+  for (let i = stages.length - 1; i >= 0; i--) {
+    const stage = stages[i];
+    if (!(stage.label ?? "").startsWith("composed (speculative)")) {
+      continue;
+    }
+    const prompt = (stage.data as { prompt?: unknown } | undefined)?.prompt;
+    if (typeof prompt === "string" && prompt !== "") {
+      return prompt;
+    }
+  }
+  return "";
+}
+
+// ── streaming transcript partials ────────────────────────────────────────────
+
+/** True for a `stt partial seg_N` stage label. */
+export function isPartialLabel(label: string): boolean {
+  return /^stt partial seg_/.test(label);
+}
+
+/**
+ * The previous partial for the same segment, looking back from `index`. Partials
+ * are cumulative, so diffing a partial against this one shows exactly what the
+ * vendor revised on that tick — the view in which a shrinking transcript is
+ * unmissable. `""` when this is the segment's first partial (everything is an
+ * addition, which reads correctly).
+ */
+export function previousPartialText(stages: TraceStageLike[] | undefined, index: number): string {
+  if (!Array.isArray(stages)) {
+    return "";
+  }
+  const label = stages[index]?.label ?? "";
+  for (let i = index - 1; i >= 0; i--) {
+    if ((stages[i].label ?? "") === label) {
+      const text = (stages[i].data as { text?: unknown } | undefined)?.text;
+      return typeof text === "string" ? text : "";
+    }
   }
   return "";
 }

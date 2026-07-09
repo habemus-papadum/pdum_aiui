@@ -73,6 +73,22 @@ describe("locateComponents (enclosure locator: data-source-loc / data-cell)", ()
     ]);
   });
 
+  it("names an un-celled element after its authoring module, never a bare tag", () => {
+    // The pre-fix failure: a drag framing several panels rendered as
+    // `name="div"` × N in the prompt AND in the trace preview's caption —
+    // the source stamp was right there, carrying the component's name.
+    annotated(document.body, { loc: "src/ui/Controls.tsx:44:7" }, { x: 0, y: 0, w: 100, h: 50 });
+    annotated(document.body, { loc: "src/ui/TimeSeries.tsx:55:5" }, { x: 0, y: 60, w: 100, h: 50 });
+    // No stamp at all (hand-written page, unstamped element): tag is the last resort.
+    const bare = document.createElement("section");
+    stubRect(bare, { x: 0, y: 120, w: 100, h: 30 });
+    bare.setAttribute("data-cell", ""); // annotated-but-empty: matches the query
+    document.body.append(bare);
+
+    const names = locateComponents({ x: -5, y: -5, w: 120, h: 170 }).map((c) => c.component);
+    expect(names).toEqual(["Controls", "TimeSeries", "section"]);
+  });
+
   it("falls back to the innermost containing element (within) when nothing is enclosed", () => {
     const shell = annotated(document.body, { cell: "AppShell" }, { x: 0, y: 0, w: 1000, h: 800 });
     annotated(

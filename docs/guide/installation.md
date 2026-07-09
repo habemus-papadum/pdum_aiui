@@ -21,29 +21,21 @@ and can launch Claude Code with permissions skipped.
   variable ([why env-only](./config#the-intent-pipeline-openai-key)). Without it everything
   still runs; the voice paths say plainly that they're unavailable.
 
-## The disposable sandbox (nothing to install)
-
-```sh
-npx @habemus-papadum/aiui demo my-demo
-```
-
-Scaffolds a standalone, self-contained sample app in its own git repo — the fastest way to try
-the loop without touching a real project. Details in
-[Getting Started](./getting-started#the-quickest-start-a-disposable-demo).
-
 ## Starting a fresh app (the SolidJS starter)
 
 ```sh
 pnpm create @habemus-papadum/aiui my-app    # or: npm create @habemus-papadum/aiui my-app
 ```
 
-Where the demo is deliberately throwaway scenery, this scaffolds a *starting point*: a SolidJS
-2.0 app that opens on a banner telling you the page is alive — arm the overlay and describe the
-app you want — with the [frontend-for-agents](./frontend-for-agents) methodology already in
-miniature (durable roots, a disposable `cell()` graph with agent tools, keyboard modes on the
-[aiui-viz modal kit](./frontend-design-choices), an `.envrc`, a `CLAUDE.md` for the agent). Its
-starter content — a Maurer rose on one slider, **T** to tune, **R** to re-flower — is built to
-be rebuilt. Re-running the command on the same directory continues it; it never overwrites.
+This is both the fastest way to try the loop without touching a real project **and** the way to
+start a keeper. It scaffolds a standalone SolidJS 2.0 app in its own git repo, opening on a banner
+telling you the page is alive — arm the overlay and describe the app you want — with the
+[frontend-for-agents](./frontend-for-agents) methodology already in miniature: durable roots, a
+disposable `cell()` graph, an agent tool surface, an `.envrc`, and a `CLAUDE.md` for the agent. Its
+starter content — a Maurer rose on two sliders — is built to be rebuilt. Re-running the command on
+the same directory continues it; it never overwrites.
+
+The [frontend user guide](./frontend-user-guide) is how to write into it.
 
 ## Adding aiui to your own app
 
@@ -82,5 +74,4 @@ npm install @habemus-papadum/aiui-viz
 ## Working on this repo itself
 
 `pnpm install && pnpm build`, then the `./aiui` wrapper (or `pnpm aiui`). `pnpm demo` serves
-the reference notebooks straight from the checkout; `pnpm workbench` runs the multimodal
-interaction lab. See [Developing pdum_aiui](./development).
+the reference notebooks straight from the checkout. See [Developing pdum_aiui](./development).

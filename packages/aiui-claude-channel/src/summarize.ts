@@ -6,7 +6,7 @@
  * turn is sent, the channel asks a cheap chat model to compress the composed
  * body into a ≤ 12-word line and writes it back onto the manifest (see
  * {@link TraceHandle.setSummary}) — the list route serves manifests, so the
- * gloss rides to every viewer for free and the workbench/DevTools rows can title
+ * gloss rides to every viewer for free and the debug-viewer/DevTools rows can title
  * themselves "18:52 · rewrite the beet essay to say vite".
  *
  * This is deliberately **best-effort and off the hot path**: the fin commit

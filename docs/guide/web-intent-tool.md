@@ -6,7 +6,7 @@ escape hatch — and streams it to the running channel server, where it is **low
 for the Claude Code session. This page is the **design document**; [Using the intent
 overlay](./intent-overlay) is the user guide for the default multimodal modality;
 [Getting Started](./getting-started) shows the whole loop in action; and `pnpm demo` (the
-`aiui-demo` package) is a ready-made playground: `./aiui claude` in one terminal, `pnpm demo` in
+`demos/gallery`) is a ready-made playground: `./aiui claude` in one terminal, `pnpm demo` in
 another, and poke at it.
 
 ![The intent tool over a demo app](/intent-tool.png)
@@ -97,14 +97,11 @@ Each piece is implemented against an abstraction independent of any particular m
 | **Debugging** (web app) | Renders the recorded lowering trace | trace viewer (+ per-format custom views, planned) | `aiui-dev-overlay` (`debug-ui`), over `aiui-claude-channel`'s `/debug/api` |
 
 The rich modalities (voice + pen + screenshots + component location, and the correction
-meta-loop) were **designed before they shipped** and now ship as the default overlay (see
-[Using the intent overlay](./intent-overlay)). The
-[intent workbench](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench)
-(`pnpm workbench`) lives on as the **lab where the pipeline is measured and tuned** — a single
-instrumented page, running the very same pipeline this overlay does, where every interaction
-choice is a setting, every action is an event, the IR passes re-run live as you talk/draw/shoot,
-and a `bench/` corpus runner ranks transcription and correction models offline. Design decisions
-are made there and graduate into the shipping three pieces.
+meta-loop) were **designed before they shipped** — prototyped and measured in a dedicated offline
+lab (the intent workbench, since retired; its findings ledgers are in `archive/workbench/` and the
+interaction fixtures it recorded are the pipeline's regression corpus in
+`packages/aiui-dev-overlay/fixtures/`) — and now ship as the default overlay (see
+[Using the intent overlay](./intent-overlay)).
 
 The three meet at one string: the **stream format name**. The client's `IntentModality.format`
 names the format its frames speak; the server's format registry maps that name to a codec and a
@@ -231,7 +228,9 @@ retracts it with an `app-selection-drop`, and the trace shows each of these as e
 `app selection` stage. The legacy send-time `context {selection}` frame is no longer sent; the
 channel still accepts it from older clients as a fallback.
 
-Attribution reuses the same DOM contract the screenshot/`locate` pipeline reads, so app authors
+Attribution reuses the same DOM contract the screenshot/`locate` pipeline reads (the full
+resolution story — stamps, ladders, and what the agent receives — is
+[Attribution: gesture → source](./attribution)), so app authors
 write nothing selection-specific: from the selection's start element, `closest('[data-source-loc]')`
 and `closest('[data-cell]')` give the authoring line and dataflow node, and `closest('[data-tex]')`
 — falling back to KaTeX's own `<annotation encoding="application/x-tex">` — recovers the TeX behind
@@ -376,7 +375,7 @@ page belongs to a frontend process). The homes: the widget's **🔍 button** ope
 debug`** serves it standalone — it picks a running channel (the same selector `aiui vite` uses)
 and the page's header offers a **channel switcher** fed by the channel's `/debug/api/channels`
 route, so one command hops across every channel on the machine; and the same panes are embedded
-in the [aiui DevTools panel](./devtools) and the workbench dock. Every home is **live** (it
+in the [aiui DevTools panel](./devtools). Every home is **live** (it
 polls; you can watch a trace grow mid-session). The
 generic stage viewer covers every modality; the design allows a modality to ship a *custom* debug
 view keyed by its format (waveform scrubbing for audio, region overlays for screenshots) — the
@@ -392,15 +391,13 @@ the tab it drives; remove the key to revert), or pinned with the `actor` option 
 plugin / `mountIntentTool`. It is deliberately **not** inferred from `navigator.webdriver` —
 that flag is browser-wide, and in the shared session browser it labeled the human's own turns
 as `agent`. The channel stamps the label on the trace manifest. Trace lists — the debug viewer
-(`aiui debug` / `/__aiui/debug`), the DevTools Intent pane, the workbench — badge any
+(`aiui debug` / `/__aiui/debug`), the DevTools Intent pane — badge any
 non-human actor. There is no pruning yet; traces only accumulate.
 
-**Watching lowering without an agent: the workbench.** The in-repo workbench (`pnpm workbench`)
-runs the whole pipeline against a **debug channel server** (`aiui-claude-channel serve`) that has
-no MCP client at all — turns lower, trace, and echo the final prompt back over the websocket (a
-`lowered-prompt` push every client is free to ignore), but can never reach a session. Its trace
-pane reuses the same shared debug-ui components as the DevTools panel, so viewer improvements
-land in both. See `packages/aiui-dev-overlay/workbench/README.md`.
+**Watching lowering without an agent.** A **debug channel server** (`aiui-claude-channel serve`)
+has no MCP client at all — turns lower, trace, and echo the final prompt back over the websocket
+(a `lowered-prompt` push every client is free to ignore), but can never reach a session. Point any
+overlay-carrying app at it to watch the pipeline in isolation.
 
 ## Adding a modality — the checklist
 

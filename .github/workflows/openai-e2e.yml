@@ -15,7 +15,7 @@ name: OpenAI E2E
 # Like the Claude e2e (e2e.yml) they're too expensive/external for every push, so
 # they run on a weekly cadence plus manual dispatch. Everything above this (unit
 # tests) stays mocked; everything below (quality, latency curves, model
-# comparisons) lives in the workbench bench/corpus runner, run by humans.
+# comparisons) was measured by hand in the retired workbench lab (archive/workbench/).
 
 on:
   schedule:
@@ -50,9 +50,9 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      # No build step: the test hits OpenAI directly and imports the workbench
-      # correction prompt/patch applier + the channel's realtime session from
-      # source (workspace source-first).
+      # No build step: the test hits OpenAI directly and imports the correction
+      # prompt/patch applier + the channel's realtime session from source
+      # (workspace source-first).
       - name: OpenAI round-trip (REST transcription + correction diff + TTS ack)
         run: pnpm exec vitest run --config vitest.e2e.config.ts openai-pipeline.e2e
 

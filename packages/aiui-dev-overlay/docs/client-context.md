@@ -24,7 +24,7 @@ channel package's *WebSocket Protocol* doc):
       "tabIndex": 0,
       "targetId": "CB992081B105C12732530E12D8B3B267"
     },
-    "source": { "root": "/Users/nehal/src/pdum_aiui/packages/aiui-demo" }
+    "source": { "root": "/Users/nehal/src/pdum_aiui/demos/gallery" }
   }
 }
 ```

@@ -1,7 +1,7 @@
 /**
  * `aiui-claude-channel serve` — a standalone debug channel server that can
  * **never reach an agent**. For developing and testing clients (the web intent
- * tool, the workbench) against the real wire protocol, lowering pipeline, and
+ * tool, a debug harness) against the real wire protocol, lowering pipeline, and
  * trace/debug tooling without a Claude Code session anywhere in the loop.
  *
  * The isolation is structural, not a flag check:
@@ -13,7 +13,7 @@
  *  - **Registered as `debug`.** The server joins the shared registry like a
  *    real one (so selectors — `quick`, `aiui vite`, the VS Code extension —
  *    can offer it), but its entry carries `debug: true` and an optional
- *    display `--name` ("aiui workbench"). Every selector marks such entries,
+ *    display `--name` (e.g. "aiui debug"). Every selector marks such entries,
  *    and nothing *auto*-picks one (see select.ts): connecting a tool to a
  *    server that answers to nobody is always a human's deliberate choice.
  *
@@ -27,7 +27,7 @@
  * project-local cache as usual, and — with `--record` — appends every
  * frame-log entry as JSONL under `.aiui-cache/recordings/` (see recording.ts).
  * It binds an OS-assigned loopback port unless `--port` pins one (the
- * workbench pins its channel to a fixed port so a human always knows where it
+ * debug harness pins its channel to a fixed port so a human always knows where it
  * is); either way the ready line below carries the actual port, and a pinned
  * port that is already taken fails loudly instead of drifting.
  *
@@ -62,7 +62,7 @@ export interface ServeOptions {
    */
   tag?: string;
   /**
-   * Display name for the registry entry (`--name`, e.g. "aiui workbench") —
+   * Display name for the registry entry (`--name`, e.g. "aiui debug") —
    * how selectors title this server, since a debug server has no owning
    * Claude Code session to be recognised by.
    */
@@ -78,7 +78,7 @@ export interface ServeOptions {
    * Fixed loopback port to bind (`--port`). Omitted, the OS assigns a free one
    * — the right default for anything discovered via the ready line or the
    * registry. A supervisor that promises its user a *known* address (the
-   * workbench pins its channel to 49223) passes one; a taken port is then a
+   * harness pins its channel to a fixed port) passes one; a taken port is then a
    * hard, explained failure instead of a silent drift (see {@link runServe}).
    */
   port?: number;
@@ -184,7 +184,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       (error as NodeJS.ErrnoException | undefined)?.code === "EADDRINUSE"
     ) {
       throw new Error(
-        `port ${options.port} is already in use — is another \`serve\` (or a workbench, ` +
+        `port ${options.port} is already in use — is another \`serve\` (or a debug harness, ` +
           "which spawns one) still running? Stop it, or pass a different --port.",
       );
     }
@@ -193,7 +193,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
 
   // The same dev auto-reload `mcp` has (AIUI_CHANNEL_WATCH=1, source checkout
   // only): edit the lowering code and the format registry hot-rebuilds — open
-  // sockets drop with 1012 and the next turn runs the new code. The workbench
+  // sockets drop with 1012 and the next turn runs the new code. A supervisor
   // spawns serve with the flag set, so pipeline edits apply without a restart.
   // POST /debug/api/reload remains the always-on manual trigger.
   // Join the shared registry, marked as debug (see the header: selectors show

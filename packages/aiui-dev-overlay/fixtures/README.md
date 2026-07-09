@@ -1,13 +1,13 @@
 # Interaction fixtures
 
-Real interaction event-streams, captured from the workbench, that pin the intent
+Real interaction event-streams (captured from the since-retired workbench lab) that pin the intent
 pipeline's behaviour. Each `*.json` is exactly what the inspector's **export**
 button produces: the engine's append-only `IntentEvent[]` for one session (see
-`../src/../../src/intent-pipeline/types.ts`). They are the regression net for the
+`../src/intent-pipeline/types.ts`). They are the regression net for the
 pipeline extraction (P1) and, later, the channel lowering processor (P2) — replayed
 through `composeIntent` in `packages/aiui-dev-overlay/src/intent-pipeline/fixtures.test.ts`.
 
-**Contract reminder** (see `../docs/field-notes.md`): these event shapes *are* the
+**Contract reminder** (see `archive/workbench/field-notes.md` at the repo root): these event shapes *are* the
 wire format, and segments-as-lines is the document shape `composeIntent` and the
 corrector share. If a fixture stops replaying, a contract drifted — fix the pass,
 don't rewrite the fixture.
@@ -35,7 +35,7 @@ top-level `*.json` — is unaffected) and are replayed by the channel's `realtim
 | --- | --- |
 | `streaming/realtime-turn.json` | One `openai-realtime` dictation turn on the wire: `armed → thread-open → talk-start`, three `audio` frames carrying `seg_1`'s PCM in `seq` order, `talk-end` (the commit boundary), then the upstream `…delta`/`…completed` echoes, then a bare `fin`. Pins the streaming contract — audio streams *during* talk under the PTT boundaries, and the partial deltas must **not** change what the turn commits (only the `…completed` final composes). |
 
-## Capture method
+## Capture method (historical — the workbench lab has since been retired)
 
 All five were driven against the **real** workbench dev server (`pnpm dev --port 5183`)
 by dispatching synthetic `KeyboardEvent`/`PointerEvent`s through the real keymap →
@@ -45,7 +45,7 @@ hand-composed. Two accommodations for headless driving, none of which touch even
 fidelity:
 
 - **`getUserMedia` / `getDisplayMedia` stubbed to reject** — the documented "no mic /
-  no capture grant" degraded path (`../docs/field-notes.md`). The mock transcriber
+  no capture grant" degraded path (`archive/workbench/field-notes.md`). The mock transcriber
   ignores audio, so transcript text is unchanged; shots land in their degraded
   (no-pixels) shape, which is exactly what fixture 3 is meant to capture.
 - **Region shots stub only the veil's `setPointerCapture`** — it is unguarded against

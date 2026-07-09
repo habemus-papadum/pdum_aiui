@@ -60,7 +60,7 @@ describe("listChannels", () => {
       entry({
         pid: 1,
         tag: "wb",
-        name: "aiui workbench",
+        name: "aiui debug",
         debug: true,
         startedAt: "2026-07-07T12:00:00Z",
       }),
@@ -73,7 +73,7 @@ describe("listChannels", () => {
     const channels = listChannels({ dir, isAlive: () => true, workspaceDir: "/w/app" });
     // Same affinity; the older REAL session still outranks the newer debug one.
     expect(channels.map((c) => c.tag)).toEqual(["real", "wb"]);
-    expect(channels[1]).toMatchObject({ name: "aiui workbench", debug: true });
+    expect(channels[1]).toMatchObject({ name: "aiui debug", debug: true });
   });
 
   it("treats a missing registry directory as nothing running", () => {
@@ -94,8 +94,8 @@ describe("channelLabel", () => {
       startedAt: "2026-07-07T00:00:00Z",
     };
     expect(channelLabel({ ...base, tag: "abc-123" })).toBe("abc-123");
-    expect(channelLabel({ ...base, tag: "wb", name: "aiui workbench", debug: true })).toBe(
-      "aiui workbench · debug",
+    expect(channelLabel({ ...base, tag: "wb", name: "aiui debug", debug: true })).toBe(
+      "aiui debug · debug",
     );
   });
 });

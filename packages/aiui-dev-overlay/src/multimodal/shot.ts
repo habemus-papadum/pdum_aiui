@@ -1,31 +1,36 @@
 /**
  * Region screenshots + the component locator.
  *
- * Capture: the browser can't screenshot itself silently, so the first shot
- * asks once via getDisplayMedia (pick this tab) and the stream is kept for the
- * session — every later shot is an instant frame-grab. Denied/unavailable
- * capture degrades gracefully: the shot event still carries the rect and the
- * located components, just no pixels. (In the session browser there is no
- * dialog at all — it launches with --auto-accept-this-tab-capture. A
- * server-side CDP capture path was considered and rejected: see the decision
+ * Capture: the browser can't screenshot itself silently, so a shot needs the
+ * document's display-capture grant — and that grant is not this module's to ask
+ * for. It belongs to {@link DisplayCapture}, the single broker the paint host
+ * and the realtime video sampler read from too, so one page asks at most once.
+ * Denied or unavailable capture degrades gracefully: the shot event still
+ * carries the rect and the located components, just no pixels. (In the session
+ * browser there is no dialog at all — it launches with
+ * --auto-accept-this-tab-capture, and the broker takes the grant eagerly at arm.
+ * A server-side CDP capture path was considered and rejected: see the decision
  * note in handoff/pipeline-and-interaction-model.md — this stream is also the
  * realtime submode's video source, which CDP round-trips can't be.)
  *
- * Locator: sample a grid of points inside the rect, `elementsFromPoint` each,
- * walk up to the nearest `[data-source-loc]`/`[data-cell]` ancestor, dedupe.
- * Those are the real stamps the overlay's source-locator Vite plugin emits on
- * host elements (`data-source-loc="file:line:col"` relative to the app root,
- * `data-cell="name"`) — the same handles `selection.ts` reads — so this
- * exercises the exact screenshot-rect → components → source path a real app
- * has. When `window.__AIUI__.sourceRoot` is known the stamp is resolved to an
- * absolute path (what the agent opens); otherwise the relative stamp rides
- * through and the channel resolves it.
+ * Locator: the enclosure strategy in {@link locateComponents} — the highest
+ * annotated elements fully inside the rect, a `within` fallback when the drag
+ * framed nothing, one level of cell frontier per element, and a naming ladder
+ * (`data-cell` → authoring module → tag). The stamps it reads are the ones the
+ * overlay's source-locator Vite plugin emits (`data-source-loc="file:line:col"`
+ * relative to the app root, `data-cell="name"`) — the same handles
+ * `selection.ts` reads — so this exercises the exact screenshot-rect →
+ * components → source path a real app has. The concepts-level write-up is
+ * docs/guide/attribution.md. When `window.__AIUI__.sourceRoot` is known the
+ * stamp is resolved to an absolute path (what the agent opens); otherwise the
+ * relative stamp rides through and the channel resolves it.
  *
- * Unlike the workbench's prototype, no PNG is POSTed to a dev proxy: the raw
+ * Unlike the retired lab prototype, no PNG is POSTed to a dev proxy: the raw
  * bytes are handed back for the modality to upload as an `intent-v1` attachment
  * frame, and the channel assigns the on-disk path.
  */
 import type { LocatedCell, LocatedComponent, Rect } from "../intent-pipeline";
+import { createDisplayCapture, type DisplayCapture } from "./display-capture";
 import type { Ink } from "./ink";
 
 /** A captured frame: the inline preview thumbnail plus the raw PNG for upload. */
@@ -54,9 +59,9 @@ export type ShotSink = (
 
 export class ShotTool {
   readonly veil: HTMLDivElement;
+  /** The document's grant. Shared with the video sampler and the paint host. */
+  readonly grant: DisplayCapture;
   private box: HTMLDivElement;
-  private stream: MediaStream | undefined;
-  private video: HTMLVideoElement | undefined;
   private start: { x: number; y: number } | undefined;
   /**
    * True when D was released while a drag was still in flight: the disarm is
@@ -67,9 +72,10 @@ export class ShotTool {
   private readonly onShot: ShotSink;
   private readonly ink: Ink;
 
-  constructor(ink: Ink, onShot: ShotSink) {
+  constructor(ink: Ink, onShot: ShotSink, grant: DisplayCapture = createDisplayCapture()) {
     this.ink = ink;
     this.onShot = onShot;
+    this.grant = grant;
     this.veil = document.createElement("div");
     this.veil.className = "mm-shot-veil";
     this.box = document.createElement("div");
@@ -136,16 +142,15 @@ export class ShotTool {
 
   /** Whether a display-capture grant is live (a shot would capture pixels). */
   hasCaptureGrant(): boolean {
-    return this.video !== undefined;
+    return this.grant.active();
   }
 
   /**
-   * The live display-capture `<video>`, acquiring the one-time grant if needed.
-   * The realtime submode's ~1 fps video sampler draws from the SAME stream shots
-   * grab from — one grant serves both — so this exposes it without disturbing
-   * the shot flow (it only ensures/returns the shared element). Returns
-   * `undefined` when capture is denied or unavailable; sampling then simply
-   * doesn't run.
+   * The live display-capture `<video>`, acquiring the document's grant if it
+   * isn't held yet. The realtime submode's ~1 fps video sampler draws from the
+   * SAME element, so this exposes it without disturbing the shot flow. Returns
+   * `undefined` when capture is denied, unavailable, or still waiting on a
+   * click (the `"gesture"` policy); sampling then simply doesn't run.
    */
   ensureCaptureStream(): Promise<HTMLVideoElement | undefined> {
     return this.ensureStream();
@@ -188,29 +193,8 @@ export class ShotTool {
   }
 
   private async ensureStream(): Promise<HTMLVideoElement | undefined> {
-    if (this.video) {
-      return this.video;
-    }
-    try {
-      // preferCurrentTab is a Chrome hint — exactly the browser this targets.
-      this.stream = await (
-        navigator.mediaDevices as MediaDevices & {
-          getDisplayMedia(o?: object): Promise<MediaStream>;
-        }
-      ).getDisplayMedia({ video: true, preferCurrentTab: true, audio: false });
-      const video = document.createElement("video");
-      video.srcObject = this.stream;
-      video.muted = true;
-      await video.play();
-      this.video = video;
-      this.stream.getVideoTracks()[0]?.addEventListener("ended", () => {
-        this.video = undefined;
-        this.stream = undefined;
-      });
-      return video;
-    } catch {
-      return undefined; // denied or unsupported — shots continue without pixels
-    }
+    await this.grant.acquire();
+    return this.grant.video(); // undefined when denied/unsupported/awaiting a click
   }
 
   private async grab(rect: Rect): Promise<ShotPixels | undefined> {
@@ -249,10 +233,12 @@ export class ShotTool {
     return bytes ? { thumb, bytes } : undefined;
   }
 
+  /**
+   * Drop the veil. The capture grant is NOT released here — it belongs to the
+   * document, and the paint host may still be streaming from it. Ending it is
+   * {@link DisplayCapture.dispose}'s job, called once on unmount by capture.ts.
+   */
   dispose(): void {
-    for (const track of this.stream?.getTracks() ?? []) {
-      track.stop();
-    }
     this.veil.remove();
   }
 }
@@ -392,13 +378,40 @@ export function locateComponents(rect: Rect): LocatedComponent[] {
     const stamp = host.getAttribute("data-source-loc") ?? undefined;
     const cells = cellFrontier(host, sourceRoot);
     return {
-      component: host.getAttribute("data-cell") ?? host.tagName.toLowerCase(),
+      // Name resolution mirrors the attribution ladder: the producing cell if
+      // stamped, else the authoring module read off the source stamp
+      // (src/ui/Controls.tsx:44:7 → "Controls"), else the bare tag. The tag is
+      // the last resort because a prompt full of `name="div"` repeated per
+      // panel carries nothing — the paid-for finding behind this ladder.
+      // `|| undefined` (not ??): an empty data-cell attribute must fall
+      // through the ladder, same as cellFrontier's `if (!name)` guard.
+      component:
+        (host.getAttribute("data-cell") || undefined) ??
+        componentNameFromStamp(stamp) ??
+        host.tagName.toLowerCase(),
       source: stamp ? absoluteSource(stamp, sourceRoot) : "unknown",
       rect: { x: box.x, y: box.y, w: box.width, h: box.height },
       ...(cells.length > 0 ? { cells } : {}),
       ...(containment !== undefined ? { containment } : {}),
     };
   });
+}
+
+/**
+ * The authoring module's name from a `data-source-loc` stamp:
+ * `src/ui/Controls.tsx:44:7` → `Controls`. In a component-per-file codebase
+ * (this methodology's default) the file basename IS the component name; when a
+ * file holds several components the name is still the right place to start
+ * reading, and the line/col in `source` disambiguates.
+ */
+function componentNameFromStamp(stamp: string | undefined): string | undefined {
+  if (!stamp) {
+    return undefined;
+  }
+  const file = stamp.split(":")[0] ?? "";
+  const base = file.split("/").pop() ?? "";
+  const name = base.replace(/\.[^.]+$/, "");
+  return name.length > 0 ? name : undefined;
 }
 
 /**

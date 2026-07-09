@@ -15,13 +15,17 @@
  *  - **Endpoint:** `wss://api.elevenlabs.io/v1/speech-to-text/realtime`, with the
  *    whole session config in the query string —
  *    `model_id`, `audio_format=pcm_24000`, `include_timestamps=true`,
- *    `no_verbatim=true`, `commit_strategy=manual` (PTT owns the boundary), plus
- *    optional `language_code` and a *repeatable* `keyterms` (domain-bias terms).
+ *    `no_verbatim=true`, plus optional `language_code` and a *repeatable*
+ *    `keyterms` (domain-bias terms).
  *    Unknown query params are accepted *silently* — the only reliable proof a
  *    param took effect is the `session_started` config echo (so verify there,
- *    not by the absence of an error). In particular `keyterms` **must** be
- *    repeated *plain* params (`keyterms=a&keyterms=b`); the bracket form
- *    `keyterms[]=` is silently dropped.
+ *    not by the absence of an error). We now DO verify it: see
+ *    {@link checkConfigEcho}, reported through `onDiagnostic`. In particular
+ *    `keyterms` **must** be repeated *plain* params (`keyterms=a&keyterms=b`);
+ *    the bracket form `keyterms[]=` is silently dropped. And this URL once
+ *    carried `commit_strategy=manual` — **there is no such parameter**; it never
+ *    appeared in the echo, and the "PTT owns the boundary" guarantee it was
+ *    supposed to buy was never in force (see the self-commit section below).
  *  - **Auth:** an `xi-api-key` request header (OpenAI is a bearer, Gemini a
  *    query param — the only per-vendor difference in the socket factory).
  *  - **Ready signal:** `session_started`. Audio queued before it is buffered and
@@ -56,11 +60,38 @@
  *      to the **oldest in-flight committed segment** (FIFO head) if one exists,
  *      else surfaced session-wide.
  *
+ * ### Scribe COMMITS UTTERANCES ITSELF — a segment is many utterances
+ *
+ * The single most important fact about this wire, and the one that cost us a
+ * user's two-minute prompt (live-verified; `archive/scribe-realtime-spike.mjs`):
+ *
+ * **Scribe closes an utterance on its own, unprompted, and there is no way to
+ * stop it.** Around 40 s of a continuous utterance it emits `committed_transcript`
+ * + `committed_transcript_with_timestamps` for everything so far — with no commit
+ * from us — and then **resets `partial_transcript` to empty** and starts a fresh
+ * utterance. This is not the silence VAD (`vad_commit_strategy` echoes `false`,
+ * and it fires well away from any pause); it is a cap on utterance length.
+ *
+ * So a push-to-talk **segment** (our unit) may contain SEVERAL Scribe
+ * **utterances** (its unit). The session therefore accumulates: every terminal
+ * frame arriving while a segment is still streaming is appended to that
+ * segment's `pending` text + words, and the segment's `onFinal` concatenates all
+ * of them with the answer to our own commit. `onDelta` prefixes the accumulated
+ * text onto each partial, so the caller's cumulative-text contract survives the
+ * vendor's reset.
+ *
+ * Before this, `completeHead` dropped any completion arriving with an empty FIFO
+ * as a "stray" — so every self-committed utterance was destroyed, the preview
+ * appeared to delete the user's words, and a long segment whose tail was silence
+ * finalized EMPTY. Nothing on our side was diffing anything; we were discarding
+ * the transcript. Hence `onDiagnostic`: no drop in this module is silent now.
+ *
  * ### Segment correlation without item ids
  *
  * OpenAI hands every utterance an `item_id` we bind segments to; Scribe hands us
- * nothing, so correlation is purely positional: commits enter a FIFO queue and
- * each completion (or a per-segment error) resolves the head. `partial_transcript`
+ * nothing, so correlation is purely positional: our commits enter a FIFO queue
+ * and the completion that finds a head resolves it, while a completion that finds
+ * none belongs to the segment currently streaming (above). `partial_transcript`
  * has no id either — it always describes the *uncommitted* utterance, so it binds
  * to the single segment currently streaming audio.
  *
@@ -257,7 +288,11 @@ export function buildElevenLabsUrl(
   if (config.noVerbatim) {
     url.searchParams.set("no_verbatim", "true");
   }
-  url.searchParams.set("commit_strategy", "manual");
+  // NOTE: this URL once carried `commit_strategy=manual`. No such parameter
+  // exists — it is absent from the `session_started` config echo, and Scribe
+  // accepts unknown query params silently, so it looked like it worked for
+  // months while Scribe went on closing utterances by itself. Do not add a param
+  // here without confirming it comes back in the echo (see checkConfigEcho).
   if (config.language !== undefined && config.language !== "") {
     url.searchParams.set("language_code", config.language);
   }
@@ -314,6 +349,44 @@ interface CommittedSegment {
   audioBaseMs: number;
 }
 
+/** Utterances Scribe closed on its own inside a segment, awaiting that segment's final. */
+interface PendingUtterances {
+  texts: string[];
+  words: TranscriptWord[];
+}
+
+/** The params we can prove took effect by reading them back out of the echo. */
+const ECHOED_PARAMS = ["model_id", "include_timestamps", "no_verbatim"] as const;
+
+/**
+ * Diff what we asked for against Scribe's `session_started` config echo. Unknown
+ * query params are accepted *silently* by this vendor, so the echo is the only
+ * evidence a param exists at all — a missing or contradicting key means the
+ * behavior we think we configured is not in force. Reports, never throws:
+ * a mismatch is information, not a reason to kill a working session.
+ */
+export function checkConfigEcho(
+  requested: Record<string, unknown>,
+  echoed: Record<string, unknown> | undefined,
+): Array<{ param: string; requested: unknown; echoed: unknown }> {
+  if (echoed === undefined) {
+    return [];
+  }
+  const out: Array<{ param: string; requested: unknown; echoed: unknown }> = [];
+  for (const param of ECHOED_PARAMS) {
+    if (!(param in requested)) {
+      continue;
+    }
+    const want = requested[param];
+    const got = echoed[param];
+    // The echo is typed (booleans as booleans); the URL is all strings.
+    if (String(got) !== String(want)) {
+      out.push({ param, requested: want, echoed: got ?? "(absent)" });
+    }
+  }
+  return out;
+}
+
 /**
  * Open a Scribe v2 realtime transcription session. Eagerly connects (the caller
  * opens it at thread-open so the handshake overlaps the arm→talk gap); audio
@@ -336,6 +409,12 @@ export function openElevenLabsRealtimeSession(
     ...(options.language?.() !== undefined ? { language: options.language() } : {}),
     ...(options.keyterms?.() !== undefined ? { keyterms: options.keyterms() } : {}),
   });
+  /** What we asked for — diffed against the `session_started` echo on arrival. */
+  const requestedConfig: Record<string, unknown> = {
+    model_id: modelId,
+    include_timestamps: true,
+    ...(noVerbatim ? { no_verbatim: true } : {}),
+  };
 
   let ready = false;
   let dead = false;
@@ -357,6 +436,9 @@ export function openElevenLabsRealtimeSession(
   // Each segment's audio base (cumulative ms before its first append), recorded
   // once on that first append and read at commit time to rebase its word timings.
   const segmentBaseMs = new Map<number, number>();
+  // Utterances Scribe closed on its own, per segment, waiting to be concatenated
+  // into that segment's final. Non-empty whenever a long segment is in progress.
+  const pending = new Map<number, PendingUtterances>();
   const drainWaiters: Array<() => void> = [];
 
   const settleDrainIfIdle = (): void => {
@@ -420,14 +502,73 @@ export function openElevenLabsRealtimeSession(
     }
   };
 
-  const completeHead = (message: { text?: string; words?: unknown }): void => {
+  /** The text Scribe already closed inside `segment`, joined for the preview. */
+  const pendingText = (segment: number): string =>
+    (pending.get(segment)?.texts ?? []).join(" ").trim();
+
+  /**
+   * A terminal frame. Two cases, and telling them apart is the whole ballgame:
+   *
+   *  - **Our commit's answer** (the FIFO has a head): the segment is done. Its
+   *    final text is everything Scribe closed inside it, *plus* this last piece.
+   *  - **Scribe's own commit** (FIFO empty, audio still streaming): Scribe caps
+   *    an utterance on its own — around 40 s, live-verified, and NOT switchable
+   *    off (`vad_commit_strategy` is already false). It then resets its partial
+   *    to empty. This used to `return` as "stray", which silently destroyed the
+   *    utterance and made the preview look like it was deleting the user's
+   *    words. Now it accumulates against the streaming segment and re-emits the
+   *    accumulated text as a delta, so `onDelta`'s cumulative contract holds
+   *    across the reset.
+   *
+   * Residual race (recorded, not silently swallowed): the wire is ordered, so a
+   * self-commit is always *emitted* before the answer to a later commit of ours.
+   * But if one is still in flight when we push to the FIFO, it would be taken
+   * for our answer and the true tail would then arrive with the FIFO empty and
+   * no streaming segment — an `orphan-result` diagnostic, which is exactly the
+   * signal that this needs an id-carrying protocol rather than position.
+   */
+  const completeHead = (messageType: string, message: { text?: string; words?: unknown }): void => {
     const head = committed.shift();
+    const text = message.text ?? "";
+
     if (head === undefined) {
-      return; // a terminal event with nothing in flight — stray, ignore
+      if (streamingSegment === undefined) {
+        callbacks.onDiagnostic?.({ kind: "orphan-result", messageType, chars: text.length });
+        return;
+      }
+      const segment = streamingSegment;
+      const baseMs = segmentBaseMs.get(segment) ?? 0;
+      const words = convertWords(message.words, baseMs);
+      const slot = pending.get(segment) ?? { texts: [], words: [] };
+      if (text !== "") {
+        slot.texts.push(text);
+      }
+      slot.words.push(...words);
+      pending.set(segment, slot);
+      // Scribe just consumed its own buffer, so OUR uncommitted meter must follow
+      // it back to zero. Otherwise the meter keeps climbing, and a commit issued
+      // shortly after a self-commit would be sent for audio the server no longer
+      // holds — under its 300 ms hard minimum, which returns `commit_throttled`
+      // and kills the socket. Erring low is safe: a refused commit still resolves
+      // the segment from `pending`.
+      uncommittedBytes = 0;
+      callbacks.onDiagnostic?.({
+        kind: "vendor-commit",
+        segment,
+        chars: text.length,
+        words: words.length,
+      });
+      // Scribe's next partial restarts from empty; keep the caller's view cumulative.
+      callbacks.onDelta(segment, pendingText(segment));
+      return;
     }
-    const words = convertWords(message.words, head.audioBaseMs);
+
+    const slot = pending.get(head.segment);
+    pending.delete(head.segment);
+    const words = [...(slot?.words ?? []), ...convertWords(message.words, head.audioBaseMs)];
+    const full = [...(slot?.texts ?? []), ...(text !== "" ? [text] : [])].join(" ").trim();
     callbacks.onFinal(head.segment, {
-      text: message.text ?? "",
+      text: full,
       latencyMs: Math.max(0, now() - head.committedAt),
       model: modelId,
       ...(words.length > 0 ? { words } : {}),
@@ -448,7 +589,13 @@ export function openElevenLabsRealtimeSession(
   };
 
   const handleMessage = (raw: string): void => {
-    let message: { message_type?: string; text?: string; words?: unknown; error?: string };
+    let message: {
+      message_type?: string;
+      text?: string;
+      words?: unknown;
+      error?: string;
+      config?: unknown;
+    };
     try {
       message = JSON.parse(raw);
     } catch {
@@ -461,6 +608,19 @@ export function openElevenLabsRealtimeSession(
     switch (type) {
       case "session_started": {
         ready = true;
+        // The config echo: the only proof our connect-URL params took effect.
+        // Recorded verbatim, then diffed — a param this vendor does not know is
+        // accepted silently, so silence is never evidence of success.
+        const echo =
+          message.config && typeof message.config === "object"
+            ? (message.config as Record<string, unknown>)
+            : undefined;
+        if (echo) {
+          callbacks.onDiagnostic?.({ kind: "config-echo", config: echo });
+          for (const m of checkConfigEcho(requestedConfig, echo)) {
+            callbacks.onDiagnostic?.({ kind: "config-mismatch", ...m });
+          }
+        }
         for (const queued of outbox.splice(0)) {
           socket.send(queued);
         }
@@ -468,29 +628,38 @@ export function openElevenLabsRealtimeSession(
         return;
       }
       case "partial_transcript": {
-        // Cumulative text for the current uncommitted utterance. With no segment
-        // streaming (nothing to attribute to, or the current one was discarded),
-        // it drops.
+        // Cumulative text for the current *uncommitted utterance* — which is not
+        // the same thing as the segment: Scribe restarts it from empty after each
+        // utterance it closes itself. Prefix what it already closed so the
+        // caller keeps seeing one growing transcript per segment.
         if (streamingSegment === undefined) {
           return;
         }
-        callbacks.onDelta(streamingSegment, message.text ?? "");
+        const prefix = pendingText(streamingSegment);
+        const text = message.text ?? "";
+        callbacks.onDelta(streamingSegment, prefix ? `${prefix} ${text}`.trim() : text);
         return;
       }
       case "committed_transcript": {
-        // `include_timestamps` is always on, so the timestamped twin is
-        // authoritative and this plain view is ignored — one onFinal per commit.
+        // `include_timestamps` is always on, so the timestamped twin carries the
+        // same text plus words — this plain view would double-count. Ignored on
+        // purpose (not a drop): the twin lands ~100 ms later and does the work.
         return;
       }
       case "committed_transcript_with_timestamps": {
-        completeHead(message);
+        completeHead(type, message);
         return;
       }
       default: {
         if (isErrorType(type)) {
           handleError(message.error ?? "realtime session error");
+          return;
         }
-        return; // an unknown, non-error message type — ignore
+        // Never a bare `return` again. An unknown type is a message this vendor
+        // added, or one we misread — either way it is reported, because that is
+        // exactly how the self-commit went unseen.
+        callbacks.onDiagnostic?.({ kind: "unhandled", messageType: type, raw: raw.slice(0, 500) });
+        return;
       }
     }
   };
@@ -503,6 +672,7 @@ export function openElevenLabsRealtimeSession(
     dead = true;
     clearKeepalive();
     const stuck = committed.splice(0);
+    pending.clear();
     for (const entry of stuck) {
       callbacks.onError(message, entry.segment);
     }
@@ -559,11 +729,21 @@ export function openElevenLabsRealtimeSession(
       segmentBaseMs.delete(segment);
       // Gate on the local floor: committing under it is FATAL on this wire
       // (`commit_throttled` closes the socket). Below the floor we send NOTHING —
-      // resolve the segment as an empty final so the caller's preview settles, and
+      // resolve the segment as a final so the caller's preview settles, and
       // leave the audio in the buffer (uncommittedBytes untouched) to prepend to
-      // the next utterance.
+      // the next utterance. The final is empty ONLY if Scribe closed nothing
+      // inside this segment: a long segment ending in a sub-floor scrap of audio
+      // still owns everything the vendor already committed within it.
       if (uncommittedBytes / BYTES_PER_MS < ELEVENLABS_COMMIT_FLOOR_MS) {
-        callbacks.onFinal(segment, { text: "", latencyMs: 0, model: modelId });
+        const slot = pending.get(segment);
+        pending.delete(segment);
+        const words = slot?.words ?? [];
+        callbacks.onFinal(segment, {
+          text: (slot?.texts ?? []).join(" ").trim(),
+          latencyMs: 0,
+          model: modelId,
+          ...(words.length > 0 ? { words } : {}),
+        });
         return;
       }
       committed.push({ segment, committedAt: now(), audioBaseMs: baseMs });
@@ -580,6 +760,7 @@ export function openElevenLabsRealtimeSession(
         streamingSegment = undefined;
       }
       segmentBaseMs.delete(segment);
+      pending.delete(segment); // a discarded segment's vendor-committed text goes with it
     },
     drain(timeoutMs) {
       if (committed.length === 0) {

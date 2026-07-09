@@ -1,9 +1,9 @@
 /**
  * The shared debug UI: framework-free DOM panes for inspecting the multimodal
- * intent pipeline, live. Three homes, one implementation — the workbench lab
+ * intent pipeline, live. Multiple homes, one implementation — the standalone
  * (over a live {@link Engine}), the DevTools extension (over a channel trace
  * it live-follows), and the `/__aiui/debug` page the Vite plugin serves (the
- * intent tool's 🔍). Prototyped as the workbench inspector; graduated here so
+ * intent tool's 🔍). Prototyped in the retired workbench lab; graduated here so
  * all of them render intent debugging identically, off the same fixtures.
  *
  * The pieces:
@@ -14,7 +14,7 @@
  *    a sensible card — so it works for any modality the debugger records.
  *  - {@link TracesPane} — the trace debugger's whole surface: the trace list
  *    (session-filtered, follow-newest) over a live-followed {@link TraceView}.
- *    The workbench dock and the `/__aiui/debug` page both mount exactly this.
+ *    The `/__aiui/debug` page mounts exactly this.
  *  - {@link mountDebugPage} — the `/__aiui/debug` bootstrap: a full-viewport
  *    {@link TracesPane} against the injected channel port, honoring the
  *    `?session=` pin.

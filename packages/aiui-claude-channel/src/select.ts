@@ -8,7 +8,7 @@ import type { RunningServer } from "./registry";
 
 /**
  * Render a server as a selector row. Prefers the entry's own display name
- * (debug servers name themselves — "aiui workbench"), then the owning Claude
+ * (debug servers name themselves via `--name`), then the owning Claude
  * Code session's name (matched by `ppid`, how a user recognises which session
  * a channel belongs to), then the raw pid. Debug entries are always marked:
  * picking one means prompts print to that server's stdout, not a session.

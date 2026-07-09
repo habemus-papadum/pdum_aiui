@@ -8,8 +8,9 @@
  * does NOT live behind this seam in the overlay: it runs **channel-side** (the
  * key belongs with the channel, not the page) — the modality uploads the
  * recorded segment as an `intent-v1` attachment and merges the transcript-final
- * the server echoes back. The workbench lab keeps its own dev-proxy `openai`
- * transcriber against this same interface (implementations differ per host).
+ * the server echoes back. (The retired workbench lab ran a dev-proxy `openai`
+ * transcriber against this same interface — the seam supports per-host
+ * implementations.)
  */
 
 export interface TranscriptResult {

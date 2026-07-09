@@ -1,6 +1,6 @@
 /**
  * The event panes: three live views over one {@link IntentEvent} stream, plus
- * export. Prototyped as the workbench's inspector dock, graduated here so the
+ * export. Prototyped in the retired workbench lab, graduated here so the
  * lab and the DevTools extension render intent debugging identically.
  *
  *  - **events** — every event, timestamped relative to thread-open. The raw

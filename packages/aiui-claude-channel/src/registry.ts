@@ -40,8 +40,8 @@ export interface RegistryEntry {
   /** ISO-8601 timestamp of when the server started. */
   startedAt: string;
   /**
-   * Human-chosen display name (e.g. the workbench names its channel
-   * "aiui workbench"). Selectors prefer it over pids; absent on servers that
+   * Human-chosen display name (a debug server's `--name`). Selectors prefer
+   * it over pids; absent on servers that
    * are recognisable by their owning Claude Code session instead.
    */
   name?: string;

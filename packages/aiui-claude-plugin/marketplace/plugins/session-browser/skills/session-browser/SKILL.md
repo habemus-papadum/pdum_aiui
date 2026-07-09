@@ -55,8 +55,7 @@ import — `transcribe.ts`, `correct.ts`, `realtime.ts`, `prompt-context.ts`, th
 in-place reload exists because in `aiui claude` the process is load-bearing (the stdio MCP pipe to
 the session, the OS-assigned port every running dev server holds) — so for deep edits, tell the
 user a relaunch of `aiui claude` (or their dev harness) is required rather than assuming the
-reload covered it. The **workbench** is different: it fully restarts its own channel child on any
-channel-side source edit, so deep edits there are picked up automatically.
+reload covered it.
 
 ## Routing to the tab an intent-tool prompt came from
 

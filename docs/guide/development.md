@@ -40,14 +40,12 @@ pnpm typecheck       # tsc --noEmit across packages
 pnpm lint            # Biome (lint + format check)
 pnpm test:packaging  # pack every publishable package, install into a scratch npm project, smoke the CLIs
 pnpm test:e2e        # live Claude Code session e2e (spends subscription usage)
-pnpm workbench       # the intent overlay's offline lab (mock backends, no channel, no key)
 ```
 
-`pnpm workbench` runs the **intent workbench** — the pipeline mounted on instrumented scenery with
-the [mock transcriber](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench#the-mock-backends)
-as its defaults, for latency/accuracy measurement, pipeline-config research, and fixture capture.
-It's where the mocking infrastructure lives; the shipping overlay defaults to the real
-channel-side backends.
+(The intent overlay's offline lab — the **workbench** — has been retired; `packages/aiui-test-app`
+and the in-repo demos are the places to exercise the overlay now. Its findings ledgers live in
+`archive/workbench/`, and the interaction fixtures it recorded live on as the intent pipeline's
+regression corpus in `packages/aiui-dev-overlay/fixtures/`.)
 
 ### Editable workspace dependencies (source-first)
 
@@ -167,8 +165,8 @@ The rules, in order of preference:
    `packages/aiui-paint/assets/ipad-client.html`, read at import with a path computed from
    `import.meta.url` and shipped via the package's `files` (an eager, module-level read makes a
    missing asset fail at import, where `pnpm test:packaging` catches it). Note: Vite's
-   `?raw` import is not an option for anything that must also run under tsx (`aiui claude`, the
-   workbench) — tsx doesn't support it.
+   `?raw` import is not an option for anything that must also run under tsx (`aiui claude`) —
+   tsx doesn't support it.
 2. **If you must emit code as strings** (the generator is the point, e.g. `aiui env`'s shell
    output), keep the generator trivial and **test the emitted artifact by parsing or executing
    it** — `aiui env`'s output round-trips through a real `sh` in its tests; the paint client's

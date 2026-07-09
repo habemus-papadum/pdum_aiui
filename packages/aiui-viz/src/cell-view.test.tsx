@@ -123,3 +123,36 @@ describe("CellView + synchronous cells", () => {
     expect(host.querySelector(".v")?.textContent).toBe("10");
   });
 });
+
+describe("CellView + the held state (the cancel gesture)", () => {
+  it("shows the last value quietly — no dim, no stripe — when the deps gate closes", async () => {
+    const [capture, setCapture] = createSignal<number | undefined>(1);
+    const host = document.createElement("div");
+    document.body.append(host);
+
+    dispose = render(() => {
+      const analysis = cell(capture, async (n) => ({ peaks: n * 3 }), {
+        name: "analysis",
+        loc: "a:1",
+      });
+      return (
+        <CellView of={analysis}>{(a) => <span class="peaks">{String(a().peaks)}</span>}</CellView>
+      );
+    }, host);
+
+    await tick();
+    await tick();
+    expect(host.querySelector(".peaks")?.textContent).toBe("3");
+
+    // Cancel: the app clears the capture, the gate closes. Before the `held`
+    // state this read "refreshing" forever — dimmed value under an
+    // indeterminate stripe, indistinguishable from a hung computation.
+    setCapture(undefined);
+    await tick();
+
+    expect(host.querySelector(".peaks")?.textContent).toBe("3"); // value stands
+    expect(host.querySelector("[data-cell-state]")?.getAttribute("data-cell-state")).toBe("held");
+    expect(host.querySelector(".cell-body-loading")).toBeNull(); // not dimmed
+    expect(host.querySelector(".progress-stripe")).toBeNull(); // no phantom work
+  });
+});

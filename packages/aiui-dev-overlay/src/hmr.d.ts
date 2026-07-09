@@ -4,7 +4,7 @@
  * source that non-Vite consumers (vitest, tsx, bundlers) also compile, and
  * the guards only ever run where a dev server defines `import.meta.hot`.
  * Kept assignment-compatible with Vite's own ViteHotContext so a consumer
- * app that DOES load `vite/client` (the workbench) typechecks both.
+ * app that DOES load `vite/client` typechecks both.
  */
 interface ImportMeta {
   readonly hot?: {

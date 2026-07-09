@@ -238,7 +238,7 @@ describe("composeIntent", () => {
         },
       ],
       "data:image/png;base64,x",
-      "/tmp/aiui-workbench/1-shot_1.png",
+      "/tmp/aiui-lab/1-shot_1.png",
     );
     const s2 = engine.talkStart();
     engine.talkEnd();
@@ -247,7 +247,7 @@ describe("composeIntent", () => {
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toContain(
       "compare this \n" +
-        '<screenshot path="/tmp/aiui-workbench/1-shot_1.png">\n' +
+        '<screenshot path="/tmp/aiui-lab/1-shot_1.png">\n' +
         '  <element name="Legend" source="scenery.ts:33">\n' +
         '    <cell name="colorScale" source="scenery.ts:41"/>\n' +
         '    <cell name="ticks"/>\n' +
@@ -258,6 +258,26 @@ describe("composeIntent", () => {
     // Everything is in the text now: no meta block, no token↔meta hint line.
     expect(composed.meta).toEqual({});
     expect(composed.prompt).not.toContain("{shot_");
+  });
+
+  it("caps a huge drag's element list behind elements-omitted", () => {
+    const engine = armedEngine();
+    // A drag framing the whole dashboard legitimately locates many panels;
+    // the prompt keeps the first MAX_ELEMENTS_IN_PROMPT (document order) and
+    // says how many it dropped, instead of shipping the full inventory.
+    const many = Array.from({ length: 11 }, (_, i) => ({
+      component: `Panel${i}`,
+      source: `src/ui/Panel${i}.tsx:1:1`,
+      rect: { x: 0, y: i * 10, w: 10, h: 10 },
+    }));
+    engine.shotDone({ x: 0, y: 0, w: 500, h: 500 }, many);
+
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt).toContain('elements-omitted="3"');
+    expect(composed.prompt).toContain('<element name="Panel7"');
+    expect(composed.prompt).not.toContain('<element name="Panel8"');
+    // The structured intent still carries everything — the cap is rendering.
+    expect(composed.components).toHaveLength(11);
   });
 
   it("renders the plain-text style on request (shotFormat: text), sources relativized", () => {
@@ -324,13 +344,13 @@ describe("composeIntent", () => {
       { x: 1, y: 2, w: 30, h: 20 },
       [{ component: "Legend", source: "scenery.ts:33", rect: { x: 0, y: 0, w: 10, h: 10 } }],
       "data:image/png;base64,x",
-      "/tmp/aiui-workbench/1-shot_1.png",
+      "/tmp/aiui-lab/1-shot_1.png",
     );
     engine.shotDone(
       { x: 5, y: 6, w: 30, h: 20 },
       [],
       "data:image/png;base64,y",
-      "/tmp/aiui-workbench/2-shot_2.png",
+      "/tmp/aiui-lab/2-shot_2.png",
     );
     engine.dropShot(first);
 
@@ -339,7 +359,7 @@ describe("composeIntent", () => {
     expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot"]);
     expect(composed.items[1].marker).toBe("shot_2");
     expect(composed.prompt).not.toContain("shot_1");
-    expect(composed.prompt).toContain('<screenshot path="/tmp/aiui-workbench/2-shot_2.png"/>');
+    expect(composed.prompt).toContain('<screenshot path="/tmp/aiui-lab/2-shot_2.png"/>');
     expect(composed.meta).toEqual({});
     // ...but the shot event itself is still in the stream (append-only; traces keep it).
     expect(engine.events.some((e) => e.type === "shot" && e.marker === "shot_1")).toBe(true);

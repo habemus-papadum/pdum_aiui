@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui",
-  "version": "0.4.0",
+  "version": "0.4.0+dev",
   "description": "ai ui frontends",
   "type": "module",
   "license": "MIT",
@@ -21,8 +21,7 @@
     "aiui": "./dist/cli.js"
   },
   "files": [
-    "dist",
-    "templates"
+    "dist"
   ],
   "publishConfig": {
     "access": "public",

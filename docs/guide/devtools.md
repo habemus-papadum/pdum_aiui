@@ -6,32 +6,30 @@ where frontend debugging already lives: an **aiui panel in Chrome DevTools**
 both kinds of debugging the system needs:
 
 - **High-level monitors** that watch the plumbing regardless of modality — the MCP/channel server
-  itself, and the websocket transport (latency, sizes, throughput).
+  itself and its transport counters.
 - **Transport/format-specific tools** — today the prompt-lowering trace debugger; later,
   per-modality views (waveforms for audio, region overlays for screenshots).
 
-## Design: two data sources, three views
+## Design: one data source, two views
 
-The panel is a *viewer*; the truth lives in two places, deliberately:
+The panel is a *viewer*; the truth lives in **the channel server** (HTTP, loopback):
 
-1. **The channel server** (HTTP, loopback): its own identity at `/debug/api/info` (tag, port,
-   pid, owning Claude session — the same payload as the `channel_info` MCP tool) plus, under
-   `launch`, the **launch info** `aiui claude` handed it — whether the session has a
-   [Chrome DevTools MCP](./chrome), attach or launch, which endpoint/browser/profile, whether
-   the panel was auto-loaded. The Server tab renders it, making the panel the first place to
-   look when the agent's browser tooling misbehaves. Also server-side transport counters at
-   `/debug/api/stats` (connections, frames in, bytes in, per-frame processing time), and the
-   lowering traces under `/debug/api/traces`.
-2. **The inspected page**: `aiui-dev-overlay` instruments its protocol client, recording every sent
-   frame — size and **ack round-trip time as the page experienced it** — into a bounded
-   `window.__AIUI__` ring. Only DevTools can read another page's globals
-   (`chrome.devtools.inspectedWindow`), which is precisely why this data pulls the debugger into
-   a DevTools panel: client-perceived latency exists nowhere else.
+- Its own identity at `/debug/api/info` (tag, port, pid, owning Claude session — the same payload
+  as the `channel_info` MCP tool) plus, under `launch`, the **launch info** `aiui claude` handed
+  it: whether the session has a [Chrome DevTools MCP](./chrome), attach or launch, which
+  endpoint/browser/profile, whether the panel was auto-loaded. The Server tab renders it, making
+  the panel the first place to look when the agent's browser tooling misbehaves.
+- Server-side transport counters at `/debug/api/stats` (connections, frames in, bytes in,
+  per-frame processing time).
+- The lowering traces under `/debug/api/traces`, and the revision poll at
+  `/debug/api/traces/:id/live`.
 
-The same global carries the **channel port**, so the panel auto-discovers which local server to
-talk to the moment an intent tool has mounted in the page. No instrumented page? A manual port
-field appears, and the panel even works opened as a plain browser tab (minus the page-side
-metrics — the server-backed views are CORS-readable on loopback).
+The **inspected page** contributes one thing: the channel port. `aiui-dev-overlay` publishes it on
+`window.__AIUI__` when the intent tool mounts, and the panel reads it out through
+`chrome.devtools.inspectedWindow` — so the panel auto-discovers which local server to talk to. No
+instrumented page? A manual port field appears, and the panel works opened as a plain browser tab
+(`panel.html?port=<port>`); the server-backed views are CORS-readable on loopback, so nothing is
+lost.
 
 ### Server — the high-level monitor
 
@@ -40,22 +38,24 @@ the server's transport counters with the recent-frame log (server processing tim
 
 ![The aiui panel's Server tab](/devtools-server.png)
 
-### Transport — the websocket, as the page saw it
-
-Frames sent, bytes on the wire, and ack round-trip latency (avg/p50/p95), plus the per-frame log —
-kind, format, thread, size, rtt, outcome. This is where a sluggish modality shows its cause:
-big frames, slow acks, or errors:
-
-![The aiui panel's Transport tab](/devtools-transport.png)
-
 ### Traces — the lowering debugger
 
-The [trace debugger](./web-intent-tool#the-debugger) — inputs → intermediate representations →
-the lowered prompt — rendered by the same shared `debug-ui` panes every other home uses (the
-`/__aiui/debug` page, `aiui debug`), over the channel's `/debug/api/*` JSON routes; the panel
-embeds rather than reimplements it. Trace lists mark provenance: a trace whose hello carried a
-non-human `actor` (browser automation self-reports as `agent`) is badged, so agent-driven
-UI-testing turns are tellable from yours.
+Pick a trace and the pane **follows it live**: the multimodal intent event stream, the recomputed
+IR passes (timeline → transcript + corrections → lowered prompt with token→path meta), and
+per-segment timing. It is a one-second poll of `/debug/api/traces/:id/live`, which answers
+`{unchanged:true}` when nothing moved (the revision is the manifest's mtime), so following a
+running lowering is a trickle of bytes rather than an open socket.
+
+The rendering is the same shared `debug-ui` every other home uses (the `/__aiui/debug` page,
+`aiui debug`), so trace debugging looks identical wherever you do it. Any trace renders —
+text-concat generically, `intent-v1` with the rich event view. Trace lists mark provenance: a
+trace whose hello carried a non-human `actor` (browser automation self-reports as `agent`) is
+badged, so agent-driven UI-testing turns are tellable from yours. The picker defaults to the
+current server's session; an **all sessions** checkbox reveals earlier and other runs.
+
+If the launcher's OpenAI-key preflight reported a non-`valid` status (surfaced under
+`/debug/api/info` → `launch.openaiKey`, a *status* only — never the key), the pane shows one line
+explaining that transcription and correction are unavailable until the key is set or fixed.
 
 ## Install & use
 

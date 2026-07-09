@@ -14,7 +14,7 @@ surface.
 - **A status bar item** showing the browser tab this window sends to. Click it (or run
   `aiui: Pick Browser Tab`) to choose: the picker lists every running channel server (from the
   same on-disk registry `aiui` tools use, `~/.cache/aiui/mcp/`) and the overlay tabs connected
-  to each. Debug channels — the workbench's "aiui workbench" — appear too, marked `· debug`
+  to each. Debug channels (standalone `serve` servers) appear too, marked `· debug`
   and sorted after real sessions; they're never auto-picked but work exactly the same once
   chosen.
 - **`aiui: Send Selection to Browser Tab`** (also in the editor context menu): sends the current
@@ -28,7 +28,7 @@ surface.
 
 Channels are titled by their **Claude Code session name** where possible: a channel's `ppid` is
 the session that spawned it, matched via `claude agents --json` exactly like the CLI selector
-(falls back to the channel's registry name — "aiui workbench" — or its tag when `claude` isn't
+(falls back to the channel's registry name or its tag when `claude` isn't
 on the extension host's PATH).
 
 **Staleness is expected and handled**: a channel reload (source edit under watch, or

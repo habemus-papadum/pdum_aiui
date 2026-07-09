@@ -11,7 +11,7 @@
  *
  * This module is the shared plumbing under that story — discovery, launch,
  * open-a-tab, and the auto-open decision ladder — so every dev-server sidecar
- * (`aiui vite`, the workbench's `pnpm workbench`) puts its page in the same
+ * (`aiui vite`) puts its page in the same
  * shared window instead of re-deriving the mechanics. The aiui CLI layers its
  * own affordances on top (config resolution, Chrome for Testing sync, the
  * devtools-extension autoload); nothing here reads config or prompts.
@@ -156,7 +156,16 @@ export async function launchSessionBrowser(opts: {
     "--auto-accept-camera-and-microphone-capture",
     //  - auto-accept the current-tab share the shot tool and the paint host
     //    ask for (getDisplayMedia({ preferCurrentTab: true })) — no picker
-    //    dialog, and tab capture needs no OS-level screen-recording grant.
+    //    dialog, no user gesture needed, and tab capture needs no OS-level
+    //    screen-recording grant. Verified against CfT 150: the call resolves in
+    //    ~320ms with `navigator.userActivation.isActive === false`. It is what
+    //    `chrome.autoCapture` lets pages rely on (docs/guide/screen-capture.md).
+    //
+    //    Trap for anyone re-measuring this: a Chrome spawned from a process that
+    //    lacks the macOS Screen Recording grant inherits that lack, and then the
+    //    call HANGS instead — no dialog, no rejection. That is an artifact of the
+    //    launching process, not of the switch. Test in a browser started from a
+    //    real terminal, or headless.
     "--auto-accept-this-tab-capture",
   ];
   if (opts.extensionDir) {

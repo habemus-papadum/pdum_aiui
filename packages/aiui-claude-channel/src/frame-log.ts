@@ -2,7 +2,7 @@
  * The channel's frame log: a bounded in-memory ring of every protocol message
  * the web backend saw on the `/ws` endpoint — hellos, data chunks, acks, and
  * server → client pushes — each stamped with a monotonically increasing `seq`.
- * `GET /debug/api/frames?since=<seq>` (see debug.ts) serves it; the workbench's
+ * `GET /debug/api/frames?since=<seq>` (see debug.ts) serves it; a debug client's
  * raw-JSON pane polls that route with the last `seq` it has seen.
  *
  * The log is recorded unconditionally (not gated on the server's debug mode)

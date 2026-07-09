@@ -22,13 +22,14 @@
  * The classification, coalescing, patch-parsing and prompt-splitting all live in
  * the pure {@link module:trace-cards} module; this file is the DOM renderer over
  * it. It is deliberately generic — an unknown stage still gets a sensible card —
- * and framework-free, so the workbench dock and the DevTools extension embed the
+ * and framework-free, so every debug home and the DevTools extension embed the
  * exact same surface.
  *
  * Live-follow re-renders on every poll; two things must survive that: which raw
  * disclosures the user opened (keyed by the card's first stage index) and the
  * filter state (instance-held, the chips are built once).
  */
+import { wordDiff } from "../intent-pipeline/patch";
 import { renderJsonTree } from "./json-tree";
 import { defaultPreviewUrl, type PreviewUrl, renderPathText } from "./paths";
 import type { LiveTrace, TraceStageLike } from "./sources";
@@ -47,6 +48,7 @@ import {
   formatDuration,
   formatUsd,
   isImageFile,
+  isPartialLabel,
   isPlayableAudioFile,
   type LiveSegment,
   liveOpenLine,
@@ -56,8 +58,10 @@ import {
   noPromptMessage,
   parsePatchLines,
   parseShotBlocks,
+  previousPartialText,
   savedFrameFiles,
   shotBlobName,
+  speculativePromptText,
   splitLoweredPrompt,
   TOGGLE_CATEGORIES,
   type TraceCard,
@@ -180,12 +184,23 @@ export class TraceView {
   private renderHero(trace: LiveTrace): void {
     this.heroEl.replaceChildren();
     const stage = (trace.stages ?? []).find((s) => s.label === "lowered prompt");
-    const text = loweredPromptText(stage);
+    const sent = loweredPromptText(stage);
+    // Before the turn commits there is no `lowered prompt` stage — but the
+    // accumulator has been recording its rendered prompt at every fold, so show
+    // that instead of "no prompt". Badged, because a speculative prompt is not
+    // what was (or will be) sent: later interactions still change it.
+    const speculative = sent === "" ? speculativePromptText(trace.stages) : "";
+    const text = sent || speculative;
     if (text === "") {
       const note = this.el("div", "aiui-dbg-hero-none");
       note.textContent = noPromptMessage(traceOutcome(trace).state);
       this.heroEl.append(note);
       return;
+    }
+    if (speculative !== "") {
+      const badge = this.el("div", "aiui-dbg-hero-preview");
+      badge.textContent = "preview · the prompt as last folded, not yet sent";
+      this.heroEl.append(badge);
     }
     const { preamble, body } = splitLoweredPrompt(text);
     if (preamble) {
@@ -542,9 +557,22 @@ export class TraceView {
       return;
     }
 
-    // Speculative compose (coalesced): the freshest transcript snippet.
+    // A streaming partial: the vendor's cumulative text for an uncommitted
+    // segment. Rendered as a word diff against the segment's previous partial —
+    // additions green, revisions red — which is the whole reason it is recorded.
+    if (isPartialLabel(label)) {
+      const text = String(data?.text ?? "");
+      info(`${text.length} chars`);
+      box.append(this.renderWordDiff(previousPartialText(trace.stages, card.indices[0]), text));
+      return;
+    }
+
+    // Speculative compose (coalesced): the freshest transcript snippet, and how
+    // large a prompt the fold had rendered at that point (the hero shows it).
     if (label.startsWith("composed (speculative)")) {
-      info(clip(String(data?.transcript ?? ""), 100) || "(empty)");
+      const promptChars = typeof data?.prompt === "string" ? data.prompt.length : 0;
+      const transcript = clip(String(data?.transcript ?? ""), 100) || "(empty)";
+      info(promptChars > 0 ? `${transcript} · prompt ${promptChars} chars` : transcript);
       return;
     }
 
@@ -676,6 +704,24 @@ export class TraceView {
     }
   }
 
+  /**
+   * Two texts as an inline word-level diff (the same `wordDiff` the overlay's
+   * correction flash uses, so every aiui surface diffs text identically).
+   * Word-level, so it is only ever applied to single-line prose — `wordDiff`
+   * splits on whitespace and rejoins with single spaces, which would flatten a
+   * multi-line prompt body and its screenshot blocks.
+   */
+  private renderWordDiff(before: string, after: string): HTMLElement {
+    const box = this.el("div", "aiui-dbg-diff");
+    for (const run of wordDiff(before, after)) {
+      const span = this.doc.createElement("span");
+      span.className = `aiui-dbg-diff-${run.kind}`;
+      span.textContent = run.text;
+      box.append(span, this.doc.createTextNode(" "));
+    }
+    return box;
+  }
+
   /** A V4A correction patch as a real red/green diff. */
   private renderPatch(patch: string): HTMLElement {
     const pre = this.el("pre", "aiui-dbg-patch");
@@ -743,7 +789,13 @@ export class TraceView {
 function shotCaption(path: string | undefined, block: string): string {
   const elements = [...block.matchAll(/<element\b[^>]*\bname="([^"]*)"/g)].map((m) => m[1]);
   const id = path ? (shotBlobName(path) ?? path.split(/[\\/]/).pop() ?? path) : "screenshot";
-  return elements.length > 0 ? `${id} · ${elements.join(", ")}` : id;
+  if (elements.length === 0) {
+    return id;
+  }
+  // A big drag frames many panels; the caption is triage, so first few + count.
+  const shown = elements.slice(0, 4).join(", ");
+  const more = elements.length - 4;
+  return `${id} · ${shown}${more > 0 ? ` +${more}` : ""}`;
 }
 
 /**

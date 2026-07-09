@@ -207,23 +207,6 @@ check(
   probe.stderr || probe.stdout,
 );
 
-// The demo scaffold proves the templates/ directory shipped in the tarball
-// (a missing `files` entry is exactly this test's reason to exist).
-const demo = run(["demo", "demo-sandbox", "--skip-install"]);
-check("aiui demo scaffolds from the shipped template", demo.status === 0, demo.stderr);
-check(
-  "scaffold has the app and a restored .gitignore",
-  existsSync(join(scratch, "demo-sandbox", "vite.config.ts")) &&
-    existsSync(join(scratch, "demo-sandbox", "src", "main.ts")) &&
-    existsSync(join(scratch, "demo-sandbox", ".gitignore")),
-);
-const demoAgain = run(["demo", "demo-sandbox", "--skip-install"]);
-check(
-  "re-running aiui demo continues instead of re-scaffolding",
-  demoAgain.status === 0 && /continuing/.test(demoAgain.stderr + demoAgain.stdout),
-  demoAgain.stderr,
-);
-
 // The create-aiui scaffolder, from its own installed bin: templates/ shipped,
 // dot-files restored (.gitignore AND .envrc), tokens resolved, continuation.
 const createBin = join(scratch, "node_modules", ".bin", "create-aiui");

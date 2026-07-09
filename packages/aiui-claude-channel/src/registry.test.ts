@@ -108,9 +108,9 @@ describe("registerServer", () => {
     expect(plain.entry.name).toBeUndefined();
     plain.remove();
 
-    const dbg = registerServer(2222, "wb", { debug: true, name: "aiui workbench" });
+    const dbg = registerServer(2222, "wb", { debug: true, name: "aiui debug" });
     expect(readEntry(dbg.file)).toEqual(dbg.entry);
-    expect(dbg.entry).toMatchObject({ tag: "wb", debug: true, name: "aiui workbench" });
+    expect(dbg.entry).toMatchObject({ tag: "wb", debug: true, name: "aiui debug" });
 
     // Junk in the optional fields is dropped, not fatal — older/foreign writers.
     writeFileSync(dbg.file, JSON.stringify({ ...dbg.entry, name: 42, debug: "yes" }));

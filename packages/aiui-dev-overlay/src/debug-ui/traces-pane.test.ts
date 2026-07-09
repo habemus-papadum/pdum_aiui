@@ -4,9 +4,9 @@ import { inSession, TracesPane, traceRowParts } from "./traces-pane";
 
 describe("inSession", () => {
   it("matches only the current session's traces; unlabeled traces are foreign", () => {
-    expect(inSession({ id: "a", session: "workbench·1·120000" }, "workbench·1·120000")).toBe(true);
-    expect(inSession({ id: "b", session: "workbench·2·090000" }, "workbench·1·120000")).toBe(false);
-    expect(inSession({ id: "c" }, "workbench·1·120000")).toBe(false);
+    expect(inSession({ id: "a", session: "lab·1·120000" }, "lab·1·120000")).toBe(true);
+    expect(inSession({ id: "b", session: "lab·2·090000" }, "lab·1·120000")).toBe(false);
+    expect(inSession({ id: "c" }, "lab·1·120000")).toBe(false);
     // No known current session (older server) → nothing is filtered out.
     expect(inSession({ id: "d" }, undefined)).toBe(true);
   });
@@ -14,7 +14,7 @@ describe("inSession", () => {
 
 describe("traceRowParts", () => {
   it("badges rows from other sessions (and unlabeled ones) with their session", () => {
-    const current = "workbench·1·120000";
+    const current = "lab·1·120000";
     expect(traceRowParts({ id: "a", session: current }, current).badges).toEqual([]);
     expect(traceRowParts({ id: "b", session: "serve·9·080000" }, current).badges).toEqual([
       "serve·9·080000",
@@ -87,7 +87,7 @@ describe("TracesPane with a pinned session (the ?session= deep link)", () => {
             session: "serve·9·080000",
             traces: [
               { id: "t1", session: "serve·9·080000", format: "intent-v1" },
-              { id: "t2", session: "workbench·1·120000", format: "intent-v1" },
+              { id: "t2", session: "lab·1·120000", format: "intent-v1" },
             ],
           }),
           { status: 200 },
@@ -102,7 +102,7 @@ describe("TracesPane with a pinned session (the ?session= deep link)", () => {
 
     const pane = new TracesPane({
       baseUrl: "http://127.0.0.1:1",
-      session: "workbench·1·120000",
+      session: "lab·1·120000",
       fetch: fetchStub,
     });
     document.body.append(pane.root);

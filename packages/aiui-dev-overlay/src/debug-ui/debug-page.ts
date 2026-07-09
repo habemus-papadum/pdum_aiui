@@ -5,7 +5,7 @@
  * `/__aiui/debug` (the intent tool's 🔍 opens it) and the standalone
  * `aiui debug` command's own Vite server. Either way it is a full-page
  * {@link TracesPane} — the same shared list + live-followed TraceView the
- * workbench dock and the DevTools extension render — polling a channel's
+ * DevTools extension renders — polling a channel's
  * `/debug/api/*` routes cross-origin (the channel opens CORS on `/debug`; it
  * only listens on loopback).
  *

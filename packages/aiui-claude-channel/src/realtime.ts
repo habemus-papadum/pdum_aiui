@@ -86,6 +86,63 @@ export interface RealtimeResult {
 }
 
 /** What a realtime session reports back, keyed by our own segment ordinal. */
+/**
+ * Something the vendor did that the session did not act on, or acted on in a way
+ * worth recording. Purely observational — a diagnostic never changes control
+ * flow, and a caller may ignore them all. They exist because every silent
+ * `default: return` in a vendor message switch is a place transcript can vanish
+ * without a trace: Scribe self-committed utterances for months and the channel
+ * dropped every one of them, unseen, because the drop was a bare `return`.
+ *
+ *  - `config-echo` — the vendor's own report of the session config it applied.
+ *    The ONLY proof a connect-URL param took effect (unknown params are accepted
+ *    silently), so it is recorded verbatim and diffed against what we asked for.
+ *  - `config-mismatch` — a param we set that the echo does not confirm.
+ *  - `vendor-commit` — the vendor closed an utterance we never asked it to close.
+ *  - `orphan-result` — a terminal frame that matched no segment at all.
+ *  - `unhandled` — a message type this session does not understand.
+ */
+export type RealtimeDiagnostic =
+  | { kind: "config-echo"; config: Record<string, unknown> }
+  | { kind: "config-mismatch"; param: string; requested: unknown; echoed: unknown }
+  | { kind: "vendor-commit"; segment: number; chars: number; words: number }
+  | { kind: "orphan-result"; messageType: string; chars: number }
+  | { kind: "unhandled"; messageType: string; raw: string };
+
+/**
+ * Diff the `session.update` we sent against the `session.updated` the server
+ * echoes back. Unlike Scribe, OpenAI *rejects* an unknown param with an `error`
+ * — but it will happily accept one it knows and apply a different value, and
+ * `turn_detection: null` (our entire manual-commit premise) is exactly the kind
+ * of thing worth proving rather than assuming. Reports, never throws.
+ *
+ * `echo` is the `session` object of a `session.updated` frame.
+ */
+export function checkRealtimeConfigEcho(
+  requested: { model: string; turnDetection: null },
+  echo: unknown,
+): Array<{ param: string; requested: unknown; echoed: unknown }> {
+  const input = (echo as { audio?: { input?: Record<string, unknown> } } | undefined)?.audio?.input;
+  if (input === undefined) {
+    return [];
+  }
+  const out: Array<{ param: string; requested: unknown; echoed: unknown }> = [];
+  // The one that matters: anything non-null here means the server owns the turn
+  // boundary, not our push-to-talk, and it will commit utterances by itself.
+  if (input.turn_detection != null) {
+    out.push({
+      param: "turn_detection",
+      requested: requested.turnDetection,
+      echoed: input.turn_detection,
+    });
+  }
+  const model = (input.transcription as { model?: unknown } | undefined)?.model;
+  if (model !== undefined && model !== requested.model) {
+    out.push({ param: "transcription.model", requested: requested.model, echoed: model });
+  }
+  return out;
+}
+
 export interface RealtimeCallbacks {
   /**
    * A partial transcript for `segment` — cumulative text (not the raw delta).
@@ -101,6 +158,8 @@ export interface RealtimeCallbacks {
    * fault before any commit.
    */
   onError(message: string, segment?: number): void;
+  /** Optional protocol observability — see {@link RealtimeDiagnostic}. */
+  onDiagnostic?(event: RealtimeDiagnostic): void;
 }
 
 /**
@@ -406,6 +465,12 @@ export function openRealtimeSession(
     if (existing !== undefined) {
       return existing;
     }
+    // An unseen item with every candidate segment already bound is the OpenAI
+    // analogue of Scribe's self-commit: the vendor opened a SECOND transcription
+    // item inside one of our segments. `turn_detection: null` is supposed to make
+    // that impossible — but Scribe's `commit_strategy=manual` was supposed to as
+    // well, and it did not exist. Callers see this as an `orphan-result`, so if
+    // it ever happens we learn from a trace instead of from a lost transcript.
     const segment = awaitingItem.shift() ?? (dead ? undefined : streamingSegment);
     if (segment === undefined || boundSegments.has(segment)) {
       return undefined;
@@ -455,6 +520,23 @@ export function openRealtimeSession(
     switch (message.type) {
       case "session.updated": {
         ready = true;
+        // The server's own report of the config it applied. Absence of an error
+        // is not proof a param took effect — read the echo (see the ElevenLabs
+        // `commit_strategy` post-mortem in elevenlabs-realtime.ts).
+        const session = (message as { session?: unknown }).session;
+        if (session && typeof session === "object") {
+          callbacks.onDiagnostic?.({
+            kind: "config-echo",
+            config: session as Record<string, unknown>,
+          });
+          const mismatches = checkRealtimeConfigEcho(
+            { model: options.model(), turnDetection: null },
+            session,
+          );
+          for (const m of mismatches) {
+            callbacks.onDiagnostic?.({ kind: "config-mismatch", ...m });
+          }
+        }
         for (const queued of outbox.splice(0)) {
           socket.send(queued);
         }
@@ -478,6 +560,12 @@ export function openRealtimeSession(
         const itemId = message.item_id ?? "";
         const segment = segmentForItem(itemId);
         if (segment === undefined) {
+          // A finished transcript that matched no segment — never silent again.
+          callbacks.onDiagnostic?.({
+            kind: "orphan-result",
+            messageType: message.type,
+            chars: (message.transcript ?? "").length,
+          });
           return;
         }
         const started = commitAt.get(segment) ?? now();
@@ -495,11 +583,42 @@ export function openRealtimeSession(
         });
         return;
       }
+      case "conversation.item.input_audio_transcription.failed": {
+        // A REAL OpenAI event this module never handled: the segment's audio was
+        // received but transcription failed. Unhandled, it left the segment in
+        // `pending` until the drain timeout, indistinguishable from silence.
+        // Attribute it to its segment so the caller can finalize that one loudly.
+        const itemId = message.item_id ?? "";
+        const segment = segmentForItem(itemId);
+        const reason = message.error?.message ?? "transcription failed";
+        if (segment === undefined) {
+          callbacks.onError(reason);
+          return;
+        }
+        const index = pending.indexOf(segment);
+        if (index >= 0) {
+          pending.splice(index, 1);
+        }
+        commitAt.delete(segment);
+        itemToSegment.delete(itemId);
+        cumulativeByItem.delete(itemId);
+        boundSegments.delete(segment);
+        callbacks.onError(reason, segment);
+        settleDrainIfIdle();
+        return;
+      }
       case "error": {
         fail(message.error?.message ?? "realtime session error");
         return;
       }
       default:
+        // Not a bare `return`. Everything this session does not understand is
+        // reported — the habit that would have caught Scribe's self-commits.
+        callbacks.onDiagnostic?.({
+          kind: "unhandled",
+          messageType: message.type ?? "(none)",
+          raw: text.slice(0, 500),
+        });
         return;
     }
   };

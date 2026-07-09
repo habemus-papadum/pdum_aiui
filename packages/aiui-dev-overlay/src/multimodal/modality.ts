@@ -1,16 +1,17 @@
 /**
- * The multimodal `IntentModality` — the workbench's turn system, graduated into
+ * The multimodal `IntentModality` — the turn system designed in the retired
+ * workbench lab, graduated into
  * the overlay and speaking the `intent-v1` wire format.
  *
  * One `Engine` (the append-only event stream + thread state machine) drives ink,
  * region screenshots with a component locator, hold-to-talk dictation with a
  * streaming preview, and the select-and-speak correction meta-loop. The
- * interaction is exactly the one designed in the workbench (see its
- * `docs/turn-flow.md`): backtick arms, Space talks, drag inks, D drag-shoots a
+ * interaction is exactly the one designed there (archive/workbench/turn-flow.md):
+ * backtick arms, Space talks, drag inks, D drag-shoots a
  * region, S shoots the whole viewport, C clears, E enters correct mode, Enter
  * sends, Esc steps out one level.
  *
- * Where the workbench was a standalone bench — mock transcriber, dev-proxy for
+ * Where that lab was a standalone bench — mock transcriber, dev-proxy for
  * the real model, self-annotated scenery — this modality streams the turn to
  * the channel over `intent-v1`:
  *  - the event log rides `chunk{kind:"events"}` JSON frames, batched on a short
@@ -81,6 +82,7 @@ import {
 } from "./advanced-config";
 import { type PcmSource, WorkletPcmSource } from "./audio";
 import { ConfigStrip, type ConfigStripState } from "./config-strip";
+import type { DisplayCapture } from "./display-capture";
 import { Ink } from "./ink";
 import { JumpPicker } from "./jump-picker";
 import { CHEAT_STYLES, CheatSheet, KEYMAP_HELP_STYLES, KeymapHelp } from "./keymap-ui";
@@ -122,6 +124,12 @@ export interface MultimodalDeps {
    * to `window.location.assign`. Injected in jsdom, which can't navigate.
    */
   navigate?: (url: string) => void;
+  /**
+   * The document's display-capture broker; defaults to a fresh
+   * {@link createDisplayCapture}. Injected by tests, which have no
+   * `getDisplayMedia` and want to script the grant's policy and timing.
+   */
+  displayCapture?: DisplayCapture;
 }
 
 /**
@@ -269,8 +277,18 @@ export function multimodalModality(
         // The live cadence (the fps slider writes videoFrameIntervalMs; the
         // sampler re-reads this thunk before every tick).
         videoFrameIntervalMs: () => config.videoFrameIntervalMs ?? 5000,
+        ...(deps.displayCapture !== undefined ? { displayCapture: deps.displayCapture } : {}),
       });
       layers.append(capture.veil);
+
+      // Publish the document's display-capture grant next to the ink seam, for
+      // the same reason: paint-host.ts must stream the iPad's video from the
+      // SAME getDisplayMedia stream the screenshots use. Two asks in one
+      // document give two independent streams — two pickers, two capture
+      // indicators, two focus excursions — for one screen.
+      if (instrumentation) {
+        instrumentation.displayCapture = capture.grant;
+      }
 
       // The talk lanes (REST + PCM) and the silence endpointer live in
       // shell/talk.ts. `speechPlayer` is created below — talk only starts on
@@ -472,6 +490,25 @@ export function multimodalModality(
             }
           },
         },
+        {
+          // "Armed ⇒ the display-capture grant is warm." Only where the browser
+          // auto-accepts (the session browser's launch marker); elsewhere this
+          // is inert, because acquiring would open a picker nobody asked for.
+          //
+          // Arm is the demand signal — it precedes hands-free and every shot,
+          // and it means the user is talking to THIS tab. Taking the grant here
+          // rather than inside the first shot moves the unavoidable
+          // getDisplayMedia blur off the D-hold (where it ate the keyup and
+          // stranded the veil) and off the first hands-free utterance (where it
+          // stopped the mic). Idempotent: prewarm is a no-op once the grant is
+          // live or a call is in flight.
+          name: "capture-prewarm",
+          apply: () => {
+            if (engine.armed) {
+              capture.prewarmGrant();
+            }
+          },
+        },
       ]);
       const enforceSurfaces = createReconciler<UiMode>([
         {
@@ -598,9 +635,21 @@ export function multimodalModality(
       // Blur also STOPS LISTENING. A mic left open on another window once
       // transcribed an entire spoken conversation, segment by segment, on the
       // API bill. Away = mic off (the open window commits, never discards).
+      //
+      // But not every blur means the user left: `getDisplayMedia` blurs the
+      // window on EVERY call, dialog or no dialog (measured — `focus` follows
+      // immediately, and `visibilitychange` never fires at all). That is why
+      // the first screenshot silently dropped you out of hands-free mode, and
+      // no subsequent one did — the grant was already held. The blur handler
+      // has to ask whose blur this is, not merely that one happened. The veil
+      // still drops unconditionally: cancelShot is idempotent, and a stranded
+      // crosshair is worse than a re-armed one.
       const onWindowBlur = (): void => {
         if (capture.shooting()) {
           capture.cancelShot();
+        }
+        if (capture.blurIsSelfInflicted()) {
+          return;
         }
         if (talk.listening() || engine.talking) {
           talk.stopAllListening();
@@ -1251,6 +1300,9 @@ export function multimodalModality(
           offSelectionChange();
           if (instrumentation?.remotePaint === remotePaint) {
             instrumentation.remotePaint = undefined;
+          }
+          if (instrumentation?.displayCapture === capture.grant) {
+            instrumentation.displayCapture = undefined;
           }
           disposeBus?.();
           overlayTools.dispose();

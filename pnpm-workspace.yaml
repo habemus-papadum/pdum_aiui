@@ -1,6 +1,5 @@
 packages:
   - "packages/*"
-  - "packages/aiui-dev-overlay/workbench"
   # In-repo demo apps (`pnpm new-demo <name>`): never published, but full workspace
   # members so their `@habemus-papadum/*` deps resolve to source via `workspace:^`.
   # Note this also enrolls them in version lockstep — scripts/versioning.mjs reads

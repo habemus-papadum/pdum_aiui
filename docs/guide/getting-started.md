@@ -10,30 +10,29 @@ and, if you say yes to its first-run question — which is easy to do without re
 Claude Code with permissions skipped. If you're still here, you've decided to trust this code.
 :::
 
-## The quickest start: a disposable demo
+## The quickest start: scaffold an app
 
-No checkout, no integration work — scaffold a sandbox and try the whole loop:
+No checkout, no integration work — scaffold the starter and try the whole loop:
 
 ```sh
-npx @habemus-papadum/aiui demo my-demo
-cd my-demo
+npm create @habemus-papadum/aiui@latest my-app
+cd my-app
 npm run claude    # terminal 1 — Claude Code with the aiui channel + session browser
-npm run dev       # terminal 2 — the demo app (Vite + the intent tool)
+npm run dev       # terminal 2 — your app (Vite + the intent tool)
 npx aiui open http://localhost:5173   # open the app in the session browser
 ```
 
-`aiui demo` copies a small sample app (real source: Vite, one `aiuiDevOverlay()` plugin, a fake
-"spectra" viewer to point at) into a directory of your own and makes it a **standalone git
-repo** — so when the agent starts rewriting the app, the churn is versioned *there*, like a
-much-mutated notebook, and never lands anywhere upstream. It installs its dependencies once
-(including `aiui` itself, so later `npx aiui …` calls in that directory resolve locally instead
-of re-downloading), and it's safe to re-run: an existing demo is **continued**, never
-re-scaffolded — your changes and the agent's survive.
+This copies the **SolidJS starter** (real source: Vite, one `aiuiDevOverlay()` plugin, and a
+placeholder rose you point at and talk about) into a directory of your own and makes it a
+**standalone git repo** — so when the agent starts rewriting the app, the churn is versioned
+*there*, like a much-mutated notebook, and never lands anywhere upstream. It installs its
+dependencies once (including `aiui` itself, so later `npx aiui …` calls in that directory resolve
+locally instead of re-downloading), and it's safe to re-run: an existing app is **continued**,
+never re-scaffolded — your changes and the agent's survive.
 
-Want a keeper rather than a sandbox? `pnpm create @habemus-papadum/aiui my-app` scaffolds the
-**SolidJS starter** instead — same loop, but with the
-[frontend-for-agents](./frontend-for-agents) shape (durable roots, a cell graph, the modal kit)
-already in place and a banner that tells you to start talking. See
+The starter arrives with the [frontend-for-agents](./frontend-for-agents) shape already in
+place — durable roots, a cell graph, an agent tool surface — and a banner that tells you to start
+talking. The [frontend user guide](./frontend-user-guide) explains how to write into it. See also
 [Installation](./installation#starting-a-fresh-app-the-solidjs-starter).
 
 Everything below explains the same loop piece by piece, for wiring aiui into your *own* app.
@@ -45,11 +44,11 @@ Everything below explains the same loop piece by piece, for wiring aiui into you
   repo itself: `pnpm install`, then the source-run `./aiui` wrapper / `pnpm aiui` — no build
   needed; `eval "$(./aiui env)"` puts it on your PATH as plain `aiui`, see
   [Developing](./development#activate-your-shell-optional-venv-style)).
-- A Vite-based web app you're developing. **No app handy?** Use the
-  [disposable demo](#the-quickest-start-a-disposable-demo) above. (Repo developers also have
-  `pnpm demo`, which serves `packages/aiui-demo` straight from the checkout — handy, but agent
-  edits land in your working tree and will try to ride along with your next commit; the
-  scaffolded demo is the sandboxed alternative.)
+- A Vite-based web app you're developing. **No app handy?** [Scaffold the
+  starter](#the-quickest-start-scaffold-an-app) above. (Repo developers also have `pnpm demo`,
+  which serves the `demos/gallery` reference notebooks straight from the checkout — handy, but
+  agent edits land in your working tree and will try to ride along with your next commit; a
+  scaffolded app is the sandboxed alternative.)
 
 ## 1. Terminal one — the session
 

@@ -7,6 +7,7 @@ import { fakeSocketFactory } from "../test-support/fake-socket";
 import { installLocalStorage } from "../test-support/local-storage";
 import { INTENT_CONFIG_STORAGE_KEY, loadIntentOverrides } from "./advanced-config";
 import type { PcmSource } from "./audio";
+import type { CaptureOutcome, DisplayCapture } from "./display-capture";
 import { type MultimodalDeps, multimodalModality } from "./modality";
 import type { SpeechAudioElement } from "./speech";
 
@@ -799,6 +800,64 @@ describe("multimodalModality: help (H) and the condensed cheat sheet", () => {
     capFor("🙌")?.click();
     await wait(30);
     expect(state()).not.toContain("REC");
+  });
+});
+
+/**
+ * A scriptable {@link DisplayCapture}. The real broker's job here is to answer
+ * one question — "is the blur that just fired one *we* caused?" — so the fake
+ * lets a test say yes or no and nothing else.
+ */
+function fakeDisplayCapture(overrides: Partial<DisplayCapture> = {}): DisplayCapture {
+  return {
+    policy: () => "gesture",
+    acquire: async (): Promise<CaptureOutcome> => "denied",
+    prewarm: () => {},
+    active: () => false,
+    video: () => undefined,
+    stream: () => undefined,
+    lastError: () => undefined,
+    blurIsSelfInflicted: () => false,
+    dispose: () => {},
+    ...overrides,
+  };
+}
+
+describe("multimodalModality: window blur vs. the capture picker's blur", () => {
+  const state = (handle: { shadowRoot: ShadowRoot | null }): string =>
+    handle.shadowRoot?.querySelector(".mm-state")?.textContent ?? "";
+
+  it("a real blur stops listening — a mic left open on another window bills for it", async () => {
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 }, true, {
+      displayCapture: fakeDisplayCapture({ blurIsSelfInflicted: () => false }),
+    });
+    key("keydown", "`");
+    key("keydown", "h"); // hands-free: listening survives the keyup
+    await wait(30);
+    expect(state(handle)).toContain("REC");
+
+    window.dispatchEvent(new Event("blur"));
+    await flush();
+    expect(state(handle)).not.toContain("REC");
+  });
+
+  it("the FIRST screenshot's own blur does not drop you out of hands-free mode", async () => {
+    // getDisplayMedia blurs the window on every call, dialog or no dialog. That
+    // blur used to look exactly like the user walking away — so the first shot
+    // of a hands-free session silently stopped the mic, and every shot after it
+    // (the grant already held, no call, no blur) worked fine. The regression is
+    // precisely that asymmetry.
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 }, true, {
+      displayCapture: fakeDisplayCapture({ blurIsSelfInflicted: () => true }),
+    });
+    key("keydown", "`");
+    key("keydown", "h");
+    await wait(30);
+    expect(state(handle)).toContain("REC");
+
+    window.dispatchEvent(new Event("blur"));
+    await flush();
+    expect(state(handle)).toContain("REC");
   });
 });
 

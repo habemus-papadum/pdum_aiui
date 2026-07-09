@@ -28,8 +28,14 @@ export { attributedRead, enableCellAttribution } from "./cell-attribution";
 // cell-view.tsx — the notebook-feel wrapper (spinner, error+retry, keep-latest).
 export { CellView, ProgressStripe, Spinner } from "./cell-view";
 
+export type { SignalBox } from "./durable";
 // durable.ts — the durable/disposable registry that makes HMR safe.
-export { disposeDurable, durable } from "./durable";
+export { disposeDurable, durable, durableSignal } from "./durable";
+export type { HotContext } from "./hot-graph";
+// hot-graph.ts — the durable box + dispose-and-swap + self-accept, in one call.
+export { hotCellGraph } from "./hot-graph";
+// standard-tools.ts — the app-independent `locate` tool and `cells` reporter.
+export { registerStandardTools } from "./standard-tools";
 export type { WorkerCancel, WorkerReply, WorkerRequest, WorkerRun } from "./worker-stream";
 // worker-stream.ts — cancellable request/stream protocol for Web Workers.
 export { fromWorker, workerStream } from "./worker-stream";

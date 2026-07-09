@@ -8,7 +8,7 @@ during a tight agent iteration loop.
 
 This is the library layer of the repo's **frontend-for-agents** methodology. The long-form write-up
 lives in the three-level guide at [`docs/guide/frontend-for-agents`](../../docs/guide/); the demo's
-[`PRINCIPLES.md`](../aiui-demo/PRINCIPLES.md) and the [`aiui-demo`](../aiui-demo) app itself are the
+[`PRINCIPLES.md`](../../demos/gallery/PRINCIPLES.md) and the [`gallery`](../../demos/gallery) demo itself are the
 worked example that every utility here was paid for building.
 
 ## Plumbing and porcelain
@@ -28,10 +28,12 @@ The library has two layers (one package for now; the seam is deliberate):
 
 | Export | What it is |
 | ------ | ---------- |
-| `cell`, `cellGraph`, `cellRegistry`, `cellByName`, `settledOnly` | Observable-style async dataflow cells: a six-state machine (`unresolved · pending · streaming · refreshing · ready · errored`), an `AbortSignal` per run, progress, a cached last-good value that survives errors, and a retry affordance. Solid 2.0 does supersession/holds/transactional commits; the cell adds what UI and cancellation need. |
+| `cell`, `cellGraph`, `cellRegistry`, `cellByName`, `settledOnly` | Observable-style async dataflow cells: a seven-state machine (`unresolved · pending · streaming · refreshing · held · ready · errored`), an `AbortSignal` per run, progress, a cached last-good value that survives errors, and a retry affordance. Solid 2.0 does supersession/holds/transactional commits; the cell adds what UI and cancellation need. |
+| `hotCellGraph` | The whole "durable roots, disposable graph" ritual in one call: owns the durable box, disposes the old graph and builds a new one over the surviving roots on a hot edit, and self-accepts the HMR update. Returns a stable `Accessor<G>` — never `undefined`, so components need no guard. Hand it the calling module's `import.meta.hot` (a library cannot self-accept on your behalf, and `import.meta.*` is resolved at *build* time, so prebuilt code never sees the consumer's hot context). |
+| `registerStandardTools` | The two agent tools every aiui app should have and none should write: `locate` (CSS selector → `data-source-loc`/`data-cell` stamps) and the `cells` report section (the live attribution table). |
 | `CellView`, `Spinner`, `ProgressStripe` | The notebook feel in one wrapper: spinner + progress before the first value, an error box with retry, and keep-the-last-render (dimmed, progress stripe) while a new run streams or refreshes. |
 | `workerStream`, `fromWorker` | A dependency-free, cancellable request/stream protocol that turns a Web Worker into an async generator a cell consumes directly — partials stream in, progress drives `ctx.progress`, and aborting posts a `cancel` so the worker actually stops. |
-| `durable`, `disposeDurable` | A keyed, idempotent `window` registry for resources that must outlive a module reload (a WebGL context, a worker, accumulated history, the user's parameters). `durable(key, create)` creates once and *adopts* forever after — the discipline HMR needs. |
+| `durable`, `durableSignal`, `disposeDurable` | A keyed, idempotent `window` registry for resources that must outlive a module reload (a WebGL context, a worker, accumulated history, the user's parameters). `durable(key, create)` creates once and *adopts* forever after — the discipline HMR needs; `durableSignal(key, initial)` is the signal-shaped case. |
 | `agentToolkit` | A WebMCP-flavored tool surface installed at `window.__<ns>`: named, described, loosely-schema'd operations an agent discovers and calls, plus pluggable `report()` sections for one bounded, JSON-serializable snapshot of the app. When the aiui dev overlay is present it forwards the surface (real tools + a synthetic `report`) to the channel, so the tools become MCP tools (`page_tools_list`/`page_tools_call`) and calls route back to the live page — best-effort and dependency-free. |
 | `@habemus-papadum/aiui-viz/plot` → `PlotFigure`, `PLOT_STYLE` | The Observable Plot bridge (reactive options in, a figure out) behind one seam. Kept on a subpath so `@observablehq/plot` stays an **optional** peer that core consumers never import. |
 | `@habemus-papadum/aiui-viz/site` → `SiteHeader`, `TocRail`, `TeX`, `colorMode` | Page chrome for the paper-like notebook anatomy: the sticky header with descriptor tabs, the "On this page" rail, KaTeX math with the `data-tex` attribution stamp, and the reactive `prefers-color-scheme` signal apps key their palettes on. `katex` is an optional peer only `/site` consumers need. Styling is the consumer's (`.site-*`, `.toc-*`, `.math-*`) — same CSS seam as `CellView`. |
@@ -77,11 +79,11 @@ function Results() {
 
 `CellView` emits stable class names (`cell-body`, `cell-body-loading`, `cell-pending`, `cell-error`,
 `progress-stripe`, `progress-stripe-fill`, and `btn`/`btn-outline` on the retry button) — style them
-in your app. The demo's [`styles.css`](../aiui-demo/src/styles.css) is a worked dark-surface example.
+in your app. The demo's [`styles.css`](../../demos/gallery/src/styles.css) is a worked dark-surface example.
 
 ## See it in use
 
-The [`aiui-demo`](../aiui-demo) package is a Gray-Scott reaction-diffusion laboratory built entirely
+The [`gallery`](../../demos/gallery) demo is a Gray-Scott reaction-diffusion laboratory built entirely
 on these utilities — a WebGL sim, a cancellable worker analysis pipeline, streaming downloads, Plot
-charts, and a `window.__morpho` agent tool surface. Read [`PRINCIPLES.md`](../aiui-demo/PRINCIPLES.md)
+charts, and a `window.__morpho` agent tool surface. Read [`PRINCIPLES.md`](../../demos/gallery/PRINCIPLES.md)
 for the methodology and the per-principle bugs each utility was designed against.

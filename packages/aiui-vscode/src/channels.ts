@@ -33,11 +33,11 @@ export interface ChannelEntry {
   cwd: string;
   /** ISO-8601 start timestamp. */
   startedAt: string;
-  /** Display name the server chose for itself (e.g. "aiui workbench"). */
+  /** Display name the server chose for itself (a debug server's `--name`). */
   name?: string;
   /**
    * A standalone debug server (`aiui-claude-channel serve`, e.g. the
-   * workbench's): fully usable as a selection target, but marked in the
+   * a standalone `serve`): fully usable as a selection target, but marked in the
    * picker and sorted after real sessions.
    */
   debug?: boolean;

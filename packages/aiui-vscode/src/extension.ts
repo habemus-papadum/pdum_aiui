@@ -64,7 +64,7 @@ function selectionUrl(uri: vscode.Uri, line: number, character: number): string 
 }
 
 /**
- * How the picker titles a channel: its own display name ("aiui workbench"),
+ * How the picker titles a channel: its own display name (a debug server's `--name`),
  * else the owning Claude Code session's name (the channel's `ppid` is that
  * session — matched via `claude agents --json`, exactly like the CLI
  * selector), else the tag. Debug servers are always marked.

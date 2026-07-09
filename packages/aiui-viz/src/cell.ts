@@ -35,10 +35,11 @@ import {
 } from "solid-js";
 
 export type CellState =
-  | "unresolved" // never had a value; deps are held
+  | "unresolved" // never had a value; deps gate closed or upstream not ready
   | "pending" // never had a value; first run in flight
   | "streaming" // has a value; current run still yielding
-  | "refreshing" // has a value; newer run pending, or deps re-held
+  | "refreshing" // has a value; a newer run is pending or an upstream is recomputing
+  | "held" // has a value; the deps gate is CLOSED — nothing is running or coming
   | "ready"
   | "errored";
 
@@ -234,12 +235,22 @@ export function cell<D, T>(
     yield value;
   }
 
-  const heldNow = (): boolean => {
+  /**
+   * Why the gate needs three answers, not two: "gated" (deps returned
+   * undefined/null/false — an explicit hold, nothing will run until the gate
+   * opens) and "blocked" (deps threw NotReadyError — an upstream is computing
+   * and a new value IS coming) look identical to the memo but mean opposite
+   * things to a user. Conflating them was the old bug: a cancel button that
+   * cleared the gate left the cell reading "refreshing" forever, and CellView
+   * showed an indeterminate progress stripe over work that wasn't happening.
+   */
+  type Gate = "open" | "gated" | "blocked";
+  const gateNow = (): Gate => {
     try {
       const d = deps();
-      return d === undefined || d === null || d === false;
+      return d === undefined || d === null || d === false ? "gated" : "open";
     } catch (e) {
-      if (e instanceof NotReadyError) return true; // upstream held/pending
+      if (e instanceof NotReadyError) return "blocked"; // upstream pending
       throw e;
     }
   };
@@ -250,14 +261,18 @@ export function cell<D, T>(
     (): Box => {
       try {
         memo(); // subscribe; between stream yields this succeeds
-        // A re-held cell can serve its stale value to tracked readers, so
+        // A re-gated cell can serve its stale value to tracked readers, so
         // check the gate before declaring ready.
-        if (heldNow()) return { state: "refreshing" };
+        const gate = gateNow();
+        if (gate === "gated") return { state: "held" };
+        if (gate === "blocked") return { state: "refreshing" };
         return { state: settled() ? "ready" : partial() ? "streaming" : "refreshing" };
       } catch (e) {
         if (e instanceof NotReadyError) {
           const hasValue = last() !== undefined;
-          if (heldNow()) return { state: hasValue ? "refreshing" : "unresolved" };
+          const gate = gateNow();
+          if (gate === "gated") return { state: hasValue ? "held" : "unresolved" };
+          if (gate === "blocked" && !hasValue) return { state: "unresolved" };
           if (partial()) return { state: "streaming" }; // latest-mode partials pre-commit
           return { state: hasValue ? "refreshing" : "pending" };
         }

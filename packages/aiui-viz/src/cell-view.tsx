@@ -31,7 +31,8 @@ export function CellView<T>(props: {
     const s = props.of.state();
     if (s === "ready") return true;
     if (s === "errored" || s === "unresolved" || s === "pending") return false;
-    // streaming/refreshing: show the last value (a streamed partial counts)
+    // streaming/refreshing/held: show the last value (a streamed partial
+    // counts). held renders it quiet — loading() is false, so no dim/stripe.
     return props.keepLatest !== false && props.of.latest() !== undefined;
   };
 
@@ -54,10 +55,13 @@ export function CellView<T>(props: {
             ("file:line", babel-injected) so DOM-contract consumers (the dev
             overlay's shot locator and VS Code jump mode) can open the
             `cell(...)` call without a runtime registry lookup. */}
+        {/* data-cell-state mirrors state() so CSS can key off it (e.g.
+            [data-cell-state="held"]) and agents/tests can read it off the DOM. */}
         <div
           style={{ position: "relative" }}
           data-cell={props.of.cellName}
           data-cell-loc={props.of.loc}
+          data-cell-state={props.of.state()}
         >
           <div class={props.of.loading() ? "cell-body cell-body-loading" : "cell-body"}>
             {props.children(() => props.of.latest() as T)}

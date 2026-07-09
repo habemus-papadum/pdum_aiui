@@ -3,7 +3,7 @@
  * streaming preview with its correction meta-mode. Class-prefixed `mm-` and
  * injected once into a scoped `<style>`; the only bare selector is
  * `body.mm-armed` (the crosshair cursor while armed), a deliberate page-level
- * effect. The scenery/inspector/settings chrome stays in the workbench lab.
+ * effect. (The retired workbench lab's scenery/inspector chrome was never here.)
  */
 export const STYLES = /* css */ `
   .mm-ink { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2147483640; pointer-events: none; }

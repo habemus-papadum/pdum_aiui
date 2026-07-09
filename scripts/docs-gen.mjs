@@ -226,10 +226,13 @@ function main() {
           { text: "Multi-View Sessions", link: "/guide/multi-view-sessions" },
           { text: "Remote Development", link: "/guide/remote" },
           { text: "iPad Paint Stream", link: "/guide/paint-stream" },
+          { text: "Screen Capture", link: "/guide/screen-capture" },
+          { text: "Attribution: Gesture → Source", link: "/guide/attribution" },
           {
             text: "Frontend for Agents",
             collapsed: false,
             items: [
+              { text: "User Guide", link: "/guide/frontend-user-guide" },
               { text: "Concepts", link: "/guide/frontend-for-agents" },
               { text: "Design Choices", link: "/guide/frontend-design-choices" },
               { text: "Hard-Won Details", link: "/guide/frontend-hard-won" },

@@ -4,8 +4,8 @@
  *  - {@link AudioCapture} — the REST path: one getUserMedia stream, one
  *    MediaRecorder run per talk segment, yielding a **whole webm/opus blob** the
  *    `openai` transcriber uploads. An AnalyserNode drives the HUD level meter so
- *    "is it hearing me" is answered by pixels, not faith. Graduated from the
- *    workbench verbatim.
+ *    "is it hearing me" is answered by pixels, not faith. Graduated verbatim
+ *    from the retired workbench lab.
  *  - {@link WorkletPcmSource} — the realtime path (streaming-turns.md §3): an
  *    AudioWorklet taps the mic and emits **Int16 PCM frames at 24 kHz** *while
  *    you talk*, which the modality streams as `audio` chunks. MediaRecorder's

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  checkConfigEcho,
   convertWords,
   ELEVENLABS_COMMIT_FLOOR_MS,
   ELEVENLABS_KEEPALIVE_MS,
@@ -8,6 +9,7 @@ import {
 } from "./elevenlabs-realtime";
 import type {
   RealtimeCallbacks,
+  RealtimeDiagnostic,
   RealtimeResult,
   RealtimeSocketFactory,
   RealtimeSocketHandlers,
@@ -95,17 +97,19 @@ describe("openElevenLabsRealtimeSession", () => {
     const deltas: Array<{ segment: number; text: string }> = [];
     const finals: Array<{ segment: number } & RealtimeResult> = [];
     const errors: Array<{ message: string; segment?: number }> = [];
+    const diagnostics: RealtimeDiagnostic[] = [];
     const cb: RealtimeCallbacks = {
       onDelta: (segment, text) => deltas.push({ segment, text }),
       onFinal: (segment, result) => finals.push({ segment, ...result }),
       onError: (message, segment) =>
         errors.push({ message, ...(segment !== undefined ? { segment } : {}) }),
+      onDiagnostic: (event) => diagnostics.push(event),
     };
     const session = openElevenLabsRealtimeSession(
       { apiKey: "k", socketFactory: up.factory, now },
       cb,
     );
-    return { session, deltas, finals, errors };
+    return { session, deltas, finals, errors, diagnostics };
   }
 
   it("puts the full session config in the connect URL (overrides + repeatable keyterms)", () => {
@@ -127,9 +131,11 @@ describe("openElevenLabsRealtimeSession", () => {
       audio_format: "pcm_24000",
       include_timestamps: "true",
       no_verbatim: "true",
-      commit_strategy: "manual",
       language_code: "ja",
     });
+    // `commit_strategy` is NOT a Scribe parameter — it never appeared in the
+    // session_started echo, and sending it bought nothing but a false premise.
+    expect(url.searchParams.has("commit_strategy")).toBe(false);
     // keyterms is repeatable — one query param per term.
     expect(url.searchParams.getAll("keyterms")).toEqual(["Solid", "WebGL"]);
   });
@@ -584,5 +590,223 @@ describe("isErrorType", () => {
     expect(isErrorType("partial_transcript")).toBe(false);
     expect(isErrorType("session_started")).toBe(false);
     expect(isErrorType("committed_transcript_with_timestamps")).toBe(false);
+  });
+});
+
+// ── Scribe self-commits: a segment is many utterances ────────────────────────
+//
+// The bug that motivated all of this. Scribe caps an utterance (~40 s, live-
+// verified) and closes it WITHOUT being asked, then resets its partial to empty.
+// These frames used to hit `completeHead` with an empty FIFO and be discarded as
+// "stray", destroying the transcript. Regression-lock the accumulation.
+
+describe("vendor-initiated commits (Scribe closes utterances by itself)", () => {
+  function session(up: FakeUpstream, now: () => number = () => 0) {
+    const deltas: Array<{ segment: number; text: string }> = [];
+    const finals: Array<{ segment: number } & RealtimeResult> = [];
+    const diagnostics: RealtimeDiagnostic[] = [];
+    const s = openElevenLabsRealtimeSession(
+      { apiKey: "k", socketFactory: up.factory, now },
+      {
+        onDelta: (segment, text) => deltas.push({ segment, text }),
+        onFinal: (segment, result) => finals.push({ segment, ...result }),
+        onError: () => {},
+        onDiagnostic: (e) => diagnostics.push(e),
+      },
+    );
+    return { s, deltas, finals, diagnostics };
+  }
+
+  /** Enough audio to clear the commit floor. */
+  const audio = (s: ReturnType<typeof session>["s"], segment: number) =>
+    s.appendAudio(segment, new Uint8Array(ELEVENLABS_COMMIT_FLOOR_MS * 48 * 2));
+
+  it("accumulates a self-committed utterance into the segment's final", () => {
+    const up = fakeUpstream();
+    const { s, finals, diagnostics } = session(up);
+    up.open();
+    up.emit({ message_type: "session_started" });
+    audio(s, 1);
+
+    // Scribe closes utterance one on its own — nothing of ours is in flight.
+    up.emit(withTimestamps("the first part.", [{ text: "first", start: 1, end: 2, type: "word" }]));
+    expect(finals).toHaveLength(0); // not a final: the segment is still streaming
+    expect(diagnostics).toContainEqual({
+      kind: "vendor-commit",
+      segment: 1,
+      chars: "the first part.".length,
+      words: 1,
+    });
+
+    // The user releases; our commit's answer carries only the tail.
+    audio(s, 1);
+    s.commit(1);
+    up.emit(withTimestamps("the tail.", [{ text: "tail", start: 3, end: 4, type: "word" }]));
+
+    expect(finals).toHaveLength(1);
+    expect(finals[0].segment).toBe(1);
+    expect(finals[0].text).toBe("the first part. the tail.");
+    expect(finals[0].words?.map((w) => w.text)).toEqual(["first", "tail"]);
+  });
+
+  it("keeps onDelta cumulative across Scribe's partial reset", () => {
+    const up = fakeUpstream();
+    const { s, deltas } = session(up);
+    up.open();
+    up.emit({ message_type: "session_started" });
+    audio(s, 1);
+
+    up.emit({ message_type: "partial_transcript", text: "hello there" });
+    expect(deltas.at(-1)).toEqual({ segment: 1, text: "hello there" });
+
+    // Self-commit → the accumulated text is re-emitted, so the preview never shrinks.
+    up.emit(withTimestamps("hello there."));
+    expect(deltas.at(-1)).toEqual({ segment: 1, text: "hello there." });
+
+    // Scribe's next partial starts from empty; we prefix what it already closed.
+    up.emit({ message_type: "partial_transcript", text: "and more" });
+    expect(deltas.at(-1)).toEqual({ segment: 1, text: "hello there. and more" });
+  });
+
+  it("a long segment whose tail is silence still finalizes with the vendor's text", () => {
+    // The exact production failure: 134 s held, Scribe self-committed, the tail
+    // was silence, and the final came back EMPTY.
+    const up = fakeUpstream();
+    const { s, finals } = session(up);
+    up.open();
+    up.emit({ message_type: "session_started" });
+    audio(s, 1);
+    up.emit(withTimestamps("everything the user said."));
+    audio(s, 1);
+    s.commit(1);
+    up.emit({ message_type: "committed_transcript_with_timestamps", text: "", words: [] });
+
+    expect(finals).toHaveLength(1);
+    expect(finals[0].text).toBe("everything the user said.");
+  });
+
+  it("carries vendor-committed text through a sub-floor commit (no wire commit)", () => {
+    const up = fakeUpstream();
+    const { s, finals } = session(up);
+    up.open();
+    up.emit({ message_type: "session_started" });
+    audio(s, 1);
+    up.emit(withTimestamps("said before the scrap."));
+    s.appendAudio(1, new Uint8Array(10)); // a scrap, under the floor
+    const before = up.sent.length;
+    s.commit(1);
+    // Nothing on the wire (committing under the floor is fatal) …
+    expect(up.sent.filter((m) => m.commit === true)).toHaveLength(0);
+    expect(up.sent.length).toBe(before);
+    // … but the segment still owns what Scribe already committed inside it.
+    expect(finals).toHaveLength(1);
+    expect(finals[0].text).toBe("said before the scrap.");
+  });
+
+  it("drops a discarded segment's accumulated text", () => {
+    const up = fakeUpstream();
+    const { s, finals } = session(up);
+    up.open();
+    up.emit({ message_type: "session_started" });
+    audio(s, 1);
+    up.emit(withTimestamps("abandoned words."));
+    s.discard(1);
+    audio(s, 2);
+    s.commit(2);
+    up.emit(withTimestamps("segment two."));
+    expect(finals).toHaveLength(1);
+    expect(finals[0]).toMatchObject({ segment: 2, text: "segment two." });
+  });
+
+  it("reports a truly orphaned completion instead of swallowing it", () => {
+    const up = fakeUpstream();
+    const { s, finals, diagnostics } = session(up);
+    up.open();
+    up.emit({ message_type: "session_started" });
+    s.discard(1); // nothing streaming, nothing committed
+    up.emit(withTimestamps("nobody's text."));
+    expect(finals).toHaveLength(0);
+    expect(diagnostics).toContainEqual({
+      kind: "orphan-result",
+      messageType: "committed_transcript_with_timestamps",
+      chars: "nobody's text.".length,
+    });
+  });
+
+  it("reports an unknown message type rather than returning silently", () => {
+    const up = fakeUpstream();
+    const { diagnostics } = session(up);
+    up.open();
+    up.emit({ message_type: "utterance_boundary_v3", detail: "who knows" });
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({ kind: "unhandled", messageType: "utterance_boundary_v3" }),
+    );
+  });
+});
+
+// ── the config echo: the only proof a query param exists ─────────────────────
+
+describe("checkConfigEcho", () => {
+  it("passes when the echo confirms what we asked for (string/bool coercion)", () => {
+    expect(
+      checkConfigEcho(
+        { model_id: "scribe_v2_realtime", include_timestamps: true, no_verbatim: true },
+        { model_id: "scribe_v2_realtime", include_timestamps: true, no_verbatim: true },
+      ),
+    ).toEqual([]);
+  });
+
+  it("flags a param the vendor never confirmed — the commit_strategy class of bug", () => {
+    expect(checkConfigEcho({ no_verbatim: true }, { model_id: "x" })).toEqual([
+      { param: "no_verbatim", requested: true, echoed: "(absent)" },
+    ]);
+  });
+
+  it("flags a param the vendor silently overrode", () => {
+    expect(checkConfigEcho({ include_timestamps: true }, { include_timestamps: false })).toEqual([
+      { param: "include_timestamps", requested: true, echoed: false },
+    ]);
+  });
+
+  it("says nothing when there is no echo to check", () => {
+    expect(checkConfigEcho({ no_verbatim: true }, undefined)).toEqual([]);
+  });
+});
+
+describe("the connect URL no longer carries a parameter that does not exist", () => {
+  it("omits commit_strategy (absent from the session_started echo; never took effect)", () => {
+    const up = fakeUpstream();
+    openElevenLabsRealtimeSession({ apiKey: "k", socketFactory: up.factory }, {
+      onDelta: () => {},
+      onFinal: () => {},
+      onError: () => {},
+    } satisfies RealtimeCallbacks);
+    expect(up.url).not.toContain("commit_strategy");
+  });
+
+  it("surfaces the echo, and a mismatch within it, as diagnostics", () => {
+    const up = fakeUpstream();
+    const diagnostics: RealtimeDiagnostic[] = [];
+    openElevenLabsRealtimeSession(
+      { apiKey: "k", socketFactory: up.factory },
+      {
+        onDelta: () => {},
+        onFinal: () => {},
+        onError: () => {},
+        onDiagnostic: (e) => diagnostics.push(e),
+      },
+    );
+    up.open();
+    up.emit({
+      message_type: "session_started",
+      config: { model_id: "scribe_v2_realtime", include_timestamps: true, no_verbatim: false },
+    });
+    expect(diagnostics[0]).toMatchObject({ kind: "config-echo" });
+    expect(diagnostics).toContainEqual({
+      kind: "config-mismatch",
+      param: "no_verbatim",
+      requested: true,
+      echoed: false,
+    });
   });
 });

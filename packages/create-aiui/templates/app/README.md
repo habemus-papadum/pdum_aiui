@@ -39,16 +39,15 @@ methodology in miniature:
 ```
 vite.config.ts        the ENTIRE aiui integration: one aiuiDevOverlay() plugin
 src/
-  model/store.ts      durable roots — signals that survive hot edits (slider, mode)
+  model/store.ts      durable roots — signals that survive hot edits (the sliders)
   model/rose.ts       pure math (the picture)
   model/graph.ts      the disposable cell graph + the agent tool surface
-  model/modal.ts      keyboard modes and layers, via the aiui-viz modal kit
   ui/                 components — freely hot-swappable
   main.tsx            entry: almost nothing (start reading there)
 ```
 
-Try the starter's interactions before replacing them: drag the slider, press **T** to tune the
-angle from the keyboard (arrows nudge, **Esc** steps out), **R** for a new petal count.
+Try the starter's interactions before replacing them: drag the sliders and watch the picture
+recompute through its cell.
 
 This is a standalone git repo of your own — let the agent redesign, break, and rebuild
 everything; nothing flows back anywhere.

@@ -223,9 +223,7 @@ the default**; mock is the explicit offline choice.
   trade-off).
 - **`mock` (local, offline, no key) — for development.** Transcription streams canned phrases;
   nothing leaves the browser. It's the explicit offline/dev choice — set
-  `transcriber: "mock"` — and it's what the
-  [intent workbench lab](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/aiui-dev-overlay/workbench)
-  defaults to, so the whole loop runs there with no channel and no key. (It is deliberately
+  `transcriber: "mock"` — so the whole loop runs with no channel and no key. (It is deliberately
   not on the K strip; set it in config.)
 
 (The pre-pivot REST transcriber — `transcriber: "openai"`, whole-segment uploads with a
@@ -346,9 +344,9 @@ transcript finals land ~0.5–0.9 s after you release Space.
 ## Configuring the pipeline
 
 Everything above is governed by one object, `IntentPipelineConfig`, deliberately **wider than
-the visible UI**. It began as the workbench's settings drawer — every contested interaction
-choice as a knob — and graduates here as a superset: the same knobs, plus research knobs that
-ride along so they can be measured before they're designed for.
+the visible UI**. It began, in the retired workbench lab, as a settings drawer — every contested
+interaction choice as a knob — and survives here as a superset: the same knobs, plus research
+knobs that ride along so they can be measured before they're designed for.
 
 **Where the knobs live.** You set them in config, not through the widget. Client-side choices
 (talk mode, ink fade, arming rebind, transcriber choice) ride the modality options —

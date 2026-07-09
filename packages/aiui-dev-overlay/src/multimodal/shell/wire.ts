@@ -328,7 +328,7 @@ export function createWire(deps: WireDeps): Wire {
       }
     } else if (msg.kind === "lowered-prompt") {
       // Deliberately ignored: the overlay doesn't surface the final lowered
-      // prompt (yet) — the workbench consumes this push server-side. See
+      // prompt (yet) — debug clients consume this push server-side. See
       // LoweredPromptMessage in protocol.ts.
     }
   }

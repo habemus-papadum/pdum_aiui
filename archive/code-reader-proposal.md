@@ -143,7 +143,7 @@ This is what "not every single thing is a reactive cell" means, made precise.
 
 ### Framework & where it lives
 
-- **A SolidJS 2.0 app**, built like the reference notebooks in `packages/aiui-demo` and on
+- **A SolidJS 2.0 app**, built like the reference notebooks in `demos/gallery` and on
   `@habemus-papadum/aiui-viz` — its own package (proposed: `@habemus-papadum/aiui-code`), its own
   Vite entry. It discovers the channel port exactly as the overlay does (`window.__AIUI__.port` /
   registry). *How it's presented* — a slide-in drawer over the app vs. a standalone tab — is its own
