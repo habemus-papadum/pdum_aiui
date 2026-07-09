@@ -31,6 +31,20 @@ Scaffolds a standalone, self-contained sample app in its own git repo — the fa
 the loop without touching a real project. Details in
 [Getting Started](./getting-started#the-quickest-start-a-disposable-demo).
 
+## Starting a fresh app (the SolidJS starter)
+
+```sh
+pnpm create @habemus-papadum/aiui my-app    # or: npm create @habemus-papadum/aiui my-app
+```
+
+Where the demo is deliberately throwaway scenery, this scaffolds a *starting point*: a SolidJS
+2.0 app that opens on a banner telling you the page is alive — arm the overlay and describe the
+app you want — with the [frontend-for-agents](./frontend-for-agents) methodology already in
+miniature (durable roots, a disposable `cell()` graph with agent tools, keyboard modes on the
+[aiui-viz modal kit](./frontend-design-choices), an `.envrc`, a `CLAUDE.md` for the agent). Its
+starter content — a Maurer rose on one slider, **T** to tune, **R** to re-flower — is built to
+be rebuilt. Re-running the command on the same directory continues it; it never overwrites.
+
 ## Adding aiui to your own app
 
 In a Vite-based project:

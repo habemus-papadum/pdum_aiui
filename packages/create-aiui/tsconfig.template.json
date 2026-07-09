@@ -1,0 +1,13 @@
+{
+  "//": "Typechecks the SHIPPED TEMPLATE's source against the workspace packages, so template code that doesn't compile can never reach a scaffolded app. Mirrors the compiler options the template itself ships (templates/app/tsconfig.json), but resolves @habemus-papadum/* through this package's workspace links instead of a consumer install.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web",
+    "types": ["vite/client"]
+  },
+  "include": ["templates/app/src", "templates/app/vite.config.ts"]
+}

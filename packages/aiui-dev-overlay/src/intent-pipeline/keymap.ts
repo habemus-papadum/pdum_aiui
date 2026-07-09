@@ -234,7 +234,9 @@ const tweakLayer: KeyLayer<KeyState, KeyCommand> = {
  */
 const jumpPickerLayer: KeyLayer<KeyState, KeyCommand> = {
   name: "jump-picker",
-  active: (state) => state.armed && state.mode === "vscode" && !!state.pickerOpen,
+  // Wherever the picker is OPEN — jump mode's double-click or the armed
+  // shift-click shortcut (any mode but tweak) both land here.
+  active: (state) => state.armed && state.mode !== "tweak" && !!state.pickerOpen,
   bindings: [
     // One display row covers both arrows: ↑ claims silently, ↓ carries "↑↓".
     { keys: ["ArrowUp"], down: () => command({ cmd: "jump-move", delta: -1 }) },

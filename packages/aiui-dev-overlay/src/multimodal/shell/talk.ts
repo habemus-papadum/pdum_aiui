@@ -72,6 +72,16 @@ export interface Talk {
   stopMainListening(): void;
   /** Window blur: away = mic off (the window commits, never discards). */
   stopAllListening(): void;
+  /**
+   * The engine ended the talk itself — send/Esc/disarm closed the thread out
+   * from under an open window, so the keymap's talk-end never fired. Release
+   * capture so nothing outlives the thread. Idempotent, and deliberately
+   * independent of `engine.talking` (the engine already ended its side).
+   * Pure teardown: the PCM lane's audio has already streamed (the server
+   * commits it on the flushed talk-end), and the REST lane's partial
+   * recording is dropped — the thread it would have ridden is closing.
+   */
+  releaseCapture(): Promise<void>;
   /** Unmount: release both capture lanes. */
   dispose(): void;
 }
@@ -138,6 +148,16 @@ export function createTalk(deps: TalkDeps): Talk {
   const stopAllListening = (): void => {
     mainListening = false;
     void talkEnd();
+  };
+  // Engine-initiated end (see the Talk interface doc). `pcmSegment` clears
+  // SYNCHRONOUSLY, before the wire finalizes/cancels the thread, so an
+  // in-flight worklet frame can't chase the closing socket — "audio frame
+  // rejected: connection closed" ×N was exactly that race.
+  const releaseCapture = async (): Promise<void> => {
+    mainListening = false;
+    pcmSegment = undefined;
+    await pcmSource?.stop();
+    await audio.stop();
   };
 
   // ── talk plumbing (mock local / channel upload / realtime stream) ─────────
@@ -304,6 +324,7 @@ export function createTalk(deps: TalkDeps): Talk {
     startMainListening,
     stopMainListening,
     stopAllListening,
+    releaseCapture,
     dispose: () => {
       audio.dispose();
       pcmSource?.dispose();
@@ -317,5 +338,10 @@ export function createTalk(deps: TalkDeps): Talk {
 // them). Declining makes any edit here a full page reload — mount-once code
 // has no meaningful hot path.
 if (import.meta.hot) {
-  import.meta.hot.decline();
+  import.meta.hot.accept(() => {
+    // decline() is a NO-OP in Vite 5+ — invalidate-on-accept is the working
+    // way to say "this module has no hot path": the update re-propagates as
+    // if unaccepted and lands as a full page reload.
+    import.meta.hot?.invalidate();
+  });
 }

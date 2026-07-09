@@ -73,6 +73,18 @@ describe("Engine thread lifecycle", () => {
     expect(engine.armed).toBe(false);
   });
 
+  it("a cancel mid-hold ends the talk too — talking never outlives its thread", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    expect(engine.talking).toBe(true);
+    engine.stepOut(); // Esc while still holding Space
+    expect(engine.talking).toBe(false);
+    expect(engine.threadOpen).toBe(false);
+    // talk-end lands before the close, like send()/setArmed(false) mid-talk.
+    expect(engine.events.at(-2)).toMatchObject({ type: "talk-end" });
+    expect(engine.events.at(-1)).toMatchObject({ type: "thread-close", reason: "cancel" });
+  });
+
   it("steps out of tweak back to ink with the thread still open (§B.5)", () => {
     const engine = armedEngine();
     engine.talkStart();

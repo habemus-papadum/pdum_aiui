@@ -175,9 +175,18 @@ function registerTools(): void {
     description: "Set Gray-Scott parameters. Sliders update; the sim reacts immediately.",
     params: { F: "feed rate 0.0..0.1", k: "kill rate 0.03..0.08" },
     run: (args) => {
-      if (typeof args?.F === "number") paramF.set(args.F);
-      if (typeof args?.k === "number") paramK.set(args.k);
-      return { F: paramF.get(), k: paramK.get() };
+      // Return the values written, not a re-read: Solid 2.0 batches writes
+      // transactionally, so a same-tick .get() can still show the old value.
+      const next = { F: paramF.get(), k: paramK.get() };
+      if (typeof args?.F === "number") {
+        next.F = args.F;
+        paramF.set(next.F);
+      }
+      if (typeof args?.k === "number") {
+        next.k = args.k;
+        paramK.set(next.k);
+      }
+      return next;
     },
   });
   registerTool({
@@ -201,8 +210,12 @@ function registerTools(): void {
     description: "Simulation steps per frame; 0 pauses.",
     params: { value: "integer 0..60" },
     run: (args) => {
-      if (typeof args?.value === "number") speed.set(args.value);
-      return { speed: speed.get() };
+      let value = speed.get();
+      if (typeof args?.value === "number") {
+        value = args.value;
+        speed.set(value);
+      }
+      return { speed: value };
     },
   });
   registerTool({

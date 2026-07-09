@@ -57,7 +57,9 @@ export class Ink {
     window.addEventListener("resize", this.onResize);
 
     this.canvas.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) {
+      if (e.button !== 0 || e.shiftKey) {
+        // Shift is the INSPECT modifier (shift-click opens the jump picker
+        // from any armed mode) — it must never leave an ink dot behind.
         return;
       }
       try {

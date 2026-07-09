@@ -526,6 +526,55 @@ describe("multimodalModality: realtime (streaming) transcriber", () => {
     expect(types).toContain("talk-end");
   });
 
+  it("Enter mid-hold (send) releases realtime capture — no frame chases the closed thread", async () => {
+    const pcm = fakePcmSource();
+    const { sent } = mountRealtime(pcm.source);
+
+    key("keydown", "`"); // arm
+    key("keydown", " "); // talk-start → realtime capture starts → thread opens
+    await wait(50);
+    pcm.emit(Int16Array.of(1, 2, 3));
+    await wait(20);
+    expect(audioChunks(sent)).toHaveLength(1);
+
+    // Send while still holding Space: the engine ends the talk ITSELF
+    // (engine.send → log-level talkEnd + thread-close) — the keymap's
+    // talk-end never fires. The shell's capture must not outlive the thread:
+    // before the fix, the worklet kept streaming into the closing socket
+    // ("audio frame rejected: connection closed" ×N) and stayed hot after.
+    key("keydown", "Enter");
+    await wait(30);
+    expect(pcm.isStarted()).toBe(false);
+    pcm.emit(Int16Array.of(4, 5, 6)); // a straggler frame — must go nowhere
+    await wait(30);
+    expect(audioChunks(sent)).toHaveLength(1);
+
+    // The late Space release is a clean no-op (the talk already ended).
+    key("keyup", " ");
+    await wait(30);
+    expect(audioChunks(sent)).toHaveLength(1);
+  });
+
+  it("Esc mid-hold (cancel) releases realtime capture the same way", async () => {
+    const pcm = fakePcmSource();
+    const { sent } = mountRealtime(pcm.source);
+
+    key("keydown", "`");
+    key("keydown", " ");
+    await wait(50);
+    pcm.emit(Int16Array.of(1, 2));
+    await wait(20);
+    expect(audioChunks(sent)).toHaveLength(1);
+
+    key("keydown", "Escape"); // cancel the thread while still holding Space
+    await wait(30);
+    expect(pcm.isStarted()).toBe(false);
+    pcm.emit(Int16Array.of(3, 4));
+    key("keyup", " ");
+    await wait(30);
+    expect(audioChunks(sent)).toHaveLength(1);
+  });
+
   it("renders transcript-delta echoes progressively into the preview", async () => {
     const pcm = fakePcmSource();
     const { push } = mountRealtime(pcm.source);
@@ -1788,5 +1837,92 @@ describe("multimodalModality: tweak mode (the §B.5 handover)", () => {
     });
     expect(report().threadOpen).toBe(true); // …and the turn is still open for more
     para.remove();
+  });
+});
+
+describe("multimodalModality: shift-click jump picker (no jump mode needed)", () => {
+  const pickerEl = (): Element | null => document.querySelector(".mm-jump-picker");
+  const inkEl = (): HTMLCanvasElement =>
+    document.querySelector<HTMLCanvasElement>(".mm-ink") as HTMLCanvasElement;
+  const shiftClick = (el: Element): void => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+  };
+  /**
+   * jsdom does no hit-testing and has no `elementsFromPoint`, so a test can
+   * dispatch a click on ANY element — including targets a browser could never
+   * produce. Stand in for the browser's z-ordered stack under the cursor.
+   */
+  const stubStack = (...stack: Element[]): void => {
+    (
+      document as unknown as { elementsFromPoint: (x: number, y: number) => Element[] }
+    ).elementsFromPoint = () => stack;
+  };
+  afterEach(() => {
+    delete (document as unknown as { elementsFromPoint?: unknown }).elementsFromPoint;
+  });
+
+  it("opens the picker THROUGH the armed ink canvas; Esc dismisses without leaving ink", async () => {
+    window.__AIUI__ = { ...(window.__AIUI__ ?? {}), sourceRoot: "/repo" } as never;
+    const stamped = document.createElement("div");
+    stamped.dataset.sourceLoc = "src/App.tsx:5:3";
+    document.body.append(stamped);
+    mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`"); // armed, ink mode — NOT jump mode
+    // The premise this test exists for: the pen layer owns the pointer, so the
+    // canvas — never `stamped` — is what a real browser hands the click to.
+    const inkCanvas = inkEl();
+    expect(inkCanvas.style.pointerEvents).toBe("auto");
+    stubStack(inkCanvas, stamped, document.body);
+    shiftClick(inkCanvas);
+    await flush();
+    expect(pickerEl()?.classList.contains("visible")).toBe(true);
+    expect(pickerEl()?.textContent).toContain("App.tsx:5:3"); // it saw *through* to the app
+    key("keydown", "Escape"); // the picker layer claims Esc wherever it is open
+    expect(pickerEl()?.classList.contains("visible")).toBe(false);
+    stamped.remove();
+  });
+
+  it("opens the picker in jump mode, where the pen layer is inactive", async () => {
+    window.__AIUI__ = { ...(window.__AIUI__ ?? {}), sourceRoot: "/repo" } as never;
+    const stamped = document.createElement("div");
+    stamped.dataset.sourceLoc = "src/App.tsx:7:3";
+    document.body.append(stamped);
+    mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`");
+    key("keydown", "j"); // jump mode releases the pointer: the app IS the target
+    expect(inkEl().style.pointerEvents).toBe("none");
+    shiftClick(stamped);
+    await flush();
+    expect(pickerEl()?.classList.contains("visible")).toBe(true);
+    stamped.remove();
+  });
+
+  it("stays inert in tweak mode (the page owns the pointer there)", async () => {
+    const stamped = document.createElement("div");
+    stamped.dataset.sourceLoc = "src/App.tsx:9:3";
+    document.body.append(stamped);
+    mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`");
+    key("keydown", "t"); // tweak handover
+    shiftClick(stamped);
+    await flush();
+    expect(pickerEl()?.classList.contains("visible") ?? false).toBe(false);
+    stamped.remove();
+  });
+
+  it("leaves our own chrome opaque — a shift-click on the widget is not the app", async () => {
+    const stamped = document.createElement("div");
+    stamped.dataset.sourceLoc = "src/App.tsx:11:3";
+    document.body.append(stamped);
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`");
+    // The widget stacks ABOVE the ink canvas, so it — not the pen layer — is
+    // the target. Nothing may be seen through it, even with the app beneath.
+    stubStack(stamped, document.body);
+    const widgetHost = handle.shadowRoot?.host as Element;
+    shiftClick(widgetHost);
+    await flush();
+    expect(pickerEl()?.classList.contains("visible") ?? false).toBe(false);
+    stamped.remove();
   });
 });

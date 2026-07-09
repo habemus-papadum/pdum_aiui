@@ -485,12 +485,14 @@ export function multimodalModality(
           },
         },
         {
-          // The jump picker can't outlive jump mode: leaving vscode mode by
-          // ANY exit (J, Esc, blur-exit, disarm) closes it — asserted from
-          // state like every surface here, never toggled at transitions.
+          // The jump picker can't outlive its context: it opens from jump
+          // mode's double-click OR the armed shift-click (any mode but
+          // tweak), so the guard hides it only where neither gesture is
+          // live — disarmed, or the tweak handover. Asserted from state
+          // like every surface here, never toggled at transitions.
           name: "jump-picker",
           apply: (mode) => {
-            if (mode !== "vscode") {
+            if (mode === "off" || mode === "tweaking") {
               picker.hide();
             }
           },
@@ -639,12 +641,31 @@ export function multimodalModality(
       // so "nothing happened" is never ambiguous with "no source location".
       const widgetRoot = hudSlot.container.getRootNode();
       const widgetHost = widgetRoot instanceof ShadowRoot ? widgetRoot.host : undefined;
-      const onDblClick = (event: MouseEvent): void => {
-        if (!engine.armed || engine.mode !== "vscode") {
-          return;
-        }
+      const isOurSurface = (el: Element): boolean =>
+        layers.contains(el) || widgetHost?.contains(el) === true;
+      // Which element did the user MEAN? Not always `event.target`: while ink
+      // owns the pointer its canvas is a full-viewport layer (`inset: 0`,
+      // pointer-events auto), so every armed ink-mode click targets the canvas
+      // and never the app beneath. The pen layer is the one surface of ours
+      // that inspection sees THROUGH — look under it. Everything else we own
+      // (widget, picker, strip, preview, shot veil) stacks above the canvas
+      // and is real UI: it absorbs the gesture, and the picker stays shut.
+      const appElementAt = (event: MouseEvent): Element | null => {
         const target = event.target instanceof Element ? event.target : null;
-        if (target === null || layers.contains(target) || widgetHost?.contains(target)) {
+        if (target !== ink.canvas) {
+          return target !== null && !isOurSurface(target) ? target : null;
+        }
+        // jsdom has no hit-testing (and no elementsFromPoint): degrade to
+        // "the pen layer swallowed it", never to a wrong element.
+        const beneath =
+          typeof document.elementsFromPoint === "function"
+            ? document.elementsFromPoint(event.clientX, event.clientY)
+            : [];
+        return beneath.find((el) => !isOurSurface(el)) ?? null;
+      };
+      const openPickerAt = (event: MouseEvent): void => {
+        const target = appElementAt(event);
+        if (target === null) {
           return; // our own surfaces are not the app
         }
         event.preventDefault();
@@ -654,7 +675,24 @@ export function multimodalModality(
           y: event.clientY,
         });
       };
+      const onDblClick = (event: MouseEvent): void => {
+        if (!engine.armed || engine.mode !== "vscode") {
+          return;
+        }
+        openPickerAt(event);
+      };
       document.addEventListener("dblclick", onDblClick, true);
+      // ⇧-click: the jump picker WITHOUT entering jump mode — armed, any mode
+      // but tweak (tweak hands the whole pointer to the page on purpose).
+      // Shift is the inspect modifier throughout: the ink layer ignores
+      // shift-drags so the gesture never leaves a stroke behind.
+      const onShiftClick = (event: MouseEvent): void => {
+        if (!engine.armed || engine.mode === "tweak" || !event.shiftKey) {
+          return;
+        }
+        openPickerAt(event);
+      };
+      document.addEventListener("click", onShiftClick, true);
 
       const meterCtx = meter?.getContext("2d") ?? null;
       const meterTimer = setInterval(() => {
@@ -1052,6 +1090,13 @@ export function multimodalModality(
           bus.set("armed", event.on);
         }
         if (event.type === "thread-close") {
+          // The engine can end a talk itself — send()/setArmed(false)/
+          // stepOut() close the thread mid-hold and end only the LOG's talk;
+          // the keymap's talk-end never fires. Release the shell's capture
+          // FIRST: its synchronous part stops frame routing, so no PCM frame
+          // chases the closing socket ("audio frame rejected: connection
+          // closed" ×N) and the worklet doesn't stay hot after the turn.
+          void talk.releaseCapture();
           if (event.reason === "send") {
             void wire.finalizeThread();
           } else {
@@ -1214,6 +1259,7 @@ export function multimodalModality(
           window.removeEventListener("blur", onWindowBlur);
           window.removeEventListener("focus", onWindowFocus);
           document.removeEventListener("dblclick", onDblClick, true);
+          document.removeEventListener("click", onShiftClick, true);
           talk.dispose(); // endpointer + both mic lanes
           capture.dispose(); // video sampler + shot tool
           clearInterval(meterTimer);
@@ -1309,5 +1355,10 @@ function bindKeys(
 // them). Declining makes any edit here a full page reload — mount-once code
 // has no meaningful hot path.
 if (import.meta.hot) {
-  import.meta.hot.decline();
+  import.meta.hot.accept(() => {
+    // decline() is a NO-OP in Vite 5+ — invalidate-on-accept is the working
+    // way to say "this module has no hot path": the update re-propagates as
+    // if unaccepted and lands as a full page reload.
+    import.meta.hot?.invalidate();
+  });
 }

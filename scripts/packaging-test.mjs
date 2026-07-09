@@ -224,6 +224,28 @@ check(
   demoAgain.stderr,
 );
 
+// The create-aiui scaffolder, from its own installed bin: templates/ shipped,
+// dot-files restored (.gitignore AND .envrc), tokens resolved, continuation.
+const createBin = join(scratch, "node_modules", ".bin", "create-aiui");
+const runCreate = (args) =>
+  spawnSync(createBin, args, { cwd: scratch, env, encoding: "utf8", timeout: 120_000 });
+check("create-aiui bin exists", existsSync(createBin));
+const created = runCreate(["starter-app", "--skip-install"]);
+check("create-aiui scaffolds from the shipped template", created.status === 0, created.stderr);
+check(
+  "starter has the app, restored .envrc/.gitignore, and resolved tokens",
+  existsSync(join(scratch, "starter-app", "src", "main.tsx")) &&
+    existsSync(join(scratch, "starter-app", ".envrc")) &&
+    existsSync(join(scratch, "starter-app", ".gitignore")) &&
+    !readFileSync(join(scratch, "starter-app", "package.json"), "utf8").includes("__AIUI"),
+);
+const createdAgain = runCreate(["starter-app", "--skip-install"]);
+check(
+  "re-running create-aiui continues instead of re-scaffolding",
+  createdAgain.status === 0 && /continuing/.test(createdAgain.stderr + createdAgain.stdout),
+  createdAgain.stderr,
+);
+
 // -------------------------------------------------------------------- result
 if (keep) {
   console.log(`scratch kept at ${work}`);

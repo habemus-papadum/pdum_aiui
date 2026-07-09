@@ -158,10 +158,14 @@ function registerTools(): void {
     description: "Set the target Aztec-diamond order n; regrows to that size.",
     params: { n: `integer 1..${MAX_N}` },
     run: (args) => {
+      // Return what was written, not a same-tick re-read — Solid 2.0 batches
+      // writes transactionally (see the seek tool below). Same throughout.
+      let n = targetN.get();
       if (typeof args?.n === "number") {
-        targetN.set(Math.max(1, Math.min(MAX_N, Math.round(args.n))));
+        n = Math.max(1, Math.min(MAX_N, Math.round(args.n)));
+        targetN.set(n);
       }
-      return { targetN: targetN.get() };
+      return { targetN: n };
     },
   });
   registerTool({
@@ -169,9 +173,14 @@ function registerTools(): void {
     description: "Draw a fresh uniformly-random tiling (new seed) and replay the fold.",
     params: { seed: "optional integer seed; omit for random" },
     run: (args) => {
-      if (typeof args?.seed === "number") seed.set(args.seed >>> 0);
-      else regrow();
-      return { seed: seed.get(), targetN: targetN.get() };
+      let s: number;
+      if (typeof args?.seed === "number") {
+        s = args.seed >>> 0;
+        seed.set(s);
+      } else {
+        s = regrow();
+      }
+      return { seed: s, targetN: targetN.get() };
     },
   });
   registerTool({
@@ -201,8 +210,12 @@ function registerTools(): void {
     description: "Animation speed in growth-frames per second.",
     params: { fps: "integer 1..60" },
     run: (args) => {
-      if (typeof args?.fps === "number") fps.set(Math.max(1, Math.min(60, Math.round(args.fps))));
-      return { fps: fps.get() };
+      let value = fps.get();
+      if (typeof args?.fps === "number") {
+        value = Math.max(1, Math.min(60, Math.round(args.fps)));
+        fps.set(value);
+      }
+      return { fps: value };
     },
   });
   registerTool({
@@ -210,8 +223,9 @@ function registerTools(): void {
     description: "Show or hide the theoretical arctic circle overlay.",
     params: { on: "optional boolean; omit to toggle" },
     run: (args) => {
-      showCircle.set(typeof args?.on === "boolean" ? args.on : !showCircle.get());
-      return { showCircle: showCircle.get() };
+      const on = typeof args?.on === "boolean" ? args.on : !showCircle.get();
+      showCircle.set(on);
+      return { showCircle: on };
     },
   });
   registerTool({

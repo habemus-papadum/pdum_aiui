@@ -1,7 +1,7 @@
 /**
  * The workbench: the full intent pipeline with **no agent on the other end**.
  *
- * Layout: the left half hosts the spectra scenery (see scenery.ts — a real-ish
+ * Layout: the left half hosts the gaussian mixture scenery (see scenery.tsx — a real-ish
  * app hand-stamped the way the source-locator plugin stamps a real one), the
  * right half is trace instrumentation. The page mounts the *shipping* intent
  * overlay (arm with `` ` ``, talk, ink, shoot, K for tiers — nothing
@@ -29,7 +29,7 @@ import { STYLES } from "./styles";
 
 // The overlay package's absolute path, define-injected by vite.config.ts. In a
 // real app the aiuiDevOverlay Vite plugin seeds `window.__AIUI__.sourceRoot`;
-// the workbench runs no plugin, so it seeds the root itself — scenery.ts's
+// the workbench runs no plugin, so it seeds the root itself — scenery.tsx's
 // hand-written `data-source-loc` stamps ("workbench/src/…") are relative to
 // the overlay package, and without a root the vscode jump picker's rows have
 // no `vscode://file/…` URL to commit (they render grayed).

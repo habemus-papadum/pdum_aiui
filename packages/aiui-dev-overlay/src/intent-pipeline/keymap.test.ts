@@ -375,11 +375,18 @@ describe("keyCommand: the jump-picker layer (vscode mode's double-click popup)",
     expect(keyCommand(open, "j", "down", false)).toEqual({ cmd: "vscode-toggle" });
   });
 
-  it("is inert while the picker is closed, and outside vscode mode", () => {
+  it("is inert while the picker is closed, and in the tweak handover", () => {
     const closed: KeyState = { ...base, mode: "vscode" };
     expect(keyCommand(closed, "ArrowDown", "down", false)).toBeUndefined();
     expect(keyCommand(closed, "1", "down", false)).toBeUndefined();
-    // A stale pickerOpen outside vscode mode claims nothing.
-    expect(keyCommand({ ...base, pickerOpen: true }, "ArrowDown", "down", false)).toBeUndefined();
+    // The picker works wherever it is OPEN (shift-click opens it from any
+    // armed mode) — except tweak, where the page owns the keys.
+    expect(keyCommand({ ...base, pickerOpen: true }, "ArrowDown", "down", false)).toEqual({
+      cmd: "jump-move",
+      delta: 1,
+    });
+    expect(
+      keyCommand({ ...base, mode: "tweak", pickerOpen: true }, "ArrowDown", "down", false),
+    ).toBeUndefined();
   });
 });

@@ -32,6 +32,21 @@ export const STYLES = /* css */ `
   #wb-scenery .card { background: #171b25; border: 1px solid #262c3a; border-radius: 12px; padding: 16px 18px; max-width: 720px; }
   #wb-scenery .legend { display: flex; gap: 14px; font-size: 11px; color: #9aa0aa; margin-top: 8px; }
   #wb-scenery .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  /* the scrub pills: drag the number horizontally to change it */
+  #wb-scenery .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  #wb-scenery .gpill { display: inline-flex; align-items: center; gap: 6px; cursor: ew-resize;
+    user-select: none; touch-action: none; border: 1px solid #3a4152; border-radius: 999px;
+    padding: 3px 10px; font-size: 12px; background: #10141d; }
+  #wb-scenery .gpill i { font-style: normal; color: #9aa0aa; }
+  #wb-scenery .gpill b { font-variant-numeric: tabular-nums; color: #e8e8ea; min-width: 42px; text-align: right; }
+  #wb-scenery .gpill:hover { background: #1a2030; }
+  #wb-scenery .prob-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #wb-scenery .prob-label { color: #9aa0aa; font-size: 13px; }
+  #wb-scenery .prob-value { font-size: 22px; font-weight: 600; color: #8ab4f8;
+    font-variant-numeric: tabular-nums; min-width: 76px; }
+  #wb-scenery .tiles { display: flex; gap: 8px; margin-top: 10px; }
+  #wb-scenery .tile { font-size: 11px; color: #9aa0aa; border: 1px solid #262c3a;
+    border-radius: 6px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
   #wb-scenery table { border-collapse: collapse; font-size: 12px; width: 100%; }
   #wb-scenery th, #wb-scenery td { text-align: left; padding: 4px 10px; border-bottom: 1px solid #232936; }
   #wb-scenery th { color: #9aa0aa; font-weight: 500; }

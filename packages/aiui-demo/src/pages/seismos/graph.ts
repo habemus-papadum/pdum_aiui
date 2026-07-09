@@ -138,10 +138,14 @@ function registerTools(): void {
       "Set the magnitude of completeness Mc used for the live Gutenberg–Richter b-value fit.",
     params: { mc: `number ${MC_MIN}..${MC_MAX}` },
     run: (args) => {
+      // Return what was written, not a same-tick re-read — Solid 2.0 batches
+      // writes transactionally, so .get() here can still show the old value.
+      let mc = store.mc.get();
       if (typeof args?.mc === "number") {
-        store.mc.set(Math.max(MC_MIN, Math.min(MC_MAX, args.mc)));
+        mc = Math.max(MC_MIN, Math.min(MC_MAX, args.mc));
+        store.mc.set(mc);
       }
-      return { mc: store.mc.get() };
+      return { mc };
     },
   });
 

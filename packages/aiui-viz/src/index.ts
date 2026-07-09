@@ -22,6 +22,9 @@ export {
   cellRegistry,
   settledOnly,
 } from "./cell";
+// cell-attribution.ts — runtime element → cell attribution (data-cell stamps)
+// without CellView, derived from Solid's reactive internals (SPIKE).
+export { attributedRead, enableCellAttribution } from "./cell-attribution";
 // cell-view.tsx — the notebook-feel wrapper (spinner, error+retry, keep-latest).
 export { CellView, ProgressStripe, Spinner } from "./cell-view";
 

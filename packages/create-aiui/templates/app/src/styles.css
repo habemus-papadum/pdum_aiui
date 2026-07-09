@@ -1,0 +1,235 @@
+/* styles.css — a small dark surface for the starter. Restyle freely; the only
+ * contract worth keeping is the CellView class set at the bottom (cell-body,
+ * cell-pending, cell-error, progress-stripe, btn), which every cell rendered
+ * through @habemus-papadum/aiui-viz expects its host to style. */
+
+:root {
+  --bg: #0f1117;
+  --panel: #171b25;
+  --line: #262c3a;
+  --text: #e8e8ea;
+  --muted: #9aa0aa;
+  --accent: #8ab4f8;
+  --bloom: #f8a8c0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px / 1.55 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel);
+  font:
+    12px ui-monospace,
+    monospace;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* --- the banner -------------------------------------------------------------- */
+
+.banner h1 {
+  font-size: 22px;
+  margin: 0 0 10px;
+}
+
+.banner p {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.banner b,
+.banner em,
+.banner i {
+  color: var(--text);
+}
+
+/* --- panels ------------------------------------------------------------------ */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+
+.picture .rose {
+  display: block;
+  width: min(100%, 520px);
+  margin: 0 auto;
+}
+
+.rose-outline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.012;
+  opacity: 0.35;
+}
+
+.rose-walk {
+  fill: none;
+  stroke: var(--bloom);
+  stroke-width: 0.004;
+  opacity: 0.9;
+}
+
+.caption {
+  margin: 10px 0 0;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* --- controls ------------------------------------------------------------------ */
+
+.slider {
+  display: block;
+}
+
+.slider-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.slider-label b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* tune mode spotlights the slider it drives (asserted via body[data-mode]) */
+body[data-mode="tune"] .slider[data-tunes="angleStep"] {
+  outline: 1px solid var(--accent);
+  outline-offset: 8px;
+  border-radius: 4px;
+}
+
+.mode-chip {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font:
+    12px / 1.4 ui-sans-serif,
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.hint:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.hint:disabled {
+  cursor: default;
+}
+
+/* --- the CellView contract (spinner, error, keep-latest, progress) ------------- */
+
+.cell-body-loading {
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+
+.cell-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  padding: 18px 0;
+}
+
+.cell-error {
+  border: 1px solid #b3564d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #f0b0a8;
+}
+
+.progress-stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress-stripe-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.btn {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-outline {
+  background: transparent;
+}

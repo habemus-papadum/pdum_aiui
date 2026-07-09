@@ -30,6 +30,12 @@ much-mutated notebook, and never lands anywhere upstream. It installs its depend
 of re-downloading), and it's safe to re-run: an existing demo is **continued**, never
 re-scaffolded — your changes and the agent's survive.
 
+Want a keeper rather than a sandbox? `pnpm create @habemus-papadum/aiui my-app` scaffolds the
+**SolidJS starter** instead — same loop, but with the
+[frontend-for-agents](./frontend-for-agents) shape (durable roots, a cell graph, the modal kit)
+already in place and a banner that tells you to start talking. See
+[Installation](./installation#starting-a-fresh-app-the-solidjs-starter).
+
 Everything below explains the same loop piece by piece, for wiring aiui into your *own* app.
 
 ## 0. Prerequisites

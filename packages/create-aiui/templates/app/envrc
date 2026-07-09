@@ -1,0 +1,14 @@
+# direnv (https://direnv.net) — auto-activates this project's environment when
+# you cd in, and undoes it when you cd out.
+#
+# One-time setup:
+#   brew install direnv                     # or your package manager
+#   eval "$(direnv hook zsh)"               # in ~/.zshrc (bash: hook bash)
+#   direnv allow                            # in this directory, after reading this file
+#
+# `layout node` is direnv's stdlib helper: it prepends ./node_modules/.bin to
+# PATH, so `aiui`, `vite`, and `tsc` run as bare commands — no npx. The .env
+# file is where secrets live (gitignored) — e.g. OPENAI_API_KEY, which the
+# aiui intent pipeline reads for voice transcription and corrections.
+layout node
+dotenv_if_exists .env

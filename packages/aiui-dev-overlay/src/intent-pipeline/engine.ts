@@ -118,6 +118,13 @@ export class Engine {
       return;
     }
     if (this.threadOpen) {
+      if (this.talking) {
+        // Symmetric with send()/setArmed(false): a cancel mid-hold ends the
+        // talk too, so `talking` can never outlive its thread — a stuck
+        // talking flag made the NEXT gesture flush into the void and toast
+        // "transcription needs the channel" on a perfectly healthy channel.
+        this.talkEnd();
+      }
       this.closeThread("cancel");
       return;
     }

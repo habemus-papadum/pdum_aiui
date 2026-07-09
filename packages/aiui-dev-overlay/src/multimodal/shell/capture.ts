@@ -240,5 +240,10 @@ export function createCapture(deps: CaptureDeps): Capture {
 // them). Declining makes any edit here a full page reload — mount-once code
 // has no meaningful hot path.
 if (import.meta.hot) {
-  import.meta.hot.decline();
+  import.meta.hot.accept(() => {
+    // decline() is a NO-OP in Vite 5+ — invalidate-on-accept is the working
+    // way to say "this module has no hot path": the update re-propagates as
+    // if unaccepted and lands as a full page reload.
+    import.meta.hot?.invalidate();
+  });
 }
