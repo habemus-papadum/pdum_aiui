@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-vscode",
-  "version": "0.3.0+dev",
+  "version": "0.4.0",
   "description": "VS Code extension: a selection provider for the aiui dev overlay — pick a connected browser tab and send editor selections to it.",
   "type": "module",
   "license": "MIT",
