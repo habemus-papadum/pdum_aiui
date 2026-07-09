@@ -155,14 +155,20 @@ describe("Engine thread lifecycle", () => {
     }
   });
 
-  it("videoShare opens a thread on the first ON and records both edges", () => {
+  it("videoShare opens a thread on the first ON and records both edges (with the share's terms)", () => {
     const engine = armedEngine();
     expect(engine.threadOpen).toBe(false);
-    engine.videoShare(true);
+    engine.videoShare(true, { ordinal: 1, mode: "smart", cadenceMs: 5000 });
     // Turning the share on is a contentful act — it opens the thread.
     expect(engine.threadOpen).toBe(true);
     expect(engine.events.some((e) => e.type === "thread-open" && e.trigger === "shot")).toBe(true);
-    expect(engine.events.at(-1)).toMatchObject({ type: "video-share", on: true });
+    expect(engine.events.at(-1)).toMatchObject({
+      type: "video-share",
+      on: true,
+      ordinal: 1,
+      mode: "smart",
+      cadenceMs: 5000,
+    });
     engine.videoShare(false);
     expect(engine.events.at(-1)).toMatchObject({ type: "video-share", on: false });
     expect(engine.threadOpen).toBe(true); // off doesn't close the thread (send/cancel do)
@@ -332,6 +338,50 @@ describe("composeIntent", () => {
       '<screenshot path="/somewhere/else/shot_2.png">\n' +
         '  <element name="Legend" source="scenery.ts:33"/>\n' +
         "</screenshot>",
+    );
+  });
+
+  it("annotates a share's sampled frames: capture mode, and the offset for continuous only", () => {
+    const engine = armedEngine();
+    // A smart-mode frame: it exists because the user touched the app — say so,
+    // but its position in the prose already dates it, so no offset.
+    engine.shotDone(
+      { x: 0, y: 0, w: 1024, h: 768 },
+      [],
+      "data:image/jpeg;base64,x",
+      "/repo/app/.aiui-cache/traces/t1/shot_1.jpg",
+      true,
+      1000,
+      { ordinal: 1, mode: "smart", offsetMs: 0 },
+    );
+    // A machine-gun frame: the cadence took it, so the offset from the share's
+    // first frame is the only thing that dates it.
+    engine.shotDone(
+      { x: 0, y: 0, w: 1024, h: 768 },
+      [],
+      "data:image/jpeg;base64,y",
+      "/repo/app/.aiui-cache/traces/t1/shot_2.jpg",
+      true,
+      6000,
+      { ordinal: 2, mode: "continuous", offsetMs: 5000 },
+    );
+
+    const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
+    expect(composed.prompt).toContain(
+      '<screenshot path=".aiui-cache/traces/t1/shot_1.jpg" capture="on-change" view="full-viewport"/>',
+    );
+    expect(composed.prompt).toContain(
+      '<screenshot path=".aiui-cache/traces/t1/shot_2.jpg" capture="continuous" at="5.0s" view="full-viewport"/>',
+    );
+    // The items carry the terms through for the preview/debug viewers.
+    expect(composed.items.map((i) => i.share?.mode)).toEqual(["smart", "continuous"]);
+
+    const text = composeIntent(engine.events, "replace", { cwd: "/repo/app", shotFormat: "text" });
+    expect(text.prompt).toContain(
+      "[screenshot: .aiui-cache/traces/t1/shot_1.jpg (captured on change) (full viewport)]",
+    );
+    expect(text.prompt).toContain(
+      "[screenshot: .aiui-cache/traces/t1/shot_2.jpg (continuous capture, +5.0s) (full viewport)]",
     );
   });
 
@@ -831,6 +881,26 @@ describe("the timestamp interleave (takenAt anchoring)", () => {
     expect(composed.items[2].text).toBe("also fix the legend");
   });
 
+  it("does not hop a shot already at a sentence seam over the NEXT sentence", () => {
+    // The lookahead finishes the sentence the gesture landed inside. When the
+    // offset already sits just past a period, there is nothing to finish — and
+    // snapping would carry the shot past a whole further sentence (which the
+    // short sentences of live speech make easy to hit).
+    const events = longWindowStream(
+      "okay this is a demo. then I can talk again.",
+      [
+        [T0 + 1000 + LAG, "okay this is a demo."],
+        [T0 + 2000 + LAG, "okay this is a demo. then I can talk again."],
+      ],
+      T0 + 2000, // release; the last delta straggles in one LAG later
+    );
+    events.splice(5, 0, shotAt(T0 + 1000 + 20, T0 + 1000 + 90));
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot", "text"]);
+    expect(composed.items[0].text).toBe("okay this is a demo.");
+    expect(composed.items[2].text).toBe("then I can talk again.");
+  });
+
   it("anchors a shot taken JUST AFTER release to the end of that segment's text", () => {
     // The today-bug this fixes: the shot event reaches the stream before the
     // final does, so arrival order used to compose the image BEFORE the
@@ -878,6 +948,159 @@ describe("the timestamp interleave (takenAt anchoring)", () => {
     const composed = composeIntent(events);
     expect(composed.items.map((i) => i.kind)).toEqual(["shot", "text"]);
     expect(composed.items[1].text).toBe("the words came later");
+  });
+});
+
+describe("streaming compose (the live transcript preview)", () => {
+  const T0 = 1000;
+  const LAG = 800;
+  const STREAMING = { streaming: true } as const;
+
+  /**
+   * A hands-free turn caught mid-utterance: deltas so far, no talk-end, no
+   * final. Wall-clock, because the interleave reasons in milliseconds.
+   *
+   * The speech: "okay this is a demo." lands at T0+1000, "then I can talk
+   * again." at T0+2000, "and once more." at T0+3000. Each delta arrives one
+   * LAG behind the words it carries — and the transcriber emits its first
+   * delta ("okay") one LAG after talk-start, so the lag estimator's HEAD
+   * anchor (`first delta − window start`, all it has while the window is still
+   * open) measures the true 800 ms rather than the speech-onset delay.
+   */
+  const DELTAS: Array<[number, string]> = [
+    [T0 + LAG, "okay"],
+    [T0 + 1000 + LAG, "okay this is a demo."],
+    [T0 + 2000 + LAG, "okay this is a demo. then I can talk again."],
+    [T0 + 3000 + LAG, "okay this is a demo. then I can talk again. and once more."],
+  ];
+  function liveStream(
+    cumulative: Array<[number, string]>,
+    shots: IntentEvent[] = [],
+  ): IntentEvent[] {
+    return [
+      { at: T0 - 10, type: "armed", on: true },
+      { at: T0 - 5, type: "thread-open", trigger: "talk" },
+      { at: T0, type: "talk-start", segment: 1 },
+      ...cumulative.map(
+        ([at, text]): IntentEvent => ({ at, type: "transcript-delta", segment: 1, text }),
+      ),
+      ...shots,
+    ].sort((a, b) => a.at - b.at);
+  }
+  /** A shot whose gesture lands at `takenAt`; the event reaches the stream 70 ms later. */
+  const shot = (marker: string, takenAt: number): IntentEvent => ({
+    at: takenAt + 70,
+    type: "shot",
+    marker,
+    rect: { x: 0, y: 0, w: 10, h: 10 },
+    components: [],
+    takenAt,
+  });
+
+  it("composes nothing from in-flight words unless asked — the send path is unchanged", () => {
+    const events = liveStream(DELTAS);
+    expect(composeIntent(events).items).toEqual([]);
+    expect(composeIntent(events).prompt).toBe("");
+  });
+
+  it("composes the still-spoken words as ONE provisional run", () => {
+    const items = composeIntent(liveStream(DELTAS), "replace", STREAMING).items;
+    expect(items).toEqual([
+      {
+        kind: "text",
+        text: "okay this is a demo. then I can talk again. and once more.",
+        segment: 1,
+        provisional: true,
+      },
+    ]);
+  });
+
+  it("drops a live screenshot where it was taken, not ahead of the whole segment", () => {
+    // The hands-free bug: a shot arrives while its segment has no final, so
+    // the fold had no text run to split and the shots stacked at the front —
+    // until the final landed and reordered everything at once.
+    const events = liveStream(DELTAS, [
+      shot("shot_1", T0 + 1000 + 20), // just after "…a demo."
+      shot("shot_2", T0 + 2000 + 20), // just after "…talk again."
+    ]);
+    const items = composeIntent(events, "replace", STREAMING).items;
+    expect(items.map((i) => i.kind)).toEqual(["text", "shot", "text", "shot", "text"]);
+    expect(items[0].text).toBe("okay this is a demo.");
+    expect(items[1].marker).toBe("shot_1");
+    expect(items[2].text).toBe("then I can talk again.");
+    expect(items[3].marker).toBe("shot_2");
+    expect(items[4].text).toBe("and once more.");
+    // Every run of an unfinalized segment stays provisional, split or not.
+    expect(items.filter((i) => i.kind === "text").every((i) => i.provisional)).toBe(true);
+  });
+
+  it("holds a placed shot still as the words keep streaming in behind it", () => {
+    // The offset is read at `takenAt + lag`. Once deltas arrive from past that
+    // instant, the answer stops changing: they extend the tail rather than
+    // push the shot rightward.
+    const shots = [shot("shot_1", T0 + 1000 + 20)];
+    const upTo = (n: number) =>
+      composeIntent(liveStream(DELTAS.slice(0, n), shots), "replace", STREAMING).items;
+
+    // The delta carrying "…a demo." has arrived; the shot pins to its end.
+    expect(upTo(2).map((i) => i.kind)).toEqual(["text", "shot"]);
+    expect(upTo(2)[0].text).toBe("okay this is a demo.");
+
+    // Two more deltas of new speech — the split offset is unmoved.
+    expect(upTo(3).map((i) => i.kind)).toEqual(["text", "shot", "text"]);
+    expect(upTo(3)[0].text).toBe("okay this is a demo.");
+    expect(upTo(3)[2].text).toBe("then I can talk again.");
+
+    expect(upTo(4)[0].text).toBe("okay this is a demo.");
+    expect(upTo(4)[2].text).toBe("then I can talk again. and once more.");
+  });
+
+  it("the final supersedes the provisional run — both folds then agree exactly", () => {
+    const finished: IntentEvent[] = [
+      ...liveStream(DELTAS, [shot("shot_1", T0 + 1000 + 20)]),
+      { at: T0 + 3000, type: "talk-end", segment: 1, ms: 3000 },
+      {
+        at: T0 + 3000 + LAG,
+        type: "transcript-final",
+        segment: 1,
+        text: "Okay, this is a demo. Then I can talk again. And once more.",
+        latencyMs: LAG,
+        model: "rt",
+      },
+    ];
+    const streaming = composeIntent(finished, "replace", STREAMING).items;
+    const committed = composeIntent(finished).items;
+    // Once a segment is final, `streaming` changes nothing at all: no
+    // provisional run survives, and the preview shows what will be sent.
+    expect(streaming).toEqual(committed);
+    expect(streaming.some((i) => i.provisional)).toBe(false);
+    expect(committed[0].kind).toBe("text");
+    expect(committed.some((i) => i.kind === "shot")).toBe(true);
+  });
+
+  it("a REST transcriber has no deltas: nothing is provisional, shots keep arrival order", () => {
+    const events: IntentEvent[] = [
+      { at: T0 - 10, type: "armed", on: true },
+      { at: T0 - 5, type: "thread-open", trigger: "talk" },
+      { at: T0, type: "talk-start", segment: 1 },
+      shot("shot_1", T0 + 1000),
+      { at: T0 + 2000, type: "talk-end", segment: 1, ms: 2000 },
+      {
+        at: T0 + 2600,
+        type: "transcript-final",
+        segment: 1,
+        text: "one two",
+        latencyMs: 600,
+        model: "rest",
+      },
+    ];
+    const items = composeIntent(events, "replace", STREAMING).items;
+    expect(items.map((i) => i.kind)).toEqual(["shot", "text"]);
+    expect(items.some((i) => i.provisional)).toBe(false);
+  });
+
+  it("keeps a whitespace-only delta out of the fold", () => {
+    expect(composeIntent(liveStream([[T0 + 500, "   "]]), "replace", STREAMING).items).toEqual([]);
   });
 });
 

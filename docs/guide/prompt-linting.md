@@ -30,24 +30,34 @@ Linting is orthogonal to the transcription tier — it is an on/off switch plus 
   `GEMINI_API_KEY`). A missing key disables the linter **loudly** — one error naming the fix —
   and dictation keeps working.
 
-While the linter is on, <kbd>V</kbd> shares your screen with it: frames are sampled at one frame
-every five seconds by default, adjustable live with the tiny slider that appears beside the
-**● video** badge (500 ms – 10 s per frame). Deliberate screenshots (<kbd>D</kbd>/<kbd>S</kbd>)
-are always labeled and referenceable; the shared frames are ambient context.
+While the linter is on, <kbd>V</kbd> shares your screen. Each sampled frame is a **first-class
+screenshot** — it lands in the transcript preview at the moment it was taken, compiles into the
+prompt there (annotated with its capture mode, and in machine-gun mode its offset from the
+share's start), and reaches the linter labeled like a <kbd>D</kbd>/<kbd>S</kbd> shot. Two
+controls appear beside the **● video** badge:
+
+- the **🦉/🔫 mode toggle** — 🦉 *smart* (default) samples only when you've interacted with the
+  app since the last frame (a still screen sends nothing); 🔫 *continuous* samples clockwork on
+  the cadence. Config: `videoMode: "smart" | "continuous"`.
+- the **cadence slider** — the tick interval, 500 ms – 10 s per frame (default 5 s). Config:
+  `videoFrameIntervalMs`. In smart mode it is the *fastest* frames can come, not a promise.
+
+Turning the share on always sends one immediate frame — the same as pressing <kbd>S</kbd> as
+you start.
 
 ## What the linter sees, exactly
 
 Everything the linter receives is bracketed, labeled, and recorded:
 
 - **Your voice**, streamed live (the same microphone audio the transcriber gets).
-- **Labeled screenshots** — `[image shot_3]` followed by the image.
+- **Labeled screenshots** — `[image shot_3]` followed by the image. A share's sampled frames
+  arrive exactly this way too — a frame *is* a shot, so the linter can cite it by id.
 - **Selections** — `[selection sel_2: "gradient stops" — on-screen selection authored at
   src/Legend.tsx:41:8]`; an update reuses the id (`[selection sel_2 updated: …]`), a retraction
   says `[selection sel_2 retracted — disregard it]`.
 - **The compiler's transcription** — when you pause, the channel waits (up to 2.5 s) for that
   segment's transcript, injects `[transcript seg_4: "make the curb wider"]`, and only then lets
   the linter speak. The lint judges what the *agent* will read, not just what the model heard.
-- **Screen frames** — unlabeled, while sharing.
 
 The linter may also call one tool, **`read_file`**: any readable path, resolved against the
 project root, capped at 32 KB, binary-sniffed — meant for verifying a suspicion ("that function
@@ -94,9 +104,10 @@ its interaction with the linter is deliberately not designed yet.)
 
 Realtime conversational models re-read the session context on **every** response — a lint after
 each pause costs proportionally to everything the session has heard and seen so far. The
-defaults are chosen accordingly: one frame per five seconds (not per second), a terse persona,
-one short observation per pause, and `read_file` capped at 32 KB. The trace's 💰 cards show the
-per-response spend; the turn's roll-up appears in the trace list.
+defaults are chosen accordingly: smart-mode sampling (an untouched screen adds **no** frames at
+all), one frame per five seconds at most, a terse persona, one short observation per pause, and
+`read_file` capped at 32 KB. The trace's 💰 cards show the per-response spend; the turn's
+roll-up appears in the trace list.
 
 Gemini-side note: Gemini Live cannot currently power the *transcription* half (no streaming
 input deltas, no transcription-only mode — see the research note in

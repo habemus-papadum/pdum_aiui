@@ -110,6 +110,34 @@ export interface TranscriptWord {
   logprob?: number;
 }
 
+/**
+ * How the screen share decides when to sample.
+ *
+ *  - `"smart"` (the default): a frame goes out only when the human has touched
+ *    the page since the last one — a press, a key, a wheel, a drag, a stroke
+ *    (local or from the iPad). Sitting still and narrating costs nothing. The
+ *    cadence is a *ceiling*, not a metronome.
+ *  - `"continuous"`: a frame every cadence tick regardless. Honest when the
+ *    screen is changing without you (a running simulation), expensive always.
+ *
+ * Both modes ride the compiled prompt so the agent knows which it is reading.
+ */
+export type VideoCaptureMode = "smart" | "continuous";
+
+/**
+ * A shot's provenance when it came from the screen share's sampler rather than
+ * a deliberate S / D-drag gesture. Its presence is what tells the compiler to
+ * render the frame as part of a sequence.
+ */
+export interface ShotShare {
+  /** The share's ordinal — `1` is the first V of the turn (`vid_1`). */
+  ordinal: number;
+  /** The mode in force when this frame was sampled. */
+  mode: VideoCaptureMode;
+  /** Milliseconds from the share's first frame — the frame's timestamp. */
+  offsetMs: number;
+}
+
 export type IntentEvent =
   | { at: number; type: "armed"; on: boolean }
   | { at: number; type: "mode"; mode: Mode }
@@ -162,8 +190,16 @@ export type IntentEvent =
       viewport?: boolean;
       /** Data-URL thumbnail (absent when no capture stream was granted). */
       thumb?: string;
-      /** Absolute path of the saved PNG on disk (the thing the prompt hands the session). */
+      /** Absolute path of the saved image on disk (the thing the prompt hands the session). */
       path?: string;
+      /**
+       * Present when the screen share's sampler took this frame rather than a
+       * human pressing S. Sampled frames are shots in every other respect —
+       * same marker space, same disk blob, same labeled injection into the
+       * linter, same `takenAt` anchoring — so the model sees one kind of
+       * image, and this descriptor says which of them came from a sequence.
+       */
+      share?: ShotShare;
     }
   | {
       /**
@@ -216,15 +252,22 @@ export type IntentEvent =
     }
   | {
       /**
-       * The realtime submode's screen share toggled (V). While on, the client
-       * samples the display-capture stream at ~1 fps into `video` chunks —
-       * unlabeled ambient context for the live model (deliberate shots stay
-       * the referenceable artifacts). An event so the trace shows exactly
-       * when the model could see the screen.
+       * The screen share toggled (V). While on, the client samples the
+       * display-capture stream on a cadence and each sampled frame enters the
+       * turn as an ordinary **shot** — same marker space, same disk blob, same
+       * injection into the live linter. So this event is not the frames; it is
+       * the bracket around them, and it records the terms the sequence was
+       * taken under.
        */
       at: number;
       type: "video-share";
       on: boolean;
+      /** The share's ordinal (`1` = the turn's first V), on the `on` event. */
+      ordinal?: number;
+      /** Which sampling discipline was in force. */
+      mode?: VideoCaptureMode;
+      /** The cadence ceiling in ms (the HUD's slider). */
+      cadenceMs?: number;
     }
   | ({
       /**

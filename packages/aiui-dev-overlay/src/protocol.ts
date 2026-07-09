@@ -41,7 +41,10 @@ export interface Ack {
 export type JsonChunk = { kind: "events" } | { kind: "context" };
 export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
 export type AudioChunk = { kind: "audio"; id: string; seq: number; mime: string };
-/** One sampled video frame of the realtime submode's screen share (~1 fps). */
+/** LEGACY: one sampled screen-share frame as its own chunk kind. The overlay
+ * now uploads sampled frames as `shot_N` {@link AttachmentChunk}s (frames are
+ * first-class shots); the kind stays in the protocol so a channel can still
+ * serve an older overlay. */
 export type VideoChunk = { kind: "video"; id: string; seq: number; mime: string };
 export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk | VideoChunk;
 
@@ -165,10 +168,10 @@ export interface IntentSocket {
    */
   sendAudio(threadId: string, chunk: AudioChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /**
-   * Send one sampled video frame of the realtime submode's screen share — raw
+   * LEGACY (see {@link VideoChunk}): send one sampled screen-share frame — raw
    * JPEG bytes on the payload, `seq`/`id` in the envelope chunk. Same wire shape
-   * as {@link sendAudio}; a distinct method only so the `video` chunk kind (and
-   * its per-share `seq`) is carried.
+   * as {@link sendAudio}. The current overlay sends sampled frames through
+   * {@link sendAttachment} instead, as ordinary shots.
    */
   sendVideo(threadId: string, chunk: VideoChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /**

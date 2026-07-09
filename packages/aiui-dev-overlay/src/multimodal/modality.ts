@@ -62,6 +62,7 @@ import {
   keyCommand,
   keymapHelp,
   TRANSCRIPTION_ENGINES,
+  type VideoCaptureMode,
 } from "../intent-pipeline";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
 import {
@@ -84,6 +85,7 @@ import { type PcmSource, WorkletPcmSource } from "./audio";
 import { ConfigStrip, type ConfigStripState } from "./config-strip";
 import type { DisplayCapture } from "./display-capture";
 import { Ink } from "./ink";
+import { watchInteraction } from "./interaction";
 import { JumpPicker } from "./jump-picker";
 import { CHEAT_STYLES, CheatSheet, KEYMAP_HELP_STYLES, KeymapHelp } from "./keymap-ui";
 import { Preview } from "./preview";
@@ -223,6 +225,12 @@ export function multimodalModality(
       });
       layers.append(ink.canvas);
 
+      // Smart mode's change signal: did the user touch the app since the last
+      // sampled frame? Window-level, capture-phase press events — see
+      // interaction.ts for what deliberately does NOT count. The share's
+      // sampler consumes it before each tick (shell/capture.ts).
+      const interaction = watchInteraction();
+
       // ── remote-paint seam ────────────────────────────────────────────────────
       // Publish an ink sink on window.__AIUI__ so an external controller (the
       // aiui-paint host, driving strokes from an iPad) can arm this intent tool
@@ -240,6 +248,9 @@ export function multimodalModality(
         },
         beginStroke(id, style, point) {
           if (engine.armed) {
+            // The pencil never touches this window, so no DOM event marks it —
+            // note it by hand or smart mode misses iPad-drawn ink.
+            interaction.note();
             ink.remoteBegin(id, style, point.x, point.y);
           }
         },
@@ -259,7 +270,7 @@ export function multimodalModality(
         instrumentation.remotePaint = remotePaint;
       }
 
-      // The capture owners (shot tool + the realtime screen sampler) live in
+      // The capture owners (shot tool + the share's frame sampler) live in
       // shell/capture.ts; the veil joins the page layers here, in the same
       // stacking position as before. `renderHud` is a hoisted declaration
       // below — the share paths that call it only run post-mount.
@@ -267,16 +278,17 @@ export function multimodalModality(
         engine,
         ink,
         uploadAttachment: wire.uploadAttachment,
-        uploadVideo: wire.uploadVideo,
         setStatus: (text) => ctx.setStatus(text),
         reportError: (error) => ctx.reportError(error),
         renderHud: () => renderHud(),
         ...(deps.videoSampleIntervalMs !== undefined
           ? { videoSampleIntervalMs: deps.videoSampleIntervalMs }
           : {}),
-        // The live cadence (the fps slider writes videoFrameIntervalMs; the
-        // sampler re-reads this thunk before every tick).
+        // The live cadence and mode (the HUD's slider/toggle write the session
+        // layer; the sampler re-reads these thunks before every tick).
         videoFrameIntervalMs: () => config.videoFrameIntervalMs ?? 5000,
+        videoMode: () => config.videoMode ?? "smart",
+        interacted: () => interaction.consume(),
         ...(deps.displayCapture !== undefined ? { displayCapture: deps.displayCapture } : {}),
       });
       layers.append(capture.veil);
@@ -324,6 +336,7 @@ export function multimodalModality(
         <button class="mm-arm" title="arm/disarm">✳</button>
         <span class="mm-state">off</span>
         <span class="mm-video" hidden>● video</span>
+        <button class="mm-vmode" hidden title="capture mode"></button>
         <input class="mm-fps" type="range" min="0" max="4" step="1" hidden
           title="frame cadence" />
         <canvas class="mm-meter" width="60" height="14"></canvas>
@@ -409,6 +422,20 @@ export function multimodalModality(
         applyEffective(recomputeEffective());
         fpsSlider.title = fpsLabel(ms);
         ctx.setStatus(`video cadence → ${fpsLabel(ms)} (session only)`);
+      });
+      // The capture-mode toggle rides next to the cadence: 🦉 smart (a frame
+      // only when the user touched the app since the last one) / 🔫 continuous
+      // (every tick). Session layer, like the slider — the sampler's thunk
+      // reads it before every tick, so a click applies mid-share.
+      const vmodeButton = hud.querySelector<HTMLButtonElement>(".mm-vmode");
+      const vmodeLabel = (mode: VideoCaptureMode): string =>
+        mode === "continuous" ? "continuous — every tick" : "smart — frames on interaction";
+      vmodeButton?.addEventListener("click", () => {
+        const next: VideoCaptureMode =
+          (config.videoMode ?? "smart") === "smart" ? "continuous" : "smart";
+        sessionOverrides = { ...sessionOverrides, videoMode: next };
+        applyEffective(recomputeEffective());
+        ctx.setStatus(`capture mode → ${vmodeLabel(next)} (session only)`);
       });
       const meter = hud.querySelector<HTMLCanvasElement>(".mm-meter");
       const speakerLabel = hud.querySelector<HTMLSpanElement>(".mm-speaker");
@@ -595,6 +622,12 @@ export function multimodalModality(
         }
         if (videoBadge) {
           videoBadge.hidden = !capture.sharing();
+        }
+        if (vmodeButton) {
+          vmodeButton.hidden = !capture.sharing();
+          const mode = config.videoMode ?? "smart";
+          vmodeButton.textContent = mode === "continuous" ? "🔫" : "🦉";
+          vmodeButton.title = vmodeLabel(mode);
         }
         if (fpsSlider) {
           fpsSlider.hidden = !capture.sharing();
@@ -1314,6 +1347,7 @@ export function multimodalModality(
           document.removeEventListener("click", onShiftClick, true);
           talk.dispose(); // endpointer + both mic lanes
           capture.dispose(); // video sampler + shot tool
+          interaction.dispose(); // smart mode's change signal
           clearInterval(meterTimer);
           wire.dispose(); // cancels any open thread socket
           ink.dispose();

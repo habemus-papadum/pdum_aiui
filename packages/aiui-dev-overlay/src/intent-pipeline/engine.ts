@@ -23,7 +23,9 @@ import type {
   LocatedComponent,
   Mode,
   Rect,
+  ShotShare,
   TranscriptWord,
+  VideoCaptureMode,
 } from "./types";
 
 export type EngineListener = (event: IntentEvent, engine: Engine) => void;
@@ -417,6 +419,8 @@ export class Engine {
     path?: string,
     viewport?: boolean,
     takenAt?: number,
+    /** Set by the share's sampler; absent for a deliberate S / D-drag. */
+    share?: ShotShare,
   ): string {
     this.ensureThread("shot");
     // Identifier-shaped (underscore) so the marker doubles as an attachment id.
@@ -433,6 +437,7 @@ export class Engine {
         // The GESTURE's wall-clock (see the event doc) — capture is async, so
         // this event's own `at` trails the moment the user actually shot.
         ...(takenAt !== undefined ? { takenAt } : {}),
+        ...(share !== undefined ? { share } : {}),
       }),
     );
     return marker;
@@ -444,17 +449,29 @@ export class Engine {
   }
 
   /**
-   * Toggle the realtime submode's screen share (V). Turning it *on* opens a
-   * thread like any other contentful act — the share is a first act of the turn
-   * — and either edge records a `video-share` event so the trace shows exactly
-   * when the live model could see the screen. The client-side sampler
-   * (video.ts) streams the frames; this verb only marks the boundaries.
+   * Toggle the screen share (V). Turning it *on* opens a thread like any other
+   * contentful act — the share is a first act of the turn — and either edge
+   * records a `video-share` event, so the trace shows exactly when the screen
+   * was being sampled and under what terms. This verb only marks the
+   * boundaries; the client-side sampler (video.ts) takes the frames, and each
+   * one enters the stream as an ordinary `shot`.
    */
-  videoShare(on: boolean): void {
+  videoShare(
+    on: boolean,
+    terms?: { ordinal: number; mode: VideoCaptureMode; cadenceMs: number },
+  ): void {
     if (on) {
       this.ensureThread("shot");
     }
-    this.emit(this.stamp({ type: "video-share", on }));
+    this.emit(
+      this.stamp({
+        type: "video-share",
+        on,
+        ...(terms !== undefined
+          ? { ordinal: terms.ordinal, mode: terms.mode, cadenceMs: terms.cadenceMs }
+          : {}),
+      }),
+    );
   }
 
   /**
@@ -525,6 +542,8 @@ export interface ComposedItem {
   viewport?: boolean;
   /** A shot item's capture-gesture wall-clock (see the shot event's doc). */
   takenAt?: number;
+  /** Set when this shot is a frame sampled by a video share (see {@link ShotShare}). */
+  share?: ShotShare;
   /** A selection item's locator (`file:line:col` / `file:start-end`). */
   sourceLoc?: string;
   /** A code-selection item's line count. */
@@ -535,6 +554,15 @@ export interface ComposedItem {
   cellLoc?: string;
   /** An app-selection item's TeX source (selected rendered mathematics). */
   tex?: string;
+  /**
+   * A text run the transcriber has not finalized: the still-streaming
+   * segment's cumulative `transcript-delta` text. Only ever produced under
+   * {@link ComposeOptions.streaming}, which only the preview passes — the
+   * committed prompt is built from finals alone. Survives the timestamp
+   * interleave's split, so a run either side of a mid-utterance shot stays
+   * marked provisional.
+   */
+  provisional?: boolean;
 }
 
 export interface ComposedIntent {
@@ -584,6 +612,22 @@ export interface ComposeOptions {
    * human-readable), or the plain-text bracket block. See {@link renderShot}.
    */
   shotFormat?: "xml" | "text";
+  /**
+   * Compose a **provisional** text run for each segment that has `transcript
+   * -delta`s but no final yet — the words you are still speaking. Off by
+   * default, and the channel never turns it on: what gets sent is built from
+   * finals alone, so in-flight words never reach a prompt or a paid call.
+   *
+   * The **transcript preview** turns it on, and gets one thing for free that
+   * it used to fake: with a text run to anchor against, the existing
+   * timestamp interleave (below) drops a mid-utterance screenshot **where it
+   * was taken**, live, instead of stacking shots ahead of the segment until
+   * the final arrives and reorders everything at once. Streaming transcribers
+   * (ElevenLabs Scribe, OpenAI realtime, Gemini Live) carry the deltas that
+   * make this possible; a whole-segment REST transcriber has none, so its
+   * shots keep their arrival position, exactly as before.
+   */
+  streaming?: boolean;
 }
 
 /**
@@ -622,6 +666,10 @@ export function composeIntent(
   // text length) samples the split pass below maps a shot's `takenAt` onto.
   const windows = new Map<number, { start: number; end?: number }>();
   const deltaTimelines = new Map<number, Array<{ at: number; len: number }>>();
+  // Streaming mode only: the latest cumulative delta text per segment, and
+  // which segments already have a final (whose text supersedes it).
+  const lastDeltaText = new Map<number, string>();
+  const finalizedSegments = new Set<number>();
   // Word-level timestamps (when the transcriber reports them) — the PRECISE
   // anchor: a word's startMs is measured in the segment's own audio, whose
   // first sample is the talk-start instant. No latency estimate needed.
@@ -644,8 +692,14 @@ export function composeIntent(
       const timeline = deltaTimelines.get(event.segment) ?? [];
       timeline.push({ at: event.at, len: event.text.length });
       deltaTimelines.set(event.segment, timeline);
-    } else if (event.type === "transcript-final" && event.words !== undefined) {
-      wordsBySegment.set(event.segment, event.words);
+      lastDeltaText.set(event.segment, event.text);
+    } else if (event.type === "transcript-final") {
+      if (!event.correction) {
+        finalizedSegments.add(event.segment);
+      }
+      if (event.words !== undefined) {
+        wordsBySegment.set(event.segment, event.words);
+      }
     }
   }
 
@@ -658,8 +712,26 @@ export function composeIntent(
   // slot, reproducing the old single-selection latest-wins behavior.
   const LEGACY_SELECTION_KEY = "";
   const selectionByKey = new Map<string, ComposedItem>();
+  /** Streaming mode: segments whose provisional run is already in `items`. */
+  const provisionalPlaced = new Set<number>();
   for (const event of scope) {
-    if (event.type === "transcript-final" && !event.correction) {
+    if (event.type === "transcript-delta") {
+      // The words still being spoken, as ONE run claiming the stream position
+      // of the segment's first delta — so a shot taken mid-utterance composes
+      // after it and the interleave below can split it. Later deltas mutate
+      // that run's text rather than appending rows. Nothing here runs unless
+      // the caller asked for it, and a finalized segment ignores it entirely:
+      // the final's own item is the truth.
+      if (!options.streaming || finalizedSegments.has(event.segment)) {
+        continue;
+      }
+      const text = lastDeltaText.get(event.segment) ?? "";
+      if (provisionalPlaced.has(event.segment) || text.trim() === "") {
+        continue;
+      }
+      provisionalPlaced.add(event.segment);
+      items.push({ kind: "text", text, segment: event.segment, provisional: true });
+    } else if (event.type === "transcript-final" && !event.correction) {
       // One item per segment, deliberately unmerged: segments-as-lines is the
       // document shape the correction patches (and the corrector model) see.
       items.push({ kind: "text", text: event.text, segment: event.segment });
@@ -716,6 +788,7 @@ export function composeIntent(
         components: event.components,
         ...(event.viewport ? { viewport: true } : {}),
         ...(event.takenAt !== undefined ? { takenAt: event.takenAt } : {}),
+        ...(event.share !== undefined ? { share: event.share } : {}),
       });
     } else if (event.type === "correction") {
       corrections.push({
@@ -773,6 +846,12 @@ export function composeIntent(
   // shot), or no deltas for the segment → the shot keeps its arrival
   // position.
   //
+  // Under `streaming` this runs against the PROVISIONAL run too, so a shot
+  // lands in the live transcript as it is taken. The offset is stable as the
+  // text grows: `deltaOffsetAt` reads the cumulative length at `takenAt + lag`,
+  // and later deltas are all past that instant, so they extend the tail rather
+  // than push the shot along.
+  //
   // Deltas TRAIL speech by the transcriber's latency, so a naive
   // takenAt-vs-arrival comparison lands the split systematically EARLY —
   // the words you had already spoken at the gesture hadn't arrived yet
@@ -818,6 +897,15 @@ export function composeIntent(
       // when present, anchor exactly; the delta-timeline lag estimate is the
       // fallback.
       const placed: ComposedItem[] = [];
+      // A provisional run stays provisional on both sides of the split — the
+      // preview renders every run of a still-streaming segment dim, whether or
+      // not a screenshot cut it in two.
+      const run = (text: string): ComposedItem => ({
+        kind: "text",
+        text,
+        segment: target.segment,
+        ...(target.provisional ? { provisional: true } : {}),
+      });
       let consumed = 0;
       for (const shot of shots.sort((a, b) => (a.takenAt ?? 0) - (b.takenAt ?? 0))) {
         const exact =
@@ -830,14 +918,14 @@ export function composeIntent(
         );
         const head = text.slice(consumed, Math.max(consumed, offset)).trim();
         if (head !== "") {
-          placed.push({ kind: "text", text: head, segment: target.segment });
+          placed.push(run(head));
         }
         placed.push(shot);
         consumed = Math.max(consumed, offset);
       }
       const tail = text.slice(consumed).trim();
       if (tail !== "") {
-        placed.push({ kind: "text", text: tail, segment: target.segment });
+        placed.push(run(tail));
       }
       items.splice(i, 1, ...placed);
     }
@@ -1028,6 +1116,14 @@ function nudgeToBoundary(text: string, offset: number): number {
   while (i < text.length && !/\s/.test(text[i])) {
     i++;
   }
+  // Already standing on a sentence seam? Stop. The lookahead below exists to
+  // finish the sentence the gesture landed INSIDE — never to skip over a whole
+  // one, which would carry the shot further from the gesture than the latency
+  // error the nudge absorbs. (An offset landing exactly after "…a demo." would
+  // otherwise swallow the next short sentence whole.)
+  if (/[.!?]["')\]]?$/.test(text.slice(0, i))) {
+    return i;
+  }
   const ahead = text.slice(i, i + SENTENCE_SNAP_CHARS);
   const sentence = ahead.match(/^(.*?[.!?]["')\]]?)(\s|$)/);
   if (sentence !== null) {
@@ -1146,11 +1242,37 @@ const MAX_ELEMENTS_IN_PROMPT = 8;
  * source location. Viewport shots render as a single self-closing tag /
  * one-liner with no element info by design; a `within` anchor (the drag
  * enclosed nothing) is marked so the agent knows it's context, not framing.
+ *
+ * A frame sampled by a video share renders as an ordinary screenshot — it *is*
+ * one, taken by the sampler instead of by the S key — plus two hints from
+ * {@link ShotShare}: `capture="on-change"|"continuous"`, and, for a continuous
+ * (machine-gun) share only, `at="N.Ns"`, the frame's offset from that share's
+ * first frame. Smart-mode frames are already self-describing: one exists
+ * exactly because the user touched the app, and it sits at the moment they did.
  */
 function renderShot(item: ComposedItem, options: ComposeOptions): string {
   return (options.shotFormat ?? "xml") === "xml"
     ? renderShotXml(item, options.cwd)
     : renderShotText(item, options.cwd);
+}
+
+/** Seconds-with-one-decimal, the resolution the cadence slider works in. */
+function formatOffset(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function shareAttrs(share: ShotShare): string[] {
+  const attrs = [`capture="${share.mode === "continuous" ? "continuous" : "on-change"}"`];
+  if (share.mode === "continuous") {
+    attrs.push(`at="${formatOffset(share.offsetMs)}"`);
+  }
+  return attrs;
+}
+
+function shareNote(share: ShotShare): string {
+  return share.mode === "continuous"
+    ? `continuous capture, +${formatOffset(share.offsetMs)}`
+    : "captured on change";
 }
 
 function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
@@ -1160,6 +1282,9 @@ function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
   } else {
     // No file on disk (capture denied/unavailable) — the reference still helps.
     attrs.push(`marker="${escapeXml(item.marker ?? "")}"`, `missing="image not captured"`);
+  }
+  if (item.share) {
+    attrs.push(...shareAttrs(item.share));
   }
   if (item.viewport) {
     attrs.push(`view="full-viewport"`);
@@ -1200,9 +1325,10 @@ function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
 }
 
 function renderShotText(item: ComposedItem, cwd: string | undefined): string {
-  const head = item.path
+  const base = item.path
     ? `[screenshot: ${relativizePath(item.path, cwd)}`
     : `[screenshot ${item.marker} — image not captured`;
+  const head = item.share ? `${base} (${shareNote(item.share)})` : base;
   if (item.viewport) {
     return `${head} (full viewport)]`;
   }

@@ -1,10 +1,10 @@
 # Screen Capture: One Grant Per Page
 
 Three features in a running aiui app need the pixels of the browser tab: the intent tool's
-[screenshots](./intent-overlay), the [realtime submode](./realtime-live)'s ~1 fps ambient video, and
-the [iPad paint stream](./paint-stream)'s live view. All three get them from a single
-`getDisplayMedia` grant, taken at most once per page, and — in the session browser — taken without
-ever showing you a dialog.
+[screenshots](./intent-overlay), the [screen share](./realtime-live)'s sampled frames (V — each
+one an ordinary screenshot, taken by the clock), and the [iPad paint stream](./paint-stream)'s
+live view. All three get them from a single `getDisplayMedia` grant, taken at most once per page,
+and — in the session browser — taken without ever showing you a dialog.
 
 This page explains what the browser actually gives you, why the design is shaped the way it is, and
 what a `<video>` element nobody can see is doing in the middle of it.
@@ -105,8 +105,8 @@ and never attaches it to the DOM. It exists because **`canvas.drawImage` cannot 
 any of this works. Three consumers draw from it:
 
 - `shot.ts` — the region and viewport screenshots, encoded as PNG. This is the one that matters.
-- `shell/capture.ts` — the realtime submode's ~1 fps JPEG frames, sent to the live model as ambient
-  context.
+- `shell/capture.ts` — the screen share's sampled frames (V): JPEG viewport shots that join the
+  turn like any screenshot and stream to the prompt linter.
 - `display-capture.ts`'s `paintFrameSource` — the paint host's **JPEG fallback** transport.
 
 It is *not* there for the iPad. Paint's default transport is WebRTC, which takes

@@ -41,7 +41,7 @@ Minimalist by design — one hand, no chords:
 | **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
 | **J**     | [VS Code jump mode](#vs-code-jump-mode-double-click-to-source) — double-click an element, pick a jump target (its source, or a containing cell), land in VS Code; **J** (or **Esc**) resumes |
-| **V**     | share your screen with the [prompt linter](./prompt-linting) — sampled frames as ambient context (needs the linter on: **K**, then **L**) |
+| **V**     | share your screen — each sampled frame is a first-class screenshot (it joins the turn *and* streams to the [prompt linter](./prompt-linting)); 🦉 smart / 🔫 continuous, toggled beside the ● badge (needs the linter on: **K**, then **L**) |
 | **K**     | quick config — the [strip](#quick-config-the-k-strip): tier digits, the **L** linter chip, save/reset, the editor |
 | **T**     | [tweak mode](#tweak-mode-adjust-the-app-mid-turn) — hand the pointer and keyboard back to the app mid-turn; **T** (or **Esc**) resumes |
 | **H**     | help — the whole keymap as a table (the pill's **?** icon is the mouse path to the same) |
@@ -382,7 +382,8 @@ The knobs, with their defaults:
 | `linter` | `off` | The [prompt linter](./prompt-linting): `off`, `openai`, or `gemini`. |
 | `linterModel` | *(vendor default)* | Linter model id (`gpt-realtime-2` / `gemini-3.1-flash-live-preview`). |
 | `linterInstructions` | *(built-in persona)* | Replaces the [published linter persona](./prompt-linting#the-prompt). |
-| `videoFrameIntervalMs` | `5000` | Screen-share cadence in ms per frame; the slider beside the ● badge writes it live. |
+| `videoFrameIntervalMs` | `5000` | Screen-share cadence in ms per frame; the slider beside the ● badge writes it live. In smart mode it's the fastest frames can come, not a promise. |
+| `videoMode` | `smart` | Screen-share capture mode: `smart` (🦉 — a frame only when you've interacted with the app since the last one) or `continuous` (🔫 — clockwork on the cadence). The toggle beside the ● badge writes it live. |
 | `arming` | `{ key: "`", enabled: true }` | The arm/disarm key, and whether keyboard arming is on at all. |
 
 The spoken-audio fields you normally never set by hand — `tier` fills them in — but they're

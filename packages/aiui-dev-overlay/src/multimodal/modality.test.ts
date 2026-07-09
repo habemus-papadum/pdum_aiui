@@ -676,13 +676,12 @@ describe("multimodalModality: realtime (streaming) transcriber", () => {
   });
 });
 
-/** Every `video` chunk frame the connection sent, decoded. */
-function videoChunks(sent: Uint8Array[]) {
+/** Every share frame the connection sent: an attachment chunk with the share's
+ * JPEG mime (S-key shots stay PNG, so the mime alone tells them apart). */
+function frameAttachments(sent: Uint8Array[]) {
   return frames(sent)
-    .map(
-      (f) => f.envelope as { chunk?: { kind?: string; id?: string; seq?: number; mime?: string } },
-    )
-    .filter((e) => e.chunk?.kind === "video")
+    .map((f) => f.envelope as { chunk?: { kind?: string; id?: string; mime?: string } })
+    .filter((e) => e.chunk?.kind === "attachment" && e.chunk.mime === "image/jpeg")
     .map((e) => e.chunk);
 }
 
@@ -1025,7 +1024,7 @@ describe("multimodalModality: vscode jump mode (J — double-click opens the jum
 });
 
 describe("multimodalModality: realtime submode screen share (V)", () => {
-  it("V streams video-share + sampled JPEG frames; disarm stops the sampler", async () => {
+  it("V (smart mode): the first frame lands as a shot; quiet ticks send nothing; interaction resumes", async () => {
     const restore = stubCapture();
     try {
       const { handle, sent } = mountLive();
@@ -1033,51 +1032,82 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
       key("keydown", "v"); // video-toggle → videoShare(true) opens the thread, sampler starts
       await wait(120); // socket connect + grant + immediate frame + a few 20ms intervals
 
-      // The share's ON edge rode the events stream.
-      const events = streamedEvents(sent);
-      expect(
-        events.some((e) => e.type === "video-share" && (e as { on?: boolean }).on === true),
-      ).toBe(true);
-
-      // Sampled frames flowed as `video` chunks — one share (vid_1), seq from 0.
-      const vids = videoChunks(sent);
-      expect(vids.length).toBeGreaterThan(0);
-      expect(vids[0]).toMatchObject({ id: "vid_1", seq: 0, mime: "image/jpeg" });
-      expect(vids.map((c) => c?.seq)).toEqual(vids.map((_, i) => i));
-      // The raw JPEG bytes rode the payload (the stubbed canvas hands back PNG magic).
-      const firstVideo = frames(sent).find(
-        (f) => (f.envelope as { chunk?: { kind?: string } }).chunk?.kind === "video",
+      // The share's ON edge rode the events stream, carrying its terms.
+      const on = streamedEvents(sent).find(
+        (e) => e.type === "video-share" && (e as { on?: boolean }).on === true,
       );
-      expect([...(firstVideo?.payload ?? [])]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+      expect(on).toMatchObject({ ordinal: 1, mode: "smart", cadenceMs: 20 });
 
-      // The badge shows while sharing (vanilla-written by renderHud: no flush).
+      // The immediate first frame is a first-class SHOT: a jpeg attachment
+      // under a shot marker + a viewport shot event carrying its share terms.
+      // The V/arm keydowns were consumed by the forced first frame, so the
+      // quiet ticks after it sent nothing — exactly one frame so far.
+      expect(frameAttachments(sent)).toHaveLength(1);
+      expect(frameAttachments(sent)[0]).toMatchObject({ id: "shot_1", mime: "image/jpeg" });
+      const shot = streamedEvents(sent).find((e) => e.type === "shot") as
+        | { viewport?: boolean; share?: { ordinal: number; mode: string; offsetMs: number } }
+        | undefined;
+      expect(shot?.viewport).toBe(true);
+      expect(shot?.share).toMatchObject({ ordinal: 1, mode: "smart" });
+      // The raw JPEG bytes rode the payload (the stubbed canvas hands back PNG magic).
+      const firstFrame = frames(sent).find(
+        (f) => (f.envelope as { chunk?: { mime?: string } }).chunk?.mime === "image/jpeg",
+      );
+      expect([...(firstFrame?.payload ?? [])]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+
+      // The user touches the app → the next tick owes a frame.
+      window.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      await wait(60);
+      expect(frameAttachments(sent)).toHaveLength(2);
+      expect(frameAttachments(sent)[1]).toMatchObject({ id: "shot_2" });
+
+      // The badge + mode toggle show while sharing (vanilla-written by renderHud).
       expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(false);
+      expect(q<HTMLElement>(handle, ".mm-vmode")?.textContent).toBe("🦉");
 
       key("keydown", "`"); // disarm → renderHud stops the sampler (share can't outlive the turn)
       await wait(60); // let the stop + any in-flight upload settle
-      const settled = videoChunks(sent).length;
+      const settled = frameAttachments(sent).length;
+      window.dispatchEvent(new Event("pointerdown", { bubbles: true })); // would arm a frame if live
       await wait(60); // three more 20ms intervals would have fired if it were still running
-      expect(videoChunks(sent).length).toBe(settled); // frozen — nothing new after disarm
+      expect(frameAttachments(sent).length).toBe(settled); // frozen — nothing new after disarm
       expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(true);
     } finally {
       restore();
     }
   });
 
-  it("toggling V off stops sampling and records the OFF edge (thread stays open)", async () => {
+  it("continuous (machine-gun) mode samples on the cadence with no interaction at all", async () => {
     const restore = stubCapture();
     try {
-      const { handle, sent } = mountLive();
+      const { handle, sent } = mountLive({ videoMode: "continuous" });
       key("keydown", "`");
       key("keydown", "v"); // on
-      await wait(80);
-      expect(videoChunks(sent).length).toBeGreaterThan(0);
+      await wait(120); // several 20ms ticks, nobody touching anything
+
+      const on = streamedEvents(sent).find(
+        (e) => e.type === "video-share" && (e as { on?: boolean }).on === true,
+      );
+      expect(on).toMatchObject({ ordinal: 1, mode: "continuous" });
+      const sampled = frameAttachments(sent);
+      expect(sampled.length).toBeGreaterThan(1); // cadence, not interaction
+      // Every frame is its own shot, offsets counting up from the share's start.
+      const shots = streamedEvents(sent).filter((e) => e.type === "shot") as Array<{
+        share?: { mode: string; offsetMs: number };
+      }>;
+      expect(shots.length).toBe(sampled.length);
+      for (const s of shots) {
+        expect(s.share?.mode).toBe("continuous");
+      }
+      const offsets = shots.map((s) => s.share?.offsetMs ?? -1);
+      expect([...offsets].sort((a, b) => a - b)).toEqual(offsets); // nondecreasing
+      expect(q<HTMLElement>(handle, ".mm-vmode")?.textContent).toBe("🔫");
 
       key("keydown", "v"); // off
       await wait(60);
-      const settled = videoChunks(sent).length;
+      const settled = frameAttachments(sent).length;
       await wait(60);
-      expect(videoChunks(sent).length).toBe(settled); // no more frames
+      expect(frameAttachments(sent).length).toBe(settled); // no more frames
       expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(true);
       const shares = streamedEvents(sent).filter((e) => e.type === "video-share");
       expect(shares.map((e) => (e as { on?: boolean }).on)).toEqual([true, false]);
@@ -1093,7 +1123,7 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
       key("keydown", "`");
       key("keydown", "v");
       await wait(60);
-      expect(videoChunks(sent)).toHaveLength(0);
+      expect(frameAttachments(sent)).toHaveLength(0);
       expect(streamedEvents(sent).some((e) => e.type === "video-share")).toBe(false);
       const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
       expect(status).toMatch(/needs the linter/i);

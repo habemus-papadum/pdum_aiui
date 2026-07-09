@@ -299,7 +299,11 @@ function describe(event: IntentEvent): string {
     case "shot":
       return `${event.marker} · ${Math.round(event.rect.w)}×${Math.round(event.rect.h)} · ${
         event.components.length
-      } component(s)${event.thumb ? "" : " · no pixels (capture not granted)"}`;
+      } component(s)${
+        event.share
+          ? ` · share ${event.share.ordinal} frame @ ${(event.share.offsetMs / 1000).toFixed(1)}s`
+          : ""
+      }${event.thumb ? "" : " · no pixels (capture not granted)"}`;
     case "correction":
       return `correction (${event.via}${
         event.model ? `, ${event.model} ${Math.round(event.latencyMs ?? 0)}ms` : ""
@@ -319,7 +323,15 @@ function describe(event: IntentEvent): string {
     case "code-selection-drop":
       return `${event.marker} retracted (✕ on the chip)`;
     case "video-share":
-      return event.on ? "video share ON (~1 fps)" : "video share off";
+      return event.on
+        ? `video share ON${
+            event.mode !== undefined
+              ? ` (${event.mode === "continuous" ? "🔫 continuous" : "🦉 smart"}, ≥${
+                  (event.cadenceMs ?? 0) / 1000
+                }s between frames)`
+              : ""
+          }`
+        : "video share off";
     case "note":
       return event.text;
     case "linter-note":

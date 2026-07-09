@@ -15,6 +15,7 @@
  *
  * Framework-free, browser-safe, no deps — like everything in this folder.
  */
+import type { VideoCaptureMode } from "./types";
 
 export interface IntentPipelineConfig {
   // ── the tier dial (the cost-sized preset over the fine fields below) ────────
@@ -150,10 +151,17 @@ export interface IntentPipelineConfig {
   /** The linter persona override. Absent → the channel's LINTER_INSTRUCTIONS. */
   linterInstructions?: string;
   /**
-   * Ambient screen-frame cadence while sharing, in ms per frame. Absent →
-   * 5000 (one frame every five seconds); the share's slider adjusts it live.
+   * Screen-frame cadence while sharing, in ms per frame. Absent → 5000 (one
+   * frame every five seconds); the share's slider adjusts it live. Under
+   * `videoMode: "smart"` this is a CEILING, not a metronome.
    */
   videoFrameIntervalMs?: number;
+  /**
+   * How the share decides when to sample. Absent → `"smart"`: a frame goes out
+   * only if the human touched the page since the last one. `"continuous"` fires
+   * on every cadence tick. See {@link VideoCaptureMode}.
+   */
+  videoMode?: VideoCaptureMode;
 
   // ── legacy realtime-submode fields (pre-linter wire compat) ─────────────────
   /**
@@ -196,6 +204,8 @@ export const DEFAULT_INTENT_CONFIG: IntentPipelineConfig = {
   audioBack: "off",
   linter: "off",
   videoFrameIntervalMs: 5000,
+  // Sitting still and narrating should not spend money on identical frames.
+  videoMode: "smart",
   arming: { key: "`", enabled: true },
 };
 

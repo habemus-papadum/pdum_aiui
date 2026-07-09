@@ -98,7 +98,8 @@ export interface LinterSidecar {
   onSelection(marker: string | undefined, entry: SelectionEntry, updated: boolean): void;
   /** A selection was retracted. */
   onSelectionDrop(marker: string | undefined): void;
-  /** One ambient screen frame (the share's sampler). */
+  /** One ambient screen frame from a LEGACY overlay's `video` chunk (the
+   * current overlay sends sampled frames through {@link onShot} instead). */
   onVideoFrame(bytes: Uint8Array, mime: string): void;
   /** Close the live session (fin / connection teardown). Idempotent. */
   close(): void;

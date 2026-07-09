@@ -178,12 +178,17 @@ export const HUD_STYLES = /* css */ `
      the ✳ and the ?; the meter only appears while armed). */
   .mm-state { color: #e8e8ea; }
   /* The screen-share badge (realtime submode): a pulsing red dot beside the
-     state label while the ~1fps sampler is running; hidden (attr) when off. */
+     state label while the frame sampler is running; hidden (attr) when off. */
   .mm-video { color: #ff5c87; font-size: 11px; font-weight: 600; white-space: nowrap;
     animation: mm-video-pulse 1.6s ease-in-out infinite; }
   .mm-video[hidden] { display: none; }
   @keyframes mm-video-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .mm-meter { border-radius: 3px; background: #0f1117; }
+  /* The share's capture-mode toggle (🦉 smart / 🔫 continuous) — beside the
+     cadence slider, only visible while sharing. */
+  .mm-vmode { background: none; border: none; padding: 0; font-size: 12px;
+    line-height: 1; cursor: pointer; }
+  .mm-vmode[hidden] { display: none; }
   /* The share's cadence slider — tiny, only visible while sharing. */
   .mm-fps { width: 56px; height: 12px; accent-color: #ff5c87; cursor: pointer; }
   .mm-fps[hidden] { display: none; }

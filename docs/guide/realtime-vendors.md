@@ -36,10 +36,11 @@ output, input+output transcription, manual VAD, the tool, session resumption, an
 Then the session is a set of **media streams**:
 
 - `realtimeInput.audio` — mic PCM, framed by explicit `activityStart`/`activityEnd` signals.
-- `realtimeInput.video` — image frames: ambient JPEGs at ~1 fps, and labeled shots (the
-  `[image shot_N]` text frame immediately followed by the PNG frame). There is **no
-  interleaving structure** between audio and video — they are independent stream fields on one
-  socket; temporal alignment is the model's problem.
+- `realtimeInput.video` — image frames: labeled shots (the `[image shot_N]` text frame
+  immediately followed by the image frame) — which since the frames-are-shots pivot includes
+  the share's sampled JPEG frames — plus, from legacy overlays, unlabeled ambient JPEGs.
+  There is **no interleaving structure** between audio and video — they are independent
+  stream fields on one socket; temporal alignment is the model's problem.
 - `clientContent` turns with `turnComplete: false` — the silent context append (selections).
 
 Replies come back as `serverContent` — `outputTranscription` fragments and audio parts —

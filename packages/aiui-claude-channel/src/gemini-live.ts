@@ -3,7 +3,8 @@
  * session behind the {@link ./live-session}.LiveSession seam.
  *
  * This is the engine the realtime submode is optimized for: the model hears the
- * mic continuously, sees labeled shots and ~1 fps ambient video, answers aloud,
+ * mic continuously, sees labeled shots (including the share's sampled frames),
+ * answers aloud,
  * can be interrupted, and — the point — **composes the prompt itself** via a
  * `submit_intent` function call. The RT0 spike proved the whole path end-to-end
  * (archive/gemini-live-spike.mjs); this is that spike, refactored under the seam
@@ -31,9 +32,10 @@
  *    before any audio hard-closes with 1007. {@link WindowOrderingGuard} enforces
  *    the ordering; outside windows (and inside, after audio) everything is safe.
  *  - **Labeled images:** `{realtimeInput:{text:"[image shot_3]"}}` then
- *    `{realtimeInput:{video:{data,mimeType}}}`; ambient video frames are the same
- *    `realtimeInput.video` unlabeled. Element/cell metadata is NEVER sent — the
- *    channel keeps it keyed by label and re-attaches it when resolving the call.
+ *    `{realtimeInput:{video:{data,mimeType}}}`; a legacy overlay's ambient video
+ *    frames are the same `realtimeInput.video` unlabeled. Element/cell metadata
+ *    is NEVER sent — the channel keeps it keyed by label and re-attaches it when
+ *    resolving the call.
  *  - **Silent context (selections):** `{clientContent:{turns:[…],turnComplete:false}}`
  *    — the incremental-context append, which does not solicit a reply. A bare
  *    `realtimeInput.text` (the nudge's form) is answered immediately under manual

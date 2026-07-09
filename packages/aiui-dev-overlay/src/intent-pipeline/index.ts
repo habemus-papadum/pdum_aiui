@@ -57,5 +57,7 @@ export type {
   LocatedComponent,
   Mode,
   Rect,
+  ShotShare,
   TranscriptWord,
+  VideoCaptureMode,
 } from "./types";

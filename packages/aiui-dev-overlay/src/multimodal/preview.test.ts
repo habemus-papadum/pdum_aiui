@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
  * Preview behaviors that don't need the whole modality. The preview is the
- * READ-ONLY render of the compiler's accumulator (composeIntent items + the
- * provisional delta tail) — these tests drive the engine directly, the same
- * calls mergeLowered makes for server echoes, and assert what renders.
+ * READ-ONLY render of the compiler's accumulator — `composeIntent(events,
+ * "replace", { streaming: true })`, nothing else — so these tests drive the
+ * engine directly, the same calls mergeLowered makes for server echoes, and
+ * assert what renders.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { composeIntent, Engine } from "../intent-pipeline";
@@ -63,6 +64,48 @@ describe("the accumulator render (text)", () => {
     expect(seg.textContent).toBe("make the curve wider");
     expect(seg.classList.contains("final")).toBe(true);
     expect(body.querySelectorAll(".mm-seg")).toHaveLength(1); // one row, one key
+  });
+
+  it("places a screenshot into the LIVE transcript, before any final arrives", async () => {
+    // Hands-free: one long segment, deltas streaming, no final yet. Shots used
+    // to stack ahead of the whole segment and only jump into place when the
+    // final landed. The compiler's `streaming` fold now gives the interleave a
+    // provisional run to split, so they land where they were taken.
+    let clock = 1000;
+    const engine = new Engine({}, () => clock);
+    engine.setArmed(true);
+    document.body.append(new Preview(engine).root);
+
+    const segment = engine.talkStart() ?? 1; // window opens at 1000
+    clock = 1800; // first delta, one 800 ms lag after talk-start
+    engine.transcriptDelta(segment, "okay");
+    clock = 2090; // the shot event, 70 ms after the gesture at 2020
+    engine.shotDone(
+      { x: 0, y: 0, w: 10, h: 10 },
+      [],
+      "data:image/png;base64,x",
+      undefined,
+      false,
+      2020,
+    );
+    clock = 2800; // the delta carrying the words spoken by 2000
+    engine.transcriptDelta(segment, "okay this is a demo.");
+    await flush();
+
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    // The shot sits after the sentence it followed, not ahead of the segment.
+    expect(body.firstElementChild?.textContent?.trim()).toBe("okay this is a demo.");
+    expect(body.querySelector(".mm-thumb")).not.toBeNull();
+
+    clock = 3800; // more speech streams in BEHIND the shot
+    engine.transcriptDelta(segment, "okay this is a demo. then I can talk again.");
+    await flush();
+    // Middle row is the shot's island (its text is the hover ✕ affordance).
+    const rows = [...body.children].map((el) => el.textContent?.trim());
+    expect(rows).toEqual(["okay this is a demo.", "✕", "then I can talk again."]);
+    // Both runs are still provisional — the segment has no final.
+    expect(body.querySelectorAll(".mm-seg.final")).toHaveLength(0);
+    expect(body.querySelectorAll(".mm-seg")).toHaveLength(2);
   });
 
   it("renders the compiled interleave: text and shots in accumulator order", async () => {

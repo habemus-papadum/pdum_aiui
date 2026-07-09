@@ -4,11 +4,17 @@
  *
  * The compiler (`composeIntent`) folds the append-only event stream; at every
  * point it holds the current compiled content — the *prompt accumulator*.
- * This popup renders exactly that: `composeIntent(events).items`, re-derived
- * after every engine event, plus a **provisional tail** for the segment still
- * streaming (its `transcript-delta` text, rendered dim until the final
- * lands). What you see is what will be sent, by construction — the preview
- * and the committed prompt share one fold and can no longer disagree.
+ * This popup renders exactly that: `composeIntent(events, "replace", {
+ * streaming: true }).items`, re-derived after every engine event. What you see
+ * is what will be sent, by construction — the preview and the committed prompt
+ * share one fold and can no longer disagree.
+ *
+ * `streaming` is the one option the send path never passes: it asks the
+ * compiler to also compose the words you are still speaking, as a
+ * **provisional** run rendered dim until its final lands. That single flag is
+ * why a mid-utterance screenshot appears where it was taken rather than
+ * stacking ahead of the segment — the compiler's timestamp interleave has a
+ * text run to split, live. The view holds no transcript state of its own.
  *
  * Read-only on purpose (the append-only pivot): there is no editor, no
  * correction bar, no lasso — a correction is *spoken*, new content the
@@ -43,7 +49,7 @@ import { LiveDiffText } from "./diff-flash";
 interface Piece {
   item: ComposedItem;
   key: string;
-  /** True for the provisional delta tail (streaming segment, no final yet). */
+  /** True for a run of a still-streaming segment (deltas, no final yet). */
   provisional?: boolean;
   /** A linter note riding the stream (💡 chip) — never composed content. */
   linter?: { text: string; segment?: number };
@@ -74,8 +80,6 @@ export class Preview {
   readonly root: HTMLDivElement;
   private readonly body: HTMLDivElement;
   private readonly engine: Engine;
-  /** Cumulative delta text per still-streaming segment (cleared on its final). */
-  private readonly deltaTail = new Map<number, string>();
   /**
    * The latest fold's pieces by key. Every re-fold produces NEW item objects,
    * but the row islands are built once per key — they read the CURRENT item
@@ -104,36 +108,25 @@ export class Preview {
     engine.onEvent((event) => this.apply(event));
   }
 
-  /** Fold one engine event into the delta-tail state, then re-derive. */
+  /** Re-derive on every engine event; a turn boundary also resets the chips. */
   private apply(event: IntentEvent): void {
-    switch (event.type) {
-      case "transcript-delta":
-        this.deltaTail.set(event.segment, event.text);
-        break;
-      case "transcript-final":
-        this.deltaTail.delete(event.segment);
-        break;
-      case "thread-open":
-      case "thread-close":
-        this.deltaTail.clear();
-        this.dismissedLints.clear();
-        break;
-      default:
-        break;
+    if (event.type === "thread-open" || event.type === "thread-close") {
+      this.dismissedLints.clear();
     }
     this.publish();
   }
 
   /**
-   * The accumulator, as rendered pieces: the compiler's items (one fold —
-   * the same call the send path makes) plus the provisional tail for any
-   * segment still streaming deltas.
+   * The accumulator, as rendered pieces: one fold — the same call the send
+   * path makes, plus `streaming`, which composes the still-unfinalized
+   * segment as a provisional run (and lets the compiler's interleave place a
+   * live screenshot inside it).
    */
   private derivePieces(): Piece[] {
     if (!this.engine.threadOpen) {
       return []; // the accumulator is per-turn; between turns it is empty
     }
-    const items = composeIntent(this.engine.events, "replace").items;
+    const items = composeIntent(this.engine.events, "replace", { streaming: true }).items;
     // Uniquify repeated keys: the compiler may split one segment's text
     // around a timestamp-anchored shot, yielding several text items for the
     // same segment — each occurrence gets its own stable row.
@@ -161,26 +154,18 @@ export class Preview {
         n === 0 &&
         words.map((w) => w.text).join(" ").length >= (item.text ?? "").length;
       // The `:w` suffix is LOAD-BEARING: a keyed row's SHAPE is decided once
-      // (the untrack in the render body), so the delta tail's plain row would
-      // otherwise survive the final and the heat branch would be unreachable —
-      // words changing the KEY forces the <For> to rebuild the row as a heat
-      // row (the bug the first live run exposed).
+      // (the untrack in the render body), so the provisional run's plain row
+      // would otherwise survive the final and the heat branch would be
+      // unreachable — words changing the KEY forces the <For> to rebuild the
+      // row as a heat row (the bug the first live run exposed).
       const key = `${n === 0 ? base : `${base}#${n}`}${heat ? ":w" : ""}`;
-      return { item, key, ...(heat ? { words } : {}) };
+      return {
+        item,
+        key,
+        ...(heat ? { words } : {}),
+        ...(item.provisional ? { provisional: true } : {}),
+      };
     });
-    // Provisional tails: streaming segments the fold has no final for yet.
-    const finalized = new Set(
-      items.filter((i) => i.kind === "text" && i.segment !== undefined).map((i) => i.segment),
-    );
-    for (const [segment, text] of this.deltaTail) {
-      if (!finalized.has(segment) && text.trim() !== "") {
-        pieces.push({
-          item: { kind: "text", text, segment },
-          key: `text:${segment}`,
-          provisional: true,
-        });
-      }
-    }
     // Linter notes: advisory chips the compiler never composes. Each chip
     // ANCHORS to the turn it lints — inserted right after the last piece of
     // its segment (a lint arrives a beat after the words, but it belongs to

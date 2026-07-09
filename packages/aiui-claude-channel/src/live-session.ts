@@ -55,10 +55,10 @@ export const LINTER_INSTRUCTIONS =
  * What one vendor's realtime engine can do, read by the processor (and, later,
  * relayed to the client) so nothing hardcodes a vendor. Gemini:
  * `{ video: true, imageInjection: "stream" }`; OpenAI:
- * `{ video: false, imageInjection: "turn-item" }`.
+ * `{ video: true, imageInjection: "turn-item" }`.
  */
 export interface LiveCapabilities {
-  /** Whether ambient ~1 fps video frames are accepted (Gemini yes, OpenAI no). */
+  /** Whether ambient video frames are accepted (both vendors: yes). */
   video: boolean;
   /**
    * How a labeled shot is injected: Gemini rides one realtime stream

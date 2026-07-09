@@ -1,11 +1,25 @@
 /**
- * The realtime submode's ambient screen sampler.
+ * The screen share's frame sampler (V).
  *
- * While the user is "sharing" (V, in a live tier) the modality draws the
- * ShotTool's display-capture stream to a canvas about once a second, encodes a
- * downscaled JPEG, and streams it as a `video` chunk — unlabeled ~1 fps context
- * for the live model (deliberate shots stay the *referenceable* artifacts; the
- * frames just tell the model what the screen currently looks like).
+ * While the user is sharing, the modality draws the display-capture stream to a
+ * canvas on a cadence, encodes a downscaled JPEG, and hands it back as an
+ * ordinary **shot** — the same artifact the S key produces, only taken by the
+ * clock instead of by a keypress. So a share is not a second kind of context: it
+ * is a stream of screenshots that the linters see and the compiler inlines into
+ * the prompt at the moment they were taken.
+ *
+ * Two cadence modes (`VideoCaptureMode`), both riding this one machine:
+ *
+ *  - **smart** (the default, 🦉): a tick captures only if the user has touched
+ *    the app since the last frame — `shouldCapture` is the interaction monitor's
+ *    `consume()`. A still screen sends nothing, so leaving the share on while
+ *    you think costs nothing.
+ *  - **continuous** (🔫): every tick captures, cadence or bust. For narrating
+ *    an animation, a drag, anything that moves on its own.
+ *
+ * The first frame of a share always fires, gate or no gate — turning the share
+ * on IS an interaction, and it's the frame that says what the screen looked like
+ * when you started talking.
  *
  * This file is the framework-free, DOM-free core: the sizing math
  * ({@link sampleDimensions}) and the cadence/toggle state machine
@@ -47,16 +61,31 @@ export function sampleDimensions(
   return { width: Math.round(width), height };
 }
 
-/** The pixel + delivery seams the {@link VideoSampler} drives. */
-export interface VideoSamplerDeps {
+/** One frame's identity within its share, as {@link VideoSamplerDeps.sendFrame} sees it. */
+export interface SampledFrame {
+  /** The frame's index within this share, counting from 0. Skipped ticks don't advance it. */
+  seq: number;
+  /** Wall-clock at which the pixels were grabbed — before the encode, which is async. */
+  takenAt: number;
+  /** `takenAt` minus the share's start — what the prompt renders as `at="N.Ns"`. */
+  offsetMs: number;
+}
+
+/**
+ * The pixel + delivery seams the {@link VideoSampler} drives. Generic in the
+ * captured payload `T` because the machine never looks inside one — it only
+ * asks "did a frame come back?". The modality passes `ShotPixels` (thumb + JPEG
+ * bytes); the tests pass whatever is convenient.
+ */
+export interface VideoSamplerDeps<T = Uint8Array> {
   /**
    * Capture one downscaled JPEG frame of the shared screen, or `undefined` when
    * the capture surface isn't available right now (grant denied/ended). Async:
    * the first call may acquire the one-time display-capture grant.
    */
-  captureFrame(): Promise<Uint8Array | undefined>;
-  /** Deliver one captured frame with its per-share `seq` (increasing from 0). */
-  sendFrame(seq: number, bytes: Uint8Array): void;
+  captureFrame(): Promise<T | undefined>;
+  /** Deliver one captured frame. */
+  sendFrame(frame: SampledFrame, pixels: T): void;
   /**
    * Sampling cadence in ms — a number, or a THUNK read before each tick so a
    * live config change (the share's fps slider) takes effect on the very
@@ -64,27 +93,52 @@ export interface VideoSamplerDeps {
    * {@link VIDEO_SAMPLE_INTERVAL_MS}.
    */
   intervalMs?: number | (() => number);
+  /**
+   * Smart mode's gate, consulted **once per tick** (the first frame of a share
+   * excepted, which always fires): capture this frame? The modality passes the
+   * interaction monitor's `consume()`, which reads *and clears* the "the user
+   * touched something" flag — so it must be called exactly once per tick, and
+   * only for ticks that actually get to decide. Omit for continuous mode.
+   *
+   * A tick the gate declines is not a frame: `seq` doesn't advance and nothing
+   * reaches `sendFrame`, so a share sitting over a still screen is free.
+   */
+  shouldCapture?(): boolean;
+  /** Clock seam (`Date.now`). */
+  now?(): number;
 }
 
 /**
  * The share cadence + toggle/pause state machine. One share is a `start()` …
- * `stop()` span, during which frames stream at the interval with a `seq`
- * counting from 0 (a new share resets it — the modality bumps the `vid_N`
+ * `stop()` span, during which frames arrive at the interval with a `seq`
+ * counting from 0 (a new share resets it — the modality bumps the share
  * ordinal in parallel). `pause()`/`resume()` (window blur/focus) hold and
  * continue sampling *without* ending the share, so a glance away doesn't drop
  * the context and refocus picks it right back up.
+ *
+ * Smart mode adds one rule on top: {@link VideoSamplerDeps.shouldCapture} vetoes
+ * a tick, and a vetoed tick is a non-event — no `seq`, no `sendFrame`, nothing
+ * in the transcript. The share's very first frame is exempt.
  */
-export class VideoSampler {
-  private readonly deps: VideoSamplerDeps;
+export class VideoSampler<T = Uint8Array> {
+  private readonly deps: VideoSamplerDeps<T>;
   private _sharing = false;
   private paused = false;
   private seq = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   /** Guards against overlapping ticks when a `captureFrame` outlives its interval. */
   private inFlight = false;
+  /** Wall-clock of `start()` — the origin every frame's `offsetMs` is measured from. */
+  private startedAt = 0;
+  /** The next tick bypasses `shouldCapture` (set by `start()`; see the class doc). */
+  private forceNext = false;
 
-  constructor(deps: VideoSamplerDeps) {
+  constructor(deps: VideoSamplerDeps<T>) {
     this.deps = deps;
+  }
+
+  private now(): number {
+    return this.deps.now?.() ?? Date.now();
   }
 
   /** True while a share is active (whether or not it is momentarily paused). */
@@ -100,6 +154,8 @@ export class VideoSampler {
     this._sharing = true;
     this.paused = false;
     this.seq = 0;
+    this.startedAt = this.now();
+    this.forceNext = true;
     this.arm();
   }
 
@@ -163,15 +219,30 @@ export class VideoSampler {
 
   private async tick(): Promise<void> {
     if (!this._sharing || this.paused || this.inFlight) {
+      // Not a decision, so don't consume the gate: whatever the user touched
+      // while we were busy is still unphotographed, and the next tick owes
+      // them a frame for it.
+      return;
+    }
+    // Consume unconditionally, even on the forced first frame — otherwise a
+    // click made just before V would arm the second tick as well.
+    const changed = this.deps.shouldCapture?.() ?? true;
+    const forced = this.forceNext;
+    this.forceNext = false;
+    if (!forced && !changed) {
       return;
     }
     this.inFlight = true;
     try {
-      const bytes = await this.deps.captureFrame();
+      const takenAt = this.now();
+      const pixels = await this.deps.captureFrame();
       // A capture can finish after a stop()/pause() (the async draw + encode) —
       // drop a frame the share no longer wants rather than stream it stale.
-      if (bytes && this._sharing && !this.paused) {
-        this.deps.sendFrame(this.seq++, bytes);
+      if (pixels !== undefined && this._sharing && !this.paused) {
+        this.deps.sendFrame(
+          { seq: this.seq++, takenAt, offsetMs: Math.max(0, takenAt - this.startedAt) },
+          pixels,
+        );
       }
     } finally {
       this.inFlight = false;

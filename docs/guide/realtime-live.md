@@ -31,7 +31,7 @@ implementation is `packages/aiui-claude-channel/src/{linter-sidecar,live-session
 flowchart LR
   subgraph browser["browser (dev overlay)"]
     mic["mic worklet<br/>PCM16 · 24 kHz<br/>(push-to-talk windows)"]
-    sampler["screen sampler<br/>JPEG ≤1024px · 1 frame/5s default<br/>(V; the slider adjusts live)"]
+    sampler["screen sampler (V)<br/>JPEG viewport shots<br/>🦉 on interaction · 🔫 on the cadence"]
     shots["deliberate shots (D/S)<br/>PNG + located elements"]
     sel["selections<br/>(app · code)"]
   end
@@ -42,7 +42,7 @@ flowchart LR
   end
   vendor["Gemini Live / OpenAI Realtime<br/>(vendor WebSocket)"]
   claude["Claude Code session"]
-  browser -- "one ws · chunks:<br/>audio · video · attachment · events" --> channel
+  browser -- "one ws · chunks:<br/>audio · attachment · events" --> channel
   side --> seam --> vendor
   vendor -- "notes · reply audio<br/>read_file calls" --> side
   channel -- "speech · linter-note events<br/>lowered-prompt" --> browser
@@ -50,8 +50,8 @@ flowchart LR
 ```
 
 One client WebSocket carries the turn to the channel as typed chunks: `audio` (raw PCM frames
-while Space is held), `video` (the sampler's JPEG frames), `attachment` (deliberate shot PNGs),
-and `events` (the engine stream — thread lifecycle, shot metadata, selections). The
+while Space is held), `attachment` (shot images — S/D captures and the share's sampled frames
+alike), and `events` (the engine stream — thread lifecycle, shot metadata, selections). The
 **streaming STT session** transcribes; the **linter sidecar** — constructed only when
 `linter != "off"` — observes the same inputs through the **`LiveSession` seam**
 (`activityStart` / `appendAudio` / `activityEnd`, `injectLabeledImage`, `appendVideoFrame`,
@@ -61,10 +61,34 @@ vendor dialect. Each engine declares `LiveCapabilities` (`video`,
 image.
 
 **Audio comes only from the microphone.** The screen share is captured with
-`getDisplayMedia({ video: true, audio: false })`; its sole consumer is the frame sampler.
-Push-to-talk is both the audio source and the **turn boundary** — both vendors run with
-server-side voice detection off (manual VAD), so a linter turn is bounded by your Space
-windows.
+`getDisplayMedia({ video: true, audio: false })` — the document's one
+[display-capture grant](./screen-capture), shared with the shot tool. Push-to-talk is both
+the audio source and the **turn boundary** — both vendors run with server-side voice
+detection off (manual VAD), so a linter turn is bounded by your Space windows.
+
+### The share's frames are shots
+
+Pressing **V** starts a share and immediately takes one whole-viewport shot — the same
+artifact the S key produces, JPEG instead of PNG. Every frame after it is another shot: it
+shows in the transcript preview where it was taken, the compiler inlines it into the prompt at
+that position (annotated `capture="on-change"` or, in machine-gun mode, `capture="continuous"
+at="5.0s"` — the offset from the share's first frame), and the linter receives it as a labeled
+image like any other shot. There is no second kind of visual context; a share is a stream of
+screenshots you didn't have to keep pressing S for.
+
+Two capture modes, toggled live from the HUD (beside the cadence slider) or persisted as
+`videoMode`:
+
+- **🦉 smart** (the default): a tick captures **only if you interacted with the app** since
+  the last frame — a click, a key, a scroll, a drag, an iPad stroke. A still screen sends
+  nothing, so leaving the share on while you think is free. (A bare mouse-move deliberately
+  does not count; nothing on screen changed. An app animating *on its own* also doesn't — take
+  a shot, or switch modes.)
+- **🔫 continuous** (machine-gun): every tick captures, clockwork on the cadence slider
+  (`videoFrameIntervalMs`, default one frame per 5 s). For narrating something that moves
+  without you touching it.
+
+The share's first frame always fires in either mode — turning it on is the interaction.
 
 ### The turn-end lint sequence
 
@@ -85,15 +109,13 @@ hearing — so a talk window doesn't end the linter's turn by itself:
 
 The linter sees *less* than the prompt will contain, deliberately:
 
-- A deliberate shot arrives as the text label `[image shot_3]` paired with the pixels; the
-  shot's file path and element/cell metadata never leave the channel.
+- A shot — deliberate or a sampled share frame — arrives as the text label `[image shot_3]`
+  paired with the pixels; the shot's file path and element/cell metadata never leave the
+  channel. **Every** frame persists to the trace, so what the model saw is fully reviewable.
 - A selection arrives as a bracketed, **clipped** text item —
   `[selection sel_2: "160-char excerpt…" — on-screen selection authored at src/…]` — injected
   silently (it must never make the model start talking). A re-selection reuses its id
   (`updated`); a drop injects an explicit retraction (`disregard it`).
-- Ambient video frames are unlabeled and unreferenceable — they show the model the screen, not
-  citable artifacts. **Every** sampled frame persists to the trace (the viewer's video strip),
-  so what the model saw is fully reviewable.
 
 ### What flows back
 
@@ -118,13 +140,14 @@ audio would double the cost for a worse record.
 
 Both engines implement the same seam with the same tool, persona, and label grammar; they
 differ in state model and injection grade. **Gemini Live** (the reference) is media *streams*
-into a session — audio, video frames, silent context — with session resumption and
+into a session — audio, image frames, silent context — with session resumption and
 sliding-window context compression; `{ video: true, imageInjection: "stream" }`. **OpenAI
-Realtime** is a *conversation of items* — buffered audio commits, images (and ambient frames)
-as turn-boundary `input_image` items, a sub-100 ms commit floor (a tapped window is cleared,
-never committed) — `{ video: true, imageInjection: "turn-item" }`. The full wire dialects,
-message-by-message, with the vendor gotcha ledger: [Gemini & OpenAI Realtime: the
-Wire](./realtime-vendors).
+Realtime** is a *conversation of items* — buffered audio commits, images as turn-boundary
+`input_image` items, a sub-100 ms commit floor (a tapped window is cleared, never committed) —
+`{ video: true, imageInjection: "turn-item" }`. **Both vendors see the share's frames** —
+they arrive through `injectLabeledImage` like any shot, so nothing is Gemini-only. The full
+wire dialects, message-by-message, with the vendor gotcha ledger: [Gemini & OpenAI Realtime:
+the Wire](./realtime-vendors).
 
 ## Turns and cost
 
@@ -138,12 +161,13 @@ The growth curves differ, and that's the practical vendor gap:
 
 - **Gemini**: the setup requests `contextWindowCompression: { slidingWindow: {} }`, so in a
   long session the retained context gets trimmed and per-turn input **plateaus**. While you
-  share, ambient frames keep joining the context between talk windows too — part of what every
+  share, sampled frames keep joining the context between talk windows too — part of what every
   later lint re-reads, which is exactly what the sliding window bounds.
 - **OpenAI**: no compression knob — the conversation grows without bound for the session's
   life (cached-input pricing discounts the re-read prefix, softening the slope without capping
-  it). This is why the frame cadence defaults to one per **five seconds**, adjustable down
-  only deliberately.
+  it). This is why the frame cadence defaults to one per **five seconds**, and why smart mode
+  is the default: a share over a still screen adds **zero** frames to what every later lint
+  re-reads. Machine-gun mode is the deliberate opt-in to the growth.
 
 That cost structure is also why the [linter persona](./prompt-linting#the-prompt) is kept
 terse, selection labels are clipped to 160 chars, and `read_file` caps at 32 KB: all are
@@ -162,8 +186,10 @@ shapes, close-frame semantics — live on [the wire page](./realtime-vendors#wir
 - **Retraction is advisory in-conversation:** the conversation is append-only (the model *saw*
   the retracted selection; it gets a "disregard it" item). The prompt side needs no
   enforcement — the compiler folds drops mechanically.
-- **Ambient frames are not referenceable** — only deliberate shots and selections carry ids.
-  If the linter should be able to cite it, take a shot.
+- **Sampled frames ARE referenceable** — each is a `shot_N` like any deliberate capture, so
+  the linter can cite one and the ✕ on its preview thumb retracts it. (Before the
+  frames-are-shots pivot they were unlabeled ambient `video` chunks; that chunk kind survives
+  in the protocol only for older overlays.)
 - **Keyless linting degrades loudly, once** — "dictation still works" is part of the error
   text, and it does.
 

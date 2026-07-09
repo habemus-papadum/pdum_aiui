@@ -479,6 +479,12 @@ function ordinalOf(id: string): number {
   return match ? Number(match[1]) : 0;
 }
 
+/** A shot blob's file extension from its declared mime: S-key shots are PNG,
+ * the share's sampled frames are JPEG. Default PNG for anything unexpected. */
+function imageExtension(mime: string): string {
+  return mime === "image/jpeg" ? "jpg" : "png";
+}
+
 /** True when the current thread (from its last open) ended in an explicit cancel. */
 function endedInCancel(events: IntentEvent[]): boolean {
   let start = -1;
@@ -1276,7 +1282,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       const path = trace?.recordBlob(
         { kind: "ir", label: `attachment ${id}` },
         conditioned.bytes,
-        `${id}.png`,
+        `${id}.${imageExtension(mime)}`,
       );
       if (path !== undefined) {
         shotPaths.set(id, path);
@@ -1288,9 +1294,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   };
 
   /**
-   * One sampled screen frame (the share's ambient context). EVERY frame
-   * persists to the trace (the viewer's video strip shows the whole share),
-   * and the linter — the only consumer of ambient sight — gets it forwarded.
+   * One sampled screen frame riding a `video` chunk — the pre-frames-are-shots
+   * wire shape, kept for compatibility with older overlays. The current
+   * overlay uploads each sampled frame as a `shot_N` ATTACHMENT instead (so it
+   * composes into the prompt and reaches the linter labeled, like any other
+   * shot); a client still streaming `video` chunks gets the old behavior:
+   * every frame persists to the trace, and the linter sees it as ambient,
+   * unlabeled sight.
    */
   const onVideoChunk = (
     chunk: Extract<ChunkDescriptor, { kind: "video" }>,

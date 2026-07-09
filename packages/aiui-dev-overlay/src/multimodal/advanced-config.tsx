@@ -112,6 +112,7 @@ const SCHEMA: Record<string, FieldCheck> = {
   linterModel: str,
   linterInstructions: str,
   videoFrameIntervalMs: num,
+  videoMode: oneOf(["smart", "continuous"]),
   arming: objectOf({ key: str, enabled: bool }),
   silenceGate: objectOf({ enabled: bool, thresholdDb: num, minSilenceMs: num }),
   priming: objectOf({ sources: strArray }),

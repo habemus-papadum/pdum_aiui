@@ -5,11 +5,12 @@
  *
  * One socket per thread, opened on thread-open. Outbound, the engine's event
  * log rides `chunk{kind:"events"}` JSON frames batched on a short debounce;
- * shot PNGs and whole audio segments ride `chunk{kind:"attachment"}` frames;
- * streamed PCM and sampled video frames ride `audio`/`video` chunks. Inbound,
- * the server's lowered echoes (`transcript-delta`s/`-final`s, pushed `speech`
- * clips) merge into the engine stream as if local — guarded by the `merging`
- * reentrancy flag so a merge never re-streams itself.
+ * shot images (S-key PNGs and the share's sampled JPEG frames alike) and whole
+ * audio segments ride `chunk{kind:"attachment"}` frames; streamed PCM rides
+ * `audio` chunks. Inbound, the server's lowered echoes
+ * (`transcript-delta`s/`-final`s, pushed `speech` clips) merge into the engine
+ * stream as if local — guarded by the `merging` reentrancy flag so a merge
+ * never re-streams itself.
  *
  * Owns its state (socket promise, outbox, debounce timer); talks to the
  * engine and the host context only through {@link WireDeps}.
@@ -19,10 +20,9 @@ import type { OverlayErrorInput } from "../../errors";
 import type { IntentThread, OpenThreadOptions } from "../../intent";
 import type { Engine, IntentEvent, IntentPipelineConfig } from "../../intent-pipeline";
 import type { ThreadSocketState } from "../../overlay-tools";
-import type { Ack, VideoChunk } from "../../protocol";
+import type { Ack } from "../../protocol";
 import { REALTIME_PCM_MIME } from "../audio";
 import type { SpeechClip } from "../speech";
-import { VIDEO_FRAME_MIME } from "../video";
 
 /** How long to accumulate engine events before flushing an events chunk. */
 const EVENTS_DEBOUNCE_MS = 60;
@@ -70,8 +70,6 @@ export interface Wire {
   uploadAttachment(id: string, mime: string, bytes: Uint8Array): Promise<void>;
   /** One captured PCM frame → an `audio` chunk on `seg_N`, in seq order. */
   uploadAudio(segment: number, seq: number, bytes: Uint8Array): Promise<void>;
-  /** One sampled screen frame → a `video` chunk on `vid_N`, in seq order. */
-  uploadVideo(share: number, seq: number, bytes: Uint8Array): Promise<void>;
   /** The send path: flush, consume the selection, `fin`, surface the ack. */
   finalizeThread(): Promise<void>;
   /** Close the socket without `fin` (a cancel) and reset the wire state. */
@@ -224,25 +222,6 @@ export function createWire(deps: WireDeps): Wire {
     }
   }
 
-  /** One sampled frame → a `video` chunk on the given share, in seq order. */
-  async function uploadVideo(share: number, seq: number, bytes: Uint8Array): Promise<void> {
-    const thread = await getThread();
-    if (!thread) {
-      return; // degraded: no channel — the share simply doesn't stream
-    }
-    const chunk: VideoChunk = {
-      kind: "video",
-      id: `vid_${share}`,
-      seq,
-      mime: VIDEO_FRAME_MIME,
-    };
-    try {
-      reportBadAck("video frame", await thread.sendVideo(chunk, bytes, false));
-    } catch (error) {
-      rememberError(error);
-    }
-  }
-
   async function finalizeThread(): Promise<void> {
     const thread = await getThread();
     if (flushTimer) {
@@ -374,7 +353,6 @@ export function createWire(deps: WireDeps): Wire {
     flushOutbox,
     uploadAttachment,
     uploadAudio,
-    uploadVideo,
     finalizeThread,
     cancelThread,
     dispose: () => {
