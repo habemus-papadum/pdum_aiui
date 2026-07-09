@@ -66,6 +66,7 @@ export default defineConfig({
         duckdb: "src/duckdb.ts",
         site: "src/site/index.ts",
         modal: "src/modal/index.ts",
+        testing: "src/testing.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

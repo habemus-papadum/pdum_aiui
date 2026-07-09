@@ -40,14 +40,20 @@ methodology in miniature:
 vite.config.ts        the ENTIRE aiui integration: one aiuiDevOverlay() plugin
 src/
   model/store.ts      durable roots — signals that survive hot edits (the sliders)
-  model/rose.ts       pure math (the picture)
+  model/rose.ts       pure math (the picture; playbook layer 1, with rose.test.ts)
+  model/scenery.ts    the starter's demo cells + tools (layer 2, with scenery.test.ts)
   model/graph.ts      the disposable cell graph + the agent tool surface
   ui/                 components — freely hot-swappable
   main.tsx            entry: almost nothing (start reading there)
 ```
 
 Try the starter's interactions before replacing them: drag the sliders and watch the picture
-recompute through its cell.
+recompute through its cell. `npm test` runs the starter's example tests — pure math and a headless
+cell probe — which double as the patterns for testing your own app.
+
+Want a **blank canvas** instead of the rose? All scenery is fenced with `<aiui-scenery>` comment
+markers; `CLAUDE.md` § *Reset to a blank canvas* gives the three-step mechanical deletion (any
+model, however small, can follow it — no code reasoning involved).
 
 This is a standalone git repo of your own — let the agent redesign, break, and rebuild
 everything; nothing flows back anywhere.

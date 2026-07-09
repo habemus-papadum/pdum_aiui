@@ -1,5 +1,5 @@
 /**
- * App.tsx — layout, arranged as a paper with a dashboard on top. The first
+ * App.tsx — layout (playbook layer 4), arranged as a paper with a dashboard on top. The first
  * section is the full overview (every panel at a glance, as it loaded before the
  * paper rewrite); the later sections re-render their OWN instances of the same
  * widgets beside the prose that explains them. That double-mounting is safe and

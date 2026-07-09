@@ -1,3 +1,4 @@
+// <aiui-scenery-file> — this WHOLE FILE is placeholder scenery: delete it on reset (CLAUDE.md § Reset).
 /**
  * Banner.tsx — the orientation card. Its one job: make sure a person landing
  * here knows the page is alive and that talking to it is the point. When the

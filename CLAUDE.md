@@ -120,6 +120,12 @@ pnpm -C demos/spectra claude   # terminal 1 — Claude Code + channel
 pnpm -C demos/spectra dev      # terminal 2 — Vite + the intent tool
 ```
 
+**The template's scenery is fenced.** Every piece of the starter's placeholder content sits
+between `<aiui-scenery>` markers (whole scenery files carry `<aiui-scenery-file>` on line 1), so
+"reset to a blank app" is a mechanical deletion documented in the template's `CLAUDE.md` — cheap
+models can do it without reading the code. When editing the template, keep the invariant: fenced
+code is only referenced from other fenced code, and the post-deletion tree must typecheck.
+
 **There is exactly one starter template.** It used to be two: `aiui demo` scaffolded a throwaway
 playground from `packages/aiui/templates/demo`, predating `create-aiui`. That command and its
 template are gone — scaffolding is `create-aiui`'s job, and `pnpm new-demo` is its in-repo twin.

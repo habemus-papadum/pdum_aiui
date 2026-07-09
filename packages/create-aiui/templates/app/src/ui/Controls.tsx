@@ -1,3 +1,4 @@
+// <aiui-scenery-file> — this WHOLE FILE is placeholder scenery: delete it on reset (CLAUDE.md § Reset).
 /**
  * Controls.tsx — the sliders. Each writes a plain durable signal; the graph
  * recomputes the picture from it, and the picture re-renders. There is no

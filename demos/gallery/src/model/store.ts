@@ -1,5 +1,5 @@
 /**
- * store.ts — the durable roots of the app.
+ * store.ts — the durable roots of the app (the state side of playbook layer 2).
  *
  * Everything in this module survives a hot edit: the parameter signals (the
  * user's slider positions are interaction state — the most precious thing in

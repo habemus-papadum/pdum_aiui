@@ -8,7 +8,7 @@
  *   terminal 2:  npm run dev       this app, served by Vite via `aiui vite`
  *
  * On the page, press ` (backtick) or the floating ✳ aiui button, then SAY or
- * type what you want — "make the rose golden", "turn this into a tide chart
+ * type what you want — "make this golden", "turn this into a tide chart
  * for my harbor", anything. Your words (plus screenshots and the source
  * locations of what you pointed at) land in the Claude session as a prompt,
  * and the agent edits this very code while you watch it hot-reload.
@@ -17,8 +17,11 @@
  * mounted by the aiuiDevOverlay() plugin (vite.config.ts — the entire
  * integration); the app splits along HMR lines:
  *
- *   src/model/store.ts   durable roots — the sliders survive hot edits
- *   src/model/rose.ts    pure math (the picture)
+ *   src/model/store.ts   durable roots — parameters survive hot edits
+ * <aiui-scenery>
+ *   src/model/rose.ts    pure math for the placeholder picture (playbook layer 1)
+ *   src/model/scenery.ts the starter's demo cells + tools (delete on reset)
+ * </aiui-scenery>
  *   src/model/graph.ts   the cell graph (dataflow) + the agent tools
  *   src/ui/              components — freely hot-swappable
  *

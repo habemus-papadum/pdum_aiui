@@ -3,7 +3,7 @@
   "version": "0.4.0+dev",
   "private": true,
   "type": "module",
-  "description": "pdum_aiui — a lockstep-versioned TypeScript monorepo.",
+  "description": "pdum_aiui \u2014 a lockstep-versioned TypeScript monorepo.",
   "author": "Nehal Patel <nehal@alum.mit.edu>",
   "license": "MIT",
   "engines": {
@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:packaging": "node scripts/packaging-test.mjs",
+    "test:template": "tsx scripts/template-e2e.ts",
     "lint": "biome check .",
     "format": "biome check --write .",
     "aiui": "tsx packages/aiui/src/cli.ts",

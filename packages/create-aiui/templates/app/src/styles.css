@@ -52,6 +52,7 @@ kbd {
   color: var(--muted);
 }
 
+/* <aiui-scenery> */
 /* --- the banner -------------------------------------------------------------- */
 
 .banner h1 {
@@ -70,6 +71,8 @@ kbd {
   color: var(--text);
 }
 
+/* </aiui-scenery> */
+
 /* --- panels ------------------------------------------------------------------ */
 
 .panel {
@@ -80,6 +83,7 @@ kbd {
   margin-top: 16px;
 }
 
+/* <aiui-scenery> */
 .picture .rose {
   display: block;
   width: min(100%, 520px);
@@ -134,6 +138,7 @@ kbd {
 .slider + .slider {
   margin-top: 18px;
 }
+/* </aiui-scenery> */
 
 /* --- the CellView contract (spinner, error, keep-latest, progress) ------------- */
 

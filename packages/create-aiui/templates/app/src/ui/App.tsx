@@ -1,20 +1,28 @@
 /**
- * App.tsx — layout: the banner that explains the loop, the picture, and its
- * controls. Everything here is a pure reader of the durable signals and the
- * cell graph, so components can be redesigned or replaced freely.
+ * App.tsx — the root layout (playbook layer 4: the application shell).
+ *
+ * Components live in this directory (playbook layer 3) and are freely
+ * hot-swappable, so build the page out of them. Keep them pure readers of the
+ * durable signals (store.ts) and the cell graph (graph.ts): read a cell's
+ * value by rendering it through `<CellView of={graph().someCell}>`, never by
+ * importing a cell directly.
  */
+// <aiui-scenery>
 import { Banner } from "./Banner";
 import { Controls } from "./Controls";
 import { Picture } from "./Picture";
+// </aiui-scenery>
 
 export function App() {
   return (
     <div class="app">
+      {/* <aiui-scenery> */}
       <Banner />
       <main class="stage">
         <Picture />
         <Controls />
       </main>
+      {/* </aiui-scenery> */}
     </div>
   );
 }

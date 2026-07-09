@@ -1,5 +1,5 @@
 /**
- * store.ts — the durable roots of the seismos page.
+ * store.ts — the durable roots of the seismos page (playbook layer 2, state side).
  *
  * These outlive every hot edit (design-choices §3): the DuckDB-WASM instance and
  * its two connections, the Mosaic coordinator wired to it, the registered

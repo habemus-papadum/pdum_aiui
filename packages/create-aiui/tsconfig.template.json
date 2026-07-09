@@ -9,5 +9,5 @@
     "jsxImportSource": "@solidjs/web",
     "types": ["vite/client"]
   },
-  "include": ["templates/app/src", "templates/app/vite.config.ts"]
+  "include": ["templates/app/src", "templates/app/vite.config.ts", "templates/app/vitest.config.ts"]
 }

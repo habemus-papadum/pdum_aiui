@@ -96,6 +96,32 @@ jobs:
       - name: Packaging test (pack → scratch install → CLI smoke)
         run: pnpm run test:packaging
 
+  # Starter-template gate: the template's example tests never execute under any
+  # package's own vitest project (they need the template's vitest config, which
+  # only exists once scaffolded). This job scaffolds a throwaway in-repo demo
+  # via the real `pnpm new-demo` path, proves the sceneried app's tests pass,
+  # applies the mechanical reset EXACTLY as the template CLAUDE.md documents it
+  # (guarding the <aiui-scenery> fence grammar), and proves the blank app
+  # typechecks, tests green, and production-builds. Locally: `pnpm test:template`.
+  template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Template e2e (scaffold → test → mechanical reset → blank verify)
+        run: pnpm run test:template
+
   # The live-session e2e is deliberately NOT part of this workflow: it drives a
   # real Claude Code session (spends subscription usage, takes minutes, and is
   # inherently a bit flaky), which is too expensive to pay on every push. It

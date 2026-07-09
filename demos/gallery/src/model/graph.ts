@@ -1,6 +1,6 @@
 /**
- * graph.ts — the cell graph: every asynchronous dataflow in the app, in one
- * place, notebook-style.
+ * graph.ts — the cell graph (playbook layer 2): every asynchronous dataflow in
+ * the app, in one place, notebook-style.
  *
  * This module is *disposable logic*. It builds the graph from the durable
  * roots in store.ts, publishes it through a durable box (a stable signal the

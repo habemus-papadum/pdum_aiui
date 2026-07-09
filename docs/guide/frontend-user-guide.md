@@ -14,7 +14,9 @@ way.
 
 The other frontend pages are for framework designers: [Concepts](./frontend-for-agents),
 [Design choices](./frontend-design-choices), and the [findings ledger](./frontend-hard-won). You
-need none of them to use this one.
+need none of them to use this one. When you're past learning the pieces and are building a whole
+app, the [Playbook](./frontend-playbook) sequences the work — pure functions, then cells, then
+components, then the application — with a definition of done per layer.
 
 ## The idea: a spreadsheet for computations
 
@@ -205,46 +207,46 @@ testing is not optional decoration here: it is the counterweight to the deps mag
 test that moves each input and watches the output is exactly the instrument that catches a
 dependency the code forgot to declare.
 
-The library's own suite (`packages/aiui-viz/src/cell.test.ts`) is the worked example — it even
-includes the out-of-sync bug as a deliberately failing dependency, pinned in a test. The pattern
-for your app:
+The library ships a harness for exactly this — `@habemus-papadum/aiui-viz/testing` — which hides
+the reactive plumbing a raw test would need (owners, write batching, tick counting). A test reads
+as intent:
 
 ```ts
-import { createRoot } from "solid-js";
-import { describe, expect, it } from "vitest";
-
-const tick = () => new Promise((r) => setTimeout(r, 0));
+import { cellHarness, whenReady } from "@habemus-papadum/aiui-viz/testing";
+import { afterEach, describe, expect, it } from "vitest";
 
 describe("the peaks cell", () => {
+  let h: ReturnType<typeof cellHarness<AppGraph>>;
+  afterEach(() => h.dispose());
+
   it("recomputes when the threshold moves", async () => {
-    let dispose!: () => void;
-    const { peaks } = createRoot((d) => {
-      dispose = d;
-      return buildGraph(); // your graph.ts build function
-    });
-    await tick(); // let the first run land
+    h = cellHarness(() => buildGraph()); // your graph.ts build function
 
-    const before = peaks.latest();
-    threshold.set(0.9);
-    await tick();
-    await tick();
-
-    expect(peaks.latest()).not.toEqual(before); // it noticed ✓
-    dispose();
+    const before = await whenReady(h.cells.peaks);
+    threshold.set(0.9); // move ONE input…
+    expect(await whenReady(h.cells.peaks)).not.toEqual(before); // …it noticed ✓
   });
 });
 ```
 
-Three habits worth copying from that file:
+Four helpers cover almost every dataflow test:
 
-- **`createRoot` wraps the graph** — cells need an owner; the disposer is your teardown.
-- **`await tick()` after every `set`** — writes are batched (see the
-  [gotchas](#gotchas-that-bite-exactly-once)); a read in the same instant sees the old value. Two
-  ticks after an async compute is common.
-- **Assert through `latest()` and `state()`** — they never throw, so tests read cleanly.
+- **`cellHarness(setup)`** — builds the graph under a disposable owner and keeps every returned
+  cell live, the way a rendering app would.
+- **`whenReady(cell)`** — waits for the next settled value and returns it; if the run *fails*, it
+  rejects with the compute's error rather than a useless timeout.
+- **`whenState(cell, "held")`** — waits for any state; this is how a test observes the cancel
+  gesture from [Step 8](#step-8-progress-and-cancelling).
+- **`recordCommits(cell)`** — collects every value a streaming cell publishes, so
+  [Step 10](#step-10-streaming--values-that-arrive-in-pieces)'s "three partials or one settled
+  value?" is a one-line assertion.
+
+The library's own suites are the worked examples: `testing.test.ts` shows each helper in use
+(including the out-of-sync bug caught by a per-input probe), and `cell.test.ts` keeps the raw,
+harness-free patterns for when you need to see the machinery.
 
 If you (or your agent) write a cell with more than one input, write the test that moves *each*
-input. It is five lines per input and it converts the framework's one silent failure mode into a
+input. It is three lines per input and it converts the framework's one silent failure mode into a
 loud one.
 
 ## Step 8: progress, and cancelling
@@ -512,7 +514,11 @@ frozen artifact.
 
 ## Where to go next
 
-- **Do:** `npm create @habemus-papadum/aiui my-app` — the starter with this whole shape working.
+- **Do:** `npm create @habemus-papadum/aiui my-app` — the starter with this whole shape working,
+  its example tests included. Its placeholder rose is fenced with `<aiui-scenery>` markers: ask
+  any model to follow the starter `CLAUDE.md`'s three-step reset and you have a blank canvas.
+- **Build:** the [Playbook](./frontend-playbook) — the four-layer order of construction for a
+  real analytic app, with each layer's testing story.
 - **Read:** `demos/gallery` — three real notebooks (GPU simulation, worker pipeline, DuckDB
   crossfilter) built from nothing but these steps.
 - **Deeper:** [Concepts](./frontend-for-agents) · [Design choices](./frontend-design-choices) ·

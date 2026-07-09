@@ -1,3 +1,4 @@
+// <aiui-scenery-file> — this WHOLE FILE is placeholder scenery: delete it on reset (CLAUDE.md § Reset).
 /**
  * rose.ts — pure math, no framework: the placeholder picture.
  *

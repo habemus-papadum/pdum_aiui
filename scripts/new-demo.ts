@@ -125,6 +125,7 @@ function rewirePackageJson(
       claude: "../../bin/aiui claude",
       dev: "../../bin/aiui vite dev",
       open: "../../bin/aiui open",
+      test: "vitest run",
       typecheck: "tsc --noEmit -p tsconfig.json",
     },
     dependencies: template.dependencies,
@@ -158,6 +159,13 @@ An in-repo demo app, scaffolded by \`pnpm new-demo\` from the same starter templ
 \`create-aiui\` ships. Its visible content — the banner, the rose — is **placeholder scenery meant
 to be replaced** by whatever this demo is for. Be bold about rebuilding the page; be careful about
 the wiring underneath.
+
+**Reset to a blank canvas (mechanical — no code reasoning), applied under \`src/\` only:**
+1) delete every file whose first line contains \`<aiui-scenery-file>\`; 2) in the remaining
+\`src/\` files, delete each block from a line containing \`<aiui-scenery>\` through the next
+line containing \`</aiui-scenery>\`, inclusive of both marker lines; 3) \`pnpm typecheck &&
+pnpm test\` (a blank app passes both). Touch nothing else — docs like this one merely mention
+the markers.
 
 It differs from a scaffolded sandbox in exactly two ways, both deliberate:
 

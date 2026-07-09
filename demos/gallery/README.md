@@ -60,6 +60,20 @@ real and invalidate the CloudFront cache. Live at <https://habemus-papadum.net/a
 `personal` AWS profile (override with `AWS_PROFILE`). Note it must be `pnpm run publish` — bare
 `pnpm publish` is the npm registry command, which this private package refuses.
 
+## The playbook, in miniature
+
+The directory layout is the
+[frontend playbook](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-playbook)'s four
+layers, per notebook:
+
+| Layer | morphogen | aztec | seismos |
+| --- | --- | --- | --- |
+| 1 · pure functions | `analysis/core.ts` (+ tests) | `pages/aztec/{shuffle,permanent}.ts` (+ tests) | `pages/seismos/gr.ts` (+ tests) |
+| seam (worker) | `analysis/analysis.worker.ts` | `pages/aztec/shuffle.worker.ts` | — (DuckDB is the engine) |
+| 2 · cells + roots | `model/{graph,store}.ts` | `pages/aztec/{graph,store}.ts` | `pages/seismos/{graph,store}.ts` |
+| 3 · components | `ui/` | `pages/aztec/ui/` | `pages/seismos/ui/` |
+| 4 · application | `ui/App.tsx` + nav | `aztec.html` entry | `seismos.html` entry |
+
 ## What to look at
 
 - `vite.config.ts` + `babel-source-locator.mjs` — the aiui integration and the

@@ -15,7 +15,8 @@ is the ledger of paid-for technical knowledge underneath it; the
 plotting, math — that make every notebook in a lab read as one publication.
 
 If you just want to *use* the library — write a cell, depend on another cell, stream a computation,
-display it — start at the [User guide](./frontend-user-guide) instead. It assumes none of this page.
+display it — start at the [User guide](./frontend-user-guide) instead; when you're building a whole
+app, the [Playbook](./frontend-playbook) sequences the work. Both assume none of this page.
 
 ## The premise
 

@@ -1,3 +1,4 @@
+// <aiui-scenery-file> — this WHOLE FILE is placeholder scenery: delete it on reset (CLAUDE.md § Reset).
 /**
  * Picture.tsx — the picture, rendered through CellView so it wears the
  * notebook chrome (pending spinner, error+retry, keep-latest while

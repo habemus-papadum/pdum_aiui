@@ -233,6 +233,7 @@ function main() {
             collapsed: false,
             items: [
               { text: "User Guide", link: "/guide/frontend-user-guide" },
+              { text: "Playbook", link: "/guide/frontend-playbook" },
               { text: "Concepts", link: "/guide/frontend-for-agents" },
               { text: "Design Choices", link: "/guide/frontend-design-choices" },
               { text: "Hard-Won Details", link: "/guide/frontend-hard-won" },

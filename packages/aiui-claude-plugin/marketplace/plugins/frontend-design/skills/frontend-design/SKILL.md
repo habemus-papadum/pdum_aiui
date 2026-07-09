@@ -1,12 +1,15 @@
 ---
 name: frontend-design
-description: How to write reactive scientific-visualization frontends in aiui projects — SolidJS 2.0 cells, durable/disposable HMR structure, worker streaming, agent tool surfaces. Use when creating or refactoring frontend/visualization code in a project that uses @habemus-papadum/aiui-viz (or when asked to follow the aiui frontend methodology). The repo docs are the source of truth; this skill is the operational digest.
+description: How to write reactive scientific-visualization frontends in aiui projects — the four-layer playbook (pure functions → cells → components → application), SolidJS 2.0 cells, durable/disposable HMR structure, worker streaming, agent tool surfaces. Use when creating, PLANNING, or refactoring frontend/visualization code in a project that uses @habemus-papadum/aiui-viz (or when asked to follow the aiui frontend methodology). The repo docs are the source of truth; this skill is the operational digest.
 ---
 
 # aiui frontend design
 
 **Sources of truth** (read when depth is needed; if this digest ever disagrees, trust them and
-say so): [frontend-user-guide.md](../../../../../../../docs/guide/frontend-user-guide.md)
+say so): [frontend-playbook.md](../../../../../../../docs/guide/frontend-playbook.md)
+(the BUILD ORDER: pure functions → cells → components → application, a definition of done per
+layer, vertical slices — follow it when creating or extending an app) →
+[frontend-user-guide.md](../../../../../../../docs/guide/frontend-user-guide.md)
 (the progressive how-to — cells, deps tracking and its out-of-sync bug, testing, streaming,
 cancellation, workers, layout) →
 [frontend-for-agents.md](../../../../../../../docs/guide/frontend-for-agents.md)
@@ -24,7 +27,9 @@ contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the modul
 
 Library surface (`@habemus-papadum/aiui-viz`): plumbing on the root barrel (`cell`,
 `settledOnly`, `CellView`, `workerStream`/`fromWorker`, `durable`/`durableSignal`,
-`hotCellGraph`, `agentToolkit`/`registerStandardTools`), porcelain on subpaths, one per
+`hotCellGraph`, `agentToolkit`/`registerStandardTools`); `…/testing` → the cell-test harness
+(`cellHarness`, `whenReady`, `whenState`, `recordCommits`) — use it, never hand-roll
+createRoot/tick plumbing in app tests; porcelain on subpaths, one per
 heavyweight optional peer — `…/plot` → `PlotFigure` (Observable Plot); `…/mosaic` →
 `MosaicView` (Mosaic/vgplot bridge: coordinator + reactive directive-list spec in, connected
 Plot out, marks disconnected on dispose); `…/duckdb` → `instantiateDuckDB` +
@@ -35,9 +40,41 @@ morphogen + aztec notebooks (cells/workers/Plot), **seismos** (the Mosaic + Duck
 Parquet → DuckDB-WASM → crossfilter Selection → coordinated vgplot views; its NOTES.md is the
 stack's field ledger).
 
+## The playbook: the default order of work (and the default shape of a plan)
+
+When building **from scratch — or anything bigger than a one-line tweak — follow the
+[playbook](../../../../../../../docs/guide/frontend-playbook.md) unless you can state a concrete
+reason not to.** Four layers, each with its own verification, rigor front-loaded:
+
+1. **Pure functions** — domain math, realm-free (no solid-js, no window, no import.meta.env);
+   exhaustive unit tests, benchmarks for anything possibly slow. Library-shaped, not app-shaped.
+2. **Cells** — the *chosen* computation boundaries where reality (time, failure, cancellation,
+   streaming) enters; NOT 1:1 with the pure functions. Headless tests via `aiui-viz/testing` —
+   one per-input probe per cell. The `.worker.ts` file is a thin protocol seam; the math stays
+   in layer 1.
+3. **Components** — pure readers: cells in (via `graph()`), DOM out, through `CellView`.
+   Behavioral jsdom tests now; the HUMAN is the visual tester until the app has earned
+   screenshot automation.
+4. **Application** — page anatomy, modal keymaps (pure tables, tested), multi-page progression;
+   done when the whole app is drivable through its own tool surface.
+
+Not a waterfall: get one thin slice through all four layers on screen early, then deepen — the
+human steers by looking at the running app. But within every slice and every feature, descend in
+this order, and **when asked to produce a PLAN for a visualization, structure the plan as these
+four layers with each layer's definition of done** — a plan organized any other way needs a
+stated justification.
+
+**Starting in a fresh scaffold?** The starter ships placeholder scenery (the rose) fenced with
+`<aiui-scenery>` markers, staged as the playbook in miniature (`rose.ts`+test = layer 1,
+`scenery.ts`+test = layer 2). If the user wants their own app rather than an edit of the rose,
+**reset to a blank canvas first** via the scaffold CLAUDE.md's § *Reset to a blank canvas* —
+three mechanical deletion steps under `src/`, no code reasoning (cheap-model work; CI runs the
+same procedure). Never treat un-reset scenery as the user's code.
+
 ## The structure (non-negotiable)
 
-Split every app along the **durable/disposable** line, visible in the module layout:
+Split every app along the **durable/disposable** line, visible in the module layout (this is
+the playbook's layer 2 made physical; `ui/` is layers 3–4):
 
 - `model/store.ts` — durable roots: user parameters via `durableSignal(key, initial)`,
   everything else (engines, workers, canvases, history rings) via `durable(key, create)`
@@ -55,7 +92,7 @@ Split every app along the **durable/disposable** line, visible in the module lay
   with `createEffect(source, handler)` pushing into methods; bridge outbound by publishing a
   small snapshot into ONE signal at a slow cadence (~4 Hz).
 
-## Async work = cells
+## Async work = cells (playbook layer 2)
 
 Every async value is a `cell(deps, compute)`: deps returning `undefined`/`null`/`false` holds
 (so a boolean dep must be boxed, `() => ({ enabled: flag.get() })`); compute may return a value,
@@ -151,10 +188,12 @@ by working around the library in app code, and do not treat its current surface 
 
 ## Definition of done
 
-Typecheck + unit tests + lint pass. Tests mean two layers: pure logic (stats, algorithms,
-worker math in its realm-free module) AND the cell graph headless — build it under `createRoot`,
-move **each** dependency, `await` a `setTimeout(0)` tick after every write (writes are batched),
-assert through `latest()`/`state()`; this is the instrument that catches an undeclared
+Each playbook layer has its own done (see the playbook section above); the whole change is done
+when: typecheck + unit tests + lint pass. Tests mean two layers: pure logic (stats, algorithms,
+worker math in its realm-free module — playbook layer 1) AND the cell graph headless via `aiui-viz/testing` —
+`cellHarness(build)`, then move **each** dependency and `await whenReady(cell)` (the harness
+absorbs write batching and owners); streaming cells assert via `recordCommits`, cancellation via
+`whenState(cell, "held")`. The per-input probe is the instrument that catches an undeclared
 dependency. Then drive the app through its own tool surface in the session browser (zero console
 errors, `report()` sane); prove HMR preserves the running state for a component edit and a graph
 edit; screenshot the result.

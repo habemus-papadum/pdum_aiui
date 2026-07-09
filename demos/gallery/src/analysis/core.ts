@@ -1,5 +1,5 @@
 /**
- * core.ts — pure algorithms for pattern structure analysis.
+ * core.ts — pure algorithms for pattern structure analysis (playbook layer 1).
  *
  * Realm-free (no DOM, no worker globals) so the worker imports it, unit tests
  * exercise it headlessly, and nothing here needs mocking. The worker adds the

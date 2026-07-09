@@ -1,5 +1,5 @@
 /**
- * graph.ts — the aztec cell graph: the shuffle run, the permanent check, the
+ * graph.ts — the aztec cell graph (playbook layer 2): the shuffle run, the permanent check, the
  * derived observables, and the reactive→imperative render bridge, all built
  * over the durable roots in store.ts and published through a durable box the UI
  * subscribes to. Disposable logic: a hot edit disposes the old graph and builds

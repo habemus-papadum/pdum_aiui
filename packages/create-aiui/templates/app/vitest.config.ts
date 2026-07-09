@@ -1,0 +1,25 @@
+import { defineConfig } from "vitest/config";
+
+// Vitest prefers THIS file over vite.config.ts, so tests run without the dev
+// overlay plugin (which belongs to the dev server, not the test runner). The
+// tests here are headless dataflow tests — playbook layers 1 and 2: pure math
+// and cells, no DOM rendering. Three settings matter:
+//
+//  - environment jsdom: `durable()` keeps its registry on `window`, so cell
+//    graphs need a window even without rendering.
+//  - resolve.conditions + inline: Solid must resolve as ONE shared browser/dev
+//    build under Vitest, or effects silently observe a different reactive
+//    instance than the one your cells write to (the full story is in
+//    aiui-viz's vite.config.ts).
+//  - passWithNoTests: a freshly reset blank app has no tests yet; `npm test`
+//    should still be green until your first cell brings its first test.
+export default defineConfig({
+  resolve: {
+    conditions: ["browser", "development", "import", "module", "default"],
+  },
+  test: {
+    environment: "jsdom",
+    passWithNoTests: true,
+    server: { deps: { inline: [/solid-js/, /@solidjs\//, /@habemus-papadum\//] } },
+  },
+});

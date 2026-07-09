@@ -1,5 +1,5 @@
 /**
- * graph.ts — the seismos cell graph: the loading cell (real progress from the
+ * graph.ts — the seismos cell graph (playbook layer 2): the loading cell (real progress from the
  * parquet fetch), the derived Gutenberg–Richter statistics of the current
  * cross-filter selection, and the agent tool surface — all built over the
  * durable roots in store.ts and published through a durable box the UI reads.

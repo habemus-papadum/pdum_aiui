@@ -1,5 +1,7 @@
 /**
- * analysis.worker.ts — heavy pattern-structure analysis, off the main thread.
+ * analysis.worker.ts — heavy pattern-structure analysis, off the main thread
+ * (the playbook's layer-1/layer-2 seam: a thin protocol shell; the math stays
+ * in core.ts).
  *
  * Speaks the cancellable request/stream protocol of @habemus-papadum/aiui-viz
  * (worker-stream):

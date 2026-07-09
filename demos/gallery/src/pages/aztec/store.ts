@@ -1,5 +1,5 @@
 /**
- * store.ts — the durable roots of the aztec page.
+ * store.ts — the durable roots of the aztec page (playbook layer 2, state side).
  *
  * Everything here survives a hot edit: the user's controls (target order,
  * animation speed, circle toggle — interaction state), the canvas the tiling is
