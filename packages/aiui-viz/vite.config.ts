@@ -20,6 +20,35 @@ export default defineConfig({
   // template calls at build time; consumers running source get the same
   // transform from their own solid plugin (the editable-deps convention).
   plugins: [solid()],
+  test: {
+    server: {
+      deps: {
+        // Solid must be INLINED under Vitest, not node-resolved — the same
+        // finding aiui-dev-overlay's config records. Node's export conditions
+        // hand @solidjs/web a SERVER build of solid-js, so `_$effect` calls a
+        // DIFFERENT instance of `createRenderEffect` than a test's
+        // `import { getObserver } from "solid-js"` observes. The DOM is still
+        // written once (so most tests pass), but there is no observer during
+        // the compute and no reactivity on update — which is precisely what
+        // cell-attribution.ts reaches for. Probe: inside `effect()` from
+        // @solidjs/web, `getObserver()` is null, while inside
+        // `createRenderEffect` from solid-js it is the effect node.
+        //
+        // vite-plugin-solid force-externalizes /solid-js/ unless the user
+        // config already lists a matching external — the never-matching regex
+        // below (its SOURCE matches the plugin's /solid-js/ gate) exists purely
+        // to defeat that, so `inline` wins and the browser/development
+        // conditions below resolve one shared dev build.
+        external: [/^never-external-solid-js$/],
+        inline: [/solid-js/, /@solidjs\//],
+      },
+    },
+  },
+  resolve: {
+    // Only meaningful under Vitest (the lib build's resolution is unaffected:
+    // externals never resolve, and app consumers bring their own config).
+    conditions: ["browser", "development", "import", "module", "default"],
+  },
   build: {
     lib: {
       // One entry per export subpath: the core surface; the Observable Plot

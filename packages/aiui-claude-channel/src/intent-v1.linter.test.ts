@@ -18,7 +18,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelFormat, StreamProcessor, ThreadContext } from "./channel";
 import type { ChunkDescriptor, MessageMeta } from "./frame";
 import { createIntentV1Format, type IntentV1Options } from "./intent-v1";
@@ -27,6 +27,27 @@ import type { LiveSession, LiveSessionCallbacks } from "./live-session";
 import type { IntentEvent } from "./overlay-types";
 
 const enc = new TextEncoder();
+
+/**
+ * Run the whole suite as a channel process that holds NO vendor keys.
+ *
+ * `createIntentV1Format` resolves each key as `options.<key> ?? process.env.<KEY>`
+ * (intent-v1.ts), so a test that passes `geminiApiKey: undefined` to assert the
+ * keyless posture silently picks up a *developer's real key* instead — this repo
+ * loads one into the shell from `.env.dev` via direnv, so `keyless gemini
+ * linting degrades loudly` passed in CI and failed on the machine of anyone set
+ * up to run the thing. Deleting the vars (`vi.stubEnv(name, undefined)`, not
+ * `""`) keeps the assertions exercising the real production path: option absent
+ * → env lookup → nothing → degrade loudly.
+ */
+beforeEach(() => {
+  vi.stubEnv("OPENAI_API_KEY", undefined);
+  vi.stubEnv("GEMINI_API_KEY", undefined);
+  vi.stubEnv("ELEVEN_LABS_API_KEY", undefined);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 interface FakeLive {
   factory: (callbacks: LiveSessionCallbacks) => LiveSession;
@@ -329,7 +350,9 @@ describe("lifecycle + posture", () => {
   });
 
   it("keyless gemini linting degrades loudly — and dictation still works", async () => {
-    // No factory, no GEMINI key → the sidecar never opens; one clear error.
+    // No factory, no GEMINI key (neither option nor env — see the suite-wide
+    // stub above) → the sidecar never opens; one clear error. The OpenAI key IS
+    // present, pinning that the gemini vendor never falls back to it.
     const d = drive(
       { transcriber: "mock", linter: "gemini" },
       { apiKey: "sk-openai-present", geminiApiKey: undefined },
