@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { decodeFrame, jsonCodec } from "@habemus-papadum/aiui-claude-channel";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountIntentTool, unmountIntentTool } from "../intent";
 import type { IntentEvent, IntentPipelineConfig } from "../intent-pipeline";
 import { fakeSocketFactory } from "../test-support/fake-socket";
@@ -8,6 +8,7 @@ import { installLocalStorage } from "../test-support/local-storage";
 import { INTENT_CONFIG_STORAGE_KEY, loadIntentOverrides } from "./advanced-config";
 import type { PcmSource } from "./audio";
 import type { CaptureOutcome, DisplayCapture } from "./display-capture";
+import { Ink } from "./ink";
 import { type MultimodalDeps, multimodalModality } from "./modality";
 import type { SpeechAudioElement } from "./speech";
 
@@ -909,9 +910,12 @@ describe("multimodalModality: vscode jump mode (J — double-click opens the jum
       // (blurExits in the mode table): returning to the tab resumes composing.
       window.dispatchEvent(new Event("blur"));
       await flush();
-      expect(q<HTMLElement>(handle, ".mm-state")?.textContent).toContain("ink");
+      // Back in ink mode — which the label states by NOT naming a mode at all
+      // (ink is the default; only the two handovers name themselves).
+      expect(q<HTMLElement>(handle, ".mm-state")?.textContent).not.toContain("vscode");
       // Still armed — blur stepped out one level, not to off.
       expect(q<HTMLElement>(handle, ".mm-state")?.textContent).not.toBe("off");
+      expect(q<HTMLElement>(handle, ".mm-inkmode")?.hidden).toBe(false);
     } finally {
       document.getElementById("vsc-fixture")?.remove();
     }
@@ -2172,6 +2176,172 @@ describe("multimodalModality: mute (M the mic, N the share — separately)", () 
       expect(q<HTMLElement>(handle, ".mm-mic-mute").hidden).toBe(false);
     } finally {
       restore();
+    }
+  });
+});
+
+describe("multimodalModality: ink outlives the turn (only C clears it)", () => {
+  const MOCK = { transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 } as const;
+  const report = () => {
+    const r = window.__aiui_overlay?.report();
+    if (!r) {
+      throw new Error("overlay tools not installed");
+    }
+    return r;
+  };
+  /** Commit one stroke through the remote pen (same strokes[] a local drag fills). */
+  const draw = (id: string): void => {
+    const sink = window.__AIUI__?.remotePaint;
+    if (!sink) {
+      throw new Error("remote paint seam not published");
+    }
+    sink.beginStroke(id, { color: "#ff5c87", width: 3 }, { x: 10, y: 10 });
+    sink.extendStroke(id, { x: 40, y: 40 });
+    sink.endStroke(id, { x: 60, y: 20 });
+  };
+
+  it("survives SEND — the drawing you talked over is still there afterwards", async () => {
+    mountMultimodal(MOCK);
+    key("keydown", "`");
+    draw("s1");
+    await flush();
+    expect(report().ink.strokes).toBe(1);
+    expect(report().threadOpen).toBe(true); // the stroke opened the turn
+
+    key("keydown", "Enter"); // send
+    await wait(60);
+    expect(report().threadOpen).toBe(false); // the turn is gone...
+    expect(report().ink.strokes).toBe(1); // ...the ink is not
+  });
+
+  it("survives ESC — abandoning a turn is not a request to erase the page", async () => {
+    mountMultimodal(MOCK);
+    key("keydown", "`");
+    draw("s1");
+    draw("s2");
+    await flush();
+    expect(report().ink.strokes).toBe(2);
+
+    key("keydown", "Escape"); // step out of the open thread
+    await wait(20);
+    expect(report().threadOpen).toBe(false);
+    expect(report().ink.strokes).toBe(2);
+  });
+
+  it("survives a tweak-mode excursion and the disarm/re-arm cycle", async () => {
+    mountMultimodal(MOCK);
+    key("keydown", "`");
+    draw("s1");
+    await flush();
+    key("keydown", "t"); // into tweak
+    key("keydown", "t"); // back out
+    key("keydown", "`"); // disarm
+    key("keydown", "`"); // re-arm
+    await wait(20);
+    expect(report().ink.strokes).toBe(1);
+  });
+
+  it("C is the only eraser, and it says so on the wire", async () => {
+    const { sent } = mountMultimodal(MOCK);
+    key("keydown", "`");
+    draw("s1");
+    await wait(60);
+    expect(report().ink.strokes).toBe(1);
+
+    key("keydown", "c");
+    await wait(60);
+    expect(report().ink.strokes).toBe(0);
+    // An explicit clear is `auto: false`; the fade's own clear is `auto: true`.
+    const cleared = streamedEvents(sent).filter((e) => e.type === "ink-clear");
+    expect(cleared).toHaveLength(1);
+    expect(cleared[0]).toMatchObject({ auto: false });
+  });
+});
+
+describe("multimodalModality: the ink chip (permanent ⇄ vanishing)", () => {
+  const MOCK = { transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 } as const;
+  const report = () => {
+    const r = window.__aiui_overlay?.report();
+    if (!r) {
+      throw new Error("overlay tools not installed");
+    }
+    return r;
+  };
+
+  it("starts PERMANENT: ✒️, no slider, and no fade", () => {
+    const { handle } = mountMultimodal(MOCK);
+    key("keydown", "`");
+    const chip = q<HTMLButtonElement>(handle, ".mm-inkmode");
+    expect(chip.hidden).toBe(false);
+    expect(chip.textContent).toBe("✒️");
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    expect(q<HTMLInputElement>(handle, ".mm-inkfade").hidden).toBe(true);
+    expect(report().ink.fadeSec).toBe(0);
+  });
+
+  it("clicking flips to vanishing at the 6s default, and reveals the slider", () => {
+    const { handle } = mountMultimodal(MOCK);
+    key("keydown", "`");
+    q<HTMLButtonElement>(handle, ".mm-inkmode").click();
+
+    const chip = q<HTMLButtonElement>(handle, ".mm-inkmode");
+    expect(chip.textContent).toBe("💨");
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    expect(report().ink.fadeSec).toBe(6);
+
+    const slider = q<HTMLInputElement>(handle, ".mm-inkfade");
+    expect(slider.hidden).toBe(false);
+    expect(slider.value).toBe("6");
+    expect(slider.min).toBe("1");
+    expect(slider.max).toBe("10");
+
+    // ...and clicking again goes back to permanent, hiding the slider.
+    chip.click();
+    expect(report().ink.fadeSec).toBe(0);
+    expect(q<HTMLInputElement>(handle, ".mm-inkfade").hidden).toBe(true);
+    expect(q<HTMLButtonElement>(handle, ".mm-inkmode").textContent).toBe("✒️");
+  });
+
+  it("the slider sets the duration, and the chip REMEMBERS it across a round trip", () => {
+    const { handle } = mountMultimodal(MOCK);
+    key("keydown", "`");
+    q<HTMLButtonElement>(handle, ".mm-inkmode").click(); // → vanishing @ 6s
+
+    const slider = q<HTMLInputElement>(handle, ".mm-inkfade");
+    slider.value = "2";
+    slider.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(report().ink.fadeSec).toBe(2);
+
+    q<HTMLButtonElement>(handle, ".mm-inkmode").click(); // → permanent
+    expect(report().ink.fadeSec).toBe(0);
+    q<HTMLButtonElement>(handle, ".mm-inkmode").click(); // → vanishing again
+    // 2s, not the 6s default: a toggle that forgets is not a toggle.
+    expect(report().ink.fadeSec).toBe(2);
+  });
+
+  it("restarts the fade clocks when (and only when) fading is switched ON", () => {
+    // Strokes already on a permanent canvas are older than any fade window, so
+    // without this they would blink out in the frame after the click.
+    const restart = vi.spyOn(Ink.prototype, "restartFade");
+    try {
+      const { handle } = mountMultimodal(MOCK);
+      key("keydown", "`");
+      const chip = q<HTMLButtonElement>(handle, ".mm-inkmode");
+
+      chip.click(); // permanent → vanishing
+      expect(restart).toHaveBeenCalledTimes(1);
+
+      // Nudging the duration must NOT reset them: a stroke drawn 2s ago under
+      // a fresh 8s fade is three-quarters opaque, not reborn.
+      const slider = q<HTMLInputElement>(handle, ".mm-inkfade");
+      slider.value = "8";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(restart).toHaveBeenCalledTimes(1);
+
+      chip.click(); // vanishing → permanent: nothing to restart
+      expect(restart).toHaveBeenCalledTimes(1);
+    } finally {
+      restart.mockRestore();
     }
   });
 });

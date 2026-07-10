@@ -35,7 +35,17 @@ export interface IntentPipelineConfig {
   // ── the visible toggles ────────────────────────────────────────────────────
   /** Space bar behavior: hold-to-talk (walkie-talkie) or press-to-toggle. */
   talkMode: "hold" | "toggle";
-  /** Seconds until ink strokes fade out; 0 = persist until cleared. */
+  /**
+   * Seconds until an ink stroke fades away. **0 (the default) is PERMANENT
+   * ink**: strokes persist until you clear them with C, across sends, across
+   * abandoned turns — the pen is not scoped to a turn, the page is a
+   * whiteboard you happen to be talking over.
+   *
+   * Any value in [{@link INK_FADE_MIN_SEC}, {@link INK_FADE_MAX_SEC}] makes it
+   * *vanishing* ink. The HUD's ✒️/💨 chip flips between the two and its slider
+   * sets this (see the modality's HUD); {@link INK_FADE_DEFAULT_SEC} is what
+   * the chip picks when it turns fading on.
+   */
   inkFadeSec: number;
   /** Auto-end the thread after this many silent/idle seconds; 0 = explicit Enter only. */
   autoEndSec: number;
@@ -184,8 +194,16 @@ export interface IntentPipelineConfig {
  * overrides these two back to `mock` so it runs with no channel and no key). The
  * `mock*` cadence/typo knobs below only matter once `transcriber: "mock"`.
  */
+/** Vanishing ink's slider range, and what the ✒️→💨 chip picks when it flips on. */
+export const INK_FADE_MIN_SEC = 1;
+export const INK_FADE_MAX_SEC = 10;
+export const INK_FADE_DEFAULT_SEC = 6;
+
 export const DEFAULT_INTENT_CONFIG: IntentPipelineConfig = {
   talkMode: "hold",
+  // Permanent. Ink is a drawing on the page, not a property of the turn that
+  // happened to be open when you drew it — so it outlives sends and abandoned
+  // turns, and only C erases it. `inkFadeSec > 0` opts into vanishing ink.
   inkFadeSec: 0,
   autoEndSec: 0,
   // Scribe v2 is the default WHEN AVAILABLE — word timestamps + logprobs

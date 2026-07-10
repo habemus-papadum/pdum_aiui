@@ -54,6 +54,9 @@ import {
   composeIntent,
   Engine,
   engineOf,
+  INK_FADE_DEFAULT_SEC,
+  INK_FADE_MAX_SEC,
+  INK_FADE_MIN_SEC,
   type IntentEvent,
   type IntentPipelineConfig,
   intentKeyHints,
@@ -352,6 +355,8 @@ export function multimodalModality(
       hud.className = "mm-hud";
       hud.innerHTML = `
         <button class="mm-arm" title="arm/disarm">✳</button>
+        <button class="mm-inkmode" hidden></button>
+        <input class="mm-inkfade" type="range" hidden />
         <span class="mm-state">off</span>
         <span class="mm-video" hidden>● video</span>
         <button class="mm-vmode" hidden title="capture mode"></button>
@@ -440,6 +445,53 @@ export function multimodalModality(
       const armButton = hud.querySelector<HTMLButtonElement>(".mm-arm");
       const stateLabel = hud.querySelector<HTMLSpanElement>(".mm-state");
       const videoBadge = hud.querySelector<HTMLSpanElement>(".mm-video");
+
+      // ── the ink chip + its fade slider (where the word "ink" used to be) ────
+      // The mode word was noise: "ink" is the only mode you are ever in while
+      // composing, so it told you nothing, and it sat where something useful
+      // could. This says what the pen is DOING — ✒️ permanent, 💨 vanishing —
+      // and clicking it flips. Session layer, like the tier digits and the fps
+      // slider: Ink reads `config.inkFadeSec` through a thunk every frame, so
+      // both apply to strokes already on screen.
+      const inkModeButton = hud.querySelector<HTMLButtonElement>(".mm-inkmode");
+      const inkFadeSlider = hud.querySelector<HTMLInputElement>(".mm-inkfade");
+      if (inkFadeSlider) {
+        inkFadeSlider.min = String(INK_FADE_MIN_SEC);
+        inkFadeSlider.max = String(INK_FADE_MAX_SEC);
+        inkFadeSlider.step = "1";
+      }
+      const inkFading = (): boolean => (config.inkFadeSec ?? 0) > 0;
+      // The duration to restore when fading is switched back on. Remembering it
+      // is the difference between a toggle and a toggle that forgets.
+      let lastInkFadeSec = INK_FADE_DEFAULT_SEC;
+      const inkModeLabel = (): string =>
+        inkFading()
+          ? `vanishing ink — strokes fade over ${config.inkFadeSec}s (click for permanent)`
+          : "permanent ink — strokes stay until C clears them (click to make them fade)";
+      const setInkFadeSec = (seconds: number): void => {
+        sessionOverrides = { ...sessionOverrides, inkFadeSec: seconds };
+        applyEffective(recomputeEffective());
+      };
+      inkModeButton?.addEventListener("click", () => {
+        if (inkFading()) {
+          setInkFadeSec(0);
+          ctx.setStatus("ink → permanent — only C clears it (session only)");
+          return;
+        }
+        // Strokes already on screen were born long before this click; without
+        // restarting their clocks they would vanish in the very next frame.
+        ink.restartFade();
+        setInkFadeSec(lastInkFadeSec);
+        ctx.setStatus(`ink → vanishing over ${lastInkFadeSec}s (session only)`);
+      });
+      inkFadeSlider?.addEventListener("input", () => {
+        // No restartFade here: a stroke drawn 2s ago under a fresh 8s fade
+        // should be three-quarters opaque, not reborn.
+        lastInkFadeSec = Number(inkFadeSlider.value);
+        setInkFadeSec(lastInkFadeSec);
+        inkFadeSlider.title = inkModeLabel();
+        ctx.setStatus(`ink fades over ${lastInkFadeSec}s (session only)`);
+      });
       // The share's cadence slider: five steps over the useful range. Writes
       // the SESSION layer (like a tier digit) — the sampler's thunk reads the
       // effective config before each tick, so it applies mid-share.
@@ -642,15 +694,40 @@ export function multimodalModality(
           // hover for the full names.
           const activeEngine = engineOf(config);
           const linter = config.linter ?? "off";
-          const backends = !engine.armed
-            ? ""
-            : ` · ${activeEngine?.icon ?? "?"}${linter !== "off" ? ` 💡${linter}` : ""}`;
-          stateLabel.textContent = !engine.armed
-            ? "off"
-            : `${engine.mode}${engine.talking ? " · REC" : ""}${engine.threadOpen ? " · thread" : ""}${backends}`;
+          // "ink" is dropped: it is the mode you are in whenever you are not
+          // in one of the two named handovers, so printing it said nothing —
+          // and the ✒️/💨 chip now sits in its place saying something. The
+          // handover modes still name themselves; they are excursions.
+          const parts = [
+            engine.mode === "ink" ? "" : engine.mode,
+            engine.talking ? "REC" : "",
+            engine.threadOpen ? "thread" : "",
+            `${activeEngine?.icon ?? "?"}${linter !== "off" ? ` 💡${linter}` : ""}`,
+          ].filter(Boolean);
+          stateLabel.textContent = engine.armed ? parts.join(" · ") : "off";
           stateLabel.title = !engine.armed
             ? ""
-            : `transcriber: ${activeEngine?.label ?? config.transcriber} (${activeEngine?.shape ?? "?"}) · linter: ${linter}`;
+            : [
+                "thread: a turn is open — Enter sends it, Esc abandons it",
+                `transcriber: ${activeEngine?.label ?? config.transcriber} (${activeEngine?.shape ?? "?"})`,
+                `linter: ${linter}`,
+              ].join("\n");
+        }
+        if (inkModeButton) {
+          // Visible whenever armed, not only in ink mode: the strokes are on
+          // screen (and still fading, or not) during a tweak/vscode excursion.
+          inkModeButton.hidden = !engine.armed;
+          inkModeButton.textContent = inkFading() ? "💨" : "✒️";
+          inkModeButton.title = inkModeLabel();
+          inkModeButton.setAttribute("aria-pressed", inkFading() ? "true" : "false");
+          inkModeButton.setAttribute("aria-label", inkModeLabel());
+        }
+        if (inkFadeSlider) {
+          inkFadeSlider.hidden = !engine.armed || !inkFading();
+          if (!inkFadeSlider.matches(":active")) {
+            inkFadeSlider.value = String(config.inkFadeSec);
+          }
+          inkFadeSlider.title = inkModeLabel();
         }
         if (videoBadge) {
           videoBadge.hidden = !capture.sharing();
@@ -1056,16 +1133,14 @@ export function multimodalModality(
             );
             break;
           case "send":
+            // Ink SURVIVES the send. It used to be wiped here (and on Esc),
+            // which made the pen a property of the turn that happened to be
+            // open when you drew — so a diagram you built to talk over
+            // evaporated the moment you talked about it. The page is a
+            // whiteboard; only C erases it (or the fade, if you asked for one).
             engine.send();
-            ink.clear();
             break;
           case "step-out":
-            // The ink-mode guard matters for tweak: stepping out of tweak
-            // lands back in ink/composing with nothing to clear — the
-            // excursion drew no ink, and the turn's strokes must survive it.
-            if (engine.mode === "ink" && engine.threadOpen) {
-              ink.clear();
-            }
             engine.stepOut();
             break;
           case "swallow":
@@ -1284,6 +1359,7 @@ export function multimodalModality(
         },
         selection: { present: ctx.selection() !== undefined },
         capture: { grant: capture.hasCaptureGrant() ? "granted" : "none" },
+        ink: { strokes: ink.strokeCount(), fadeSec: config.inkFadeSec },
       });
       const overlayTools = installOverlayTools({
         report: buildReport,

@@ -38,10 +38,10 @@ Minimalist by design — one hand, no chords:
 | **Space** | talk — push-to-talk, always a *hold* (toggling lives on **H**) |
 | **H**     | hands-free talk — one press opens the mic, the next closes it |
 | **M**     | mute / unmute the mic *without* ending the turn — the cough button. Offered only while the mic is open; the level meter dims and a 🔇 appears beside it |
-| *drag*    | ink — no key; while armed, dragging draws |
+| *drag*    | ink — no key; while armed, dragging draws. Strokes are **permanent** by default: they outlive the turn they were drawn in, and only **C** erases them |
 | **D**     | hold + drag a rectangle = region screenshot |
 | **S**     | whole-viewport screenshot (one press) |
-| **C**     | clear ink |
+| **C**     | clear ink — the only thing that does |
 | **J**     | [VS Code jump mode](#vs-code-jump-mode-double-click-to-source) — double-click an element, pick a jump target (its source, or a containing cell), land in VS Code; **J** (or **Esc**) resumes |
 | **V**     | share your screen — each sampled frame is a first-class screenshot (it joins the turn, and streams to the [prompt linter](./prompt-linting) when one is on); 🦉 smart / 🔫 continuous, toggled beside the ● badge |
 | **N**     | mute / unmute the *share*, separately from the mic. The clock keeps ticking and every frame is dropped; unmuting captures one frame at the next tick, so the model sees where the screen ended up. Offered only while sharing |
@@ -55,6 +55,29 @@ Minimalist by design — one hand, no chords:
 narrating over a frozen screen, are both ordinary things to want; one key for both would make them
 impossible. Neither mute survives its own subject: every talk window opens live, and every new
 share starts unmuted — a mute you forgot is a recording you thought you were making.
+
+### Ink: permanent by default, vanishing on request
+
+The pill carries an **ink chip** where the mode name used to be (it read `ink`, which is the mode
+you are in whenever you aren't in one of the two handovers — it never told you anything):
+
+- **✒️ permanent** — the default. Strokes stay until **C**. They survive sending a turn, and they
+  survive abandoning one with **Esc**. Ink is a drawing on the page, not a property of the turn
+  that happened to be open when you drew it: a diagram you built to talk over should still be
+  there while you talk about it.
+- **💨 vanishing** — click the chip. A slider appears beside it: **1–10 s**, defaulting to **6**.
+
+Vanishing ink does **not** dissolve steadily. For the first 80 % of a stroke's life nothing
+happens at all — a stroke that begins dying the moment you draw it looks sick, and hides the one
+moment worth seeing. Then it *charges*: still fully opaque, it thickens and heats toward white for
+a beat (~0.7 s at 6 s). Then it pops, most of the disappearance landing in the last instants
+(~0.5 s), stretching wider as it goes. A ship going to warp.
+
+Flipping ✒️ → 💨 restarts every stroke's clock, so ink that has been sitting there for two minutes
+gets the full fade you just asked for instead of vanishing in the next frame. Adjusting the
+*duration* does not restart them — a stroke drawn 2 s ago, under a fresh 8 s fade, is
+three-quarters opaque, not reborn. And a shot always freezes ink at full strength, mid-warp or
+not: it captures what you circled, not a half-erased ghost.
 
 **You never have to memorize this table.** While armed, a condensed **cheat sheet** floats above
 the pill showing exactly the keys live in the *current* mode — key caps with a pictogram each,

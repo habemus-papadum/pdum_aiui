@@ -177,6 +177,13 @@ export const HUD_STYLES = /* css */ `
   /* No reserved width: the pill hugs its content ("off" sits tight against
      the ✳ and the ?; the meter only appears while armed). */
   .mm-state { color: #e8e8ea; }
+  /* The ink chip (✒️ permanent / 💨 vanishing) stands where the word "ink"
+     used to, and its slider unfurls beside it only when ink actually fades. */
+  .mm-inkmode { background: none; border: none; padding: 0; font-size: 13px;
+    line-height: 1; cursor: pointer; }
+  .mm-inkmode[hidden] { display: none; }
+  .mm-inkfade { width: 52px; height: 12px; accent-color: #ff5c87; cursor: pointer; }
+  .mm-inkfade[hidden] { display: none; }
   /* The screen-share badge (realtime submode): a pulsing red dot beside the
      state label while the frame sampler is running; hidden (attr) when off. */
   .mm-video { color: #ff5c87; font-size: 11px; font-weight: 600; white-space: nowrap;

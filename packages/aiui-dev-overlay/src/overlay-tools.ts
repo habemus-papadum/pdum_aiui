@@ -74,6 +74,13 @@ export interface OverlayReport {
   };
   selection: { present: boolean };
   capture: { grant: "granted" | "none" };
+  /**
+   * The pen. `strokes` is what is currently drawn on the page — ink outlives
+   * the turn it was drawn in, so this is NOT derivable from `events`.
+   * `fadeSec` is 0 for permanent ink, else the seconds a stroke takes to
+   * vanish.
+   */
+  ink: { strokes: number; fadeSec: number };
 }
 
 /** Result of a `set_config` — mirrors the advanced panel's validate/apply/persist. */
