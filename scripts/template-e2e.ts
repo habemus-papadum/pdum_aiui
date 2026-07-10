@@ -32,13 +32,27 @@ const SLUG = "template-e2e-probe";
 const probeDir = join(repoRoot, "demos", SLUG);
 const lockfilePath = join(repoRoot, "pnpm-lock.yaml");
 
+/**
+ * Drop ANSI colour codes from captured output. The checks below MATCH on this
+ * text, and vitest colourises whenever `$CI` is set — so `Test Files  2 passed`
+ * arrives as `\e[2m Test Files \e[22m \e[1m\e[32m2 passed\e[39m`, where a
+ * `Test Files\s+2 passed` regex finds escape codes, not whitespace, and fails.
+ * Piping locally turns colour off, so this could only ever break in CI (it did).
+ * Built with `new RegExp` rather than a literal: an ESC in a regex literal is a
+ * control character Biome (rightly) flags.
+ */
+const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+const stripAnsi = (text: string): string => text.replace(ANSI_SGR, "");
+
 function run(command: string, args: string[], cwd = repoRoot): string {
   process.stdout.write(`\n$ ${command} ${args.join(" ")}\n`);
-  return execFileSync(command, args, {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "inherit"],
-  });
+  return stripAnsi(
+    execFileSync(command, args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "inherit"],
+    }),
+  );
 }
 
 function check(label: string, ok: boolean, detail = ""): void {
