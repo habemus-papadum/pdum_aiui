@@ -118,6 +118,10 @@ export interface Capture {
   shootViewport(): void;
   /** True while a screen share is active — feeds the HUD badge + the guard. */
   sharing(): boolean;
+  /** True while the share is muted (N): the clock ticks, the frames are dropped. */
+  videoMuted(): boolean;
+  /** N: mute/unmute the share. Unmuting repays one frame if any were dropped. */
+  toggleVideoMute(): void;
   /** End the share's sampling (the bounded-by-turn reconciler surface). */
   stopShare(): void;
   /** Window blur: hold sampling without ending the share. */
@@ -170,6 +174,9 @@ export function createCapture(deps: CaptureDeps): Capture {
   // counts `seq`/offset within one share. `captureVideoFrame` is a hoisted
   // declaration below.
   let videoShareOrdinal = 0;
+  // The share's mute (N). Transient, per-share state — not config: it is reset
+  // by every toggle-on, so a share can never start secretly blind.
+  let videoMuted = false;
   const cadenceMs = (): number =>
     deps.videoSampleIntervalMs ?? deps.videoFrameIntervalMs?.() ?? VIDEO_SAMPLE_INTERVAL_MS;
   const videoSampler = new VideoSampler<ShotPixels>({
@@ -207,7 +214,21 @@ export function createCapture(deps: CaptureDeps): Capture {
         deps.noteInteraction?.();
       }
     },
+    muted: () => videoMuted,
   });
+
+  // N: mute/unmute the share. Unmuting pays back exactly one frame — if any
+  // tick was actually swallowed — by noting an interaction, so the very next
+  // grid point captures and the model sees where the screen ended up. Smart
+  // mode would otherwise sit over a now-still screen and send nothing; the
+  // note costs continuous mode nothing (it captures regardless).
+  const toggleVideoMute = (): void => {
+    videoMuted = !videoMuted;
+    if (!videoMuted && videoSampler.takeMutedSkips()) {
+      deps.noteInteraction?.();
+    }
+    renderHud();
+  };
 
   let shooting = false;
 
@@ -264,6 +285,10 @@ export function createCapture(deps: CaptureDeps): Capture {
       renderHud();
       return;
     }
+    // A new share is never born muted: N is a within-share act, and a share
+    // that silently inherits the last one's mute is a share you think is
+    // recording. (Same rule the mic follows — see talk.ts's talkStart.)
+    videoMuted = false;
     // The ordinal is consumed even if the grant is denied below — ordinals
     // only need to be unique, and the trace's on→off pair explains the gap.
     videoShareOrdinal += 1;
@@ -325,6 +350,8 @@ export function createCapture(deps: CaptureDeps): Capture {
     cancelShot,
     shootViewport,
     sharing: () => videoSampler.sharing,
+    videoMuted: () => videoMuted,
+    toggleVideoMute,
     stopShare: () => videoSampler.stop(),
     pauseShare: () => videoSampler.pause(),
     resumeShare: () => videoSampler.resume(),

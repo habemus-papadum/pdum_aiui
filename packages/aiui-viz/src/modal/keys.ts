@@ -50,6 +50,16 @@ export interface KeyHint {
   /** Optional pictogram for the condensed cheat sheet (an emoji works). */
   icon?: string;
   /**
+   * This row's mode/state is currently ENGAGED — the share is sampling, the
+   * mic is muted, tweak mode has the pointer. Condensed surfaces highlight
+   * such a cap, so "what is on right now" is readable at a glance instead of
+   * being inferred from a label that only appears on hover.
+   *
+   * A binding reports it from its own `hint(state)`, which keeps the fact next
+   * to the binding that owns it — the same reason the hint column exists.
+   */
+  active?: boolean;
+  /**
    * The real `KeyboardEvent.key` a UI tap synthesizes to EXECUTE this row.
    * {@link keyHints} fills it from the binding's first key; a synthetic
    * gesture row (e.g. "drag") has none and renders non-clickable.

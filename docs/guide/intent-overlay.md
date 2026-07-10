@@ -35,25 +35,40 @@ Minimalist by design — one hand, no chords:
 | Key       | Action |
 | --------- | ------ |
 | `` ` ``   | arm / disarm the overlay (also the **✳** button on the pill) |
-| **Space** | talk — *hold*-to-talk (default) or press-to-*toggle*, per config |
+| **Space** | talk — push-to-talk, always a *hold* (toggling lives on **H**) |
+| **H**     | hands-free talk — one press opens the mic, the next closes it |
+| **M**     | mute / unmute the mic *without* ending the turn — the cough button. Offered only while the mic is open; the level meter dims and a 🔇 appears beside it |
 | *drag*    | ink — no key; while armed, dragging draws |
 | **D**     | hold + drag a rectangle = region screenshot |
 | **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
 | **J**     | [VS Code jump mode](#vs-code-jump-mode-double-click-to-source) — double-click an element, pick a jump target (its source, or a containing cell), land in VS Code; **J** (or **Esc**) resumes |
 | **V**     | share your screen — each sampled frame is a first-class screenshot (it joins the turn, and streams to the [prompt linter](./prompt-linting) when one is on); 🦉 smart / 🔫 continuous, toggled beside the ● badge |
+| **N**     | mute / unmute the *share*, separately from the mic. The clock keeps ticking and every frame is dropped; unmuting captures one frame at the next tick, so the model sees where the screen ended up. Offered only while sharing |
 | **K**     | quick config — the [strip](#quick-config-the-k-strip): tier digits, the **L** linter chip, save/reset, the editor |
 | **T**     | [tweak mode](#tweak-mode-adjust-the-app-mid-turn) — hand the pointer and keyboard back to the app mid-turn; **T** (or **Esc**) resumes |
-| **H**     | help — the whole keymap as a table (the pill's **?** icon is the mouse path to the same) |
+| **?**     | help — the whole keymap as a table (the pill's **?** icon is the mouse path to the same) |
 | **Enter** | send — finalize and lower the turn |
 | **Esc**   | step out one level (see the escape ladder below) |
+
+**The two mutes are two keys on purpose.** Muting the screen while you keep narrating, and
+narrating over a frozen screen, are both ordinary things to want; one key for both would make them
+impossible. Neither mute survives its own subject: every talk window opens live, and every new
+share starts unmuted — a mute you forgot is a recording you thought you were making.
 
 **You never have to memorize this table.** While armed, a condensed **cheat sheet** floats above
 the pill showing exactly the keys live in the *current* mode — key caps with a pictogram each,
 labels on hover — so a handover mode shows only its two keys, the jump picker its four, and so
-on. Both the cheat sheet and the **H** table are generated from the same declarative binding
+on. Both the cheat sheet and the **?** table are generated from the same declarative binding
 rows the key resolver reads (the modal kit's hint column), so what they show and what the keys
 do can never drift apart.
+
+**A lit cap means that mode is on.** Any binding whose state is currently *engaged* — the share
+is sampling, the mic is muted, tweak mode has the pointer — renders with a green ring
+(`KeyHint.active`, reported by the binding itself). So "what of mine is switched on right now" is
+readable at a glance rather than inferred from a label you have to hover to see. Green because
+nothing else in the sheet is: the pill's ring is mode-coloured and the level meter is pink, so a
+lit cap never reads as *recording*.
 
 K is deliberately the only key configuration costs this layer: the tier digits, save, reset,
 and the advanced editor all live *inside* the strip it opens, which shows its own bindings.

@@ -390,3 +390,84 @@ describe("keyCommand: the jump-picker layer (vscode mode's double-click popup)",
     ).toBeUndefined();
   });
 });
+
+describe("mute keys (M mic, N share) and the engaged-mode `active` flag", () => {
+  const hintFor = (state: KeyState, key: string) =>
+    intentKeyHints(state).find((h) => h.key === key);
+
+  it("M is offered only while the mic is open, and toggles without ending the turn", () => {
+    // Muting nothing is a confusing no-op, so M stays the page's when silent.
+    expect(keyCommand(base, "m", "down", false)).toBeUndefined();
+    expect(hintFor(base, "M")).toBeUndefined();
+
+    const talking: KeyState = { ...base, talking: true };
+    expect(keyCommand(talking, "m", "down", false)).toEqual({ cmd: "mic-mute-toggle" });
+    expect(keyCommand(talking, "M", "down", false)).toEqual({ cmd: "mic-mute-toggle" });
+    // A held M must not machine-gun the toggle.
+    expect(keyCommand(talking, "m", "down", true)).toBeUndefined();
+    // The SAME key unmutes — it is a toggle, not a "mute" verb.
+    expect(keyCommand({ ...talking, micMuted: true }, "m", "down", false)).toEqual({
+      cmd: "mic-mute-toggle",
+    });
+  });
+
+  it("N is offered only while sharing, and is a different key from M", () => {
+    expect(keyCommand(base, "n", "down", false)).toBeUndefined();
+    expect(hintFor(base, "N")).toBeUndefined();
+
+    // Sharing but silent: N works, M does not. The two mutes are independent —
+    // that separation is the whole reason they are two keys.
+    const sharing: KeyState = { ...base, sharing: true };
+    expect(keyCommand(sharing, "n", "down", false)).toEqual({ cmd: "video-mute-toggle" });
+    expect(keyCommand(sharing, "m", "down", false)).toBeUndefined();
+
+    // Talking but not sharing: M works, N does not.
+    const talking: KeyState = { ...base, talking: true };
+    expect(keyCommand(talking, "m", "down", false)).toEqual({ cmd: "mic-mute-toggle" });
+    expect(keyCommand(talking, "n", "down", false)).toBeUndefined();
+  });
+
+  it("lights the cap of every engaged mode, and only those", () => {
+    // Nothing engaged: no lit caps at all.
+    expect(intentKeyHints(base).filter((h) => h.active)).toEqual([]);
+
+    // Talking lights H; muting the mic lights M too.
+    expect(hintFor({ ...base, talking: true }, "H")?.active).toBe(true);
+    expect(hintFor({ ...base, talking: true }, "M")?.active).toBe(false);
+    expect(hintFor({ ...base, talking: true, micMuted: true }, "M")?.active).toBe(true);
+
+    // Sharing lights V; muting the share lights N too.
+    expect(hintFor({ ...base, sharing: true }, "V")?.active).toBe(true);
+    expect(hintFor({ ...base, sharing: true }, "N")?.active).toBe(false);
+    expect(hintFor({ ...base, sharing: true, videoMuted: true }, "N")?.active).toBe(true);
+    // ...and an un-shared V is dark, even though the row is present.
+    expect(hintFor(base, "V")?.active).toBe(false);
+
+    // The handover modes light their own entrance key — those layers only
+    // exist inside the mode they name.
+    expect(hintFor({ ...base, mode: "tweak" }, "T")?.active).toBe(true);
+    expect(hintFor({ ...base, mode: "vscode" }, "J")?.active).toBe(true);
+    expect(hintFor(base, "T")?.active).toBeUndefined(); // ink-mode entrance: unlit
+  });
+
+  it("gives jump mode a colour-bearing emoji — a bare ↗ is invisible in dark mode", () => {
+    for (const icon of [
+      hintFor(base, "J")?.icon,
+      hintFor({ ...base, mode: "vscode" }, "J")?.icon,
+      hintFor({ ...base, mode: "vscode", pickerOpen: true }, "⏎")?.icon,
+    ]) {
+      expect(icon).toBeDefined();
+      expect(icon).not.toBe("↗");
+    }
+  });
+
+  it("documents both mute keys in the help table (they are invisible to the base state)", () => {
+    const sections = keymapHelp();
+    const section = (title: string) => sections.find((s) => s.title === title);
+    expect(section("while talking")?.hints.map((h) => h.key)).toContain("M");
+    expect(section("while sharing")?.hints.map((h) => h.key)).toContain("N");
+    // The base "armed" section must NOT list them — they aren't live there.
+    expect(section("armed")?.hints.map((h) => h.key)).not.toContain("M");
+    expect(section("armed")?.hints.map((h) => h.key)).not.toContain("N");
+  });
+});

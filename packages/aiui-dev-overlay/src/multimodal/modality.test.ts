@@ -2063,3 +2063,115 @@ describe("multimodalModality: shift-click jump picker (no jump mode needed)", ()
     stamped.remove();
   });
 });
+
+describe("multimodalModality: mute (M the mic, N the share — separately)", () => {
+  it("N mutes the share; unmuting repays exactly one frame at the next grid point", async () => {
+    const restore = stubCapture();
+    try {
+      const { handle, sent } = mountLive();
+      key("keydown", "`"); // arm
+      key("keydown", "v"); // share on — the forced first frame eats the keydowns
+      await wait(120);
+      expect(frameAttachments(sent)).toHaveLength(1);
+
+      // Mute. (The N keydown is itself an interaction — the next, muted, tick
+      // consumes it and throws it away, which is exactly the debt under test.)
+      key("keydown", "n");
+      await wait(100); // five cadences, muted
+      expect(frameAttachments(sent)).toHaveLength(1); // the clock ran, nothing shipped
+      expect(q<HTMLElement>(handle, ".mm-video")?.classList.contains("muted")).toBe(true);
+
+      // Unmute WITHOUT a keypress, by tapping the cap: a click is not one of
+      // the interaction monitor's events, so the ONLY thing that can produce a
+      // frame here is the skipped-frame repayment.
+      const cap = q<HTMLButtonElement>(handle, '.mm-keycap[aria-label="unmute the share"]');
+      expect(cap).toBeTruthy();
+      expect(cap.getAttribute("aria-pressed")).toBe("true"); // lit while muted
+      cap.click();
+      await wait(100);
+
+      // Exactly one: the debt is one frame, not a resumed stream (the screen
+      // has been still this whole time, and smart mode owes nothing more).
+      expect(frameAttachments(sent)).toHaveLength(2);
+      expect(q<HTMLElement>(handle, ".mm-video")?.classList.contains("muted")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("M mutes the mic without ending the turn, and the meter says so", async () => {
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`"); // arm
+    key("keydown", "h"); // hands-free: the mic window opens
+    await wait(20);
+
+    const meter = q<HTMLElement>(handle, ".mm-meter");
+    const badge = q<HTMLElement>(handle, ".mm-mic-mute");
+    expect(meter.classList.contains("muted")).toBe(false);
+    expect(badge.hidden).toBe(true);
+
+    key("keydown", "m");
+    await wait(120); // the meter's paint loop runs on its own 80ms timer
+    expect(meter.classList.contains("muted")).toBe(true);
+    expect(badge.hidden).toBe(false);
+    // The window is STILL open — mute is a cough button, not a stop button.
+    expect(q<HTMLElement>(handle, ".mm-state")?.textContent).toContain("REC");
+    expect(
+      q<HTMLButtonElement>(handle, '.mm-keycap[aria-label="unmute the mic"]').getAttribute(
+        "aria-pressed",
+      ),
+    ).toBe("true");
+
+    key("keydown", "m"); // the same key unmutes
+    await wait(120);
+    expect(meter.classList.contains("muted")).toBe(false);
+    expect(badge.hidden).toBe(true);
+  });
+
+  it("every talk window opens live — a mute never survives into the next one", async () => {
+    const { handle } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
+    key("keydown", "`");
+    key("keydown", "h"); // window 1
+    await wait(20);
+    key("keydown", "m"); // muted
+    await wait(120);
+    expect(q<HTMLElement>(handle, ".mm-mic-mute").hidden).toBe(false);
+
+    key("keydown", "h"); // close window 1 while still muted
+    await wait(20);
+    key("keydown", "h"); // window 2
+    await wait(120);
+    // Inheriting the mute here is the worst failure this feature can have:
+    // you talk, nothing is heard, and the badge sits in a corner.
+    expect(q<HTMLElement>(handle, ".mm-mic-mute").hidden).toBe(true);
+    expect(q<HTMLElement>(handle, ".mm-meter").classList.contains("muted")).toBe(false);
+  });
+
+  it("the two mutes are independent — M does not touch the share, N does not touch the mic", async () => {
+    const restore = stubCapture();
+    try {
+      const { handle } = mountLive();
+      key("keydown", "`");
+      key("keydown", "v"); // sharing
+      key("keydown", "h"); // and talking
+      await wait(120);
+
+      key("keydown", "n"); // mute the SHARE only
+      await wait(120);
+      expect(q<HTMLElement>(handle, ".mm-video").classList.contains("muted")).toBe(true);
+      expect(q<HTMLElement>(handle, ".mm-mic-mute").hidden).toBe(true); // mic untouched
+
+      key("keydown", "m"); // now mute the MIC too
+      await wait(120);
+      expect(q<HTMLElement>(handle, ".mm-mic-mute").hidden).toBe(false);
+      expect(q<HTMLElement>(handle, ".mm-video").classList.contains("muted")).toBe(true);
+
+      key("keydown", "n"); // unmute the share; the mic stays muted
+      await wait(120);
+      expect(q<HTMLElement>(handle, ".mm-video").classList.contains("muted")).toBe(false);
+      expect(q<HTMLElement>(handle, ".mm-mic-mute").hidden).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+});

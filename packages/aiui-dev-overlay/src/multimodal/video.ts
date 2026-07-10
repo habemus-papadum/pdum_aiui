@@ -118,6 +118,14 @@ export interface VideoSamplerDeps<T = Uint8Array> {
    * Omit where the gate consumes nothing (continuous mode) — there is no debt.
    */
   rearm?(): void;
+  /**
+   * Is the share muted (N)? Consulted LAST, after every other gate has already
+   * said "take this frame" — so muting is a pure veto on delivery and changes
+   * nothing about how the rest of the machine decides. A vetoed tick is
+   * recorded (see {@link VideoSampler.takeMutedSkips}) so unmuting can repay
+   * the frame it owes.
+   */
+  muted?(): boolean;
   /** Clock seam (`Date.now`). */
   now?(): number;
 }
@@ -146,6 +154,8 @@ export class VideoSampler<T = Uint8Array> {
   private startedAt = 0;
   /** The next tick bypasses `shouldCapture` (set by `start()`; see the class doc). */
   private forceNext = false;
+  /** A tick was vetoed by the mute since the flag was last taken. */
+  private mutedSkips = false;
 
   constructor(deps: VideoSamplerDeps<T>) {
     this.deps = deps;
@@ -170,7 +180,20 @@ export class VideoSampler<T = Uint8Array> {
     this.seq = 0;
     this.startedAt = this.now();
     this.forceNext = true;
+    this.mutedSkips = false;
     this.arm();
+  }
+
+  /**
+   * Did the mute swallow at least one frame since this was last called? Reads
+   * **and clears**, like the interaction gate it feeds: the caller (unmute)
+   * converts one outstanding debt into one frame, and a second unmute with
+   * nothing skipped in between must not buy a second one.
+   */
+  takeMutedSkips(): boolean {
+    const skipped = this.mutedSkips;
+    this.mutedSkips = false;
+    return skipped;
   }
 
   /** End the share entirely (toggle off / thread-close / disarm). */
@@ -244,6 +267,15 @@ export class VideoSampler<T = Uint8Array> {
     const forced = this.forceNext;
     this.forceNext = false;
     if (!forced && !changed) {
+      return;
+    }
+    // The LAST word, deliberately: every other gate has now agreed to take
+    // this frame, and mute simply throws it away. Nothing is given back here
+    // — not the gate, not `forceNext` — because the debt is settled in one
+    // place instead: unmuting sees `takeMutedSkips()` and notes an
+    // interaction, which buys exactly one frame at the next grid point.
+    if (this.deps.muted?.() === true) {
+      this.mutedSkips = true;
       return;
     }
     this.inFlight = true;

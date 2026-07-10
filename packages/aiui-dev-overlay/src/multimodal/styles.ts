@@ -182,8 +182,17 @@ export const HUD_STYLES = /* css */ `
   .mm-video { color: #ff5c87; font-size: 11px; font-weight: 600; white-space: nowrap;
     animation: mm-video-pulse 1.6s ease-in-out infinite; }
   .mm-video[hidden] { display: none; }
+  /* Muted (N): the share is on but blind. Stop the pulse and drop to slate —
+     the pulse is what says "frames are leaving", so it must not keep saying it. */
+  .mm-video.muted { color: #7a8090; animation: none; }
   @keyframes mm-video-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .mm-meter { border-radius: 3px; background: #0f1117; }
+  /* Muted (M): the bar is dimmed and its fill goes cold (the draw loop pins the
+     level at 0 and swaps the hot pink for slate). Dimming alone would read as
+     "you happen to be silent", so the 🔇 beside it says which. */
+  .mm-meter.muted { opacity: 0.4; }
+  .mm-mic-mute { font-size: 11px; line-height: 1; }
+  .mm-mic-mute[hidden] { display: none; }
   /* The share's capture-mode toggle (🦉 smart / 🔫 continuous) — beside the
      cadence slider, only visible while sharing. */
   .mm-vmode { background: none; border: none; padding: 0; font-size: 12px;

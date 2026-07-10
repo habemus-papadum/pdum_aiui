@@ -59,6 +59,7 @@ import {
   intentKeyHints,
   isTypingTarget,
   type KeyCommand,
+  type KeyState,
   keyCommand,
   keymapHelp,
   TRANSCRIPTION_ENGINES,
@@ -357,6 +358,7 @@ export function multimodalModality(
         <input class="mm-fps" type="range" min="0" max="4" step="1" hidden
           title="frame cadence" />
         <canvas class="mm-meter" width="60" height="14"></canvas>
+        <span class="mm-mic-mute" hidden title="mic muted — M unmutes">🔇</span>
         <span class="mm-speaker" hidden></span>`;
       hudSlot.container.append(hud);
 
@@ -369,6 +371,26 @@ export function multimodalModality(
       // bounding-box highlight — same dispatch-routing shape as the strip.
       const picker = new JumpPicker((command) => dispatch(command));
       layers.append(picker.root, picker.highlight);
+
+      /**
+       * The keymap's view of the world — ONE builder, read by all three
+       * consumers: the real keydown handler, the cheat sheet's rows, and the
+       * cap-tap that synthesizes a key. They were three copies of this object
+       * literal, which is precisely how a new field (M's `micMuted`, N's
+       * `sharing`) reaches the displayed keymap while the working keymap still
+       * says "pass" — the drift the hint column exists to prevent.
+       */
+      const keyState = (): Omit<KeyState, "typing"> => ({
+        armed: engine.armed,
+        mode: engine.mode,
+        talking: engine.talking,
+        talkMode: config.talkMode,
+        configOpen: strip.open,
+        pickerOpen: picker.open,
+        sharing: capture.sharing(),
+        micMuted: talk.micMuted(),
+        videoMuted: capture.videoMuted(),
+      });
       // The always-present condensed cheat sheet (renderHud re-asserts it
       // from the live keymap rows — see keymap-ui.tsx). It mounts in the
       // widget's BELOW-PILL slot: under the pill, inside the draggable
@@ -384,15 +406,7 @@ export function multimodalModality(
           dispatch({ cmd: "arm-toggle" });
           return;
         }
-        const state = {
-          armed: engine.armed,
-          mode: engine.mode,
-          talking: engine.talking,
-          talkMode: config.talkMode,
-          typing: false,
-          configOpen: strip.open,
-          pickerOpen: picker.open,
-        };
+        const state = { ...keyState(), typing: false };
         const down = keyCommand(state, key, "down", false);
         if (down !== undefined && down.cmd !== "swallow") {
           dispatch(down);
@@ -455,6 +469,7 @@ export function multimodalModality(
         ctx.setStatus(`capture mode → ${vmodeLabel(next)} (session only)`);
       });
       const meter = hud.querySelector<HTMLCanvasElement>(".mm-meter");
+      const micMuteBadge = hud.querySelector<HTMLSpanElement>(".mm-mic-mute");
       const speakerLabel = hud.querySelector<HTMLSpanElement>(".mm-speaker");
       armButton?.addEventListener("click", () => engine.setArmed(!engine.armed));
 
@@ -639,6 +654,16 @@ export function multimodalModality(
         }
         if (videoBadge) {
           videoBadge.hidden = !capture.sharing();
+          const muted = capture.videoMuted();
+          videoBadge.classList.toggle("muted", muted);
+          videoBadge.title = muted
+            ? "share muted — frames are dropped; N unmutes"
+            : "sampling the screen — N mutes";
+        }
+        if (micMuteBadge) {
+          // Only meaningful next to a live meter: muted-and-not-talking is not
+          // a state the mic can be in (every window opens unmuted).
+          micMuteBadge.hidden = !(engine.talking && talk.micMuted());
         }
         if (vmodeButton) {
           vmodeButton.hidden = !capture.sharing();
@@ -657,19 +682,16 @@ export function multimodalModality(
         }
         if (meter) {
           meter.hidden = !engine.armed; // an idle meter is just a gap in the pill
+          // The muted LOOK is state, so it is set here and not in the paint
+          // loop: that loop bails when there is no 2d context (a headless
+          // canvas), and a mute that only shows up if the pixels happen to be
+          // paintable is not an indicator.
+          meter.classList.toggle("muted", engine.talking && talk.micMuted());
         }
         // The condensed cheat sheet: the CURRENT state's live keymap rows,
         // hidden while disarmed (the pill's ? teaches the off state) and
         // while the config strip is open (it displays its own bindings).
-        const hints = intentKeyHints({
-          armed: engine.armed,
-          mode: engine.mode,
-          talking: engine.talking,
-          talkMode: config.talkMode,
-          typing: false,
-          configOpen: strip.open,
-          pickerOpen: picker.open,
-        });
+        const hints = intentKeyHints({ ...keyState(), typing: false });
         // Ink's drag gesture is pointer-side, not a key — give it a row
         // whenever ink owns the pointer.
         if (mode === "ready" || mode === "composing" || mode === "talking") {
@@ -798,9 +820,15 @@ export function multimodalModality(
         if (!meterCtx || !meter) {
           return;
         }
+        // Muted: pin the bar at its resting stub and paint it cold, so a muted
+        // mic can never look like a quiet one. (A disabled track already reads
+        // ~0 through the analyser; pinning it makes that a promise, not a
+        // coincidence.) renderHud owns the .muted class that dims the canvas,
+        // and the 🔇 beside it names the reason.
+        const muted = engine.talking && talk.micMuted();
         meterCtx.clearRect(0, 0, meter.width, meter.height);
-        const level = engine.talking ? talk.level() : 0;
-        meterCtx.fillStyle = engine.talking ? "#ff5c87" : "#3a4152";
+        const level = engine.talking && !muted ? talk.level() : 0;
+        meterCtx.fillStyle = engine.talking && !muted ? "#ff5c87" : "#3a4152";
         meterCtx.fillRect(0, 0, Math.max(2, level * meter.width), meter.height);
       }, 80);
 
@@ -1006,6 +1034,27 @@ export function multimodalModality(
             // ever saw.) The linter, when on, receives them like any shot.
             void capture.toggleVideoShare();
             break;
+          case "mic-mute-toggle": {
+            // The keymap only offers M while talking, so the window is open.
+            const muted = !talk.micMuted();
+            talk.setMicMuted(muted);
+            ctx.setStatus(
+              muted
+                ? "mic muted — the turn keeps running; M unmutes"
+                : "mic live — M mutes without ending the turn",
+            );
+            break;
+          }
+          case "video-mute-toggle":
+            // Owns its own status: the toggle repays a skipped frame, and
+            // whether it did is worth saying (renderHud runs inside).
+            capture.toggleVideoMute();
+            ctx.setStatus(
+              capture.videoMuted()
+                ? "share muted — the clock runs, frames are dropped; N unmutes"
+                : "share live — the next grid point captures",
+            );
+            break;
           case "send":
             engine.send();
             ink.clear();
@@ -1024,13 +1073,7 @@ export function multimodalModality(
         }
         renderHud();
       };
-      let uninstallKeys = bindKeys(
-        config,
-        () => engine,
-        () => strip.open,
-        () => picker.open,
-        dispatch,
-      );
+      let uninstallKeys = bindKeys(config, keyState, dispatch);
 
       // ── advanced config panel (gear → raw JSON over the full effective config) ─
       // Apply mutates the live config in place: dynamic reads (mock cadence, ink
@@ -1049,13 +1092,7 @@ export function multimodalModality(
         Object.assign(config, effective);
         Object.assign(engine.settings, effective);
         uninstallKeys();
-        uninstallKeys = bindKeys(
-          config,
-          () => engine,
-          () => strip.open,
-          () => picker.open,
-          dispatch,
-        );
+        uninstallKeys = bindKeys(config, keyState, dispatch);
         renderLabels();
         renderHud();
       };
@@ -1397,9 +1434,7 @@ function armKeyLabel(config: IntentPipelineConfig): string {
  */
 function bindKeys(
   config: IntentPipelineConfig,
-  getEngine: () => Engine,
-  isConfigOpen: () => boolean,
-  isPickerOpen: () => boolean,
+  getKeyState: () => Omit<KeyState, "typing">,
   dispatch: (command: KeyCommand) => void,
 ): () => void {
   const armKey = config.arming?.key ?? "`";
@@ -1418,25 +1453,12 @@ function bindKeys(
       // double-fire against a rebind.
       return;
     }
-    const engine = getEngine();
-    const command = keyCommand(
-      {
-        armed: engine.armed,
-        mode: engine.mode,
-        talking: engine.talking,
-        talkMode: config.talkMode,
-        typing: false,
-        configOpen: isConfigOpen(),
-        pickerOpen: isPickerOpen(),
-      },
-      event.key,
-      phase,
-      event.repeat,
-    );
+    const state: KeyState = { ...getKeyState(), typing: false };
+    const command = keyCommand(state, event.key, phase, event.repeat);
     if (command && command.cmd !== "arm-toggle") {
       event.preventDefault();
       event.stopPropagation();
-      if (!(command.cmd === "talk-start" && engine.talking)) {
+      if (!(command.cmd === "talk-start" && state.talking)) {
         dispatch(command);
       }
     }

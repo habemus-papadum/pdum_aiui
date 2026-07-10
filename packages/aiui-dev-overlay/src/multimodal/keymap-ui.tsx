@@ -40,10 +40,22 @@ const Cap = (props: {
   // push-to-talk Space — a mouse can't hold a cap); undefined means the row
   // simply has no key (a gesture like drag). Both render inert.
   const tappable = () => !!props.hint.tapKey && props.onTap !== undefined;
+  // `active` is the binding's own report that its mode/state is engaged (the
+  // share is sampling, the mic is muted). It reads as a lit cap — and as
+  // aria-pressed, because that is exactly what these caps are: toggles.
+  const classes = () =>
+    ["mm-keycap", tappable() ? "" : "inert", props.hint.active ? "active" : ""]
+      .filter(Boolean)
+      .join(" ");
   return (
     <button
       type="button"
-      class={tappable() ? "mm-keycap" : "mm-keycap inert"}
+      class={classes()}
+      // The cap renders a bare emoji, which is no name at all to a screen
+      // reader (and nothing for a test to aim at). The label already exists —
+      // it is what the hover tooltip shows.
+      aria-label={props.hint.label}
+      aria-pressed={props.hint.active ? "true" : undefined}
       ref={(node: HTMLButtonElement) => (el = node)}
       onMouseEnter={() => props.onHover(props.hint, el)}
       onMouseLeave={() => props.onHover(undefined)}
@@ -80,6 +92,12 @@ export const CHEAT_STYLES = /* css */ `
     width: 24px; height: 22px; border: 1px solid transparent; border-radius: 6px;
     background: none; padding: 0; cursor: pointer; }
   .mm-keycap:hover { border-color: #3a4152; background: #232936; }
+  /* An ENGAGED mode reads as a lit cap. Green because the sheet has no other
+     green — the ring is mode-coloured and the meter is pink — so "something of
+     yours is switched on" never collides with "something is recording". Ordered
+     after :hover (equal specificity) so a hovered active cap stays lit. */
+  .mm-keycap.active { border-color: #4ade80; background: #16261d; }
+  .mm-keycap.active:hover { border-color: #6ee7a0; background: #1b2f23; }
   .mm-keycap.inert { cursor: default; }
   .mm-keycap kbd, .mm-cheat-tip kbd { display: inline-block; min-width: 12px; text-align: center;
     border: 1px solid #3a4152; border-bottom-width: 2px; border-radius: 4px;

@@ -39,6 +39,19 @@ export class AudioCapture {
     }
   }
 
+  /**
+   * Mute/unmute the mic by DISABLING the track rather than tearing capture
+   * down: a disabled track keeps producing samples, all of them silent, so the
+   * MediaRecorder run (and the segment it belongs to) survives the mute
+   * untouched — no re-acquisition, no gap in the recording's timeline. The
+   * analyser sees that silence, so {@link level} falls to zero on its own.
+   */
+  setMuted(muted: boolean): void {
+    for (const track of this.stream?.getAudioTracks() ?? []) {
+      track.enabled = !muted;
+    }
+  }
+
   /** 0..1 RMS-ish level for the meter; 0 when no stream. */
   level(): number {
     if (!this.analyser || !this.levelData) {
@@ -118,6 +131,13 @@ export interface PcmSource {
   stop(): Promise<void>;
   /** 0..1 RMS-ish level for the meter; 0 when not capturing. */
   level(): number;
+  /**
+   * Mute/unmute the mic mid-stream (M). Optional: a test fake that never
+   * acquires a real track has nothing to mute. Frames keep flowing while
+   * muted — they are simply silent — so the realtime session's audio timeline
+   * stays continuous and the segment keeps its place in the turn.
+   */
+  setMuted?(muted: boolean): void;
   /** Release the mic + audio graph. */
   dispose(): void;
 }
@@ -270,6 +290,13 @@ export class WorkletPcmSource implements PcmSource {
       sum += centered * centered;
     }
     return Math.min(1, Math.sqrt(sum / this.levelData.length) * 3);
+  }
+
+  /** See {@link PcmSource.setMuted}: silence the track, keep the frames. */
+  setMuted(muted: boolean): void {
+    for (const track of this.stream?.getAudioTracks() ?? []) {
+      track.enabled = !muted;
+    }
   }
 
   private teardown(): void {

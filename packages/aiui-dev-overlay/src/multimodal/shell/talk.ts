@@ -64,6 +64,14 @@ export interface TalkDeps {
 export interface Talk {
   /** The current mic level (whichever lane is live) — feeds the HUD meter. */
   level(): number;
+  /**
+   * Whether the mic is muted (M). The talk window is still open and the
+   * segment still running — the microphone is just deaf. Always false at the
+   * start of a window.
+   */
+  micMuted(): boolean;
+  /** M: mute/unmute the open window's mic, whichever lane is carrying it. */
+  setMicMuted(muted: boolean): void;
   /** Whether the main loop still wants the mic. */
   listening(): boolean;
   /** Space pressed: start the main listening loop. */
@@ -131,6 +139,22 @@ export function createTalk(deps: TalkDeps): Talk {
   const listening = (): boolean => mainListening;
   const level = (): number => (usesPcmStream(config()) ? (pcmSource?.level() ?? 0) : audio.level());
 
+  // ── mute (M) ──────────────────────────────────────────────────────────────
+  // Mute is a property of the MIC, not of a lane, so it is applied to BOTH:
+  // which one is carrying a given window depends on the config read at talk
+  // time, and muting the lane that happens to be idle costs nothing. (Each
+  // window opens unmuted — see talkStart — so the lazily-built PCM source is
+  // never born owing a mute.)
+  let micMuted = false;
+  const applyMute = (): void => {
+    audio.setMuted(micMuted);
+    pcmSource?.setMuted?.(micMuted);
+  };
+  const setMicMuted = (muted: boolean): void => {
+    micMuted = muted;
+    applyMute();
+  };
+
   // Main-loop listening (Space pressed/toggled): one talk window per gesture.
   const startMainListening = (): void => {
     mainListening = true;
@@ -162,6 +186,11 @@ export function createTalk(deps: TalkDeps): Talk {
 
   // ── talk plumbing (mock local / channel upload / realtime stream) ─────────
   async function talkStart(): Promise<void> {
+    // Every talk window opens LIVE. Mute is a within-window act (the cough
+    // button), and a mute silently inherited by the next window is the worst
+    // failure this feature can have: you talk, nothing is heard, and the HUD
+    // said so in a corner you weren't looking at.
+    micMuted = false;
     // Barge-in: talking over a playing ack/reply cuts it off locally (the
     // channel cancels the upstream response in parallel).
     deps.bargeIn();
@@ -320,6 +349,8 @@ export function createTalk(deps: TalkDeps): Talk {
 
   return {
     level,
+    micMuted: () => micMuted,
+    setMicMuted,
     listening,
     startMainListening,
     stopMainListening,

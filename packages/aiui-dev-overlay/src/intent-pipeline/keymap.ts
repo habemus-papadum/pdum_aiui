@@ -68,6 +68,15 @@ export { isTypingTarget };
  * test/offline preset, reachable through the advanced editor (G). */
 export const ENGINE_DIGITS = TRANSCRIPTION_ENGINES.length;
 
+/**
+ * Jump mode's pictogram. It was `↗`, a TEXT-presentation glyph: it has no
+ * colour of its own, so it renders in the surrounding text colour and all but
+ * disappears against the cheat sheet's dark chrome. Every other cap is a real
+ * emoji, which carries its own palette and reads at 13px on any background —
+ * so this is one too. (A kangaroo jumps; swap it if a better jumper turns up.)
+ */
+const JUMP_ICON = "🦘";
+
 export interface KeyState {
   armed: boolean;
   mode: Mode;
@@ -81,6 +90,12 @@ export interface KeyState {
   configOpen?: boolean;
   /** True while the jump picker is open (vscode mode's double-click popup). */
   pickerOpen?: boolean;
+  /** True while the screen share is sampling (V) — gates N, highlights V. */
+  sharing?: boolean;
+  /** True while the mic is muted (M) — the talk window stays open, silent. */
+  micMuted?: boolean;
+  /** True while the share is muted (N) — ticks fire, frames are dropped. */
+  videoMuted?: boolean;
 }
 
 export type KeyCommand =
@@ -113,7 +128,21 @@ export type KeyCommand =
   | { cmd: "jump-commit"; index?: number }
   | { cmd: "jump-close" } // Esc while the picker is open: dismiss it, stay in jump mode
   | { cmd: "help-toggle" } // ?: open/close the help panel (the keymap as a table)
-  | { cmd: "video-toggle" } // V: toggle the realtime submode's screen share (dispatch gates on submode)
+  | { cmd: "video-toggle" } // V: toggle the screen share
+  /**
+   * M: mute/unmute the mic WITHOUT ending the talk window — the cough button.
+   * The segment keeps running and keeps its place in the turn; the microphone
+   * simply stops hearing (the track is disabled, so the lane records silence
+   * rather than tearing down and re-acquiring capture mid-sentence).
+   */
+  | { cmd: "mic-mute-toggle" }
+  /**
+   * N: mute/unmute the screen SHARE, separately from the mic — you routinely
+   * want one without the other (narrating over a frozen screen; showing a
+   * screen while you say nothing). The share stays on, its clock keeps
+   * ticking, and each tick drops its frame; unmuting owes one frame back.
+   */
+  | { cmd: "video-mute-toggle" }
   | { cmd: "send" }
   | { cmd: "step-out" }
   | { cmd: "config-toggle" }
@@ -217,7 +246,9 @@ const tweakLayer: KeyLayer<KeyState, KeyCommand> = {
     {
       keys: ["t", "T"],
       down: onPress({ cmd: "tweak-toggle" }),
-      hint: { key: "T", label: "resume the turn", icon: "🔧" },
+      // This layer is only reachable IN tweak mode, so the cap is lit whenever
+      // it is on screen at all — that is exactly what it should say.
+      hint: { key: "T", label: "resume the turn", icon: "🔧", active: true },
     },
     { keys: ["Escape"], down: onPress({ cmd: "step-out" }), hint: { key: "esc", label: "resume" } },
   ],
@@ -254,7 +285,7 @@ const jumpPickerLayer: KeyLayer<KeyState, KeyCommand> = {
     {
       keys: ["Enter"],
       down: onPress({ cmd: "jump-commit" }),
-      hint: { key: "⏎", label: "open in VS Code", icon: "↗" },
+      hint: { key: "⏎", label: "open in VS Code", icon: JUMP_ICON },
     },
     {
       keys: ["Escape"],
@@ -278,7 +309,8 @@ const vscodeLayer: KeyLayer<KeyState, KeyCommand> = {
     {
       keys: ["j", "J"],
       down: onPress({ cmd: "vscode-toggle" }),
-      hint: { key: "J", label: "resume the turn", icon: "↗" },
+      // Same as tweak's T: this layer only exists inside the mode it names.
+      hint: { key: "J", label: "resume the turn", icon: JUMP_ICON, active: true },
     },
     // While the picker is open, its own Escape row shadows this one — the
     // hint resolver mirrors resolveKey's claim precedence.
@@ -327,7 +359,25 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
         key: "H",
         label: state.talking ? "stop hands-free talk" : "hands-free talk",
         icon: "🙌",
+        active: state.talking,
       }),
+    },
+    {
+      // M — mute the mic without closing the window. Only offered while the
+      // mic is actually open: muting nothing is a confusing no-op, and the
+      // key stays the page's the rest of the time.
+      keys: ["m", "M"],
+      down: (state, _key, repeat) =>
+        !repeat && state.talking ? command({ cmd: "mic-mute-toggle" }) : "pass",
+      hint: (state) =>
+        state.talking
+          ? {
+              key: "M",
+              label: state.micMuted ? "unmute the mic" : "mute the mic",
+              icon: state.micMuted ? "🔇" : "🎤",
+              active: !!state.micMuted,
+            }
+          : undefined,
     },
     {
       // The region shot: arm the crosshair veil on the way down, disarm on the
@@ -358,7 +408,7 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
       down: (state, _key, repeat) =>
         !repeat && state.mode === "ink" ? command({ cmd: "vscode-toggle" }) : "pass",
       hint: (state) =>
-        state.mode === "ink" ? { key: "J", label: "jump to code", icon: "↗" } : undefined,
+        state.mode === "ink" ? { key: "J", label: "jump to code", icon: JUMP_ICON } : undefined,
     },
     {
       // The screen share. Only in ink mode, fired on keydown. The dispatch
@@ -368,7 +418,26 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
       down: (state, _key, repeat) =>
         !repeat && state.mode === "ink" ? command({ cmd: "video-toggle" }) : "pass",
       hint: (state) =>
-        state.mode === "ink" ? { key: "V", label: "screen share", icon: "🎥" } : undefined,
+        state.mode === "ink"
+          ? { key: "V", label: "screen share", icon: "🎥", active: !!state.sharing }
+          : undefined,
+    },
+    {
+      // N — mute the SHARE. Its own key, never M's: muting the camera while
+      // still narrating (and the reverse) is the common case, not the exotic
+      // one. Only offered while a share is running.
+      keys: ["n", "N"],
+      down: (state, _key, repeat) =>
+        !repeat && state.sharing ? command({ cmd: "video-mute-toggle" }) : "pass",
+      hint: (state) =>
+        state.sharing
+          ? {
+              key: "N",
+              label: state.videoMuted ? "unmute the share" : "mute the share",
+              icon: state.videoMuted ? "🙈" : "👁",
+              active: !!state.videoMuted,
+            }
+          : undefined,
     },
     {
       keys: ["k", "K"],
@@ -466,6 +535,19 @@ export function keymapHelp(talkMode: "hold" | "toggle" = "hold"): KeymapHelpSect
       title: "off",
       note: "arm to start a turn (the ✳ button works too)",
       hints: rows({ armed: false }),
+    },
+    {
+      // The mute keys are offered only while their thing is running, so they
+      // are invisible to `base` — diff against it, like the strip/picker, or
+      // the help table would never mention them.
+      title: "while talking",
+      note: "Space held, or H — the mic is open",
+      hints: minus(rows({ talking: true }), base),
+    },
+    {
+      title: "while sharing",
+      note: "V — the screen share is sampling",
+      hints: minus(rows({ sharing: true }), base),
     },
     {
       title: "tweak mode",

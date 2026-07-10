@@ -291,6 +291,91 @@ describe("smart mode's shouldCapture gate", () => {
     }
   });
 
+  it("mute is the LAST gate: the frame is dropped, and the skip is remembered", async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: number[] = [];
+      let muted = true;
+      let dirty = false;
+      let captures = 0;
+      const sampler = new VideoSampler<Uint8Array>({
+        captureFrame: async () => {
+          captures += 1;
+          return new Uint8Array([1]);
+        },
+        sendFrame: (frame) => sent.push(frame.seq),
+        intervalMs: 100,
+        shouldCapture: () => {
+          const was = dirty;
+          dirty = false;
+          return was;
+        },
+        muted: () => muted,
+      });
+
+      // Muted from the outset: even the FORCED first frame is vetoed, and the
+      // veto is total — no capture is even attempted (no pixels, no encode).
+      sampler.start();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(sent).toEqual([]);
+      expect(captures).toBe(0);
+
+      // The debt is recorded once, and reading it CLEARS it.
+      expect(sampler.takeMutedSkips()).toBe(true);
+      expect(sampler.takeMutedSkips()).toBe(false);
+
+      // Unmute. The caller repays the debt by noting an interaction (what
+      // capture.ts does); the next grid point spends it on one frame, and the
+      // seq starts at 0 — a swallowed tick was never a frame.
+      muted = false;
+      dirty = true;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sent).toEqual([0]);
+
+      // ...and the gate closes again: mute bought exactly one catch-up frame.
+      await vi.advanceTimersByTimeAsync(300);
+      expect(sent).toEqual([0]);
+      sampler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a muted share in CONTINUOUS mode drops frames too, and a fresh share unmutes", async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: number[] = [];
+      let muted = false;
+      const sampler = new VideoSampler<Uint8Array>({
+        captureFrame: async () => new Uint8Array([1]),
+        sendFrame: (frame) => sent.push(frame.seq),
+        intervalMs: 100,
+        // Continuous mode: no gate at all. Mute must still veto.
+        muted: () => muted,
+      });
+      sampler.start();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(sent.length).toBeGreaterThan(1);
+
+      muted = true;
+      const frozen = sent.length;
+      await vi.advanceTimersByTimeAsync(300);
+      expect(sent.length).toBe(frozen); // clockwork stopped delivering
+
+      // A NEW share resets the skip ledger — its own first frame is not a
+      // repayment of the last share's debt.
+      sampler.stop();
+      muted = false;
+      sampler.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sampler.takeMutedSkips()).toBe(false);
+      expect(sent.length).toBe(frozen + 1);
+      sampler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("re-forces the first frame when the share's opening capture fails", async () => {
     vi.useFakeTimers();
     try {
