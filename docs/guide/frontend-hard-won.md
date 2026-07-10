@@ -79,6 +79,11 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
 - Solid's `innerHTML` prop is NOT covered by `noDangerouslySetInnerHtml` (a React-only rule) —
   and a suppression comment for it errors as *unused*. KaTeX-via-innerHTML needs no suppression.
 - `noShadowRestrictedNames` forbids a binding named `Math` — name a math component `TeX`.
+- **`noUselessEmptyExport`'s autofix deletes the `export {};` AND any comment attached to it** —
+  a trailing marker comment (a scenery fence, a directive) sitting directly above the export
+  vanishes with it. Keep load-bearing trailing comments standalone, separated by a blank line.
+  (Comment-only `.ts` files are fine: this repo does not enable `isolatedModules`-style checks
+  that would demand a real export.)
 
 ## Babel / compile-time instrumentation
 
@@ -95,6 +100,12 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
   skip files with nothing to stamp): it covers all extensions and decouples from Solid entirely.
 - **Enable the `jsx` parser plugin only for `*.jsx/*.tsx`.** In plain `.ts`, jsx parsing makes
   `<T>expr` type assertions ambiguous.
+- **The compiler must run under Vitest too, not just Vite.** Anything that tests compiled
+  behavior (control names, lifted descriptions) needs the same plugin in `vitest.config.ts` —
+  the template ships it wired; a test project without it sees anonymous cells and undescribed
+  controls and fails mysteriously.
+- **Babel string literals escape non-ASCII** (`κ` → `\u03BA` in output). Harmless at runtime,
+  but string-matching tests over transformed output should use ASCII fixtures.
 
 ## Vite HMR routing
 
@@ -148,6 +159,21 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
 - **The 2.0 toolchain that works together:** `solid-js@next` + `@solidjs/web@next` +
   `vite-plugin-solid@next` (bundles a 2.0-compatible solid-refresh). TypeScript ≥ 5.x with
   `jsx: "preserve"`, `jsxImportSource: "@solidjs/web"`.
+
+## Testing cells and controls headless
+
+- **Cells must be created inside `cellHarness`'s setup callback** — created outside any owner
+  they throw `NO_OWNER_BOUNDARY` (Solid 2.0 requires an owner for the underlying memo). The
+  harness exists precisely to own them; build the graph in the callback, return what the test
+  needs.
+- **jsdom has no `Worker`.** Don't mock the module — parameterize the seam:
+  `buildGraph(worker = realWorker)` and hand tests a ~30-line stub speaking the same
+  run/cancel → progress/partial/done protocol over the pure layer-1 functions
+  (`demos/walkthrough/src/model/graph.test.ts` is the worked example).
+- **Controls are module-global state; tests must reset between cases** — but modules are
+  imported once, so a reset that *unregisters* leaves every later test with an empty registry.
+  `resetControlSurface` therefore restores initial values and clears dependency edges while
+  **keeping registrations**; call it in `afterEach`.
 
 ## Workers, GPU, and long computation
 

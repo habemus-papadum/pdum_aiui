@@ -20,7 +20,7 @@
  */
 import { agentToolkit, hotCellGraph, registerStandardTools } from "@habemus-papadum/aiui-viz";
 // <aiui-scenery>
-import { registerSceneryTools, sceneryCells } from "./scenery";
+import { sceneryCells } from "./scenery";
 // </aiui-scenery>
 
 // --- the graph: rebuilt over the durable roots on every hot edit --------------
@@ -42,19 +42,17 @@ export const graph = hotCellGraph(
 /** The graph's shape, inferred — components can type against it. */
 export type AppGraph = ReturnType<typeof graph>;
 
-// --- agent tools: the app's operations, exposed as they are built ---------------
+// --- the agent surface: derived from the declarations -------------------------
 //
-// Every operation a user can perform should have a tool twin, so the agent
-// (your future self) can drive and inspect the app instead of guessing at it.
-// Register each one next to the capability it exposes. Registration is
-// idempotent by name, so a hot edit replaces rather than duplicates.
+// Controls (store.ts) and actions (declared next to their features) surface
+// automatically: `registerStandardTools` provides `report` (the whole picture:
+// controls, cells, actions, dependency edges), `set` (validated through each
+// control's own meta), `locate`, and one real tool per action. Hand-write a
+// kit.registerTool(...) only for operations that are genuinely neither a value
+// nor a verb-with-args. Registration is idempotent by name (HMR-safe).
 
 const kit = agentToolkit("app");
 
 // `locate` (element → source) and the `cells` attribution table: app-independent,
 // and every aiui app should have them.
 registerStandardTools(kit);
-
-// <aiui-scenery>
-registerSceneryTools(kit);
-// </aiui-scenery>

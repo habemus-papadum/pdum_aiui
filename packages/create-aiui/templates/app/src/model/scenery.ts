@@ -2,19 +2,24 @@
 /**
  * scenery.ts — the starter's demo dataflow (playbook layer 2, scenery edition).
  *
- * Everything the placeholder rose needs above the pure math: its cell, and the
- * agent tools that expose its parameters. It is packaged as one module so the
- * rest of the app touches it in exactly three fenced lines (an import, a
- * spread, a register call in graph.ts) — which is what makes the reset to a
- * blank canvas a mechanical deletion instead of a refactor.
+ * Everything the placeholder rose needs above the pure math: its cell, and one
+ * `action()` — a registered verb. It is packaged as one module so the rest of
+ * the app touches it in exactly two fenced lines (an import and a spread in
+ * graph.ts) — which is what makes the reset to a blank canvas a mechanical
+ * deletion instead of a refactor.
  *
- * When you build your real app, you won't have a scenery.ts: your cells go
- * straight into graph.ts's builder (or into per-feature modules shaped like
- * this one, if the graph grows big enough to want splitting).
+ * Note what is NOT here: no get-params/set-params tools. The controls declared
+ * in store.ts and the action below surface to the agent automatically through
+ * `registerStandardTools` (report/set + one real tool per action) — declaring
+ * IS exposing.
+ *
+ * When you build your real app, you won't have a scenery.ts: your cells and
+ * actions go straight into graph.ts's builder (or per-feature modules shaped
+ * like this one, if the graph grows big enough to want splitting).
  */
-import { type AgentToolkit, type Cell, cell } from "@habemus-papadum/aiui-viz";
+import { action, type Cell, cell } from "@habemus-papadum/aiui-viz";
 import { buildRose, type Rose } from "./rose";
-import { ANGLE_STEP_MAX, ANGLE_STEP_MIN, angleStep, PETALS_MAX, PETALS_MIN, petals } from "./store";
+import { angleStep, petals } from "./store";
 
 export interface SceneryCells {
   /** The picture, recomputed whenever a parameter moves. */
@@ -34,34 +39,16 @@ export function sceneryCells(): SceneryCells {
   };
 }
 
-/** The scenery's tool twins: every operation the sliders offer, callable. */
-export function registerSceneryTools(kit: AgentToolkit): void {
-  kit.registerTool({
-    name: "get-params",
-    description: "Current rose parameters (petal frequency n, angle step d).",
-    run: () => ({ petals: petals.get(), step: angleStep.get() }),
-  });
-  kit.registerTool({
-    name: "set-params",
-    description: "Set rose parameters. The sliders follow; the picture reacts immediately.",
-    params: {
-      petals: `petal frequency, integer ${PETALS_MIN}..${PETALS_MAX}`,
-      step: `angle step in degrees, integer ${ANGLE_STEP_MIN}..${ANGLE_STEP_MAX}`,
-    },
-    run: (args) => {
-      // Return what was written, not a fresh read: Solid 2.0 commits signal
-      // writes transactionally, so a same-scope .get() still sees old values.
-      const next = { petals: petals.get(), step: angleStep.get() };
-      if (typeof args?.petals === "number") {
-        next.petals = Math.round(Math.min(PETALS_MAX, Math.max(PETALS_MIN, args.petals)));
-        petals.set(next.petals);
-      }
-      if (typeof args?.step === "number") {
-        next.step = Math.round(Math.min(ANGLE_STEP_MAX, Math.max(ANGLE_STEP_MIN, args.step)));
-        angleStep.set(next.step);
-      }
-      return next;
-    },
-  });
-  kit.registerReporter("params", () => ({ petals: petals.get(), step: angleStep.get() }));
-}
+/** Jump both parameters to a fresh random flower. */
+action({
+  name: "re-flower",
+  run: () => {
+    // Writes validate through each control's own meta — no clamping here.
+    const next = {
+      petals: petals.set(2 + Math.floor(Math.random() * 8)),
+      step: angleStep.set(1 + Math.floor(Math.random() * 179)),
+    };
+    // Return what was written, never a re-read: writes are batched.
+    return next;
+  },
+});

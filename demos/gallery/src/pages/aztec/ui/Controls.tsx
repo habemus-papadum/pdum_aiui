@@ -4,37 +4,10 @@
  * slider moves the playhead through the recorded ring so you can walk the
  * arctic circle in and back out by hand.
  */
+import { ControlSlider, ControlToggle } from "@habemus-papadum/aiui-viz";
 import { Show } from "solid-js";
 import { aztecGraph } from "../graph";
-import { fps, frameIndex, frames, MAX_N, playing, regrow, showCircle, targetN } from "../store";
-
-function Slider(props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format?: (v: number) => string;
-  onInput: (v: number) => void;
-}) {
-  const shown = () => (props.format ?? ((v: number) => String(v)))(props.value);
-  return (
-    <label class="slider">
-      <span class="slider-label">
-        {props.label} <b>{shown()}</b>
-      </span>
-      <input
-        type="range"
-        name={props.label}
-        min={props.min}
-        max={props.max}
-        step={props.step}
-        value={props.value}
-        onInput={(e) => props.onInput(e.currentTarget.valueAsNumber)}
-      />
-    </label>
-  );
-}
+import { fps, frameIndex, frames, playing, regrow, showCircle, targetN } from "../store";
 
 export function Controls() {
   const paused = () => !playing.get();
@@ -49,24 +22,8 @@ export function Controls() {
   return (
     <div class="controls panel">
       <div class="controls-grid">
-        <Slider
-          label="order n"
-          value={targetN.get()}
-          min={1}
-          max={MAX_N}
-          step={1}
-          format={(v) => `AD(${v})`}
-          onInput={(v) => targetN.set(v)}
-        />
-        <Slider
-          label="speed"
-          value={fps.get()}
-          min={1}
-          max={30}
-          step={1}
-          format={(v) => `${v} steps/s`}
-          onInput={(v) => fps.set(v)}
-        />
+        <ControlSlider of={targetN} label="order n" format={(v) => `AD(${v})`} />
+        <ControlSlider of={fps} label="speed" format={(v) => `${v} steps/s`} />
       </div>
 
       <label class="slider aztec-scrub">
@@ -97,15 +54,7 @@ export function Controls() {
         <button type="button" class="btn" onClick={() => regrow()}>
           ↺ regrow
         </button>
-        <label class="check">
-          <input
-            type="checkbox"
-            name="arctic-circle"
-            checked={showCircle.get()}
-            onInput={(e) => showCircle.set(e.currentTarget.checked)}
-          />
-          arctic circle
-        </label>
+        <ControlToggle of={showCircle} label="arctic circle" />
         <span class="panel-sub aztec-status">
           <Show when={shuffle()?.loading()} fallback={<>grown</>}>
             growing… {Math.round((shuffle()?.progress() ?? 0) * 100)}%

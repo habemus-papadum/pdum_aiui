@@ -1,37 +1,15 @@
 /**
- * Controls.tsx — parameter widgets. Sliders write plain durable signals; the
- * graph's effects push them into the sim. Nothing here knows WebGL exists.
+ * Controls.tsx — parameter widgets (playbook layer 3). Sliders bind controls
+ * through ControlSlider: bounds/step come from each control's meta in
+ * store.ts (declared once — the agent's `set` tool validates through the same
+ * numbers), writes go through the control's validation, and each label
+ * carries its `data-control` attribution stamp. Nothing here knows WebGL
+ * exists.
  */
+import { ControlSlider } from "@habemus-papadum/aiui-viz";
 import { Show } from "solid-js";
 import { brushRadius, history, paramF, paramK, sim, speed } from "../model/store";
 import type { SeedKind } from "../sim/gray-scott";
-
-function Slider(props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format?: (v: number) => string;
-  onInput: (v: number) => void;
-}) {
-  const shown = () => (props.format ?? ((v: number) => v.toFixed(4)))(props.value);
-  return (
-    <label class="slider">
-      <span class="slider-label">
-        {props.label} <b>{shown()}</b>
-      </span>
-      <input
-        type="range"
-        min={props.min}
-        max={props.max}
-        step={props.step}
-        value={props.value}
-        onInput={(e) => props.onInput(e.currentTarget.valueAsNumber)}
-      />
-    </label>
-  );
-}
 
 export function Controls() {
   const reseed = (kind: SeedKind) => {
@@ -42,40 +20,14 @@ export function Controls() {
   return (
     <div class="controls panel">
       <div class="controls-grid">
-        <Slider
-          label="feed F"
-          value={paramF.get()}
-          min={0.005}
-          max={0.09}
-          step={0.0005}
-          onInput={paramF.set}
-        />
-        <Slider
-          label="kill k"
-          value={paramK.get()}
-          min={0.03}
-          max={0.075}
-          step={0.0005}
-          onInput={paramK.set}
-        />
-        <Slider
+        <ControlSlider of={paramF} label="feed F" format={(v) => v.toFixed(4)} />
+        <ControlSlider of={paramK} label="kill k" format={(v) => v.toFixed(4)} />
+        <ControlSlider
+          of={speed}
           label="speed"
-          value={speed.get()}
-          min={0}
-          max={48}
-          step={1}
           format={(v) => (v === 0 ? "paused" : `${v} steps/frame`)}
-          onInput={speed.set}
         />
-        <Slider
-          label="brush"
-          value={brushRadius.get()}
-          min={0.01}
-          max={0.12}
-          step={0.005}
-          format={(v) => v.toFixed(3)}
-          onInput={brushRadius.set}
-        />
+        <ControlSlider of={brushRadius} label="brush" format={(v) => v.toFixed(3)} />
       </div>
       <div class="controls-buttons">
         <button type="button" class="btn" onClick={() => speed.set(paused() ? 12 : 0)}>

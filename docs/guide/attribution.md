@@ -10,8 +10,9 @@ answer two different questions about whatever was pointed at:
 They are different questions (a `<span>` in a table is authored in `Table.tsx` but its number came
 from the `analysis` cell defined in `graph.ts`), and everything on this page exists to answer both
 mechanically. This is the concepts-level description; the code lives in the dev overlay
-(`source-locator.ts`, `selection.ts`, `multimodal/shot.ts`, `intent-pipeline/engine.ts`) and in
-`aiui-viz` (`CellView`, `cell-attribution.ts`, `registerStandardTools`).
+(`source-locator.ts`, `selection.ts`, `multimodal/shot.ts`, `multimodal/vscode.ts`,
+`intent-pipeline/engine.ts`) and in `aiui-viz` (`CellView`, the cell registry,
+`registerStandardTools`).
 
 ## The contract: three DOM attributes and a registry
 
@@ -19,12 +20,30 @@ Attribution is deliberately framework-neutral. The entire contract is data in th
 
 | Attribute | Meaning | Emitted by |
 | --- | --- | --- |
-| `data-source-loc="src/ui/Controls.tsx:44:7"` | this element's **authoring site** (the JSX that wrote it), app-root-relative | the source-locator babel pass, at compile time, dev-only |
+| `data-source-loc="src/ui/Controls.tsx:44:7"` | this element's **authoring site** (the JSX that wrote it), app-root-relative | the aiui compiler's JSX-stamping half, at compile time, dev-only (its factory-identity half runs in production builds too) |
 | `data-cell="analysis"` | the **dataflow node** whose value is rendered inside this boundary | `CellView` (from the babel-injected cell name); a component rendering a cell's value *outside* CellView may declare it — the one manual attribute in the contract, and it is a *name*, so it cannot drift |
 | `data-cell-loc="src/model/graph.ts:31"` | the cell's **definition site** — the `cell(…)` call itself | `CellView`, from the same injection |
+| `data-control="kappa"` | the **control** this widget binds — the writable end of the surface | `ControlSlider`/`ControlToggle` (from the control's injected name); a hand-rolled binding declares it the same way — a name, never a location |
 
 plus the live **cell registry** (`cellRegistry()` / the `cells` report section), which maps a
-`data-cell` name to the cell's current state and definition site at runtime.
+`data-cell` name to the cell's current state, definition site, and description at runtime — and
+its writable twin, the **control surface** (`report` full: every control's value, constraints,
+description, definition site, plus the control→cell dependency edges recorded live from each
+cell's deps). A drag over a slider resolves to the control and its declaration exactly as a drag
+over a chart resolves to the cell.
+
+**Pixel→cell is supported by declaration only** — two paths with different economics, and no
+third mechanism. (1) *The free path*: `CellView` stamps `data-cell`/`data-cell-loc` as a free
+rider on the loading/error chrome the methodology mandates anyway — zero incremental cost, covers
+the majority of cell renders. (2) *The declared path*: a render outside `CellView` declares
+`data-cell="name"` — a name, not a location, so it cannot drift; a forgotten declaration is a
+false negative only, because the element still carries its compiler-injected `data-source-loc`
+and an agent is one file-read from identifying the cell itself. A runtime-internals mechanism
+that derived stamps automatically was built, measured, and retired (see the retired proposal
+`docs/proposals/solid-cell-attribution.md` for the findings and the reasoning); compile-time
+detection of cell reads in JSX was rejected because real components read cells non-lexically.
+The division of labor: compile time owns *locations*, declarations own *identity*, runtime owns
+*live state and topology*.
 
 Two properties of this contract carry most of the weight:
 
@@ -40,8 +59,8 @@ Two properties of this contract carry most of the weight:
   precise, incorrect location. This happened — an agent once hard-coded stamps into an app instead
   of using the plugin, and the resulting misresolutions cost real debugging time. (Unit tests may
   synthesize stamps to exercise the resolvers; nothing else should.) The one *legitimate* manual
-  attribute is `data-cell="name"` for values rendered outside `CellView` — a name, not a
-  location.
+  attributes are *names*: `data-cell="name"` for values rendered outside `CellView`, and
+  `data-control="name"` on hand-rolled control bindings (the shipped widgets stamp it for you).
 
 ## Resolving a text selection
 
@@ -85,9 +104,13 @@ it). The current strategy, in `locateComponents`:
    paid-for fix: without it, a drag across a dashboard rendered as `name="div"` repeated per
    panel — noise in the prompt and in the trace viewer's captions — while the informative name
    sat right there in the stamp.
-5. **The cell-source ladder.** A frontier cell's `source` is its `data-cell-loc` (definition
-   site) when stamped; else the element's own JSX stamp; else the first stamped element *inside*
-   the cell — where its UI is authored, an approximation, but the right file to open first.
+5. **The cell-source ladder** (shared by the shot locator, the selection watcher, and the jump
+   picker — one implementation, `cellSourceLoc`). A frontier cell's `source` is its
+   `data-cell-loc` (definition site) when stamped; else the **live cell registry** — aiui-viz
+   mirrors `name → definition site` at `window.__aiuiCells`, which is what makes the one manual
+   `data-cell="name"` attribute resolve to the full `cell(...)` definition line; else the
+   element's own JSX stamp; else the first stamped element *inside* the cell — where its UI is
+   authored, an approximation, but the right file to open first.
 
 Full-viewport shots (`S`) skip the locator entirely: "everything" frames nothing, and element
 metadata without a reference point is bulk.
@@ -128,7 +151,8 @@ annotations).
 
 The same contract serves the reverse direction. `registerStandardTools` gives every app a
 `locate` tool — CSS selector in, the nearest `data-source-loc` / `data-cell` stamps out — and the
-`cells` report section (the live registry: every named cell, its state, its definition site). An
+`report` tool (full format: every control with meta and loc, every named cell with state,
+description, and definition site, the dependency edges, and each registered action). An
 agent that received `<cell name="analysis" …/>` in a prompt can go from the name to the live
 cell's state without any further wiring. The VS Code extension's jump mode rides the same stamps.
 

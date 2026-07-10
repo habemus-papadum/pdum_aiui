@@ -32,6 +32,7 @@
 import type { LocatedCell, LocatedComponent, Rect } from "../intent-pipeline";
 import { createDisplayCapture, type DisplayCapture } from "./display-capture";
 import type { Ink } from "./ink";
+import { cellSourceLoc } from "./vscode";
 
 /** A captured frame: the inline preview thumbnail plus the raw PNG for upload. */
 export interface ShotPixels {
@@ -460,15 +461,11 @@ function cellFrontier(host: Element, sourceRoot: string | undefined): LocatedCel
     if (!name) {
       continue;
     }
-    // Best stamp first: `data-cell-loc` is the cell's *definition* site (the
-    // `cell(...)` call — CellView stamps it from the babel-injected loc);
-    // then the element's own JSX stamp; then the first stamped element
-    // *inside* the cell — where the cell's UI is authored, an approximation,
-    // but exactly the file an agent should open first for "this cell".
-    const stamp =
-      el.getAttribute("data-cell-loc") ??
-      el.getAttribute("data-source-loc") ??
-      el.querySelector("[data-source-loc]")?.getAttribute("data-source-loc");
+    // THE shared resolution ladder (cellSourceLoc, also used by the selection
+    // watcher and the jump picker): data-cell-loc → the live cell registry
+    // (which resolves a bare manual `data-cell="name"` to its definition
+    // site) → the element's own JSX stamp → first stamped descendant.
+    const stamp = cellSourceLoc(el);
     frontier.push({ name, ...(stamp ? { source: absoluteSource(stamp, sourceRoot) } : {}) });
   }
   return frontier;

@@ -136,6 +136,11 @@ demo, not a published package. `pnpm demo` serves it. It is deliberately far ric
 starter — workers, WebGL, DuckDB/Mosaic, the modal kit — and it is *not* a template: nothing
 scaffolds from it.
 
+**`demos/walkthrough` is the teaching demo**: the frontend playbook executed in order on 1-D
+diffusion, with every layer left standing as its own page (`step1.html` → the finished index;
+multi-entry Vite) and `WALKTHROUGH.md` narrating the diffs. Its steps must stay truthful — an
+edit that leaks a later layer into an earlier step breaks its point (see its `CLAUDE.md`).
+
 Three things follow from `demos/*` being a workspace glob in `pnpm-workspace.yaml`:
 
 - **Demos are never published.** The template's `package.json` already carries `"private": true` —

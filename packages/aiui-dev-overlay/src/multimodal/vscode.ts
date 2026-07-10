@@ -113,18 +113,44 @@ export function jumpTargets(target: Element, sourceRoot: string | undefined): Ju
 }
 
 /**
- * A cell element's source stamp, best first: `data-cell-loc` (the cell's
- * *definition* site — the `cell(...)` call), its own `data-source-loc`, then
- * the first stamped descendant (where the cell's UI is authored — the shot
- * locator's approximation).
+ * A cell element's source stamp — THE shared resolution ladder (the shot
+ * locator, the selection watcher, and the jump picker all route through
+ * here). Best first: `data-cell-loc` (the cell's *definition* site — the
+ * `cell(...)` call, stamped by CellView); the **live cell registry** (aiui-viz
+ * mirrors name→loc at `window.__aiuiCells`), which is what lets the one
+ * MANUAL attribution attribute — a bare `data-cell="name"` on a non-CellView
+ * render — resolve to the full definition site; the element's own
+ * `data-source-loc`; then the first stamped descendant (where the cell's UI
+ * is authored — an approximation, but the right file to open first).
  */
 export function cellSourceLoc(cellEl: Element): string | undefined {
   return (
     cellEl.getAttribute("data-cell-loc") ??
+    registryCellLoc(cellEl.getAttribute("data-cell")) ??
     cellEl.getAttribute("data-source-loc") ??
     cellEl.querySelector("[data-source-loc]")?.getAttribute("data-source-loc") ??
     undefined
   );
+}
+
+/**
+ * Definition site for a cell name from the live registry, when the page runs
+ * aiui-viz. Structural and best-effort — the overlay never imports the
+ * framework; a page without the bridge (or a foreign framework implementing
+ * only the DOM contract) falls through to the stamp ladder.
+ */
+function registryCellLoc(name: string | null): string | undefined {
+  if (!name) {
+    return undefined;
+  }
+  try {
+    const bridge = (
+      window as unknown as { __aiuiCells?: { loc?: (n: string) => string | undefined } }
+    ).__aiuiCells;
+    return bridge?.loc?.(name) ?? undefined;
+  } catch {
+    return undefined; // a broken bridge must never break attribution
+  }
 }
 
 /**

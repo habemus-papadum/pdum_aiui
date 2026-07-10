@@ -64,7 +64,25 @@ nothing in the layer imports anything above it.
 
 ## Layer 2 — cells: where reality enters
 
-Now organize the *application's* dataflow as [cells](./frontend-user-guide#step-2-your-first-cell)
+**Layer 2 opens by declaring the control surface** — the experiment's independent variables and
+verbs, before any cell exists:
+
+```ts
+/** Diffusion constant — how fast heat spreads. */
+export const kappa = control({ value: 0.1, min: 0.01, max: 1, step: 0.01 });
+
+/** New random seed; the evolution recomputes. */
+action({ name: "re-seed", run: () => seed.set((s) => s + 1) });
+```
+
+Names, definition sites, and descriptions are compiler-injected (the doc comment IS the
+description); constraints are declared once and validate every write — widget, keyboard, and the
+agent's derived `set` tool alike; each `action()` becomes a real named agent tool. Curate it:
+knobs are controls, internal state stays plain signals. Declaring is exposing — the hand-written
+get-params/set-params tool pair this framework once required is gone.
+
+Then organize the *application's* dataflow as
+[cells](./frontend-user-guide#step-3-your-first-cell)
 — still no UI. A cell is a **computation boundary you chose on purpose**: the unit that
 recomputes together, cancels together, fails together, and reports progress as one thing. Layer 1
 pretended time and failure don't exist; this layer is exactly where they're allowed in — fetches
@@ -111,8 +129,11 @@ downstream see three partials, or one settled value?); cancellable cells add a `
 including the out-of-sync bug, kept as a deliberately failing dependency so its signature stays
 documented.
 
-Done when: every cell has its inputs probed, its failure path asserted (`errored` keeps
-`latest()`), and its cancellation observed — all without a browser.
+Done when: every control is described and constrained; every cell has its inputs probed, its
+failure path asserted (`errored` keeps `latest()`), and its cancellation observed; a `set` through
+the derived tool round-trips into an observable recompute; and the dependency edges appear in
+`report` — all without a browser (`resetControlSurface` between cases; the compiler runs under
+Vitest).
 
 ## Layer 3 — components: elements that show cells
 
@@ -121,7 +142,10 @@ one discipline that keeps this layer almost logic-free: **components are pure re
 (through the `graph()` accessor), DOM out; parameters written back through their signals; nothing
 computed in the component that belongs in a cell. `<CellView of={…}>` supplies the whole
 lifecycle (pending, error + retry, keep-latest, progress, the attribution stamps) so the
-component body is just "value → markup".
+component body is just "value → markup". Controls bind through `ControlSlider`/`ControlToggle`
+(bounds, step, and unit come from the declaration — never re-typed in JSX; the label carries the
+`data-control` stamp), with hand-rolled bindings for shapes the porcelain doesn't cover — which
+is exactly how the next porcelain earns its extraction evidence.
 
 Reuse falls out of purity: the same component renders in the hero overview and again in a
 deep-dive section, reading the same cell — double-mounting shared cells is free and intended.
@@ -147,7 +171,8 @@ anatomy (a complete dashboard overview first, then explanatory sections re-rende
 widgets, theory with real mathematics, an experiments section — the
 [style guide](./frontend-style-guide) owns these conventions); keyboard interactions as **modal
 command structures** (the `aiui-viz/modal` kit: modes, layers, and surfaces as data — never
-scattered `addEventListener("keydown", …)` calls); and, when one page isn't enough, the
+scattered `addEventListener("keydown", …)` calls, with bindings dispatching the SAME registered
+actions and validated controls the widgets and the agent use); and, when one page isn't enough, the
 progression across pages — an introductory notebook flowing to a deeper one, each page its own
 entry so leaving it frees its GPU contexts and workers by construction.
 
@@ -175,4 +200,7 @@ slice.
 - [Design choices](./frontend-design-choices) — why the pieces are shaped this way.
 - [Hard-won details](./frontend-hard-won) — the findings ledger (worker choreography, HMR
   routing, theming).
-- `demos/gallery` — three notebooks whose directory layout *is* this playbook.
+- `demos/walkthrough` — this playbook executed in order on one small app (1-D diffusion), with
+  **every layer left standing as its own page** (`step1.html` → the finished index) and
+  `WALKTHROUGH.md` narrating each diff. Start there.
+- `demos/gallery` — three notebooks whose directory layout *is* this playbook, at real scale.

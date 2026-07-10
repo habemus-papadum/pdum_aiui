@@ -1,7 +1,12 @@
 import { transformAsync } from "@babel/core";
 import type { Plugin } from "vite";
 import { describe, expect, it } from "vitest";
-import { type SourceLocatorOptions, sourceLocatorBabel, sourceLocatorVite } from "./source-locator";
+import {
+  optionsFactory,
+  type SourceLocatorOptions,
+  sourceLocatorBabel,
+  sourceLocatorVite,
+} from "./source-locator";
 
 /**
  * Run the babel plugin in isolation (no Solid preset) and return the output.
@@ -117,11 +122,159 @@ describe("sourceLocatorBabel — cell() call-site identity", () => {
   });
 });
 
+describe("factory table — control()/action() identity (the aiui compiler)", () => {
+  it("infers a control's name from its export binding and injects name + loc", async () => {
+    const out = await run(`export const kappa = control({ value: 0.1 });`, "src/model/store.ts");
+    expect(out).toContain('name: "kappa"');
+    expect(out).toContain('loc: "src/model/store.ts:1"');
+  });
+
+  it("lifts a JSDoc description from the declaration, tags stripped", async () => {
+    const out = await run(
+      `/**
+ * Diffusion constant, how fast heat spreads.
+ * @remarks internal
+ */
+export const kappa = control({ value: 0.1 });`,
+      "src/model/store.ts",
+    );
+    expect(out).toContain('description: "Diffusion constant, how fast heat spreads."');
+    expect(out).not.toMatch(/description: "[^"]*@remarks/); // tags never leak in
+  });
+
+  it("lifts a contiguous // run as one description, and takes the CLOSEST comment", async () => {
+    const out = await run(
+      `// ---- parameters ----------------------------------------------------
+// Time step for the explicit scheme.
+// Halve it if the profile oscillates.
+export const dt = control({ value: 0.01 });`,
+      "src/model/store.ts",
+    );
+    expect(out).toContain(
+      'description: "Time step for the explicit scheme. Halve it if the profile oscillates."',
+    );
+    expect(out).not.toMatch(/description: "[^"]*parameters/); // the banner never leaks in
+  });
+
+  it("ignores directive comments (biome-ignore, scenery fences) as descriptions", async () => {
+    const out = await run(
+      `// biome-ignore lint/suspicious/noExplicitAny: probe
+// <aiui-scenery>
+export const k = control({ value: 1 });`,
+      "src/s.ts",
+    );
+    expect(out).toContain('name: "k"');
+    expect(out).not.toContain("description");
+  });
+
+  it("explicit name and description always win over inference and comments", async () => {
+    const out = await run(
+      `/** comment loses */
+export const binding = control({ name: "kappa", description: "explicit wins", value: 1 });`,
+      "src/s.ts",
+    );
+    expect(out).toContain('name: "kappa"');
+    expect(out).not.toContain('name: "binding"');
+    expect(out).toContain('description: "explicit wins"');
+    expect(out).not.toContain('description: "comment loses"');
+  });
+
+  it("rejects a non-literal explicit name with a code-framed compile error", async () => {
+    await expect(
+      run(`const c = control({ name: "k" + suffix, value: 1 });`, "src/s.ts"),
+    ).rejects.toThrow(/compile-time string literal/);
+    // Template literals are rejected even without placeholders — strictness
+    // keeps the rule statable in one sentence: a plain "…" string, nothing else.
+    await expect(
+      run("const c = control({ name: `kappa`, value: 1 });", "src/s.ts"),
+    ).rejects.toThrow(/compile-time string literal/);
+  });
+
+  it("rejects an anonymous control (no binding, no explicit name) — names are keys", async () => {
+    await expect(run(`register(control({ value: 1 }));`, "src/s.ts")).rejects.toThrow(
+      /needs a name/,
+    );
+  });
+
+  it("a bare action() statement still lifts its comment but requires an explicit name", async () => {
+    const out = await run(
+      `/** New noise seed; the profile recomputes. */
+action({ name: "re-seed", run: () => reseed() });`,
+      "src/model/graph.ts",
+    );
+    expect(out).toContain('description: "New noise seed; the profile recomputes."');
+    await expect(run(`action({ run: () => reseed() });`, "src/s.ts")).rejects.toThrow(
+      /needs a name/,
+    );
+  });
+
+  it("leaves a non-object options expression alone (runtime guard is the backstop)", async () => {
+    const src = `const kappa = control(makeOpts());`;
+    expect(await run(src, "src/s.ts")).toContain("control(makeOpts())");
+  });
+
+  it("cells also gain lifted descriptions — on graph object properties too", async () => {
+    const out = await run(
+      `const graph = {
+  /** The evolving profile. */
+  profile: cell(deps, compute),
+};`,
+      "src/model/graph.ts",
+    );
+    expect(out).toContain('name: "profile"');
+    expect(out).toContain('description: "The evolving profile."');
+  });
+
+  it("back-compat: cellFactories narrows the table (control untouched), [] disables it", async () => {
+    const src = `const kappa = control({ value: 1 });\nconst c = cell(d, f);`;
+    const narrowed = await run(src, "src/s.ts", { cellFactories: ["cell"] });
+    expect(narrowed).toContain("control({\n  value: 1\n})"); // untouched
+    expect(narrowed).toContain('name: "c"');
+    const off = await run(src, "src/s.ts", { cellFactories: [] });
+    expect(off).not.toContain("name:");
+  });
+
+  it("a custom factories table is honored end to end", async () => {
+    const out = await run(`export const w = widget({ kind: "slider" });`, "src/s.ts", {
+      factories: [optionsFactory("widget")],
+    });
+    expect(out).toContain('name: "w"');
+    expect(out).toContain('loc: "src/s.ts:1"');
+  });
+
+  it("stampJsx: false keeps identity injection while skipping instrumentation", async () => {
+    const out = await run(
+      `const v = <div/>;\nexport const kappa = control({ value: 1 });`,
+      "src/a.tsx",
+      { stampJsx: false },
+    );
+    expect(out).not.toContain("data-source-loc");
+    expect(out).toContain('name: "kappa"');
+  });
+});
+
 describe("sourceLocatorVite — plugin surface", () => {
-  it("is a pre, serve-only plugin", () => {
+  it("is a pre plugin that applies to serve AND build (identity is load-bearing)", () => {
     const p = sourceLocatorVite();
     expect(p.enforce).toBe("pre");
-    expect(p.apply).toBe("serve");
+    // No `apply` gate: a control's compiled-in name is its durable key and
+    // tool identity, so production builds must run the injection half too.
+    expect(p.apply).toBeUndefined();
+  });
+
+  it("stamps JSX under serve but not under build; injection runs in both", async () => {
+    const stamped = "const k = <div/>;\nexport const kappa = control({ value: 1 });";
+    const serve = sourceLocatorVite();
+    (serve.configResolved as (c: object) => void)({ root: "/app", command: "serve" });
+    const dev = await transformOf(serve)(stamped, "/app/src/a.tsx");
+    expect(dev?.code).toContain("data-source-loc");
+    expect(dev?.code).toContain('name: "kappa"');
+
+    const build = sourceLocatorVite();
+    (build.configResolved as (c: object) => void)({ root: "/app", command: "build" });
+    const prod = await transformOf(build)(stamped, "/app/src/a.tsx");
+    expect(prod?.code).not.toContain("data-source-loc"); // instrumentation is dev-only
+    expect(prod?.code).toContain('name: "kappa"'); // identity is not
   });
 
   it("transform skips node_modules and content with nothing to stamp", async () => {
@@ -133,14 +286,14 @@ describe("sourceLocatorVite — plugin surface", () => {
 
   it("stamps through the full transform, relative to the resolved root", async () => {
     const p = sourceLocatorVite();
-    (p.configResolved as (c: { root: string }) => void)({ root: "/app" });
+    (p.configResolved as (c: object) => void)({ root: "/app", command: "serve" });
     const result = await transformOf(p)("const x = <div/>;", "/app/src/a.tsx");
     expect(result?.code).toContain('data-source-loc="src/a.tsx:1:11"');
   });
 
   it("an explicit root option wins over the resolved Vite root", async () => {
     const p = sourceLocatorVite({ root: "/other" });
-    (p.configResolved as (c: { root: string }) => void)({ root: "/app" });
+    (p.configResolved as (c: object) => void)({ root: "/app", command: "serve" });
     // File under /app is outside the explicit /other root, so it is skipped.
     expect(await transformOf(p)("const x = <div/>;", "/app/src/a.tsx")).toBeNull();
   });

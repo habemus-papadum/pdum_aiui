@@ -1,8 +1,42 @@
 # Runtime element → cell attribution from Solid 2 internals
 
-Status: **spike, shipped behind an explicit opt-in** (July 2026). Companion to the frontend-for-agents
-attribution contract (`data-cell` / `data-cell-loc`) and to `packages/aiui-viz/src/cell-attribution.ts`,
-which is the mechanism this proposal describes. Pinned to `@solidjs/signals@2.0.0-beta.15`.
+Status: **retired** (2026-07-10; spiked and shipped behind an explicit opt-in July 2026, removed
+after review). Companion to the frontend-for-agents attribution contract
+(`data-cell` / `data-cell-loc`). The implementation (`packages/aiui-viz/src/cell-attribution.ts`)
+has been **deleted**; this document remains as the record of what was learned.
+
+## Outcome (why it was retired)
+
+The mechanism *worked* — the exact-or-nothing bar was met, and the findings below about Solid's
+internals remain true and valuable. It was retired because the price/benefit collapsed on review:
+
+- **The price**: pinned to `@solidjs/signals@2.0.0-beta.15` private internals (every beta bump a
+  potential break), global DOM-prototype patching, and coverage limited to inserts (or
+  all-attributes-are-cells via `attributedRead`) — which does not even cover real component
+  idioms, where cells are read *non-lexically* (`const census = () => analysis().latest()` in
+  component logic; cells feeding Plot option thunks).
+- **The benefit**: eliminating exactly one manual attribute. The supported model is now
+  **attribution by declaration**: `CellView` stamps automatically (a free rider on chrome the
+  methodology mandates anyway), and non-CellView renders declare `data-cell="name"` — a *name*,
+  which cannot drift the way a hand-written location can. The resolution ladder then resolves
+  that name to the cell's definition site through a tiny window bridge to the live cell registry
+  (`window.__aiuiCells`, mirrored by `packages/aiui-viz/src/cell.ts`; consumed by the shared
+  ladder in `packages/aiui-dev-overlay/src/multimodal/vscode.ts` `cellSourceLoc`) — everything
+  this spike delivered, at zero brittleness. A missing declaration is a false *negative* only:
+  the element still carries its compiler-injected `data-source-loc`, leaving an agent one
+  file-read from the answer.
+- **Compile-time JSX read detection was also considered and rejected** (not built): because real
+  reads are non-lexical, a false-positive-safe syntactic rule catches approximately nothing,
+  and a loose rule manufactures false positives — which mislead the agent and are strictly worse
+  than false negatives. Do not re-attempt it without new evidence that read idioms have changed.
+
+The division of labor that fell out, and that the rest of the framework now follows: **compile
+time owns locations, declarations own identity, runtime owns live state and topology** (the
+registries and dependency edges). This spike failed the review because it made runtime own
+identity.
+
+Everything below is the original proposal, kept verbatim as the findings ledger. Pinned to
+`@solidjs/signals@2.0.0-beta.15`.
 
 ## The question
 

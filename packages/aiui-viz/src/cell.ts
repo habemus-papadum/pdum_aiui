@@ -33,6 +33,7 @@ import {
   refresh,
   untrack,
 } from "solid-js";
+import { dropConsumer, recordRead, runAsConsumer } from "./graph-trace";
 
 export type CellState =
   | "unresolved" // never had a value; deps gate closed or upstream not ready
@@ -57,15 +58,22 @@ export type CellCompute<D, T> = (deps: D, ctx: CellContext<T>) => T | Promise<T>
 export interface CellOptions {
   /**
    * Stable identity for attribution and the cell registry. Normally you never
-   * write this: the source-locator babel plugin injects `name` (from the
-   * declaration, e.g. `const catalog = cell(…)` → "catalog") and `loc`
-   * ("src/model/graph.ts:77") at compile time, dev-only. Named cells register
-   * themselves (see cellRegistry) and CellView stamps `data-cell` with the
-   * name — the element → cell attribution contract.
+   * write this: the aiui compiler (the source-locator babel pass) injects
+   * `name` (from the declaration, e.g. `const catalog = cell(…)` → "catalog")
+   * and `loc` ("src/model/graph.ts:77") at compile time — in dev AND
+   * production builds; identity injection is load-bearing. Named cells
+   * register themselves (see cellRegistry) and CellView stamps `data-cell`
+   * with the name — the element → cell attribution contract.
    */
   name?: string;
   /** Definition site "file:line"; injected alongside `name`. */
   loc?: string;
+  /**
+   * Human description for the registry and the agent-facing report. Normally
+   * lifted by the aiui compiler from the leading doc comment above the
+   * declaration (the JSDoc convention); an explicit value here wins.
+   */
+  description?: string;
   /**
    * How async-iterable computes stream:
    * - "commit" (default): every yield is committed to the graph — downstream
@@ -107,6 +115,8 @@ export interface Cell<T> {
   cellName?: string;
   /** Definition site "file:line". */
   loc?: string;
+  /** Human description (compiler-lifted from the doc comment, or explicit). */
+  description?: string;
 }
 
 // --- the cell registry: name → live cell, for attribution -------------------
@@ -118,16 +128,31 @@ export interface Cell<T> {
 
 const registry = new Map<string, Cell<unknown>>();
 
+// Mirror a name→definition-site lookup on `window` for DOM-contract consumers
+// that must stay framework-agnostic: the dev overlay's shot locator and
+// selection watcher resolve a bare `data-cell="name"` stamp (the one manual
+// attribution attribute) to the cell's `cell(...)` definition site through
+// this, without importing aiui-viz (see docs/guide/attribution.md). Read-only
+// and deliberately tiny; guarded because the barrel is imported from workers
+// and node-side tests where `window` doesn't exist.
+if (typeof window !== "undefined") {
+  (window as unknown as { __aiuiCells?: { loc(name: string): string | undefined } }).__aiuiCells = {
+    loc: (name) => registry.get(name)?.loc,
+  };
+}
+
 /** Snapshot of every live named cell — the agent-facing attribution table. */
 export function cellRegistry(): Array<{
   name: string;
   loc: string | undefined;
+  description: string | undefined;
   state: CellState;
   settled: boolean;
 }> {
   return [...registry.entries()].map(([name, c]) => ({
     name,
     loc: c.loc,
+    description: c.description,
     state: c.state(),
     settled: c.settled(),
   }));
@@ -161,7 +186,10 @@ export function cell<D, T>(
   });
 
   const memo = createMemo<T>((prev) => {
-    const d = deps(); // reading a pending upstream throws NotReadyError: hold
+    // Attribute this deps evaluation to the cell (dependency-edge capture —
+    // graph-trace.ts). Only the deps read is bracketed: reads inside compute
+    // are untracked by Solid and deliberately unattributed here too.
+    const d = runAsConsumer(options?.name, deps); // pending upstream throws NotReadyError: hold
     if (d === undefined || d === null || d === false) {
       throw new NotReadyError(null); // explicit hold — idiomatic 2.0 "not yet"
     }
@@ -247,7 +275,10 @@ export function cell<D, T>(
   type Gate = "open" | "gated" | "blocked";
   const gateNow = (): Gate => {
     try {
-      const d = deps();
+      // Suspend edge attribution: this re-read serves state derivation, and it
+      // can run while an OUTER cell's deps are being attributed (a deps that
+      // reads inner.state()) — those reads are not the outer cell's edges.
+      const d = runAsConsumer(undefined, deps);
       return d === undefined || d === null || d === false ? "gated" : "open";
     } catch (e) {
       if (e instanceof NotReadyError) return "blocked"; // upstream pending
@@ -285,7 +316,12 @@ export function cell<D, T>(
     },
   ) as Accessor<Box>;
 
-  const read = (() => memo()) as Cell<T>;
+  const read = (() => {
+    if (options?.name) {
+      recordRead({ kind: "cell", name: options.name }); // consumer-aware no-op otherwise
+    }
+    return memo();
+  }) as Cell<T>;
   read.latest = () => {
     const boxed = last();
     if (boxed) return boxed.value;
@@ -323,10 +359,14 @@ export function cell<D, T>(
     const name = options.name;
     read.cellName = name;
     read.loc = options.loc;
+    read.description = options.description;
     registry.set(name, read as Cell<unknown>);
     if (getOwner()) {
       onCleanup(() => {
-        if (registry.get(name) === (read as Cell<unknown>)) registry.delete(name);
+        if (registry.get(name) === (read as Cell<unknown>)) {
+          registry.delete(name);
+          dropConsumer(name); // its dependency edges die with it
+        }
       });
     }
   }

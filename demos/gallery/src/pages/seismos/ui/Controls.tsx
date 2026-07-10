@@ -1,3 +1,4 @@
+import { ControlSlider } from "@habemus-papadum/aiui-viz";
 /**
  * Controls.tsx — the page's own (non-vgplot) controls: the completeness
  * magnitude Mc slider that drives the live b-value fit, a one-click "use
@@ -7,7 +8,7 @@
  */
 import { Show } from "solid-js";
 import { seismosGraph } from "../graph";
-import { MC_MAX, MC_MIN, store } from "../store";
+import { store } from "../store";
 
 function clearFilters() {
   for (const c of [...store.brush.clauses]) {
@@ -20,19 +21,12 @@ export function Controls() {
   const active = () => store.brush.clauses.length;
   return (
     <div class="seismos-controls">
-      <label class="slider slider-compact">
-        <span class="slider-label">
-          completeness <b>Mc {store.mc.get().toFixed(1)}</b>
-        </span>
-        <input
-          type="range"
-          min={MC_MIN}
-          max={MC_MAX}
-          step="0.1"
-          value={store.mc.get()}
-          onInput={(e) => store.mc.set(Number(e.currentTarget.value))}
-        />
-      </label>
+      <ControlSlider
+        of={store.mc}
+        label="completeness"
+        class="slider-compact"
+        format={(v) => `Mc ${v.toFixed(1)}`}
+      />
       <div class="controls-buttons">
         <Show when={suggested() != null}>
           <button
@@ -40,7 +34,7 @@ export function Controls() {
             class="btn btn-outline"
             onClick={() => {
               const s = suggested();
-              if (s != null) store.mc.set(Math.max(MC_MIN, Math.min(MC_MAX, s)));
+              if (s != null) store.mc.set(s); // the control clamps to [MC_MIN, MC_MAX]
             }}
           >
             use suggested Mc ({(suggested() as number).toFixed(1)})

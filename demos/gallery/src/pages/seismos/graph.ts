@@ -37,7 +37,7 @@ import {
   mcMaxCurvature,
   totalCount,
 } from "./gr";
-import { MC_MAX, MC_MIN, type Summary, store } from "./store";
+import { type Summary, store } from "./store";
 
 export interface GrStats {
   /** The filtered magnitude histogram (incremental FMD). */
@@ -138,25 +138,9 @@ function registerTools(): void {
   const kit = agentToolkit("seismos");
   const { registerTool, registerReporter } = kit;
   const brush = store.brush;
-  // `locate` (element → source) and the `cells` attribution table.
+  // The derived surface: report/set/locate (+ actions, when declared). The old
+  // set-mc tool dissolved into the `mc` control — declaring IS exposing.
   registerStandardTools(kit);
-
-  registerTool({
-    name: "set-mc",
-    description:
-      "Set the magnitude of completeness Mc used for the live Gutenberg–Richter b-value fit.",
-    params: { mc: `number ${MC_MIN}..${MC_MAX}` },
-    run: (args) => {
-      // Return what was written, not a same-tick re-read — Solid 2.0 batches
-      // writes transactionally, so .get() here can still show the old value.
-      let mc = store.mc.get();
-      if (typeof args?.mc === "number") {
-        mc = Math.max(MC_MIN, Math.min(MC_MAX, args.mc));
-        store.mc.set(mc);
-      }
-      return { mc };
-    },
-  });
 
   registerTool({
     name: "suggest-mc",

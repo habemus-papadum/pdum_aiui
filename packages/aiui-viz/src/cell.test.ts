@@ -446,6 +446,31 @@ describe("progress", () => {
 });
 
 describe("the named-cell registry", () => {
+  it("mirrors name→loc on window for framework-agnostic consumers", () => {
+    // The dev overlay's attribution ladder (shot locator, selection watcher,
+    // jump picker) resolves a bare manual `data-cell="name"` stamp to the
+    // cell's definition site through window.__aiuiCells — without importing
+    // aiui-viz. This bridge is what retired the runtime-internals spike.
+    const bridge = (
+      window as unknown as { __aiuiCells?: { loc(name: string): string | undefined } }
+    ).__aiuiCells;
+    expect(bridge).toBeDefined();
+
+    let d: () => void = () => {};
+    createRoot((dd) => {
+      d = dd;
+      cell(
+        () => 1,
+        (n) => n,
+        { name: "grStats", loc: "src/model/graph.ts:31" },
+      );
+    });
+    expect(bridge?.loc("grStats")).toBe("src/model/graph.ts:31");
+    expect(bridge?.loc("mystery")).toBeUndefined();
+    d();
+    expect(bridge?.loc("grStats")).toBeUndefined(); // deregistered with its owner
+  });
+
   it("registers on creation and deregisters when the owner is disposed", async () => {
     let d2: () => void = () => {};
     createRoot((d) => {

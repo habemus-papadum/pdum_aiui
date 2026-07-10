@@ -42,7 +42,7 @@ import type { Plugin } from "vite";
 // `.ts`. The `#`-import (resolved via package.json `imports`, dev→src / publish→
 // dist) carries no extension in the specifier, so it resolves cleanly for node
 // and TypeScript in both the source-first dev shape and the published `dist`.
-import { sourceLocatorVite } from "#source-locator";
+import { type FactorySpec, sourceLocatorVite } from "#source-locator";
 import type { IntentPipelineConfig } from "./intent-pipeline";
 
 // Re-exported from the `./vite` (node-side) subpath so the compile-time locator
@@ -142,28 +142,39 @@ export interface AiuiDevOverlayOptions {
    */
   sourceRoot?: string;
   /**
-   * Enable compile-time source-location stamping (opt-in, default off). When
-   * on, `aiuiDevOverlay()` returns an ARRAY of plugins — a `"pre"` babel pass
-   * that stamps every host JSX element with `data-source-loc` and (unless
-   * disabled) injects `{ name, loc }` into cell-factory call sites — plus the
-   * overlay plugin. Vite flattens nested plugin arrays, so
-   * `plugins: [aiuiDevOverlay({ locator: true })]` keeps working.
+   * Enable the aiui compiler (opt-in, default off). When on,
+   * `aiuiDevOverlay()` returns an ARRAY of plugins — a `"pre"` babel pass with
+   * two halves — plus the overlay plugin. Vite flattens nested plugin arrays,
+   * so `plugins: [aiuiDevOverlay({ locator: true })]` keeps working.
    *
-   * - `true` — JSX stamping and the default `cell()` call-site injection.
-   * - `{ cellFactories }` — configure the call-site factory names; pass `[]`
-   *   to keep JSX stamping only.
+   * The two halves have different lifecycles (source-locator.ts documents the
+   * principles): **JSX stamping** (`data-source-loc` on host elements) is
+   * dev-only instrumentation; **factory identity injection** (`{ name, loc,
+   * description }` into `cell()`/`control()`/`action()` call sites, names
+   * inferred from bindings, descriptions lifted from doc comments) is
+   * LOAD-BEARING and runs in production builds too — a control's compiled-in
+   * name is its durable key and tool identity.
+   *
+   * - `true` — JSX stamping plus the default factory table
+   *   (`cell`/`control`/`action`).
+   * - `{ factories }` — the full table (see `FactorySpec`); `[]` keeps JSX
+   *   stamping only.
+   * - `{ cellFactories }` — back-compat sugar: names treated as cell-shaped
+   *   factories only.
+   * - `{ stampJsx }` — override the per-command default (serve: on, build:
+   *   off) for the instrumentation half.
    *
    * ORDER MATTERS for JSX stamping: place `aiuiDevOverlay(...)` BEFORE your
    * framework's JSX plugin (e.g. `vite-plugin-solid`, which is also
    * `enforce: "pre"`) — same-enforce plugins run in array order, and the
    * locator must see JSX before the framework compiles each element into an
-   * opaque template. The `cell()` half is order-independent (plain `.ts`).
+   * opaque template. The factory half is order-independent (plain `.ts`).
    *
    * Requires `@babel/core` (an optional peer) as a devDependency of the app.
    * The locator's source-loc paths are relative to the same root injected as
    * `window.__AIUI__.sourceRoot` (this option's `sourceRoot`, else the Vite root).
    */
-  locator?: boolean | { cellFactories?: string[] };
+  locator?: boolean | { cellFactories?: string[]; factories?: FactorySpec[]; stampJsx?: boolean };
 }
 
 /**
@@ -380,10 +391,7 @@ export function aiuiDevOverlay(options: AiuiDevOverlayOptions = {}): Plugin | Pl
   // resolved Vite root). Returning an array is transparent to consumers — Vite
   // flattens nested plugin arrays.
   const locatorOptions = options.locator === true ? {} : options.locator;
-  return [
-    sourceLocatorVite({ root: options.sourceRoot, cellFactories: locatorOptions.cellFactories }),
-    overlay,
-  ];
+  return [sourceLocatorVite({ root: options.sourceRoot, ...locatorOptions }), overlay];
 }
 
 export default aiuiDevOverlay;

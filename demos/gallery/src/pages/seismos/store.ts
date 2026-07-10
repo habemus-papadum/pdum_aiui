@@ -25,9 +25,9 @@
  * histogram client's result signal. See NOTES.md.
  */
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
-import { durable } from "@habemus-papadum/aiui-viz";
+import { type ControlBox, control, durable } from "@habemus-papadum/aiui-viz";
 import { Coordinator, loadParquet, Selection, wasmConnector } from "@uwdata/vgplot";
-import { type Accessor, createSignal, type Setter } from "solid-js";
+import { type Accessor, createSignal } from "solid-js";
 import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "./duckdb";
 import type { MagBin } from "./gr";
 import { MagHistogramClient } from "./stats-client";
@@ -119,7 +119,7 @@ export interface SeismosStore {
   brush: Selection;
   table: string;
   /** Completeness magnitude control (durable interaction state). */
-  mc: { get: Accessor<number>; set: Setter<number> };
+  mc: ControlBox<number>;
   loadState: Accessor<LoadState>;
   loadProgress: Accessor<number>;
   loadError: Accessor<unknown>;
@@ -154,7 +154,8 @@ export const store: SeismosStore = durable("seismos:store", () => {
   const coordinator = new Coordinator();
   const brush = Selection.crossfilter();
 
-  const [mcGet, mcSet] = createSignal(DEFAULT_MC);
+  /** Magnitude of completeness Mc for the live Gutenberg-Richter b-value fit. */
+  const mc = control({ name: "mc", value: DEFAULT_MC, min: MC_MIN, max: MC_MAX, step: 0.1 });
   const [loadState, setLoadState] = createSignal<LoadState>("idle");
   const [loadProgress, setLoadProgress] = createSignal(0);
   const [loadError, setLoadError] = createSignal<unknown>(undefined);
@@ -297,7 +298,7 @@ export const store: SeismosStore = durable("seismos:store", () => {
     coordinator,
     brush,
     table: TABLE,
-    mc: { get: mcGet, set: mcSet },
+    mc,
     loadState,
     loadProgress,
     loadError,

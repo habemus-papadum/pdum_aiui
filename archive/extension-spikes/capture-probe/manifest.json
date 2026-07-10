@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "aiui capture probe (spike)",
+  "version": "0.1.0",
+  "description": "Measurement spike M1/M2/M4/M6 for docs/proposals/browser-extension-intent-tool.md. Not a product.",
+  "action": {
+    "default_title": "capture-probe: invoke on this tab (grants activeTab) + open panel"
+  },
+  "background": { "service_worker": "sw.js" },
+  "side_panel": { "default_path": "panel.html" },
+  "permissions": [
+    "tabCapture",
+    "desktopCapture",
+    "offscreen",
+    "activeTab",
+    "scripting",
+    "tabs",
+    "sidePanel",
+    "storage"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

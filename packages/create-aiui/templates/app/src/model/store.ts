@@ -1,34 +1,33 @@
 /**
- * store.ts — the durable roots of the app (the state side of playbook layer 2).
+ * store.ts — the durable roots of the app (the state side of playbook layer 2),
+ * and where the **control surface** is declared: the independent variables a
+ * user moves through widgets and an agent moves through the derived `set` tool.
  *
- * Everything in this module survives a hot edit: the parameter signals (the
- * user's slider position is interaction state — the most precious thing in the
- * HMR contract), and later the engines, workers, canvases, and history rings a
- * real app grows. Each is created once through `durableSignal()` (or `durable()`
- * for anything that isn't a signal) and *adopted* by any re-evaluated module:
+ * `control({ value, … })` needs no name and no description here — the aiui
+ * compiler injects the name from the binding and lifts the description from
+ * the doc comment above it (so write real doc comments: they become the editor
+ * tooltip AND the agent-facing registry text). Constraints (`min`/`max`/`step`/
+ * `unit`/`options`) live in the declaration, and every write — slider,
+ * keyboard, agent — validates through them in one place. Controls are durable:
+ * a hot edit never resets what the user set; renaming a binding DOES reset its
+ * state (pass an explicit `{ name }` to rename without that).
  *
- *   import { durableSignal } from "@habemus-papadum/aiui-viz";
- *   export const sampleId = durableSignal("param:sampleId", "A1");
+ * State that is NOT part of the surface (engines, workers, canvases, history
+ * rings, transient bookkeeping) uses `durableSignal()`/`durable()` instead —
+ * the surface is curated, not automatic.
  *
  * The companion rule: this file is the guarded, rarely-edited wiring; the cell
  * graph (graph.ts) and the components (ui/) are the disposable logic edited
- * constantly. Splitting the two along module lines is what gives HMR an easy
- * job. Add new state HERE; add the dataflow over it in graph.ts.
- *
- * Note that editing this file forces a full reload — it is everything's
- * ancestor — so avoid it while a live run matters.
+ * constantly. Note that editing this file forces a full reload — it is
+ * everything's ancestor — so avoid it while a live run matters.
  */
 
 // <aiui-scenery>
-import { durableSignal } from "@habemus-papadum/aiui-viz";
+import { control } from "@habemus-papadum/aiui-viz";
 
 /** Petal frequency n of the rose r = sin(n·θ). */
-export const petals = durableSignal("param:petals", 6);
-/** The Maurer walk's angle step d, in degrees. */
-export const angleStep = durableSignal("param:angleStep", 71);
+export const petals = control({ value: 6, min: 2, max: 9, step: 1 });
 
-export const ANGLE_STEP_MIN = 1;
-export const ANGLE_STEP_MAX = 179;
-export const PETALS_MIN = 2;
-export const PETALS_MAX = 9;
+/** The Maurer walk's angle step d, in degrees. */
+export const angleStep = control({ value: 71, min: 1, max: 179, step: 1, unit: "°" });
 // </aiui-scenery>

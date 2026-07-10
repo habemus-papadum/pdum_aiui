@@ -37,6 +37,8 @@
 
 import { createEffect, createRoot } from "solid-js";
 import type { Cell, CellState } from "./cell";
+import { restoreControlDefaults } from "./control";
+import { resetDependencyEdges } from "./graph-trace";
 
 /** One macrotask: lets batched writes commit and async cell runs advance. */
 export const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -141,6 +143,27 @@ export async function whenReady<T>(cell: Cell<T>, options: WaitOptions = {}): Pr
     );
   }
   return cell.latest() as T;
+}
+
+/**
+ * Reset the control surface between tests: every registered control returns
+ * to its declared initial value (through its own validation) and the recorded
+ * dependency edges are cleared. The REGISTRATIONS persist — app controls are
+ * declared at module import, modules don't re-import between tests, and a
+ * reset that unregistered them would leave every test after the first staring
+ * at an empty registry (the template e2e caught exactly that).
+ *
+ * ```ts
+ * afterEach(() => resetControlSurface());
+ * ```
+ *
+ * Cells need no equivalent: `cellHarness(...).dispose()` tears their owner
+ * down, and their registry entries (and edges) go with it. A test that builds
+ * cells over controls uses both — dispose the harness, reset the surface.
+ */
+export function resetControlSurface(): void {
+  restoreControlDefaults();
+  resetDependencyEdges();
 }
 
 export interface CommitRecorder<T> {

@@ -39,7 +39,7 @@ methodology in miniature:
 ```
 vite.config.ts        the ENTIRE aiui integration: one aiuiDevOverlay() plugin
 src/
-  model/store.ts      durable roots — signals that survive hot edits (the sliders)
+  model/store.ts      durable roots + the control surface (described, constrained knobs)
   model/rose.ts       pure math (the picture; playbook layer 1, with rose.test.ts)
   model/scenery.ts    the starter's demo cells + tools (layer 2, with scenery.test.ts)
   model/graph.ts      the disposable cell graph + the agent tool surface

@@ -63,14 +63,28 @@ with the cell reporting `held` so the UI shows it quietly rather than as endless
 > concepts page: [Attribution: gesture → source](./attribution).
 
 Attribution, the registry, and HMR all need stable identity, and nobody should have to write it.
-A compile-time pass — the dev overlay's source-locator (`packages/aiui-dev-overlay/src/source-locator.ts`,
-enabled via `aiuiDevOverlay({ locator })` in an app's Vite config) — rewrites cell call-sites in dev:
+A compile-time pass — the aiui compiler (`packages/aiui-dev-overlay/src/source-locator.ts`,
+enabled via `aiuiDevOverlay({ locator })` in an app's Vite config) — rewrites factory call-sites:
 
 ```ts
 const catalog = cell(deps, compute);
 // becomes
 const catalog = cell(deps, compute, { name: "catalog", loc: "src/model/graph.ts:77" });
+
+/** Peak-detection cutoff. */
+const threshold = control({ value: 0.5, min: 0, max: 1 });
+// becomes
+const threshold = control({ value: 0.5, min: 0, max: 1,
+  name: "threshold", loc: "src/model/store.ts:12", description: "Peak-detection cutoff." });
 ```
+
+The pass is table-driven (`FactorySpec`: which callee, which argument holds options, what to
+inject) and covers `cell`, `control`, and `action` by default; names are inferred from the
+`const` binding (or, for `action`, required inline as a string literal), and the JSDoc or `//`
+comment immediately above a declaration is lifted into `description`. Identity injection runs in
+**build and serve alike** — the compiler is load-bearing, because control names are durable keys
+and tool identities, and a production build without them would be a different app. Only the JSX
+`data-source-loc` stamping stays serve-only.
 
 Named cells self-register into a per-page registry (`cellRegistry()`) and deregister via
 `onCleanup` on their reactive owner — so a graph hot-swap replaces the population atomically and
@@ -198,11 +212,21 @@ declares it over the channel's `/tools` websocket; the session reaches it throug
 the handoff (`packages/aiui-dev-overlay/handoff/frontend-tool-registry.md`): registration is
 *declarative* (always re-register the full set; identity = namespace + name), forwarding is
 *content-hashed* (page reloads with unchanged tool sets are invisible upstream), and
-implementations are resolved *at call time* (HMR swaps closures invisibly). The ergonomic
-direction remains ImGui-like single-source parameter meta — define `{min, max, step,
-description}` once and derive the slider, the tool schema, and the report entry — plus
-auto-derived read-tools from the cell registry, and per-tool dynamic MCP registration in place
-of the list/call pair.
+implementations are resolved *at call time* (HMR swaps closures invisibly).
+
+**The control surface: declaring is exposing.** The ImGui-like single-source direction shipped as
+`control()` and `action()` (`aiui-viz/src/control.ts`): a control is a curated durable signal
+carrying `{min, max, step, unit, options, description}` declared once; validation (clamp, snap,
+enum check) lives in the library and guards *every* write — widget, keyboard, and agent alike.
+`registerStandardTools` derives the whole tool surface from the declarations: `report`
+(brief/full — controls, cells with state, actions, and the **dependency edges** recorded live as
+each cell's deps run), `set` (validated write, returns what was actually written), `locate`, and
+**one real named tool per registered action**. The hand-written get-params/set-params pair this
+framework once required is gone; hand-written tools remain only for the genuinely bespoke
+(gallery's `set-filter`, `query`). Deliberately absent: a generated control panel. Widgets are
+hand-placed (`ControlSlider`/`ControlToggle` read bounds from the declaration and stamp
+`data-control`), and porcelain is extracted from repetition in real apps, never invented ahead
+of evidence.
 
 ## 7 · Attribution: boundaries, not magic
 

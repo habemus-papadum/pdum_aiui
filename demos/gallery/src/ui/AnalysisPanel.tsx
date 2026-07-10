@@ -5,7 +5,7 @@
  * histogram, and the correlogram with the dominant wavelength flagged.
  */
 
-import { CellView } from "@habemus-papadum/aiui-viz";
+import { CellView, ControlSlider, ControlToggle } from "@habemus-papadum/aiui-viz";
 import { PlotFigure } from "@habemus-papadum/aiui-viz/plot";
 import * as Plot from "@observablehq/plot";
 import { Show } from "solid-js";
@@ -72,29 +72,6 @@ export function AnalysisPanel() {
   const g = () => morphoGraph();
   const analysis = () => g().analysis;
 
-  const knob = (
-    label: string,
-    value: () => number,
-    set: (v: number) => void,
-    min: number,
-    max: number,
-    step: number,
-  ) => (
-    <label class="slider slider-compact">
-      <span class="slider-label">
-        {label} <b>{value()}</b>
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value()}
-        onInput={(e) => set(e.currentTarget.valueAsNumber)}
-      />
-    </label>
-  );
-
   return (
     <div class="panel">
       <div class="panel-head">
@@ -113,28 +90,9 @@ export function AnalysisPanel() {
         >
           cancel
         </button>
-        <label class="check">
-          <input
-            type="checkbox"
-            checked={autoAnalyze.get()}
-            onInput={(e) => autoAnalyze.set(e.currentTarget.checked)}
-          />
-          auto
-        </label>
-        {knob("thoroughness", quality.get, quality.set, 1, 5, 1)}
-        <label class="slider slider-compact">
-          <span class="slider-label">
-            threshold <b>{threshold.get().toFixed(2)}</b>
-          </span>
-          <input
-            type="range"
-            min={0.05}
-            max={0.5}
-            step={0.01}
-            value={threshold.get()}
-            onInput={(e) => threshold.set(e.currentTarget.valueAsNumber)}
-          />
-        </label>
+        <ControlToggle of={autoAnalyze} label="auto" />
+        <ControlSlider of={quality} label="thoroughness" class="slider-compact" />
+        <ControlSlider of={threshold} class="slider-compact" format={(v) => v.toFixed(2)} />
       </div>
       <CellView of={g().analysis} label="analyzing pattern structure">
         {(a) => (

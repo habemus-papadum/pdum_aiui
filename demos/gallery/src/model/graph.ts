@@ -16,6 +16,7 @@
  */
 
 import {
+  action,
   agentToolkit,
   type Cell,
   cell,
@@ -150,87 +151,13 @@ export const morphoGraph = hotCellGraph<MorphoGraph>(
 
 function registerTools(): void {
   const kit = agentToolkit("morpho");
-  const { registerTool, registerReporter } = kit;
-  // `locate` (element → source) and the `cells` attribution table.
+  const { registerReporter } = kit;
+  // The derived surface: report (controls/cells/actions/edges), set (validated
+  // through each control's meta), locate, and one real tool per action().
+  // The old hand-written get-params/set-params/set-speed tools dissolved into
+  // the controls declared in store.ts — declaring IS exposing.
   registerStandardTools(kit);
-  registerTool({
-    name: "get-params",
-    description: "Current simulation parameters and speed.",
-    run: () => ({
-      F: paramF.get(),
-      k: paramK.get(),
-      speed: speed.get(),
-      threshold: threshold.get(),
-      quality: quality.get(),
-    }),
-  });
-  registerTool({
-    name: "set-params",
-    description: "Set Gray-Scott parameters. Sliders update; the sim reacts immediately.",
-    params: { F: "feed rate 0.0..0.1", k: "kill rate 0.03..0.08" },
-    run: (args) => {
-      // Return the values written, not a re-read: Solid 2.0 batches writes
-      // transactionally, so a same-tick .get() can still show the old value.
-      const next = { F: paramF.get(), k: paramK.get() };
-      if (typeof args?.F === "number") {
-        next.F = args.F;
-        paramF.set(next.F);
-      }
-      if (typeof args?.k === "number") {
-        next.k = args.k;
-        paramK.set(next.k);
-      }
-      return next;
-    },
-  });
-  registerTool({
-    name: "jump-regime",
-    description: "Jump to a named regime from the catalog (see report().catalog).",
-    params: { id: "regime id, e.g. 'mitosis'" },
-    run: (args) => {
-      const regime = REGIME_CATALOG.find((r) => r.id === args?.id);
-      if (!regime) {
-        throw new Error(
-          `unknown regime "${String(args?.id)}" — ids: ${REGIME_CATALOG.map((r) => r.id).join(", ")}`,
-        );
-      }
-      paramF.set(regime.F);
-      paramK.set(regime.k);
-      return regime;
-    },
-  });
-  registerTool({
-    name: "set-speed",
-    description: "Simulation steps per frame; 0 pauses.",
-    params: { value: "integer 0..60" },
-    run: (args) => {
-      let value = speed.get();
-      if (typeof args?.value === "number") {
-        value = args.value;
-        speed.set(value);
-      }
-      return { speed: value };
-    },
-  });
-  registerTool({
-    name: "reseed",
-    description: "Reinitialize the field.",
-    params: { kind: "'center' | 'spots' | 'noise' | 'clear'" },
-    run: (args) => {
-      const kind = (args?.kind ?? "center") as "center" | "spots" | "noise" | "clear";
-      sim.engine.seed(kind);
-      history.clear();
-      return { seeded: kind };
-    },
-  });
-  registerTool({
-    name: "analyze",
-    description: "Capture the current field and run the structure analysis.",
-    run: () => {
-      morphoGraph().captureAnalysis();
-      return { started: true };
-    },
-  });
+
   registerReporter("sim", () => ({
     ...sim.loop.stats(),
     steps: sim.engine.steps,
@@ -268,5 +195,45 @@ function registerTools(): void {
     };
   });
 }
+
+// --- actions: the verbs of the surface (each becomes a real agent tool) -------
+
+/** Jump to a named regime from the catalog (ids in report().catalog). */
+action({
+  name: "jump-regime",
+  params: { id: "regime id, e.g. 'mitosis'" },
+  run: (args) => {
+    const regime = REGIME_CATALOG.find((r) => r.id === args?.id);
+    if (!regime) {
+      throw new Error(
+        `unknown regime "${String(args?.id)}" — ids: ${REGIME_CATALOG.map((r) => r.id).join(", ")}`,
+      );
+    }
+    paramF.set(regime.F);
+    paramK.set(regime.k);
+    return regime;
+  },
+});
+
+/** Reinitialize the field. */
+action({
+  name: "reseed",
+  params: { kind: "'center' | 'spots' | 'noise' | 'clear'" },
+  run: (args) => {
+    const kind = (args?.kind ?? "center") as "center" | "spots" | "noise" | "clear";
+    sim.engine.seed(kind);
+    history.clear();
+    return { seeded: kind };
+  },
+});
+
+/** Capture the current field and run the structure analysis. */
+action({
+  name: "analyze",
+  run: () => {
+    morphoGraph().captureAnalysis();
+    return { started: true };
+  },
+});
 
 registerTools(); // idempotent by name — re-registration replaces

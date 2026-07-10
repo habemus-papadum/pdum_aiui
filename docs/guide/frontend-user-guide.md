@@ -49,10 +49,52 @@ threshold.set(0.7); // write → everyone who read it gets re-run
 ```
 
 That's the whole interface: `.get()` and `.set()`. The "durable" part means the box survives a
-live code edit — more on that in [Step 9](#step-9-where-everything-lives), and until then you can
+live code edit — more on that in [Step 10](#step-10-where-everything-lives), and until then you can
 ignore it. The string key just names the box.
 
-## Step 2: your first cell
+## Step 2: the control surface — the knobs of your experiment
+
+A bare signal is anonymous plumbing. The knobs a *person* turns — and an agent should be able to
+turn — deserve more: a name, a description, legal bounds. Declare those with `control()`:
+
+```ts
+import { control } from "@habemus-papadum/aiui-viz";
+
+/** Diffusion constant — how fast heat spreads down the rod. */
+export const kappa = control({ value: 0.1, min: 0.01, max: 1, step: 0.01 });
+```
+
+Notice what you did NOT write: no name, no description string. The aiui compiler injects the name
+from the variable (`kappa`) and lifts the doc comment as the description — so the comment you'd
+write anyway becomes the editor tooltip *and* what the agent reads. Write real doc comments.
+
+What the declaration buys, everywhere at once:
+
+- **One source of truth for constraints.** Every write — a slider, a keyboard shortcut, the
+  agent — is validated by the same declaration: numbers clamp to `min`/`max` and snap to `step`;
+  a control with `options: [...]` (an enum) rejects anything else; wrong types throw.
+- **Widgets for free-ish.** `<ControlSlider of={kappa} />` renders a slider whose bounds, step,
+  and unit come from the declaration (never re-type them in the UI); `<ControlToggle of={flag} />`
+  does booleans. These are ordinary components you compose into your own layout — there is
+  deliberately no auto-generated panel.
+- **Agent access, with zero extra code** — Step 13 shows the derived tools.
+- **Durability**: like `durableSignal`, a control survives live code edits. One consequence to
+  know: the name is the storage key, so *renaming the variable resets the stored value* — pass an
+  explicit `{ name: "kappa" }` to rename the binding without that.
+
+Controls have the same `.get()`/`.set()` interface as signals, so everything in the following
+steps applies to them unchanged. And not every signal should be a control: transient interior
+state stays a plain signal — the surface is *curated*, which is exactly what makes it useful.
+
+Verbs get the same treatment as values. An operation that isn't "set a value" — re-seed the
+noise, capture a snapshot — is an **action**:
+
+```ts
+/** New random seed; the profile recomputes. */
+action({ name: "re-seed", run: () => seed.set((s) => s + 1) });
+```
+
+## Step 3: your first cell
 
 A cell is made from two functions:
 
@@ -70,10 +112,10 @@ it."* Move the threshold slider, and `peaks` recomputes. You never call it, sche
 up — declaring the dependency **is** the wiring, exactly like the spreadsheet.
 
 The first function (**deps**) gathers the inputs into a bundle. The second (**compute**) receives
-that bundle and returns the value. Keep that division of labor in mind; Step 3 explains why it
+that bundle and returns the value. Keep that division of labor in mind; Step 4 explains why it
 matters more than it looks.
 
-## Step 3: how the cell knows when to re-run
+## Step 4: how the cell knows when to re-run
 
 This is the one piece of magic in the whole system, so it deserves a plain explanation.
 
@@ -117,11 +159,11 @@ const curve = cell(
 
 The rule that prevents it: **`compute` should be a pure function of its bundle.** If `compute`
 mentions a signal or a cell directly, that's the bug. It is an easy rule for a human to state and
-an easy one to drift from during a refactor — which is why [Step 7](#step-7-testing-your-cells)
+an easy one to drift from during a refactor — which is why [Step 8](#step-8-testing-your-cells)
 shows a unit test that catches exactly this, and why an agent writing cells should write that test
 without being asked.
 
-## Step 4: putting a cell on screen
+## Step 5: putting a cell on screen
 
 `CellView` renders a cell with all its life-cycle chrome handled:
 
@@ -146,7 +188,7 @@ Two mechanical notes, both easy to trip on:
   `cell-pending`, `cell-error`, `progress-stripe`, and friends — and your app styles them once.
   The starter app's `styles.css` already does.
 
-## Step 5: cells that use other cells
+## Step 6: cells that use other cells
 
 Read the upstream cell in `deps`, the same way you read a signal — a cell is read by *calling* it:
 
@@ -176,9 +218,9 @@ One caution outside cells: **calling `spectrum()` in ordinary code** — a click
 `console.log` — throws that same not-ready error if the cell isn't done. For those places use
 `spectrum.latest()`, which never throws and returns the most recent value (or `undefined`). Every
 cell also answers `state()`, `loading()`, `error()`, `progress()`, and `settled()`; the full table
-is in [Step 8](#step-8-progress-and-cancelling).
+is in [Step 9](#step-9-progress-and-cancelling).
 
-## Step 6: the gate — "don't run yet"
+## Step 7: the gate — "don't run yet"
 
 If `deps` returns `undefined`, `null`, or `false`, the cell **holds**: it doesn't run at all.
 That's how you express "nothing to do until…":
@@ -198,12 +240,12 @@ Corollary: since those three values mean "hold," none of them can *be* a depende
 input genuinely is a boolean, box it — `() => ({ enabled: flag.get() })` — so `false` travels as a
 value instead of closing the gate. (The library's own test suite pins this exact case.)
 
-The gate is also how you'll cancel things, in [Step 8](#step-8-progress-and-cancelling).
+The gate is also how you'll cancel things, in [Step 9](#step-9-progress-and-cancelling).
 
-## Step 7: testing your cells
+## Step 8: testing your cells
 
 A cell graph is plain model code — no browser, no rendering. That makes it *unit-testable*, and
-testing is not optional decoration here: it is the counterweight to the deps magic in Step 3. A
+testing is not optional decoration here: it is the counterweight to the deps magic in Step 4. A
 test that moves each input and watches the output is exactly the instrument that catches a
 dependency the code forgot to declare.
 
@@ -236,9 +278,9 @@ Four helpers cover almost every dataflow test:
 - **`whenReady(cell)`** — waits for the next settled value and returns it; if the run *fails*, it
   rejects with the compute's error rather than a useless timeout.
 - **`whenState(cell, "held")`** — waits for any state; this is how a test observes the cancel
-  gesture from [Step 8](#step-8-progress-and-cancelling).
+  gesture from [Step 9](#step-9-progress-and-cancelling).
 - **`recordCommits(cell)`** — collects every value a streaming cell publishes, so
-  [Step 10](#step-10-streaming--values-that-arrive-in-pieces)'s "three partials or one settled
+  [Step 11](#step-11-streaming--values-that-arrive-in-pieces)'s "three partials or one settled
   value?" is a one-line assertion.
 
 The library's own suites are the worked examples: `testing.test.ts` shows each helper in use
@@ -246,10 +288,22 @@ The library's own suites are the worked examples: `testing.test.ts` shows each h
 harness-free patterns for when you need to see the machinery.
 
 If you (or your agent) write a cell with more than one input, write the test that moves *each*
-input. It is three lines per input and it converts the framework's one silent failure mode into a
-loud one.
+input — controls included. It is three lines per input and it converts the framework's one silent
+failure mode into a loud one.
 
-## Step 8: progress, and cancelling
+Three rules keep these tests honest:
+
+- **Build cells inside the harness's callback.** A cell created at module top level or in the
+  test body has no reactive owner and throws `NO_OWNER_BOUNDARY`; the setup callback is the
+  owner.
+- **`resetControlSurface()` in `afterEach`.** Controls are shared state across a test file
+  (modules import once); the reset restores every control to its declared initial and clears the
+  recorded dependency edges, while keeping the registrations alive for the next test.
+- **The compiler runs under Vitest too.** Control names and descriptions are injected at compile
+  time, so the same plugin from `vite.config.ts` belongs in `vitest.config.ts` — the scaffold
+  ships it wired. Without it, controls come out nameless and tests fail confusingly.
+
+## Step 9: progress, and cancelling
 
 So far `compute` has taken a second argument we've ignored: `ctx`. It carries three things.
 
@@ -267,7 +321,7 @@ stops because new work started.
 **`ctx.previous`** — the last value this cell produced, if you want to warm-start from it.
 
 That leaves deliberate, user-pressed **cancel**. There is no `cell.cancel()` — instead, remember
-the gate from Step 6: cancelling *is* closing the gate.
+the gate from Step 7: cancelling *is* closing the gate.
 
 ```ts
 const cancelAnalysis = () => capture.set(undefined);
@@ -286,28 +340,35 @@ dev tools speak them:
 | --- | --- |
 | `unresolved` | never produced a value; gate closed or inputs not ready |
 | `pending` | first run in flight |
-| `streaming` | producing partial values right now (Step 10) |
+| `streaming` | producing partial values right now (Step 11) |
 | `refreshing` | has a value; a newer one is on the way |
 | `held` | has a value; gate closed — idle, at rest |
 | `ready` | has a settled value |
 | `errored` | the run threw; `error()` has it, `latest()` still serves the old value |
 
-## Step 9: where everything lives
+## Step 10: where everything lives
 
 Here is the part where we ask you to copy a shape without fully deriving it. The payoff is **hot
 reload that never loses your work**: you (or the agent) edit code while a simulation runs, and the
 simulation, the slider positions, and the history all survive the edit. Every aiui app is split
 into three files to make that true:
 
-**`src/model/store.ts` — things that survive edits.** Your parameters, and later your workers and
-canvases. This is where `durableSignal` from Step 1 earns its name: on a live edit, a durable
-signal is *re-found*, not re-created, so the slider the user positioned stays put.
+**`src/model/store.ts` — things that survive edits, and the control surface.** Your knobs are the
+`control()` declarations from Step 2; internal state is `durableSignal`; non-signal resources
+(workers, engines, canvases) are `durable(key, create)`. All of them are *re-found*, not
+re-created, on a live edit — the slider the user positioned stays put.
 
 ```ts
-import { durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, durableSignal } from "@habemus-papadum/aiui-viz";
 
-export const sampleId = durableSignal("param:sampleId", "A1");
-export const threshold = durableSignal("param:threshold", 0.5);
+/** Which sample the instruments read. */
+export const sampleId = control({ value: "A1", options: ["A1", "A2", "B1"] });
+
+/** Peak-detection cutoff. */
+export const threshold = control({ value: 0.5, min: 0, max: 1, step: 0.01 });
+
+// internal, not a knob — the surface is curated
+export const lastFetchAt = durableSignal("lastFetchAt", 0);
 ```
 
 **`src/model/graph.ts` — the cells.** All of them, built inside one `hotCellGraph` call:
@@ -371,7 +432,7 @@ file everything grows from).
 `npm create @habemus-papadum/aiui` scaffolds all of this working, with a placeholder app to
 overwrite.
 
-## Step 10: streaming — values that arrive in pieces
+## Step 11: streaming — values that arrive in pieces
 
 Return an async *generator* (note the `*`) and every `yield` publishes a value:
 
@@ -411,7 +472,7 @@ double as runnable examples.
 One rule for generators: **yield at least once** before finishing, or the cell errors — a stream
 that ends silently with no value is treated as a bug, loudly.
 
-## Step 11: heavy computation — Web Workers
+## Step 12: heavy computation — Web Workers
 
 When a computation is heavy enough to freeze the page, it belongs in a **Web Worker** — the
 browser's way of running code on another core. The library reduces the ceremony to one function:
@@ -447,33 +508,37 @@ writing it, each of which once cost a real debugging session:
   will count it twice.
 
 The gallery demo's `analysis/` directory is a complete worked example, with the math kept in a
-pure, separately-tested module — which is the worker-shaped version of Step 7's advice.
+pure, separately-tested module — which is the worker-shaped version of Step 8's advice.
 
-## Step 12: letting the agent drive
+## Step 13: letting the agent drive
 
 The last convention exists because an agent is part of the team: the app exposes its operations as
-**tools** the agent can discover and call, instead of guessing at your UI. In `graph.ts`:
+**tools** the agent can discover and call, instead of guessing at your UI. And here Step 2 pays
+off completely — you already wrote the tools, by declaring the surface. In `graph.ts`:
 
 ```ts
 import { agentToolkit, registerStandardTools } from "@habemus-papadum/aiui-viz";
 
 const kit = agentToolkit("app");
-registerStandardTools(kit); // `locate` (screen → source) + the live cell table
-
-kit.registerTool({
-  name: "set-threshold",
-  description: "Set the peak threshold. The slider follows; peaks recompute.",
-  params: { value: "number 0..1" },
-  run: (args) => {
-    const v = Math.min(1, Math.max(0, Number(args?.value)));
-    threshold.set(v);
-    return { value: v }; // return what you wrote, not a re-read (see gotchas)
-  },
-});
+registerStandardTools(kit);
 ```
 
-Rule of thumb: **every operation a user can perform gets a tool twin.** It costs a few lines and it
-is how the agent verifies its own work — set a parameter, read the report, check the cell states —
+Those two lines derive the whole standard surface from your declarations:
+
+- **`report`** — one bounded snapshot of the app: every control (value; the `full` format adds
+  bounds, description, definition site), every cell and its state, every action, and the
+  **dependency edges** — which cells actually read which controls, recorded live as they run.
+  This is the single most-used call in agent-driven verification.
+- **`set`** — writes any control by name, through the same validation as the slider (clamped,
+  snapped, enum-checked), and returns what was *actually* written.
+- **One real tool per `action()`** — the `re-seed` you declared in Step 2 is now a tool named
+  `re-seed`, description included.
+- **`locate`** — screen element → source location, for "make *this* wider."
+
+Rule of thumb: **don't write tools — declare controls and actions.** The hand-written
+set-this/get-that tool this framework once required is gone; `kit.registerTool` remains only for
+the genuinely bespoke operation (a database query, say). Declaring is exposing — and it is how
+the agent verifies its own work: `set` a parameter, read the `report`, check the cell states —
 rather than squinting at screenshots.
 
 ## Gotchas that bite exactly once
@@ -483,9 +548,9 @@ underlying UI library (SolidJS 2.0) and are the kind of thing no one should have
 they're written down. The full ledger, with the debugging stories, is
 [Hard-won details](./frontend-hard-won).
 
-- **Deps and compute drifting apart** (Step 3). Everything `compute` uses arrives via the bundle.
+- **Deps and compute drifting apart** (Step 4). Everything `compute` uses arrives via the bundle.
   Test each input.
-- **A boolean dependency closes the gate** (Step 6). Box it.
+- **A boolean dependency closes the gate** (Step 7). Box it.
 - **Reads right after writes see the old value.** Writes are batched into transactions:
   `threshold.set(0.7); threshold.get()` in the same instant returns the *old* value. Where it
   bites: a tool that sets then re-reads (return what you computed instead), and tests (await a
@@ -498,9 +563,15 @@ they're written down. The full ledger, with the debugging stories, is
 - **An errored cell shows the error box even though `latest()` still has a value.** Errors win —
   by design, so failures aren't papered over. The Retry button calls `refetch()`.
 - **`<Show>`'s function child gets an accessor,** like `CellView`'s: `{(v) => v().thing}`.
-- **The name stamps need the plugin.** `data-cell` attributes and the cell registry are injected
-  at compile time by `aiuiDevOverlay({ locator: { cellFactories: ["cell"] } })` in
-  `vite.config.ts`. The scaffold has it; if names come up `undefined`, that's what's missing.
+- **Renaming a control's variable resets its stored value.** The injected name is the durable
+  storage key. To rename the binding without losing state, pass an explicit `{ name: "old-name" }`
+  (Step 2).
+- **Never re-type a control's bounds in the UI.** `min`/`max`/`step` in a slider's JSX will
+  silently drift from the declaration; `<ControlSlider of={c} />` reads them from the control.
+- **The name stamps need the plugin.** Cell and control names, descriptions, and the registry
+  are injected at compile time by `aiuiDevOverlay({ locator: true })` in `vite.config.ts` (and
+  the same plugin in `vitest.config.ts`). The scaffold has both; if names come up `undefined`,
+  that's what's missing.
 
 ## A young library
 
@@ -519,6 +590,9 @@ frozen artifact.
   any model to follow the starter `CLAUDE.md`'s three-step reset and you have a blank canvas.
 - **Build:** the [Playbook](./frontend-playbook) — the four-layer order of construction for a
   real analytic app, with each layer's testing story.
+- **Watch it built:** `demos/walkthrough` — the playbook executed step by step on one small app
+  (1-D heat diffusion), with every stage left standing as its own page and a narration of each
+  diff (`WALKTHROUGH.md`).
 - **Read:** `demos/gallery` — three real notebooks (GPU simulation, worker pipeline, DuckDB
   crossfilter) built from nothing but these steps.
 - **Deeper:** [Concepts](./frontend-for-agents) · [Design choices](./frontend-design-choices) ·

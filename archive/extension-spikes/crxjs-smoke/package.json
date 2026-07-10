@@ -1,0 +1,20 @@
+{
+  "name": "crxjs-smoke",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "M5 spike: CRXJS v2 + Vite 6 + vite-plugin-solid 3.0.0-next.5 + solid-js 2.0.0-beta.15 + overlay source import",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.7.1",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "3.0.0-next.5"
+  },
+  "dependencies": {
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15"
+  }
+}

@@ -14,7 +14,7 @@
  * edited constantly. Splitting the two along module lines is what gives HMR
  * an easy job — see archive/agentic_ui_workflow/hmr_for_agentic_coding.md.
  */
-import { durable, durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, durable, durableSignal } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";
 import { GrayScottEngine } from "../sim/gray-scott";
 import { type SimLoop, type Snapshot, startLoop } from "../sim/loop";
@@ -23,16 +23,36 @@ import { DISPLAY_FRAG, ENCODE_FRAG, QUAD_VERT, STEP_FRAG } from "../sim/shaders"
 export const SIM_SIZE = 256;
 export const HISTORY_LIMIT = 600; // ~2.5 min at 4 Hz
 
-// --- parameters (durable interaction state) ---------------------------------
+// --- the control surface (described, constrained, agent-settable) ------------
+//
+// Names, definition sites, and the descriptions below are compiler-injected
+// (the doc comment IS the registry description). Bounds live here once — the
+// ControlSlider widgets, the keyboard, and the agent's `set` tool all validate
+// through them.
 
-export const paramF = durableSignal("param:F", 0.0545);
-export const paramK = durableSignal("param:k", 0.062);
-export const speed = durableSignal("param:speed", 12); // sim steps per frame
-export const brushRadius = durableSignal("param:brush", 0.04); // uv units
-export const threshold = durableSignal("param:threshold", 0.1); // analysis cutoff
-export const quality = durableSignal("param:quality", 3); // analysis thoroughness 1..5
-export const autoAnalyze = durableSignal("param:autoAnalyze", true);
-export const failNextFetch = durableSignal("param:failNextFetch", false);
+/** Gray-Scott feed rate F. */
+export const paramF = control({ value: 0.0545, min: 0.005, max: 0.09, step: 0.0005 });
+
+/** Gray-Scott kill rate k. */
+export const paramK = control({ value: 0.062, min: 0.03, max: 0.075, step: 0.0005 });
+
+/** Simulation steps per frame; 0 pauses. */
+export const speed = control({ value: 12, min: 0, max: 48, step: 1 });
+
+/** Brush radius for painting chemical V, in uv units. */
+export const brushRadius = control({ value: 0.04, min: 0.01, max: 0.12, step: 0.005 });
+
+/** Analysis cutoff: V above this counts as pattern. */
+export const threshold = control({ value: 0.1, min: 0.05, max: 0.5, step: 0.01 });
+
+/** Analysis thoroughness (spot-metric sampling density). */
+export const quality = control({ value: 3, min: 1, max: 5, step: 1 });
+
+/** Re-run the structure analysis on a cadence while the sim runs. */
+export const autoAnalyze = control({ value: true });
+
+/** Make the next catalog download fail (demonstrates the error/retry chrome). */
+export const failNextFetch = control({ value: false });
 
 // Diffusion rates are fixed in this demo (they rescale the same regimes).
 export const DIFFUSION = { Du: 1.0, Dv: 0.5 };

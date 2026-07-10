@@ -4,7 +4,7 @@
  * streams them — the cell commits every chunk, so the table literally fills
  * in packet by packet. Click a row to jump the simulation there.
  */
-import { CellView } from "@habemus-papadum/aiui-viz";
+import { CellView, ControlToggle } from "@habemus-papadum/aiui-viz";
 import { For } from "solid-js";
 import { morphoGraph } from "../model/graph";
 import type { Regime } from "../model/regime-data";
@@ -23,14 +23,7 @@ export function RegimeTable() {
       <div class="panel-head">
         <h2>regime catalog</h2>
         <span class="panel-sub">
-          <label class="check" title="the next download will fail mid-flight — exercise Retry">
-            <input
-              type="checkbox"
-              checked={failNextFetch.get()}
-              onInput={(e) => failNextFetch.set(e.currentTarget.checked)}
-            />
-            fail next fetch
-          </label>
+          <ControlToggle of={failNextFetch} label="fail next fetch" />
           <button type="button" class="btn btn-outline" onClick={() => g().reloadCatalog()}>
             re-download
           </button>

@@ -26,16 +26,20 @@ always: the **installed package's own `.d.ts`/docblocks** — every export docum
 contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the module headers.
 
 Library surface (`@habemus-papadum/aiui-viz`): plumbing on the root barrel (`cell`,
-`settledOnly`, `CellView`, `workerStream`/`fromWorker`, `durable`/`durableSignal`,
+`settledOnly`, `CellView`, **`control`/`action`** (the declared control surface — names, locs,
+and descriptions injected by the aiui compiler), `ControlSlider`/`ControlToggle` (widgets that
+read bounds from the declaration), `workerStream`/`fromWorker`, `durable`/`durableSignal`,
 `hotCellGraph`, `agentToolkit`/`registerStandardTools`); `…/testing` → the cell-test harness
-(`cellHarness`, `whenReady`, `whenState`, `recordCommits`) — use it, never hand-roll
-createRoot/tick plumbing in app tests; porcelain on subpaths, one per
+(`cellHarness`, `whenReady`, `whenState`, `recordCommits`, `resetControlSurface`) — use it,
+never hand-roll createRoot/tick plumbing in app tests; porcelain on subpaths, one per
 heavyweight optional peer — `…/plot` → `PlotFigure` (Observable Plot); `…/mosaic` →
 `MosaicView` (Mosaic/vgplot bridge: coordinator + reactive directive-list spec in, connected
 Plot out, marks disconnected on dispose); `…/duckdb` → `instantiateDuckDB` +
 `fetchWithProgress` (DuckDB-WASM from app-bundled `?url` assets — the four asset imports stay
 in YOUR app, see the module docblock); `…/site` → `SiteHeader`, `TocRail`, `TeX`, `colorMode`;
-`…/modal` → the framework-free modal interaction kit. Reference apps: `demos/gallery` —
+`…/modal` → the framework-free modal interaction kit. Reference apps: **`demos/walkthrough`**
+(the playbook executed in order on 1-D diffusion, every layer left standing as its own page —
+read its WALKTHROUGH.md when unsure what a layer should look like), and `demos/gallery` —
 morphogen + aztec notebooks (cells/workers/Plot), **seismos** (the Mosaic + DuckDB reference:
 Parquet → DuckDB-WASM → crossfilter Selection → coordinated vgplot views; its NOTES.md is the
 stack's field ledger).
@@ -48,10 +52,12 @@ reason not to.** Four layers, each with its own verification, rigor front-loaded
 
 1. **Pure functions** — domain math, realm-free (no solid-js, no window, no import.meta.env);
    exhaustive unit tests, benchmarks for anything possibly slow. Library-shaped, not app-shaped.
-2. **Cells** — the *chosen* computation boundaries where reality (time, failure, cancellation,
-   streaming) enters; NOT 1:1 with the pure functions. Headless tests via `aiui-viz/testing` —
-   one per-input probe per cell. The `.worker.ts` file is a thin protocol seam; the math stays
-   in layer 1.
+2. **Controls + cells** — the layer OPENS by declaring the control surface (`control()` per
+   user-movable parameter, `action()` per verb — with real doc comments; the compiler lifts them
+   as descriptions), then the *chosen* computation boundaries where reality (time, failure,
+   cancellation, streaming) enters; NOT 1:1 with the pure functions. Headless tests via
+   `aiui-viz/testing` — one per-input probe per cell, `resetControlSurface` in afterEach. The
+   `.worker.ts` file is a thin protocol seam; the math stays in layer 1.
 3. **Components** — pure readers: cells in (via `graph()`), DOM out, through `CellView`.
    Behavioral jsdom tests now; the HUMAN is the visual tester until the app has earned
    screenshot automation.
@@ -76,9 +82,13 @@ same procedure). Never treat un-reset scenery as the user's code.
 Split every app along the **durable/disposable** line, visible in the module layout (this is
 the playbook's layer 2 made physical; `ui/` is layers 3–4):
 
-- `model/store.ts` — durable roots: user parameters via `durableSignal(key, initial)`,
-  everything else (engines, workers, canvases, history rings) via `durable(key, create)`
-  (create-once, adopt-forever). Rarely edited; edits here full-reload.
+- `model/store.ts` — durable roots AND the control surface: user-movable parameters via
+  `control({ value, min?, max?, step?, unit?, options? })` with a doc comment (constraints
+  declared ONCE here validate every write — widget, keyboard, and agent alike; never re-state
+  min/max in JSX), internal state via `durableSignal(key, initial)`, everything else (engines,
+  workers, canvases, history rings) via `durable(key, create)` (create-once, adopt-forever).
+  The surface is curated: a knob is a `control`, internals stay plain. Rarely edited; edits
+  here full-reload.
 - `model/graph.ts` — the **disposable cell graph**, one
   `export const graph = hotCellGraph<AppGraph>("app", build, import.meta.hot)` call: it owns the
   durable box, the dispose-and-rebuild on hot edits, and the self-accept. Do NOT hand-roll that
@@ -112,10 +122,16 @@ unit tests, post errors as `{type:"error"}`. Don't emit the final value as both 
 
 ## The agent surface (build it as you build features)
 
-`agentToolkit("<page-ns>")`, then `registerStandardTools(kit)` first — it provides `locate`
-(element → source/cell stamps) and the `cells` attribution reporter, so never hand-write those —
-then register a tool and/or reporter **next to each feature**:
-name+description(+`inputSchema` JSON Schema for real tools), idempotent by name. When the aiui
+**Declaring IS exposing.** `agentToolkit("<page-ns>")`, then `registerStandardTools(kit)` — it
+derives the whole standard surface from the declarations: `report` (brief/full — controls,
+cells, actions, and the live control→cell dependency edges), `set` (validated write; returns
+what was actually written), `locate` (element → source/cell stamps), and **one real named tool
+per registered `action()`**. Do NOT hand-write get-params/set-params tools — that pattern is
+retired; for a new verb add `action({ name: "…", run })` next to the feature (name must be a
+string literal), and reserve `kit.registerTool` for the genuinely bespoke
+(name+description+`inputSchema`, idempotent by name). Bind controls in the UI through
+`ControlSlider`/`ControlToggle` (they stamp `data-control` and read meta) or a hand-rolled
+binding that declares `data-control="<name>"` itself. When the aiui
 dev overlay is active, the toolkit auto-forwards each namespace to the channel — the session can
 then drive the page remotely via the `page_tools_list` / `page_tools_call` MCP tools, no app
 wiring. Always provide one bounded `report()`. Components rendering cell values *outside* CellView declare
@@ -190,10 +206,16 @@ by working around the library in app code, and do not treat its current surface 
 
 Each playbook layer has its own done (see the playbook section above); the whole change is done
 when: typecheck + unit tests + lint pass. Tests mean two layers: pure logic (stats, algorithms,
-worker math in its realm-free module — playbook layer 1) AND the cell graph headless via `aiui-viz/testing` —
-`cellHarness(build)`, then move **each** dependency and `await whenReady(cell)` (the harness
-absorbs write batching and owners); streaming cells assert via `recordCommits`, cancellation via
-`whenState(cell, "held")`. The per-input probe is the instrument that catches an undeclared
-dependency. Then drive the app through its own tool surface in the session browser (zero console
+worker math in its realm-free module — playbook layer 1) AND the surface + graph headless via
+`aiui-viz/testing` — build cells **inside** `cellHarness(build)`'s callback (outside an owner
+they throw `NO_OWNER_BOUNDARY`), `resetControlSurface()` in afterEach (restores initials, keeps
+registrations), then move **each** dependency — every `control` included — and
+`await whenReady(cell)` (the harness absorbs write batching and owners); streaming cells assert
+via `recordCommits`, cancellation via `whenState(cell, "held")`; a `set` through the derived
+tool should round-trip into an observable recompute and the dependency edges should appear in
+`report`. The per-input probe is the instrument that catches an undeclared dependency. (The
+compiler must be wired in `vitest.config.ts` — the template ships it; without it controls are
+nameless and tests fail mysteriously.) Then drive the app through its own tool surface in the
+session browser (zero console
 errors, `report()` sane); prove HMR preserves the running state for a component edit and a graph
 edit; screenshot the result.

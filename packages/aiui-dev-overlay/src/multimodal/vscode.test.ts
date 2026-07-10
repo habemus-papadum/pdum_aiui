@@ -97,6 +97,45 @@ describe("cellSourceLoc (definition site first, then the shot locator's approxim
     expect(cellSourceLoc(cell)).toBe("src/model.ts:20");
   });
 
+  it("resolves a bare manual data-cell name through the live registry bridge", () => {
+    // The one MANUAL attribution attribute: a non-CellView render declares
+    // `data-cell="name"` (no loc — names can't drift, locations can). aiui-viz
+    // mirrors name→loc at window.__aiuiCells; the ladder consults it before
+    // falling back to JSX-stamp approximations. This replaced the retired
+    // runtime-internals attribution spike at zero brittleness.
+    (window as unknown as { __aiuiCells?: unknown }).__aiuiCells = {
+      loc: (name: string) => (name === "grStats" ? "src/model/graph.ts:31" : undefined),
+    };
+    try {
+      const manual = tree(
+        `<div id="cell" data-cell="grStats" data-source-loc="src/View.tsx:8:3"></div>`,
+        "#cell",
+      );
+      expect(cellSourceLoc(manual)).toBe("src/model/graph.ts:31"); // registry beats JSX stamp
+      // Explicit data-cell-loc still wins over the registry…
+      const stamped = tree(
+        `<div id="cell" data-cell="grStats" data-cell-loc="src/other.ts:9"></div>`,
+        "#cell",
+      );
+      expect(cellSourceLoc(stamped)).toBe("src/other.ts:9");
+      // …and a name the registry doesn't know falls through the ladder.
+      const unknown = tree(
+        `<div id="cell" data-cell="mystery" data-source-loc="src/View.tsx:8:3"></div>`,
+        "#cell",
+      );
+      expect(cellSourceLoc(unknown)).toBe("src/View.tsx:8:3");
+      // A broken bridge must never break attribution.
+      (window as unknown as { __aiuiCells?: unknown }).__aiuiCells = {
+        loc: () => {
+          throw new Error("boom");
+        },
+      };
+      expect(cellSourceLoc(unknown)).toBe("src/View.tsx:8:3");
+    } finally {
+      delete (window as unknown as { __aiuiCells?: unknown }).__aiuiCells;
+    }
+  });
+
   it("falls back to the element's own stamp, then the first stamped descendant", () => {
     const own = tree(
       `<div id="cell" data-cell="c" data-source-loc="src/View.tsx:8:3"></div>`,

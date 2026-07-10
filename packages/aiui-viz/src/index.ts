@@ -22,15 +22,27 @@ export {
   cellRegistry,
   settledOnly,
 } from "./cell";
-// cell-attribution.ts — runtime element → cell attribution (data-cell stamps)
-// without CellView, derived from Solid's reactive internals (SPIKE).
-export { attributedRead, enableCellAttribution } from "./cell-attribution";
 // cell-view.tsx — the notebook-feel wrapper (spinner, error+retry, keep-latest).
 export { CellView, ProgressStripe, Spinner } from "./cell-view";
 
+export type {
+  ActionSpec,
+  ControlBox,
+  ControlMeta,
+  ControlSpec,
+  ControlSurfaceEntry,
+  RegisteredAction,
+} from "./control";
+// control.ts — the control surface: controls (writable frontier) + actions (verbs).
+export { action, actionByName, control, controlByName, controlSurface } from "./control";
+// control-widgets.tsx — the earned control-bound widgets (slider, toggle).
+export { ControlSlider, ControlToggle } from "./control-widgets";
 export type { SignalBox } from "./durable";
 // durable.ts — the durable/disposable registry that makes HMR safe.
 export { disposeDurable, durable, durableSignal } from "./durable";
+export type { DependencyEdge, DependencyRead } from "./graph-trace";
+// graph-trace.ts — runtime dependency edges (controls→cells, cells→cells).
+export { dependencyEdges } from "./graph-trace";
 export type { HotContext } from "./hot-graph";
 // hot-graph.ts — the durable box + dispose-and-swap + self-accept, in one call.
 export { hotCellGraph } from "./hot-graph";

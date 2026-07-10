@@ -12,7 +12,7 @@
  * window, hence its own durable registry and its own agent-tool namespace
  * (window.__aztec) — nothing here can collide with morphogen.
  */
-import { durable, durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, durable, durableSignal } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";
 import type { ShuffleFrame } from "./types";
 
@@ -24,13 +24,26 @@ export const MAX_N = 96;
 
 const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
 
-// --- controls (durable interaction state) -----------------------------------
+// --- the control surface (described, constrained, agent-settable) ------------
+//
+// Names and the descriptions below are compiler-injected (the doc comment IS
+// the registry description). `seed`, `runId`, and `frameIndex` stay
+// durableSignals: they are derived/playhead state, not knobs a human drags —
+// the surface is curated.
 
-export const targetN = durableSignal("aztec:targetN", 32);
+/** Target Aztec-diamond order n; changing it regrows to that size. */
+export const targetN = control({ value: 32, min: 1, max: MAX_N, step: 1 });
+
+/** Whether the growth animation is running. */
+export const playing = control({ value: true });
+
+/** Animation speed, growth-frames per second. */
+export const fps = control({ value: 8, min: 1, max: 60, step: 1 });
+
+/** Show the theoretical arctic-circle overlay. */
+export const showCircle = control({ value: true });
+
 export const seed = durableSignal<number>("aztec:seed", randomSeed());
-export const playing = durableSignal("aztec:playing", true);
-export const fps = durableSignal("aztec:fps", 8);
-export const showCircle = durableSignal("aztec:showCircle", true);
 /** Bumped to force a fresh run (regrow) without changing target/seed. */
 export const runId = durableSignal("aztec:runId", 0);
 /** The playhead: which ring frame is currently painted. */

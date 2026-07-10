@@ -11,6 +11,7 @@
  */
 
 import {
+  action,
   agentToolkit,
   type Cell,
   cell,
@@ -27,7 +28,6 @@ import {
   frameIndex,
   frames,
   MAX_FRAMES,
-  MAX_N,
   playing,
   regrow,
   runId,
@@ -152,106 +152,12 @@ function atEnd(): boolean {
 
 function registerTools(): void {
   const kit = agentToolkit("aztec");
-  const { registerTool, registerReporter } = kit;
-  // `locate` (element → source) and the `cells` attribution table.
+  const { registerReporter } = kit;
+  // The derived surface: report/set/locate + one real tool per action(). The
+  // old set-size/set-speed/toggle-circle tools dissolved into the controls in
+  // store.ts — declaring IS exposing.
   registerStandardTools(kit);
 
-  registerTool({
-    name: "set-size",
-    description: "Set the target Aztec-diamond order n; regrows to that size.",
-    params: { n: `integer 1..${MAX_N}` },
-    run: (args) => {
-      // Return what was written, not a same-tick re-read — Solid 2.0 batches
-      // writes transactionally (see the seek tool below). Same throughout.
-      let n = targetN.get();
-      if (typeof args?.n === "number") {
-        n = Math.max(1, Math.min(MAX_N, Math.round(args.n)));
-        targetN.set(n);
-      }
-      return { targetN: n };
-    },
-  });
-  registerTool({
-    name: "regrow",
-    description: "Draw a fresh uniformly-random tiling (new seed) and replay the fold.",
-    params: { seed: "optional integer seed; omit for random" },
-    run: (args) => {
-      let s: number;
-      if (typeof args?.seed === "number") {
-        s = args.seed >>> 0;
-        seed.set(s);
-      } else {
-        s = regrow();
-      }
-      return { seed: s, targetN: targetN.get() };
-    },
-  });
-  registerTool({
-    name: "run",
-    description: "Alias of regrow: start a new random growth from AD(1).",
-    run: () => ({ seed: regrow(), targetN: targetN.get() }),
-  });
-  registerTool({
-    name: "play",
-    description: "Resume the growth animation (restarts from AD(1) if at the end).",
-    run: () => {
-      if (atEnd()) frameIndex.set(0);
-      playing.set(true);
-      return { playing: true };
-    },
-  });
-  registerTool({
-    name: "pause",
-    description: "Pause the growth animation on the current frame.",
-    run: () => {
-      playing.set(false);
-      return { playing: false };
-    },
-  });
-  registerTool({
-    name: "set-speed",
-    description: "Animation speed in growth-frames per second.",
-    params: { fps: "integer 1..60" },
-    run: (args) => {
-      let value = fps.get();
-      if (typeof args?.fps === "number") {
-        value = Math.max(1, Math.min(60, Math.round(args.fps)));
-        fps.set(value);
-      }
-      return { fps: value };
-    },
-  });
-  registerTool({
-    name: "toggle-circle",
-    description: "Show or hide the theoretical arctic circle overlay.",
-    params: { on: "optional boolean; omit to toggle" },
-    run: (args) => {
-      const on = typeof args?.on === "boolean" ? args.on : !showCircle.get();
-      showCircle.set(on);
-      return { showCircle: on };
-    },
-  });
-  registerTool({
-    name: "seek",
-    description: "Move the playhead to a frame by ring index or by order n.",
-    params: { index: "ring index", n: "target order to jump to" },
-    run: (args) => {
-      const rows = frames.frames;
-      let i = frameIndex.get();
-      if (typeof args?.index === "number") i = Math.round(args.index);
-      else if (typeof args?.n === "number") {
-        const found = rows.findIndex((f) => f.n >= (args.n as number));
-        if (found >= 0) i = found;
-      }
-      const target = Math.max(0, Math.min(rows.length - 1, i));
-      frameIndex.set(target);
-      playing.set(false);
-      // Return the computed target, not a re-read: Solid 2.0 batches the write
-      // transactionally, so frameIndex.get() in this same tick can still show
-      // the pre-write value.
-      return { frameIndex: target, n: frames.at(target)?.n };
-    },
-  });
   const current = () => aztecGraph().currentFrame();
   registerReporter("n", () => current()?.n ?? null);
   registerReporter("running", () => aztecGraph().shuffle.loading());
@@ -276,4 +182,63 @@ function registerTools(): void {
   });
 }
 
-registerTools(); // idempotent by name — re-registration replaces
+// --- actions: the verbs of the surface (each becomes a real agent tool) -------
+
+/** Draw a fresh uniformly-random tiling (new seed) and replay the fold. */
+action({
+  name: "regrow",
+  params: { seed: "optional integer seed; omit for random" },
+  run: (args) => {
+    let s: number;
+    if (typeof args?.seed === "number") {
+      s = args.seed >>> 0;
+      seed.set(s);
+    } else {
+      s = regrow();
+    }
+    return { seed: s, targetN: targetN.get() };
+  },
+});
+
+/** Resume the growth animation (restarts from AD(1) if at the end). */
+action({
+  name: "play",
+  run: () => {
+    if (atEnd()) frameIndex.set(0);
+    playing.set(true);
+    return { playing: true };
+  },
+});
+
+/** Pause the growth animation on the current frame. */
+action({
+  name: "pause",
+  run: () => {
+    playing.set(false);
+    return { playing: false };
+  },
+});
+
+/** Move the playhead to a frame by ring index or by order n. */
+action({
+  name: "seek",
+  params: { index: "ring index", n: "target order to jump to" },
+  run: (args) => {
+    const rows = frames.frames;
+    let i = frameIndex.get();
+    if (typeof args?.index === "number") i = Math.round(args.index);
+    else if (typeof args?.n === "number") {
+      const found = rows.findIndex((f) => f.n >= (args.n as number));
+      if (found >= 0) i = found;
+    }
+    const target = Math.max(0, Math.min(rows.length - 1, i));
+    frameIndex.set(target);
+    playing.set(false);
+    // Return the computed target, not a re-read: Solid 2.0 batches the write
+    // transactionally, so a same-tick frameIndex.get() can still show the old
+    // value.
+    return { index: target, n: rows[target]?.n };
+  },
+});
+
+registerTools(); // idempotent by name

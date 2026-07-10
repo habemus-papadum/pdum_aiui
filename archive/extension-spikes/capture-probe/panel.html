@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>capture-probe</title>
+<style>
+  body { font: 12px ui-monospace, monospace; background: #14171f; color: #dfe3ec; margin: 0; padding: 10px; }
+  h2 { font-size: 13px; margin: 10px 0 6px; color: #8ab4f8; }
+  button { font: inherit; background: #232a3a; color: #dfe3ec; border: 1px solid #3a4460; border-radius: 6px; padding: 4px 8px; margin: 2px; cursor: pointer; }
+  button:hover { background: #2d3650; }
+  select { font: inherit; background: #232a3a; color: #dfe3ec; border: 1px solid #3a4460; border-radius: 6px; padding: 3px; max-width: 100%; }
+  #log { white-space: pre-wrap; word-break: break-all; background: #0d0f15; border: 1px solid #2a3040; border-radius: 6px; padding: 8px; max-height: 40vh; overflow: auto; margin-top: 6px; }
+  #shots img { max-width: 100%; border: 1px solid #3a4460; border-radius: 6px; display: block; margin: 4px 0; }
+  #shots figcaption { color: #9aa4bd; margin: 6px 0 2px; }
+  .hint { color: #9aa4bd; }
+</style>
+
+<h2>invoke</h2>
+<div class="hint">Click the toolbar action on a tab to invoke it (grants activeTab there).</div>
+<button id="invocations">show recorded invocations</button>
+
+<h2>tabs</h2>
+<button id="refreshTabs">refresh tab list</button>
+<select id="tabSelect"></select>
+<div id="splitNote" class="hint"></div>
+
+<h2>tab capture (M1 / M4)</h2>
+<button id="captureSel">capture selected tab → offscreen</button>
+<button id="captureInPage">capture selected tab IN-PAGE (M1 crop/restrict)</button>
+<button id="mintTransport">M1 transport: send CropTarget over messaging</button>
+<button id="capturedTabs">getCapturedTabs()</button>
+<button id="snapshotAll">snapshot all offscreen streams</button>
+<button id="tryLocal">offscreen: cropTo/restrictTo error shapes</button>
+<button id="stopAll">stop all</button>
+
+<h2>stills + window capture (M2)</h2>
+<button id="visibleTab">captureVisibleTab (this window)</button>
+<button id="gdmPanel">getDisplayMedia from panel (picker)</button>
+<button id="gdmOffscreen">getDisplayMedia in offscreen (expect reject)</button>
+<button id="desktopCapture">desktopCapture picker → offscreen</button>
+
+<h2>panel lifetime (M6)</h2>
+<button id="lifetime">lifetime report</button>
+
+<h2>log</h2>
+<button id="clearLog">clear</button>
+<div id="log"></div>
+<div id="shots"></div>
+
+<script src="panel.js"></script>
