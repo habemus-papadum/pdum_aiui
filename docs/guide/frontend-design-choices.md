@@ -253,12 +253,25 @@ registry closes the loop for anything it misses.
 
 Documented in [Frontend for agents](./frontend-for-agents#many-notebooks-one-lab) at the concept
 level; the design commitments: **Level 1** (separate Vite entries, plain-link nav, full reload as
-the resource policy — exercised by morphogen|aztec) and **Level 2** (one entry, lazy page
-modules, per-island suspend policies: `pause` keeps the GPU context and stops the loop;
-`hibernate` reads state back to CPU and releases the context — mandatory at scale because
-browsers cap live WebGL contexts per tab (~8–16, oldest silently killed); `dispose` recomputes).
-Durable-registry namespaces per page; tool namespaces per page (`__morpho`, `__aztec`); URL for
-shareable state.
+the resource policy) and **Level 2** (one entry, one document, lazy page modules behind
+client-side routing, per-island suspend policies). The gallery ran Level 1 for its first life and
+now exercises **Level 2**: a ~40-line pushState router over the tab list, a shell that owns the
+header/title/theme, dynamic `import()` per notebook (Vite code-splits each into its own chunk),
+and a **pause-not-destroy** page lifecycle — leaving a route disposes the page's component tree
+(the same disposability HMR relies on) and *parks its rAF loops* (`SimLoop.pause`,
+`Player.pause`), while every durable (the WebGL field, workers, DuckDB, history rings) survives
+for the return visit. Event-driven resources need no handling: a worker between jobs costs
+nothing. The motive is **turn continuity**: one document means an open intent turn, its socket,
+and its capture grant survive switching notebooks, and the overlay's navigation watcher records
+each switch as a `navigation` event
+(docs/proposals/spa-navigation-and-turn-continuity.md). A shell-level delegated click
+interceptor turns every same-origin in-base anchor into a client-side navigation, so no link can
+hard-navigate the document and kill a turn. At larger scale the suspend ladder continues:
+`hibernate` reads GPU state back to CPU and releases the context — mandatory eventually because
+browsers cap live WebGL contexts per tab (~8–16, oldest silently killed); `dispose` recomputes.
+One window now holds every page's registries: durable keys carry a page prefix
+(`aztec:*`), control and cell names must be unique app-wide, tool namespaces stay per page
+(`__morpho`, `__aztec`); the URL carries shareable state.
 
 **The anatomy of a notebook page.** A scientific notebook reads like a paper, not a dashboard:
 titled **sections** that interleave interactive panels with explanatory prose and real

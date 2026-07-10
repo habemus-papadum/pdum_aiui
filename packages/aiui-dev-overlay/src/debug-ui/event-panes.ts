@@ -270,6 +270,16 @@ function clip(text: string): string {
   return text.length > 44 ? `${text.slice(0, 44)}…` : text;
 }
 
+/** A URL as path+query+hash — the origin is noise in a per-page trace. */
+function shortUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}${u.hash}` || url;
+  } catch {
+    return url;
+  }
+}
+
 function describe(event: IntentEvent): string {
   switch (event.type) {
     case "armed":
@@ -293,7 +303,15 @@ function describe(event: IntentEvent): string {
     case "stroke":
       return `stroke · ${event.points}pts @ ${Math.round(event.bounds.x)},${Math.round(event.bounds.y)}`;
     case "ink-clear":
-      return event.auto ? "ink faded out" : "ink cleared";
+      return event.reason === "navigation"
+        ? "ink cleared (page navigation)"
+        : event.auto
+          ? "ink faded out"
+          : "ink cleared";
+    case "navigation":
+      return `⇢ navigated ${shortUrl(event.from)} → ${shortUrl(event.to)}${
+        event.kind !== undefined ? ` (${event.kind})` : ""
+      }`;
     case "shot-drop":
       return `${event.marker} retracted (✕ on the preview thumb)`;
     case "shot":

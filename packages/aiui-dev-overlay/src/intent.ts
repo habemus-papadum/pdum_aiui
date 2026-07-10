@@ -31,6 +31,7 @@ import { addError, dismissError, type OverlayError, type OverlayErrorInput } fro
 import { type ClientMeta, collectClientMeta, setChannelPort } from "./instrumentation";
 import type { AppSelection, IntentPipelineConfig } from "./intent-pipeline";
 import { multimodalModality } from "./multimodal";
+import { installNavigationWatcher, type NavigationChange } from "./navigation";
 import { isDevEnvironment } from "./overlay";
 import {
   type Ack,
@@ -126,6 +127,16 @@ export interface IntentToolContext {
    * returns an unsubscribe.
    */
   onSelectionChange(handler: (snapshot: SelectionSnapshot | undefined) => void): () => void;
+  /**
+   * Subscribe to same-document navigations (the host's navigation watcher —
+   * navigation.ts). The multimodal modality records each as a `navigation`
+   * event on an open turn and applies the boundary policy (clear ink on a
+   * path change). Handlers run BEFORE the host's own policy (it clears the
+   * selection chip on a path change), so a modality sees the pre-navigation
+   * selection retract as an ordinary watcher clear, in order. Returns an
+   * unsubscribe.
+   */
+  onNavigation(handler: (change: NavigationChange) => void): () => void;
   /**
    * Exclude a node's selections from capture — for page-level UI a modality
    * mounts outside the tool's shadow host (the multimodal layers: a
@@ -418,6 +429,24 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
   });
   projectChip(watcher.snapshot());
 
+  // Watch same-document navigations (an SPA router, a hash jump) so an open
+  // turn can record the boundary. Order matters inside the callback: modality
+  // handlers first (the `navigation` event lands, then their ink policy), THEN
+  // the host's own policy — a path change makes the selection chip stale (its
+  // DOM died with the old route), and clearing the watcher both drops the chip
+  // and retracts the turn's carried selection via the ordinary onChange path.
+  const navigationSubscribers = new Set<(change: NavigationChange) => void>();
+  const navWatcher = installNavigationWatcher({
+    onNavigate: (change) => {
+      for (const handler of navigationSubscribers) {
+        handler(change);
+      }
+      if (change.pathChanged) {
+        watcher.clear();
+      }
+    },
+  });
+
   // One context per modality — openThread speaks that modality's format.
   const contextFor = (modality: IntentModality): IntentToolContext => ({
     port,
@@ -433,6 +462,10 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
     onSelectionChange: (handler) => {
       selectionSubscribers.add(handler);
       return () => selectionSubscribers.delete(handler);
+    },
+    onNavigation: (handler) => {
+      navigationSubscribers.add(handler);
+      return () => navigationSubscribers.delete(handler);
     },
     ignoreSelectionsWithin: (node) => watcher.addIgnored(node),
     hudSlot: () => widget.claimHudSlot(),
@@ -553,6 +586,7 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
       }
       widget.dispose();
       watcher.dispose();
+      navWatcher.dispose();
       host.remove();
       if (window.__aiuiIntentTool === handle) {
         window.__aiuiIntentTool = undefined;

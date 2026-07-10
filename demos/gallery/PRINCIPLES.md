@@ -18,14 +18,22 @@ What stays useful *here* is the map — the demo's layout is the methodology in 
 src/
   sim/          morphogen's imperative WebGL island (engine, loop, shaders, cheap stats)
   analysis/     morphogen's worker pipeline (pure core + chunked/cancellable worker)
-  model/        store.ts (durable roots) · graph.ts (the disposable cell graph) · data
+  model/        store.ts (durable roots + controls) · graph.ts (the disposable cell graph)
   ui/           morphogen components — all freely hot-swappable
-  pages/aztec/  the second notebook (see its NOTES.md for build findings)
-  main.tsx      morphogen entry: almost nothing
+  pages/        one directory per notebook (morphogen/ aztec/ seismos/ — each a page module)
+  site/         the SPA shell's seams: router.ts (pushState + link interception),
+                pages.ts (route → lazy page module, pause-not-destroy lifecycle), nav.ts
+  main.tsx      the shell: SiteHeader + route swapping; almost nothing else
 ```
 
-Source/cell stamping (`data-source-loc` + `cell()` identity injection) is enabled via the
-`aiuiDevOverlay({ locator: { cellFactories: ["cell"] } })` option in `vite.config.ts`; the
+The gallery is a **single-document SPA** (it began as one Vite entry per notebook — "Level 1" —
+and moved to client-side routing so an open intent turn survives switching pages; see
+`docs/proposals/spa-navigation-and-turn-continuity.md`). Each notebook is still a self-contained
+module tree, lazily imported and code-split; leaving a route parks its rAF loops and disposes its
+components while every durable survives for the return visit.
+
+Source/cell/control stamping (`data-source-loc` + `cell()`/`control()`/`action()` identity
+injection) is enabled via the `aiuiDevOverlay({ locator: true })` option in `vite.config.ts`; the
 implementation lives in the overlay (`packages/aiui-dev-overlay/src/source-locator.ts`).
 
 Per-build findings ledgers: `src/pages/aztec/NOTES.md` (already folded into the docs;

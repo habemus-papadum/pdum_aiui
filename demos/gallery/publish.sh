@@ -55,19 +55,39 @@ echo "==> Building static site -> dist/ (base /aiui/)…"
 npx vite build
 
 [ -d dist ] || { echo "error: build did not produce dist/" >&2; exit 1; }
-[ -f dist/index.html ] && [ -f dist/aztec.html ] || {
-  echo "error: dist/ is missing an entry html — refusing to publish a partial site" >&2
+[ -f dist/index.html ] || {
+  echo "error: dist/ is missing index.html — refusing to publish a partial site" >&2
   exit 1
 }
+
+# SPA deep links on a static host: the app is one document (src/main.tsx) and
+# the router reads the path, so every route must resolve to index.html. S3
+# behind CloudFront resolves neither folder indexes nor extensionless keys, so
+# ship EXPLICIT copies: `aztec`/`seismos` (the clean route URLs — uploaded with
+# content-type text/html below, since an extensionless key would sniff as
+# octet-stream) and `aztec.html`/`seismos.html` (the old multi-entry URLs;
+# inbound links keep working — the router maps the .html slugs to routes).
+ROUTES="aztec seismos"
+for route in $ROUTES; do
+  cp dist/index.html "dist/$route.html"
+done
 
 if [ "$DO_DRYRUN" = "1" ]; then
   echo "==> DRY RUN — showing what 'aws s3 sync --delete' would do (profile: $AWS_PROFILE):"
   echo "    (re-run with --publish, or PUBLISH=1, to upload for real)"
   aws s3 sync dist "$S3_DEST" --delete --dryrun
+  for route in $ROUTES; do
+    echo "(dryrun) would upload dist/index.html to $S3_DEST/$route (content-type text/html)"
+  done
   echo "==> DRY RUN — would then invalidate CloudFront '/$PREFIX/*' for $CF_DOMAIN."
 else
   echo "==> PUBLISHING to $S3_DEST (with --delete, profile: $AWS_PROFILE)…"
   aws s3 sync dist "$S3_DEST" --delete
+  # The clean deep-link objects (see the ROUTES note above). After the sync so
+  # --delete cannot remove them (they exist in dist/ only as .html twins).
+  for route in $ROUTES; do
+    aws s3 cp dist/index.html "$S3_DEST/$route" --content-type "text/html"
+  done
   echo "==> Invalidating CloudFront cache for /$PREFIX/* …"
   cf_id="$(aws cloudfront list-distributions \
     --query "DistributionList.Items[?contains(Aliases.Items, '$CF_DOMAIN')].Id | [0]" \

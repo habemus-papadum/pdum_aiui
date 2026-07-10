@@ -8,9 +8,10 @@
  * that walks the playhead through the ring at the chosen speed). The cell graph
  * (graph.ts) and components (ui/) are the disposable logic rebuilt over these.
  *
- * This is a Level-1 notebook page (PRINCIPLES §8): its own entry, its own fresh
- * window, hence its own durable registry and its own agent-tool namespace
- * (window.__aztec) — nothing here can collide with morphogen.
+ * Under the SPA shell all notebooks share ONE window, so collision avoidance
+ * is a naming discipline, not an accident of separate documents: durable keys
+ * carry the `aztec:` prefix, control/cell names must be unique app-wide (the
+ * registries are global), and the agent-tool namespace stays window.__aztec.
  */
 import { control, durable, durableSignal } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";
@@ -119,6 +120,13 @@ export const shuffleWorker: Worker = durable(
 // same one-way cadence bridge as morphogen's snapshot loop.
 
 export interface Player {
+  /**
+   * Park the rAF loop while the SPA shell has this page off-route
+   * (pause-not-destroy: a hidden notebook must not tick). Distinct from the
+   * `playing` control, which is the USER's pause and keeps the loop alive.
+   */
+  pause(): void;
+  resume(): void;
   dispose(): void;
 }
 
@@ -127,9 +135,10 @@ export const player: Player = durable("aztec:player", () => {
   let last = performance.now();
   let acc = 0;
   let disposed = false;
+  let paused = false;
 
   const tick = (now: number) => {
-    if (disposed) return;
+    if (disposed || paused) return;
     const dt = now - last;
     last = now;
     if (playing.get()) {
@@ -152,6 +161,18 @@ export const player: Player = durable("aztec:player", () => {
   };
   raf = requestAnimationFrame(tick);
   return {
+    pause() {
+      if (paused || disposed) return;
+      paused = true;
+      cancelAnimationFrame(raf);
+    },
+    resume() {
+      if (!paused || disposed) return;
+      paused = false;
+      last = performance.now(); // don't replay the idle stretch as elapsed time
+      acc = 0;
+      raf = requestAnimationFrame(tick);
+    },
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);

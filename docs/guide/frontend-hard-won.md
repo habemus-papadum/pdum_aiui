@@ -131,6 +131,16 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
   (Related: the dep scanner cannot see through virtual modules — a plugin-injected bare import is
   discovered at request time, costing one reload on cold start; acceptable, or pre-bundle for
   registry consumers only.)
+- **Dev SPA fallback ≠ static-host SPA fallback.** Vite's dev server rewrites unknown paths to
+  index.html for free, so client-side routes "just work" locally — then 404 on S3/CloudFront,
+  which resolves neither folder indexes nor extensionless keys through a REST origin. Ship
+  explicit per-route objects at publish time, and upload extensionless copies with
+  `--content-type text/html` (mime guessing gives octet-stream). The gallery's publish.sh is the
+  worked example.
+- **Routers dispose component trees, not module singletons.** Anything durable-registry-held (a
+  rAF loop, a WebGL engine, a worker) keeps running when its route unmounts — by design. Route
+  changes need an explicit pause-not-destroy seam (park the loops, keep the state); destroying
+  would throw away exactly the accrued state the durable model exists to protect.
 - **`vite preview` resolves the config with `command: "serve"`** (plus an `isPreview` flag —
   key environment-dependent `base` on `command === "build" || isPreview`, never on command
   alone), and `apply: "serve"` plugins are active under preview too. The failure mode is

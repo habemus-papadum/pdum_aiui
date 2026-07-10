@@ -173,14 +173,20 @@ widgets, theory with real mathematics, an experiments section — the
 command structures** (the `aiui-viz/modal` kit: modes, layers, and surfaces as data — never
 scattered `addEventListener("keydown", …)` calls, with bindings dispatching the SAME registered
 actions and validated controls the widgets and the agent use); and, when one page isn't enough, the
-progression across pages — an introductory notebook flowing to a deeper one, each page its own
-entry so leaving it frees its GPU contexts and workers by construction.
+progression across pages — an introductory notebook flowing to a deeper one, as **routed page
+modules under one document** (a thin SPA shell + client-side routing), never separate `.html`
+entries: one document is what lets an open intent turn survive the switch, and the resource story
+is a pause-not-destroy lifecycle — leaving a route parks the page's rAF loops while its durables
+(engines, workers, accrued state) survive for the return (`demos/gallery` is the worked example;
+its `src/site/router.ts` is the whole router). Keep every internal link routed — one bare
+`<a href>` the router doesn't intercept is a hard navigation that kills the turn (the gallery
+intercepts same-origin anchors app-wide, which makes the safe idiom the default one).
 
 This layer is deliberately late because it's the most tasteful and least testable — but not
 untestable: the modal kit keeps keymaps as pure tables (unit-test the bindings and the Esc
 ladder), and the whole app is drivable through its own tool surface — which is the layer's
-definition of done: `report()` is sane, every user operation has its tool twin, and the agent can
-verify a feature by calling it rather than squinting at pixels.
+definition of done: `report` is sane, every knob is a declared control and every verb a declared
+action, and the agent can verify a feature by calling it rather than squinting at pixels.
 
 ## Running through all four: the tool surface and the loop
 

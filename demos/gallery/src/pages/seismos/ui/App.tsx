@@ -11,9 +11,8 @@
  * immediately; the live widgets inside them wait on `ready`.
  */
 import { CellView } from "@habemus-papadum/aiui-viz";
-import { SiteHeader, TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
+import { TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
 import { Show } from "solid-js";
-import { BRAND, LINKS, TABS } from "../../../site/nav";
 import { ThemeToggle } from "../../../site/ThemeToggle";
 import { seismosGraph } from "../graph";
 import { store } from "../store";
@@ -41,7 +40,6 @@ function LoadingPanel() {
 export function App() {
   return (
     <>
-      <SiteHeader brand={BRAND} tabs={TABS} active="seismos" links={LINKS} />
       <ThemeToggle />
       <div class="app">
         <div class="app-main">

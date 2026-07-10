@@ -435,3 +435,20 @@ every layer left standing as its own page (multi-entry Vite: `step1`/`step2`/`st
 Gates at completion: lint, `pnpm -r typecheck`, 1539 tests / 146 files, template e2e,
 docs:build, skills:check — all green. Remaining open threads: the porcelain possibility list
 above (extract on evidence) and multi-client (§4, deferred by decision).
+
+
+### SPA-shell candidates (2026-07-10, from the gallery rewrite)
+
+The gallery's SPA conversion (spa-navigation-and-turn-continuity.md) left three page-navigation
+patterns in app code, one consumer each — possibility-list material, not extractions:
+
+- **The route shell**: TABS-driven pushState router + lazy page modules + per-page
+  activate/deactivate lifecycle + title/theme ownership (`demos/gallery/src/site/router.ts` +
+  `pages.ts` + the `Shell` in `main.tsx`, ~150 lines total). Extract when the starter template
+  grows its "add a page" recipe — that's the second consumer.
+- **`interceptLocalLinks`**: delegated same-origin anchor interception, the piece that makes
+  routed navigation the default idiom rather than a discipline. Framework-free already.
+- **Registry scoping**: under one document every page's controls/cells/edges merge into the
+  global reflection registries (each kit's `report` sees all pages). Uniqueness-of-names is the
+  working rule; a first-class `scope` on the registry (and per-kit filtered reports) waits for
+  evidence that an agent actually gets confused.

@@ -668,6 +668,60 @@ describe("app selection (a positional stream event, interleaved like text and sh
   });
 });
 
+describe("navigation (a context boundary riding the turn, never opening one)", () => {
+  const A = "http://app.test/";
+  const B = "http://app.test/aztec";
+
+  it("is a no-op without an open thread — navigation is context, not content", () => {
+    const engine = armedEngine();
+    expect(engine.navigation(A, B, "push")).toBe(false);
+    expect(engine.threadOpen).toBe(false);
+    expect(engine.events.some((e) => e.type === "navigation")).toBe(false);
+  });
+
+  it("records the boundary on an open thread, kind included", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    expect(engine.navigation(A, B, "push")).toBe(true);
+    const event = engine.events.find((e) => e.type === "navigation");
+    expect(event).toMatchObject({ type: "navigation", from: A, to: B, kind: "push" });
+  });
+
+  it("composes positionally: content before the boundary reads as the old page's", () => {
+    const engine = armedEngine();
+    const seg = engine.talkStart() as number;
+    engine.transcriptFinal(seg, "make this wider", 5, "test");
+    engine.talkEnd();
+    engine.navigation(A, B, "push");
+    const seg2 = engine.talkStart() as number;
+    engine.transcriptFinal(seg2, "and this taller", 5, "test");
+    engine.talkEnd();
+
+    const composed = composeIntent(engine.events, "replace");
+    const kinds = composed.items.map((i) => i.kind);
+    expect(kinds).toEqual(["text", "navigation", "text"]);
+    // The lowered prompt carries the boundary between the two utterances,
+    // rendered as short routes (origin is noise).
+    const prompt = composed.prompt;
+    const boundary = prompt.indexOf("(page navigation: now on /aztec — content above was on /)");
+    expect(boundary).toBeGreaterThan(prompt.indexOf("make this wider"));
+    expect(boundary).toBeLessThan(prompt.indexOf("and this taller"));
+    // The transcript (text-only view) is unpolluted by the boundary.
+    expect(composed.transcript).toBe("make this wider and this taller");
+  });
+
+  it("ink-clear carries the navigation reason", () => {
+    const engine = armedEngine();
+    engine.strokeDone(4, { x: 0, y: 0, w: 2, h: 2 });
+    engine.inkCleared(true, "navigation");
+    expect(engine.events.at(-1)).toMatchObject({
+      type: "ink-clear",
+      auto: true,
+      reason: "navigation",
+    });
+  });
+});
+
 describe("code selection (the reader's contribution, rendered at lowering time)", () => {
   it("opens the thread like a contribution and inlines a short selection", () => {
     const engine = armedEngine();

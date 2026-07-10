@@ -35,6 +35,16 @@ export interface SimLoop {
   /** Copy the current field (V channel as floats) for heavy analysis. */
   captureField(): { field: Float32Array; width: number; height: number };
   stats(): { fps: number; stepsPerSecond: number; snapshotAgeMs: number };
+  /**
+   * Park the rAF loop entirely — no stepping, no present, no readback — while
+   * keeping the engine and its accrued field intact. The SPA shell calls this
+   * when the route leaves the page (pause-not-destroy: a hidden notebook must
+   * not burn GPU); `resume` picks the loop back up where it stood. Distinct
+   * from `speed = 0`, which is the USER's pause and keeps rendering.
+   */
+  pause(): void;
+  resume(): void;
+  running(): boolean;
   dispose(): void;
 }
 
@@ -50,9 +60,10 @@ export function startLoop(options: LoopOptions): SimLoop {
   let windowStart = performance.now();
   let stepsInWindow = 0;
   let disposed = false;
+  let paused = false;
 
   const frame = (now: number) => {
-    if (disposed) return;
+    if (disposed || paused) return;
     if (speed > 0) {
       engine.step(speed);
       stepsInWindow += speed;
@@ -96,6 +107,21 @@ export function startLoop(options: LoopOptions): SimLoop {
       stepsPerSecond: Math.round(stepsPerSecond),
       snapshotAgeMs: Math.round(performance.now() - lastSnapshot),
     }),
+    pause() {
+      if (paused || disposed) return;
+      paused = true;
+      cancelAnimationFrame(raf);
+    },
+    resume() {
+      if (!paused || disposed) return;
+      paused = false;
+      // Reset the fps window so the idle stretch doesn't read as 0 fps.
+      windowStart = performance.now();
+      frames = 0;
+      stepsInWindow = 0;
+      raf = requestAnimationFrame(frame);
+    },
+    running: () => !paused && !disposed,
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);

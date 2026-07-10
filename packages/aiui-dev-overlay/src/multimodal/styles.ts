@@ -74,6 +74,11 @@ export const STYLES = /* css */ `
   .mm-lint-chip { font-size: 11px; border: 1px dashed #6b5d2e; border-radius: 999px;
     padding: 1px 8px; display: inline-block; vertical-align: middle;
     white-space: nowrap; color: #ffd166; }
+  /* A navigation boundary (⇢ /route): the page changed under the turn —
+     neutral gray, a marker rather than content, substance in the title. */
+  .mm-nav-chip { font-size: 11px; border: 1px solid #3a4152; border-radius: 999px;
+    padding: 1px 8px; display: inline-block; vertical-align: middle;
+    white-space: nowrap; color: #9aa0aa; }
   /* The selection peek: the mm-thumb-peek pattern (fixed-position, body-
      attached) as a card — source location + the selected text, clamped by CSS
      (the full text stays in the DOM; nothing is JS-truncated). */

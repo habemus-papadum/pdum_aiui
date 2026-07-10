@@ -182,6 +182,26 @@ export function multimodalModality(
           engine.appSelectionDrop();
         }
       });
+      // Same-document navigations (the host's navigation watcher): record the
+      // boundary on an open turn, then apply the "ink must not outlive its
+      // page" policy — a PATH change clears the canvas (strokes floating over
+      // a route they weren't drawn on are deixis pointing at nothing); a hash
+      // or query-only change is a section jump / state sync, context worth
+      // tracing but nothing worth clearing over. The logged strokes stay in
+      // the stream, attributed to the old page by their position before the
+      // navigation event; the host retracts the stale selection chip right
+      // after this handler (see intent.ts). `ink` is hoisted below — the
+      // watcher only fires on real navigations, post-mount.
+      const offNavigation = ctx.onNavigation((change) => {
+        if (!engine.threadOpen) {
+          return; // navigation is context, not content — it never opens a turn
+        }
+        engine.navigation(change.from, change.to, change.kind);
+        if (change.pathChanged && ink.strokeCount() > 0) {
+          ink.clear();
+          engine.inkCleared(true, "navigation");
+        }
+      });
       // The durable turn store: survives a soft remount in memory, and mirrors
       // to sessionStorage so a full reload (an overlay-source edit under the dev
       // server — see turn-store.ts) can still recover the in-progress turn.
@@ -1319,10 +1339,14 @@ export function multimodalModality(
           }
         }
         // Persist the turn while a thread is open (transcript + shot refs + thread
-        // state); a closed thread has nothing to recover.
+        // state). Forget it ONLY when a thread actually closes here — clearing on
+        // every threadless event was the gotcha-#5 hazard: a fresh page's first
+        // event (the bus replaying `armed`) arrived with threadOpen false and
+        // garbage-collected ANOTHER page's still-recoverable mirror from the
+        // shared per-tab sessionStorage.
         if (engine.threadOpen) {
           turn.record(currentThreadEvents(), true);
-        } else {
+        } else if (event.type === "thread-close") {
           turn.clear();
         }
         broadcastPreview();
@@ -1441,6 +1465,14 @@ export function multimodalModality(
         // its socket and re-streams the log to a fresh thread (the old socket died
         // with the page). Shot pixels / audio don't survive — the refs do.
         engine.replay(recovered.events, { threadOpen: recovered.threadOpen });
+        // A turn recovered onto a DIFFERENT URL crossed a hard navigation the
+        // watcher never saw (the document died first). Record the boundary now,
+        // so ordering-based attribution stays truthful: everything replayed
+        // happened on the old page.
+        const here = typeof location !== "undefined" ? location.href : "";
+        if (recovered.url !== "" && here !== "" && recovered.url !== here) {
+          engine.navigation(recovered.url, here);
+        }
         renderHud();
         if (config.submode === "realtime") {
           // A realtime turn's live session died with the page and can't be
@@ -1460,6 +1492,7 @@ export function multimodalModality(
       return {
         unmount() {
           offSelectionChange();
+          offNavigation();
           if (instrumentation?.remotePaint === remotePaint) {
             instrumentation.remotePaint = undefined;
           }

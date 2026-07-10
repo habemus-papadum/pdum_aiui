@@ -67,6 +67,13 @@ export {
   ShotTool,
   SpeechPlayer,
 } from "./multimodal";
+export type {
+  NavigationChange,
+  NavigationKind,
+  NavigationWatcher,
+  NavigationWatcherOptions,
+} from "./navigation";
+export { installNavigationWatcher } from "./navigation";
 export type { DevOverlayHandle, DevOverlayOptions } from "./overlay";
 export {
   isDevEnvironment,

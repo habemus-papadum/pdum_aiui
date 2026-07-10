@@ -61,8 +61,13 @@ reason not to.** Four layers, each with its own verification, rigor front-loaded
 3. **Components** — pure readers: cells in (via `graph()`), DOM out, through `CellView`.
    Behavioral jsdom tests now; the HUMAN is the visual tester until the app has earned
    screenshot automation.
-4. **Application** — page anatomy, modal keymaps (pure tables, tested), multi-page progression;
-   done when the whole app is drivable through its own tool surface.
+4. **Application** — page anatomy, modal keymaps (pure tables, tested), multi-page progression
+   as **routed page modules under one document** (a thin SPA shell — never separate `.html`
+   entries: one document keeps an open intent turn alive across page switches; leaving a route
+   PARKS the page's rAF loops while durables survive — pause-not-destroy; `demos/gallery`'s
+   `src/site/router.ts` + `pages.ts` are the worked example, and every internal link must be
+   routed/intercepted, since one bare hard-navigating anchor kills the turn); done when the
+   whole app is drivable through its own tool surface.
 
 Not a waterfall: get one thin slice through all four layers on screen early, then deepen — the
 human steers by looking at the running app. But within every slice and every feature, descend in

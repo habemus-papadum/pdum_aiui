@@ -15,8 +15,9 @@
  * its progress; on a hot reload the promise is already resolved, so the rebuilt
  * cell settles immediately against the surviving table.
  *
- * Level-1 notebook page (design-choices §8): its own entry/window, hence its own
- * durable registry and its own agent-tool namespace (window.__seismos).
+ * Under the SPA shell all notebooks share one window: durable keys carry the
+ * `seismos:` prefix, control/cell names must be unique app-wide (the
+ * registries are global), and the agent-tool namespace stays window.__seismos.
  *
  * Why DuckDB is a durable island Mosaic reaches through a connector: Mosaic owns
  * its own reactivity (Selections → coordinator → client queries → SVG). Solid

@@ -1,32 +1,71 @@
 /**
- * main.tsx — the entry: durable roots first, then the graph, then the UI.
+ * main.tsx — the SPA shell: ONE document hosting all three notebooks behind
+ * client-side routing, so the aiui intent tool (its open turn, its socket, its
+ * capture grant) survives switching pages — the whole point of the rewrite
+ * (docs/proposals/spa-navigation-and-turn-continuity.md).
  *
- * There is deliberately almost nothing here. The aiui intent tool is mounted
- * by the aiuiDevOverlay() Vite plugin (vite.config.ts), the sim/loop/worker
- * live in the durable registry (model/store.ts), and the dataflow lives in
- * the graph module (model/graph.ts) — each with its own HMR story:
+ * The shell owns what used to be duplicated per entry: the SiteHeader (tabs
+ * driven by the route signal), the theme stamp, and `document.title`. Each
+ * notebook remains a self-contained lazily-imported module (site/pages.ts) —
+ * adding one is still a TABS entry plus a page module.
  *
- *   - ui/ components: hot-swapped by solid-refresh, durable canvas adopted.
- *   - model/graph.ts: self-swaps the cell graph over the durable roots.
- *   - sim/shaders.ts: accepted HERE — the engine recompiles its programs in
- *     place, so a GLSL edit updates the running field without resetting it.
- *     (An edit is just another cause of invalidation; the field is the state
- *     it must not invalidate.)
+ * Route changes are pause-not-destroy: the leaving page's component tree is
+ * disposed (components are pure readers — the same disposability HMR relies
+ * on) and its rAF loops are parked via `deactivate()`, while every durable —
+ * the WebGL field, the workers, DuckDB, the history rings — survives for the
+ * return visit. Link clicks anywhere in the document are intercepted into
+ * `navigate()` (site/router.ts), so no anchor can hard-navigate and kill an
+ * open turn.
  */
-
 import { render } from "@solidjs/web";
 import "./styles.css";
+import { SiteHeader } from "@habemus-papadum/aiui-viz/site";
+import { createEffect, createSignal, Show, untrack } from "solid-js";
+import { BRAND, LINKS, TABS } from "./site/nav";
+import { type GalleryPage, loadPage } from "./site/pages";
+import { interceptLocalLinks, type Route, route } from "./site/router";
 import { initSystemTheme } from "./site/theme";
 
-initSystemTheme(); // morphogen follows prefers-color-scheme (style-guide default)
+initSystemTheme(); // the shell follows prefers-color-scheme (style-guide default)
+interceptLocalLinks();
 
-import "./model/graph"; // builds the cell graph + registers agent tools
-import { App } from "./ui/App";
+interface View {
+  route: Route;
+  page: GalleryPage;
+}
 
-// Source location stamps: babel-source-locator.mjs (vite.config.ts) tags every
-// host JSX element with data-source-loc="src/…:line:col" — read it off the DOM
-// or call window.__morpho.call("locate", { selector }). It replaced LocatorJS
-// after the trial recorded in PRINCIPLES.md §7 (its babel half worked on Solid
-// 2.0 but gave file-level-only ids; its runtime UI is compiled against 1.x).
+function Shell() {
+  const [view, setView] = createSignal<View | undefined>(undefined);
+  let seq = 0;
 
-render(() => <App />, document.getElementById("root") as HTMLElement);
+  const show = async (r: Route): Promise<void> => {
+    const my = ++seq;
+    const page = await loadPage(r); // cached after the first visit
+    if (my !== seq) return; // superseded by a faster navigation
+    const prev = untrack(view);
+    prev?.page.deactivate?.(); // park the old page's loops...
+    page.activate?.(); // ...wake the new one's
+    document.title = page.title;
+    setView({ route: r, page });
+  };
+
+  // Track the route in the source, load/swap in the untracked handler.
+  createEffect(route, (r) => {
+    void show(r);
+  });
+
+  return (
+    <>
+      <SiteHeader brand={BRAND} tabs={TABS} active={route()} links={LINKS} />
+      {/* keyed: a route change DISPOSES the old page's component tree and
+          mounts the new one over the surviving durables (the HMR discipline,
+          reused). The brief first-load gap renders nothing on purpose —
+          page chunks are small and local. */}
+      <Show when={view()} keyed>
+        {(v) => <v.page.App />}
+      </Show>
+    </>
+  );
+}
+
+render(() => <Shell />, document.getElementById("root") as HTMLElement);

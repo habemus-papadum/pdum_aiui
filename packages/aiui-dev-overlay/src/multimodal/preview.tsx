@@ -73,6 +73,8 @@ function keyOf(item: ComposedItem, index: number): string {
       return `sel:${item.marker ?? `@${index}`}`;
     case "code-selection":
       return `code:${item.marker ?? `@${index}`}`;
+    case "navigation":
+      return `nav:@${index}`;
   }
 }
 
@@ -368,6 +370,9 @@ export class Preview {
             if (piece.item.kind === "code-selection" || piece.item.kind === "app-selection") {
               return this.renderSelectionPiece(piece);
             }
+            if (piece.item.kind === "navigation") {
+              return renderNavigationChip(piece.item);
+            }
             if (piece.words?.some((w) => w.logprob !== undefined)) {
               return heatRow(piece.key);
             }
@@ -559,6 +564,32 @@ export class Preview {
     this.peek?.remove();
     this.peek = undefined;
   }
+}
+
+/** A URL as path+query+hash — the origin is noise inside one tab's preview. */
+function shortRoute(url: string | undefined): string {
+  if (url === undefined || url === "") {
+    return "?";
+  }
+  try {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}${u.hash}` || url;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * A navigation boundary in the accumulator: a minimal ⇢ chip at its stream
+ * position (like every other marker chip); the from → to detail rides the
+ * title. Not content and not retractable — the page really did change.
+ */
+function renderNavigationChip(item: ComposedItem): HTMLElement {
+  const chip = document.createElement("span");
+  chip.className = "mm-nav-chip";
+  chip.textContent = `⇢ ${shortRoute(item.to)}`;
+  chip.title = `navigated ${shortRoute(item.from)} → ${shortRoute(item.to)}`;
+  return chip;
 }
 
 // HMR guard: the mounted intent tool holds RUNNING closures from this module,

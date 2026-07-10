@@ -408,8 +408,28 @@ export class Engine {
     this.emit(this.stamp({ type: "stroke", points, bounds }));
   }
 
-  inkCleared(auto: boolean): void {
-    this.emit(this.stamp({ type: "ink-clear", auto }));
+  inkCleared(auto: boolean, reason?: "navigation"): void {
+    this.emit(this.stamp({ type: "ink-clear", auto, ...(reason !== undefined ? { reason } : {}) }));
+  }
+
+  /**
+   * Record a same-document navigation (the overlay's navigation watcher). A
+   * navigation is context riding a turn, never a turn opener — the
+   * `app-selection` rule — so this is a no-op without an open thread. Returns
+   * whether an event was recorded.
+   */
+  navigation(
+    from: string,
+    to: string,
+    kind?: "push" | "replace" | "traverse" | "reload" | "hash",
+  ): boolean {
+    if (!this.threadOpen) {
+      return false;
+    }
+    this.emit(
+      this.stamp({ type: "navigation", from, to, ...(kind !== undefined ? { kind } : {}) }),
+    );
+    return true;
   }
 
   shotDone(
@@ -528,8 +548,11 @@ export class Engine {
 // ── the first IR pass, pure ──────────────────────────────────────────────────
 
 export interface ComposedItem {
-  kind: "text" | "shot" | "code-selection" | "app-selection";
+  kind: "text" | "shot" | "code-selection" | "app-selection" | "navigation";
   text?: string;
+  /** A navigation item's `location.href` before / after the boundary. */
+  from?: string;
+  to?: string;
   /** A text item's source segment ordinal — the accumulator view's stable key. */
   segment?: number;
   /** The item's stream identity (`shot_N` / `sel_N` / `code_N`) — absent for
@@ -779,6 +802,11 @@ export function composeIntent(
         lines: event.lines ?? event.text.split("\n").length,
         ...(event.marker !== undefined ? { marker: event.marker } : {}),
       });
+    } else if (event.type === "navigation") {
+      // A positional boundary: everything composed before it happened on
+      // `from`, everything after on `to`. Rendering is the compiler's call
+      // (renderNavigation below) — the event travels structured.
+      items.push({ kind: "navigation", from: event.from, to: event.to });
     } else if (event.type === "shot" && !droppedShots.has(event.marker)) {
       items.push({
         kind: "shot",
@@ -948,6 +976,8 @@ export function composeIntent(
       promptParts.push(renderCodeSelection(item));
     } else if (item.kind === "app-selection") {
       promptParts.push(renderAppSelection(item));
+    } else if (item.kind === "navigation") {
+      promptParts.push(renderNavigation(item));
     }
   }
   if (policy === "note") {
@@ -1180,6 +1210,29 @@ export function renderCodeSelection(
  * with THIS exact rendering — one implementation, per the defer-rendering
  * rule. The parameter is the `ComposedItem` subset the rendering reads.
  */
+/** A URL as the short label a prompt should carry: path+query+hash (or the
+ * full string when it doesn't parse — tests, exotic schemes). */
+function pageLabel(url: string | undefined): string {
+  if (url === undefined || url === "") {
+    return "?";
+  }
+  try {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}${u.hash}` || url;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * The navigation boundary, lowered: one parenthetical the model reads as "the
+ * page changed here — references above are to the old page". Deliberately
+ * plain; refinements belong here (the shared lowering), never in the watcher.
+ */
+export function renderNavigation(item: Pick<ComposedItem, "from" | "to">): string {
+  return `(page navigation: now on ${pageLabel(item.to)} — content above was on ${pageLabel(item.from)})`;
+}
+
 export function renderAppSelection(
   item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "cellLoc" | "tex">,
 ): string {

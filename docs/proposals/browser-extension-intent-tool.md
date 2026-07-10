@@ -158,12 +158,17 @@ Concrete pipeline changes:
   test flags (`--auto-select-window-capture-source-by-title` et al.) that the session-browser
   launcher can add under the trusted-LAN posture. Budget: zero pickers in the session browser,
   one picker per window session in personal Chrome.
-- **Element/Region Capture interplay.** `restrictTo` (Chrome 132+) is defined on
-  `getDisplayMedia` self-capture tracks; whether it attaches to a *tabCapture-derived* track is
-  documented nowhere — if it does (measurement M1), the capture-plane design in
-  `element-capture-and-the-capture-plane.md` carries over to the extension picker-free, which
-  would be the best capture story available anywhere. Note the standing constraint either way:
-  `restrictTo` rejects on cloned tracks, so one restriction scope per tab stream.
+- **Element/Region Capture interplay — MEASURED (M1): does NOT carry over.** A tabCapture-derived
+  track is a plain `MediaStreamTrack` (no `cropTo`/`restrictTo`) even when consumed inside the
+  captured tab itself with the API globals demonstrably present; Chromium mints
+  `BrowserCaptureMediaStreamTrack` only for `getDisplayMedia` self-capture. So picker-free
+  extension capture is whole-tab frames only, and the capture-plane design in
+  `element-capture-and-the-capture-plane.md` stays tied to `getDisplayMedia` (auto-accept flags
+  in the session browser; one picker per session in personal Chrome). Hybrid accordingly:
+  tabCapture for continuity/share/iPad + software rect-cropping for shots + `restrictTo` as a
+  session-browser-only enhancement. Two more measured constraints: **one active tabCapture
+  stream per tab** ("Cannot capture a tab with an active stream"), and unconstrained tab tracks
+  default to display-sized `crop-and-scale` output — always pass width/height constraints.
 
 ## 6 · The iPad, and split view
 
@@ -173,9 +178,12 @@ from the same grant the shots use). Under a per-window session the natural seman
 
 1. **Follow the active tab**: the offscreen document holds the window's current tabCapture stream
    and re-points the paint host's `FrameSource` on tab activation. The iPad sees whatever tab the
-   user is on — matching the mental model "the iPad shows what I'm working on." Gate: whether a
-   background/previously-invoked tab can be (re)captured without a fresh invocation
-   (measurement M4); worst case, first visit to each tab needs one action click.
+   user is on — matching the mental model "the iPad shows what I'm working on."
+   **Measured (M4):** previously-invoked tabs re-capture fine while backgrounded, streams stay
+   pinned to their tab across focus changes, two concurrent captures work, and the per-tab grant
+   is browser-state durable across SW restarts (~an hour verified) until navigation/tab close —
+   so the only friction is one action click per *first* visit to a tab (softenable with a
+   keyboard `commands` shortcut).
 2. **Window capture**: one `desktopCapture`/`getDisplayMedia` window stream per session (one
    picker; zero in the session browser). The iPad sees the window — including browser chrome and,
    notably, **both panes of a split view**.
@@ -183,19 +191,18 @@ from the same grant the shots use). Under a per-window session the natural seman
    isn't present.
 
 **Split view** (stable since Chrome 143, broad in 145): extensions get *detection* —
-`Tab.splitViewId`, `tabs.query({splitViewId})`, `onUpdated` changes — but **no capture semantics
-are documented anywhere**: what tabCapture returns for a split pane (pane-sized viewport,
-probably), what `captureVisibleTab` shows ("visible area of the active tab" — one pane or the
-whole content area?), and which pane is "active" are all unknowns (measurement M2). The design
-answers, conditional on M2:
+`Tab.splitViewId`, `tabs.query({splitViewId})`, `onUpdated` changes. The capture semantics were
+documented nowhere; **measurement M2 (live, CfT 150) settled the matrix**: `splitViewId` is real
+and shared by the panes; `captureVisibleTab` returns the **active pane only**; tabCapture is
+**pane-scoped** (each stream shows exactly its own tab — no chrome, no other pane); window
+`getDisplayMedia` shows **everything** (both panes + side panel + chrome). So:
 
-- **Recording both tabs**: either two concurrent tabCaptures (no documented per-extension limit;
-  plural `getCapturedTabs()` exists; concurrent *video* unverified — M4) each pane-scoped, or the
-  window stream showing both panes at once. The transcript's context-boundary events
-  (`split-change`) mark when the visual context doubled.
-- **iPad in split view**: option 2 shows both panes naturally; option 1 shows the active pane
-  and flips with `onActivated`. Both are coherent; which is *right* is a UX decision to make
-  after M2, not before.
+- **Recording both tabs**: two concurrent pane-scoped tabCaptures (concurrency proven under M4c,
+  `getCapturedTabs()` reports both active) or the one window stream. The transcript's
+  context-boundary events (`split-change`) mark when the visual context doubled.
+- **iPad in split view**: option 2 (window capture) shows both panes naturally; option 1 shows
+  the active pane and flips with `onActivated`. Both are coherent and both are now known to
+  work; choosing is pure UX.
 
 ## 7 · Page tools: detection, tab changes, and notifying the agent
 
@@ -324,9 +331,14 @@ documented failure mode, not a design input.
 
 > **Status:** the spikes are implemented in `archive/extension-spikes/` (capture-probe extension,
 > mcp-list-changed probe, crxjs-smoke scaffold), with results recorded in its `RESULTS.md`.
-> Already measured: **M3 passed** (list_changed honored cross-turn AND mid-turn on CLI 2.1.206;
-> silent-flip control confirms no background polling) and **M5's headless leg passed** (CRXJS 2.7
-> builds Solid 2.0-beta.15 + overlay-source imports into a loadable MV3 dist).
+> Measured (2026-07-10, CfT 150, CLI 2.1.206): **M1 = NO** (crop/restrict does not attach to
+> tabCapture tracks — capture plane stays gDM-only), **M2 = matrix settled** (visibleTab =
+> active pane; tabCapture = pane-scoped; window gDM = both panes + chrome), **M3 = PASSED**
+> (list_changed honored cross-turn AND mid-turn; silent-flip control shows no background
+> polling), **M4 = as documented** (invocation required per tab even with `<all_urls>`; grants
+> durable across SW restarts; two concurrent captures; one stream per tab), **M5 headless leg
+> passed** (CRXJS 2.7 builds Solid 2.0-beta.15 + overlay-source imports into a loadable MV3
+> dist). Remaining: M5 live HMR leg, M6 soak.
 
 Standing rule (learned the hard way, recorded in project memory): **capture measurements must be
 taken by hand in the real session browser** — an agent-spawned Chrome under test flags lies about

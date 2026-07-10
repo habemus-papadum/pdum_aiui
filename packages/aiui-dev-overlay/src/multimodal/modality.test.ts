@@ -2345,3 +2345,150 @@ describe("multimodalModality: the ink chip (permanent ⇄ vanishing)", () => {
     }
   });
 });
+
+describe("multimodalModality: SPA navigation mid-turn (the navigation watcher)", () => {
+  const MOCK = { transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 } as const;
+  const report = () => {
+    const r = window.__aiui_overlay?.report();
+    if (!r) {
+      throw new Error("overlay tools not installed");
+    }
+    return r;
+  };
+  /** One committed stroke via the remote pen (same strokes[] a local drag fills). */
+  const draw = (id: string): void => {
+    const sink = window.__AIUI__?.remotePaint;
+    if (!sink) {
+      throw new Error("remote paint seam not published");
+    }
+    sink.beginStroke(id, { color: "#ff5c87", width: 3 }, { x: 10, y: 10 });
+    sink.extendStroke(id, { x: 40, y: 40 });
+    sink.endStroke(id, { x: 60, y: 20 });
+  };
+  afterEach(() => {
+    history.replaceState(null, "", "/");
+  });
+
+  it("records the boundary on a path change, clears the ink, and the turn survives", async () => {
+    const { sent } = mountMultimodal(MOCK);
+    key("keydown", "`"); // arm
+    draw("s1"); // stroke → thread-open
+    await flush();
+    expect(report().ink.strokes).toBe(1);
+    expect(report().threadOpen).toBe(true);
+    await wait(50); // socket + hello
+
+    history.pushState(null, "", "/aztec"); // what any SPA router bottoms out in
+    await wait(50);
+
+    // Ink must not outlive its page; the TURN must survive the navigation.
+    expect(report().ink.strokes).toBe(0);
+    expect(report().threadOpen).toBe(true);
+    const events = streamedEvents(sent);
+    const nav = events.find((e) => e.type === "navigation");
+    expect(nav).toMatchObject({ type: "navigation", kind: "push" });
+    expect((nav as { to: string }).to).toContain("/aztec");
+    const clear = events.find((e) => e.type === "ink-clear");
+    expect(clear).toMatchObject({ type: "ink-clear", auto: true, reason: "navigation" });
+    // The boundary lands first; its ink-clear is a consequence, after it.
+    expect(events.findIndex((e) => e.type === "navigation")).toBeLessThan(
+      events.findIndex((e) => e.type === "ink-clear"),
+    );
+  });
+
+  it("a hash-only jump traces the boundary but clears nothing", async () => {
+    const { sent } = mountMultimodal(MOCK);
+    key("keydown", "`");
+    draw("s1");
+    await flush();
+    await wait(50);
+
+    history.pushState(null, "", "/#theory"); // a section jump — same pathname
+    await wait(50);
+
+    expect(report().ink.strokes).toBe(1);
+    const events = streamedEvents(sent);
+    expect(events.some((e) => e.type === "navigation")).toBe(true);
+    expect(events.some((e) => e.type === "ink-clear")).toBe(false);
+  });
+
+  it("without an open thread, a navigation records nothing — context, not content", async () => {
+    const { sent } = mountMultimodal(MOCK);
+    key("keydown", "`"); // armed, but no thread yet
+    await wait(20);
+
+    history.pushState(null, "", "/quiet");
+    await wait(20);
+
+    const events = streamedEvents(sent);
+    expect(events.some((e) => e.type === "navigation")).toBe(false);
+    expect(report().threadOpen).toBe(false);
+  });
+});
+
+describe("multimodalModality: turn recovery across pages (gotcha #5 fixes)", () => {
+  const MOCK = { transcriber: "mock", mockWordMs: 0, mockTypoRate: 0 } as const;
+  const report = () => {
+    const r = window.__aiui_overlay?.report();
+    if (!r) {
+      throw new Error("overlay tools not installed");
+    }
+    return r;
+  };
+  const TURN_KEY = "aiui-intent-turn";
+  const mirrorFrom = (url: string) =>
+    JSON.stringify({
+      events: [
+        { at: 1, type: "thread-open", trigger: "ink" },
+        { at: 2, type: "stroke", points: 3, bounds: { x: 0, y: 0, w: 5, h: 5 } },
+      ],
+      threadOpen: true,
+      url,
+      savedAt: Date.now(),
+    });
+  afterEach(() => {
+    history.replaceState(null, "", "/");
+  });
+
+  it("recovers a turn onto a DIFFERENT URL and records the navigation boundary", async () => {
+    history.replaceState(null, "", "/new-page");
+    sessionStorage.setItem(TURN_KEY, mirrorFrom("http://localhost:3000/old-page"));
+    mountMultimodal(MOCK);
+    await wait(50);
+
+    const r = report();
+    expect(r.threadOpen).toBe(true); // the exact-URL gate would have refused this
+    const types = r.events.last.map((e) => e.type);
+    expect(types).toContain("navigation"); // the hard nav, reconstructed at adopt
+  });
+
+  it("threadless events do not garbage-collect another page's mirror", async () => {
+    mountMultimodal(MOCK);
+    await flush();
+    // Another page's still-recoverable turn lands in the shared per-tab store
+    // AFTER this page mounted (so this mount never adopted it).
+    sessionStorage.setItem(TURN_KEY, mirrorFrom("http://localhost:3000/other-page"));
+
+    key("keydown", "`"); // arm — an event with threadOpen === false
+    await wait(20);
+    key("keydown", "`"); // disarm — another one
+    await wait(20);
+
+    expect(sessionStorage.getItem(TURN_KEY)).not.toBeNull(); // the old bug deleted it
+  });
+
+  it("a real thread-close still clears the mirror", async () => {
+    mountMultimodal(MOCK);
+    key("keydown", "`");
+    const sink = window.__AIUI__?.remotePaint;
+    if (!sink) throw new Error("remote paint seam not published");
+    sink.beginStroke("s1", { color: "#fff", width: 2 }, { x: 5, y: 5 });
+    sink.endStroke("s1", { x: 9, y: 9 });
+    await flush();
+    expect(sessionStorage.getItem(TURN_KEY)).not.toBeNull(); // recorded while open
+
+    key("keydown", "Escape"); // cancel → thread-close
+    await wait(20);
+    expect(sessionStorage.getItem(TURN_KEY)).toBeNull();
+  });
+});

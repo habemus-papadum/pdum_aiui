@@ -8,8 +8,7 @@
  * canvas — a DOM singleton — which lives only in the overview.
  */
 
-import { SiteHeader, TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
-import { BRAND, LINKS, TABS } from "../../../site/nav";
+import { TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
 import { AztecCanvas } from "./AztecCanvas";
 import { Controls } from "./Controls";
 import { FrozenChart } from "./FrozenChart";
@@ -20,7 +19,6 @@ import { Tiles } from "./Tiles";
 export function App() {
   return (
     <>
-      <SiteHeader brand={BRAND} tabs={TABS} active="aztec" links={LINKS} />
       <div class="app">
         <div class="app-main">
           <header class="app-head">

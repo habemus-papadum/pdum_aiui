@@ -109,13 +109,15 @@ each page reads like a short paper, not a dashboard: sections that interleave th
 laboratory with prose, real mathematics, a theory of what's on screen, and an "experiments"
 section of concrete things to try — navigable through a right-hand table of contents, under a
 shared header that makes the *collection* visible. Pages respect the system's light/dark
-preference; simulation canvases stay self-contained dark figures in both. Two
-patterns cover it: **separate Vite entries** (a full page load per notebook — which *is* the
-resource policy: leaving a page frees its GPU contexts and workers by construction), and a
-**single-entry shell** with lazy pages whose heavy islands declare suspend policies (pause /
-hibernate / dispose) — the durable/disposable line applied at page granularity. Coordination
-stays boring: URL for shareable state, localStorage for preferences, BroadcastChannel across
-tabs.
+preference; simulation canvases stay self-contained dark figures in both. The supported shape is
+a **single-document shell**: lazy page modules behind client-side routing, with heavy islands
+declaring suspend policies (pause / hibernate / dispose) — the durable/disposable line applied at
+page granularity, pause-not-destroy by default. One document is not just a resource choice: it is
+what lets an agent-collaboration turn (the intent tool's open thread, its socket, its capture
+grant) survive switching notebooks, with each switch traced as a navigation event. The older
+pattern — separate Vite entries, a full page load per notebook — frees resources by construction
+but kills that continuity, which is why the gallery migrated off it. Coordination stays boring:
+URL for shareable state, localStorage for preferences, BroadcastChannel across tabs.
 
 ## The weaving challenge
 

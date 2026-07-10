@@ -10,8 +10,7 @@
  * overview.
  */
 
-import { SiteHeader, TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
-import { BRAND, LINKS, TABS } from "../site/nav";
+import { TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { Controls } from "./Controls";
 import { RegimeAtlas } from "./RegimeAtlas";
@@ -23,7 +22,6 @@ import { TimeSeries } from "./TimeSeries";
 export function App() {
   return (
     <>
-      <SiteHeader brand={BRAND} tabs={TABS} active="morphogen" links={LINKS} />
       <div class="app">
         <div class="app-main">
           <header class="app-head">

@@ -159,7 +159,43 @@ export type IntentEvent =
       correction?: boolean;
     }
   | { at: number; type: "stroke"; points: number; bounds: Rect }
-  | { at: number; type: "ink-clear"; auto: boolean }
+  | {
+      at: number;
+      type: "ink-clear";
+      auto: boolean;
+      /**
+       * Why the ink went away, when a cause beyond the user's ✕ / the fade is
+       * worth recording. `"navigation"`: the page SPA-navigated and strokes
+       * must not float over a route they weren't drawn on — the logged strokes
+       * stay in the stream (correctly attributed by their position before the
+       * `navigation` event); screenshots remain the durable form of deixis.
+       */
+      reason?: "navigation";
+    }
+  | {
+      /**
+       * The page navigated **within the same document** mid-turn — an SPA
+       * router push, a hash jump to a section, a back/forward traversal (the
+       * overlay's navigation watcher, navigation.ts). Context riding a turn,
+       * never a turn opener (the `app-selection` rule): emitted only while a
+       * thread is open. Ordering in the log is the attribution: strokes,
+       * shots, and selections before this event belong to `from`, after it to
+       * `to` — which also makes the stream self-describing after the hello's
+       * one-shot `location.href` snapshot goes stale.
+       *
+       * This is the first of the context-boundary family — an extension host
+       * later adds siblings like `tab-switch` (see
+       * docs/proposals/browser-extension-intent-tool.md §2).
+       */
+      at: number;
+      type: "navigation";
+      /** `location.href` before. */
+      from: string;
+      /** `location.href` after. */
+      to: string;
+      /** How it happened, when the watcher could cheaply attribute it. */
+      kind?: "push" | "replace" | "traverse" | "reload" | "hash";
+    }
   | {
       at: number;
       type: "shot";

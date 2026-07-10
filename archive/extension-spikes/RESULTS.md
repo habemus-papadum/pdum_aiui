@@ -73,5 +73,63 @@ Probe: `capture-probe/` (plain-JS MV3, load unpacked). Human-driven in the real 
   tab (it never follows focus). This is the continuity property the per-window design wants.
   Invocation is strictly per-tab: capturing a second tab requires an action click on THAT tab
   first.
-- M4c (two concurrent captures), M1 in-page crop/restrict, M2 split-view matrix, M6 soak:
-  pending below.
+- **M4c (two concurrent video captures) — PASSED (live):** second tab invoked + captured while
+  the first stream ran; `snapshot all` returned correct stills of BOTH tabs and
+  `getCapturedTabs()` reported both as `{"status":"active"}`
+  (`[{tabId:1015960432},{tabId:1015960433}]`). No "Busy" error — the 2012 design doc's reserved
+  concurrency cap is not enforced at 2 streams on CfT 150.
+- **M4 verdict:** invocation-gated but otherwise ideal for the per-window design — per-tab
+  invocation is the only friction ("iPad follows active tab" costs one action click per
+  first visit to a tab; a keyboard `commands` shortcut can soften it).
+- **One stream per tab (live):** starting an in-page capture while the offscreen doc already
+  held a stream of the same tab failed with `"Cannot capture a tab with an active stream."`
+  A tab supports exactly one active tabCapture stream — the extension cannot hold a share
+  stream and also hand the page its own stream for the same tab.
+
+### M1 — cropTo/restrictTo on tabCapture-derived tracks · **MEASURED: NO (live, CfT 150)**
+
+The decisive leg: `getMediaStreamId({targetTabId, consumerTabId})` consumed **in the captured
+tab itself** (no transport problem possible). Result:
+
+- `trackConstructor: "MediaStreamTrack"` — NOT `BrowserCaptureMediaStreamTrack`;
+  `hasCropTo`/`hasRestrictTo` both `undefined`.
+- Control facts in the same context: `globalCropTarget`/`globalRestrictionTarget` are
+  `"function"` — the Region/Element Capture API exists in that world; the tabCapture track is
+  simply not the track type that carries them. Chromium mints `BrowserCaptureMediaStreamTrack`
+  only for `getDisplayMedia` self-capture.
+- Wrinkle: the unconstrained tab track defaulted to 5120x1440 `crop-and-scale`
+  (`screenPixelRatio 1.25`) for an 814-CSS-px page — always pass width/height constraints.
+
+**Design consequence:** picker-free extension capture (tabCapture) = whole-tab frames only; the
+element-capture proposal's occluder-free capture plane stays tied to `getDisplayMedia`
+self-capture (auto-accept flags in the session browser; one picker/session in personal Chrome).
+Hybrid: tabCapture for continuity/share/iPad + software rect-cropping for shots + `restrictTo`
+as a session-browser-only enhancement.
+
+- **Durable invocation grant (live, incidental):** a capture succeeded with the SW logging
+  `invoked at: NEVER` — the MV3 service worker had restarted (in-memory invocation ledger
+  wiped) while Chrome's activeTab grant, given ~an hour earlier, still authorized capture.
+  Per-tab invocation is browser-state, durable until navigation/tab close, independent of
+  extension process lifetime. (Alternative reading — split panes sharing invocation — not
+  excluded by this log, but the SW-restart explanation fits all facts.)
+
+### M2 — split-view capture matrix · **MEASURED (live, CfT 150)**
+
+Two tabs (NPR | Google) in one split view, extension side panel open:
+
+| Primitive | What it returned |
+| --- | --- |
+| `Tab.splitViewId` | real; both panes share one view id (panel dropdown showed it) |
+| `captureVisibleTab` | **active pane only** — never both |
+| tabCapture per pane | **pane-scoped**: #4 showed only NPR, #5 only Google; no chrome, no other pane |
+| `getDisplayMedia` (window, from panel) | **everything**: both panes + side panel + chrome (`surface: window`, 1200x1276) |
+
+**Design consequences:** "record both split tabs" = two concurrent tabCaptures (proven under
+M4c) or one window gDM; "iPad shows both panes" = the window-capture option; per-pane capture
+composes cleanly with the per-window session model. Reminder from both M1/M2 runs: default
+(unconstrained) tab tracks come back 5120x1440 `crop-and-scale` regardless of surface shape —
+real code must set width/height constraints.
+
+Still open: M6 soak (leave the panel open a few hours, then `lifetime report`), M5 live HMR
+leg, optional personal-Chrome contrast run (same probe, no session-browser flags — expected
+identical for tabCapture since no flags are involved, picker for gDM).

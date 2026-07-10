@@ -180,3 +180,72 @@ This needs saying explicitly, because the demos are what agents (and readers) im
 - How far to take the dev-mode hard-navigation warning (gotcha #1) — console, toast, or nothing?
 - Per-URL ink layers if a real annotation workflow ever appears (explicitly deferred, not
   rejected forever).
+
+
+## Outcome (2026-07-10) — proposals 1 and 2 shipped; recovery fixed
+
+**Proposal 1 shipped** as `packages/aiui-dev-overlay/src/navigation.ts` plus wiring:
+
+- The watcher prefers the Navigation API's `currententrychange` (one event per COMMITTED
+  same-document navigation, with `navigationType`), falling back to pushState/replaceState
+  patching + popstate/hashchange. Router-agnostic as designed; ships unconditionally.
+- The `navigation` intent event landed as proposed (`{ from, to, kind? }`, emitted only while a
+  thread is open — context, never a turn opener). `composeIntent` folds it as a positional
+  boundary item and lowers it to a compact parenthetical; the trace viewer renders `⇢ from → to`;
+  the preview shows a minimal `⇢ /route` chip.
+- **Policy hinge discovered during build: `pathChanged`.** Not every same-document navigation is
+  a page change — `replaceState` syncing app state into the query string and `#section` TOC
+  jumps navigate without changing pathname. The destructive policies (ink clear, selection
+  retraction) key on a PATHNAME change; same-path changes are traced but clear nothing.
+- Ink policy: on a path change the canvas clears and the stream records
+  `ink-clear { auto: true, reason: "navigation" }`; stale app selections retract through the
+  host clearing the selection watcher (ordinary onChange → `app-selection-drop`), ordered after
+  the navigation event.
+
+**Proposal 2 shipped**: `demos/gallery` is now the single-document SPA reference.
+
+- ~40-line pushState router (`src/site/router.ts`) over the `TABS` config; `@solidjs/router`
+  was not risked against the Solid 2.0 beta, per the "almost immaterial" analysis.
+- **Delegated link interception** answers gotcha #1 more strongly than the proposal asked:
+  every same-origin, in-base anchor click app-wide becomes a client-side navigation
+  (`interceptLocalLinks`), so the safe idiom is the default idiom — a prose link between
+  notebooks can't kill a turn either. Modified clicks, targets, downloads, and external URLs
+  pass through; same-path hash links stay native.
+- **Pause-not-destroy page lifecycle** (`src/site/pages.ts`): a route change disposes the page's
+  component tree (the HMR disposability, reused) and parks its rAF loops
+  (`SimLoop.pause`/`Player.pause` — parking is distinct from the user-facing `speed=0` /
+  `playing=false` controls), while durables survive. Event-driven resources (workers between
+  jobs, DuckDB) needed nothing. This is the piece the proposal under-specified: routers dispose
+  component trees, and the gallery's heavy resources are deliberately NOT in the component tree —
+  the lifecycle seam had to be added by hand (~10 lines per page).
+- Deep links: dev rides Vite's SPA fallback; the published static site gets explicit
+  `aztec`/`seismos` objects (content-type text/html) plus `.html` twins so legacy inbound URLs
+  keep working (`publish.sh`); the router maps `.html` slugs onto routes.
+- **One window, merged registries — the open design question this rewrite surfaced.** Under one
+  document, all pages' controls/cells/edges share the global reflection registries, so each
+  page's `report` lists every page's surface. Names are unique across the gallery today (that is
+  now a stated rule in each store's header) and durable keys are page-prefixed; whether the
+  reflection layer wants first-class scoping (a `page`/`scope` field, per-kit filtered reports)
+  is deferred until an app actually confuses an agent — recorded as a porcelain/possibility item
+  in front_end_controls_guide_and_more.md.
+- Found and fixed while converting: the gallery's vite config still had the pre-controls
+  `locator: { cellFactories: ["cell"] }`, which suppresses control/action name injection (a
+  Phase-3 adoption gap — nameless `control()` throws at runtime). Now `locator: true`.
+
+**Gotcha #5 fixed** (both halves):
+
+- `TurnStore.recover()` dropped the exact-URL gate: sessionStorage is already same-tab +
+  same-origin (≈ "same app" under a dev server), freshness stays the bound, and `RecoveredTurn`
+  now reports the URL the turn was last recorded on. When it differs from the adopting page, the
+  modality records the hard navigation as a `navigation` event at adopt time — the boundary the
+  watcher couldn't see (the document died first) is reconstructed in the stream.
+- The `turn.clear()`-on-threadless-event hazard is gone: the mirror is forgotten only on an
+  actual `thread-close`, so a fresh page's bus-replayed `armed` event no longer garbage-collects
+  another page's recoverable turn.
+
+**Still open** (unchanged from the proposal): the session-bus hello URL staleness for the peer
+list (gotcha #6 — the thread side is superseded by navigation events); channel-side navigation
+milestones in trace timing; the dev-mode hard-navigation warning (moot inside the gallery now
+that links are intercepted, still interesting for arbitrary apps); per-URL ink layers (deferred);
+sequencing step 3's template "add a page" recipe — the template is still single-page, and the
+skill/playbook now describe the routed-shell idiom with the gallery as the reference.

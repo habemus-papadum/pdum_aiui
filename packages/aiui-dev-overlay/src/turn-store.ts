@@ -21,9 +21,17 @@
  *    module's MutationObserver re-runs `mountIntentTool`): `window` survives, so
  *    the {@link durable} in-memory copy is adopted silently — nothing was lost.
  *  - **Full reload** (an overlay-source edit under the dev server; a Vite config
- *    change; a manual reload): `window` — and the durable registry with it — is
- *    wiped, so we fall back to a **sessionStorage** mirror, bounded by freshness
- *    (5 min) and same-URL, and restore it on the fresh mount with a status line.
+ *    change; a manual reload; a hard navigation mid-turn): `window` — and the
+ *    durable registry with it — is wiped, so we fall back to a
+ *    **sessionStorage** mirror, bounded by freshness (5 min), and restore it on
+ *    the fresh mount with a status line. There is deliberately NO same-URL
+ *    gate: sessionStorage is already same-tab + same-origin (≈ "same app" under
+ *    a dev server), and with in-turn navigation a first-class event
+ *    (navigation.ts) a turn may legitimately end its life on a different URL
+ *    than it started — the recovered turn reports its last URL so the adopter
+ *    can record the boundary as a `navigation` event instead of refusing.
+ *    (The old exact-URL gate made every cross-page recovery silently fail —
+ *    docs/proposals/spa-navigation-and-turn-continuity.md, gotcha #5.)
  *
  * What is precious is only the *turn*: the current thread's event log (which is
  * the transcript, the shot references, and the thread state) — nothing else. The
@@ -54,6 +62,10 @@ export interface RecoveredTurn {
   /** `"live"` — a soft remount adopted the in-memory copy (silent); `"reloaded"`
    * — a full reload restored it from sessionStorage (announce it). */
   source: "live" | "reloaded";
+  /** `location.href` when the turn was last recorded. When it differs from the
+   * adopting page's URL, a hard navigation happened mid-turn — record it as a
+   * `navigation` event so the boundary shows in the stream. */
+  url: string;
 }
 
 function session(): Storage | undefined {
@@ -108,21 +120,17 @@ export class TurnStore {
 
   /**
    * The turn to adopt on a fresh mount, or undefined. A live in-memory turn
-   * (soft remount) wins and is silent; otherwise a fresh, same-URL sessionStorage
-   * mirror (full reload) is announced by the caller.
+   * (soft remount) wins and is silent; otherwise a fresh sessionStorage mirror
+   * (full reload — possibly on a different URL, see the module doc) is
+   * announced by the caller.
    */
   recover(): RecoveredTurn | undefined {
     if (this.live && this.live.events.length > 0 && this.live.threadOpen) {
-      return { events: this.live.events, threadOpen: true, source: "live" };
+      return { events: this.live.events, threadOpen: true, source: "live", url: this.live.url };
     }
     const mirror = readMirror();
-    if (
-      mirror?.threadOpen &&
-      mirror.events.length > 0 &&
-      mirror.url === currentUrl() &&
-      Date.now() - mirror.savedAt < FRESH_MS
-    ) {
-      return { events: mirror.events, threadOpen: true, source: "reloaded" };
+    if (mirror?.threadOpen && mirror.events.length > 0 && Date.now() - mirror.savedAt < FRESH_MS) {
+      return { events: mirror.events, threadOpen: true, source: "reloaded", url: mirror.url };
     }
     return undefined;
   }

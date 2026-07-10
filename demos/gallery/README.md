@@ -72,7 +72,7 @@ layers, per notebook:
 | seam (worker) | `analysis/analysis.worker.ts` | `pages/aztec/shuffle.worker.ts` | — (DuckDB is the engine) |
 | 2 · cells + roots | `model/{graph,store}.ts` | `pages/aztec/{graph,store}.ts` | `pages/seismos/{graph,store}.ts` |
 | 3 · components | `ui/` | `pages/aztec/ui/` | `pages/seismos/ui/` |
-| 4 · application | `ui/App.tsx` + nav | `aztec.html` entry | `seismos.html` entry |
+| 4 · application | `ui/App.tsx` + nav | `pages/aztec/page.tsx` | `pages/seismos/page.tsx` |
 
 ## What to look at
 
@@ -84,8 +84,8 @@ layers, per notebook:
 
 ## The aztec page
 
-A second notebook page (`aztec.html` → `src/pages/aztec/`) demonstrating the
-multi-page pattern from [PRINCIPLES.md](./PRINCIPLES.md) §8: **uniformly-random
+A second notebook page (`/aztec` → `src/pages/aztec/`) demonstrating the
+many-notebooks pattern from [PRINCIPLES.md](./PRINCIPLES.md): **uniformly-random
 domino tilings of the Aztec diamond**, grown by EKLP domino shuffling. Watch the
 fold and the **arctic circle** emerges — four corners freeze into single-orientation
 brickwork (N/E/S/W dominoes) around a disordered disc of radius n/√2. A live panel
@@ -93,7 +93,8 @@ computes the number of tilings two ways — Ryser's **permanent** of the dual gr
 biadjacency matrix vs. the EKLP closed form 2^(n(n+1)/2) — and they match through
 n=4. Same methodology as morphogen: a durable canvas island, a worker streaming a
 frame per growth step into a scrub ring, a cell for progress/cancel, and an agent
-surface at `window.__aztec` (`set-size`, `regrow`, `play`/`pause`, `set-speed`,
-`toggle-circle`, `seek`, `report()`). Nav between the two pages is a plain link —
-a full page load per notebook is the resource policy. Build notes and the
-GPU/WebGPU mapping are in `src/pages/aztec/NOTES.md`.
+surface at `window.__aztec` (controls + actions via `registerStandardTools`, plus
+the bespoke pieces). Nav between notebooks is client-side routing under one
+document — leaving a page parks its loops, every durable survives, and an open
+intent turn rides across the switch. Build notes and the GPU/WebGPU mapping are
+in `src/pages/aztec/NOTES.md`.
