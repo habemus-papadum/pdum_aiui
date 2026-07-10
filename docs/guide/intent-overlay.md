@@ -436,6 +436,10 @@ the pipeline is already shaped for behavior the lab is still measuring.
 
 ## See also
 
+- [Element Capture & the Capture Plane](../proposals/element-capture-and-the-capture-plane.md) —
+  a proposal: keep the overlay's own chrome out of shots and share frames by restricting the
+  capture to a DOM subtree, and let ink reach the model from the capture rather than from a
+  second, software renderer.
 - [Prompt Linting](./prompt-linting) — the realtime observer, its verbatim persona, the
   `read_file` tool, and the cost model.
 - [The Web Intent Tool](./web-intent-tool) — the design behind the overlay: modalities,
