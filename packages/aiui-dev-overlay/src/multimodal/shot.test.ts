@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Ink } from "./ink";
-import { locateComponents, ShotTool } from "./shot";
+import { encodeCanvas, locateComponents, ShotTool } from "./shot";
 
 afterEach(() => {
   delete window.__AIUI__;
@@ -208,6 +208,30 @@ describe("ShotTool capture", () => {
     }
   });
 
+  it("reads the canvas back once per shot — the thumb comes from the bytes, not a second encode", async () => {
+    const restore = stubCapture();
+    const proto = HTMLCanvasElement.prototype as unknown as Record<string, unknown>;
+    const toBlob = vi.fn(proto.toBlob as (cb: (b: Blob) => void) => void);
+    const toDataURL = vi.fn(proto.toDataURL as () => string);
+    proto.toBlob = toBlob;
+    proto.toDataURL = toDataURL;
+    try {
+      const ink = new Ink({ fadeSec: () => 0, onStroke: () => {}, onAutoClear: () => {} });
+      let thumb: string | undefined;
+      const shots = new ShotTool(ink, (_rect, _components, _viewport, t) => {
+        thumb = t;
+      });
+      await shots.shootViewport();
+      expect(toBlob).toHaveBeenCalledTimes(1);
+      expect(toDataURL).not.toHaveBeenCalled();
+      expect(thumb).toBe(`data:image/png;base64,${btoa("\x89PNG")}`);
+      ink.dispose();
+      shots.dispose();
+    } finally {
+      restore();
+    }
+  });
+
   it("degrades to no pixels when capture is unavailable", async () => {
     const ink = new Ink({ fadeSec: () => 0, onStroke: () => {}, onAutoClear: () => {} });
     let received: { bytes?: Uint8Array } | undefined;
@@ -278,5 +302,63 @@ describe("ShotTool region veil (D arm/disarm)", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("encodeCanvas", () => {
+  /** A canvas whose two readback paths are both counted. */
+  function countingCanvas(bytes: Uint8Array, type: string) {
+    const canvas = document.createElement("canvas");
+    const toBlob = vi.fn((cb: (b: Blob) => void) => cb(new Blob([bytes], { type })));
+    const toDataURL = vi.fn(() => `data:${type};base64,SENTINEL`);
+    Object.assign(canvas, { toBlob, toDataURL });
+    return { canvas, toBlob, toDataURL };
+  }
+
+  it("reads the canvas back exactly once: toBlob for the bytes, and the thumb derived from them", async () => {
+    // `toDataURL()` is a second readback + re-encode of pixels toBlob already
+    // gave us. Both capture sites used to call both; this pins that they don't.
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // "\x89PNG"
+    const { canvas, toBlob, toDataURL } = countingCanvas(png, "image/png");
+
+    const shot = await encodeCanvas(canvas, "image/png");
+
+    expect(toBlob).toHaveBeenCalledTimes(1);
+    expect(toDataURL).not.toHaveBeenCalled();
+    expect(shot?.bytes).toEqual(png);
+    // The thumb is the *same* pixels, base64 of the bytes toBlob returned.
+    expect(shot?.thumb).toBe(`data:image/png;base64,${btoa("\x89PNG")}`);
+  });
+
+  it("passes the image type and quality through to toBlob", async () => {
+    const { canvas, toBlob } = countingCanvas(new Uint8Array([0xff, 0xd8]), "image/jpeg");
+    await encodeCanvas(canvas, "image/jpeg", 0.6);
+    expect(toBlob).toHaveBeenCalledWith(expect.any(Function), "image/jpeg", 0.6);
+  });
+
+  it("falls back to toDataURL when the canvas has no toBlob", async () => {
+    const canvas = document.createElement("canvas");
+    (canvas as { toBlob?: unknown }).toBlob = undefined;
+    canvas.toDataURL = vi.fn(() => `data:image/png;base64,${btoa("\x89PNG")}`);
+
+    const shot = await encodeCanvas(canvas, "image/png");
+
+    expect(canvas.toDataURL).toHaveBeenCalledTimes(1); // still only one readback
+    expect(shot?.bytes).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+  });
+
+  it("yields undefined when the encode fails", async () => {
+    const canvas = document.createElement("canvas");
+    Object.assign(canvas, { toBlob: (cb: (b: Blob | null) => void) => cb(null) });
+    expect(await encodeCanvas(canvas, "image/png")).toBeUndefined();
+  });
+
+  it("base64s a payload larger than the argument-spread limit", async () => {
+    // fromCharCode(...bytes) blows the stack past ~100k args — a real 1080p PNG.
+    const big = new Uint8Array(300_000).fill(0x41);
+    const { canvas } = countingCanvas(big, "image/png");
+    const shot = await encodeCanvas(canvas, "image/png");
+    expect(shot?.bytes.length).toBe(300_000);
+    expect(shot?.thumb).toBe(`data:image/png;base64,${btoa("A".repeat(300_000))}`);
   });
 });

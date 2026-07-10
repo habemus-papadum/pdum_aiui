@@ -228,9 +228,7 @@ export class ShotTool {
     // Freeze any ink inside the rect into the image — annotations travel with
     // the pixels they annotate.
     this.ink.compositeInto(ctx, rect.x, rect.y, scaleX);
-    const thumb = canvas.toDataURL("image/png");
-    const bytes = await canvasPngBytes(canvas);
-    return bytes ? { thumb, bytes } : undefined;
+    return encodeCanvas(canvas, "image/png");
   }
 
   /**
@@ -243,56 +241,81 @@ export class ShotTool {
   }
 }
 
-/** PNG bytes from a canvas via toBlob (preferred) with a data-URL fallback. */
-function canvasPngBytes(canvas: HTMLCanvasElement): Promise<Uint8Array | undefined> {
+/** The image encodings a captured canvas is read back as. */
+export type ImageType = "image/png" | "image/jpeg";
+
+/** `toBlob` as a promise. Resolves undefined when the encode fails. */
+function canvasBlob(
+  canvas: HTMLCanvasElement,
+  type: ImageType,
+  quality?: number,
+): Promise<Blob | undefined> {
   return new Promise((resolve) => {
-    if (typeof canvas.toBlob !== "function") {
-      resolve(dataUrlToBytes(canvas.toDataURL("image/png")));
-      return;
-    }
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        resolve(undefined);
-        return;
-      }
-      blob
-        .arrayBuffer()
-        .then((buf) => resolve(new Uint8Array(buf)))
-        .catch(() => resolve(undefined));
-    }, "image/png");
+    canvas.toBlob((blob) => resolve(blob ?? undefined), type, quality);
   });
 }
 
+/** Bytes out of a blob, or undefined if reading it threw. */
+async function blobBytes(blob: Blob): Promise<Uint8Array | undefined> {
+  try {
+    return new Uint8Array(await blob.arrayBuffer());
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * JPEG bytes from a canvas via toBlob (preferred) with a data-URL fallback —
- * the realtime submode's video sampler encodes its ~1 fps frames this way (the
- * shot path stays PNG via {@link canvasPngBytes}; JPEG is small enough for a
- * stream and legible enough to ground on).
+ * Encoded bytes from a canvas via toBlob (preferred) with a data-URL fallback —
+ * the realtime submode's video sampler encodes its ~1 fps frames this way, and
+ * the paint sidecar reuses it as its frame source. Callers that also need a
+ * thumbnail want {@link encodeCanvas} instead, which gets both from one encode.
  */
-export function canvasJpegBytes(
+export async function canvasJpegBytes(
   canvas: HTMLCanvasElement,
   quality: number,
 ): Promise<Uint8Array | undefined> {
-  return new Promise((resolve) => {
-    if (typeof canvas.toBlob !== "function") {
-      resolve(dataUrlToBytes(canvas.toDataURL("image/jpeg", quality)));
-      return;
-    }
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          resolve(undefined);
-          return;
-        }
-        blob
-          .arrayBuffer()
-          .then((buf) => resolve(new Uint8Array(buf)))
-          .catch(() => resolve(undefined));
-      },
-      "image/jpeg",
-      quality,
-    );
-  });
+  if (typeof canvas.toBlob !== "function") {
+    return dataUrlToBytes(canvas.toDataURL("image/jpeg", quality));
+  }
+  const blob = await canvasBlob(canvas, "image/jpeg", quality);
+  return blob ? blobBytes(blob) : undefined;
+}
+
+/**
+ * Encode a canvas **once** into the two forms every capture site needs: bytes
+ * for the upload, and a data URL for the inline preview thumbnail.
+ *
+ * `toBlob()` and `toDataURL()` are both *readback* operations — each pulls the
+ * pixels back off an accelerated canvas and re-encodes them
+ * ([spec](https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently)).
+ * The shot and video-frame paths used to call both, paying for two readbacks
+ * and two encodes of one image. Encode with `toBlob()` and derive the data URL
+ * from the bytes it already handed back.
+ */
+export async function encodeCanvas(
+  canvas: HTMLCanvasElement,
+  type: ImageType,
+  quality?: number,
+): Promise<ShotPixels | undefined> {
+  if (typeof canvas.toBlob !== "function") {
+    const thumb = canvas.toDataURL(type, quality);
+    const bytes = dataUrlToBytes(thumb);
+    return bytes ? { thumb, bytes } : undefined;
+  }
+  const blob = await canvasBlob(canvas, type, quality);
+  const bytes = blob ? await blobBytes(blob) : undefined;
+  return bytes ? { thumb: `data:${type};base64,${bytesToBase64(bytes)}`, bytes } : undefined;
+}
+
+/** `String.fromCharCode(...bytes)` overflows the call stack past ~100k args. */
+const BASE64_CHUNK = 0x8000;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK));
+  }
+  return btoa(binary);
 }
 
 function dataUrlToBytes(dataUrl: string): Uint8Array | undefined {

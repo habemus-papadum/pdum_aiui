@@ -27,7 +27,7 @@ import type { OverlayErrorInput } from "../../errors";
 import type { Engine, Rect, VideoCaptureMode } from "../../intent-pipeline";
 import { createDisplayCapture, type DisplayCapture } from "../display-capture";
 import type { Ink } from "../ink";
-import { canvasJpegBytes, type ShotPixels, ShotTool } from "../shot";
+import { encodeCanvas, type ShotPixels, ShotTool } from "../shot";
 import {
   sampleDimensions,
   VIDEO_FRAME_MIME,
@@ -332,11 +332,7 @@ export function createCapture(deps: CaptureDeps): Capture {
       return undefined;
     }
     c2d.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const bytes = await canvasJpegBytes(canvas, VIDEO_JPEG_QUALITY);
-    if (!bytes) {
-      return undefined;
-    }
-    return { thumb: canvas.toDataURL("image/jpeg", VIDEO_JPEG_QUALITY), bytes };
+    return encodeCanvas(canvas, "image/jpeg", VIDEO_JPEG_QUALITY);
   }
 
   return {
