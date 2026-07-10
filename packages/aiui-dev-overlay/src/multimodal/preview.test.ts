@@ -351,6 +351,46 @@ describe("the confidence heat map (word logprobs end-to-end in the view)", () =>
     expect(unsure.title).toContain("-1.10");
     expect(words[0].style.background).toBe("");
   });
+
+  it("retints earlier words when a later segment widens the logprob range", async () => {
+    // The range spans the WHOLE turn, so a new segment's worse word rescales
+    // every tint already on screen. The words array is reused by reference, so
+    // <For> keeps the existing rows — the tint has to be reactive on its own,
+    // not computed once in the row's (untracked) child body.
+    const { engine } = mounted();
+    const s1 = engine.talkStart() ?? 1;
+    engine.talkEnd();
+    engine.transcriptFinal(s1, "make foo", 90, "gpt-4o-transcribe", [
+      { text: "make", logprob: -0.01 },
+      { text: "foo", logprob: -0.3 }, // the worst word SO FAR → full tint
+    ]);
+    await flush();
+    const body = document.querySelector(".mm-preview-body") as HTMLElement;
+    const alphaOf = (el: HTMLElement): number =>
+      Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(el.style.background)?.[1] ?? 0);
+    const foo = () => [...body.querySelectorAll(".mm-heat-word")][1] as HTMLElement;
+    const before = alphaOf(foo());
+    expect(before).toBeCloseTo(0.45, 2); // the floor of the range: strongest tint
+
+    // A second segment is far less certain — now "foo" is comparatively safe.
+    const s2 = engine.talkStart() ?? 2;
+    engine.talkEnd();
+    engine.transcriptFinal(s2, "bad ok", 90, "gpt-4o-transcribe", [
+      { text: "bad", logprob: -2.0 }, // the new floor
+      { text: "ok", logprob: -0.02 },
+    ]);
+    await flush();
+    expect([...body.querySelectorAll(".mm-heat-word")].map((w) => w.textContent)).toEqual([
+      "make",
+      "foo",
+      "bad",
+      "ok",
+    ]);
+    // Same span, same word, rescaled: (−0.3 − −2.0)/(−0.01 − −2.0) ≈ 0.854 unsure-ness
+    // inverted onto 0.45 ≈ 0.066. Before the fix this stayed pinned at 0.45.
+    expect(alphaOf(foo())).toBeCloseTo(0.066, 2);
+    expect(alphaOf(foo())).toBeLessThan(before);
+  });
 });
 
 describe("linter chip anchoring (the chip belongs to its turn)", () => {

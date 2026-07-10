@@ -23,7 +23,11 @@
  * frame differencer), not a DOM firehose.
  *
  * Remote sources with no DOM events of their own — an iPad's Apple Pencil
- * arriving over the paint relay — call {@link InteractionMonitor.note}.
+ * arriving over the paint relay — call {@link InteractionMonitor.note} by hand,
+ * once per verb that its local twin would have marked: pen-down, every moving
+ * point while the pen is down, and pen-up. A remote stroke that notes only at
+ * pen-down is a stroke the share photographs as a single dot (see the
+ * `remotePaint` sink in modality.ts).
  */
 
 /** The events that mean "the human did something to the page". */

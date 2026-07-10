@@ -1023,7 +1023,7 @@ describe("multimodalModality: vscode jump mode (J — double-click opens the jum
   });
 });
 
-describe("multimodalModality: realtime submode screen share (V)", () => {
+describe("multimodalModality: screen share (V)", () => {
   it("V (smart mode): the first frame lands as a shot; quiet ticks send nothing; interaction resumes", async () => {
     const restore = stubCapture();
     try {
@@ -1077,6 +1077,44 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
     }
   });
 
+  it("an iPad stroke holds smart mode's gate open while the pen MOVES, not just at touch-down", async () => {
+    const restore = stubCapture();
+    try {
+      const { sent } = mountLive();
+      key("keydown", "`"); // arm
+      key("keydown", "v"); // share on — the forced first frame eats the keydowns
+      await wait(120);
+
+      const sink = window.__AIUI__?.remotePaint;
+      if (!sink) {
+        throw new Error("the remote-paint seam was never published");
+      }
+
+      // Nothing touches the page: smart mode sends nothing. (Also proves the
+      // keydowns above are spent, so every frame below is the pen's doing.)
+      const quiet = frameAttachments(sent).length;
+      await wait(80); // four cadences of a still screen
+      expect(frameAttachments(sent).length).toBe(quiet);
+
+      // ONE stroke from the iPad, drawn slowly across several ticks. No DOM
+      // event accompanies any of it — the sink's note()s are the only signal
+      // smart mode can possibly see.
+      sink.beginStroke("s1", { color: "#ff0055", width: 4 }, { x: 10, y: 10 });
+      for (let i = 1; i <= 4; i++) {
+        sink.extendStroke("s1", { x: 10 + i * 6, y: 10 });
+        await wait(30); // a tick elapses with the pen still down
+      }
+      sink.endStroke("s1", { x: 40, y: 10 });
+      await wait(30);
+
+      // A frame per tick while the pen moved, plus one for the lift. Noting
+      // only at touch-down (the bug) left exactly one — the stroke as a dot.
+      expect(frameAttachments(sent).length - quiet).toBeGreaterThanOrEqual(3);
+    } finally {
+      restore();
+    }
+  });
+
   it("continuous (machine-gun) mode samples on the cadence with no interaction at all", async () => {
     const restore = stubCapture();
     try {
@@ -1116,17 +1154,27 @@ describe("multimodalModality: realtime submode screen share (V)", () => {
     }
   });
 
-  it("V with the linter off is inert with a hint (dispatch gates on linter)", async () => {
+  it("V shares with the linter off — a frame is a shot, it needs no model watching", async () => {
     const restore = stubCapture();
     try {
       const { handle, sent } = mountMultimodal({ transcriber: "mock", mockWordMs: 0 });
-      key("keydown", "`");
-      key("keydown", "v");
-      await wait(60);
-      expect(frameAttachments(sent)).toHaveLength(0);
-      expect(streamedEvents(sent).some((e) => e.type === "video-share")).toBe(false);
-      const status = handle.shadowRoot?.querySelector(".status")?.textContent ?? "";
-      expect(status).toMatch(/needs the linter/i);
+      key("keydown", "`"); // arm
+      key("keydown", "v"); // video-toggle — ungated
+      await wait(60); // socket connect + grant + the forced first frame
+
+      // The share opened and its first frame landed as an ordinary shot, with
+      // no linter and no live tier anywhere in this config.
+      const on = streamedEvents(sent).find(
+        (e) => e.type === "video-share" && (e as { on?: boolean }).on === true,
+      );
+      expect(on).toMatchObject({ ordinal: 1, mode: "smart" });
+      expect(frameAttachments(sent)).toHaveLength(1);
+      expect(frameAttachments(sent)[0]).toMatchObject({ id: "shot_1", mime: "image/jpeg" });
+      expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(false);
+
+      key("keydown", "v"); // off
+      await wait(20);
+      expect(q<HTMLElement>(handle, ".mm-video")?.hidden).toBe(true);
     } finally {
       restore();
     }

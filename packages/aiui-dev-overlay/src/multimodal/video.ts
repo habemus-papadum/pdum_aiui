@@ -104,6 +104,20 @@ export interface VideoSamplerDeps<T = Uint8Array> {
    * reaches `sendFrame`, so a share sitting over a still screen is free.
    */
   shouldCapture?(): boolean;
+  /**
+   * Hand the gate back. Called when a tick consumed {@link shouldCapture} and
+   * then delivered no frame — the capture came back empty (grant lost, encode
+   * failed), or a `pause()` landed mid-encode and the frame was dropped.
+   *
+   * `shouldCapture` is read-and-CLEAR, so without this the interaction that
+   * earned the frame is destroyed by the attempt: the next tick sees a closed
+   * gate, and a share sitting over a now-still screen never photographs the
+   * thing the user just did. Same rule the in-flight early return already
+   * follows — a tick that services nothing owes the next one a frame.
+   *
+   * Omit where the gate consumes nothing (continuous mode) — there is no debt.
+   */
+  rearm?(): void;
   /** Clock seam (`Date.now`). */
   now?(): number;
 }
@@ -243,6 +257,19 @@ export class VideoSampler<T = Uint8Array> {
           { seq: this.seq++, takenAt, offsetMs: Math.max(0, takenAt - this.startedAt) },
           pixels,
         );
+        return;
+      }
+      // Nothing was delivered, but this tick already spent the gate. Put back
+      // what it took, or the change that earned the frame goes unphotographed
+      // forever (a still screen afterwards sends nothing). A share that has
+      // ENDED owes nobody anything; a paused one still does, and its resume
+      // ticks immediately.
+      if (this._sharing) {
+        if (forced) {
+          this.forceNext = true; // the first frame is a promise — retry it
+        } else {
+          this.deps.rearm?.();
+        }
       }
     } finally {
       this.inFlight = false;

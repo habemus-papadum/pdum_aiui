@@ -243,6 +243,79 @@ describe("smart mode's shouldCapture gate", () => {
       vi.useRealTimers();
     }
   });
+
+  it("gives the gate back when a serviced tick delivers no frame (failed capture)", async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: number[] = [];
+      let dirty = false;
+      let failing = false;
+      const sampler = new VideoSampler<Uint8Array>({
+        captureFrame: async () => (failing ? undefined : new Uint8Array([1])),
+        sendFrame: (frame) => sent.push(frame.seq),
+        intervalMs: 100,
+        // The real monitor's read-and-CLEAR gate.
+        shouldCapture: () => {
+          const was = dirty;
+          dirty = false;
+          return was;
+        },
+        rearm: () => {
+          dirty = true;
+        },
+      });
+      sampler.start(); // the forced first frame
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sent).toEqual([0]);
+
+      // The user touches the page — but this tick's capture comes back empty
+      // (grant hiccup, a failed encode). No frame is sent.
+      failing = true;
+      dirty = true;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sent).toEqual([0]);
+
+      // Capture recovers. Nothing NEW happened, but the interaction that
+      // earned a frame was never photographed — the next tick still owes it.
+      // Without the give-back, a still screen sends nothing ever again.
+      failing = false;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sent).toEqual([0, 1]);
+
+      // ...and the gate closes again: the debt is paid exactly once.
+      await vi.advanceTimersByTimeAsync(300);
+      expect(sent).toEqual([0, 1]);
+      sampler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("re-forces the first frame when the share's opening capture fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: number[] = [];
+      let failing = true;
+      const sampler = new VideoSampler<Uint8Array>({
+        captureFrame: async () => (failing ? undefined : new Uint8Array([1])),
+        sendFrame: (frame) => sent.push(frame.seq),
+        intervalMs: 100,
+        shouldCapture: () => false, // a perfectly still screen, all share long
+      });
+      sampler.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sent).toEqual([]); // the forced frame failed
+
+      // The share's first frame is a promise, not a lottery ticket: retry it.
+      // Otherwise a still screen never yields one and the share looks dead.
+      failing = false;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sent).toEqual([0]);
+      sampler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("dynamic cadence (the fps slider's thunk)", () => {

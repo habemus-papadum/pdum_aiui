@@ -361,16 +361,14 @@ const armedLayer: KeyLayer<KeyState, KeyCommand> = {
         state.mode === "ink" ? { key: "J", label: "jump to code", icon: "↗" } : undefined,
     },
     {
-      // The realtime submode's screen share. Only in ink mode, fired on
-      // keydown. The command always emits here — whether it *does* anything
-      // is gated on the effective submode in the modality's dispatch (a live
-      // tier only), which is where config is known; a non-live tier just
-      // shows a hint.
+      // The screen share. Only in ink mode, fired on keydown. The dispatch
+      // takes it unconditionally: every sampled frame is an ordinary shot, so
+      // a share needs no live tier and no linter behind it.
       keys: ["v", "V"],
       down: (state, _key, repeat) =>
         !repeat && state.mode === "ink" ? command({ cmd: "video-toggle" }) : "pass",
       hint: (state) =>
-        state.mode === "ink" ? { key: "V", label: "screen share (live)", icon: "🎥" } : undefined,
+        state.mode === "ink" ? { key: "V", label: "screen share", icon: "🎥" } : undefined,
     },
     {
       keys: ["k", "K"],

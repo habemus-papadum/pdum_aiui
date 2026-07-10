@@ -74,6 +74,12 @@ export interface CaptureDeps {
    */
   interacted?: () => boolean;
   /**
+   * Re-arm smart mode's gate (the interaction monitor's `note()`), for a tick
+   * that consumed {@link interacted} and then failed to deliver a frame. See
+   * `VideoSamplerDeps.rearm`.
+   */
+  noteInteraction?: () => void;
+  /**
    * The document's display-capture broker. Injected by tests (jsdom has no
    * `getDisplayMedia`); otherwise created here and published on
    * `window.__AIUI__.displayCapture` by the composer, so the paint host streams
@@ -193,6 +199,14 @@ export function createCapture(deps: CaptureDeps): Capture {
     // monitor's flag, and continuous mode must not eat an interaction that
     // smart mode would owe a frame for after a live mode flip.
     shouldCapture: () => videoMode() === "continuous" || (deps.interacted?.() ?? true),
+    // A tick that ate the interaction and produced no frame has to give it
+    // back. Only smart mode has a debt: continuous short-circuits above and
+    // never reads (never clears) the monitor.
+    rearm: () => {
+      if (videoMode() !== "continuous") {
+        deps.noteInteraction?.();
+      }
+    },
   });
 
   let shooting = false;

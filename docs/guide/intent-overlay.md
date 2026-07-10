@@ -41,7 +41,7 @@ Minimalist by design — one hand, no chords:
 | **S**     | whole-viewport screenshot (one press) |
 | **C**     | clear ink |
 | **J**     | [VS Code jump mode](#vs-code-jump-mode-double-click-to-source) — double-click an element, pick a jump target (its source, or a containing cell), land in VS Code; **J** (or **Esc**) resumes |
-| **V**     | share your screen — each sampled frame is a first-class screenshot (it joins the turn *and* streams to the [prompt linter](./prompt-linting)); 🦉 smart / 🔫 continuous, toggled beside the ● badge (needs the linter on: **K**, then **L**) |
+| **V**     | share your screen — each sampled frame is a first-class screenshot (it joins the turn, and streams to the [prompt linter](./prompt-linting) when one is on); 🦉 smart / 🔫 continuous, toggled beside the ● badge |
 | **K**     | quick config — the [strip](#quick-config-the-k-strip): tier digits, the **L** linter chip, save/reset, the editor |
 | **T**     | [tweak mode](#tweak-mode-adjust-the-app-mid-turn) — hand the pointer and keyboard back to the app mid-turn; **T** (or **Esc**) resumes |
 | **H**     | help — the whole keymap as a table (the pill's **?** icon is the mouse path to the same) |

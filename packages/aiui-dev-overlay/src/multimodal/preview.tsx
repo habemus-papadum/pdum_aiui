@@ -286,19 +286,29 @@ export class Preview {
             <span class="mm-seg final">
               <For each={current()?.words ?? []}>
                 {(word) => {
-                  const range = logprobRange();
-                  let alpha = 0;
-                  if (range !== undefined && word.logprob !== undefined) {
+                  // logprobRange() spans EVERY word in the turn, so a later
+                  // segment can widen it and retint the words already on
+                  // screen. A <For> child body runs once and untracked, so
+                  // reading the memo here would freeze this word's tint at
+                  // insert time (that read is what STRICT_READ_UNTRACKED
+                  // names). Derive the alpha in its own memo instead: the
+                  // style/title props below are tracking scopes, so the tint
+                  // follows the range as the turn grows.
+                  const alpha = createMemo(() => {
+                    const range = logprobRange();
+                    if (range === undefined || word.logprob === undefined) {
+                      return 0;
+                    }
                     const normalized = (word.logprob - range.min) / (range.max - range.min);
-                    alpha = (1 - normalized) * 0.45;
-                  }
+                    return (1 - normalized) * 0.45;
+                  });
                   return (
                     <>
                       <span
                         class="mm-heat-word"
                         style={
-                          alpha > 0.04
-                            ? { background: `rgba(255, 92, 135, ${alpha.toFixed(3)})` }
+                          alpha() > 0.04
+                            ? { background: `rgba(255, 92, 135, ${alpha().toFixed(3)})` }
                             : {}
                         }
                         title={

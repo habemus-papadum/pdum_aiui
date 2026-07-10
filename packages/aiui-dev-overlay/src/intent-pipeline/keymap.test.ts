@@ -70,8 +70,8 @@ describe("keyCommand", () => {
     expect(keyCommand(base, "s", "down", false)).toEqual({ cmd: "shoot-viewport" });
     expect(keyCommand(base, "S", "up", false)).toBeUndefined();
     expect(keyCommand(base, "c", "down", false)).toEqual({ cmd: "ink-clear" });
-    // J enters VS Code jump mode; V toggles the realtime screen share (the
-    // modality gates the latter on submode).
+    // J enters VS Code jump mode; V toggles the screen share (the modality
+    // takes the latter unconditionally — a frame is just a shot).
     expect(keyCommand(base, "j", "down", false)).toEqual({ cmd: "vscode-toggle" });
     expect(keyCommand(base, "J", "down", false)).toEqual({ cmd: "vscode-toggle" });
     expect(keyCommand(base, "v", "down", false)).toEqual({ cmd: "video-toggle" });
@@ -315,7 +315,7 @@ describe("intentKeyHints / keymapHelp (the displayed keymap IS the working keyma
     expect(rows).toContain("hold to talk");
     expect(rows).toContain("hold + drag: region shot");
     expect(rows).toContain("jump to code");
-    expect(rows).toContain("screen share (live)");
+    expect(rows).toContain("screen share");
     expect(rows).toContain("tweak the app");
     expect(rows).toContain("help");
     expect(rows).toContain("send the turn");

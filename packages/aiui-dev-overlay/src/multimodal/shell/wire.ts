@@ -112,6 +112,23 @@ export function createWire(deps: WireDeps): Wire {
     });
   };
 
+  /**
+   * Surface a frame that THREW instead of answering `ok:false` — a socket that
+   * died mid-send, a serialization failure. Symmetric with {@link reportBadAck}:
+   * both mean "these bytes never reached the channel", and both must be SEEN.
+   * {@link rememberError} alone writes only the panel-footer status line, which
+   * cannot render while the panel is closed — i.e. exactly when the multimodal
+   * turn is in use. Same dedupe: a dead thread throwing on every sampled frame
+   * is one toast with a climbing ×N.
+   */
+  const reportThrow = (what: string, error: unknown): void => {
+    rememberError(error);
+    reportError({
+      source: "channel",
+      message: `${what} failed: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  };
+
   const getThread = async (): Promise<IntentThread | undefined> => {
     if (!threadPromise) {
       return undefined;
@@ -138,7 +155,10 @@ export function createWire(deps: WireDeps): Wire {
         return thread;
       });
     // Swallow the rejection here so it never surfaces as unhandled; callers
-    // observe it via getThread() returning undefined.
+    // observe it via getThread() returning undefined. Status-only on purpose —
+    // the sole rememberError without a reportThrow: openThread already toasted
+    // the precise cause (no port, connect refused), and a second toast saying
+    // the same thing in vaguer words is noise, not visibility.
     threadPromise.catch((error) => {
       threadState = "failed";
       rememberError(error);
@@ -182,7 +202,7 @@ export function createWire(deps: WireDeps): Wire {
         await thread.sendChunk({ kind: "events" }, { events: batch }, false),
       );
     } catch (error) {
-      rememberError(error);
+      reportThrow("event batch", error);
     }
   }
 
@@ -199,7 +219,7 @@ export function createWire(deps: WireDeps): Wire {
         await thread.sendAttachment({ kind: "attachment", id, mime }, bytes, false),
       );
     } catch (error) {
-      rememberError(error);
+      reportThrow(`attachment ${id}`, error);
     }
   }
 
@@ -218,7 +238,7 @@ export function createWire(deps: WireDeps): Wire {
         ),
       );
     } catch (error) {
-      rememberError(error);
+      reportThrow("audio frame", error);
     }
   }
 
@@ -254,14 +274,10 @@ export function createWire(deps: WireDeps): Wire {
         reportBadAck("send (fin)", ack);
       }
     } catch (error) {
-      // A fin that THROWS (vs. an ok:false ack) was the one send failure
-      // that only reached the panel-footer status line — invisible with
-      // the panel closed, i.e. exactly when the multimodal turn is used.
-      rememberError(error);
-      reportError({
-        source: "channel",
-        message: `send failed: ${error instanceof Error ? error.message : String(error)}`,
-      });
+      // A fin that THROWS (vs. an ok:false ack) — see reportThrow: every
+      // "the bytes never landed" path toasts, none of them whisper into the
+      // closed panel's footer.
+      reportThrow("send", error);
     }
     resetThread();
   }

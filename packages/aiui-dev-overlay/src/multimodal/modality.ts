@@ -246,21 +246,37 @@ export function multimodalModality(
           }
           renderHud();
         },
+        // The pencil never touches this window, so no DOM event marks any of
+        // this — smart mode's gate has to be fed by hand. Each stroke verb
+        // notes exactly when its LOCAL twin would (interaction.ts): touch-down
+        // is a pointerdown, a moving pen is a pointermove with a button held,
+        // lifting is a pointerup. Noting only at touch-down (the old bug) let
+        // a long stroke mark once and photograph itself as a single dot, while
+        // the same gesture drawn with a mouse kept the gate open throughout.
         beginStroke(id, style, point) {
           if (engine.armed) {
-            // The pencil never touches this window, so no DOM event marks it —
-            // note it by hand or smart mode misses iPad-drawn ink.
             interaction.note();
             ink.remoteBegin(id, style, point.x, point.y);
           }
         },
         extendStroke(id, point) {
+          if (engine.armed) {
+            interaction.note();
+          }
           ink.remotePoint(id, point.x, point.y);
         },
         endStroke(id, point) {
+          // The most valuable frame of the whole stroke: the finished shape.
+          if (engine.armed) {
+            interaction.note();
+          }
           ink.remoteEnd(id, point?.x, point?.y);
         },
         cancelStroke(id) {
+          // Deliberately silent, mirroring `pointercancel`'s absence from the
+          // local set: a cancel is usually the RELAY giving up (a dropped iPad
+          // connection), not the human doing something — and the strokes it
+          // discards already noted themselves on the way in.
           ink.remoteCancel(id);
         },
         size: () => ({ width: window.innerWidth, height: window.innerHeight }),
@@ -289,6 +305,7 @@ export function multimodalModality(
         videoFrameIntervalMs: () => config.videoFrameIntervalMs ?? 5000,
         videoMode: () => config.videoMode ?? "smart",
         interacted: () => interaction.consume(),
+        noteInteraction: () => interaction.note(),
         ...(deps.displayCapture !== undefined ? { displayCapture: deps.displayCapture } : {}),
       });
       layers.append(capture.veil);
@@ -981,13 +998,12 @@ export function multimodalModality(
             break;
           }
           case "video-toggle":
-            // Screen share feeds the LINTER: the live model is what watches
-            // the sampled frames. With the linter off (and no legacy realtime
-            // submode), name the fix and do nothing else.
-            if ((config.linter ?? "off") === "off" && config.submode !== "realtime") {
-              ctx.setStatus("video needs the linter — K, then L");
-              break;
-            }
+            // Ungated. A sampled frame is an ordinary shot: it joins the turn
+            // and compiles into the prompt wherever it was taken, linter or no
+            // linter — a share is just the S key pressing itself on a cadence.
+            // (This used to require a live tier, then the linter, back when
+            // frames streamed as ambient `video` chunks only the live model
+            // ever saw.) The linter, when on, receives them like any shot.
             void capture.toggleVideoShare();
             break;
           case "send":

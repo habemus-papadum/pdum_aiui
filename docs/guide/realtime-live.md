@@ -90,6 +90,12 @@ Two capture modes, toggled live from the HUD (beside the cadence slider) or pers
 
 The share's first frame always fires in either mode — turning it on is the interaction.
 
+The share is documented here because the linter is its most interesting consumer, but it does
+not depend on one: **V works with `linter: "off"`**. The frames are shots, and shots compile
+into the prompt whether or not a model is watching them go by. (V *used* to be gated — first on
+a live tier, then on the linter — back when frames streamed as ambient `video` chunks that only
+a live model could see. Nothing gates it now.)
+
 ### The turn-end lint sequence
 
 The linter must judge the transcription the **compiler will actually use** — not just its own
