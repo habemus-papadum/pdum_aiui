@@ -505,6 +505,7 @@ interface PageToolRegistration {
   hash: string;            // page-computed content hash of the tool set (identity across reloads)
   tools: { name: string; description: string; inputSchema?: object }[];
   registeredAt: string;    // ISO timestamp of the latest registration
+  activeTab?: true;        // derived at list time: this entry's tab is a window's active tab
 }
 ```
 
@@ -527,6 +528,10 @@ memory.
 // answer a call the server routed to this connection
 { "v": 1, "type": "result", "callId": "…", "ok": true,  "value": <any JSON> }
 { "v": 1, "type": "result", "callId": "…", "ok": false, "error": "human-readable message" }
+
+// report a tab (de)activation — sent by a browser-extension client whose service
+// worker watches chrome.tabs.onActivated; a page client never sends it
+{ "v": 1, "type": "activation", "tab": { "chromeTabId": 10, "windowId": 1 }, "active": true }
 ```
 
 **server → client**
@@ -557,10 +562,34 @@ registration that matches (a tool with that `name`, narrowed by `ns`/`clientId` 
 
 - **exactly one match** → the call is sent to that connection; the promise resolves on the matching
   `result` (default timeout 15 s).
-- **several matches** → the call errors, listing the candidates (`clientId`, `ns`, `url`, `tab`) so
-  the agent can retry with `ns` and/or `clientId`.
+- **several matches, exactly one on the browser's active tab** → that one wins (MCP-B's routing
+  rule: active tab first, else any tab holding the tool). Requires an `activation` reporter; with
+  none connected, this rung never engages.
+- **several matches otherwise** → the call errors, listing the candidates (`clientId`, `ns`, `url`,
+  `tab`, `activeTab`) so the agent can retry with `ns` and/or `clientId`.
 - **no page connected / no tool matches** → a clear error.
 - **the page disconnects before answering** → any in-flight call for that connection rejects.
+
+### Activation and change notifications
+
+`activation` messages keep a directory-global map of each window's active tab (`windowId` →
+`chromeTabId`). The map only ever *adds* precision: with no activation reporter connected (the
+plain dev-overlay world), no entry carries `activeTab`, `page_tools_list` keeps its natural
+order, and calls behave exactly as before. A deactivation (`"active": false`) only clears the
+window's slot when it names the currently-active tab, so a stale deactivation cannot clobber a
+newer activation.
+
+The directory also emits a **debounced change signal** (default 500 ms) whenever its observable
+state changes: a namespace registered under a new hash, registrations lost to a socket close, or
+an activation flip that re-flags an entry. The signal is gated by a content signature
+(`ns|hash|active` per registration — deliberately excluding the connection id), so same-hash HMR
+re-registrations stay silent and a reload's close-plus-reconnect that restores an identical set
+within the window nets to nothing. The `mcp` command wires the signal to two agent-facing
+notifications ([browser-extension proposal §7](../../../docs/proposals/browser-extension-intent-tool.md)):
+the spec-blessed MCP `notifications/tools/list_changed` (the advertised tool list is still the
+static meta-tools; the notification's value is the client's refresh cycle), and a terse
+`page tools changed: <ns>/<name>, … (active tab: <title|url>)` push over the channel
+(`kind: "page-tools"`), on by default and disabled with `--no-page-tools-notify`.
 
 `GET /health` includes a cheap `pageTools` summary (`{ clients, namespaces, tools }`) and is
 served with `Access-Control-Allow-Origin: *`: browsers log failed websocket handshakes as

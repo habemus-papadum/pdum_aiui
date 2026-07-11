@@ -254,12 +254,22 @@ export class Engine {
    * own chip; successive refinements with nothing contentful in between ride
    * the SAME marker (the fold keeps the latest — one chip tracking the drag).
    * The thread-open capture itself goes through {@link selectionProvider}.
-   * No-op without an open thread — an app selection rides a turn, never
-   * opens one.
+   *
+   * With no thread open: an *armed* engine opens one (the extension panel's
+   * pull model — "add selection" is a deliberate act, as contentful as a
+   * contribution). Ambient watcher updates must not open turns: those callers
+   * (the overlay modality) pre-filter on `threadOpen` themselves. Unarmed
+   * remains a no-op.
    */
   appSelection(selection: AppSelection): boolean {
-    if (!this.threadOpen || selection.text === "") {
+    if (selection.text === "") {
       return false;
+    }
+    if (!this.threadOpen) {
+      if (!this.armed) {
+        return false;
+      }
+      this.ensureThread("contribution");
     }
     this.emitAppSelection(selection);
     return true;

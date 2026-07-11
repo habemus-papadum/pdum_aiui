@@ -420,6 +420,25 @@ taken by hand in the real session browser** — an agent-spawned Chrome under te
 6. **Absorb `aiui-devtools-extension`** (tab stamping, panel) once the new extension is the
    daily driver.
 
+## 13.5 · Panel interaction grammar (decided 2026-07-11, during step 4)
+
+Three decisions from live use, diverging deliberately from the web overlay's grammar while
+sharing its machinery:
+
+- **Selection is explicit, never ambient (pull model).** Selecting page text does nothing to
+  the turn. The user's "add selection" command (panel button; later a keystroke) pulls the
+  active tab's current snapshot and appends it — or stages it as the next turn's opener when no
+  thread is open. The content-script watcher only keeps the snapshot warm and pings presence
+  for the affordance dot. Rationale: the user decides what enters the prompt and when; and a
+  pull is loudly debuggable where the ambient push failed silently.
+- **Armed carries no mode.** Armed = "this window's tool is live" (indicator ring), nothing
+  more. Modes (ink, shot, talk) are each explicitly entered from the armed state; the overlay's
+  armed→ink default is a page-overlay convention that does not carry over.
+- **Keyboard is leader-key modal.** Page keys belong to the page; a leader chord opens aiui's
+  key layer, then single keys pick actions/modes (I → ink, a slurp key, Esc leaves). Built on
+  the same keymap/modal-kit machinery as the overlay — shared code, different grammar. Open:
+  the leader itself, and whether Chrome `commands` global shortcuts host it.
+
 ## 14 · Open questions
 
 - Does the per-window session bind to **one channel exclusively**, or can a window observe

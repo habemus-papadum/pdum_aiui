@@ -52,15 +52,20 @@ export default defineConfig({
   },
   build: {
     lib: {
-      // Four entries: the browser bundle, the dev-server plugin behind the
-      // `./vite` subpath export (Node code — kept out of the browser bundle),
-      // the framework-free intent pipeline behind `./intent-pipeline`, and the
-      // shared debug UI behind `./debug-ui` (lab + DevTools extension).
+      // One entry per subpath export: the browser bundle, the dev-server
+      // plugin behind `./vite` (Node code — kept out of the browser bundle),
+      // the framework-free intent pipeline behind `./intent-pipeline`, the
+      // shared debug UI behind `./debug-ui` (lab + DevTools extension), and
+      // the two lean host seams the browser extension consumes without the
+      // barrel's Solid/multimodal graph: `./protocol` (intent socket) and
+      // `./selection` (the page selection watcher).
       entry: {
         index: "src/index.ts",
         vite: "src/vite.ts",
         "intent-pipeline": "src/intent-pipeline/index.ts",
         "debug-ui": "src/debug-ui/index.ts",
+        protocol: "src/protocol.ts",
+        selection: "src/selection.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

@@ -35,7 +35,9 @@ const STYLES = `
   :host { all: initial; }
   .ring {
     position: fixed; inset: 0; z-index: 2147483646; pointer-events: none;
-    border: 2px solid rgba(138, 180, 248, 0.85); border-radius: 4px;
+    /* A soft glow, not a hard border: thicker and fuzzier reads as "live"
+       without drawing a line through page content at the edges. */
+    box-shadow: inset 0 0 22px 5px rgba(138, 180, 248, 0.4);
     display: none;
   }
   .anchor {

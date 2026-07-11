@@ -659,10 +659,24 @@ describe("app selection (a positional stream event, interleaved like text and sh
     expect(droppedAll.prompt).toBe("");
   });
 
-  it("is a no-op without an open thread (a selection rides a turn, never opens one)", () => {
+  it("armed + no thread: an explicit selection OPENS the turn (panel pull model)", () => {
+    // The 2026-07-11 contract change: "add selection" is a deliberate act, as
+    // contentful as a contribution. Ambient watchers must still never open
+    // turns — but that guard lives in the CALLER (the overlay modality
+    // pre-filters on threadOpen), not here.
     const engine = armedEngine();
+    expect(engine.appSelectionDrop()).toBe(false); // a retract still needs a thread
+    expect(engine.appSelection({ text: "picked" })).toBe(true);
+    expect(engine.threadOpen).toBe(true);
+    expect(
+      engine.events.some((e) => e.type === "thread-open" && e.trigger === "contribution"),
+    ).toBe(true);
+  });
+
+  it("unarmed: a selection is a no-op and opens nothing", () => {
+    let t = 0;
+    const engine = new Engine({}, () => ++t);
     expect(engine.appSelection({ text: "stray" })).toBe(false);
-    expect(engine.appSelectionDrop()).toBe(false);
     expect(engine.threadOpen).toBe(false);
     expect(engine.events.some((e) => e.type === "app-selection")).toBe(false);
   });

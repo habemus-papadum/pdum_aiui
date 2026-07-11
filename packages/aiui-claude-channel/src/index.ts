@@ -134,6 +134,7 @@ export {
   openOpenAiLiveSession,
 } from "./openai-live";
 export {
+  formatPageToolsChanged,
   type PageToolCall,
   type PageToolDescriptor,
   PageToolDirectory,

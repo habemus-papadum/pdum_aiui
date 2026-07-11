@@ -44,7 +44,12 @@ export default defineManifest({
   side_panel: {
     default_path: "src/panel/index.html",
   },
-  permissions: ["sidePanel", "storage", "nativeMessaging"],
+  // "tabs": the turn hello carries the active tab's url/title (context for
+  // the lowered prompt's preamble); without it query() returns bare tabs.
+  // "tabCapture" + "offscreen": the shot path — invocation-gated
+  // getMediaStreamId in the SW, one-frame getUserMedia consumption in the
+  // offscreen document (public/offscreen.js).
+  permissions: ["sidePanel", "storage", "nativeMessaging", "tabs", "tabCapture", "offscreen"],
   // Loopback only: the panel probes /health and /debug/api/channels over
   // fetch (CORS-gated without this) — same grant as aiui-devtools-extension.
   host_permissions: ["http://127.0.0.1/*", "http://localhost/*"],

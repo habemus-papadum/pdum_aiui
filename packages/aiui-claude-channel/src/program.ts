@@ -45,6 +45,11 @@ export function buildProgram(): Command {
         return value;
       },
     )
+    .option(
+      "--no-page-tools-notify",
+      "don't push 'page tools changed' notes into the session when the page-tool " +
+        "directory changes (the tools/list_changed MCP notification is still sent)",
+    )
     .action(runMcp);
 
   program

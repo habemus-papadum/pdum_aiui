@@ -14,7 +14,9 @@
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts",
     "./intent-pipeline": "./src/intent-pipeline/index.ts",
-    "./debug-ui": "./src/debug-ui/index.ts"
+    "./debug-ui": "./src/debug-ui/index.ts",
+    "./protocol": "./src/protocol.ts",
+    "./selection": "./src/selection.ts"
   },
   "imports": {
     "#source-locator": "./src/source-locator.ts"
@@ -50,6 +52,16 @@
         "types": "./dist/debug-ui/index.d.ts",
         "import": "./dist/debug-ui.js",
         "default": "./dist/debug-ui.js"
+      },
+      "./protocol": {
+        "types": "./dist/protocol.d.ts",
+        "import": "./dist/protocol.js",
+        "default": "./dist/protocol.js"
+      },
+      "./selection": {
+        "types": "./dist/selection.d.ts",
+        "import": "./dist/selection.js",
+        "default": "./dist/selection.js"
       }
     },
     "imports": {

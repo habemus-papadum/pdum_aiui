@@ -4,7 +4,7 @@ import { createChannelLog } from "../channel-log";
 import { channelSourceDir, watchChannelSource } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
 import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
-import { PageToolDirectory } from "../page-tools";
+import { formatPageToolsChanged, PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
 import type { Sidecar } from "../sidecar";
@@ -39,6 +39,16 @@ export interface McpOptions {
    * choice). See docs/guide/warning.md.
    */
   bind?: "loopback" | "host";
+  /**
+   * Push a terse "page tools changed: ns/name, …" note into the session when
+   * the page-tool directory changes — rung 2 of the notification ladder
+   * (docs/proposals/browser-extension-intent-tool.md §7). Named tools ride the
+   * push because a *listed* tool is not necessarily one the model looks up
+   * (archive/extension-spikes/RESULTS.md, M3). Defaults ON (`false` disables;
+   * the CLI's `--no-page-tools-notify`). The spec-blessed
+   * `notifications/tools/list_changed` (rung 3) is sent regardless.
+   */
+  pageToolsNotify?: boolean;
 }
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
@@ -127,6 +137,33 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // effectively invisible, so lifecycle + every error push also land in
   // .aiui-cache/logs/ where a human (or the agent) can read them post-mortem.
   const channelLog = createChannelLog(cacheDir);
+
+  // One debounced directory change drives both notification rungs of the
+  // browser-extension proposal (§7): `tools/list_changed` makes the client
+  // re-fetch the tool list (measured to work cross-turn AND mid-turn on CLI
+  // 2.1.206 — archive/extension-spikes/RESULTS.md M3; the advertised list is
+  // still the static meta-tools, so its value is the refresh cycle), and the
+  // channel push *names* the tools, because a re-listed tool is not
+  // necessarily one a weak model looks up. Subscribed after connect(), so a
+  // send can only fail racing shutdown — caught and logged, never fatal.
+  const pageToolsNotify = options.pageToolsNotify !== false;
+  pageTools.onChange(() => {
+    mcp.sendToolListChanged().catch((err) => {
+      channelLog.log("tools/list_changed send failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    if (pageToolsNotify) {
+      // The directory's signature gate already guarantees the set (or its
+      // active-tab flags) really changed since the last signal — no re-hash here.
+      pushToSession(formatPageToolsChanged(pageTools.list()), "page-tools").catch((err) => {
+        channelLog.log("page-tools push failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+  });
+
   web = await startWebServer({
     onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
     traceDir: cacheDir,

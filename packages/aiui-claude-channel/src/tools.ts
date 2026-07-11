@@ -73,6 +73,8 @@ const PAGE_TOOLS_LIST_DESCRIPTION =
   "List the tools that live in the connected browser page(s) under development " +
   "(registered by the aiui dev overlay). Returns a JSON array of directory entries: " +
   "clientId, ns (page namespace), url, tab, and each tool's name/description/inputSchema. " +
+  "Entries from the browser's active tab sort first and carry activeTab: true (when a " +
+  "client reports tab activation; otherwise the flag is simply absent). " +
   "Call this FIRST to discover what's available, then invoke one with page_tools_call. " +
   "The list is empty when no dev page is connected.";
 
@@ -80,7 +82,8 @@ const PAGE_TOOLS_CALL_DESCRIPTION =
   "Invoke one of the browser page's tools (discover them with page_tools_list first) and " +
   "return its JSON result. Args: { name (required), args? (must match that tool's " +
   "inputSchema), ns? and clientId? to disambiguate }. When exactly one registered tool has " +
-  "the given name you may omit ns/clientId; if several pages expose the same name the call " +
+  "the given name you may omit ns/clientId; if several pages expose the same name, the one " +
+  "on the browser's active tab wins — when that still doesn't single one out the call " +
   "errors and lists the candidates (pass ns and/or clientId to pick one). Errors if no page " +
   "is connected, no tool matches, the page is mid-reload, or the call times out.";
 

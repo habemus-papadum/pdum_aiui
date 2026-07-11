@@ -20,7 +20,11 @@ Two things the spikes taught, now load-bearing:
 
 - **`dist/` has two shapes.** `pnpm dev` writes HMR loader stubs that require the dev server;
   `pnpm build` writes the standalone production extension. After switching modes, **Reload** the
-  extension in `chrome://extensions` — same path, different artifact.
+  extension in `chrome://extensions` — same path, different artifact. **Corollary (learned the
+  hard way, twice):** running `pnpm build` as a CI-style gate while a dev install is live
+  silently freezes the installed extension at that moment's code — the dev server does NOT
+  rewrite `dist/` on edits, only on startup. After any `pnpm build`, restart `pnpm dev` before
+  touching the browser again.
 - **A squatted dev port fails loudly (by design).** If vite refuses to start, find the squatter
   (`lsof -iTCP:5317 -sTCP:LISTEN`); never retry as `vite <port>` — a bare positional arg is a
   root directory, not a port.

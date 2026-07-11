@@ -14,7 +14,14 @@ describe("extension manifest", () => {
   it("declares the panel, worker, and permissions", () => {
     expect(m.side_panel).toEqual({ default_path: "src/panel/index.html" });
     expect(m.background).toEqual({ service_worker: "src/sw.ts", type: "module" });
-    expect(m.permissions).toEqual(["sidePanel", "storage", "nativeMessaging"]);
+    expect(m.permissions).toEqual([
+      "sidePanel",
+      "storage",
+      "nativeMessaging",
+      "tabs",
+      "tabCapture",
+      "offscreen",
+    ]);
   });
 
   it("pins the stable id and ships the aiui icon", () => {

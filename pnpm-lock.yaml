@@ -359,6 +359,12 @@ importers:
 
   packages/aiui-extension:
     dependencies:
+      '@habemus-papadum/aiui-dev-overlay':
+        specifier: workspace:^
+        version: link:../aiui-dev-overlay
+      '@habemus-papadum/aiui-ink':
+        specifier: workspace:^
+        version: link:../aiui-ink
       '@habemus-papadum/aiui-webext':
         specifier: workspace:^
         version: link:../aiui-webext

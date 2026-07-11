@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseClaudeAgents } from "./agents";
 import { PageToolDirectory } from "./page-tools";
@@ -129,7 +130,12 @@ describe("page-tool MCP tools (wired to a directory with a fake page connection)
    * what the `/tools` websocket would feed and what the agent would drive.
    */
   async function connectWithDirectory(handlers: Record<string, (args: unknown) => unknown> = {}) {
-    const pageTools = new PageToolDirectory({ log: () => {}, newId: () => "fixed-id" });
+    // Zero debounce so change-signal tests need no timer control.
+    const pageTools = new PageToolDirectory({
+      log: () => {},
+      newId: () => "fixed-id",
+      changeDebounceMs: 0,
+    });
     let clientId = "";
     clientId = pageTools.addConnection((msg) => {
       if (msg.type !== "call") {
@@ -223,6 +229,31 @@ describe("page-tool MCP tools (wired to a directory with a fake page connection)
       expect(result.isError).toBe(true);
       const content = result.content as Array<{ type: string; text: string }>;
       expect(content[0].text).toMatch(/no page tool "nope"/);
+    } finally {
+      await client.close();
+      await mcp.close();
+    }
+  });
+
+  it("delivers tools/list_changed to the client on a directory change", async () => {
+    const { pageTools, clientId, mcp, client } = await connectWithDirectory();
+    const heard = new Promise<void>((resolve) => {
+      client.setNotificationHandler(ToolListChangedNotificationSchema, () => resolve());
+    });
+    // Mirror the mcp command's wiring: the directory's debounced change signal
+    // drives the SDK's sendToolListChanged (capability declared in server.ts).
+    pageTools.onChange(() => {
+      void mcp.sendToolListChanged();
+    });
+    try {
+      pageTools.handleClientMessage(clientId, {
+        v: 1,
+        type: "register",
+        ns: "morpho",
+        hash: "h1",
+        tools: [{ name: "set-params", description: "set params" }],
+      });
+      await heard;
     } finally {
       await client.close();
       await mcp.close();
