@@ -1,0 +1,209 @@
+/* styles.css — a small dark surface for the starter. Restyle freely; the only
+ * contract worth keeping is the CellView class set at the bottom (cell-body,
+ * cell-pending, cell-error, progress-stripe, btn), which every cell rendered
+ * through @habemus-papadum/aiui-viz expects its host to style. */
+
+:root {
+  --bg: #0f1117;
+  --panel: #171b25;
+  --line: #262c3a;
+  --text: #e8e8ea;
+  --muted: #9aa0aa;
+  --accent: #8ab4f8;
+  --bloom: #f8a8c0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px / 1.55 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel);
+  font:
+    12px ui-monospace,
+    monospace;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* --- panels ------------------------------------------------------------------ */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+
+/* --- the CellView contract (spinner, error, keep-latest, progress) ------------- */
+
+.cell-body-loading {
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+
+.cell-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  padding: 18px 0;
+}
+
+.cell-error {
+  border: 1px solid #b3564d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #f0b0a8;
+}
+
+.progress-stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress-stripe-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.btn {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-outline {
+  background: transparent;
+}
+
+/* ── twins ─────────────────────────────────────────────────────────────────── */
+:root {
+  --left-accent: #88c0d0;
+  --right-accent: #d08770;
+  --accent: #b48ead;
+}
+.app {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+.app-head h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+.app-sub {
+  color: var(--muted, #9aa0aa);
+  max-width: 68ch;
+  line-height: 1.55;
+  margin: 0 0 20px;
+}
+.app-sub code {
+  font-size: 0.9em;
+}
+.panels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.scope-panel {
+  flex: 1 1 300px;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 10px;
+  padding: 12px 14px 14px;
+  background: var(--panel, rgba(255, 255, 255, 0.02));
+}
+.scope-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.scope-head h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+.kick {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #2a2f3a);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.kick:hover {
+  border-color: var(--accent);
+}
+.scope-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.scope-svg .axis {
+  stroke: var(--border, #2a2f3a);
+  stroke-width: 1;
+}
+.scope-svg .axis-label {
+  fill: var(--muted, #9aa0aa);
+  font-size: 9px;
+}
+.scope-controls {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+.lissajous .hint {
+  color: var(--muted, #9aa0aa);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+.left-accent {
+  color: var(--left-accent);
+}
+.right-accent {
+  color: var(--right-accent);
+}

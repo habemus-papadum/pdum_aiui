@@ -46,6 +46,9 @@ export { dependencyEdges } from "./graph-trace";
 export type { HotContext } from "./hot-graph";
 // hot-graph.ts — the durable box + dispose-and-swap + self-accept, in one call.
 export { hotCellGraph } from "./hot-graph";
+export type { Scope } from "./scope";
+// scope.ts — instance identity for composable slices (qualified names).
+export { SCOPE_SEPARATOR, scope } from "./scope";
 // standard-tools.ts — the app-independent `locate` tool and `cells` reporter.
 export { registerStandardTools } from "./standard-tools";
 export type { WorkerCancel, WorkerReply, WorkerRequest, WorkerRun } from "./worker-stream";

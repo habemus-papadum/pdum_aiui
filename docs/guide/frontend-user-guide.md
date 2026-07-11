@@ -583,6 +583,78 @@ now, boilerplate that every app copied has been folded into one tested call (`ho
 `registerStandardTools`); assume there is more of that to find, and don't treat the library as a
 frozen artifact.
 
+## Advanced: composing bigger apps — slices and scopes
+
+Everything above assumes one app, written in one place. Sooner or later you'll want to **reuse a
+piece** — the same instrument in two applications, or the same instrument *twice on one page*.
+This section is the how; skip it until you need it.
+
+**The unit of reuse is a pair of factory functions, not a graph object.** A graph is not a thing
+with membership — `hotCellGraph` provides an owner and whatever your build function returns *is*
+the graph. So a reusable "slice" is just:
+
+```ts
+// a library module (its own package, or a shared folder)
+export function oscillatorStore(s: Scope) {
+  /** Natural frequency, Hz. */
+  const freq = control({ scope: s, value: 1, min: 0.1, max: 5, step: 0.1 });
+  const phase = s.durableSignal("phase", 0); // internal state, scoped key
+  /** Kick the oscillator: a quarter-turn phase impulse. */
+  const kick = action({ scope: s, name: "kick", run: () => phase.set((p) => p + Math.PI / 2) });
+  return { freq, phase, kick };
+}
+
+export function oscillatorCells(s: Scope, store: ReturnType<typeof oscillatorStore>) {
+  /** The sampled displacement trace. */
+  const trace = cell(() => ({ f: store.freq.get(), p: store.phase.get() }), computeTrace, {
+    scope: s,
+  });
+  return { trace };
+}
+```
+
+The store factory is called once per instance at module level (durable side); the cells factory
+is called inside the app's one `hotCellGraph` build (disposable side). A slice never owns the
+`hotCellGraph` ritual — that belongs to the app module holding `import.meta.hot`.
+
+**The `scope` is what makes two instances possible.** Without it, both instances come from the
+same call site, get the same compiler-injected name, and silently share one durable state — the
+registry can't tell "second instance" from "hot re-evaluation". With it:
+
+```ts
+// the app's store.ts
+export const left = oscillatorStore(scope("left"));
+export const right = oscillatorStore(scope("right"));
+```
+
+each instance's identity is qualified everywhere at once: controls `left/freq` and `right/freq`
+with separate durable state, agent tools `left/kick` and `right/kick`, cells `left/trace`, and
+dependency edges that point at the right instance's controls. The compiler still injects the
+*leaf* name and the description from the doc comment — the scope is a runtime qualifier you
+thread through explicitly, the same way you thread a worker or any other dependency (there is
+deliberately no ambient "current scope"). Scopes nest (`scope("rig").child("left")`) for slices
+that instantiate sub-slices.
+
+Composing across instances is nothing special — a cell that reads both:
+
+```ts
+const lissajous = cell(() => ({ x: leftCells.trace(), y: rightCells.trace() }), interleave);
+```
+
+**Where the slice's names and descriptions come from** depends on who compiles it:
+
+- **In a workspace** (the slice is a linked package the app imports source-first): the app's own
+  compiler processes it — names, descriptions, and dotdot-relative definition sites
+  (`../../packages/spectra/src/store.ts:12`) come for free.
+- **As a published library**: run the compiler in the library's own build and tests
+  (`sourceLocatorVite({ locPrefix: "@you/spectra/" })` in its vite/vitest config), so the dist
+  carries baked, package-qualified identity. Or write explicit `{ name }`s and descriptions —
+  the un-ergonomic fallback.
+
+The living reference is `packages/aiui-oscillator` (the slice, with its own compiled identity
+and tests) consumed twice by `demos/twins` (two scoped instruments composed into a Lissajous
+figure — call `__app.call("report")` there to see a qualified surface).
+
 ## Where to go next
 
 - **Do:** `npm create @habemus-papadum/aiui my-app` — the starter with this whole shape working,

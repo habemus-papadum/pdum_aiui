@@ -27,7 +27,8 @@ contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the modul
 
 Library surface (`@habemus-papadum/aiui-viz`): plumbing on the root barrel (`cell`,
 `settledOnly`, `CellView`, **`control`/`action`** (the declared control surface — names, locs,
-and descriptions injected by the aiui compiler), `ControlSlider`/`ControlToggle` (widgets that
+and descriptions injected by the aiui compiler), `scope` (instance identity for reusable
+slices), `ControlSlider`/`ControlToggle` (widgets that
 read bounds from the declaration), `workerStream`/`fromWorker`, `durable`/`durableSignal`,
 `hotCellGraph`, `agentToolkit`/`registerStandardTools`); `…/testing` → the cell-test harness
 (`cellHarness`, `whenReady`, `whenState`, `recordCommits`, `resetControlSurface`) — use it,
@@ -194,6 +195,24 @@ pushed down to DuckDB). Mosaic durables: the DuckDB instance, coordinator, and S
 in the store; specs are reactive thunks (theme reads rebuild views against the surviving
 coordinator). Pin `@duckdb/duckdb-wasm` to the exact version `@uwdata/mosaic-core` uses (one
 deduped copy), and read the hard-won doc's Mosaic section before writing a custom MosaicClient.
+
+## Composing and reusing (slices + scopes)
+
+When the same instrument is wanted in two apps — or twice on one page — the unit of reuse is a
+**pair of factory functions**, never a graph object: a store factory declaring the control
+surface, and a cells factory building the derived cells inside the app's ONE `hotCellGraph`
+(a slice never owns that ritual — it's bound to the app module's `import.meta.hot`). Both take an
+explicit `Scope` (`scope("left")`) and thread it into every declaration (`control({ scope, … })`,
+`cell(deps, compute, { scope })`, `action({ scope, name: "…", … })`, `s.durableSignal(…)` for
+internal keys): the compiler still injects the leaf name/description, and the scope qualifies the
+effective identity (`left/freq`) so two instances get distinct durable state, distinct tools
+(`left/kick`), and instance-correct dependency edges. **Never instantiate a slice factory twice
+without distinct scopes** — same call site means same injected name, and the instances silently
+share one durable state (indistinguishable from an HMR re-eval; nothing warns). Identity across a
+package boundary: a workspace-linked slice is compiled by the consuming app (dotdot-relative
+locs, automatic); a published library runs `sourceLocatorVite({ locPrefix: "@you/pkg/" })` in its
+own build/vitest configs. Worked example: `packages/aiui-oscillator` consumed twice by
+`demos/twins`.
 
 ## The library is young — treat it as improvable, not frozen
 

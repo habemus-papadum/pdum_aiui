@@ -124,10 +124,21 @@ export function defaultFactories(): FactorySpec[] {
 
 export interface SourceLocatorOptions {
   /**
-   * App root for relativizing filenames; a stamped/injected path is
-   * `file.slice(root.length)`. Defaults to `""` (absolute paths).
+   * Root for relativizing filenames. Files UNDER it stamp as root-relative
+   * ("src/model/store.ts:12"); files OUTSIDE it (a workspace-linked package
+   * the app consumes source-first) stamp relative-with-dotdots
+   * ("../../packages/spectra/src/store.ts:12") — still resolvable against the
+   * app root by the attribution consumers. Defaults to `""` (absolute paths).
    */
   root?: string;
+  /**
+   * Prefix prepended to every stamped/injected path — for a LIBRARY running
+   * this pass in its own build so its published dist carries identity: with
+   * `root` = the package dir and `locPrefix: "@you/spectra/"`, locs read
+   * "@you/spectra/src/store.ts:12" — package-qualified, meaningful in any
+   * consumer. Apps normally leave this unset.
+   */
+  locPrefix?: string;
   /**
    * The factory table. Defaults to {@link defaultFactories}; pass `[]` to
    * disable call-site injection entirely (JSX stamping is independent).
@@ -152,6 +163,23 @@ function resolveFactories(options: SourceLocatorOptions): FactorySpec[] {
   if (options.factories) return options.factories;
   if (options.cellFactories) return options.cellFactories.map((name) => cellFactory(name));
   return defaultFactories();
+}
+
+/**
+ * A file's stamped path: root-relative when under the root, dotdot-relative
+ * when outside it (workspace-linked sources), absolute only with no root.
+ * String-based on purpose (this module also runs under test tooling where
+ * pulling in node:path is avoidable); paths here are Vite-normalized `/`.
+ */
+function relativizeFile(root: string, file: string): string {
+  if (root === "") return file;
+  if (file.startsWith(root)) return file.slice(root.length).replace(/^\//, "");
+  const from = root.replace(/\/+$/, "").split("/");
+  const to = file.split("/");
+  let common = 0;
+  while (common < from.length && common < to.length && from[common] === to[common]) common++;
+  if (common === 0) return file; // different volume/prefix — keep it absolute
+  return [...Array<string>(from.length - common).fill(".."), ...to.slice(common)].join("/");
 }
 
 /**
@@ -215,6 +243,7 @@ export function sourceLocatorBabel(
 ): PluginObj {
   const t = babel.types;
   const root = options.root ?? "";
+  const locPrefix = options.locPrefix ?? "";
   const stampJsx = options.stampJsx ?? true;
   const factories = new Map(resolveFactories(options).map((f) => [f.callee, f]));
 
@@ -223,8 +252,7 @@ export function sourceLocatorBabel(
     visitor: {
       Program(programPath: NodePath<BabelTypes.Program>, state: PluginPass) {
         const file = state.file.opts.filename ?? "";
-        const rel =
-          root && file.startsWith(root) ? file.slice(root.length).replace(/^\//, "") : file;
+        const rel = `${locPrefix}${relativizeFile(root, file)}`;
         const visitor: Visitor = {
           JSXOpeningElement(path) {
             if (!stampJsx) return;
@@ -431,10 +459,17 @@ function buildSniff(factories: FactorySpec[], stampJsx: boolean): RegExp | undef
  * (`stampJsx` defaults to `command === "serve"`); pass `stampJsx: true` to
  * keep instrumentation in a production build deliberately.
  *
- * `node_modules` skipped; a cheap content sniff skips files with neither JSX
- * nor a factory call. `@babel/core` is loaded lazily (dynamic import) and
- * required only here — if it is missing, `buildStart` fails fast with a clear
- * install hint.
+ * Scope of processing: `node_modules` is always skipped (published deps carry
+ * their identity from their own build, or write explicit names). Files under
+ * the app root get both halves. Files OUTSIDE the root but not in
+ * node_modules — workspace-linked package sources consumed source-first — get
+ * the factory-identity half only, with dotdot-relative locs
+ * ("../../packages/spectra/src/store.ts:12"): a shared slice's controls are
+ * named wherever the code lives, while JSX stamping stays app-scoped so
+ * attribution keeps resolving to the app's own components. A cheap content
+ * sniff skips files with neither JSX nor a factory call. `@babel/core` is
+ * loaded lazily (dynamic import) and required only here — if it is missing,
+ * `buildStart` fails fast with a clear install hint.
  */
 export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugin {
   // Root defaults to the resolved Vite root (captured in configResolved); an
@@ -443,6 +478,8 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
   let stampJsx = options.stampJsx ?? true;
   const factories = resolveFactories(options);
   let sniff = buildSniff(factories, stampJsx);
+  // The out-of-root sniff: factory calls only (no JSX part) — see transform.
+  let factorySniff = buildSniff(factories, false);
 
   const load = options.loadBabel ?? (() => import("@babel/core"));
   let babel: BabelModule | undefined;
@@ -471,6 +508,7 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
       if (options.root === undefined) root = config.root;
       if (options.stampJsx === undefined) stampJsx = config.command === "serve";
       sniff = buildSniff(factories, stampJsx);
+      factorySniff = buildSniff(factories, false);
     },
     async buildStart() {
       // Fail fast with a clear message if the optional peer is missing, rather
@@ -481,8 +519,14 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
       const file = id.replace(/\?.*$/, "");
       if (!/\.[mc]?[tj]sx?$/.test(file)) return null;
       if (file.includes("node_modules")) return null;
-      if (root && !file.startsWith(root)) return null;
-      if (!sniff?.test(code)) return null; // nothing to inject
+      // Files OUTSIDE the app root — workspace-linked package sources the app
+      // consumes source-first — get FACTORY IDENTITY only (a shared slice's
+      // controls need their names wherever the code lives), never JSX stamps:
+      // `data-source-loc` on library internals would win the shot locator's
+      // innermost-containing resolution away from the app's own components.
+      const inRoot = root === "" || file.startsWith(root);
+      const effectiveSniff = inRoot ? sniff : factorySniff;
+      if (!effectiveSniff?.test(code)) return null; // nothing to inject
       const { transformAsync } = await ensureBabel();
       // jsx parsing only for *.jsx/*.tsx: in plain .ts the jsx plugin makes
       // `<T>expr` type assertions ambiguous.
@@ -492,7 +536,15 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
         filename: file,
         parserOpts: { plugins },
         plugins: [
-          [sourceLocatorBabel, { root, factories, stampJsx } satisfies SourceLocatorOptions],
+          [
+            sourceLocatorBabel,
+            {
+              root,
+              factories,
+              stampJsx: stampJsx && inRoot,
+              ...(options.locPrefix !== undefined ? { locPrefix: options.locPrefix } : {}),
+            } satisfies SourceLocatorOptions,
+          ],
         ],
         configFile: false,
         babelrc: false,

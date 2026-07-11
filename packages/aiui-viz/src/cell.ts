@@ -34,6 +34,7 @@ import {
   untrack,
 } from "solid-js";
 import { dropConsumer, recordRead, runAsConsumer } from "./graph-trace";
+import type { Scope } from "./scope";
 
 export type CellState =
   | "unresolved" // never had a value; deps gate closed or upstream not ready
@@ -66,6 +67,13 @@ export interface CellOptions {
    * with the name — the element → cell attribution contract.
    */
   name?: string;
+  /**
+   * Instance qualifier for slice factories (scope.ts): the registered name —
+   * and so the `data-cell` stamp, the edges, and the report entry — becomes
+   * `<scope>/<name>`, so a cells factory instantiated twice yields two
+   * distinctly-named cells. The compiler still injects the LEAF name.
+   */
+  scope?: Scope;
   /** Definition site "file:line"; injected alongside `name`. */
   loc?: string;
   /**
@@ -169,6 +177,13 @@ export function cell<D, T>(
   options?: CellOptions,
 ): Cell<T> {
   const streamMode = options?.stream ?? "commit";
+  // The effective identity: scope-qualified when built by a slice factory.
+  const cellName =
+    options?.name !== undefined
+      ? options.scope !== undefined
+        ? options.scope.qualify(options.name)
+        : options.name
+      : undefined;
   // ownedWrite: these are the cell's *internal* bookkeeping, legitimately
   // written from inside the compute's owned scope (the async wrappers run
   // their prologue synchronously inside the memo). Solid 2.0 dev mode
@@ -189,7 +204,7 @@ export function cell<D, T>(
     // Attribute this deps evaluation to the cell (dependency-edge capture —
     // graph-trace.ts). Only the deps read is bracketed: reads inside compute
     // are untracked by Solid and deliberately unattributed here too.
-    const d = runAsConsumer(options?.name, deps); // pending upstream throws NotReadyError: hold
+    const d = runAsConsumer(cellName, deps); // pending upstream throws NotReadyError: hold
     if (d === undefined || d === null || d === false) {
       throw new NotReadyError(null); // explicit hold — idiomatic 2.0 "not yet"
     }
@@ -317,8 +332,8 @@ export function cell<D, T>(
   ) as Accessor<Box>;
 
   const read = (() => {
-    if (options?.name) {
-      recordRead({ kind: "cell", name: options.name }); // consumer-aware no-op otherwise
+    if (cellName !== undefined) {
+      recordRead({ kind: "cell", name: cellName }); // consumer-aware no-op otherwise
     }
     return memo();
   }) as Cell<T>;
@@ -355,11 +370,11 @@ export function cell<D, T>(
     if (untrack(box).state === "errored" && resetError) resetError();
     else refresh(memo);
   };
-  if (options?.name) {
-    const name = options.name;
+  if (cellName !== undefined) {
+    const name = cellName;
     read.cellName = name;
-    read.loc = options.loc;
-    read.description = options.description;
+    read.loc = options?.loc;
+    read.description = options?.description;
     registry.set(name, read as Cell<unknown>);
     if (getOwner()) {
       onCleanup(() => {

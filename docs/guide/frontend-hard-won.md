@@ -172,6 +172,14 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
 
 ## Testing cells and controls headless
 
+- **Solid must resolve as ONE browser/dev build under Vitest, or reactivity silently dies.**
+  A package whose vitest config lacks `resolve.conditions: ["browser", "development", …]` +
+  `server.deps.inline: [/solid-js/, /@solidjs\//, /@habemus-papadum\//]` gets a node-resolved
+  SECOND solid instance: signals write to one runtime, memos track in the other — `get()` reads
+  fresh values while cells never recompute, and nothing errors. Every test config in this repo
+  carries the recipe (aiui-viz's vite.config.ts has the full story); copy it into any NEW package
+  that tests cells before debugging "my cell doesn't update".
+
 - **Cells must be created inside `cellHarness`'s setup callback** — created outside any owner
   they throw `NO_OWNER_BOUNDARY` (Solid 2.0 requires an owner for the underlying memo). The
   harness exists precisely to own them; build the graph in the callback, return what the test

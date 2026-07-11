@@ -249,3 +249,104 @@ milestones in trace timing; the dev-mode hard-navigation warning (moot inside th
 that links are intercepted, still interesting for arbitrary apps); per-URL ink layers (deferred);
 sequencing step 3's template "add a page" recipe — the template is still single-page, and the
 skill/playbook now describe the routed-shell idiom with the gallery as the reference.
+
+## Addendum: a map for the extension work (read before building browser-extension-intent-tool.md)
+
+This implementation is the extension's substrate: the `navigation` event is the first member of
+the context-boundary family the extension generalizes (`tab-switch`, `split-change` — its §2),
+and several of the seams built here are exactly the ones the extension will re-host. What follows
+is what you need to know that the code alone won't tell you.
+
+### The event family: how to add a sibling event type
+
+`navigation` is discriminated by `type`, like every stream event — a `tab-switch` is a NEW
+`type` in the `IntentEvent` union, not a `kind` value (`kind` on `navigation` is the
+push/replace/traverse sub-attribution and stays navigation-specific). Adding a stream event
+touches **six surfaces**, and only some of them fail loudly when you forget one:
+
+1. `intent-pipeline/types.ts` — the union member (compile-checked everywhere else from here).
+2. `intent-pipeline/engine.ts` — the verb (`Engine.navigation(from, to, kind?)` is the model:
+   gate on `threadOpen`, return whether it recorded).
+3. `composeIntent` (same file) — the items fold AND the prompt render (`renderNavigation`).
+   **This one fails silently**: an event type the fold doesn't mention simply vanishes from the
+   composition (correct for `linter-*`, wrong for a boundary). Decide explicitly whether the new
+   event composes, and add a test that pins its position in `items`.
+4. `debug-ui/event-panes.ts` `describe()` — compile-checked (exhaustive switch, no default);
+   the build breaks until the trace viewer can render the event. This is deliberate — never ship
+   an event the viewer can't show.
+5. `multimodal/preview.tsx` — `keyOf()` (compile-checked) and a row renderer if the event shows
+   in the accumulator (the `⇢` chip pattern: a marker, substance in the title, not content).
+6. The channel — nothing. Events cross the wire as opaque JSON and the channel's lowering shares
+   `composeIntent`, so a new event type needs zero channel changes unless it wants milestone
+   treatment in trace timing.
+
+### Contracts the extension must preserve (or knowingly change)
+
+- **Boundaries ride open turns only.** `Engine.navigation()` no-ops without an open thread — a
+  navigation is context, never a turn opener (the `app-selection` rule). The watcher itself still
+  fires regardless; host-level policy (chip clearing) happens threadless. Keep this split for
+  `tab-switch`: detection is unconditional, the stream event is turn-gated.
+- **Ordering IS attribution.** Consumers assume everything before a boundary event happened in
+  the old context. The emission order is pinned: `navigation` → `ink-clear(reason:"navigation")`
+  → `app-selection-drop`. In `intent.ts` this is achieved by running modality subscribers before
+  the host's own policy inside the watcher callback — if the extension re-hosts the fan-out
+  (panel relaying content-script observations), it must keep an equivalent ordering guarantee,
+  including across the Port hop.
+- **`pathChanged` is the destructive-policy hinge, not "navigated".** `replaceState` syncing
+  state into the query string and `#section` jumps navigate WITHOUT changing pathname; clearing
+  ink or retracting selections on those would punish apps for good URL hygiene. The extension's
+  per-tab content script should apply the same test for in-tab navigations. (Tab switches are a
+  different policy entirely — the extension proposal already says freeze-fade, don't clear, §8.)
+- **`ink-clear` grew a `reason` field** rather than a new event; extend that enum
+  (`"navigation" | "tab-close" | …`) rather than minting parallel clear events.
+- **The host seam grew a member**: `IntentToolContext.onNavigation(handler)`. The modality is
+  already host-agnostic here — it neither knows nor cares that the current implementation is a
+  page-side watcher. When the extension extracts the host seam (its sequencing step 2), the
+  panel-backed host implements `onNavigation` from content-script relays (and presumably widens
+  the change type to the context-boundary family); the modality code should not need to change.
+
+### Turn recovery: what changed and what it means for `chrome.storage.session`
+
+- `RecoveredTurn` now carries `url` (where the turn was last recorded), and the adopter
+  reconstructs a missed hard navigation as a `navigation` event at replay time. Generalize this:
+  the extension's turn mirror should carry provenance (tab id + url), and adoption into a
+  different context should emit the corresponding boundary event rather than refusing. The old
+  exact-URL gate is the cautionary tale — a "safety" check that made every legitimate cross-page
+  recovery silently fail.
+- The mirror is cleared **only on `thread-close`**, never on "some event arrived while no thread
+  was open". The original bug: the session bus replays `armed` into a fresh page's engine, the
+  persistence listener saw `threadOpen === false`, and garbage-collected another page's
+  still-recoverable turn from the shared per-tab store. `chrome.storage.session` is shared even
+  wider (per-extension, all windows), so this discipline matters MORE there: clear by
+  provenance-checked ownership, not by local quiescence.
+- Under the extension the whole hazard class shrinks — the engine lives in the panel and no page
+  lifecycle touches it — but recovery survives extension reloads via the same record/adopt shape,
+  so the semantics above still apply.
+
+### Environment facts that will bite
+
+- **jsdom has no Navigation API**, so the watcher's fallback (history patching) is what unit
+  tests exercise; the Navigation API path is tested against a hand-stubbed `window.navigation`
+  (`navigation.test.ts` — reuse the stub). An extension content script in a real Chrome will
+  take the Navigation API path; don't let test coverage fool you about which branch runs where.
+- **History patching must be last-in-wins aware**: dispose only unpatches if it is still the
+  installed patch (routers and analytics patch the same functions). The content-script world has
+  the same hazard from page code.
+- **Solid write batching reaches route state**: a `navigate()` followed by a same-tick read of
+  the route signal lies (bit the gallery's own router tests). Any panel-side state mirroring
+  through signals inherits this.
+- **One document now means merged page-side registries.** The gallery's three notebooks share
+  one `window`: three agentToolkit namespaces (`__morpho`/`__aztec`/`__seismos`) coexist and each
+  kit's `report` sees the GLOBAL control/cell registries (names are unique by rule, durable keys
+  page-prefixed). The extension's MAIN-world probe should expect multiple namespaces per
+  document as the normal case, and tool-directory UX should not assume namespace ⇒ page.
+
+### What this work deliberately did NOT solve (the extension's opening)
+
+The page-hosted overlay still dies with the document on a genuinely hard navigation (a
+non-intercepted anchor in an arbitrary app, a form post, `window.location=`), and a turn cannot
+span tabs at all. The SPA methodology makes continuity available to apps that opt in; the
+recovery path reconstructs boundaries after the fact for same-tab reloads. The extension's
+panel-hosted engine is the structural fix for both — and when it lands, the `navigation` event,
+its composition, its trace rendering, and the boundary-reconstruction-at-adopt pattern are the
+pieces it inherits unchanged.

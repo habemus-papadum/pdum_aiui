@@ -35,6 +35,7 @@
 import type { Setter } from "solid-js";
 import { durableSignal, type SignalBox } from "./durable";
 import { recordRead } from "./graph-trace";
+import type { Scope } from "./scope";
 
 /** Constraint / presentation metadata for a control's value. */
 export interface ControlMeta<T> {
@@ -58,6 +59,13 @@ export interface ControlSpec<T> extends ControlMeta<T> {
    * write it explicitly to rename a binding WITHOUT resetting durable state.
    */
   name?: string;
+  /**
+   * Instance qualifier for slice factories (see scope.ts): the effective
+   * identity becomes `<scope>/<name>`, so a slice instantiated twice gets two
+   * controls with two durable states instead of silently sharing one. The
+   * compiler still injects the LEAF name; the scope is runtime data.
+   */
+  scope?: Scope;
   /** Initial value (the durable registry adopts an existing one on hot edits). */
   value: T;
   /** Human description — compiler-lifted from the doc comment, or explicit. */
@@ -68,7 +76,10 @@ export interface ControlSpec<T> extends ControlMeta<T> {
 
 /** A live control: the two-way box plus its identity and metadata. */
 export interface ControlBox<T> extends SignalBox<T> {
+  /** The effective identity — scope-qualified when declared with one. */
   readonly name: string;
+  /** The declaring scope's name, when scoped ("left" of "left/freq"). */
+  readonly scope?: string;
   readonly description?: string;
   readonly loc?: string;
   readonly meta: ControlMeta<T>;
@@ -80,6 +91,9 @@ export interface ControlBox<T> extends SignalBox<T> {
 export interface ActionSpec {
   /** Identity — same rules as a control's name. */
   name?: string;
+  /** Instance qualifier (see {@link ControlSpec.scope}): the registered name —
+   * and so the derived agent tool — becomes `<scope>/<name>`. */
+  scope?: Scope;
   /** Human description — compiler-lifted from the doc comment, or explicit. */
   description?: string;
   /** Definition site "file:line" — compiler-injected. */
@@ -92,9 +106,10 @@ export interface ActionSpec {
   run: (args?: Record<string, unknown>) => unknown;
 }
 
-/** One registered action (spec with identity resolved). */
-export interface RegisteredAction extends Omit<ActionSpec, "name"> {
+/** One registered action (spec with identity resolved; `scope` as its name). */
+export interface RegisteredAction extends Omit<ActionSpec, "name" | "scope"> {
   name: string;
+  scope?: string;
 }
 
 /** A snapshot entry of the control surface (see {@link controlSurface}). */
@@ -102,6 +117,7 @@ export type ControlSurfaceEntry =
   | {
       kind: "control";
       name: string;
+      scope?: string;
       value: unknown;
       description?: string;
       loc?: string;
@@ -110,6 +126,7 @@ export type ControlSurfaceEntry =
   | {
       kind: "action";
       name: string;
+      scope?: string;
       description?: string;
       loc?: string;
       params?: Record<string, string>;
@@ -185,7 +202,11 @@ function warnOnCollision(
  * ```
  */
 export function control<T>(spec: ControlSpec<T>): ControlBox<T> {
-  const name = requireName("control", spec.name);
+  const leaf = requireName("control", spec.name);
+  // The effective identity: scope-qualified when the declaration came from a
+  // slice factory. Everything downstream — durable key, registry, tools,
+  // edges, stamps — sees only the qualified name.
+  const name = spec.scope !== undefined ? spec.scope.qualify(leaf) : leaf;
   const meta: ControlMeta<T> = {
     ...(spec.min !== undefined ? { min: spec.min } : {}),
     ...(spec.max !== undefined ? { max: spec.max } : {}),
@@ -251,6 +272,7 @@ export function control<T>(spec: ControlSpec<T>): ControlBox<T> {
     },
     set,
     name,
+    ...(spec.scope !== undefined ? { scope: spec.scope.name } : {}),
     ...(spec.description !== undefined ? { description: spec.description } : {}),
     ...(spec.loc !== undefined ? { loc: spec.loc } : {}),
     meta,
@@ -269,8 +291,14 @@ export function control<T>(spec: ControlSpec<T>): ControlBox<T> {
  * (declared before or after; the surface subscription covers both orders).
  */
 export function action(spec: ActionSpec): RegisteredAction {
-  const name = requireName("action", spec.name);
-  const entry: RegisteredAction = { ...spec, name };
+  const leaf = requireName("action", spec.name);
+  const name = spec.scope !== undefined ? spec.scope.qualify(leaf) : leaf;
+  const { scope: specScope, ...rest } = spec;
+  const entry: RegisteredAction = {
+    ...rest,
+    name,
+    ...(specScope !== undefined ? { scope: specScope.name } : {}),
+  };
   warnOnCollision("action", name, actions.get(name)?.loc, spec.loc);
   actions.set(name, entry);
   notifySurfaceChanged();
@@ -297,6 +325,7 @@ export function controlSurface(): ControlSurfaceEntry[] {
     out.push({
       kind: "control",
       name: c.name,
+      ...(c.scope !== undefined ? { scope: c.scope } : {}),
       value: c.get(),
       ...(c.description !== undefined ? { description: c.description } : {}),
       ...(c.loc !== undefined ? { loc: c.loc } : {}),
@@ -307,6 +336,7 @@ export function controlSurface(): ControlSurfaceEntry[] {
     out.push({
       kind: "action",
       name: a.name,
+      ...(a.scope !== undefined ? { scope: a.scope } : {}),
       ...(a.description !== undefined ? { description: a.description } : {}),
       ...(a.loc !== undefined ? { loc: a.loc } : {}),
       ...(a.params !== undefined ? { params: a.params } : {}),

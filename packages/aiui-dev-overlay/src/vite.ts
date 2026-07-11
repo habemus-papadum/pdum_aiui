@@ -163,6 +163,13 @@ export interface AiuiDevOverlayOptions {
    *   factories only.
    * - `{ stampJsx }` — override the per-command default (serve: on, build:
    *   off) for the instrumentation half.
+   * - `{ locPrefix }` — package-qualify locs; for a LIBRARY running the pass
+   *   in its own build/test toolchain (see SourceLocatorOptions.locPrefix).
+   *
+   * Scope of processing: files under the app root get both halves;
+   * workspace-linked package sources outside the root get factory identity
+   * only, with dotdot-relative locs (a shared slice's controls are named
+   * wherever the code lives); `node_modules` is never touched.
    *
    * ORDER MATTERS for JSX stamping: place `aiuiDevOverlay(...)` BEFORE your
    * framework's JSX plugin (e.g. `vite-plugin-solid`, which is also
@@ -174,7 +181,14 @@ export interface AiuiDevOverlayOptions {
    * The locator's source-loc paths are relative to the same root injected as
    * `window.__AIUI__.sourceRoot` (this option's `sourceRoot`, else the Vite root).
    */
-  locator?: boolean | { cellFactories?: string[]; factories?: FactorySpec[]; stampJsx?: boolean };
+  locator?:
+    | boolean
+    | {
+        cellFactories?: string[];
+        factories?: FactorySpec[];
+        stampJsx?: boolean;
+        locPrefix?: string;
+      };
 }
 
 /**

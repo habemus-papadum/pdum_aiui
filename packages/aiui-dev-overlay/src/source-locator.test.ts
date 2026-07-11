@@ -294,8 +294,51 @@ describe("sourceLocatorVite — plugin surface", () => {
   it("an explicit root option wins over the resolved Vite root", async () => {
     const p = sourceLocatorVite({ root: "/other" });
     (p.configResolved as (c: object) => void)({ root: "/app", command: "serve" });
-    // File under /app is outside the explicit /other root, so it is skipped.
+    // File under /app is outside the explicit /other root: JSX-only content
+    // has nothing to process there (stamping is root-scoped).
     expect(await transformOf(p)("const x = <div/>;", "/app/src/a.tsx")).toBeNull();
+  });
+
+  it("out-of-root workspace sources get factory identity with dotdot-relative locs", async () => {
+    const p = sourceLocatorVite();
+    (p.configResolved as (c: object) => void)({ root: "/repo/demos/twins", command: "serve" });
+    const code = [
+      "/** Natural frequency, Hz. */",
+      "export const freq = control({ scope: s, value: 1 });",
+    ].join("\n");
+    const out = await transformOf(p)(code, "/repo/packages/spectra/src/store.ts");
+    expect(out?.code).toContain('name: "freq"');
+    expect(out?.code).toContain('description: "Natural frequency, Hz."');
+    expect(out?.code).toContain('loc: "../../packages/spectra/src/store.ts:2"');
+  });
+
+  it("never JSX-stamps out-of-root files, even under serve", async () => {
+    const p = sourceLocatorVite();
+    (p.configResolved as (c: object) => void)({ root: "/repo/demos/twins", command: "serve" });
+    // JSX plus a factory call: the factory sniff admits the file, but the
+    // stamping half must stay app-scoped (library-internal data-source-loc
+    // would win the shot locator's innermost-containing resolution away from
+    // the app's own components).
+    const code = [
+      "export function Slider() { return <div/>; }",
+      "export const freq = control({ value: 1 });",
+    ].join("\n");
+    const out = await transformOf(p)(code, "/repo/packages/spectra/src/widgets.tsx");
+    expect(out?.code).toContain('name: "freq"');
+    expect(out?.code).not.toContain("data-source-loc");
+  });
+
+  it("locPrefix package-qualifies locs for a library's own build", async () => {
+    const p = sourceLocatorVite({
+      root: "/repo/packages/spectra",
+      locPrefix: "@you/spectra/",
+    });
+    (p.configResolved as (c: object) => void)({ root: "/repo/packages/spectra", command: "build" });
+    const out = await transformOf(p)(
+      "export const freq = control({ value: 1 });",
+      "/repo/packages/spectra/src/store.ts",
+    );
+    expect(out?.code).toContain('loc: "@you/spectra/src/store.ts:1"');
   });
 
   it("fails fast with a friendly error when @babel/core is missing", async () => {

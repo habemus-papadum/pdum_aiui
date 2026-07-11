@@ -136,6 +136,11 @@ demo, not a published package. `pnpm demo` serves it. It is deliberately far ric
 starter — workers, WebGL, DuckDB/Mosaic, the modal kit — and it is *not* a template: nothing
 scaffolds from it.
 
+**`demos/twins` is the composability worked example**: one reusable slice
+(`packages/aiui-oscillator`, an internal never-published package) instantiated twice under
+`scope("left")`/`scope("right")` and composed into a Lissajous figure — the living reference for
+slices, scopes, and cross-package compiler identity (user guide, "Composing bigger apps").
+
 **`demos/walkthrough` is the teaching demo**: the frontend playbook executed in order on 1-D
 diffusion, with every layer left standing as its own page (`step1.html` → the finished index;
 multi-entry Vite) and `WALKTHROUGH.md` narrating the diffs. Its steps must stay truthful — an

@@ -451,4 +451,9 @@ patterns in app code, one consumer each — possibility-list material, not extra
 - **Registry scoping**: under one document every page's controls/cells/edges merge into the
   global reflection registries (each kit's `report` sees all pages). Uniqueness-of-names is the
   working rule; a first-class `scope` on the registry (and per-kit filtered reports) waits for
-  evidence that an agent actually gets confused.
+  evidence that an agent actually gets confused. **Update (2026-07-10): shipped** — `scope()` in
+  aiui-viz qualifies controls/actions/cells/durables per instance (`left/freq`), motivated by the
+  slice-reuse work rather than page separation; `packages/aiui-oscillator` + `demos/twins` are
+  the worked example, and the compiler now injects identity across workspace boundaries
+  (dotdot-relative locs) and in library builds (`locPrefix`). Per-kit filtered reports remain
+  unbuilt (the report shows the whole qualified surface).
