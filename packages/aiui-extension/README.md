@@ -6,6 +6,9 @@ surface), channel binding, capture, ink, page tools. Design:
 `archive/extension-spikes/RESULTS.md`. Built on
 [`@habemus-papadum/aiui-webext`](../aiui-webext/README.md).
 
+> **Picking this work up fresh?** Read [`docs/CONTINUITY.md`](./docs/CONTINUITY.md) first — status,
+> working agreements, the traps that already cost cycles, and the ordered plan for what's next.
+
 ## Development
 
 ```sh
