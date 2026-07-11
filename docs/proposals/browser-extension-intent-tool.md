@@ -41,11 +41,16 @@ Five extension surfaces, each doing the only thing it can do:
   inside an extension page — the DevTools panel bundles it via esbuild today). Turn state mirrors
   to `chrome.storage.session` for crash/reload recovery — strictly better than today's
   sessionStorage mirror because no page navigation can clear it.
-- **Content scripts — the per-tab limbs.** An ISOLATED-world script per tab renders the pill/HUD
-  in a shadow root, owns that tab's ink canvas and selection watcher, and relays events to the
-  side panel over a `runtime.Port`. A minimal MAIN-world probe (declarative `"world": "MAIN"`,
-  Chrome 111+) reads `window.__AIUI__` / detects a page-hosted overlay / observes page tool
-  registrations, and posts them to the isolated sibling. All page-side logic stays thin; the
+- **Content scripts — the per-tab limbs, and almost nothing else.** With the side panel as the
+  primary surface, the in-page footprint shrinks to what *must* be in the page: the **ink
+  canvas**, the **selection watcher**, a thin **keymap relay** (arming keys and gesture keys are
+  page-level keystrokes; Chrome `commands` shortcuts are the global fallback), and a minimal
+  MAIN-world probe (declarative `"world": "MAIN"`, Chrome 111+) that reads `window.__AIUI__` /
+  detects a page-hosted overlay / observes page tool registrations. No pill, no command bar, no
+  preview strip, no config UI in the page — those all move to the panel (measured, 2026-07-10:
+  tab-scoped captures — pane-scoped tabCapture and `captureVisibleTab` — do **not** include the
+  side panel, so tool chrome in the panel is structurally outside every captured frame; only
+  window-level `getDisplayMedia` sees it). Events relay to the panel over a `runtime.Port`; the
   engine is not here.
 - **Service worker — plumbing.** Tab lifecycle (`tabs.onActivated`/`onUpdated`/`onRemoved`,
   `splitViewId` changes), tab-identity stamping (absorbing what
@@ -169,6 +174,10 @@ Concrete pipeline changes:
   session-browser-only enhancement. Two more measured constraints: **one active tabCapture
   stream per tab** ("Cannot capture a tab with an active stream"), and unconstrained tab tracks
   default to display-sized `crop-and-scale` output — always pass width/height constraints.
+  **The panel-first UI largely neutralizes this loss**: with all tool chrome in the side panel
+  (which tab-scoped captures cannot see — measured) and only ink left in-page, there is almost
+  nothing to occlude-remove; ink in frames is deliberate deixis. The element-capture plane
+  remains relevant to the *web* overlay path, not the extension.
 
 ## 6 · The iPad, and split view
 
@@ -290,18 +299,19 @@ reload?" — the tooling landscape settled favorably:
 
 ## 10 · Coexistence with the web intent tool
 
-Both overlays will exist in the same profile — deliberately. Precedence protocol:
-
-- **The page-hosted overlay wins when mounted.** The MAIN-world probe checks for the mount
-  (`window.__aiuiIntentTool` / the host element); if present, the extension parks for that tab
-  (badge: "page overlay active") and contributes only what the page host can't do (tab stamping,
-  window-level trace viewer).
-- **Why this direction:** debuggability. The agent reaches the page-hosted overlay through the
-  Chrome DevTools MCP (`evaluate` on a page the MCP can see); extension contexts (SW, panel,
-  offscreen) are separate CDP targets the MCP does not list as pages. When something breaks, the
-  integrated overlay is the observable reference implementation — keep it healthy, debug there,
-  then port. The extension can force takeover via its action menu (the overlay grows a
-  stand-down hook), for testing the extension path on instrumented pages.
+Both overlays will exist in the same profile — deliberately. **Decided (2026-07-11): no
+deference protocol.** The two tools simply coexist as independent peers: a tab served by
+`aiui vite` may host the web overlay *and* be visible to the extension at the same time — two
+connections from the same tab, two turn hosts, and the user chooses which one to drive (or
+uninstalls/ignores the extension entirely). No detection, no stand-down hooks, no takeover
+logic. This trades a little duplicated UI for a large drop in coordination complexity, and it
+preserves the debuggability asymmetry as a *feature*: the page-hosted overlay stays the
+reference implementation the agent can reach through the Chrome DevTools MCP (`evaluate` on a
+listed page), while extension contexts (SW, panel, offscreen) remain separate CDP targets. When
+something breaks in the extension path, reproduce it in the web overlay first if possible.
+The only interplay to design for is capture: **one tabCapture stream per tab** (measured), so
+the extension must surface a clear error if the page overlay already holds the tab's stream
+(and vice versa — the page's `getDisplayMedia` grant is independent and unaffected).
 - **Code sharing is the point, not an aspiration.** The engine, keymap, composeIntent, protocol
   codec, turn store, errors, debug-ui are already framework-free and host-agnostic; the widget is
   Solid in a shadow root either way. The refactor is extracting the host seam that
@@ -415,8 +425,11 @@ taken by hand in the real session browser** — an agent-spawned Chrome under te
 - Does the per-window session bind to **one channel exclusively**, or can a window observe
   several channels with one *active* for turn-hosting? (Registry hop makes multi-channel cheap;
   the UX may not want it.)
-- Where does the **widget pill** live long-term — per-tab content script (today's proposal) or
-  drawn by the panel with the content script reduced to pure input capture?
+- ~~Where does the widget pill live long-term?~~ **Decided (2026-07-11): panel-first.** The side
+  panel is the tool's whole visible surface (command bar, preview, config, trace viewer,
+  submodes); the page keeps only ink + selection + keymap relay, plus a **minimal in-page
+  armed/mode indicator** (decided 2026-07-11: wanted — a border tint/cursor, since the panel
+  may be closed while armed; it also lands in captures as a truthful "tool was armed" marker).
 - Should the **web intent tool** eventually *detect* the extension and defer in the opposite
   direction (extension wins when both present), once the extension is mature? The §10 precedence
   is explicitly a bootstrapping order, not a final answer.

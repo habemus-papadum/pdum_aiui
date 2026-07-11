@@ -19,7 +19,7 @@ Gotcha already found and fixed here: Solid 2.0 beta's web runtime is `@solidjs/w
 
 ## Live HMR leg
 
-1. `npm run dev` (Vite on pinned port 5199; CRXJS writes a dev `dist/`).
+1. `npm run dev` (Vite on pinned port 5311; CRXJS writes a dev `dist/`).
 2. Load `dist/` unpacked (`chrome://extensions` → Developer mode → Load unpacked).
 3. Open any page; the smoke box appears bottom-left. Click the counter a few times.
 4. Edit `BADGE` in `src/content.tsx` and save. **Pass:** the box updates in place, counter value

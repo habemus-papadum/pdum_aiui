@@ -130,6 +130,38 @@ composes cleanly with the per-window session model. Reminder from both M1/M2 run
 (unconstrained) tab tracks come back 5120x1440 `crop-and-scale` regardless of surface shape —
 real code must set width/height constraints.
 
-Still open: M6 soak (leave the panel open a few hours, then `lifetime report`), M5 live HMR
-leg, optional personal-Chrome contrast run (same probe, no session-browser flags — expected
-identical for tabCapture since no flags are involved, picker for gDM).
+### M6 — side-panel document lifetime · **PASSED (live soak)**
+
+Panel left open across hours of live testing (including overnight into 2026-07-11): `lifetime
+report` shows **no heartbeat gaps**. The panel document is a stable host for sockets and engine
+state; `chrome.storage.session` mirroring can stay lazy rather than paranoid.
+
+### M5 live HMR leg — first attempt invalidated; pipeline verified server-side
+
+The first live run "failed" for reasons that had nothing to do with CRXJS, reconstructed from
+port listeners and dist mtimes:
+
+1. The pinned port 5199 was **already held by an unrelated dev server from another checkout**
+   (`pdum_aiui-review-pr1/packages/aiui-code`, running since Jul 7 with `--strictPort 5199`), so
+   `npm run dev` refused to start.
+2. The retry `vite 45555` passed the port as a **positional arg = root directory** — that server
+   ran with the wrong root, never loaded our config (hence the mystery port 5179, 5173 bumped),
+   and had no CRXJS pipeline.
+3. The extension actually loaded in Chrome was the **stale production dist** from the headless
+   build — static bundle, HMR structurally impossible, dev server silent by construction.
+
+Fix: pin moved to 5311. With the dev server started correctly, CRXJS rewrote `dist/` into the
+dev shape (`src/content.tsx-loader.js` + its own service worker + vendor) and the watcher fires
+(`hmr update /src/content.tsx` logged on edit). Lesson for the run-book: after switching between
+`build` and `dev`, always Reload the unpacked extension — the two dist shapes are entirely
+different artifacts at the same path.
+
+**Final verdict (2026-07-11, live, real extension): PASSED.** The M5 live leg was re-run on the
+actual `packages/aiui-extension` (step-1 checkpoint of the implementation plan, CRXJS dev mode,
+port 5317): editing the content script's badge updated the in-page indicator **in place, with
+the click counter preserved and no page reload** — true content-script HMR with SolidJS
+2.0-beta.15 in the workspace. (Counter state rides a `window` stash: it survives hot swaps by
+design and resets on document reload, as expected.) Panel pages get plain Vite HMR.
+
+Optional remaining: personal-Chrome contrast run (expected identical for tabCapture — no flags
+involved; picker for gDM).

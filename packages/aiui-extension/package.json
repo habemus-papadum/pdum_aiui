@@ -1,0 +1,33 @@
+{
+  "name": "@habemus-papadum/aiui-extension",
+  "version": "0.4.0+dev",
+  "description": "The aiui intent tool as a Chrome extension: per-window side panel, channel binding, capture, ink, page tools.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-extension"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-webext": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "vite": "^6.4.1"
+  }
+}

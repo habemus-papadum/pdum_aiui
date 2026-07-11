@@ -13,7 +13,7 @@ import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { addError, type OverlayError } from "../../../../packages/aiui-dev-overlay/src/errors";
 
-const BADGE = "crxjs-smoke v1";
+const BADGE = "FOO crxjsoke v1";
 
 function Probe() {
   const [count, setCount] = createSignal(0);
