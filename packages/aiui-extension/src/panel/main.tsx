@@ -27,7 +27,7 @@ import { createEffect, createSignal } from "solid-js";
 import { dataUrlToBytes, isNotInvokedError, type ShotGrab } from "../capture";
 import { CapturePane } from "./capture-pane";
 import { SessionPane } from "./session-pane";
-import { connectToolsLink, type ToolsLink } from "./tools-link";
+import { connectToolsLink } from "./tools-link";
 import { attachTurnHost, panelIntentConfig, turnMirror } from "./turn";
 import { TurnPane } from "./turn-pane";
 
@@ -84,16 +84,20 @@ function Panel() {
   const session = SessionPane({ windowId });
 
   // ── the /tools link: tab-activation reporting, tied to the binding ────────
-  let toolsLink: ToolsLink | undefined;
-  createEffect(() => {
-    const port = session.handle.port();
-    const win = windowId();
-    toolsLink?.close();
-    toolsLink =
-      port !== undefined && win !== undefined
-        ? connectToolsLink({ port, windowId: win })
-        : undefined;
-  });
+  // Solid 2.0 createEffect(compute, effect): the compute tracks (port,
+  // windowId); the effect rewires the link when either changes and returns its
+  // teardown, which runs before the next rewire and on panel dispose. (A
+  // one-arg createEffect throws MISSING_EFFECT_FN at runtime in Solid 2.0.)
+  createEffect(
+    () => ({ port: session.handle.port(), win: windowId() }),
+    ({ port, win }) => {
+      if (port === undefined || win === undefined) {
+        return;
+      }
+      const link = connectToolsLink({ port, windowId: win });
+      return () => link.close();
+    },
+  );
 
   // ── the engine: one per panel document ────────────────────────────────────
   const engine = new Engine(panelIntentConfig());
