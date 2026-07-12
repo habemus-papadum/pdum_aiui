@@ -27,9 +27,10 @@
  *
  * - **Best-effort auto-load of the aiui extensions.** In a dev checkout we
  *   rebuild the `aiui-devtools-extension` package (~0.3s of tsc, so it is never
- *   stale), pick up whatever `dist/` the `aiui-extension` intent tool's own
- *   dev loop maintains (never building it — see {@link findIntentExtension}),
- *   and pass both via `--load-extension`. Chrome-branded builds
+ *   stale), pick whichever artifact the `aiui-extension` intent tool currently
+ *   offers — its live dev build, else its production build (never building
+ *   either — see {@link findIntentExtension}) — and pass both via
+ *   `--load-extension`. Chrome-branded builds
  *   ≥ 137 ignore that flag (Chromium and Chrome for Testing still honor it), so
  *   this is an attempt, not a guarantee — the reliable path is loading the
  *   extensions unpacked once at `chrome://extensions`, which the persistent
@@ -208,55 +209,174 @@ export function devtoolsExtensionDir(): string | undefined {
 }
 
 /**
+ * The intent extension has **two artifacts, in two directories** (the kit's
+ * `webextConfig`, since 2026-07-12):
+ *
+ * - `dist-dev/` — what `vite` (dev) writes: CRXJS loader stubs that are inert
+ *   without the extension's Vite dev server on its pinned port.
+ * - `dist/` — what `vite build` writes: the standalone extension, no server
+ *   needed. This is also what ships (`files: ["dist"]`).
+ *
+ * They used to be one directory, which is why a `pnpm build` could silently
+ * freeze a live dev install (CONTINUITY trap 1) — and why a launcher could
+ * load "the extension" with no idea which of the two it was getting.
+ */
+export const INTENT_DEV_DIR = "dist-dev";
+export const INTENT_OUT_DIR = "dist";
+
+/**
+ * Written by the dev build as its LAST act (kit: `aiui-webext/src/dev-stamp`),
+ * so its presence means "this dev artifact is complete", and its `runId` says
+ * *which dev-server run* wrote it. Duplicated here rather than importing the
+ * kit: the CLI has no business depending on CRXJS + the Solid plugin.
+ */
+const DEV_STAMP_FILE = "aiui-dev.json";
+
+/** The dev artifact's self-description — see the kit's `DevStamp`. */
+export interface IntentDevStamp {
+  runId: string;
+  origin: string;
+  port: number;
+  startedAt: string;
+}
+
+/**
  * What we found when looking for the browser-extension intent tool
- * (`aiui-extension`), whose `dist/` — unlike the devtools panel's — has two
- * shapes (see that package's README):
+ * (`aiui-extension`):
  *
  * - **absent** — the package isn't resolvable here (a plain npm install of the
  *   CLI without it). Silently not our problem.
- * - **unbuilt** — resolvable but `dist/manifest.json` is missing: a dev
- *   checkout where the extension's Vite dev server hasn't run yet (it writes
- *   the dev `dist/` on startup). Worth an actionable note.
- * - **ready** — a loadable unpacked extension. When the dist is *dev-shaped*
- *   (CRXJS loader stubs that import everything from the extension's Vite dev
- *   server), `devPort` carries the port those stubs point at, so the launcher
- *   can check someone is actually serving it.
+ * - **unbuilt** — resolvable, but neither artifact exists: a dev checkout where
+ *   neither `aiui extension dev` nor `pnpm build` has ever run. Worth a note.
+ * - **ready** — a loadable unpacked extension, and *which kind*: `mode: "dev"`
+ *   (needs its dev server — `devServer` says whether one is actually answering)
+ *   or `mode: "prod"` (self-contained).
  */
 export type IntentExtension =
   | { state: "absent" }
   | { state: "unbuilt"; root: string }
-  | { state: "ready"; dir: string; devPort?: number };
+  | {
+      state: "ready";
+      dir: string;
+      mode: "dev" | "prod";
+      /** dev only: the port its loader stubs dial. */
+      devPort?: number;
+      /** dev only: is anything actually serving that port right now? */
+      devServer?: boolean;
+      /** dev only: the run that wrote this artifact, when it stamped itself. */
+      stamp?: IntentDevStamp;
+      /** A `dist/` still holding a dev-shaped artifact from the old layout. */
+      legacyDevDist?: string;
+    };
 
-/**
- * Locate the intent-tool extension's `dist/`, never building it.
- *
- * Deliberately no build-on-launch here (unlike {@link buildDevtoolsExtension}):
- * `vite build` writes production output into the SAME `dist/` the dev loop
- * serves loader stubs from, silently freezing any live dev install of the
- * extension at that moment's code (see the package README — this bit twice).
- * Whoever owns the dev loop owns `dist/`; we only load what's there.
- */
-export function findIntentExtension(): IntentExtension {
-  let root: string;
+/** Absolute paths for the intent extension's two artifacts, in a checkout. */
+export function intentExtensionPaths():
+  | { root: string; devDir: string; outDir: string }
+  | undefined {
   try {
     // realpath, not the pnpm symlink — the same canonical path a manual
     // "Load unpacked" would register in the profile.
-    root = realpathSync(packageRoot(INTENT_PKG));
+    const root = realpathSync(packageRoot(INTENT_PKG));
+    return { root, devDir: join(root, INTENT_DEV_DIR), outDir: join(root, INTENT_OUT_DIR) };
   } catch {
-    return { state: "absent" };
+    return undefined;
   }
-  const dir = join(root, "dist");
-  if (!existsSync(join(dir, "manifest.json"))) {
-    return { state: "unbuilt", root };
-  }
-  return { state: "ready", dir, devPort: intentExtensionDevPort(dir) };
 }
 
 /**
- * The dev-server port a dev-shaped `dist/` depends on, or undefined for a
+ * Decide which artifact this launch should load, never building either.
+ *
+ * Deliberately no build-on-launch here (unlike {@link buildDevtoolsExtension}):
+ * whoever owns the dev loop owns `dist-dev/`, and `dist/` is a release
+ * decision. The ordering rule, most-live first:
+ *
+ *  1. a dev artifact whose dev server is **answering** — you are developing the
+ *     extension, so that is what you mean;
+ *  2. otherwise the production build, if there is one — a stale `dist-dev/`
+ *     from last week can never hijack a launch;
+ *  3. otherwise the dev artifact anyway, with a loud warning (it will show the
+ *     CRXJS "cannot connect" page until you start the server — visibly broken,
+ *     which is the point);
+ *  4. otherwise: unbuilt.
+ */
+export async function findIntentExtension(
+  probe: (port: number) => Promise<boolean> = devServerAlive,
+): Promise<IntentExtension> {
+  const paths = intentExtensionPaths();
+  return paths ? await resolveIntentExtension(paths, probe) : { state: "absent" };
+}
+
+/** {@link findIntentExtension}'s decision table, against explicit paths. */
+export async function resolveIntentExtension(
+  paths: { root: string; devDir: string; outDir: string },
+  probe: (port: number) => Promise<boolean> = devServerAlive,
+): Promise<IntentExtension> {
+  const dev = readArtifact(paths.devDir);
+  const out = readArtifact(paths.outDir);
+
+  // `dist/` with dev-shaped loader stubs is the pre-split layout (or a `pnpm
+  // dev` from an old checkout): it is a dev artifact wearing the release
+  // directory's name, and must not be mistaken for a production build.
+  const legacy = out?.devPort !== undefined ? out : undefined;
+  const release = out && out.devPort === undefined ? out : undefined;
+  const candidate = dev ?? legacy;
+  const common = { legacyDevDist: legacy?.dir };
+
+  if (candidate?.devPort !== undefined && (await probe(candidate.devPort))) {
+    return {
+      state: "ready",
+      dir: candidate.dir,
+      mode: "dev",
+      devPort: candidate.devPort,
+      devServer: true,
+      stamp: candidate.stamp,
+      ...common,
+    };
+  }
+  if (release) {
+    return { state: "ready", dir: release.dir, mode: "prod", ...common };
+  }
+  if (candidate) {
+    return {
+      state: "ready",
+      dir: candidate.dir,
+      mode: "dev",
+      devPort: candidate.devPort,
+      devServer: false,
+      stamp: candidate.stamp,
+      ...common,
+    };
+  }
+  return { state: "unbuilt", root: paths.root };
+}
+
+/** A loadable artifact at `dir`, and whether it is dev-shaped. */
+function readArtifact(
+  dir: string,
+): { dir: string; devPort?: number; stamp?: IntentDevStamp } | undefined {
+  if (!existsSync(join(dir, "manifest.json"))) {
+    return undefined;
+  }
+  const stamp = readDevStamp(dir);
+  return { dir, devPort: stamp?.port ?? intentExtensionDevPort(dir), stamp };
+}
+
+/** The dev artifact's completeness stamp, if it finished writing itself. */
+export function readDevStamp(dir: string): IntentDevStamp | undefined {
+  try {
+    const stamp = JSON.parse(readFileSync(join(dir, DEV_STAMP_FILE), "utf8")) as IntentDevStamp;
+    return typeof stamp.runId === "string" && typeof stamp.port === "number" ? stamp : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The dev-server port a dev-shaped artifact depends on, or undefined for a
  * production build. The fingerprint: CRXJS's dev `service-worker-loader.js`
  * imports from `http://localhost:<port>/…`, while a production build's
- * imports are relative.
+ * imports are relative. (The stamp says the same thing more directly; this
+ * still answers for a half-written artifact, and for the pre-split `dist/`.)
  */
 export function intentExtensionDevPort(dir: string): number | undefined {
   let loader: string;
@@ -271,12 +391,14 @@ export function intentExtensionDevPort(dir: string): number | undefined {
 
 /**
  * Loud-failure check for the intent extension at launch (dev checkouts only —
- * "absent" stays silent by design). Two ways it can quietly not work, both of
+ * "absent" stays silent by design). The ways it can quietly not work, all of
  * which read as "the extension is broken" in the browser:
  *
- * - no `dist/` yet → it simply won't be loaded this launch;
- * - dev-shaped `dist/` with nothing listening on its dev port → Chrome loads
- *   it, but every surface comes up blank.
+ * - neither artifact exists → it simply won't be loaded this launch;
+ * - the dev artifact is being loaded with nothing serving its port → Chrome
+ *   loads it, but every surface shows CRXJS's "cannot connect" page;
+ * - a pre-split dev-shaped `dist/` is lying around → confusing, and it is what
+ *   gets published if anyone ever packs the package.
  *
  * Printed every launch while true (actionable, and it disappears once fixed),
  * not once-per-profile like {@link maybeExtensionAutoloadHint}.
@@ -284,27 +406,35 @@ export function intentExtensionDevPort(dir: string): number | undefined {
 export async function warnIntentExtensionState(intent: IntentExtension): Promise<void> {
   if (intent.state === "unbuilt") {
     printNote(
-      "the aiui intent-tool extension has no dist/ yet, so this launch won't load it",
-      "Start its dev server first — pnpm -C packages/aiui-extension dev — then relaunch.",
+      "the aiui intent-tool extension has no artifact yet, so this launch won't load it",
+      "Developing it?  aiui extension dev   (Vite + auto-reload; writes dist-dev/)\n" +
+        "Just using it?  pnpm -C packages/aiui-extension build   (writes dist/, needs no server)\n" +
+        "Then relaunch.",
     );
     return;
   }
-  if (intent.state !== "ready" || intent.devPort === undefined) {
+  if (intent.state !== "ready") {
     return;
   }
-  if (await devServerAlive(intent.devPort)) {
-    return;
+  if (intent.mode === "dev" && !intent.devServer) {
+    printWarning(
+      `the aiui intent-tool extension is dev-mode (${intent.dir}) but nothing is serving ` +
+        `:${intent.devPort} — its panel will show CRXJS's "cannot connect" page`,
+      "Start the dev loop (`aiui extension dev`), or build it standalone\n" +
+        "(`pnpm -C packages/aiui-extension build`) and relaunch to load dist/ instead.",
+    );
   }
-  printWarning(
-    `the aiui intent-tool extension's dist/ is dev-mode but nothing is serving :${intent.devPort} — ` +
-      "it will load blank",
-    "Start the dev server (pnpm -C packages/aiui-extension dev), then reload the extension\n" +
-      "in chrome://extensions.",
-  );
+  if (intent.legacyDevDist && intent.mode === "dev" && intent.dir !== intent.legacyDevDist) {
+    printNote(
+      `${intent.legacyDevDist} holds a stale dev-mode artifact from the old single-dist layout`,
+      'Harmless but confusing (and it is what `files: ["dist"]` would publish):\n' +
+        `  rm -rf ${intent.legacyDevDist}   # or: pnpm -C packages/aiui-extension build`,
+    );
+  }
 }
 
 /** Is the extension's Vite dev server answering on this port? */
-async function devServerAlive(port: number): Promise<boolean> {
+export async function devServerAlive(port: number): Promise<boolean> {
   try {
     const res = await fetch(`http://localhost:${port}/@vite/client`, {
       signal: AbortSignal.timeout(1000),

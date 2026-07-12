@@ -325,7 +325,7 @@ async function chromeServerEntry(
       // feature): keep the profile's NM manifest current even when attaching.
       ensureProfileNativeHost(
         settings.userDataDir,
-        findIntentExtension().state === "ready",
+        (await findIntentExtension()).state === "ready",
         printWarning,
       );
       return {
@@ -355,7 +355,7 @@ async function chromeServerEntry(
   if (settings.buildExtension) {
     await buildDevtoolsExtension();
   }
-  const intent = findIntentExtension();
+  const intent = await findIntentExtension();
   const extensionDirs = [
     devtoolsExtensionDir(),
     intent.state === "ready" ? intent.dir : undefined,

@@ -110,7 +110,7 @@ export async function runBrowser(opts: BrowserOptions): Promise<void> {
     // running browser may predate this checkout's native host.
     ensureProfileNativeHost(
       settings.userDataDir,
-      findIntentExtension().state === "ready",
+      (await findIntentExtension()).state === "ready",
       printNote,
     );
     report("session browser already running", settings, session);
@@ -214,7 +214,7 @@ export async function startSessionBrowser(
   if (settings.buildExtension) {
     await buildDevtoolsExtension();
   }
-  const intent = findIntentExtension();
+  const intent = await findIntentExtension();
   const extensionDirs = [
     devtoolsExtensionDir(),
     intent.state === "ready" ? intent.dir : undefined,

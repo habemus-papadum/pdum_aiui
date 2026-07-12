@@ -105,13 +105,16 @@ export function buildProgram(): Command {
     .option("--remote-port <port>", "fixed port on the tunnel's remote side (default: 9222)")
     .action((opts: BrowserOptions) => runBrowser(opts));
 
-  // The aiui browser extension's native side: install/inspect the Chrome
-  // native-messaging host (channel discovery for a browser that can't read
-  // the on-disk registry). See docs/proposals/browser-extension-intent-tool.md §4.
+  // The aiui browser extension: its dev loop (`dev` = Vite + an ordered reload
+  // of the session browser; `reload` = that reload on its own) and its native
+  // side (the Chrome native-messaging host that gives it channel discovery a
+  // browser can't get from the on-disk registry — proposal §4).
   program
     .command("extension")
-    .description("manage the aiui browser extension: install-native-host | status")
-    .argument("<action>", "install-native-host | status")
+    .description("the aiui browser extension: dev | reload | install-native-host | status")
+    .argument("<action>", "dev | reload | install-native-host | status")
+    .option("--profile <name>", "named profile under .aiui-cache/chrome/ (which browser to reload)")
+    .option("--data-dir <path>", "explicit Chrome user data dir (which browser to reload)")
     .option("--extension-id <id>", "extension id for allowed_origins (default: the pinned id)")
     .action((action: string, opts: ExtensionOptions) => runExtension(action, opts));
 

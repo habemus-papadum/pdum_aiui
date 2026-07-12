@@ -1,8 +1,25 @@
 /**
- * `aiui extension` — manage the aiui browser extension's native side
- * (browser-extension proposal §4). Today: install/inspect the Chrome
- * native-messaging host that lets the extension enumerate channels cold
- * (the on-disk registry is unreachable from a browser).
+ * `aiui extension` — the browser-extension intent tool's command surface:
+ * its dev loop (`dev`, `reload`) and its native side (`install-native-host`,
+ * `status`; browser-extension proposal §4 — the native-messaging host lets the
+ * extension enumerate channels cold, since the on-disk registry is unreachable
+ * from a browser).
+ *
+ * **The dev loop is a command because the ORDER is the whole game.** The
+ * extension's Vite dev server rewrites its `dist-dev/` on every start, and
+ * Chrome holds whatever it read last. Two rules, and every blank-panel
+ * mystery this repo has had is one of them being broken:
+ *
+ *  1. Chrome must not read the directory while Vite is writing it (a partial
+ *     extension loads with no error — just nothing).
+ *  2. Chrome must be told to re-read it after every dev-server start (else it
+ *     silently runs the previous run's code).
+ *
+ * `aiui extension dev` owns both: it starts Vite, waits for the artifact to
+ * stamp itself complete (the kit's `aiui-dev.json`), and only then reloads the
+ * extension in this project's session browser over CDP. `aiui extension reload`
+ * is the same second half on its own — after a `pnpm build`, after a manual
+ * `vite`, or any time a surface looks stale.
  *
  * `install-native-host` writes two things, both idempotent:
  *  1. A wrapper script under the user cache that execs this CLI's
@@ -33,10 +50,29 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { cacheDir, packageRoot } from "@habemus-papadum/aiui-util";
+import { dirname, join } from "node:path";
+import {
+  cacheDir,
+  discoverSessionBrowser,
+  evaluateInExtension,
+  packageRoot,
+  type ReloadExtensionResult,
+  reloadExtension,
+} from "@habemus-papadum/aiui-util";
+import { execa } from "execa";
+import {
+  devServerAlive,
+  findIntentExtension,
+  type IntentDevStamp,
+  intentExtensionPaths,
+  readDevStamp,
+  resolveChromeSettings,
+} from "../util/chrome";
+import { loadAiuiConfig } from "../util/config";
 import { resolvePackageCli } from "../util/resolve-cli";
+import { printError, printNote, printWarning } from "../util/ui";
 
 /** The NM host name (lowercase alphanumerics, dots, underscores only). */
 export const NATIVE_HOST_NAME = "com.habemus_papadum.aiui";
@@ -44,8 +80,19 @@ export const NATIVE_HOST_NAME = "com.habemus_papadum.aiui";
 /** The stable unpacked-extension id (from the pinned manifest key). */
 export const DEFAULT_EXTENSION_ID = "ngakidpkjdgaajnlpggbchpaikilkpmp";
 
+/**
+ * An inert page inside the extension, opened in a background tab when the
+ * extension has no live context to evaluate `chrome.runtime.reload()` in (an
+ * idle MV3 service worker leaves none). Shipped in both artifacts.
+ */
+const WAKE_PAGE = "reload.html";
+
 export interface ExtensionOptions {
   extensionId?: string;
+  /** Named profile under `.aiui-cache/chrome/` (which browser to reload in). */
+  profile?: string;
+  /** Explicit Chrome user data dir (which browser to reload in). */
+  dataDir?: string;
 }
 
 /**
@@ -89,16 +136,281 @@ export function wrapperScript(cwd: string, command: string, args: string[]): str
   ].join("\n");
 }
 
-export function runExtension(action: string, options: ExtensionOptions = {}): void {
-  if (action === "install-native-host") {
-    installNativeHost(options);
+const ACTIONS = ["dev", "reload", "install-native-host", "status"] as const;
+
+export async function runExtension(action: string, options: ExtensionOptions = {}): Promise<void> {
+  switch (action) {
+    case "dev":
+      await runExtensionDev(options);
+      return;
+    case "reload":
+      await runExtensionReload(options);
+      return;
+    case "install-native-host":
+      installNativeHost(options);
+      return;
+    case "status":
+      statusNativeHost();
+      return;
+    default:
+      throw new Error(`aiui extension: unknown action "${action}" (${ACTIONS.join(" | ")})`);
+  }
+}
+
+/**
+ * `aiui extension dev` — the blessed dev loop: Vite, then a reload, in that
+ * order, every time.
+ *
+ * Run it from the *project* whose session browser you're developing against
+ * (the same directory you run `aiui claude` from) — that's what picks the
+ * profile, exactly like `aiui open` and `aiui browser`. Vite itself always
+ * runs in the extension package, wherever that is in the workspace.
+ *
+ * Vite owns the terminal (stdio inherited: Ctrl-C, its shortcuts, its output);
+ * the reload rides alongside, and a browser that isn't running yet is a note,
+ * never a failure — the dev server is still the point.
+ */
+async function runExtensionDev(options: ExtensionOptions): Promise<void> {
+  const paths = intentExtensionPaths();
+  if (!paths || !existsSync(join(paths.root, "vite.config.ts"))) {
+    printError(
+      "aiui extension dev needs a source checkout of @habemus-papadum/aiui-extension",
+      "The published package ships only its built extension — there is nothing to dev-serve.",
+    );
+    process.exitCode = 1;
     return;
   }
-  if (action === "status") {
-    statusNativeHost();
+  const vite = viteBin(paths.root);
+  if (!vite) {
+    printError(
+      `Vite is not installed in ${paths.root}`,
+      "Run `pnpm install` at the workspace root.",
+    );
+    process.exitCode = 1;
     return;
   }
-  throw new Error(`aiui extension: unknown action "${action}" (install-native-host | status)`);
+
+  // Whatever run wrote the current artifact (if any): the reload must wait for
+  // a *different* one, or we'd reload Chrome onto the previous run's files.
+  const before = readDevStamp(paths.devDir);
+  const child = execa(process.execPath, [vite], {
+    cwd: paths.root,
+    stdio: "inherit",
+    reject: false,
+  });
+  let running = true;
+  void child.finally(() => {
+    running = false;
+  });
+
+  const stamp = await waitForDevArtifact(paths.devDir, before, () => running);
+  if (stamp) {
+    await reloadIntoSessionBrowser(options);
+  } else if (running) {
+    printWarning(
+      "the extension's dev artifact never stamped itself complete — not reloading the browser",
+      "Vite is still running; once it settles, run `aiui extension reload` by hand.",
+    );
+  }
+
+  const result = await child;
+  if (result.exitCode) {
+    process.exitCode = result.exitCode;
+  }
+}
+
+/**
+ * `aiui extension reload` — make the session browser re-read the extension's
+ * directory. The manual half of the loop: after `pnpm build` (you switched
+ * artifacts), after a bare `vite`, or whenever a surface looks stale.
+ */
+async function runExtensionReload(options: ExtensionOptions): Promise<void> {
+  const intent = await findIntentExtension();
+  if (intent.state === "absent") {
+    printError("the @habemus-papadum/aiui-extension package is not resolvable here");
+    process.exitCode = 1;
+    return;
+  }
+  if (intent.state === "unbuilt") {
+    printError(
+      "the intent extension has no artifact to reload",
+      "aiui extension dev   (dev loop)   ·   pnpm -C packages/aiui-extension build   (standalone)",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (intent.mode === "dev") {
+    if (!intent.devServer) {
+      printWarning(
+        `nothing is serving :${intent.devPort}, so the dev artifact will load blank`,
+        "Reloading anyway — start `aiui extension dev` and it will reload again for you.",
+      );
+    } else if (!intent.stamp) {
+      // Server up, no stamp: Vite is mid-write. Waiting is the whole point.
+      const stamp = await waitForDevArtifact(intent.dir, undefined, () => true, 30_000);
+      if (!stamp) {
+        printWarning(
+          "the dev artifact is still being written — reloading now could cache a partial extension",
+          "Wait for the dev server to settle, then rerun `aiui extension reload`.",
+        );
+        process.exitCode = 1;
+        return;
+      }
+    }
+  }
+  await reloadIntoSessionBrowser(options);
+}
+
+/**
+ * Reload the extension in the session browser this directory would use, then
+ * **check what the browser is now actually running** by reading the extension's
+ * own dev stamp back out of it.
+ *
+ * That last step is the difference between hoping and knowing, and it catches
+ * the one failure the two-directory split introduces: Chrome installs an
+ * unpacked extension *by path*, so a browser that was launched (or Load-
+ * unpacked'ed) against `dist/` keeps re-reading `dist/` no matter how many
+ * times you reload it — the dev server's output never arrives, and every
+ * symptom looks exactly like a stale build. The extension tells us which one it
+ * is, so we can say so.
+ */
+async function reloadIntoSessionBrowser(
+  options: ExtensionOptions,
+): Promise<ReloadExtensionResult | undefined> {
+  const intent = await findIntentExtension();
+  const dir = intent.state === "ready" ? intent.dir : undefined;
+  const what =
+    intent.state === "ready"
+      ? intent.mode === "dev"
+        ? `dev build (${intent.dir})`
+        : `production build (${intent.dir})`
+      : "extension";
+
+  const config = loadAiuiConfig();
+  const settings = resolveChromeSettings(
+    { chromeProfile: options.profile, chromeDataDir: options.dataDir },
+    config.chrome ?? {},
+  );
+  const browserUrl =
+    config.chrome?.browserUrl ?? (await discoverSessionBrowser(settings.userDataDir))?.browserUrl;
+  if (!browserUrl) {
+    printNote(
+      "no session browser is running for this profile — nothing to reload",
+      `Start one with \`aiui browser\` (or \`aiui claude\`) and it will load the ${what}.\n` +
+        `(profile: ${settings.userDataDir})`,
+    );
+    return undefined;
+  }
+
+  const extensionId = options.extensionId ?? DEFAULT_EXTENSION_ID;
+  // Only offer the wake page if the loaded artifact actually contains it — a
+  // missing page would open an error document we'd then "succeed" in.
+  const wakePage = dir && existsSync(join(dir, WAKE_PAGE)) ? WAKE_PAGE : undefined;
+  const result = await reloadExtension(browserUrl, { extensionId, wakePage });
+
+  if (!result.ok) {
+    if (result.reason === "not-loaded") {
+      printWarning(
+        "the intent extension is not loaded in the session browser — nothing to reload",
+        `Load it once: chrome://extensions → Developer mode → Load unpacked → ${dir}\n` +
+          "(or relaunch the browser with `aiui browser` — Chrome for Testing auto-loads it).",
+      );
+    } else {
+      printWarning(
+        `couldn't reload the intent extension in ${browserUrl}`,
+        "detail" in result ? result.detail : "",
+      );
+    }
+    return result;
+  }
+
+  console.log(`aiui: reloaded the intent extension in ${browserUrl} (via ${result.via})`);
+  await reportLoadedArtifact(browserUrl, extensionId, wakePage, intent);
+  return result;
+}
+
+/** Ask the reloaded extension which artifact it came from, and say so. */
+async function reportLoadedArtifact(
+  browserUrl: string,
+  extensionId: string,
+  wakePage: string | undefined,
+  intent: Awaited<ReturnType<typeof findIntentExtension>>,
+): Promise<void> {
+  // Give the service worker a moment to come back up after the reload.
+  await sleep(1200);
+  const loaded = await evaluateInExtension<IntentDevStamp | null>(browserUrl, {
+    extensionId,
+    wakePage,
+    expression:
+      "fetch(chrome.runtime.getURL('aiui-dev.json'))" +
+      ".then(r => r.ok ? r.json() : null).catch(() => null)",
+  });
+  if (!loaded.ok) {
+    // Not fatal: the reload itself succeeded, we just couldn't ask.
+    return;
+  }
+  const stamp = loaded.value;
+  const wanted = intent.state === "ready" ? intent : undefined;
+
+  if (!stamp) {
+    if (wanted?.mode === "dev") {
+      printWarning(
+        "the browser is running the PRODUCTION build — your dev server's output is not being loaded",
+        "Chrome installs an unpacked extension by PATH, and this browser was pointed at dist/.\n" +
+          `Point it at the dev artifact once:  chrome://extensions → Load unpacked → ${wanted.dir}\n` +
+          "(removing the old entry first), or relaunch the browser (`aiui browser`) — aiui passes\n" +
+          "the dev artifact on --load-extension whenever its dev server is up.",
+      );
+    } else {
+      console.log("aiui: the browser is running the production build (no dev server needed)");
+    }
+    return;
+  }
+  if (wanted?.mode === "dev" && wanted.stamp && stamp.runId !== wanted.stamp.runId) {
+    printWarning(
+      `the browser is running dev run ${stamp.runId}, but the current artifact is ${wanted.stamp.runId}`,
+      "It reloaded from a different directory than the one this checkout is writing — see\n" +
+        "chrome://extensions for the path it was loaded from.",
+    );
+    return;
+  }
+  console.log(`aiui: the browser is running dev run ${stamp.runId} from ${stamp.origin} ✓`);
+}
+
+/**
+ * Wait until the dev artifact stamps itself complete with a *new* run id, and
+ * its dev server answers. Returns undefined if it never does (Vite died, the
+ * port was squatted, the timeout blew).
+ */
+async function waitForDevArtifact(
+  devDir: string,
+  before: IntentDevStamp | undefined,
+  alive: () => boolean,
+  timeoutMs = 60_000,
+): Promise<IntentDevStamp | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && alive()) {
+    const stamp = readDevStamp(devDir);
+    if (stamp && stamp.runId !== before?.runId && (await devServerAlive(stamp.port))) {
+      return stamp;
+    }
+    await sleep(300);
+  }
+  return undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** The extension package's OWN vite (one Vite instance, its own plugins). */
+function viteBin(root: string): string | undefined {
+  try {
+    const require = createRequire(join(root, "package.json"));
+    return join(dirname(require.resolve("vite/package.json")), "bin", "vite.js");
+  } catch {
+    return undefined;
+  }
 }
 
 function wrapperPath(): string {

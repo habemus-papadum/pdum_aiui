@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -11,7 +11,9 @@ import {
   devtoolsExtensionDir,
   findIntentExtension,
   intentExtensionDevPort,
+  readDevStamp,
   resolveChromeSettings,
+  resolveIntentExtension,
 } from "./chrome";
 
 describe("chromeDevtoolsEnabled", () => {
@@ -229,15 +231,110 @@ describe("devtoolsExtensionDir", () => {
 });
 
 describe("findIntentExtension", () => {
-  it("never reports an unloadable dir", () => {
+  it("never reports an unloadable dir", async () => {
     // Environment-dependent like devtoolsExtensionDir above: the state varies
-    // with whether the extension's dev loop has produced a dist/ here — but
-    // "ready" must always mean a loadable unpacked extension.
-    const intent = findIntentExtension();
+    // with which artifacts this checkout has produced — but "ready" must always
+    // mean a loadable unpacked extension, in one of the two known directories.
+    const intent = await findIntentExtension();
     if (intent.state === "ready") {
-      expect(intent.dir.endsWith(join("aiui-extension", "dist"))).toBe(true);
+      expect(
+        intent.dir.endsWith(join("aiui-extension", "dist")) ||
+          intent.dir.endsWith(join("aiui-extension", "dist-dev")),
+      ).toBe(true);
       expect(existsSync(join(intent.dir, "manifest.json"))).toBe(true);
     }
+  });
+});
+
+describe("resolveIntentExtension", () => {
+  const up = async () => true;
+  const down = async () => false;
+
+  /** A package root with whichever artifacts the test asks for. */
+  function checkout(artifacts: { dev?: "dev"; out?: "dev" | "prod" }) {
+    const root = mkdtempSync(join(tmpdir(), "aiui-intent-"));
+    const paths = { root, devDir: join(root, "dist-dev"), outDir: join(root, "dist") };
+    const write = (dir: string, shape: "dev" | "prod") => {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "manifest.json"), "{}\n");
+      writeFileSync(
+        join(dir, "service-worker-loader.js"),
+        shape === "dev"
+          ? "import 'http://localhost:5317/src/sw.ts';\n"
+          : "import './assets/sw.js';\n",
+      );
+      if (shape === "dev") {
+        writeFileSync(
+          join(dir, "aiui-dev.json"),
+          JSON.stringify({
+            runId: "r1",
+            origin: "http://localhost:5317",
+            port: 5317,
+            startedAt: "now",
+          }),
+        );
+      }
+    };
+    if (artifacts.dev) {
+      write(paths.devDir, artifacts.dev);
+    }
+    if (artifacts.out) {
+      write(paths.outDir, artifacts.out);
+    }
+    return paths;
+  }
+
+  it("reports unbuilt when neither artifact exists", async () => {
+    const paths = checkout({});
+    expect(await resolveIntentExtension(paths, up)).toEqual({ state: "unbuilt", root: paths.root });
+  });
+
+  it("prefers the dev artifact when its dev server is answering", async () => {
+    const paths = checkout({ dev: "dev", out: "prod" });
+    const intent = await resolveIntentExtension(paths, up);
+    expect(intent).toMatchObject({
+      state: "ready",
+      dir: paths.devDir,
+      mode: "dev",
+      devPort: 5317,
+      devServer: true,
+    });
+  });
+
+  it("falls back to the production build when no dev server answers", async () => {
+    const paths = checkout({ dev: "dev", out: "prod" });
+    expect(await resolveIntentExtension(paths, down)).toMatchObject({
+      state: "ready",
+      dir: paths.outDir,
+      mode: "prod",
+    });
+  });
+
+  it("loads a serverless dev artifact anyway when there is no production build", async () => {
+    const paths = checkout({ dev: "dev" });
+    expect(await resolveIntentExtension(paths, down)).toMatchObject({
+      state: "ready",
+      dir: paths.devDir,
+      mode: "dev",
+      devServer: false,
+    });
+  });
+
+  it("never mistakes a pre-split dev-shaped dist/ for a production build", async () => {
+    const paths = checkout({ out: "dev" });
+    const intent = await resolveIntentExtension(paths, down);
+    expect(intent).toMatchObject({
+      state: "ready",
+      dir: paths.outDir,
+      mode: "dev",
+      legacyDevDist: paths.outDir,
+    });
+  });
+
+  it("reads the dev stamp the kit writes when the artifact is complete", () => {
+    const paths = checkout({ dev: "dev" });
+    expect(readDevStamp(paths.devDir)).toMatchObject({ runId: "r1", port: 5317 });
+    expect(readDevStamp(paths.outDir)).toBeUndefined();
   });
 });
 

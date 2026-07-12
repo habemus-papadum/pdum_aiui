@@ -135,24 +135,32 @@ async function printStatus(): Promise<void> {
   }
 
   console.log("\naiui intent-tool extension:");
-  const intent = findIntentExtension();
+  const intent = await findIntentExtension();
   switch (intent.state) {
     case "absent":
       console.log("  not available in this install (the aiui-extension package is not resolvable)");
       break;
     case "unbuilt":
       console.log(
-        "  no dist/ yet — start its dev server: pnpm -C packages/aiui-extension dev\n" +
-          `  (${intent.root})`,
+        `  no artifact yet (${intent.root})\n` +
+          "  develop it:  aiui extension dev                          (writes dist-dev/)\n" +
+          "  just use it: pnpm -C packages/aiui-extension build       (writes dist/)",
       );
       break;
     case "ready":
       console.log(`  ${intent.dir}`);
       console.log(
-        intent.devPort === undefined
-          ? "  production build"
-          : `  dev-mode dist — needs its dev server on :${intent.devPort}`,
+        intent.mode === "prod"
+          ? "  production build — no dev server needed"
+          : intent.devServer
+            ? `  dev build — its dev server is up on :${intent.devPort}` +
+              (intent.stamp ? ` (run ${intent.stamp.runId})` : "")
+            : `  dev build — NOTHING is serving :${intent.devPort}; it will load blank ` +
+              "(`aiui extension dev`)",
       );
+      if (intent.legacyDevDist && intent.legacyDevDist !== intent.dir) {
+        console.log(`  note: ${intent.legacyDevDist} is a stale dev artifact from the old layout`);
+      }
       printAutoloadability(settings.executablePath);
       break;
   }
