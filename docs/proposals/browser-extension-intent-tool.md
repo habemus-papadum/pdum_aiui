@@ -500,8 +500,15 @@ start.)
 |---|---|---|---|
 | disarmed | arm **and** start a turn (arming is implicit; a dedicated arm shortcut wouldn't hurt, later) | page's | page's |
 | armed, no turn | start a turn | **page's** (keyboard is not ours here) | page's |
-| in a turn | step out one level: sub-layer (strip/picker, when they exist) → cancel the turn | same ladder | enter tweak |
+| in a turn | **grant THIS tab** — idempotent, never destructive (see below) | step out one level: sub-layer → cancel the turn | enter tweak |
 | tweak | **resume the open turn** | page's | page's |
+
+**⌘B is idempotent (revised 2026-07-12, after live use).** It was an escape rung — in-turn it
+cancelled — which made the natural gesture on a newly-opened tab ("let aiui see this one")
+silently abandon the turn you were composing. Cancelling belongs to Esc, disarming to `d`. The
+leader now only ever *grants and opens*: its press IS the tabCapture invocation (measured M8),
+so in-turn it re-points the capture surfaces at the active tab and warms its stream — and does
+nothing at all if that tab is already live. **⌘B = "this tab is aiui's to see."**
 
 **Disarm** — abandon everything: ink cleared, partial turn dropped, hands-free/share stopped,
 border off. Reachable via `d` during a turn, the panel's disarm button anytime, maybe a

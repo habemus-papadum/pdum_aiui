@@ -30,7 +30,8 @@ import {
 } from "@habemus-papadum/aiui-webext";
 import { render } from "@solidjs/web";
 import { createEffect, createSignal } from "solid-js";
-import { dataUrlToBytes, isNotInvokedError, type ShotGrab } from "../capture";
+import { isNotInvokedError, type StreamIdReply } from "../capture";
+import { grabShot, holdTabStream, releaseTabStream, streamHeldFor } from "./capture";
 import { ConnectionChip } from "./connection-chip";
 import { createKeysIsland, type KeysIsland } from "./keys-view";
 import {
@@ -281,6 +282,37 @@ function Panel() {
   let lastActiveTab: { id: number; url?: string } | undefined;
 
   /**
+   * The TAB STREAM claim, derived exactly like the ink pointer: the panel holds
+   * a warm tabCapture stream for the active tab while a turn is open, so a shot
+   * is a draw, not an acquisition (measured: acquiring costs ~148ms — paying it
+   * per shot is what made captures feel slow; see panel/capture.ts).
+   *
+   * Failure is NOT fatal here: the invocation gate (a tab never invoked) simply
+   * means no warm stream — `takeShot` then reports the ⌘B remedy. Warming is
+   * silent; only an actual shot complains.
+   */
+  const syncTabStream = async (): Promise<void> => {
+    const tabId = await activeTabId();
+    if (phaseNow !== "turn" || tabId === undefined) {
+      releaseTabStream();
+      return;
+    }
+    if (streamHeldFor(tabId)) {
+      return;
+    }
+    try {
+      await holdTabStream(tabId, async (id) => {
+        const reply = await relayRequest<StreamIdReply>("sw", "streamId", { tabId: id });
+        return reply.streamId;
+      });
+      logDebug("tab stream warm for tab", tabId);
+    } catch (err) {
+      // Expected on a never-invoked tab; the shot path says what to do.
+      logDebug("no warm stream:", err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  /**
    * The ink POINTER claim, DERIVED — never toggled ad hoc. It is on iff a turn
    * is open AND ink mode is on: tweak hands the page back BOTH keyboard and
    * pointer (found live 2026-07-12 — ink kept drawing in tweak), and resuming
@@ -341,12 +373,12 @@ function Panel() {
   };
 
   /**
-   * One whole-viewport shot of the active tab. Dims come from the page itself
-   * (CSS px + dpr) so the SW/offscreen capture can pin the track to the tab's
-   * native size — unconstrained tab tracks default to display-sized
-   * crop-and-scale (measured). The engine event carries the thumb; the PNG
+   * One whole-viewport shot of the active tab — off the WARM stream the panel
+   * already holds (syncTabStream), so this is a draw + an encode and nothing
+   * else: no acquisition (~148ms saved), no offscreen document, no base64
+   * across two message hops. The engine event carries the thumb; the encoded
    * bytes ride the thread socket as an `attachment` chunk keyed by the shot's
-   * marker, exactly the overlay wire's shape.
+   * marker — the overlay wire's exact shape.
    */
   const takeShot = async (): Promise<void> => {
     const win = windowId();
@@ -359,48 +391,48 @@ function Panel() {
       return;
     }
     const takenAt = Date.now();
-    let vp: { w: number; h: number; dpr: number };
+    const tShot = performance.now();
     try {
-      vp = await relayRequestTab<{ w: number; h: number; dpr: number }>(tab.id, "page", "viewport");
-    } catch {
-      // No content script (chrome:// etc.) — tab metrics are CSS px; capture
-      // itself will usually refuse such pages with the invocation error.
-      vp = { w: tab.width ?? 1280, h: tab.height ?? 800, dpr: 1 };
-    }
-    logDebug("capturing…");
-    try {
-      const grab = await relayRequest<ShotGrab>("sw", "capture", {
-        tabId: tab.id,
-        width: vp.w,
-        height: vp.h,
-        dpr: vp.dpr,
-      });
-      // Camera-style confirmation, strictly AFTER the grab returned so the
-      // wash can never be in the frame it confirms. (A same-second burst
-      // could still catch the tail of the previous flash — 240ms, accepted.)
-      // §13.6: manual shots flash (the shotFlash control is the easy off);
-      // share-sampled frames (Phase C) never will.
+      // The stream is normally already warm (the turn warmed it). If it is
+      // not — a tab switch racing the shot, a tab that only just became
+      // invocable — acquire now and pay the ~148ms once.
+      if (!streamHeldFor(tab.id)) {
+        await holdTabStream(tab.id, async (id) => {
+          const reply = await relayRequest<StreamIdReply>("sw", "streamId", { tabId: id });
+          return reply.streamId;
+        });
+      }
+      const shot = await grabShot();
+      // Camera-style confirmation, strictly AFTER the frame is grabbed so the
+      // wash can never be in the frame it confirms. §13.6: manual shots flash
+      // (the shotFlash control is the easy off); share-sampled frames never do.
       if (shotFlash.get()) {
         void relayRequestTab(tab.id, "page", "flash", { kind: "shot" }).catch(() => {});
       }
+      logDebug("shot latency (ms):", {
+        total: Math.round(performance.now() - tShot),
+        ...shot.timing,
+      });
       const marker = engine.shotDone(
-        { x: 0, y: 0, w: vp.w, h: vp.h },
+        { x: 0, y: 0, w: shot.width, h: shot.height },
         [],
-        grab.thumb,
+        shot.thumb,
         undefined,
         true,
         takenAt,
       );
-      await wire.uploadAttachment(marker, "image/png", dataUrlToBytes(grab.png));
-      logInfo(`${marker} captured (${grab.width}×${grab.height})`);
+      // Bytes straight to the wire — the panel owns the socket, so there is
+      // nothing to marshal.
+      await wire.uploadAttachment(marker, shot.mime, shot.bytes);
+      logInfo(`${marker} captured (${shot.width}×${shot.height}, ${shot.timing.kb}KB)`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // The invocation gate is THE sanctioned toast case (misuse feedback);
       // toasts dedupe with ×N, so repeats visibly change.
       toast(
         isNotInvokedError(message)
-          ? "tab not invoked: press ⌘B twice (cancel + reopen the turn invokes THIS tab) " +
-              "or click the aiui toolbar button, then retry"
+          ? "aiui can't see this tab yet — press ⌘B on it (a leader press is what grants " +
+              "capture), then retry"
           : `shot failed: ${message}`,
       );
     }
@@ -535,18 +567,10 @@ function Panel() {
       }
       if (phaseNow === "turn") {
         pointCaptureAt(info.tabId);
-        // The ink POINTER follows the active tab while the mode is on; the
-        // old tab keeps its strokes (deactivated surface, page state).
-        if (inkOn()) {
-          if (inkTabId !== undefined && inkTabId !== info.tabId) {
-            void relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
-          }
-          inkTabId = info.tabId;
-          void relayRequestTab(info.tabId, "page", "ink", {
-            on: true,
-            fadeSec: inkFade.get(),
-          }).catch(() => {});
-        }
+        // Both claims follow the active tab: the ink pointer (the old tab keeps
+        // its strokes — page state) and the capture stream (one per tab).
+        await syncInkPointer();
+        await syncTabStream();
       }
     })();
   });
@@ -686,9 +710,12 @@ function Panel() {
     setBlip(undefined);
     helpOpen = false;
     pointCaptureAt(undefined);
-    if (inkTabId !== undefined) {
-      void relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
-    }
+    // Both media claims are DERIVED from (phase, active tab): leaving the turn
+    // releases the ink pointer (tweak hands the page back keyboard AND pointer)
+    // and the warm capture stream. Strokes and the ink-mode flag persist —
+    // standing state (§13.6).
+    void syncInkPointer();
+    void syncTabStream();
     broadcastRing();
   };
 
@@ -703,15 +730,9 @@ function Panel() {
     const tabId = await activeTabId();
     if (tabId !== undefined && phaseNow === "turn") {
       pointCaptureAt(tabId);
-      // Re-apply the standing ink-mode flag: the pointer claim is per-turn.
-      if (inkOn()) {
-        inkTabId = tabId;
-        void relayRequestTab(tabId, "page", "ink", {
-          on: true,
-          fadeSec: inkFade.get(),
-        }).catch(() => {});
-      }
     }
+    await syncInkPointer(); // re-claims iff the standing ink flag is on
+    void syncTabStream(); // warm the capture stream: a shot becomes a draw
   };
 
   /** The open turn holds something worth lowering (explicit turns can be empty). */
@@ -774,6 +795,7 @@ function Panel() {
     engine.setArmed(false);
     setInkOn(false);
     void inkClear("silent");
+    releaseTabStream();
     // Standing tools (hands-free, share) tear down here when they land
     // (Phase C) — the §13.6 contract is recorded now.
     broadcastRing();
@@ -782,8 +804,16 @@ function Panel() {
 
   /**
    * The leader (⌘B) — the state-dependent verb of §13.6's table:
-   * disarmed → arm + open a turn · armed → open a turn · in-turn → step out
-   * (cancel the turn) · tweak → RESUME the same turn.
+   * disarmed → arm + open a turn · armed → open a turn · tweak → RESUME the
+   * same turn · **in-turn → grant THIS tab** (never destructive).
+   *
+   * Revised 2026-07-12 after live use: ⌘B used to be an escape rung (it
+   * cancelled the open turn), which made the natural gesture on a new tab —
+   * "let aiui see this one" — silently abandon your turn. Cancelling is Esc's
+   * job and disarming is `d`'s; the leader is now IDEMPOTENT. Its press is
+   * itself the tabCapture invocation (measured M8), so in-turn it re-points
+   * the capture surfaces at the active tab and warms its stream; if that tab
+   * is already live it does nothing at all.
    */
   const leaderPress = async (): Promise<void> => {
     switch (phaseNow) {
@@ -802,10 +832,21 @@ function Panel() {
         await enterPhaseTurn();
         logInfo("turn open");
         return;
-      case "turn":
-        endTurn("cancel");
-        logInfo("turn cancelled — still armed");
+      case "turn": {
+        // Idempotent: the press already granted this tab (a commands press is
+        // an invocation); make the surfaces follow it and warm the stream.
+        const tabId = await activeTabId();
+        if (tabId !== undefined) {
+          pointCaptureAt(tabId);
+        }
+        await syncInkPointer();
+        const before = tabId !== undefined && streamHeldFor(tabId);
+        await syncTabStream();
+        if (!before && tabId !== undefined && streamHeldFor(tabId)) {
+          logInfo("this tab is now aiui's to see (capture ready)");
+        }
         return;
+      }
       case "tweak":
         await enterPhaseTurn();
         logInfo("turn resumed");
@@ -952,6 +993,8 @@ function Panel() {
   };
   document.addEventListener("keydown", onPanelKey("down"), true);
   document.addEventListener("keyup", onPanelKey("up"), true);
+  // A held tab stream must never outlive the panel document.
+  window.addEventListener("pagehide", () => releaseTabStream());
 
   // Leader broadcasts: the SW's press notification carries no sender.tab (it
   // is not a content script), so this is its own listener, not a branch of

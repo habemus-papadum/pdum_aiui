@@ -16,9 +16,10 @@
  * Outside a turn NOTHING here runs — armed is presence, not capture, and the
  * page keeps its keys (§13.6 divergence 6 applies only inside turns). ⌘B is
  * not in this table: it is the browser-global `chrome.commands` leader whose
- * state-dependent meaning (arm+turn / turn / ladder / resume) the panel
- * resolves — it must stay global because in tweak the page owns every
- * ordinary key and only the leader can reach us.
+ * state-dependent meaning the panel resolves — arm+turn / open a turn /
+ * **grant this tab** (in-turn, idempotent — never cancels; that is Esc's job)
+ * / resume from tweak. It must stay global because in tweak the page owns
+ * every ordinary key and only the leader can reach us.
  *
  * Built on the modal kit (`aiui-viz/modal`) — same machinery as the overlay's
  * keymap, deliberately different grammar (the §13.6 divergence ledger). The
@@ -234,7 +235,7 @@ export function leaderHelp(): KeymapHelpSection[] {
   const base = leaderHints(at());
   const inking = leaderHints(at({ inkOn: true }));
   const fresh = inking.filter((h) => !base.some((b) => b.key === h.key));
-  const leaderRow: KeyHint = { key: "⌘B", label: "open / cancel / resume the turn", icon: "✳" };
+  const leaderRow: KeyHint = { key: "⌘B", label: "open a turn · grant this tab", icon: "✳" };
   return [
     {
       title: "in a turn",

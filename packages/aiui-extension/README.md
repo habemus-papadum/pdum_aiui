@@ -117,8 +117,13 @@ is the state-dependent verb; nothing else opens a turn:
 |---|---|---|
 | disarmed | arm **and** start a turn | page's |
 | armed, no turn | start a turn | page's (keyboard is not captured here) |
-| in a turn | cancel the turn (stay armed) | same |
+| in a turn | **grant this tab** (idempotent — warms capture; never cancels) | cancel the turn (stay armed) |
 | tweak | **resume the turn** | page's |
+
+**⌘B never destroys anything.** A leader press is itself the tabCapture invocation, so pressing
+it on a new tab is how you say *"this tab is aiui's to see"* — mid-turn it re-points capture at
+that tab and warms its stream, and does nothing if the tab is already live. Cancel is `esc`;
+disarm is `d`.
 
 **Armed is presence, not capture**: steady ring, everything passes through to the page.
 **In a turn** the page keyboard routes to aiui (breathing ring; the panel's fields stay

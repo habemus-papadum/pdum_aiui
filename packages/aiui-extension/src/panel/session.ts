@@ -16,8 +16,22 @@ import { type BusState, connectSessionBus, INITIAL_BUS_STATE, type SessionBusCli
 import { type ChannelEntry, channelLabel, probeHealth, saveRecentPort } from "./channel";
 import { discoverOnce } from "./model/graph";
 
-/** Per-window auto-reconnect memory (storage.session dies with the browser). */
+/**
+ * Auto-reconnect memory. TWO keys, on purpose (fixed live 2026-07-12 — the
+ * panel stopped auto-binding):
+ *
+ *  - per-window, in `storage.session`: which channel THIS window was on. Right
+ *    scope, but session storage dies with the browser AND with every extension
+ *    reload (which, in development, is constantly).
+ *  - a global "last bound port", in `storage.local`: survives both. It is the
+ *    fallback when the window has no memory of its own — a new window, a
+ *    restarted browser, a reloaded extension.
+ *
+ * Either way the port is PROBED before use, so a remembered channel that has
+ * since died just falls through to discovery.
+ */
 const lastPortKey = (windowId: number | undefined): string => `aiui.lastPort.win${windowId ?? 0}`;
+const LAST_PORT_GLOBAL = "aiui.lastPort";
 
 export interface SessionHandle {
   /** The live bus state, for the chip (connected/connecting) and peers. */
@@ -87,19 +101,33 @@ export function createSession(): SessionHandle {
   const connect = (entry: ChannelEntry): Promise<void> =>
     connectPort(entry.port, channelLabel(entry));
 
-  // Boot: one discovery pass (shared with the cell via discoverOnce), then
-  // auto-reconnect the remembered port; with nothing remembered and exactly
-  // ONE channel discovered, bind it (decided 2026-07-11 — the cold ⌘B flow
-  // shouldn't stall on a click with one possible answer).
+  // Boot: reconnect the channel this window was on — or, failing that, the
+  // last channel ANY window bound (the global memory: an extension reload wipes
+  // session storage, and in development that happens constantly). A remembered
+  // port is only used if it is STILL RUNNING (discovery answers that), so a
+  // dead channel degrades to the single-channel auto-bind, then to a manual
+  // pick. Discovery runs once here and is shared with the cell via discoverOnce.
   void (async () => {
     const key = lastPortKey(await windowIdReady);
-    const remembered = (await chrome.storage.session.get(key))[key];
+    const perWindow = (await chrome.storage.session.get(key))[key];
+    const global = (await chrome.storage.local.get(LAST_PORT_GLOBAL))[LAST_PORT_GLOBAL];
     const found = (await discoverOnce()).list;
-    if (typeof remembered === "number") {
+
+    for (const remembered of [perWindow, global]) {
+      if (typeof remembered !== "number") {
+        continue;
+      }
       const entry = found.find((c) => c.port === remembered);
-      void connectPort(remembered, entry !== undefined ? channelLabel(entry) : `:${remembered}`);
-      return;
+      if (entry === undefined) {
+        continue; // remembered, but no longer running — try the next memory
+      }
+      await connect(entry);
+      if (boundPort() === entry.port) {
+        setStatus(`reconnected to :${entry.port}`);
+        return;
+      }
     }
+
     if (found.length === 1) {
       await connect(found[0]);
       if (boundPort() === found[0].port) {

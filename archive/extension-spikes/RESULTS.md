@@ -217,3 +217,43 @@ browser's `--auto-accept-camera-and-microphone-capture` flag. `permissions.query
 talk can live in the panel document in the dev posture with zero friction; a browser without
 the flag will need a one-time grant flow (options-page dance) — design it when a non-flagged
 target matters. (Phase C0.1; plan: packages/aiui-extension/docs/PHASE-C-PLAN.md.)
+
+## M10 — the SIDE PANEL consumes a tabCapture stream id · **MEASURED (live, CfT 150, macOS, 2026-07-12)**
+
+**YES** — the architectural pivot of the media design. The SW minted
+`tabCapture.getMediaStreamId({targetTabId})` and the *panel document* consumed it with
+`getUserMedia({video:{mandatory:{chromeMediaSource:"tab", chromeMediaSourceId}}})`: real
+3840×1600 track, first frame presented. So the panel is the media hub — engine, preview,
+channel socket, mic (M9) and tab video in ONE context; no offscreen document, no
+cross-process marshalling. Measured on that frame:
+
+| stage | cost |
+|---|---|
+| acquire (gUM + play + first presented frame) | **148 ms** |
+| PNG encode | 40 ms → 790 KB |
+| WebP q0.9 encode | 180 ms → 55 KB (Chrome's canvas WebP encoder is SLOW) |
+| JPEG q0.85 encode | **23 ms → 128 KB** |
+
+Consequence (shipped same day): warm stream held per open turn, JPEG full frames, bytes
+straight to the panel's own socket. The offscreen capture room and its base64-through-two-
+`chrome.runtime`-hops path are deleted; the `offscreen` permission is gone.
+
+## M11 — `tabs.captureVisibleTab` · **MEASURED (live, CfT 150, macOS, 2026-07-12)**
+
+Fails without `<all_urls>`/`activeTab` host permission ("Either the '<all_urls>' or
+'activeTab' permission is required") — our manifest deliberately has neither. Moot anyway:
+M10's direct path is faster per shot (draw + 23 ms encode off a warm stream) and costs no
+new permission. Not adopted.
+
+## M12 — visible capture indicator during tabCapture · **MEASURED (human eye, CfT 150, macOS, 2026-07-12)**
+
+**None.** During a held tabCapture stream + repeated shots: no "sharing this tab" bar, no
+tab-strip badge, nothing user-visible (user-confirmed while shooting). Tab capture satisfies
+the no-visual-artifacts constraint; `getDisplayMedia` (which shows a bar) stays unnecessary.
+
+## M13 — perceived shot latency on the warm-stream path · **MEASURED (live, CfT 150, macOS, 2026-07-12)**
+
+Keypress (`s`) → shot thumb VISIBLE in the transcript preview (MutationObserver on the
+preview body), three consecutive shots: **48 / 42 / 36 ms**. The old path (per-shot stream
+acquire + PNG + base64 relay through SW/offscreen) was a few hundred ms end-to-end. JPEG
+full frames of real pages land at ~315–330 KB (vs 790 KB PNG).

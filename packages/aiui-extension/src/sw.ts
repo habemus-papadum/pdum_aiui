@@ -9,17 +9,16 @@
  * picker-free capture on (invocation-gated, per tab, durable across SW
  * restarts until navigation/tab close) — and opens this window's side panel.
  *
- * Capture plumbing (proposal §1: getMediaStreamId + offscreen management live
- * here): the panel asks `sw/capture`, this worker mints a stream id for the
- * target tab and hands it to the offscreen document, which grabs ONE frame
- * and stops the stream (one-stream-per-tab economy). The worker holds nothing.
+ * Capture plumbing, as of 2026-07-12 (measured, RESULTS.md M10): this worker
+ * mints a `tabCapture` stream id — the one thing only it can do (privileged,
+ * invocation-gated) — and hands the ID to the panel, which consumes it with
+ * `getUserMedia` and does all the pixel work in its own document. The offscreen
+ * capture room is GONE: a side panel can consume a tab stream directly, so the
+ * frame never crosses a process boundary and never becomes a base64 string
+ * (see src/panel/capture.ts for the latency budget that motivated it).
  */
-import { ensureOffscreenDocument, relayRequest, serveRelay } from "@habemus-papadum/aiui-webext";
-import type { CaptureRequest, ShotGrab } from "./capture";
+import { serveRelay } from "@habemus-papadum/aiui-webext";
 import type { PendingLeader } from "./panel/leader";
-
-/** The static capture room under public/ — see that file for why it's static. */
-const OFFSCREEN_URL = "offscreen.html";
 
 /** tabId → ISO time of the last action click in THIS worker's lifetime. */
 const invocations = new Map<number, string>();
@@ -94,24 +93,13 @@ function getMediaStreamId(targetTabId: number): Promise<string> {
 
 serveRelay("sw", {
   /**
-   * One shot of the given tab: offscreen doc first (a fresh stream id expires
-   * within seconds if unconsumed), then the id, then the grab. Returns the
-   * offscreen document's {@link ShotGrab} to the panel unchanged.
+   * Mint a tabCapture stream id for `tabId` — the panel consumes it (M10). A
+   * fresh id expires within seconds if unconsumed, so the panel asks for one
+   * only when it is about to hold the stream.
    */
-  capture: async (payload) => {
-    const req = payload as CaptureRequest;
-    await ensureOffscreenDocument(
-      OFFSCREEN_URL,
-      ["USER_MEDIA" as chrome.offscreen.Reason],
-      "Grab single tab-capture frames for intent-tool shots",
-    );
-    const streamId = await getMediaStreamId(req.tabId);
-    return await relayRequest<ShotGrab>("offscreen", "grab", {
-      streamId,
-      width: req.width,
-      height: req.height,
-      dpr: req.dpr,
-    });
+  streamId: async (payload) => {
+    const { tabId } = payload as { tabId: number };
+    return { streamId: await getMediaStreamId(tabId) };
   },
   /** Invocations seen by this worker instance (per-lifetime, see module doc). */
   invocations: () => Object.fromEntries(invocations),

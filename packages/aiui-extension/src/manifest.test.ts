@@ -23,7 +23,6 @@ describe("extension manifest", () => {
       "nativeMessaging",
       "tabs",
       "tabCapture",
-      "offscreen",
     ]);
   });
 

@@ -59,10 +59,11 @@ export default defineManifest({
   },
   // "tabs": the turn hello carries the active tab's url/title (context for
   // the lowered prompt's preamble); without it query() returns bare tabs.
-  // "tabCapture" + "offscreen": the shot path — invocation-gated
-  // getMediaStreamId in the SW, one-frame getUserMedia consumption in the
-  // offscreen document (public/offscreen.js).
-  permissions: ["sidePanel", "storage", "nativeMessaging", "tabs", "tabCapture", "offscreen"],
+  // "tabCapture": the shot path — the SW mints an invocation-gated stream id
+  // and the PANEL consumes it with getUserMedia (measured, RESULTS.md M10).
+  // No "offscreen": a side panel can hold the stream itself, so the offscreen
+  // capture room (and its base64 round-trip) is gone.
+  permissions: ["sidePanel", "storage", "nativeMessaging", "tabs", "tabCapture"],
   // Loopback only: the panel probes /health and /debug/api/channels over
   // fetch (CORS-gated without this) — same grant as aiui-devtools-extension.
   host_permissions: ["http://127.0.0.1/*", "http://localhost/*"],
