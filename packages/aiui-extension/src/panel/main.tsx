@@ -187,7 +187,14 @@ function Panel() {
   // PULL selection model (decided 2026-07-11): nothing enters the turn until
   // the user's explicit "add selection", which opens the turn itself when none
   // is open (engine.appSelection arms-gated thread opening). No staging.
-  const [selectionPresent, setSelectionPresent] = createSignal(false);
+  const [selectionPresent, setSelectionPresentSignal] = createSignal(false);
+  // Mirrored for the same reason as inkOnNow: the caps re-render from a plain
+  // read right after this changes (the 📋 cap stayed lit after a deselect).
+  let selectionPresentNow = false;
+  const setSelectionPresent = (present: boolean): void => {
+    selectionPresentNow = present;
+    setSelectionPresentSignal(present);
+  };
 
   /** The active tab's identity, for the hello's context block. */
   const activeTabMeta = async (): Promise<Record<string, unknown> | undefined> => {
@@ -254,10 +261,16 @@ function Panel() {
 
   // ── capture state: shots + per-tab ink (step 5) ────────────────────────────
   // The standing ink-mode flag lives in the store (durableSignal — §13.6
-  // standing state, survives panel hot swaps); these accessors keep the
-  // machine code reading like a signal.
-  const inkOn = (): boolean => inkMode.get();
+  // standing state, survives panel hot swaps), MIRRORED into a plain variable:
+  // Solid defers writes, so `set(x)` followed by a read in the same flow gives
+  // the STALE value — and the machine reads it immediately (the pointer claim,
+  // the ✏️ cap). That inverted both (found live 2026-07-12; same trap as
+  // `phaseNow`). Rule: never read a signal to decide something in the flow
+  // that wrote it.
+  let inkOnNow = inkMode.get();
+  const inkOn = (): boolean => inkOnNow;
   const setInkOn = (on: boolean): void => {
+    inkOnNow = on;
     inkMode.set(on);
   };
   /** The tab whose content script holds the ink surface, while ink is on. */
@@ -458,6 +471,7 @@ function Panel() {
     };
     if (m.aiuiSelectionPresence === 1) {
       setSelectionPresent(m.present === true);
+      syncIslands(); // the 📋 cap follows the page's selection live
     }
     if (
       m.aiuiStroke === 1 &&
@@ -586,16 +600,21 @@ function Panel() {
     phaseNow = p;
     setPhaseSignal(p);
   };
-  /** The rejected key currently blipping in the strip (`× g`), if any. */
-  const [blip, setBlip] = createSignal<string | undefined>();
+  /** The rejected key currently blipping (`× g`), if any. A plain variable:
+   * only the imperative caps island reads it, synchronously (a signal here
+   * fired Solid's STRICT_READ_UNTRACKED and could serve a stale value). */
+  let blipNow: string | undefined;
+  const setBlip = (key: string | undefined): void => {
+    blipNow = key;
+  };
   let blipTimer: number | undefined;
   /** The tab whose content script holds the key capture, while in-turn. */
   let leaderTabId: number | undefined;
 
   const leaderState = (): LeaderState => ({
     phase: phaseNow === "disarmed" ? "armed" : (phaseNow as "armed" | "turn" | "tweak"),
-    inkOn: inkOn(),
-    selectionPresent: selectionPresent(),
+    inkOn: inkOnNow,
+    selectionPresent: selectionPresentNow,
   });
 
   // ── the shared imperative islands (the overlay's Preview + CheatSheet +
@@ -614,7 +633,7 @@ function Panel() {
   /** Re-assert both islands from the CURRENT state. Plain callbacks only. */
   const syncIslands = (): void => {
     previewIsland?.sync(phaseNow === "turn" || phaseNow === "tweak");
-    keysIsland?.sync(leaderState(), helpOpen, blip());
+    keysIsland?.sync(leaderState(), helpOpen, blipNow);
   };
 
   queueMicrotask(() => {

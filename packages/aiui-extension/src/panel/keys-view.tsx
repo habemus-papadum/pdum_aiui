@@ -26,37 +26,56 @@ const KEYS_STYLES = `
 ${CHEAT_STYLES}
 ${KEYMAP_HELP_STYLES}
 /* The CAPS STRIP is the command bar: visible whenever a turn is open (the
-   panel's primary surface — every act has a cap, lit when engaged). */
+   panel's primary surface — every act has a cap, lit when engaged). Bigger
+   than the overlay's page version: this is the panel's main affordance, not a
+   corner cheat sheet. */
 .keys-bar { margin: 0 0.125rem 0.5rem; }
 .keys-bar[hidden] { display: none; }
 .keys-bar .mm-cheat-wrap { display: block; }
 .keys-bar .mm-cheat {
   max-width: 100%; width: 100%; margin: 0; box-sizing: border-box;
   background: var(--surface-2); border-color: var(--border-2);
+  gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 10px;
 }
-/* The HELP TABLE is a popup: ? (or the ❓ cap) opens it, ✕/Esc/? dismiss. */
+.keys-bar .mm-keycap {
+  width: 2.25rem; height: 2rem; border-radius: 8px; border-width: 2px;
+}
+.keys-bar .mm-keyicon { font-size: 1.125rem; }
+/* The lit ring: 2px and inset-free reads clean at this size (1px hairlines
+   looked jagged on the emoji caps — reported live 2026-07-12). */
+.keys-bar .mm-keycap.active {
+  border-color: var(--ok); background: var(--ok-bg);
+  box-shadow: 0 0 0 1px var(--ok-border);
+}
+.keys-bar .mm-cheat-tip { font-size: 0.75rem; padding: 0.25rem 0.625rem; }
+
+/* The KEYMAP popup: covers the TOP of the panel (the caps and transcript live
+   there — a bottom sheet fought them), two columns, larger type. ✕/Esc/? exit. */
 .keys-island {
-  position: fixed; left: 0.625rem; right: 0.625rem; bottom: 0.625rem; z-index: 70;
+  position: fixed; left: 0.625rem; right: 0.625rem; top: 0.625rem; z-index: 70;
+  max-height: 80vh; overflow: auto;
   background: var(--surface); border: 1px solid var(--border-2); border-radius: 10px;
-  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5); padding: 0.5rem 0.625rem;
-  max-height: 70vh; overflow: auto;
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.6); padding: 0.625rem 0.75rem;
 }
 .keys-island[hidden] { display: none; }
 .keys-head {
-  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.375rem;
-  font: 0.6875rem ui-monospace, monospace; color: var(--muted);
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;
+  font: 600 0.8125rem ui-sans-serif, system-ui, sans-serif; color: var(--text-2);
 }
 .keys-head .keys-x {
   margin-left: auto; background: none; border: none; color: var(--text-2);
-  cursor: pointer; font-size: 0.75rem; padding: 0;
+  cursor: pointer; font-size: 0.875rem; padding: 0;
 }
 .keys-island .mm-keymap-help {
-  height: auto; max-height: 40vh; column-width: 11rem; overflow-y: auto;
-  margin-top: 0.5rem;
+  height: auto; max-height: none; overflow: visible; margin: 0;
+  columns: 2; column-gap: 1rem; column-fill: balance;
+  font-size: 0.8125rem;
 }
+.keys-island .mm-help-section { break-inside: avoid; margin-bottom: 0.75rem; }
+.keys-island .mm-help-row, .keys-island .mm-help-title { font-size: 0.8125rem; }
 .keys-blip {
-  font: 0.6875rem ui-monospace, monospace; color: var(--warn);
-  margin: 0.25rem 0 0;
+  font: 0.75rem ui-monospace, monospace; color: var(--warn);
+  margin: 0.375rem 0 0;
 }
 `;
 
