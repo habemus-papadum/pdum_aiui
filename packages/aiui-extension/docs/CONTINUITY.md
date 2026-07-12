@@ -254,6 +254,9 @@ Open design questions parked from live use (2026-07-11):
 
 Debugging access (what an agent/human can see into the extension, measured; incl. the
 chrome-devtools-MCP stale-attach limitation and the wishlist): `docs/DEBUGGING.md`.
+Phase C (port the overlay's full tool — command bar, preview, talk, share, iPad ink, trace
+viewer — into the panel via the host seam, zero logic duplication): `docs/PHASE-C-PLAN.md`
+(plan under user review; not started).
 
 ```
 packages/aiui-webext/src/           vite.ts · relay.ts · panes.tsx · indicator.ts · offscreen.ts
