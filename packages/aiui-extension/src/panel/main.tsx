@@ -31,7 +31,6 @@ import {
 import { render } from "@solidjs/web";
 import { createEffect, createSignal } from "solid-js";
 import { dataUrlToBytes, isNotInvokedError, type ShotGrab } from "../capture";
-import { CapturePane } from "./capture-pane";
 import { ConnectionChip } from "./connection-chip";
 import { createKeysIsland, type KeysIsland } from "./keys-view";
 import {
@@ -143,9 +142,15 @@ const PANEL_STYLES = `
     cursor: pointer; font-size: 0.6875rem; padding: 0;
   }
   .toast-body { padding: 0.375rem 0.5rem; }
-  /* The embedded trace debugger: bounded height, its own scroll. */
+  /* The transcript's slot: full panel width (a pane's padding was clipping
+     its right edge — found live 2026-07-12). */
+  .transcript { margin: 0 0.125rem 0.625rem; }
+  /* The embedded trace debugger. Its layout is a flex COLUMN (list flex:none,
+     view flex:1, both min-height:0) — it needs a DEFINITE height or the view
+     collapses to zero and only the list shows (found live 2026-07-12). */
   .trace-host { width: 100%; }
-  .trace-host .aiui-dbgt { max-height: 26rem; overflow: auto; }
+  .trace-host .aiui-dbgt { height: 30rem; max-height: 70vh; overflow: hidden; }
+  .trace-host .aiui-dbgt-list { max-height: 40%; }
   .leader {
     font: 0.6875rem ui-monospace, monospace; color: var(--text-2);
     border: 1px solid var(--border-2); background: var(--surface-2); border-radius: 6px;
@@ -263,19 +268,29 @@ function Panel() {
   let lastActiveTab: { id: number; url?: string } | undefined;
 
   /**
-   * Leave ink MODE: release the tab's pointer, KEEP the strokes on screen
-   * (decided live 2026-07-11 — exiting the mode must not erase the sketch;
-   * that surprised as data loss). No engine event: nothing was cleared.
-   * `inkTabId` stays set while strokes remain, so a later clear finds them.
+   * The ink POINTER claim, DERIVED — never toggled ad hoc. It is on iff a turn
+   * is open AND ink mode is on: tweak hands the page back BOTH keyboard and
+   * pointer (found live 2026-07-12 — ink kept drawing in tweak), and resuming
+   * re-claims it. The mode FLAG and the strokes are untouched (standing
+   * state, §13.6). Resolved against the LIVE active tab, so a tab switch or a
+   * stale id can't strand the claim.
    */
-  const inkModeOff = async (): Promise<void> => {
-    if (!inkOn()) {
+  const syncInkPointer = async (): Promise<void> => {
+    const want = phaseNow === "turn" && inkOn();
+    const tabId = await activeTabId();
+    if (inkTabId !== undefined && (!want || inkTabId !== tabId)) {
+      await relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
+      if (!want) {
+        return;
+      }
+    }
+    if (!want || tabId === undefined) {
       return;
     }
-    setInkOn(false);
-    if (inkTabId !== undefined) {
-      await relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
-    }
+    inkTabId = tabId;
+    await relayRequestTab(tabId, "page", "ink", { on: true, fadeSec: inkFade.get() }).catch(
+      () => {},
+    );
   };
 
   /**
@@ -302,44 +317,14 @@ function Panel() {
 
   /**
    * The ink MODE toggle. The flag is standing state (§13.6 — it outlives
-   * turns); the POINTER claim it implies is per-turn: toggling on outside a
-   * turn just sets the flag, and the next turn entry claims the pointer.
+   * turns); the POINTER claim it implies is DERIVED (syncInkPointer), so a
+   * toggle outside a turn just arms the flag and the next turn entry claims.
    */
   const toggleInkMode = (): void => {
-    if (inkOn()) {
-      void inkModeOff();
-    } else if (phaseNow === "turn") {
-      void inkModeOn();
-    } else {
-      setInkOn(true);
-      logInfo("ink mode on (standing) — the pointer claims when a turn opens");
-    }
-  };
-
-  const inkModeOn = async (): Promise<void> => {
-    const win = windowId();
-    if (win === undefined) {
-      return;
-    }
-    const [tab] = await chrome.tabs.query({ active: true, windowId: win });
-    if (tab?.id === undefined) {
-      toast("ink needs an active tab");
-      return;
-    }
-    try {
-      await relayRequestTab(tab.id, "page", "ink", {
-        on: true,
-        fadeSec: inkFade.get(),
-      });
-    } catch (err) {
-      toast(
-        `ink can't reach this page (reload it?): ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return;
-    }
-    inkTabId = tab.id;
-    setInkOn(true);
-    logInfo("ink on — pointer claimed");
+    setInkOn(!inkOn());
+    void syncInkPointer();
+    syncIslands(); // the ✏️ cap follows the flag
+    logInfo(inkOn() ? "ink mode on" : "ink mode off (strokes stay)");
   };
 
   /**
@@ -633,7 +618,13 @@ function Panel() {
 
   queueMicrotask(() => {
     previewIsland = createPreviewIsland(engine);
-    keysIsland = createKeysIsland((key) => applyLeaderKey(key, "down", false));
+    keysIsland = createKeysIsland(
+      (key) => applyLeaderKey(key, "down", false),
+      () => {
+        helpOpen = false;
+        syncIslands();
+      },
+    );
     previewHost?.append(previewIsland.root);
     keysHost?.append(keysIsland.root);
     syncIslands();
@@ -866,6 +857,12 @@ function Panel() {
       return "pass";
     }
     if (verdict.kind === "action") {
+      // The keys popup is a LAYER: Esc dismisses it before the turn's rung.
+      if (verdict.action === "cancel" && helpOpen) {
+        helpOpen = false;
+        syncIslands();
+        return "handled";
+      }
       leaderDispatch(verdict.action);
     } else if (verdict.kind === "ignored") {
       blipKey(verdict.key);
@@ -1077,6 +1074,21 @@ function Panel() {
         <span class="win">win {windowId() ?? "?"}</span>
       </div>
       <Toasts />
+      {phase() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
+      {/* The transcript lives directly under the command bar — permanently
+          visible, not a pane tenant (the Turn pane is a temporary helper and
+          will retire into the command bar). */}
+      <div
+        class="transcript"
+        ref={(el: HTMLDivElement) => {
+          previewHost = el;
+          if (previewIsland !== undefined) {
+            el.append(previewIsland.root);
+          }
+        }}
+      />
+      {/* The keys popup (?): a fixed, dismissible overlay — never a permanent
+          tenant of the panel. */}
       <div
         ref={(el: HTMLDivElement) => {
           keysHost = el;
@@ -1085,7 +1097,6 @@ function Panel() {
           }
         }}
       />
-      {phase() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
       <PaneStack>
         <TurnPane
           engine={engine}
@@ -1100,22 +1111,6 @@ function Panel() {
           loweredPrompt={loweredPrompt}
           onAddSelection={() => void addSelection()}
           selectionPresent={selectionPresent}
-          previewHostRef={(el: HTMLElement) => {
-            previewHost = el;
-            if (previewIsland !== undefined) {
-              el.append(previewIsland.root);
-            }
-          }}
-        />
-        <CapturePane
-          engine={engine}
-          rev={rev}
-          onShot={() =>
-            phaseNow === "turn" ? void takeShot() : toast("no turn open — ⌘B starts one")
-          }
-          inkOn={inkOn}
-          onInkToggle={() => toggleInkMode()}
-          onInkClear={() => void inkClear("manual")}
         />
         <TracePane session={session} />
         <Pane title="Dev" defaultOpen={false} hint="probes">

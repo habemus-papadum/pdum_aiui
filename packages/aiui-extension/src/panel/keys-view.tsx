@@ -25,15 +25,31 @@ const STYLE_ID = "aiui-panel-keys-styles";
 const KEYS_STYLES = `
 ${CHEAT_STYLES}
 ${KEYMAP_HELP_STYLES}
-.keys-island { margin: 0 0.125rem 0.5rem; }
+/* The keys popup: shown on ? (or the ❓ cap), dismissed by ?/Esc/the ✕.
+   Never a permanent tenant of the panel — the transcript owns that space. */
+.keys-island {
+  position: fixed; left: 0.625rem; right: 0.625rem; bottom: 0.625rem; z-index: 70;
+  background: var(--surface); border: 1px solid var(--border-2); border-radius: 10px;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5); padding: 0.5rem 0.625rem;
+  max-height: 70vh; overflow: auto;
+}
+.keys-island[hidden] { display: none; }
+.keys-head {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.375rem;
+  font: 0.6875rem ui-monospace, monospace; color: var(--muted);
+}
+.keys-head .keys-x {
+  margin-left: auto; background: none; border: none; color: var(--text-2);
+  cursor: pointer; font-size: 0.75rem; padding: 0;
+}
 .keys-island .mm-cheat-wrap { display: block; }
 .keys-island .mm-cheat {
   max-width: 100%; width: 100%; margin: 0; box-sizing: border-box;
   background: var(--surface-2); border-color: var(--border-2);
 }
 .keys-island .mm-keymap-help {
-  height: auto; max-height: 18rem; column-width: 11rem; overflow-y: auto;
-  margin-top: 0.375rem;
+  height: auto; max-height: 40vh; column-width: 11rem; overflow-y: auto;
+  margin-top: 0.5rem;
 }
 .keys-blip {
   font: 0.6875rem ui-monospace, monospace; color: var(--warn);
@@ -43,12 +59,15 @@ ${KEYMAP_HELP_STYLES}
 
 export interface KeysIsland {
   readonly root: HTMLElement;
-  /** Re-assert the caps, the help table, and the blip line. */
-  sync(state: LeaderState, helpOpen: boolean, blip: string | undefined): void;
+  /** Re-assert the popup's visibility, its caps, and the blip line. */
+  sync(state: LeaderState, open: boolean, blip: string | undefined): void;
 }
 
-/** Build the keys island. Call OUTSIDE any effect (see the module doc). */
-export function createKeysIsland(onKey: (key: string) => void): KeysIsland {
+/**
+ * Build the keys popup. `onKey` fires a synthesized key through the panel's
+ * resolver (cap taps); `onClose` is the ✕. Call OUTSIDE any effect.
+ */
+export function createKeysIsland(onKey: (key: string) => void, onClose: () => void): KeysIsland {
   if (document.getElementById(STYLE_ID) === null) {
     const style = document.createElement("style");
     style.id = STYLE_ID;
@@ -64,15 +83,28 @@ export function createKeysIsland(onKey: (key: string) => void): KeysIsland {
   blipLine.className = "keys-blip";
   blipLine.hidden = true;
 
+  const head = document.createElement("div");
+  head.className = "keys-head";
+  const title = document.createElement("span");
+  title.textContent = "keys";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "keys-x";
+  close.textContent = "✕";
+  close.addEventListener("click", onClose);
+  head.append(title, close);
+
   const root = document.createElement("div");
   root.className = "keys-island";
-  root.append(cheat.root, blipLine, help.root);
+  root.hidden = true;
+  root.append(head, cheat.root, blipLine, help.root);
+  help.root.hidden = false; // the popup IS the help; no nested toggle
 
   return {
     root,
-    sync(state, helpOpen, blip) {
-      cheat.update(leaderHints(state), state.phase === "turn");
-      help.root.hidden = !helpOpen || state.phase !== "turn";
+    sync(state, open, blip) {
+      root.hidden = !open;
+      cheat.update(leaderHints(state), true);
       blipLine.hidden = blip === undefined;
       blipLine.textContent = blip === undefined ? "" : `× ${blip} — not a key here`;
     },

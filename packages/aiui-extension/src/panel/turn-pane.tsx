@@ -1,11 +1,10 @@
 /**
- * Compose + Turn: the panel's turn-driving UI. The turn's CONTENT renders
- * through the overlay's real transcript preview (Phase C4 — PreviewView: the
- * compiler's accumulator, word-confidence heat, animated diffs, shot thumbs
- * with ✕ retraction, selection pills); this pane keeps the acts around it —
- * the compose box (text → `engine.contribute`, one segment per submission),
- * the selection slurp, Send (the wire fins, the channel lowers, the prompt
- * lands in the session) and cancel.
+ * The Turn pane — a TEMPORARY helper (it retires into the command bar): the
+ * compose box (text → `engine.contribute`, one segment per submission), the
+ * selection slurp, Send and cancel. The turn's CONTENT is not here: the
+ * transcript preview lives directly under the command bar, permanently
+ * visible (main.tsx), because it is the panel's centre of gravity — not a
+ * pane tenant.
  */
 
 import type { Engine } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
@@ -29,8 +28,6 @@ export interface TurnPaneProps {
   onAddSelection: () => void;
   /** The active tab currently has a non-empty selection (affordance only). */
   selectionPresent: () => boolean;
-  /** Host for the transcript-preview island (built outside the reactive graph). */
-  previewHostRef: (el: HTMLElement) => void;
 }
 
 export function TurnPane(props: TurnPaneProps) {
@@ -93,7 +90,6 @@ export function TurnPane(props: TurnPaneProps) {
           </button>
         </Show>
       </div>
-      <div ref={(el: HTMLDivElement) => props.previewHostRef(el)} />
       <Show when={props.loweredPrompt() !== undefined}>
         <details>
           <summary class="kv">last sent prompt (as lowered)</summary>
