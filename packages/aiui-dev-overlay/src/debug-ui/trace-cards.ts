@@ -566,10 +566,14 @@ export function speculativePromptText(stages: TraceStageLike[] | undefined): str
     if (!(stage.label ?? "").startsWith("composed (speculative)")) {
       continue;
     }
+    // The NEWEST fold wins — including an empty one. Skipping empties (the
+    // old rule) resurrected the previous fold after the user retracted the
+    // turn's last item: three shots deleted one by one left the hero showing
+    // the two-shot prompt forever (seen live 2026-07-13). An empty latest
+    // fold means the turn currently HAS no content, and the hero's
+    // "no prompt" note is the truthful render of that.
     const prompt = (stage.data as { prompt?: unknown } | undefined)?.prompt;
-    if (typeof prompt === "string" && prompt !== "") {
-      return prompt;
-    }
+    return typeof prompt === "string" ? prompt : "";
   }
   return "";
 }

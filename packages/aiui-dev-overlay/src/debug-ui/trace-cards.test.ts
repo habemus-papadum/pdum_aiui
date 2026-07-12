@@ -655,14 +655,18 @@ describe("speculativePromptText (the hero's in-flight fallback)", () => {
     data: { transcript, prompt },
   });
 
-  it("returns the freshest non-empty speculative prompt", () => {
+  it("returns the freshest speculative prompt", () => {
     expect(speculativePromptText([spec("a", "prompt one"), spec("ab", "prompt two")])).toBe(
       "prompt two",
     );
   });
 
-  it("skips the empty prompts a turn opens with", () => {
-    expect(speculativePromptText([spec("", ""), spec("a", "real"), spec("a", "")])).toBe("real");
+  it("the newest fold wins even when EMPTY — retracting the last item empties the hero", () => {
+    // Three shots deleted one by one: the final fold is empty, and showing the
+    // previous fold would claim content the turn no longer has (seen live
+    // 2026-07-13). An opener's empty folds still lose to any later real one.
+    expect(speculativePromptText([spec("", ""), spec("a", "real")])).toBe("real");
+    expect(speculativePromptText([spec("a", "real"), spec("", "")])).toBe("");
   });
 
   it("is empty when nothing composed yet", () => {
