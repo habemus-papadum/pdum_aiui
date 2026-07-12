@@ -35,6 +35,20 @@
 - **Human paths**: right-click panel → Inspect; chrome://extensions → service-worker link and
   "views"; the dev server's own output (HMR lines name every hot-swapped module).
 
+## Dev-loop traps that make verification lie (measured 2026-07-12)
+
+CRXJS **snapshots each HTML page's entry bundle when the dev server starts**. Consequences that
+have now cost three debugging rounds:
+
+- Edits to existing modules reach the OPEN page via HMR, but a **full page reload re-fetches the
+  startup snapshot** — the page silently runs OLD code. Any verification that reloads (every CDP
+  probe here does) therefore tests the snapshot, not your edit.
+- A **new module file** (or a changed export map) is not in the snapshot's graph at all: the page
+  renders the old tree with no error.
+- **Rule: restart the extension dev server before verifying anything by reload** — and after
+  adding a module or touching exports. Restarting invalidates the panel document, so the
+  extension needs a reload (`chrome://extensions` → ⟳) and the side panel must be reopened.
+
 ## What does NOT work today (measured or blocked)
 
 - **The session's chrome-devtools MCP after a browser relaunch.** The MCP's attach URL

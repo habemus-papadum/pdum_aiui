@@ -883,13 +883,18 @@ function Panel() {
   const applyUiScale = (scale: number): void => {
     document.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
   };
-  void chrome.storage.local.get(UI_SCALE_KEY).then((got) => {
-    const saved = got[UI_SCALE_KEY];
-    if (typeof saved === "number") {
-      uiScale.set(saved);
-    }
-    applyUiScale(uiScale.get());
-  });
+  void chrome.storage.local
+    .get(UI_SCALE_KEY)
+    .then((got) => {
+      const saved = got[UI_SCALE_KEY];
+      // Solid BATCHES writes: `set()` then `get()` in the same tick reads the
+      // STALE value — the original restore did exactly that and silently
+      // applied 100% while storage held the real scale (found live
+      // 2026-07-12). Use what `set()` returns: the actually-written, clamped
+      // value. (zoomStep always did; only the restore was wrong.)
+      applyUiScale(typeof saved === "number" ? uiScale.set(saved) : uiScale.get());
+    })
+    .catch(() => applyUiScale(uiScale.get()));
   const zoomStep = (delta: number): void => {
     // Float-safe stepping (0.1 increments live in binary-float land).
     const next = delta === 0 ? 1 : Math.round((uiScale.get() + delta) * 10) / 10;
