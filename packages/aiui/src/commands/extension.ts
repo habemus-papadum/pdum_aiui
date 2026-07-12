@@ -57,6 +57,7 @@ import {
   cacheDir,
   discoverSessionBrowser,
   evaluateInExtension,
+  loadUnpackedExtension,
   packageRoot,
   type ReloadExtensionResult,
   reloadExtension,
@@ -309,12 +310,12 @@ async function reloadIntoSessionBrowser(
   const result = await reloadExtension(browserUrl, { extensionId, wakePage });
 
   if (!result.ok) {
-    if (result.reason === "not-loaded") {
-      printWarning(
-        "the intent extension is not loaded in the session browser — nothing to reload",
-        `Load it once: chrome://extensions → Developer mode → Load unpacked → ${dir}\n` +
-          "(or relaunch the browser with `aiui browser` — Chrome for Testing auto-loads it).",
-      );
+    if (result.reason === "not-loaded" && dir) {
+      // Not installed at all: install it. (A launch would too, but the browser
+      // is already up, and nobody should have to restart it for this.)
+      await pointBrowserAt(browserUrl, dir, "loaded");
+    } else if (result.reason === "not-loaded") {
+      printWarning("the intent extension is not loaded in the session browser — and has no dir");
     } else {
       printWarning(
         `couldn't reload the intent extension in ${browserUrl}`,
@@ -325,18 +326,65 @@ async function reloadIntoSessionBrowser(
   }
 
   console.log(`aiui: reloaded the intent extension in ${browserUrl} (via ${result.via})`);
-  await reportLoadedArtifact(browserUrl, extensionId, wakePage, intent);
+  await reconcileLoadedArtifact(browserUrl, extensionId, wakePage, intent);
   return result;
 }
 
-/** Ask the reloaded extension which artifact it came from, and say so. */
-async function reportLoadedArtifact(
+/**
+ * Ask the extension which artifact it actually came from — and if it is the
+ * wrong one, re-point the browser at the right one.
+ *
+ * Chrome installs an unpacked extension **by path**: a browser launched (or
+ * Load-unpacked'ed) against `dist/` will keep re-reading `dist/` no matter how
+ * many times it is reloaded, so the dev server's output never arrives and every
+ * symptom looks exactly like a stale build. Rather than explain that to a human,
+ * fix it: CDP's `Extensions.loadUnpacked` is "Load unpacked" without the click.
+ */
+async function reconcileLoadedArtifact(
   browserUrl: string,
   extensionId: string,
   wakePage: string | undefined,
   intent: Awaited<ReturnType<typeof findIntentExtension>>,
 ): Promise<void> {
-  // Give the service worker a moment to come back up after the reload.
+  const stamp = await loadedDevStamp(browserUrl, extensionId, wakePage);
+  if (stamp === undefined) {
+    return; // couldn't ask; the reload itself still happened
+  }
+  const wanted = intent.state === "ready" ? intent : undefined;
+
+  if (!wanted || wanted.mode === "prod") {
+    console.log(
+      stamp
+        ? `aiui: the browser is running dev run ${stamp.runId} (this checkout has no dev server up)`
+        : "aiui: the browser is running the production build (no dev server needed)",
+    );
+    return;
+  }
+  // We want the dev artifact. Is that what the browser has?
+  if (stamp && stamp.runId === wanted.stamp?.runId) {
+    console.log(`aiui: the browser is running dev run ${stamp.runId} from ${stamp.origin} ✓`);
+    return;
+  }
+  printNote(
+    stamp
+      ? `the browser is running dev run ${stamp.runId}, not this checkout's ${wanted.stamp?.runId}`
+      : "the browser is running the PRODUCTION build, so your dev server's output never arrives",
+    "Chrome installs an unpacked extension by PATH — re-pointing it at the dev artifact.",
+  );
+  await pointBrowserAt(browserUrl, wanted.dir, "re-pointed");
+  const after = await loadedDevStamp(browserUrl, extensionId, wakePage);
+  if (after?.runId === wanted.stamp?.runId) {
+    console.log(`aiui: the browser is running dev run ${after?.runId} from ${after?.origin} ✓`);
+  }
+}
+
+/** The dev stamp of whatever the browser has installed (null = production). */
+async function loadedDevStamp(
+  browserUrl: string,
+  extensionId: string,
+  wakePage: string | undefined,
+): Promise<IntentDevStamp | null | undefined> {
+  // Give the service worker a moment to come back up after a reload.
   await sleep(1200);
   const loaded = await evaluateInExtension<IntentDevStamp | null>(browserUrl, {
     extensionId,
@@ -345,36 +393,21 @@ async function reportLoadedArtifact(
       "fetch(chrome.runtime.getURL('aiui-dev.json'))" +
       ".then(r => r.ok ? r.json() : null).catch(() => null)",
   });
-  if (!loaded.ok) {
-    // Not fatal: the reload itself succeeded, we just couldn't ask.
-    return;
-  }
-  const stamp = loaded.value;
-  const wanted = intent.state === "ready" ? intent : undefined;
+  return loaded.ok ? loaded.value : undefined;
+}
 
-  if (!stamp) {
-    if (wanted?.mode === "dev") {
-      printWarning(
-        "the browser is running the PRODUCTION build — your dev server's output is not being loaded",
-        "Chrome installs an unpacked extension by PATH, and this browser was pointed at dist/.\n" +
-          `Point it at the dev artifact once:  chrome://extensions → Load unpacked → ${wanted.dir}\n` +
-          "(removing the old entry first), or relaunch the browser (`aiui browser`) — aiui passes\n" +
-          "the dev artifact on --load-extension whenever its dev server is up.",
-      );
-    } else {
-      console.log("aiui: the browser is running the production build (no dev server needed)");
-    }
+/** "Load unpacked", without the human — with the human's steps as the fallback. */
+async function pointBrowserAt(browserUrl: string, dir: string, verb: string): Promise<void> {
+  const loaded = await loadUnpackedExtension(browserUrl, dir);
+  if (loaded.ok) {
+    console.log(`aiui: ${verb} the session browser at ${dir}`);
     return;
   }
-  if (wanted?.mode === "dev" && wanted.stamp && stamp.runId !== wanted.stamp.runId) {
-    printWarning(
-      `the browser is running dev run ${stamp.runId}, but the current artifact is ${wanted.stamp.runId}`,
-      "It reloaded from a different directory than the one this checkout is writing — see\n" +
-        "chrome://extensions for the path it was loaded from.",
-    );
-    return;
-  }
-  console.log(`aiui: the browser is running dev run ${stamp.runId} from ${stamp.origin} ✓`);
+  printWarning(
+    `couldn't point the session browser at ${dir} (${loaded.detail})`,
+    `Do it by hand, once: chrome://extensions → Developer mode → Load unpacked → ${dir}\n` +
+      "(or relaunch the browser with `aiui browser` — it passes the right directory itself).",
+  );
 }
 
 /**
