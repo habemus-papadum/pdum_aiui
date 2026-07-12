@@ -60,6 +60,7 @@ import {
   videoFps,
   videoOn,
 } from "./model/store";
+import { createPanelPaint } from "./paint";
 import { createPreviewIsland, type PreviewIsland } from "./preview-pane";
 import { createSession } from "./session";
 import { Toasts, toast } from "./toasts";
@@ -757,6 +758,47 @@ function Panel() {
       sampler.stop();
     }
   };
+
+  // ── iPad ink (C7): the panel is a paint HOST — frames off the warm stream
+  // out to the iPad viewer, stroke intents back onto the active tab's ink
+  // surface (paint.ts). Reconnects when the channel binding changes.
+  let lastTabMeta: { tabId: number; width: number; height: number } | undefined;
+  const refreshTabMeta = async (): Promise<void> => {
+    const tabId = await activeTabId();
+    if (tabId === undefined) {
+      return;
+    }
+    try {
+      const vp = await relayRequestTab<{ w: number; h: number }>(tabId, "page", "viewport");
+      lastTabMeta = { tabId, width: vp.w, height: vp.h };
+    } catch {
+      lastTabMeta = { tabId, width: 1280, height: 800 };
+    }
+  };
+  const paint = createPanelPaint({
+    port: session.port,
+    activeTab: () => lastTabMeta,
+    captureFrame: async () => {
+      try {
+        return (await grabShot()).bytes;
+      } catch {
+        return undefined; // no warm stream — the viewer just sees no video yet
+      }
+    },
+    openTurn: (on) => {
+      if (on && phase.get() !== "turn") {
+        void enterPhaseTurn();
+      }
+    },
+    sendInk: (tabId, op) => {
+      void chrome.tabs.sendMessage(tabId, op).catch(() => {});
+      void refreshTabMeta(); // strokes imply the iPad is live — keep dims fresh
+    },
+    log: logInfo,
+  });
+  setInterval(() => paint.sync(), 3000); // binding changes reconnect lazily
+  void refreshTabMeta();
+  window.addEventListener("pagehide", () => paint.dispose());
 
   // The REC meter: a tiny rAF island (imperative — never touches signals in
   // its loop; the frontend playbook's bridge rule). Visible only while the

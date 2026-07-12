@@ -88,6 +88,18 @@ const mountInk = (fadeSec: number): void => {
         })
         .catch(() => {});
     },
+    onRemoteStrokeEnd: (_id, points) => {
+      // An iPad stroke joins the turn exactly like a local one (C7): same
+      // relay, same viewport-space bounds.
+      const doc = boundsOf(points);
+      chrome.runtime
+        .sendMessage({
+          aiuiStroke: 1,
+          points: points.length,
+          bounds: { ...doc, x: doc.x - window.scrollX, y: doc.y - window.scrollY },
+        })
+        .catch(() => {});
+    },
     onAutoClear: () => {
       chrome.runtime.sendMessage({ aiuiInkClear: 1 }).catch(() => {});
       if (!inkActive) {
@@ -255,7 +267,47 @@ for (const type of ["pointerdown", "keyup", "wheel", "scroll"] as const) {
   window.addEventListener(type, pingInteract, { passive: true, capture: true });
 }
 
+// Remote ink (C7): the panel's paint host forwards iPad strokes as one-way
+// ops in TAB CSS pixels. They land on the SAME surface local drawing uses —
+// mounted on demand (remote ink needs no local ink MODE; the pointer claim is
+// untouched: activateInk/deactivateInk still own setActive).
+const remoteInkOp = (m: {
+  op: "begin" | "point" | "end" | "cancel";
+  id: string;
+  style?: { color: string; width: number };
+  point?: { x: number; y: number };
+}): void => {
+  if (ink === undefined) {
+    const wasOn = inkActive; // mountInk claims the pointer; restore intent
+    mountInk(inkFadeSec);
+    if (!wasOn) {
+      deactivateInk(); // mounted for remote strokes only — no pointer claim
+    }
+  }
+  const surface = ink?.surface;
+  if (surface === undefined) {
+    return;
+  }
+  if (m.op === "begin" && m.style && m.point) {
+    surface.remoteBegin(m.id, { style: m.style, point: m.point });
+  } else if (m.op === "point" && m.point) {
+    surface.remotePoint(m.id, m.point);
+  } else if (m.op === "end") {
+    surface.remoteEnd(m.id, m.point);
+  } else if (m.op === "cancel") {
+    surface.remoteCancel(m.id);
+  }
+};
+
 chrome.runtime.onMessage.addListener((msg) => {
+  if (
+    msg !== null &&
+    typeof msg === "object" &&
+    (msg as { aiuiRemoteInk?: number }).aiuiRemoteInk === 1
+  ) {
+    remoteInkOp(msg as never);
+    return false;
+  }
   if (msg !== null && typeof msg === "object" && (msg as { aiuiRing?: number }).aiuiRing === 1) {
     const m = msg as { armed?: boolean; turn?: boolean };
     indicator.set({ armed: m.armed === true, turn: m.turn === true });
