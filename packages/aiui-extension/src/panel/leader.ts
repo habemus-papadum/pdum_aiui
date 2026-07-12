@@ -40,6 +40,7 @@
 import faAsterisk from "@fortawesome/fontawesome-free/svgs/solid/asterisk.svg?raw";
 import faBroom from "@fortawesome/fontawesome-free/svgs/solid/broom.svg?raw";
 import faQuestion from "@fortawesome/fontawesome-free/svgs/solid/circle-question.svg?raw";
+import faGauge from "@fortawesome/fontawesome-free/svgs/solid/gauge-high.svg?raw";
 import faImage from "@fortawesome/fontawesome-free/svgs/solid/image.svg?raw";
 import faMicrophone from "@fortawesome/fontawesome-free/svgs/solid/microphone.svg?raw";
 import faMicLines from "@fortawesome/fontawesome-free/svgs/solid/microphone-lines.svg?raw";
@@ -48,6 +49,7 @@ import faMoon from "@fortawesome/fontawesome-free/svgs/solid/moon.svg?raw";
 import faPlane from "@fortawesome/fontawesome-free/svgs/solid/paper-plane.svg?raw";
 import faPaste from "@fortawesome/fontawesome-free/svgs/solid/paste.svg?raw";
 import faPen from "@fortawesome/fontawesome-free/svgs/solid/pen.svg?raw";
+import faVideo from "@fortawesome/fontawesome-free/svgs/solid/video.svg?raw";
 import faWrench from "@fortawesome/fontawesome-free/svgs/solid/wrench.svg?raw";
 import faXmark from "@fortawesome/fontawesome-free/svgs/solid/xmark.svg?raw";
 import type { KeymapHelpSection } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
@@ -73,7 +75,9 @@ export type LeaderAction =
   | "talkPress"
   | "talkRelease"
   | "handsFree"
-  | "mute";
+  | "mute"
+  | "video"
+  | "fpsMode";
 
 /** The §13.6 phases the grammar can see (disarmed = no grammar at all). */
 export type LeaderPhase = "armed" | "turn" | "tweak";
@@ -92,6 +96,10 @@ export interface LeaderState {
   holdTalk: boolean;
   /** The open talk window's mic is muted (lights the `m` cap). */
   micMuted: boolean;
+  /** Video sampling is on (lights the `v` cap). */
+  videoOn: boolean;
+  /** Cadence is smart (interaction-gated); constant lights the `f` cap. */
+  fpsSmart: boolean;
 }
 
 /** The resolver's verdict for one key event. */
@@ -224,6 +232,30 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
           : undefined,
     },
     {
+      // Video sampling toggle — a mode button, exactly like hands-free talk.
+      keys: ["v", "V"],
+      down: onPress("video"),
+      hint: (state) => ({
+        key: "v",
+        label: state.videoOn ? "video off" : "video",
+        icon: "🎥",
+        iconSvg: faVideo,
+        active: state.videoOn,
+      }),
+    },
+    {
+      // Cadence: smart (interaction-gated) ↔ constant (the config slider).
+      keys: ["f", "F"],
+      down: onPress("fpsMode"),
+      hint: (state) => ({
+        key: "f",
+        label: state.fpsSmart ? "constant rate" : "smart rate",
+        icon: "⏱",
+        iconSvg: faGauge,
+        active: !state.fpsSmart,
+      }),
+    },
+    {
       // The keymap as a table, under the caps (the overlay's ? — same rows).
       keys: ["?"],
       down: onPress("help"),
@@ -302,6 +334,8 @@ export function leaderHelp(): KeymapHelpSection[] {
     talking: false,
     holdTalk: false,
     micMuted: false,
+    videoOn: false,
+    fpsSmart: true,
     ...over,
   });
   const base = leaderHints(at());

@@ -53,12 +53,14 @@ import { graph } from "./model/graph";
 import {
   inkFade,
   inkMode,
+  inkVanish,
   linter,
   shotFlash,
-  tier,
+  stt,
   uiScale,
-  videoFps,
+  videoMode,
   videoOn,
+  videoPeriodSec,
 } from "./model/store";
 import { createPanelPaint } from "./paint";
 import { createPreviewIsland, type PreviewIsland } from "./preview-pane";
@@ -215,7 +217,7 @@ function Panel() {
   );
 
   // ── the engine: one per panel document ────────────────────────────────────
-  const engine = new Engine(panelIntentConfig(tier.get(), linter.get()));
+  const engine = new Engine(panelIntentConfig(stt.get(), linter.get()));
   const mirror = turnMirror(windowId);
   // PULL selection model (decided 2026-07-11): nothing enters the turn until
   // the user's explicit "add selection", which opens the turn itself when none
@@ -374,7 +376,10 @@ function Panel() {
       return;
     }
     inkTabId = tabId;
-    await relayRequestTab(tabId, "page", "ink", { on: true, fadeSec: inkFade.get() }).catch(() => {
+    await relayRequestTab(tabId, "page", "ink", {
+      on: true,
+      fadeSec: inkVanish.get() ? inkFade.get() : 0,
+    }).catch(() => {
       // The page can't hear us — usually an orphaned/absent content script
       // (the SW re-injects on reload now, but a page can still predate an
       // install). Loud, because the user just asked for ink and got nothing.
@@ -677,6 +682,8 @@ function Panel() {
     talking: engine.talking || talk.listening(),
     holdTalk: listeningIsHold,
     micMuted: talk.micMuted(),
+    videoOn: videoOn.get(),
+    fpsSmart: videoMode.get() === "smart",
   });
 
   // ── the shared imperative islands (the overlay's Preview + CheatSheet +
@@ -733,12 +740,9 @@ function Panel() {
       void wire.uploadAttachment(marker, shot.mime, shot.bytes);
       logDebug("video frame", frame.seq, "→", marker);
     },
-    intervalMs: () => {
-      const fps = videoFps.get();
-      return fps === "smart" ? 1000 : Math.round(1000 / Number(fps));
-    },
+    intervalMs: () => (videoMode.get() === "smart" ? 1000 : videoPeriodSec.get() * 1000),
     shouldCapture: () => {
-      if (videoFps.get() !== "smart") {
+      if (videoMode.get() !== "smart") {
         return true;
       }
       const had = pageInteracted;
@@ -1051,6 +1055,18 @@ function Panel() {
       syncIslands();
       return;
     }
+    if (action === "video") {
+      videoOn.set(!videoOn.get());
+      syncVideo();
+      syncIslands();
+      logInfo(videoOn.get() ? "video sampling on" : "video sampling off");
+      return;
+    }
+    if (action === "fpsMode") {
+      videoMode.set(videoMode.get() === "smart" ? "constant" : "smart");
+      syncIslands();
+      return;
+    }
     if (action === "disarm") {
       disarm();
       return;
@@ -1337,15 +1353,15 @@ function Panel() {
         <label>
           stt
           <select
-            value={tier.get()}
+            value={stt.get()}
             onChange={(e) => {
-              tier.set(e.currentTarget.value);
-              logInfo("tier →", e.currentTarget.value, "(applies at the next turn)");
+              stt.set(e.currentTarget.value);
+              logInfo("stt →", e.currentTarget.value, "(applies at the next turn)");
             }}
           >
-            <option value="mock">mock</option>
-            <option value="rapid">rapid</option>
-            <option value="premium">premium</option>
+            <option value="gpt-realtime-whisper">gpt-realtime-whisper</option>
+            <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe</option>
+            <option value="elevenlabs">elevenlabs</option>
           </select>
         </label>
         <label>
@@ -1356,27 +1372,38 @@ function Panel() {
             <option value="gemini">gemini</option>
           </select>
         </label>
-        <label>
-          video
-          <select
-            value={videoOn.get() ? "on" : "off"}
-            onChange={(e) => {
-              videoOn.set(e.currentTarget.value === "on");
-              syncVideo();
-            }}
-          >
-            <option value="off">off</option>
-            <option value="on">on</option>
-          </select>
+        <label title="seconds per frame (constant rate)">
+          rate
+          <input
+            type="range"
+            min="1"
+            max="10"
+            step="1"
+            value={videoPeriodSec.get()}
+            onInput={(e) => videoPeriodSec.set(Number(e.currentTarget.value))}
+          />
         </label>
-        <label>
-          fps
-          <select value={videoFps.get()} onChange={(e) => videoFps.set(e.currentTarget.value)}>
-            <option value="smart">smart</option>
-            <option value="0.5">0.5</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-          </select>
+        <label title="vanishing ink (off = page-permanent)">
+          <input
+            type="checkbox"
+            checked={inkVanish.get()}
+            onChange={(e) => {
+              inkVanish.set(e.currentTarget.checked);
+              void syncInkPointer(); // re-relay the live fade to the page
+            }}
+          />
+          vanish
+        </label>
+        <label title="ink lifetime, seconds">
+          ink
+          <input
+            type="range"
+            min="2"
+            max="20"
+            step="1"
+            value={inkFade.get()}
+            onInput={(e) => inkFade.set(Number(e.currentTarget.value))}
+          />
         </label>
       </div>
       {/* The command bar: the live keycaps, visible whenever a turn is open. */}

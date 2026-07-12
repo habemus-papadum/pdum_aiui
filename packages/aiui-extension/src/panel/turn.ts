@@ -18,15 +18,23 @@ import {
  * the store's `tier` control picks the expansion, defaulting to the shipped
  * "rapid" streaming tier.
  */
-export function panelIntentConfig(tier: string, linter?: string): IntentPipelineConfig {
+export function panelIntentConfig(sttName: string, linter?: string): IntentPipelineConfig {
   // Real tiers now (C5): "rapid" (streaming gpt-realtime-whisper — partial
   // deltas drive the preview's diff animation), "premium" (word logprobs →
   // the confidence heat), "mock" (offline). The tier control in the store
   // picks; the hello carries the expansion.
+  // Model names on the surface, shared tiers underneath: rapid carries the
+  // streaming gpt-realtime-whisper, premium the REST gpt-4o-mini-transcribe;
+  // elevenlabs swaps the transcriber on the premium shape.
+  const base =
+    sttName === "gpt-4o-mini-transcribe"
+      ? expandTier("premium")
+      : sttName === "elevenlabs"
+        ? { ...expandTier("premium"), transcriber: "elevenlabs" as const }
+        : expandTier("rapid");
   return {
     ...DEFAULT_INTENT_CONFIG,
-    ...expandTier(tier),
-    tier: tier as never,
+    ...base,
     ...(linter !== undefined ? { linter: linter as never } : {}),
   };
 }

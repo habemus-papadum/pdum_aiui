@@ -124,7 +124,6 @@ export function createKeysIsland(onKey: (key: string) => void, onClose: () => vo
   // The command bar: caps + the swallowed-key line, inline in the panel.
   const barRoot = document.createElement("div");
   barRoot.className = "keys-bar";
-  barRoot.hidden = true;
   barRoot.append(cheat.root, blipLine);
 
   // The help table's popup.
@@ -152,6 +151,7 @@ export function createKeysIsland(onKey: (key: string) => void, onClose: () => vo
       const inTurn = state.phase === "turn";
       // Always render the rows (a "turn" projection of the state), so the bar
       // keeps its shape between turns; idle = dimmed + inert, never hidden.
+      barRoot.hidden = false; // always present (stable geography); idle dims
       barRoot.classList.toggle("idle", !inTurn);
       cheat.update(leaderHints({ ...state, phase: "turn" }), true);
       popupRoot.hidden = !helpOpen;

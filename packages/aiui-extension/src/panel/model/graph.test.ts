@@ -82,7 +82,7 @@ describe("the control surface", () => {
     // vitest.config.ts) — if these fail, the compiler isn't running.
     expect(inkFade.name).toBe("inkFade");
     expect(shotFlash.name).toBe("shotFlash");
-    expect(inkFade.set(99)).toBe(10); // clamped by the declaration's max
-    expect(inkFade.set(0)).toBe(0);
+    expect(inkFade.set(99)).toBe(20); // clamped by the declaration's max
+    expect(inkFade.set(0)).toBe(2); // …and the 2s floor (vanish's slider)
   });
 });

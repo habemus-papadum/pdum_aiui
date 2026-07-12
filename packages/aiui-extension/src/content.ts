@@ -224,8 +224,16 @@ serveRelay("page", {
       clearInk();
     }
     if (p.on === true) {
-      mountInk(p.fadeSec ?? 0);
-      stash.ink = { fadeSec: p.fadeSec ?? 0 };
+      const next = p.fadeSec ?? 0;
+      // Turning VANISH on restarts every stroke's fade clock (aiui-ink's
+      // restartFade — the C2a semantic): bornAt is pen-up time, so ink that
+      // sat permanent for minutes would otherwise blink out in one frame.
+      const wasPermanent = inkFadeSec === 0;
+      mountInk(next);
+      if (wasPermanent && next > 0) {
+        ink?.surface.restartFade();
+      }
+      stash.ink = { fadeSec: next };
     } else if (p.on === false) {
       deactivateInk();
       stash.ink = undefined;

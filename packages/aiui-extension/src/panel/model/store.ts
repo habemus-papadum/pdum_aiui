@@ -24,7 +24,7 @@ import { control, durableSignal } from "@habemus-papadum/aiui-viz";
  * they are cleared with C or a disarm (§13.6: those are the ONLY clears).
  * Matches the overlay's ✒️ permanent / 💨 vanishing chip semantics.
  */
-export const inkFade = control({ value: 0, min: 0, max: 10, step: 1, unit: "s" });
+export const inkFade = control({ value: 2, min: 2, max: 20, step: 1, unit: "s" });
 
 /**
  * Blue confirmation flash after a manual shot. Share-sampled frames NEVER
@@ -55,16 +55,28 @@ export const logLevel = control({ value: "info", options: ["quiet", "info", "deb
  * the preview's diff animation), premium = word logprobs (confidence heat),
  * mock = offline. Read at thread-open (the hello carries the expansion).
  */
-export const tier = control({ value: "rapid", options: ["mock", "rapid", "premium"] });
+/** Speech-to-text engine, by model name (maps onto the shared tiers). */
+export const stt = control({
+  value: "gpt-realtime-whisper",
+  options: ["gpt-realtime-whisper", "gpt-4o-mini-transcribe", "elevenlabs"],
+});
 
-/** The realtime prompt linter (orthogonal to the tier; the hello carries it). */
+/** The realtime prompt linter (orthogonal to stt; the hello carries it). */
 export const linter = control({ value: "off", options: ["off", "openai", "gemini"] });
 
-/** Periodic tab-frame sampling into the open turn (no flash — §13.6). */
+/** Periodic tab-frame sampling into the open turn (no flash — §13.6). The
+ * `v` cap toggles it, like hands-free talk. */
 export const videoOn = control({ value: false });
 
-/** Sampling cadence: smart = only after page interaction; else frames/sec. */
-export const videoFps = control({ value: "smart", options: ["smart", "0.5", "1", "2"] });
+/** Cadence mode: smart = only after page interaction; constant = metronome.
+ * The `f` cap toggles. */
+export const videoMode = control({ value: "smart", options: ["smart", "constant"] });
+
+/** Constant mode's cadence, SECONDS PER FRAME (the config-bar slider). */
+export const videoPeriodSec = control({ value: 5, min: 1, max: 10, step: 1 });
+
+/** Vanishing ink: off = strokes are page-permanent (§13.6 default). */
+export const inkVanish = control({ value: false });
 
 /**
  * Panel zoom — a multiplier on the BROWSER'S accessibility font-size default

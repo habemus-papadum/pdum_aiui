@@ -16,6 +16,8 @@ const state = (over: Partial<LeaderState> = {}): LeaderState => ({
   talking: false,
   holdTalk: false,
   micMuted: false,
+  videoOn: false,
+  fpsSmart: true,
   ...over,
 });
 
@@ -92,7 +94,7 @@ describe("leaderKeyEvent", () => {
 describe("leaderHints", () => {
   it("shows the base row set, adding c while inking", () => {
     const keys = (s: LeaderState) => leaderHints(s).map((h) => h.key);
-    expect(keys(state())).toEqual(["i", "s", "a", "t", "d", "⏎", "␣", "h", "?", "esc"]);
+    expect(keys(state())).toEqual(["i", "s", "a", "t", "d", "⏎", "␣", "h", "v", "f", "?", "esc"]);
     expect(keys(state({ inkOn: true }))).toEqual([
       "i",
       "s",
@@ -103,6 +105,8 @@ describe("leaderHints", () => {
       "⏎",
       "␣",
       "h",
+      "v",
+      "f",
       "?",
       "esc",
     ]);
@@ -122,7 +126,7 @@ describe("leaderHints", () => {
   it("renders one strip line for the panel header", () => {
     expect(leaderHintText(state())).toBe(
       "i ink · s shot · a add selection · t tweak the page · d disarm (abandon all) · ⏎ send · " +
-        "␣ talk (hold) · h hands-free talk · ? help · esc cancel turn",
+        "␣ talk (hold) · h hands-free talk · v video · f constant rate · ? help · esc cancel turn",
     );
   });
 
@@ -154,7 +158,7 @@ describe("leaderHelp (the table generated from the real stack)", () => {
     ]);
     const inTurn = sections[0].hints.map((h) => h.key);
     expect(inTurn).toContain("⌘B"); // authored: the leader is a browser-global
-    for (const key of ["i", "s", "a", "t", "d", "⏎", "␣", "h", "?", "esc"]) {
+    for (const key of ["i", "s", "a", "t", "d", "⏎", "␣", "h", "v", "f", "?", "esc"]) {
       expect(inTurn).toContain(key);
     }
     // The ink-only rows are DIFFED against the base — no repeats.
