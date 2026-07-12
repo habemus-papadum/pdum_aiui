@@ -19,6 +19,12 @@
 
 ## What works today (measured)
 
+- **Reloading the extension from a terminal** — `aiui extension reload` (aiui-util's
+  `reloadExtension`): finds a context of the extension over CDP (service worker → any extension
+  page → an inert wake page opened in a background tab, because an idle MV3 worker leaves no
+  target at all) and evaluates `chrome.runtime.reload()` there. `evaluateInExtension` is the same
+  machinery with the answer kept — how the CLI asks the browser *which artifact it is running*.
+  Both verified live on 2026-07-12 (CfT 150).
 - **Raw CDP against the session browser's debug endpoint** — full access to everything above.
   The endpoint comes from `DevToolsActivePort` in the profile dir
   (`.aiui-cache/chrome/<profile>/`); `GET /json` lists targets; a WebSocket to a target's
@@ -35,19 +41,36 @@
 - **Human paths**: right-click panel → Inspect; chrome://extensions → service-worker link and
   "views"; the dev server's own output (HMR lines name every hot-swapped module).
 
-## Dev-loop traps that make verification lie (measured 2026-07-12)
+## Dev-loop traps that make verification lie (measured 2026-07-12 — then fixed the same day)
 
-CRXJS **snapshots each HTML page's entry bundle when the dev server starts**. Consequences that
-have now cost three debugging rounds:
+CRXJS **snapshots each HTML page's entry bundle when the dev server starts**, and Chrome holds
+the extension directory it last read. Consequences that cost three debugging rounds:
 
 - Edits to existing modules reach the OPEN page via HMR, but a **full page reload re-fetches the
   startup snapshot** — the page silently runs OLD code. Any verification that reloads (every CDP
   probe here does) therefore tests the snapshot, not your edit.
 - A **new module file** (or a changed export map) is not in the snapshot's graph at all: the page
   renders the old tree with no error.
-- **Rule: restart the extension dev server before verifying anything by reload** — and after
-  adding a module or touching exports. Restarting invalidates the panel document, so the
-  extension needs a reload (`chrome://extensions` → ⟳) and the side panel must be reopened.
+- Reloading the extension **while Vite is rewriting the artifact** caches a partial extension: a
+  panel document with zero scripts, no title, no error.
+
+**All three are now the CLI's problem, not yours** (2026-07-12):
+
+- The dev artifact lives in **`dist-dev/`**, separate from the release `dist/`, and it stamps
+  itself complete (`aiui-dev.json`, written last) with a `runId` also served at
+  `/@aiui/dev-run` (kit: `aiui-webext/src/dev-stamp.ts`).
+- **`aiui extension dev`** (run it from the project whose session browser you use — it picks the
+  profile) starts Vite, waits for that stamp, then reloads the extension over CDP, then reports
+  which artifact the browser is really running. **`aiui extension reload`** is the same reload on
+  its own. So "restart the dev server → reload the extension → re-open the panel" is one command,
+  in the right order, every time.
+- The panel **says** when it is stale or serverless (`src/panel/boot.ts` — banner + Reload
+  button), so a lying verification announces itself instead of looking like your bug.
+
+**Rule (unchanged in spirit): after adding a module or touching exports, restart the dev loop
+before believing any reload-based verification** — but restart it with `aiui extension dev`, which
+leaves Chrome in the right state. The side panel still has to be re-opened by a human (a panel can
+only be opened by a user gesture; a CDP probe cannot do it).
 
 ## What does NOT work today (measured or blocked)
 

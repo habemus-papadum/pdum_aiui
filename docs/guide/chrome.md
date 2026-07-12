@@ -211,17 +211,31 @@ Whether it *loads* depends on the browser:
 
 The [browser-extension intent tool](../proposals/browser-extension-intent-tool.md)
 (`@habemus-papadum/aiui-extension` — per-window side panel, capture, ink, page tools) is
-auto-loaded the same way whenever its `dist/` exists, appended to the same `--load-extension`
-list. Two deliberate differences from the DevTools panel:
+auto-loaded the same way, appended to the same `--load-extension` list. Two deliberate
+differences from the DevTools panel:
 
-- **aiui never builds it.** That package's `dist/` has two shapes — CRXJS dev-server loader
-  stubs (written by its `pnpm dev` on startup) or a production build — and building from the
-  launcher would silently freeze a live dev install (see the package README). aiui loads
-  whatever its dev loop has produced, or skips it when there's nothing yet (with a note telling
-  you to start `pnpm -C packages/aiui-extension dev` first).
-- **A dev-shaped `dist/` needs its dev server.** If the dist points at a dev-server port and
-  nothing answers there, interactive launches warn loudly — otherwise the extension loads with
-  every surface blank, which reads as "broken" instead of "not being served".
+- **It has two artifacts, and aiui picks one.** `dist-dev/` is what its Vite dev server writes
+  (CRXJS loader stubs — inert without that server); `dist/` is the standalone production build.
+  The launcher loads **`dist-dev/` when its dev server is answering**, and `dist/` otherwise — so
+  a stale dev artifact can never hijack a launch, and "just use the tool" needs no dev server at
+  all. With neither present, it prints a note telling you how to get one.
+- **aiui never builds it.** Building from the launcher would be a surprise write into someone
+  else's dev loop. Whoever owns the loop owns the artifact:
+
+  ```sh
+  aiui extension dev      # develop it: Vite + an ordered reload of this project's browser
+  pnpm -C packages/aiui-extension build   # just use it: standalone dist/, no server
+  aiui extension reload   # make the running browser re-read whichever artifact applies
+  ```
+
+- **A dev artifact with no dev server behind it** still loads (you asked for it), but interactive
+  launches warn loudly — otherwise every surface comes up on CRXJS's "cannot connect" page, which
+  reads as "broken" instead of "not being served".
+
+Chrome installs an unpacked extension **by path**, so a profile that was loaded against one of
+the two directories keeps re-reading that one. `aiui extension reload` checks (it reads the
+extension's own dev stamp back out of the browser) and says so when the browser is running the
+production build while you are developing.
 
 The extension's channel discovery runs over Chrome native messaging, and Chrome for Testing
 looks the host manifest up **inside the user data dir** (measured — not in

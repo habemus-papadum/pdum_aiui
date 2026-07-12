@@ -127,12 +127,16 @@ the live checklist is `docs/PHASE-A.md`. Keep that log current with every change
 
 ## Traps that already cost us cycles (symptom → rule)
 
-1. **`pnpm build` in `aiui-extension` silently freezes a live dev install.** Dev `dist/` is CRXJS
-   loader stubs that require the Vite dev server (pinned strict port **5317**); `pnpm build`
-   writes production output to the SAME `dist/`. Symptom: extension goes blank/stale, no error.
-   Rule: NEVER run build in this package while a dev install is loaded; after any build, `rm -rf
-   dist` and restart `pnpm dev`, then **Reload the extension** in `chrome://extensions`. A
-   mixed-timestamp `dist/` (`ls -laT dist/`) is the fingerprint of a partial overwrite.
+1. ~~**`pnpm build` in `aiui-extension` silently freezes a live dev install.**~~ **FIXED
+   2026-07-12 — structurally, not by discipline.** Dev and release now write *different*
+   directories (`webextConfig` in the kit): `vite` → **`dist-dev/`** (CRXJS loader stubs, pinned
+   strict port **5317**), `vite build` → **`dist/`** (standalone, what ships). A build can no
+   longer touch a running dev loop — verified by running a full `pnpm -r build` against a live
+   dev server and diffing the artifact. The *residue* of the old trap: Chrome installs an unpacked
+   extension **by path**, so a profile that was pointed at `dist/` keeps re-reading `dist/`
+   forever. `aiui extension reload` detects that (it reads the extension's own stamp back out of
+   the browser) and tells you to Load-unpacked `dist-dev/` once. The extension id is pinned by the
+   manifest key, so re-pointing does not invalidate the native-messaging host.
 2. **Solid 2.0 `createEffect` requires TWO functions** — `createEffect(compute, effect)`. One-arg
    `createEffect(() => {…})` *typechecks* but throws `[MISSING_EFFECT_FN]` at render and blanks
    the whole panel. tsc/biome/node-vitest cannot catch it. Other Solid 2.0-beta.15 gotchas:
@@ -146,7 +150,16 @@ the live checklist is `docs/PHASE-A.md`. Keep that log current with every change
 3. **Port squatting from other checkouts.** A Vite from `pdum_aiui-review-pr1` squatted an
    earlier pinned port and served a wrong module graph. Rule: on weird dev behavior, check WHO
    owns the port (`lsof -nP -iTCP:5317 -sTCP:LISTEN`) and its `cwd` before debugging code. Also
-   note Vite may bind `[::1]` only.
+   note Vite may bind `[::1]` only. (Since 2026-07-12 the panel *tells* you when it is talking to
+   a different run than the one it was loaded from — the dev stamp's `runId` — so a squatter now
+   announces itself instead of silently serving the wrong tree.)
+
+3b. ~~**Chrome caches a PARTIAL dist if it reloads while Vite is writing it.**~~ **FIXED
+   2026-07-12.** Symptom (it stranded a live session): the panel document loads with zero
+   scripts, no title, no error; recovery was `chrome.runtime.reload()` after the dist settled.
+   The dev build now writes `dist-dev/aiui-dev.json` **last**, as its completeness stamp, and
+   `aiui extension dev` / `aiui extension reload` refuse to reload Chrome until it appears (and
+   the dev artifact is never emptied, so even a mid-write read finds a loadable manifest).
 4. **tabCapture is invocation-gated per tab.** The user must "invoke" the extension on a tab
    (toolbar click) before `getMediaStreamId` works there; grants survive SW restarts but die on
    navigation. This is platform law; the planned softener is `chrome.commands` shortcuts (which
@@ -165,17 +178,29 @@ the live checklist is `docs/PHASE-A.md`. Keep that log current with every change
 ## Dev-loop quickstart
 
 ```sh
-# terminal 1 — the extension dev server FIRST (pinned :5317; writes dev dist/)
-pnpm -C packages/aiui-extension dev
-# terminal 2 — Claude session + channel (from a demo or repo root)
+# terminal 1 — the extension dev server FIRST (pinned :5317; writes dist-dev/),
+# run from the PROJECT whose session browser you want (it picks the profile):
+aiui extension dev
+# terminal 2 — Claude session + channel (same project)
 pnpm -C demos/gallery claude
 ```
 
-When the session browser is launched *by aiui* (CfT/Chromium), the extension auto-loads from
-`dist/` via `--load-extension` — no manual Load unpacked needed (branded Chrome ≥ 137 still
-needs the manual once-per-profile load: chrome://extensions → Load unpacked →
-`packages/aiui-extension/dist`). Order matters: start the dev server before the launch, or the
-launch skips/warns (`findIntentExtension` in `packages/aiui/src/util/chrome.ts`).
+`aiui extension dev` = Vite **+ the ordering invariant**: it waits for the dev artifact to stamp
+itself complete, then reloads the extension in that project's session browser over CDP, then
+reports which artifact the browser actually ended up running. Raw `pnpm -C packages/aiui-extension
+dev` still works; follow it with `aiui extension reload`.
+
+**Using the tool instead of developing it:** `pnpm -C packages/aiui-extension build` (writes the
+standalone `dist/`), then launch without a dev server — the launcher picks `dist/` on its own.
+
+When the session browser is launched *by aiui* (CfT/Chromium), the extension auto-loads via
+`--load-extension`: **`dist-dev/` when its dev server is up, `dist/` otherwise**
+(`findIntentExtension` in `packages/aiui/src/util/chrome.ts`; `aiui chrome status` shows the
+choice). Branded Chrome ≥ 137 ignores the flag, so it needs the manual once-per-profile load:
+chrome://extensions → Load unpacked → `packages/aiui-extension/dist-dev` (dev) or `…/dist` (prod).
+Chrome installs unpacked extensions **by path** — if the profile was pointed at the other
+directory, no amount of reloading will show you the dev server's output; `aiui extension reload`
+says so explicitly.
 
 Extension ID is pinned via `key` in `manifest.config.ts`: `ngakidpkjdgaajnlpggbchpaikilkpmp`.
 Native host manifest install: `pnpm -C packages/aiui exec tsx src/cli.ts extension
