@@ -87,8 +87,19 @@ dev servers.
 
 The panel is instrumented to **fail loudly, never blankly** (`src/panel/boot.ts`): a stale dev
 build, an unreachable dev server, or an app that threw during render each produce a visible
-banner with a **Reload extension** button. If you get a blank panel with no banner at all, the
-document itself never loaded — see `docs/DEBUGGING.md`.
+banner with a **Reload extension** button.
+
+The one state the watchdog *cannot* narrate — because the document isn't ours:
+
+> **"CRXJS DEV MODE — Connecting to the Vite dev server…"** in the panel means **your dev server is
+> down.** In dev, that page is a placeholder that polls the server and then reloads into the real
+> panel (which the service worker proxies from Vite). No server, no panel. Start `aiui extension
+> dev` — or switch to the standalone build: `pnpm build` + `aiui extension reload --prod`.
+
+`--prod` is also how you take the browser off a dev artifact *while Vite is running*: without it, a
+live dev server means the dev artifact, by design. Everything else about the artifacts —
+what a dev build contains, and why `dist-dev/assets/` holds only a loading page — is in
+[`docs/DEBUGGING.md`](./docs/DEBUGGING.md).
 
 - **A squatted dev port fails loudly (by design).** If vite refuses to start, find the squatter
   (`lsof -iTCP:5317 -sTCP:LISTEN`); never retry as `vite <port>` — a bare positional arg is a

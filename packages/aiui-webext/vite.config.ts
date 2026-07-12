@@ -22,7 +22,12 @@ export default defineConfig({
       // Node-side config factory (./vite) — plus the dev stamp, which both of
       // them import (`#dev-stamp`) and which therefore needs a real file behind
       // publishConfig's imports map rather than being inlined into each.
-      entry: { index: "src/index.ts", vite: "src/vite.ts", "dev-stamp": "src/dev-stamp.ts" },
+      entry: {
+        index: "src/index.ts",
+        vite: "src/vite.ts",
+        "dev-stamp": "src/dev-stamp.ts",
+        "dev-artifact": "src/dev-artifact.ts",
+      },
       formats: ["es"],
       fileName: (_format, name) => `${name}.js`,
     },

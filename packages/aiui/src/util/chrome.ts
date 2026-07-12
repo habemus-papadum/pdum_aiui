@@ -301,15 +301,24 @@ export function intentExtensionPaths():
  */
 export async function findIntentExtension(
   probe: (port: number) => Promise<boolean> = devServerAlive,
+  prefer: IntentPreference = "auto",
 ): Promise<IntentExtension> {
   const paths = intentExtensionPaths();
-  return paths ? await resolveIntentExtension(paths, probe) : { state: "absent" };
+  return paths ? await resolveIntentExtension(paths, probe, prefer) : { state: "absent" };
 }
+
+/**
+ * Which artifact to load. "auto" is the ladder below; the explicit values are
+ * the escape hatches — above all `"prod"`, which is how you run the standalone
+ * build *while* a dev server happens to be up (`aiui extension reload --prod`).
+ */
+export type IntentPreference = "auto" | "dev" | "prod";
 
 /** {@link findIntentExtension}'s decision table, against explicit paths. */
 export async function resolveIntentExtension(
   paths: { root: string; devDir: string; outDir: string },
   probe: (port: number) => Promise<boolean> = devServerAlive,
+  prefer: IntentPreference = "auto",
 ): Promise<IntentExtension> {
   const dev = readArtifact(paths.devDir);
   const out = readArtifact(paths.outDir);
@@ -321,6 +330,24 @@ export async function resolveIntentExtension(
   const release = out && out.devPort === undefined ? out : undefined;
   const candidate = dev ?? legacy;
   const common = { legacyDevDist: legacy?.dir };
+
+  // The escape hatches: "give me the standalone build even though Vite is up"
+  // (the production path, and the way to stop a dev loop from re-claiming the
+  // browser), and its mirror image.
+  if (prefer === "prod" && release) {
+    return { state: "ready", dir: release.dir, mode: "prod", ...common };
+  }
+  if (prefer === "dev" && candidate?.devPort !== undefined) {
+    return {
+      state: "ready",
+      dir: candidate.dir,
+      mode: "dev",
+      devPort: candidate.devPort,
+      devServer: await probe(candidate.devPort),
+      stamp: candidate.stamp,
+      ...common,
+    };
+  }
 
   if (candidate?.devPort !== undefined && (await probe(candidate.devPort))) {
     return {

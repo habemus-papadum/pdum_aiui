@@ -74,17 +74,55 @@ the extension directory it last read. Consequences that cost three debugging rou
 **Rule (unchanged in spirit): after adding a module or touching exports, restart the dev loop
 before believing any reload-based verification** — but restart it with `aiui extension dev`, which
 leaves Chrome in the right state. The side panel still has to be re-opened by a human (a panel can
-only be opened by a user gesture; a CDP probe cannot do it).
+only be opened by a user gesture) — though its *document* can be checked without one (see above).
+
+## Know what a CRXJS dev artifact IS, or you will misdiagnose it (measured 2026-07-12)
+
+This cost a false alarm, so it is written down. **A dev build emits no entry bundles at all.**
+
+| in `dist-dev/` | what it is |
+|---|---|
+| `manifest.json` | points at loader stubs, not bundles |
+| `service-worker-loader.js` | three `import 'http://localhost:5317/…'` lines |
+| `src/content.ts-loader.js`, `src/content.ts.js` | the content script, via the dev server |
+| `src/panel/index.html` | **CRXJS's "loading page"**, not your HTML |
+| `assets/loading-page-*.js` | that page's script — *the only file in `assets/`* |
+
+The panel's real document arrives at **runtime**: the loading page polls `/@crx/dev-ready`, then
+reloads, and the **service worker proxies the extension's own origin to the dev server**, which
+serves the transformed HTML and modules. So:
+
+- `dist-dev/assets/` containing only `loading-page-*.js` is **correct**. The hashed
+  `assets/index.html-*.js`, `assets/sw.ts-*.js`, `assets/content.ts-*.js` bundles you may go
+  looking for are **production** output — if you find them in `dist/` with fresh timestamps,
+  someone ran a build (e.g. `pnpm test:packaging`, which does `pnpm -r build`), not the dev server.
+- **A panel stuck on "CRXJS DEV MODE / Connecting to the Vite dev server…" means the dev server is
+  down** (or was never reachable), *not* that the extension is broken. That page is CRXJS's, not
+  ours, so the panel's own watchdog banner cannot appear there — this is the one blank-ish state
+  the watchdog can't narrate. It carries CRXJS's own "Reload Extension" button; the real fix is
+  `aiui extension dev`.
+- The honest completeness question for a dev artifact is therefore *"does every file the manifest
+  names exist?"* — which the build now checks before stamping (kit: `missingManifestFiles`), and
+  refuses to stamp when it doesn't.
+
+## Verifying the panel's RENDER without a human (measured 2026-07-12)
+
+The side panel can only be *opened* by a user gesture — but the panel **document** can be
+inspected without one, and this is the check that settles "is the panel actually working?":
+
+- **Do NOT open it with CDP** (`PUT /json/new`, `Target.createTarget`, `Page.navigate`). An
+  extension page in a CDP-created tab **never commits**: `document.readyState` stays `"loading"`,
+  there is no `<head>`, the console is silent. Measured against BOTH artifacts — the *production*
+  build hangs identically — so it is a property of CDP-driven tabs, not of the dev loop. Believing
+  that probe cost a round of "the panel is broken" that wasn't.
+- **Open it through the extension's own API instead**: evaluate, in the service worker,
+  `chrome.windows.create({url: chrome.runtime.getURL('src/panel/index.html'), type:'popup',
+  focused:false})`, then attach to the resulting page target and read
+  `document.title` / `#root.childElementCount` / `#aiui-boot-banner`. A healthy dev panel answers
+  `title: "aiui"`, `rootKids: 7`, no banner. Close it with `chrome.windows.remove(id)`.
 
 ## What does NOT work today (measured or blocked)
 
-- **Verifying the panel's RENDER without a human.** The side panel can only be *opened* by a user
-  gesture, and opening the panel document in a CDP-created tab does not work either: the
-  navigation never commits (`document.readyState` stays `"loading"`, no `<head>`, silent console).
-  Measured 2026-07-12 against BOTH artifacts — the production build hangs identically, so this is
-  a property of extension pages in CDP-driven tabs, **not** of the dev loop. Everything else about
-  the extension is checkable from a terminal (service worker, content scripts, the dev stamp); the
-  panel's tree is not. Ask the human to open it.
 - **The session's chrome-devtools MCP after a browser relaunch.** The MCP's attach URL
   (`--browser-url`) is captured ONCE at `aiui claude` launch. Relaunch the browser and the MCP
   keeps dialing the dead endpoint (measured: stale `:52300` vs live `:52916`) — every MCP

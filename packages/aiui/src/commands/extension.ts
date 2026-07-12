@@ -67,6 +67,7 @@ import {
   devServerAlive,
   findIntentExtension,
   type IntentDevStamp,
+  type IntentPreference,
   intentExtensionPaths,
   readDevStamp,
   resolveChromeSettings,
@@ -90,6 +91,12 @@ const WAKE_PAGE = "reload.html";
 
 export interface ExtensionOptions {
   extensionId?: string;
+  /**
+   * Force the standalone production build, even with a dev server running —
+   * the "I want to USE the tool, not develop it" switch. Without it, a live dev
+   * server means the dev artifact (see findIntentExtension's ladder).
+   */
+  prod?: boolean;
   /** Named profile under `.aiui-cache/chrome/` (which browser to reload in). */
   profile?: string;
   /** Explicit Chrome user data dir (which browser to reload in). */
@@ -226,7 +233,8 @@ async function runExtensionDev(options: ExtensionOptions): Promise<void> {
  * artifacts), after a bare `vite`, or whenever a surface looks stale.
  */
 async function runExtensionReload(options: ExtensionOptions): Promise<void> {
-  const intent = await findIntentExtension();
+  const prefer: IntentPreference = options.prod ? "prod" : "auto";
+  const intent = await findIntentExtension(undefined, prefer);
   if (intent.state === "absent") {
     printError("the @habemus-papadum/aiui-extension package is not resolvable here");
     process.exitCode = 1;
@@ -236,6 +244,14 @@ async function runExtensionReload(options: ExtensionOptions): Promise<void> {
     printError(
       "the intent extension has no artifact to reload",
       "aiui extension dev   (dev loop)   ·   pnpm -C packages/aiui-extension build   (standalone)",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (options.prod && intent.mode !== "prod") {
+    printError(
+      "--prod asked for the standalone build, but there isn't one",
+      "Build it first: pnpm -C packages/aiui-extension build",
     );
     process.exitCode = 1;
     return;
@@ -259,7 +275,7 @@ async function runExtensionReload(options: ExtensionOptions): Promise<void> {
       }
     }
   }
-  await reloadIntoSessionBrowser(options);
+  await reloadIntoSessionBrowser(options, prefer);
 }
 
 /**
@@ -277,8 +293,9 @@ async function runExtensionReload(options: ExtensionOptions): Promise<void> {
  */
 async function reloadIntoSessionBrowser(
   options: ExtensionOptions,
+  prefer: IntentPreference = "auto",
 ): Promise<ReloadExtensionResult | undefined> {
-  const intent = await findIntentExtension();
+  const intent = await findIntentExtension(undefined, prefer);
   const dir = intent.state === "ready" ? intent.dir : undefined;
   const what =
     intent.state === "ready"
@@ -351,30 +368,42 @@ async function reconcileLoadedArtifact(
     return; // couldn't ask; the reload itself still happened
   }
   const wanted = intent.state === "ready" ? intent : undefined;
+  if (!wanted) {
+    return;
+  }
 
-  if (!wanted || wanted.mode === "prod") {
+  // Does the browser already run what this checkout resolved to? For a dev
+  // artifact "the same" means the same RUN — a different runId is a different
+  // directory (the same one always overwrites its stamp in place).
+  const running = wanted.mode === "dev" ? stamp?.runId === wanted.stamp?.runId : stamp === null;
+  if (running) {
     console.log(
       stamp
-        ? `aiui: the browser is running dev run ${stamp.runId} (this checkout has no dev server up)`
-        : "aiui: the browser is running the production build (no dev server needed)",
+        ? `aiui: the browser is running dev run ${stamp.runId} from ${stamp.origin} ✓`
+        : `aiui: the browser is running the production build ✓ (${wanted.dir})`,
     );
     return;
   }
-  // We want the dev artifact. Is that what the browser has?
-  if (stamp && stamp.runId === wanted.stamp?.runId) {
-    console.log(`aiui: the browser is running dev run ${stamp.runId} from ${stamp.origin} ✓`);
-    return;
-  }
+
   printNote(
-    stamp
-      ? `the browser is running dev run ${stamp.runId}, not this checkout's ${wanted.stamp?.runId}`
-      : "the browser is running the PRODUCTION build, so your dev server's output never arrives",
-    "Chrome installs an unpacked extension by PATH — re-pointing it at the dev artifact.",
+    wanted.mode === "dev"
+      ? stamp
+        ? `the browser is running dev run ${stamp.runId}, not this checkout's ${wanted.stamp?.runId}`
+        : "the browser is running the PRODUCTION build, so your dev server's output never arrives"
+      : `the browser is running a DEV build (run ${stamp?.runId}), not the standalone one`,
+    "Chrome installs an unpacked extension by PATH — re-pointing it at " +
+      `${wanted.mode === "dev" ? "the dev artifact" : "the production build"}.`,
   );
   await pointBrowserAt(browserUrl, wanted.dir, "re-pointed");
+
   const after = await loadedDevStamp(browserUrl, extensionId, wakePage);
-  if (after?.runId === wanted.stamp?.runId) {
-    console.log(`aiui: the browser is running dev run ${after?.runId} from ${after?.origin} ✓`);
+  const fixed = wanted.mode === "dev" ? after?.runId === wanted.stamp?.runId : after === null;
+  if (fixed) {
+    console.log(
+      wanted.mode === "dev"
+        ? `aiui: the browser is running dev run ${after?.runId} from ${after?.origin} ✓`
+        : `aiui: the browser is running the production build ✓ (${wanted.dir})`,
+    );
   }
 }
 

@@ -13,11 +13,23 @@
  *    build can no longer clobber a running dev loop, and each artifact is what
  *    it says it is.
  *  - **The dev artifact stamps itself when it is COMPLETE** (see ./dev-stamp):
- *    `aiui-dev.json` lands last, and the same `runId` is served at
- *    `/@aiui/dev-run`. Chrome is only ever told to reload once the stamp exists
- *    (`aiui extension dev` / `aiui extension reload`), and any extension surface
- *    can tell "fresh" from "stale" from "server down" instead of rendering
- *    nothing.
+ *    `aiui-dev.json` lands last — and only after every file the built manifest
+ *    references is verified present ({@link missingManifestFiles}) — while the
+ *    same `runId` is served at `/@aiui/dev-run`. Chrome is only ever told to
+ *    reload once the stamp exists (`aiui extension dev` / `aiui extension
+ *    reload`), and any extension surface can tell "fresh" from "stale" from
+ *    "server down" instead of rendering nothing.
+ *  - **Know what a CRXJS dev artifact IS, or you will misdiagnose it.** Dev
+ *    emits **no entry bundles**: the manifest points at loader stubs and, for
+ *    each HTML page, at CRXJS's "loading page" — a placeholder that polls
+ *    `/@crx/dev-ready` and reloads, at which point the *service worker* proxies
+ *    the extension's own origin to the dev server and the real document is
+ *    served from there. So `dist-dev/assets/` holding only `loading-page-*.js`
+ *    is correct and expected; the hashed `index.html-*.js` bundles people go
+ *    looking for are **production** output. And the corollary that bites: with
+ *    the dev server down, every page is stuck on that loading page ("CRXJS DEV
+ *    MODE — cannot connect"), which reads as "the extension is broken" and is
+ *    in fact "start your dev server".
  *  - **Dev never empties its out dir.** Chrome may read the directory at any
  *    moment; a directory that is briefly *missing its manifest* is a hard
  *    load failure that only a human clicking ⟳ can undo. Overwriting in place
@@ -43,6 +55,7 @@ import solid from "vite-plugin-solid";
 // externalizes linked workspace packages), so it may not use relative imports —
 // Node ESM would need the file extension. The package-internal subpath is the
 // repo's convention for exactly this (cf. aiui-dev-overlay's #source-locator).
+import { missingManifestFiles } from "#dev-artifact";
 import { DEV_RUN_ROUTE, DEV_STAMP_FILE, type DevStamp } from "#dev-stamp";
 
 // Re-exported so extension packages write their manifest.config.ts against the
@@ -133,14 +146,16 @@ function devArtifact(opts: { devPort: number; outDir: string; devOutDir: string 
     startedAt: new Date().toISOString(),
   };
   let dir = opts.devOutDir;
+  let expected = opts.devOutDir;
 
   return {
     name: "aiui:webext-dev-artifact",
     enforce: "pre",
     config(_config, env) {
+      expected = env.command === "serve" ? opts.devOutDir : opts.outDir;
       return {
         build: {
-          outDir: env.command === "serve" ? opts.devOutDir : opts.outDir,
+          outDir: expected,
           // Never wipe the dev dir: Chrome may read it at any instant, and a
           // manifest-less directory is an unrecoverable load error (see the
           // module doc). A release build empties `dist/` as usual.
@@ -149,9 +164,21 @@ function devArtifact(opts: { devPort: number; outDir: string; devOutDir: string 
       };
     },
     configResolved(config) {
-      dir = isAbsolute(config.build.outDir)
-        ? config.build.outDir
-        : resolve(config.root, config.build.outDir);
+      dir = absolute(config.build.outDir, config.root);
+      // Vite merges plugin `config()` results, and CRXJS's file writer emits
+      // into whatever `build.outDir` finally resolved to. If anything (another
+      // plugin, a stray user config) overrode us, the dev artifact would be
+      // written into the RELEASE directory — freezing a live dev install and
+      // leaving the loaded extension unbootable, exactly the disease this split
+      // exists to kill. Refuse to run rather than split the artifact in two.
+      const want = absolute(expected, config.root);
+      if (dir !== want) {
+        throw new Error(
+          `[aiui-webext] build.outDir resolved to ${dir}, but this ${config.command} must write ` +
+            `${want}. Something else in the plugin/config chain is setting outDir — the dev and ` +
+            "release artifacts must never share a directory.",
+        );
+      }
     },
     configureServer(server) {
       // Serve this run's identity to anyone who holds a stamp — the extension's
@@ -167,6 +194,23 @@ function devArtifact(opts: { devPort: number; outDir: string; devOutDir: string 
       server.httpServer?.on("listening", () => {
         void (async () => {
           await settle(dir);
+
+          // The stamp means "this artifact is complete and loadable". Earn it:
+          // an extension whose manifest points at files that aren't there loads
+          // as a broken shell, and no surface can report why. A dev artifact
+          // that cannot boot is worse than no dev artifact — say so, and do NOT
+          // stamp, so nothing downstream reloads Chrome onto it.
+          const missing = missingManifestFiles(dir);
+          if (missing.length) {
+            server.config.logger.error(
+              `\n  [aiui] the dev artifact in ${dir} is INCOMPLETE — its manifest references ` +
+                `files that were never written:\n${missing.map((f) => `    - ${f}`).join("\n")}\n` +
+                "  Not stamping it: Chrome would load a broken extension. This is a bug in the\n" +
+                "  build (a plugin writing somewhere else?) — do not reload the extension.\n",
+            );
+            return;
+          }
+
           try {
             mkdirSync(dir, { recursive: true });
             writeFileSync(join(dir, DEV_STAMP_FILE), `${JSON.stringify(stamp, null, 2)}\n`);
@@ -185,6 +229,10 @@ function devArtifact(opts: { devPort: number; outDir: string; devOutDir: string 
       });
     },
   };
+}
+
+function absolute(dir: string, root: string): string {
+  return isAbsolute(dir) ? dir : resolve(root, dir);
 }
 
 /** Resolve once the directory stops changing (or we give up waiting). */

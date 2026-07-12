@@ -113,6 +113,7 @@ export function buildProgram(): Command {
     .command("extension")
     .description("the aiui browser extension: dev | reload | install-native-host | status")
     .argument("<action>", "dev | reload | install-native-host | status")
+    .option("--prod", "reload: force the standalone build, even with a dev server running")
     .option("--profile <name>", "named profile under .aiui-cache/chrome/ (which browser to reload)")
     .option("--data-dir <path>", "explicit Chrome user data dir (which browser to reload)")
     .option("--extension-id <id>", "extension id for allowed_origins (default: the pinned id)")

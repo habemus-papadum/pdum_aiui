@@ -156,6 +156,16 @@ the live checklist is `docs/PHASE-A.md`. Keep that log current with every change
    a different run than the one it was loaded from — the dev stamp's `runId` — so a squatter now
    announces itself instead of silently serving the wrong tree.)
 
+3a. **A dev artifact contains NO entry bundles — do not "diagnose" it as incomplete.** `dist-dev/`
+   holds loader stubs, CRXJS's loading page, and `assets/loading-page-*.js` — nothing else. The
+   real panel document is proxied from the dev server by the service worker at runtime. A panel
+   stuck on "CRXJS DEV MODE / Connecting to the Vite dev server…" means **the dev server is down**,
+   not that the artifact is broken (this produced a false alarm on 2026-07-12, complete with
+   "evidence" from `dist/` timestamps that were really a `pnpm test:packaging` build). The build
+   now verifies every manifest-referenced file exists before stamping, and refuses to stamp
+   otherwise — so "incomplete artifact" is a claim the build itself will make, loudly, or not at
+   all. Full table: `docs/DEBUGGING.md`.
+
 3b. ~~**Chrome caches a PARTIAL dist if it reloads while Vite is writing it.**~~ **FIXED
    2026-07-12.** Symptom (it stranded a live session): the panel document loads with zero
    scripts, no title, no error; recovery was `chrome.runtime.reload()` after the dist settled.
