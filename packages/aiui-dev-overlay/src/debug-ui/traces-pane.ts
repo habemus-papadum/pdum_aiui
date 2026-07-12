@@ -98,7 +98,15 @@ export class TracesPane {
   readonly root: HTMLDivElement;
   private readonly opts: TracesPaneOptions;
   private readonly fetchFn: typeof fetch;
-  private readonly list: HTMLSelectElement;
+  private readonly list: HTMLDivElement;
+  private readonly trigger: HTMLButtonElement;
+  private readonly menu: HTMLDivElement;
+  private menuOpen = false;
+  private readonly onDocClick = (e: MouseEvent): void => {
+    if (this.menuOpen && e.target instanceof Node && !this.list.contains(e.target)) {
+      this.toggleMenu(false);
+    }
+  };
   private readonly viewHost: HTMLDivElement;
   private readonly view: TraceView;
   private entries: TraceListEntry[] = [];
@@ -144,22 +152,20 @@ export class TracesPane {
     bar.append(followLabel, allLabel);
 
     // A dropdown, not a scrolling row list (reworked 2026-07-12): the picker
-    // is a chooser, not content — one closed line, options on demand. Picking
-    // a trace by hand naturally leaves follow mode.
-    this.list = document.createElement("select");
+    // is a chooser, not content — one closed line, rows on demand. A native
+    // <select> can't render the status pills, so this is a small vanilla
+    // dropdown: trigger (the current trace, pills and all) + a popup of the
+    // same rich rows. Picking a trace by hand naturally leaves follow mode.
+    this.list = document.createElement("div");
     this.list.className = "aiui-dbgt-list";
-    this.list.addEventListener("change", () => {
-      const id = this.list.value;
-      if (id === "") {
-        return;
-      }
-      this.follow = false;
-      const check = this.root.querySelector<HTMLInputElement>(".aiui-dbgt-bar input");
-      if (check) {
-        check.checked = false;
-      }
-      this.select(id);
-    });
+    this.trigger = document.createElement("button");
+    this.trigger.type = "button";
+    this.trigger.className = "aiui-dbgt-trigger";
+    this.trigger.addEventListener("click", () => this.toggleMenu(!this.menuOpen));
+    this.menu = document.createElement("div");
+    this.menu.className = "aiui-dbgt-menu";
+    this.menu.hidden = true;
+    this.list.append(this.trigger, this.menu);
     this.viewHost = document.createElement("div");
     this.viewHost.className = "aiui-dbgt-view";
     this.view = new TraceView({
@@ -223,35 +229,84 @@ export class TracesPane {
       : this.entries.filter((entry) => inSession(entry, this.session));
   }
 
-  private renderList(): void {
-    this.list.replaceChildren();
-    const visible = this.visibleEntries().slice(0, 40);
-    for (const entry of visible) {
-      const { title, badges, dim } = traceRowParts(entry, this.session);
-      const option = document.createElement("option");
-      option.className = "aiui-dbgt-row";
-      option.value = entry.id;
-      option.textContent = badges.length > 0 ? `${title} · ${badges.join(" · ")}` : title;
-      option.classList.toggle("dim", dim);
-      if (badges.length > 0) {
-        option.dataset.badges = badges.join(" ");
-      }
-      this.list.append(option);
+  private toggleMenu(open: boolean): void {
+    this.menuOpen = open;
+    this.menu.hidden = !open;
+    this.trigger.classList.toggle("open", open);
+    const doc = this.root.ownerDocument;
+    if (open) {
+      doc.addEventListener("mousedown", this.onDocClick, true);
+    } else {
+      doc.removeEventListener("mousedown", this.onDocClick, true);
     }
-    if (visible.length === 0) {
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.disabled = true;
-      empty.selected = true;
-      empty.textContent =
+  }
+
+  /**
+   * One trace as row content: title (the AI turn gloss once summarize.ts has
+   * landed it, else time · format) + colored status/badge pills — the same
+   * palette the trace header's outcome pill uses.
+   */
+  private rowContent(entry: TraceListEntry, into: HTMLElement): void {
+    const { title, badges, dim } = traceRowParts(entry, this.session);
+    into.classList.toggle("dim", dim);
+    const text = document.createElement("span");
+    text.className = "aiui-dbgt-row-title";
+    text.textContent = title;
+    into.append(text);
+    const status = entry.status;
+    if (status === "sent" || status === "cancelled" || status === "empty") {
+      into.append(this.pill(status, `state-${status}`));
+    }
+    for (const badge of badges) {
+      into.append(this.pill(badge, badge === "abandoned" ? "state-abandoned" : "meta"));
+    }
+  }
+
+  private pill(text: string, kind: string): HTMLSpanElement {
+    const pill = document.createElement("span");
+    pill.className = `aiui-dbgt-badge ${kind}`;
+    pill.textContent = text;
+    return pill;
+  }
+
+  private renderList(): void {
+    // Trigger = the selected trace, rendered exactly like its row.
+    this.trigger.replaceChildren();
+    const selected = this.entries.find((e) => e.id === this.selectedId);
+    if (selected !== undefined) {
+      this.rowContent(selected, this.trigger);
+    } else {
+      const placeholder = document.createElement("span");
+      placeholder.className = "aiui-dbgt-row-title";
+      placeholder.textContent =
         this.entries.length > 0
           ? "no traces from this session yet — check “all sessions” to see older ones"
           : "no traces yet — arm the overlay and speak a turn";
-      this.list.append(empty);
-      return;
+      this.trigger.append(placeholder);
     }
-    if (this.selectedId !== undefined) {
-      this.list.value = this.selectedId;
+    const caret = document.createElement("span");
+    caret.className = "aiui-dbgt-caret";
+    caret.textContent = "▾";
+    this.trigger.append(caret);
+
+    this.menu.replaceChildren();
+    for (const entry of this.visibleEntries().slice(0, 40)) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "aiui-dbgt-row";
+      row.classList.toggle("selected", entry.id === this.selectedId);
+      this.rowContent(entry, row);
+      row.addEventListener("click", () => {
+        this.follow = false;
+        const check = this.root.querySelector<HTMLInputElement>(".aiui-dbgt-bar input");
+        if (check) {
+          check.checked = false;
+        }
+        this.select(entry.id);
+        this.toggleMenu(false);
+        this.renderList();
+      });
+      this.menu.append(row);
     }
   }
 

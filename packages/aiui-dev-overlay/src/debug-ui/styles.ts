@@ -67,22 +67,29 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-trace { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .aiui-dbg-sec { display: flex; flex-direction: column; min-height: 0;
   border-bottom: 1px solid #262c3a; }
-/* The prompt owns the height while stages are collapsed (their default);
-   expanding stages splits the pane again. */
+/* Sections are CARDS: a thin border each, so "prompt" and "events" read as
+   distinct surfaces (2026-07-12). The prompt owns the height while events are
+   collapsed (their default); expanding events splits the pane again. A
+   collapsed section shrinks to its header — min-height MUST reset with it or
+   the card keeps its floor as dead space (the ghost-gap bug, seen live). */
+.aiui-dbg-sec { border: 1px solid #262c3a; border-radius: 8px; margin: 4px 10px;
+  overflow: hidden; }
 .aiui-dbg-sec.prompt { flex: 1 1 auto; min-height: 11rem; }
 .aiui-dbg-trace:has(.aiui-dbg-sec.stages:not(.collapsed)) .aiui-dbg-sec.prompt {
   flex: 0 1 auto; max-height: 45%; }
 .aiui-dbg-sec.stages { flex: 1 1 auto; }
-.aiui-dbg-sec.collapsed { flex: 0 0 auto; max-height: none; }
+.aiui-dbg-sec.collapsed { flex: 0 0 auto; max-height: none; min-height: 0; }
 .aiui-dbg-sec.collapsed > .aiui-dbg-sec-body { display: none; }
 .aiui-dbg-sec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 4px 12px; background: #12151c; border-bottom: 1px solid #1c2029; flex: none; }
-.aiui-dbg-sec-toggle { display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 12px; background: #12151c; border-bottom: 1px solid #1c2029; flex: none; }
+.aiui-dbg-sec.collapsed .aiui-dbg-sec-head { border-bottom: none; }
+.aiui-dbg-sec-toggle { display: inline-flex; align-items: center; gap: 6px;
   background: none; border: none; cursor: pointer; padding: 2px 0;
   color: #9aa0aa; font: 600 11px ui-sans-serif, system-ui, sans-serif;
   text-transform: uppercase; letter-spacing: 0.04em; }
 .aiui-dbg-sec-toggle:hover { color: #e8e8ea; }
-.aiui-dbg-sec-chevron { transition: transform 120ms; font-size: 13px; color: #8ab4f8; }
+.aiui-dbg-sec-chevron { transition: transform 120ms; font-size: 17px; line-height: 1;
+  color: #8ab4f8; }
 .aiui-dbg-sec.collapsed .aiui-dbg-sec-chevron { transform: rotate(-90deg); }
 .aiui-dbg-sec-body { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1 1 auto; }
 .aiui-dbg-events-body { display: flex; flex-direction: column; min-height: 0; }
@@ -216,7 +223,7 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbgt-row:hover { background: #171b25; }
 .aiui-dbgt-row.selected { background: #1b2130; color: #e8e8ea; }
 .aiui-dbgt-row.dim { opacity: 0.55; }
-.aiui-dbgt-badge { font-size: 10px; color: #ffd166; border: 1px solid #3a4152; border-radius: 999px;
+.aiui-dbgt-badge { font-size: 10px; color: #9aa0aa; border: 1px solid #3a4152; border-radius: 999px;
   padding: 0 7px; }
 .aiui-dbgt-view { flex: 1; overflow-y: auto; padding: 6px 10px; min-height: 0; }
 .aiui-dbgt-empty { padding: 16px; color: #6b7280; }
