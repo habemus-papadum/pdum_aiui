@@ -20,6 +20,8 @@ export interface CapturePaneProps {
   /** Ink mode: on = the active tab's content script holds an ink surface. */
   inkOn: () => boolean;
   onInkToggle: () => void;
+  /** Erase the strokes (mode exit deliberately does NOT — see main.tsx). */
+  onInkClear: () => void;
   /** The capture status line (invocation failures land here). */
   status: () => string;
 }
@@ -48,6 +50,11 @@ export function CapturePane(props: CapturePaneProps) {
         >
           {props.inkOn() ? "ink mode ✓" : "ink mode"}
         </button>
+        <Show when={props.inkOn()}>
+          <button type="button" class="ghost" onClick={() => props.onInkClear()}>
+            clear ink
+          </button>
+        </Show>
       </div>
       <Show when={shots().length > 0}>
         <div class="thumbs">

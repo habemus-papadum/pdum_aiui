@@ -14,8 +14,14 @@ export interface TurnPaneProps {
   engine: Engine;
   /** Bumped by the host after every engine event (drives re-derivation). */
   rev: () => number;
-  armed: () => boolean;
-  onArmToggle: () => void;
+  /** A turn is open — the only state where content may enter (§13.6). */
+  canCompose: () => boolean;
+  /** Called when an act needs a turn and none is open (status hint). */
+  onNoTurn: () => void;
+  /** Send/cancel route through the panel's state machine, never the engine
+   * directly — the machine owns phase, re-arm, and capture teardown. */
+  onSend: () => void;
+  onCancel: () => void;
   status: () => string;
   loweredPrompt: () => string | undefined;
   /** The slurp command (pull model): add the active tab's selection now. */
@@ -41,18 +47,19 @@ export function TurnPane(props: TurnPaneProps) {
     if (t === "") {
       return;
     }
-    if (!props.armed()) {
-      props.onArmToggle(); // contribute implies intent — arm like the bus contribution path
+    if (!props.canCompose()) {
+      props.onNoTurn(); // §13.6: nothing enters outside a turn; ⌘B opens one
+      return;
     }
     props.engine.contribute(t);
     setText("");
   };
   const send = (): void => {
     addText();
-    props.engine.send();
+    props.onSend();
   };
   const cancel = (): void => {
-    props.engine.stepOut();
+    props.onCancel();
   };
 
   return (

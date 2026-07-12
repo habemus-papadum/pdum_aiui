@@ -10,12 +10,29 @@
  *     with a minimal environment and cwd `/` — nothing here may rely on PATH
  *     or working directory; `--import tsx` resolves from cwd, hence the `cd`).
  *  2. The NM manifest into each installed browser's user-level
- *     `NativeMessagingHosts/` directory (macOS + Linux paths; Chrome, Chrome
- *     for Testing, Chromium, Edge). `allowed_origins` pins the extension id —
- *     the default is the stable id derived from the key checked into
+ *     `NativeMessagingHosts/` directory (macOS + Linux paths; Chrome,
+ *     Chromium, Edge). `allowed_origins` pins the extension id — the default
+ *     is the stable id derived from the key checked into
  *     `packages/aiui-extension/manifest.config.ts`.
+ *
+ * That global install covers browsers aiui does NOT manage. The session
+ * browsers aiui launches are handled without it: {@link
+ * installProfileNativeHost} drops the same manifest into the launch profile's
+ * own `<user-data-dir>/NativeMessagingHosts/`, which is where Chrome for
+ * Testing actually looks (measured live on macOS, CfT 150: it reads the user
+ * data dir, NOT `~/Library/Application Support/Google/ChromeForTesting` or
+ * any other Application Support spelling — those were never read). Launchers
+ * call it automatically whenever they load the intent extension, so an
+ * aiui-launched browser needs no global install at all.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { cacheDir, packageRoot } from "@habemus-papadum/aiui-util";
@@ -31,13 +48,20 @@ export interface ExtensionOptions {
   extensionId?: string;
 }
 
-/** Browser NM manifest directories, user-level, per platform. */
+/**
+ * Browser NM manifest directories, user-level, per platform.
+ *
+ * Deliberately NO Chrome for Testing entry: CfT does not read a fixed
+ * user-level directory — it looks in `<user-data-dir>/NativeMessagingHosts`
+ * (measured on macOS; an earlier `Google/ChromeForTesting` guess here was
+ * never read by anything). aiui-launched browsers get the manifest written
+ * into their profile at launch instead ({@link installProfileNativeHost}).
+ */
 export function nativeHostManifestDirs(platform: NodeJS.Platform, home: string): string[] {
   if (platform === "darwin") {
     const base = join(home, "Library", "Application Support");
     return [
       join(base, "Google", "Chrome", "NativeMessagingHosts"),
-      join(base, "Google", "ChromeForTesting", "NativeMessagingHosts"),
       join(base, "Chromium", "NativeMessagingHosts"),
       join(base, "Microsoft Edge", "NativeMessagingHosts"),
     ];
@@ -45,7 +69,6 @@ export function nativeHostManifestDirs(platform: NodeJS.Platform, home: string):
   if (platform === "linux") {
     return [
       join(home, ".config", "google-chrome", "NativeMessagingHosts"),
-      join(home, ".config", "google-chrome-for-testing", "NativeMessagingHosts"),
       join(home, ".config", "chromium", "NativeMessagingHosts"),
       join(home, ".config", "microsoft-edge", "NativeMessagingHosts"),
     ];
@@ -82,15 +105,18 @@ function wrapperPath(): string {
   return join(cacheDir("native-host", { create: true }), "aiui-native-host.sh");
 }
 
-function installNativeHost(options: ExtensionOptions): void {
-  const extensionId = options.extensionId ?? DEFAULT_EXTENSION_ID;
+/**
+ * Write the wrapper script (shared, user-cache) and return the NM manifest
+ * body pointing at it. The wrapper embeds THIS checkout's CLI invocation, so
+ * re-writing it on every install keeps it current after moves/reinstalls.
+ */
+function ensureWrapperAndManifest(extensionId: string): { wrapper: string; body: string } {
   const cli = resolvePackageCli("@habemus-papadum/aiui");
   const root = packageRoot("@habemus-papadum/aiui");
 
   const wrapper = wrapperPath();
-  writeFileSync(wrapper, wrapperScript(root, cli.command, cli.args));
+  writeIfChanged(wrapper, wrapperScript(root, cli.command, cli.args));
   chmodSync(wrapper, 0o755);
-  process.stdout.write(`wrote ${wrapper}\n`);
 
   const manifest = {
     name: NATIVE_HOST_NAME,
@@ -99,15 +125,83 @@ function installNativeHost(options: ExtensionOptions): void {
     type: "stdio",
     allowed_origins: [`chrome-extension://${extensionId}/`],
   };
+  return { wrapper, body: `${JSON.stringify(manifest, null, 2)}\n` };
+}
+
+/** Write only when the content differs — these run on every launch. */
+function writeIfChanged(file: string, content: string): boolean {
+  try {
+    if (readFileSync(file, "utf8") === content) {
+      return false;
+    }
+  } catch {}
+  writeFileSync(file, content);
+  return true;
+}
+
+/**
+ * Install the NM manifest into a session-browser profile
+ * (`<user-data-dir>/NativeMessagingHosts/`) — the directory Chrome for
+ * Testing actually consults (measured; see the module doc). Called by the
+ * launchers whenever they load the intent extension: the profile lives in
+ * aiui's own project-local cache, so unlike the global install this needs no
+ * user decision — it is the same class of write as creating the profile.
+ * Quiet and idempotent; no browser restart needed (NM manifests are read
+ * per `connectNative`/`sendNativeMessage` call).
+ */
+export function installProfileNativeHost(
+  userDataDir: string,
+  options: ExtensionOptions = {},
+): void {
+  const { body } = ensureWrapperAndManifest(options.extensionId ?? DEFAULT_EXTENSION_ID);
+  const dir = join(userDataDir, "NativeMessagingHosts");
+  mkdirSync(dir, { recursive: true });
+  writeIfChanged(join(dir, `${NATIVE_HOST_NAME}.json`), body);
+}
+
+/**
+ * {@link installProfileNativeHost} as the launchers call it: only when the
+ * intent extension is actually loadable (no point granting a host to an
+ * extension that won't be there), and never fatal — a failed write degrades
+ * to the panel's type-a-port fallback, with a note saying so. Called on both
+ * the launch and the attach-to-running paths, so a profile whose browser
+ * outlives many sessions still converges on a current manifest.
+ */
+export function ensureProfileNativeHost(
+  userDataDir: string,
+  intentReady: boolean,
+  warn: (title: string, detail: string) => void,
+): void {
+  if (!intentReady) {
+    return;
+  }
+  try {
+    installProfileNativeHost(userDataDir);
+  } catch (error) {
+    warn(
+      "couldn't install the native-messaging host into the browser profile — " +
+        "the intent extension will need a manually typed port",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function installNativeHost(options: ExtensionOptions): void {
+  const extensionId = options.extensionId ?? DEFAULT_EXTENSION_ID;
+  const { wrapper, body } = ensureWrapperAndManifest(extensionId);
+  process.stdout.write(`wrote ${wrapper}\n`);
+
   for (const dir of nativeHostManifestDirs(process.platform, homedir())) {
     mkdirSync(dir, { recursive: true });
     const file = join(dir, `${NATIVE_HOST_NAME}.json`);
-    writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+    writeFileSync(file, body);
     process.stdout.write(`wrote ${file}\n`);
   }
   process.stdout.write(
     `native host installed for extension ${extensionId}.\n` +
-      "No browser restart needed; reload the extension if it was already running.\n",
+      "No browser restart needed; reload the extension if it was already running.\n" +
+      "(Session browsers launched by aiui get the manifest in their own profile\n" +
+      "automatically — this global install is for browsers aiui does not manage.)\n",
   );
 }
 
@@ -115,16 +209,30 @@ function statusNativeHost(): void {
   const wrapper = wrapperPath();
   process.stdout.write(`wrapper: ${wrapper} ${existsSync(wrapper) ? "(present)" : "(MISSING)"}\n`);
   for (const dir of nativeHostManifestDirs(process.platform, homedir())) {
-    const file = join(dir, `${NATIVE_HOST_NAME}.json`);
-    if (!existsSync(file)) {
-      process.stdout.write(`absent:  ${file}\n`);
-      continue;
-    }
-    try {
-      const parsed = JSON.parse(readFileSync(file, "utf8")) as { allowed_origins?: string[] };
-      process.stdout.write(`present: ${file} → ${parsed.allowed_origins?.join(", ")}\n`);
-    } catch {
-      process.stdout.write(`present: ${file} (unparseable)\n`);
-    }
+    reportManifest(join(dir, `${NATIVE_HOST_NAME}.json`));
+  }
+  // The profiles aiui launches here (project-local; where CfT actually looks).
+  const profiles = join(process.cwd(), ".aiui-cache", "chrome");
+  let names: string[] = [];
+  try {
+    names = readdirSync(profiles, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {}
+  for (const name of names) {
+    reportManifest(join(profiles, name, "NativeMessagingHosts", `${NATIVE_HOST_NAME}.json`));
+  }
+}
+
+function reportManifest(file: string): void {
+  if (!existsSync(file)) {
+    process.stdout.write(`absent:  ${file}\n`);
+    return;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as { allowed_origins?: string[] };
+    process.stdout.write(`present: ${file} → ${parsed.allowed_origins?.join(", ")}\n`);
+  } catch {
+    process.stdout.write(`present: ${file} (unparseable)\n`);
   }
 }

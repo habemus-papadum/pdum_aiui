@@ -165,3 +165,45 @@ design and resets on document reload, as expected.) Panel pages get plain Vite H
 
 Optional remaining: personal-Chrome contrast run (expected identical for tabCapture — no flags
 involved; picker for gDM).
+
+## M7 — Chrome for Testing × native-messaging manifest lookup · **MEASURED (live, CfT 150, macOS)**
+
+Where does CfT look for user-level native-messaging host manifests? **In the user data dir:
+`<user-data-dir>/NativeMessagingHosts/<host>.json`** — and, as far as measured, nowhere else.
+
+Probed live (2026-07-11) with `chrome.runtime.sendNativeMessage` evaluated inside the real
+extension's service worker over CDP, against a CfT 150 session browser launched with
+`--user-data-dir=.aiui-cache/chrome/default`:
+
+| manifest location | result |
+|---|---|
+| `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/` | NOT read ("host not found") |
+| `~/Library/Application Support/Google/ChromeForTesting/NativeMessagingHosts/` | NOT read (this dir was an unverified guess in the installer) |
+| `~/Library/Application Support/Google/Chrome for Testing/NativeMessagingHosts/` | NOT read (no restart tried; irrelevant given the row below) |
+| `<user-data-dir>/NativeMessagingHosts/` | **READ — listChannels answered immediately, no browser restart** |
+
+Consequences (implemented in `packages/aiui/src/commands/extension.ts`):
+- `installProfileNativeHost()` plants the manifest inside the launch profile; the launchers call
+  it whenever they load the intent extension (launch *and* attach paths).
+- The global `aiui extension install-native-host` dropped its CfT directories (never read) and
+  remains for browsers aiui does not manage (branded Chrome + manually loaded extension).
+- Manifest changes take effect per `sendNativeMessage` call — no browser restart needed
+  (measured: the probe flipped from "not found" to answering the moment the file appeared).
+
+## M8 — `chrome.commands` press × invocation gate & side-panel opening · **MEASURED (live, CfT 150, macOS, 2026-07-11)**
+
+Three facts from the leader-key layer's first live rounds:
+
+1. **A `chrome.commands` shortcut press IS an extension invocation for
+   `tabCapture.getMediaStreamId`.** Leader (⌘B) → `s` captured a tab whose toolbar button had
+   NEVER been clicked — full-viewport shot landed in the turn. The invocation-gate softener
+   (M4's per-tab gate, CONTINUITY trap 4) works as the platform docs imply, now measured.
+2. **`chrome.sidePanel.open()` in `commands.onCommand` must be called SYNCHRONOUSLY.** The
+   user-gesture token does not survive an `await`: with a `runtime.getContexts` check awaited
+   before `open()`, ⌘B with the panel closed was a silent no-op (no error surfaced anywhere);
+   moving `open()` to the listener's synchronous path fixed it. Same class as the M3-era
+   gesture rules — never put an await between the gesture and the gesture-gated call.
+3. **`sidePanel.open()` moves keyboard focus to the panel.** After a ⌘B that opens the panel,
+   the modal layer's keys are handled by the panel document's listener, not the content
+   script's (both paths exist; this is why). Observed, not a problem — recorded so nobody
+   "fixes" the dual listener.

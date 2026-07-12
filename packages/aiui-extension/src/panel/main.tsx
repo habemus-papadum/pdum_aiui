@@ -15,6 +15,7 @@ import {
   Engine,
   type Rect,
 } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import { isTypingTarget } from "@habemus-papadum/aiui-viz/modal";
 import {
   injectPaneStyles,
   Pane,
@@ -26,6 +27,15 @@ import { render } from "@solidjs/web";
 import { createEffect, createSignal } from "solid-js";
 import { dataUrlToBytes, isNotInvokedError, type ShotGrab } from "../capture";
 import { CapturePane } from "./capture-pane";
+import {
+  LEADER_BLIP_MS,
+  type LeaderAction,
+  type LeaderState,
+  leaderHintText,
+  leaderKeyEvent,
+  leaderPendingFresh,
+  type PendingLeader,
+} from "./leader";
 import { SessionPane } from "./session-pane";
 import { connectToolsLink } from "./tools-link";
 import { attachTurnHost, panelIntentConfig, turnMirror } from "./turn";
@@ -72,12 +82,16 @@ const PANEL_STYLES = `
     color: #8ab4f8; border: 1px solid #2a3140; border-radius: 4px;
     padding: 0 4px; margin-right: 4px; font-size: 10px;
   }
+  .leader {
+    font: 11px ui-monospace, monospace; color: #cfd6e4;
+    border: 1px solid #3a4460; background: #232a3a; border-radius: 6px;
+    padding: 4px 8px; margin: 0 2px 10px;
+  }
 `;
 
 function Panel() {
   const [windowId, setWindowId] = createSignal<number | undefined>();
   const [rev, setRev] = createSignal(0);
-  const [armed, setArmed] = createSignal(false);
   const [turnStatus, setTurnStatus] = createSignal("");
   const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>();
 
@@ -145,30 +159,56 @@ function Panel() {
   let lastActiveTab: { id: number; url?: string } | undefined;
 
   /**
-   * Leave ink mode: clear + unmount the tab's surface, then record why the
-   * strokes went away — `manual` is the user's toggle (the overlay's C),
-   * `boundary` a tab switch (the SPA navigation rule: emitted AFTER the
-   * `navigation` event so stroke attribution reads correctly), `none` a
-   * thread-close/disarm (nothing may land after the close event).
+   * Leave ink MODE: release the tab's pointer, KEEP the strokes on screen
+   * (decided live 2026-07-11 — exiting the mode must not erase the sketch;
+   * that surprised as data loss). No engine event: nothing was cleared.
+   * `inkTabId` stays set while strokes remain, so a later clear finds them.
    */
-  const inkModeOff = async (clearEvent: "manual" | "boundary" | "none"): Promise<void> => {
+  const inkModeOff = async (): Promise<void> => {
     if (!inkOn()) {
       return;
     }
     setInkOn(false);
+    if (inkTabId !== undefined) {
+      await relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
+    }
+  };
+
+  /**
+   * Erase the strokes and record why — `manual` is the user's clear (the C
+   * key / pane button), `silent` a disarm (abandon everything; nothing may
+   * land after). §13.6: these are the ONLY clears — never turn end, mode
+   * exit, resize, or tab switch. Off-mode, the tab's empty surface unmounts
+   * and the tab is released.
+   */
+  const inkClear = async (why: "manual" | "silent"): Promise<void> => {
     const tabId = inkTabId;
-    inkTabId = undefined;
     const hadStrokes = strokesSinceClear > 0;
     strokesSinceClear = 0;
-    if (tabId !== undefined) {
-      await relayRequestTab(tabId, "page", "ink", { on: false }).catch(() => {});
+    if (!inkOn()) {
+      inkTabId = undefined;
     }
-    if (hadStrokes && engine.threadOpen) {
-      if (clearEvent === "manual") {
-        engine.inkCleared(false);
-      } else if (clearEvent === "boundary") {
-        engine.inkCleared(true, "navigation");
-      }
+    if (tabId !== undefined) {
+      await relayRequestTab(tabId, "page", "ink", { clear: true }).catch(() => {});
+    }
+    if (hadStrokes && engine.threadOpen && why === "manual") {
+      engine.inkCleared(false);
+    }
+  };
+
+  /**
+   * The ink MODE toggle. The flag is standing state (§13.6 — it outlives
+   * turns); the POINTER claim it implies is per-turn: toggling on outside a
+   * turn just sets the flag, and the next turn entry claims the pointer.
+   */
+  const toggleInkMode = (): void => {
+    if (inkOn()) {
+      void inkModeOff();
+    } else if (phase() === "turn") {
+      void inkModeOn();
+    } else {
+      setInkOn(true);
+      setCaptureStatus("ink mode on — the pointer claims when a turn opens (⌘B)");
     }
   };
 
@@ -193,12 +233,7 @@ function Panel() {
       );
       return;
     }
-    // A mode is entered from the armed state (§13.5); entering it IS intent.
-    if (!engine.armed) {
-      engine.setArmed(true);
-    }
     inkTabId = tab.id;
-    strokesSinceClear = 0;
     setInkOn(true);
     setCaptureStatus("ink on — draw on the page; strokes land in shots natively");
   };
@@ -238,10 +273,11 @@ function Panel() {
         height: vp.h,
         dpr: vp.dpr,
       });
-      // A shot is a deliberate act: it arms, and shotDone opens the turn.
-      if (!engine.armed) {
-        engine.setArmed(true);
-      }
+      // Camera-style confirmation, strictly AFTER the grab returned so the
+      // wash can never be in the frame it confirms. (A same-second burst
+      // could still catch the tail of the previous flash — 240ms, accepted.)
+      // §13.6: manual shots flash; share-sampled frames (Phase C) never will.
+      void relayRequestTab(tab.id, "page", "flash", { kind: "shot" }).catch(() => {});
       const marker = engine.shotDone(
         { x: 0, y: 0, w: vp.w, h: vp.h },
         [],
@@ -259,23 +295,28 @@ function Panel() {
       const at = new Date().toLocaleTimeString();
       setCaptureStatus(
         isNotInvokedError(message)
-          ? `⚠ ${at} — tab not invoked: click the aiui toolbar button on THIS tab, then retry`
+          ? `⚠ ${at} — tab not invoked: press ⌘B twice (cancel + reopen the turn invokes THIS ` +
+              "tab) or click the aiui toolbar button, then retry"
           : `⚠ shot failed: ${message}`,
       );
     }
   };
 
-  // Reactive bridge + armed broadcast to this window's tabs. The broadcast
-  // also runs at boot: a reopened panel starts with a fresh (disarmed) engine,
-  // and without the boot sync a ring lit by the previous panel document would
-  // stay lit forever (found live, 2026-07-11).
-  const broadcastArmed = (on: boolean): void => {
+  // Ring broadcast to this window's tabs (§13.6: the ring is the page's ONLY
+  // evidence — armed = steady, in-turn = breathing). Also runs at boot: a
+  // reopened panel starts disarmed, and without the boot sync a ring lit by
+  // the previous panel document would stay lit forever (found live).
+  const broadcastRing = (): void => {
     const win = windowId();
+    const on = phase() !== "disarmed";
+    const composing = phase() === "turn" || phase() === "tweak";
     if (win !== undefined) {
       void chrome.tabs.query({ windowId: win }).then((tabs) => {
         for (const tab of tabs) {
           if (tab.id !== undefined) {
-            chrome.tabs.sendMessage(tab.id, { aiuiArm: 1, armed: on }).catch(() => {});
+            chrome.tabs
+              .sendMessage(tab.id, { aiuiRing: 1, armed: on && !composing, turn: composing })
+              .catch(() => {});
           }
         }
       });
@@ -284,13 +325,19 @@ function Panel() {
   engine.onEvent((event) => {
     setRev((r) => r + 1);
     if (event.type === "armed") {
-      setArmed(event.on);
-      broadcastArmed(event.on);
+      // ⚠ Phase-B bridge: engine.send() disarms (reference behavior). Under
+      // §13.6 send keeps you armed — re-arm immediately unless the panel
+      // itself is disarming (phase already "disarmed" then).
+      if (!event.on && phase() !== "disarmed") {
+        engine.setArmed(true);
+      }
     }
-    // Send/cancel/disarm ends ink mode with the turn (§8: a send clears the
-    // ink; strokes die with their thread) — no clear event after the close.
-    if (event.type === "thread-close" || (event.type === "armed" && !event.on)) {
-      void inkModeOff("none");
+    // An engine-side thread close (send ack path, future timeouts) must land
+    // the phase back at "armed" — §13.6: turn ends, you STAY armed, no new
+    // turn auto-begins. Ink strokes are NOT touched (divergence 5 clears them
+    // only on disarm).
+    if (event.type === "thread-close" && (phase() === "turn" || phase() === "tweak")) {
+      leavePhaseTurn("armed");
     }
   });
 
@@ -320,12 +367,21 @@ function Panel() {
       m.bounds !== undefined
     ) {
       strokesSinceClear += 1;
-      engine.strokeDone(m.points, m.bounds); // opens the turn (armed with ink mode)
+      // ⚠ Phase-B bridge: engine.strokeDone would implicitly OPEN a thread,
+      // and §13.6 says only ⌘B opens turns — so strokes reach the engine
+      // only while a turn is open. Between turns, drawing is page-whiteboard
+      // only (the strokes still land in later shots as page content).
+      if (phase() === "turn" || phase() === "tweak") {
+        engine.strokeDone(m.points, m.bounds);
+      }
     }
     if (m.aiuiInkClear === 1 && sender.tab?.id === inkTabId) {
       strokesSinceClear = 0;
       if (engine.threadOpen) {
         engine.inkCleared(true);
+      }
+      if (!inkOn()) {
+        inkTabId = undefined; // faded away after mode exit — tab released
       }
     }
     return false;
@@ -334,8 +390,9 @@ function Panel() {
   // ── tab provenance: activation is a context boundary (proposal §2) ─────────
   // On an open turn, a tab switch within this window emits `navigation` with
   // the two tabs' URLs — ordering in the log attributes everything before it
-  // to `from`. Ink follows the SPA rule: strokes must not float over a tab
-  // they weren't drawn on, so the boundary also ends ink mode.
+  // to `from`. §13.6: strokes are PER-TAB page state — a switch clears
+  // nothing (each tab keeps its own document-anchored ink); the in-turn
+  // captures simply re-point at the newly active tab.
   chrome.tabs.onActivated.addListener((info) => {
     void (async () => {
       if (info.windowId !== windowId()) {
@@ -363,7 +420,21 @@ function Panel() {
       if (engine.threadOpen) {
         engine.navigation(fromUrl ?? "", toUrl ?? "");
       }
-      await inkModeOff("boundary");
+      if (phase() === "turn") {
+        pointCaptureAt(info.tabId);
+        // The ink POINTER follows the active tab while the mode is on; the
+        // old tab keeps its strokes (deactivated surface, page state).
+        if (inkOn()) {
+          if (inkTabId !== undefined && inkTabId !== info.tabId) {
+            void relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
+          }
+          inkTabId = info.tabId;
+          void relayRequestTab(info.tabId, "page", "ink", {
+            on: true,
+            fadeSec: engine.settings.inkFadeSec,
+          }).catch(() => {});
+        }
+      }
     })();
   });
 
@@ -385,10 +456,7 @@ function Panel() {
         setTurnStatus("no selection on the page");
         return;
       }
-      if (!engine.armed) {
-        engine.setArmed(true);
-      }
-      engine.appSelection(payload); // opens the turn itself when none is open
+      engine.appSelection(payload);
       setTurnStatus("selection added to the turn");
     } catch (err) {
       setTurnStatus(
@@ -397,22 +465,308 @@ function Panel() {
     }
   };
 
-  // ── boot: window id, armed sync, then turn recovery from the mirror ───────
+  // ── the §13.6 state machine (grammar in leader.ts; spec in the proposal) ──
+  // disarmed ⊂ armed ⊂ in-a-turn (+ tweak excursion). Armed is presence —
+  // border only, everything passes through. Capture is per-TURN: keyboard
+  // while a turn is open (+ pointer when ink mode is on). ⌘B is the ONLY
+  // turn-opener; Esc is the in-turn cancel rung; T releases capture with the
+  // turn open and only ⌘B can resume (the page owns every ordinary key in
+  // tweak). Send/cancel keep you armed. Disarm abandons everything.
+  const [phase, setPhase] = createSignal<"disarmed" | "armed" | "turn" | "tweak">("disarmed");
+  /** The rejected key currently blipping in the strip (`× g`), if any. */
+  const [blip, setBlip] = createSignal<string | undefined>();
+  let blipTimer: number | undefined;
+  /** The tab whose content script holds the key capture, while in-turn. */
+  let leaderTabId: number | undefined;
+
+  const leaderState = (): LeaderState => ({
+    phase: phase() === "disarmed" ? "armed" : (phase() as "armed" | "turn" | "tweak"),
+    inkOn: inkOn(),
+    selectionPresent: selectionPresent(),
+  });
+
+  /** Point the page-side key capture at a tab (or nowhere). */
+  const pointCaptureAt = (tabId: number | undefined): void => {
+    const prev = leaderTabId;
+    leaderTabId = tabId;
+    if (prev !== undefined && prev !== tabId) {
+      void relayRequestTab(prev, "page", "keylayer", { on: false }).catch(() => {});
+    }
+    if (tabId !== undefined) {
+      // chrome:// pages have no content script — keys then work only with
+      // the panel focused; the hint strip is panel-only anyway (§13.6).
+      void relayRequestTab(tabId, "page", "keylayer", { on: true }).catch(() => {});
+    }
+  };
+
+  /** The active tab id, or undefined (no tab / no window yet). */
+  const activeTabId = async (): Promise<number | undefined> => {
+    const win = windowId();
+    if (win === undefined) {
+      return undefined;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, windowId: win });
+    return tab?.id;
+  };
+
+  /**
+   * Leave the in-turn phase for `to` ("armed" after send/cancel, "tweak" for
+   * the excursion): release the keyboard capture and the ink POINTER (the
+   * mode flag and the strokes persist — standing state, §13.6). Never touches
+   * the engine; callers own the engine verbs.
+   */
+  const leavePhaseTurn = (to: "armed" | "tweak"): void => {
+    setPhase(to);
+    setBlip(undefined);
+    pointCaptureAt(undefined);
+    if (inkTabId !== undefined) {
+      void relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
+    }
+    broadcastRing();
+  };
+
+  /** Enter the in-turn phase (⌘B open or tweak-resume): capture on. */
+  const enterPhaseTurn = async (): Promise<void> => {
+    setPhase("turn");
+    broadcastRing();
+    const tabId = await activeTabId();
+    if (tabId !== undefined && phase() === "turn") {
+      pointCaptureAt(tabId);
+      // Re-apply the standing ink-mode flag: the pointer claim is per-turn.
+      if (inkOn()) {
+        inkTabId = tabId;
+        void relayRequestTab(tabId, "page", "ink", {
+          on: true,
+          fadeSec: engine.settings.inkFadeSec,
+        }).catch(() => {});
+      }
+    }
+  };
+
+  /** End the open turn: `send` lowers it, `cancel` drops it. STAY ARMED. */
+  const endTurn = (how: "send" | "cancel"): void => {
+    // ⚠ Phase-B bridge: the engine thread only exists once a contentful act
+    // happened (no explicit open verb yet), so guard the engine verbs.
+    if (how === "send") {
+      if (engine.threadOpen) {
+        engine.send(); // emits thread-close + armed(false); bridges re-arm
+      } else {
+        setTurnStatus("nothing in the turn — cancelled");
+      }
+    } else if (engine.threadOpen) {
+      engine.stepOut(); // in-thread: closes with reason "cancel", stays armed
+    }
+    if (phase() === "turn" || phase() === "tweak") {
+      leavePhaseTurn("armed");
+    }
+  };
+
+  /** Disarm: abandon EVERYTHING (§13.6) — turn, ink, standing tools, ring. */
+  const disarm = (): void => {
+    setPhase("disarmed"); // first — the armed(false) bridge checks this
+    pointCaptureAt(undefined);
+    setBlip(undefined);
+    if (engine.threadOpen) {
+      engine.stepOut();
+    }
+    engine.setArmed(false);
+    setInkOn(false);
+    void inkClear("silent");
+    // Standing tools (hands-free, share) tear down here when they land
+    // (Phase C) — the §13.6 contract is recorded now.
+    broadcastRing();
+    setTurnStatus("disarmed — everything abandoned (⌘B arms and starts a turn)");
+  };
+
+  /**
+   * The leader (⌘B) — the state-dependent verb of §13.6's table:
+   * disarmed → arm + open a turn · armed → open a turn · in-turn → step out
+   * (cancel the turn) · tweak → RESUME the same turn.
+   */
+  const leaderPress = async (): Promise<void> => {
+    switch (phase()) {
+      case "disarmed":
+        engine.setArmed(true);
+        await enterPhaseTurn();
+        setTurnStatus("turn open — compose (⏎ sends, esc cancels, t tweaks)");
+        return;
+      case "armed":
+        await enterPhaseTurn();
+        setTurnStatus("turn open — compose (⏎ sends, esc cancels, t tweaks)");
+        return;
+      case "turn":
+        endTurn("cancel");
+        setTurnStatus("turn cancelled — still armed (⌘B starts the next)");
+        return;
+      case "tweak":
+        await enterPhaseTurn();
+        setTurnStatus("turn resumed");
+        return;
+    }
+  };
+
+  const leaderDispatch = (action: LeaderAction): void => {
+    if (action === "disarm") {
+      disarm();
+      return;
+    }
+    if (action === "send") {
+      endTurn("send");
+      return;
+    }
+    if (action === "cancel") {
+      endTurn("cancel");
+      setTurnStatus("turn cancelled — still armed (⌘B starts the next)");
+      return;
+    }
+    if (action === "tweak") {
+      leavePhaseTurn("tweak");
+      setTurnStatus("tweak — the page has keyboard and pointer; ⌘B resumes the turn");
+      return;
+    }
+    if (session.handle.port() === undefined) {
+      setTurnStatus("⚠ bind a channel first (Session pane)");
+      return;
+    }
+    if (action === "ink") {
+      toggleInkMode();
+    } else if (action === "clear") {
+      void inkClear("manual");
+    } else if (action === "shot") {
+      void takeShot();
+    } else if (action === "selection") {
+      void addSelection();
+    }
+  };
+
+  /** The `× key` feedback for a swallowed typo — panel strip + page flash. */
+  const blipKey = (key: string): void => {
+    setBlip(key);
+    if (blipTimer !== undefined) {
+      clearTimeout(blipTimer);
+    }
+    blipTimer = window.setTimeout(() => setBlip(undefined), LEADER_BLIP_MS);
+    if (leaderTabId !== undefined) {
+      void relayRequestTab(leaderTabId, "page", "flash", { kind: "miss" }).catch(() => {});
+    }
+  };
+
+  const applyLeaderKey = (
+    key: string,
+    keyPhase: "down" | "up",
+    repeat: boolean,
+  ): "handled" | "pass" => {
+    const verdict = leaderKeyEvent(leaderState(), key, keyPhase, repeat);
+    if (verdict.kind === "pass") {
+      return "pass";
+    }
+    if (verdict.kind === "action") {
+      leaderDispatch(verdict.action);
+    } else if (verdict.kind === "ignored") {
+      blipKey(verdict.key);
+    }
+    return "handled";
+  };
+
+  // The panel document's own key capture (focus may sit here, especially
+  // right after the SW opens the panel). Yields to the panel's OWN form
+  // fields — tool UI, not the website; the wholesale claim is per-turn and
+  // on the page. Lives as long as the panel document.
+  const onPanelKey = (keyPhase: "down" | "up") => (event: KeyboardEvent) => {
+    if (isTypingTarget(event)) {
+      return;
+    }
+    if (applyLeaderKey(event.key, keyPhase, event.repeat) === "handled") {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+  document.addEventListener("keydown", onPanelKey("down"), true);
+  document.addEventListener("keyup", onPanelKey("up"), true);
+
+  // Leader broadcasts: the SW's press notification carries no sender.tab (it
+  // is not a content script), so this is its own listener, not a branch of
+  // the tab-filtered one above.
+  chrome.runtime.onMessage.addListener((msg, sender) => {
+    if (msg === null || typeof msg !== "object") {
+      return false;
+    }
+    const m = msg as {
+      aiuiLeader?: number;
+      windowId?: number;
+      aiuiLeaderKey?: number;
+      key?: string;
+      aiuiPageHello?: number;
+    };
+    if (m.aiuiLeader === 1 && m.windowId === windowId()) {
+      void leaderPress();
+    }
+    if (m.aiuiLeaderKey === 1 && sender.tab?.windowId === windowId() && typeof m.key === "string") {
+      applyLeaderKey(m.key, "down", false);
+    }
+    // A fresh content script's state pull (navigation, new tab, HMR swap):
+    // answer with the ring state, and re-point the in-turn key capture if the
+    // hello came from the window's active tab. Without this, state silently
+    // died at every navigation (found live 2026-07-11 — the back button
+    // "fixing" it was bfcache resurrecting old listeners).
+    const helloTab = sender.tab;
+    if (
+      m.aiuiPageHello === 1 &&
+      helloTab !== undefined &&
+      helloTab.windowId === windowId() &&
+      helloTab.id !== undefined
+    ) {
+      const composing = phase() === "turn" || phase() === "tweak";
+      chrome.tabs
+        .sendMessage(helloTab.id, {
+          aiuiRing: 1,
+          armed: phase() !== "disarmed" && !composing,
+          turn: composing,
+        })
+        .catch(() => {});
+      if (phase() === "turn" && helloTab.active) {
+        pointCaptureAt(helloTab.id);
+      }
+    }
+    return false;
+  });
+
+  // ── boot: window id, ring sync, then turn recovery from the mirror ────────
   void chrome.windows.getCurrent().then(async (w) => {
     setWindowId(w.id);
-    broadcastArmed(engine.armed);
+    broadcastRing(); // fresh panel = disarmed; kill any stale ring
     if (w.id !== undefined) {
       const [tab] = await chrome.tabs.query({ active: true, windowId: w.id });
       if (tab?.id !== undefined) {
         lastActiveTab = { id: tab.id, ...(tab.url !== undefined ? { url: tab.url } : {}) };
       }
     }
+    // Recovery first, pending leader second: a recovered turn re-enters the
+    // in-turn phase, and a parked ⌘B then means its ladder step, not a
+    // surprise second turn.
     const recovered = await mirror.recover();
     if (recovered !== undefined) {
       engine.replay(recovered.events, { threadOpen: recovered.threadOpen });
+      if (recovered.threadOpen) {
+        await enterPhaseTurn();
+      } else {
+        setPhase("armed"); // replay forces engine.armed = true
+        broadcastRing();
+      }
       setTurnStatus(
-        `recovered an in-progress turn (${recovered.events.length} events) — Send finalizes, cancel discards`,
+        `recovered an in-progress turn (${recovered.events.length} events) — ⏎ sends, esc discards`,
       );
+    }
+    // A leader press may have opened this panel — consume the parked press
+    // (missed broadcasts are the rule during boot) if it is fresh enough to
+    // still be what the user means.
+    if (w.id !== undefined) {
+      const pending = await relayRequest<PendingLeader | null>("sw", "leaderPending", {
+        windowId: w.id,
+      }).catch(() => null);
+      if (leaderPendingFresh(pending, Date.now())) {
+        void leaderPress();
+      }
     }
   });
 
@@ -433,18 +787,17 @@ function Panel() {
       <style>{PANEL_STYLES}</style>
       <div class="hdr">
         <span class="mark">✳ aiui</span>
+        <span class={phase() === "disarmed" ? "arm" : "arm on"}>
+          {phase() === "disarmed" ? "disarmed — ⌘B" : phase()}
+        </span>
         <button
           type="button"
-          class={armed() ? "arm on" : "arm"}
-          disabled={!armed() && session.handle.port() === undefined}
-          title={
-            !armed() && session.handle.port() === undefined
-              ? "bind a channel first (Session pane)"
-              : undefined
-          }
-          onClick={() => engine.setArmed(!engine.armed)}
+          class="ghost"
+          disabled={phase() === "disarmed"}
+          title="abandon everything: turn, ink, standing tools (§13.6)"
+          onClick={() => disarm()}
         >
-          {armed() ? "armed" : "disarmed"}
+          disarm
         </button>
         <span class={chipClass()}>
           <span class="dot" />
@@ -452,12 +805,24 @@ function Panel() {
         </span>
         <span class="win">win {windowId() ?? "?"}</span>
       </div>
+      {phase() === "turn" ? (
+        <div class="leader">
+          ⌨ {leaderHintText(leaderState())}
+          {blip() !== undefined ? ` — × ${blip()}` : ""}
+        </div>
+      ) : null}
+      {phase() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
       <PaneStack>
         <TurnPane
           engine={engine}
           rev={rev}
-          armed={armed}
-          onArmToggle={() => engine.setArmed(true)}
+          canCompose={() => phase() === "turn"}
+          onNoTurn={() => setTurnStatus("⚠ no turn open — ⌘B starts one")}
+          onSend={() => endTurn("send")}
+          onCancel={() => {
+            endTurn("cancel");
+            setTurnStatus("turn cancelled — still armed (⌘B starts the next)");
+          }}
           status={turnStatus}
           loweredPrompt={loweredPrompt}
           onAddSelection={() => void addSelection()}
@@ -466,9 +831,14 @@ function Panel() {
         <CapturePane
           engine={engine}
           rev={rev}
-          onShot={() => void takeShot()}
+          onShot={() =>
+            phase() === "turn"
+              ? void takeShot()
+              : setCaptureStatus("⚠ no turn open — ⌘B starts one")
+          }
           inkOn={inkOn}
-          onInkToggle={() => void (inkOn() ? inkModeOff("manual") : inkModeOn())}
+          onInkToggle={() => toggleInkMode()}
+          onInkClear={() => void inkClear("manual")}
           status={captureStatus}
         />
         {session.view()}

@@ -42,6 +42,17 @@ export interface InkSurfaceOptions {
   width?: () => number;
   /** Capture local pointer input into strokes. Defaults to `true`. */
   localInput?: boolean;
+  /**
+   * Anchor strokes to the DOCUMENT instead of the viewport: points are stored
+   * in document coordinates (client + scroll) and the draw loop subtracts the
+   * live scroll offset each frame, so strokes follow the page as it scrolls —
+   * annotations stay glued to the content they mark. Content reflow (a resize
+   * re-wrapping text) is deliberately NOT tracked: coordinates, not DOM
+   * anchors. Remote-fed points are mapped the same way at ingestion (the wire
+   * still speaks viewport CSS pixels). Off by default — the paint sidecar's
+   * full-viewport surfaces don't scroll. (Extension proposal §13.6.)
+   */
+  documentAnchored?: boolean;
   /** A local stroke began (pen-down). Fires before any points. */
   onStrokeStart?: (stroke: LocalStroke) => void;
   /** A point was appended to the in-flight local stroke. */
@@ -154,7 +165,7 @@ export class InkSurface {
   remoteBegin(id: string, init: { style: StrokeStyle; point: InkPoint }): void {
     const stroke: Stroke = {
       id,
-      points: [init.point],
+      points: [this.toStored(init.point)],
       color: init.style.color,
       width: init.style.width,
       bornAt: 0,
@@ -165,7 +176,7 @@ export class InkSurface {
   }
 
   remotePoint(id: string, point: InkPoint): void {
-    this.liveById.get(id)?.points.push(point);
+    this.liveById.get(id)?.points.push(this.toStored(point));
   }
 
   remoteEnd(id: string, point?: InkPoint): void {
@@ -174,7 +185,7 @@ export class InkSurface {
       return;
     }
     if (point) {
-      stroke.points.push(point);
+      stroke.points.push(this.toStored(point));
     }
     stroke.live = false;
     stroke.bornAt = this.now();
@@ -219,9 +230,24 @@ export class InkSurface {
     return typeof performance !== "undefined" ? performance.now() : Date.now();
   }
 
+  /** The stored-coordinate origin: the live scroll offset when document-anchored. */
+  private origin(): { x: number; y: number } {
+    if (this.opts.documentAnchored) {
+      return { x: window.scrollX, y: window.scrollY };
+    }
+    return { x: 0, y: 0 };
+  }
+
+  /** Map an externally-supplied (viewport CSS px) point into stored coordinates. */
+  private toStored(point: InkPoint): InkPoint {
+    const o = this.origin();
+    return o.x === 0 && o.y === 0 ? point : { ...point, x: point.x + o.x, y: point.y + o.y };
+  }
+
   private localPoint(e: PointerEvent): InkPoint {
     const rect = this.canvas.getBoundingClientRect();
-    const point: InkPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const o = this.origin();
+    const point: InkPoint = { x: e.clientX - rect.left + o.x, y: e.clientY - rect.top + o.y };
     // 0 pressure is what a mouse reports; treat only real pen/touch pressure as
     // meaningful so a mouse line stays a constant width.
     if (e.pointerType === "pen" || e.pointerType === "touch") {
@@ -322,6 +348,9 @@ export class InkSurface {
 
     const fadeMs = this.opts.fadeSec ? this.opts.fadeSec() * 1000 : 0;
     const now = this.now();
+    // Document-anchored surfaces subtract the live scroll every frame — the
+    // paint loop already runs per-rAF, so strokes track scrolling for free.
+    const o = this.origin();
     let expired = 0;
     for (const stroke of this.strokes) {
       const alpha = strokeAlpha(stroke, now, fadeMs);
@@ -329,7 +358,7 @@ export class InkSurface {
         expired++;
         continue;
       }
-      drawStroke(ctx, stroke, alpha, 1, 0, 0);
+      drawStroke(ctx, stroke, alpha, 1, -o.x, -o.y);
     }
     if (expired > 0 && expired === this.strokes.length && this.liveById.size === 0) {
       this.clear(true);

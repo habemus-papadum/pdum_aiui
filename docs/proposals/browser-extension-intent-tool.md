@@ -436,8 +436,140 @@ sharing its machinery:
   armed→ink default is a page-overlay convention that does not carry over.
 - **Keyboard is leader-key modal.** Page keys belong to the page; a leader chord opens aiui's
   key layer, then single keys pick actions/modes (I → ink, a slurp key, Esc leaves). Built on
-  the same keymap/modal-kit machinery as the overlay — shared code, different grammar. Open:
-  the leader itself, and whether Chrome `commands` global shortcuts host it.
+  the same keymap/modal-kit machinery as the overlay — shared code, different grammar.
+  **Decided (2026-07-11, implemented; revised same day to TURBO semantics after live use):**
+  the leader IS a Chrome `commands` global shortcut (`aiui-leader`, suggested ⌘B / Ctrl+B,
+  rebindable at `chrome://extensions/shortcuts`) — it works with either the page or the panel
+  focused, and the press is an extension *invocation*, so it grants the tab the same
+  tabCapture standing as a toolbar click (the §1 invocation-gate softener, measured M8).
+  The leader TOGGLES **turbo mode**, sticky until the leader or Esc exits: while on, aiui owns
+  the page's keyboard wholesale — bound keys (`i` ink, `s` shot, `a` add selection, `d` disarm
+  while armed) fire repeatedly, and an unbound key is swallowed and IGNORED with a `× key`
+  feedback blip, never an exit and never leaked to the page (you are not interacting with the
+  website; the pulsing indicator ring + persistent hint strip say so). The panel's own form
+  fields stay typeable (tool UI, not the website). Turbo survives tab switches (the key
+  capture re-points; the invocation gate does not — the shot-failure status names the
+  ⌘B-twice remedy). Single swallow-fallback `KeyLayer` (`aiui-viz/modal`) resolved by the
+  panel — the per-window brain — with keys arriving from whichever document has focus (the
+  panel's own capture listener, or the content script forwarding while it synchronously
+  swallows). The hint strip (panel header + page indicator badge) renders from the same rows
+  the resolver reads (`src/panel/leader.ts`).
+  **Superseded (2026-07-11, later the same day) by §13.6** — "turbo" as a state distinct from
+  armed is gone; the keyboard claim moved from armed to *in-a-turn*. §13.6 is the current
+  interaction model; this paragraph stands as the record of the intermediate rung.
+
+## 13.6 · The extension interaction model + integration plan (decided 2026-07-11)
+
+Worked out live with the user across several rounds, after a course correction: the web
+overlay is the REFERENCE implementation — its semantics port unless a divergence is decided
+per-item, on purpose, here. This section is that record, plus the plan for integrating the
+worked-out overlay machinery into the panel.
+
+### The state machine: disarmed ⊂ armed ⊂ in-a-turn
+
+**Disarmed** — inert. Nothing on the page, nothing running.
+
+**Armed** — *presence, not capture*. The only page evidence is the glowing border; **keyboard
+and pointer pass through to the application untouched**. Armed hosts the standing state that
+outlives turns:
+
+- the **ink mode flag** and the page-anchored strokes already drawn;
+- **hands-free mic** (open, panel meter live, ZERO audio leaves the machine between turns);
+- **share** (sampling; frames go nowhere between turns — not-capturing is a later optimization);
+- **remote ink**: iPad strokes render whenever armed, turn or no turn (remote drawing needs no
+  local pointer capture — exactly why it works while the local pointer stays the app's).
+
+**In a turn** — capture begins. The **keyboard** routes to aiui (unknown keys swallowed with
+the pink miss-blip; the panel's own form fields exempt); **if ink mode is on, the pointer
+too** (local drawing). Content flows to the wire: strokes, shots, selections, talk segments,
+share frames. Turn end releases capture; standing state stays; **you remain armed**.
+
+**Tweak (T, in a turn)** — the reference's handover, extension-shaped: the turn stays open but
+ALL capture releases — the page gets keyboard and pointer back. Because the page then owns
+every ordinary key, the only reachable binding is the browser-global leader: **⌘B resumes the
+same turn** (never starts a new one from tweak).
+
+**Turns are explicit: nothing opens a turn except ⌘B.** Not a stroke, not a shot key, not
+speech, not a selection. (Forced, not stylistic: with the mic standing open across turns,
+"audio is sent only during a turn" requires something other than speech to define the turn's
+start.)
+
+**⌘B / Esc / T:**
+
+| State | ⌘B | Esc | T |
+|---|---|---|---|
+| disarmed | arm **and** start a turn (arming is implicit; a dedicated arm shortcut wouldn't hurt, later) | page's | page's |
+| armed, no turn | start a turn | **page's** (keyboard is not ours here) | page's |
+| in a turn | step out one level: sub-layer (strip/picker, when they exist) → cancel the turn | same ladder | enter tweak |
+| tweak | **resume the open turn** | page's | page's |
+
+**Disarm** — abandon everything: ink cleared, partial turn dropped, hands-free/share stopped,
+border off. Reachable via `d` during a turn, the panel's disarm button anytime, maybe a
+dedicated shortcut later. Esc cannot be the disarm rung — outside a turn it belongs to the
+page, which is the point.
+
+**Ink** (planned divergence, three parts): `i` toggles the mode (pointer claim only — never
+touches strokes); strokes are **page-anchored** — document coordinates, they follow scroll,
+they are per-tab and still there when you tab back; reflow (window resize re-wrapping text) is
+explicitly NOT tracked. Clears: **C or disarm. Nothing else** — not turn end, not send, not
+mode exit, not resize, not tab switch. Drawing works whenever ink mode is on; stroke events
+enter the log only while a turn is open.
+
+**UI**: panel-first, **no pill, no page badge** — the page carries exactly what should be
+capturable: the border and the ink. All controls, hints, and the mode-gated sliders (ink fade,
+share fps — the overlay command bar's tenants) live in the side panel, enabled by mode.
+
+**Flashes**: manual shots keep the blue confirmation flash (easy off-switch when it grates);
+**share-sampled frames never flash** (periodic strobing is noise). The pink miss-blip stays.
+
+### Divergence ledger vs. the reference (each decided, none improvised)
+
+| # | Reference | Extension | Why |
+|---|---|---|---|
+| 1 | No begin gesture — first contentful act opens the turn | **⌘B is the only turn-opener** | standing mic/share across turns need an explicit send-gate boundary |
+| 2 | `send()` disarms | send/cancel **keep you armed** | armed is presence; the next ⌘B starts the next turn |
+| 3 | Armed = ink active (drag draws); no mode key | **`i`-modal ink** | arbitrary websites need their pointer by default |
+| 4 | Ink viewport-anchored, scroll unhandled | **page-anchored** (follows scroll, per-tab) | annotating real, scrolling pages |
+| 5 | Disarm keeps ink (page is a whiteboard) | **disarm clears ink** | disarm = abandon everything |
+| 6 | Armed keymap passes unclaimed keys, yields to inputs | **in-turn keyboard is claimed wholesale** (miss-blip) | composing is explicit and bounded here |
+| 7 | Pill + page HUD/preview layers | **panel-first; page = border + ink only** | captures must not contain tool chrome |
+| 8 | T/Esc resume tweak | **⌘B resumes** | in tweak the page owns every ordinary key; only the global leader can reach us |
+| 9 | Ambient selection + pre-arm staging | explicit pull (`a`) — §13.5, unchanged | decided at step 4 |
+
+### Integration plan (no code until this section is agreed)
+
+**Phase A — implement the model in the extension** (extension-local): the state machine above
+replaces the current turbo semantics (`leader.ts` grammar + panel state); ⌘B begin/ladder/
+resume; T/tweak; ink page-anchoring (document-coordinate strokes — new engineering, replacing
+both the viewport-anchored `aiui-ink` usage and the resize-clear patch); strip the page badge/
+hint strip (panel-only); flash rules; engine verbs (`setMode`, `stepOut`) instead of
+panel-local mode state where they fit today.
+
+**Phase B — host-seam extraction upstream** (`aiui-dev-overlay`, behavior-identical for the
+overlay, live-verified): split the page-coupled stratum of `modality.ts` behind a PageSurface
+seam next to `IntentToolContext`/`MultimodalDeps` (ink layer, capture broker, viewport,
+selection/navigation watchers, locator, event scope, cursor). Fix the engine gaps the
+extension needs, without breaking the overlay: a public explicit turn-open verb (divergence 1;
+today threads open only via contentful acts), send-without-disarm as an option (divergence 2),
+`onEvent` unsubscribe, a `tab-switch` context event, `stroke` outside turns must not
+auto-open (divergence 1 again — today `strokeDone` calls `ensureThread`), TurnStore persisting
+`mode`, `renderNavigation` export. Converge the two ink implementations (overlay `Ink` vs
+`aiui-ink` `InkSurface`) into one while in there.
+
+**Phase C — the extension becomes a host**: the panel implements `IntentToolContext`
+(openThread → the shared wire shell against the bound port; status/errors → panel; hudSlot →
+panel header; setUiMode → border/indicator), the content script implements PageSurface, the
+SW stays the capture broker (tabCapture behind the `DisplayCapture` seam). Mount the
+multimodal modality in the panel; retire the hand-rolled panes piecemeal (Turn pane body → the
+real fold-rendering preview with its ✕-retraction chips; capture controls → the command-bar
+tenants, panel-hosted). Talk, region shots + locator, share, jump mode, config strip, help
+arrive as the modality's existing features lighting up — ported, not reimplemented. The
+guide's keymap table (`docs/guide/intent-overlay.md`) is the acceptance checklist for
+everything that has a reference counterpart; this section's tables are the checklist for the
+divergences.
+
+Turn-document editing (amendments, paste — the append-only revisit) comes after Phase C's
+preview port, as bounded affordances on the *shared* preview so the overlay gains it too.
 
 ## 14 · Open questions
 

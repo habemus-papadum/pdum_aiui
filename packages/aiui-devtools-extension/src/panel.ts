@@ -41,6 +41,8 @@ interface LaunchChromeDevtools {
   executablePath?: string;
   channel?: string;
   headless?: boolean;
+  /** Current launchers send a list; `extensionDir` is the pre-0.4 spelling. */
+  extensionDirs?: string[];
   extensionDir?: string;
 }
 interface LaunchInfoPayload {
@@ -183,8 +185,10 @@ const renderInfo = (info: Record<string, unknown> | null): void => {
       if (chrome.userDataDir) {
         rows.push(["browser profile", chrome.userDataDir]);
       }
-      if (chrome.extensionDir) {
-        rows.push(["panel auto-load", chrome.extensionDir]);
+      const extensionDirs =
+        chrome.extensionDirs ?? (chrome.extensionDir ? [chrome.extensionDir] : []);
+      if (extensionDirs.length) {
+        rows.push(["extensions auto-load", extensionDirs.join(" · ")]);
       }
     }
   }

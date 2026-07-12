@@ -1,11 +1,16 @@
 /**
- * The minimal in-page indicator: the only visible thing an aiui extension puts
- * into a page. A small fixed dot (bottom-right, shadow-DOM isolated) plus an
- * optional viewport ring shown while armed — enough to answer "is the tool
- * armed on this tab?" with the side panel closed, and a truthful "tool was
- * armed" marker in captured frames (the indicator, like ink, is page content
- * and so lands in tab captures by design; all other tool chrome lives in the
- * side panel, which tab-scoped captures cannot see).
+ * The minimal in-page indicator: the ONLY page chrome an aiui extension adds.
+ *
+ * Per the extension proposal §13.6 the page carries exactly what should be
+ * capturable — the glowing border and the ink — so this is a viewport ring
+ * plus the transient feedback flashes, and nothing else (the old dot/badge
+ * anchor pill is gone; every control and hint lives in the side panel).
+ *
+ * Ring states: `armed` = steady glow (presence — everything still passes
+ * through to the page); `turn` = breathing (a turn is open: the keyboard is
+ * captured, content is being composed). Both are difference-blended neutrals
+ * so they read on any background without sniffing it (a colored source flips
+ * hue with the backdrop — measured live; see git history).
  *
  * Dependency-free (no Solid): content scripts stay slim.
  */
@@ -14,19 +19,22 @@
 const HOST_ID = "aiui-webext-indicator-host";
 
 export interface IndicatorState {
-  /** Show the armed ring + brighten the dot. */
+  /** Steady ring: the tool is armed (presence, not capture). */
   armed?: boolean;
-  /** Short mode label rendered beside the dot (e.g. "ink"); empty hides it. */
-  mode?: string;
-  /** Free-form badge text (dev builds show HMR probes here); empty hides it. */
-  badge?: string;
+  /** Breathing ring: a turn is open (keyboard captured, composing). */
+  turn?: boolean;
 }
 
 export interface IndicatorHandle {
   /** Update what the indicator shows. Fields not given are unchanged. */
   set(state: IndicatorState): void;
-  /** Register a click handler on the dot (e.g. open/focus the panel). */
-  onClick(handler: () => void): () => void;
+  /**
+   * A brief wash over the whole viewport. `miss` (soft pink + blur): "that
+   * input wasn't registered" — the in-turn swallowed-typo feedback. `shot`
+   * (aiui blue): "the frame was captured" — fired only AFTER the grab
+   * returns, camera-style, and never for share-sampled frames (§13.6).
+   */
+  flash(kind: "miss" | "shot"): void;
   /** Remove the indicator from the page. */
   unmount(): void;
 }
@@ -35,36 +43,48 @@ const STYLES = `
   :host { all: initial; }
   .ring {
     position: fixed; inset: 0; z-index: 2147483646; pointer-events: none;
-    /* A soft glow, not a hard border: thicker and fuzzier reads as "live"
-       without drawing a line through page content at the edges. */
-    box-shadow: inset 0 0 22px 5px rgba(138, 180, 248, 0.4);
+    /* A soft glow, difference-blended so it reads on ANY background without
+       sniffing it. The source is NEUTRAL on purpose: under difference a
+       colored source flips hue with the backdrop (the original blue computed
+       to an ugly brown on white — rejected live 2026-07-11), while a neutral
+       one renders as a dark edge on light pages and a light edge on dark
+       ones — the same vignette feel everywhere. Kept tight: the ring marks
+       the viewport edge and must not reach into the page. */
+    box-shadow: inset 0 0 10px 2px rgba(255, 255, 255, 0.5);
+    mix-blend-mode: difference;
     display: none;
   }
-  .anchor {
-    position: fixed; right: 10px; bottom: 10px; z-index: 2147483647;
-    display: inline-flex; align-items: center; gap: 5px;
-    font: 11px ui-monospace, monospace; color: #cfd6e4;
-    background: rgba(23, 27, 37, 0.85); border: 1px solid #2a3140;
-    border-radius: 999px; padding: 3px 7px; cursor: pointer; user-select: none;
-  }
-  .dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #4a5468; transition: background 120ms;
-  }
-  .armed .dot { background: #8ab4f8; }
   .armed .ring { display: block; }
-  .label:empty, .badge:empty { display: none; }
-  .badge { color: #9aa4bd; }
+  /* In a turn the ring breathes — composing must be unmistakable at a
+     glance. Brightness modulation at fixed geometry (a radius pulse read as
+     blinking annoyance, rejected live). */
+  .turn .ring { display: block; animation: aiui-turn-pulse 1.6s ease-in-out infinite; }
+  @keyframes aiui-turn-pulse {
+    0%, 100% { box-shadow: inset 0 0 10px 2px rgba(255, 255, 255, 0.4); }
+    50% { box-shadow: inset 0 0 12px 3px rgba(255, 255, 255, 0.85); }
+  }
+  /* Full-viewport feedback washes. Above the ring; re-triggered per flash.
+     miss = fuzzy pink ("not registered"), shot = aiui blue ("captured"). */
+  .flash {
+    position: fixed; inset: 0; z-index: 2147483645; pointer-events: none;
+    opacity: 0;
+  }
+  .flash.miss { background: rgba(255, 92, 128, 0.16); backdrop-filter: blur(2px); }
+  .flash.shot { background: rgba(138, 180, 248, 0.25); }
+  @keyframes aiui-flash-fade {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
 `;
 
 /**
- * Mount the indicator into the current page. Double-mount safe: a second call
- * returns a handle to the existing element.
+ * Mount the indicator into the current page. Double-mount safe: a stale host
+ * from a torn-down script (HMR) is replaced wholesale.
  */
 export function mountIndicator(): IndicatorHandle {
   const existing = document.getElementById(HOST_ID);
   if (existing) {
-    existing.remove(); // a stale host from a torn-down script: replace wholesale
+    existing.remove();
   }
   const host = document.createElement("div");
   host.id = HOST_ID;
@@ -76,45 +96,31 @@ export function mountIndicator(): IndicatorHandle {
   const root = document.createElement("div");
   const ring = document.createElement("div");
   ring.className = "ring";
-  const anchor = document.createElement("div");
-  anchor.className = "anchor";
-  const dot = document.createElement("span");
-  dot.className = "dot";
-  const label = document.createElement("span");
-  label.className = "label";
-  const badge = document.createElement("span");
-  badge.className = "badge";
-  anchor.append(dot, label, badge);
-  root.append(ring, anchor);
+  const flash = document.createElement("div");
+  flash.className = "flash";
+  root.append(ring, flash);
   shadow.append(style, root);
   document.documentElement.append(host);
-
-  const clickHandlers = new Set<() => void>();
-  anchor.addEventListener("click", () => {
-    for (const handler of clickHandlers) {
-      handler();
-    }
-  });
 
   return {
     set(state) {
       if (state.armed !== undefined) {
         root.classList.toggle("armed", state.armed);
       }
-      if (state.mode !== undefined) {
-        label.textContent = state.mode;
-      }
-      if (state.badge !== undefined) {
-        badge.textContent = state.badge;
+      if (state.turn !== undefined) {
+        root.classList.toggle("turn", state.turn);
       }
     },
-    onClick(handler) {
-      clickHandlers.add(handler);
-      return () => clickHandlers.delete(handler);
+    flash(kind) {
+      flash.className = `flash ${kind}`;
+      // Restarting the animation needs a reflow between "none" and re-set —
+      // the standard retrigger dance, so rapid flashes each get a fresh blink.
+      flash.style.animation = "none";
+      void flash.offsetWidth;
+      flash.style.animation = `aiui-flash-fade ${kind === "shot" ? 240 : 280}ms ease-out`;
     },
     unmount() {
       host.remove();
-      clickHandlers.clear();
     },
   };
 }

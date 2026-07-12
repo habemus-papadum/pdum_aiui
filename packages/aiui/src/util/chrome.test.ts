@@ -1,3 +1,5 @@
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -7,6 +9,8 @@ import {
   chromeMcpServer,
   chromeUserDataDir,
   devtoolsExtensionDir,
+  findIntentExtension,
+  intentExtensionDevPort,
   resolveChromeSettings,
 } from "./chrome";
 
@@ -184,10 +188,22 @@ describe("chromeMcpServer", () => {
     expect(channel).toContain("canary");
   });
 
-  it("asks Chrome to load the extension when a dir is given", () => {
-    const { args } = chromeMcpServer(settings(), "/ext/dir");
+  it("asks Chrome to load the extensions when dirs are given", () => {
+    const { args } = chromeMcpServer(settings(), ["/ext/dir"]);
     expect(args).toContain("--chromeArg=--load-extension=/ext/dir");
     expect(args).toContain("--ignoreDefaultChromeArg=--disable-extensions");
+  });
+
+  it("comma-joins multiple extension dirs into one --load-extension", () => {
+    const { args } = chromeMcpServer(settings(), ["/ext/devtools", "/ext/intent"]);
+    expect(args).toContain("--chromeArg=--load-extension=/ext/devtools,/ext/intent");
+  });
+
+  it("passes no --load-extension when there are no dirs", () => {
+    for (const dirs of [[], undefined]) {
+      const { args } = chromeMcpServer(settings(), dirs);
+      expect(args.some((a) => a.includes("--load-extension"))).toBe(false);
+    }
   });
 });
 
@@ -209,5 +225,40 @@ describe("devtoolsExtensionDir", () => {
     if (dir !== undefined) {
       expect(dir.endsWith(join("aiui-devtools-extension", "extension"))).toBe(true);
     }
+  });
+});
+
+describe("findIntentExtension", () => {
+  it("never reports an unloadable dir", () => {
+    // Environment-dependent like devtoolsExtensionDir above: the state varies
+    // with whether the extension's dev loop has produced a dist/ here — but
+    // "ready" must always mean a loadable unpacked extension.
+    const intent = findIntentExtension();
+    if (intent.state === "ready") {
+      expect(intent.dir.endsWith(join("aiui-extension", "dist"))).toBe(true);
+      expect(existsSync(join(intent.dir, "manifest.json"))).toBe(true);
+    }
+  });
+});
+
+describe("intentExtensionDevPort", () => {
+  it("reads the dev-server port out of CRXJS dev loader stubs", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aiui-intent-ext-"));
+    writeFileSync(
+      join(dir, "service-worker-loader.js"),
+      "import 'http://localhost:5317/@vite/env';\nimport 'http://localhost:5317/src/sw.ts';\n",
+    );
+    expect(intentExtensionDevPort(dir)).toBe(5317);
+  });
+
+  it("treats relative (production) imports as not dev-shaped", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aiui-intent-ext-"));
+    writeFileSync(join(dir, "service-worker-loader.js"), "import './assets/sw.js';\n");
+    expect(intentExtensionDevPort(dir)).toBeUndefined();
+  });
+
+  it("is undefined when the loader stub is missing entirely", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aiui-intent-ext-"));
+    expect(intentExtensionDevPort(dir)).toBeUndefined();
   });
 });

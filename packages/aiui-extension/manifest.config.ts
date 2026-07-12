@@ -37,6 +37,19 @@ export default defineManifest({
       32: "icons/icon32.png",
     },
   },
+  // The leader (proposal §13.5): one global shortcut opens the modal key
+  // layer (then i/s/a/d/esc — see src/panel/leader.ts). A chrome.commands
+  // press is ALSO an extension invocation, so it grants the tab the same
+  // activeTab/tabCapture standing as a toolbar click — the softener for the
+  // invocation gate (CONTINUITY trap 4). Users rebind it at
+  // chrome://extensions/shortcuts; if Chrome refuses the suggestion (already
+  // taken), the command simply starts unbound there.
+  commands: {
+    "aiui-leader": {
+      suggested_key: { default: "Ctrl+B", mac: "Command+B" },
+      description: "aiui: open the key layer (leader)",
+    },
+  },
   background: {
     service_worker: "src/sw.ts",
     type: "module",

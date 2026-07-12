@@ -16,6 +16,7 @@
  */
 import { ensureOffscreenDocument, relayRequest, serveRelay } from "@habemus-papadum/aiui-webext";
 import type { CaptureRequest, ShotGrab } from "./capture";
+import type { PendingLeader } from "./panel/leader";
 
 /** The static capture room under public/ — see that file for why it's static. */
 const OFFSCREEN_URL = "offscreen.html";
@@ -30,6 +31,47 @@ chrome.action.onClicked.addListener((tab) => {
   if (tab.windowId !== undefined) {
     void chrome.sidePanel.open({ windowId: tab.windowId });
   }
+});
+
+// ── the leader (proposal §13.5) ──────────────────────────────────────────────
+// The global shortcut is an extension INVOCATION (like the action click above,
+// it grants the tab activeTab/tabCapture standing — the invocation-gate
+// softener), so it lands in the same ledger. The panel is the layer's brain;
+// this worker only makes sure one exists for the window and tells it. A panel
+// that is still booting misses the broadcast, so the press is also parked in
+// `pendingLeaders` for the boot-time pull (relay `leaderPending` below; the
+// panel applies the freshness rule — leader.ts owns the TTL).
+
+/** windowId → the most recent unconsumed leader press (worker-lifetime, like
+ * the invocation ledger: a debugging aid and boot hand-off, never truth). */
+const pendingLeaders = new Map<number, PendingLeader>();
+
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== "aiui-leader") {
+    return;
+  }
+  const windowId = tab?.windowId;
+  if (tab?.id !== undefined) {
+    invocations.set(tab.id, new Date().toISOString());
+  }
+  if (windowId === undefined) {
+    return;
+  }
+  pendingLeaders.set(windowId, {
+    ...(tab?.id !== undefined ? { tabId: tab.id } : {}),
+    at: Date.now(),
+  });
+  // open() MUST be synchronous in this listener: the command press's
+  // user-gesture token does not survive an await (verified live — a
+  // getContexts check before open() made ⌘B with the panel closed a silent
+  // no-op). Unconditional: on an already-open panel it is a cheap no-op-ish
+  // call, and the broadcast below is what actually toggles the layer.
+  void chrome.sidePanel.open({ windowId }).catch(() => {});
+  // Fire-and-forget, like the armed broadcast: every panel hears it and
+  // filters by windowId; a panel still booting pulls `leaderPending` instead.
+  chrome.runtime
+    .sendMessage({ aiuiLeader: 1, windowId, tabId: tab?.id, at: Date.now() })
+    .catch(() => {});
 });
 
 /** Promisified `getMediaStreamId` (callback-style in @types/chrome). The
@@ -73,6 +115,13 @@ serveRelay("sw", {
   },
   /** Invocations seen by this worker instance (per-lifetime, see module doc). */
   invocations: () => Object.fromEntries(invocations),
+  /** Consume the window's parked leader press (boot hand-off; see above). */
+  leaderPending: (payload) => {
+    const { windowId } = payload as { windowId: number };
+    const pending = pendingLeaders.get(windowId) ?? null;
+    pendingLeaders.delete(windowId);
+    return pending;
+  },
   /** Liveness probe for the panel's Dev pane. */
   ping: () => ({ at: new Date().toISOString() }),
 });

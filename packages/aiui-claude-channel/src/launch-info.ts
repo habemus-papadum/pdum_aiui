@@ -34,8 +34,8 @@ export interface ChromeDevtoolsInfo {
   /** Installed branded-Chrome channel, when that's the browser. */
   channel?: string;
   headless?: boolean;
-  /** The aiui devtools extension the browser was asked to load, if any. */
-  extensionDir?: string;
+  /** The unpacked aiui extensions the browser was asked to load, if any. */
+  extensionDirs?: string[];
 }
 
 /**

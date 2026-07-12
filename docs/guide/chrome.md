@@ -207,6 +207,34 @@ Whether it *loads* depends on the browser:
   for every later session. Interactive launches print a one-time note per profile reminding you
   of exactly this (then a marker in the profile keeps it quiet).
 
+## The intent-tool extension rides along
+
+The [browser-extension intent tool](../proposals/browser-extension-intent-tool.md)
+(`@habemus-papadum/aiui-extension` — per-window side panel, capture, ink, page tools) is
+auto-loaded the same way whenever its `dist/` exists, appended to the same `--load-extension`
+list. Two deliberate differences from the DevTools panel:
+
+- **aiui never builds it.** That package's `dist/` has two shapes — CRXJS dev-server loader
+  stubs (written by its `pnpm dev` on startup) or a production build — and building from the
+  launcher would silently freeze a live dev install (see the package README). aiui loads
+  whatever its dev loop has produced, or skips it when there's nothing yet (with a note telling
+  you to start `pnpm -C packages/aiui-extension dev` first).
+- **A dev-shaped `dist/` needs its dev server.** If the dist points at a dev-server port and
+  nothing answers there, interactive launches warn loudly — otherwise the extension loads with
+  every surface blank, which reads as "broken" instead of "not being served".
+
+The extension's channel discovery runs over Chrome native messaging, and Chrome for Testing
+looks the host manifest up **inside the user data dir** (measured — not in
+`~/Library/Application Support`). Since aiui owns the profiles it launches, it plants the
+manifest there automatically (`<profile>/NativeMessagingHosts/`) whenever the extension is
+loadable — on launch *and* when attaching to an already-running session browser. The global
+`aiui extension install-native-host` remains for browsers aiui does not manage (e.g. branded
+Chrome with the extension loaded unpacked by hand).
+
+`aiui chrome status` reports which shape (if any) it found and whether the chosen browser will
+auto-load it; `aiui extension status` shows every native-host manifest, including the current
+project's profiles.
+
 ## Choosing a browser explicitly
 
 Config keys that override the defaults:

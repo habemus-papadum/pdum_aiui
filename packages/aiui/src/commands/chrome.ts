@@ -19,6 +19,7 @@ import {
   chromeDevtoolsEnabled,
   chromeUserDataDir,
   devtoolsExtensionDir,
+  findIntentExtension,
   resolveChromeSettings,
 } from "../util/chrome";
 import { loadAiuiConfig } from "../util/config";
@@ -128,10 +129,38 @@ async function printStatus(): Promise<void> {
   const extension = devtoolsExtensionDir();
   if (!extension) {
     console.log("  not available (unbuilt dev checkout? run `aiui chrome extension` for help)");
-    return;
+  } else {
+    console.log(`  ${extension}`);
+    printAutoloadability(settings.executablePath);
   }
-  console.log(`  ${extension}`);
-  if (settings.executablePath) {
+
+  console.log("\naiui intent-tool extension:");
+  const intent = findIntentExtension();
+  switch (intent.state) {
+    case "absent":
+      console.log("  not available in this install (the aiui-extension package is not resolvable)");
+      break;
+    case "unbuilt":
+      console.log(
+        "  no dist/ yet — start its dev server: pnpm -C packages/aiui-extension dev\n" +
+          `  (${intent.root})`,
+      );
+      break;
+    case "ready":
+      console.log(`  ${intent.dir}`);
+      console.log(
+        intent.devPort === undefined
+          ? "  production build"
+          : `  dev-mode dist — needs its dev server on :${intent.devPort}`,
+      );
+      printAutoloadability(settings.executablePath);
+      break;
+  }
+}
+
+/** Whether the chosen browser will honor `--load-extension` for this dir. */
+function printAutoloadability(executablePath: string | undefined): void {
+  if (executablePath) {
     console.log("  auto-loads via --load-extension (honored by Chrome for Testing/Chromium)");
   } else {
     console.log("  can NOT auto-load into branded Chrome ≥ 137 — load it unpacked once");

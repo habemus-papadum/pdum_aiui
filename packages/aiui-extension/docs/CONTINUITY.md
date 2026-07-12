@@ -69,8 +69,46 @@ real `chromeTabId`, answer `call` messages.
 
 ### Loose end at time of writing
 
-- `src/panel/main.tsx` has an **uncommitted** fix (the Solid 2.0 `createEffect` two-arg fix, see
-  traps below). Everything else was pushed by the user before it. Commit/push is the user's call.
+- ~~`src/panel/main.tsx` has an uncommitted fix~~ — resolved: the Solid 2.0 `createEffect`
+  two-arg fix is committed (verify: `grep -n createEffect src/panel/main.tsx` shows the
+  two-function form with the explanatory comment).
+
+### Added 2026-07-11 (second session): `aiui` auto-loads this extension
+
+`aiui claude` / `aiui browser` now append this package's `dist/` (when `dist/manifest.json`
+exists) to the same `--load-extension` list as the devtools panel — see
+`packages/aiui/src/util/chrome.ts` (`findIntentExtension`, `intentExtensionDevPort`,
+`warnIntentExtensionState`) and `docs/guide/chrome.md` ("The intent-tool extension rides
+along"). Deliberate choices: the CLI **never builds** this package (trap 1 below — a launch-time
+build would freeze a live dev install); a dev-shaped dist (CRXJS loader stubs importing from
+`http://localhost:<port>/`) is fingerprinted via `dist/service-worker-loader.js` and the launch
+warns loudly when nothing answers on that port; "package resolvable but no dist" prints a
+start-the-dev-server note. `aiui chrome status` reports all of it. The extensionDir plumbing is
+now `extensionDirs: string[]` end-to-end (aiui-util `launchSessionBrowser`, `chromeMcpServer`,
+`ChromeDevtoolsInfo`, the devtools panel's Server tab).
+
+Same session, second discovery: the native host "installed" by the global installer was
+invisible to CfT (trap 6 above, measured M7). The launchers now plant the NM manifest into the
+launch profile (`ensureProfileNativeHost` — gated on the intent extension being loadable, warns
+on failure, runs on attach too), `aiui extension status` also reports the cwd's profile
+manifests, and the global installer's CfT dirs are gone. Net effect: on a fresh box, `pnpm -C
+packages/aiui-extension dev` + any aiui browser launch = extension loaded AND channel discovery
+working, zero manual steps.
+
+## ⚠ Course correction (2026-07-11, read this before the sections below)
+
+Late on 2026-07-11 the user corrected hard: **the web overlay (`aiui-dev-overlay`) is the
+REFERENCE implementation — its semantics port; divergences are decided per-item with the user,
+never improvised.** A full review of the overlay (engine API + event vocabulary, modality/ink/
+talk/shot lifecycles, keymap layers, the `IntentToolContext` host seam) was done, and the
+extension's interaction model was then redesigned live with the user. **The current model and
+the three-phase integration plan live in the proposal, §13.6** — disarmed ⊂ armed ⊂ in-a-turn,
+⌘B the only turn-opener, capture scoped to turns, page-anchored `i`-modal ink, standing
+hands-free/share across turns, panel-first with NO page pill/badge, plus a 9-row divergence
+ledger. Sections below describing "turbo" semantics are the superseded intermediate rung —
+real history, wrong spec. **Phase A is IMPLEMENTED (2026-07-11, gates green; live
+verification pending)** — the running log with per-item status, the Phase-B bridge list, and
+the live checklist is `docs/PHASE-A.md`. Keep that log current with every change.
 
 ## Working agreement with the user (do not drift from these)
 
@@ -110,16 +148,29 @@ real `chromeTabId`, answer `call` messages.
    count as invocations). Surface failures loudly — a silent no-op shot read as "button broken".
 5. **Headless measurements lie.** Anything involving capture, focus, or invocation must be
    verified with the human in a real browser. See `archive/extension-spikes/RESULTS.md`.
+6. **CfT reads native-messaging manifests from the user data dir, not Application Support**
+   (measured M7, live CfT 150/macOS: `<user-data-dir>/NativeMessagingHosts/`; the installer's
+   old `Google/ChromeForTesting` dir was never read by anything). Symptom: panel says "native
+   host not installed" even after `aiui extension install-native-host`. Rule: aiui-launched
+   browsers get the manifest planted in their profile automatically
+   (`installProfileNativeHost`, called from both launch and attach paths); the global installer
+   is only for browsers aiui does not manage. Manifest writes take effect per
+   `sendNativeMessage` call — no restart.
 
 ## Dev-loop quickstart
 
 ```sh
-# terminal 1 — Claude session + channel (from a demo or repo root)
-pnpm -C demos/gallery claude
-# terminal 2 — the extension dev server (pinned :5317)
+# terminal 1 — the extension dev server FIRST (pinned :5317; writes dev dist/)
 pnpm -C packages/aiui-extension dev
-# then: chrome://extensions → Load unpacked → packages/aiui-extension/dist
+# terminal 2 — Claude session + channel (from a demo or repo root)
+pnpm -C demos/gallery claude
 ```
+
+When the session browser is launched *by aiui* (CfT/Chromium), the extension auto-loads from
+`dist/` via `--load-extension` — no manual Load unpacked needed (branded Chrome ≥ 137 still
+needs the manual once-per-profile load: chrome://extensions → Load unpacked →
+`packages/aiui-extension/dist`). Order matters: start the dev server before the launch, or the
+launch skips/warns (`findIntentExtension` in `packages/aiui/src/util/chrome.ts`).
 
 Extension ID is pinned via `key` in `manifest.config.ts`: `ngakidpkjdgaajnlpggbchpaikilkpmp`.
 Native host manifest install: `pnpm -C packages/aiui exec tsx src/cli.ts extension
@@ -132,10 +183,39 @@ kind="page-tools">` pushes.
 
 ## Next big chunks (rough plan, in order)
 
-1. **Leader-key keyboard layer.** `chrome.commands` global shortcut as the leader (ALSO counts as
-   an invocation — this is the invocation-gate softener), then a modal single-key layer (i = ink,
-   s = shot, a = add selection, …) rendered by the panel/indicator machinery. Shares the grammar
-   with the future web-overlay leader keys. Design sketch in proposal §13.5.
+1. ~~**Leader-key keyboard layer.**~~ **DONE — live-verified 2026-07-11 (second session), then
+   REVISED same day to TURBO semantics at the user's direction.** Verified in the single-shot
+   form: leader→s captured a never-toolbar-clicked tab (**a commands press IS an invocation**
+   — measured M8), panel self-opens on ⌘B (focus moves to the panel — also M8), auto-bind
+   kicked in, a shot+selection compound turn landed in the session, all dismissals behaved.
+   Turbo revision (decided in discussion, do not regress): the leader TOGGLES a sticky mode —
+   capture the ENTIRE page keyboard while on; bound keys fire repeatedly; unknown keys are
+   swallowed + blipped (`× key`), NEVER an exit and never passed through; only leader/Esc
+   exits; `d` disarms without exiting; panel form fields stay typeable (isTypingTarget on the
+   panel listener only); pulsing indicator ring (`turbo` state in aiui-webext indicator.ts) +
+   persistent hint strip; turbo survives tab switches (capture re-points in onActivated), and
+   the not-invoked shot failure names the ⌘B-twice remedy. The user explicitly REJECTED
+   overlay-style pass-fallback/typing-yield on the page: turbo means "not interacting with
+   the website". Single-shot mode is gone — one leader, one meaning. `commands["aiui-leader"]` (⌘B/Ctrl+B) → SW records the invocation + ensures the
+   window's panel (runtime.getContexts SIDE_PANEL check; a command press is a user gesture, so
+   sidePanel.open works) + parks `pendingLeader` for booting panels (relay `leaderPending`) +
+   broadcasts `{aiuiLeader:1}`. The panel is the brain: grammar in `src/panel/leader.ts` on the
+   modal kit (`aiui-viz/modal`, new workspace dep) — i/s/a/d/esc, single-shot, 3s timeout, typo
+   closes-and-swallows; keys come from the panel's own capture listener OR the content script's
+   `keylayer` relay mode (synchronous swallow, forwards `{aiuiLeaderKey:1}`); hints render from
+   the resolver's own rows into the panel header strip + the page indicator badge. TO VERIFY
+   LIVE: leader→s on a never-toolbar-clicked tab (does a command press satisfy
+   getMediaStreamId? platform docs say yes; measure it), and whether sidePanel.open steals
+   focus from the page.
+   First live round found two things (both fixed): **sidePanel.open must be called
+   SYNCHRONOUSLY in onCommand** — the user-gesture token does not survive an `await` (a
+   getContexts check before open() made ⌘B-with-panel-closed a silent no-op; measured); and
+   the **rebind "flake" was deterministic key skew** — session-pane's startup read the
+   remembered port under `win0` because the panel's windowId signal hadn't resolved yet, while
+   connect() saved under `win<id>` (fixed: the pane resolves windows.getCurrent itself). Also
+   decided with the user: **auto-bind when unambiguous** — nothing remembered + exactly one
+   discovered channel → bind it at boot (extension reloads wipe storage.session, so this is
+   the common dev cold-start); multiple channels still wait for the pick.
 2. **Tools pane + Trace pane.** Tools pane: live `page_tools_list` view in the panel (the
    directory already pushes changes). Trace pane: embed the shared `debug-ui` viewer
    (session-pinned, like the overlay's 🔍) in a collapsible pane.
@@ -151,8 +231,19 @@ kind="page-tools">` pushes.
    (user-local, 2FA), then they ride the normal CI release.
 
 Smaller debt, whenever touching the area: shot retraction (remove a chip), config pane (fade
-seconds etc.), the one-time rebind flake after panel reopen (windowId race suspected), HMR
-listener leaks in long dev sessions, and replacing the step-1 click-counter badge scenery.
+seconds etc.), ~~the one-time rebind flake after panel reopen~~ (FIXED — deterministic
+windowId key skew, see the chunk-1 note), HMR listener leaks in long dev sessions, and
+replacing the step-1 click-counter badge scenery.
+
+Open design questions parked from live use (2026-07-11):
+- **Should ink strokes survive exiting ink mode?** Today mode-off unmounts the surface and the
+  strokes vanish (leader `i` and the panel button are deliberately identical; the engine logs a
+  manual ink-clear). The user half-expected strokes to persist inertly until send/fade. Think
+  before changing: capture truthfulness (strokes land in shots only while mounted) and the §8
+  strokes-die-with-their-thread rule both lean on the current behavior.
+- **Armed-ring visibility**: now difference-blended (aiui-webext indicator.ts) so it reads on
+  white AND black without background sniffing — first candidate, eyeballed live; revisit blend
+  choice (exclusion? dual shadow?) if real pages show artifacts.
 
 ## Key file map
 

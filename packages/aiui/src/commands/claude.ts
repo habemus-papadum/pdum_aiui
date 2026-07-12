@@ -18,8 +18,10 @@ import {
   chromeMcpAttachServer,
   chromeMcpServer,
   devtoolsExtensionDir,
+  findIntentExtension,
   maybeExtensionAutoloadHint,
   resolveChromeSettings,
+  warnIntentExtensionState,
 } from "../util/chrome";
 import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { nudgeChannelAck } from "../util/enter-nudge";
@@ -30,6 +32,7 @@ import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
 import { printError, printWarning } from "../util/ui";
 import { VERSION } from "../util/version";
 import { commandExists } from "../util/which";
+import { ensureProfileNativeHost } from "./extension";
 
 const CHANNEL_PKG = "@habemus-papadum/aiui-claude-channel";
 const PLUGIN_PKG = "@habemus-papadum/aiui-claude-plugin";
@@ -318,6 +321,13 @@ async function chromeServerEntry(
   if (settings.mode === "attach") {
     const running = await discoverSessionBrowser(settings.userDataDir);
     if (running) {
+      // The running browser may predate this checkout's native host (or the
+      // feature): keep the profile's NM manifest current even when attaching.
+      ensureProfileNativeHost(
+        settings.userDataDir,
+        findIntentExtension().state === "ready",
+        printWarning,
+      );
       return {
         entry: chromeMcpAttachServer(running.browserUrl),
         info: {
@@ -345,16 +355,24 @@ async function chromeServerEntry(
   if (settings.buildExtension) {
     await buildDevtoolsExtension();
   }
-  const extensionDir = devtoolsExtensionDir();
+  const intent = findIntentExtension();
+  const extensionDirs = [
+    devtoolsExtensionDir(),
+    intent.state === "ready" ? intent.dir : undefined,
+  ].filter((d): d is string => d !== undefined);
+  // The extension's channel discovery runs over native messaging, and CfT
+  // looks the manifest up in the profile itself — keep it planted there.
+  ensureProfileNativeHost(settings.userDataDir, intent.state === "ready", printWarning);
   if (interactive) {
-    maybeExtensionAutoloadHint(settings, extensionDir);
+    maybeExtensionAutoloadHint(settings, extensionDirs);
+    await warnIntentExtensionState(intent);
   }
   const browserInfo = {
     userDataDir: settings.userDataDir,
     executablePath: settings.executablePath,
     channel: settings.channel,
     headless: settings.headless,
-    extensionDir,
+    extensionDirs,
   };
 
   if (settings.mode === "attach" && interactive) {
@@ -363,7 +381,7 @@ async function chromeServerEntry(
         binary: sessionBrowserBinary(settings),
         userDataDir: settings.userDataDir,
         debugPort: settings.debugPort,
-        extensionDir,
+        extensionDirs,
         headless: settings.headless,
       });
       return {
@@ -383,7 +401,7 @@ async function chromeServerEntry(
     }
   }
   return {
-    entry: chromeMcpServer(settings, extensionDir),
+    entry: chromeMcpServer(settings, extensionDirs),
     info: { enabled: true, connection: "launch", ...browserInfo },
   };
 }

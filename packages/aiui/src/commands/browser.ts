@@ -44,11 +44,14 @@ import {
   buildDevtoolsExtension,
   type ChromeSettings,
   devtoolsExtensionDir,
+  findIntentExtension,
   maybeExtensionAutoloadHint,
   resolveChromeSettings,
+  warnIntentExtensionState,
 } from "../util/chrome";
 import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { printError, printNote } from "../util/ui";
+import { ensureProfileNativeHost } from "./extension";
 
 type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
 
@@ -103,6 +106,13 @@ export async function runBrowser(opts: BrowserOptions): Promise<void> {
 
   let session = await discoverSessionBrowser(settings.userDataDir);
   if (session) {
+    // Keep the profile's NM manifest current even when not launching — the
+    // running browser may predate this checkout's native host.
+    ensureProfileNativeHost(
+      settings.userDataDir,
+      findIntentExtension().state === "ready",
+      printNote,
+    );
     report("session browser already running", settings, session);
     if (opts.open) {
       await openInSessionBrowser(session.browserUrl, opts.open);
@@ -171,7 +181,9 @@ export interface StartSessionBrowserOptions {
  *  2. Prefer the managed Chrome for Testing unless config names a browser
  *     explicitly (the sync may prompt to install/update — only when
  *     `interactive`; otherwise it just reports what's installed).
- *  3. Rebuild and load the aiui devtools extension (dev checkouts only).
+ *  3. Rebuild and load the aiui devtools extension, and pick up the
+ *     intent-tool extension's dist/ if its dev loop has produced one
+ *     (dev checkouts only).
  *  4. Launch on the profile's user data dir and wait for the debug endpoint.
  *
  * Throws with a remediation-bearing message when no browser can be found or
@@ -202,9 +214,17 @@ export async function startSessionBrowser(
   if (settings.buildExtension) {
     await buildDevtoolsExtension();
   }
-  const extensionDir = devtoolsExtensionDir();
+  const intent = findIntentExtension();
+  const extensionDirs = [
+    devtoolsExtensionDir(),
+    intent.state === "ready" ? intent.dir : undefined,
+  ].filter((d): d is string => d !== undefined);
+  // The extension's channel discovery runs over native messaging, and CfT
+  // looks the manifest up in the profile itself — keep it planted there.
+  ensureProfileNativeHost(settings.userDataDir, intent.state === "ready", printNote);
   if (opts.interactive) {
-    maybeExtensionAutoloadHint(settings, extensionDir);
+    maybeExtensionAutoloadHint(settings, extensionDirs);
+    await warnIntentExtensionState(intent);
   }
 
   let binary: string;
@@ -220,7 +240,7 @@ export async function startSessionBrowser(
     binary,
     userDataDir: settings.userDataDir,
     debugPort: settings.debugPort,
-    extensionDir,
+    extensionDirs,
     headless: settings.headless || opts.headless,
     startUrl: opts.startUrl,
   });

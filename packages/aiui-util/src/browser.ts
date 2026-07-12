@@ -4,7 +4,8 @@
  *
  * In the aiui CLI's default "attach" mode, `aiui claude` launches the browser
  * itself — with a DevTools debug port, the project profile, and the aiui
- * devtools extension — and chrome-devtools-mcp *attaches* to it
+ * extensions (DevTools panel, intent tool) — and chrome-devtools-mcp
+ * *attaches* to it
  * (`--browser-url`) instead of launching a private one. That's what makes the
  * agent's browser the same window the human is looking at: shared tabs,
  * shared state, visible from session start.
@@ -126,7 +127,8 @@ export async function launchSessionBrowser(opts: {
   binary: string;
   userDataDir: string;
   debugPort?: number;
-  extensionDir?: string;
+  /** Unpacked extensions to load (comma-joined into one `--load-extension`). */
+  extensionDirs?: string[];
   headless?: boolean;
   startUrl?: string;
 }): Promise<SessionBrowser> {
@@ -168,8 +170,8 @@ export async function launchSessionBrowser(opts: {
     //    real terminal, or headless.
     "--auto-accept-this-tab-capture",
   ];
-  if (opts.extensionDir) {
-    args.push(`--load-extension=${opts.extensionDir}`);
+  if (opts.extensionDirs?.length) {
+    args.push(`--load-extension=${opts.extensionDirs.join(",")}`);
   }
   if (opts.headless) {
     args.push("--headless");

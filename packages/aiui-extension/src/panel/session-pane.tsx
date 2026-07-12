@@ -37,6 +37,17 @@ export function SessionPane(props: { windowId: () => number | undefined }): {
   const [boundPort, setBoundPort] = createSignal<number | undefined>();
   let client: SessionBusClient | undefined;
 
+  // The window id resolved HERE, not via the panel's signal: the signal
+  // arrives async, and racing it made startup read the remembered port under
+  // the wrong key (`win0`) while connect() saved under `win<id>` — the
+  // debt-listed "rebind flake after panel reopen", which was deterministic
+  // key skew, not a flake. (Reopens within one extension load restore; an
+  // extension reload still forgets — storage.session dies with it.)
+  const windowIdReady: Promise<number | undefined> = chrome.windows
+    .getCurrent()
+    .then((w) => w.id)
+    .catch(() => undefined);
+
   const disconnect = (): void => {
     client?.close();
     client = undefined;
@@ -67,7 +78,7 @@ export function SessionPane(props: { windowId: () => number | undefined }): {
         : `bound to :${port}`,
     );
     void saveRecentPort(port);
-    void chrome.storage.session.set({ [lastPortKey(props.windowId())]: port });
+    void windowIdReady.then((win) => chrome.storage.session.set({ [lastPortKey(win)]: port }));
   };
 
   /**
@@ -97,14 +108,25 @@ export function SessionPane(props: { windowId: () => number | undefined }): {
   };
 
   // Startup: discover, then auto-reconnect the port this window used before
-  // the panel was last closed.
+  // the panel was last closed (keyed by the resolved window id — see above).
+  // With nothing remembered and exactly ONE channel discovered, bind it
+  // (decided 2026-07-11): the cold ⌘B flow shouldn't stall on a click that
+  // has only one possible answer. Multiple channels still wait for the
+  // user's pick — the per-window choice survives where it matters.
   void (async () => {
     await discover();
-    const remembered = (await chrome.storage.session.get(lastPortKey(props.windowId())))[
-      lastPortKey(props.windowId())
-    ];
+    const key = lastPortKey(await windowIdReady);
+    const remembered = (await chrome.storage.session.get(key))[key];
     if (typeof remembered === "number") {
       void connect(remembered);
+      return;
+    }
+    const found = channels();
+    if (found.length === 1) {
+      await connect(found[0].port);
+      if (boundPort() === found[0].port) {
+        setStatus(`auto-bound to :${found[0].port} (the only channel)`);
+      }
     }
   })();
 

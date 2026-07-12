@@ -25,12 +25,14 @@
  *   on first use; `--aiui-chrome-data-dir <path>` escapes the convention
  *   entirely.
  *
- * - **Best-effort auto-load of the aiui DevTools panel.** In a dev checkout we
+ * - **Best-effort auto-load of the aiui extensions.** In a dev checkout we
  *   rebuild the `aiui-devtools-extension` package (~0.3s of tsc, so it is never
- *   stale) and pass `--load-extension` pointing at it. Chrome-branded builds
+ *   stale), pick up whatever `dist/` the `aiui-extension` intent tool's own
+ *   dev loop maintains (never building it — see {@link findIntentExtension}),
+ *   and pass both via `--load-extension`. Chrome-branded builds
  *   ≥ 137 ignore that flag (Chromium and Chrome for Testing still honor it), so
  *   this is an attempt, not a guarantee — the reliable path is loading the
- *   extension unpacked once at `chrome://extensions`, which the persistent
+ *   extensions unpacked once at `chrome://extensions`, which the persistent
  *   profile then remembers.
  *
  * - **Config picks the browser.** `chrome.executablePath` (e.g. a Chrome for
@@ -38,7 +40,7 @@
  *   `chrome.browserUrl` says "don't launch anything, attach here" (the remote
  *   key); flags choose per-invocation things (profile, on/off).
  */
-import { existsSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
 import { isCi } from "@habemus-papadum/aiui-util";
@@ -58,6 +60,9 @@ import { printNote, printWarning } from "./ui";
 export const CHROME_SERVER_ID = "chrome-devtools";
 
 const DEVTOOLS_PKG = "@habemus-papadum/aiui-devtools-extension";
+
+/** The browser-extension intent tool (side panel, capture, ink, page tools). */
+const INTENT_PKG = "@habemus-papadum/aiui-extension";
 
 /** The profile used when neither flags nor config name one. */
 export const DEFAULT_CHROME_PROFILE = "default";
@@ -203,6 +208,114 @@ export function devtoolsExtensionDir(): string | undefined {
 }
 
 /**
+ * What we found when looking for the browser-extension intent tool
+ * (`aiui-extension`), whose `dist/` — unlike the devtools panel's — has two
+ * shapes (see that package's README):
+ *
+ * - **absent** — the package isn't resolvable here (a plain npm install of the
+ *   CLI without it). Silently not our problem.
+ * - **unbuilt** — resolvable but `dist/manifest.json` is missing: a dev
+ *   checkout where the extension's Vite dev server hasn't run yet (it writes
+ *   the dev `dist/` on startup). Worth an actionable note.
+ * - **ready** — a loadable unpacked extension. When the dist is *dev-shaped*
+ *   (CRXJS loader stubs that import everything from the extension's Vite dev
+ *   server), `devPort` carries the port those stubs point at, so the launcher
+ *   can check someone is actually serving it.
+ */
+export type IntentExtension =
+  | { state: "absent" }
+  | { state: "unbuilt"; root: string }
+  | { state: "ready"; dir: string; devPort?: number };
+
+/**
+ * Locate the intent-tool extension's `dist/`, never building it.
+ *
+ * Deliberately no build-on-launch here (unlike {@link buildDevtoolsExtension}):
+ * `vite build` writes production output into the SAME `dist/` the dev loop
+ * serves loader stubs from, silently freezing any live dev install of the
+ * extension at that moment's code (see the package README — this bit twice).
+ * Whoever owns the dev loop owns `dist/`; we only load what's there.
+ */
+export function findIntentExtension(): IntentExtension {
+  let root: string;
+  try {
+    // realpath, not the pnpm symlink — the same canonical path a manual
+    // "Load unpacked" would register in the profile.
+    root = realpathSync(packageRoot(INTENT_PKG));
+  } catch {
+    return { state: "absent" };
+  }
+  const dir = join(root, "dist");
+  if (!existsSync(join(dir, "manifest.json"))) {
+    return { state: "unbuilt", root };
+  }
+  return { state: "ready", dir, devPort: intentExtensionDevPort(dir) };
+}
+
+/**
+ * The dev-server port a dev-shaped `dist/` depends on, or undefined for a
+ * production build. The fingerprint: CRXJS's dev `service-worker-loader.js`
+ * imports from `http://localhost:<port>/…`, while a production build's
+ * imports are relative.
+ */
+export function intentExtensionDevPort(dir: string): number | undefined {
+  let loader: string;
+  try {
+    loader = readFileSync(join(dir, "service-worker-loader.js"), "utf8");
+  } catch {
+    return undefined;
+  }
+  const match = loader.match(/https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)\//);
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Loud-failure check for the intent extension at launch (dev checkouts only —
+ * "absent" stays silent by design). Two ways it can quietly not work, both of
+ * which read as "the extension is broken" in the browser:
+ *
+ * - no `dist/` yet → it simply won't be loaded this launch;
+ * - dev-shaped `dist/` with nothing listening on its dev port → Chrome loads
+ *   it, but every surface comes up blank.
+ *
+ * Printed every launch while true (actionable, and it disappears once fixed),
+ * not once-per-profile like {@link maybeExtensionAutoloadHint}.
+ */
+export async function warnIntentExtensionState(intent: IntentExtension): Promise<void> {
+  if (intent.state === "unbuilt") {
+    printNote(
+      "the aiui intent-tool extension has no dist/ yet, so this launch won't load it",
+      "Start its dev server first — pnpm -C packages/aiui-extension dev — then relaunch.",
+    );
+    return;
+  }
+  if (intent.state !== "ready" || intent.devPort === undefined) {
+    return;
+  }
+  if (await devServerAlive(intent.devPort)) {
+    return;
+  }
+  printWarning(
+    `the aiui intent-tool extension's dist/ is dev-mode but nothing is serving :${intent.devPort} — ` +
+      "it will load blank",
+    "Start the dev server (pnpm -C packages/aiui-extension dev), then reload the extension\n" +
+      "in chrome://extensions.",
+  );
+}
+
+/** Is the extension's Vite dev server answering on this port? */
+async function devServerAlive(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${port}/@vite/client`, {
+      signal: AbortSignal.timeout(1000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Rebuild the aiui-devtools-extension package so the auto-loaded panel is never stale.
  *
  * A full tsc of the extension (plus the debug-ui esbuild bundle) is well
@@ -261,8 +374,8 @@ export async function buildDevtoolsExtension(): Promise<void> {
 }
 
 /**
- * One-time tip when the extension exists but the chosen browser won't
- * auto-load it (no `executablePath` means a branded Chrome — installed
+ * One-time tip when extensions exist but the chosen browser won't
+ * auto-load them (no `executablePath` means a branded Chrome — installed
  * stable or a `channel` build — and branded builds ≥ 137 ignore
  * `--load-extension`). Printed once per profile: the marker file lives in the
  * user data dir, so it survives exactly as long as the profile whose manual
@@ -270,9 +383,9 @@ export async function buildDevtoolsExtension(): Promise<void> {
  */
 export function maybeExtensionAutoloadHint(
   settings: ChromeSettings,
-  extensionDir: string | undefined,
+  extensionDirs: string[],
 ): void {
-  if (!extensionDir || settings.executablePath) {
+  if (!extensionDirs.length || settings.executablePath) {
     return;
   }
   const marker = join(settings.userDataDir, "aiui-devtools-extension-hint");
@@ -280,11 +393,11 @@ export function maybeExtensionAutoloadHint(
     return;
   }
   printNote(
-    "the aiui DevTools panel can't auto-load into regular Chrome (≥ 137 ignores --load-extension)",
-    `Load it once in the launched Chrome — chrome://extensions → Developer mode → Load unpacked →\n` +
-      `${extensionDir}\n` +
-      "— and this profile remembers it. Or switch to Chrome for Testing (`aiui chrome install`),\n" +
-      "which auto-loads it. This note won't repeat for this profile.",
+    "the aiui extensions can't auto-load into regular Chrome (≥ 137 ignores --load-extension)",
+    `Load them once in the launched Chrome — chrome://extensions → Developer mode → Load unpacked →\n` +
+      `${extensionDirs.join("\n")}\n` +
+      "— and this profile remembers them. Or switch to Chrome for Testing (`aiui chrome install`),\n" +
+      "which auto-loads them. This note won't repeat for this profile.",
   );
   try {
     writeFileSync(marker, `${new Date().toISOString()}\n`);
@@ -298,9 +411,9 @@ export function maybeExtensionAutoloadHint(
  *
  * Uses the documented `npx -y chrome-devtools-mcp@latest` invocation with the
  * user data dir pinned to ours. Puppeteer's default launch args include
- * `--disable-extensions`, which would neuter both the auto-loaded panel and
- * anything installed manually into the profile — so it is always stripped.
- * When an extension dir is given, additionally ask Chrome to load it.
+ * `--disable-extensions`, which would neuter both the auto-loaded extensions
+ * and anything installed manually into the profile — so it is always stripped.
+ * When extension dirs are given, additionally ask Chrome to load them.
  */
 /**
  * The `mcpServers` entry that *attaches* chrome-devtools-mcp to an existing
@@ -317,7 +430,7 @@ export function chromeMcpAttachServer(browserUrl: string): { command: string; ar
 
 export function chromeMcpServer(
   settings: ChromeSettings,
-  extensionDir?: string,
+  extensionDirs: string[] = [],
 ): { command: string; args: string[] } {
   const args = [
     "-y",
@@ -335,8 +448,8 @@ export function chromeMcpServer(
   if (settings.headless) {
     args.push("--headless");
   }
-  if (extensionDir) {
-    args.push(`--chromeArg=--load-extension=${extensionDir}`);
+  if (extensionDirs.length) {
+    args.push(`--chromeArg=--load-extension=${extensionDirs.join(",")}`);
   }
   return { command: "npx", args };
 }
