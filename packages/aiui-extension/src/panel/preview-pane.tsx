@@ -45,8 +45,12 @@ ${STYLES}
 .preview-host .mm-preview.visible {
   display: block; border-color: var(--accent); animation: none;
 }
+/* Between turns the transcript STAYS (stable geography), just quiet. */
+.preview-host .mm-preview { display: block; }
+.preview-host .mm-preview:not(.visible) { opacity: 0.55; }
+/* Grows with content to ~10 lines, then scrolls. */
 .preview-host .mm-preview-body {
-  max-height: 22rem; overflow-y: auto; overflow-x: hidden;
+  max-height: calc(10 * 1.5em); overflow-y: auto; overflow-x: hidden;
   max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
 }
 .preview-host .mm-preview-title { color: var(--muted); }

@@ -30,7 +30,8 @@ ${KEYMAP_HELP_STYLES}
    than the overlay's page version: this is the panel's main affordance, not a
    corner cheat sheet. */
 .keys-bar { margin: 0 0.125rem 0.5rem; }
-.keys-bar[hidden] { display: none; }
+/* Outside a turn the bar STAYS (stable geography) — just inert and dimmed. */
+.keys-bar.idle { opacity: 0.45; pointer-events: none; }
 .keys-bar .mm-cheat-wrap { display: block; }
 .keys-bar .mm-cheat {
   max-width: 100%; width: 100%; margin: 0; box-sizing: border-box;
@@ -149,8 +150,10 @@ export function createKeysIsland(onKey: (key: string) => void, onClose: () => vo
     popupRoot,
     sync(state, helpOpen, blip) {
       const inTurn = state.phase === "turn";
-      barRoot.hidden = !inTurn;
-      cheat.update(leaderHints(state), inTurn);
+      // Always render the rows (a "turn" projection of the state), so the bar
+      // keeps its shape between turns; idle = dimmed + inert, never hidden.
+      barRoot.classList.toggle("idle", !inTurn);
+      cheat.update(leaderHints({ ...state, phase: "turn" }), true);
       popupRoot.hidden = !helpOpen;
       blipLine.hidden = blip === undefined;
       blipLine.textContent = blip === undefined ? "" : `× ${blip} — not a key here`;

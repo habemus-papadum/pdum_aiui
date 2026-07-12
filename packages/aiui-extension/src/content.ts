@@ -239,6 +239,22 @@ serveRelay("page", {
 });
 
 // ── ring state: driven by the panel (per-window broadcast) ──────────────────
+// Smart video's gate: a throttled "the user touched the page" ping. One-way,
+// cheap (>=500ms apart), consumed by the panel's sampler tick (§13.6: smart
+// frames follow interaction, never a metronome).
+let lastInteractPing = 0;
+const pingInteract = (): void => {
+  const now = Date.now();
+  if (now - lastInteractPing < 500) {
+    return;
+  }
+  lastInteractPing = now;
+  chrome.runtime.sendMessage({ aiuiInteract: 1 }).catch(() => {});
+};
+for (const type of ["pointerdown", "keyup", "wheel", "scroll"] as const) {
+  window.addEventListener(type, pingInteract, { passive: true, capture: true });
+}
+
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg !== null && typeof msg === "object" && (msg as { aiuiRing?: number }).aiuiRing === 1) {
     const m = msg as { armed?: boolean; turn?: boolean };

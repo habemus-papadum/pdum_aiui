@@ -22,6 +22,7 @@ import {
   SpeechPlayer,
   WorkletPcmSource,
 } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
+import { VideoSampler } from "@habemus-papadum/aiui-dev-overlay/multimodal-video";
 import { isErrorMessage } from "@habemus-papadum/aiui-dev-overlay/protocol";
 import { createWire } from "@habemus-papadum/aiui-dev-overlay/wire";
 import { CellView, liveSignal } from "@habemus-papadum/aiui-viz";
@@ -49,7 +50,16 @@ import {
 } from "./leader";
 import { logDebug, logInfo } from "./log";
 import { graph } from "./model/graph";
-import { inkFade, inkMode, shotFlash, tier, uiScale } from "./model/store";
+import {
+  inkFade,
+  inkMode,
+  linter,
+  shotFlash,
+  tier,
+  uiScale,
+  videoFps,
+  videoOn,
+} from "./model/store";
 import { createPreviewIsland, type PreviewIsland } from "./preview-pane";
 import { createSession } from "./session";
 import { Toasts, toast } from "./toasts";
@@ -148,6 +158,14 @@ const PANEL_STYLES = `
     cursor: pointer; font-size: 0.6875rem; padding: 0;
   }
   .toast-body { padding: 0.375rem 0.5rem; }
+  /* The config bar: compact selects under the caps. */
+  .config-bar { display: flex; gap: 0.625rem; align-items: center; flex-wrap: wrap;
+    margin: 0 0.125rem 0.375rem; }
+  .config-bar label { display: inline-flex; gap: 0.3rem; align-items: center;
+    font: 0.6875rem ui-monospace, monospace; color: var(--muted); }
+  .config-bar select { background: var(--input-bg); color: var(--text);
+    border: 1px solid var(--border-2); border-radius: 6px; padding: 0.125rem 0.375rem;
+    font: 0.75rem ui-monospace, monospace; }
   /* The REC meter: under the caps while the mic loop runs. */
   .rec-meter { height: 0.375rem; margin: 0.25rem 0.125rem 0; border-radius: 999px;
     background: var(--surface-2); border: 1px solid var(--border-2); overflow: hidden; }
@@ -196,7 +214,7 @@ function Panel() {
   );
 
   // ── the engine: one per panel document ────────────────────────────────────
-  const engine = new Engine(panelIntentConfig(tier.get()));
+  const engine = new Engine(panelIntentConfig(tier.get(), linter.get()));
   const mirror = turnMirror(windowId);
   // PULL selection model (decided 2026-07-11): nothing enters the turn until
   // the user's explicit "add selection", which opens the turn itself when none
@@ -679,6 +697,67 @@ function Panel() {
     keysIsland?.sync(leaderState(), helpOpen, blip.get());
   };
 
+  // ── video (C6): periodic tab frames into the open turn — the overlay's
+  // VideoSampler over the panel's WARM stream (frames-are-shots: each frame
+  // is a quiet shot_N + attachment; no flash, §13.6). Smart mode's gate is
+  // the content script's throttled interaction pings.
+  let pageInteracted = false;
+  chrome.runtime.onMessage.addListener((m: unknown) => {
+    if (
+      m !== null &&
+      typeof m === "object" &&
+      (m as { aiuiInteract?: number }).aiuiInteract === 1
+    ) {
+      pageInteracted = true;
+    }
+  });
+  const sampler = new VideoSampler({
+    captureFrame: async () => {
+      try {
+        const shot = await grabShot();
+        return shot; // full Shot; sendFrame downscales markers from it
+      } catch {
+        return undefined; // no warm stream right now — the tick owes nothing
+      }
+    },
+    sendFrame: (frame, shot) => {
+      const marker = engine.shotDone(
+        { x: 0, y: 0, w: shot.width, h: shot.height },
+        [],
+        shot.thumb,
+        undefined,
+        false, // sampled, not manual — no flash, quieter preview chrome
+        Date.now(),
+      );
+      void wire.uploadAttachment(marker, shot.mime, shot.bytes);
+      logDebug("video frame", frame.seq, "→", marker);
+    },
+    intervalMs: () => {
+      const fps = videoFps.get();
+      return fps === "smart" ? 1000 : Math.round(1000 / Number(fps));
+    },
+    shouldCapture: () => {
+      if (videoFps.get() !== "smart") {
+        return true;
+      }
+      const had = pageInteracted;
+      pageInteracted = false;
+      return had;
+    },
+    rearm: () => {
+      pageInteracted = true; // the tick consumed the gate but delivered nothing
+    },
+  });
+  /** The video claim, derived like ink/stream: sampling iff turn + videoOn. */
+  const syncVideo = (): void => {
+    const want = phase.get() === "turn" && videoOn.get();
+    if (want) {
+      sampler.start();
+    } else {
+      sampler.stop();
+    }
+  };
+
   // The REC meter: a tiny rAF island (imperative — never touches signals in
   // its loop; the frontend playbook's bridge rule). Visible only while the
   // mic loop runs; the fill tracks talk.level(), red when muted.
@@ -758,6 +837,7 @@ function Panel() {
     talk.stopAllListening();
     void syncInkPointer();
     void syncTabStream();
+    syncVideo();
     broadcastRing();
   };
 
@@ -775,6 +855,7 @@ function Panel() {
     }
     await syncInkPointer(); // re-claims iff the standing ink flag is on
     void syncTabStream(); // warm the capture stream: a shot becomes a draw
+    syncVideo(); // resume sampling iff the video flag is on
   };
 
   /** The open turn holds something worth lowering (explicit turns can be empty). */
@@ -1207,6 +1288,55 @@ function Panel() {
       </div>
       <Toasts />
       {phase.get() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
+      {/* The config bar: tier / linter / video / fps — the always-there
+          settings strip (its dropdowns are plain selects bound to controls;
+          the hello reads them at the next thread-open). */}
+      <div class="config-bar">
+        <label>
+          stt
+          <select
+            value={tier.get()}
+            onChange={(e) => {
+              tier.set(e.currentTarget.value);
+              logInfo("tier →", e.currentTarget.value, "(applies at the next turn)");
+            }}
+          >
+            <option value="mock">mock</option>
+            <option value="rapid">rapid</option>
+            <option value="premium">premium</option>
+          </select>
+        </label>
+        <label>
+          linter
+          <select value={linter.get()} onChange={(e) => linter.set(e.currentTarget.value)}>
+            <option value="off">off</option>
+            <option value="openai">openai</option>
+            <option value="gemini">gemini</option>
+          </select>
+        </label>
+        <label>
+          video
+          <select
+            value={videoOn.get() ? "on" : "off"}
+            onChange={(e) => {
+              videoOn.set(e.currentTarget.value === "on");
+              syncVideo();
+            }}
+          >
+            <option value="off">off</option>
+            <option value="on">on</option>
+          </select>
+        </label>
+        <label>
+          fps
+          <select value={videoFps.get()} onChange={(e) => videoFps.set(e.currentTarget.value)}>
+            <option value="smart">smart</option>
+            <option value="0.5">0.5</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </label>
+      </div>
       {/* The command bar: the live keycaps, visible whenever a turn is open. */}
       <div
         ref={(el: HTMLDivElement) => {

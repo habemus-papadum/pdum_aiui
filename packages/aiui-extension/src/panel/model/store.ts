@@ -57,6 +57,15 @@ export const logLevel = control({ value: "info", options: ["quiet", "info", "deb
  */
 export const tier = control({ value: "rapid", options: ["mock", "rapid", "premium"] });
 
+/** The realtime prompt linter (orthogonal to the tier; the hello carries it). */
+export const linter = control({ value: "off", options: ["off", "openai", "gemini"] });
+
+/** Periodic tab-frame sampling into the open turn (no flash — §13.6). */
+export const videoOn = control({ value: false });
+
+/** Sampling cadence: smart = only after page interaction; else frames/sec. */
+export const videoFps = control({ value: "smart", options: ["smart", "0.5", "1", "2"] });
+
 /**
  * Panel zoom — a multiplier on the BROWSER'S accessibility font-size default
  * (applied as a percentage root font-size; see index.html). Driven by
