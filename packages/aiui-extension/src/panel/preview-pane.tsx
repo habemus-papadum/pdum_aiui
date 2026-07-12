@@ -24,10 +24,18 @@ const STYLE_ID = "aiui-panel-preview-styles";
 /** The shared multimodal stylesheet + the panel's geometry overrides. */
 const PREVIEW_STYLES = `
 ${STYLES}
-/* Panel geometry: an in-flow block, not a floating page popup. */
+/* Panel geometry: an in-flow block, not a floating page popup.
+   BORDER-BOX everywhere: the shared rules size by content, so width:100%
+   plus their padding/border overflowed the panel and forced a horizontal
+   scrollbar at every width (found live 2026-07-12). Long words wrap rather
+   than widening the column. */
+.preview-host, .preview-host * { box-sizing: border-box; }
+.preview-host {
+  width: 100%; max-width: 100%; overflow-x: hidden;
+}
 .preview-host .mm-preview {
   position: static; transform: none; left: auto; bottom: auto;
-  width: 100%; max-width: 100%; z-index: auto;
+  width: 100%; max-width: 100%; min-width: 0; z-index: auto;
   display: none; cursor: default; touch-action: auto;
   background: var(--input-bg); border-color: var(--border);
   border-radius: 8px; padding: 0.5rem 0.625rem;
@@ -37,8 +45,13 @@ ${STYLES}
 .preview-host .mm-preview.visible {
   display: block; border-color: var(--accent); animation: none;
 }
-.preview-host .mm-preview-body { max-height: 22rem; overflow: auto; }
+.preview-host .mm-preview-body {
+  max-height: 22rem; overflow-y: auto; overflow-x: hidden;
+  max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
+}
 .preview-host .mm-preview-title { color: var(--muted); }
+/* Inline shot thumbs must not widen the column either. */
+.preview-host .mm-preview img { max-width: 100%; height: auto; }
 `;
 
 export interface PreviewIsland {

@@ -607,7 +607,8 @@ function Panel() {
   let previewIsland: PreviewIsland | undefined;
   let keysIsland: KeysIsland | undefined;
   let previewHost: HTMLElement | undefined;
-  let keysHost: HTMLElement | undefined;
+  let keysBarHost: HTMLElement | undefined;
+  let keysPopupHost: HTMLElement | undefined;
   let helpOpen = false;
 
   /** Re-assert both islands from the CURRENT state. Plain callbacks only. */
@@ -626,7 +627,8 @@ function Panel() {
       },
     );
     previewHost?.append(previewIsland.root);
-    keysHost?.append(keysIsland.root);
+    keysBarHost?.append(keysIsland.barRoot);
+    keysPopupHost?.append(keysIsland.popupRoot);
     syncIslands();
   });
 
@@ -1075,6 +1077,15 @@ function Panel() {
       </div>
       <Toasts />
       {phase() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
+      {/* The command bar: the live keycaps, visible whenever a turn is open. */}
+      <div
+        ref={(el: HTMLDivElement) => {
+          keysBarHost = el;
+          if (keysIsland !== undefined) {
+            el.append(keysIsland.barRoot);
+          }
+        }}
+      />
       {/* The transcript lives directly under the command bar — permanently
           visible, not a pane tenant (the Turn pane is a temporary helper and
           will retire into the command bar). */}
@@ -1087,13 +1098,12 @@ function Panel() {
           }
         }}
       />
-      {/* The keys popup (?): a fixed, dismissible overlay — never a permanent
-          tenant of the panel. */}
+      {/* The keys popup (?): a fixed, dismissible overlay. */}
       <div
         ref={(el: HTMLDivElement) => {
-          keysHost = el;
+          keysPopupHost = el;
           if (keysIsland !== undefined) {
-            el.append(keysIsland.root);
+            el.append(keysIsland.popupRoot);
           }
         }}
       />

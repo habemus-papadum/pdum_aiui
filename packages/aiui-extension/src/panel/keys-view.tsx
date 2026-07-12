@@ -25,8 +25,16 @@ const STYLE_ID = "aiui-panel-keys-styles";
 const KEYS_STYLES = `
 ${CHEAT_STYLES}
 ${KEYMAP_HELP_STYLES}
-/* The keys popup: shown on ? (or the ❓ cap), dismissed by ?/Esc/the ✕.
-   Never a permanent tenant of the panel — the transcript owns that space. */
+/* The CAPS STRIP is the command bar: visible whenever a turn is open (the
+   panel's primary surface — every act has a cap, lit when engaged). */
+.keys-bar { margin: 0 0.125rem 0.5rem; }
+.keys-bar[hidden] { display: none; }
+.keys-bar .mm-cheat-wrap { display: block; }
+.keys-bar .mm-cheat {
+  max-width: 100%; width: 100%; margin: 0; box-sizing: border-box;
+  background: var(--surface-2); border-color: var(--border-2);
+}
+/* The HELP TABLE is a popup: ? (or the ❓ cap) opens it, ✕/Esc/? dismiss. */
 .keys-island {
   position: fixed; left: 0.625rem; right: 0.625rem; bottom: 0.625rem; z-index: 70;
   background: var(--surface); border: 1px solid var(--border-2); border-radius: 10px;
@@ -42,11 +50,6 @@ ${KEYMAP_HELP_STYLES}
   margin-left: auto; background: none; border: none; color: var(--text-2);
   cursor: pointer; font-size: 0.75rem; padding: 0;
 }
-.keys-island .mm-cheat-wrap { display: block; }
-.keys-island .mm-cheat {
-  max-width: 100%; width: 100%; margin: 0; box-sizing: border-box;
-  background: var(--surface-2); border-color: var(--border-2);
-}
 .keys-island .mm-keymap-help {
   height: auto; max-height: 40vh; column-width: 11rem; overflow-y: auto;
   margin-top: 0.5rem;
@@ -58,9 +61,12 @@ ${KEYMAP_HELP_STYLES}
 `;
 
 export interface KeysIsland {
-  readonly root: HTMLElement;
-  /** Re-assert the popup's visibility, its caps, and the blip line. */
-  sync(state: LeaderState, open: boolean, blip: string | undefined): void;
+  /** The in-turn command bar (the live keycaps). Sits inline in the panel. */
+  readonly barRoot: HTMLElement;
+  /** The help table's popup (?). A fixed, dismissible overlay. */
+  readonly popupRoot: HTMLElement;
+  /** Re-assert the bar, the popup's visibility, and the blip line. */
+  sync(state: LeaderState, helpOpen: boolean, blip: string | undefined): void;
 }
 
 /**
@@ -83,10 +89,17 @@ export function createKeysIsland(onKey: (key: string) => void, onClose: () => vo
   blipLine.className = "keys-blip";
   blipLine.hidden = true;
 
+  // The command bar: caps + the swallowed-key line, inline in the panel.
+  const barRoot = document.createElement("div");
+  barRoot.className = "keys-bar";
+  barRoot.hidden = true;
+  barRoot.append(cheat.root, blipLine);
+
+  // The help table's popup.
   const head = document.createElement("div");
   head.className = "keys-head";
   const title = document.createElement("span");
-  title.textContent = "keys";
+  title.textContent = "keymap";
   const close = document.createElement("button");
   close.type = "button";
   close.className = "keys-x";
@@ -94,17 +107,20 @@ export function createKeysIsland(onKey: (key: string) => void, onClose: () => vo
   close.addEventListener("click", onClose);
   head.append(title, close);
 
-  const root = document.createElement("div");
-  root.className = "keys-island";
-  root.hidden = true;
-  root.append(head, cheat.root, blipLine, help.root);
-  help.root.hidden = false; // the popup IS the help; no nested toggle
+  const popupRoot = document.createElement("div");
+  popupRoot.className = "keys-island";
+  popupRoot.hidden = true;
+  popupRoot.append(head, help.root);
+  help.root.hidden = false; // the popup IS the help
 
   return {
-    root,
-    sync(state, open, blip) {
-      root.hidden = !open;
-      cheat.update(leaderHints(state), true);
+    barRoot,
+    popupRoot,
+    sync(state, helpOpen, blip) {
+      const inTurn = state.phase === "turn";
+      barRoot.hidden = !inTurn;
+      cheat.update(leaderHints(state), inTurn);
+      popupRoot.hidden = !helpOpen;
       blipLine.hidden = blip === undefined;
       blipLine.textContent = blip === undefined ? "" : `× ${blip} — not a key here`;
     },
