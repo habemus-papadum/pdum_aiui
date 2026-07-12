@@ -98,7 +98,7 @@ export class TracesPane {
   readonly root: HTMLDivElement;
   private readonly opts: TracesPaneOptions;
   private readonly fetchFn: typeof fetch;
-  private readonly list: HTMLDivElement;
+  private readonly list: HTMLSelectElement;
   private readonly viewHost: HTMLDivElement;
   private readonly view: TraceView;
   private entries: TraceListEntry[] = [];
@@ -143,8 +143,23 @@ export class TracesPane {
     allLabel.append(all, document.createTextNode(" all sessions"));
     bar.append(followLabel, allLabel);
 
-    this.list = document.createElement("div");
+    // A dropdown, not a scrolling row list (reworked 2026-07-12): the picker
+    // is a chooser, not content — one closed line, options on demand. Picking
+    // a trace by hand naturally leaves follow mode.
+    this.list = document.createElement("select");
     this.list.className = "aiui-dbgt-list";
+    this.list.addEventListener("change", () => {
+      const id = this.list.value;
+      if (id === "") {
+        return;
+      }
+      this.follow = false;
+      const check = this.root.querySelector<HTMLInputElement>(".aiui-dbgt-bar input");
+      if (check) {
+        check.checked = false;
+      }
+      this.select(id);
+    });
     this.viewHost = document.createElement("div");
     this.viewHost.className = "aiui-dbgt-view";
     this.view = new TraceView({
@@ -199,7 +214,7 @@ export class TracesPane {
     if (this.follow && visible[0] && visible[0].id !== this.selectedId) {
       this.select(visible[0].id);
     }
-    this.renderList();
+    this.renderList(); // also re-asserts the dropdown's value (follow mode)
   }
 
   private visibleEntries(): TraceListEntry[] {
@@ -210,41 +225,33 @@ export class TracesPane {
 
   private renderList(): void {
     this.list.replaceChildren();
-    for (const entry of this.visibleEntries().slice(0, 40)) {
+    const visible = this.visibleEntries().slice(0, 40);
+    for (const entry of visible) {
       const { title, badges, dim } = traceRowParts(entry, this.session);
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "aiui-dbgt-row";
-      row.classList.toggle("selected", entry.id === this.selectedId);
-      row.classList.toggle("dim", dim);
-      const text = document.createElement("span");
-      text.textContent = title;
-      row.append(text);
-      for (const badge of badges) {
-        const pill = document.createElement("span");
-        pill.className = "aiui-dbgt-badge";
-        pill.textContent = badge;
-        row.append(pill);
+      const option = document.createElement("option");
+      option.className = "aiui-dbgt-row";
+      option.value = entry.id;
+      option.textContent = badges.length > 0 ? `${title} · ${badges.join(" · ")}` : title;
+      option.classList.toggle("dim", dim);
+      if (badges.length > 0) {
+        option.dataset.badges = badges.join(" ");
       }
-      row.addEventListener("click", () => {
-        this.follow = false;
-        const check = this.root.querySelector<HTMLInputElement>(".aiui-dbgt-bar input");
-        if (check) {
-          check.checked = false;
-        }
-        this.select(entry.id);
-        this.renderList();
-      });
-      this.list.append(row);
+      this.list.append(option);
     }
-    if (this.visibleEntries().length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "aiui-dbgt-empty";
+    if (visible.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.disabled = true;
+      empty.selected = true;
       empty.textContent =
         this.entries.length > 0
           ? "no traces from this session yet — check “all sessions” to see older ones"
           : "no traces yet — arm the overlay and speak a turn";
       this.list.append(empty);
+      return;
+    }
+    if (this.selectedId !== undefined) {
+      this.list.value = this.selectedId;
     }
   }
 

@@ -34,6 +34,18 @@
  * The hint strip renders in the PANEL ONLY (the page carries no chrome but
  * ring + ink), from the same rows the resolver reads.
  */
+// Font Awesome Free (CC BY 4.0) solid glyphs, bundled as raw SVG markup —
+// monochrome, currentColor-tinted caps (the panel's visual language; color
+// emoji read as stickers there). ?raw keeps them out of any font pipeline.
+import faAsterisk from "@fortawesome/fontawesome-free/svgs/solid/asterisk.svg?raw";
+import faBroom from "@fortawesome/fontawesome-free/svgs/solid/broom.svg?raw";
+import faQuestion from "@fortawesome/fontawesome-free/svgs/solid/circle-question.svg?raw";
+import faImage from "@fortawesome/fontawesome-free/svgs/solid/image.svg?raw";
+import faMoon from "@fortawesome/fontawesome-free/svgs/solid/moon.svg?raw";
+import faPlane from "@fortawesome/fontawesome-free/svgs/solid/paper-plane.svg?raw";
+import faPaste from "@fortawesome/fontawesome-free/svgs/solid/paste.svg?raw";
+import faPen from "@fortawesome/fontawesome-free/svgs/solid/pen.svg?raw";
+import faWrench from "@fortawesome/fontawesome-free/svgs/solid/wrench.svg?raw";
 import type { KeymapHelpSection } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import {
   type KeyClaim,
@@ -113,13 +125,14 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
         key: "i",
         label: state.inkOn ? "ink off" : "ink",
         icon: "✏️",
+        iconSvg: faPen,
         active: state.inkOn,
       }),
     },
     {
       keys: ["s", "S"],
       down: onPress("shot"),
-      hint: { key: "s", label: "shot", icon: "🖼" },
+      hint: { key: "s", label: "shot", icon: "🖼", iconSvg: faImage },
     },
     {
       keys: ["a", "A"],
@@ -128,6 +141,7 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
         key: "a",
         label: "add selection",
         icon: "📋",
+        iconSvg: faPaste,
         active: state.selectionPresent,
       }),
     },
@@ -136,30 +150,31 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
       // PHASE-A.md gap 2 (should offer whenever strokes exist).
       keys: ["c", "C"],
       down: (state, _key, repeat) => (!repeat && state.inkOn ? command("clear") : "swallow"),
-      hint: (state) => (state.inkOn ? { key: "c", label: "clear ink", icon: "🧹" } : undefined),
+      hint: (state) =>
+        state.inkOn ? { key: "c", label: "clear ink", icon: "🧹", iconSvg: faBroom } : undefined,
     },
     {
       // Tweak: hand keyboard AND pointer back to the page, turn stays open.
       // Only ⌘B can resume (the page owns every ordinary key in tweak).
       keys: ["t", "T"],
       down: onPress("tweak"),
-      hint: { key: "t", label: "tweak the page", icon: "🔧" },
+      hint: { key: "t", label: "tweak the page", icon: "🔧", iconSvg: faWrench },
     },
     {
       keys: ["d", "D"],
       down: onPress("disarm"),
-      hint: { key: "d", label: "disarm (abandon all)", icon: "💤" },
+      hint: { key: "d", label: "disarm (abandon all)", icon: "💤", iconSvg: faMoon },
     },
     {
       keys: ["Enter"],
       down: onPress("send"),
-      hint: { key: "⏎", label: "send", icon: "📤" },
+      hint: { key: "⏎", label: "send", icon: "📤", iconSvg: faPlane },
     },
     {
       // The keymap as a table, under the caps (the overlay's ? — same rows).
       keys: ["?"],
       down: onPress("help"),
-      hint: { key: "?", label: "help", icon: "❓" },
+      hint: { key: "?", label: "help", icon: "❓", iconSvg: faQuestion },
     },
     {
       // The ladder's in-turn rung: cancel the turn, stay armed. (Sub-layers —
@@ -235,7 +250,12 @@ export function leaderHelp(): KeymapHelpSection[] {
   const base = leaderHints(at());
   const inking = leaderHints(at({ inkOn: true }));
   const fresh = inking.filter((h) => !base.some((b) => b.key === h.key));
-  const leaderRow: KeyHint = { key: "⌘B", label: "open a turn · grant this tab", icon: "✳" };
+  const leaderRow: KeyHint = {
+    key: "⌘B",
+    label: "open a turn · grant this tab",
+    icon: "✳",
+    iconSvg: faAsterisk,
+  };
   return [
     {
       title: "in a turn",
@@ -255,7 +275,7 @@ export function leaderHelp(): KeymapHelpSection[] {
     {
       title: "tweak",
       note: "t — the page has keyboard and pointer; the turn stays open",
-      hints: [{ key: "⌘B", label: "resume the turn", icon: "🔧" }],
+      hints: [{ key: "⌘B", label: "resume the turn", icon: "🔧", iconSvg: faWrench }],
     },
   ];
 }

@@ -50,6 +50,14 @@ export interface KeyHint {
   /** Optional pictogram for the condensed cheat sheet (an emoji works). */
   icon?: string;
   /**
+   * Optional SVG markup for the pictogram — wins over {@link icon} where the
+   * renderer supports it. For hosts whose visual language wants monochrome
+   * glyphs (the extension panel bundles Font Awesome SVGs) rather than color
+   * emoji. The string is injected as innerHTML: it must come from the app's
+   * own bundle, never from user input.
+   */
+  iconSvg?: string;
+  /**
    * This row's mode/state is currently ENGAGED — the share is sampling, the
    * mic is muted, tweak mode has the pointer. Condensed surfaces highlight
    * such a cap, so "what is on right now" is readable at a glance instead of

@@ -110,11 +110,11 @@ describe("TracesPane with a pinned session (the ?session= deep link)", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     pane.deactivate();
 
-    const rows = [...pane.root.querySelectorAll(".aiui-dbgt-row")];
+    const rows = [...pane.root.querySelectorAll("option.aiui-dbgt-row")];
     expect(rows).toHaveLength(1);
-    // The pinned session's row carries no badge (it IS the current session);
-    // the server's own would have been badged had "all sessions" shown it.
-    expect(rows[0].querySelector(".aiui-dbgt-badge")).toBeNull();
+    // The pinned session's option carries no badge suffix (it IS the current
+    // session); the server's own would have been badged under "all sessions".
+    expect(rows[0].dataset.badges).toBeUndefined();
     document.body.replaceChildren();
   });
 });

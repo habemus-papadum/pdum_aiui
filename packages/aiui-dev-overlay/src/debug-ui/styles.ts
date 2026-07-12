@@ -67,7 +67,11 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-trace { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .aiui-dbg-sec { display: flex; flex-direction: column; min-height: 0;
   border-bottom: 1px solid #262c3a; }
-.aiui-dbg-sec.prompt { flex: 0 1 auto; max-height: 45%; }
+/* The prompt owns the height while stages are collapsed (their default);
+   expanding stages splits the pane again. */
+.aiui-dbg-sec.prompt { flex: 1 1 auto; }
+.aiui-dbg-trace:has(.aiui-dbg-sec.stages:not(.collapsed)) .aiui-dbg-sec.prompt {
+  flex: 0 1 auto; max-height: 45%; }
 .aiui-dbg-sec.stages { flex: 1 1 auto; }
 .aiui-dbg-sec.collapsed { flex: 0 0 auto; max-height: none; }
 .aiui-dbg-sec.collapsed > .aiui-dbg-sec-body { display: none; }

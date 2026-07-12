@@ -66,8 +66,17 @@ const Cap = (props: {
         }
       }}
     >
-      <Show when={props.hint.icon !== undefined} fallback={<kbd>{props.hint.key}</kbd>}>
-        <span class="mm-keyicon">{props.hint.icon}</span>
+      <Show
+        when={props.hint.icon !== undefined || props.hint.iconSvg !== undefined}
+        fallback={<kbd>{props.hint.key}</kbd>}
+      >
+        <Show
+          when={props.hint.iconSvg !== undefined}
+          fallback={<span class="mm-keyicon">{props.hint.icon}</span>}
+        >
+          {/* Bundle-owned markup only (see KeyHint.iconSvg's contract). */}
+          <span class="mm-keyicon" innerHTML={props.hint.iconSvg} />
+        </Show>
       </Show>
     </button>
   );
@@ -195,7 +204,12 @@ export class KeymapHelp {
                 {(hint) => (
                   <div class="mm-help-row">
                     <kbd>{hint.key}</kbd>
-                    <span class="mm-help-icon">{hint.icon ?? ""}</span>
+                    <Show
+                      when={hint.iconSvg !== undefined}
+                      fallback={<span class="mm-help-icon">{hint.icon ?? ""}</span>}
+                    >
+                      <span class="mm-help-icon" innerHTML={hint.iconSvg} />
+                    </Show>
                     <span class="mm-help-label">{hint.label}</span>
                   </div>
                 )}

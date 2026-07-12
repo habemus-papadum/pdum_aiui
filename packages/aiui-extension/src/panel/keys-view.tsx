@@ -41,6 +41,15 @@ ${KEYMAP_HELP_STYLES}
   width: 2.25rem; height: 2rem; border-radius: 8px; border-width: 2px;
 }
 .keys-bar .mm-keyicon { font-size: 1.125rem; }
+/* Font Awesome glyphs: monochrome, tinted by the cap's state (muted at rest,
+   bright on hover, green when the mode is ENGAGED). */
+.keys-bar .mm-keyicon svg, .keys-island .mm-help-icon svg {
+  width: 1em; height: 1em; display: block; fill: currentColor;
+}
+.keys-bar .mm-keyicon { color: var(--text-2); }
+.keys-bar .mm-keycap:hover .mm-keyicon { color: var(--text); }
+.keys-bar .mm-keycap.active .mm-keyicon { color: var(--ok); }
+.keys-island .mm-help-icon { color: var(--text-2); }
 /* The lit ring: 2px and inset-free reads clean at this size (1px hairlines
    looked jagged on the emoji caps — reported live 2026-07-12). */
 .keys-bar .mm-keycap.active {

@@ -131,7 +131,9 @@ export class TraceView {
     this.root.append(
       this.statusEl,
       this.section("prompt", "lowered prompt", this.heroEl),
-      this.section("stages", "stages", this.cardsEl, this.filtersEl),
+      // Stages start COLLAPSED: the lowered prompt is what a trace is opened
+      // for; the recorded stages are the drill-down (2026-07-12).
+      this.section("stages", "stages", this.cardsEl, this.filtersEl, true),
     );
   }
 
@@ -144,8 +146,9 @@ export class TraceView {
     title: string,
     body: HTMLElement,
     tail?: HTMLElement,
+    startCollapsed = false,
   ): HTMLElement {
-    const sec = this.el("div", `aiui-dbg-sec ${kind}`);
+    const sec = this.el("div", `aiui-dbg-sec ${kind}${startCollapsed ? " collapsed" : ""}`);
     const head = this.doc.createElement("div");
     head.className = "aiui-dbg-sec-head";
     const toggle = this.doc.createElement("button");
@@ -161,7 +164,7 @@ export class TraceView {
       sec.classList.toggle("collapsed");
       toggle.setAttribute("aria-expanded", sec.classList.contains("collapsed") ? "false" : "true");
     });
-    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-expanded", startCollapsed ? "false" : "true");
     head.append(toggle);
     if (tail !== undefined) {
       head.append(tail);
