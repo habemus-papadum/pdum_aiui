@@ -106,6 +106,7 @@
     }
   },
   "dependencies": {
+    "@habemus-papadum/aiui-ink": "workspace:^",
     "@habemus-papadum/aiui-paint": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^"
   },

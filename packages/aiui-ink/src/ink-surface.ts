@@ -16,6 +16,7 @@
  * Graduated from the overlay's internal `Ink` (multimodal/ink.ts), generalized
  * with per-stroke style and a remote feed.
  */
+import { CHARGE_GLOW, type FadeStyle, FULL_STYLE, fadeStyle, heat } from "./fade";
 import {
   boundsOf,
   type InkPoint,
@@ -24,7 +25,6 @@ import {
   type Stroke,
   type StrokeStyle,
   smoothedSegments,
-  strokeAlpha,
 } from "./strokes";
 
 /** Default brush when a local stroke's style isn't overridden. */
@@ -42,6 +42,24 @@ export interface InkSurfaceOptions {
   width?: () => number;
   /** Capture local pointer input into strokes. Defaults to `true`. */
   localInput?: boolean;
+  /**
+   * Per-pointerdown veto for local capture (e.g. the overlay ignores
+   * shift-drags — shift is its inspect modifier). Return false to pass the
+   * gesture to whatever is underneath.
+   */
+  shouldCapture?: (e: PointerEvent) => boolean;
+  /**
+   * Minimum committed points for a finished stroke (local AND remote).
+   * Default 1 — a tap is a dot (the paint surfaces' behavior). The overlay
+   * passes 2: taps are nothing, never ink.
+   */
+  minCommitPoints?: number;
+  /**
+   * A REMOTE stroke completed (its `remoteEnd` arrived with enough points).
+   * The overlay feeds these to the engine exactly like local strokes; the
+   * extension's panel will relay them the same way (iPad ink, Phase C7).
+   */
+  onRemoteStrokeEnd?: (id: string, points: InkPoint[]) => void;
   /**
    * Anchor strokes to the DOCUMENT instead of the viewport: points are stored
    * in document coordinates (client + scroll) and the draw loop subtracts the
@@ -135,6 +153,27 @@ export class InkSurface {
     return this.strokes.length > 0;
   }
 
+  /** How many committed strokes are on the surface. */
+  strokeCount(): number {
+    return this.strokes.filter((s) => !s.live).length;
+  }
+
+  /**
+   * Restart every committed stroke's fade clock from now. Turning vanishing
+   * ink ON is the reason this exists: `bornAt` is pen-up time, so ink that
+   * sat on a permanent canvas for minutes is already older than any fade
+   * window — flipping the chip would blink the whole drawing out in one
+   * frame. Adjusting the DURATION deliberately does not call this.
+   */
+  restartFade(): void {
+    const now = this.now();
+    for (const stroke of this.strokes) {
+      if (!stroke.live) {
+        stroke.bornAt = now;
+      }
+    }
+  }
+
   /** Bounds of everything currently on the surface, or `undefined` if empty. */
   inkBounds(): Rect | undefined {
     if (this.strokes.length === 0) {
@@ -187,9 +226,17 @@ export class InkSurface {
     if (point) {
       stroke.points.push(this.toStored(point));
     }
+    this.liveById.delete(id);
+    if (stroke.points.length < (this.opts.minCommitPoints ?? 1)) {
+      const at = this.strokes.indexOf(stroke);
+      if (at >= 0) {
+        this.strokes.splice(at, 1); // a remote tap below the floor: nothing
+      }
+      return;
+    }
     stroke.live = false;
     stroke.bornAt = this.now();
-    this.liveById.delete(id);
+    this.opts.onRemoteStrokeEnd?.(id, stroke.points);
   }
 
   remoteCancel(id: string): void {
@@ -212,7 +259,10 @@ export class InkSurface {
     scale: number,
   ): void {
     for (const stroke of this.strokes) {
-      drawStroke(ctx, stroke, 1, scale, -offsetX, -offsetY);
+      // Always FULL, never mid-warp: a shot freezes what you circled, and a
+      // stroke caught two frames before it popped should reach the model as
+      // the annotation it is, not as a half-erased ghost.
+      drawStroke(ctx, stroke, FULL_STYLE, scale, -offsetX, -offsetY);
     }
   }
 
@@ -261,6 +311,9 @@ export class InkSurface {
       // Primary button for mouse; pen/touch always. Secondary mouse buttons are
       // left for the app (context menu, etc.).
       if (e.pointerType === "mouse" && e.button !== 0) {
+        return;
+      }
+      if (this.opts.shouldCapture !== undefined && !this.opts.shouldCapture(e)) {
         return;
       }
       try {
@@ -315,6 +368,14 @@ export class InkSurface {
       if (!stroke) {
         return;
       }
+      if (stroke.points.length < (this.opts.minCommitPoints ?? 1)) {
+        // A tap below the commit floor: not ink — remove it entirely.
+        const at = this.strokes.indexOf(stroke);
+        if (at >= 0) {
+          this.strokes.splice(at, 1);
+        }
+        return;
+      }
       stroke.live = false;
       stroke.bornAt = this.now(); // fade clock starts at pen-up
       this.opts.onStrokeEnd?.({
@@ -353,12 +414,14 @@ export class InkSurface {
     const o = this.origin();
     let expired = 0;
     for (const stroke of this.strokes) {
-      const alpha = strokeAlpha(stroke, now, fadeMs);
-      if (alpha === 0) {
+      // Live strokes never fade — their clock starts at pen-up. Committed
+      // strokes ride the warp curve (fade.ts): hold → charge → pop.
+      const style = stroke.live ? FULL_STYLE : fadeStyle(now - stroke.bornAt, fadeMs);
+      if (style.alpha <= 0) {
         expired++;
         continue;
       }
-      drawStroke(ctx, stroke, alpha, 1, -o.x, -o.y);
+      drawStroke(ctx, stroke, style, 1, -o.x, -o.y);
     }
     if (expired > 0 && expired === this.strokes.length && this.liveById.size === 0) {
       this.clear(true);
@@ -382,7 +445,7 @@ function getCoalesced(e: PointerEvent): PointerEvent[] {
 function drawStroke(
   ctx: CanvasRenderingContext2D,
   stroke: Stroke,
-  alpha: number,
+  style: FadeStyle,
   scale: number,
   dx: number,
   dy: number,
@@ -391,10 +454,11 @@ function drawStroke(
   if (points.length === 0) {
     return;
   }
+  const color = heat(stroke.color, CHARGE_GLOW * style.glow);
   ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.strokeStyle = stroke.color;
-  ctx.fillStyle = stroke.color;
+  ctx.globalAlpha = style.alpha;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   const tx = (x: number) => (x + dx) * scale;
@@ -402,7 +466,7 @@ function drawStroke(
 
   if (points.length === 1) {
     const p = points[0];
-    const r = (pressureWidth(stroke.width, p.pressure) * scale) / 2;
+    const r = (pressureWidth(stroke.width, p.pressure) * style.widthScale * scale) / 2;
     ctx.beginPath();
     ctx.arc(tx(p.x), ty(p.y), Math.max(0.5, r), 0, Math.PI * 2);
     ctx.fill();
@@ -410,7 +474,7 @@ function drawStroke(
     return;
   }
 
-  ctx.lineWidth = pressureWidth(stroke.width, averagePressure(points)) * scale;
+  ctx.lineWidth = pressureWidth(stroke.width, averagePressure(points)) * style.widthScale * scale;
   ctx.beginPath();
   ctx.moveTo(tx(points[0].x), ty(points[0].y));
   for (const seg of smoothedSegments(points)) {

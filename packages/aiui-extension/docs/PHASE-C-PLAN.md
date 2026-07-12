@@ -195,6 +195,17 @@ per-phase entries: what moved, what's bridged, what was measured live.
   armed → explicit turn → compose → send; the turn arrived in the Claude session through the
   shared shell; post-send state armed-lit/turn-off per §13.6.
 
+**C2a (2026-07-12, DONE):** ONE ink implementation. `aiui-ink` absorbed the overlay's
+graduated policies — the warp fade curve (`fade.ts`: hold → charge → pop, `heat`, tested),
+`restartFade` (the ✒️→💨 chip flip), `strokeCount`, `shouldCapture` (shift = inspect, never
+ink), `minCommitPoints` (taps are nothing for the overlay, dots for paint), FULL-style
+`compositeInto`, and an `onRemoteStrokeEnd` callback (remote strokes join the engine like
+local ones — and C7's iPad relay will ride the same hook). The overlay's `multimodal/ink.ts`
+is now a thin adapter over `InkSurface` with its exact old API + re-exports — modality.ts
+untouched, all 81 modality tests + its ink tests green unchanged. Overlay gained the
+`aiui-ink` workspace dep (both public). Extension side already consumed `aiui-ink`
+(documentAnchored); nothing to change. 1673 repo tests, packaging green.
+
 ## 5 · Decision points for review (before any code)
 
 1. **Shared code stays in `aiui-dev-overlay`** (no new package) — confirm.

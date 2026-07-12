@@ -9,6 +9,16 @@
  *
  * @packageDocumentation
  */
+
+export {
+  CHARGE_GLOW,
+  type FadeStyle,
+  FULL_STYLE,
+  fadeStyle,
+  heat,
+  INK_CHARGE,
+  INK_HOLD,
+} from "./fade";
 export type { InkSurfaceOptions, LocalStroke } from "./ink-surface";
 export { InkSurface } from "./ink-surface";
 export type { InkPoint, Rect, Segment, Stroke, StrokeStyle } from "./strokes";
