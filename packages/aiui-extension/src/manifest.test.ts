@@ -23,6 +23,7 @@ describe("extension manifest", () => {
       "nativeMessaging",
       "tabs",
       "tabCapture",
+      "scripting",
     ]);
   });
 

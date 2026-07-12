@@ -23,6 +23,32 @@ import type { PendingLeader } from "./panel/leader";
 /** tabId → ISO time of the last action click in THIS worker's lifetime. */
 const invocations = new Map<number, string>();
 
+// Re-inject the content script after an extension (re)load: reloading ORPHANS
+// the copies in already-open tabs — their chrome.runtime context dies and only
+// a navigation would re-inject — which silently kills the ring, ink, and key
+// relay in every open tab (found live 2026-07-12; in development, reloads are
+// constant). The injected file is whatever the built manifest declares, so dev
+// (CRXJS loader) and production (bundle) both re-arm. content.ts is written to
+// adopt a predecessor's DOM (its HMR posture), so double-injection is safe.
+const reinjectContentScripts = async (): Promise<void> => {
+  const files = chrome.runtime.getManifest().content_scripts?.[0]?.js ?? [];
+  if (files.length === 0) {
+    return;
+  }
+  const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+  await Promise.allSettled(
+    tabs
+      .filter((tab) => tab.id !== undefined)
+      .map((tab) =>
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id as number },
+          files,
+        }),
+      ),
+  );
+};
+chrome.runtime.onInstalled.addListener(() => void reinjectContentScripts());
+
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id !== undefined) {
     invocations.set(tab.id, new Date().toISOString());

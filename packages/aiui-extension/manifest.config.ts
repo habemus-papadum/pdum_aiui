@@ -63,10 +63,15 @@ export default defineManifest({
   // and the PANEL consumes it with getUserMedia (measured, RESULTS.md M10).
   // No "offscreen": a side panel can hold the stream itself, so the offscreen
   // capture room (and its base64 round-trip) is gone.
-  permissions: ["sidePanel", "storage", "nativeMessaging", "tabs", "tabCapture"],
-  // Loopback only: the panel probes /health and /debug/api/channels over
-  // fetch (CORS-gated without this) — same grant as aiui-devtools-extension.
-  host_permissions: ["http://127.0.0.1/*", "http://localhost/*"],
+  // "scripting": re-inject the content script into open tabs after an
+  // extension reload (sw.ts) — a reload orphans the injected copies and only
+  // navigation would restore them (ring/ink/keys died in every open tab).
+  permissions: ["sidePanel", "storage", "nativeMessaging", "tabs", "tabCapture", "scripting"],
+  // <all_urls>: executeScript needs host access per-origin — the declared
+  // content_scripts match doesn't grant it. Same reach the content script
+  // already has, now usable for re-injection. Loopback entries: the panel
+  // probes /health and /debug/api/channels over fetch (CORS-gated without).
+  host_permissions: ["<all_urls>", "http://127.0.0.1/*", "http://localhost/*"],
   content_scripts: [
     {
       matches: ["<all_urls>"],

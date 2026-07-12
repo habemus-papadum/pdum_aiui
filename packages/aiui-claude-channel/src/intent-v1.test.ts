@@ -455,12 +455,15 @@ describe("intent-v1 incremental lowering (S1)", () => {
     expect(finReused(cache)).toBe(true);
   });
 
-  it("recomputes at fin when a shot path is wired after the last events batch", async () => {
+  it("refreshes the compose when a shot's bytes land, so fin reuses it", async () => {
     const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
     const d = drive({ cache });
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 9, 9]);
-    // Batch (shot event, no path yet → speculative degraded reference), then the
-    // bytes land and wire the path — the one late mutation between batch and fin.
+    // Batch (shot event, no path yet → speculative degraded reference), then
+    // the bytes land and wire the path. Since 2026-07-12 the wiring also
+    // refreshes the compose cache immediately — the LIVE fold showed
+    // "(image not captured)" one shot behind otherwise (each shot's fold
+    // rendered before its bytes arrived; observed live in the trace hero).
     await d.feedEvents(loadFixture("full-turn-send.json"));
     await d.feedAttachment("shot_1", "image/png", png);
     await d.fin();
@@ -470,8 +473,9 @@ describe("intent-v1 incremental lowering (S1)", () => {
     const inlinePath = /<screenshot path="([^"]+)"/.exec(d.sent[0].text)?.[1];
     expect(inlinePath).toBeDefined();
     expect(existsSync(inlinePath ?? "")).toBe(true);
-    // …which required a fin-time recompute (the cache was stale).
-    expect(finReused(cache)).toBe(false);
+    // …and fin REUSED the cache: the attachment-arrival recompose already
+    // held the path, so there was nothing stale left for fin to redo.
+    expect(finReused(cache)).toBe(true);
   });
 
   it("saves a shot blob to the trace dir on arrival, before fin", async () => {

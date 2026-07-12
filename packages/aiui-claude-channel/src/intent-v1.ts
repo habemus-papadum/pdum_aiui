@@ -1287,6 +1287,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       if (path !== undefined) {
         shotPaths.set(id, path);
         applyShotPaths();
+        // Refresh the LIVE fold too (2026-07-12): the shot's event usually
+        // outruns its bytes, so the fold that introduced `{shot_N}` rendered
+        // before this blob existed — the trace hero showed "(image not
+        // captured)" until the NEXT fold picked the path up (off by one shot,
+        // observed live). fin was always correct (the wiring bumps the
+        // mutation seq); this makes the preview correct as well.
+        recomposeIfStale();
       }
       sidecar?.onShot(id, conditioned.bytes, mime);
     }

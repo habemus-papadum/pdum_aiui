@@ -322,9 +322,12 @@ function Panel() {
       return;
     }
     inkTabId = tabId;
-    await relayRequestTab(tabId, "page", "ink", { on: true, fadeSec: inkFade.get() }).catch(
-      () => {},
-    );
+    await relayRequestTab(tabId, "page", "ink", { on: true, fadeSec: inkFade.get() }).catch(() => {
+      // The page can't hear us — usually an orphaned/absent content script
+      // (the SW re-injects on reload now, but a page can still predate an
+      // install). Loud, because the user just asked for ink and got nothing.
+      toast("ink can't reach this page — reload the tab");
+    });
   };
 
   /**
