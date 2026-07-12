@@ -154,6 +154,23 @@ C0 (one sitting, answers recorded) → C1 → C2 → C3 → C4 (each ends with a
 run of BOTH hosts) → C5 → C6 → C7 → C8. PHASE-A.md's log pattern continues in this file —
 per-phase entries: what moved, what's bridged, what was measured live.
 
+## Log
+
+**C0 (2026-07-12, all measured/read):**
+1. **Mic in the side panel: YES** (RESULTS.md M9) — real device track via getUserMedia in the
+   panel document under the session browser's auto-accept flag; permission never persists
+   ("prompt" before/after — the flag accepts per call). Non-flagged browsers → one-time grant
+   page, deferred until such a target matters. C5 is unblocked in the dev posture.
+2. Preview mount smoke: deferred into C4 proper (it is Solid + light-DOM by design).
+3. debug-ui: `TracesPane` (list + live-followed TraceView, session-filtered) is the
+   embeddable surface; `./debug-ui` subpath already exported. C8-lite is additive.
+4. Paint routing read: the dev page runs `installPaintHost` (probe `GET /paint/info`, then
+   `startPaintHost` from aiui-paint), bridging remote strokes → the modality's
+   `window.__AIUI__.remotePaint` seam and iPad view-frames → the page's one displayCapture
+   grant. C7 design: the PANEL is the paint host (bus-adjacent connection to the bound
+   channel), strokes relay → content-script `aiui-ink` remote feed (documentAnchored maps at
+   ingestion), view-frames come from the SW tabCapture sampler instead of getDisplayMedia.
+
 ## 5 · Decision points for review (before any code)
 
 1. **Shared code stays in `aiui-dev-overlay`** (no new package) — confirm.

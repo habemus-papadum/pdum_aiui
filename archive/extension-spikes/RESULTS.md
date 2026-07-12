@@ -207,3 +207,13 @@ Three facts from the leader-key layer's first live rounds:
    the modal layer's keys are handled by the panel document's listener, not the content
    script's (both paths exist; this is why). Observed, not a problem — recorded so nobody
    "fixes" the dual listener.
+
+## M9 — microphone from the extension SIDE PANEL · **MEASURED (live, CfT 150, macOS, 2026-07-12)**
+
+`navigator.mediaDevices.getUserMedia({ audio: true })` evaluated inside the side panel
+document (raw CDP) **succeeded** — a real device track (`BRIO 301`) — under the session
+browser's `--auto-accept-camera-and-microphone-capture` flag. `permissions.query` reports
+`"prompt"` before AND after: the flag auto-accepts per call, nothing persists. Consequences:
+talk can live in the panel document in the dev posture with zero friction; a browser without
+the flag will need a one-time grant flow (options-page dance) — design it when a non-flagged
+target matters. (Phase C0.1; plan: packages/aiui-extension/docs/PHASE-C-PLAN.md.)
