@@ -13,6 +13,8 @@ const state = (over: Partial<LeaderState> = {}): LeaderState => ({
   phase: "turn",
   inkOn: false,
   selectionPresent: false,
+  talking: false,
+  micMuted: false,
   ...over,
 });
 
@@ -59,7 +61,7 @@ describe("leaderKeyEvent", () => {
   });
 
   it("an unknown key is swallowed and blipped — never a leak, never an exit", () => {
-    for (const key of ["x", " ", "1", "ArrowDown"]) {
+    for (const key of ["x", "1", "ArrowDown"]) {
       expect(leaderKeyEvent(state(), key, "down", false)).toEqual({ kind: "ignored", key });
     }
   });
@@ -75,18 +77,34 @@ describe("leaderKeyEvent", () => {
     expect(leaderKeyEvent(state(), "x", "down", true)).toEqual({ kind: "stay" });
   });
 
-  it("keyups are swallowed wholesale while composing", () => {
+  it("keyups are swallowed wholesale while composing — except Space's (talk release)", () => {
     for (const key of ["i", "b", "Meta", "Escape"]) {
       expect(leaderKeyEvent(state(), key, "up", false)).toEqual({ kind: "stay" });
     }
+    expect(leaderKeyEvent(state(), " ", "up", false)).toEqual({
+      kind: "action",
+      action: "talkRelease",
+    });
   });
 });
 
 describe("leaderHints", () => {
   it("shows the base row set, adding c while inking", () => {
     const keys = (s: LeaderState) => leaderHints(s).map((h) => h.key);
-    expect(keys(state())).toEqual(["i", "s", "a", "t", "d", "⏎", "?", "esc"]);
-    expect(keys(state({ inkOn: true }))).toEqual(["i", "s", "a", "c", "t", "d", "⏎", "?", "esc"]);
+    expect(keys(state())).toEqual(["i", "s", "a", "t", "d", "⏎", "␣", "h", "?", "esc"]);
+    expect(keys(state({ inkOn: true }))).toEqual([
+      "i",
+      "s",
+      "a",
+      "c",
+      "t",
+      "d",
+      "⏎",
+      "␣",
+      "h",
+      "?",
+      "esc",
+    ]);
   });
 
   it("lights the ink cap while ink is on, and relabels it", () => {
@@ -102,7 +120,8 @@ describe("leaderHints", () => {
 
   it("renders one strip line for the panel header", () => {
     expect(leaderHintText(state())).toBe(
-      "i ink · s shot · a add selection · t tweak the page · d disarm (abandon all) · ⏎ send · ? help · esc cancel turn",
+      "i ink · s shot · a add selection · t tweak the page · d disarm (abandon all) · ⏎ send · " +
+        "␣ talk (hold) · h hands-free talk · ? help · esc cancel turn",
     );
   });
 
@@ -134,7 +153,7 @@ describe("leaderHelp (the table generated from the real stack)", () => {
     ]);
     const inTurn = sections[0].hints.map((h) => h.key);
     expect(inTurn).toContain("⌘B"); // authored: the leader is a browser-global
-    for (const key of ["i", "s", "a", "t", "d", "⏎", "?", "esc"]) {
+    for (const key of ["i", "s", "a", "t", "d", "⏎", "␣", "h", "?", "esc"]) {
       expect(inTurn).toContain(key);
     }
     // The ink-only rows are DIFFED against the base — no repeats.

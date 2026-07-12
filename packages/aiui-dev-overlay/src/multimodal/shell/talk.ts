@@ -24,8 +24,8 @@
  */
 
 import type { OverlayErrorInput } from "../../errors";
-import type { IntentThread } from "../../intent";
 import type { Engine, IntentPipelineConfig } from "../../intent-pipeline";
+import type { IntentThread } from "../../intent-types";
 import { AudioCapture, type PcmSource } from "../audio";
 import { mockTranscriber, type Transcriber } from "../transcribe";
 

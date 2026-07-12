@@ -19,7 +19,8 @@
     "./selection": "./src/selection.ts",
     "./intent-thread": "./src/intent-thread.ts",
     "./wire": "./src/multimodal/shell/wire.ts",
-    "./multimodal-ui": "./src/multimodal/ui.ts"
+    "./multimodal-ui": "./src/multimodal/ui.ts",
+    "./multimodal-talk": "./src/multimodal/talk-entry.ts"
   },
   "imports": {
     "#source-locator": "./src/source-locator.ts"
@@ -80,6 +81,11 @@
         "types": "./dist/multimodal/ui.d.ts",
         "import": "./dist/multimodal/ui.js",
         "default": "./dist/multimodal/ui.js"
+      },
+      "./multimodal-talk": {
+        "types": "./dist/multimodal/talk-entry.d.ts",
+        "import": "./dist/multimodal/talk-entry.js",
+        "default": "./dist/multimodal/talk-entry.js"
       }
     },
     "imports": {

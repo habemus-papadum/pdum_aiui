@@ -14,12 +14,16 @@ import {
 
 /**
  * The panel's effective config, declared on every hello as `meta.intent` so
- * traces record reality. `transcriber: "mock"` is deliberate (seam analysis
- * gotcha #1): the shipped default would open a per-thread upstream vendor
- * socket at thread-open — pointless for a text-only host.
+ * traces record reality. Since C5 (talk) the panel is no longer text-only:
+ * the store's `tier` control picks the expansion, defaulting to the shipped
+ * "rapid" streaming tier.
  */
-export function panelIntentConfig(): IntentPipelineConfig {
-  return { ...DEFAULT_INTENT_CONFIG, ...expandTier("mock"), tier: "mock" };
+export function panelIntentConfig(tier: string): IntentPipelineConfig {
+  // Real tiers now (C5): "rapid" (streaming gpt-realtime-whisper — partial
+  // deltas drive the preview's diff animation), "premium" (word logprobs →
+  // the confidence heat), "mock" (offline). The tier control in the store
+  // picks; the hello carries the expansion.
+  return { ...DEFAULT_INTENT_CONFIG, ...expandTier(tier), tier: tier as never };
 }
 
 /** The events since the last thread-open — the persistence/replay unit. */

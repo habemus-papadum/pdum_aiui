@@ -51,6 +51,13 @@ export const rescanTick = durableSignal("panel.rescanTick", 0);
 export const logLevel = control({ value: "info", options: ["quiet", "info", "debug"] });
 
 /**
+ * Transcription tier for talk (C5): rapid = streaming realtime (deltas →
+ * the preview's diff animation), premium = word logprobs (confidence heat),
+ * mock = offline. Read at thread-open (the hello carries the expansion).
+ */
+export const tier = control({ value: "rapid", options: ["mock", "rapid", "premium"] });
+
+/**
  * Panel zoom — a multiplier on the BROWSER'S accessibility font-size default
  * (applied as a percentage root font-size; see index.html). Driven by
  * ⌘+/⌘−/⌘0 in the panel (deliberately no widget — decided 2026-07-12);

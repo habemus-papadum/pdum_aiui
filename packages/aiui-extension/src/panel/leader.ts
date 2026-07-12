@@ -41,6 +41,9 @@ import faAsterisk from "@fortawesome/fontawesome-free/svgs/solid/asterisk.svg?ra
 import faBroom from "@fortawesome/fontawesome-free/svgs/solid/broom.svg?raw";
 import faQuestion from "@fortawesome/fontawesome-free/svgs/solid/circle-question.svg?raw";
 import faImage from "@fortawesome/fontawesome-free/svgs/solid/image.svg?raw";
+import faMicrophone from "@fortawesome/fontawesome-free/svgs/solid/microphone.svg?raw";
+import faMicLines from "@fortawesome/fontawesome-free/svgs/solid/microphone-lines.svg?raw";
+import faMicSlash from "@fortawesome/fontawesome-free/svgs/solid/microphone-slash.svg?raw";
 import faMoon from "@fortawesome/fontawesome-free/svgs/solid/moon.svg?raw";
 import faPlane from "@fortawesome/fontawesome-free/svgs/solid/paper-plane.svg?raw";
 import faPaste from "@fortawesome/fontawesome-free/svgs/solid/paste.svg?raw";
@@ -66,7 +69,11 @@ export type LeaderAction =
   | "disarm"
   | "send"
   | "cancel"
-  | "help";
+  | "help"
+  | "talkPress"
+  | "talkRelease"
+  | "handsFree"
+  | "mute";
 
 /** The §13.6 phases the grammar can see (disarmed = no grammar at all). */
 export type LeaderPhase = "armed" | "turn" | "tweak";
@@ -79,6 +86,10 @@ export interface LeaderState {
   inkOn: boolean;
   /** The active tab reports a live selection (lights the `a` cap). */
   selectionPresent: boolean;
+  /** The mic loop is listening (lights the 🎙 caps, offers `m`). */
+  talking: boolean;
+  /** The open talk window's mic is muted (lights the `m` cap). */
+  micMuted: boolean;
 }
 
 /** The resolver's verdict for one key event. */
@@ -172,6 +183,45 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
       hint: { key: "⏎", label: "send", icon: "📤", iconSvg: faPlane },
     },
     {
+      // Talk (C5): hold Space to talk — down starts the mic loop, up ends it
+      // (the ONE keyup the grammar acts on; every other keyup is swallowed).
+      keys: [" "],
+      down: onPress("talkPress"),
+      hint: (state) => ({
+        key: "␣",
+        label: "talk (hold)",
+        icon: "🎙",
+        iconSvg: faMicrophone,
+        active: state.talking,
+      }),
+    },
+    {
+      keys: ["h", "H"],
+      down: onPress("handsFree"),
+      hint: (state) => ({
+        key: "h",
+        label: state.talking ? "stop hands-free" : "hands-free talk",
+        icon: "🎧",
+        iconSvg: faMicLines,
+        active: state.talking,
+      }),
+    },
+    {
+      // Mute is only meaningful while a talk window is open.
+      keys: ["m", "M"],
+      down: (state, _key, repeat) => (!repeat && state.talking ? command("mute") : "swallow"),
+      hint: (state) =>
+        state.talking
+          ? {
+              key: "m",
+              label: state.micMuted ? "unmute" : "mute mic",
+              icon: "🔇",
+              iconSvg: faMicSlash,
+              active: state.micMuted,
+            }
+          : undefined,
+    },
+    {
       // The keymap as a table, under the caps (the overlay's ? — same rows).
       keys: ["?"],
       down: onPress("help"),
@@ -203,10 +253,11 @@ export function leaderKeyEvent(
   if (state.phase !== "turn") {
     return { kind: "pass" };
   }
-  // Keyups are swallowed wholesale while composing: the keydowns they pair
-  // with were ours, and none of them may leak to the page.
+  // Keyups are swallowed wholesale while composing — except Space's, which
+  // ENDS a push-to-talk hold (C5). The keydowns they pair with were ours, and
+  // none of them may leak to the page.
   if (phase === "up") {
-    return { kind: "stay" };
+    return key === " " ? { kind: "action", action: "talkRelease" } : { kind: "stay" };
   }
   const claim = resolveKey(STACK, state, key, phase, repeat);
   if (claim === "pass") {
@@ -246,6 +297,8 @@ export function leaderHelp(): KeymapHelpSection[] {
     phase: "turn",
     inkOn: false,
     selectionPresent: false,
+    talking: false,
+    micMuted: false,
     ...over,
   });
   const base = leaderHints(at());

@@ -17,6 +17,11 @@ import {
   type Rect,
 } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import { openIntentThread } from "@habemus-papadum/aiui-dev-overlay/intent-thread";
+import {
+  createTalk,
+  SpeechPlayer,
+  WorkletPcmSource,
+} from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
 import { isErrorMessage } from "@habemus-papadum/aiui-dev-overlay/protocol";
 import { createWire } from "@habemus-papadum/aiui-dev-overlay/wire";
 import { CellView, liveSignal } from "@habemus-papadum/aiui-viz";
@@ -44,7 +49,7 @@ import {
 } from "./leader";
 import { logDebug, logInfo } from "./log";
 import { graph } from "./model/graph";
-import { inkFade, inkMode, shotFlash, uiScale } from "./model/store";
+import { inkFade, inkMode, shotFlash, tier, uiScale } from "./model/store";
 import { createPreviewIsland, type PreviewIsland } from "./preview-pane";
 import { createSession } from "./session";
 import { Toasts, toast } from "./toasts";
@@ -143,6 +148,14 @@ const PANEL_STYLES = `
     cursor: pointer; font-size: 0.6875rem; padding: 0;
   }
   .toast-body { padding: 0.375rem 0.5rem; }
+  /* The REC meter: under the caps while the mic loop runs. */
+  .rec-meter { height: 0.375rem; margin: 0.25rem 0.125rem 0; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border-2); overflow: hidden; }
+  .rec-meter[hidden] { display: none; }
+  .rec-meter-fill { height: 100%; width: 0; border-radius: 999px;
+    background: var(--ok); transition: width 60ms linear; }
+  .rec-meter.muted { border-color: var(--warn); }
+  .rec-meter.muted .rec-meter-fill { background: var(--warn); }
   /* The transcript's slot: full panel width (a pane's padding was clipping
      its right edge — found live 2026-07-12). */
   .transcript { margin: 0 0.125rem 0.625rem; }
@@ -183,7 +196,7 @@ function Panel() {
   );
 
   // ── the engine: one per panel document ────────────────────────────────────
-  const engine = new Engine(panelIntentConfig());
+  const engine = new Engine(panelIntentConfig(tier.get()));
   const mirror = turnMirror(windowId);
   // PULL selection model (decided 2026-07-11): nothing enters the turn until
   // the user's explicit "add selection", which opens the turn itself when none
@@ -250,7 +263,25 @@ function Panel() {
     setStatus: (text) => logInfo("wire:", text),
     reportError: (error) => toast(`${error.source ?? "channel"}: ${error.message}`),
     clearSelection: () => {}, // pull model: selections are engine events, no chip to consume
-    enqueueSpeech: () => {}, // server speech clips arrive with C5 (talk)
+    enqueueSpeech: (clip) => speechPlayer.enqueue(clip),
+  });
+
+  // ── talk (C5): the overlay's shell lanes, composed with panel seams. The
+  // mic lives in THIS document (M9) — it survives tab switches and dies with
+  // the panel, and PCM/segments ride the wire the panel already owns.
+  const speechPlayer = new SpeechPlayer();
+  let listeningIsHold = false;
+  const talk = createTalk({
+    engine,
+    config: () => engine.settings,
+    pcmSource: () => new WorkletPcmSource(),
+    setStatus: (text) => logInfo("talk:", text),
+    reportError: (error) => toast(`${error.source ?? "talk"}: ${error.message}`),
+    bargeIn: () => speechPlayer.bargeIn(),
+    getThread: () => wire.getThread(),
+    flushOutbox: (known) => wire.flushOutbox(known),
+    uploadAttachment: (id, mime, bytes) => wire.uploadAttachment(id, mime, bytes),
+    uploadAudio: (segment, seq, bytes) => wire.uploadAudio(segment, seq, bytes),
   });
 
   // ── capture state: shots + per-tab ink (step 5) ────────────────────────────
@@ -622,6 +653,8 @@ function Panel() {
     phase: phase.get() === "disarmed" ? "armed" : (phase.get() as "armed" | "turn" | "tweak"),
     inkOn: inkOnLive.get(),
     selectionPresent: selectionPresent.get(),
+    talking: engine.talking || talk.listening(),
+    micMuted: talk.micMuted(),
   });
 
   // ── the shared imperative islands (the overlay's Preview + CheatSheet +
@@ -643,6 +676,27 @@ function Panel() {
     keysIsland?.sync(leaderState(), helpOpen, blip.get());
   };
 
+  // The REC meter: a tiny rAF island (imperative — never touches signals in
+  // its loop; the frontend playbook's bridge rule). Visible only while the
+  // mic loop runs; the fill tracks talk.level(), red when muted.
+  const meter = document.createElement("div");
+  meter.className = "rec-meter";
+  meter.hidden = true;
+  const meterFill = document.createElement("div");
+  meterFill.className = "rec-meter-fill";
+  meter.append(meterFill);
+  const meterTick = (): void => {
+    const on = engine.talking || talk.listening();
+    meter.hidden = !on;
+    if (on) {
+      const muted = talk.micMuted();
+      meterFill.style.width = `${Math.round(Math.min(1, muted ? 0 : talk.level()) * 100)}%`;
+      meter.classList.toggle("muted", muted);
+    }
+    requestAnimationFrame(meterTick);
+  };
+  requestAnimationFrame(meterTick);
+
   queueMicrotask(() => {
     previewIsland = createPreviewIsland(engine);
     keysIsland = createKeysIsland(
@@ -654,6 +708,7 @@ function Panel() {
     );
     previewHost?.append(previewIsland.root);
     keysBarHost?.append(keysIsland.barRoot);
+    keysBarHost?.append(meter);
     keysPopupHost?.append(keysIsland.popupRoot);
     syncIslands();
   });
@@ -696,7 +751,8 @@ function Panel() {
     // Both media claims are DERIVED from (phase, active tab): leaving the turn
     // releases the ink pointer (tweak hands the page back keyboard AND pointer)
     // and the warm capture stream. Strokes and the ink-mode flag persist —
-    // standing state (§13.6).
+    // standing state (§13.6). The mic loop ends with the turn too.
+    talk.stopAllListening();
     void syncInkPointer();
     void syncTabStream();
     broadcastRing();
@@ -840,6 +896,32 @@ function Panel() {
   const leaderDispatch = (action: LeaderAction): void => {
     if (action === "help") {
       helpOpen = !helpOpen;
+      syncIslands();
+      return;
+    }
+    if (action === "talkPress" || action === "handsFree") {
+      // Space (hold) and h (toggle) drive the same main loop; Space's keyup
+      // ends only a hold — an h-started loop ignores it (listeningIsHold).
+      if (talk.listening()) {
+        if (action === "handsFree") {
+          talk.stopMainListening();
+        }
+      } else {
+        listeningIsHold = action === "talkPress";
+        talk.startMainListening();
+      }
+      syncIslands();
+      return;
+    }
+    if (action === "talkRelease") {
+      if (talk.listening() && listeningIsHold) {
+        talk.stopMainListening();
+        syncIslands();
+      }
+      return;
+    }
+    if (action === "mute") {
+      talk.setMicMuted(!talk.micMuted());
       syncIslands();
       return;
     }
