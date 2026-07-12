@@ -57,6 +57,8 @@ export interface KeyHint {
    * own bundle, never from user input.
    */
   iconSvg?: string;
+  /** Visual tone for the cap (renderers map it to a class, e.g. "danger"). */
+  tone?: string;
   /**
    * This row's mode/state is currently ENGAGED — the share is sampling, the
    * mic is muted, tweak mode has the pointer. Condensed surfaces highlight

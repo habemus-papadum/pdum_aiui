@@ -50,6 +50,8 @@ ${KEYMAP_HELP_STYLES}
 .keys-bar .mm-keyicon { color: var(--text-2); }
 .keys-bar .mm-keycap:hover .mm-keyicon { color: var(--text); }
 .keys-bar .mm-keycap.active .mm-keyicon { color: var(--ok); }
+/* The danger cap (disarm): pink at rest — it abandons everything. */
+.keys-bar .mm-keycap.tone-danger .mm-keyicon { color: #ff5c87; }
 .keys-island .mm-help-icon { color: var(--text-2); }
 /* The lit ring: 2px and inset-free reads clean at this size (1px hairlines
    looked jagged on the emoji caps — reported live 2026-07-12). */

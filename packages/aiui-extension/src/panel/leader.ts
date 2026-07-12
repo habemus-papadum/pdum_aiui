@@ -183,16 +183,6 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
       hint: { key: "t", label: "tweak the page", icon: "🔧", iconSvg: faWrench },
     },
     {
-      keys: ["d", "D"],
-      down: onPress("disarm"),
-      hint: { key: "d", label: "disarm (abandon all)", icon: "💤", iconSvg: faMoon },
-    },
-    {
-      keys: ["Enter"],
-      down: onPress("send"),
-      hint: { key: "⏎", label: "send", icon: "📤", iconSvg: faPlane },
-    },
-    {
       // Talk (C5): hold Space to talk — down starts the mic loop, up ends it
       // (the ONE keyup the grammar acts on; every other keyup is swallowed).
       keys: [" "],
@@ -256,10 +246,9 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
       }),
     },
     {
-      // The keymap as a table, under the caps (the overlay's ? — same rows).
-      keys: ["?"],
-      down: onPress("help"),
-      hint: { key: "?", label: "help", icon: "❓", iconSvg: faQuestion },
+      keys: ["Enter"],
+      down: onPress("send"),
+      hint: { key: "⏎", label: "send", icon: "📤", iconSvg: faPlane },
     },
     {
       // The ladder's in-turn rung: cancel the turn, stay armed. (Sub-layers —
@@ -267,6 +256,23 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
       keys: ["Escape"],
       down: onPress("cancel"),
       hint: { key: "esc", label: "cancel turn", icon: "✖", iconSvg: faXmark },
+    },
+    {
+      keys: ["d", "D"],
+      down: onPress("disarm"),
+      hint: {
+        key: "d",
+        label: "disarm (abandon all)",
+        icon: "💤",
+        iconSvg: faMoon,
+        tone: "danger",
+      },
+    },
+    {
+      // The keymap as a table, under the caps (the overlay's ? — same rows).
+      keys: ["?"],
+      down: onPress("help"),
+      hint: { key: "?", label: "help", icon: "❓", iconSvg: faQuestion },
     },
   ],
   fallback: "swallow",

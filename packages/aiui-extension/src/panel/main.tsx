@@ -682,8 +682,8 @@ function Panel() {
     talking: engine.talking || talk.listening(),
     holdTalk: listeningIsHold,
     micMuted: talk.micMuted(),
-    videoOn: videoOn.get(),
-    fpsSmart: videoMode.get() === "smart",
+    videoOn: videoOnLive.get(),
+    fpsSmart: videoModeLive.get() === "smart",
   });
 
   // ── the shared imperative islands (the overlay's Preview + CheatSheet +
@@ -704,6 +704,12 @@ function Panel() {
     previewIsland?.sync(phase.get() === "turn" || phase.get() === "tweak");
     keysIsland?.sync(leaderState(), helpOpen, blip.get());
   };
+
+  // Control mirrors (the liveSignal rule): the caps and the sampler read
+  // these right after the dispatch writes them — a bare control read there is
+  // one write behind (the video cap showed the OPPOSITE state, seen live).
+  const videoOnLive = liveSignal(videoOn.get());
+  const videoModeLive = liveSignal(videoMode.get());
 
   // ── video (C6): periodic tab frames into the open turn — the overlay's
   // VideoSampler over the panel's WARM stream (frames-are-shots: each frame
@@ -742,7 +748,7 @@ function Panel() {
     },
     intervalMs: () => (videoMode.get() === "smart" ? 1000 : videoPeriodSec.get() * 1000),
     shouldCapture: () => {
-      if (videoMode.get() !== "smart") {
+      if (videoModeLive.get() !== "smart") {
         return true;
       }
       const had = pageInteracted;
@@ -755,7 +761,7 @@ function Panel() {
   });
   /** The video claim, derived like ink/stream: sampling iff turn + videoOn. */
   const syncVideo = (): void => {
-    const want = phase.get() === "turn" && videoOn.get();
+    const want = phase.get() === "turn" && videoOnLive.get();
     if (want) {
       sampler.start();
     } else {
@@ -906,7 +912,8 @@ function Panel() {
 
   /** The open turn holds something worth lowering (explicit turns can be empty). */
   const turnHasContent = (): boolean =>
-    composeIntent(currentThreadEvents(engine.events)).items.length > 0;
+    composeIntent(currentThreadEvents(engine.events), "replace", { streaming: true }).items.length >
+    0;
 
   /** End the open turn: `send` lowers it, `cancel` drops it. STAY ARMED. */
   const endTurn = (how: "send" | "cancel"): void => {
@@ -1056,14 +1063,18 @@ function Panel() {
       return;
     }
     if (action === "video") {
-      videoOn.set(!videoOn.get());
+      const next = !videoOnLive.get();
+      videoOnLive.set(next);
+      videoOn.set(next);
       syncVideo();
       syncIslands();
-      logInfo(videoOn.get() ? "video sampling on" : "video sampling off");
+      logInfo(next ? "video sampling on" : "video sampling off");
       return;
     }
     if (action === "fpsMode") {
-      videoMode.set(videoMode.get() === "smart" ? "constant" : "smart");
+      const next = videoModeLive.get() === "smart" ? "constant" : "smart";
+      videoModeLive.set(next);
+      videoMode.set(next);
       syncIslands();
       return;
     }
@@ -1373,7 +1384,7 @@ function Panel() {
           </select>
         </label>
         <label title="seconds per frame (constant rate)">
-          rate
+          fps
           <input
             type="range"
             min="1"

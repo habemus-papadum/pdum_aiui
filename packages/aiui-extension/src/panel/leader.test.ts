@@ -94,21 +94,21 @@ describe("leaderKeyEvent", () => {
 describe("leaderHints", () => {
   it("shows the base row set, adding c while inking", () => {
     const keys = (s: LeaderState) => leaderHints(s).map((h) => h.key);
-    expect(keys(state())).toEqual(["i", "s", "a", "t", "d", "⏎", "␣", "h", "v", "f", "?", "esc"]);
+    expect(keys(state())).toEqual(["i", "s", "a", "t", "␣", "h", "v", "f", "⏎", "esc", "d", "?"]);
     expect(keys(state({ inkOn: true }))).toEqual([
       "i",
       "s",
       "a",
       "c",
       "t",
-      "d",
-      "⏎",
       "␣",
       "h",
       "v",
       "f",
-      "?",
+      "⏎",
       "esc",
+      "d",
+      "?",
     ]);
   });
 
@@ -125,8 +125,8 @@ describe("leaderHints", () => {
 
   it("renders one strip line for the panel header", () => {
     expect(leaderHintText(state())).toBe(
-      "i ink · s shot · a add selection · t tweak the page · d disarm (abandon all) · ⏎ send · " +
-        "␣ talk (hold) · h hands-free talk · v video · f constant rate · ? help · esc cancel turn",
+      "i ink · s shot · a add selection · t tweak the page · ␣ talk (hold) · h hands-free talk · " +
+        "v video · f constant rate · ⏎ send · esc cancel turn · d disarm (abandon all) · ? help",
     );
   });
 

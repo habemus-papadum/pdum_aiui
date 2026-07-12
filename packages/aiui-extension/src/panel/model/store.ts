@@ -57,8 +57,8 @@ export const logLevel = control({ value: "info", options: ["quiet", "info", "deb
  */
 /** Speech-to-text engine, by model name (maps onto the shared tiers). */
 export const stt = control({
-  value: "gpt-realtime-whisper",
-  options: ["gpt-realtime-whisper", "gpt-4o-mini-transcribe", "elevenlabs"],
+  value: "scribe-v2",
+  options: ["scribe-v2", "gpt-realtime-whisper", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"],
 });
 
 /** The realtime prompt linter (orthogonal to stt; the hello carries it). */

@@ -27,11 +27,13 @@ export function panelIntentConfig(sttName: string, linter?: string): IntentPipel
   // streaming gpt-realtime-whisper, premium the REST gpt-4o-mini-transcribe;
   // elevenlabs swaps the transcriber on the premium shape.
   const base =
-    sttName === "gpt-4o-mini-transcribe"
-      ? expandTier("premium")
-      : sttName === "elevenlabs"
-        ? { ...expandTier("premium"), transcriber: "elevenlabs" as const }
-        : expandTier("rapid");
+    sttName === "scribe-v2"
+      ? { ...expandTier("premium"), transcriber: "elevenlabs" as const }
+      : sttName === "gpt-4o-transcribe"
+        ? { ...expandTier("premium"), model: "gpt-4o-transcribe" }
+        : sttName === "gpt-4o-mini-transcribe"
+          ? expandTier("premium")
+          : expandTier("rapid");
   return {
     ...DEFAULT_INTENT_CONFIG,
     ...base,
