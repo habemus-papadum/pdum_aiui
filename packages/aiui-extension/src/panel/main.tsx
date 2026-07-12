@@ -48,6 +48,7 @@ import { inkFade, inkMode, shotFlash, uiScale } from "./model/store";
 import { createSession } from "./session";
 import { Toasts, toast } from "./toasts";
 import { connectToolsLink } from "./tools-link";
+import { TracePane } from "./trace-pane";
 import { currentThreadEvents, panelIntentConfig, turnMirror } from "./turn";
 import { TurnPane } from "./turn-pane";
 
@@ -141,6 +142,9 @@ const PANEL_STYLES = `
     cursor: pointer; font-size: 0.6875rem; padding: 0;
   }
   .toast-body { padding: 0.375rem 0.5rem; }
+  /* The embedded trace debugger: bounded height, its own scroll. */
+  .trace-host { width: 100%; }
+  .trace-host .aiui-dbgt { max-height: 26rem; overflow: auto; }
   .leader {
     font: 0.6875rem ui-monospace, monospace; color: var(--text-2);
     border: 1px solid var(--border-2); background: var(--surface-2); border-radius: 6px;
@@ -1059,6 +1063,7 @@ function Panel() {
           onInkToggle={() => toggleInkMode()}
           onInkClear={() => void inkClear("manual")}
         />
+        <TracePane session={session} />
         <Pane title="Dev" defaultOpen={false} hint="probes">
           <CellView of={graph().swPing} label="pinging the service worker">
             {(r) => <div class="kv">service worker alive ({r().at.slice(11, 19)})</div>}

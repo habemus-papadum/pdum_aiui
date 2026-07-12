@@ -206,6 +206,18 @@ untouched, all 81 modality tests + its ink tests green unchanged. Overlay gained
 `aiui-ink` workspace dep (both public). Extension side already consumed `aiui-ink`
 (documentAnchored); nothing to change. 1673 repo tests, packaging green.
 
+**C8-lite (2026-07-12, DONE — live-verified):** a **Trace pane** embeds the shared debug-ui
+`TracesPane` (the same surface the overlay's 🔍 opens), pinned to the BOUND channel and
+polling only while expanded (`Pane` gained an `onToggle` hook in aiui-webext; the pane
+rebuilds on port change). Live: 21 traces listed, the follow-view rendering a real lowering
+(15 stages) — including the turns sent through C1's shared wire.
+
+**Dev-loop trap (cost a debugging round, worth remembering):** CRXJS pre-bundles each HTML
+page's ENTRY at dev-server startup. Edits to existing modules hot-update fine, but a **NEW
+module file** (here `trace-pane.tsx`) is not in the pinned entry graph — the panel silently
+renders the old tree, no error. Restart the dev server after adding a module, exactly as after
+an export-map change (C1).
+
 ## 5 · Decision points for review (before any code)
 
 1. **Shared code stays in `aiui-dev-overlay`** (no new package) — confirm.

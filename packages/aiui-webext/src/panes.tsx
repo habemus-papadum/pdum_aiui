@@ -64,6 +64,8 @@ export interface PaneProps {
   defaultOpen?: boolean;
   /** Optional right-aligned hint text in the header (a count, a status). */
   hint?: string;
+  /** Observe expand/collapse (e.g. pause polling while collapsed). */
+  onToggle?: (open: boolean) => void;
   children: JSX.Element;
 }
 
@@ -76,7 +78,11 @@ export function Pane(props: PaneProps): JSX.Element {
         type="button"
         class="wx-pane-header"
         aria-expanded={open() ? "true" : "false"}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          const next = !open();
+          setOpen(next);
+          props.onToggle?.(next);
+        }}
       >
         <span class="wx-pane-chevron">▶</span>
         <span>{props.title}</span>
