@@ -7,6 +7,13 @@
  * guard). The build-time config factory lives at the `./vite` subpath — it
  * imports Node/build machinery and must not be pulled into extension bundles.
  */
+export {
+  checkDevBuild,
+  DEV_RUN_ROUTE,
+  DEV_STAMP_FILE,
+  type DevBuildState,
+  type DevStamp,
+} from "./dev-stamp";
 export { type IndicatorHandle, type IndicatorState, mountIndicator } from "./indicator";
 export { ensureOffscreenDocument } from "./offscreen";
 export {

@@ -18,9 +18,11 @@ export default defineConfig({
   plugins: [solid()],
   build: {
     lib: {
-      // Two entries, mirroring the exports map: the browser runtime barrel and
-      // the Node-side config factory (./vite).
-      entry: { index: "src/index.ts", vite: "src/vite.ts" },
+      // The exports map's two entries — the browser runtime barrel and the
+      // Node-side config factory (./vite) — plus the dev stamp, which both of
+      // them import (`#dev-stamp`) and which therefore needs a real file behind
+      // publishConfig's imports map rather than being inlined into each.
+      entry: { index: "src/index.ts", vite: "src/vite.ts", "dev-stamp": "src/dev-stamp.ts" },
       formats: ["es"],
       fileName: (_format, name) => `${name}.js`,
     },

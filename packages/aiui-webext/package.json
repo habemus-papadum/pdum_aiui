@@ -14,6 +14,9 @@
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts"
   },
+  "imports": {
+    "#dev-stamp": "./src/dev-stamp.ts"
+  },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
@@ -36,6 +39,9 @@
         "import": "./dist/vite.js",
         "default": "./dist/vite.js"
       }
+    },
+    "imports": {
+      "#dev-stamp": "./dist/dev-stamp.js"
     }
   },
   "scripts": {

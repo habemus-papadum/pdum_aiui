@@ -5,6 +5,11 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# The CRXJS dev artifact (aiui-webext's webextConfig): loader stubs that only
+# work while the extension's Vite dev server is running. Deliberately NOT dist/
+# — a `pnpm build` must never be able to clobber a live dev install.
+dist-dev/
+
 # Generated documentation (docs:gen output + VitePress artifacts). Rebuilt by `pnpm docs:gen`.
 docs/packages/
 docs/.vitepress/sidebar.generated.json
