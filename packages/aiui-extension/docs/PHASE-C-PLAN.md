@@ -218,6 +218,31 @@ module file** (here `trace-pane.tsx`) is not in the pinned entry graph — the p
 renders the old tree, no error. Restart the dev server after adding a module, exactly as after
 an export-map change (C1).
 
+**C4 + C3-lite (2026-07-12, DONE — live-verified):** the panel now renders the OVERLAY's real
+surfaces, not lookalikes.
+- New subpath `./multimodal-ui` exports the host-agnostic UI classes (`Preview`, `CheatSheet`,
+  `KeymapHelp` + their stylesheets). Nothing in them touches the page, `window.__AIUI__`, or
+  the widget — they are DOM-in/DOM-out over the shared engine.
+- **Transcript preview** (C4): the Turn pane's body IS `Preview` — the compiler's accumulator
+  (`composeIntent(…, { streaming: true })`), word-confidence heat, animated diffs, shot thumbs
+  with ✕ retraction, selection pills. The hand-rolled chip list is gone. Panel geometry is
+  applied with MORE SPECIFIC selectors (`.preview-host .mm-preview`), never by editing the
+  shared stylesheet.
+- **Cheat sheet + help** (C3-lite): `CheatSheet` renders the live caps for the extension's own
+  key layer (leader.ts — same hint machinery, different grammar), and `?` opens `KeymapHelp`
+  over `leaderHelp()`, generated from the REAL stack (⌘B is an authored row: it is a
+  browser-global command, not a stack binding). Cap taps synthesize the key through the panel's
+  resolver. New `help` action + row; tests updated (28 extension tests).
+- **Solid 2.0 trap, cost a live round (now in CONTINUITY trap 2's family):** these shared
+  classes own internal signals, so BUILDING or UPDATING them inside an owned scope (component
+  body or `createEffect`) throws `[REACTIVE_WRITE_IN_OWNED_SCOPE]` — `KeymapHelp.render()`
+  writes on construction. They are now built in a **queueMicrotask** (outside the owner) and
+  driven by a plain `syncIslands()` called from phase transitions and engine events. Imperative
+  islands: never reactive.
+- Verified live over CDP: caps `✏️ 🖼 📋 🔧 💤 📤 ❓ esc`, preview rendering a real transcript
+  run, `?` (keyboard AND cap tap) toggling the 4-section help table, send → armed stays / turn
+  clears / preview hides. Repo suite 1674, packaging green.
+
 ## 5 · Decision points for review (before any code)
 
 1. **Shared code stays in `aiui-dev-overlay`** (no new package) — confirm.

@@ -18,7 +18,8 @@
     "./protocol": "./src/protocol.ts",
     "./selection": "./src/selection.ts",
     "./intent-thread": "./src/intent-thread.ts",
-    "./wire": "./src/multimodal/shell/wire.ts"
+    "./wire": "./src/multimodal/shell/wire.ts",
+    "./multimodal-ui": "./src/multimodal/ui.ts"
   },
   "imports": {
     "#source-locator": "./src/source-locator.ts"
@@ -74,6 +75,11 @@
         "types": "./dist/multimodal/shell/wire.d.ts",
         "import": "./dist/multimodal/shell/wire.js",
         "default": "./dist/multimodal/shell/wire.js"
+      },
+      "./multimodal-ui": {
+        "types": "./dist/multimodal/ui.d.ts",
+        "import": "./dist/multimodal/ui.js",
+        "default": "./dist/multimodal/ui.js"
       }
     },
     "imports": {

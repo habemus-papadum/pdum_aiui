@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LEADER_PENDING_TTL_MS,
   type LeaderState,
+  leaderHelp,
   leaderHints,
   leaderHintText,
   leaderKeyEvent,
@@ -39,6 +40,7 @@ describe("leaderKeyEvent", () => {
       ["D", "disarm"],
       ["Enter", "send"],
       ["Escape", "cancel"],
+      ["?", "help"],
     ];
     for (const [key, action] of table) {
       expect(leaderKeyEvent(state(), key, "down", false)).toEqual({ kind: "action", action });
@@ -83,8 +85,8 @@ describe("leaderKeyEvent", () => {
 describe("leaderHints", () => {
   it("shows the base row set, adding c while inking", () => {
     const keys = (s: LeaderState) => leaderHints(s).map((h) => h.key);
-    expect(keys(state())).toEqual(["i", "s", "a", "t", "d", "⏎", "esc"]);
-    expect(keys(state({ inkOn: true }))).toEqual(["i", "s", "a", "c", "t", "d", "⏎", "esc"]);
+    expect(keys(state())).toEqual(["i", "s", "a", "t", "d", "⏎", "?", "esc"]);
+    expect(keys(state({ inkOn: true }))).toEqual(["i", "s", "a", "c", "t", "d", "⏎", "?", "esc"]);
   });
 
   it("lights the ink cap while ink is on, and relabels it", () => {
@@ -100,7 +102,7 @@ describe("leaderHints", () => {
 
   it("renders one strip line for the panel header", () => {
     expect(leaderHintText(state())).toBe(
-      "i ink · s shot · a add selection · t tweak the page · d disarm (abandon all) · ⏎ send · esc cancel turn",
+      "i ink · s shot · a add selection · t tweak the page · d disarm (abandon all) · ⏎ send · ? help · esc cancel turn",
     );
   });
 
@@ -118,5 +120,24 @@ describe("leaderPendingFresh", () => {
     expect(leaderPendingFresh({ at: now - LEADER_PENDING_TTL_MS - 1 }, now)).toBe(false);
     expect(leaderPendingFresh(null, now)).toBe(false);
     expect(leaderPendingFresh(undefined, now)).toBe(false);
+  });
+});
+
+describe("leaderHelp (the table generated from the real stack)", () => {
+  it("sections cover every phase, and every in-turn binding appears", () => {
+    const sections = leaderHelp();
+    expect(sections.map((s) => s.title)).toEqual([
+      "in a turn",
+      "while inking",
+      "armed, no turn",
+      "tweak",
+    ]);
+    const inTurn = sections[0].hints.map((h) => h.key);
+    expect(inTurn).toContain("⌘B"); // authored: the leader is a browser-global
+    for (const key of ["i", "s", "a", "t", "d", "⏎", "?", "esc"]) {
+      expect(inTurn).toContain(key);
+    }
+    // The ink-only rows are DIFFED against the base — no repeats.
+    expect(sections[1].hints.map((h) => h.key)).toEqual(["c"]);
   });
 });

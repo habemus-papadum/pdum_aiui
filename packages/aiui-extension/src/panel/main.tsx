@@ -33,11 +33,11 @@ import { createEffect, createSignal } from "solid-js";
 import { dataUrlToBytes, isNotInvokedError, type ShotGrab } from "../capture";
 import { CapturePane } from "./capture-pane";
 import { ConnectionChip } from "./connection-chip";
+import { createKeysIsland, type KeysIsland } from "./keys-view";
 import {
   LEADER_BLIP_MS,
   type LeaderAction,
   type LeaderState,
-  leaderHintText,
   leaderKeyEvent,
   leaderPendingFresh,
   type PendingLeader,
@@ -45,6 +45,7 @@ import {
 import { logDebug, logInfo } from "./log";
 import { graph } from "./model/graph";
 import { inkFade, inkMode, shotFlash, uiScale } from "./model/store";
+import { createPreviewIsland, type PreviewIsland } from "./preview-pane";
 import { createSession } from "./session";
 import { Toasts, toast } from "./toasts";
 import { connectToolsLink } from "./tools-link";
@@ -412,6 +413,9 @@ function Panel() {
   // reopened panel starts disarmed, and without the boot sync a ring lit by
   // the previous panel document would stay lit forever (found live).
   const broadcastRing = (): void => {
+    // The islands re-assert from the same transitions the ring does (they are
+    // imperative — no reactive subscription; see preview-pane's module note).
+    syncIslands();
     const win = windowId();
     const on = phaseNow !== "disarmed";
     const composing = phaseNow === "turn" || phaseNow === "tweak";
@@ -429,6 +433,7 @@ function Panel() {
   };
   engine.onEvent((event, eng) => {
     setRev((r) => r + 1);
+    syncIslands();
     // The shared wire sees every event (thread-open opens its socket, the
     // rest batch on its debounce), then the close verbs — the overlay
     // modality's exact composition (wire.ts is the shared shell).
@@ -608,6 +613,32 @@ function Panel() {
     selectionPresent: selectionPresent(),
   });
 
+  // ── the shared imperative islands (the overlay's Preview + CheatSheet +
+  // KeymapHelp). Solid 2.0 rule, learned live: they own internal signals, so
+  // BUILDING or UPDATING them inside an owned scope (component body, effect)
+  // throws [REACTIVE_WRITE_IN_OWNED_SCOPE] — `help.render()` writes on
+  // construction. Build them in a microtask (outside the owner) and drive
+  // them only from plain callbacks: phase transitions and engine events.
+  let previewIsland: PreviewIsland | undefined;
+  let keysIsland: KeysIsland | undefined;
+  let previewHost: HTMLElement | undefined;
+  let keysHost: HTMLElement | undefined;
+  let helpOpen = false;
+
+  /** Re-assert both islands from the CURRENT state. Plain callbacks only. */
+  const syncIslands = (): void => {
+    previewIsland?.sync(phaseNow === "turn" || phaseNow === "tweak");
+    keysIsland?.sync(leaderState(), helpOpen, blip());
+  };
+
+  queueMicrotask(() => {
+    previewIsland = createPreviewIsland(engine);
+    keysIsland = createKeysIsland((key) => applyLeaderKey(key, "down", false));
+    previewHost?.append(previewIsland.root);
+    keysHost?.append(keysIsland.root);
+    syncIslands();
+  });
+
   /** Point the page-side key capture at a tab (or nowhere). */
   const pointCaptureAt = (tabId: number | undefined): void => {
     const prev = leaderTabId;
@@ -641,6 +672,7 @@ function Panel() {
   const leavePhaseTurn = (to: "armed" | "tweak"): void => {
     setPhase(to);
     setBlip(undefined);
+    helpOpen = false;
     pointCaptureAt(undefined);
     if (inkTabId !== undefined) {
       void relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
@@ -770,6 +802,11 @@ function Panel() {
   };
 
   const leaderDispatch = (action: LeaderAction): void => {
+    if (action === "help") {
+      helpOpen = !helpOpen;
+      syncIslands();
+      return;
+    }
     if (action === "disarm") {
       disarm();
       return;
@@ -809,7 +846,11 @@ function Panel() {
     if (blipTimer !== undefined) {
       clearTimeout(blipTimer);
     }
-    blipTimer = window.setTimeout(() => setBlip(undefined), LEADER_BLIP_MS);
+    blipTimer = window.setTimeout(() => {
+      setBlip(undefined);
+      syncIslands();
+    }, LEADER_BLIP_MS);
+    syncIslands();
     if (leaderTabId !== undefined) {
       void relayRequestTab(leaderTabId, "page", "flash", { kind: "miss" }).catch(() => {});
     }
@@ -1031,12 +1072,14 @@ function Panel() {
         <span class="win">win {windowId() ?? "?"}</span>
       </div>
       <Toasts />
-      {phase() === "turn" ? (
-        <div class="leader">
-          ⌨ {leaderHintText(leaderState())}
-          {blip() !== undefined ? ` — × ${blip()}` : ""}
-        </div>
-      ) : null}
+      <div
+        ref={(el: HTMLDivElement) => {
+          keysHost = el;
+          if (keysIsland !== undefined) {
+            el.append(keysIsland.root);
+          }
+        }}
+      />
       {phase() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
       <PaneStack>
         <TurnPane
@@ -1052,6 +1095,12 @@ function Panel() {
           loweredPrompt={loweredPrompt}
           onAddSelection={() => void addSelection()}
           selectionPresent={selectionPresent}
+          previewHostRef={(el: HTMLElement) => {
+            previewHost = el;
+            if (previewIsland !== undefined) {
+              el.append(previewIsland.root);
+            }
+          }}
         />
         <CapturePane
           engine={engine}

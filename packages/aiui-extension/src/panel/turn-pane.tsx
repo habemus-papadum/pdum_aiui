@@ -1,14 +1,16 @@
 /**
- * Compose + Turn: the panel's turn-driving UI. Text goes in via
- * `engine.contribute` (each submission is one transcript segment); selections
- * arrive from content scripts and ride as `app-selection` chips; Send
- * finalizes (the wire fins, the channel lowers, the prompt lands in the
- * Claude session); Esc-equivalent is the cancel button (`engine.stepOut`).
+ * Compose + Turn: the panel's turn-driving UI. The turn's CONTENT renders
+ * through the overlay's real transcript preview (Phase C4 — PreviewView: the
+ * compiler's accumulator, word-confidence heat, animated diffs, shot thumbs
+ * with ✕ retraction, selection pills); this pane keeps the acts around it —
+ * the compose box (text → `engine.contribute`, one segment per submission),
+ * the selection slurp, Send (the wire fins, the channel lowers, the prompt
+ * lands in the session) and cancel.
  */
 
-import { composeIntent, type Engine } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { Engine } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import { Pane } from "@habemus-papadum/aiui-webext";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 
 export interface TurnPaneProps {
   engine: Engine;
@@ -27,15 +29,13 @@ export interface TurnPaneProps {
   onAddSelection: () => void;
   /** The active tab currently has a non-empty selection (affordance only). */
   selectionPresent: () => boolean;
+  /** Host for the transcript-preview island (built outside the reactive graph). */
+  previewHostRef: (el: HTMLElement) => void;
 }
 
 export function TurnPane(props: TurnPaneProps) {
   const [text, setText] = createSignal("");
 
-  const items = () => {
-    props.rev(); // subscribe
-    return props.engine.threadOpen ? composeIntent(props.engine.events).items : [];
-  };
   const threadOpen = () => {
     props.rev();
     return props.engine.threadOpen;
@@ -93,19 +93,7 @@ export function TurnPane(props: TurnPaneProps) {
           </button>
         </Show>
       </div>
-      <Show when={items().length > 0}>
-        <div class="kv">turn so far:</div>
-        <For each={items()}>
-          {(item) => (
-            <div class="peer">
-              <span class="role">{item.kind}</span>
-              {item.kind === "text"
-                ? (item.text ?? "")
-                : (item.text ?? item.marker ?? "").slice(0, 120)}
-            </div>
-          )}
-        </For>
-      </Show>
+      <div ref={(el: HTMLDivElement) => props.previewHostRef(el)} />
       <Show when={props.loweredPrompt() !== undefined}>
         <details>
           <summary class="kv">last sent prompt (as lowered)</summary>
