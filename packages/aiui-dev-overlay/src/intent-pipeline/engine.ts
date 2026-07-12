@@ -51,8 +51,17 @@ export class Engine {
     this.now = now;
   }
 
-  onEvent(listener: EngineListener): void {
+  /** Subscribe to every emitted event. Returns an unsubscribe (hosts whose
+   * panels outlive engines — the extension — must detach; the overlay's
+   * page-lifetime listeners may ignore it). */
+  onEvent(listener: EngineListener): () => void {
     this.listeners.push(listener);
+    return () => {
+      const i = this.listeners.indexOf(listener);
+      if (i >= 0) {
+        this.listeners.splice(i, 1);
+      }
+    };
   }
 
   /**
@@ -105,6 +114,20 @@ export class Engine {
     this.emit(this.stamp({ type: "armed", on }));
   }
 
+  /**
+   * EXPLICITLY open a turn — the extension's ⌘B (§13.6: a host where nothing
+   * opens implicitly; the overlay never calls this — its turns open on the
+   * first contentful act, unchanged). No-op unless armed; no-op when a
+   * thread is already open. Returns whether a thread is open after the call.
+   */
+  openTurn(): boolean {
+    if (!this.armed) {
+      return false;
+    }
+    this.ensureThread("explicit");
+    return this.threadOpen;
+  }
+
   setMode(mode: Mode): void {
     if (!this.armed || mode === this.mode) {
       return;
@@ -145,7 +168,7 @@ export class Engine {
    */
   selectionProvider?: () => AppSelection | undefined;
 
-  private ensureThread(trigger: "talk" | "ink" | "shot" | "contribution"): void {
+  private ensureThread(trigger: "talk" | "ink" | "shot" | "contribution" | "explicit"): void {
     if (this.threadOpen || !this.armed) {
       return;
     }
@@ -316,7 +339,7 @@ export class Engine {
     return candidate;
   }
 
-  send(): void {
+  send(options: { keepArmed?: boolean } = {}): void {
     if (this.threadOpen) {
       if (this.talking) {
         this.talkEnd();
@@ -325,8 +348,11 @@ export class Engine {
       // Send ends the whole interaction, not just the thread: disarm, so the
       // surfaces (preview, HUD) put themselves away and a re-arm starts a
       // visibly fresh turn. Without this, the armed HUD + retained transcript
-      // read as "nothing happened" after Enter.
-      this.setArmed(false);
+      // read as "nothing happened" after Enter. The extension opts OUT
+      // (`keepArmed` — §13.6: send keeps you armed; ⌘B starts the next turn).
+      if (!options.keepArmed) {
+        this.setArmed(false);
+      }
     }
   }
 

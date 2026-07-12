@@ -1211,3 +1211,47 @@ describe("linter events (observations, never content)", () => {
     expect(markers).toEqual(["sel_1", "sel_1"]);
   });
 });
+
+describe("the extension host's verbs (§13.6 — explicit turns, send keeps armed)", () => {
+  it("openTurn opens exactly one explicit thread, armed-only", () => {
+    const engine = new Engine();
+    expect(engine.openTurn()).toBe(false); // unarmed: refused
+    expect(engine.events.some((e) => e.type === "thread-open")).toBe(false);
+
+    engine.setArmed(true);
+    expect(engine.openTurn()).toBe(true);
+    const opens = engine.events.filter((e) => e.type === "thread-open");
+    expect(opens).toHaveLength(1);
+    expect(opens[0]).toMatchObject({ trigger: "explicit" });
+
+    expect(engine.openTurn()).toBe(true); // already open: no second thread
+    expect(engine.events.filter((e) => e.type === "thread-open")).toHaveLength(1);
+  });
+
+  it("send({ keepArmed: true }) closes the thread but stays armed", () => {
+    const engine = new Engine();
+    engine.setArmed(true);
+    engine.openTurn();
+    engine.contribute("hello");
+    engine.send({ keepArmed: true });
+    expect(engine.threadOpen).toBe(false);
+    expect(engine.armed).toBe(true); // §13.6: the next ⌘B starts the next turn
+    expect(engine.events.at(-1)).toMatchObject({ type: "thread-close", reason: "send" });
+
+    // The overlay's default is unchanged: a plain send() disarms.
+    engine.openTurn();
+    engine.send();
+    expect(engine.armed).toBe(false);
+  });
+
+  it("onEvent returns an unsubscribe that actually detaches", () => {
+    const engine = new Engine();
+    const seen: string[] = [];
+    const off = engine.onEvent((event) => seen.push(event.type));
+    engine.setArmed(true);
+    expect(seen).toEqual(["armed"]);
+    off();
+    engine.setArmed(false);
+    expect(seen).toEqual(["armed"]); // nothing after detach
+  });
+});

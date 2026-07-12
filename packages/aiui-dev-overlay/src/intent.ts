@@ -29,22 +29,16 @@
  */
 import { addError, dismissError, type OverlayError, type OverlayErrorInput } from "./errors";
 import { type ClientMeta, collectClientMeta, setChannelPort } from "./instrumentation";
+import { openIntentThread } from "./intent-thread";
+
+export type { IntentThread, OpenThreadOptions } from "./intent-types";
+
 import type { AppSelection, IntentPipelineConfig } from "./intent-pipeline";
+import type { IntentThread, OpenThreadOptions } from "./intent-types";
 import { multimodalModality } from "./multimodal";
 import { installNavigationWatcher, type NavigationChange } from "./navigation";
 import { isDevEnvironment } from "./overlay";
-import {
-  type Ack,
-  type AttachmentChunk,
-  type AudioChunk,
-  connectIntentSocket,
-  type IntentSocket,
-  isErrorMessage,
-  type JsonChunk,
-  type ServerMessage,
-  type VideoChunk,
-  type WebSocketFactory,
-} from "./protocol";
+import { isErrorMessage, type WebSocketFactory } from "./protocol";
 import { installSelectionWatcher, type SelectionSnapshot } from "./selection";
 import { mountWidget } from "./ui/widget";
 
@@ -52,38 +46,6 @@ import { mountWidget } from "./ui/widget";
 const HOST_ID = "aiui-intent-tool-host";
 
 /** One thread of an intent submission. */
-export interface IntentThread {
-  /** Send a non-final JSON payload (streaming modalities). */
-  send(payload: unknown): Promise<Ack>;
-  /** Send the final payload (`fin`) and release the connection. */
-  finish(payload?: unknown): Promise<Ack>;
-  /**
-   * Send a tagged JSON chunk (an `events` batch or the end-of-turn `context`)
-   * — the `intent-v1` streaming form. `fin` marks the thread's final frame.
-   */
-  sendChunk(chunk: JsonChunk, payload: unknown, fin?: boolean): Promise<Ack>;
-  /** Send a raw-binary attachment chunk (a shot PNG or a whole audio segment). */
-  sendAttachment(chunk: AttachmentChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
-  /** Send one streamed PCM frame of a talk segment (the realtime path). */
-  sendAudio(chunk: AudioChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
-  /** Send one sampled screen-share video frame (the realtime submode's ~1 fps sampler). */
-  sendVideo(chunk: VideoChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
-  /** Register a handler for this thread's server pushes (lowered echoes). */
-  onServerMessage(handler: (msg: ServerMessage) => void): void;
-  /** Close the underlying socket without sending `fin` (a cancel). */
-  close(): void;
-}
-
-/** Extra per-thread options a modality passes to {@link IntentToolContext.openThread}. */
-export interface OpenThreadOptions {
-  /**
-   * A JSON-serializable client config to ride the hello as `meta.intent` (the
-   * `intent-v1` modality's effective `IntentPipelineConfig`), so a lowering
-   * trace records the whole configuration.
-   */
-  intent?: Record<string, unknown>;
-}
-
 /** What the host provides a mounted modality. */
 export interface IntentToolContext {
   /**
@@ -490,14 +452,31 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
         threadOptions?.intent !== undefined
           ? { ...(baseMeta ?? {}), intent: threadOptions.intent }
           : baseMeta;
-      let socket: IntentSocket;
       try {
-        socket = await connectIntentSocket(
-          `ws://127.0.0.1:${port}/ws`,
-          modality.format,
-          options.webSocketFactory,
-          meta,
-        );
+        return await openIntentThread({
+          url: `ws://127.0.0.1:${port}/ws`,
+          format: modality.format,
+          ...(meta !== undefined ? { meta } : {}),
+          ...(options.webSocketFactory !== undefined
+            ? { webSocketFactory: options.webSocketFactory }
+            : {}),
+          // Route error pushes — server-side failures and the synthetic
+          // connection-lost message protocol.ts fabricates — into the toasts.
+          // On the raw socket, not the thread wrapper, so connection-level
+          // errors (no threadId) and late stragglers are never filtered away.
+          onSocket: (socket) => {
+            socket.onServerMessage((msg) => {
+              if (isErrorMessage(msg)) {
+                reportError({
+                  message: msg.message,
+                  ...(msg.source !== undefined ? { source: msg.source } : {}),
+                  ...(msg.detail !== undefined ? { detail: msg.detail } : {}),
+                  ...(msg.data !== undefined ? { data: msg.data } : {}),
+                });
+              }
+            });
+          },
+        });
       } catch (err) {
         // The failure every modality shares: no socket at all (channel down,
         // wrong port, never launched) or a refused hello (an older server that
@@ -513,46 +492,6 @@ export function mountIntentTool(options: IntentToolOptions = {}): IntentToolHand
         });
         throw err;
       }
-      // Route error pushes — server-side failures and the synthetic
-      // connection-lost message protocol.ts fabricates — into the toasts. On
-      // the raw socket, not the thread wrapper below, so connection-level
-      // errors (no threadId) and late stragglers are never filtered away.
-      socket.onServerMessage((msg) => {
-        if (isErrorMessage(msg)) {
-          reportError({
-            message: msg.message,
-            ...(msg.source !== undefined ? { source: msg.source } : {}),
-            ...(msg.detail !== undefined ? { detail: msg.detail } : {}),
-            ...(msg.data !== undefined ? { data: msg.data } : {}),
-          });
-        }
-      });
-      const threadId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      return {
-        send: (payload) => socket.send(threadId, payload, false),
-        finish: async (payload) => {
-          const ack = await socket.send(threadId, payload, true);
-          socket.close();
-          return ack;
-        },
-        sendChunk: (chunk, payload, fin = false) => socket.sendChunk(threadId, chunk, payload, fin),
-        sendAttachment: (chunk, bytes, fin = false) =>
-          socket.sendAttachment(threadId, chunk, bytes, fin),
-        sendAudio: (chunk, bytes, fin = false) => socket.sendAudio(threadId, chunk, bytes, fin),
-        sendVideo: (chunk, bytes, fin = false) => socket.sendVideo(threadId, chunk, bytes, fin),
-        onServerMessage: (handler) =>
-          socket.onServerMessage((msg) => {
-            // Route only this thread's pushes (server may omit threadId for
-            // connection-level notices — deliver those too).
-            if (msg.threadId === undefined || msg.threadId === threadId) {
-              handler(msg);
-            }
-          }),
-        close: () => socket.close(),
-      };
     },
   });
 

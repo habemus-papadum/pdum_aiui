@@ -16,7 +16,9 @@
     "./intent-pipeline": "./src/intent-pipeline/index.ts",
     "./debug-ui": "./src/debug-ui/index.ts",
     "./protocol": "./src/protocol.ts",
-    "./selection": "./src/selection.ts"
+    "./selection": "./src/selection.ts",
+    "./intent-thread": "./src/intent-thread.ts",
+    "./wire": "./src/multimodal/shell/wire.ts"
   },
   "imports": {
     "#source-locator": "./src/source-locator.ts"
@@ -62,6 +64,16 @@
         "types": "./dist/selection.d.ts",
         "import": "./dist/selection.js",
         "default": "./dist/selection.js"
+      },
+      "./intent-thread": {
+        "types": "./dist/intent-thread.d.ts",
+        "import": "./dist/intent-thread.js",
+        "default": "./dist/intent-thread.js"
+      },
+      "./wire": {
+        "types": "./dist/multimodal/shell/wire.d.ts",
+        "import": "./dist/multimodal/shell/wire.js",
+        "default": "./dist/multimodal/shell/wire.js"
       }
     },
     "imports": {

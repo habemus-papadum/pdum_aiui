@@ -17,8 +17,8 @@
  */
 
 import type { OverlayErrorInput } from "../../errors";
-import type { IntentThread, OpenThreadOptions } from "../../intent";
 import type { Engine, IntentEvent, IntentPipelineConfig } from "../../intent-pipeline";
+import type { IntentThread, OpenThreadOptions } from "../../intent-types";
 import type { ThreadSocketState } from "../../overlay-tools";
 import type { Ack } from "../../protocol";
 import { REALTIME_PCM_MIME } from "../audio";

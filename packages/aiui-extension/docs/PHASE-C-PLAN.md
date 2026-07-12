@@ -171,6 +171,30 @@ per-phase entries: what moved, what's bridged, what was measured live.
    channel), strokes relay → content-script `aiui-ink` remote feed (documentAnchored maps at
    ingestion), view-frames come from the SW tabCapture sampler instead of getDisplayMedia.
 
+**C1 (2026-07-12, DONE — E2E verified over CDP):**
+- Engine grew the three §13.6 verbs, all non-breaking and unit-tested: `openTurn()` (explicit
+  thread-open, trigger `"explicit"` added to the vocabulary — the channel treats triggers
+  opaquely, checked), `send({ keepArmed })` (overlay default unchanged), `onEvent` now returns
+  an unsubscribe.
+- `openIntentThread` extracted (`aiui-dev-overlay/intent-thread`) — the thread adapter that
+  intent.ts and the panel now share; `IntentThread`/`OpenThreadOptions` moved to a LEAF
+  `intent-types.ts` (a type-only import of intent.ts still pulls the whole multimodal graph
+  into a consumer's TS program — found the hard way via cross-file interface merging errors).
+- The panel adopted the shared `createWire` (`aiui-dev-overlay/wire`): batching, attachment
+  discipline, bad-ack toasts, finalize/cancel, lowered-echo merging (which C5 needs) — the
+  hand-rolled `attachTurnHost` twin is DELETED. Panel keeps: turn mirror, lowered-prompt
+  display (via the adapter's `onSocket` hook), tab-identity hello meta.
+- Bridges retired: the armed(false) re-arm hack (send keeps armed for real now) and the
+  lazy-thread bridge (⌘B calls `engine.openTurn()`; empty explicit turns cancel on send
+  instead of lowering nothing). Boot recovery waits briefly for the auto-bind so a replayed
+  turn re-streams into a live socket.
+- New subpaths `./wire` + `./intent-thread` in BOTH export maps; `pnpm test:packaging` green.
+  Gotcha for the log: the dev server must RESTART after export-map changes (stale resolution
+  rendered the panel blank — "createWire is not defined").
+- Verified: 645 overlay + 27 extension tests; repo suite 1668; live E2E over raw CDP — panel
+  armed → explicit turn → compose → send; the turn arrived in the Claude session through the
+  shared shell; post-send state armed-lit/turn-off per §13.6.
+
 ## 5 · Decision points for review (before any code)
 
 1. **Shared code stays in `aiui-dev-overlay`** (no new package) — confirm.

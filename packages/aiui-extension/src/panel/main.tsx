@@ -12,9 +12,13 @@
 
 import {
   type AppSelection,
+  composeIntent,
   Engine,
   type Rect,
 } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import { openIntentThread } from "@habemus-papadum/aiui-dev-overlay/intent-thread";
+import { isErrorMessage } from "@habemus-papadum/aiui-dev-overlay/protocol";
+import { createWire } from "@habemus-papadum/aiui-dev-overlay/wire";
 import { CellView } from "@habemus-papadum/aiui-viz";
 import { isTypingTarget } from "@habemus-papadum/aiui-viz/modal";
 import {
@@ -44,7 +48,7 @@ import { inkFade, inkMode, shotFlash, uiScale } from "./model/store";
 import { createSession } from "./session";
 import { Toasts, toast } from "./toasts";
 import { connectToolsLink } from "./tools-link";
-import { attachTurnHost, panelIntentConfig, turnMirror } from "./turn";
+import { currentThreadEvents, panelIntentConfig, turnMirror } from "./turn";
 import { TurnPane } from "./turn-pane";
 
 // Sizes in rem (the browser's accessibility default × the panel zoom — see
@@ -175,31 +179,67 @@ function Panel() {
   // is open (engine.appSelection arms-gated thread opening). No staging.
   const [selectionPresent, setSelectionPresent] = createSignal(false);
 
-  const turnHost = attachTurnHost({
+  /** The active tab's identity, for the hello's context block. */
+  const activeTabMeta = async (): Promise<Record<string, unknown> | undefined> => {
+    const win = windowId();
+    if (win === undefined) {
+      return undefined;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, windowId: win });
+    return tab === undefined
+      ? undefined
+      : {
+          ...(tab.url !== undefined ? { url: tab.url } : {}),
+          ...(tab.title !== undefined ? { title: tab.title } : {}),
+          ...(tab.id !== undefined ? { chromeTabId: tab.id } : {}),
+          windowId: win,
+          tabIndex: tab.index,
+        };
+  };
+
+  // ── the wire: the overlay's shared shell, panel-hosted (Phase C1) ─────────
+  // createWire owns batching, attachment discipline, bad-ack surfacing,
+  // finalize/cancel, and lowered-echo merging (which C5 talk requires); the
+  // panel provides only the host seams — openThread over the bound port with
+  // tab-identity meta, errors → toasts, status → the console channel.
+  const wire = createWire({
     engine,
-    port: session.port,
-    activeTab: async () => {
-      const win = windowId();
-      if (win === undefined) {
-        return undefined;
+    config: () => engine.settings,
+    openThread: async (options) => {
+      const port = session.port();
+      if (port === undefined) {
+        // No toast here: boot-time turn recovery may replay before the
+        // auto-bind lands, and send-time surfacing is the wire's own job
+        // ("composed locally…" + its connection toast).
+        throw new Error("no channel bound");
       }
-      const [tab] = await chrome.tabs.query({ active: true, windowId: win });
-      return tab === undefined
-        ? undefined
-        : {
-            ...(tab.url !== undefined ? { url: tab.url } : {}),
-            ...(tab.title !== undefined ? { title: tab.title } : {}),
-            ...(tab.id !== undefined ? { chromeTabId: tab.id } : {}),
-            windowId: win,
-            tabIndex: tab.index,
-          };
+      const tab = await activeTabMeta();
+      return openIntentThread({
+        url: `ws://127.0.0.1:${port}/ws`,
+        format: "intent-v1",
+        meta: {
+          ...(tab !== undefined ? { tab } : {}),
+          actor: "human",
+          ...(options.intent !== undefined ? { intent: options.intent } : {}),
+        } as never,
+        onSocket: (socket) => {
+          // Connection-level pushes: error surfacing (the overlay host's
+          // rule) plus the lowered-prompt echo the panel displays.
+          socket.onServerMessage((msg) => {
+            if (isErrorMessage(msg)) {
+              toast(`${msg.source ?? "channel"}: ${msg.message}`);
+            } else if (msg.kind === "lowered-prompt" && typeof msg.prompt === "string") {
+              setLoweredPrompt(msg.prompt);
+              logInfo("turn sent — lowered prompt received");
+            }
+          });
+        },
+      });
     },
-    onError: (message) => toast(`turn wire: ${message}`),
-    onLoweredPrompt: (prompt) => {
-      setLoweredPrompt(prompt);
-      logInfo("turn sent — lowered prompt received");
-    },
-    persist: mirror.persist,
+    setStatus: (text) => logInfo("wire:", text),
+    reportError: (error) => toast(`${error.source ?? "channel"}: ${error.message}`),
+    clearSelection: () => {}, // pull model: selections are engine events, no chip to consume
+    enqueueSpeech: () => {}, // server speech clips arrive with C5 (talk)
   });
 
   // ── capture state: shots + per-tab ink (step 5) ────────────────────────────
@@ -348,7 +388,7 @@ function Panel() {
         true,
         takenAt,
       );
-      await turnHost.uploadAttachment(marker, "image/png", dataUrlToBytes(grab.png));
+      await wire.uploadAttachment(marker, "image/png", dataUrlToBytes(grab.png));
       logInfo(`${marker} captured (${grab.width}×${grab.height})`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -383,23 +423,27 @@ function Panel() {
       });
     }
   };
-  engine.onEvent((event) => {
+  engine.onEvent((event, eng) => {
     setRev((r) => r + 1);
-    if (event.type === "armed") {
-      // ⚠ Phase-B bridge: engine.send() disarms (reference behavior). Under
-      // §13.6 send keeps you armed — re-arm immediately unless the panel
-      // itself is disarming (phase already "disarmed" then).
-      if (!event.on && phaseNow !== "disarmed") {
-        engine.setArmed(true);
+    // The shared wire sees every event (thread-open opens its socket, the
+    // rest batch on its debounce), then the close verbs — the overlay
+    // modality's exact composition (wire.ts is the shared shell).
+    wire.onEngineEvent(event);
+    if (event.type === "thread-close") {
+      if (event.reason === "send") {
+        void wire.finalizeThread();
+      } else {
+        void wire.cancelThread();
+      }
+      // An engine-side close must land the phase back at "armed" — §13.6:
+      // turn ends, you STAY armed (send uses keepArmed now — the re-arm
+      // bridge is gone), no new turn auto-begins. Ink strokes untouched
+      // (divergence 5 clears them only on disarm).
+      if (phaseNow === "turn" || phaseNow === "tweak") {
+        leavePhaseTurn("armed");
       }
     }
-    // An engine-side thread close (send ack path, future timeouts) must land
-    // the phase back at "armed" — §13.6: turn ends, you STAY armed, no new
-    // turn auto-begins. Ink strokes are NOT touched (divergence 5 clears them
-    // only on disarm).
-    if (event.type === "thread-close" && (phaseNow === "turn" || phaseNow === "tweak")) {
-      leavePhaseTurn("armed");
-    }
+    mirror.persist(currentThreadEvents(eng.events), eng.threadOpen);
   });
 
   // ── broadcasts up from this window's content scripts ──────────────────────
@@ -603,6 +647,10 @@ function Panel() {
   /** Enter the in-turn phase (⌘B open or tweak-resume): capture on. */
   const enterPhaseTurn = async (): Promise<void> => {
     setPhase("turn");
+    // §13.6 divergence 1, now engine-real (C1): the thread opens HERE,
+    // explicitly — no-op on tweak-resume (already open). The wire's socket
+    // opens on the resulting thread-open event.
+    engine.openTurn();
     broadcastRing();
     const tabId = await activeTabId();
     if (tabId !== undefined && phaseNow === "turn") {
@@ -618,14 +666,17 @@ function Panel() {
     }
   };
 
+  /** The open turn holds something worth lowering (explicit turns can be empty). */
+  const turnHasContent = (): boolean =>
+    composeIntent(currentThreadEvents(engine.events)).items.length > 0;
+
   /** End the open turn: `send` lowers it, `cancel` drops it. STAY ARMED. */
   const endTurn = (how: "send" | "cancel"): void => {
-    // ⚠ Phase-B bridge: the engine thread only exists once a contentful act
-    // happened (no explicit open verb yet), so guard the engine verbs.
-    if (how === "send") {
-      if (engine.threadOpen) {
-        engine.send(); // emits thread-close + armed(false); bridges re-arm
+    if (how === "send" && engine.threadOpen) {
+      if (turnHasContent()) {
+        engine.send({ keepArmed: true }); // §13.6: the next ⌘B starts the next turn
       } else {
+        engine.stepOut(); // an empty explicit turn: nothing to lower — cancel
         logInfo("nothing in the turn — cancelled");
       }
     } else if (engine.threadOpen) {
@@ -893,8 +944,15 @@ function Panel() {
     }
     // Recovery first, pending leader second: a recovered turn re-enters the
     // in-turn phase, and a parked ⌘B then means its ladder step, not a
-    // surprise second turn.
+    // surprise second turn. Give the session's auto-bind a short settle
+    // first — the replay re-streams to a fresh socket (overlay parity), and
+    // that socket needs the port.
     const recovered = await mirror.recover();
+    if (recovered !== undefined && session.port() === undefined) {
+      for (let i = 0; i < 15 && session.port() === undefined; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
     if (recovered !== undefined) {
       engine.replay(recovered.events, { threadOpen: recovered.threadOpen });
       if (recovered.threadOpen) {
