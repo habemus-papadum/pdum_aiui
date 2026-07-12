@@ -12,7 +12,8 @@
       "!**/.aiui/lsp",
       "!**/templates/*/aiui/lsp",
       "!.claude/worktrees",
-      "!archive"
+      "!archive",
+      "!packages/aiui-extension/public/pcm-worklet.js"
     ]
   },
   "formatter": {

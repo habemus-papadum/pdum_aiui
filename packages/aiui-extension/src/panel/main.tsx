@@ -274,7 +274,9 @@ function Panel() {
   const talk = createTalk({
     engine,
     config: () => engine.settings,
-    pcmSource: () => new WorkletPcmSource(),
+    // MV3 CSP blocks blob: worklet modules (measured 2026-07-13) — load the
+    // shipped copy, pinned to the shared constant by worklet-file.test.ts.
+    pcmSource: () => new WorkletPcmSource({ workletUrl: chrome.runtime.getURL("pcm-worklet.js") }),
     setStatus: (text) => logInfo("talk:", text),
     reportError: (error) => toast(`${error.source ?? "talk"}: ${error.message}`),
     bargeIn: () => speechPlayer.bargeIn(),
@@ -654,6 +656,7 @@ function Panel() {
     inkOn: inkOnLive.get(),
     selectionPresent: selectionPresent.get(),
     talking: engine.talking || talk.listening(),
+    holdTalk: listeningIsHold,
     micMuted: talk.micMuted(),
   });
 

@@ -143,7 +143,14 @@ export interface PcmSource {
 }
 
 /** The AudioWorklet module: forwards each mono input quantum to the main thread. */
-const PCM_WORKLET_SOURCE = `
+/**
+ * The PCM worklet module, exported so hosts that CANNOT load blob: scripts can
+ * ship it as a real file and pass its URL: MV3 extension pages' CSP
+ * (script-src 'self') rejects blob worklet modules — measured live 2026-07-13,
+ * "AbortError: Unable to load a worklet's module". The extension pins its
+ * shipped copy to this constant with a test, so the two cannot drift.
+ */
+export const PCM_WORKLET_SOURCE = `
 class AiuiPcmForwarder extends AudioWorkletProcessor {
   process(inputs) {
     const ch = inputs[0] && inputs[0][0];
@@ -188,6 +195,14 @@ function floatToInt16(block: Float32Array): Int16Array {
  * safe (only `start` touches APIs jsdom lacks; it returns false there).
  */
 export class WorkletPcmSource implements PcmSource {
+  /** Where to load the worklet module from; default is a blob: URL of
+   * {@link PCM_WORKLET_SOURCE} (fine on pages, blocked in MV3 — see above). */
+  private readonly workletUrl: string | undefined;
+
+  constructor(options: { workletUrl?: string } = {}) {
+    this.workletUrl = options.workletUrl;
+  }
+
   private stream: MediaStream | undefined;
   private ctx: AudioContext | undefined;
   private node: AudioWorkletNode | undefined;
@@ -212,9 +227,9 @@ export class WorkletPcmSource implements PcmSource {
         this.teardown();
         return false; // no AudioWorklet — do NOT silently fall back
       }
-      const moduleUrl = URL.createObjectURL(
-        new Blob([PCM_WORKLET_SOURCE], { type: "application/javascript" }),
-      );
+      const moduleUrl =
+        this.workletUrl ??
+        URL.createObjectURL(new Blob([PCM_WORKLET_SOURCE], { type: "application/javascript" }));
       try {
         await this.ctx.audioWorklet.addModule(moduleUrl);
       } finally {

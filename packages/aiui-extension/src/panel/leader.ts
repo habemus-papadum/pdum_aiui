@@ -86,8 +86,10 @@ export interface LeaderState {
   inkOn: boolean;
   /** The active tab reports a live selection (lights the `a` cap). */
   selectionPresent: boolean;
-  /** The mic loop is listening (lights the 🎙 caps, offers `m`). */
+  /** The mic loop is listening (offers `m`; lights whichever cap started it). */
   talking: boolean;
+  /** The listening loop was started by a Space HOLD (vs h hands-free). */
+  holdTalk: boolean;
   /** The open talk window's mic is muted (lights the `m` cap). */
   micMuted: boolean;
 }
@@ -192,7 +194,7 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
         label: "talk (hold)",
         icon: "🎙",
         iconSvg: faMicrophone,
-        active: state.talking,
+        active: state.talking && state.holdTalk,
       }),
     },
     {
@@ -200,10 +202,10 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
       down: onPress("handsFree"),
       hint: (state) => ({
         key: "h",
-        label: state.talking ? "stop hands-free" : "hands-free talk",
+        label: state.talking && !state.holdTalk ? "stop hands-free" : "hands-free talk",
         icon: "🎧",
         iconSvg: faMicLines,
-        active: state.talking,
+        active: state.talking && !state.holdTalk,
       }),
     },
     {
@@ -298,6 +300,7 @@ export function leaderHelp(): KeymapHelpSection[] {
     inkOn: false,
     selectionPresent: false,
     talking: false,
+    holdTalk: false,
     micMuted: false,
     ...over,
   });

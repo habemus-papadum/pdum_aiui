@@ -14,6 +14,7 @@ const state = (over: Partial<LeaderState> = {}): LeaderState => ({
   inkOn: false,
   selectionPresent: false,
   talking: false,
+  holdTalk: false,
   micMuted: false,
   ...over,
 });

@@ -13,6 +13,7 @@
  */
 export {
   AudioCapture,
+  PCM_WORKLET_SOURCE,
   type PcmSource,
   REALTIME_PCM_MIME,
   REALTIME_PCM_RATE,
