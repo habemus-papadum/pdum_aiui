@@ -40,6 +40,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- The watchdog loads FIRST: it installs the error listeners the app's own
+         failures land in, and it is the only thing standing between a broken dev
+         build and a blank panel (see boot.ts). It imports nothing the app owns. -->
+    <script type="module" src="./boot.ts"></script>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>
