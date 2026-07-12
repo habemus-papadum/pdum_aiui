@@ -145,10 +145,12 @@ the live checklist is `docs/PHASE-A.md`. Keep that log current with every change
    `render`/JSX types from `@solidjs/web` (not `solid-js/web`), no `onMount` (run in component
    body), no `classList` JSX prop, aria-* values are strings. **And: signal writes are
    DEFERRED — a signal read in the same synchronous flow that wrote it returns the STALE
-   value** (cost a live round 2026-07-12: the ring broadcast one state behind; a disarm stomped
-   back to armed by a synchronous engine event whose guard read the old phase). State machines
-   keep a plain variable as truth and mirror it into a signal for the UI only (see
-   `main.tsx` `phaseNow` + PHASE-A.md §7.5).
+   value** (it bit FIVE times before being distilled: the phase machine, the ink flag,
+   selection presence, the key blip, and the channel-reconnect check). The fix is now a
+   library primitive: **`liveSignal` from `aiui-viz`** — read-your-own-writes (a plain field
+   for the machine, a version signal for reactivity, one accessor). Any state a synchronous
+   machine branches on right after writing goes in a liveSignal, never a bare createSignal
+   (see aiui-viz/src/live-signal.ts's docblock for the story).
 3. **Port squatting from other checkouts.** A Vite from `pdum_aiui-review-pr1` squatted an
    earlier pinned port and served a wrong module graph. Rule: on weird dev behavior, check WHO
    owns the port (`lsof -nP -iTCP:5317 -sTCP:LISTEN`) and its `cwd` before debugging code. Also

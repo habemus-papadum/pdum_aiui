@@ -69,7 +69,7 @@ export const DEBUG_UI_CSS = /* css */ `
   border-bottom: 1px solid #262c3a; }
 /* The prompt owns the height while stages are collapsed (their default);
    expanding stages splits the pane again. */
-.aiui-dbg-sec.prompt { flex: 1 1 auto; }
+.aiui-dbg-sec.prompt { flex: 1 1 auto; min-height: 11rem; }
 .aiui-dbg-trace:has(.aiui-dbg-sec.stages:not(.collapsed)) .aiui-dbg-sec.prompt {
   flex: 0 1 auto; max-height: 45%; }
 .aiui-dbg-sec.stages { flex: 1 1 auto; }
@@ -82,9 +82,10 @@ export const DEBUG_UI_CSS = /* css */ `
   color: #9aa0aa; font: 600 11px ui-sans-serif, system-ui, sans-serif;
   text-transform: uppercase; letter-spacing: 0.04em; }
 .aiui-dbg-sec-toggle:hover { color: #e8e8ea; }
-.aiui-dbg-sec-chevron { transition: transform 120ms; font-size: 9px; }
+.aiui-dbg-sec-chevron { transition: transform 120ms; font-size: 13px; color: #8ab4f8; }
 .aiui-dbg-sec.collapsed .aiui-dbg-sec-chevron { transform: rotate(-90deg); }
 .aiui-dbg-sec-body { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1 1 auto; }
+.aiui-dbg-events-body { display: flex; flex-direction: column; min-height: 0; }
 .aiui-dbg-hero { padding: 12px 14px; }
 .aiui-dbg-hero-preamble { color: #6f7686; font: 11px/1.55 ui-monospace, monospace;
   white-space: pre-wrap; word-break: break-word; margin-bottom: 8px; }

@@ -46,6 +46,7 @@ import faPlane from "@fortawesome/fontawesome-free/svgs/solid/paper-plane.svg?ra
 import faPaste from "@fortawesome/fontawesome-free/svgs/solid/paste.svg?raw";
 import faPen from "@fortawesome/fontawesome-free/svgs/solid/pen.svg?raw";
 import faWrench from "@fortawesome/fontawesome-free/svgs/solid/wrench.svg?raw";
+import faXmark from "@fortawesome/fontawesome-free/svgs/solid/xmark.svg?raw";
 import type { KeymapHelpSection } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import {
   type KeyClaim,
@@ -181,7 +182,7 @@ const turnLayer: KeyLayer<LeaderState, LeaderAction> = {
       // strip, picker — slot above this when they arrive in Phase C.)
       keys: ["Escape"],
       down: onPress("cancel"),
-      hint: { key: "esc", label: "cancel turn" },
+      hint: { key: "esc", label: "cancel turn", icon: "✖", iconSvg: faXmark },
     },
   ],
   fallback: "swallow",

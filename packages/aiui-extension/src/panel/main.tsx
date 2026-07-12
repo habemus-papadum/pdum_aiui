@@ -19,7 +19,7 @@ import {
 import { openIntentThread } from "@habemus-papadum/aiui-dev-overlay/intent-thread";
 import { isErrorMessage } from "@habemus-papadum/aiui-dev-overlay/protocol";
 import { createWire } from "@habemus-papadum/aiui-dev-overlay/wire";
-import { CellView } from "@habemus-papadum/aiui-viz";
+import { CellView, liveSignal } from "@habemus-papadum/aiui-viz";
 import { isTypingTarget } from "@habemus-papadum/aiui-viz/modal";
 import {
   injectPaneStyles,
@@ -188,14 +188,7 @@ function Panel() {
   // PULL selection model (decided 2026-07-11): nothing enters the turn until
   // the user's explicit "add selection", which opens the turn itself when none
   // is open (engine.appSelection arms-gated thread opening). No staging.
-  const [selectionPresent, setSelectionPresentSignal] = createSignal(false);
-  // Mirrored for the same reason as inkOnNow: the caps re-render from a plain
-  // read right after this changes (the 📋 cap stayed lit after a deselect).
-  let selectionPresentNow = false;
-  const setSelectionPresent = (present: boolean): void => {
-    selectionPresentNow = present;
-    setSelectionPresentSignal(present);
-  };
+  const selectionPresent = liveSignal(false);
 
   /** The active tab's identity, for the hello's context block. */
   const activeTabMeta = async (): Promise<Record<string, unknown> | undefined> => {
@@ -261,17 +254,13 @@ function Panel() {
   });
 
   // ── capture state: shots + per-tab ink (step 5) ────────────────────────────
-  // The standing ink-mode flag lives in the store (durableSignal — §13.6
-  // standing state, survives panel hot swaps), MIRRORED into a plain variable:
-  // Solid defers writes, so `set(x)` followed by a read in the same flow gives
-  // the STALE value — and the machine reads it immediately (the pointer claim,
-  // the ✏️ cap). That inverted both (found live 2026-07-12; same trap as
-  // `phaseNow`). Rule: never read a signal to decide something in the flow
-  // that wrote it.
-  let inkOnNow = inkMode.get();
-  const inkOn = (): boolean => inkOnNow;
+  // The standing ink-mode flag: a liveSignal for machine + UI (the claim
+  // derivations read it right after writing it), persisted through the
+  // store's durableSignal so it survives panel hot swaps (§13.6).
+  const inkOnLive = liveSignal(inkMode.get());
+  const inkOn = (): boolean => inkOnLive.get();
   const setInkOn = (on: boolean): void => {
-    inkOnNow = on;
+    inkOnLive.set(on);
     inkMode.set(on);
   };
   /** The tab whose content script holds the ink surface, while ink is on. */
@@ -293,7 +282,7 @@ function Panel() {
    */
   const syncTabStream = async (): Promise<void> => {
     const tabId = await activeTabId();
-    if (phaseNow !== "turn" || tabId === undefined) {
+    if (phase.get() !== "turn" || tabId === undefined) {
       releaseTabStream();
       return;
     }
@@ -321,7 +310,7 @@ function Panel() {
    * stale id can't strand the claim.
    */
   const syncInkPointer = async (): Promise<void> => {
-    const want = phaseNow === "turn" && inkOn();
+    const want = phase.get() === "turn" && inkOn();
     const tabId = await activeTabId();
     if (inkTabId !== undefined && (!want || inkTabId !== tabId)) {
       await relayRequestTab(inkTabId, "page", "ink", { on: false }).catch(() => {});
@@ -447,8 +436,8 @@ function Panel() {
     // imperative — no reactive subscription; see preview-pane's module note).
     syncIslands();
     const win = windowId();
-    const on = phaseNow !== "disarmed";
-    const composing = phaseNow === "turn" || phaseNow === "tweak";
+    const on = phase.get() !== "disarmed";
+    const composing = phase.get() === "turn" || phase.get() === "tweak";
     if (win !== undefined) {
       void chrome.tabs.query({ windowId: win }).then((tabs) => {
         for (const tab of tabs) {
@@ -478,7 +467,7 @@ function Panel() {
       // turn ends, you STAY armed (send uses keepArmed now — the re-arm
       // bridge is gone), no new turn auto-begins. Ink strokes untouched
       // (divergence 5 clears them only on disarm).
-      if (phaseNow === "turn" || phaseNow === "tweak") {
+      if (phase.get() === "turn" || phase.get() === "tweak") {
         leavePhaseTurn("armed");
       }
     }
@@ -502,7 +491,7 @@ function Panel() {
       aiuiInkClear?: number;
     };
     if (m.aiuiSelectionPresence === 1) {
-      setSelectionPresent(m.present === true);
+      selectionPresent.set(m.present === true);
       syncIslands(); // the 📋 cap follows the page's selection live
     }
     if (
@@ -516,7 +505,7 @@ function Panel() {
       // and §13.6 says only ⌘B opens turns — so strokes reach the engine
       // only while a turn is open. Between turns, drawing is page-whiteboard
       // only (the strokes still land in later shots as page content).
-      if (phaseNow === "turn" || phaseNow === "tweak") {
+      if (phase.get() === "turn" || phase.get() === "tweak") {
         engine.strokeDone(m.points, m.bounds);
       }
     }
@@ -565,7 +554,7 @@ function Panel() {
       if (engine.threadOpen) {
         engine.navigation(fromUrl ?? "", toUrl ?? "");
       }
-      if (phaseNow === "turn") {
+      if (phase.get() === "turn") {
         pointCaptureAt(info.tabId);
         // Both claims follow the active tab: the ink pointer (the old tab keeps
         // its strokes — page state) and the capture stream (one per tab).
@@ -611,34 +600,25 @@ function Panel() {
   // turn-opener; Esc is the in-turn cancel rung; T releases capture with the
   // turn open and only ⌘B can resume (the page owns every ordinary key in
   // tweak). Send/cancel keep you armed. Disarm abandons everything.
-  // The machine's truth is a PLAIN variable, mirrored into a signal for the
-  // UI. Solid 2.0 defers signal writes — phase() read right after setPhase()
-  // returns the STALE value, which (found live 2026-07-12) broadcast the
-  // previous state's ring and let a synchronous engine event stomp a disarm
-  // back to armed. All machine logic reads `phaseNow`; only JSX reads the
-  // signal.
+  // The machine's state is a liveSignal (aiui-viz) — read-your-own-writes:
+  // the machine writes it and BRANCHES on it in the same synchronous flow,
+  // which a plain signal gets wrong under Solid 2.0's write batching (found
+  // live 2026-07-12: the ring broadcast one state behind; a synchronous
+  // engine event stomped a disarm back to armed). The primitive is the
+  // distilled form of the mirror pair that used to live here and in four
+  // other spots — live-signal.ts's docblock tells the story.
   type Phase = "disarmed" | "armed" | "turn" | "tweak";
-  let phaseNow: Phase = "disarmed";
-  const [phase, setPhaseSignal] = createSignal<Phase>("disarmed");
-  const setPhase = (p: Phase): void => {
-    phaseNow = p;
-    setPhaseSignal(p);
-  };
-  /** The rejected key currently blipping (`× g`), if any. A plain variable:
-   * only the imperative caps island reads it, synchronously (a signal here
-   * fired Solid's STRICT_READ_UNTRACKED and could serve a stale value). */
-  let blipNow: string | undefined;
-  const setBlip = (key: string | undefined): void => {
-    blipNow = key;
-  };
+  const phase = liveSignal<Phase>("disarmed");
+  /** The rejected key currently blipping (`× g`), if any. */
+  const blip = liveSignal<string | undefined>(undefined);
   let blipTimer: number | undefined;
   /** The tab whose content script holds the key capture, while in-turn. */
   let leaderTabId: number | undefined;
 
   const leaderState = (): LeaderState => ({
-    phase: phaseNow === "disarmed" ? "armed" : (phaseNow as "armed" | "turn" | "tweak"),
-    inkOn: inkOnNow,
-    selectionPresent: selectionPresentNow,
+    phase: phase.get() === "disarmed" ? "armed" : (phase.get() as "armed" | "turn" | "tweak"),
+    inkOn: inkOnLive.get(),
+    selectionPresent: selectionPresent.get(),
   });
 
   // ── the shared imperative islands (the overlay's Preview + CheatSheet +
@@ -656,8 +636,8 @@ function Panel() {
 
   /** Re-assert both islands from the CURRENT state. Plain callbacks only. */
   const syncIslands = (): void => {
-    previewIsland?.sync(phaseNow === "turn" || phaseNow === "tweak");
-    keysIsland?.sync(leaderState(), helpOpen, blipNow);
+    previewIsland?.sync(phase.get() === "turn" || phase.get() === "tweak");
+    keysIsland?.sync(leaderState(), helpOpen, blip.get());
   };
 
   queueMicrotask(() => {
@@ -706,8 +686,8 @@ function Panel() {
    * the engine; callers own the engine verbs.
    */
   const leavePhaseTurn = (to: "armed" | "tweak"): void => {
-    setPhase(to);
-    setBlip(undefined);
+    phase.set(to);
+    blip.set(undefined);
     helpOpen = false;
     pointCaptureAt(undefined);
     // Both media claims are DERIVED from (phase, active tab): leaving the turn
@@ -721,14 +701,14 @@ function Panel() {
 
   /** Enter the in-turn phase (⌘B open or tweak-resume): capture on. */
   const enterPhaseTurn = async (): Promise<void> => {
-    setPhase("turn");
+    phase.set("turn");
     // §13.6 divergence 1, now engine-real (C1): the thread opens HERE,
     // explicitly — no-op on tweak-resume (already open). The wire's socket
     // opens on the resulting thread-open event.
     engine.openTurn();
     broadcastRing();
     const tabId = await activeTabId();
-    if (tabId !== undefined && phaseNow === "turn") {
+    if (tabId !== undefined && phase.get() === "turn") {
       pointCaptureAt(tabId);
     }
     await syncInkPointer(); // re-claims iff the standing ink flag is on
@@ -751,7 +731,7 @@ function Panel() {
     } else if (engine.threadOpen) {
       engine.stepOut(); // in-thread: closes with reason "cancel", stays armed
     }
-    if (phaseNow === "turn" || phaseNow === "tweak") {
+    if (phase.get() === "turn" || phase.get() === "tweak") {
       leavePhaseTurn("armed");
     }
   };
@@ -779,16 +759,16 @@ function Panel() {
       return;
     }
     engine.setArmed(true);
-    setPhase("armed");
+    phase.set("armed");
     broadcastRing();
     logInfo("armed — ⌘B starts a turn");
   };
 
   /** Disarm: abandon EVERYTHING (§13.6) — turn, ink, standing tools, ring. */
   const disarm = (): void => {
-    setPhase("disarmed"); // first — the armed(false) bridge checks this
+    phase.set("disarmed"); // first — the armed(false) bridge checks this
     pointCaptureAt(undefined);
-    setBlip(undefined);
+    blip.set(undefined);
     if (engine.threadOpen) {
       engine.stepOut();
     }
@@ -816,7 +796,7 @@ function Panel() {
    * is already live it does nothing at all.
    */
   const leaderPress = async (): Promise<void> => {
-    switch (phaseNow) {
+    switch (phase.get()) {
       case "disarmed":
         if (!requireChannel()) {
           return;
@@ -895,12 +875,12 @@ function Panel() {
 
   /** The `× key` feedback for a swallowed typo — panel strip + page flash. */
   const blipKey = (key: string): void => {
-    setBlip(key);
+    blip.set(key);
     if (blipTimer !== undefined) {
       clearTimeout(blipTimer);
     }
     blipTimer = window.setTimeout(() => {
-      setBlip(undefined);
+      blip.set(undefined);
       syncIslands();
     }, LEADER_BLIP_MS);
     syncIslands();
@@ -1028,15 +1008,15 @@ function Panel() {
       helloTab.windowId === windowId() &&
       helloTab.id !== undefined
     ) {
-      const composing = phaseNow === "turn" || phaseNow === "tweak";
+      const composing = phase.get() === "turn" || phase.get() === "tweak";
       chrome.tabs
         .sendMessage(helloTab.id, {
           aiuiRing: 1,
-          armed: phaseNow !== "disarmed" && !composing,
+          armed: phase.get() !== "disarmed" && !composing,
           turn: composing,
         })
         .catch(() => {});
-      if (phaseNow === "turn" && helloTab.active) {
+      if (phase.get() === "turn" && helloTab.active) {
         pointCaptureAt(helloTab.id);
       }
     }
@@ -1069,7 +1049,7 @@ function Panel() {
       if (recovered.threadOpen) {
         await enterPhaseTurn();
       } else {
-        setPhase("armed"); // replay forces engine.armed = true
+        phase.set("armed"); // replay forces engine.armed = true
         broadcastRing();
       }
       logInfo(`recovered an in-progress turn (${recovered.events.length} events)`);
@@ -1092,7 +1072,7 @@ function Panel() {
   createEffect(
     () => ({ fade: inkFade.get() }),
     ({ fade }) => {
-      if (inkOn() && inkTabId !== undefined && phaseNow === "turn") {
+      if (inkOn() && inkTabId !== undefined && phase.get() === "turn") {
         void relayRequestTab(inkTabId, "page", "ink", { on: true, fadeSec: fade }).catch(() => {});
       }
     },
@@ -1106,27 +1086,27 @@ function Panel() {
         <ConnectionChip session={session} />
         <button
           type="button"
-          class={phase() !== "disarmed" ? "pill on" : "pill"}
-          disabled={phase() === "disarmed" && session.port() === undefined}
+          class={phase.get() !== "disarmed" ? "pill on" : "pill"}
+          disabled={phase.get() === "disarmed" && session.port() === undefined}
           title="armed = presence (border only); needs a bound channel. Off-click disarms: abandons turn, ink, standing tools (§13.6)"
-          onClick={() => (phaseNow === "disarmed" ? armOnly() : disarm())}
+          onClick={() => (phase.get() === "disarmed" ? armOnly() : disarm())}
         >
           <span class="dot" />
           armed
         </button>
         <button
           type="button"
-          class={phase() === "turn" || phase() === "tweak" ? "pill turn on" : "pill turn"}
-          disabled={phase() === "disarmed"}
+          class={phase.get() === "turn" || phase.get() === "tweak" ? "pill turn on" : "pill turn"}
+          disabled={phase.get() === "disarmed"}
           title="the open turn (⌘B). Off-click cancels it — you stay armed"
           onClick={() => {
-            if (phaseNow === "armed") {
+            if (phase.get() === "armed") {
               if (!requireChannel()) {
                 return;
               }
               void enterPhaseTurn();
               logInfo("turn open");
-            } else if (phaseNow === "turn" || phaseNow === "tweak") {
+            } else if (phase.get() === "turn" || phase.get() === "tweak") {
               endTurn("cancel");
               logInfo("turn cancelled — still armed");
             }
@@ -1138,7 +1118,7 @@ function Panel() {
         <span class="win">win {windowId() ?? "?"}</span>
       </div>
       <Toasts />
-      {phase() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
+      {phase.get() === "tweak" ? <div class="leader">🔧 tweak — ⌘B resumes the turn</div> : null}
       {/* The command bar: the live keycaps, visible whenever a turn is open. */}
       <div
         ref={(el: HTMLDivElement) => {
@@ -1173,7 +1153,7 @@ function Panel() {
         <TurnPane
           engine={engine}
           rev={rev}
-          canCompose={() => phaseNow === "turn"}
+          canCompose={() => phase.get() === "turn"}
           onNoTurn={() => toast("no turn open — ⌘B starts one")}
           onSend={() => endTurn("send")}
           onCancel={() => {
@@ -1182,7 +1162,7 @@ function Panel() {
           }}
           loweredPrompt={loweredPrompt}
           onAddSelection={() => void addSelection()}
-          selectionPresent={selectionPresent}
+          selectionPresent={selectionPresent.get}
         />
         <TracePane session={session} />
         <Pane title="Dev" defaultOpen={false} hint="probes">

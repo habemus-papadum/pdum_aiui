@@ -94,7 +94,10 @@ const DIRECTION_ARROW: Record<CardDirection, string> = {
 };
 
 /** Bounded thumbnail height for hero screenshots and inline shot blobs. */
-const THUMB_MAX = 140;
+// Transcript-preview sized (the overlay's mm-thumb is 34px): the hero is a
+// PROMPT reading surface — a shot is an inline chip there, and hover-peek /
+// click-to-open give the pixels (shrunk from 140, 2026-07-12).
+const THUMB_MAX = 40;
 
 export class TraceView {
   readonly root: HTMLDivElement;
@@ -128,12 +131,16 @@ export class TraceView {
     // reading surfaces — sharing one scroll made the prompt unreadable as
     // soon as a trace had many stages, and unusable in a narrow host (the
     // extension's side panel). Every client gets the split.
+    // The events section's body: filters AT THE TOP OF THE CONTENT — they
+    // belong to the expanded view, not the collapsed header (2026-07-12).
+    const eventsBody = this.el("div", "aiui-dbg-events-body");
+    eventsBody.append(this.filtersEl, this.cardsEl);
     this.root.append(
       this.statusEl,
       this.section("prompt", "lowered prompt", this.heroEl),
-      // Stages start COLLAPSED: the lowered prompt is what a trace is opened
-      // for; the recorded stages are the drill-down (2026-07-12).
-      this.section("stages", "stages", this.cardsEl, this.filtersEl, true),
+      // Events start COLLAPSED: the lowered prompt is what a trace is opened
+      // for; the recorded events are the drill-down (2026-07-12).
+      this.section("stages", "events", eventsBody, undefined, true),
     );
   }
 

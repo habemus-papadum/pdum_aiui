@@ -11,6 +11,7 @@
  * the socket NEVER touches the phase machine — armed and the open turn
  * survive outages; the wire is stateless enough that resuming just works.
  */
+import { liveSignal } from "@habemus-papadum/aiui-viz";
 import { createSignal } from "solid-js";
 import { type BusState, connectSessionBus, INITIAL_BUS_STATE, type SessionBusClient } from "./bus";
 import { type ChannelEntry, channelLabel, probeHealth, saveRecentPort } from "./channel";
@@ -48,7 +49,11 @@ export interface SessionHandle {
 
 export function createSession(): SessionHandle {
   const [bus, setBus] = createSignal<BusState>({ ...INITIAL_BUS_STATE, phase: "closed" });
-  const [boundPort, setBoundPort] = createSignal<number | undefined>();
+  // liveSignal, not createSignal: the boot sequence writes this and BRANCHES
+  // on it in the same flow (the reconnect loop) — a batched signal read there
+  // is stale (the library primitive exists because this class of bug bit the
+  // panel five times; see aiui-viz/live-signal).
+  const boundPort = liveSignal<number | undefined>(undefined);
   const [label, setLabel] = createSignal("");
   const [status, setStatus] = createSignal("");
   let client: SessionBusClient | undefined;
@@ -66,7 +71,7 @@ export function createSession(): SessionHandle {
   const disconnect = (): void => {
     client?.close();
     client = undefined;
-    setBoundPort(undefined);
+    boundPort.set(undefined);
     setLabel("");
     setBus({ ...INITIAL_BUS_STATE, phase: "closed" });
     setStatus("disconnected");
@@ -87,7 +92,7 @@ export function createSession(): SessionHandle {
     const win = await windowIdReady;
     client = connectSessionBus({ port, label: `browser window ${win ?? "?"}`, role: "window" });
     client.onChange(setBus);
-    setBoundPort(port);
+    boundPort.set(port);
     setLabel(portLabel);
     setStatus(
       health.debug === true
@@ -96,6 +101,11 @@ export function createSession(): SessionHandle {
     );
     void saveRecentPort(port);
     void chrome.storage.session.set({ [lastPortKey(win)]: port });
+    // The reload-proof memory (storage.session dies with every extension
+    // reload — which in development is constantly). This write was the fix
+    // for "the panel stopped auto-connecting" (2026-07-12): without it the
+    // global key never existed and boot had nothing to reconnect to.
+    void chrome.storage.local.set({ [LAST_PORT_GLOBAL]: port });
   };
 
   const connect = (entry: ChannelEntry): Promise<void> =>
@@ -122,7 +132,7 @@ export function createSession(): SessionHandle {
         continue; // remembered, but no longer running — try the next memory
       }
       await connect(entry);
-      if (boundPort() === entry.port) {
+      if (boundPort.get() === entry.port) {
         setStatus(`reconnected to :${entry.port}`);
         return;
       }
@@ -130,11 +140,11 @@ export function createSession(): SessionHandle {
 
     if (found.length === 1) {
       await connect(found[0]);
-      if (boundPort() === found[0].port) {
+      if (boundPort.get() === found[0].port) {
         setStatus(`auto-bound to :${found[0].port} (the only channel)`);
       }
     }
   })();
 
-  return { bus, port: boundPort, label, status, connect, disconnect };
+  return { bus, port: boundPort.get, label, status, connect, disconnect };
 }

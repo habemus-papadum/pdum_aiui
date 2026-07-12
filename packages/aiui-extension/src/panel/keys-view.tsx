@@ -38,9 +38,9 @@ ${KEYMAP_HELP_STYLES}
   gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 10px;
 }
 .keys-bar .mm-keycap {
-  width: 2.25rem; height: 2rem; border-radius: 8px; border-width: 2px;
+  width: 1.875rem; height: 1.625rem; border-radius: 7px; border-width: 2px;
 }
-.keys-bar .mm-keyicon { font-size: 1.125rem; }
+.keys-bar .mm-keyicon { font-size: 0.875rem; }
 /* Font Awesome glyphs: monochrome, tinted by the cap's state (muted at rest,
    bright on hover, green when the mode is ENGAGED). */
 .keys-bar .mm-keyicon svg, .keys-island .mm-help-icon svg {
@@ -56,7 +56,10 @@ ${KEYMAP_HELP_STYLES}
   border-color: var(--ok); background: var(--ok-bg);
   box-shadow: 0 0 0 1px var(--ok-border);
 }
-.keys-bar .mm-cheat-tip { font-size: 0.75rem; padding: 0.25rem 0.625rem; }
+.keys-bar .mm-cheat-tip {
+  font-size: 0.75rem; padding: 0.25rem 0.625rem;
+  bottom: auto; top: calc(100% + 2px); /* drop BELOW — nothing above to cover */
+}
 
 /* The KEYMAP popup: covers the TOP of the panel (the caps and transcript live
    there — a bottom sheet fought them), two columns, larger type. ✕/Esc/? exit. */
