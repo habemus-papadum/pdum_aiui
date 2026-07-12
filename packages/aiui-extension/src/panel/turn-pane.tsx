@@ -22,7 +22,6 @@ export interface TurnPaneProps {
    * directly — the machine owns phase, re-arm, and capture teardown. */
   onSend: () => void;
   onCancel: () => void;
-  status: () => string;
   loweredPrompt: () => string | undefined;
   /** The slurp command (pull model): add the active tab's selection now. */
   onAddSelection: () => void;
@@ -107,7 +106,6 @@ export function TurnPane(props: TurnPaneProps) {
           )}
         </For>
       </Show>
-      <div class="kv">{props.status()}</div>
       <Show when={props.loweredPrompt() !== undefined}>
         <details>
           <summary class="kv">last sent prompt (as lowered)</summary>

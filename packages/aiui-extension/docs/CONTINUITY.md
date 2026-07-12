@@ -137,7 +137,12 @@ the live checklist is `docs/PHASE-A.md`. Keep that log current with every change
    `createEffect(() => {…})` *typechecks* but throws `[MISSING_EFFECT_FN]` at render and blanks
    the whole panel. tsc/biome/node-vitest cannot catch it. Other Solid 2.0-beta.15 gotchas:
    `render`/JSX types from `@solidjs/web` (not `solid-js/web`), no `onMount` (run in component
-   body), no `classList` JSX prop, aria-* values are strings.
+   body), no `classList` JSX prop, aria-* values are strings. **And: signal writes are
+   DEFERRED — a signal read in the same synchronous flow that wrote it returns the STALE
+   value** (cost a live round 2026-07-12: the ring broadcast one state behind; a disarm stomped
+   back to armed by a synchronous engine event whose guard read the old phase). State machines
+   keep a plain variable as truth and mirror it into a signal for the UI only (see
+   `main.tsx` `phaseNow` + PHASE-A.md §7.5).
 3. **Port squatting from other checkouts.** A Vite from `pdum_aiui-review-pr1` squatted an
    earlier pinned port and served a wrong module graph. Rule: on weird dev behavior, check WHO
    owns the port (`lsof -nP -iTCP:5317 -sTCP:LISTEN`) and its `cwd` before debugging code. Also
@@ -246,6 +251,9 @@ Open design questions parked from live use (2026-07-11):
   choice (exclusion? dual shadow?) if real pages show artifacts.
 
 ## Key file map
+
+Debugging access (what an agent/human can see into the extension, measured; incl. the
+chrome-devtools-MCP stale-attach limitation and the wishlist): `docs/DEBUGGING.md`.
 
 ```
 packages/aiui-webext/src/           vite.ts · relay.ts · panes.tsx · indicator.ts · offscreen.ts

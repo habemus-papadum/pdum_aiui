@@ -8,8 +8,10 @@
  */
 
 import { composeIntent, type Engine } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import { ControlSlider, ControlToggle } from "@habemus-papadum/aiui-viz";
 import { Pane } from "@habemus-papadum/aiui-webext";
 import { For, Show } from "solid-js";
+import { inkFade, shotFlash } from "./model/store";
 
 export interface CapturePaneProps {
   engine: Engine;
@@ -22,8 +24,6 @@ export interface CapturePaneProps {
   onInkToggle: () => void;
   /** Erase the strokes (mode exit deliberately does NOT — see main.tsx). */
   onInkClear: () => void;
-  /** The capture status line (invocation failures land here). */
-  status: () => string;
 }
 
 export function CapturePane(props: CapturePaneProps) {
@@ -56,6 +56,18 @@ export function CapturePane(props: CapturePaneProps) {
           </button>
         </Show>
       </div>
+      {/* Mode-gated knobs (the overlay command-bar convention, panel-hosted):
+          the fade slider appears with ink mode; the shot-flash switch is the
+          §13.6 "easy off" for the blue confirm wash. Both are control()s —
+          bounds live in the store declaration, never re-stated here. */}
+      <Show when={props.inkOn()}>
+        <div class="row">
+          <ControlSlider of={inkFade} label="ink fade" />
+        </div>
+      </Show>
+      <div class="row">
+        <ControlToggle of={shotFlash} label="shot flash" />
+      </div>
       <Show when={shots().length > 0}>
         <div class="thumbs">
           <For each={shots()}>
@@ -70,11 +82,6 @@ export function CapturePane(props: CapturePaneProps) {
           </For>
         </div>
       </Show>
-      <div class="kv">{props.status()}</div>
-      <div class="kv">
-        shots need invocation: click the aiui toolbar button once on a tab (per visit) before
-        capturing it
-      </div>
     </Pane>
   );
 }

@@ -42,6 +42,14 @@ export interface WebextConfigOptions {
    * by default (workspace packages resolve to their `src/`).
    */
   fsAllow?: string[];
+  /**
+   * Plugins to run BEFORE the Solid transform — the slot for the aiui
+   * compiler (`aiuiDevOverlay({ locator: true, mount: false })`): its `pre`
+   * babel pass must stamp JSX and inject `control()`/`cell()` identities
+   * before vite-plugin-solid compiles elements into opaque templates (same
+   * ordering rule as the app template's vite.config).
+   */
+  prePlugins?: UserConfig["plugins"];
 }
 
 /**
@@ -50,7 +58,7 @@ export interface WebextConfigOptions {
  */
 export function webextConfig(options: WebextConfigOptions): UserConfig {
   return {
-    plugins: [solid(), crx({ manifest: options.manifest })],
+    plugins: [...(options.prePlugins ?? []), solid(), crx({ manifest: options.manifest })],
     server: {
       port: options.devPort,
       strictPort: true,

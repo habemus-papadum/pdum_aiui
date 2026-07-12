@@ -37,6 +37,7 @@ export type {
 export { action, actionByName, control, controlByName, controlSurface } from "./control";
 // control-widgets.tsx — the earned control-bound widgets (slider, toggle).
 export { ControlSlider, ControlToggle } from "./control-widgets";
+export { Dropdown } from "./dropdown";
 export type { SignalBox } from "./durable";
 // durable.ts — the durable/disposable registry that makes HMR safe.
 export { disposeDurable, durable, durableSignal } from "./durable";

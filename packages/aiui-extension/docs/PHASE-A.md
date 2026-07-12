@@ -83,6 +83,114 @@ border + ink + transient flashes, nothing else. Panel owns all controls/hints/sl
 - ☑ README keymap table rewritten to the §13.6 model.
 - ☑ CONTINUITY.md updated (Phase A started/done pointers).
 
+### 7.5 Live round 1 (2026-07-12) — found & fixed
+
+- **Ring one transition behind + `d` left the header "armed"** — one root cause: Solid 2.0
+  DEFERS signal writes, so `phase()` read right after `setPhase()` returned the STALE value.
+  `broadcastRing()` broadcast the previous state's ring (in-turn = no blink, leaving = blink),
+  and worse: `disarm()` set the phase, then `engine.stepOut()` fired `thread-close`
+  *synchronously*, whose handler still read "turn", stomped the phase back to "armed", and the
+  armed(false) re-arm bridge then re-armed the engine. FIX: the machine's truth is a plain
+  `phaseNow` variable set synchronously alongside the signal; ALL machine logic (broadcast,
+  event guards, dispatch, grammar state) reads `phaseNow`; only JSX reads the signal. Rule for
+  the future: **never read a Solid 2.0 signal to make a decision in the same synchronous flow
+  that wrote it** (also recorded in CONTINUITY trap 2).
+- Everything else in round 1 passed per the user ("pretty close"): ⌘B cold start, compose,
+  send-lands-in-session, keys passing through when armed-no-turn.
+
+### 7.6 Frontend-methodology pass (2026-07-12, user-requested review + modernize)
+
+Review verdict: the panel had NO model layer — raw signals and signal-and-forget promises
+everywhere; no control surface (inkFadeSec was unreachable, the promised shot-flash switch
+didn't exist); no compiler wiring, so `control()`/`cell()` could never have run. What changed:
+
+- ☑ **Compiler wired**: `webextConfig` grew a `prePlugins` slot (aiui-webext); the extension's
+  vite.config passes `aiuiDevOverlay({ locator: true, mount: false })` (compiler only — the
+  panel IS the tool, nothing overlays it); vitest.config mirrors it (jsdom + solid inline, the
+  template's shape; manifest.test pinned back to node — esbuild's TextEncoder invariant breaks
+  under jsdom).
+- ☑ **`src/panel/model/store.ts`**: controls `inkFade` (0–10 s, 0 = permanent; live-updates an
+  inked tab via a panel effect + a content-side live var) and `shotFlash` (the §13.6 easy-off,
+  now real); `inkMode` as a durableSignal (standing §13.6 flag, survives panel hot swaps);
+  `rescanTick` internal.
+- ☑ **`src/panel/model/graph.ts`**: `hotCellGraph("panel", panelCells, import.meta.hot)` with
+  `channels` (discovery: native host → port-scan fallback; `discoverOnce` shared with the boot
+  auto-bind so the two paths can't drift) and `swPing`; `rescan` as an `action()`. Rendered
+  through CellView in the Session + Dev panes; ControlSlider/ControlToggle in the Capture pane
+  (mode-gated, the overlay command-bar convention).
+- ☑ **Headless tests** (`graph.test.ts`): cellHarness + per-input tick probes + compiler-name
+  assertions + bound clamping; chrome stubbed. 27 extension tests total.
+- **Deliberately NOT converted** (each has a reason): the §13.6 state machine stays a plain
+  `phaseNow` imperative island (trap 2 — deferred signal writes); the bus client stays
+  imperative (a live connection is not a cell); the Engine is NOT `durable()` yet — blocked on
+  the missing `onEvent` unsubscribe (Phase B gap; a durable engine would accumulate listeners
+  per hot swap); `agentToolkit`/`registerStandardTools` deferred to Phase C (the /tools link is
+  the forwarding path; wiring it belongs with the modality port). Typed-port rescan seeds were
+  dropped (typed ports connect directly; the cell rescans recents).
+
+### 7.7 Accessibility sizing + panel zoom (2026-07-12)
+
+Browser zoom (⌘+) does not reach side panels, and the panel's hardcoded px fonts ignored the
+browser's accessibility font-size setting entirely. Now:
+
+- ☑ All panel sizes are **rem** (index.html base 0.8125rem, PANEL_STYLES, and the kit's
+  PANE_STYLES — hairline borders stay px): Chrome Settings → Appearance → Font size flows in
+  with zero knobs.
+- ☑ **⌘+/⌘−/⌘0 zoom inside the panel** — a `uiScale` control (0.6–2.0, bounds clamp the
+  steps; deliberately NO widget, per the user) applied as a *percentage* root font-size, so
+  it MULTIPLIES the accessibility default instead of replacing it. Persisted in
+  chrome.storage.local across panel reopens. The chord listener registers before the turn
+  grammar and stops propagation, so zoom wins mid-turn.
+- ☑ Style-guide alignment: all stylesheet color now goes through **:root tokens** (dark
+  values, index.html; the kit reads them with fallbacks). Known conflict, acknowledged by the
+  user: the overlay's own CSS is px-based — the extension diverges here deliberately. Light
+  theme variant + the same treatment for aiui-devtools-extension: future work.
+
+### 7.8 Header streamline (2026-07-12, user-directed)
+
+Order: ✳ mark · **connection chip** · **armed pill** · **turn pill** · win. The pills are
+chip-shaped BUTTONS (dot + word, lit/gray, no shortcut text): pure readers of the `phase`
+signal, so they react to every source of change (⌘B, d, engine closes — everything funnels
+through setPhase); clicks call the machine's verbs. Armed click: cold → `armOnly()` (NEW verb:
+presence without a turn — ⌘B stays the only turn-opener); on → `disarm()` (abandon all). Turn
+click: armed → open turn; on → cancel (send stays on ⏎/Send — a toggle-off must be the safe
+verb); disabled while disarmed. The old "disarmed — ⌘B" label + separate disarm button are
+gone.
+
+### 7.9 Session pane retired into the connection chip (2026-07-12, user-directed)
+
+- The header chip now shows **"name :port"** (channelLabel), with three states: green =
+  connected, **amber = bound but re-dialing** (the bus client's own reconnect loop — a channel
+  restart under hot-reload self-heals and NEVER touches armed/turn; nothing couples the phase
+  machine to the socket), gray = unbound.
+- The chip is a **dropdown that rescans on open**: new `Dropdown` widget in **aiui-viz**
+  (root barrel, `dropdown.tsx` + tests) — the widget owns ONLY the popup lifecycle with an
+  `onOpen` refresh hook; trigger and body are arbitrary host JSX (the extension's body:
+  discovery CellView list, binding status, peers, disconnect). The library-worthiness call the
+  user made; extracted with docblocks + behavioral tests per the methodology.
+- Session logic went headless: `session.ts` (`createSession()` — bind/unbind, remembered-port
+  + auto-bind boot, bus island); `session-pane.tsx` deleted; **explicit-port entry dropped**
+  (decided: discovery covers the flows; revisit if a portless setup appears).
+
+### 7.10 Advisory redesign: toasts + leveled console, inline hints retired (2026-07-12)
+
+Decided: the UI does NOT teach inline (that's a future, separate system). Two channels only:
+- **Misuse/blocking feedback**: the pink miss flash (unbound keys, empty selection pull) and a
+  new **panel toast column** (`toasts.tsx` — dismissible, deduped ×N, used SPARINGLY; the
+  sanctioned cases: the invocation-gate shot failure, unbound-channel acts, no-turn acts,
+  unreachable-page ink, wire errors).
+- **Routine narration** → the console at a **logLevel control** ("quiet"|"info"|"debug",
+  store.ts; log.ts prefixes `[aiui]`): state transitions, captures, binding flow. Read it via
+  right-click panel → Inspect.
+- Removed: every `turnStatus`/`captureStatus` inline line and the static "shots need
+  invocation…" teaching footer.
+
+CDP access facts (measured 2026-07-12): the side panel is an ordinary `page` target and the MV3
+SW a `service_worker` target on the browser's debug endpoint — both fully drivable over raw CDP
+(console read + evaluate proven live). The session's chrome-devtools MCP attaches to the
+browser endpoint captured AT LAUNCH and does not follow browser relaunches (stale :52300 vs
+live :52916 today) — reattach requires a new session or a browser that outlives it.
+
 ### 8. Known gaps / next (ordered)
 1. LIVE verification with the user against the §13.6 tables (this file's checklist below).
 2. `c` is hint-gated on inkOn; per model it should clear whenever strokes exist. Needs a

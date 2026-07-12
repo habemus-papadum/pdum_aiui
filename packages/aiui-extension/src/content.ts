@@ -49,10 +49,15 @@ const INK_HOST_ID = "aiui-webext-ink-host";
 let ink: { surface: InkSurface; host: HTMLElement } | undefined;
 /** Ink MODE (pointer captured) — distinct from strokes existing. */
 let inkActive = false;
+/** The live fade lifetime — the surface reads it per frame, so the panel's
+ * fade slider takes effect on EXISTING strokes without a remount. */
+let inkFadeSec = 0;
 
 const mountInk = (fadeSec: number): void => {
+  inkFadeSec = fadeSec;
   if (ink !== undefined) {
-    // A kept-strokes surface from an earlier mode: re-enter over it.
+    // A kept-strokes surface from an earlier mode: re-enter over it (the
+    // fade update above already applies — the surface reads the live var).
     ink.surface.setActive(true);
     inkActive = true;
     return;
@@ -67,7 +72,7 @@ const mountInk = (fadeSec: number): void => {
   document.documentElement.append(host);
   const surface = new InkSurface({
     target: layer,
-    fadeSec: () => fadeSec,
+    fadeSec: () => inkFadeSec,
     documentAnchored: true, // strokes follow the page, not the viewport (§13.6)
     onStrokeEnd: (stroke) => {
       // Stroke facts relay up as raw broadcasts (structured — the

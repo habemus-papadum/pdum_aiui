@@ -5,10 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>aiui</title>
     <style>
-      :root { color-scheme: dark; }
+      /* Color goes through :root tokens (the style guide's rule; dark values —
+         a light variant is future work). SIZES are rem on purpose: the panel
+         tracks the browser's accessibility font-size default, and the panel
+         zoom (⌘+/⌘−/⌘0, main.tsx) multiplies it via a percentage root
+         font-size — never a px override, which would defeat both. */
+      :root {
+        color-scheme: dark;
+        --bg: #14171f;
+        --surface: #171b25;
+        --surface-2: #232a3a;
+        --surface-3: #2d3650;
+        --input-bg: #0d0f15;
+        --border: #2a3140;
+        --border-2: #3a4460;
+        --border-3: #222939;
+        --text: #dfe3ec;
+        --text-2: #cfd6e4;
+        --muted: #9aa4bd;
+        --accent: #8ab4f8;
+        --accent-bg: #1c2940;
+        --accent-border: #3a5686;
+        --ok: #7bd88f;
+        --ok-bg: #1d3a2a;
+        --ok-border: #2f6b45;
+        --warn: #e5c07b;
+        --dot: #4a5468;
+      }
       body {
-        margin: 0; padding: 10px; background: #14171f; color: #dfe3ec;
-        font: 13px ui-sans-serif, system-ui, sans-serif;
+        margin: 0; padding: 0.625rem; background: var(--bg); color: var(--text);
+        font: 0.8125rem ui-sans-serif, system-ui, sans-serif;
       }
     </style>
   </head>

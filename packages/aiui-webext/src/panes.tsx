@@ -17,23 +17,29 @@ import { createSignal, Show } from "solid-js";
 
 const STYLE_ID = "aiui-webext-pane-styles";
 
+// Sizes in rem so a host document's root font-size (the browser accessibility
+// default × any host zoom) scales the panes; colors read the host's :root
+// tokens with the original dark palette as fallbacks, so the kit still renders
+// standalone (hairline borders stay px on purpose).
 export const PANE_STYLES = `
-  .wx-panes { display: flex; flex-direction: column; gap: 6px; }
+  .wx-panes { display: flex; flex-direction: column; gap: 0.375rem; }
   .wx-pane {
-    border: 1px solid #2a3140; border-radius: 8px; background: #171b25;
+    border: 1px solid var(--border, #2a3140); border-radius: 8px;
+    background: var(--surface, #171b25);
     overflow: hidden;
   }
   .wx-pane-header {
-    display: flex; align-items: center; gap: 8px; width: 100%;
-    padding: 7px 10px; border: none; background: transparent; color: #dfe3ec;
-    font: 600 12px ui-sans-serif, system-ui, sans-serif; cursor: pointer;
+    display: flex; align-items: center; gap: 0.5rem; width: 100%;
+    padding: 0.4375rem 0.625rem; border: none; background: transparent;
+    color: var(--text, #dfe3ec);
+    font: 600 0.75rem ui-sans-serif, system-ui, sans-serif; cursor: pointer;
     text-align: left;
   }
-  .wx-pane-header:hover { background: #1d2330; }
-  .wx-pane-chevron { transition: transform 120ms; color: #9aa4bd; font-size: 10px; }
+  .wx-pane-header:hover { background: var(--surface-hover, #1d2330); }
+  .wx-pane-chevron { transition: transform 120ms; color: var(--muted, #9aa4bd); font-size: 0.625rem; }
   .wx-pane.open > .wx-pane-header .wx-pane-chevron { transform: rotate(90deg); }
-  .wx-pane-hint { margin-left: auto; color: #9aa4bd; font-weight: 400; font-size: 11px; }
-  .wx-pane-body { padding: 8px 10px 10px; border-top: 1px solid #222939; }
+  .wx-pane-hint { margin-left: auto; color: var(--muted, #9aa4bd); font-weight: 400; font-size: 0.6875rem; }
+  .wx-pane-body { padding: 0.5rem 0.625rem 0.625rem; border-top: 1px solid var(--border-3, #222939); }
 `;
 
 /** Inject the pane stylesheet once into `doc` (idempotent by element id). */

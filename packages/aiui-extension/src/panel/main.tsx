@@ -15,6 +15,7 @@ import {
   Engine,
   type Rect,
 } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import { CellView } from "@habemus-papadum/aiui-viz";
 import { isTypingTarget } from "@habemus-papadum/aiui-viz/modal";
 import {
   injectPaneStyles,
@@ -27,6 +28,7 @@ import { render } from "@solidjs/web";
 import { createEffect, createSignal } from "solid-js";
 import { dataUrlToBytes, isNotInvokedError, type ShotGrab } from "../capture";
 import { CapturePane } from "./capture-pane";
+import { ConnectionChip } from "./connection-chip";
 import {
   LEADER_BLIP_MS,
   type LeaderAction,
@@ -36,66 +38,118 @@ import {
   leaderPendingFresh,
   type PendingLeader,
 } from "./leader";
-import { SessionPane } from "./session-pane";
+import { logDebug, logInfo } from "./log";
+import { graph } from "./model/graph";
+import { inkFade, inkMode, shotFlash, uiScale } from "./model/store";
+import { createSession } from "./session";
+import { Toasts, toast } from "./toasts";
 import { connectToolsLink } from "./tools-link";
 import { attachTurnHost, panelIntentConfig, turnMirror } from "./turn";
 import { TurnPane } from "./turn-pane";
 
+// Sizes in rem (the browser's accessibility default × the panel zoom — see
+// index.html), colors through the :root tokens it defines. Hairline borders
+// stay px on purpose.
 const PANEL_STYLES = `
-  .hdr { display: flex; align-items: center; gap: 8px; margin: 2px 2px 10px; }
-  .hdr .mark { color: #8ab4f8; font-weight: 700; }
-  .hdr .win { margin-left: auto; color: #9aa4bd; font: 11px ui-monospace, monospace; }
-  .arm {
-    font: 11px ui-monospace, monospace; border-radius: 999px; padding: 2px 10px;
-    border: 1px solid #3a4460; background: #232a3a; color: #cfd6e4; cursor: pointer;
+  .hdr { display: flex; align-items: center; gap: 0.5rem; margin: 0.125rem 0.125rem 0.625rem; }
+  .hdr .mark { color: var(--accent); font-weight: 700; }
+  .hdr .win { margin-left: auto; color: var(--muted); font: 0.6875rem ui-monospace, monospace; }
+  /* Status pills: chip-shaped BUTTONS (armed, turn) — dot + word, lit when
+     on, gray when off, disabled when unreachable. Pure readers of the phase
+     signal; clicks call the machine's verbs. */
+  .pill {
+    display: inline-flex; align-items: center; gap: 0.3125rem;
+    font: 0.6875rem ui-monospace, monospace; color: var(--text-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 0.125rem 0.5rem;
+    background: transparent; cursor: pointer;
   }
-  .arm.on { background: #1d3a2a; border-color: #2f6b45; color: #7bd88f; }
+  .pill .dot { width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: var(--dot); }
+  .pill.on { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+  .pill.on .dot { background: var(--ok); }
+  .pill:disabled { opacity: 0.45; cursor: default; }
+  .pill:hover:not(:disabled):not(.on) { background: var(--surface-2); }
+  /* The turn pill lights BLUE (armed stays green): composing is the accent
+     state, not another "ok" (decided 2026-07-12). */
+  .pill.turn.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
+  .pill.turn.on .dot { background: var(--accent); }
   .chip {
-    display: inline-flex; align-items: center; gap: 5px;
-    font: 11px ui-monospace, monospace; color: #cfd6e4;
-    border: 1px solid #2a3140; border-radius: 999px; padding: 2px 8px;
+    display: inline-flex; align-items: center; gap: 0.3125rem;
+    font: 0.6875rem ui-monospace, monospace; color: var(--text-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 0.125rem 0.5rem;
+    background: transparent; cursor: pointer;
   }
-  .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: #4a5468; }
-  .chip.on .dot { background: #7bd88f; }
-  .chip.connecting .dot { background: #e5c07b; }
-  .kv { color: #9aa4bd; font: 12px ui-monospace, monospace; margin-top: 4px; }
-  .row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin: 2px 0; }
+  .chip .dot { width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: var(--dot); }
+  .chip.on .dot { background: var(--ok); }
+  .chip.connecting .dot { background: var(--warn); }
+  .chip:hover { background: var(--surface-2); }
+  /* The connection dropdown's surface (the Dropdown widget owns geometry
+     only; the host styles the popup). */
+  .drop {
+    display: flex; flex-direction: column; gap: 0.3125rem; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border-2); border-radius: 8px;
+    padding: 0.5rem 0.625rem; min-width: 15rem;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.45);
+  }
+  .kv { color: var(--muted); font: 0.75rem ui-monospace, monospace; margin-top: 0.25rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 0.3125rem; align-items: center; margin: 0.125rem 0; }
   .row input, .row textarea {
-    background: #0d0f15; color: #dfe3ec; border: 1px solid #2a3140;
-    border-radius: 6px; padding: 3px 7px; font: 12px ui-monospace, monospace;
+    background: var(--input-bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.1875rem 0.4375rem; font: 0.75rem ui-monospace, monospace;
   }
   .row textarea { width: 100%; resize: vertical; }
-  .row button, .peer { font: 12px ui-monospace, monospace; }
+  .row button, .peer { font: 0.75rem ui-monospace, monospace; }
   .chan, .ghost {
-    background: #232a3a; color: #dfe3ec; border: 1px solid #3a4460;
-    border-radius: 6px; padding: 3px 8px; cursor: pointer;
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--border-2);
+    border-radius: 6px; padding: 0.1875rem 0.5rem; cursor: pointer;
   }
-  .chan:disabled { background: #1d3a2a; border-color: #2f6b45; cursor: default; }
-  .chan:hover:not(:disabled), .ghost:hover { background: #2d3650; }
-  .chan.ink-on { background: #1d3a2a; border-color: #2f6b45; color: #7bd88f; }
-  .thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chan:disabled { background: var(--ok-bg); border-color: var(--ok-border); cursor: default; }
+  .chan:hover:not(:disabled), .ghost:hover { background: var(--surface-3); }
+  .chan.ink-on { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.375rem; }
   .thumbs img {
-    max-width: 96px; max-height: 72px; border: 1px solid #2a3140; border-radius: 6px;
+    max-width: 6rem; max-height: 4.5rem; border: 1px solid var(--border); border-radius: 6px;
   }
-  .peer { color: #cfd6e4; margin-top: 2px; }
+  .peer { color: var(--text-2); margin-top: 0.125rem; }
   .peer .role {
-    color: #8ab4f8; border: 1px solid #2a3140; border-radius: 4px;
-    padding: 0 4px; margin-right: 4px; font-size: 10px;
+    color: var(--accent); border: 1px solid var(--border); border-radius: 4px;
+    padding: 0 0.25rem; margin-right: 0.25rem; font-size: 0.625rem;
   }
+  /* Toasts: a FIXED overlay column, bottom-right of the panel — a real
+     popup, no reflow. Card = translucent light header over the message. */
+  .toasts {
+    position: fixed; right: 0.625rem; bottom: 0.625rem; z-index: 60;
+    display: flex; flex-direction: column; gap: 0.375rem;
+    max-width: min(20rem, calc(100vw - 1.25rem));
+  }
+  .toast {
+    border: 1px solid var(--warn); border-radius: 8px; overflow: hidden;
+    background: var(--surface); box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5);
+    font: 0.75rem ui-monospace, monospace; color: var(--text);
+  }
+  .toast-head {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: rgba(229, 192, 123, 0.22); color: var(--text);
+    padding: 0.1875rem 0.5rem; font-size: 0.6875rem; font-weight: 600;
+  }
+  .toast-count { color: var(--warn); }
+  .toast-head .toast-x {
+    margin-left: auto; background: none; border: none; color: var(--text-2);
+    cursor: pointer; font-size: 0.6875rem; padding: 0;
+  }
+  .toast-body { padding: 0.375rem 0.5rem; }
   .leader {
-    font: 11px ui-monospace, monospace; color: #cfd6e4;
-    border: 1px solid #3a4460; background: #232a3a; border-radius: 6px;
-    padding: 4px 8px; margin: 0 2px 10px;
+    font: 0.6875rem ui-monospace, monospace; color: var(--text-2);
+    border: 1px solid var(--border-2); background: var(--surface-2); border-radius: 6px;
+    padding: 0.25rem 0.5rem; margin: 0 0.125rem 0.625rem;
   }
 `;
 
 function Panel() {
   const [windowId, setWindowId] = createSignal<number | undefined>();
   const [rev, setRev] = createSignal(0);
-  const [turnStatus, setTurnStatus] = createSignal("");
   const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>();
 
-  const session = SessionPane({ windowId });
+  const session = createSession();
 
   // ── the /tools link: tab-activation reporting, tied to the binding ────────
   // Solid 2.0 createEffect(compute, effect): the compute tracks (port,
@@ -103,7 +157,7 @@ function Panel() {
   // teardown, which runs before the next rewire and on panel dispose. (A
   // one-arg createEffect throws MISSING_EFFECT_FN at runtime in Solid 2.0.)
   createEffect(
-    () => ({ port: session.handle.port(), win: windowId() }),
+    () => ({ port: session.port(), win: windowId() }),
     ({ port, win }) => {
       if (port === undefined || win === undefined) {
         return;
@@ -123,7 +177,7 @@ function Panel() {
 
   const turnHost = attachTurnHost({
     engine,
-    port: session.handle.port,
+    port: session.port,
     activeTab: async () => {
       const win = windowId();
       if (win === undefined) {
@@ -140,17 +194,22 @@ function Panel() {
             tabIndex: tab.index,
           };
     },
-    onError: (message) => setTurnStatus(`⚠ ${message}`),
+    onError: (message) => toast(`turn wire: ${message}`),
     onLoweredPrompt: (prompt) => {
       setLoweredPrompt(prompt);
-      setTurnStatus("sent ✓ — the lowered prompt is in the session");
+      logInfo("turn sent — lowered prompt received");
     },
     persist: mirror.persist,
   });
 
   // ── capture state: shots + per-tab ink (step 5) ────────────────────────────
-  const [captureStatus, setCaptureStatus] = createSignal("");
-  const [inkOn, setInkOn] = createSignal(false);
+  // The standing ink-mode flag lives in the store (durableSignal — §13.6
+  // standing state, survives panel hot swaps); these accessors keep the
+  // machine code reading like a signal.
+  const inkOn = (): boolean => inkMode.get();
+  const setInkOn = (on: boolean): void => {
+    inkMode.set(on);
+  };
   /** The tab whose content script holds the ink surface, while ink is on. */
   let inkTabId: number | undefined;
   /** Strokes since the last clear — gates the ink-clear events (no ink, no event). */
@@ -204,11 +263,11 @@ function Panel() {
   const toggleInkMode = (): void => {
     if (inkOn()) {
       void inkModeOff();
-    } else if (phase() === "turn") {
+    } else if (phaseNow === "turn") {
       void inkModeOn();
     } else {
       setInkOn(true);
-      setCaptureStatus("ink mode on — the pointer claims when a turn opens (⌘B)");
+      logInfo("ink mode on (standing) — the pointer claims when a turn opens");
     }
   };
 
@@ -219,23 +278,23 @@ function Panel() {
     }
     const [tab] = await chrome.tabs.query({ active: true, windowId: win });
     if (tab?.id === undefined) {
-      setCaptureStatus("⚠ no active tab");
+      toast("ink needs an active tab");
       return;
     }
     try {
       await relayRequestTab(tab.id, "page", "ink", {
         on: true,
-        fadeSec: engine.settings.inkFadeSec,
+        fadeSec: inkFade.get(),
       });
     } catch (err) {
-      setCaptureStatus(
-        `⚠ ink failed: ${err instanceof Error ? err.message : String(err)} (reload the tab?)`,
+      toast(
+        `ink can't reach this page (reload it?): ${err instanceof Error ? err.message : String(err)}`,
       );
       return;
     }
     inkTabId = tab.id;
     setInkOn(true);
-    setCaptureStatus("ink on — draw on the page; strokes land in shots natively");
+    logInfo("ink on — pointer claimed");
   };
 
   /**
@@ -253,7 +312,7 @@ function Panel() {
     }
     const [tab] = await chrome.tabs.query({ active: true, windowId: win });
     if (tab?.id === undefined) {
-      setCaptureStatus("⚠ no active tab");
+      toast("a shot needs an active tab");
       return;
     }
     const takenAt = Date.now();
@@ -265,7 +324,7 @@ function Panel() {
       // itself will usually refuse such pages with the invocation error.
       vp = { w: tab.width ?? 1280, h: tab.height ?? 800, dpr: 1 };
     }
-    setCaptureStatus("capturing…");
+    logDebug("capturing…");
     try {
       const grab = await relayRequest<ShotGrab>("sw", "capture", {
         tabId: tab.id,
@@ -276,8 +335,11 @@ function Panel() {
       // Camera-style confirmation, strictly AFTER the grab returned so the
       // wash can never be in the frame it confirms. (A same-second burst
       // could still catch the tail of the previous flash — 240ms, accepted.)
-      // §13.6: manual shots flash; share-sampled frames (Phase C) never will.
-      void relayRequestTab(tab.id, "page", "flash", { kind: "shot" }).catch(() => {});
+      // §13.6: manual shots flash (the shotFlash control is the easy off);
+      // share-sampled frames (Phase C) never will.
+      if (shotFlash.get()) {
+        void relayRequestTab(tab.id, "page", "flash", { kind: "shot" }).catch(() => {});
+      }
       const marker = engine.shotDone(
         { x: 0, y: 0, w: vp.w, h: vp.h },
         [],
@@ -287,17 +349,16 @@ function Panel() {
         takenAt,
       );
       await turnHost.uploadAttachment(marker, "image/png", dataUrlToBytes(grab.png));
-      setCaptureStatus(`${marker} captured (${grab.width}×${grab.height})`);
+      logInfo(`${marker} captured (${grab.width}×${grab.height})`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      // Stamp the time so a REPEATED failure visibly changes — an unchanged
-      // status line reads as "the button did nothing" (found live, 2026-07-11).
-      const at = new Date().toLocaleTimeString();
-      setCaptureStatus(
+      // The invocation gate is THE sanctioned toast case (misuse feedback);
+      // toasts dedupe with ×N, so repeats visibly change.
+      toast(
         isNotInvokedError(message)
-          ? `⚠ ${at} — tab not invoked: press ⌘B twice (cancel + reopen the turn invokes THIS ` +
-              "tab) or click the aiui toolbar button, then retry"
-          : `⚠ shot failed: ${message}`,
+          ? "tab not invoked: press ⌘B twice (cancel + reopen the turn invokes THIS tab) " +
+              "or click the aiui toolbar button, then retry"
+          : `shot failed: ${message}`,
       );
     }
   };
@@ -308,8 +369,8 @@ function Panel() {
   // the previous panel document would stay lit forever (found live).
   const broadcastRing = (): void => {
     const win = windowId();
-    const on = phase() !== "disarmed";
-    const composing = phase() === "turn" || phase() === "tweak";
+    const on = phaseNow !== "disarmed";
+    const composing = phaseNow === "turn" || phaseNow === "tweak";
     if (win !== undefined) {
       void chrome.tabs.query({ windowId: win }).then((tabs) => {
         for (const tab of tabs) {
@@ -328,7 +389,7 @@ function Panel() {
       // ⚠ Phase-B bridge: engine.send() disarms (reference behavior). Under
       // §13.6 send keeps you armed — re-arm immediately unless the panel
       // itself is disarming (phase already "disarmed" then).
-      if (!event.on && phase() !== "disarmed") {
+      if (!event.on && phaseNow !== "disarmed") {
         engine.setArmed(true);
       }
     }
@@ -336,7 +397,7 @@ function Panel() {
     // the phase back at "armed" — §13.6: turn ends, you STAY armed, no new
     // turn auto-begins. Ink strokes are NOT touched (divergence 5 clears them
     // only on disarm).
-    if (event.type === "thread-close" && (phase() === "turn" || phase() === "tweak")) {
+    if (event.type === "thread-close" && (phaseNow === "turn" || phaseNow === "tweak")) {
       leavePhaseTurn("armed");
     }
   });
@@ -371,7 +432,7 @@ function Panel() {
       // and §13.6 says only ⌘B opens turns — so strokes reach the engine
       // only while a turn is open. Between turns, drawing is page-whiteboard
       // only (the strokes still land in later shots as page content).
-      if (phase() === "turn" || phase() === "tweak") {
+      if (phaseNow === "turn" || phaseNow === "tweak") {
         engine.strokeDone(m.points, m.bounds);
       }
     }
@@ -420,7 +481,7 @@ function Panel() {
       if (engine.threadOpen) {
         engine.navigation(fromUrl ?? "", toUrl ?? "");
       }
-      if (phase() === "turn") {
+      if (phaseNow === "turn") {
         pointCaptureAt(info.tabId);
         // The ink POINTER follows the active tab while the mode is on; the
         // old tab keeps its strokes (deactivated surface, page state).
@@ -431,7 +492,7 @@ function Panel() {
           inkTabId = info.tabId;
           void relayRequestTab(info.tabId, "page", "ink", {
             on: true,
-            fadeSec: engine.settings.inkFadeSec,
+            fadeSec: inkFade.get(),
           }).catch(() => {});
         }
       }
@@ -447,20 +508,22 @@ function Panel() {
     }
     const [tab] = await chrome.tabs.query({ active: true, windowId: win });
     if (tab?.id === undefined) {
-      setTurnStatus("⚠ no active tab");
+      toast("adding a selection needs an active tab");
       return;
     }
     try {
       const payload = await relayRequestTab<AppSelection | null>(tab.id, "page", "selection");
       if (payload === null) {
-        setTurnStatus("no selection on the page");
+        // Misuse-shaped but tiny: the miss flash says "nothing to add".
+        void relayRequestTab(tab.id, "page", "flash", { kind: "miss" }).catch(() => {});
+        logInfo("add selection: nothing selected on the page");
         return;
       }
       engine.appSelection(payload);
-      setTurnStatus("selection added to the turn");
+      logInfo("selection added to the turn");
     } catch (err) {
-      setTurnStatus(
-        `⚠ selection pull failed: ${err instanceof Error ? err.message : String(err)} (reload the tab?)`,
+      toast(
+        `selection pull failed (reload the tab?): ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   };
@@ -472,7 +535,19 @@ function Panel() {
   // turn-opener; Esc is the in-turn cancel rung; T releases capture with the
   // turn open and only ⌘B can resume (the page owns every ordinary key in
   // tweak). Send/cancel keep you armed. Disarm abandons everything.
-  const [phase, setPhase] = createSignal<"disarmed" | "armed" | "turn" | "tweak">("disarmed");
+  // The machine's truth is a PLAIN variable, mirrored into a signal for the
+  // UI. Solid 2.0 defers signal writes — phase() read right after setPhase()
+  // returns the STALE value, which (found live 2026-07-12) broadcast the
+  // previous state's ring and let a synchronous engine event stomp a disarm
+  // back to armed. All machine logic reads `phaseNow`; only JSX reads the
+  // signal.
+  type Phase = "disarmed" | "armed" | "turn" | "tweak";
+  let phaseNow: Phase = "disarmed";
+  const [phase, setPhaseSignal] = createSignal<Phase>("disarmed");
+  const setPhase = (p: Phase): void => {
+    phaseNow = p;
+    setPhaseSignal(p);
+  };
   /** The rejected key currently blipping in the strip (`× g`), if any. */
   const [blip, setBlip] = createSignal<string | undefined>();
   let blipTimer: number | undefined;
@@ -480,7 +555,7 @@ function Panel() {
   let leaderTabId: number | undefined;
 
   const leaderState = (): LeaderState => ({
-    phase: phase() === "disarmed" ? "armed" : (phase() as "armed" | "turn" | "tweak"),
+    phase: phaseNow === "disarmed" ? "armed" : (phaseNow as "armed" | "turn" | "tweak"),
     inkOn: inkOn(),
     selectionPresent: selectionPresent(),
   });
@@ -530,14 +605,14 @@ function Panel() {
     setPhase("turn");
     broadcastRing();
     const tabId = await activeTabId();
-    if (tabId !== undefined && phase() === "turn") {
+    if (tabId !== undefined && phaseNow === "turn") {
       pointCaptureAt(tabId);
       // Re-apply the standing ink-mode flag: the pointer claim is per-turn.
       if (inkOn()) {
         inkTabId = tabId;
         void relayRequestTab(tabId, "page", "ink", {
           on: true,
-          fadeSec: engine.settings.inkFadeSec,
+          fadeSec: inkFade.get(),
         }).catch(() => {});
       }
     }
@@ -551,14 +626,42 @@ function Panel() {
       if (engine.threadOpen) {
         engine.send(); // emits thread-close + armed(false); bridges re-arm
       } else {
-        setTurnStatus("nothing in the turn — cancelled");
+        logInfo("nothing in the turn — cancelled");
       }
     } else if (engine.threadOpen) {
       engine.stepOut(); // in-thread: closes with reason "cancel", stays armed
     }
-    if (phase() === "turn" || phase() === "tweak") {
+    if (phaseNow === "turn" || phaseNow === "tweak") {
       leavePhaseTurn("armed");
     }
+  };
+
+  /**
+   * Arming (pill or ⌘B) requires a bound channel — a turn with nowhere to go
+   * is a misunderstanding, which is the toast channel's job. NOTE: a bound
+   * port that is merely RECONNECTING stays bound (resilience — outages never
+   * disarm); only truly unbound blocks.
+   */
+  const requireChannel = (): boolean => {
+    if (session.port() === undefined) {
+      toast("no channel bound — pick one from the connection chip");
+      return false;
+    }
+    return true;
+  };
+
+  /**
+   * Arm WITHOUT opening a turn — the header pill's cold-start click (§13.6:
+   * armed is presence; ⌘B remains the only turn-opener).
+   */
+  const armOnly = (): void => {
+    if (!requireChannel()) {
+      return;
+    }
+    engine.setArmed(true);
+    setPhase("armed");
+    broadcastRing();
+    logInfo("armed — ⌘B starts a turn");
   };
 
   /** Disarm: abandon EVERYTHING (§13.6) — turn, ink, standing tools, ring. */
@@ -575,7 +678,7 @@ function Panel() {
     // Standing tools (hands-free, share) tear down here when they land
     // (Phase C) — the §13.6 contract is recorded now.
     broadcastRing();
-    setTurnStatus("disarmed — everything abandoned (⌘B arms and starts a turn)");
+    logInfo("disarmed — everything abandoned");
   };
 
   /**
@@ -584,23 +687,29 @@ function Panel() {
    * (cancel the turn) · tweak → RESUME the same turn.
    */
   const leaderPress = async (): Promise<void> => {
-    switch (phase()) {
+    switch (phaseNow) {
       case "disarmed":
+        if (!requireChannel()) {
+          return;
+        }
         engine.setArmed(true);
         await enterPhaseTurn();
-        setTurnStatus("turn open — compose (⏎ sends, esc cancels, t tweaks)");
+        logInfo("turn open");
         return;
       case "armed":
+        if (!requireChannel()) {
+          return;
+        }
         await enterPhaseTurn();
-        setTurnStatus("turn open — compose (⏎ sends, esc cancels, t tweaks)");
+        logInfo("turn open");
         return;
       case "turn":
         endTurn("cancel");
-        setTurnStatus("turn cancelled — still armed (⌘B starts the next)");
+        logInfo("turn cancelled — still armed");
         return;
       case "tweak":
         await enterPhaseTurn();
-        setTurnStatus("turn resumed");
+        logInfo("turn resumed");
         return;
     }
   };
@@ -616,16 +725,16 @@ function Panel() {
     }
     if (action === "cancel") {
       endTurn("cancel");
-      setTurnStatus("turn cancelled — still armed (⌘B starts the next)");
+      logInfo("turn cancelled — still armed");
       return;
     }
     if (action === "tweak") {
       leavePhaseTurn("tweak");
-      setTurnStatus("tweak — the page has keyboard and pointer; ⌘B resumes the turn");
+      logInfo("tweak — the page has keyboard and pointer; ⌘B resumes");
       return;
     }
-    if (session.handle.port() === undefined) {
-      setTurnStatus("⚠ bind a channel first (Session pane)");
+    if (session.port() === undefined) {
+      toast("no channel bound — pick one from the connection chip");
       return;
     }
     if (action === "ink") {
@@ -667,6 +776,47 @@ function Panel() {
     }
     return "handled";
   };
+
+  // ── panel zoom: ⌘+/⌘−/⌘0 (browser zoom does not reach side panels) ────────
+  // Multiplies the browser's accessibility font-size default via a percentage
+  // root font-size (all panel sizes are rem — see index.html). Registered
+  // BEFORE the leader key listener so the chords win even mid-turn; persisted
+  // across panel reopens in chrome.storage.local. The uiScale control's own
+  // bounds clamp every step.
+  const UI_SCALE_KEY = "panel.uiScale";
+  const applyUiScale = (scale: number): void => {
+    document.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
+  };
+  void chrome.storage.local.get(UI_SCALE_KEY).then((got) => {
+    const saved = got[UI_SCALE_KEY];
+    if (typeof saved === "number") {
+      uiScale.set(saved);
+    }
+    applyUiScale(uiScale.get());
+  });
+  const zoomStep = (delta: number): void => {
+    // Float-safe stepping (0.1 increments live in binary-float land).
+    const next = delta === 0 ? 1 : Math.round((uiScale.get() + delta) * 10) / 10;
+    const applied = uiScale.set(next); // clamped by the control's bounds
+    applyUiScale(applied);
+    void chrome.storage.local.set({ [UI_SCALE_KEY]: applied });
+  };
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+      const delta =
+        event.key === "+" || event.key === "=" ? 0.1 : event.key === "-" ? -0.1 : undefined;
+      if (delta !== undefined || event.key === "0") {
+        event.preventDefault();
+        event.stopImmediatePropagation(); // never reaches the turn grammar
+        zoomStep(delta ?? 0);
+      }
+    },
+    true,
+  );
 
   // The panel document's own key capture (focus may sit here, especially
   // right after the SW opens the panel). Yields to the panel's OWN form
@@ -716,15 +866,15 @@ function Panel() {
       helloTab.windowId === windowId() &&
       helloTab.id !== undefined
     ) {
-      const composing = phase() === "turn" || phase() === "tweak";
+      const composing = phaseNow === "turn" || phaseNow === "tweak";
       chrome.tabs
         .sendMessage(helloTab.id, {
           aiuiRing: 1,
-          armed: phase() !== "disarmed" && !composing,
+          armed: phaseNow !== "disarmed" && !composing,
           turn: composing,
         })
         .catch(() => {});
-      if (phase() === "turn" && helloTab.active) {
+      if (phaseNow === "turn" && helloTab.active) {
         pointCaptureAt(helloTab.id);
       }
     }
@@ -753,9 +903,7 @@ function Panel() {
         setPhase("armed"); // replay forces engine.armed = true
         broadcastRing();
       }
-      setTurnStatus(
-        `recovered an in-progress turn (${recovered.events.length} events) — ⏎ sends, esc discards`,
-      );
+      logInfo(`recovered an in-progress turn (${recovered.events.length} events)`);
     }
     // A leader press may have opened this panel — consume the parked press
     // (missed broadcasts are the rule during boot) if it is fresh enough to
@@ -770,41 +918,57 @@ function Panel() {
     }
   });
 
-  const [swPing, setSwPing] = createSignal("…");
-  relayRequest<{ at: string }>("sw", "ping")
-    .then((r) => setSwPing(`service worker alive (${r.at.slice(11, 19)})`))
-    .catch((e) => setSwPing(`service worker unreachable: ${String(e)}`));
-
-  const chipClass = () =>
-    session.handle.bus().phase === "connected"
-      ? "chip on"
-      : session.handle.port() !== undefined
-        ? "chip connecting"
-        : "chip";
+  // Live fade: the inkFade control moving while ink is on re-relays the new
+  // lifetime to the inked tab (the content surface reads it per frame).
+  createEffect(
+    () => ({ fade: inkFade.get() }),
+    ({ fade }) => {
+      if (inkOn() && inkTabId !== undefined && phaseNow === "turn") {
+        void relayRequestTab(inkTabId, "page", "ink", { on: true, fadeSec: fade }).catch(() => {});
+      }
+    },
+  );
 
   return (
     <>
       <style>{PANEL_STYLES}</style>
       <div class="hdr">
         <span class="mark">✳ aiui</span>
-        <span class={phase() === "disarmed" ? "arm" : "arm on"}>
-          {phase() === "disarmed" ? "disarmed — ⌘B" : phase()}
-        </span>
+        <ConnectionChip session={session} />
         <button
           type="button"
-          class="ghost"
-          disabled={phase() === "disarmed"}
-          title="abandon everything: turn, ink, standing tools (§13.6)"
-          onClick={() => disarm()}
+          class={phase() !== "disarmed" ? "pill on" : "pill"}
+          disabled={phase() === "disarmed" && session.port() === undefined}
+          title="armed = presence (border only); needs a bound channel. Off-click disarms: abandons turn, ink, standing tools (§13.6)"
+          onClick={() => (phaseNow === "disarmed" ? armOnly() : disarm())}
         >
-          disarm
-        </button>
-        <span class={chipClass()}>
           <span class="dot" />
-          {session.handle.port() !== undefined ? `:${session.handle.port()}` : "no channel"}
-        </span>
+          armed
+        </button>
+        <button
+          type="button"
+          class={phase() === "turn" || phase() === "tweak" ? "pill turn on" : "pill turn"}
+          disabled={phase() === "disarmed"}
+          title="the open turn (⌘B). Off-click cancels it — you stay armed"
+          onClick={() => {
+            if (phaseNow === "armed") {
+              if (!requireChannel()) {
+                return;
+              }
+              void enterPhaseTurn();
+              logInfo("turn open");
+            } else if (phaseNow === "turn" || phaseNow === "tweak") {
+              endTurn("cancel");
+              logInfo("turn cancelled — still armed");
+            }
+          }}
+        >
+          <span class="dot" />
+          turn
+        </button>
         <span class="win">win {windowId() ?? "?"}</span>
       </div>
+      <Toasts />
       {phase() === "turn" ? (
         <div class="leader">
           ⌨ {leaderHintText(leaderState())}
@@ -816,14 +980,13 @@ function Panel() {
         <TurnPane
           engine={engine}
           rev={rev}
-          canCompose={() => phase() === "turn"}
-          onNoTurn={() => setTurnStatus("⚠ no turn open — ⌘B starts one")}
+          canCompose={() => phaseNow === "turn"}
+          onNoTurn={() => toast("no turn open — ⌘B starts one")}
           onSend={() => endTurn("send")}
           onCancel={() => {
             endTurn("cancel");
-            setTurnStatus("turn cancelled — still armed (⌘B starts the next)");
+            logInfo("turn cancelled — still armed");
           }}
-          status={turnStatus}
           loweredPrompt={loweredPrompt}
           onAddSelection={() => void addSelection()}
           selectionPresent={selectionPresent}
@@ -832,18 +995,16 @@ function Panel() {
           engine={engine}
           rev={rev}
           onShot={() =>
-            phase() === "turn"
-              ? void takeShot()
-              : setCaptureStatus("⚠ no turn open — ⌘B starts one")
+            phaseNow === "turn" ? void takeShot() : toast("no turn open — ⌘B starts one")
           }
           inkOn={inkOn}
           onInkToggle={() => toggleInkMode()}
           onInkClear={() => void inkClear("manual")}
-          status={captureStatus}
         />
-        {session.view()}
-        <Pane title="Dev" defaultOpen={false} hint="step 1">
-          <div class="kv">{swPing()}</div>
+        <Pane title="Dev" defaultOpen={false} hint="probes">
+          <CellView of={graph().swPing} label="pinging the service worker">
+            {(r) => <div class="kv">service worker alive ({r().at.slice(11, 19)})</div>}
+          </CellView>
         </Pane>
       </PaneStack>
     </>

@@ -1,3 +1,6 @@
+// @vitest-environment node
+// (defineManifest pulls the CRXJS/esbuild chain, and esbuild's TextEncoder
+// invariant breaks under jsdom — the model-layer tests are what need jsdom.)
 import { describe, expect, it } from "vitest";
 import manifest from "../manifest.config";
 
