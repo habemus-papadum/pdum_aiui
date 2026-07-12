@@ -98,7 +98,7 @@ export function createPanelPaint(deps: PanelPaintDeps): PanelPaint {
       },
     });
     connectedPort = port;
-    deps.log("paint host up on :" + String(port), "(iPad ink ready)");
+    deps.log(`paint host up on :${port}`, "(iPad ink ready)");
   };
 
   return {
