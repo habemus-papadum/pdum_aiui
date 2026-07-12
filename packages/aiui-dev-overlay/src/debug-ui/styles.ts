@@ -41,12 +41,14 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-peek .aiui-dbg-peek-err { color: #9aa0aa; font-size: 11px; padding: 4px 6px; }
 
 /* ── trace view: the card-based reading surface (dock + DevTools) ───────────── */
-.aiui-dbg-trace { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow-y: auto;
+/* The ROOT no longer scrolls: its two sections each own a scroll (below), so
+   the prompt stays readable however many stages a trace has. */
+.aiui-dbg-trace { flex: 1; overflow: hidden;
   color: #e8e8ea; font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
 
 /* status header — the outcome at a glance, pinned to the top on scroll */
 .aiui-dbg-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 8px 12px; border-bottom: 1px solid #262c3a; position: sticky; top: 0;
+  padding: 8px 12px; border-bottom: 1px solid #262c3a; flex: none;
   background: #14171f; z-index: 2; }
 .aiui-dbg-outcome { font-weight: 700; font-size: 12px; border-radius: 999px; padding: 1px 10px; }
 .aiui-dbg-outcome.state-sent { color: #7ee0a3; background: #7ee0a31a; }
@@ -59,7 +61,27 @@ export const DEBUG_UI_CSS = /* css */ `
   padding: 0 8px; font-size: 10px; font-weight: 600; }
 
 /* the prompt hero — preamble dimmed, body prominent, screenshots as thumbnails */
-.aiui-dbg-hero { padding: 12px 14px; border-bottom: 1px solid #262c3a; }
+/* The trace's two reading surfaces: collapsible, independently scrolling
+   (2026-07-12). The flex ratios split the height; a collapsed section keeps
+   only its header. */
+.aiui-dbg-trace { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.aiui-dbg-sec { display: flex; flex-direction: column; min-height: 0;
+  border-bottom: 1px solid #262c3a; }
+.aiui-dbg-sec.prompt { flex: 0 1 auto; max-height: 45%; }
+.aiui-dbg-sec.stages { flex: 1 1 auto; }
+.aiui-dbg-sec.collapsed { flex: 0 0 auto; max-height: none; }
+.aiui-dbg-sec.collapsed > .aiui-dbg-sec-body { display: none; }
+.aiui-dbg-sec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 4px 12px; background: #12151c; border-bottom: 1px solid #1c2029; flex: none; }
+.aiui-dbg-sec-toggle { display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer; padding: 2px 0;
+  color: #9aa0aa; font: 600 11px ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase; letter-spacing: 0.04em; }
+.aiui-dbg-sec-toggle:hover { color: #e8e8ea; }
+.aiui-dbg-sec-chevron { transition: transform 120ms; font-size: 9px; }
+.aiui-dbg-sec.collapsed .aiui-dbg-sec-chevron { transform: rotate(-90deg); }
+.aiui-dbg-sec-body { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1 1 auto; }
+.aiui-dbg-hero { padding: 12px 14px; }
 .aiui-dbg-hero-preamble { color: #6f7686; font: 11px/1.55 ui-monospace, monospace;
   white-space: pre-wrap; word-break: break-word; margin-bottom: 8px; }
 .aiui-dbg-hero-body { color: #e8e8ea; font: 13px/1.6 ui-monospace, monospace;
@@ -179,7 +201,10 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbgt-bar { display: flex; align-items: center; gap: 4px; padding: 6px 10px;
   color: #9aa0aa; border-bottom: 1px solid #262c3a; flex: none; }
 .aiui-dbgt-bar label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
-.aiui-dbgt-list { max-height: 30%; overflow-y: auto; border-bottom: 1px solid #262c3a; flex: none; }
+/* The picker shows ~3 rows and scrolls — it is a chooser, not the content
+   (reworked 2026-07-12; it used to eat a third of every host). */
+.aiui-dbgt-list { max-height: 5.5rem; overflow-y: auto;
+  border-bottom: 1px solid #262c3a; flex: none; }
 .aiui-dbgt-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
   background: transparent; border: none; color: #cfd3da; font: inherit; padding: 4px 10px;
   cursor: pointer; }

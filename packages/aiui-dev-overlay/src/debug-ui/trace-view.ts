@@ -123,7 +123,52 @@ export class TraceView {
     this.filtersEl = this.el("div", "aiui-dbg-filters");
     this.cardsEl = this.el("div", "aiui-dbg-cards");
     this.buildFilters();
-    this.root.append(this.statusEl, this.heroEl, this.filtersEl, this.cardsEl);
+    // Two SECTIONS, each collapsible and independently scrolling (reworked
+    // 2026-07-12): the lowered prompt and the recorded stages are different
+    // reading surfaces — sharing one scroll made the prompt unreadable as
+    // soon as a trace had many stages, and unusable in a narrow host (the
+    // extension's side panel). Every client gets the split.
+    this.root.append(
+      this.statusEl,
+      this.section("prompt", "lowered prompt", this.heroEl),
+      this.section("stages", "stages", this.cardsEl, this.filtersEl),
+    );
+  }
+
+  /**
+   * One collapsible section: a header button that toggles it, an optional
+   * header-tail (the stage filters), and a scrolling body.
+   */
+  private section(
+    kind: "prompt" | "stages",
+    title: string,
+    body: HTMLElement,
+    tail?: HTMLElement,
+  ): HTMLElement {
+    const sec = this.el("div", `aiui-dbg-sec ${kind}`);
+    const head = this.doc.createElement("div");
+    head.className = "aiui-dbg-sec-head";
+    const toggle = this.doc.createElement("button");
+    toggle.type = "button";
+    toggle.className = "aiui-dbg-sec-toggle";
+    const chevron = this.doc.createElement("span");
+    chevron.className = "aiui-dbg-sec-chevron";
+    chevron.textContent = "▾";
+    const label = this.doc.createElement("span");
+    label.textContent = title;
+    toggle.append(chevron, label);
+    toggle.addEventListener("click", () => {
+      sec.classList.toggle("collapsed");
+      toggle.setAttribute("aria-expanded", sec.classList.contains("collapsed") ? "false" : "true");
+    });
+    toggle.setAttribute("aria-expanded", "true");
+    head.append(toggle);
+    if (tail !== undefined) {
+      head.append(tail);
+    }
+    body.classList.add("aiui-dbg-sec-body");
+    sec.append(head, body);
+    return sec;
   }
 
   /** Render (or clear, when undefined) the trace. */

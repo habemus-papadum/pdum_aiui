@@ -550,14 +550,35 @@ export class Preview {
     this.placePeek(anchor, peek);
   }
 
-  /** Fixed-position, body-attached — the body is a scroll container, so an
-   * absolutely-positioned child would clip (the mm-thumb-peek lesson). */
+  /**
+   * Fixed-position, body-attached — the body is a scroll container, so an
+   * absolutely-positioned child would clip (the mm-thumb-peek lesson).
+   *
+   * The peek FLIPS: above the anchor when there is room, below when there
+   * isn't. In the overlay the preview floats near the bottom, so "above" was
+   * always right and was hard-coded; in the extension's side panel the
+   * transcript sits at the TOP and the peek was clipping off-screen (found
+   * live 2026-07-12). Measured after attachment, so the real height decides.
+   */
   private placePeek(anchor: HTMLElement, peek: HTMLElement): void {
     const rect = anchor.getBoundingClientRect();
-    peek.style.left = `${Math.max(8, rect.left)}px`;
-    peek.style.bottom = `${window.innerHeight - rect.top + 8}px`;
     document.body.append(peek);
     this.peek = peek;
+    const height = peek.getBoundingClientRect().height;
+    const gap = 8;
+    const above = rect.top - gap;
+    const below = window.innerHeight - rect.bottom - gap;
+    if (height <= above || above >= below) {
+      peek.style.top = "";
+      peek.style.bottom = `${window.innerHeight - rect.top + gap}px`;
+    } else {
+      peek.style.bottom = "";
+      peek.style.top = `${rect.bottom + gap}px`;
+    }
+    // Keep it on screen horizontally too (a narrow panel clips a wide peek).
+    const width = peek.getBoundingClientRect().width;
+    const left = Math.min(Math.max(gap, rect.left), Math.max(gap, window.innerWidth - width - gap));
+    peek.style.left = `${left}px`;
   }
 
   private hidePeek(): void {

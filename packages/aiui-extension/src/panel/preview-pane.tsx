@@ -50,8 +50,10 @@ ${STYLES}
   max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
 }
 .preview-host .mm-preview-title { color: var(--muted); }
-/* Inline shot thumbs must not widen the column either. */
-.preview-host .mm-preview img { max-width: 100%; height: auto; }
+/* Inline shot thumbs keep the shared inline size (the mm-thumb rule's 34px
+   height) — a blanket img height:auto blew them up to full width (found live
+   2026-07-12). Only cap the width so a thumb can never widen the column. */
+.preview-host .mm-thumb { max-width: 100%; }
 `;
 
 export interface PreviewIsland {

@@ -145,12 +145,12 @@ const PANEL_STYLES = `
   /* The transcript's slot: full panel width (a pane's padding was clipping
      its right edge — found live 2026-07-12). */
   .transcript { margin: 0 0.125rem 0.625rem; }
-  /* The embedded trace debugger. Its layout is a flex COLUMN (list flex:none,
-     view flex:1, both min-height:0) — it needs a DEFINITE height or the view
-     collapses to zero and only the list shows (found live 2026-07-12). */
+  /* The embedded trace debugger. Its layout is a flex COLUMN (compact picker,
+     then the trace's two collapsible sections, each scrolling) — it needs a
+     DEFINITE height or the flex children collapse to zero (found live
+     2026-07-12). */
   .trace-host { width: 100%; }
-  .trace-host .aiui-dbgt { height: 30rem; max-height: 70vh; overflow: hidden; }
-  .trace-host .aiui-dbgt-list { max-height: 40%; }
+  .trace-host .aiui-dbgt { height: 32rem; max-height: 75vh; overflow: hidden; }
   .leader {
     font: 0.6875rem ui-monospace, monospace; color: var(--text-2);
     border: 1px solid var(--border-2); background: var(--surface-2); border-radius: 6px;
