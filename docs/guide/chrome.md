@@ -232,10 +232,13 @@ differences from the DevTools panel:
   launches warn loudly — otherwise every surface comes up on CRXJS's "cannot connect" page, which
   reads as "broken" instead of "not being served".
 
-Chrome installs an unpacked extension **by path**, so a profile that was loaded against one of
-the two directories keeps re-reading that one. `aiui extension reload` checks (it reads the
-extension's own dev stamp back out of the browser) and says so when the browser is running the
-production build while you are developing.
+Chrome installs an unpacked extension **by path**, so a profile that was loaded against one of the
+two directories keeps re-reading that one — no amount of reloading changes it. `aiui extension
+dev`/`reload` check (they read the extension's own dev stamp back out of the browser) and
+**re-point the running browser** at the right directory over CDP (`Extensions.loadUnpacked`;
+best-effort — it falls back to naming the clicks). The extension id comes from the manifest key,
+not the path, so this never disturbs anything keyed to the id (the native-messaging host above
+all).
 
 The extension's channel discovery runs over Chrome native messaging, and Chrome for Testing
 looks the host manifest up **inside the user data dir** (measured — not in

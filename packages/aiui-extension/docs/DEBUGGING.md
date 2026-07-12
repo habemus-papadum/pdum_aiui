@@ -25,6 +25,10 @@
   target at all) and evaluates `chrome.runtime.reload()` there. `evaluateInExtension` is the same
   machinery with the answer kept — how the CLI asks the browser *which artifact it is running*.
   Both verified live on 2026-07-12 (CfT 150).
+- **Installing / re-pointing it from a terminal** — CDP's `Extensions.loadUnpacked` works on the
+  session browser's debug endpoint (measured, CfT 150; returns the key-pinned id). That is "Load
+  unpacked" with no human, and it is how `aiui extension dev`/`reload` fix a browser that is
+  pointed at the wrong artifact directory.
 - **Raw CDP against the session browser's debug endpoint** — full access to everything above.
   The endpoint comes from `DevToolsActivePort` in the profile dir
   (`.aiui-cache/chrome/<profile>/`); `GET /json` lists targets; a WebSocket to a target's
@@ -74,6 +78,13 @@ only be opened by a user gesture; a CDP probe cannot do it).
 
 ## What does NOT work today (measured or blocked)
 
+- **Verifying the panel's RENDER without a human.** The side panel can only be *opened* by a user
+  gesture, and opening the panel document in a CDP-created tab does not work either: the
+  navigation never commits (`document.readyState` stays `"loading"`, no `<head>`, silent console).
+  Measured 2026-07-12 against BOTH artifacts — the production build hangs identically, so this is
+  a property of extension pages in CDP-driven tabs, **not** of the dev loop. Everything else about
+  the extension is checkable from a terminal (service worker, content scripts, the dev stamp); the
+  panel's tree is not. Ask the human to open it.
 - **The session's chrome-devtools MCP after a browser relaunch.** The MCP's attach URL
   (`--browser-url`) is captured ONCE at `aiui claude` launch. Relaunch the browser and the MCP
   keeps dialing the dead endpoint (measured: stale `:52300` vs live `:52916`) — every MCP

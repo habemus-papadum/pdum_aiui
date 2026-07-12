@@ -134,9 +134,11 @@ the live checklist is `docs/PHASE-A.md`. Keep that log current with every change
    longer touch a running dev loop — verified by running a full `pnpm -r build` against a live
    dev server and diffing the artifact. The *residue* of the old trap: Chrome installs an unpacked
    extension **by path**, so a profile that was pointed at `dist/` keeps re-reading `dist/`
-   forever. `aiui extension reload` detects that (it reads the extension's own stamp back out of
-   the browser) and tells you to Load-unpacked `dist-dev/` once. The extension id is pinned by the
-   manifest key, so re-pointing does not invalidate the native-messaging host.
+   forever. `aiui extension dev`/`reload` detect that (they read the extension's own stamp back
+   out of the browser) and **re-point the browser themselves** over CDP
+   (`Extensions.loadUnpacked` — measured working on CfT 150; falls back to naming the clicks).
+   The extension id comes from the manifest key, not the path, so a re-point never invalidates the
+   native-messaging host.
 2. **Solid 2.0 `createEffect` requires TWO functions** — `createEffect(compute, effect)`. One-arg
    `createEffect(() => {…})` *typechecks* but throws `[MISSING_EFFECT_FN]` at render and blanks
    the whole panel. tsc/biome/node-vitest cannot catch it. Other Solid 2.0-beta.15 gotchas:

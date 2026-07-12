@@ -47,13 +47,17 @@ Two rules it exists to enforce, worth knowing anyway:
 The raw `pnpm -C packages/aiui-extension dev` still works (it just writes `dist-dev/` and prints
 what to do); follow it with `aiui extension reload` from your project directory.
 
-**First time (once per browser profile):** `chrome://extensions` → Developer mode → **Load
-unpacked** → this package's **`dist-dev/`**. Chrome installs an unpacked extension *by path*, so a
-profile pointed at `dist/` will never see the dev server's output — `aiui extension reload` detects
-exactly that and says so. (The extension id is pinned by the manifest `key`, so switching
-directories does **not** change the id: the native-messaging host manifest stays valid.) Pin the
-toolbar action (puzzle-piece menu) — clicking it opens the window's side panel and invokes the tab
-for capture.
+**Which directory is the browser pointed at?** Chrome installs an unpacked extension *by path*, so
+a profile that was loaded against `dist/` will never see the dev server's output, however many
+times you reload it. `aiui extension dev` / `reload` **check** (they read the extension's own dev
+stamp back out of the browser) and **fix it** — CDP's `Extensions.loadUnpacked` is "Load unpacked"
+without the click (measured working on Chrome for Testing 150). The extension id comes from the
+manifest `key`, not the path, so re-pointing changes nothing else — the native-messaging host
+manifest stays valid. If a browser refuses, the CLI names the exact clicks:
+`chrome://extensions` → Developer mode → Load unpacked → the directory it prints.
+
+Pin the toolbar action (puzzle-piece menu) — clicking it opens the window's side panel and invokes
+the tab for capture.
 
 **Or let aiui load it for you:** `aiui claude` / `aiui browser` append the extension to the same
 `--load-extension` list as the DevTools panel (honored by Chrome for Testing / Chromium; branded
