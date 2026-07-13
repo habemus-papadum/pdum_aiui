@@ -466,8 +466,12 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   };
 
   const capture: CaptureSource = {
-    // Nothing to warm: CDP stills need no grant and no MediaStream, so the
-    // "held stream" is a handle the claim's lifecycle can still hold.
+    // `Page.captureScreenshot` asks nobody: any attached tab, no grant, no
+    // MediaStream. So the shot/selection acts light up as soon as a turn is
+    // open, and they follow the tab you are looking at.
+    grantless: true,
+    // Nothing to warm, either — the "held stream" is a handle the claim's
+    // lifecycle can still hold.
     holdStream: (tab) => Promise.resolve<HeldStream>({ tab, release: () => {} }),
     grabShot: async (tab): Promise<PanelShot> => {
       const page = byTab.get(tab);

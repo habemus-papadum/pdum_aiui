@@ -80,6 +80,17 @@ export interface PanelShot {
 
 /** Pixels: the capture half (tabCapture in MV3, getDisplayMedia elsewhere). */
 export interface CaptureSource {
+  /**
+   * This host can capture ANY attached tab with no user grant — so there is no
+   * grant to mint, and `grantedTab` simply tracks the tab in view.
+   *
+   * That is the CDP tier: `Page.captureScreenshot` asks nobody. MV3's
+   * `tabCapture` does not — it is invocation-gated per tab, so its grant is a
+   * real world fact the activation gesture mints, and the capture acts stay
+   * dark until it exists. Same machine, same gates; the host decides whether
+   * the fact is free.
+   */
+  grantless?: boolean;
   /** Warm a stream for a tab; the claim holds it for the turn's life. */
   holdStream(tab: number): Promise<HeldStream>;
   /** Grab one shot off the warm stream. */

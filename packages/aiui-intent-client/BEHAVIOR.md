@@ -84,6 +84,15 @@ is per-tab and invocation-gated, so the warm stream re-points on switch; standal
 CdpBus tier needs no grant at all for stills (`Page.captureScreenshot`), so shots and sampled
 frames follow the active tab freely — only true continuous video inherits the pinning.
 
+**Whether a capture GRANT exists is the host's business, not the user's.** The machine gates
+shot/selection/clear on holding a grant for a tab, and that gate stays — but a host declares
+whether the grant is free (`CaptureSource.grantless`). MV3's `tabCapture` is invocation-gated, so
+its grant is a real fact the activation gesture mints, and the capture acts stay dark until it
+does. The CDP tier's screenshots ask nobody, so there is nothing to mint: the grant simply *is*
+the tab in view. Consequence, and the bug it fixes (found live): arming from the BAR (`arm` →
+`turn`) must work exactly like ⌘B. It did not — the bar mints nothing, so the capture acts stayed
+disabled forever while ink, which follows the tab in view, worked fine.
+
 ## Which tab the client is aimed at (the leader)
 
 The client drives **the tab you are looking at** — the old client's `lastActiveTab`. On real

@@ -120,6 +120,7 @@ needs no ?channel=).
 | Ink imported its module from the channel origin — silently blocked as MIXED CONTENT on every https page (the ring showed up; the ink didn't) | the sidecar bundles `/intent/page-ink.js`; the bus evaluates it INTO the page (`ensureInk`); cdp-bus.test "the page fetches nothing" |
 | The trace pane's count read `engine.events.length` straight from the array — subscribing to nothing, and reading 0 through a live turn | panes.test "counts events as they arrive" |
 | The bridge dropped the panel's first command (`ws` has no buffer before a listener attaches) — a bus that attaches to nothing | cdp-proxy.test "holding the commands it sends before the upstream opens" |
+| Only the ⌘B gesture minted a capture grant, so arming from the BAR left shot/selection/clear dark forever (owner found it) — and the grant, once minted, stayed pinned to that tab, against the decided "CDP shots follow the active tab" | `CaptureSource.grantless` (the host says whether a grant is a real fact); client.test "the capture grant is the HOST's business, not a ritual" |
 
 ## Bug ledger (inventory §3) as tests
 

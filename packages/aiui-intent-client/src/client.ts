@@ -180,8 +180,19 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
 
   // World facts flow in: tab switches re-point targeting-derived claims;
   // page events update affordances (selection dot) without touching modes.
-  host.targeting.onActiveTabChange((tab) => engine.setContext({ activeTab: tab }));
-  engine.setContext({ activeTab: host.targeting.activeTab() });
+  //
+  // A GRANTLESS host (CDP: screenshots ask nobody) has no grant to acquire, so
+  // the grant is simply "the tab in view" — kept in lockstep here. Two bugs die
+  // with this: arming from the BAR left the capture acts dark forever (only the
+  // activation gesture minted a grant — found live), and the grant stayed
+  // pinned to the tab it was minted on, so shots could not follow a tab switch
+  // the way BEHAVIOR.md says they do in this tier.
+  const grantless = host.capture.grantless === true;
+  const noteTab = (tab: number | undefined): void => {
+    engine.setContext(grantless ? { activeTab: tab, grantedTab: tab } : { activeTab: tab });
+  };
+  host.targeting.onActiveTabChange(noteTab);
+  noteTab(host.targeting.activeTab());
   host.transport.onPageEvent((event) => {
     if (event.kind === "selectionPresent") {
       engine.setContext({ selectionPresent: event.present });

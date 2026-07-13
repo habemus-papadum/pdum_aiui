@@ -46,8 +46,8 @@ interface Rig {
 
 let rig: Rig | undefined;
 
-function makeRig(): Rig {
-  const bus = fakeBus({ activeTab: 7 });
+function makeRig(options: { grantless?: boolean } = {}): Rig {
+  const bus = fakeBus({ activeTab: 7, grantless: options.grantless });
   const lanes: string[] = [];
   const blips: string[] = [];
   const client = createIntentClient({
@@ -112,6 +112,49 @@ describe("the activation gesture — imperative boundary, idempotent grant-and-o
     activationGesture(r.client, 7);
     expect(r.client.state().phase).toBe("disarmed");
     expect(r.lanes).toEqual([]);
+  });
+});
+
+describe("the capture grant is the HOST's business, not a ritual", () => {
+  it("a grantless host lights the capture acts however you armed (found live: the bar left them dark)", async () => {
+    // The CDP tier's screenshots ask nobody, so there is no grant to acquire —
+    // and arming from the BAR (arm → turn), which mints nothing, must work
+    // exactly like the ⌘B gesture. It did not: shot/selection/clear stayed
+    // disabled forever, and only ink (which follows the tab in view) worked.
+    const r = makeRig({ grantless: true });
+    r.client.setContext({ connected: true });
+    r.client.dispatch("arm");
+    r.client.dispatch("turn");
+    await settle();
+
+    expect(r.client.state().phase).toBe("turn");
+    expect(r.client.context().grantedTab).toBe(7);
+    expect(r.client.canDispatch("shot")).toBe(true);
+    expect(r.client.canDispatch("selection")).toBe(true);
+
+    // …and the grant follows the tab you look at (BEHAVIOR: in this tier shots
+    // are not pinned to the surface you granted).
+    r.bus.switchTab(9);
+    await settle();
+    expect(r.client.context().grantedTab).toBe(9);
+    r.client.dispatch("shot");
+    expect(r.lanes).toContain("takeShot:9");
+  });
+
+  it("a granted host (MV3 tabCapture) still needs the gesture — the acts stay dark until it runs", async () => {
+    const r = makeRig(); // grantless: false — the invocation-gated tier
+    r.client.setContext({ connected: true });
+    r.client.dispatch("arm");
+    r.client.dispatch("turn");
+    await settle();
+
+    expect(r.client.state().phase).toBe("turn");
+    expect(r.client.context().grantedTab).toBeUndefined();
+    expect(r.client.canDispatch("shot")).toBe(false);
+
+    activationGesture(r.client, 7); // the gesture mints the grant
+    await settle();
+    expect(r.client.canDispatch("shot")).toBe(true);
   });
 });
 
