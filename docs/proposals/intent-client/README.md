@@ -16,6 +16,12 @@ inventory, dev-loop/host capabilities) plus the
   reinvented and why, host-coupling numbers, the target component map.
 - **[03 · Hosts and the dev loop](./03-hosts-and-dev-loop.md)** — the four host architectures,
   the residual dev pain, and the detached-harness design.
+- **[04 · Parity inventory](./04-parity-inventory.md)** — every mode, claim, and mode-bug in
+  both clients; the greenfield parity checklist.
+- **[HANDOFF](./HANDOFF.md)** *(added later on 2026-07-13)* — guidance for the next agent: the
+  Solid-purity analysis, and an assessment of the **greenfield-parallel** strategy the owner is
+  considering, which **amends Phases 1–3 below** (build the new client as a detached plain page
+  first, MV3 shell last; old extension + overlay frozen as safety nets).
 
 ## Verdict
 
