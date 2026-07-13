@@ -117,6 +117,16 @@ veil, double-shot on fast S-drag, `blurIsSelfInflicted` first-screenshot drop, z
 reconnect check, stale-ring boot broadcast, replayed-armed GC) land with their lanes in
 P2/P3/P4 — **each lane PR must move its rows from this line into its tests.**
 
+## Preview / trace richness (owner check-in 2026-07-13 — minimal by design TODAY, rows so nothing is lost)
+
+| Row | Status |
+| --- | --- |
+| turn preview = composeIntent rows (the literal lowering input) | ✅ panes.tsx |
+| word-DIFF flash as transcript deltas revise (the overlay's LiveDiffText, modal kit) | **P2-polish** — import `LiveDiffText`/`wordDiff` from the kit; wire to transcript-delta events |
+| logprob confidence heat on finals (premium tier) | **P2-polish** — the events carry logprobs; render heat in the preview rows |
+| rich trace viewer | **DECIDE** (default: the panel's raw pane stays; LINK OUT to the channel's own `/debug` viewer, which already renders traces — same origin now) |
+| turn cap needs no grant (turn = wire concept; capture acts gate individually) | ✅ spec.ts available (found live: the grant gate dead-ended the bar) |
+
 ## Known-open gaps carried from the old client (do not lose twice)
 
 `c` hint gated on ink-mode not has-strokes (old PHASE-A gap 2) — P2 decides; tweak-ring appearance

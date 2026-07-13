@@ -419,15 +419,21 @@ describe("the bar: a tree presented linearly", () => {
     r.client.setContext({ connected: true });
     r.client.dispatch("arm");
     expect(findCap(r, "turn")).toBeDefined(); // the armed tier
-    expect(findCap(r, "turn")?.enabled).toBe(false); // no grant yet
+    // A turn is a WIRE concept — no grant needed (found live: the grant gate
+    // dead-ended the bar for anyone who armed via the cap). The capture acts
+    // below gate on the grant individually.
+    expect(findCap(r, "turn")?.enabled).toBe(true);
     expect(findCap(r, "ink")).toBeUndefined(); // turn tier closed
 
-    r.client.setContext({ grantedTab: 7 });
-    expect(findCap(r, "turn")?.enabled).toBe(true);
     r.client.dispatch("turn");
     expect(r.lanes).toContain("openTurn"); // the bar's turn opens the thread too
     expect(findCap(r, "ink")).toBeDefined();
     expect(findCap(r, "send")?.enabled).toBe(true);
+    // Grantless turn: the capture-dependent verbs say no, individually.
+    expect(findCap(r, "shot")?.enabled).toBe(false);
+    expect(findCap(r, "selection")?.enabled).toBe(false);
+    r.client.setContext({ grantedTab: 7 });
+    expect(findCap(r, "shot")?.enabled).toBe(true);
   });
 
   it("push-to-talk and hands-free are separate affordances over ONE talk region", () => {

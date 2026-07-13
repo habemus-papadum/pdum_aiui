@@ -191,7 +191,11 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
    */
   available: {
     arm: (s, ctx) => s.phase !== "disarmed" || ctx.connected,
-    turn: (s, ctx) => s.phase === "armed" && ctx.grantedTab !== undefined,
+    // NOTE deliberately NO `turn` gate: a turn is a WIRE concept — talk and
+    // text work grantless — so armed → turn derives from the reducer. The
+    // capture GRANT gates the capture-dependent acts individually (below);
+    // the activation shortcut mints it (found live: gating the turn cap on
+    // the grant dead-ended the bar for anyone who armed via the cap).
     shot: (s, ctx) => s.phase === "turn" && ctx.grantedTab !== undefined,
     selection: (s, ctx) => s.phase === "turn" && ctx.grantedTab !== undefined,
     clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.grantedTab !== undefined,
