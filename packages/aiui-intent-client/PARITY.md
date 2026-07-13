@@ -22,7 +22,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | Esc ladder: help → tweak → turn-cancel → armed → disarmed (CONSCIOUS DEVIATION: the old client's Esc never disarmed; owner 2026-07-13 — step out of armed IS disarm) | ✅ escOrder, floorless ladder + tests |
 | ONE hard disarmed: every route (esc, arm cap, d) clears ink; standing video kept | ✅ the `disarmed-is-hard` exclude + tests |
 | blip on unknown in-turn keys (swallow, 500 ms) | ✅ keys.ts verdict + panel blip line |
-| `inkOn` standing/durable; only c/disarm clear strokes | ✅ spec.ts `ink` (durable) + `clear` verb — **stroke clearing itself P2/P3** (real page surface) |
+| `inkOn` standing/durable; only c/disarm clear strokes | ✅ spec.ts `ink` (durable) + `clear` verb; the real surface lands on real pages in P3 (cdp/page-ink.ts — InkSurface, document-anchored, live fade) — verified live by drawing on an https page |
 | `videoOn`/`videoMode` standing/durable, agent-visible | ✅ spec.ts agent regions (single-writer bridge) |
 | talk: ONE exclusive region (off/hold/handsFree), TWO affordances — hold Space or the press-and-hold 🎙 cap; the 🎧 toggle; per-turn; Space-up ends only a hold | ✅ spec.ts + caps.ts hold cap + tests |
 | `micMuted` only while talking; reset on talk start | ✅ spec.ts + excludes + tests |
@@ -34,12 +34,12 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | `uiScale` control (⌘+/⌘−/⌘0) | ✅ main.tsx keys + root-font effect; persisted via the config base |
 | paint host (iPad) re-pointing | P4 (needs real capture host) — lane import unchanged |
 | `inkTabId`/`leaderTabId`/`lastActiveTab` routing | ✅ context (`activeTab`/`grantedTab`) + claims re-point on tab switch |
-| navigation events into the turn (same-tab SPA/reload; prompt-rendered) | ✅ `navigation` PageEvent → engine.navigation (lanes.ts + tests) — **full SPA turn-continuity semantics later, with real pages (P3)** |
-| tab-boundary events into the turn (switch names both sides) | ✅ onActiveTabChange + tabInfo → engine.navigation (lanes.ts + tests) |
-| aiui-instrumented-page fact (`window.__AIUI__`) | ✅ `aiuiSupport` PageEvent → ctx.aiuiPage + the `page` pill; `locate` in PageCapability — **real detection rides the P3/P4 page hosts** |
+| navigation events into the turn (same-tab SPA/reload; prompt-rendered) | ✅ `navigation` PageEvent → engine.navigation (lanes.ts + tests); real SPA navs land from the injected bootstrap (history wraps + popstate/hashchange) and full loads re-announce — seen live in the turn preview |
+| tab-boundary events into the turn (switch names both sides) | ✅ onActiveTabChange + tabInfo → engine.navigation (lanes.ts + tests); the CdpBus's leader rule supplies it on real tabs |
+| aiui-instrumented-page fact (`window.__AIUI__`) | ✅ `aiuiSupport` PageEvent → ctx.aiuiPage + the `page` pill; **real detection landed in P3** (the bootstrap's hello reports it — verified live: the `page` pill lit on an instrumented dev app and not on example.com). `locate` still stubbed (returns null) for the jump mode |
 | jump-to-VS-Code mode (overlay-only; never in the old extension) | ANTICIPATED: seam + fact above; the `jump` ladder region + picker remain the post-P5 DECIDE |
 | mic level meter while talking (the old HUD meter) | ✅ panel.tsx meter next to the pills (polls talk.level at display cadence) — **shows real levels once live talk is verified with a mic** |
-| ring three states (off · steady armed · breathing turn) | ✅ claim desire carries them; test walks all three; the ring pill shows off/on/live — **page-side rendering with the P3/P4 hosts** |
+| ring three states (off · steady armed · breathing turn) | ✅ claim desire carries them; test walks all three; the ring pill shows off/on/live; **the page-side badge landed in P3** (purple steady when armed, red breathing in a turn — seen on real tabs) |
 
 ## Config surface (inventory §1C controls — the "kept getting lost" list)
 
@@ -76,8 +76,8 @@ them bind in P2:
 | --- | --- | --- |
 | ink pointer / tab stream / video sampling / key routing / ring | ✅ claims.ts over the host seam + harness tests |
 | smart-mode interaction gate (page pings arm one frame) | ✅ the frame pump's shouldCapture/rearm over `interaction` PageEvents (lanes.ts + test) |
-| capture pre-warm on arm (overlay 2A row) | DECIDE (default: keep the panel's turn-scoped warm; pre-warm-on-arm was overlay-only) |
-| M10 warm-shot pixel path (36–48 ms) | P4 — `panel/capture.ts` copied nearly verbatim behind `CaptureSource` |
+| capture pre-warm on arm (overlay 2A row) | DECIDE (default: keep the panel's turn-scoped warm; pre-warm-on-arm was overlay-only). **Moot in the CDP tier**: `Page.captureScreenshot` needs no grant and no MediaStream, so there is nothing to warm — `holdStream` is a bookkeeping handle |
+| M10 warm-shot pixel path (36–48 ms) | P4 — `panel/capture.ts` copied nearly verbatim behind `CaptureSource` (the CDP tier gets its pixels straight from the protocol instead) |
 | M9 panel-document mic (grant persistence) | P2 (plain page = stable origin, same property) |
 | manual shots flash; sampled frames never | ✅ lanes.ts takeShot (flash AFTER grab) + pump sendFrame (never) — lanes.test rows |
 | standing mic/share between turns send NOTHING | ✅ structurally (talk per-turn exclude; sampling gated on turn) + P2 lane tests |
@@ -105,9 +105,21 @@ needs no ?channel=).
 | Row | Status |
 | --- | --- |
 | FakeBus | ✅ |
-| CdpBus (real tabs, extension-free; refuse non-loopback CDP) | P3 |
+| CdpBus (real tabs, extension-free; refuse non-loopback CDP) | ✅ cdp/{protocol,page-script,page-ink,cdp-bus}.ts + the sidecar's `/intent/cdp` bridge (cdp-proxy.ts) — **verified live**: ring · page keys · ink · shots on real tabs, including an https page, with no extension installed |
 | ExtensionBus + SW broker (copied) + content glue + static build + new identity + `aiui2.*` prefixes + never-both-armed policy | P4 |
 | activation shortcut via `chrome.commands` (in-page listener until then) | ✅ in-page listener → activationGesture (main.tsx) · P4 real |
+
+### What Phase 3 taught us (each row is a test)
+
+| Live finding | Where it is pinned |
+| --- | --- |
+| Browser-level auto-attach ALSO adopts open tabs, so our adoption pass attached each page twice — two sessions, two tabs, and the second `addBinding` stole the first's reports | cdp-bus.test "one tab per page, however many times the browser attaches it" |
+| A page carrying an older bootstrap went DEAF to a re-attaching panel (the install guard returned early, so it never said hello) | the versioned surface + `adopt()`; cdp-bus.test attach/hello rows |
+| A reloaded page came back BARE while its session stayed healthy — ring, keys, ink gone, and no claim re-applies because the client's desire never changed | `Page.enable` + re-inject on `Page.frameNavigated` + the bus's sticky `replay`; cdp-bus.test reload rows |
+| The leader tab followed FOCUS, and `document.hasFocus()` is false for every page whenever the browser app isn't frontmost — the turn ended up aimed at an `about:blank` | `relead()`: visibility leads, focus refines; cdp-bus.test "follows the tab you are LOOKING at" |
+| Ink imported its module from the channel origin — silently blocked as MIXED CONTENT on every https page (the ring showed up; the ink didn't) | the sidecar bundles `/intent/page-ink.js`; the bus evaluates it INTO the page (`ensureInk`); cdp-bus.test "the page fetches nothing" |
+| The trace pane's count read `engine.events.length` straight from the array — subscribing to nothing, and reading 0 through a live turn | panes.test "counts events as they arrive" |
+| The bridge dropped the panel's first command (`ws` has no buffer before a listener attaches) — a bus that attaches to nothing | cdp-proxy.test "holding the commands it sends before the upstream opens" |
 
 ## Bug ledger (inventory §3) as tests
 

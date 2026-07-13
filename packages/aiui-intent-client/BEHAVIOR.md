@@ -69,14 +69,33 @@ recording indicator: red while live, amber while muted.
 A same-tab navigation and a tab SWITCH are both **navigation events riding the open turn** —
 context, never a turn opener (no thread, no event) — and both render into the lowered prompt.
 A tab boundary names both sides, with `from` re-read at boundary time (the tab may have
-navigated since it was last active). Full SPA turn-continuity semantics (what survives a
-mid-turn reload) follow with real pages in Phase 3.
+navigated since it was last active).
+
+**What survives a mid-turn reload (decided in Phase 3, on real pages):** the turn does. A reload
+gives the page a new document, which carries none of what the client asserted into the old one —
+and the client's *desire* has not changed, so no claim re-applies on its own. The host therefore
+re-arms the new document: the ring and the key layer come back, ink MODE comes back (a fresh
+surface), and the **strokes do not** — they were drawn on the document that is gone. The turn's
+events, including the navigation itself, are untouched.
 
 **Capture across a tab switch differs by host — decided facts:** the extension's `tabCapture`
 is per-tab and invocation-gated, so the warm stream re-points on switch; standalone
 `getDisplayMedia` is pinned to the surface the user picked and CANNOT follow a switch; the
 CdpBus tier needs no grant at all for stills (`Page.captureScreenshot`), so shots and sampled
 frames follow the active tab freely — only true continuous video inherits the pinning.
+
+## Which tab the client is aimed at (the leader)
+
+The client drives **the tab you are looking at** — the old client's `lastActiveTab`. On real
+pages that means VISIBILITY, not keyboard focus: `document.hasFocus()` is false for every page
+whenever the browser itself is not the frontmost app (you are typing in your editor, or an agent
+is driving), so a focus-only rule aims the turn at whatever it happened to see first. Visibility
+leads; focus only refines it when the browser has focus and several windows each show a tab.
+
+Two consequences, both deliberate: **looking at the panel never blanks the leader** (the panel is
+not a page the client drives — it is excluded from targeting entirely, along with devtools and
+browser pages), and **closing the leader hands the role on** rather than leaving the client aimed
+at nothing.
 
 ## Instrumented pages (aiui support)
 

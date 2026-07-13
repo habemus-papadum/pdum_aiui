@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
-import { builtinModules } from "node:module";
+import { builtinModules, createRequire } from "node:module";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+const require = createRequire(import.meta.url);
 
 // Externalize Node builtins + everything this package declares as a runtime/peer
 // dependency, so the library bundle never inlines a consumer-provided module.
@@ -34,6 +35,13 @@ export default defineConfig({
   resolve: {
     // Only meaningful under Vitest (the lib build's externals never resolve).
     conditions: ["browser", "development", "import", "module", "default"],
+    alias: {
+      // …but this package has a NODE half (the sidecar + its CDP bridge), and
+      // `browser` hands it ws's browser stub — a module whose whole job is to
+      // throw. Pin ws to the real node entry; nothing in the page graph imports
+      // it, so the app build is unaffected.
+      ws: require.resolve("ws"),
+    },
   },
   build: {
     lib: {

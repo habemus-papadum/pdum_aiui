@@ -121,9 +121,25 @@ plain page (by the channel, ideally), built Solid-native on the engine + the imp
 the devtools MCP can screenshot it, click its caps, and evaluate its state — the agent verifies
 its own work from the first commit.
 
-**Phase 3 — `CdpBus` (days).** The page transport against the session browser (the plumbing
-exists: the `installCaptureMarker` pattern, `browser.ts` discovery); now it drives real tabs —
-ink, key routing, ring, selection on live pages, still extension-free.
+**Phase 3 — `CdpBus` (days).** ✅ **Done.** The page transport against the session browser (the
+plumbing existed: the `installCaptureMarker` pattern, `browser.ts` discovery); it now drives real
+tabs — ink, key routing, ring, selection, shots on live pages, extension-free.
+
+Two things the plan did not anticipate, both structural:
+
+- **The page cannot reach the browser, and it cannot reach us.** Chrome refuses a websocket
+  upgrade to its debug port from a page (that guard is what stops the open web from driving your
+  browser), so the channel bridges it at `/intent/cdp` — the one server-side piece of the tier,
+  loopback-only, and now the widest thing on the channel port (see the security warning). And the
+  page cannot *fetch* from the channel either: an https page blocks a module from our http origin
+  as mixed content, so nothing is imported — the bootstrap arrives as a string, and the ink
+  surface is bundled by the sidecar and evaluated INTO the page.
+- **The document is the unit of state, not the tab.** A reload leaves the CDP session healthy and
+  the client's desire unchanged, so nothing re-applies — the page just comes back bare. The bus
+  therefore re-injects on navigation and replays what it had asserted (ring, keys, ink mode).
+
+The live findings are pinned as tests, one row each, in the client's
+[PARITY.md](../../../packages/aiui-intent-client/PARITY.md) ("What Phase 3 taught us").
 
 **Phase 4 — the MV3 shell (a week).** `ExtensionBus`, the SW broker (copied — see salvage
 list), content glue, a **static Vite build**, new extension identity (see coexistence). `aiui

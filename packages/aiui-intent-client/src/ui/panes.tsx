@@ -98,6 +98,14 @@ function traceLine(event: IntentEvent): string {
 
 /** The raw engine stream, newest last, capped — the mode timeline's sibling. */
 export function TracePane(props: { lanes: ChannelLanes }) {
+  // `engine.events` is a plain array the wire pushes to — reading its length
+  // straight from the JSX subscribes to NOTHING, so the count sat at 0 while
+  // events poured in (found live, Phase 3). Every read of it goes through the
+  // cursor; that is what makes it a reactive read.
+  const total = createMemo(() => {
+    void props.lanes.eventsRev();
+    return props.lanes.engine.events.length;
+  });
   const events = createMemo(() => {
     void props.lanes.eventsRev();
     return props.lanes.engine.events.slice(-TRACE_LIMIT);
@@ -105,8 +113,7 @@ export function TracePane(props: { lanes: ChannelLanes }) {
   return (
     <details class="aiui-pane" data-testid="trace-pane">
       <summary>
-        trace — {props.lanes.engine.events.length} event
-        {props.lanes.engine.events.length === 1 ? "" : "s"}
+        trace — {total()} event{total() === 1 ? "" : "s"}
       </summary>
       <ul class="aiui-pane-list">
         <For each={events()}>

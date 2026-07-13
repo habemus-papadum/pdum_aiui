@@ -2,20 +2,23 @@
  * main.tsx — the detached plain page (the client's HOME, per the plan; the
  * MV3 extension will be a shell around this, not the other way around).
  *
- * Boot decides the lane tier from the world, not a build flag:
- *  - a reachable channel (same origin, or `?channel=<port>`) → the REAL
- *    lanes: shared intent pipeline + wire + talk + speech + frame pump,
- *    session bus driving the `connected` fact;
- *  - no channel → the FakeBus + console lanes, fully exercisable offline
- *    (the harness tier), with the simulate strip standing in for the world.
+ * Boot decides the tier from the world, not a build flag — HOST first, then
+ * lanes:
+ *  - a reachable channel with a live session browser → the **CdpBus**: real
+ *    tabs, driven over the channel's `/intent/cdp` bridge. Ink, keys, ring,
+ *    selection and shots land on actual pages, with no extension installed.
+ *  - a reachable channel without one → the FakeBus for pages, real lanes for
+ *    the wire (the turn still goes to the agent; the page facts are simulated).
+ *  - no channel → FakeBus + console lanes: the whole client, offline.
  *
- * Either way the machine, claims, bar, pills, and keys are IDENTICAL — the
- * tier only swaps the host and the lanes, which is the whole architecture.
+ * The machine, claims, bar, pills, and keys are IDENTICAL in every tier — the
+ * tier swaps the host and the lanes, which is the whole architecture.
  */
 
 import { render } from "@solidjs/web";
 import { createEffect, createRoot, createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
+import { type CdpBus, connectCdpBus } from "../cdp/cdp-bus";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { uiScale } from "../config";
 import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
@@ -23,6 +26,7 @@ import { fakeBus } from "../fake-bus";
 import { keyVerdict } from "../keys";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
+import type { IntentHost } from "../transport";
 import { Panel } from "./panel";
 import { PANES_STYLES, TracePane, TurnPane } from "./panes";
 
@@ -54,22 +58,53 @@ createRoot(() => {
   );
 });
 
+/**
+ * The CdpBus, when this machine's session browser is up: the channel tells us
+ * (`/intent/cdp/info`) rather than us probing Chrome — the page CANNOT reach
+ * the debug port itself (no CORS on `/json/version`; Chrome rejects a page's
+ * websocket upgrade), which is exactly why the bridge exists. Any failure here
+ * is not fatal: the panel falls back to the FakeBus and says so.
+ */
+async function tryCdpHost(port: number): Promise<CdpBus | undefined> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/intent/cdp/info`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    const info = (await res.json()) as { available?: boolean; reason?: string };
+    if (info.available !== true) {
+      setStatusLine(`page hosting: simulated — ${info.reason ?? "no session browser"}`);
+      return undefined;
+    }
+    return await connectCdpBus({
+      cdpUrl: `ws://127.0.0.1:${port}/intent/cdp`,
+      channelOrigin: `http://127.0.0.1:${port}`,
+      log: (message) => console.info("[cdp]", message),
+    });
+  } catch (err) {
+    setStatusLine(`page hosting: simulated — the CDP bridge failed (${String(err)})`);
+    return undefined;
+  }
+}
+
 async function boot(): Promise<{
   client: IntentClient;
-  mode: "channel" | "fake";
+  mode: "cdp" | "channel" | "fake";
   lanes?: ChannelLanes;
+  fake?: ReturnType<typeof fakeBus>;
+  cdp?: CdpBus;
 }> {
-  // The FakeBus hosts BOTH tiers today: page-side capabilities (ink, keys,
-  // ring, selection) get real transports in Phase 3 (CdpBus) and Phase 4
-  // (ExtensionBus); the channel tier already carries the real wire/talk.
+  // The FakeBus stands in for the world whenever a real host isn't there — in
+  // the CDP tier it isn't used at all (the pages are real).
   const bus = fakeBus({ activeTab: 1 });
 
   const port = resolveChannelPort();
   const health = port !== undefined ? await probeChannel(port) : undefined;
 
   if (port !== undefined && health !== undefined) {
+    const cdp = await tryCdpHost(port);
+    const host: IntentHost = cdp ?? bus;
     const channelLanes = createChannelLanes({
-      host: bus,
+      host,
       port: () => port,
       tabMeta: async () => ({ url: location.href, title: document.title, kind: "detached-page" }),
       onStatus: (line) => {
@@ -80,7 +115,7 @@ async function boot(): Promise<{
       onLoweredPrompt: (prompt) => setLoweredPrompt(prompt),
     });
     const client = createIntentClient({
-      host: bus,
+      host,
       lanes: channelLanes.lanes,
       claimOptions: channelLanes.claimOptions,
       onBlip: (key) => blipSink?.(key),
@@ -100,10 +135,15 @@ async function boot(): Promise<{
     (window as unknown as { __aiuiIntentClient?: unknown }).__aiuiIntentClient = {
       client,
       bus,
+      cdp,
       lanes: channelLanes,
       sessionBus,
     };
-    return { client, mode: "channel", lanes: channelLanes };
+    if (cdp !== undefined) {
+      setStatusLine(`driving ${cdp.pages().length} real tab(s) over CDP — no extension installed`);
+      return { client, mode: "cdp", lanes: channelLanes, cdp };
+    }
+    return { client, mode: "channel", lanes: channelLanes, fake: bus };
   }
 
   const consoleLanes: IntentLanes = {
@@ -124,21 +164,21 @@ async function boot(): Promise<{
   });
   client.setContext({ connected: true }); // the fake tier pretends a channel
   (window as unknown as { __aiuiIntentClient?: unknown }).__aiuiIntentClient = { client, bus };
-  return { client, mode: "fake" };
+  return { client, mode: "fake", fake: bus };
 }
 
 let blipSink: ((key: string) => void) | undefined;
 let navCounter = 0;
 
-const { client, mode, lanes } = await boot();
-const bus = (window as unknown as { __aiuiIntentClient: { bus: ReturnType<typeof fakeBus> } })
-  .__aiuiIntentClient.bus;
+const { client, mode, lanes, fake, cdp } = await boot();
+/** Whichever host is targeting pages — the CdpBus's real tabs, or the fake's. */
+const targeting = cdp?.targeting ?? fake?.targeting;
 
 // The activation shortcut — an IMPERATIVE event outside the modal keyboard
 // system (chrome.commands in the extension; this listener here). See
 // ../activation.ts, the reference imperative-boundary example.
 const activate = (): void => {
-  activationGesture(client, bus.targeting.activeTab());
+  activationGesture(client, targeting?.activeTab());
 };
 
 // Document keys — the same verdicts the content-script forwarding uses.
@@ -187,18 +227,23 @@ document.addEventListener("keydown", onKey("down"), true);
 document.addEventListener("keyup", onKey("up"), true);
 window.addEventListener("blur", () => client.emit("windowBlur"));
 
-/** Dev-only: the world facts the real hosts will supply, as buttons. */
+/** The world facts a real host supplies — as buttons, for the tiers that lack one.
+ * In the CDP tier every one of these is REAL (open a tab, select text, click,
+ * navigate), so the strip only carries what still has no supplier: the mic grant
+ * (until talk is exercised) and the iPad presence (P4). */
 function SimulateStrip() {
+  const summary =
+    mode === "cdp"
+      ? `CDP tier — driving real tabs (${cdp?.pages().length ?? 0} attached), no extension`
+      : mode === "channel"
+        ? "channel tier (real wire, simulated pages) — no session browser found"
+        : "fake tier (no channel found) — simulate everything";
   return (
     <details
       style="margin: 12px 0 0 12px; font: 12px system-ui; opacity: 0.8"
-      open={mode === "fake"}
+      open={mode !== "cdp"}
     >
-      <summary>
-        {mode === "channel"
-          ? "channel tier (real wire) — simulate page-side facts"
-          : "fake tier (no channel found) — simulate everything"}
-      </summary>
+      <summary>{summary}</summary>
       <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px">
         <button type="button" data-testid="activate" onClick={activate}>
           activate (the ⌘B stand-in): grant + open
@@ -225,61 +270,67 @@ function SimulateStrip() {
         >
           iPad connect/drop
         </button>
-        <button
-          type="button"
-          onClick={() =>
-            bus.firePageEvent({
-              kind: "selectionPresent",
-              tab: bus.targeting.activeTab() ?? 1,
-              present: !client.context().selectionPresent,
-            })
-          }
-        >
-          selection ping
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            bus.firePageEvent({ kind: "interaction", tab: bus.targeting.activeTab() ?? 1 })
-          }
-        >
-          page interaction (smart-video gate)
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const tab = bus.targeting.activeTab() ?? 1;
-            const n = ++navCounter;
-            bus.firePageEvent({
-              kind: "navigation",
-              tab,
-              from: `fake://tab/${tab}/page/${n - 1}`,
-              to: `fake://tab/${tab}/page/${n}`,
-              navKind: "push",
-            });
-            bus.setTabUrl(tab, `fake://tab/${tab}/page/${n}`);
-          }}
-        >
-          navigate (same tab)
-        </button>
-        <button
-          type="button"
-          onClick={() => bus.switchTab(bus.targeting.activeTab() === 1 ? 2 : 1)}
-        >
-          switch tab 1↔2
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            bus.firePageEvent({
-              kind: "aiuiSupport",
-              tab: bus.targeting.activeTab() ?? 1,
-              supported: !client.context().aiuiPage,
-            })
-          }
-        >
-          aiui page support on/off
-        </button>
+        <Show when={fake} keyed>
+          {(bus) => (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  bus.firePageEvent({
+                    kind: "selectionPresent",
+                    tab: bus.targeting.activeTab() ?? 1,
+                    present: !client.context().selectionPresent,
+                  })
+                }
+              >
+                selection ping
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  bus.firePageEvent({ kind: "interaction", tab: bus.targeting.activeTab() ?? 1 })
+                }
+              >
+                page interaction (smart-video gate)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const tab = bus.targeting.activeTab() ?? 1;
+                  const n = ++navCounter;
+                  bus.firePageEvent({
+                    kind: "navigation",
+                    tab,
+                    from: `fake://tab/${tab}/page/${n - 1}`,
+                    to: `fake://tab/${tab}/page/${n}`,
+                    navKind: "push",
+                  });
+                  bus.setTabUrl(tab, `fake://tab/${tab}/page/${n}`);
+                }}
+              >
+                navigate (same tab)
+              </button>
+              <button
+                type="button"
+                onClick={() => bus.switchTab(bus.targeting.activeTab() === 1 ? 2 : 1)}
+              >
+                switch tab 1↔2
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  bus.firePageEvent({
+                    kind: "aiuiSupport",
+                    tab: bus.targeting.activeTab() ?? 1,
+                    supported: !client.context().aiuiPage,
+                  })
+                }
+              >
+                aiui page support on/off
+              </button>
+            </>
+          )}
+        </Show>
       </div>
     </details>
   );

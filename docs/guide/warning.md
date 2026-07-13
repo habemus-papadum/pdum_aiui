@@ -29,6 +29,13 @@ into your live, permission-skipping Claude Code session (loaded via
 - Anything that can reach the channel's local web backend can steer your agent.
 - The [iPad paint stream](./paint-stream) rides the same port (its sidecar is on by default —
   it costs nothing until something connects).
+- **So does the intent client, and it bridges the browser.** The channel serves the panel at
+  `/intent/`, and — so the panel can drive real tabs without a browser extension — proxies the
+  Chrome DevTools protocol at `/intent/cdp` to the [session browser](./chrome). The browser's own
+  debug port stays loopback-bound (the proxy refuses to bridge anywhere else), but the *bridge*
+  is on the channel port. Whoever can reach that port can therefore drive the browser: read any
+  open tab, screenshot it, run JavaScript in it. Same trust boundary as prompt injection, and the
+  same `channel.bind` choice decides who is inside it.
 - **Who can reach that port is your `channel.bind` choice** — asked at first run, never silently
   widened. `loopback` (the default) keeps the whole surface this-machine-only; using the iPad then
   means tunneling the port yourself (Tailscale, `ssh -L`). `host` binds `0.0.0.0`: one port, and
@@ -57,7 +64,9 @@ understand about how it's wired:
 - The sharing works over Chrome's **DevTools debug port, which is unauthenticated**: any process
   that can reach it has full control of that browser. It binds to loopback only, so "any process"
   means anything running on your machine — and if you tunnel it for
-  [remote development](./remote), anything on the remote machine too.
+  [remote development](./remote), anything on the remote machine too. Note the channel's
+  `/intent/cdp` bridge above: it re-exposes that control on the channel port, under
+  `channel.bind`.
 - The session browser also launches with **media prompts pre-answered**
   (`--auto-accept-camera-and-microphone-capture`, `--auto-accept-this-tab-capture`): any page
   open in it can capture the microphone, the camera, and its own tab **without a permission
