@@ -93,9 +93,12 @@ bus + /health probe + port resolution (explicit → ?channel= → same-origin). 
 
 Engine (`intent-pipeline`) + `composeIntent` · `createWire` (upload path) · `openIntentThread` ·
 talk PCM lifecycle live-verified (worklet mic; the frames-chasing-closed-socket
-fix as a test — needs the owner's mic) · channel-SERVED page (the same-origin
-resolution is ready for it). Preview/trace panes, turn mirror, uiScale, and the
-session-layering strip landed in the second tranche (panes.tsx, config-store.ts).
+fix as a test — needs the owner's mic). Preview/trace panes, turn mirror, uiScale,
+and the session-layering strip landed in the second tranche (panes.tsx,
+config-store.ts); the CHANNEL-SERVED page landed in the third: src/sidecar.ts
+(vite middleware under /intent/, registered always-on in the aiui CLI — takes
+effect on the next `aiui claude` launch; the page's same-origin discovery then
+needs no ?channel=).
 
 ## Hosts
 

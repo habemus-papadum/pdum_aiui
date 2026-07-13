@@ -27,7 +27,7 @@ describe("resolveChannelLaunch", () => {
   it("defaults to loopback with the auto-detected sidecars", () => {
     const launch = resolveChannelLaunch({ root: ROOT, config: {} }, deps);
     expect(launch.bind).toBe("loopback");
-    expect(names(launch)).toEqual(["paint"]); // paint auto-enables everywhere
+    expect(names(launch)).toEqual(["paint", "intent"]); // both auto-enable everywhere
   });
 
   it("takes bind from config, and a flag beats config", () => {
@@ -43,7 +43,15 @@ describe("resolveChannelLaunch", () => {
       { root: ROOT, config: { sidecars: { paint: false } } },
       deps,
     );
-    expect(names(launch)).toEqual([]);
+    expect(names(launch)).toEqual(["intent"]); // only paint was turned off
+    expect(
+      names(
+        resolveChannelLaunch(
+          { root: ROOT, config: { sidecars: { paint: false, intent: false } } },
+          deps,
+        ),
+      ),
+    ).toEqual([]);
   });
 
   it("lets a per-launch flag beat the durable sidecar setting, both ways", () => {
@@ -51,7 +59,11 @@ describe("resolveChannelLaunch", () => {
     expect(
       names(
         resolveChannelLaunch(
-          { root: ROOT, config: { sidecars: { paint: false } }, sidecar: ["paint"] },
+          {
+            root: ROOT,
+            config: { sidecars: { paint: false, intent: false } },
+            sidecar: ["paint"],
+          },
           deps,
         ),
       ),
@@ -60,7 +72,11 @@ describe("resolveChannelLaunch", () => {
     expect(
       names(
         resolveChannelLaunch(
-          { root: ROOT, config: { sidecars: { paint: true } }, noSidecar: ["paint"] },
+          {
+            root: ROOT,
+            config: { sidecars: { paint: true, intent: false } },
+            noSidecar: ["paint"],
+          },
           deps,
         ),
       ),
@@ -91,7 +107,7 @@ describe("channelLaunchFlags", () => {
     // The channel distinguishes "no descriptors" from "flag never passed" —
     // passing `[]` would be a different statement than passing nothing.
     const launch = resolveChannelLaunch(
-      { root: ROOT, config: { sidecars: { paint: false } } },
+      { root: ROOT, config: { sidecars: { paint: false, intent: false } } },
       deps,
     );
     expect(channelLaunchFlags(launch)).toEqual(["--bind", "loopback"]);

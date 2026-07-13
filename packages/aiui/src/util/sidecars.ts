@@ -82,6 +82,25 @@ const KNOWN_SIDECARS: KnownSidecar[] = [
       options: { root },
     }),
   },
+  {
+    // The intent client (the detached panel) served BY the channel under
+    // /intent/ — the page's origin is the channel, so discovery disappears
+    // (docs/proposals/intent-client, Phase 2). Always on, same posture story
+    // as paint: no extra listener; reachability is the channel bind's call.
+    // `--aiui-no-sidecar intent` / `sidecars.intent: false` turn it off.
+    // NOTE: a DEV dependency while the package is --no-publish — in a
+    // published install the module doesn't resolve and the mapper below
+    // warns + skips (by design); flip to a real dependency when the package
+    // graduates to --public.
+    name: "intent",
+    autoEnable: () => true,
+    descriptor: (root, resolveModule) => ({
+      name: "intent",
+      module: resolveModule("@habemus-papadum/aiui-intent-client/sidecar"),
+      export: "intentSidecar",
+      options: { root },
+    }),
+  },
 ];
 
 /**

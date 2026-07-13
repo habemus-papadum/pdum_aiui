@@ -9,6 +9,14 @@ const paintDescriptor = (root: string) => ({
   options: { root },
 });
 
+/** The descriptor for the `intent` sidecar (the channel-served panel). */
+const intentDescriptor = (root: string) => ({
+  name: "intent",
+  module: "@habemus-papadum/aiui-intent-client/sidecar",
+  export: "intentSidecar",
+  options: { root },
+});
+
 /**
  * Deps for a test: an identity `resolveModule`, so the emitted `module` stays
  * the bare specifier (the real default resolves it to an absolute path — see
@@ -19,9 +27,9 @@ const testDeps = () => ({
 });
 
 describe("resolveSidecars", () => {
-  it("emits the always-on paint sidecar by default (no flags)", () => {
+  it("emits the always-on sidecars by default (no flags), registry order", () => {
     const out = resolveSidecars("/proj", { enable: [], disable: [] }, testDeps());
-    expect(out).toEqual([paintDescriptor("/proj")]);
+    expect(out).toEqual([paintDescriptor("/proj"), intentDescriptor("/proj")]);
     // The exact contract shape, threading the root into options.
     expect(out[0]).toEqual({
       name: "paint",
@@ -31,19 +39,49 @@ describe("resolveSidecars", () => {
     });
   });
 
-  it("disable turns off the always-on paint", () => {
-    expect(resolveSidecars("/proj", { enable: [], disable: ["paint"] }, testDeps())).toEqual([]);
+  it("disable turns off an always-on sidecar", () => {
+    expect(resolveSidecars("/proj", { enable: [], disable: ["paint"] }, testDeps())).toEqual([
+      intentDescriptor("/proj"),
+    ]);
+    expect(resolveSidecars("/proj", { enable: [], disable: ["intent"] }, testDeps())).toEqual([
+      paintDescriptor("/proj"),
+    ]);
+    expect(
+      resolveSidecars("/proj", { enable: [], disable: ["paint", "intent"] }, testDeps()),
+    ).toEqual([]);
   });
 
   it("disable wins over an explicit enable of the same name", () => {
-    expect(resolveSidecars("/proj", { enable: ["paint"], disable: ["paint"] }, testDeps())).toEqual(
-      [],
-    );
+    expect(
+      resolveSidecars("/proj", { enable: ["paint"], disable: ["paint", "intent"] }, testDeps()),
+    ).toEqual([]);
   });
 
   it("ignores enable names the CLI doesn't know how to construct", () => {
     expect(resolveSidecars("/proj", { enable: ["bogus"], disable: [] }, testDeps())).toEqual([
       paintDescriptor("/proj"),
+      intentDescriptor("/proj"),
     ]);
+  });
+
+  it("a sidecar whose module fails to resolve is warned about and skipped", () => {
+    const warnings: string[] = [];
+    const out = resolveSidecars(
+      "/proj",
+      { enable: [], disable: [] },
+      {
+        resolveModule: (specifier: string) => {
+          if (specifier.includes("intent-client")) {
+            throw new Error("not installed"); // the --no-publish package, absent
+          }
+          return specifier;
+        },
+        log: (message) => warnings.push(message),
+      },
+    );
+    expect(out).toEqual([paintDescriptor("/proj")]);
+    expect(warnings.some((w) => w.includes('"intent"') && w.includes("failed to resolve"))).toBe(
+      true,
+    );
   });
 });

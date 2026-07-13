@@ -11,7 +11,8 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./sidecar": "./src/sidecar.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -32,6 +33,9 @@
   "devDependencies": {
     "jsdom": "^25.0.1",
     "vite-plugin-solid": "3.0.0-next.5",
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@types/express": "^5.0.0",
+    "express": "^5.1.0"
   }
 }

@@ -267,6 +267,10 @@ importers:
       vite:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+    devDependencies:
+      '@habemus-papadum/aiui-intent-client':
+        specifier: workspace:^
+        version: link:../aiui-intent-client
 
   packages/aiui-claude-channel:
     dependencies:
@@ -411,6 +415,15 @@ importers:
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15
     devDependencies:
+      '@habemus-papadum/aiui-claude-channel':
+        specifier: workspace:^
+        version: link:../aiui-claude-channel
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.6
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1

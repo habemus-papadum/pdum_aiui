@@ -279,7 +279,9 @@ aiui's own flags (everything else forwards to claude verbatim):
                                  surface — the iPad paint page included;
                                  trusted networks only)
   --aiui-sidecar <name>          host this session sidecar (repeatable);
-                                 \`paint\` (iPad ink) is always on
+                                 \`paint\` (iPad ink) and \`intent\` (the
+                                 channel-served intent panel at /intent/)
+                                 are always on
   --aiui-no-sidecar <name>       don't host this session sidecar (repeatable)
 
 Durable settings live in config.json (project .aiui-cache/ + user cache) — see the

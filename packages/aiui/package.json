@@ -54,5 +54,8 @@
     "commander": "^15.0.0",
     "execa": "^9.6.1",
     "vite": "^6.4.3"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-intent-client": "workspace:^"
   }
 }
