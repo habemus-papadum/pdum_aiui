@@ -247,6 +247,34 @@ describe("shots and selections ride the wire", () => {
   });
 });
 
+describe("the fade re-relay effect", () => {
+  it("re-relays a moved fade while ink is claimed — with NO untracked handler reads", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = makeRig();
+    activationGesture(r.client, 7);
+    r.client.dispatch("ink");
+    await settle(30); // ink claim active → the effect asserts once
+    r.bus.clearLog();
+
+    const { inkFade, inkVanish } = await import("./config");
+    inkVanish.set(true as never);
+    inkFade.set(9 as never);
+    await settle(30);
+    expect(r.bus.log).toContain('page:ink@7 {"on":true,"fadeSec":9}'); // live re-relay
+
+    // Regression (found live): grantedTab was read in the effect HANDLER —
+    // untracked, STRICT_READ_UNTRACKED on every run. Everything the handler
+    // needs must arrive through the compute.
+    const diagnostics = [...warn.mock.calls, ...error.mock.calls]
+      .flat()
+      .filter((arg) => typeof arg === "string" && arg.includes("STRICT_READ_UNTRACKED"));
+    expect(diagnostics).toEqual([]);
+    inkVanish.set(false as never);
+    inkFade.set(6 as never);
+  });
+});
+
 describe("config consumers", () => {
   it("panelIntentConfig maps the stt models onto tiers (salvaged mapping)", () => {
     expect(panelIntentConfig("scribe-v2").transcriber).toBe("elevenlabs");

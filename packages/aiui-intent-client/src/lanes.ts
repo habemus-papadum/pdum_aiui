@@ -362,13 +362,17 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     // unbind disposes it (bind is called from plain page bootstrap code).
     const disposeFade = createRoot((dispose) => {
       createEffect(
+        // EVERYTHING the handler needs is computed HERE — a read inside the
+        // handler is untracked and warns STRICT_READ_UNTRACKED (the ledger's
+        // "consume the value the source computed" rule; found live on this
+        // very effect when grantedTab was read in the handler).
         () => ({
           fade: inkVanish.get() === true ? (inkFade.get() as number) : 0,
           // re-run when the claim lands too, not just when the controls move
           inkActive: client.claimStatuses().inkPointer?.phase === "active",
+          tab: client.context().grantedTab,
         }),
-        ({ fade, inkActive }) => {
-          const tab = client.context().grantedTab;
+        ({ fade, inkActive, tab }) => {
           if (inkActive && tab !== undefined) {
             void host.transport
               .requestPage(tab, "ink", { on: true, fadeSec: fade })
