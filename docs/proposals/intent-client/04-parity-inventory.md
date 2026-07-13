@@ -3,7 +3,7 @@
 Part of the [intent-client plan](./README.md). Compiled 2026-07-13 by a line-level audit of
 both conductors at `bbd9fff`/`8b43d16`; all cites verified then. **Purpose: the parity
 checklist and regression-spec for the greenfield client
-([HANDOFF](./HANDOFF.md) §2).** A rebuild is done when every row here is either implemented,
+([README](./README.md), "The strategy").** A rebuild is done when every row here is either implemented,
 consciously diverged (extend the §13.6 ledger), or consciously dropped (say so).
 
 "Engine" = the shared `intent-pipeline/engine.ts` `Engine`, instantiated by both hosts.
