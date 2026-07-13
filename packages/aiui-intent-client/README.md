@@ -3,9 +3,21 @@
 The greenfield intent client (plan of record:
 [docs/proposals/intent-client](../../docs/proposals/intent-client/README.md)): a detached
 plain-page panel built Solid-native on the aiui-viz **mode engine**, host-agnostic behind a
-small transport seam. The MV3 extension will be a *shell* added last — one more transport plus
-a static build — not the app's home. Never published (`--no-publish`); it graduates when the
-parity gate passes.
+small transport seam. The MV3 extension is a *shell* — one more transport plus a static build,
+added last on purpose — not the app's home. Never published (`--no-publish`); it graduates when
+the parity gate passes.
+
+Three hosts, one client. The same machine, claims, keys, bar and lanes run under all of them;
+what changes is who reaches the page:
+
+| Host | Reaches the page via | Capture | Where it runs |
+| --- | --- | --- | --- |
+| `FakeBus` | an in-memory effect log | fabricated | every harness test, and the dev page host-less |
+| `CdpBus` | the session browser's CDP endpoint (no extension at all) | `Page.captureScreenshot` — **grantless**, stills only | the channel-served plain page (`/intent/`) |
+| `ExtensionBus` | `chrome.tabs.sendMessage` → the content script | `tabCapture` — a real, invocation-gated grant; a warm stream, so continuous video | the MV3 side panel |
+
+That the extension is the *last* thing built, and needs no change to the client, is the design
+paying out.
 
 ## The shape
 
@@ -18,6 +30,9 @@ parity gate passes.
 | The seam | `src/transport.ts` | `PageTransport` / `SurfaceTargeting` / `CaptureSource` — the only things a host must provide. The page-side contract is the old relay's (`ink` / `keylayer` / `flash` / `selection` / `viewport`). |
 | Fake host | `src/fake-bus.ts` | In-memory host with a readable effect log — what every harness test (and the dev page, host-less) drives. |
 | The client | `src/client.ts` | One constructor: engine + claims + verb effects + key entry + bar. No `chrome.*`, no CDP, no DOM. |
+| The lanes | `src/lanes.ts` | The wire: the `intent-pipeline` Engine, `composeIntent`, the turn thread, talk, the video pump. What the client's verbs *do*. |
+| CDP host | `src/cdp/` | The bus over the session browser's protocol + the page bootstrap it injects (stringified, so it may import nothing) + the ink surface it evaluates in. |
+| MV3 host | `src/ext/` | The bus over `chrome.*`, the service-worker broker (the only context that can mint a `tabCapture` id), the content script (a real module — it *imports* the ink and the structured selection watcher), and the side panel that composes them. |
 
 State discipline (the write-semantics ground rules, enforced by construction):
 
@@ -35,21 +50,41 @@ State discipline (the write-semantics ground rules, enforced by construction):
 harness tests (each `// ledger:` comment names the incident the row would have caught), driven
 entirely through `dispatch()` + the FakeBus. Run `pnpm test`.
 
+## Running it
+
+**As a plain page** — no extension, real tabs. `aiui claude` serves it at
+`http://127.0.0.1:<channel-port>/intent/` and drives the session browser over CDP.
+
+**As the side panel** — the MV3 shell:
+
+```sh
+pnpm -C packages/aiui-intent-client ext   # build the bundle, load it into the session browser
+```
+
+That is `build:ext` (Vite for the panel, esbuild for the content scripts and the worker — no
+CRXJS, ever) followed by `load:ext`, which is "Load unpacked" without the human: CDP's
+`Extensions.loadUnpacked` against the running session browser. Then **⌘B** on the tab you want
+to drive — the chord and the toolbar button are extension *invocations*, and an invocation is
+what mints the `tabCapture` grant, so they are what opens the panel and the turn together.
+
+Installing it is a deliberate act rather than something `aiui claude` does for you: the frozen
+extension is still auto-loaded, and two extensions cannot both hold ⌘B (Chrome drops the second
+binding without saying so). Which client the launcher loads is the parity gate's switchover.
+
 ## Status / road to parity
 
-Built and tested: the machine, claims, keys, caps, FakeBus harness. Next, in order
-(README plan, Phases 2–5):
+Phases 0–4 are done: the machine, claims, keys, caps and FakeBus harness; the wire lanes and the
+channel-served page; the `CdpBus` (real tabs, no extension); and the MV3 shell (`ExtensionBus`,
+the salvaged SW broker and warm-shot capture path, a static build, a new extension identity,
+`aiui2.*` storage). All three hosts are verified live.
 
-1. **The page**: a Solid panel UI (bar, phase pill, keymap help, preview, trace) served as a
-   plain page — by the channel ideally — with the wire lanes (`intent-pipeline` Engine,
-   `createWire`, talk, video sampler) bound as `IntentLanes`/claims appliers. Daily dev in the
-   harness; the devtools MCP drives it.
-2. **`CdpBus`**: the transport over the session browser's CDP plumbing
-   (`installCaptureMarker` pattern) — real tabs, still extension-free.
-3. **The MV3 shell**: `ExtensionBus` + the copied 141-line SW broker + a **static** Vite build
-   (no CRXJS, ever). New extension identity — see coexistence rules in the plan.
-4. **Parity gate**: walk the [inventory](../../docs/proposals/intent-client/04-parity-inventory.md)
-   row by row; then the old extension retires to safety-net status.
+Left: the **parity gate** — walk the
+[inventory](../../docs/proposals/intent-client/04-parity-inventory.md) row by row against
+[PARITY.md](./PARITY.md), settle the open `DECIDE`s, then flip the launcher to this client and
+retire the old extension to safety-net status.
 
-Coexistence policy (decided): this client refuses to arm on a tab the old extension's ring
-marker claims; durable keys on shared pages use the `aiui2.` prefix when the page shell lands.
+Coexistence policy (decided, and now enforced): the two clients are separate extensions with
+separate ids and separate storage (`aiui2.*`), and **never both armed** — the content script
+watches the frozen client's ring for its `armed` class, reports it as a `foreign` fact, and the
+machine's `arm` gate refuses on a tab it holds. The gate is real: `dispatch` consults
+`spec.available`, so a key or an agent write cannot walk past what the bar dims.

@@ -141,9 +141,31 @@ Two things the plan did not anticipate, both structural:
 The live findings are pinned as tests, one row each, in the client's
 [PARITY.md](../../../packages/aiui-intent-client/PARITY.md) ("What Phase 3 taught us").
 
-**Phase 4 — the MV3 shell (a week).** `ExtensionBus`, the SW broker (copied — see salvage
-list), content glue, a **static Vite build**, new extension identity (see coexistence). `aiui
-extension dev/reload` re-points for release verification only.
+**Phase 4 — the MV3 shell (a week).** ✅ **Done.** `ExtensionBus`, the SW broker and the warm-shot
+capture path (both salvaged), content glue, a **static Vite build** (no CRXJS), a new extension
+identity, `aiui2.*` storage, and the never-both-armed policy against the frozen client. It went in
+as a shell around an untouched client — the panel entry is two lines of composition (`ExtensionBus`
+instead of `CdpBus`; discover the channel instead of inheriting it from the page's origin) — which
+is the whole reason it was built last. Install it with `pnpm -C packages/aiui-intent-client ext`
+(build, then `Extensions.loadUnpacked` into the running session browser).
+
+Three things the plan did not anticipate:
+
+- **Availability was a hint, not a gate.** The bar dimmed unavailable caps; `dispatch` ran them
+  anyway — so a key, an agent write, or a recovered turn could each walk past a gate the bar was
+  honoring. The coexistence rule (refuse to arm on a tab the frozen client holds) is what exposed
+  it, because it is the first gate whose violation is *visible in another process*. `dispatch` now
+  consults `spec.available`; turn recovery, which had been relying on the bypass, waits for the
+  channel.
+- **An app build must inline what a library build externalizes.** The panel bundle inherited the
+  package's library externals and shipped `import "@solidjs/web"` as a bare specifier: an extension
+  page has no import map, so the panel was a blank white rectangle and one console line.
+- **The native host admitted exactly one extension id**, which would have made "install the new
+  client beside the frozen one" impossible to cold-start — an extension page, unlike the
+  channel-served page, cannot read its channel port off its own URL.
+
+The live findings are pinned, one row each, under "What Phase 4 taught us" in
+[PARITY.md](../../../packages/aiui-intent-client/PARITY.md).
 
 **Phase 5 — parity gate.** Walk [04](./04-parity-inventory.md) row by row: every row
 implemented, consciously diverged (extend the §13.6 ledger), or consciously dropped (say so).

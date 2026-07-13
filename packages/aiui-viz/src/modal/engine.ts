@@ -209,12 +209,17 @@ export interface ModeEngineSpec<Ctx> {
   /** System events → commands (engine turnClosed, socket drop, tab close). */
   on?: Readonly<Record<string, EventBinding>>;
   /**
-   * Availability overrides for {@link ModeEngine.canDispatch}. Most commands
-   * need none — availability is DERIVED by dry-running the pure reducer
-   * ("would it change anything here?"). Verbs (pure effects that move no
-   * region) derive to "never", so they declare their gate here; a command
-   * whose availability differs from its reduction (an arm gate on a context
-   * fact) can override too. Keys must name declared commands.
+   * Availability overrides. Most commands need none — availability is DERIVED
+   * by dry-running the pure reducer ("would it change anything here?"). Verbs
+   * (pure effects that move no region) derive to "never", so they declare their
+   * gate here; a command whose availability differs from its reduction (an arm
+   * gate on a context fact) can override too. Keys must name declared commands.
+   *
+   * This is a GATE, not a hint: an unavailable command is refused by
+   * {@link ModeEngine.dispatch} itself, not merely greyed out in the bar. The
+   * difference is the whole point — a bar button, a key, an agent's `control()`
+   * write and a recovered turn all arrive as the same dispatch, and a rule that
+   * only the bar enforces is a rule that holds until the first other caller.
    */
   available?: Readonly<Record<string, (state: EngineState, ctx: Ctx) => boolean>>;
 }
@@ -481,6 +486,13 @@ export function createModeEngine<Ctx>(
   const dispatch = (command: string, payload?: unknown): EngineState => {
     if (committing) {
       queued.push({ command, payload });
+      return state;
+    }
+    // The availability gate is the machine's, not the bar's. Every caller —
+    // a cap, a key, an agent's control() write, a recovered turn — arrives
+    // here, so this is the only place the rule can actually hold.
+    const gate = spec.available?.[command];
+    if (gate !== undefined && !gate(state, ctx)) {
       return state;
     }
     let patch: StatePatch | null | undefined;

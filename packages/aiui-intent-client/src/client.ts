@@ -200,6 +200,8 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       handleKey(event.key, event.phase, event.repeat);
     } else if (event.kind === "aiuiSupport") {
       engine.setContext({ aiuiPage: event.supported });
+    } else if (event.kind === "foreignClient") {
+      engine.setContext({ foreignArmed: event.armed });
     }
   });
 

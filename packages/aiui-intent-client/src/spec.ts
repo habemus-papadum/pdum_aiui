@@ -46,6 +46,10 @@ export interface IntentContext {
    * `locate` capability and can host jump-to-editor (the overlay's vscode
    * mode — anticipated here, built post-parity). */
   aiuiPage: boolean;
+  /** The FROZEN client has this tab armed. Two clients inking one page is
+   * nonsense and they cannot negotiate (no messaging across extension ids), so
+   * the new one refuses to arm and says why — the coexistence policy. */
+  foreignArmed: boolean;
 }
 
 export const initialContext: IntentContext = {
@@ -56,6 +60,7 @@ export const initialContext: IntentContext = {
   micGranted: undefined,
   paintClients: 0,
   aiuiPage: false,
+  foreignArmed: false,
 };
 
 /**
@@ -190,7 +195,10 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
    * disabled while disarmed, escape at the floor — derives from the dry-run.
    */
   available: {
-    arm: (s, ctx) => s.phase !== "disarmed" || ctx.connected,
+    // Arming needs a channel — and a tab the frozen client is not already
+    // holding (the coexistence policy: never both armed on one page). Note the
+    // shape: you can always arm DOWN (disarm), whatever the world says.
+    arm: (s, ctx) => s.phase !== "disarmed" || (ctx.connected && !ctx.foreignArmed),
     // NOTE deliberately NO `turn` gate: a turn is a WIRE concept — talk and
     // text work grantless — so armed → turn derives from the reducer. The
     // capture GRANT gates the capture-dependent acts individually (below);

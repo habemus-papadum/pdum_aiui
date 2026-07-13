@@ -364,6 +364,10 @@ describe("turn recovery — the mirror", () => {
       claimOptions: lanes2.claimOptions,
     });
     const unbind2 = lanes2.bind(client2);
+    // The real sequence: the session bus connects, THEN the mirror is recovered
+    // (re-arming goes through the ordinary gated `arm` command, and a turn you
+    // cannot send is not a turn you have recovered — see lanes.recover).
+    client2.setContext({ connected: true });
     expect(lanes2.recover(client2)).toBe(true);
     await settle(30);
 

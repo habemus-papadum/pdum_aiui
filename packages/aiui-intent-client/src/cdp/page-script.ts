@@ -22,7 +22,8 @@
  * injection by `buildPageScript()`.
  */
 
-/** What one injected document reports through the binding. */
+/** What one instrumented document reports — the page→panel contract, shared by
+ * BOTH hosts (the extension's content script speaks it too; see ext/protocol). */
 export type PageReport =
   | { kind: "hello"; url: string; title: string; visible: boolean; focused: boolean; aiui: boolean }
   | { kind: "focus"; visible: boolean; focused: boolean }
@@ -35,7 +36,11 @@ export type PageReport =
       navKind: "push" | "replace" | "traverse" | "hash";
     }
   | { kind: "key"; key: string; phase: "down" | "up"; repeat: boolean }
-  | { kind: "stroke"; points: number };
+  | { kind: "stroke"; points: number }
+  /** The FROZEN client has this tab armed (its ring says so). Two clients
+   * inking one page is nonsense, so the new one stands down — see the
+   * coexistence policy in the client's README. */
+  | { kind: "foreign"; armed: boolean };
 
 const BINDING = "__aiuiIntentReport";
 
@@ -243,6 +248,30 @@ function pageBootstrap(version: string): void {
       report({ kind: "selection", present });
     }
   });
+
+  // The FROZEN client injects into this same page. We cannot talk to it, but we
+  // share a DOM: its indicator's shadow root wears an `armed` class while it
+  // holds the tab. Watch it, report it, and let the panel stand down rather
+  // than fight for the page (the coexistence policy — README).
+  let foreignWas = false;
+  const checkForeign = (): void => {
+    const host = document.getElementById("aiui-webext-indicator-host");
+    const root = host?.shadowRoot?.querySelector("div");
+    const armed = root instanceof HTMLElement && root.classList.contains("armed");
+    if (armed !== foreignWas) {
+      foreignWas = armed;
+      report({ kind: "foreign", armed });
+    }
+  };
+  const legacyRoot = document.getElementById("aiui-webext-indicator-host")?.shadowRoot;
+  if (legacyRoot != null) {
+    new MutationObserver(checkForeign).observe(legacyRoot, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["class"],
+    });
+    checkForeign();
+  }
 
   let lastInteraction = 0;
   const interaction = (): void => {

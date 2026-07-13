@@ -29,6 +29,11 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 - **Help is a standing root-level toggle** (blank system: arm · step out · help). Esc
   dismisses it before anything else; window blur closes it.
 - **Unknown in-turn keys swallow + blip** — never exit, never leak to the page.
+- **A dimmed cap is a REFUSED command, not a discouraged one.** Availability is a gate the
+  machine enforces (`dispatch` consults `spec.available`), so every route in — a cap tap, a key,
+  an agent's `control()` write, a recovered turn — meets the same answer. Anything less makes
+  the bar a suggestion: found live, where arming was gated on the channel in the bar and *not*
+  in the machine, so a keypress could arm a client with nothing to talk to.
 
 ## Activation is not a key
 
@@ -105,6 +110,23 @@ Two consequences, both deliberate: **looking at the panel never blanks the leade
 not a page the client drives — it is excluded from targeting entirely, along with devtools and
 browser pages), and **closing the leader hands the role on** rather than leaving the client aimed
 at nothing.
+
+Under the extension the browser answers this question directly (`chrome.tabs.query({active:
+true})`) — no visibility heuristic is needed or wanted — and a **side panel drives only its own
+window's tabs**. It is per-window by construction, so a panel never aims at a tab you cannot see
+from it, and another window's page reports (which every panel hears) are dropped.
+
+## Two clients, never both armed
+
+The greenfield client and the frozen extension are separate extensions — separate ids, separate
+storage (`aiui2.*`) — so both can be installed, and only one may hold a tab. They cannot speak to
+each other (runtime messages never cross extension ids), but they share a DOM: the frozen client's
+ring wears an `armed` class while it holds the page. The content script watches for it, reports it
+as a `foreign` world fact, and the `arm` gate refuses on a tab it holds. The bar dims, and — since
+availability is a gate, not a hint (above) — the key and the agent write are refused too.
+
+The reverse (this client armed, the frozen one refusing) is not enforced; the frozen client is
+frozen. In practice one drives, the other is the safety net.
 
 ## Instrumented pages (aiui support)
 

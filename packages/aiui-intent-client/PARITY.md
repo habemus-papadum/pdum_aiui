@@ -32,7 +32,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | bus phase connected/connecting/closed; outage never touches phase | ✅ session.ts bus client (reconnect loop) → `connected` fact; the channel pill is the chip |
 | `boundPort` + arm gate (arming requires bound) | P2 — gate becomes an `enabledWhen`/command guard on `connected` context |
 | `uiScale` control (⌘+/⌘−/⌘0) | ✅ main.tsx keys + root-font effect; persisted via the config base |
-| paint host (iPad) re-pointing | P4 (needs real capture host) — lane import unchanged |
+| paint host (iPad) re-pointing | **P5** — still open, and neither host supplies the fact: `paintClients` is a declared context field that nothing writes (spec.ts). The capture host it was waiting for now exists (P4), so this is a lane wiring job, not a blocked one |
 | `inkTabId`/`leaderTabId`/`lastActiveTab` routing | ✅ context (`activeTab`/`grantedTab`) + claims re-point on tab switch |
 | navigation events into the turn (same-tab SPA/reload; prompt-rendered) | ✅ `navigation` PageEvent → engine.navigation (lanes.ts + tests); real SPA navs land from the injected bootstrap (history wraps + popstate/hashchange) and full loads re-announce — seen live in the turn preview |
 | tab-boundary events into the turn (switch names both sides) | ✅ onActiveTabChange + tabInfo → engine.navigation (lanes.ts + tests); the CdpBus's leader rule supplies it on real tabs |
@@ -77,7 +77,7 @@ them bind in P2:
 | ink pointer / tab stream / video sampling / key routing / ring | ✅ claims.ts over the host seam + harness tests |
 | smart-mode interaction gate (page pings arm one frame) | ✅ the frame pump's shouldCapture/rearm over `interaction` PageEvents (lanes.ts + test) |
 | capture pre-warm on arm (overlay 2A row) | DECIDE (default: keep the panel's turn-scoped warm; pre-warm-on-arm was overlay-only). **Moot in the CDP tier**: `Page.captureScreenshot` needs no grant and no MediaStream, so there is nothing to warm — `holdStream` is a bookkeeping handle |
-| M10 warm-shot pixel path (36–48 ms) | P4 — `panel/capture.ts` copied nearly verbatim behind `CaptureSource` (the CDP tier gets its pixels straight from the protocol instead) |
+| M10 warm-shot pixel path (36–48 ms) | ✅ ext/capture.ts — the old panel's measured code, salvaged near-verbatim behind `CaptureSource`: SW mints the stream id, the panel document consumes it, JPEG 0.85, one warm stream per turn, `firstFrame` guards the black first paint. The CDP tier gets its pixels straight from the protocol instead |
 | M9 panel-document mic (grant persistence) | P2 (plain page = stable origin, same property) |
 | manual shots flash; sampled frames never | ✅ lanes.ts takeShot (flash AFTER grab) + pump sendFrame (never) — lanes.test rows |
 | standing mic/share between turns send NOTHING | ✅ structurally (talk per-turn exclude; sampling gated on turn) + P2 lane tests |
@@ -106,8 +106,8 @@ needs no ?channel=).
 | --- | --- |
 | FakeBus | ✅ |
 | CdpBus (real tabs, extension-free; refuse non-loopback CDP) | ✅ cdp/{protocol,page-script,page-ink,cdp-bus}.ts + the sidecar's `/intent/cdp` bridge (cdp-proxy.ts) — **verified live**: ring · page keys · ink · shots on real tabs, including an https page, with no extension installed |
-| ExtensionBus + SW broker (copied) + content glue + static build + new identity + `aiui2.*` prefixes + never-both-armed policy | P4 |
-| activation shortcut via `chrome.commands` (in-page listener until then) | ✅ in-page listener → activationGesture (main.tsx) · P4 real |
+| ExtensionBus + SW broker (copied) + content glue + static build + new identity + `aiui2.*` prefixes + never-both-armed policy | ✅ ext/{extension-bus,sw,content,content-main,capture,panel,channel,protocol,manifest}.ts + scripts/build-ext.ts — **verified live** in the session browser: the extension loads at its pinned id, the worker registers, the content script serves every capability on a real tab, the panel boots with no console errors, discovers the channel through the native host and connects |
+| activation shortcut via `chrome.commands` (in-page listener until then) | ✅ real: `aiui-intent-activate` (⌘B) + the toolbar action, both landing in the WORKER (they are the invocations that mint the `tabCapture` grant), broadcast to the panel — with a parked press the panel pulls on boot, because a panel opened BY the gesture missed the broadcast |
 
 ### What Phase 3 taught us (each row is a test)
 
@@ -122,13 +122,32 @@ needs no ?channel=).
 | The bridge dropped the panel's first command (`ws` has no buffer before a listener attaches) — a bus that attaches to nothing | cdp-proxy.test "holding the commands it sends before the upstream opens" |
 | Only the ⌘B gesture minted a capture grant, so arming from the BAR left shot/selection/clear dark forever (owner found it) — and the grant, once minted, stayed pinned to that tab, against the decided "CDP shots follow the active tab" | `CaptureSource.grantless` (the host says whether a grant is a real fact); client.test "the capture grant is the HOST's business, not a ritual" |
 
+### What Phase 4 taught us (each row is a test, or a structural answer)
+
+| Live finding | Where it is pinned |
+| --- | --- |
+| `spec.available` was a HINT, not a gate: the bar dimmed an unavailable cap, and `dispatch` ran it anyway — so a key, an agent `control()` write, or a recovered turn could all walk straight through a gate the bar was honoring. Found by the coexistence row (never-both-armed), which the bar refused and the machine allowed | engine.ts `dispatch` consults `available` before every command; engine.test "REFUSES an unavailable command". Turn recovery was RELYING on the bypass (it re-armed with no channel) — it now waits for the channel to connect, in both entries |
+| The panel bundle kept the LIBRARY build's externals, so the shipped page imported `@solidjs/web` as a bare specifier and died at boot — an extension page has no import map, and the failure is total (blank panel, one console line) | `configFile: false` in build-ext.ts, with the reason written down: an app build must inline exactly what a library build externalizes |
+| The native host admitted ONE extension id, so a second client could never cold-start (an extension page cannot read its port off its own URL — that is the tax the plain page does not pay) | `allowed_origins` carries both ids (aiui/src/commands/extension.ts) + its test — this is what makes the greenfield client installable BESIDE the frozen one |
+| Two extensions cannot both hold ⌘B (Chrome drops the second binding silently), so auto-loading the new client next to the frozen one would half-break both | installing it stays a deliberate act: `pnpm -C packages/aiui-intent-client ext` (build + `Extensions.loadUnpacked` into the running session browser). The launcher still loads the frozen client; flipping that is the P5 switchover row |
+| `tabCapture` really is invocation-gated — measured, not assumed: with no invocation the worker's `getMediaStreamId` refuses with "Extension has not been invoked for the current page" | `CaptureSource.grantless: false` for this host (extension-bus.test) — the grant is a world fact here, exactly as `grantless: true` says it is NOT one under CDP |
+
 ## Bug ledger (inventory §3) as tests
 
 F1/F2 families and engine-fix rows that are machine-shaped: ✅ client.test.ts (each `// ledger:`
-comment names its incident). Lane-shaped rows (PCM chase, ElevenLabs include-list, stranded shot
-veil, double-shot on fast S-drag, `blurIsSelfInflicted` first-screenshot drop, zoom restore,
-reconnect check, stale-ring boot broadcast, replayed-armed GC) land with their lanes in
-P2/P3/P4 — **each lane PR must move its rows from this line into its tests.**
+comment names its incident).
+
+The extension-shaped rows are answered by the salvaged capture path and the new page footprint,
+structurally rather than by a regression test (they need a real MediaStream to fail):
+**stranded shot veil** — the flash element removes itself on a timer with no state to strand
+(ext/content.ts); **first-screenshot black frame** — `firstFrame()` waits for a presented frame,
+timeout-guarded (ext/capture.ts); **one stream per tab** — `holdTabStream` releases before it
+re-holds, so a tab switch cannot leave two live captures. The `blurIsSelfInflicted` first-shot
+drop is designed out: the page reports focus as a fact and nothing cancels on blur.
+
+Still lane-shaped and still open, to be moved into tests by the lane that lands them (P5):
+PCM chase, ElevenLabs include-list, double-shot on fast S-drag, zoom restore, reconnect check,
+stale-ring boot broadcast, replayed-armed GC.
 
 ## Preview / trace richness (owner check-in 2026-07-13 — minimal by design TODAY, rows so nothing is lost)
 

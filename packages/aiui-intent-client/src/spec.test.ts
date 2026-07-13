@@ -7,8 +7,15 @@ import { createModeEngine, type EngineState } from "@habemus-papadum/aiui-viz/mo
 import { describe, expect, it } from "vitest";
 import { initialContext, intentSpec } from "./spec";
 
+/** The machine with a plausible world behind it: a channel to arm against (the
+ * gate is enforced by `dispatch` itself, not merely greyed out in the bar) and
+ * no frozen client holding the tab. These rows are about the MACHINE; the
+ * world's gates have their own tests, in client.test.ts. */
 const engine = (overrides: Partial<Record<string, string | boolean>> = {}) =>
-  createModeEngine(intentSpec, { context: initialContext, initial: overrides });
+  createModeEngine(intentSpec, {
+    context: { ...initialContext, connected: true },
+    initial: overrides,
+  });
 
 /** One §13.6-style row: state × command → expected regions. */
 const rows: Array<{

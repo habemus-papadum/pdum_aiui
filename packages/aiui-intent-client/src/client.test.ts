@@ -158,6 +158,45 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
   });
 });
 
+describe("coexistence with the frozen client (never both armed)", () => {
+  it("refuses to arm a tab the old client holds, and arms once it lets go", async () => {
+    // The two clients share a DOM but no messaging (runtime messages never
+    // cross extension ids), so they see each other exactly one way: the old
+    // one's on-page ring wears an `armed` class. Two rings and two ink surfaces
+    // on one page is nonsense — so the new client stands down.
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    r.bus.firePageEvent({ kind: "foreignClient", tab: 7, armed: true });
+    await settle();
+
+    expect(r.client.context().foreignArmed).toBe(true);
+    expect(r.client.canDispatch("arm")).toBe(false);
+    r.client.dispatch("arm");
+    expect(r.client.state().phase).toBe("disarmed");
+
+    r.bus.firePageEvent({ kind: "foreignClient", tab: 7, armed: false });
+    await settle();
+    expect(r.client.canDispatch("arm")).toBe(true);
+    r.client.dispatch("arm");
+    expect(r.client.state().phase).toBe("armed");
+  });
+
+  it("never blocks the way OUT — disarming is always available", async () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    r.client.dispatch("arm");
+    await settle();
+
+    // The old client arms the tab underneath us (a race we cannot prevent).
+    // The gate must not trap us armed: stepping down is always allowed.
+    r.bus.firePageEvent({ kind: "foreignClient", tab: 7, armed: true });
+    await settle();
+    expect(r.client.canDispatch("arm")).toBe(true);
+    r.client.dispatch("arm");
+    expect(r.client.state().phase).toBe("disarmed");
+  });
+});
+
 describe("the ring — a claim, committed with the dispatch", () => {
   it("is asserted in the same breath as the phase change", async () => {
     const r = makeRig();

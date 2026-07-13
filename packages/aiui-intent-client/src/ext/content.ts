@@ -1,0 +1,234 @@
+/**
+ * content.ts — the extension's entire in-page footprint (the CDP tier's
+ * `page-script.ts`, wearing the other transport).
+ *
+ * The page carries ONLY what should be capturable — the ring, the ink, the
+ * feedback flashes. No pill, no badge, no hints: every control lives in the
+ * panel. Modes are the PANEL's state; this script obeys capability commands and
+ * reports facts back. It speaks the same `PageReport` union the injected CDP
+ * bootstrap speaks, so both hosts map page facts with one vocabulary.
+ *
+ * Being a real module (Vite bundles it) buys what the CDP bootstrap could not
+ * have: it *imports* the ink surface (`../cdp/page-ink`) instead of having a
+ * bundle evaluated into it, and it imports the overlay's selection watcher, so
+ * selections here are STRUCTURED (source locators, cell ids, TeX) rather than
+ * plain text.
+ *
+ * What it cannot have, and where those facts come from instead:
+ *  - **`window.__AIUI__`** — a content script lives in an isolated world, so the
+ *    page's own globals are invisible. A tiny MAIN-world script
+ *    (`content-main.ts`) probes it and posts the answer over here.
+ *  - **SPA navigations** — `history.pushState` happens in the page's realm;
+ *    wrapping ours would see nothing. The service worker watches
+ *    `chrome.webNavigation` instead, which is the browser's own answer.
+ *
+ * The ring/flash visuals are deliberately mirrored from `cdp/page-script.ts`
+ * (same ids, same look). They cannot be shared: that bootstrap is stringified
+ * for injection and so may not import anything at all.
+ */
+
+import { installSelectionWatcher } from "@habemus-papadum/aiui-dev-overlay/selection";
+import { serveRelay } from "@habemus-papadum/aiui-webext";
+import { type InkHandle, mountInk } from "../cdp/page-ink";
+import type { PageReport } from "../cdp/page-script";
+import { LEGACY_RING_HOST_ID, PAGE_ADDRESS, type ReportMessage } from "./protocol";
+
+const report = (r: PageReport): void => {
+  const message: ReportMessage = { aiuiIntentReport: 1, report: r };
+  chrome.runtime.sendMessage(message).catch(() => {
+    // No panel open (or the extension reloaded): facts are re-reported on the
+    // next hello, so a dropped one is never load-bearing.
+  });
+};
+
+// ── the ring: the page's ONLY evidence of the client's state ─────────────────
+const RING_ID = "__aiui-intent-ring";
+let ring: HTMLElement | undefined;
+const assertRing = (on: boolean, turnTone: boolean): void => {
+  if (!on) {
+    ring?.remove();
+    ring = undefined;
+    return;
+  }
+  if (ring === undefined || !ring.isConnected) {
+    ring = document.createElement("div");
+    ring.id = RING_ID;
+    ring.style.cssText =
+      "position:fixed;top:8px;right:8px;width:12px;height:12px;border-radius:50%;" +
+      "z-index:2147483646;pointer-events:none;transition:background 200ms;";
+    const style = document.createElement("style");
+    style.textContent =
+      "@keyframes __aiui-breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}";
+    ring.appendChild(style);
+    (document.body ?? document.documentElement).appendChild(ring);
+  }
+  ring.style.background = turnTone ? "#dc2626" : "#7c3aed";
+  ring.style.animation = turnTone ? "__aiui-breathe 1.6s ease-in-out infinite" : "none";
+};
+
+const flash = (kind: string): void => {
+  const wash = document.createElement("div");
+  wash.style.cssText =
+    "position:fixed;inset:0;z-index:2147483647;pointer-events:none;transition:opacity 220ms;" +
+    `background:${kind === "miss" ? "rgba(220,38,38,.25)" : "rgba(147,197,253,.35)"};`;
+  (document.body ?? document.documentElement).appendChild(wash);
+  requestAnimationFrame(() => {
+    wash.style.opacity = "0";
+    setTimeout(() => wash.remove(), 260);
+  });
+};
+
+// ── the in-turn key layer (the wholesale claim) ──────────────────────────────
+let keyHandlers: { down: (e: KeyboardEvent) => void; up: (e: KeyboardEvent) => void } | undefined;
+const setKeyCapture = (capture: boolean): void => {
+  if (!capture) {
+    if (keyHandlers !== undefined) {
+      window.removeEventListener("keydown", keyHandlers.down, true);
+      window.removeEventListener("keyup", keyHandlers.up, true);
+      keyHandlers = undefined;
+    }
+    return;
+  }
+  if (keyHandlers !== undefined) {
+    return;
+  }
+  const forward = (phase: "down" | "up") => (event: KeyboardEvent) => {
+    // Browser chords (⌘L, ⌘T…) stay the browser's — the wholesale claim is for
+    // ordinary keys; the panel's grammar decides swallow-vs-command.
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    report({ kind: "key", key: event.key, phase, repeat: event.repeat });
+  };
+  keyHandlers = { down: forward("down"), up: forward("up") };
+  window.addEventListener("keydown", keyHandlers.down, true);
+  window.addEventListener("keyup", keyHandlers.up, true);
+};
+
+// ── ink: the real surface, imported (no injection, no CSP fight) ─────────────
+let ink: InkHandle | undefined;
+
+// ── selection: structured, via the overlay's watcher ─────────────────────────
+const watcher = installSelectionWatcher({
+  onChange: (snap) => report({ kind: "selection", present: snap !== undefined }),
+});
+
+// ── the coexistence detector (see protocol.ts) ───────────────────────────────
+// The frozen client injects into the same page. We cannot talk to it — runtime
+// messages never cross extension ids — but we share a DOM, and its ring wears
+// an `armed` class while it holds the tab. Watch that, report it, and let the
+// panel refuse to arm on top of it (README: never both armed).
+const legacyArmed = (): boolean => {
+  const host = document.getElementById(LEGACY_RING_HOST_ID);
+  const root = host?.shadowRoot?.firstElementChild?.nextElementSibling ?? undefined;
+  return root instanceof HTMLElement ? root.classList.contains("armed") : false;
+};
+let foreignWas = false;
+const checkForeign = (): void => {
+  const armed = legacyArmed();
+  if (armed !== foreignWas) {
+    foreignWas = armed;
+    report({ kind: "foreign", armed });
+  }
+};
+const legacyHost = document.getElementById(LEGACY_RING_HOST_ID);
+if (legacyHost?.shadowRoot != null) {
+  new MutationObserver(checkForeign).observe(legacyHost.shadowRoot, {
+    attributes: true,
+    subtree: true,
+    attributeFilter: ["class"],
+  });
+}
+
+// ── the interaction ping (the smart-video gate) ──────────────────────────────
+let lastInteraction = 0;
+const interaction = (): void => {
+  const now = Date.now();
+  if (now - lastInteraction > 1000) {
+    lastInteraction = now;
+    report({ kind: "interaction" });
+  }
+};
+for (const type of ["pointerdown", "keydown", "wheel", "scroll"] as const) {
+  window.addEventListener(type, interaction, { passive: true, capture: true });
+}
+
+// ── the MAIN-world probe's answer: is this page aiui-instrumented? ───────────
+let aiuiPage = false;
+window.addEventListener("message", (event) => {
+  if (event.source === window && (event.data as { aiuiInstrumented?: boolean })?.aiuiInstrumented) {
+    aiuiPage = true;
+    sayHello(); // the probe may land after our first hello — correct the record
+  }
+});
+
+const sayHello = (): void => {
+  report({
+    kind: "hello",
+    url: location.href,
+    title: document.title,
+    visible: document.visibilityState === "visible",
+    focused: document.hasFocus(),
+    aiui: aiuiPage,
+  });
+  checkForeign();
+};
+
+// ── the capability surface (the same command set the CDP page serves) ────────
+serveRelay(PAGE_ADDRESS, {
+  ring: (payload) => {
+    const p = payload as { on?: boolean; turnTone?: boolean } | null;
+    assertRing(p?.on === true, p?.turnTone === true);
+    return { ok: true };
+  },
+  flash: (payload) => {
+    flash(String((payload as { kind?: string } | null)?.kind ?? "shot"));
+    return { ok: true };
+  },
+  keylayer: (payload) => {
+    setKeyCapture((payload as { capture?: boolean } | null)?.capture === true);
+    return { ok: true };
+  },
+  selection: () => {
+    const snap = watcher.snapshot();
+    return snap === undefined
+      ? null
+      : {
+          text: snap.text,
+          ...(snap.sourceLoc !== undefined ? { sourceLoc: snap.sourceLoc } : {}),
+          ...(snap.cell !== undefined ? { cell: snap.cell } : {}),
+          ...(snap.cellLoc !== undefined ? { cellLoc: snap.cellLoc } : {}),
+          ...(snap.tex !== undefined ? { tex: snap.tex } : {}),
+          ...(snap.url !== "" ? { url: snap.url } : {}),
+          title: document.title,
+        };
+  },
+  viewport: () => ({
+    w: window.innerWidth,
+    h: window.innerHeight,
+    dpr: window.devicePixelRatio || 1,
+  }),
+  ink: (payload) => {
+    const p = (payload ?? {}) as { on?: boolean; fadeSec?: number; clear?: boolean };
+    if (p.clear === true) {
+      ink?.clear();
+      return { ok: true };
+    }
+    if (p.on === true) {
+      ink ??= mountInk((points) => report({ kind: "stroke", points }));
+      ink.setOn(true, p.fadeSec ?? 0);
+      return { ok: true };
+    }
+    ink?.setOn(false, p.fadeSec ?? 0);
+    return { ok: true };
+  },
+  locate: () => null, // instrumented-page jump: anticipated, post-parity
+});
+
+// The boot hello: a fresh document knows nothing, and the panel may hold state
+// for this tab (ring, key layer, ink mode). Saying hello is what re-arms it —
+// the bus replays on every hello (the reload lesson, learned in Phase 3).
+sayHello();
+document.addEventListener("visibilitychange", sayHello);

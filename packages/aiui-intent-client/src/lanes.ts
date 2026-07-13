@@ -166,7 +166,11 @@ export interface ChannelLanes {
    * the wire engine (the wire re-dials on the replayed thread-open) and
    * re-opens the machine to armed+turn. The capture GRANT does not survive
    * a reload — the user re-grants with the activation gesture (idempotent).
-   * Returns whether a turn was recovered. Call after bind().
+   * Returns whether a turn was recovered.
+   *
+   * Call after bind(), and once the channel is CONNECTED: re-arming goes
+   * through the ordinary `arm` command, which the machine gates on having a
+   * channel. A turn you cannot send is not a turn you have recovered.
    */
   recover(client: IntentClient): boolean;
 }
@@ -486,9 +490,15 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     // Replay re-feeds every listener: the wire re-dials on the replayed
     // thread-open, the panes see the events, the mirror re-persists.
     engine.replay(got.events, { threadOpen: true });
-    // The machine follows the recovered wire truth (arm gate deliberately
-    // bypassed: a recovered turn outranks a not-yet-connected bus — outages
-    // never abandon turns).
+    // The machine follows the recovered wire truth — through the ordinary
+    // commands, and therefore through the ordinary GATES. Arming requires a
+    // channel, so this must be called once the bus is CONNECTED (the entries
+    // do it on first connect). That is not a concession to the gate: a turn you
+    // cannot send is not a turn you have recovered.
+    //
+    // (An earlier version leaned on the gate being advisory and armed anyway.
+    // It worked only because `dispatch` did not enforce `available` — which is
+    // exactly the loophole that let a key or an agent arm past any gate at all.)
     if (client.state().phase === "disarmed") {
       client.dispatch("arm");
     }

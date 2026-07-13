@@ -5,8 +5,8 @@
     "declarationDir": "dist",
     "jsx": "preserve",
     "jsxImportSource": "@solidjs/web",
-    "types": ["vite/client"]
+    "types": ["vite/client", "chrome"]
   },
-  "include": ["src"],
-  "exclude": ["dist", "node_modules", "src/**/*.test.ts"]
+  "include": ["src", "scripts", "vite.config.ts"],
+  "exclude": ["dist", "dist-ext", "node_modules", "src/**/*.test.ts"]
 }

@@ -42,7 +42,11 @@ export type PageEvent =
     }
   /** The page announced whether it is aiui-INSTRUMENTED (window.__AIUI__):
    * instrumented pages answer `locate` and can host jump-to-editor. */
-  | { kind: "aiuiSupport"; tab: number; supported: boolean };
+  | { kind: "aiuiSupport"; tab: number; supported: boolean }
+  /** The FROZEN client holds this tab (its on-page ring says armed). The two
+   * clients share a DOM but no messaging, so this is how they see each other —
+   * and the new one stands down rather than ink over the old one's page. */
+  | { kind: "foreignClient"; tab: number; armed: boolean };
 
 /** Tab-scoped request/response + ring broadcast + page→panel events. */
 export interface PageTransport {

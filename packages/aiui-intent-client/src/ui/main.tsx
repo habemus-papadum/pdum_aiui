@@ -23,12 +23,12 @@ import { createIntentClient, type IntentClient, type IntentLanes } from "../clie
 import { uiScale } from "../config";
 import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
-import { keyVerdict } from "../keys";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
 import type { IntentHost } from "../transport";
 import { Panel } from "./panel";
 import { PANES_STYLES, TracePane, TurnPane } from "./panes";
+import { installPanelKeys, type Narration, WirePane } from "./shell";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined, {
@@ -42,6 +42,15 @@ const toast = (message: string): void => {
   setToastLine(message);
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => setToastLine(undefined), 4000);
+};
+/** The panes' narration — shared with the extension panel (ui/shell.tsx). */
+const narration: Narration = {
+  statusLine,
+  setStatusLine,
+  toastLine,
+  toast,
+  loweredPrompt,
+  setLoweredPrompt,
 };
 
 // The saved config base applies BEFORE the lanes read stt/linter.
@@ -121,15 +130,22 @@ async function boot(): Promise<{
       onBlip: (key) => blipSink?.(key),
     });
     channelLanes.bind(client);
-    if (channelLanes.recover(client)) {
-      setStatusLine("turn recovered from the mirror — re-grant with activate/⌘B");
-    }
 
     // The session bus is the `connected` fact (and, later, peers/slots —
     // the iPad paint presence). Outages never disarm; they just gray the pill.
     const sessionBus = connectSessionBus({ port, label: "intent client (detached page)" });
+    let recovered = false;
     sessionBus.onChange((state) => {
       client.setContext({ connected: state.phase === "connected" });
+      // Recover a mirrored turn once the channel is actually THERE: re-arming
+      // is gated on it (and the gate is the machine's, not the bar's), and a
+      // turn you cannot send is not a turn you have recovered.
+      if (!recovered && state.phase === "connected") {
+        recovered = true;
+        if (channelLanes.recover(client)) {
+          setStatusLine("turn recovered from the mirror — re-grant with activate/⌘B");
+        }
+      }
     });
 
     (window as unknown as { __aiuiIntentClient?: unknown }).__aiuiIntentClient = {
@@ -175,57 +191,16 @@ const { client, mode, lanes, fake, cdp } = await boot();
 const targeting = cdp?.targeting ?? fake?.targeting;
 
 // The activation shortcut — an IMPERATIVE event outside the modal keyboard
-// system (chrome.commands in the extension; this listener here). See
-// ../activation.ts, the reference imperative-boundary example.
+// system (chrome.commands in the extension, where the WORKER receives it; a
+// plain window listener here). See ../activation.ts, the reference
+// imperative-boundary example.
 const activate = (): void => {
   activationGesture(client, targeting?.activeTab());
 };
 
-// Document keys — the same verdicts the content-script forwarding uses.
-const onKey = (phase: "down" | "up") => (event: KeyboardEvent) => {
-  if (event.metaKey && event.key === "b") {
-    event.preventDefault();
-    activate();
-    return;
-  }
-  // Panel zoom (⌘+/⌘−/⌘0) — panel-document chrome, registered before the
-  // grammar so it wins mid-turn (the old panel's rule).
-  if (event.metaKey && phase === "down") {
-    const scale = uiScale.get() as number;
-    if (event.key === "=" || event.key === "+") {
-      event.preventDefault();
-      uiScale.set((Math.round((scale + 0.1) * 10) / 10) as never);
-      return;
-    }
-    if (event.key === "-") {
-      event.preventDefault();
-      uiScale.set((Math.round((scale - 0.1) * 10) / 10) as never);
-      return;
-    }
-    if (event.key === "0") {
-      event.preventDefault();
-      uiScale.set(1 as never);
-      return;
-    }
-  }
-  const verdict = keyVerdict(client.state(), event.key, phase, event.repeat);
-  if (verdict.kind === "pass") {
-    // PANEL-document affordance: outside a turn the grammar claims nothing
-    // (on the TARGET page, keys belong to the page — decided) — but in the
-    // panel's own document, Esc may still step out (armed → disarmed).
-    if (phase === "down" && event.key === "Escape" && client.canDispatch("escape")) {
-      event.preventDefault();
-      client.dispatch("escape");
-    }
-    return;
-  }
-  event.preventDefault();
-  event.stopPropagation();
-  client.handleKey(event.key, phase, event.repeat);
-};
-document.addEventListener("keydown", onKey("down"), true);
-document.addEventListener("keyup", onKey("up"), true);
-window.addEventListener("blur", () => client.emit("windowBlur"));
+// The panel document's keys — shared with the side panel (ui/shell.tsx), so the
+// grammar has exactly one home.
+installPanelKeys({ client, activate });
 
 /** The world facts a real host supplies — as buttons, for the tiers that lack one.
  * In the CDP tier every one of these is REAL (open a tab, select text, click,
@@ -336,32 +311,6 @@ function SimulateStrip() {
   );
 }
 
-/** The wire's narration: status line · toast · the lowered-prompt echo. */
-function WirePane() {
-  return (
-    <div style="margin: 8px 12px; font: 12px system-ui; opacity: 0.85; max-width: 460px">
-      <Show when={toastLine()}>
-        {(line) => (
-          <div style="color: #dc2626; border: 1px solid #dc2626; border-radius: 6px; padding: 4px 8px; margin-bottom: 6px">
-            {line()}
-          </div>
-        )}
-      </Show>
-      <Show when={statusLine() !== ""}>
-        <div style="opacity: 0.7">{statusLine()}</div>
-      </Show>
-      <Show when={loweredPrompt()}>
-        {(prompt) => (
-          <details style="margin-top: 6px" open>
-            <summary>lowered prompt (the channel's echo of the sent turn)</summary>
-            <pre style="white-space: pre-wrap; font: 11px ui-monospace, monospace">{prompt()}</pre>
-          </details>
-        )}
-      </Show>
-    </div>
-  );
-}
-
 const root = document.getElementById("root");
 if (root === null) {
   throw new Error("intent-client page: #root missing");
@@ -385,7 +334,7 @@ render(
           </>
         )}
       </Show>
-      <WirePane />
+      <WirePane narration={narration} />
     </>
   ),
   root,

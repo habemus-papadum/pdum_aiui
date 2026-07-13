@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_EXTENSION_ID,
+  INTENT_CLIENT_EXTENSION_ID,
   installProfileNativeHost,
   NATIVE_HOST_NAME,
   nativeHostManifestDirs,
@@ -94,7 +95,13 @@ describe("installProfileNativeHost", () => {
     expect(manifest.name).toBe(NATIVE_HOST_NAME);
     expect(manifest.path).toBe(wrapper);
     expect(manifest.type).toBe("stdio");
-    expect(manifest.allowed_origins).toEqual([`chrome-extension://${DEFAULT_EXTENSION_ID}/`]);
+    // Both clients: the frozen extension and the greenfield intent client are
+    // separate extensions with separate ids, and BOTH cold-start through this
+    // host. Admitting only one is what would force a replace-not-coexist.
+    expect(manifest.allowed_origins).toEqual([
+      `chrome-extension://${DEFAULT_EXTENSION_ID}/`,
+      `chrome-extension://${INTENT_CLIENT_EXTENSION_ID}/`,
+    ]);
   });
 
   it("honors an explicit extension id", () => {
@@ -102,7 +109,10 @@ describe("installProfileNativeHost", () => {
     const manifest = JSON.parse(readFileSync(manifestPath(), "utf8")) as {
       allowed_origins: string[];
     };
-    expect(manifest.allowed_origins).toEqual([`chrome-extension://${"a".repeat(32)}/`]);
+    expect(manifest.allowed_origins).toEqual([
+      `chrome-extension://${"a".repeat(32)}/`,
+      `chrome-extension://${INTENT_CLIENT_EXTENSION_ID}/`,
+    ]);
   });
 
   it("is idempotent — unchanged content is not rewritten (launch-time mtime churn)", () => {

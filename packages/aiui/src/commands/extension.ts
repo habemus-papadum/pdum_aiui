@@ -83,6 +83,14 @@ export const NATIVE_HOST_NAME = "com.habemus_papadum.aiui";
 export const DEFAULT_EXTENSION_ID = "ngakidpkjdgaajnlpggbchpaikilkpmp";
 
 /**
+ * The greenfield intent client's id — a DIFFERENT extension, deliberately (see
+ * `packages/aiui-intent-client/src/ext/manifest.ts`, which owns the key this is
+ * derived from). Duplicated rather than imported: `aiui` does not depend on the
+ * intent client, and this is a 32-char constant that changes only if the key does.
+ */
+export const INTENT_CLIENT_EXTENSION_ID = "cdpbfpcelmifhagikjlfpgfipggcmdeg";
+
+/**
  * An inert page inside the extension, opened in a background tab when the
  * extension has no live context to evaluate `chrome.runtime.reload()` in (an
  * idle MV3 service worker leaves none). Shipped in both artifacts.
@@ -497,7 +505,15 @@ function ensureWrapperAndManifest(extensionId: string): { wrapper: string; body:
     description: "aiui native-messaging host: channel discovery for the aiui browser extension",
     path: wrapper,
     type: "stdio",
-    allowed_origins: [`chrome-extension://${extensionId}/`],
+    // Both clients. The host answers one question — "which channels are up?" —
+    // and both extensions need it to cold-start (an extension page's origin is
+    // `chrome-extension://…`, so unlike the channel-served page it cannot read
+    // its port off its own URL). Listing both is what lets the greenfield client
+    // be installed beside the frozen one instead of replacing it.
+    allowed_origins: [
+      `chrome-extension://${extensionId}/`,
+      `chrome-extension://${INTENT_CLIENT_EXTENSION_ID}/`,
+    ],
   };
   return { wrapper, body: `${JSON.stringify(manifest, null, 2)}\n` };
 }

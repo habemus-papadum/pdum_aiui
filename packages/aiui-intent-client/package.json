@@ -19,6 +19,9 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "build:ext": "tsx scripts/build-ext.ts",
+    "load:ext": "tsx scripts/load-ext.ts",
+    "ext": "pnpm build:ext && pnpm load:ext",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "dev": "vite"
@@ -28,17 +31,20 @@
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-ink": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-webext": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",
     "solid-js": "2.0.0-beta.15"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
+    "@types/chrome": "^0.0.287",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",
     "esbuild": "^0.25.12",
     "express": "^5.1.0",
     "jsdom": "^25.0.1",
+    "tsx": "^4.22.5",
     "vite": "^6.4.1",
     "vite-plugin-solid": "3.0.0-next.5",
     "ws": "^8.18.0"

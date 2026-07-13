@@ -289,6 +289,9 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
           repeat: report.repeat,
         });
         break;
+      case "foreign":
+        emit({ kind: "foreignClient", tab: page.tab, armed: report.armed });
+        break;
       case "stroke":
         break; // stroke counts enrich the shot payload later (post-v1)
     }

@@ -10,6 +10,11 @@ dist/
 # — a `pnpm build` must never be able to clobber a live dev install.
 dist-dev/
 
+# The intent client's MV3 bundle (`pnpm -C packages/aiui-intent-client build:ext`).
+# Its own directory because it is a THIRD shape of the same package: dist/ is the
+# library, dist-ext/ is the unpacked extension you load at chrome://extensions.
+dist-ext/
+
 # Generated documentation (docs:gen output + VitePress artifacts). Rebuilt by `pnpm docs:gen`.
 docs/packages/
 docs/.vitepress/sidebar.generated.json

@@ -355,6 +355,27 @@ describe("canDispatch: availability is derived from the reducer", () => {
     expect(e.canDispatch("arm")).toBe(true);
   });
 
+  it("REFUSES an unavailable command — the gate is the machine's, not the bar's", () => {
+    // A bar button can be greyed out; a key, an agent's control() write and a
+    // recovered turn cannot. They all arrive as the same dispatch, so a gate
+    // enforced only where the buttons live is a gate that holds until the first
+    // other caller (found in Phase 4: the coexistence rule was bypassable by
+    // simply pressing the key).
+    const e = createModeEngine(
+      {
+        ...fullSpec,
+        available: { arm: (_s, ctx) => ctx.grantedTab !== undefined },
+      },
+      { context: { grantedTab: undefined } },
+    );
+    expect(e.dispatch("arm")).toEqual(e.state()); // refused: nothing moved
+    expect(e.state().phase).toBe("disarmed");
+
+    e.setContext({ grantedTab: 1 });
+    e.dispatch("arm");
+    expect(e.state().phase).toBe("armed");
+  });
+
   it("throws on unknown commands and validates available keys at creation", () => {
     expect(() => engine().canDispatch("frobnicate")).toThrow(/unknown command/);
     expect(() =>
