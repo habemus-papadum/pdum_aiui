@@ -22,6 +22,11 @@ export const PANEL_STYLES = `
     border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit; }
   .aiui-cap[data-lit="true"] { background: color-mix(in srgb, #7c3aed 18%, transparent);
     border-color: #7c3aed; }
+  .aiui-cap:active:not([disabled]) { transform: translateY(1px);
+    background: color-mix(in srgb, currentColor 14%, transparent); }
+  .aiui-cap[data-flash="true"] { background: color-mix(in srgb, #16a34a 22%, transparent);
+    border-color: #16a34a; transition: none; }
+  .aiui-cap { transition: background 250ms ease-out, border-color 250ms ease-out; }
   .aiui-cap[disabled] { opacity: 0.4; cursor: default; }
   .aiui-cap[data-tone="danger"] { border-color: color-mix(in srgb, #dc2626 60%, transparent); }
   .aiui-claims { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
@@ -61,6 +66,18 @@ export function Panel(props: PanelProps) {
   });
   onCleanup(() => clearTimeout(blipTimer));
 
+  // Verb caps (shot, selection, clear) move no region, so nothing lights —
+  // acknowledge the tap itself with a brief flash. Display state, UI-local.
+  const [flashed, setFlashed] = createSignal<string | undefined>(undefined, { ownedWrite: true });
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  const tapCap = (command: string, payload?: unknown): void => {
+    client.dispatch(command, payload);
+    setFlashed(command);
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => setFlashed(undefined), 220);
+  };
+  onCleanup(() => clearTimeout(flashTimer));
+
   return (
     <div class="aiui-panel" data-testid="aiui-panel">
       <style>{PANEL_STYLES}</style>
@@ -76,10 +93,11 @@ export function Panel(props: PanelProps) {
               class="aiui-cap"
               data-command={cap.command}
               data-lit={cap.lit ? "true" : "false"}
+              data-flash={flashed() === cap.command ? "true" : "false"}
               data-tone={cap.hint.tone}
               disabled={!cap.enabled}
               title={`${cap.hint.key} — ${cap.hint.label}`}
-              onClick={() => client.dispatch(cap.command, cap.payload)}
+              onClick={() => tapCap(cap.command, cap.payload)}
             >
               {cap.hint.icon ?? cap.hint.key} {cap.hint.label}
             </button>

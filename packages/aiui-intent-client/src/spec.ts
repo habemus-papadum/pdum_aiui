@@ -82,8 +82,14 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     send: (s) => (s.phase === "turn" || s.phase === "tweak" ? { phase: "armed" } : null),
     /** d — deliberate full abandonment: everything off, ink mode included. */
     disarm: () => ({ phase: "disarmed", ink: false }),
-    /** t — hand keyboard and pointer back to the page; the turn stays open. */
-    tweak: (s) => (s.phase === "turn" ? { phase: "tweak" } : null),
+    /**
+     * t — hand keyboard and pointer back to the page; the turn stays open.
+     * A TOGGLE: the panel's tweak cap also releases it (in tweak the page
+     * owns every ordinary key, so the cap and ⌘B are the only ways back —
+     * pressing T on the page must pass through to the page).
+     */
+    tweak: (s) =>
+      s.phase === "turn" ? { phase: "tweak" } : s.phase === "tweak" ? { phase: "turn" } : null,
     /** i — toggle ink mode (standing). */
     ink: (s) => ({ ink: !(s.ink as boolean) }),
     /** v — toggle video sampling (standing; the claim gates on turn). */

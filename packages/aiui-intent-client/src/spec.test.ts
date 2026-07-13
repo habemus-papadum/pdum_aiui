@@ -69,6 +69,12 @@ const rows: Array<{
     expected: { phase: "tweak" },
   },
   {
+    name: "tweak from tweak releases back to turn (the panel cap; T on the page passes through)",
+    start: { phase: "tweak" },
+    command: "tweak",
+    expected: { phase: "turn" },
+  },
+  {
     name: "tweak outside turn is nothing",
     start: { phase: "armed" },
     command: "tweak",

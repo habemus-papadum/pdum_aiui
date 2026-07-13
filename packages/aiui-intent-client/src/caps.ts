@@ -37,7 +37,11 @@ export const intentCaps: readonly CapSpec<IntentContext>[] = [
   },
   {
     command: "tweak",
-    hint: { key: "t", label: "tweak", icon: "🔧" },
+    hint: ({ state }) => ({
+      key: "t",
+      label: state.phase === "tweak" ? "resume (leave tweak)" : "tweak",
+      icon: "🔧",
+    }),
     litWhen: ({ state }) => state.phase === "tweak",
   },
   {
