@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PageEvent } from "../transport";
 import { connectExtensionBus } from "./extension-bus";
-import { PAGE_ADDRESS, type ReportMessage } from "./protocol";
+import type { ReportMessage } from "./protocol";
 
 interface FakeChrome {
   fireMessage(msg: unknown, sender: { tab?: { id: number; windowId: number } }): void;
