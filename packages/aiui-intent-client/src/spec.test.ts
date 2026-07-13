@@ -17,31 +17,9 @@ const rows: Array<{
   command: string;
   expected: Partial<Record<string, string | boolean>>;
 }> = [
-  // ⌘B column: grant-and-open, idempotent, resumes tweak
-  {
-    name: "⌘B from disarmed opens a turn",
-    start: {},
-    command: "cmdB",
-    expected: { phase: "turn" },
-  },
-  {
-    name: "⌘B from armed opens a turn",
-    start: { phase: "armed" },
-    command: "cmdB",
-    expected: { phase: "turn" },
-  },
-  {
-    name: "⌘B in a turn is a no-op",
-    start: { phase: "turn" },
-    command: "cmdB",
-    expected: { phase: "turn" },
-  },
-  {
-    name: "⌘B resumes from tweak",
-    start: { phase: "tweak" },
-    command: "cmdB",
-    expected: { phase: "turn" },
-  },
+  // (The activation shortcut has NO command row here on purpose: it is an
+  // imperative event outside the modal system — activationGesture composes
+  // arm/turn/tweak; its semantics are pinned in client.test.ts.)
   // arm column: one cap, status + toggle (gated on `connected` via available)
   {
     name: "arm from disarmed arms",
@@ -112,7 +90,7 @@ const rows: Array<{
     command: "tweak",
     expected: { phase: "armed" },
   },
-  // Esc column: one level, floor at armed
+  // Esc column: one level per press, the WHOLE ladder (armed → disarmed too)
   {
     name: "esc from tweak returns to turn",
     start: { phase: "tweak" },
@@ -126,10 +104,10 @@ const rows: Array<{
     expected: { phase: "armed" },
   },
   {
-    name: "esc from armed does nothing",
-    start: { phase: "armed" },
+    name: "esc from armed steps out to the ONE hard disarmed (ink clears)",
+    start: { phase: "armed", ink: true },
     command: "escape",
-    expected: { phase: "armed" },
+    expected: { phase: "disarmed", ink: false },
   },
   {
     name: "esc dismisses help before the cancel rung",
@@ -137,11 +115,17 @@ const rows: Array<{
     command: "escape",
     expected: { phase: "turn", help: false },
   },
-  // d column
+  // d column — the hard-disarmed exclude does the clearing on EVERY route
   {
-    name: "disarm clears ink mode (nothing else does)",
+    name: "disarm clears ink mode (the disarmed-is-hard invariant)",
     start: { phase: "turn", ink: true },
     command: "disarm",
+    expected: { phase: "disarmed", ink: false },
+  },
+  {
+    name: "the arm toggle from a turn reaches the same hard disarmed",
+    start: { phase: "turn", ink: true },
+    command: "arm",
     expected: { phase: "disarmed", ink: false },
   },
   {
@@ -209,19 +193,22 @@ describe("spec-level properties", () => {
         break;
       }
     }
-    expect(steps).toBeLessThanOrEqual(3); // help + tweak→turn + turn→armed
-    expect(e.state()).toMatchObject({ phase: "armed", help: false });
+    expect(steps).toBeLessThanOrEqual(4); // help + tweak→turn + turn→armed + armed→disarmed
+    expect(e.state()).toMatchObject({ phase: "disarmed", help: false, ink: false });
   });
 
   it("excludes hold after every command from a hostile seed", () => {
     const e = engine({ phase: "turn", talk: "handsFree", micMuted: true, help: true });
-    for (const command of ["send", "cmdB", "handsFree", "disarm", "cmdB", "escape", "arm"]) {
+    for (const command of ["send", "turn", "handsFree", "disarm", "arm", "turn", "escape", "arm"]) {
       const s: EngineState = e.dispatch(command);
       if (s.phase !== "turn") {
         expect(s.talk).toBe("off");
       }
       if (s.talk === "off") {
         expect(s.micMuted).toBe(false);
+      }
+      if (s.phase === "disarmed") {
+        expect(s.ink).toBe(false); // one disarmed, and it is hard
       }
     }
   });

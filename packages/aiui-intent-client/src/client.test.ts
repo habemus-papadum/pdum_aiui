@@ -7,6 +7,7 @@
  */
 import { controlByName, disposeDurable } from "@habemus-papadum/aiui-viz";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { activationGesture } from "./activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "./client";
 import { type FakeBus, fakeBus } from "./fake-bus";
 import { intentSpec } from "./spec";
@@ -58,10 +59,10 @@ function makeRig(): Rig {
   return rig;
 }
 
-/** ⌘B with the grant minted (the SW's invocation gate, faked). */
+/** The activation shortcut with the grant minted (the SW gate, faked). */
 function grantAndOpen(r: Rig, tab = 7): void {
-  r.client.setContext({ grantedTab: tab, connected: true });
-  r.client.dispatch("cmdB");
+  r.client.setContext({ connected: true });
+  activationGesture(r.client, tab);
 }
 
 /** All bar items, flattened across depth rows. */
@@ -89,21 +90,28 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe("⌘B — idempotent grant-and-open (decided semantics)", () => {
+describe("the activation gesture — imperative boundary, idempotent grant-and-open", () => {
   it("opens from disarmed, is a no-op in an open turn, resumes from tweak", async () => {
     const r = makeRig();
     grantAndOpen(r);
-    expect(r.client.state().phase).toBe("turn");
+    expect(r.client.state().phase).toBe("turn"); // armed AND opened, one gesture
     expect(r.lanes).toEqual(["openTurn"]);
 
-    r.client.dispatch("cmdB"); // ledger: "⌘B-as-escape silently abandoned turns"
+    grantAndOpen(r); // ledger: "⌘B-as-escape silently abandoned turns"
     expect(r.client.state().phase).toBe("turn");
     expect(r.lanes).toEqual(["openTurn"]); // no second open, no cancel
 
     r.client.dispatch("tweak");
-    r.client.dispatch("cmdB");
+    grantAndOpen(r);
     expect(r.client.state().phase).toBe("turn"); // resumed, same turn
     expect(r.lanes).toEqual(["openTurn"]);
+  });
+
+  it("respects the arm gate: no channel, no arming — the gesture fizzles safely", () => {
+    const r = makeRig(); // never connected
+    activationGesture(r.client, 7);
+    expect(r.client.state().phase).toBe("disarmed");
+    expect(r.lanes).toEqual([]);
   });
 });
 
@@ -145,8 +153,12 @@ describe("send vs cancel vs disarm", () => {
     expect(r.client.state().phase).toBe("armed");
     expect(r.lanes).toEqual(["openTurn", "cancelTurn"]);
 
+    r.client.dispatch("ink"); // standing setting, to prove the hard clear
+    r.client.dispatch("escape"); // the last rung: step out of armed = disarm
+    expect(r.client.state()).toMatchObject({ phase: "disarmed", ink: false });
+
     const before = r.client.state();
-    r.client.dispatch("escape"); // and Esc NEVER disarms (the floor)
+    r.client.dispatch("escape"); // quiescent: nothing left to step out of
     expect(r.client.state()).toBe(before);
   });
 
@@ -383,6 +395,21 @@ describe("the bar: a tree presented linearly", () => {
     expect(r.lanes).toContain("openTurn"); // the bar's turn opens the thread too
     expect(findCap(r, "ink")).toBeDefined();
     expect(findCap(r, "send")?.enabled).toBe(true);
+  });
+
+  it("push-to-talk and hands-free are separate affordances over ONE talk region", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    const ptt = findCap(r, "talkPress");
+    expect(ptt?.hold).toEqual({ down: "talkPress", up: "talkRelease" }); // press-and-HOLD
+    expect(ptt?.enabled).toBe(true);
+
+    r.client.dispatch("handsFree"); // while hands-free, the hold grip is
+    expect(findCap(r, "talkPress")?.enabled).toBe(false); // unavailable — one mic
+    r.client.dispatch("handsFree");
+    r.client.dispatch("talkPress"); // and vice versa
+    expect(findCap(r, "handsFree")?.enabled).toBe(true); // h SWITCHES grips (reduction moves talk)
+    expect(r.client.state().talk).toBe("hold");
   });
 
   it("hands-free reveals mute; video reveals cadence — widgets included", () => {

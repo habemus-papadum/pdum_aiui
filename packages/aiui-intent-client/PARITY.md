@@ -9,20 +9,22 @@ commit as the code that moves it.
 
 Status key: ✅ done · P2/P3/P4 = assigned phase · DECIDE = owner call needed (default noted).
 
+The interaction contract itself (how these features behave) is [BEHAVIOR.md](./BEHAVIOR.md).
+
 ## Machine (inventory §1A/§1C — the phase machine and modes)
 
 | Row | Status | Where / when |
 | --- | --- | --- |
 | phase ladder disarmed·armed·turn·tweak; turn recovery via mirror | ✅ spec.ts (`phase`) — **recovery mirror P2** (wire lanes own the completeness-stamped mirror) |
-| ⌘B idempotent grant-and-open; resume from tweak | ✅ spec.ts `cmdB` + tests |
+| Activation (⌘B in the extension): idempotent grant-and-open; resume from tweak; NEVER cancels | ✅ activation.ts `activationGesture` (an imperative-boundary helper, not a command) + tests |
 | tweak: cap toggles out; page keys pass through in tweak | ✅ spec.ts `tweak` (toggle), keyRouting claim releases in tweak |
 | send keeps armed (divergence 2) | ✅ spec.ts `send` + tests |
-| Esc ladder: help → turn-cancel; never disarms | ✅ escOrder + escFloor + tests |
-| disarm: ink off, everything abandoned; standing video kept | ✅ spec.ts `disarm` + excludes + tests |
+| Esc ladder: help → tweak → turn-cancel → armed → disarmed (CONSCIOUS DEVIATION: the old client's Esc never disarmed; owner 2026-07-13 — step out of armed IS disarm) | ✅ escOrder, floorless ladder + tests |
+| ONE hard disarmed: every route (esc, arm cap, d) clears ink; standing video kept | ✅ the `disarmed-is-hard` exclude + tests |
 | blip on unknown in-turn keys (swallow, 500 ms) | ✅ keys.ts verdict + panel blip line |
 | `inkOn` standing/durable; only c/disarm clear strokes | ✅ spec.ts `ink` (durable) + `clear` verb — **stroke clearing itself P2/P3** (real page surface) |
 | `videoOn`/`videoMode` standing/durable, agent-visible | ✅ spec.ts agent regions (single-writer bridge) |
-| talk: hold (Space) vs hands-free (h); per-turn; Space-up ends only a hold | ✅ spec.ts `talk` region + excludes + tests |
+| talk: ONE exclusive region (off/hold/handsFree), TWO affordances — hold Space or the press-and-hold 🎙 cap; the 🎧 toggle; per-turn; Space-up ends only a hold | ✅ spec.ts + caps.ts hold cap + tests |
 | `micMuted` only while talking; reset on talk start | ✅ spec.ts + excludes + tests |
 | help popup (`?`), Esc dismisses before cancel | ✅ spec.ts + panel help table |
 | idle timeout closes turn → armed; suspended in tweak + while talking | ✅ `turnClosed` binding — **timer itself P2** (engine lane owns it; the suspension rule rides the lane config) |
@@ -90,7 +92,7 @@ channel-served page. Each imports unchanged (salvage list); what's new is bindin
 | FakeBus | ✅ |
 | CdpBus (real tabs, extension-free; refuse non-loopback CDP) | P3 |
 | ExtensionBus + SW broker (copied) + content glue + static build + new identity + `aiui2.*` prefixes + never-both-armed policy | P4 |
-| ⌘B via `chrome.commands` (in-page binding until then) | ✅ in-page (main.tsx) · P4 real |
+| activation shortcut via `chrome.commands` (in-page listener until then) | ✅ in-page listener → activationGesture (main.tsx) · P4 real |
 
 ## Bug ledger (inventory §3) as tests
 

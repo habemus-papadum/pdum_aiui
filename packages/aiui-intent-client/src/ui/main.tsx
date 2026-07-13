@@ -11,6 +11,7 @@
  */
 
 import { render } from "@solidjs/web";
+import { activationGesture } from "../activation";
 import { createIntentClient, type IntentLanes } from "../client";
 import { fakeBus } from "../fake-bus";
 import { keyVerdict } from "../keys";
@@ -46,18 +47,20 @@ const client = createIntentClient({
 // The dev page boots "connected" (the real page learns this from its bus).
 client.setContext({ connected: true });
 
-// The plain page stands in for the privileged ⌘B: grant the fake tab and
-// open (the SW's invocation gate, simulated — same command path).
-const grantAndOpen = (): void => {
-  client.setContext({ grantedTab: bus.targeting.activeTab() });
-  client.dispatch("cmdB");
+// The activation shortcut — an IMPERATIVE event outside the modal keyboard
+// system (chrome.commands in the extension; this listener here). The page
+// mints the grant stand-in and crosses the boundary via activationGesture:
+// sequential idempotent dispatches (see ../activation.ts, the reference
+// imperative-boundary example).
+const activate = (): void => {
+  activationGesture(client, bus.targeting.activeTab());
 };
 
 // Document keys — the same verdicts the content-script forwarding uses.
 const onKey = (phase: "down" | "up") => (event: KeyboardEvent) => {
   if (event.metaKey && event.key === "b") {
     event.preventDefault();
-    grantAndOpen();
+    activate();
     return;
   }
   const verdict = keyVerdict(client.state(), event.key, phase, event.repeat);
@@ -79,8 +82,8 @@ function SimulateStrip() {
     <details style="margin: 12px 0 0 12px; font: 12px system-ui; opacity: 0.8" open>
       <summary>simulate (dev page stand-ins for real host facts)</summary>
       <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px">
-        <button type="button" data-testid="cmd-b" onClick={grantAndOpen}>
-          ⌘B — grant + open turn
+        <button type="button" data-testid="activate" onClick={activate}>
+          activate (the ⌘B stand-in): grant + open
         </button>
         <button
           type="button"

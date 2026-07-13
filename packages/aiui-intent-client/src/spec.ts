@@ -60,8 +60,11 @@ export const initialContext: IntentContext = {
  */
 export const intentSpec: ModeEngineSpec<IntentContext> = {
   regions: {
-    /** THE machine: disarmed ⊂ armed ⊂ turn, tweak a submode of turn. */
-    phase: ladder(["disarmed", "armed", "turn", "tweak"], { escFloor: "armed" }),
+    /** THE machine: disarmed ⊂ armed ⊂ turn, tweak a submode of turn. Esc
+     * unwinds the WHOLE ladder one level per press (owner, 2026-07-13):
+     * tweak → turn → armed → disarmed — stepping out of armed IS disarming,
+     * and there is only one disarmed (the hard one; see the exclude). */
+    phase: ladder(["disarmed", "armed", "turn", "tweak"]),
     /** Ink mode — standing (survives turns), durable; disarm clears it. */
     ink: toggle({ durable: true }),
     /** Video sampling — standing, durable, agent-visible. */
@@ -85,29 +88,29 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
   },
 
   commands: {
-    /**
-     * ⌘B — the browser-global whose meaning is state-dependent, but never
-     * destructive: grant-and-open from anywhere, resume from tweak, no-op in
-     * an open turn (idempotent — a second press must never cancel).
-     */
-    cmdB: (s) => (s.phase === "turn" ? null : { phase: "turn" }),
+    // NOTE deliberately absent: a "cmdB" command. The browser-global
+    // activation shortcut is NOT a key in this modal system — it is an
+    // imperative event from outside (chrome.commands in the extension, a
+    // window listener in the plain page) handled by activationGesture(),
+    // which crosses the boundary as sequential idempotent dispatches of the
+    // commands below. See ./activation.ts.
     /**
      * The bar's arm cap — a status indicator you can press: arms from
-     * disarmed, disarms (full abandon, like `d`) from anywhere else. Gated
-     * on the channel being connected via `available` below.
+     * disarmed, disarms from anywhere else (the disarmed-is-hard exclude
+     * does the clearing). Gated on the channel via `available` below.
      */
     arm: (s): StatePatch => {
       if (s.phase === "disarmed") {
         return { phase: "armed" };
       }
-      return { phase: "disarmed", ink: false };
+      return { phase: "disarmed" };
     },
-    /** The bar's turn cap — open a turn from armed (⌘B minus the mint). */
+    /** The bar's turn cap — open a turn from armed. */
     turn: (s) => (s.phase === "armed" ? { phase: "turn" } : null),
     /** Enter — send the turn; the seat stays armed (divergence 2, decided). */
     send: (s) => (s.phase === "turn" || s.phase === "tweak" ? { phase: "armed" } : null),
-    /** d — deliberate full abandonment: everything off, ink mode included. */
-    disarm: () => ({ phase: "disarmed", ink: false }),
+    /** d — disarm from anywhere in-turn (same hard disarmed as everything). */
+    disarm: () => ({ phase: "disarmed" }),
     /**
      * t — hand keyboard and pointer back to the page; the turn stays open.
      * A TOGGLE: the panel's tweak cap also releases it (in tweak the page
@@ -155,6 +158,11 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
   escOrder: ["help", "phase"],
 
   excludes: [
+    // ONE disarmed, and it is HARD (owner, 2026-07-13): however you get
+    // there — the d key, the arm toggle, Esc unwinding the last rung — ink
+    // mode clears. Declared once as an invariant, not remembered per route.
+    // (Standing video/videoMode survive disarm, as in the old client.)
+    { name: "disarmed-is-hard", when: (s) => s.phase === "disarmed", set: { ink: false } },
     // Talk is per-turn: whoever moved the phase, leaving "turn" ends it
     // (send, cancel, disarm, tweak, idle-timeout binding — no site can forget).
     { name: "talk-is-per-turn", when: (s) => s.phase !== "turn", set: { talk: "off" } },

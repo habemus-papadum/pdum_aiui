@@ -19,13 +19,17 @@ const inTurn = (phase: unknown): boolean => phase === "turn" || phase === "tweak
 /** The main bar: the mode tree. */
 export const intentBar: readonly BarNode<IntentContext>[] = [
   {
+    // No key: arming is a cap (or the activation gesture) — not a modal key.
     command: "arm",
-    hint: { key: "⏻", label: "armed" },
+    hint: { key: "", label: "armed", icon: "⏻" },
     litWhen: ({ state }) => state.phase !== "disarmed",
     children: [
       {
+        // No key either: the activation shortcut is an imperative event
+        // outside the modal keyboard system (see activation.ts) — it must
+        // not masquerade as this cap's binding.
         command: "turn",
-        hint: { key: "⌘B", label: "turn" },
+        hint: { key: "", label: "turn", icon: "💬" },
         litWhen: ({ state }) => inTurn(state.phase),
         children: [
           {
@@ -54,6 +58,16 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
             command: "tweak",
             hint: { key: "t", label: "tweak", icon: "🔧" },
             litWhen: ({ state }) => state.phase === "tweak",
+          },
+          {
+            // Push-to-talk: a HOLD cap — press opens the talk window, release
+            // ends it; the identical commands Space uses. A separate
+            // engagement affordance from hands-free; one exclusive talk
+            // region underneath (a second window is unrepresentable).
+            command: "talkPress",
+            hold: { down: "talkPress", up: "talkRelease" },
+            hint: { key: "␣", label: "push to talk", icon: "🎙" },
+            litWhen: ({ state }) => state.talk === "hold",
           },
           {
             command: "handsFree",

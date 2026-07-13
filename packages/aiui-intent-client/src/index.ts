@@ -15,6 +15,7 @@
  *  - fake-bus.ts— the in-memory host (tests + the dev harness)
  */
 
+export { activationGesture } from "./activation";
 export { configBar, intentBar } from "./caps";
 export { intentClaims } from "./claims";
 export {

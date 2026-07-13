@@ -8,6 +8,7 @@
 import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { afterEach, describe, expect, it } from "vitest";
+import { activationGesture } from "../activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { fakeBus } from "../fake-bus";
 import { intentSpec } from "../spec";
@@ -90,7 +91,7 @@ describe("the panel is a projection", () => {
     await settle();
     expect(text(m.root, "phase-pill")).toBe("disarmed");
 
-    m.client.dispatch("cmdB");
+    activationGesture(m.client, 7);
     await settle(); // effects paint on the flush inside dispatch; settle for jsdom
     expect(text(m.root, "phase-pill")).toBe("turn");
 
@@ -102,7 +103,7 @@ describe("the panel is a projection", () => {
 
   it("cap clicks dispatch the same command as the key", async () => {
     const m = mount();
-    m.client.dispatch("cmdB");
+    activationGesture(m.client, 7);
     await settle();
     const sendCap = m.root.querySelector<HTMLButtonElement>('[data-command="send"]');
     expect(sendCap).not.toBeNull();
@@ -114,7 +115,7 @@ describe("the panel is a projection", () => {
 
   it("the help table renders the working keymap and dies on Esc first", async () => {
     const m = mount();
-    m.client.dispatch("cmdB");
+    activationGesture(m.client, 7);
     m.client.handleKey("?", "down", false);
     await settle();
     expect(m.root.querySelector('[data-testid="keymap-help"]')).not.toBeNull();
@@ -131,7 +132,7 @@ describe("the panel is a projection", () => {
     const pill = (name: string) =>
       m.root.querySelector(`[data-pill="${name}"]`)?.getAttribute("data-state");
     m.client.setContext({ connected: true, micGranted: true, paintClients: 1 });
-    m.client.dispatch("cmdB");
+    activationGesture(m.client, 7);
     await settle();
     expect(pill("stream")).toBe("on"); // warm capture held
     expect(pill("keys")).toBe("on");
@@ -149,9 +150,31 @@ describe("the panel is a projection", () => {
     expect(pill("rec")).toBe("busy"); // recording but muted
   });
 
+  it("the push-to-talk cap survives its own press — hold, then release, on ONE node", async () => {
+    // Regression (found live): a reference-keyed <For> re-created the button
+    // when its own lit flipped, detaching the node mid-press and losing the
+    // pointerup. <Index> keeps the node; attributes update in place.
+    const m = mount();
+    activationGesture(m.client, 7);
+    await settle();
+    const ptt = m.root.querySelector<HTMLButtonElement>('[data-command="talkPress"]');
+    expect(ptt).not.toBeNull();
+
+    ptt?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    await settle();
+    expect(m.client.state().talk).toBe("hold");
+    expect(ptt?.isConnected).toBe(true); // the SAME node, still in the DOM
+    expect(ptt?.getAttribute("data-lit")).toBe("true"); // updated in place
+
+    ptt?.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    await settle();
+    expect(m.client.state().talk).toBe("off"); // the release landed
+    expect(ptt?.getAttribute("data-lit")).toBe("false");
+  });
+
   it("a swallowed typo blips without touching the machine", async () => {
     const m = mount();
-    m.client.dispatch("cmdB");
+    activationGesture(m.client, 7);
     const before = m.client.state();
     m.client.handleKey("q", "down", false);
     await settle();

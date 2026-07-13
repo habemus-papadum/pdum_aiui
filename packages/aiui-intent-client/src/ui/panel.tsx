@@ -23,7 +23,7 @@ import {
   controlByName,
 } from "@habemus-papadum/aiui-viz";
 import type { BarItem, BarRow, ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
-import { createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
+import { createMemo, createSignal, For, Match, onCleanup, Repeat, Show, Switch } from "solid-js";
 import type { IntentClient } from "../client";
 
 export const PANEL_STYLES = `
@@ -34,9 +34,7 @@ export const PANEL_STYLES = `
   .aiui-phase[data-phase="disarmed"] { opacity: 0.55; }
   .aiui-phase[data-phase="turn"], .aiui-phase[data-phase="tweak"] { color: #7c3aed; }
   .aiui-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; align-items: center; }
-  .aiui-bar[data-depth="1"] { margin-left: 10px; }
-  .aiui-bar[data-depth="2"] { margin-left: 20px; }
-  .aiui-bar[data-depth="3"] { margin-left: 30px; }
+  .aiui-sep { opacity: 0.4; padding: 0 3px; font-weight: 600; user-select: none; }
   .aiui-cap { border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
     border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
     transition: background 250ms ease-out, border-color 250ms ease-out; }
@@ -97,39 +95,45 @@ const claimPillState = (status: ClaimStatus | undefined): Pill["state"] => {
 };
 
 /** A control-bound widget (slider / select / toggle) by registered name. */
-function BarWidget(props: { item: Extract<BarItem, { kind: "widget" }> }) {
-  const ctl = controlByName(props.item.control);
-  if (ctl === undefined) {
-    return <span class="aiui-widget">missing control: {props.item.control}</span>;
-  }
+function BarWidget(props: { item: () => Extract<BarItem, { kind: "widget" }> }) {
+  const ctl = createMemo(() => controlByName(props.item().control));
   return (
-    <span class="aiui-widget" data-widget={props.item.control}>
-      <Switch>
-        <Match when={props.item.widget === "slider"}>
-          <ControlSlider of={ctl as ControlBox<number>} label={props.item.label} />
-        </Match>
-        <Match when={props.item.widget === "toggle"}>
-          <ControlToggle of={ctl as ControlBox<boolean>} label={props.item.label} />
-        </Match>
-        <Match when={props.item.widget === "select"}>
-          <label>
-            {props.item.label}
-            <select
-              disabled={!props.item.enabled}
-              onChange={(e) => ctl.set(e.currentTarget.value as never)}
-            >
-              <For each={(ctl.meta.options ?? []) as readonly string[]}>
-                {(option) => (
-                  <option value={option} selected={ctl.get() === option}>
-                    {option}
-                  </option>
-                )}
-              </For>
-            </select>
-          </label>
-        </Match>
-      </Switch>
-    </span>
+    <Show
+      when={ctl()}
+      fallback={<span class="aiui-widget">missing control: {props.item().control}</span>}
+      keyed
+    >
+      {(control) => (
+        <span class="aiui-widget" data-widget={props.item().control}>
+          <Switch>
+            <Match when={props.item().widget === "slider"}>
+              <ControlSlider of={control as ControlBox<number>} label={props.item().label} />
+            </Match>
+            <Match when={props.item().widget === "toggle"}>
+              <ControlToggle of={control as ControlBox<boolean>} label={props.item().label} />
+            </Match>
+            <Match when={props.item().widget === "select"}>
+              <label>
+                {props.item().label}
+                <select
+                  name={props.item().control}
+                  disabled={!props.item().enabled}
+                  onChange={(e) => control.set(e.currentTarget.value as never)}
+                >
+                  <For each={(control.meta.options ?? []) as readonly string[]}>
+                    {(option) => (
+                      <option value={option} selected={control.get() === option}>
+                        {option}
+                      </option>
+                    )}
+                  </For>
+                </select>
+              </label>
+            </Match>
+          </Switch>
+        </span>
+      )}
+    </Show>
   );
 }
 
@@ -184,24 +188,69 @@ export function Panel(props: PanelProps) {
     ];
   });
 
-  const renderItem = (item: BarItem) =>
-    item.kind === "cap" ? (
+  // Keyboard shortcuts are never cap TEXT (owner): keys live in the tooltip
+  // and the help table; the cap shows icon + stable label.
+  //
+  // Rendered POSITION-KEYED (<Repeat>, fine-grained): the DOM node at a
+  // position PERSISTS while its attributes update in place. This is load-
+  // bearing for the push-to-talk hold cap — a reference-keyed <For> would
+  // re-create the button the moment its own lit state flips, detaching the
+  // node mid-press and losing the pointerup (found live).
+  const cap = (item: () => Extract<BarItem, { kind: "cap" }> | undefined) => {
+    const hold = () => item()?.hold;
+    return (
       <button
         type="button"
         class="aiui-cap"
-        data-command={item.command}
-        data-lit={item.lit ? "true" : "false"}
-        data-flash={flashed() === item.command ? "true" : "false"}
-        data-tone={item.hint.tone}
-        disabled={!item.enabled}
-        title={`${item.hint.key} — ${item.hint.label}`}
-        onClick={() => tapCap(item.command, item.payload)}
+        data-command={item()?.command}
+        data-lit={item()?.lit ? "true" : "false"}
+        data-flash={flashed() === item()?.command ? "true" : "false"}
+        data-tone={item()?.hint.tone}
+        data-hold={hold() !== undefined ? "true" : "false"}
+        disabled={!item()?.enabled}
+        title={((h) => (h === undefined ? "" : h.key !== "" ? `${h.key} — ${h.label}` : h.label))(
+          item()?.hint,
+        )}
+        onClick={() => {
+          const it = item();
+          if (it !== undefined && it.hold === undefined) {
+            tapCap(it.command, it.payload);
+          }
+        }}
+        onPointerDown={() => {
+          const h = hold();
+          if (h !== undefined) {
+            client.dispatch(h.down);
+          }
+        }}
+        onPointerUp={() => {
+          const h = hold();
+          if (h !== undefined) {
+            client.dispatch(h.up);
+          }
+        }}
+        onPointerLeave={() => {
+          const h = hold();
+          if (h !== undefined && item()?.lit) {
+            client.dispatch(h.up);
+          }
+        }}
       >
-        {item.hint.icon ?? item.hint.key} {item.hint.label}
+        {item()?.hint.icon} {item()?.hint.label}
       </button>
-    ) : (
-      <BarWidget item={item} />
     );
+  };
+
+  const renderItem = (item: () => BarItem | undefined) => (
+    <>
+      <Show when={item()?.kind === "cap"}>
+        {cap(item as () => Extract<BarItem, { kind: "cap" }> | undefined)}
+      </Show>
+      <Show when={item()?.kind === "widget"}>
+        <BarWidget item={item as () => Extract<BarItem, { kind: "widget" }>} />
+      </Show>
+    </>
+  );
 
   const rows = createMemo((): BarRow[] => client.bar());
 
@@ -212,14 +261,27 @@ export function Panel(props: PanelProps) {
         {phase()}
       </span>
 
-      <div data-testid="command-bar">
-        <For each={rows()}>
-          {(row) => (
-            <div class="aiui-bar" data-depth={row.depth}>
-              <For each={row.items}>{renderItem}</For>
-            </div>
-          )}
-        </For>
+      {/* The tree, flattened into ONE wrapping flow: depth tiers joined by a
+          chevron divider, so a one-cap tier (turn) never sits alone on a
+          line. The model still yields rows; only the presentation joins. */}
+      <div class="aiui-bar" data-testid="command-bar">
+        <Repeat count={rows().length}>
+          {(rowIndex) => {
+            const row = () => rows()[rowIndex];
+            return (
+              <>
+                <Show when={rowIndex > 0}>
+                  <span class="aiui-sep" aria-hidden="true">
+                    ›
+                  </span>
+                </Show>
+                <Repeat count={row()?.items.length ?? 0}>
+                  {(itemIndex) => renderItem(() => row()?.items[itemIndex])}
+                </Repeat>
+              </>
+            );
+          }}
+        </Repeat>
       </div>
 
       <div class="aiui-pills" data-testid="pills">
@@ -245,10 +307,13 @@ export function Panel(props: PanelProps) {
               fallback={
                 <tr>
                   <td>
-                    <kbd>⌘B</kbd>
+                    <kbd>activate</kbd>
                   </td>
                   <td />
-                  <td>grant this tab + open a turn — the keys live in-turn</td>
+                  <td>
+                    the host's activation shortcut (or the caps above) grants + opens a turn — the
+                    keys live in-turn
+                  </td>
                 </tr>
               }
             >
@@ -273,7 +338,16 @@ export function Panel(props: PanelProps) {
       </div>
 
       <div class="aiui-config" data-testid="config-strip">
-        <For each={client.configStrip()}>{(row) => <For each={row.items}>{renderItem}</For>}</For>
+        <Repeat count={client.configStrip().length}>
+          {(rowIndex) => {
+            const row = () => client.configStrip()[rowIndex];
+            return (
+              <Repeat count={row()?.items.length ?? 0}>
+                {(itemIndex) => renderItem(() => row()?.items[itemIndex])}
+              </Repeat>
+            );
+          }}
+        </Repeat>
       </div>
     </div>
   );

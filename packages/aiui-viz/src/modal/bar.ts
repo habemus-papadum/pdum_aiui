@@ -48,6 +48,12 @@ export interface CapSpec<Ctx> {
   command: string;
   /** Payload for the dispatch, when the command takes one. */
   payload?: unknown;
+  /**
+   * A press-and-HOLD cap (push-to-talk): the host binds pointer down/up to
+   * these commands instead of click. `command` stays the identity/enabled
+   * probe (usually the same as `hold.down`).
+   */
+  hold?: { down: string; up: string };
   /** Display row. RULE: the label must not vary with state (lit does). */
   hint: KeyHint | ((inputs: BarInputs<Ctx>) => KeyHint | undefined);
   /** The cap renders highlighted (its mode/flag is engaged). */
@@ -79,6 +85,7 @@ export interface CapView {
   kind: "cap";
   command: string;
   payload?: unknown;
+  hold?: { down: string; up: string };
   hint: KeyHint;
   lit: boolean;
   enabled: boolean;
@@ -132,13 +139,22 @@ export function barModel<Ctx>(nodes: readonly BarNode<Ctx>[], inputs: BarInputs<
         continue;
       }
       const lit = node.litWhen?.(inputs) ?? false;
+      // A HOLD cap stays enabled while EITHER half of its gesture applies:
+      // mid-press the down command reads unavailable, but disabling the
+      // button then would swallow the pointerup and wedge the hold.
+      const enabled =
+        node.enabledWhen?.(inputs) ??
+        (node.hold !== undefined
+          ? inputs.canDispatch(node.hold.down) || inputs.canDispatch(node.hold.up)
+          : inputs.canDispatch(node.command, node.payload));
       items.push({
         kind: "cap",
         command: node.command,
         ...(node.payload !== undefined ? { payload: node.payload } : {}),
+        ...(node.hold !== undefined ? { hold: node.hold } : {}),
         hint,
         lit,
-        enabled: node.enabledWhen?.(inputs) ?? inputs.canDispatch(node.command, node.payload),
+        enabled,
       });
       if (lit && node.children !== undefined) {
         next.push(...node.children);

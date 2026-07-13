@@ -431,6 +431,10 @@ export function createModeEngine<Ctx>(
     }
     return current;
   };
+  // The initial state satisfies the invariants too: durable adoption can
+  // resurrect a combination the excludes forbid (ink persisted true into a
+  // disarmed boot, under a disarmed-forces-ink-off rule).
+  state = applyExcludes(state);
 
   const resolveBuiltin = (command: string): StatePatch | null => {
     if (command === "escape") {
