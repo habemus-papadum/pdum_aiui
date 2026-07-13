@@ -35,20 +35,32 @@ Status key: ✅ done · P2/P3/P4 = assigned phase · DECIDE = owner call needed 
 
 ## Config surface (inventory §1C controls — the "kept getting lost" list)
 
-All of these are `control()`s (agent-visible via the standard tools) plus bar-revealed widgets.
-**They land in P2** — the reveal slots are already declared in caps.ts so the bar cannot ship
-without them:
+All of these are `control()`s (agent-visible via the standard tools) plus bar/config-strip
+widgets, **declared and rendered now** (config.ts + caps.ts + panel.tsx); the lanes that READ
+them bind in P2:
 
 | Row | Status | Where / when |
 | --- | --- | --- |
-| `stt` transcriber choice (scribe-v2 default) | **P2** — control + config strip row; read at thread-open (hello) |
-| `videoPeriodSec` (constant-mode frame rate, 5-step slider) | **P2** — control + slider under the `video-cadence` reveal (slot exists in caps.ts) |
-| `linter` off/openai/gemini | **P2** — control + strip row |
-| `inkVanish` + `inkFade` (2–20 s; permanent ⇒ only c clears) | **P2** — controls + slider under the `ink-fade` reveal (slot exists); live re-relay while inked |
-| `shotFlash` / `logLevel` / `rescanTick` | **P2** — controls (agent/internal) |
+| `stt` transcriber choice (scribe-v2 default, 4 models) | ✅ control + config-strip select — **consumed at hello in P2** |
+| `videoPeriodSec` (constant-mode s/frame, 1–10 slider) | ✅ control + slider revealed under video while constant — **sampler consumes in P2** |
+| `linter` off/openai/gemini | ✅ control + strip select — **hello carries it in P2** |
+| `inkVanish` + `inkFade` (2–20 s) | ✅ controls + toggle/slider under ink — **live re-relay in P2** |
+| `shotFlash` / `logLevel` | ✅ controls (strip toggle/select) — **consumers in P2** |
+| `uiScale` (⌘+/⌘−/⌘0, deliberately no widget) | ✅ control — **key bindings + root-font effect P2** |
+| `rescanTick` | P2 (internal, with discovery) |
 | engine choice + `pendingEngine` (applies at thread-close) | **P2** — control + deferred binding (the engine's `on:` bindings carry payloads for exactly this) |
 | config strip (K layer) with session overrides / R reset / S save | **DECIDE** (default: adopt the overlay's session-layering in P2 as a strip pane; it was a "panel gap" the old client never closed) |
 | advanced raw-JSON config panel (G) | **DECIDE** (default: defer past P5 — agent `set_config` covers the need) |
+
+## The bar + status pills (owner review 2026-07-13 — conscious divergence, improvement)
+
+| Row | Status |
+| --- | --- |
+| Bar is a TREE flattened into depth rows (arm · step out · help at root; tiers reveal as parents engage) | ✅ modal/bar.ts + caps.ts |
+| Enabled DERIVED (engine canDispatch dry-run; spec.available for verbs/gates) | ✅ modal/engine.ts |
+| Stable cap labels (lit carries engagement; no relayout) | ✅ caps.ts + keys.ts hints |
+| Arm cap = armed status + toggle (gated on channel; mid-turn press = full abandon, no confirm) | ✅ spec.ts `arm` |
+| Status pills: channel · mic grant · REC (talk/muted) · stream · video · ink · keys · iPad | ✅ panel.tsx — mic/iPad facts are context now, **real suppliers P2 (talk lane) / P2-paint** |
 
 ## Operations (inventory §2 — claims)
 

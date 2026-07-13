@@ -19,7 +19,13 @@
  *  - mute exists only while talking; starting talk starts unmuted
  */
 
-import { choice, ladder, type ModeEngineSpec, toggle } from "@habemus-papadum/aiui-viz/modal";
+import {
+  choice,
+  ladder,
+  type ModeEngineSpec,
+  type StatePatch,
+  toggle,
+} from "@habemus-papadum/aiui-viz/modal";
 
 /** The world's facts (inputs, not choices — no command sets these). */
 export interface IntentContext {
@@ -31,6 +37,11 @@ export interface IntentContext {
   selectionPresent: boolean;
   /** The channel session is connected (arming requires it). */
   connected: boolean;
+  /** Mic permission: undefined = never asked, then granted or denied.
+   * A status-pill fact today; the talk lane supplies it in Phase 2. */
+  micGranted: boolean | undefined;
+  /** Connected iPad paint clients (0 = none). Phase 2 wires the real count. */
+  paintClients: number;
 }
 
 export const initialContext: IntentContext = {
@@ -38,6 +49,8 @@ export const initialContext: IntentContext = {
   grantedTab: undefined,
   selectionPresent: false,
   connected: false,
+  micGranted: undefined,
+  paintClients: 0,
 };
 
 /**
@@ -78,6 +91,19 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      * an open turn (idempotent — a second press must never cancel).
      */
     cmdB: (s) => (s.phase === "turn" ? null : { phase: "turn" }),
+    /**
+     * The bar's arm cap — a status indicator you can press: arms from
+     * disarmed, disarms (full abandon, like `d`) from anywhere else. Gated
+     * on the channel being connected via `available` below.
+     */
+    arm: (s): StatePatch => {
+      if (s.phase === "disarmed") {
+        return { phase: "armed" };
+      }
+      return { phase: "disarmed", ink: false };
+    },
+    /** The bar's turn cap — open a turn from armed (⌘B minus the mint). */
+    turn: (s) => (s.phase === "armed" ? { phase: "turn" } : null),
     /** Enter — send the turn; the seat stays armed (divergence 2, decided). */
     send: (s) => (s.phase === "turn" || s.phase === "tweak" ? { phase: "armed" } : null),
     /** d — deliberate full abandonment: everything off, ink mode included. */
@@ -134,8 +160,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     { name: "talk-is-per-turn", when: (s) => s.phase !== "turn", set: { talk: "off" } },
     // Mute exists only while talking.
     { name: "mute-needs-talk", when: (s) => s.talk === "off", set: { micMuted: false } },
-    // The help popup belongs to the open turn.
-    { name: "help-is-in-turn", when: (s) => s.phase !== "turn", set: { help: false } },
+    // (help is a root-level standing toggle — owner review 2026-07-13: the
+    // blank system shows arm · step out · help. Blur still dismisses it.)
   ],
 
   on: {
@@ -143,5 +169,18 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     turnClosed: "turnEnded",
     /** Window blur — the built-in blur resolution (transients die). */
     windowBlur: "blur",
+  },
+
+  /**
+   * Availability the reducer can't derive: verbs (they move no region) and
+   * the channel gate on arming. Everything else — ink/tweak/send/mute/turn
+   * disabled while disarmed, escape at the floor — derives from the dry-run.
+   */
+  available: {
+    arm: (s, ctx) => s.phase !== "disarmed" || ctx.connected,
+    turn: (s, ctx) => s.phase === "armed" && ctx.grantedTab !== undefined,
+    shot: (s, ctx) => s.phase === "turn" && ctx.grantedTab !== undefined,
+    selection: (s, ctx) => s.phase === "turn" && ctx.grantedTab !== undefined,
+    clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.grantedTab !== undefined,
   },
 };

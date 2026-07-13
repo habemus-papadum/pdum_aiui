@@ -49,12 +49,8 @@ export const turnLayer: KeyLayer<EngineState, string> = {
     {
       keys: ["i", "I"],
       down: onPress("ink"),
-      hint: (s) => ({
-        key: "i",
-        label: s.ink ? "ink off" : "ink",
-        icon: "✏️",
-        active: s.ink === true,
-      }),
+      // Labels are STABLE (owner review): `active` carries engagement.
+      hint: (s) => ({ key: "i", label: "ink", icon: "✏️", active: s.ink === true }),
     },
     {
       keys: ["s", "S"],
@@ -92,7 +88,7 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       down: onPress("handsFree"),
       hint: (s) => ({
         key: "h",
-        label: s.talk === "handsFree" ? "stop hands-free" : "hands-free talk",
+        label: "hands-free talk",
         icon: "🎧",
         active: s.talk === "handsFree",
       }),
@@ -103,30 +99,20 @@ export const turnLayer: KeyLayer<EngineState, string> = {
         !repeat && state.talk !== "off" ? command("mute") : "swallow",
       hint: (s) =>
         s.talk !== "off"
-          ? {
-              key: "m",
-              label: s.micMuted ? "unmute" : "mute mic",
-              icon: "🔇",
-              active: s.micMuted === true,
-            }
+          ? { key: "m", label: "mute mic", icon: "🔇", active: s.micMuted === true }
           : undefined,
     },
     {
       keys: ["v", "V"],
       down: onPress("video"),
-      hint: (s) => ({
-        key: "v",
-        label: s.video ? "video off" : "video",
-        icon: "🎥",
-        active: s.video === true,
-      }),
+      hint: (s) => ({ key: "v", label: "video", icon: "🎥", active: s.video === true }),
     },
     {
       keys: ["f", "F"],
       down: onPress("fpsMode"),
       hint: (s) => ({
         key: "f",
-        label: s.videoMode === "smart" ? "constant rate" : "smart rate",
+        label: "constant cadence",
         icon: "⏱",
         active: s.videoMode === "constant",
       }),

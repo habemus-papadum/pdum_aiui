@@ -1,75 +1,128 @@
 /**
- * bar.test.ts — the command bar as a projection: caps are renders of
- * (state, ctx, claims), so lit/enabled/shown/reveals can never drift.
+ * bar.test.ts — the command bar as a tree presented linearly: depth rows,
+ * lit-parents reveal children, enabled derived from the engine's
+ * canDispatch, stable labels, widget descriptors.
  */
 import { describe, expect, it } from "vitest";
-import { type BarInputs, barModel, type CapSpec } from "./bar";
-import type { ClaimStatus } from "./claims";
+import { type BarInputs, type BarNode, barModel } from "./bar";
 import type { EngineState } from "./engine";
 
 interface Ctx {
   bound: boolean;
 }
 
-const caps: readonly CapSpec<Ctx>[] = [
+const tree: readonly BarNode<Ctx>[] = [
   {
-    command: "ink",
-    hint: { key: "i", label: "ink" },
-    litWhen: ({ state }) => state.ink === true,
-    enabledWhen: ({ ctx }) => ctx.bound,
-    reveals: "ink-fade-slider",
+    command: "arm",
+    hint: { key: "⏻", label: "arm" },
+    litWhen: ({ state }) => state.phase !== "disarmed",
+    children: [
+      {
+        command: "turn",
+        hint: { key: "⌘B", label: "turn" },
+        litWhen: ({ state }) => state.phase === "turn",
+        children: [
+          {
+            command: "ink",
+            hint: { key: "i", label: "ink" },
+            litWhen: ({ state }) => state.ink === true,
+            children: [{ kind: "widget", control: "inkFade", widget: "slider", label: "fade" }],
+          },
+          {
+            command: "handsFree",
+            hint: { key: "h", label: "hands-free" },
+            litWhen: ({ state }) => state.talk === "handsFree",
+            children: [{ command: "mute", hint: { key: "m", label: "mute" } }],
+          },
+        ],
+      },
+    ],
   },
-  {
-    command: "set:video",
-    payload: true,
-    hint: ({ claims }) => ({
-      key: "v",
-      label: claims.videoSample?.phase === "pending" ? "video (warming…)" : "video",
-    }),
-    litWhen: ({ state }) => state.video === true,
-  },
-  {
-    command: "send",
-    hint: { key: "⏎", label: "send" },
-    showWhen: ({ state }) => state.phase === "turn",
-  },
+  { command: "escape", hint: { key: "esc", label: "step out" } },
+  { command: "help", hint: { key: "?", label: "help" } },
 ];
 
 const inputs = (
   state: Partial<Record<string, string | boolean>>,
-  claims: Record<string, ClaimStatus> = {},
-  ctx: Ctx = { bound: true },
+  can: (command: string) => boolean = () => true,
 ): BarInputs<Ctx> => ({
-  state: Object.freeze({ phase: "armed", ink: false, video: false, ...state }) as EngineState,
-  ctx,
-  claims,
+  state: Object.freeze({
+    phase: "disarmed",
+    ink: false,
+    talk: "off",
+    ...state,
+  }) as EngineState,
+  ctx: { bound: true },
+  claims: {},
+  canDispatch: can,
 });
 
-describe("barModel", () => {
-  it("projects lit/enabled and keeps declaration order", () => {
-    const bar = barModel(caps, inputs({ ink: true }));
-    expect(bar.map((c) => c.command)).toEqual(["ink", "set:video"]); // send hidden: not in turn
-    expect(bar[0]).toMatchObject({ lit: true, enabled: true, reveals: "ink-fade-slider" });
-    expect(bar[1]).toMatchObject({ lit: false, enabled: true, payload: true });
+const rowCommands = (rows: ReturnType<typeof barModel>, depth: number): string[] =>
+  rows
+    .find((r) => r.depth === depth)
+    ?.items.map((i) => (i.kind === "cap" ? i.command : `widget:${i.control}`)) ?? [];
+
+describe("the tree, flattened into depth rows", () => {
+  it("disarmed: only the root row exists", () => {
+    const rows = barModel(tree, inputs({}));
+    expect(rows).toHaveLength(1);
+    expect(rowCommands(rows, 0)).toEqual(["arm", "escape", "help"]);
   });
 
-  it("reveals only while lit — declared tenancy, not imperative mounting", () => {
-    const [ink] = barModel(caps, inputs({ ink: false }));
-    expect(ink.reveals).toBeUndefined();
+  it("each lit tier reveals the next; unlit branches stay closed", () => {
+    const rows = barModel(tree, inputs({ phase: "armed" }));
+    expect(rowCommands(rows, 1)).toEqual(["turn"]); // armed reveals the turn tier
+    expect(rows).toHaveLength(2); // turn not lit — its children stay closed
+
+    const inTurn = barModel(tree, inputs({ phase: "turn" }));
+    expect(rowCommands(inTurn, 2)).toEqual(["ink", "handsFree"]);
   });
 
-  it("gates enabled from context facts", () => {
-    const [ink] = barModel(caps, inputs({}, {}, { bound: false }));
-    expect(ink.enabled).toBe(false);
+  it("engaging a leaf mode reveals its own children — widgets included", () => {
+    const rows = barModel(tree, inputs({ phase: "turn", ink: true, talk: "handsFree" }));
+    expect(rowCommands(rows, 3)).toEqual(["widget:inkFade", "mute"]); // same depth, one row
+  });
+});
+
+describe("enabled is derived, not hand-written", () => {
+  it("caps default to the engine's canDispatch verdict", () => {
+    const rows = barModel(
+      tree,
+      inputs({}, (command) => command === "arm"),
+    );
+    const [arm, stepOut, help] = rows[0].items;
+    expect(arm).toMatchObject({ command: "arm", enabled: true });
+    expect(stepOut).toMatchObject({ command: "escape", enabled: false });
+    expect(help).toMatchObject({ command: "help", enabled: false });
   });
 
-  it("caps can render claim status — the operation's 'neither on nor off'", () => {
-    const bar = barModel(caps, inputs({}, { videoSample: { phase: "pending" } }));
-    expect(bar[1].hint.label).toBe("video (warming…)");
+  it("enabledWhen remains as an explicit override", () => {
+    const gated: readonly BarNode<Ctx>[] = [
+      {
+        command: "arm",
+        hint: { key: "⏻", label: "arm" },
+        enabledWhen: ({ ctx }) => ctx.bound,
+      },
+    ];
+    const rows = barModel(gated, {
+      ...inputs({}),
+      ctx: { bound: false },
+      canDispatch: () => true,
+    });
+    expect(rows[0].items[0]).toMatchObject({ enabled: false });
   });
+});
 
-  it("shows mode-scoped caps only in their mode", () => {
-    const bar = barModel(caps, inputs({ phase: "turn" }));
-    expect(bar.map((c) => c.command)).toContain("send");
+describe("widgets", () => {
+  it("travel as descriptors the host binds — never functions or DOM", () => {
+    const rows = barModel(tree, inputs({ phase: "turn", ink: true }));
+    const widget = rows.find((r) => r.depth === 3)?.items[0];
+    expect(widget).toEqual({
+      kind: "widget",
+      control: "inkFade",
+      widget: "slider",
+      label: "fade",
+      enabled: true,
+    });
   });
 });

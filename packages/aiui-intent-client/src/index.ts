@@ -15,7 +15,7 @@
  *  - fake-bus.ts— the in-memory host (tests + the dev harness)
  */
 
-export { intentCaps } from "./caps";
+export { configBar, intentBar } from "./caps";
 export { intentClaims } from "./claims";
 export {
   createIntentClient,
@@ -23,6 +23,7 @@ export {
   type IntentClientConfig,
   type IntentLanes,
 } from "./client";
+export * as intentConfig from "./config";
 export { type FakeBus, fakeBus } from "./fake-bus";
 export { hintsFor, type KeyVerdict, keyStack, keyVerdict, turnLayer } from "./keys";
 export { type IntentContext, initialContext, intentSpec } from "./spec";

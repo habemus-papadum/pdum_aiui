@@ -73,6 +73,9 @@ export interface SolidModeEngine<Ctx> {
   context: Accessor<Ctx>;
   /** Run a command through the reducer; commits before returning. */
   dispatch(command: string, payload?: unknown): EngineState;
+  /** Derived availability (see ModeEngine.canDispatch) — reads the reactive
+   * state signal so bar projections re-derive per commit. */
+  canDispatch(command: string, payload?: unknown): boolean;
   /** Fire a declared system-event binding. */
   emit(event: string, payload?: unknown): EngineState;
   /** Replace world facts; claims re-derive. */
@@ -199,6 +202,10 @@ export function solidModeEngine<Ctx>(config: SolidModeEngineConfig<Ctx>): SolidM
     region: (name) => stateSignal()[name],
     context: contextSignal,
     dispatch: engine.dispatch,
+    canDispatch: (command, payload) => {
+      void stateSignal(); // subscribe (in-graph callers re-derive per commit)
+      return engine.canDispatch(command, payload);
+    },
     emit: engine.emit,
     setContext: engine.setContext,
     subscribe: engine.subscribe,

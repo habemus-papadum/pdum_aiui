@@ -42,6 +42,38 @@ const rows: Array<{
     command: "cmdB",
     expected: { phase: "turn" },
   },
+  // arm column: one cap, status + toggle (gated on `connected` via available)
+  {
+    name: "arm from disarmed arms",
+    start: {},
+    command: "arm",
+    expected: { phase: "armed" },
+  },
+  {
+    name: "arm from armed disarms (full abandon, like d)",
+    start: { phase: "armed", ink: true },
+    command: "arm",
+    expected: { phase: "disarmed", ink: false },
+  },
+  {
+    name: "arm mid-turn abandons the turn",
+    start: { phase: "turn", talk: "handsFree" },
+    command: "arm",
+    expected: { phase: "disarmed", talk: "off" },
+  },
+  // turn column: the bar's open-turn (⌘B minus the mint)
+  {
+    name: "turn opens from armed",
+    start: { phase: "armed" },
+    command: "turn",
+    expected: { phase: "turn" },
+  },
+  {
+    name: "turn from disarmed is nothing (arm first)",
+    start: {},
+    command: "turn",
+    expected: { phase: "disarmed" },
+  },
   // Enter column: send keeps armed, from tweak too
   {
     name: "send from turn keeps armed",
@@ -183,15 +215,21 @@ describe("spec-level properties", () => {
 
   it("excludes hold after every command from a hostile seed", () => {
     const e = engine({ phase: "turn", talk: "handsFree", micMuted: true, help: true });
-    for (const command of ["send", "cmdB", "handsFree", "disarm", "cmdB", "escape"]) {
+    for (const command of ["send", "cmdB", "handsFree", "disarm", "cmdB", "escape", "arm"]) {
       const s: EngineState = e.dispatch(command);
       if (s.phase !== "turn") {
         expect(s.talk).toBe("off");
-        expect(s.help).toBe(false);
       }
       if (s.talk === "off") {
         expect(s.micMuted).toBe(false);
       }
     }
+  });
+
+  it("help is a standing root-level toggle (blank system: arm · step out · help)", () => {
+    const e = engine();
+    e.dispatch("help");
+    expect(e.state().help).toBe(true); // no turn required
+    expect(e.dispatch("escape").help).toBe(false); // esc still dismisses it first
   });
 });

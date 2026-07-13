@@ -64,6 +64,13 @@ function grantAndOpen(r: Rig, tab = 7): void {
   r.client.dispatch("cmdB");
 }
 
+/** All bar items, flattened across depth rows. */
+const flatBar = (r: Rig) => r.client.bar().flatMap((row) => row.items);
+const findCap = (r: Rig, command: string) =>
+  flatBar(r).find((item) => item.kind === "cap" && item.command === command) as
+    | Extract<ReturnType<typeof flatBar>[number], { kind: "cap" }>
+    | undefined;
+
 afterEach(async () => {
   await rig?.client.dispose();
   rig = undefined;
@@ -243,8 +250,7 @@ describe("the agent bridge — one writer, no mirrors", () => {
 
     // And the cap agrees, same tick — ledger: "video cap showed the
     // OPPOSITE state" (F1 cap inversion).
-    const videoCap = r.client.bar().find((c) => c.command === "video");
-    expect(videoCap?.lit).toBe(true);
+    expect(findCap(r, "video")?.lit).toBe(true);
   });
 });
 
@@ -331,9 +337,89 @@ describe("system events", () => {
     grantAndOpen(r);
     r.bus.firePageEvent({ kind: "selectionPresent", tab: 7, present: true });
     expect(r.client.context().selectionPresent).toBe(true);
-    const selectionCap = r.client.bar().find((c) => c.command === "selection");
-    expect(selectionCap?.lit).toBe(true); // ledger: "selection cap stuck lit" —
-    // a projection now, recomputed per read
+    expect(findCap(r, "selection")?.lit).toBe(true); // ledger: "selection cap
+    // stuck lit" — a projection now, recomputed per read
+  });
+});
+
+describe("the bar: a tree presented linearly", () => {
+  it("blank system: arm · step out (disabled) · help — nothing else", () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    const rows = r.client.bar();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].items.map((i) => (i.kind === "cap" ? i.command : ""))).toEqual([
+      "arm",
+      "escape",
+      "help",
+    ]);
+    expect(findCap(r, "arm")?.enabled).toBe(true);
+    expect(findCap(r, "escape")?.enabled).toBe(false); // nothing to step out of
+    expect(findCap(r, "help")?.enabled).toBe(true);
+  });
+
+  it("arming requires the channel; the arm cap is the armed STATUS", () => {
+    const r = makeRig();
+    expect(findCap(r, "arm")?.enabled).toBe(false); // disconnected
+    r.client.setContext({ connected: true });
+    expect(findCap(r, "arm")?.enabled).toBe(true);
+    r.client.dispatch("arm");
+    expect(findCap(r, "arm")?.lit).toBe(true); // status indicator
+    r.client.dispatch("arm"); // …and the same cap disarms
+    expect(r.client.state().phase).toBe("disarmed");
+  });
+
+  it("each tier reveals as its parent engages; enabled derives from the machine", () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    r.client.dispatch("arm");
+    expect(findCap(r, "turn")).toBeDefined(); // the armed tier
+    expect(findCap(r, "turn")?.enabled).toBe(false); // no grant yet
+    expect(findCap(r, "ink")).toBeUndefined(); // turn tier closed
+
+    r.client.setContext({ grantedTab: 7 });
+    expect(findCap(r, "turn")?.enabled).toBe(true);
+    r.client.dispatch("turn");
+    expect(r.lanes).toContain("openTurn"); // the bar's turn opens the thread too
+    expect(findCap(r, "ink")).toBeDefined();
+    expect(findCap(r, "send")?.enabled).toBe(true);
+  });
+
+  it("hands-free reveals mute; video reveals cadence — widgets included", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    expect(findCap(r, "mute")).toBeUndefined();
+    r.client.dispatch("handsFree");
+    expect(findCap(r, "mute")).toBeDefined();
+
+    r.client.dispatch("video");
+    expect(findCap(r, "fpsMode")).toBeDefined();
+    expect(
+      flatBar(r).find((i) => i.kind === "widget" && i.control === "videoPeriodSec"),
+    ).toBeUndefined(); // smart mode — no rate slider
+    r.client.dispatch("fpsMode");
+    expect(
+      flatBar(r).find((i) => i.kind === "widget" && i.control === "videoPeriodSec"),
+    ).toBeDefined();
+  });
+
+  it("labels are STABLE — engaging a mode never rewrites its cap text", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    const before = findCap(r, "handsFree")?.hint.label;
+    r.client.dispatch("handsFree");
+    expect(findCap(r, "handsFree")?.hint.label).toBe(before);
+    r.client.dispatch("tweak");
+    expect(findCap(r, "tweak")?.hint.label).toBe("tweak");
+  });
+
+  it("the config strip carries the standing settings as control widgets", () => {
+    const r = makeRig();
+    const widgets = r.client
+      .configStrip()
+      .flatMap((row) => row.items)
+      .map((i) => (i.kind === "widget" ? i.control : ""));
+    expect(widgets).toEqual(["stt", "linter", "logLevel", "shotFlash"]);
   });
 });
 
@@ -342,10 +428,9 @@ describe("projections", () => {
     const r = makeRig();
     grantAndOpen(r);
     r.client.dispatch("ink");
-    const bar = r.client.bar();
-    expect(bar.find((c) => c.command === "ink")?.lit).toBe(true);
-    expect(bar.find((c) => c.command === "clear")).toBeDefined(); // shown only while inked
+    expect(findCap(r, "ink")?.lit).toBe(true);
+    expect(findCap(r, "clear")).toBeDefined(); // ink's child tier
     const hints = r.client.hints();
-    expect(hints.find((h) => h.key === "i")?.label).toBe("ink off");
+    expect(hints.find((h) => h.key === "i")?.active).toBe(true); // stable label, active flag
   });
 });

@@ -208,6 +208,15 @@ export interface ModeEngineSpec<Ctx> {
   excludes?: readonly ExcludeRule[];
   /** System events → commands (engine turnClosed, socket drop, tab close). */
   on?: Readonly<Record<string, EventBinding>>;
+  /**
+   * Availability overrides for {@link ModeEngine.canDispatch}. Most commands
+   * need none — availability is DERIVED by dry-running the pure reducer
+   * ("would it change anything here?"). Verbs (pure effects that move no
+   * region) derive to "never", so they declare their gate here; a command
+   * whose availability differs from its reduction (an arm gate on a context
+   * fact) can override too. Keys must name declared commands.
+   */
+  available?: Readonly<Record<string, (state: EngineState, ctx: Ctx) => boolean>>;
 }
 
 /** One dispatch, as trace data (mode changes SHOULD be events — mode.ts). */
@@ -257,6 +266,15 @@ export interface ModeEngine<Ctx> {
    * commit completes (single-writer linearity; it returns the pre-state).
    */
   dispatch(command: string, payload?: unknown): EngineState;
+  /**
+   * Would dispatching this command do anything right now? Derived by
+   * dry-running the pure reducer against the committed state (a returned
+   * patch that changes nothing → false); `spec.available` overrides for
+   * verbs and gated commands; escape/blur resolve their own steps. The bar
+   * projection disables caps from this — gating is mechanical, not
+   * hand-written per surface. Unknown command → throws, like dispatch.
+   */
+  canDispatch(command: string, payload?: unknown): boolean;
   /** Fire a declared system-event binding; unbound events are ignored. */
   emit(event: string, payload?: unknown): EngineState;
   /**
@@ -352,6 +370,11 @@ export function createModeEngine<Ctx>(
       throw new Error(
         `mode engine: "${builtin}" is a built-in command; declare esc/blur columns instead`,
       );
+    }
+  }
+  for (const name of Object.keys(spec.available ?? {})) {
+    if (spec.commands[name] === undefined && name !== "escape" && name !== "blur") {
+      throw new Error(`mode engine: available names unknown command "${name}"`);
     }
   }
   for (const name of Object.keys(spec.commands)) {
@@ -493,6 +516,35 @@ export function createModeEngine<Ctx>(
     return state;
   };
 
+  const canDispatch = (command: string, payload?: unknown): boolean => {
+    const override = spec.available?.[command];
+    if (override !== undefined) {
+      return override(state, ctx);
+    }
+    if (command === "escape" || command === "blur") {
+      return resolveBuiltin(command) !== null;
+    }
+    if (command.startsWith("set:")) {
+      return spec.regions[command.slice(4)] !== undefined;
+    }
+    const fn = spec.commands[command];
+    if (fn === undefined) {
+      throw new Error(`mode engine: unknown command "${command}"`);
+    }
+    const patch = fn(state, payload, ctx);
+    if (patch === null || patch === undefined) {
+      return false;
+    }
+    // The same pure computation dispatch performs — excludes included, so a
+    // reduction the excludes would immediately revert reads as unavailable.
+    const after = applyPatch(state, patch);
+    if (after === state) {
+      return false;
+    }
+    const final = applyExcludes(after);
+    return Object.keys(final).some((name) => final[name] !== state[name]);
+  };
+
   const emit = (event: string, payload?: unknown): EngineState => {
     const binding = spec.on?.[event];
     if (binding === undefined) {
@@ -508,6 +560,7 @@ export function createModeEngine<Ctx>(
     state: () => state,
     context: () => ctx,
     dispatch,
+    canDispatch,
     emit,
     setContext: (patch) => {
       ctx = { ...ctx, ...patch };

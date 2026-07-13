@@ -14,16 +14,19 @@
 
 import { type SolidModeEngine, solidModeEngine } from "@habemus-papadum/aiui-viz";
 import {
+  type BarRow,
   barModel,
-  type CapView,
   type DispatchEvent,
   type KeyHint,
 } from "@habemus-papadum/aiui-viz/modal";
-import { intentCaps } from "./caps";
+import { configBar, intentBar } from "./caps";
 import { intentClaims } from "./claims";
 import { hintsFor, keyVerdict } from "./keys";
 import { type IntentContext, initialContext, intentSpec } from "./spec";
 import type { IntentHost } from "./transport";
+// The standing config surface: importing registers the controls (durable,
+// agent-visible) that the bar's widget nodes bind by name.
+import "./config";
 
 /** The turn/wire verbs the client drives (the lanes own the transport). */
 export interface IntentLanes {
@@ -68,8 +71,12 @@ export interface IntentClient
   > {
   /** One key event, resolved through the grammar to a dispatch (or blip). */
   handleKey(key: string, phase: "down" | "up", repeat: boolean): void;
-  /** The command bar, projected for the current state (reactive). */
-  bar(): CapView[];
+  /** Derived availability — would this command do anything right now? */
+  canDispatch(command: string, payload?: unknown): boolean;
+  /** The command bar: the mode tree flattened into depth rows (reactive). */
+  bar(): BarRow[];
+  /** The standing config strip (one flat row of widgets; reactive). */
+  configStrip(): BarRow[];
   /** The keymap help rows for the current state (reactive). */
   hints(): KeyHint[];
   engine: SolidModeEngine<IntentContext>;
@@ -91,12 +98,13 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     const leftTurn = inTurn(event.before.phase) && !inTurn(event.after.phase);
     const grantedTab = engine.context().grantedTab;
 
+    // Opening is command-agnostic (cmdB, the bar's turn cap); closing is
+    // command-SPECIFIC: send commits, escape/disarm/arm abandon, and
+    // turnEnded means the wire already closed it — nothing to drive.
+    if (enteredTurn) {
+      lanes.openTurn();
+    }
     switch (event.command) {
-      case "cmdB":
-        if (enteredTurn) {
-          lanes.openTurn();
-        }
-        break;
       case "send":
         if (leftTurn) {
           lanes.sendTurn();
@@ -104,6 +112,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         break;
       case "escape":
       case "disarm":
+      case "arm":
         if (leftTurn) {
           lanes.cancelTurn();
         }
@@ -186,11 +195,20 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     claimStatuses: engine.claimStatuses,
     dispose: engine.dispose,
     handleKey,
+    canDispatch: engine.canDispatch,
     bar: () =>
-      barModel(intentCaps, {
+      barModel(intentBar, {
         state: engine.state(),
         ctx: engine.context(),
         claims: engine.claimStatuses(),
+        canDispatch: engine.canDispatch,
+      }),
+    configStrip: () =>
+      barModel(configBar, {
+        state: engine.state(),
+        ctx: engine.context(),
+        claims: engine.claimStatuses(),
+        canDispatch: engine.canDispatch,
       }),
     hints: () => hintsFor(engine.state()),
     engine,

@@ -126,14 +126,27 @@ describe("the panel is a projection", () => {
     expect(m.client.state().phase).toBe("turn"); // …the turn did not
   });
 
-  it("claim chips show the operations' status", async () => {
+  it("status pills show the operations and the world's facts", async () => {
     const m = mount();
+    const pill = (name: string) =>
+      m.root.querySelector(`[data-pill="${name}"]`)?.getAttribute("data-state");
+    m.client.setContext({ connected: true, micGranted: true, paintClients: 1 });
     m.client.dispatch("cmdB");
     await settle();
-    const ring = m.root.querySelector('[data-claim="ring"]');
-    expect(ring?.getAttribute("data-phase")).toBe("active");
-    const stream = m.root.querySelector('[data-claim="tabStream"]');
-    expect(stream?.getAttribute("data-phase")).toBe("active");
+    expect(pill("stream")).toBe("on"); // warm capture held
+    expect(pill("keys")).toBe("on");
+    expect(pill("channel")).toBe("on");
+    expect(pill("mic")).toBe("on");
+    expect(pill("ipad")).toBe("on");
+    expect(pill("video")).toBe("off"); // standing setting off — not sampling
+    expect(pill("rec")).toBe("off");
+
+    m.client.dispatch("handsFree"); // REC pill goes live with the talk window
+    await settle();
+    expect(pill("rec")).toBe("live");
+    m.client.dispatch("mute");
+    await settle();
+    expect(pill("rec")).toBe("busy"); // recording but muted
   });
 
   it("a swallowed typo blips without touching the machine", async () => {

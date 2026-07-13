@@ -1,107 +1,109 @@
 /**
- * caps.ts — the command bar, declared (bar projection over the spec).
+ * caps.ts — the command bar, declared as a TREE (owner review 2026-07-13):
+ * root = arm · step out · help; arming reveals the turn tier; engaging a cap
+ * reveals its children (ink → clear/vanish/fade, hands-free → mute, video →
+ * cadence/rate). The projection flattens it into depth rows; a tap
+ * dispatches the same command its key does.
  *
- * Cap order is the decided one (old panel, final form): acts → talk/video →
- * send · esc · disarm · help. A cap dispatches the same command its key
- * does; lit/enabled/shown are derivations — the cap-inversion bug family
- * has no code left to live in.
+ * Rules carried from the review: labels are STABLE (lit carries "engaged");
+ * enabled is DERIVED (the engine dry-runs the reducer; verbs gate via the
+ * spec's `available`); widgets are control-bound descriptors, so the whole
+ * config surface is visible now and cannot get lost on the road to parity.
  */
 
-import type { BarInputs, CapSpec } from "@habemus-papadum/aiui-viz/modal";
+import type { BarNode } from "@habemus-papadum/aiui-viz/modal";
 import type { IntentContext } from "./spec";
 
-type Inputs = BarInputs<IntentContext>;
+const inTurn = (phase: unknown): boolean => phase === "turn" || phase === "tweak";
 
-const talking = ({ state }: Inputs): boolean => state.talk !== "off";
-
-export const intentCaps: readonly CapSpec<IntentContext>[] = [
+/** The main bar: the mode tree. */
+export const intentBar: readonly BarNode<IntentContext>[] = [
   {
-    command: "ink",
-    hint: ({ state }) => ({ key: "i", label: state.ink ? "ink off" : "ink", icon: "✏️" }),
-    litWhen: ({ state }) => state.ink === true,
-    reveals: "ink-fade",
+    command: "arm",
+    hint: { key: "⏻", label: "armed" },
+    litWhen: ({ state }) => state.phase !== "disarmed",
+    children: [
+      {
+        command: "turn",
+        hint: { key: "⌘B", label: "turn" },
+        litWhen: ({ state }) => inTurn(state.phase),
+        children: [
+          {
+            command: "ink",
+            hint: { key: "i", label: "ink", icon: "✏️" },
+            litWhen: ({ state }) => state.ink === true,
+            children: [
+              { command: "clear", hint: { key: "c", label: "clear", icon: "🧹" } },
+              { kind: "widget", control: "inkVanish", widget: "toggle", label: "vanish" },
+              {
+                kind: "widget",
+                control: "inkFade",
+                widget: "slider",
+                label: "fade",
+                showWhen: ({ state }) => state.ink === true,
+              },
+            ],
+          },
+          { command: "shot", hint: { key: "s", label: "shot", icon: "🖼" } },
+          {
+            command: "selection",
+            hint: { key: "a", label: "selection", icon: "📋" },
+            litWhen: ({ ctx }) => ctx.selectionPresent,
+          },
+          {
+            command: "tweak",
+            hint: { key: "t", label: "tweak", icon: "🔧" },
+            litWhen: ({ state }) => state.phase === "tweak",
+          },
+          {
+            command: "handsFree",
+            hint: { key: "h", label: "hands-free", icon: "🎧" },
+            litWhen: ({ state }) => state.talk === "handsFree",
+            children: [
+              {
+                command: "mute",
+                hint: { key: "m", label: "mute", icon: "🔇" },
+                litWhen: ({ state }) => state.micMuted === true,
+              },
+            ],
+          },
+          {
+            command: "video",
+            hint: { key: "v", label: "video", icon: "🎥" },
+            litWhen: ({ state }) => state.video === true,
+            children: [
+              {
+                command: "fpsMode",
+                hint: { key: "f", label: "constant", icon: "⏱" },
+                litWhen: ({ state }) => state.videoMode === "constant",
+              },
+              {
+                kind: "widget",
+                control: "videoPeriodSec",
+                widget: "slider",
+                label: "s/frame",
+                showWhen: ({ state }) => state.videoMode === "constant",
+              },
+            ],
+          },
+          { command: "send", hint: { key: "⏎", label: "send", icon: "📤" } },
+        ],
+      },
+    ],
   },
-  {
-    command: "shot",
-    hint: { key: "s", label: "shot", icon: "🖼" },
-  },
-  {
-    command: "selection",
-    hint: { key: "a", label: "add selection", icon: "📋" },
-    litWhen: ({ ctx }) => ctx.selectionPresent,
-  },
-  {
-    command: "clear",
-    hint: { key: "c", label: "clear ink", icon: "🧹" },
-    showWhen: ({ state }) => state.ink === true,
-  },
-  {
-    command: "tweak",
-    hint: ({ state }) => ({
-      key: "t",
-      label: state.phase === "tweak" ? "resume (leave tweak)" : "tweak",
-      icon: "🔧",
-    }),
-    litWhen: ({ state }) => state.phase === "tweak",
-  },
-  {
-    command: "handsFree",
-    hint: (inputs) => ({
-      key: "h",
-      label: inputs.state.talk === "handsFree" ? "stop hands-free" : "hands-free",
-      icon: "🎧",
-    }),
-    litWhen: ({ state }) => state.talk === "handsFree",
-  },
-  {
-    command: "mute",
-    hint: ({ state }) => ({ key: "m", label: state.micMuted ? "unmute" : "mute", icon: "🔇" }),
-    showWhen: talking,
-    litWhen: ({ state }) => state.micMuted === true,
-  },
-  {
-    command: "video",
-    hint: ({ state, claims }) => ({
-      key: "v",
-      label:
-        state.video && claims.videoSample?.phase === "pending"
-          ? "video (warming…)"
-          : state.video
-            ? "video off"
-            : "video",
-      icon: "🎥",
-    }),
-    litWhen: ({ state }) => state.video === true,
-    reveals: "video-cadence",
-  },
-  {
-    command: "fpsMode",
-    hint: ({ state }) => ({
-      key: "f",
-      label: state.videoMode === "smart" ? "constant rate" : "smart rate",
-      icon: "⏱",
-    }),
-    showWhen: ({ state }) => state.video === true,
-    litWhen: ({ state }) => state.videoMode === "constant",
-  },
-  {
-    command: "send",
-    hint: { key: "⏎", label: "send", icon: "📤" },
-    showWhen: ({ state }) => state.phase === "turn" || state.phase === "tweak",
-  },
-  {
-    command: "escape",
-    hint: { key: "esc", label: "step out", icon: "✖" },
-    showWhen: ({ state }) => state.phase === "turn" || state.phase === "tweak",
-  },
-  {
-    command: "disarm",
-    hint: { key: "d", label: "disarm", icon: "💤", tone: "danger" },
-    showWhen: ({ state }) => state.phase !== "disarmed",
-  },
+  { command: "escape", hint: { key: "esc", label: "step out", icon: "✖" } },
   {
     command: "help",
     hint: { key: "?", label: "help", icon: "❓" },
     litWhen: ({ state }) => state.help === true,
   },
+];
+
+/** The standing config strip (the old panel's bottom bar): read at
+ * thread-open by the Phase-2 lanes; visible and settable now. */
+export const configBar: readonly BarNode<IntentContext>[] = [
+  { kind: "widget", control: "stt", widget: "select", label: "stt" },
+  { kind: "widget", control: "linter", widget: "select", label: "linter" },
+  { kind: "widget", control: "logLevel", widget: "select", label: "log" },
+  { kind: "widget", control: "shotFlash", widget: "toggle", label: "shot flash" },
 ];

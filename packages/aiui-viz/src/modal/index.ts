@@ -29,7 +29,17 @@
  * pipeline) and from workers.
  */
 
-export { type BarInputs, barModel, type CapSpec, type CapView } from "./bar";
+export {
+  type BarInputs,
+  type BarItem,
+  type BarNode,
+  type BarRow,
+  barModel,
+  type CapSpec,
+  type CapView,
+  type WidgetSpec,
+  type WidgetView,
+} from "./bar";
 export {
   type ClaimPhase,
   type ClaimSpec,

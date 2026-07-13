@@ -310,6 +310,62 @@ describe("commit and trace", () => {
   });
 });
 
+describe("canDispatch: availability is derived from the reducer", () => {
+  it("dry-runs the pure reducer — guarded commands read as unavailable", () => {
+    const e = engine();
+    expect(e.canDispatch("arm")).toBe(true);
+    expect(e.canDispatch("openTurn")).toBe(false); // needs armed
+    expect(e.canDispatch("tweak")).toBe(false);
+    e.dispatch("arm");
+    expect(e.canDispatch("openTurn")).toBe(true);
+    expect(e.canDispatch("arm")).toBe(false); // already armed — nothing to do
+  });
+
+  it("a patch that changes nothing counts as unavailable", () => {
+    const e = engine({ phase: "armed" });
+    // grantTurn returns null without a grant; with one, it patches phase.
+    expect(e.canDispatch("grantTurn")).toBe(false);
+    e.setContext({ grantedTab: 3 });
+    expect(e.canDispatch("grantTurn")).toBe(true);
+  });
+
+  it("escape/blur resolve their own steps", () => {
+    const e = engine();
+    expect(e.canDispatch("escape")).toBe(false); // everything at base
+    e.dispatch("arm");
+    e.dispatch("openTurn");
+    expect(e.canDispatch("escape")).toBe(true);
+    expect(e.canDispatch("blur")).toBe(false); // nothing blur-exiting is up
+    e.dispatch("toggleHelp");
+    expect(e.canDispatch("blur")).toBe(true);
+  });
+
+  it("spec.available overrides derivation (verbs; context gates)", () => {
+    const e = createModeEngine(
+      {
+        ...fullSpec,
+        available: {
+          arm: (_s, ctx) => ctx.grantedTab !== undefined, // context-gated arm
+        },
+      },
+      { context: { grantedTab: undefined } },
+    );
+    expect(e.canDispatch("arm")).toBe(false);
+    e.setContext({ grantedTab: 1 });
+    expect(e.canDispatch("arm")).toBe(true);
+  });
+
+  it("throws on unknown commands and validates available keys at creation", () => {
+    expect(() => engine().canDispatch("frobnicate")).toThrow(/unknown command/);
+    expect(() =>
+      createModeEngine(
+        { regions: { x: toggle() }, commands: {}, available: { ghost: () => true } },
+        { context: {} },
+      ),
+    ).toThrow(/available names unknown command/);
+  });
+});
+
 describe("spec validation at creation", () => {
   it("rejects initial overrides for unknown regions or illegal values", () => {
     expect(() => engine({ nope: true })).toThrow(/unknown region/);
