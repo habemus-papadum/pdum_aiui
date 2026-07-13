@@ -104,6 +104,7 @@ async function boot(): Promise<{ client: IntentClient; mode: "channel" | "fake" 
 }
 
 let blipSink: ((key: string) => void) | undefined;
+let navCounter = 0;
 
 const { client, mode } = await boot();
 const bus = (window as unknown as { __aiuiIntentClient: { bus: ReturnType<typeof fakeBus> } })
@@ -199,6 +200,41 @@ function SimulateStrip() {
           }
         >
           page interaction (smart-video gate)
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const tab = bus.targeting.activeTab() ?? 1;
+            const n = ++navCounter;
+            bus.firePageEvent({
+              kind: "navigation",
+              tab,
+              from: `fake://tab/${tab}/page/${n - 1}`,
+              to: `fake://tab/${tab}/page/${n}`,
+              navKind: "push",
+            });
+            bus.setTabUrl(tab, `fake://tab/${tab}/page/${n}`);
+          }}
+        >
+          navigate (same tab)
+        </button>
+        <button
+          type="button"
+          onClick={() => bus.switchTab(bus.targeting.activeTab() === 1 ? 2 : 1)}
+        >
+          switch tab 1↔2
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            bus.firePageEvent({
+              kind: "aiuiSupport",
+              tab: bus.targeting.activeTab() ?? 1,
+              supported: !client.context().aiuiPage,
+            })
+          }
+        >
+          aiui page support on/off
         </button>
       </div>
     </details>

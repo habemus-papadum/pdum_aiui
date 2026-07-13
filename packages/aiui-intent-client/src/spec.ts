@@ -42,6 +42,10 @@ export interface IntentContext {
   micGranted: boolean | undefined;
   /** Connected iPad paint clients (0 = none). Phase 2 wires the real count. */
   paintClients: number;
+  /** The active tab is aiui-INSTRUMENTED (window.__AIUI__): it answers the
+   * `locate` capability and can host jump-to-editor (the overlay's vscode
+   * mode — anticipated here, built post-parity). */
+  aiuiPage: boolean;
 }
 
 export const initialContext: IntentContext = {
@@ -51,6 +55,7 @@ export const initialContext: IntentContext = {
   connected: false,
   micGranted: undefined,
   paintClients: 0,
+  aiuiPage: false,
 };
 
 /**

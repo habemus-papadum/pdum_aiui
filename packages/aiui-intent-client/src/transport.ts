@@ -13,8 +13,11 @@
  * headless-testable, and the host is a constructor argument.
  */
 
-/** The page capabilities a transport must deliver (the relay's command set). */
-export type PageCapability = "ink" | "keylayer" | "flash" | "selection" | "viewport";
+/** The page capabilities a transport must deliver (the relay's command set).
+ * `locate` is the aiui-instrumented-page capability (screenshot rectangle →
+ * components → source): declared now so the seam anticipates the overlay's
+ * jump-to-VS-Code mode; only instrumented pages answer it. */
+export type PageCapability = "ink" | "keylayer" | "flash" | "selection" | "viewport" | "locate";
 
 /** The on-page indicator's asserted state (a claim's desire, as data). */
 export interface RingState {
@@ -27,7 +30,19 @@ export interface RingState {
 export type PageEvent =
   | { kind: "selectionPresent"; tab: number; present: boolean }
   | { kind: "interaction"; tab: number }
-  | { kind: "keyForward"; tab: number; key: string; phase: "down" | "up"; repeat: boolean };
+  | { kind: "keyForward"; tab: number; key: string; phase: "down" | "up"; repeat: boolean }
+  /** A same-tab navigation (SPA route, reload, hash) — context riding the
+   * turn, rendered into the prompt by the wire engine. */
+  | {
+      kind: "navigation";
+      tab: number;
+      from: string;
+      to: string;
+      navKind?: "push" | "replace" | "traverse" | "reload" | "hash";
+    }
+  /** The page announced whether it is aiui-INSTRUMENTED (window.__AIUI__):
+   * instrumented pages answer `locate` and can host jump-to-editor. */
+  | { kind: "aiuiSupport"; tab: number; supported: boolean };
 
 /** Tab-scoped request/response + ring broadcast + page→panel events. */
 export interface PageTransport {
@@ -43,6 +58,8 @@ export interface PageTransport {
 export interface SurfaceTargeting {
   activeTab(): number | undefined;
   onActiveTabChange(handler: (tab: number | undefined) => void): () => void;
+  /** Identity of one tab (tab-boundary events name where the user left/went). */
+  tabInfo?(tab: number): Promise<{ url?: string; title?: string } | undefined>;
 }
 
 /** A warm, held capture stream (36–48 ms shots ride it). */

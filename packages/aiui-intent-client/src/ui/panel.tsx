@@ -191,6 +191,20 @@ export function Panel(props: PanelProps) {
       { label: "video", state: claimPillState(claims.videoSample) },
       { label: "ink", state: claimPillState(claims.inkPointer) },
       { label: "keys", state: claimPillState(claims.keyRouting) },
+      {
+        // The ring's own three states, from the claim's DESIRE: off · steady
+        // (armed) · breathing (in-turn) — the page indicator's exact contract.
+        label: "ring",
+        state: ((desire) => (desire?.on !== true ? "off" : desire.turnTone ? "live" : "on"))(
+          claims.ring?.desire as { on?: boolean; turnTone?: boolean } | undefined,
+        ),
+        detail: "off · steady=armed · red=turn",
+      },
+      {
+        label: "page",
+        state: ctx.aiuiPage ? "on" : "off",
+        detail: ctx.aiuiPage ? "aiui-instrumented (locate/jump capable)" : "not instrumented",
+      },
       { label: "ipad", state: ctx.paintClients > 0 ? "on" : "off", detail: `${ctx.paintClients}` },
     ];
   });

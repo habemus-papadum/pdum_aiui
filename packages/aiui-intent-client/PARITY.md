@@ -34,6 +34,12 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | `uiScale` control (⌘+/⌘−/⌘0) | P2 — a `control()` + root font effect on the page |
 | paint host (iPad) re-pointing | P4 (needs real capture host) — lane import unchanged |
 | `inkTabId`/`leaderTabId`/`lastActiveTab` routing | ✅ context (`activeTab`/`grantedTab`) + claims re-point on tab switch |
+| navigation events into the turn (same-tab SPA/reload; prompt-rendered) | ✅ `navigation` PageEvent → engine.navigation (lanes.ts + tests) — **full SPA turn-continuity semantics later, with real pages (P3)** |
+| tab-boundary events into the turn (switch names both sides) | ✅ onActiveTabChange + tabInfo → engine.navigation (lanes.ts + tests) |
+| aiui-instrumented-page fact (`window.__AIUI__`) | ✅ `aiuiSupport` PageEvent → ctx.aiuiPage + the `page` pill; `locate` in PageCapability — **real detection rides the P3/P4 page hosts** |
+| jump-to-VS-Code mode (overlay-only; never in the old extension) | ANTICIPATED: seam + fact above; the `jump` ladder region + picker remain the post-P5 DECIDE |
+| mic level meter while talking (the old HUD meter) | **P2-talk** — `talk.level()` is already composed (lanes.ts); the meter renders next to the REC pill when live talk is verified |
+| ring three states (off · steady armed · breathing turn) | ✅ claim desire carries them; test walks all three; the ring pill shows off/on/live — **page-side rendering with the P3/P4 hosts** |
 
 ## Config surface (inventory §1C controls — the "kept getting lost" list)
 

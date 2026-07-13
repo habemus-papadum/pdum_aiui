@@ -30,6 +30,8 @@ export interface FakeBus extends IntentHost {
   heldStreams(): number[];
   /** Simulate the user switching tabs. */
   switchTab(tab: number | undefined): void;
+  /** Set a fake tab's identity (tab-boundary events read it via tabInfo). */
+  setTabUrl(tab: number, url: string, title?: string): void;
   /** Push a page event at the panel (selection ping, interaction, key). */
   firePageEvent(event: PageEvent): void;
   /** Make a capability start failing (claim error paths). */
@@ -68,12 +70,15 @@ export function fakeBus(options: { activeTab?: number } = {}): FakeBus {
     },
   };
 
+  const tabUrls = new Map<number, { url: string; title?: string }>();
   const targeting: SurfaceTargeting = {
     activeTab: () => activeTab,
     onActiveTabChange: (handler) => {
       tabHandlers.add(handler);
       return () => tabHandlers.delete(handler);
     },
+    tabInfo: (tab) =>
+      Promise.resolve(tabUrls.get(tab) ?? { url: `fake://tab/${tab}`, title: `tab ${tab}` }),
   };
 
   const capture: CaptureSource = {
@@ -117,6 +122,9 @@ export function fakeBus(options: { activeTab?: number } = {}): FakeBus {
       for (const handler of tabHandlers) {
         handler(tab);
       }
+    },
+    setTabUrl: (tab, url, title) => {
+      tabUrls.set(tab, { url, ...(title !== undefined ? { title } : {}) });
     },
     firePageEvent: (event) => {
       for (const handler of pageHandlers) {

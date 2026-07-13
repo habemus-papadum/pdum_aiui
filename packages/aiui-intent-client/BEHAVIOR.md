@@ -64,9 +64,30 @@ only ends a hold). Talk is per-turn — leaving the turn ends it, whoever caused
 exists only while talking; starting talk starts unmuted. The REC pill is the always-visible
 recording indicator: red while live, amber while muted.
 
+## Continuity: navigations and tab switches
+
+A same-tab navigation and a tab SWITCH are both **navigation events riding the open turn** —
+context, never a turn opener (no thread, no event) — and both render into the lowered prompt.
+A tab boundary names both sides, with `from` re-read at boundary time (the tab may have
+navigated since it was last active). Full SPA turn-continuity semantics (what survives a
+mid-turn reload) follow with real pages in Phase 3.
+
+**Capture across a tab switch differs by host — decided facts:** the extension's `tabCapture`
+is per-tab and invocation-gated, so the warm stream re-points on switch; standalone
+`getDisplayMedia` is pinned to the surface the user picked and CANNOT follow a switch; the
+CdpBus tier needs no grant at all for stills (`Page.captureScreenshot`), so shots and sampled
+frames follow the active tab freely — only true continuous video inherits the pinning.
+
+## Instrumented pages (aiui support)
+
+Pages announce `window.__AIUI__` instrumentation as a world fact (`ctx.aiuiPage`, the `page`
+pill). Instrumented pages answer the `locate` capability (screenshot rectangle → components →
+source) — the seam the overlay's jump-to-VS-Code mode will ride when it lands (post-parity;
+it was never in the old extension).
+
 ## Status pills (permanent expert strip)
 
-`channel · mic · rec · stream · video · ink · keys · ipad` — claim statuses (stream/video/
+`channel · mic · rec · stream · video · ink · keys · ring · page · ipad` — claim statuses (stream/video/
 ink/keys: idle → pending → active → error) and world facts (channel connection, mic
 permission, iPad paint clients), stable labels, color = state. Internal detail deliberately
 kept visible.

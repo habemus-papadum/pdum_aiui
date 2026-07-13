@@ -130,6 +130,39 @@ describe("the ring — a claim, committed with the dispatch", () => {
     // ledger: "disarm stomped back to armed" — nothing re-arms after disarm.
     expect(r.client.state().phase).toBe("disarmed");
   });
+
+  it("walks all THREE ring states: off → steady (armed) → breathing (turn)", async () => {
+    const r = makeRig();
+    await settle();
+    expect(r.bus.lastRing).toEqual({ on: false, turnTone: false }); // off (boot broadcast)
+
+    r.client.setContext({ connected: true });
+    r.client.dispatch("arm"); // armed, no turn — the STEADY middle state
+    await settle();
+    expect(r.bus.lastRing).toEqual({ on: true, turnTone: false });
+
+    r.client.setContext({ grantedTab: 7 });
+    r.client.dispatch("turn");
+    await settle();
+    expect(r.bus.lastRing).toEqual({ on: true, turnTone: true }); // breathing
+
+    r.client.dispatch("escape"); // back to steady
+    await settle();
+    expect(r.bus.lastRing).toEqual({ on: true, turnTone: false });
+  });
+});
+
+describe("the instrumented-page fact (jump/locate anticipation)", () => {
+  it("an aiuiSupport ping moves the context fact, never the modes", async () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    const before = r.client.state();
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
+    expect(r.client.context().aiuiPage).toBe(true);
+    expect(r.client.state()).toBe(before); // a fact, not a mode
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: false });
+    expect(r.client.context().aiuiPage).toBe(false);
+  });
 });
 
 describe("send vs cancel vs disarm", () => {

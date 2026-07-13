@@ -187,6 +187,8 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       engine.setContext({ selectionPresent: event.present });
     } else if (event.kind === "keyForward") {
       handleKey(event.key, event.phase, event.repeat);
+    } else if (event.kind === "aiuiSupport") {
+      engine.setContext({ aiuiPage: event.supported });
     }
   });
 

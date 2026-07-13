@@ -197,7 +197,39 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   host.transport.onPageEvent((event) => {
     if (event.kind === "interaction") {
       pageInteracted = true;
+    } else if (event.kind === "navigation") {
+      // Same-tab navigation: context riding the turn (the engine no-ops
+      // without an open thread), rendered into the prompt by composeIntent.
+      engine.navigation(event.from, event.to, event.navKind);
     }
+  });
+
+  // ── tab boundaries: a switch mid-turn is a navigation event too — the
+  // prompt should name where the user LEFT and where they went (the old
+  // panel's exact semantics, minus chrome.tabs: identity via tabInfo).
+  let lastActiveTab: { id: number; url?: string } | undefined;
+  const seedTab = host.targeting.activeTab();
+  if (seedTab !== undefined) {
+    void host.targeting.tabInfo?.(seedTab).then((info) => {
+      lastActiveTab ??= { id: seedTab, url: info?.url };
+    });
+  }
+  host.targeting.onActiveTabChange((tab) => {
+    void (async () => {
+      const prev = lastActiveTab;
+      if (tab === undefined) {
+        return;
+      }
+      const to = await host.targeting.tabInfo?.(tab);
+      lastActiveTab = { id: tab, url: to?.url };
+      if (prev === undefined || prev.id === tab) {
+        return;
+      }
+      // `from` re-read at boundary time: the tab may have navigated since it
+      // was last active; the boundary names where the user actually left.
+      const from = (await host.targeting.tabInfo?.(prev.id))?.url ?? prev.url;
+      engine.navigation(from ?? "", to?.url ?? "");
+    })();
   });
 
   const claimOptions: ClaimLaneOptions = {

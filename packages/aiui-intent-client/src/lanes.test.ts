@@ -247,6 +247,47 @@ describe("shots and selections ride the wire", () => {
   });
 });
 
+describe("navigation continuity — context riding the turn", () => {
+  it("a same-tab navigation event lands in the engine stream (prompt-rendered)", async () => {
+    const r = makeRig();
+    activationGesture(r.client, 7);
+    r.bus.firePageEvent({
+      kind: "navigation",
+      tab: 7,
+      from: "fake://tab/7/a",
+      to: "fake://tab/7/b",
+      navKind: "push",
+    });
+    const nav = r.lanes.engine.events.find((e) => e.type === "navigation") as
+      | { from: string; to: string; kind?: string }
+      | undefined;
+    expect(nav).toMatchObject({ from: "fake://tab/7/a", to: "fake://tab/7/b", kind: "push" });
+  });
+
+  it("a tab SWITCH mid-turn is a navigation event naming both sides", async () => {
+    const r = makeRig();
+    r.bus.setTabUrl(7, "fake://tab/7/docs");
+    r.bus.setTabUrl(9, "fake://tab/9/app");
+    activationGesture(r.client, 7);
+    await settle(); // seed lastActiveTab
+    r.bus.switchTab(9);
+    await settle(20);
+    const nav = r.lanes.engine.events.find((e) => e.type === "navigation") as
+      | { from: string; to: string }
+      | undefined;
+    expect(nav).toMatchObject({ from: "fake://tab/7/docs", to: "fake://tab/9/app" });
+  });
+
+  it("navigations OUTSIDE a turn record nothing (never a turn opener)", async () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    r.bus.firePageEvent({ kind: "navigation", tab: 7, from: "a", to: "b" });
+    r.bus.switchTab(9);
+    await settle(20);
+    expect(r.lanes.engine.events.some((e) => e.type === "navigation")).toBe(false);
+  });
+});
+
 describe("the fade re-relay effect", () => {
   it("re-relays a moved fade while ink is claimed — with NO untracked handler reads", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
