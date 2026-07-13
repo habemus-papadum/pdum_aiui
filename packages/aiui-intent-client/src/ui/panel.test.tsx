@@ -153,7 +153,9 @@ describe("the panel is a projection", () => {
   it("the push-to-talk cap survives its own press — hold, then release, on ONE node", async () => {
     // Regression (found live): a reference-keyed <For> re-created the button
     // when its own lit flipped, detaching the node mid-press and losing the
-    // pointerup. <Index> keeps the node; attributes update in place.
+    // pointerup. Position-keyed <Repeat> keeps the node; attributes update
+    // in place. (Also: the hold cap must stay ENABLED mid-hold — a disabled
+    // button swallows the pointerup.)
     const m = mount();
     activationGesture(m.client, 7);
     await settle();

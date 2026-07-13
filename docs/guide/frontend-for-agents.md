@@ -133,6 +133,45 @@ entry (with the seven live bites that paid for it) is in
 [Hard-won details](./frontend-hard-won); the contract itself is pinned by
 `packages/aiui-viz/src/solid-semantics.test.ts`.
 
+The reference implementation of a correct inbound crossing is the intent client's activation
+gesture (`packages/aiui-intent-client/src/activation.ts`): a vanilla listener walks a state
+machine with sequential, idempotent dispatches, **re-reading committed state between steps** —
+which is safe precisely because the mode engine (next section) commits every dispatch under
+`flush` and keeps machine state as a plain frozen object. Machine state under the mode engine
+is never stale to read, from any scope — the structural fix for the write-then-read-back trap.
+
+### The mode engine: settings, operations, and one writer
+
+When an app grows real modes — arming, open turns, talk windows, standing toggles — the
+methodology's answer is the mode engine (`createModeEngine` in `aiui-viz/modal`,
+framework-free; `solidModeEngine` is the Solid adapter), built on one clarifying split: every
+"mode" is a **setting** (what the user chose — standing, often durable, often agent-visible)
+and an **operation** (what the world is doing about it right now — derived, transient, async).
+Settings live in **regions** — named independent axes (ladders, toggles, choices) whose product
+is the state, so orthogonality is by construction. Operations are **claims**: pure derivations
+from (state, context) that a reconciler drives, each with a derived status
+(idle · pending · active · error · stale) — the "granted but idle", "warming", "on but not
+sampling" states are the *status of an operation*, displayed but never stored in ad-hoc flags,
+with supersession built in (the newest desire wins, even when it is null).
+
+**Commands are the only writers.** Keys, command-bar caps, the agent's `set`, and system events
+all funnel into `dispatch` — one pure reducer plus declared cross-region **excludes** ("leaving
+the turn ends talk"), applied after every command *and to the initial state*, so a durable
+value can never resurrect a forbidden combination; Esc and blur resolve mechanically from the
+spec. Because nothing else writes, availability is *derived*: `canDispatch` dry-runs the
+reducer ("would this do anything right now?"), and the command bar is a pure projection of the
+spec — a tree flattened into depth rows, labels stable (the lit highlight carries "engaged"),
+enablement mechanical rather than hand-written per surface. The Solid adapter completes the
+contract: dispatch commits under `flush()`, so state, memos, and every effect-driven projection
+are current when it returns; and regions marked `agent:` register a `control()` whose setter
+dispatches — the agent's write and the key take the identical path, which structurally kills
+the control-mirror desync class.
+
+The deep rationale — including what was deliberately left out (entry/exit effects, history
+states, XState) — is `docs/proposals/intent-client/01-mode-engine.md`; the worked example is
+the intent client's spec (`packages/aiui-intent-client/src/spec.ts`): a real machine as one
+data structure — regions, commands, excludes, the Esc order, and availability overrides.
+
 ### Many notebooks, one lab
 
 Real practice is a collection of explorations — separate pages with nav, VitePress-style. And
@@ -172,10 +211,15 @@ better instrumented than a human team would ever bother to make it.
 ## Where things live
 
 - **Library** — `@habemus-papadum/aiui-viz` (`packages/aiui-viz`): cells, the CellView wrapper,
-  the worker protocol, the durable registry, the tool surface.
+  the worker protocol, the durable registry, the tool surface, and the modal kit + mode engine
+  (`src/modal/`; the Solid adapter is `src/mode-solid.ts`).
 - **Reference apps** — `demos/gallery`: morphogen (reaction-diffusion) and aztec (domino
   tilings), each a full notebook built the intended way; `PRINCIPLES.md` there maps file layout
   to methodology.
+- **Mode-engine reference** — `packages/aiui-intent-client`: the first full consumer — the
+  machine as data (`src/spec.ts`), claims (`src/claims.ts`), bar caps (`src/caps.ts`), the
+  imperative-boundary reference (`src/activation.ts`); `BEHAVIOR.md` records the decided
+  interaction contract, each rule pinned by a test.
 - **Design choices** — [the level-2 page](./frontend-design-choices); **ledger** —
   [the level-3 page](./frontend-hard-won).
 - **Skill** — the `frontend-design` Claude plugin

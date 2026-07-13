@@ -39,10 +39,27 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
   when a boundary read would return a pre-write value. The whole contract is pinned by
   `packages/aiui-viz/src/solid-semantics.test.ts`; Solid 1.x had read-your-own-writes behind
   the identical API, which is why 1.x-trained intuition (and priors) keep regenerating the bug.
+  Machine state under the **mode engine** is exempt by construction — `solidModeEngine` commits
+  every dispatch under `flush` and keeps state a plain frozen object, so reading it after a
+  dispatch is never stale, from any scope; putting modal state there is the structural fix for
+  this bug class.
 - **Gone from 1.x:** `onMount` (use ref callbacks — they run when the element exists),
   `classList` (compute class strings). `render` and the `JSX` type moved to `@solidjs/web`
   (`jsxImportSource` likewise). `<Show>`'s non-keyed function child receives an **accessor**;
   keyed receives the value.
+- **`<Index>` is also gone; `<Repeat count={n}>{(i) => …}` is 2.0's position-keyed list** — and
+  the distinction is load-bearing, not cosmetic. Reference-keyed `<For>` over freshly-*computed*
+  row objects re-creates the DOM node on every recompute, which detaches a node mid-interaction:
+  the intent client's press-and-hold cap was re-created the instant its own lit state flipped,
+  and the pointerup died with the detached node (event delegation only delivers to connected
+  nodes). Render recomputed projections position-keyed — the node persists and its attributes
+  update in place. Regression: `packages/aiui-intent-client/src/ui/panel.test.tsx` ("survives
+  its own press").
+- **A disabled button swallows pointer events.** A press-and-hold gesture whose down-command
+  becomes unavailable mid-hold (pressing it is exactly what made it unavailable) must keep the
+  button enabled across the whole gesture, or the pointerup lands on a disabled element and the
+  hold wedges. The bar projection encodes the rule: a hold cap stays enabled while *either* half
+  of its gesture applies (`packages/aiui-viz/src/modal/bar.ts`).
 - **Errored memos read as `undefined` and drop their previous value**; without an error boundary
   the failure is near-silent (`isPending` stays true, error dumped globally). This is why cells
   cache their own last value and wrap state derivation in `createErrorBoundary` — and why
@@ -116,6 +133,14 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
   behavior (control names, lifted descriptions) needs the same plugin in `vitest.config.ts` —
   the template ships it wired; a test project without it sees anonymous cells and undescribed
   controls and fails mysteriously.
+- **Explicit names must be compile-time string literals — dynamic registration passes a
+  prebuilt spec.** An inline `control({ name: expr })` whose name is not a literal is a
+  code-framed compile error (the name is a durable key, a tool identity, and a grep target).
+  Legitimate dynamic registration — a library minting controls from data, like the mode
+  engine's agent bridge — builds the options object first (`const spec = {…}; control(spec)`):
+  the compiler deliberately leaves a non-literal options *expression* alone, and the runtime
+  missing-name guard is the backstop (`packages/aiui-viz/src/mode-solid.ts` is the documented
+  shape).
 - **Babel string literals escape non-ASCII** (`κ` → `\u03BA` in output). Harmless at runtime,
   but string-matching tests over transformed output should use ASCII fixtures.
 
@@ -188,9 +213,13 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
   A package whose vitest config lacks `resolve.conditions: ["browser", "development", …]` +
   `server.deps.inline: [/solid-js/, /@solidjs\//, /@habemus-papadum\//]` gets a node-resolved
   SECOND solid instance: signals write to one runtime, memos track in the other — `get()` reads
-  fresh values while cells never recompute, and nothing errors. Every test config in this repo
-  carries the recipe (aiui-viz's vite.config.ts has the full story); copy it into any NEW package
-  that tests cells before debugging "my cell doesn't update".
+  fresh values while cells never recompute (or a dispatch "works" while writes commit into a
+  graph nobody reads and the DOM never updates), and nothing errors. The recipe includes a
+  never-matching `external` regex (`/^never-external-solid-js$/`) — vite-plugin-solid
+  force-externalizes solid-js unless the user config already lists a matching external, so
+  without it `inline` silently loses. Every test config in this repo carries the recipe
+  (aiui-viz's vite.config.ts has the full story; aiui-intent-client's copied it); copy it into
+  any NEW package that tests Solid before debugging "my cell doesn't update".
 
 - **Cells must be created inside `cellHarness`'s setup callback** — created outside any owner
   they throw `NO_OWNER_BOUNDARY` (Solid 2.0 requires an owner for the underlying memo). The

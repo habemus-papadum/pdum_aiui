@@ -65,6 +65,13 @@ const onKey = (phase: "down" | "up") => (event: KeyboardEvent) => {
   }
   const verdict = keyVerdict(client.state(), event.key, phase, event.repeat);
   if (verdict.kind === "pass") {
+    // PANEL-document affordance: outside a turn the grammar claims nothing
+    // (on the TARGET page, keys belong to the page — decided) — but in the
+    // panel's own document, Esc may still step out (armed → disarmed).
+    if (phase === "down" && event.key === "Escape" && client.canDispatch("escape")) {
+      event.preventDefault();
+      client.dispatch("escape");
+    }
     return;
   }
   event.preventDefault();

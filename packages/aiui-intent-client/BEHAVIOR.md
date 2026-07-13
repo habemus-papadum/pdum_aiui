@@ -13,6 +13,9 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
   first (the esc order), then tweak → turn → turn-cancel → armed → **disarmed**.
   *Deviation from the old client* (whose Esc never disarmed): stepping out of armed IS
   disarming — the ladder has no floor.
+  Where the Esc KEY works: in-turn everywhere (the grammar claims it); outside a turn, only
+  in the **panel's own document** (a panel-local listener) — on the target page, keys belong
+  to the page outside a turn, so Esc there rightly passes through. The ✖ cap always works.
 - **There is ONE disarmed, and it is hard**: however you reach it (Esc's last step, the arm
   cap, the `d` key), ink mode clears. Declared once as the `disarmed-is-hard` exclude — not
   remembered per route. Standing video/videoMode survive disarm (as in the old client).

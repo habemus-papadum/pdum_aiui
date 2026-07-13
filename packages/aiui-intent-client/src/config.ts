@@ -33,7 +33,7 @@ export const videoPeriodSec = control({
   value: 5,
   min: 1,
   max: 10,
-  step: 1,
+  step: 0.1,
   unit: "s",
   description: "constant-mode video cadence, seconds per frame",
 });
@@ -51,7 +51,7 @@ export const inkFade = control({
   value: 6,
   min: 2,
   max: 20,
-  step: 1,
+  step: 0.1,
   unit: "s",
   description: "vanishing-ink stroke lifetime",
 });

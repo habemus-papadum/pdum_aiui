@@ -561,6 +561,10 @@ they're written down. The full ledger, with the debugging stories, is
   computed or the setter's return. A flow that genuinely must observe its own writes (a
   state-machine dispatch) calls `flush()` from `solid-js`, which commits synchronously
   (`flush(fn)` runs effect handlers too). In tests, `await tick()` after every `set` also works.
+  And when the state in question is modal machine state, put it in the
+  [mode engine](./frontend-for-agents#the-mode-engine-settings-operations-and-one-writer): its
+  dispatch commits under `flush` and machine state is a plain frozen object — never stale to
+  read, so this trap has no surface there.
 - **Don't `set` a signal from inside a cell's compute** (before its first `await`). The dev build
   throws `REACTIVE_WRITE_IN_OWNED_SCOPE`. State changes belong in event handlers and tools; if a
   compute truly must flag something, defer it: `queueMicrotask(() => flag.set(true))`.

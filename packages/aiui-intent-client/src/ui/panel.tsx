@@ -16,12 +16,7 @@
  *    flash) as control-bound widgets, always visible.
  */
 
-import {
-  type ControlBox,
-  ControlSlider,
-  ControlToggle,
-  controlByName,
-} from "@habemus-papadum/aiui-viz";
+import { type ControlBox, ControlToggle, controlByName } from "@habemus-papadum/aiui-viz";
 import type { BarItem, BarRow, ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
 import { createMemo, createSignal, For, Match, onCleanup, Repeat, Show, Switch } from "solid-js";
 import type { IntentClient } from "../client";
@@ -107,7 +102,19 @@ function BarWidget(props: { item: () => Extract<BarItem, { kind: "widget" }> }) 
         <span class="aiui-widget" data-widget={props.item().control}>
           <Switch>
             <Match when={props.item().widget === "slider"}>
-              <ControlSlider of={control as ControlBox<number>} label={props.item().label} />
+              {/* Bare range, no label/readout — text beside a slider relayouts
+                  as the value moves (owner); the tooltip carries the name. */}
+              <input
+                type="range"
+                name={props.item().control}
+                min={control.meta.min}
+                max={control.meta.max}
+                step={control.meta.step}
+                value={control.get() as number}
+                title={`${props.item().label}: ${control.get()}${control.meta.unit ?? ""}`}
+                disabled={!props.item().enabled}
+                onInput={(e) => control.set(Number(e.currentTarget.value) as never)}
+              />
             </Match>
             <Match when={props.item().widget === "toggle"}>
               <ControlToggle of={control as ControlBox<boolean>} label={props.item().label} />
