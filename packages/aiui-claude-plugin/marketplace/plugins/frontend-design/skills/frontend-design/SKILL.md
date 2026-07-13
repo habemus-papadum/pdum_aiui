@@ -158,8 +158,13 @@ surface: `.tools`, `.call(name, args)`, `.report()`, `.call("locate", { selector
   `{ ownedWrite: true }`; otherwise write from handlers or `queueMicrotask`.
 - `createEffect(source, handler)`: the handler is untracked for *reads* too — consume the value
   the source computed, never re-read signals in the handler.
-- Writes are batched: `set` then `get` in the same tick reads stale. Tools return the value they
-  computed; when driving via `evaluate_script`, await a `setTimeout 0` before `report()`.
+- A write COMMITS at the next microtask, and the reactive graph is the only reader of your
+  writes: `set` then `get` in the same tick reads stale *everywhere Solid didn't call you* (event
+  handlers, timers, sockets, tool `run`s — not just tools and tests), and a memo over the fresh
+  write is exactly as stale. Never read back — branch on the value you computed or the setter's
+  return. A flow that must observe its own writes calls `flush()` from `solid-js` (`flush(fn)`
+  also runs effect handlers synchronously). Reads inside the graph (memos, effect computes, JSX,
+  cell deps) are always fine. `control()`/`durableSignal()`/`createStore` share these semantics.
 - A cell is callable — never put identity on `.name` (Function.name is read-only).
 
 ## HMR rules that keep live state safe

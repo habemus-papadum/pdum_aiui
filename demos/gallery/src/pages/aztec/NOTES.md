@@ -43,15 +43,20 @@ build taught, for folding back into that document.
    `(s) => draw(…, frames.at(s.i))` and the warning vanished.
 
 2. **Signal writes are transactional within a synchronous tick — a `get()` in
-   the same tick as a `set()` may not observe the write.** This surfaced two
-   ways: (a) an agent tool that does `x.set(v); return x.get()` can return the
+   the same tick as a `set()` does NOT observe the write.** This surfaced two
+   ways: (a) an agent tool that does `x.set(v); return x.get()` returns the
    *pre-write* value (fixed by returning the value it computed, see `seek`); and
    (b) verifying via `evaluate_script`, a synchronous `report()` right after a
    tool `set` reads stale — you must let a task boundary (`await` a `setTimeout`)
    flush the batch before reading. Cross-task reads were always correct; only
    same-tick reads lied. Cost me a long false-alarm chase into a "seek is broken"
-   that wasn't. (Notably `targetN`/`fps` re-reads *did* look fresh — the effect
-   is most visible on a heavily-subscribed signal like the playhead.)
+   that wasn't. (`targetN`/`fps` re-reads looked fresh only because those flows
+   never wrote them in the same tick — the staleness is deterministic and has
+   nothing to do with how many subscribers a signal has. The same trap also hid
+   in the player's rAF loop for a while: re-reading `frameIndex` after `set`
+   inside the drain advanced at most one frame per tick; the fix tracks the
+   playhead in a local and writes once. Full rule + `flush()` escape hatch:
+   docs/guide/frontend-hard-won.md.)
 
 3. **HMR boundary: editing the *worker* or a *store* module forces a full page
    reload**, which resets the durable registry (fresh window). Editing

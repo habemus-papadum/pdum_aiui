@@ -102,6 +102,37 @@ the dev overlay to the channel and appear to the agent as first-class tools. In 
 surface is also how the agent *verifies its own work* — the reference apps were tested end-to-end
 through their own tools.
 
+### The imperative boundary: who called this function?
+
+The one piece of vocabulary the rest of this methodology quietly depends on. Solid 2.0's write
+contract is transactional: a `set` *stages* a value, the commit happens at the next microtask,
+and **the reactive graph is the only reader of your writes**. So every function in an app is in
+exactly one of two worlds, and the test is a single question — *who called it?*
+
+- **Solid called it** → you are **inside the graph**: a memo's compute, an effect's *compute*
+  function (the first argument), a JSX expression, a cell's `deps` thunk. Reads here are
+  tracked, see a consistent staged snapshot, and are always safe. Writes here throw (in dev).
+- **Anything else called it** → you are at an **imperative boundary**: the browser fired an
+  event, a timer or socket delivered, the MCP dispatcher invoked a tool's `run`, a rAF tick
+  landed. Writes here are allowed but staged; reads here return the last *committed* value —
+  **not what you just wrote**, and a memo over what you just wrote is exactly as stale.
+  (`getObserver()` from `solid-js` is `null` precisely here, if you're ever unsure. Being
+  lexically inside a component changes nothing: the component *body* is graph; the `onClick`
+  handler it creates is boundary.)
+
+Boundary code therefore follows two rules, one per direction. **Inbound** (world → graph):
+never read back what you just wrote — branch on the local you computed or on the setter's
+return value; where a flow genuinely must observe its own writes (a state-machine dispatch),
+wrap it in `flush(fn)`, which commits synchronously. **Outbound** (graph → world): push
+reactive values into non-reactive things (a canvas, a worker, an imperative widget) through a
+two-arg `createEffect(() => derive(), (value) => push(value))` — the graph calls the push;
+nothing is hand-called, so nothing can be forgotten. The two rules are one mechanism:
+`flush(fn)` also runs effect handlers before it returns, so a committed dispatch leaves state,
+derived values, *and* every effect-driven surface current by its next line. The full ledger
+entry (with the seven live bites that paid for it) is in
+[Hard-won details](./frontend-hard-won); the contract itself is pinned by
+`packages/aiui-viz/src/solid-semantics.test.ts`.
+
 ### Many notebooks, one lab
 
 Real practice is a collection of explorations — separate pages with nav, VitePress-style. And

@@ -106,6 +106,22 @@ describe("control(): validation lives in one place", () => {
     const steps = control({ name: "steps", value: 100, min: 1, max: 200 });
     expect(steps.set((n) => n * 3)).toBe(200); // computed, then clamped
   });
+
+  it("same-tick updater chains compose — each updater sees the prior STAGED value", () => {
+    // The M4 regression (measured before the fix: 1, not 2): resolving the
+    // updater against a committed read dropped every same-tick update but the
+    // last. Two arrow-keys in one frame must nudge twice.
+    const n = control({ name: "n", value: 0 });
+    n.set((v) => v + 1);
+    n.set((v) => v + 1);
+    expect(n.set((v) => v + 1)).toBe(3);
+  });
+
+  it("updater chains still validate each step (clamp applies to the staged value)", () => {
+    const steps = control({ name: "steps", value: 90, min: 1, max: 100 });
+    steps.set((v) => v + 20); // 110 → clamped to 100
+    expect(steps.set((v) => v + 20)).toBe(100); // chains from the CLAMPED 100
+  });
 });
 
 describe("dependency edges", () => {

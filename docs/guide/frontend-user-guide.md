@@ -551,10 +551,16 @@ they're written down. The full ledger, with the debugging stories, is
 - **Deps and compute drifting apart** (Step 4). Everything `compute` uses arrives via the bundle.
   Test each input.
 - **A boolean dependency closes the gate** (Step 7). Box it.
-- **Reads right after writes see the old value.** Writes are batched into transactions:
-  `threshold.set(0.7); threshold.get()` in the same instant returns the *old* value. Where it
-  bites: a tool that sets then re-reads (return what you computed instead), and tests (await a
-  `tick()` after every `set`).
+- **Reads right after writes see the old value — everywhere, not just in tools and tests.**
+  Writes are batched into transactions: the commit happens at the next microtask, and only code
+  running *inside* the reactive graph (memo computes, effect computes, JSX, cell `deps`) sees
+  staged values — those reads are always fine, which is why pure-dataflow code never hits this.
+  Any plain callback that sets then re-reads gets the pre-write answer:
+  `threshold.set(0.7); threshold.get()` returns the *old* value, and a **derived** read (a memo
+  over the value just written) is exactly as stale. Don't read back — branch on the value you
+  computed or the setter's return. A flow that genuinely must observe its own writes (a
+  state-machine dispatch) calls `flush()` from `solid-js`, which commits synchronously
+  (`flush(fn)` runs effect handlers too). In tests, `await tick()` after every `set` also works.
 - **Don't `set` a signal from inside a cell's compute** (before its first `await`). The dev build
   throws `REACTIVE_WRITE_IN_OWNED_SCOPE`. State changes belong in event handlers and tools; if a
   compute truly must flag something, defer it: `queueMicrotask(() => flag.set(true))`.

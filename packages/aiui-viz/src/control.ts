@@ -258,8 +258,21 @@ export function control<T>(spec: ControlSpec<T>): ControlBox<T> {
   };
 
   const set = ((next: T | ((prev: T) => T)) => {
-    const resolved = typeof next === "function" ? (next as (prev: T) => T)(box.get()) : (next as T);
-    const valid = validate(resolved);
+    if (typeof next === "function") {
+      // Resolve the updater THROUGH Solid's setter, never against box.get():
+      // writes are staged until the next microtask, so a same-tick chain of
+      // updaters must compose against the pending value (Solid resolves it) —
+      // resolving against the committed read silently drops every update but
+      // the last (two set(v=>v+1) in one tick yielded 1, measured).
+      let valid!: T;
+      box.set(((prev: T) => {
+        valid = validate((next as (prev: T) => T)(prev));
+        // biome-ignore lint/complexity/noBannedTypes: mirrors createSignal's own Exclude<T, Function> overload
+        return valid as Exclude<T, Function>;
+      }) as never);
+      return valid;
+    }
+    const valid = validate(next as T);
     // biome-ignore lint/complexity/noBannedTypes: mirrors createSignal's own Exclude<T, Function> overload
     box.set(valid as Exclude<T, Function>);
     return valid;

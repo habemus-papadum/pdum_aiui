@@ -769,6 +769,23 @@ function Panel() {
     }
   };
 
+  // The mirrors above are dual-written by the panel's OWN key path only — but
+  // videoOn/videoMode are agent-visible controls, and an agent's `set` moves
+  // the control and never the mirror, so sampling silently never starts (a
+  // permanent desync, found in the write-semantics audit §4.2). Reconcile:
+  // whenever the controls move (whoever wrote them), the mirrors, the claim,
+  // and the caps follow. The key path still writes both; re-asserting the
+  // same value here is a no-op (liveSignal drops === writes).
+  createEffect(
+    () => ({ on: videoOn.get(), mode: videoMode.get() }),
+    ({ on, mode }) => {
+      videoOnLive.set(on);
+      videoModeLive.set(mode);
+      syncVideo();
+      syncIslands();
+    },
+  );
+
   // ── iPad ink (C7): the panel is a paint HOST — frames off the warm stream
   // out to the iPad viewer, stroke intents back onto the active tab's ink
   // surface (paint.ts). Reconnects when the channel binding changes.

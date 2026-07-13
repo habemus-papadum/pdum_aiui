@@ -22,11 +22,23 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
   `STRICT_READ_UNTRACKED` (at 60 Hz, spectacularly) and can miss updates. Consume the value the
   source computed: `createEffect(() => frames.at(i.get()), (frame) => draw(frame))`, not
   `createEffect(i.get, () => draw(frames.at(i.get())))`.
-- **Same-tick reads after writes lie.** Writes are batched: `x.set(v); x.get()` in one
-  synchronous tick can return the pre-write value. Two places this bites: an agent tool that
-  `set`s then returns a `get` (return the value you computed instead), and driving the app via
-  `evaluate_script` — a synchronous `report()` right after a tool call reads stale; await a task
-  boundary (`setTimeout 0`) first. Cross-task reads are always correct.
+- **Same-tick reads after writes lie — always, not just in tools and tests.** A signal write is
+  a *transaction*: `set` stages the value, the commit happens at the next microtask, and **the
+  reactive graph is the only reader of your writes**. Code Solid did not call — an event
+  handler, a `chrome.*` callback, a timer, a socket, an agent tool's `run`, a rAF tick; any
+  *imperative boundary* (`getObserver() === null`) — reads the last committed value: `x.set(v);
+  x.get()` returns the pre-write value, and a **memo over** `x` is exactly as stale, which is
+  why making the raw value fresh (a `liveSignal`) can never fix a derived read. Reads *inside*
+  the graph (memo computes, effect computes, JSX, cell `deps`) always see a consistent staged
+  snapshot — this is why pure-dataflow code never meets the bug. Cures, in order: **don't read
+  back** — branch on the local you computed or the setter's return (it returns the written
+  value); where a flow genuinely must observe its own writes, **`flush()`** (exported from
+  `solid-js`, dev *and* prod) commits synchronously, and `flush(fn)` also runs effect handlers
+  before returning, so effect-driven surfaces are already repainted. `control()`,
+  `durableSignal()`, and `createStore` all share these semantics; the aiui primitives shout
+  when a boundary read would return a pre-write value. The whole contract is pinned by
+  `packages/aiui-viz/src/solid-semantics.test.ts`; Solid 1.x had read-your-own-writes behind
+  the identical API, which is why 1.x-trained intuition (and priors) keep regenerating the bug.
 - **Gone from 1.x:** `onMount` (use ref callbacks — they run when the element exists),
   `classList` (compute class strings). `render` and the `JSX` type moved to `@solidjs/web`
   (`jsxImportSource` likewise). `<Show>`'s non-keyed function child receives an **accessor**;

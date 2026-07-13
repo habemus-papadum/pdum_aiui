@@ -145,15 +145,20 @@ export const player: Player = durable("aztec:player", () => {
       acc += dt;
       const interval = 1000 / Math.max(1, fps.get());
       const edge = frames.frames.length - 1;
+      // Track the playhead in a LOCAL across the drain: a rAF tick is an
+      // imperative boundary, so re-reading frameIndex after set() serves the
+      // pre-write value — the loop drained acc but advanced at most one frame
+      // per tick (silently slow at high fps or after any stutter).
+      let cur = frameIndex.get();
       while (acc >= interval) {
         acc -= interval;
-        const cur = frameIndex.get();
-        if (cur < edge) frameIndex.set(cur + 1);
+        if (cur < edge) cur += 1;
         else {
           acc = 0;
           break;
         }
       }
+      frameIndex.set(cur);
     } else {
       acc = 0;
     }

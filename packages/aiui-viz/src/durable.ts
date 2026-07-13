@@ -14,7 +14,7 @@
  * dev-tool state, same spirit as the observability handles.
  */
 
-import { type Accessor, createSignal, type Setter } from "solid-js";
+import { type Accessor, createSignal, getObserver, type Setter } from "solid-js";
 
 interface DurableRegistry {
   entries: Map<string, unknown>;
@@ -73,6 +73,44 @@ export function durableSignal<T>(
 ): SignalBox<T> {
   return durable(key, () => {
     const [get, set] = createSignal<T>(initial);
-    return { get, set };
+
+    // The stale-read guard (write-semantics proposal M6). Solid 2.0 STAGES
+    // writes until the next microtask, and a read outside a reactive scope
+    // returns the last COMMITTED value — so "set then get" in one synchronous
+    // flow silently reads the pre-write value. That bug was found live seven
+    // times before it was understood, and LLM priors (trained on Solid 1.x,
+    // which had read-your-own-writes behind the identical API) regenerate it
+    // on every new file. Documentation cannot outrank a prior; only something
+    // that fails loudly can. So: when a boundary read would return a value
+    // that DIFFERS from what this same tick wrote, shout, with the fix in the
+    // message. Reads inside the graph (memos, effect computes, JSX) never
+    // warn — they see staged values and are always safe. Reads after flush()
+    // or a microtask never warn — the values agree by then. The check is two
+    // comparisons; it stays on in prod builds (this library must not read
+    // `import.meta.env`, and the hazard is exactly as wrong in prod).
+    let pendingWrite = false;
+    let lastWritten: T;
+    const guardedSet = ((next?: unknown) => {
+      const written = (set as (v: unknown) => T)(next);
+      lastWritten = written;
+      pendingWrite = true;
+      queueMicrotask(() => {
+        pendingWrite = false;
+      });
+      return written;
+    }) as Setter<T>;
+    const guardedGet: Accessor<T> = () => {
+      const value = get();
+      if (pendingWrite && getObserver() === null && !Object.is(value, lastWritten)) {
+        console.error(
+          `[aiui] "${key}" was written earlier in this same tick and is being read outside a ` +
+            `reactive scope — this read returns the PRE-write value (${JSON.stringify(value)}, ` +
+            `not ${JSON.stringify(lastWritten)}). Branch on the value you wrote (or the ` +
+            "setter's return), or flush() first. See docs/guide/frontend-hard-won.md",
+        );
+      }
+      return value;
+    };
+    return { get: guardedGet, set: guardedSet };
   });
 }

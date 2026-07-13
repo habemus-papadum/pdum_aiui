@@ -1,6 +1,21 @@
 /**
  * `liveSignal` — a signal with **read-your-own-writes**.
  *
+ * @deprecated A correct implementation of the wrong idea — do not use in new
+ * code (docs/proposals/solid-write-semantics-and-the-imperative-boundary.md
+ * §4). It restores Solid 1.x read-your-own-writes for the RAW value only:
+ * every *derived* read (a memo over it — cap labels, claims) is still stale
+ * in the same tick (measured), which is where the bugs it was built for
+ * actually lived; and used beside a `control()` it becomes a double-write
+ * whose mirror an agent's `set` never moves (a live desync until the
+ * reconciling effect was added). The real cures: don't read back (branch on
+ * the local or the setter's return), and `flush()` at boundaries that must
+ * observe their own writes — the reactive graph is the only reader of
+ * writes. Kept only for the frozen extension panel; new machines use the
+ * mode engine's flush()-committed dispatch. The narrow legitimate residue of
+ * this field+version shape is genuinely EXTERNAL mutable state Solid does
+ * not own (see hot-graph.ts).
+ *
  * The trap it retires (hit repeatedly in real apps — the extension panel
  * alone tripped over it five separate times: its phase machine, the ink
  * flag, selection presence, the key blip, and the channel port): Solid 2.0
@@ -43,6 +58,7 @@ export interface LiveSignal<T> {
   set(next: T | ((prev: T) => T)): T;
 }
 
+/** @deprecated See the module docblock — new code never needs this. */
 export function liveSignal<T>(initial: T): LiveSignal<T> {
   let now = initial;
   // A version counter, not the value: sidesteps signal equality/function-value
