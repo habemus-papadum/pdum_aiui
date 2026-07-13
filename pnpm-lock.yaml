@@ -401,6 +401,9 @@ importers:
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
+      '@solidjs/web':
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15
@@ -408,6 +411,12 @@ importers:
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+      vite-plugin-solid:
+        specifier: 3.0.0-next.5
+        version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-oscillator:
     dependencies:

@@ -19,14 +19,18 @@
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev": "vite"
   },
   "private": true,
   "dependencies": {
     "@habemus-papadum/aiui-viz": "workspace:^",
-    "solid-js": "2.0.0-beta.15"
+    "solid-js": "2.0.0-beta.15",
+    "@solidjs/web": "2.0.0-beta.15"
   },
   "devDependencies": {
-    "jsdom": "^25.0.1"
+    "jsdom": "^25.0.1",
+    "vite-plugin-solid": "3.0.0-next.5",
+    "vite": "^6.4.1"
   }
 }

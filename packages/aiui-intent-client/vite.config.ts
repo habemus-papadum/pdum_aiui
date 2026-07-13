@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
@@ -14,6 +15,8 @@ const external = [
 ];
 
 export default defineConfig({
+  // Compiles the panel's JSX; dev serving (`pnpm dev`) gets the plain page.
+  plugins: [solid()],
   test: {
     server: {
       deps: {
