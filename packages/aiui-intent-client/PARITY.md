@@ -28,8 +28,8 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | `micMuted` only while talking; reset on talk start | ✅ spec.ts + excludes + tests |
 | help popup (`?`), Esc dismisses before cancel | ✅ spec.ts + panel help table |
 | idle timeout closes turn → armed; suspended in tweak + while talking | ✅ `turnClosed` binding — **timer itself P2** (engine lane owns it; the suspension rule rides the lane config) |
-| engine dual-truth (`engine.setArmed` beside phase) | ✅ designed out: the mode engine is the single truth; the wire Engine is DRIVEN (P2) |
-| bus phase connected/connecting/closed; outage never touches phase | P2 — context fact `connected` exists; session bus + chip in the page work |
+| engine dual-truth (`engine.setArmed` beside phase) | ✅ designed out: lanes.ts DRIVES the wire Engine (setArmed/openTurn/send/stepOut verbs); its thread-close flows back as `turnClosed` |
+| bus phase connected/connecting/closed; outage never touches phase | ✅ session.ts bus client (reconnect loop) → `connected` fact; the channel pill is the chip |
 | `boundPort` + arm gate (arming requires bound) | P2 — gate becomes an `enabledWhen`/command guard on `connected` context |
 | `uiScale` control (⌘+/⌘−/⌘0) | P2 — a `control()` + root font effect on the page |
 | paint host (iPad) re-pointing | P4 (needs real capture host) — lane import unchanged |
@@ -43,11 +43,11 @@ them bind in P2:
 
 | Row | Status | Where / when |
 | --- | --- | --- |
-| `stt` transcriber choice (scribe-v2 default, 4 models) | ✅ control + config-strip select — **consumed at hello in P2** |
-| `videoPeriodSec` (constant-mode s/frame, 1–10 slider) | ✅ control + slider revealed under video while constant — **sampler consumes in P2** |
-| `linter` off/openai/gemini | ✅ control + strip select — **hello carries it in P2** |
-| `inkVanish` + `inkFade` (2–20 s) | ✅ controls + toggle/slider under ink — **live re-relay in P2** |
-| `shotFlash` / `logLevel` | ✅ controls (strip toggle/select) — **consumers in P2** |
+| `stt` transcriber choice (scribe-v2 default, 4 models) | ✅ control + strip select; **consumed**: panelIntentConfig → the hello's `meta.intent` (lanes.test) |
+| `videoPeriodSec` (constant-mode s/frame, 1–10 slider) | ✅ control + slider; **consumed**: the frame pump's intervalMs reads it per tick (lanes.ts) |
+| `linter` off/openai/gemini | ✅ control + strip select; **consumed**: rides the hello via panelIntentConfig |
+| `inkVanish` + `inkFade` (2–20 s) | ✅ controls + widgets; **consumed**: the ink claim's fadeSec + the live re-relay effect (lanes.bind) |
+| `shotFlash` / `logLevel` | ✅ controls; shotFlash **consumed** (manual shots flash, sampled never — lanes.test); logLevel consumer pending with the console channel |
 | `uiScale` (⌘+/⌘−/⌘0, deliberately no widget) | ✅ control — **key bindings + root-font effect P2** |
 | `rescanTick` | P2 (internal, with discovery) |
 | engine choice + `pendingEngine` (applies at thread-close) | **P2** — control + deferred binding (the engine's `on:` bindings carry payloads for exactly this) |
@@ -69,21 +69,27 @@ them bind in P2:
 | Row | Status | Where / when |
 | --- | --- | --- |
 | ink pointer / tab stream / video sampling / key routing / ring | ✅ claims.ts over the host seam + harness tests |
-| smart-mode interaction gate (page pings arm one frame) | P2 — `interaction` PageEvent exists; sampler lane consumes it |
+| smart-mode interaction gate (page pings arm one frame) | ✅ the frame pump's shouldCapture/rearm over `interaction` PageEvents (lanes.ts + test) |
 | capture pre-warm on arm (overlay 2A row) | DECIDE (default: keep the panel's turn-scoped warm; pre-warm-on-arm was overlay-only) |
 | M10 warm-shot pixel path (36–48 ms) | P4 — `panel/capture.ts` copied nearly verbatim behind `CaptureSource` |
 | M9 panel-document mic (grant persistence) | P2 (plain page = stable origin, same property) |
-| manual shots flash; sampled frames never | P2 — `shotFlash` control + shot verb lane |
+| manual shots flash; sampled frames never | ✅ lanes.ts takeShot (flash AFTER grab) + pump sendFrame (never) — lanes.test rows |
 | standing mic/share between turns send NOTHING | ✅ structurally (talk per-turn exclude; sampling gated on turn) + P2 lane tests |
 
 ## Wire / lanes (Phase 2 proper)
 
+**Done in the first P2 tranche** (lanes.ts, session.ts; harness rows in lanes.test.ts; verified
+live against a running channel — thread dialed, events flushed, cancel clean): Engine +
+composeIntent bound; createWire + openIntentThread (finalize on send, cancel otherwise;
+lowered-prompt echo + channel-error toasts); createTalk + SpeechPlayer composed (mic lives in
+the panel document — M9); the VideoSampler frame pump as the real videoSample applier; session
+bus + /health probe + port resolution (explicit → ?channel= → same-origin). **Remaining:**
+
 Engine (`intent-pipeline`) + `composeIntent` · `createWire` (upload path) · `openIntentThread` ·
-turn mirror recovery · talk lane (`createTalk`, worklet, PCM lifecycle incl. the
-frames-chasing-closed-socket fix as a test) · VideoSampler over `CaptureSource` · preview pane ·
-trace pane · connection chip · toasts · session bus + auto-bind (2 remembered keys) ·
-channel-served page. Each imports unchanged (salvage list); what's new is binding them as
-`IntentLanes` + claim appliers, each with a harness test.
+turn mirror recovery · talk PCM lifecycle live-verified (worklet mic; the
+frames-chasing-closed-socket fix as a test) · preview pane · trace pane ·
+channel-SERVED page (the same-origin resolution is ready for it) · uiScale key bindings ·
+session-layering config strip (the DECIDE default).
 
 ## Hosts
 

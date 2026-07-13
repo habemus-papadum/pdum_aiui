@@ -20,7 +20,7 @@ import {
   type KeyHint,
 } from "@habemus-papadum/aiui-viz/modal";
 import { configBar, intentBar } from "./caps";
-import { intentClaims } from "./claims";
+import { type ClaimLaneOptions, intentClaims } from "./claims";
 import { hintsFor, keyVerdict } from "./keys";
 import { type IntentContext, initialContext, intentSpec } from "./spec";
 import type { IntentHost } from "./transport";
@@ -46,11 +46,19 @@ export interface IntentLanes {
   startTalk(mode: string): void;
   stopTalk(): void;
   setMicMuted(muted: boolean): void;
+  /**
+   * The seat's armed-ness changed (any route). Optional: hosts whose wire
+   * engine tracks armed-ness implement it (the wire Engine gates openTurn
+   * and talk on it, and its setArmed(false) is its own full abandon).
+   */
+  setArmed?(on: boolean): void;
 }
 
 export interface IntentClientConfig {
   host: IntentHost;
   lanes: IntentLanes;
+  /** Lane hooks for the claims (real video pump, ink fade) — see claims.ts. */
+  claimOptions?: ClaimLaneOptions;
   /** Trace sink — every dispatch (mode timelines in the debug UI). */
   onDispatch?: (event: DispatchEvent) => void;
   /** A swallowed in-turn typo — flash it (UI blip line + page miss-flash). */
@@ -98,9 +106,15 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     const leftTurn = inTurn(event.before.phase) && !inTurn(event.after.phase);
     const grantedTab = engine.context().grantedTab;
 
-    // Opening is command-agnostic (cmdB, the bar's turn cap); closing is
-    // command-SPECIFIC: send commits, escape/disarm/arm abandon, and
-    // turnEnded means the wire already closed it — nothing to drive.
+    // Armed-ness first (the wire engine gates turn-opening on it), then
+    // opening — command-agnostic (the bar's turn cap, the activation
+    // gesture); closing is command-SPECIFIC: send commits, escape/disarm/arm
+    // abandon, and turnEnded means the wire already closed it.
+    const wasArmed = event.before.phase !== "disarmed";
+    const isArmed = event.after.phase !== "disarmed";
+    if (wasArmed !== isArmed) {
+      lanes.setArmed?.(isArmed);
+    }
     if (enteredTurn) {
       lanes.openTurn();
     }
@@ -157,7 +171,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
   const engine = solidModeEngine<IntentContext>({
     spec: intentSpec,
     context: initialContext,
-    claims: intentClaims(host),
+    claims: intentClaims(host, config.claimOptions),
     onDispatch: (event) => {
       runVerbs(event);
       config.onDispatch?.(event);

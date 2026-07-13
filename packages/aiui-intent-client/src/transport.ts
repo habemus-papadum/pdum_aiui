@@ -57,6 +57,8 @@ export interface PanelShot {
   height: number;
   mime: string;
   bytes: Uint8Array;
+  /** Small data-URL preview for the engine event / preview pane. */
+  thumb?: string;
 }
 
 /** Pixels: the capture half (tabCapture in MV3, getDisplayMedia elsewhere). */

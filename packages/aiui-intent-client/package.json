@@ -26,7 +26,8 @@
   "dependencies": {
     "@habemus-papadum/aiui-viz": "workspace:^",
     "solid-js": "2.0.0-beta.15",
-    "@solidjs/web": "2.0.0-beta.15"
+    "@solidjs/web": "2.0.0-beta.15",
+    "@habemus-papadum/aiui-dev-overlay": "workspace:^"
   },
   "devDependencies": {
     "jsdom": "^25.0.1",

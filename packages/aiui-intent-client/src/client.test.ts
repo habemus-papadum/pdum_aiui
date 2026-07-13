@@ -167,7 +167,7 @@ describe("send vs cancel vs disarm", () => {
     grantAndOpen(r);
     r.client.dispatch("ink");
     await settle();
-    expect(r.bus.log).toContain('page:ink@7 {"on":true}');
+    expect(r.bus.log).toContain('page:ink@7 {"on":true,"fadeSec":0}');
 
     r.client.dispatch("disarm");
     await settle();
@@ -186,7 +186,7 @@ describe("claims — the end of hand-called syncs", () => {
     r.bus.clearLog();
     r.client.dispatch("ink"); // ledger (F2): "caps stale after selection change",
     await settle(); //            "command bar completely missing" — the class
-    expect(r.bus.log).toContain('page:ink@7 {"on":true}');
+    expect(r.bus.log).toContain('page:ink@7 {"on":true,"fadeSec":0}');
   });
 
   it("the warm stream is held for the turn's life and re-pointed on re-grant", async () => {

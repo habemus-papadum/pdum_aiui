@@ -1,19 +1,13 @@
-- testing strategy
-  -- claude token
-
-custom channel --
-  write info on startup
-  cleanup info on shutdown
-  pip of claude
-  its pid
-  cwd
-  
-
-  test that it works
-
-
- create websocket
-
- vite tool
-   get mcp
-   
+Oracle mode
+  agent
+  realtime
+  transfer into app
+TTS
+Ink 
+  Better
+Demos:
+  Modal
+  Multipage
+  Ink
+  Oracle
+Editing

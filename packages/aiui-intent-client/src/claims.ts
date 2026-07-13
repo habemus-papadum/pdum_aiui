@@ -20,7 +20,22 @@ import type { HeldStream, IntentHost, RingState } from "./transport";
 
 const inTurn = (s: EngineState): boolean => s.phase === "turn" || s.phase === "tweak";
 
-export function intentClaims(host: IntentHost): ClaimSpecs<EngineState, IntentContext> {
+/** Lane hooks: the REAL operations behind two claims (the fake host's
+ * transport assertions remain the default, which is what harness tests
+ * drive). */
+export interface ClaimLaneOptions {
+  /** Vanishing-ink lifetime for the ink assertion (0 = page-permanent). */
+  inkFadeSec?: () => number;
+  /** The real frame pump: start sampling for a desire, return the stop. */
+  videoSampler?: {
+    start: (desire: { tab: number; mode: string }) => Promise<() => void>;
+  };
+}
+
+export function intentClaims(
+  host: IntentHost,
+  options: ClaimLaneOptions = {},
+): ClaimSpecs<EngineState, IntentContext> {
   const { transport, capture } = host;
   return {
     /** Ink pointer routed at the granted tab while inking in an open turn. */
@@ -30,7 +45,10 @@ export function intentClaims(host: IntentHost): ClaimSpecs<EngineState, IntentCo
           ? { tab: ctx.grantedTab }
           : null,
       acquire: async (desire: { tab: number }) => {
-        await transport.requestPage(desire.tab, "ink", { on: true });
+        await transport.requestPage(desire.tab, "ink", {
+          on: true,
+          fadeSec: options.inkFadeSec?.() ?? 0,
+        });
         return desire.tab;
       },
       release: async (tab: number) => {
@@ -48,21 +66,33 @@ export function intentClaims(host: IntentHost): ClaimSpecs<EngineState, IntentCo
       },
     },
 
-    /** Frame sampling: turn ∧ video ∧ grant — smart or constant cadence. */
+    /** Frame sampling: turn ∧ video ∧ grant — smart or constant cadence.
+     * Default applier asserts the page-side flag (the fake host / tests);
+     * the real client passes `options.videoSampler`, whose start() runs the
+     * VideoSampler pump (frames → engine shots → wire attachments). */
     videoSample: {
       derive: (s, ctx) =>
         s.phase === "turn" && s.video === true && ctx.grantedTab !== undefined
           ? { tab: ctx.grantedTab, mode: s.videoMode as string }
           : null,
       acquire: async (desire: { tab: number; mode: string }) => {
+        if (options.videoSampler !== undefined) {
+          return { stop: await options.videoSampler.start(desire) };
+        }
         await transport.requestPage(desire.tab, "viewport", {
           sample: true,
           mode: desire.mode,
         });
-        return desire;
+        return { desire };
       },
-      release: async (actual: { tab: number; mode: string }) => {
-        await transport.requestPage(actual.tab, "viewport", { sample: false });
+      release: async (actual: { stop?: () => void; desire?: { tab: number } }) => {
+        if (actual.stop !== undefined) {
+          actual.stop();
+          return;
+        }
+        if (actual.desire !== undefined) {
+          await transport.requestPage(actual.desire.tab, "viewport", { sample: false });
+        }
       },
     },
 

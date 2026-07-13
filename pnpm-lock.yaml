@@ -398,6 +398,9 @@ importers:
 
   packages/aiui-intent-client:
     dependencies:
+      '@habemus-papadum/aiui-dev-overlay':
+        specifier: workspace:^
+        version: link:../aiui-dev-overlay
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz

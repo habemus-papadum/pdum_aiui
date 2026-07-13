@@ -17,7 +17,7 @@
 
 export { activationGesture } from "./activation";
 export { configBar, intentBar } from "./caps";
-export { intentClaims } from "./claims";
+export { type ClaimLaneOptions, intentClaims } from "./claims";
 export {
   createIntentClient,
   type IntentClient,
@@ -27,6 +27,26 @@ export {
 export * as intentConfig from "./config";
 export { type FakeBus, fakeBus } from "./fake-bus";
 export { hintsFor, type KeyVerdict, keyStack, keyVerdict, turnLayer } from "./keys";
+export {
+  type ChannelLanes,
+  type ChannelLanesConfig,
+  createChannelLanes,
+  currentThreadEvents,
+  type OpenThread,
+  panelIntentConfig,
+} from "./lanes";
+export {
+  type BusPeer,
+  type BusPhase,
+  type BusState,
+  type ChannelHealth,
+  connectSessionBus,
+  INITIAL_BUS_STATE,
+  probeChannel,
+  reduceBusMessage,
+  resolveChannelPort,
+  type SessionBusClient,
+} from "./session";
 export { type IntentContext, initialContext, intentSpec } from "./spec";
 export type {
   CaptureSource,
