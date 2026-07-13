@@ -11,11 +11,17 @@
  * tracked state, and the shared word-diff flash (one visual language, one
  * tempo, for "this text changed in front of you").
  *
- * The kit does NOT own state. Apps keep their own architecture (for the
- * overlay: an append-only event stream and pure folds — state = fold(events),
- * UI = projection); the kit disciplines the SHELL around it — modes, keys,
- * surfaces, effects — which is where all fifteen of the overlay's real bugs
- * lived.
+ * The kit's *modules* do NOT own state — but the kit now also ships the
+ * composition layer both intent clients used to hand-roll: the **mode
+ * engine** (engine.ts — regions + a pure command reducer + mechanical
+ * esc/blur + atomic commit), **claims** (claims.ts — derived async
+ * operations with per-claim status; the end of hand-called `sync*`
+ * functions), and the **bar projection** (bar.ts — caps as renders of the
+ * spec). Apps that want the engine give it their state wholesale; apps with
+ * their own architecture keep using the modules à la carte. Design doc:
+ * docs/proposals/intent-client/01-mode-engine.md. The Solid adapter
+ * (`solidModeEngine`) lives in the package root, keeping this subpath
+ * framework-free.
  *
  * Realm rules: no Solid import, no DOM access at module scope (DOM only
  * inside install/render functions), so this subpath is safe to import from
@@ -23,8 +29,39 @@
  * pipeline) and from workers.
  */
 
+export { type BarInputs, barModel, type CapSpec, type CapView } from "./bar";
+export {
+  type ClaimPhase,
+  type ClaimSpec,
+  type ClaimSpecs,
+  type ClaimStatus,
+  type ClaimsHandle,
+  type ClaimsOptions,
+  createClaims,
+} from "./claims";
 export { type DiffRun, wordDiff } from "./diff";
 export { type GuardedOutcome, type GuardOptions, guardedEffect } from "./effect";
+export {
+  type ChoiceRegion,
+  type CommandFn,
+  choice,
+  createModeEngine,
+  type DispatchEvent,
+  type EngineEvent,
+  type EngineState,
+  type EventBinding,
+  type ExcludeRule,
+  type LadderRegion,
+  ladder,
+  type ModeEngine,
+  type ModeEngineOptions,
+  type ModeEngineSpec,
+  type RegionSpec,
+  type RegionValue,
+  type StatePatch,
+  type ToggleRegion,
+  toggle,
+} from "./engine";
 export {
   DEFAULT_DIFF_CLASSES,
   type DiffRunClasses,

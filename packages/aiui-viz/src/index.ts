@@ -48,6 +48,13 @@ export type { HotContext } from "./hot-graph";
 // hot-graph.ts — the durable box + dispose-and-swap + self-accept, in one call.
 export { hotCellGraph } from "./hot-graph";
 export { type LiveSignal, liveSignal } from "./live-signal";
+// mode-solid.ts — the Solid adapter for the modal kit's mode engine:
+// flush()-committed dispatch, reactive state/claim views, the agent bridge.
+export {
+  type SolidModeEngine,
+  type SolidModeEngineConfig,
+  solidModeEngine,
+} from "./mode-solid";
 export type { Scope } from "./scope";
 // scope.ts — instance identity for composable slices (qualified names).
 export { SCOPE_SEPARATOR, scope } from "./scope";
