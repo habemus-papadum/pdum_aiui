@@ -25,6 +25,7 @@ export {
   type IntentLanes,
 } from "./client";
 export * as intentConfig from "./config";
+export { loadConfigBase, resetConfigToBase, saveConfigBase } from "./config-store";
 export { type FakeBus, fakeBus } from "./fake-bus";
 export { hintsFor, type KeyVerdict, keyStack, keyVerdict, turnLayer } from "./keys";
 export {
@@ -34,6 +35,8 @@ export {
   currentThreadEvents,
   type OpenThread,
   panelIntentConfig,
+  sessionStorageMirror,
+  type TurnMirror,
 } from "./lanes";
 export {
   type BusPeer,

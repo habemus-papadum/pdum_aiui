@@ -18,7 +18,17 @@
 
 import { type ControlBox, ControlToggle, controlByName } from "@habemus-papadum/aiui-viz";
 import type { BarItem, BarRow, ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
-import { createMemo, createSignal, For, Match, onCleanup, Repeat, Show, Switch } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Repeat,
+  Show,
+  Switch,
+} from "solid-js";
 import type { IntentClient } from "../client";
 
 export const PANEL_STYLES = `
@@ -60,12 +70,23 @@ export const PANEL_STYLES = `
   .aiui-help kbd { border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
     border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
   .aiui-blip { margin-top: 8px; min-height: 1.2em; color: #dc2626; font-size: 12px; }
+  .aiui-meter { display: inline-block; width: 64px; height: 8px; border-radius: 4px;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent); overflow: hidden;
+    vertical-align: middle; }
+  .aiui-meter > div { height: 100%; background: #dc2626; transition: width 80ms linear; }
+  .aiui-config-verbs button { font: 11px system-ui; padding: 1px 7px; border-radius: 6px;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent); background: transparent;
+    cursor: pointer; }
 `;
 
 export interface PanelProps {
   client: IntentClient;
   /** Called once with the blip sink (blips are UI-local display state). */
   registerBlipSink?: (sink: (key: string) => void) => void;
+  /** Session-layering verbs (save the base / reset to it) — config-store.ts. */
+  configActions?: { save(): void; reset(): void };
+  /** The live mic level 0..1 (talk.level) — renders the REC meter while talking. */
+  micLevel?: () => number;
 }
 
 /** One status pill's view: stable label, varying state. */
@@ -157,6 +178,23 @@ export function Panel(props: PanelProps) {
     blipTimer = setTimeout(() => setBlip(undefined), 500);
   });
   onCleanup(() => clearTimeout(blipTimer));
+
+  // The REC meter: poll talk.level while a talk window is open (display
+  // state at display cadence — the machine is untouched).
+  const [micLevel, setMicLevel] = createSignal(0, { ownedWrite: true });
+  let meterTimer: ReturnType<typeof setInterval> | undefined;
+  createEffect(
+    () => client.state().talk !== "off" && props.micLevel !== undefined,
+    (talking) => {
+      clearInterval(meterTimer);
+      if (talking) {
+        meterTimer = setInterval(() => setMicLevel(props.micLevel?.() ?? 0), 100);
+      } else {
+        setMicLevel(0);
+      }
+    },
+  );
+  onCleanup(() => clearInterval(meterTimer));
 
   // Verb caps move no region — acknowledge the tap itself with a brief flash.
   const [flashed, setFlashed] = createSignal<string | undefined>(undefined, { ownedWrite: true });
@@ -318,6 +356,11 @@ export function Panel(props: PanelProps) {
             </span>
           )}
         </For>
+        <Show when={client.state().talk !== "off" && props.micLevel !== undefined}>
+          <span class="aiui-meter" data-testid="mic-meter" title="mic level">
+            <div style={`width: ${Math.round(Math.min(1, micLevel()) * 100)}%`} />
+          </span>
+        </Show>
       </div>
 
       <Show when={client.state().help === true}>
@@ -369,6 +412,28 @@ export function Panel(props: PanelProps) {
             );
           }}
         </Repeat>
+        <Show when={props.configActions} keyed>
+          {(actions) => (
+            <span class="aiui-config-verbs" style="display: inline-flex; gap: 4px">
+              <button
+                type="button"
+                data-testid="config-save"
+                title="save current config as the base (survives reload)"
+                onClick={() => actions.save()}
+              >
+                save
+              </button>
+              <button
+                type="button"
+                data-testid="config-reset"
+                title="discard session changes — restore the saved base"
+                onClick={() => actions.reset()}
+              >
+                reset
+              </button>
+            </span>
+          )}
+        </Show>
       </div>
     </div>
   );

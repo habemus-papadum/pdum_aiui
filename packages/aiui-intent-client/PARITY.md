@@ -15,7 +15,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 
 | Row | Status | Where / when |
 | --- | --- | --- |
-| phase ladder disarmed·armed·turn·tweak; turn recovery via mirror | ✅ spec.ts (`phase`) — **recovery mirror P2** (wire lanes own the completeness-stamped mirror) |
+| phase ladder disarmed·armed·turn·tweak; turn recovery via mirror | ✅ spec.ts (`phase`); mirror = lanes.ts sessionStorageMirror + recover() (replay → wire re-dials → machine re-opens; grant re-asked via activation) — verified live across a reload |
 | Activation (⌘B in the extension): idempotent grant-and-open; resume from tweak; NEVER cancels | ✅ activation.ts `activationGesture` (an imperative-boundary helper, not a command) + tests |
 | tweak: cap toggles out; page keys pass through in tweak | ✅ spec.ts `tweak` (toggle), keyRouting claim releases in tweak |
 | send keeps armed (divergence 2) | ✅ spec.ts `send` + tests |
@@ -31,14 +31,14 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | engine dual-truth (`engine.setArmed` beside phase) | ✅ designed out: lanes.ts DRIVES the wire Engine (setArmed/openTurn/send/stepOut verbs); its thread-close flows back as `turnClosed` |
 | bus phase connected/connecting/closed; outage never touches phase | ✅ session.ts bus client (reconnect loop) → `connected` fact; the channel pill is the chip |
 | `boundPort` + arm gate (arming requires bound) | P2 — gate becomes an `enabledWhen`/command guard on `connected` context |
-| `uiScale` control (⌘+/⌘−/⌘0) | P2 — a `control()` + root font effect on the page |
+| `uiScale` control (⌘+/⌘−/⌘0) | ✅ main.tsx keys + root-font effect; persisted via the config base |
 | paint host (iPad) re-pointing | P4 (needs real capture host) — lane import unchanged |
 | `inkTabId`/`leaderTabId`/`lastActiveTab` routing | ✅ context (`activeTab`/`grantedTab`) + claims re-point on tab switch |
 | navigation events into the turn (same-tab SPA/reload; prompt-rendered) | ✅ `navigation` PageEvent → engine.navigation (lanes.ts + tests) — **full SPA turn-continuity semantics later, with real pages (P3)** |
 | tab-boundary events into the turn (switch names both sides) | ✅ onActiveTabChange + tabInfo → engine.navigation (lanes.ts + tests) |
 | aiui-instrumented-page fact (`window.__AIUI__`) | ✅ `aiuiSupport` PageEvent → ctx.aiuiPage + the `page` pill; `locate` in PageCapability — **real detection rides the P3/P4 page hosts** |
 | jump-to-VS-Code mode (overlay-only; never in the old extension) | ANTICIPATED: seam + fact above; the `jump` ladder region + picker remain the post-P5 DECIDE |
-| mic level meter while talking (the old HUD meter) | **P2-talk** — `talk.level()` is already composed (lanes.ts); the meter renders next to the REC pill when live talk is verified |
+| mic level meter while talking (the old HUD meter) | ✅ panel.tsx meter next to the pills (polls talk.level at display cadence) — **shows real levels once live talk is verified with a mic** |
 | ring three states (off · steady armed · breathing turn) | ✅ claim desire carries them; test walks all three; the ring pill shows off/on/live — **page-side rendering with the P3/P4 hosts** |
 
 ## Config surface (inventory §1C controls — the "kept getting lost" list)
@@ -54,10 +54,10 @@ them bind in P2:
 | `linter` off/openai/gemini | ✅ control + strip select; **consumed**: rides the hello via panelIntentConfig |
 | `inkVanish` + `inkFade` (2–20 s) | ✅ controls + widgets; **consumed**: the ink claim's fadeSec + the live re-relay effect (lanes.bind) |
 | `shotFlash` / `logLevel` | ✅ controls; shotFlash **consumed** (manual shots flash, sampled never — lanes.test); logLevel consumer pending with the console channel |
-| `uiScale` (⌘+/⌘−/⌘0, deliberately no widget) | ✅ control — **key bindings + root-font effect P2** |
+| `uiScale` (⌘+/⌘−/⌘0, deliberately no widget) | ✅ control + keys + root-font effect (main.tsx) |
 | `rescanTick` | P2 (internal, with discovery) |
 | engine choice + `pendingEngine` (applies at thread-close) | **P2** — control + deferred binding (the engine's `on:` bindings carry payloads for exactly this) |
-| config strip (K layer) with session overrides / R reset / S save | **DECIDE** (default: adopt the overlay's session-layering in P2 as a strip pane; it was a "panel gap" the old client never closed) |
+| config strip with session overrides / reset / save | ✅ config-store.ts (live values = session; saved base in localStorage under `aiui2.config`; save flushes first — the M2 boundary) + strip buttons |
 | advanced raw-JSON config panel (G) | **DECIDE** (default: defer past P5 — agent `set_config` covers the need) |
 
 ## The bar + status pills (owner review 2026-07-13 — conscious divergence, improvement)
@@ -92,10 +92,10 @@ the panel document — M9); the VideoSampler frame pump as the real videoSample 
 bus + /health probe + port resolution (explicit → ?channel= → same-origin). **Remaining:**
 
 Engine (`intent-pipeline`) + `composeIntent` · `createWire` (upload path) · `openIntentThread` ·
-turn mirror recovery · talk PCM lifecycle live-verified (worklet mic; the
-frames-chasing-closed-socket fix as a test) · preview pane · trace pane ·
-channel-SERVED page (the same-origin resolution is ready for it) · uiScale key bindings ·
-session-layering config strip (the DECIDE default).
+talk PCM lifecycle live-verified (worklet mic; the frames-chasing-closed-socket
+fix as a test — needs the owner's mic) · channel-SERVED page (the same-origin
+resolution is ready for it). Preview/trace panes, turn mirror, uiScale, and the
+session-layering strip landed in the second tranche (panes.tsx, config-store.ts).
 
 ## Hosts
 

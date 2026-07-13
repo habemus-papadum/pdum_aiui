@@ -14,14 +14,17 @@
  */
 
 import { render } from "@solidjs/web";
-import { createSignal, Show } from "solid-js";
+import { createEffect, createRoot, createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
+import { uiScale } from "../config";
+import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
 import { keyVerdict } from "../keys";
-import { createChannelLanes } from "../lanes";
+import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
 import { Panel } from "./panel";
+import { PANES_STYLES, TracePane, TurnPane } from "./panes";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined, {
@@ -37,7 +40,25 @@ const toast = (message: string): void => {
   toastTimer = setTimeout(() => setToastLine(undefined), 4000);
 };
 
-async function boot(): Promise<{ client: IntentClient; mode: "channel" | "fake" }> {
+// The saved config base applies BEFORE the lanes read stt/linter.
+loadConfigBase();
+
+// Panel zoom: ⌘+/⌘−/⌘0 drive the uiScale control; the graph pushes the
+// root font size (nothing hand-called).
+createRoot(() => {
+  createEffect(
+    () => uiScale.get() as number,
+    (scale) => {
+      document.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
+    },
+  );
+});
+
+async function boot(): Promise<{
+  client: IntentClient;
+  mode: "channel" | "fake";
+  lanes?: ChannelLanes;
+}> {
   // The FakeBus hosts BOTH tiers today: page-side capabilities (ink, keys,
   // ring, selection) get real transports in Phase 3 (CdpBus) and Phase 4
   // (ExtensionBus); the channel tier already carries the real wire/talk.
@@ -65,6 +86,9 @@ async function boot(): Promise<{ client: IntentClient; mode: "channel" | "fake" 
       onBlip: (key) => blipSink?.(key),
     });
     channelLanes.bind(client);
+    if (channelLanes.recover(client)) {
+      setStatusLine("turn recovered from the mirror — re-grant with activate/⌘B");
+    }
 
     // The session bus is the `connected` fact (and, later, peers/slots —
     // the iPad paint presence). Outages never disarm; they just gray the pill.
@@ -79,7 +103,7 @@ async function boot(): Promise<{ client: IntentClient; mode: "channel" | "fake" 
       lanes: channelLanes,
       sessionBus,
     };
-    return { client, mode: "channel" };
+    return { client, mode: "channel", lanes: channelLanes };
   }
 
   const consoleLanes: IntentLanes = {
@@ -106,7 +130,7 @@ async function boot(): Promise<{ client: IntentClient; mode: "channel" | "fake" 
 let blipSink: ((key: string) => void) | undefined;
 let navCounter = 0;
 
-const { client, mode } = await boot();
+const { client, mode, lanes } = await boot();
 const bus = (window as unknown as { __aiuiIntentClient: { bus: ReturnType<typeof fakeBus> } })
   .__aiuiIntentClient.bus;
 
@@ -123,6 +147,26 @@ const onKey = (phase: "down" | "up") => (event: KeyboardEvent) => {
     event.preventDefault();
     activate();
     return;
+  }
+  // Panel zoom (⌘+/⌘−/⌘0) — panel-document chrome, registered before the
+  // grammar so it wins mid-turn (the old panel's rule).
+  if (event.metaKey && phase === "down") {
+    const scale = uiScale.get() as number;
+    if (event.key === "=" || event.key === "+") {
+      event.preventDefault();
+      uiScale.set((Math.round((scale + 0.1) * 10) / 10) as never);
+      return;
+    }
+    if (event.key === "-") {
+      event.preventDefault();
+      uiScale.set((Math.round((scale - 0.1) * 10) / 10) as never);
+      return;
+    }
+    if (event.key === "0") {
+      event.preventDefault();
+      uiScale.set(1 as never);
+      return;
+    }
   }
   const verdict = keyVerdict(client.state(), event.key, phase, event.repeat);
   if (verdict.kind === "pass") {
@@ -274,8 +318,22 @@ if (root === null) {
 render(
   () => (
     <>
+      <style>{PANES_STYLES}</style>
       <SimulateStrip />
-      <Panel client={client} registerBlipSink={(sink) => (blipSink = sink)} />
+      <Panel
+        client={client}
+        registerBlipSink={(sink) => (blipSink = sink)}
+        configActions={{ save: () => saveConfigBase(), reset: () => resetConfigToBase() }}
+        micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
+      />
+      <Show when={lanes} keyed>
+        {(l) => (
+          <>
+            <TurnPane lanes={l} />
+            <TracePane lanes={l} />
+          </>
+        )}
+      </Show>
       <WirePane />
     </>
   ),

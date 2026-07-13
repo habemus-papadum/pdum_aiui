@@ -38,7 +38,7 @@ import {
 } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
 import { VideoSampler } from "@habemus-papadum/aiui-dev-overlay/multimodal-video";
 import { createWire, type Wire } from "@habemus-papadum/aiui-dev-overlay/wire";
-import { createEffect, createRoot } from "solid-js";
+import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { ClaimLaneOptions } from "./claims";
 import type { IntentClient, IntentLanes } from "./client";
 import { inkFade, inkVanish, linter, shotFlash, stt, videoPeriodSec } from "./config";
@@ -82,10 +82,47 @@ export type OpenThread = (options: {
   onServerMessage: (msg: unknown) => void;
 }) => Promise<unknown>;
 
+/** Turn persistence across page reloads (the old panel's storage.session
+ * mirror, plain-page grade). Default: sessionStorage under `aiui2.turn`. */
+export interface TurnMirror {
+  persist(events: IntentEvent[], threadOpen: boolean): void;
+  recover(): { events: IntentEvent[]; threadOpen: boolean } | undefined;
+}
+
+const MIRROR_KEY = "aiui2.turn";
+
+export function sessionStorageMirror(storage: Storage = sessionStorage): TurnMirror {
+  return {
+    persist(events, threadOpen) {
+      if (threadOpen && events.length > 0) {
+        storage.setItem(MIRROR_KEY, JSON.stringify({ events, threadOpen, savedAt: Date.now() }));
+      } else {
+        storage.removeItem(MIRROR_KEY);
+      }
+    },
+    recover() {
+      try {
+        const raw = storage.getItem(MIRROR_KEY);
+        if (raw === null) {
+          return undefined;
+        }
+        const got = JSON.parse(raw) as { events?: IntentEvent[]; threadOpen?: boolean };
+        return Array.isArray(got.events) && got.events.length > 0
+          ? { events: got.events, threadOpen: got.threadOpen === true }
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  };
+}
+
 export interface ChannelLanesConfig {
   host: IntentHost;
   /** The bound channel port (undefined = degraded; sends will say so). */
   port: () => number | undefined;
+  /** Turn persistence; defaults to sessionStorage. Pass null to disable. */
+  mirror?: TurnMirror | null;
   /** Identity of the driven surface for the hello's context block. */
   tabMeta?: () => Promise<Record<string, unknown> | undefined>;
   /** PCM capture factory; defaults to the blob-URL AudioWorklet source
@@ -112,11 +149,26 @@ export interface ChannelLanes {
   talk: Talk;
   speech: SpeechPlayer;
   /**
+   * Reactive event cursor: reading it inside the graph subscribes to every
+   * engine event, so panes over `engine.events` re-render per event.
+   */
+  eventsRev: Accessor<number>;
+  /** The current thread's events, reactively (empty when no thread ever). */
+  threadEvents(): IntentEvent[];
+  /**
    * Bind the wire-engine's world back into the mode engine and start the
    * outbound config effects. Call once, right after createIntentClient.
    * Returns the unbind.
    */
   bind(client: IntentClient): () => void;
+  /**
+   * Recover a mirrored turn after a page reload: replays the events into
+   * the wire engine (the wire re-dials on the replayed thread-open) and
+   * re-opens the machine to armed+turn. The capture GRANT does not survive
+   * a reload — the user re-grants with the activation gesture (idempotent).
+   * Returns whether a turn was recovered. Call after bind().
+   */
+  recover(client: IntentClient): boolean;
 }
 
 export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
@@ -366,6 +418,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
 
   // ── the engine → wire feed: every event, then the close verbs (the
   // overlay modality's exact composition; the wire does not self-subscribe).
+  // Plus: the reactive event cursor for panes, and the turn mirror.
+  const [eventsRev, setEventsRev] = createSignal(0);
+  const mirror = config.mirror === null ? undefined : (config.mirror ?? sessionStorageMirror());
   engine.onEvent((event) => {
     wire.onEngineEvent(event);
     if (event.type === "thread-close") {
@@ -375,6 +430,8 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
         void wire.cancelThread();
       }
     }
+    setEventsRev((n) => n + 1);
+    mirror?.persist(currentThreadEvents(engine.events), engine.threadOpen);
   });
 
   // ── the world flows back: wire-engine events → mode-engine bindings ───────
@@ -421,5 +478,39 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     };
   };
 
-  return { lanes, claimOptions, engine, wire, talk, speech, bind };
+  const recover = (client: IntentClient): boolean => {
+    const got = mirror?.recover();
+    if (got === undefined || !got.threadOpen) {
+      return false;
+    }
+    // Replay re-feeds every listener: the wire re-dials on the replayed
+    // thread-open, the panes see the events, the mirror re-persists.
+    engine.replay(got.events, { threadOpen: true });
+    // The machine follows the recovered wire truth (arm gate deliberately
+    // bypassed: a recovered turn outranks a not-yet-connected bus — outages
+    // never abandon turns).
+    if (client.state().phase === "disarmed") {
+      client.dispatch("arm");
+    }
+    if (client.state().phase === "armed") {
+      client.dispatch("turn");
+    }
+    return client.state().phase === "turn";
+  };
+
+  return {
+    lanes,
+    claimOptions,
+    engine,
+    wire,
+    talk,
+    speech,
+    eventsRev,
+    threadEvents: () => {
+      void eventsRev(); // subscribe (in-graph readers re-run per event)
+      return currentThreadEvents(engine.events);
+    },
+    bind,
+    recover,
+  };
 }

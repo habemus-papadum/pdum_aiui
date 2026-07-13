@@ -316,6 +316,79 @@ describe("the fade re-relay effect", () => {
   });
 });
 
+describe("turn recovery — the mirror", () => {
+  it("a mirrored open turn survives a 'reload': events replayed, wire re-dialed, machine re-opened", async () => {
+    // One shared in-memory mirror = the surviving sessionStorage.
+    let saved: { events: never[]; threadOpen: boolean } | undefined;
+    const mirror = {
+      persist: (events: never[], threadOpen: boolean) => {
+        saved = threadOpen && events.length > 0 ? { events, threadOpen } : undefined;
+      },
+      recover: () => saved,
+    };
+
+    // Page 1: open a turn with content, then "reload" (no send, no cancel).
+    const bus1 = fakeBus({ activeTab: 7 });
+    const stub1 = stubThread();
+    const lanes1 = createChannelLanes({
+      host: bus1,
+      port: () => 55555,
+      openThread: stub1.openThread,
+      mirror,
+    });
+    const client1 = createIntentClient({
+      host: bus1,
+      lanes: lanes1.lanes,
+      claimOptions: lanes1.claimOptions,
+    });
+    lanes1.bind(client1);
+    client1.setContext({ connected: true });
+    activationGesture(client1, 7);
+    lanes1.engine.contribute("half-composed thought");
+    await settle(20);
+    expect(saved?.threadOpen).toBe(true);
+    await client1.dispose(); // the page dies mid-turn
+
+    // Page 2: fresh everything except the mirror.
+    const bus2 = fakeBus({ activeTab: 7 });
+    const stub2 = stubThread();
+    const lanes2 = createChannelLanes({
+      host: bus2,
+      port: () => 55555,
+      openThread: stub2.openThread,
+      mirror,
+    });
+    const client2 = createIntentClient({
+      host: bus2,
+      lanes: lanes2.lanes,
+      claimOptions: lanes2.claimOptions,
+    });
+    const unbind2 = lanes2.bind(client2);
+    expect(lanes2.recover(client2)).toBe(true);
+    await settle(30);
+
+    expect(client2.state().phase).toBe("turn"); // the machine re-opened
+    expect(lanes2.engine.threadOpen).toBe(true);
+    expect(
+      lanes2.engine.events.some(
+        (e) => e.type === "transcript-final" && (e as { text?: string }).text?.includes("half"),
+      ),
+    ).toBe(true); // the content survived
+    expect(stub2.thread.dials.length).toBeGreaterThan(0); // the wire re-dialed
+
+    unbind2();
+    await client2.dispose();
+    rig = undefined;
+  });
+
+  it("no mirrored turn (or a closed one) recovers nothing", () => {
+    const r = makeRig(); // makeRig's lanes use the DEFAULT sessionStorage mirror
+    sessionStorage.removeItem("aiui2.turn");
+    expect(r.lanes.recover(r.client)).toBe(false);
+    expect(r.client.state().phase).toBe("disarmed");
+  });
+});
+
 describe("config consumers", () => {
   it("panelIntentConfig maps the stt models onto tiers (salvaged mapping)", () => {
     expect(panelIntentConfig("scribe-v2").transcriber).toBe("elevenlabs");
