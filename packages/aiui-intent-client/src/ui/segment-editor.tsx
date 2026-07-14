@@ -286,7 +286,9 @@ export function SegmentEditor(props: {
   // imperative API; Solid renders around it, not inside it).
   const editable = document.createElement("div");
   editable.className = "aiui-se-text";
-  editable.contentEditable = "true";
+  // The attribute, not just the property: the shell's stand-down guard (and
+  // jsdom) match on [contenteditable] — browsers reflect either way.
+  editable.setAttribute("contenteditable", "true");
   editable.setAttribute("role", "textbox");
   editable.setAttribute("aria-multiline", "true");
   const atomSpan = (emoji: string, data: Record<string, string>): HTMLSpanElement => {
@@ -389,22 +391,33 @@ export function SegmentEditor(props: {
     props.onClose();
   };
 
-  // The popup claims Esc AHEAD of the panel's ladder while open (capture on
-  // the document — the shell's own listener must not step the machine out
-  // underneath an open editor). ⌘Enter applies.
+  // The popup is MODAL for the keyboard, claimed at WINDOW capture — the
+  // phase that fires before the shell's document-capture grammar. Esc closes,
+  // ⌘⏎ applies, and EVERY other key stops propagating so the grammar cannot
+  // dispatch commands (or step the machine out) underneath the open popup.
+  // Propagation only — never preventDefault — so the contenteditable's
+  // typing, the buttons' activation, and paste all keep their defaults.
   const onKey = (event: KeyboardEvent): void => {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();
       props.onClose();
-    } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      return;
+    }
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       apply();
+      return;
     }
+    event.stopPropagation();
   };
-  document.addEventListener("keydown", onKey, true);
-  onCleanup(() => document.removeEventListener("keydown", onKey, true));
+  window.addEventListener("keydown", onKey, true);
+  window.addEventListener("keyup", onKey, true);
+  onCleanup(() => {
+    window.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("keyup", onKey, true);
+  });
 
   queueMicrotask(() => editable.focus());
 

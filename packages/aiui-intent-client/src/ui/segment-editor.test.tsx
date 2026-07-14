@@ -215,6 +215,39 @@ describe("SegmentEditor (integration)", () => {
     expect(closed).toBe(true);
   });
 
+  it("is MODAL for the keyboard: keys under the popup never reach the grammar below", () => {
+    const [rev] = createSignal(0);
+    const lanes = {
+      eventsRev: rev,
+      threadEvents: () => [],
+      engine: { events: [], threadOpen: true, contribute: () => {} },
+      wire: { uploadAttachment: () => Promise.resolve() },
+    } as unknown as ChannelLanes;
+    // The shell's grammar listens at DOCUMENT capture; the editor claims
+    // window capture ahead of it. Found live: arrows blipped and letters
+    // dispatched commands while the popup was open.
+    const reached: string[] = [];
+    const shellLike = (event: KeyboardEvent) => reached.push(event.key);
+    document.addEventListener("keydown", shellLike, true);
+    try {
+      dispose = render(
+        () => <SegmentEditor lanes={lanes} mode={{ kind: "append" }} onClose={() => {}} />,
+        document.body,
+      );
+      flush();
+      const editable = document.querySelector(".aiui-se-text") as HTMLElement;
+      editable.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }),
+      );
+      editable.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "d", bubbles: true, cancelable: true }),
+      );
+      expect(reached).toEqual([]); // the grammar under the popup heard nothing
+    } finally {
+      document.removeEventListener("keydown", shellLike, true);
+    }
+  });
+
   it("append mode contributes the typed text", () => {
     const calls: string[] = [];
     const [rev] = createSignal(0);

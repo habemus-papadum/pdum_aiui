@@ -68,6 +68,21 @@ export function installPanelKeys(config: {
 }): () => void {
   const { client } = config;
   const onKey = (phase: "down" | "up") => (event: KeyboardEvent) => {
+    // Typing belongs to the FIELD, never the grammar: a key born inside an
+    // editable element (the segment editor's contenteditable, the config
+    // strip's selects, any future input) must reach it untouched. Found
+    // live: the in-turn grammar was eating the editor's every keystroke —
+    // arrows blipped, letters dispatched commands under the open popup.
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        target.closest(
+          'input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]',
+        ) !== null)
+    ) {
+      return;
+    }
     if (config.activate !== undefined && event.metaKey && event.key === "b") {
       event.preventDefault();
       config.activate();
