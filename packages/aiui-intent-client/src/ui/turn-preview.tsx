@@ -494,10 +494,16 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
               if (segment === undefined) {
                 return inner;
               }
-              // A text row is EDITABLE: the hover ✎ opens the segment editor
-              // (one segment at a time — the owner's edit unit).
+              // A text row is EDITABLE: the hover ✎ or a DOUBLE-CLICK opens
+              // the segment editor (one segment at a time — the owner's edit
+              // unit; the ✎ stays as the discoverable, accessible path).
               return (
-                <span class="aiui-tp-wrap aiui-tp-textwrap">
+                // biome-ignore lint/a11y/noStaticElementInteractions: dblclick is a shortcut — the ✎ button inside is the accessible control
+                <span
+                  class="aiui-tp-wrap aiui-tp-textwrap"
+                  title="double-click to edit"
+                  onDblClick={() => setEditing({ kind: "segment", segment })}
+                >
                   {inner}
                   <button
                     type="button"
