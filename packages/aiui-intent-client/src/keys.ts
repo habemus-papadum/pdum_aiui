@@ -58,9 +58,16 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       hint: { key: "s", label: "shot", icon: "🖼" },
     },
     {
+      // 'a' = AREA (owner, 2026-07-14): arm a one-shot drag on the page —
+      // rubber-band a region, get a cropped shot with located components.
       keys: ["a", "A"],
+      down: onPress("region"),
+      hint: { key: "a", label: "area shot", icon: "⛶" },
+    },
+    {
+      keys: ["p", "P"],
       down: onPress("selection"),
-      hint: { key: "a", label: "add selection", icon: "📋" },
+      hint: { key: "p", label: "pull selection", icon: "📋" },
     },
     {
       keys: ["c", "C"],

@@ -251,6 +251,36 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   // Smart mode's gate: page interaction pings arm one frame (read-and-clear).
   let pageInteracted = false;
   host.transport.onPageEvent((event) => {
+    if (event.kind === "regionDrag") {
+      // The armed `a` drag completed: crop the region (host-native — CDP clip
+      // or the warm stream's canvas), then into the turn exactly like a shot.
+      void (async () => {
+        try {
+          const shot =
+            host.capture.grabRegion !== undefined
+              ? await host.capture.grabRegion(event.tab, event.rect, event.viewport)
+              : await host.capture.grabShot(event.tab); // degraded: full frame
+          if (shotFlash.get() === true) {
+            void host.transport.requestPage(event.tab, "flash", { kind: "shot" }).catch(() => {});
+          }
+          const marker = engine.shotDone(
+            event.rect,
+            (event.components ?? []) as never,
+            shot.thumb ?? "",
+            undefined,
+            false,
+            event.takenAt,
+          );
+          await wire.uploadAttachment(marker, shot.mime, shot.bytes);
+          status(
+            `${marker} captured (region ${Math.round(event.rect.w)}×${Math.round(event.rect.h)})`,
+          );
+        } catch (err) {
+          toast(`region shot failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })();
+      return;
+    }
     if (event.kind === "interaction") {
       pageInteracted = true;
     } else if (event.kind === "navigation") {
@@ -363,6 +393,14 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       if (engine.threadOpen) {
         engine.stepOut(); // closes with reason "cancel", stays armed
       }
+    },
+    armRegion: (tab) => {
+      // One-shot: the page mounts a rubber band; the drag comes back as a
+      // `regionDrag` page event (handled below) with rect + components.
+      void host.transport.requestPage(tab, "region", { arm: true }).catch(() => {
+        toast("could not arm the region drag on this tab");
+      });
+      status("drag a region on the page (esc cancels)");
     },
     takeShot: (tab) => {
       void (async () => {

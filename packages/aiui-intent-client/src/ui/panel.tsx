@@ -234,7 +234,7 @@ export function Panel(props: PanelProps) {
         detail: ctx.selectionPresent ? "the page has a live selection" : "no selection",
       },
       {
-        label: "page",
+        label: "aiui",
         state: ctx.aiuiPage ? "on" : "off",
         detail: ctx.aiuiPage ? "aiui-instrumented (locate/jump capable)" : "not instrumented",
       },

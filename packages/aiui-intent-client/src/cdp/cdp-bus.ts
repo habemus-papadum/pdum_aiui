@@ -215,7 +215,10 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     capability: PageCapability | "ring",
     payload?: unknown,
   ): Promise<unknown> => {
-    if (capability === "ink") {
+    if (capability === "ink" || capability === "region") {
+      // The region drag's locator rides the same evaluated bundle as the ink
+      // surface — deliver it before arming so instrumented pages can name
+      // the components the drag frames.
       await ensureInk(page);
     }
     const result = await evaluate(page.sessionId, invoke(capability, payload));
@@ -292,6 +295,16 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         break;
       case "foreign":
         emit({ kind: "foreignClient", tab: page.tab, armed: report.armed });
+        break;
+      case "region":
+        emit({
+          kind: "regionDrag",
+          tab: page.tab,
+          rect: report.rect,
+          viewport: report.viewport,
+          takenAt: report.takenAt,
+          ...(report.components !== undefined ? { components: report.components } : {}),
+        });
         break;
       case "stroke":
         break; // stroke counts enrich the shot payload later (post-v1)
@@ -502,6 +515,33 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         height: Math.round(metrics.cssVisualViewport?.clientHeight ?? 0),
         mime: "image/png",
         bytes,
+        thumb: `data:image/png;base64,${shot.data}`,
+      };
+    },
+    grabRegion: async (tab, rect): Promise<PanelShot> => {
+      const page = byTab.get(tab);
+      if (page === undefined) {
+        throw new Error(`no attached page for tab ${tab}`);
+      }
+      // CDP's clip is in CSS pixels, viewport coordinates — exactly what the
+      // page's rubber band reported. No scale math to get wrong.
+      const shot = (await cdp.send(
+        "Page.captureScreenshot",
+        {
+          format: "png",
+          captureBeyondViewport: false,
+          clip: { x: rect.x, y: rect.y, width: rect.w, height: rect.h, scale: 1 },
+        },
+        page.sessionId,
+      )) as { data?: string };
+      if (typeof shot.data !== "string") {
+        throw new Error("Page.captureScreenshot returned no data");
+      }
+      return {
+        width: Math.round(rect.w),
+        height: Math.round(rect.h),
+        mime: "image/png",
+        bytes: Uint8Array.from(atob(shot.data), (c) => c.charCodeAt(0)),
         thumb: `data:image/png;base64,${shot.data}`,
       };
     },

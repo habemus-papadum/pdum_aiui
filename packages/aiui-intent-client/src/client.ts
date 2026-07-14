@@ -38,6 +38,9 @@ export interface IntentLanes {
   cancelTurn(): void;
   /** One manual shot into the turn (flash on the page; sampled frames never flash). */
   takeShot(tab: number): void;
+  /** Arm a one-shot region drag on the page (the `a` area shot); the page
+   * reports the drag as a `regionDrag` event and the lanes crop + upload. */
+  armRegion(tab: number): void;
   /** Pull the page's current selection into the turn. */
   addSelection(tab: number): void;
   /** Clear the page's ink strokes (the ONLY clearer besides disarm). */
@@ -137,6 +140,13 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       case "shot":
         if (event.before.phase === "turn" && grantedTab !== undefined) {
           lanes.takeShot(grantedTab);
+        }
+        break;
+      case "region":
+        // Pixels, so the grant gate applies (spec.available refused us here
+        // otherwise); the drag itself happens on the granted tab in view.
+        if (event.before.phase === "turn" && grantedTab !== undefined) {
+          lanes.armRegion(grantedTab);
         }
         break;
       case "selection":

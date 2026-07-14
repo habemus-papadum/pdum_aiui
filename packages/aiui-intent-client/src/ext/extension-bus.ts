@@ -149,6 +149,16 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
       case "foreign":
         emit({ kind: "foreignClient", tab, armed: report.armed });
         break;
+      case "region":
+        emit({
+          kind: "regionDrag",
+          tab,
+          rect: report.rect,
+          viewport: report.viewport,
+          takenAt: report.takenAt,
+          ...(report.components !== undefined ? { components: report.components } : {}),
+        });
+        break;
       case "focus":
       case "stroke":
         break; // focus is the browser's business here; strokes enrich shots later
@@ -262,6 +272,9 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
       return { tab, release: releaseTabStream };
     },
     grabShot: () => grabTabShot(),
+    // The crop happens on the SAME warm-stream canvas as a full shot — the
+    // region rect (CSS px) maps to stream pixels by the viewport width.
+    grabRegion: (_tab, rect, viewport) => grabTabShot({ rect, viewport }),
   };
 
   return {

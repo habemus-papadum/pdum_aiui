@@ -167,6 +167,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // dispatch event (shot flash, selection pull, stroke clear). Declared so
     // caps/keys/tests share one command vocabulary.
     shot: () => null,
+    /** a — arm a one-shot region drag on the page (rubber band → cropped shot). */
+    region: () => null,
     selection: () => null,
     clear: () => null,
   },
@@ -217,6 +219,9 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // looking at would contradict the hollow ring saying "no pixels here".
     // (Grantless hosts keep the two in lockstep, so this never bites there.)
     shot: (s, ctx) =>
+      s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
+    // The region drag is pixels too — same gate as shot.
+    region: (s, ctx) =>
       s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
     // Selection and clear are PAGE acts, not pixel acts (owner, 2026-07-14):
     // they ride the content script / bootstrap, which follows the tab in

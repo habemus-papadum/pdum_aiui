@@ -116,6 +116,16 @@ export function fakeBus(
       const shot: PanelShot = { width: 2, height: 2, mime: "image/png", bytes: new Uint8Array(4) };
       return Promise.resolve(shot);
     },
+    grabRegion: (tab, rect, viewport) => {
+      log.push(`region@${tab} ${rect.w}x${rect.h}@${rect.x},${rect.y} vp=${viewport.w}`);
+      const shot: PanelShot = {
+        width: rect.w,
+        height: rect.h,
+        mime: "image/png",
+        bytes: new Uint8Array(4),
+      };
+      return Promise.resolve(shot);
+    },
   };
 
   const bus: FakeBus = {

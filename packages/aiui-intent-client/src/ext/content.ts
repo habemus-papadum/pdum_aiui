@@ -27,6 +27,7 @@
  * for injection and so may not import anything at all.
  */
 
+import { locateComponents } from "@habemus-papadum/aiui-dev-overlay/multimodal-shot";
 import { installSelectionWatcher } from "@habemus-papadum/aiui-dev-overlay/selection";
 import { serveRelay } from "@habemus-papadum/aiui-webext";
 import { type InkHandle, mountInk } from "../cdp/page-ink";
@@ -131,6 +132,83 @@ const setKeyCapture = (capture: boolean): void => {
   keyHandlers = { down: forward("down"), up: forward("up") };
   window.addEventListener("keydown", keyHandlers.down, true);
   window.addEventListener("keyup", keyHandlers.up, true);
+};
+
+// ── the region rubber band: a ONE-SHOT drag overlay (the `a` area shot) ──────
+let regionOverlay: HTMLElement | undefined;
+const disarmRegion = (): void => {
+  regionOverlay?.remove();
+  regionOverlay = undefined;
+};
+const armRegion = (): void => {
+  disarmRegion(); // re-arm replaces
+  const overlay = document.createElement("div");
+  overlay.id = "__aiui-intent-region";
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:2147483646;cursor:crosshair;background:rgba(124,58,237,.06);";
+  const band = document.createElement("div");
+  band.style.cssText =
+    "position:fixed;border:2px solid #7c3aed;background:rgba(124,58,237,.12);display:none;" +
+    "pointer-events:none;";
+  overlay.appendChild(band);
+  let start: { x: number; y: number } | undefined;
+  const rectNow = (e: PointerEvent) => {
+    const s0 = start ?? { x: e.clientX, y: e.clientY };
+    return {
+      x: Math.min(s0.x, e.clientX),
+      y: Math.min(s0.y, e.clientY),
+      w: Math.abs(e.clientX - s0.x),
+      h: Math.abs(e.clientY - s0.y),
+    };
+  };
+  overlay.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    start = { x: e.clientX, y: e.clientY };
+    overlay.setPointerCapture(e.pointerId);
+  });
+  overlay.addEventListener("pointermove", (e) => {
+    if (start === undefined) {
+      return;
+    }
+    const r = rectNow(e);
+    band.style.display = "block";
+    band.style.left = `${r.x}px`;
+    band.style.top = `${r.y}px`;
+    band.style.width = `${r.w}px`;
+    band.style.height = `${r.h}px`;
+  });
+  overlay.addEventListener("pointerup", (e) => {
+    const r = start !== undefined ? rectNow(e) : undefined;
+    disarmRegion();
+    if (r === undefined || r.w < 4 || r.h < 4) {
+      return; // a click, not a drag — cancelled
+    }
+    // The locator reads DOM attributes (data-source-loc stamps), which the
+    // isolated world sees fine; only window.__AIUI__ globals are main-world.
+    let components: unknown[] | undefined;
+    try {
+      components = locateComponents(r);
+    } catch {
+      components = undefined;
+    }
+    report({
+      kind: "region",
+      rect: r,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      takenAt: Date.now(),
+      ...(components !== undefined && components.length > 0 ? { components } : {}),
+    });
+  });
+  const onEsc = (e: KeyboardEvent): void => {
+    if (e.key === "Escape") {
+      e.stopImmediatePropagation();
+      disarmRegion();
+      document.removeEventListener("keydown", onEsc, true);
+    }
+  };
+  document.addEventListener("keydown", onEsc, true);
+  (document.body ?? document.documentElement).appendChild(overlay);
+  regionOverlay = overlay;
 };
 
 // ── ink: the real surface, imported (no injection, no CSP fight) ─────────────
@@ -258,6 +336,14 @@ serveRelay(PAGE_ADDRESS, {
       return { ok: true };
     }
     ink?.setOn(false, p.fadeSec ?? 0);
+    return { ok: true };
+  },
+  region: (payload) => {
+    if ((payload as { arm?: boolean } | null)?.arm === true) {
+      armRegion();
+    } else {
+      disarmRegion();
+    }
     return { ok: true };
   },
   locate: () => null, // instrumented-page jump: anticipated, post-parity

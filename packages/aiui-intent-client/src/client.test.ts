@@ -30,6 +30,7 @@ function fakeLanes(log: string[]): IntentLanes {
     sendTurn: entry("sendTurn"),
     cancelTurn: entry("cancelTurn"),
     takeShot: entry("takeShot"),
+    armRegion: entry("armRegion"),
     addSelection: entry("addSelection"),
     clearInk: entry("clearInk"),
     startTalk: entry("startTalk"),

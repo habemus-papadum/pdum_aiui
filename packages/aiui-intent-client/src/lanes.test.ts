@@ -129,6 +129,40 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
+describe("the region drag (the `a` area shot)", () => {
+  it("arms the page, then a regionDrag event crops, composes, and uploads", async () => {
+    const r = makeRig();
+    activationGesture(r.client, 7);
+    r.client.dispatch("region");
+    await settle();
+    // The page was armed for ONE drag.
+    expect(r.bus.log.some((line) => line.startsWith("page:region@7"))).toBe(true);
+
+    // The user drags a 200×100 region at (10,20); the page reports it with
+    // located components (an aiui-instrumented page).
+    r.bus.firePageEvent({
+      kind: "regionDrag",
+      tab: 7,
+      rect: { x: 10, y: 20, w: 200, h: 100 },
+      viewport: { w: 1000, h: 800 },
+      takenAt: Date.now(),
+      components: [{ component: "LegendBox", source: "src/Legend.tsx:12:3" }],
+    });
+    await settle(30);
+
+    // Cropped through the host's region path (never the full frame)…
+    expect(r.bus.log.some((line) => line.startsWith("region@7 200x100@10,20"))).toBe(true);
+    // …composed as a shot whose rect and components are the drag's…
+    const shot = r.lanes.engine.events.find((e) => e.type === "shot");
+    expect(shot).toBeDefined();
+    expect(shot?.type === "shot" && shot.rect).toEqual({ x: 10, y: 20, w: 200, h: 100 });
+    expect(shot?.type === "shot" && shot.components).toHaveLength(1);
+    // …and uploaded as the marker's attachment.
+    await settle(30);
+    expect(r.thread.chunks.some((c) => c.kind.startsWith("attachment:shot_"))).toBe(true);
+  });
+});
+
 describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
   it("activation opens a real thread; the hello meta carries tab + actor + config", async () => {
     const r = makeRig();

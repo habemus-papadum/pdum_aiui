@@ -17,7 +17,15 @@
  * `locate` is the aiui-instrumented-page capability (screenshot rectangle →
  * components → source): declared now so the seam anticipates the overlay's
  * jump-to-VS-Code mode; only instrumented pages answer it. */
-export type PageCapability = "ink" | "keylayer" | "flash" | "selection" | "viewport" | "locate";
+export type PageCapability =
+  | "ink"
+  | "keylayer"
+  | "flash"
+  | "selection"
+  | "viewport"
+  | "locate"
+  /** Arm a ONE-SHOT rubber-band drag on the page (the `a` area shot). */
+  | "region";
 
 /** The on-page indicator's asserted state (a claim's desire, as data). */
 export interface RingState {
@@ -77,7 +85,19 @@ export type PageEvent =
   /** The FROZEN client holds this tab (its on-page ring says armed). The two
    * clients share a DOM but no messaging, so this is how they see each other —
    * and the new one stands down rather than ink over the old one's page. */
-  | { kind: "foreignClient"; tab: number; armed: boolean };
+  | { kind: "foreignClient"; tab: number; armed: boolean }
+  /** The user completed a region drag (the armed `a` gesture): the rect in
+   * CSS px (viewport coords), the viewport for crop scaling, the gesture's
+   * wall-clock, and — on aiui-instrumented pages — the located components
+   * (data-source-loc stamps) the drag framed. */
+  | {
+      kind: "regionDrag";
+      tab: number;
+      rect: { x: number; y: number; w: number; h: number };
+      viewport: { w: number; h: number };
+      takenAt: number;
+      components?: unknown[];
+    };
 
 /** Tab-scoped request/response + ring broadcast + page→panel events. */
 export interface PageTransport {
@@ -138,6 +158,13 @@ export interface CaptureSource {
   holdStream(tab: number): Promise<HeldStream>;
   /** Grab one shot off the warm stream. */
   grabShot(tab: number): Promise<PanelShot>;
+  /** Crop a REGION of the tab (rect in CSS px; viewport for scale mapping).
+   * Optional: hosts without it degrade to the full-frame grabShot. */
+  grabRegion?(
+    tab: number,
+    rect: { x: number; y: number; w: number; h: number },
+    viewport: { w: number; h: number },
+  ): Promise<PanelShot>;
 }
 
 /** The full host bundle a client is constructed over. */

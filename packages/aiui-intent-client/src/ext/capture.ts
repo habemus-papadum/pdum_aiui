@@ -97,13 +97,22 @@ export function releaseTabStream(): void {
  * One frame off the warm stream: encoded bytes + a thumb. Pure draw + encode —
  * no acquisition, no messaging. Rejects when no stream is held.
  */
-export async function grabTabShot(): Promise<PanelShot> {
+export async function grabTabShot(region?: {
+  rect: { x: number; y: number; w: number; h: number };
+  viewport: { w: number; h: number };
+}): Promise<PanelShot> {
   const el = video;
   if (el === undefined || stream === undefined) {
     throw new Error("no capture stream held for this tab");
   }
-  const w = el.videoWidth;
-  const h = el.videoHeight;
+  // The stream is in DEVICE pixels at the tab's captured size; the region
+  // rect arrives in CSS pixels — the viewport width maps between them.
+  const streamScale =
+    region !== undefined && region.viewport.w > 0 ? el.videoWidth / region.viewport.w : 1;
+  const w =
+    region !== undefined ? Math.max(1, Math.round(region.rect.w * streamScale)) : el.videoWidth;
+  const h =
+    region !== undefined ? Math.max(1, Math.round(region.rect.h * streamScale)) : el.videoHeight;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -111,7 +120,21 @@ export async function grabTabShot(): Promise<PanelShot> {
   if (ctx === null) {
     throw new Error("no 2d context for the shot canvas");
   }
-  ctx.drawImage(el, 0, 0);
+  if (region !== undefined) {
+    ctx.drawImage(
+      el,
+      Math.round(region.rect.x * streamScale),
+      Math.round(region.rect.y * streamScale),
+      w,
+      h,
+      0,
+      0,
+      w,
+      h,
+    );
+  } else {
+    ctx.drawImage(el, 0, 0);
+  }
 
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, SHOT_MIME, SHOT_QUALITY),

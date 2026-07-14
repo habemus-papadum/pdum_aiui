@@ -21,7 +21,8 @@
     "./wire": "./src/multimodal/shell/wire.ts",
     "./multimodal-ui": "./src/multimodal/ui.ts",
     "./multimodal-talk": "./src/multimodal/talk-entry.ts",
-    "./multimodal-video": "./src/multimodal/video-entry.ts"
+    "./multimodal-video": "./src/multimodal/video-entry.ts",
+    "./multimodal-shot": "./src/multimodal/shot.ts"
   },
   "imports": {
     "#source-locator": "./src/source-locator.ts"
@@ -92,6 +93,11 @@
         "types": "./dist/multimodal/video-entry.d.ts",
         "import": "./dist/multimodal/video-entry.js",
         "default": "./dist/multimodal/video-entry.js"
+      },
+      "./multimodal-shot": {
+        "types": "./dist/multimodal/shot.d.ts",
+        "import": "./dist/multimodal/shot.js",
+        "default": "./dist/multimodal/shot.js"
       }
     },
     "imports": {
