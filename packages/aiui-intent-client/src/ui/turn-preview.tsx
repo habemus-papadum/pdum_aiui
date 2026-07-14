@@ -84,6 +84,12 @@ export const TURN_PREVIEW_STYLES = `
   .aiui-tp-add { cursor: pointer; background: transparent; font: inherit; color: inherit;
     opacity: 0.7; margin-top: 4px; }
   .aiui-tp-add:hover { opacity: 1; }
+  /* The linter's 💡 advice — chips below the flow, per-turn, locally dismissible. */
+  .aiui-tp-lints { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .aiui-tp-lint { color: #ffd166; border-color: #5a4a24; position: relative;
+    padding-right: 22px; white-space: normal; }
+  .aiui-tp-lint .aiui-tp-x { display: flex; position: absolute; right: 2px; top: 50%;
+    transform: translateY(-50%); }
 `
   // The segment editor mounts from this pane; its styles travel with ours.
   .concat(SEGMENT_EDITOR_STYLES);
@@ -258,6 +264,33 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
       }
     }
     return min < max ? { min, max } : undefined;
+  });
+
+  /**
+   * The linter's 💡 advice (the overlay preview's lint chips, ported): notes
+   * ride the thread's raw events — the COMPILER ignores them, so they never
+   * become composed items; the preview reads them directly. Dismissal is
+   * LOCAL (owner): a dismissed note's `at` lands in a signal-held set that
+   * resets with the turn — nothing goes back to the channel.
+   */
+  const [dismissedLints, setDismissedLints] = createSignal<ReadonlySet<number>>(new Set<number>(), {
+    ownedWrite: true,
+  });
+  const lints = createMemo(() => {
+    if (!threadOpen()) {
+      if (untrack(dismissedLints).size > 0) {
+        setDismissedLints(new Set<number>()); // per-turn, like everything here
+      }
+      return [];
+    }
+    const dismissed = dismissedLints();
+    return props.lanes
+      .threadEvents()
+      .filter(
+        (event): event is Extract<typeof event, { type: "linter-note" }> =>
+          event.type === "linter-note",
+      )
+      .filter((event) => !dismissed.has(event.at));
   });
 
   /** The live item behind a key — rows read content through this so a
@@ -512,6 +545,28 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
                     onClick={() => setEditing({ kind: "segment", segment })}
                   >
                     ✎
+                  </button>
+                </span>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
+      <Show when={lints().length > 0}>
+        <div class="aiui-tp-lints" data-testid="lint-chips">
+          <For each={lints()} keyed={(note) => note.at}>
+            {(note) => {
+              const n = untrack(note);
+              return (
+                <span class="aiui-tp-chip aiui-tp-lint" title={n.text}>
+                  💡 {n.text.length > 60 ? `${n.text.slice(0, 57)}…` : n.text}
+                  <button
+                    type="button"
+                    class="aiui-tp-x"
+                    title="dismiss this advice (local — the turn is unchanged)"
+                    onClick={() => setDismissedLints(new Set([...dismissedLints(), n.at]))}
+                  >
+                    ✕
                   </button>
                 </span>
               );
