@@ -19,16 +19,15 @@
 import { WorkletPcmSource } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
 import { relayRequest } from "@habemus-papadum/aiui-webext";
 import { render } from "@solidjs/web";
-import { createEffect, createRoot, createSignal, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
-import { uiScale } from "../config";
 import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel } from "../session";
 import { Panel } from "../ui/panel";
 import { PANES_STYLES, TracePane, TurnPane } from "../ui/panes";
-import { installPanelKeys, type Narration, WirePane } from "../ui/shell";
+import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "../ui/shell";
 import { RichTracePane, TRACE_PANE_STYLES } from "../ui/trace-pane";
 import { discoverChannel, rememberPort } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
@@ -55,14 +54,7 @@ const narration: Narration = {
 
 loadConfigBase();
 
-createRoot(() => {
-  createEffect(
-    () => uiScale.get() as number,
-    (scale) => {
-      document.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
-    },
-  );
-});
+installUiScaleRoot();
 
 /** Lanes that only narrate — the panel is fully usable with no channel found. */
 const consoleLanes: IntentLanes = {

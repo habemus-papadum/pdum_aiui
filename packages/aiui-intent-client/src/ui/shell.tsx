@@ -9,10 +9,31 @@
  * two copies would drift the moment one is edited.
  */
 
-import { Show } from "solid-js";
+import { createEffect, createRoot, Show } from "solid-js";
 import type { IntentClient } from "../client";
 import { uiScale } from "../config";
 import { keyVerdict } from "../keys";
+
+/**
+ * Drive the document's root font size off the `uiScale` control (panel zoom —
+ * browser zoom does not reach side panels, which is why this exists at all).
+ * Shared by both entries, and the APPLY half of zoom restore: the effect runs
+ * immediately with the control's current value, so a scale restored by
+ * `loadConfigBase()` lands on the document at boot. The frozen client's
+ * "zoom restore" ledger bug was exactly this half going wrong — the value
+ * came back, the application of it didn't. Returns the disposer.
+ */
+export function installUiScaleRoot(doc: Document = document): () => void {
+  return createRoot((dispose) => {
+    createEffect(
+      () => uiScale.get() as number,
+      (scale) => {
+        doc.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
+      },
+    );
+    return dispose;
+  });
+}
 
 /** The panel's running commentary — one set of signals, shared by the panes. */
 export interface Narration {

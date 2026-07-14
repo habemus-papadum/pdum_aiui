@@ -16,11 +16,10 @@
  */
 
 import { render } from "@solidjs/web";
-import { createEffect, createRoot, createSignal, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
 import { type CdpBus, connectCdpBus } from "../cdp/cdp-bus";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
-import { uiScale } from "../config";
 import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
@@ -28,7 +27,7 @@ import { connectSessionBus, probeChannel, resolveChannelPort } from "../session"
 import type { IntentHost } from "../transport";
 import { Panel } from "./panel";
 import { PANES_STYLES, TracePane, TurnPane } from "./panes";
-import { installPanelKeys, type Narration, WirePane } from "./shell";
+import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "./shell";
 import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
@@ -59,14 +58,7 @@ loadConfigBase();
 
 // Panel zoom: ⌘+/⌘−/⌘0 drive the uiScale control; the graph pushes the
 // root font size (nothing hand-called).
-createRoot(() => {
-  createEffect(
-    () => uiScale.get() as number,
-    (scale) => {
-      document.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
-    },
-  );
-});
+installUiScaleRoot();
 
 /**
  * The CdpBus, when this machine's session browser is up: the channel tells us

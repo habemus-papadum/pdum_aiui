@@ -31,7 +31,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | engine dual-truth (`engine.setArmed` beside phase) | ✅ designed out: lanes.ts DRIVES the wire Engine (setArmed/openTurn/send/stepOut verbs); its thread-close flows back as `turnClosed` |
 | bus phase connected/connecting/closed; outage never touches phase | ✅ session.ts bus client (reconnect loop) → `connected` fact; the channel pill is the chip |
 | `boundPort` + arm gate (arming requires bound) | P2 — gate becomes an `enabledWhen`/command guard on `connected` context |
-| `uiScale` control (⌘+/⌘−/⌘0) | ✅ main.tsx keys + root-font effect; persisted via the config base |
+| `uiScale` control (⌘+/⌘−/⌘0) | ✅ shell.tsx keys + `installUiScaleRoot` (ONE shared apply effect, both entries — the restore half pinned in shell.test); persisted via the config base; keys verified live in the side-panel document |
 | paint host (iPad) re-pointing | **P5** — still open, and neither host supplies the fact: `paintClients` is a declared context field that nothing writes (spec.ts). The capture host it was waiting for now exists (P4), so this is a lane wiring job, not a blocked one |
 | `inkTabId`/`leaderTabId`/`lastActiveTab` routing | ✅ context (`activeTab`/`grantedTab`) + claims re-point on tab switch |
 | navigation events into the turn (same-tab SPA/reload; prompt-rendered) | ✅ `navigation` PageEvent → engine.navigation (lanes.ts + tests); real SPA navs land from the injected bootstrap (history wraps + popstate/hashchange) and full loads re-announce — seen live in the turn preview |
@@ -152,8 +152,13 @@ timeout-guarded (ext/capture.ts); **one stream per tab** — `holdTabStream` rel
 re-holds, so a tab switch cannot leave two live captures. The `blurIsSelfInflicted` first-shot
 drop is designed out: the page reports focus as a fact and nothing cancels on blur.
 
+**Zoom restore** is done: the apply half is ONE shared effect (`installUiScaleRoot`, shell.tsx)
+that fires with the restored value at boot — pinned in shell.test.tsx ("the saved scale must
+LAND on the document"), and the keys verified live in the extension panel document (⌘+/⌘−/⌘0
+stepped 100→120→110→100% over CDP-dispatched keystrokes, 2026-07-14).
+
 Still lane-shaped and still open, to be moved into tests by the lane that lands them (P5):
-PCM chase, ElevenLabs include-list, double-shot on fast S-drag, zoom restore, reconnect check,
+PCM chase, ElevenLabs include-list, double-shot on fast S-drag, reconnect check,
 stale-ring boot broadcast, replayed-armed GC.
 
 ## Preview / trace richness (owner check-in 2026-07-13 — minimal by design TODAY, rows so nothing is lost)
