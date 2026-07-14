@@ -29,6 +29,7 @@ import type { IntentHost } from "../transport";
 import { Panel } from "./panel";
 import { PANES_STYLES, TracePane, TurnPane } from "./panes";
 import { installPanelKeys, type Narration, WirePane } from "./shell";
+import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined, {
@@ -101,6 +102,8 @@ async function boot(): Promise<{
   lanes?: ChannelLanes;
   fake?: ReturnType<typeof fakeBus>;
   cdp?: CdpBus;
+  /** The channel the lanes dialed — also where the lowering traces live. */
+  port?: number;
 }> {
   // The FakeBus stands in for the world whenever a real host isn't there — in
   // the CDP tier it isn't used at all (the pages are real).
@@ -157,9 +160,9 @@ async function boot(): Promise<{
     };
     if (cdp !== undefined) {
       setStatusLine(`driving ${cdp.pages().length} real tab(s) over CDP — no extension installed`);
-      return { client, mode: "cdp", lanes: channelLanes, cdp };
+      return { client, mode: "cdp", lanes: channelLanes, cdp, port };
     }
-    return { client, mode: "channel", lanes: channelLanes, fake: bus };
+    return { client, mode: "channel", lanes: channelLanes, fake: bus, port };
   }
 
   const consoleLanes: IntentLanes = {
@@ -186,7 +189,7 @@ async function boot(): Promise<{
 let blipSink: ((key: string) => void) | undefined;
 let navCounter = 0;
 
-const { client, mode, lanes, fake, cdp } = await boot();
+const { client, mode, lanes, fake, cdp, port } = await boot();
 /** Whichever host is targeting pages — the CdpBus's real tabs, or the fake's. */
 const targeting = cdp?.targeting ?? fake?.targeting;
 
@@ -318,7 +321,7 @@ if (root === null) {
 render(
   () => (
     <>
-      <style>{PANES_STYLES}</style>
+      <style>{PANES_STYLES + TRACE_PANE_STYLES}</style>
       <SimulateStrip />
       <Panel
         client={client}
@@ -331,6 +334,7 @@ render(
           <>
             <TurnPane lanes={l} />
             <TracePane lanes={l} />
+            {port !== undefined && <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />}
           </>
         )}
       </Show>

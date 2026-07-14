@@ -29,6 +29,7 @@ import { connectSessionBus, probeChannel } from "../session";
 import { Panel } from "../ui/panel";
 import { PANES_STYLES, TracePane, TurnPane } from "../ui/panes";
 import { installPanelKeys, type Narration, WirePane } from "../ui/shell";
+import { RichTracePane, TRACE_PANE_STYLES } from "../ui/trace-pane";
 import { discoverChannel, rememberPort } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
@@ -76,7 +77,13 @@ const consoleLanes: IntentLanes = {
   setMicMuted: (muted) => console.info("[lanes] setMicMuted", muted),
 };
 
-async function boot(): Promise<{ client: IntentClient; lanes?: ChannelLanes; windowId: number }> {
+async function boot(): Promise<{
+  client: IntentClient;
+  lanes?: ChannelLanes;
+  windowId: number;
+  /** The discovered channel - also where the lowering traces live. */
+  port?: number;
+}> {
   const { id: windowId } = await chrome.windows.getCurrent();
   if (windowId === undefined) {
     throw new Error("the side panel has no window — cannot target tabs");
@@ -150,12 +157,12 @@ async function boot(): Promise<{ client: IntentClient; lanes?: ChannelLanes; win
     sessionBus,
   };
   setStatusLine(`channel :${port} — driving this window's tabs`);
-  return { client, lanes, windowId };
+  return { client, lanes, windowId, port };
 }
 
 let blipSink: ((key: string) => void) | undefined;
 
-const { client, lanes, windowId } = await boot();
+const { client, lanes, windowId, port } = await boot();
 
 /**
  * The activation gesture, arriving from OUTSIDE (the worker). The toolbar click
@@ -191,7 +198,7 @@ if (root === null) {
 render(
   () => (
     <>
-      <style>{PANES_STYLES}</style>
+      <style>{PANES_STYLES + TRACE_PANE_STYLES}</style>
       <Panel
         client={client}
         registerBlipSink={(sink) => (blipSink = sink)}
@@ -203,6 +210,7 @@ render(
           <>
             <TurnPane lanes={l} />
             <TracePane lanes={l} />
+            {port !== undefined && <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />}
           </>
         )}
       </Show>
