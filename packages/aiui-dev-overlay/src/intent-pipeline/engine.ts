@@ -203,6 +203,27 @@ export class Engine {
   }
 
   /**
+   * Replace a segment's transcript WHOLESALE (see the `segment-replace`
+   * event's doc): the panel's segment editor speaks this after the user fixes
+   * bad STT or pastes text. `words` are the editor's best-effort re-timestamped
+   * word timings — they are what lets the compiler REFLOW anchored shots
+   * against the new text. No-op when not armed, like every content verb.
+   */
+  replaceSegment(segment: number, text: string, words?: TranscriptWord[]): void {
+    if (!this.armed || !text) {
+      return;
+    }
+    this.emit(
+      this.stamp({
+        type: "segment-replace",
+        segment,
+        text,
+        ...(words !== undefined ? { words } : {}),
+      }),
+    );
+  }
+
+  /**
    * Ingest a code selection contributed from ANOTHER view of the session (the
    * reader's "Add to prompt →"). Same lifecycle as {@link contribute} — opens
    * the thread if armed, no-op when not — but emits the structured
@@ -477,6 +498,8 @@ export class Engine {
     takenAt?: number,
     /** Set by the share's sampler; absent for a deliberate S / D-drag. */
     share?: ShotShare,
+    /** `"paste"` when the pixels came from the clipboard, not the screen. */
+    origin?: "paste",
   ): string {
     this.ensureThread("shot");
     // Identifier-shaped (underscore) so the marker doubles as an attachment id.
@@ -494,6 +517,7 @@ export class Engine {
         // this event's own `at` trails the moment the user actually shot.
         ...(takenAt !== undefined ? { takenAt } : {}),
         ...(share !== undefined ? { share } : {}),
+        ...(origin !== undefined ? { origin } : {}),
       }),
     );
     return marker;
@@ -603,6 +627,8 @@ export interface ComposedItem {
   takenAt?: number;
   /** Set when this shot is a frame sampled by a video share (see {@link ShotShare}). */
   share?: ShotShare;
+  /** `"paste"` when the image came from the clipboard (labeled in the prompt). */
+  origin?: "paste";
   /** A selection item's locator (`file:line:col` / `file:start-end`). */
   sourceLoc?: string;
   /** A code-selection item's line count. */
@@ -691,8 +717,26 @@ export interface ComposeOptions {
 
 /**
  * Fold the current thread's events into the composed intent. Pure — the
- * inspector re-runs it on every event, which makes the pass's behavior
- * directly observable while you interact (and trivially unit-testable).
+ * inspector re-runs it on every event, which makes the behavior directly
+ * observable while you interact (and trivially unit-testable).
+ *
+ * Structured as a MULTI-PASS lowering (owner, 2026-07-14 — "as if you're a
+ * compiler engineer"), each pass a named function over an explicit IR:
+ *
+ *  1. **scan** — one walk over the stream collecting every stream-wide fact
+ *     later passes consult ({@link StreamFacts}): drops, talk windows, delta
+ *     timelines, word timestamps, and segment REPLACEMENTS (latest-wins,
+ *     respecting deletes — the segment editor's `segment-replace`).
+ *  2. **place** — append items in stream order. A replaced segment's text is
+ *     superseded IN PLACE: the item sits where the segment's first placer
+ *     (its final, normally) sits, carrying the replacement text.
+ *  3. **corrections** — the spoken-correction patches against the
+ *     transcript-as-lines (unchanged semantics; `replace` policy only).
+ *  4. **interleave** — the timestamp reflow: anchored shots move INSIDE
+ *     their segment's text, split at word-timestamp offsets. Replacements
+ *     reflow here for free: their re-timestamped words landed in
+ *     {@link StreamFacts.wordsBySegment} during the scan.
+ *  5. **render** — transcript + the lowered prompt body.
  *
  * Correction semantics under `replace`: each correction rewrites the *first*
  * remaining occurrence of its original text (ranges were lassoed against a
@@ -714,54 +758,108 @@ export function composeIntent(
   }
   const scope = start === -1 ? events : events.slice(start);
 
-  // Retracted shots and selections (the preview's ✕) never reach the
-  // composition — the events themselves stay in the stream, so the trace
-  // still shows them. Drops are keyed by marker: each retracts exactly one.
-  const droppedShots = new Set<string>();
-  const droppedSelections = new Set<string>();
-  const droppedCode = new Set<string>();
-  // The timestamp-interleave inputs: each segment's talk window (wall-clock
-  // bounds) and its `transcript-delta` timeline — (arrival time, cumulative
-  // text length) samples the split pass below maps a shot's `takenAt` onto.
-  const windows = new Map<number, { start: number; end?: number }>();
-  const deltaTimelines = new Map<number, Array<{ at: number; len: number }>>();
-  // Streaming mode only: the latest cumulative delta text per segment, and
-  // which segments already have a final (whose text supersedes it).
-  const lastDeltaText = new Map<number, string>();
-  const finalizedSegments = new Set<number>();
-  // Word-level timestamps (when the transcriber reports them) — the PRECISE
-  // anchor: a word's startMs is measured in the segment's own audio, whose
-  // first sample is the talk-start instant. No latency estimate needed.
-  const wordsBySegment = new Map<number, TranscriptWord[]>();
+  const facts = scanStream(scope);
+  const { items, corrections } = placeItems(scope, facts, options);
+  applyCorrectionsPass(items, corrections, policy);
+  interleavePass(items, facts);
+  return renderPass(items, corrections, policy, options);
+}
+
+/**
+ * Pass 1's IR: every stream-wide fact the later passes consult. One walk
+ * builds it; nothing after the scan re-reads the raw stream for facts.
+ */
+interface StreamFacts {
+  /** Retracted markers (the preview's ✕) — the place pass skips them. */
+  droppedShots: Set<string>;
+  droppedSelections: Set<string>;
+  droppedCode: Set<string>;
+  /** Each segment's talk window (wall-clock bounds) — the interleave's map
+   * from a shot's `takenAt` to its segment. */
+  windows: Map<number, { start: number; end?: number }>;
+  /** Each segment's `transcript-delta` timeline — (arrival, cumulative
+   * length) samples the interleave's fallback anchoring reads. */
+  deltaTimelines: Map<number, Array<{ at: number; len: number }>>;
+  /** Streaming mode: the latest cumulative delta text per segment. */
+  lastDeltaText: Map<number, string>;
+  /** Segments whose provisional run is superseded (a final arrived — or a
+   * replacement did: an edited segment is definitionally not in flight). */
+  finalizedSegments: Set<number>;
+  /** Segments that have a REAL final in scope (place-position bookkeeping:
+   * a replacement places at its segment's first final when one exists). */
+  finalsInScope: Set<number>;
+  /** Word-level timestamps per segment, latest-wins — the PRECISE interleave
+   * anchor. A replacement's re-timestamped words land here, which is what
+   * makes the reflow of an edited segment free. */
+  wordsBySegment: Map<number, TranscriptWord[]>;
+  /** The segment editor's replacements, latest-wins per segment. */
+  replacements: Map<number, { text: string; words?: TranscriptWord[] }>;
+}
+
+/** Pass 1 — scan: one walk, all facts. */
+function scanStream(scope: IntentEvent[]): StreamFacts {
+  const facts: StreamFacts = {
+    droppedShots: new Set(),
+    droppedSelections: new Set(),
+    droppedCode: new Set(),
+    windows: new Map(),
+    deltaTimelines: new Map(),
+    lastDeltaText: new Map(),
+    finalizedSegments: new Set(),
+    finalsInScope: new Set(),
+    wordsBySegment: new Map(),
+    replacements: new Map(),
+  };
   for (const event of scope) {
     if (event.type === "shot-drop") {
-      droppedShots.add(event.marker);
+      facts.droppedShots.add(event.marker);
     } else if (event.type === "app-selection-drop" && event.marker !== undefined) {
-      droppedSelections.add(event.marker);
+      facts.droppedSelections.add(event.marker);
     } else if (event.type === "code-selection-drop") {
-      droppedCode.add(event.marker);
+      facts.droppedCode.add(event.marker);
     } else if (event.type === "talk-start") {
-      windows.set(event.segment, { start: event.at });
+      facts.windows.set(event.segment, { start: event.at });
     } else if (event.type === "talk-end") {
-      const window = windows.get(event.segment);
+      const window = facts.windows.get(event.segment);
       if (window !== undefined) {
         window.end = event.at;
       }
     } else if (event.type === "transcript-delta") {
-      const timeline = deltaTimelines.get(event.segment) ?? [];
+      const timeline = facts.deltaTimelines.get(event.segment) ?? [];
       timeline.push({ at: event.at, len: event.text.length });
-      deltaTimelines.set(event.segment, timeline);
-      lastDeltaText.set(event.segment, event.text);
+      facts.deltaTimelines.set(event.segment, timeline);
+      facts.lastDeltaText.set(event.segment, event.text);
     } else if (event.type === "transcript-final") {
       if (!event.correction) {
-        finalizedSegments.add(event.segment);
+        facts.finalizedSegments.add(event.segment);
+        facts.finalsInScope.add(event.segment);
       }
       if (event.words !== undefined) {
-        wordsBySegment.set(event.segment, event.words);
+        facts.wordsBySegment.set(event.segment, event.words);
       }
+    } else if (event.type === "segment-replace") {
+      // Latest-wins per segment. Words supersede the transcriber's (they
+      // re-anchor the interleave); absent words keep the originals — the
+      // old anchors are still the best approximation available.
+      facts.replacements.set(event.segment, {
+        text: event.text,
+        ...(event.words !== undefined ? { words: event.words } : {}),
+      });
+      if (event.words !== undefined) {
+        facts.wordsBySegment.set(event.segment, event.words);
+      }
+      facts.finalizedSegments.add(event.segment);
     }
   }
+  return facts;
+}
 
+/** Pass 2 — place: items in stream order (replacements supersede in place). */
+function placeItems(
+  scope: IntentEvent[],
+  facts: StreamFacts,
+  options: ComposeOptions,
+): { items: ComposedItem[]; corrections: ComposedIntent["corrections"] } {
   const items: ComposedItem[] = [];
   const corrections: ComposedIntent["corrections"] = [];
   // App selections are POSITIONAL items, marker-keyed latest-wins: the first
@@ -773,6 +871,23 @@ export function composeIntent(
   const selectionByKey = new Map<string, ComposedItem>();
   /** Streaming mode: segments whose provisional run is already in `items`. */
   const provisionalPlaced = new Set<number>();
+  /** Replaced segments already placed (first placer wins the position). */
+  const replacedPlaced = new Set<number>();
+
+  /** The one text item a replaced segment gets, wherever its first placer
+   * sits. Returns true when it placed (or already had) the item. */
+  const placeReplaced = (segment: number): boolean => {
+    const replacement = facts.replacements.get(segment);
+    if (replacement === undefined) {
+      return false;
+    }
+    if (!replacedPlaced.has(segment)) {
+      replacedPlaced.add(segment);
+      items.push({ kind: "text", text: replacement.text, segment });
+    }
+    return true;
+  };
+
   for (const event of scope) {
     if (event.type === "transcript-delta") {
       // The words still being spoken, as ONE run claiming the stream position
@@ -781,10 +896,10 @@ export function composeIntent(
       // that run's text rather than appending rows. Nothing here runs unless
       // the caller asked for it, and a finalized segment ignores it entirely:
       // the final's own item is the truth.
-      if (!options.streaming || finalizedSegments.has(event.segment)) {
+      if (!options.streaming || facts.finalizedSegments.has(event.segment)) {
         continue;
       }
-      const text = lastDeltaText.get(event.segment) ?? "";
+      const text = facts.lastDeltaText.get(event.segment) ?? "";
       if (provisionalPlaced.has(event.segment) || text.trim() === "") {
         continue;
       }
@@ -793,9 +908,19 @@ export function composeIntent(
     } else if (event.type === "transcript-final" && !event.correction) {
       // One item per segment, deliberately unmerged: segments-as-lines is the
       // document shape the correction patches (and the corrector model) see.
-      items.push({ kind: "text", text: event.text, segment: event.segment });
+      // A REPLACED segment's text supersedes here, in this final's position.
+      if (!placeReplaced(event.segment)) {
+        items.push({ kind: "text", text: event.text, segment: event.segment });
+      }
+    } else if (event.type === "segment-replace") {
+      // Normally the segment's final placed it already (above). A replacement
+      // for a segment with NO final in scope (an edited contribution whose
+      // final fell out of the window) places at its own stream position.
+      if (!facts.finalsInScope.has(event.segment)) {
+        placeReplaced(event.segment);
+      }
     } else if (event.type === "app-selection") {
-      if (event.marker !== undefined && droppedSelections.has(event.marker)) {
+      if (event.marker !== undefined && facts.droppedSelections.has(event.marker)) {
         continue;
       }
       const key = event.marker ?? LEGACY_SELECTION_KEY;
@@ -816,8 +941,8 @@ export function composeIntent(
       }
       selectionByKey.set(key, next);
     } else if (event.type === "app-selection-drop") {
-      // Marker'd drops were pre-collected above; a markerless drop (pre-marker
-      // traces) retracts the most recent still-carried selection.
+      // Marker'd drops were pre-collected in the scan; a markerless drop
+      // (pre-marker traces) retracts the most recent still-carried selection.
       if (event.marker === undefined) {
         for (let i = items.length - 1; i >= 0; i--) {
           if (items[i].kind === "app-selection") {
@@ -829,7 +954,7 @@ export function composeIntent(
       }
     } else if (
       event.type === "code-selection" &&
-      !(event.marker !== undefined && droppedCode.has(event.marker))
+      !(event.marker !== undefined && facts.droppedCode.has(event.marker))
     ) {
       items.push({
         kind: "code-selection",
@@ -843,7 +968,7 @@ export function composeIntent(
       // `from`, everything after on `to`. Rendering is the compiler's call
       // (renderNavigation below) — the event travels structured.
       items.push({ kind: "navigation", from: event.from, to: event.to });
-    } else if (event.type === "shot" && !droppedShots.has(event.marker)) {
+    } else if (event.type === "shot" && !facts.droppedShots.has(event.marker)) {
       items.push({
         kind: "shot",
         marker: event.marker,
@@ -853,6 +978,7 @@ export function composeIntent(
         ...(event.viewport ? { viewport: true } : {}),
         ...(event.takenAt !== undefined ? { takenAt: event.takenAt } : {}),
         ...(event.share !== undefined ? { share: event.share } : {}),
+        ...(event.origin !== undefined ? { origin: event.origin } : {}),
       });
     } else if (event.type === "correction") {
       corrections.push({
@@ -869,61 +995,75 @@ export function composeIntent(
       corrections.pop();
     }
   }
+  return { items, corrections };
+}
 
-  if (policy === "replace" && corrections.length) {
-    // Corrections are patches against the transcript-as-lines (one text run
-    // per line — the same document shape the corrector model saw).
-    const textIndexes = items
-      .map((item, index) => (item.kind === "text" ? index : -1))
-      .filter((index) => index !== -1);
-    let lines = textIndexes.map((index) => items[index].text ?? "");
-    for (const correction of corrections) {
-      const result = applyCorrectionToLines(lines, correction);
-      lines = result.lines;
-      correction.applied = result.applied;
-    }
-    // Map lines back onto the interleave: 1:1 while both last, extra lines
-    // append as a trailing run, vanished lines drop their runs.
-    for (let k = 0; k < Math.min(lines.length, textIndexes.length); k++) {
-      items[textIndexes[k]].text = lines[k];
-    }
-    if (lines.length > textIndexes.length) {
-      items.push({ kind: "text", text: lines.slice(textIndexes.length).join(" ") });
-    } else if (lines.length < textIndexes.length) {
-      const dropped = new Set(textIndexes.slice(lines.length));
-      for (let index = items.length - 1; index >= 0; index--) {
-        if (dropped.has(index)) {
-          items.splice(index, 1);
-        }
+/** Pass 3 — spoken-correction patches against the transcript-as-lines. */
+function applyCorrectionsPass(
+  items: ComposedItem[],
+  corrections: ComposedIntent["corrections"],
+  policy: "replace" | "note",
+): void {
+  if (policy !== "replace" || corrections.length === 0) {
+    return;
+  }
+  // Corrections are patches against the transcript-as-lines (one text run
+  // per line — the same document shape the corrector model saw).
+  const textIndexes = items
+    .map((item, index) => (item.kind === "text" ? index : -1))
+    .filter((index) => index !== -1);
+  let lines = textIndexes.map((index) => items[index].text ?? "");
+  for (const correction of corrections) {
+    const result = applyCorrectionToLines(lines, correction);
+    lines = result.lines;
+    correction.applied = result.applied;
+  }
+  // Map lines back onto the interleave: 1:1 while both last, extra lines
+  // append as a trailing run, vanished lines drop their runs.
+  for (let k = 0; k < Math.min(lines.length, textIndexes.length); k++) {
+    items[textIndexes[k]].text = lines[k];
+  }
+  if (lines.length > textIndexes.length) {
+    items.push({ kind: "text", text: lines.slice(textIndexes.length).join(" ") });
+  } else if (lines.length < textIndexes.length) {
+    const dropped = new Set(textIndexes.slice(lines.length));
+    for (let index = items.length - 1; index >= 0; index--) {
+      if (dropped.has(index)) {
+        items.splice(index, 1);
       }
     }
   }
+}
 
-  // ── the timestamp interleave: place anchored shots INSIDE their segment ────
-  // A shot taken mid-window used to compose BEFORE that segment's entire text
-  // (finals arrive late; position was arrival order). With `takenAt` (the
-  // gesture's wall-clock) and the segment's delta timeline, the compiler —
-  // the ONLY place allowed to reorder the accumulator — splits the segment's
-  // text at the offset the deltas had reached when the shot was taken,
-  // nudged to a word boundary. Fallbacks are byte-identical to the old
-  // behavior: no takenAt (legacy streams), no matching talk window (an idle
-  // shot), or no deltas for the segment → the shot keeps its arrival
-  // position.
-  //
-  // Under `streaming` this runs against the PROVISIONAL run too, so a shot
-  // lands in the live transcript as it is taken. The offset is stable as the
-  // text grows: `deltaOffsetAt` reads the cumulative length at `takenAt + lag`,
-  // and later deltas are all past that instant, so they extend the tail rather
-  // than push the shot along.
-  //
-  // Deltas TRAIL speech by the transcriber's latency, so a naive
-  // takenAt-vs-arrival comparison lands the split systematically EARLY —
-  // the words you had already spoken at the gesture hadn't arrived yet
-  // (observed ~1 s off in practice). {@link deltaLagEstimate} compensates
-  // with a per-segment estimate measured from data the stream already
-  // carries. Honest scope note: this is a research area, not a solved
-  // problem — the estimate is coarse (see the helper's doc), and the right
-  // long-term anchor is probably audio-time-aligned transcription.
+/**
+ * Pass 4 — the timestamp interleave: place anchored shots INSIDE their
+ * segment's text. A shot taken mid-window used to compose BEFORE that
+ * segment's entire text (finals arrive late; position was arrival order).
+ * With `takenAt` (the gesture's wall-clock) and the segment's delta
+ * timeline, the compiler — the ONLY place allowed to reorder the
+ * accumulator — splits the segment's text at the offset the deltas had
+ * reached when the shot was taken, nudged to a word boundary. Fallbacks are
+ * byte-identical to the old behavior: no takenAt (legacy streams), no
+ * matching talk window (an idle shot), or no deltas for the segment → the
+ * shot keeps its arrival position.
+ *
+ * Under `streaming` this runs against the PROVISIONAL run too, so a shot
+ * lands in the live transcript as it is taken. The offset is stable as the
+ * text grows: `deltaOffsetAt` reads the cumulative length at `takenAt + lag`,
+ * and later deltas are all past that instant, so they extend the tail rather
+ * than push the shot along.
+ *
+ * Deltas TRAIL speech by the transcriber's latency, so a naive
+ * takenAt-vs-arrival comparison lands the split systematically EARLY —
+ * the words you had already spoken at the gesture hadn't arrived yet
+ * (observed ~1 s off in practice). {@link deltaLagEstimate} compensates
+ * with a per-segment estimate measured from data the stream already
+ * carries. Honest scope note: this is a research area, not a solved
+ * problem — the estimate is coarse (see the helper's doc), and the right
+ * long-term anchor is probably audio-time-aligned transcription.
+ */
+function interleavePass(items: ComposedItem[], facts: StreamFacts): void {
+  const { windows, deltaTimelines, wordsBySegment } = facts;
   const anchoredShots = new Map<number, ComposedItem[]>();
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
@@ -940,61 +1080,70 @@ export function composeIntent(
     items.splice(i, 1);
     anchoredShots.set(segment, [item, ...(anchoredShots.get(segment) ?? [])]);
   }
-  if (anchoredShots.size > 0) {
-    for (let i = items.length - 1; i >= 0; i--) {
-      const target = items[i];
-      if (target.kind !== "text" || target.segment === undefined) {
-        continue;
-      }
-      const shots = anchoredShots.get(target.segment);
-      if (shots === undefined) {
-        continue;
-      }
-      const text = target.text ?? "";
-      const timeline = deltaTimelines.get(target.segment) ?? [];
-      const lag = deltaLagEstimate(windows.get(target.segment), timeline);
-      const words = wordsBySegment.get(target.segment);
-      const windowStart = windows.get(target.segment)?.start;
-      // Oldest shot first; each split offset is nudged to the end of the word
-      // it lands in (and past a sentence end just ahead), so a screenshot
-      // never interrupts a word — and rarely a sentence. Word timestamps,
-      // when present, anchor exactly; the delta-timeline lag estimate is the
-      // fallback.
-      const placed: ComposedItem[] = [];
-      // A provisional run stays provisional on both sides of the split — the
-      // preview renders every run of a still-streaming segment dim, whether or
-      // not a screenshot cut it in two.
-      const run = (text: string): ComposedItem => ({
-        kind: "text",
-        text,
-        segment: target.segment,
-        ...(target.provisional ? { provisional: true } : {}),
-      });
-      let consumed = 0;
-      for (const shot of shots.sort((a, b) => (a.takenAt ?? 0) - (b.takenAt ?? 0))) {
-        const exact =
-          words !== undefined && windowStart !== undefined
-            ? wordOffsetAt(text, words, windowStart, shot.takenAt ?? 0)
-            : undefined;
-        const offset = nudgeToBoundary(
-          text,
-          exact ?? deltaOffsetAt(timeline, (shot.takenAt ?? 0) + lag),
-        );
-        const head = text.slice(consumed, Math.max(consumed, offset)).trim();
-        if (head !== "") {
-          placed.push(run(head));
-        }
-        placed.push(shot);
-        consumed = Math.max(consumed, offset);
-      }
-      const tail = text.slice(consumed).trim();
-      if (tail !== "") {
-        placed.push(run(tail));
-      }
-      items.splice(i, 1, ...placed);
-    }
+  if (anchoredShots.size === 0) {
+    return;
   }
+  for (let i = items.length - 1; i >= 0; i--) {
+    const target = items[i];
+    if (target.kind !== "text" || target.segment === undefined) {
+      continue;
+    }
+    const shots = anchoredShots.get(target.segment);
+    if (shots === undefined) {
+      continue;
+    }
+    const text = target.text ?? "";
+    const timeline = deltaTimelines.get(target.segment) ?? [];
+    const lag = deltaLagEstimate(windows.get(target.segment), timeline);
+    const words = wordsBySegment.get(target.segment);
+    const windowStart = windows.get(target.segment)?.start;
+    // Oldest shot first; each split offset is nudged to the end of the word
+    // it lands in (and past a sentence end just ahead), so a screenshot
+    // never interrupts a word — and rarely a sentence. Word timestamps,
+    // when present, anchor exactly; the delta-timeline lag estimate is the
+    // fallback.
+    const placed: ComposedItem[] = [];
+    // A provisional run stays provisional on both sides of the split — the
+    // preview renders every run of a still-streaming segment dim, whether or
+    // not a screenshot cut it in two.
+    const run = (text: string): ComposedItem => ({
+      kind: "text",
+      text,
+      segment: target.segment,
+      ...(target.provisional ? { provisional: true } : {}),
+    });
+    let consumed = 0;
+    for (const shot of shots.sort((a, b) => (a.takenAt ?? 0) - (b.takenAt ?? 0))) {
+      const exact =
+        words !== undefined && windowStart !== undefined
+          ? wordOffsetAt(text, words, windowStart, shot.takenAt ?? 0)
+          : undefined;
+      const offset = nudgeToBoundary(
+        text,
+        exact ?? deltaOffsetAt(timeline, (shot.takenAt ?? 0) + lag),
+      );
+      const head = text.slice(consumed, Math.max(consumed, offset)).trim();
+      if (head !== "") {
+        placed.push(run(head));
+      }
+      placed.push(shot);
+      consumed = Math.max(consumed, offset);
+    }
+    const tail = text.slice(consumed).trim();
+    if (tail !== "") {
+      placed.push(run(tail));
+    }
+    items.splice(i, 1, ...placed);
+  }
+}
 
+/** Pass 5 — render: the transcript and the lowered prompt body. */
+function renderPass(
+  items: ComposedItem[],
+  corrections: ComposedIntent["corrections"],
+  policy: "replace" | "note",
+  options: ComposeOptions,
+): ComposedIntent {
   const components = items.flatMap((item) => item.components ?? []);
   const transcript = items
     .filter((item) => item.kind === "text")
@@ -1365,6 +1514,10 @@ function shareNote(share: ShotShare): string {
 }
 
 function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
+  // A pasted image is a screenshot in every mechanical respect (marker space,
+  // disk blob, takenAt anchoring) — but the model must never mistake clipboard
+  // content for what was on screen, so it gets its own tag.
+  const tag = item.origin === "paste" ? "pasted-image" : "screenshot";
   const attrs: string[] = [];
   if (item.path) {
     attrs.push(`path="${escapeXml(relativizePath(item.path, cwd))}"`);
@@ -1377,11 +1530,11 @@ function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
   }
   if (item.viewport) {
     attrs.push(`view="full-viewport"`);
-    return `<screenshot ${attrs.join(" ")}/>`;
+    return `<${tag} ${attrs.join(" ")}/>`;
   }
   const components = item.components ?? [];
   if (components.length === 0) {
-    return `<screenshot ${attrs.join(" ")}/>`;
+    return `<${tag} ${attrs.join(" ")}/>`;
   }
   if (components.length > MAX_ELEMENTS_IN_PROMPT) {
     attrs.push(`elements-omitted="${components.length - MAX_ELEMENTS_IN_PROMPT}"`);
@@ -1410,13 +1563,14 @@ function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
   // Multi-line blocks get a blank line's worth of separation from the prose
   // around them; the single-line forms (viewport, no elements) read fine
   // inline mid-sentence and stay there.
-  return `\n${[`<screenshot ${attrs.join(" ")}>`, ...lines, "</screenshot>"].join("\n")}\n`;
+  return `\n${[`<${tag} ${attrs.join(" ")}>`, ...lines, `</${tag}>`].join("\n")}\n`;
 }
 
 function renderShotText(item: ComposedItem, cwd: string | undefined): string {
+  const label = item.origin === "paste" ? "pasted image" : "screenshot";
   const base = item.path
-    ? `[screenshot: ${relativizePath(item.path, cwd)}`
-    : `[screenshot ${item.marker} — image not captured`;
+    ? `[${label}: ${relativizePath(item.path, cwd)}`
+    : `[${label} ${item.marker} — image not captured`;
   const head = item.share ? `${base} (${shareNote(item.share)})` : base;
   if (item.viewport) {
     return `${head} (full viewport)]`;

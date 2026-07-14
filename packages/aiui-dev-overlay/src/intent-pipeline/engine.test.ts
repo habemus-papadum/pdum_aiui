@@ -1019,6 +1019,182 @@ describe("the timestamp interleave (takenAt anchoring)", () => {
   });
 });
 
+describe("segment-replace (the panel's segment editor)", () => {
+  /** A spoken segment with word timestamps and a shot anchored mid-text. */
+  const T0 = 1000;
+  function editedStream(): IntentEvent[] {
+    return [
+      { at: T0 - 10, type: "armed", on: true },
+      { at: T0 - 5, type: "thread-open", trigger: "talk" },
+      { at: T0 - 2, type: "navigation", from: "https://a.test/x", to: "https://a.test/y" },
+      { at: T0, type: "talk-start", segment: 1 },
+      { at: T0 + 900, type: "transcript-delta", segment: 1, text: "make the legend" },
+      { at: T0 + 2400, type: "transcript-delta", segment: 1, text: "make the legend wider now" },
+      // The shot gesture at t=+1400 — between "legend" (ends 1200) and
+      // "wider" (starts 1600) by WORD TIMESTAMPS below.
+      {
+        at: T0 + 1450,
+        type: "shot",
+        marker: "shot_1",
+        rect: { x: 0, y: 0, w: 10, h: 10 },
+        components: [],
+        takenAt: T0 + 1400,
+      },
+      { at: T0 + 3000, type: "talk-end", segment: 1, ms: 3000 },
+      {
+        at: T0 + 3600,
+        type: "transcript-final",
+        segment: 1,
+        text: "make the legend wider now",
+        latencyMs: 600,
+        model: "rt",
+        words: [
+          { text: "make", startMs: 0, endMs: 400 },
+          { text: "the", startMs: 400, endMs: 700 },
+          { text: "legend", startMs: 700, endMs: 1200 },
+          { text: "wider", startMs: 1600, endMs: 2000 },
+          { text: "now", startMs: 2000, endMs: 2400 },
+        ],
+      },
+    ];
+  }
+
+  it("replaces the segment's text IN PLACE and reflows the shot on the new words", () => {
+    const events = editedStream();
+    const before = composeIntent(events);
+    expect(before.items.map((i) => i.kind)).toEqual(["navigation", "text", "shot", "text"]);
+    expect(before.items[1].text).toBe("make the legend");
+
+    // The editor fixed "legend" → "caption" and re-timestamped (kept words
+    // keep their times; the fix inherits its slot).
+    events.push({
+      at: T0 + 9000,
+      type: "segment-replace",
+      segment: 1,
+      text: "make the caption wider now",
+      words: [
+        { text: "make", startMs: 0, endMs: 400 },
+        { text: "the", startMs: 400, endMs: 700 },
+        { text: "caption", startMs: 700, endMs: 1200 },
+        { text: "wider", startMs: 1600, endMs: 2000 },
+        { text: "now", startMs: 2000, endMs: 2400 },
+      ],
+    });
+    const after = composeIntent(events);
+    // Same shape, same POSITION (after the navigation, where the final sat);
+    // new text on both sides of the reflowed shot.
+    expect(after.items.map((i) => i.kind)).toEqual(["navigation", "text", "shot", "text"]);
+    expect(after.items[1].text).toBe("make the caption");
+    expect(after.items[3].text).toBe("wider now");
+    expect(after.transcript).toBe("make the caption wider now");
+  });
+
+  it("latest replacement wins, and the trace keeps every prior text", () => {
+    const events = editedStream();
+    events.push(
+      { at: T0 + 9000, type: "segment-replace", segment: 1, text: "first fix" },
+      { at: T0 + 9500, type: "segment-replace", segment: 1, text: "second fix" },
+    );
+    const composed = composeIntent(events);
+    const texts = composed.items.filter((i) => i.kind === "text").map((i) => i.text);
+    expect(texts).toEqual(["second fix"]); // one row, latest text
+    // The events themselves stay in the stream — the trace still shows all.
+    expect(events.filter((e) => e.type === "segment-replace")).toHaveLength(2);
+  });
+
+  it("a replacement without words degrades to the ORIGINAL anchors (best effort)", () => {
+    const events = editedStream();
+    events.push({
+      at: T0 + 9000,
+      type: "segment-replace",
+      segment: 1,
+      text: "make the caption wider now",
+    });
+    const composed = composeIntent(events);
+    // The original words align by TEXT against the edited text (wordOffsetAt's
+    // moving cursor, diverged words skipped): "legend" no longer matches, so
+    // the shot anchors after the last kept word spoken before the gesture —
+    // "make the". Approximate on purpose; the editor sends retimed words in
+    // practice, and this is the shape of the fallback when it cannot.
+    expect(composed.items.map((i) => i.kind)).toEqual(["navigation", "text", "shot", "text"]);
+    expect(composed.items[1].text).toBe("make the");
+    expect(composed.transcript).toBe("make the caption wider now");
+  });
+
+  it("suppresses the provisional run for a replaced segment (streaming compose)", () => {
+    const events: IntentEvent[] = [
+      { at: 0, type: "armed", on: true },
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "talk-start", segment: 1 },
+      { at: 3, type: "transcript-delta", segment: 1, text: "still streaming words" },
+      { at: 4, type: "segment-replace", segment: 1, text: "edited before the final" },
+    ];
+    const composed = composeIntent(events, "replace", { streaming: true });
+    const texts = composed.items.filter((i) => i.kind === "text");
+    // No final in scope: the replacement places at its own stream position,
+    // and the provisional run is gone (an edited segment is not in flight).
+    expect(texts).toHaveLength(1);
+    expect(texts[0].text).toBe("edited before the final");
+    expect(texts[0].provisional).toBeUndefined();
+  });
+
+  it("works with drops: delete the shot AND fix the text in one edit", () => {
+    const events = editedStream();
+    events.push(
+      { at: T0 + 9000, type: "shot-drop", marker: "shot_1" },
+      { at: T0 + 9001, type: "segment-replace", segment: 1, text: "make the caption wider now" },
+    );
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["navigation", "text"]);
+    expect(composed.items[1].text).toBe("make the caption wider now");
+  });
+});
+
+describe("pasted images (clipboard pixels, labeled honestly)", () => {
+  it("renders <pasted-image> in xml and '[pasted image' in text — never 'screenshot'", () => {
+    const events: IntentEvent[] = [
+      { at: 0, type: "armed", on: true },
+      { at: 1, type: "thread-open", trigger: "explicit" },
+      {
+        at: 2,
+        type: "shot",
+        marker: "shot_1",
+        rect: { x: 0, y: 0, w: 10, h: 10 },
+        components: [],
+        path: "/tmp/paste.png",
+        origin: "paste",
+      },
+    ];
+    const xml = composeIntent(events, "replace", { shotFormat: "xml" });
+    expect(xml.prompt).toContain("<pasted-image");
+    expect(xml.prompt).not.toContain("<screenshot");
+    expect(xml.items[0].origin).toBe("paste");
+
+    const text = composeIntent(events, "replace", { shotFormat: "text" });
+    expect(text.prompt).toContain("[pasted image:");
+    expect(text.prompt).not.toContain("screenshot");
+  });
+
+  it("the engine verb stamps provenance; a capture stays unmarked", () => {
+    const engine = new Engine();
+    engine.setArmed(true);
+    engine.shotDone({ x: 0, y: 0, w: 4, h: 4 }, [], undefined, "/tmp/a.png");
+    engine.shotDone(
+      { x: 0, y: 0, w: 4, h: 4 },
+      [],
+      undefined,
+      "/tmp/b.png",
+      false,
+      undefined,
+      undefined,
+      "paste",
+    );
+    const shots = engine.events.filter((e) => e.type === "shot");
+    expect(shots[0].origin).toBeUndefined();
+    expect(shots[1].origin).toBe("paste");
+  });
+});
+
 describe("streaming compose (the live transcript preview)", () => {
   const T0 = 1000;
   const LAG = 800;

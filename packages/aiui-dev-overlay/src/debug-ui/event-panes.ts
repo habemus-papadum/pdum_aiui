@@ -314,6 +314,10 @@ function describe(event: IntentEvent): string {
       }`;
     case "shot-drop":
       return `${event.marker} retracted (✕ on the preview thumb)`;
+    case "segment-replace":
+      return `seg ${event.segment} REPLACED (editor): “${clip(event.text)}”${
+        event.words !== undefined ? ` · ${event.words.length} retimed word(s)` : ""
+      }`;
     case "shot":
       return `${event.marker} · ${Math.round(event.rect.w)}×${Math.round(event.rect.h)} · ${
         event.components.length

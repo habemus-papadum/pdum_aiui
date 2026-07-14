@@ -162,6 +162,23 @@ export type IntentEvent =
       /** Set when this segment was spoken while a correction target was lassoed. */
       correction?: boolean;
     }
+  | {
+      /**
+       * Replace a segment's transcript WHOLESALE — the panel's segment
+       * editor (fixing bad STT, pasting text) speaks this. The compiler
+       * treats it as latest-wins IN PLACE: the segment's text item keeps its
+       * stream position, its text (and word timestamps, when provided —
+       * best-effort re-timestamped by the editor) are superseded, and the
+       * timestamp interleave then reflows any anchored shots against the new
+       * words. The original transcript stays in the stream for the trace,
+       * exactly like a dropped shot.
+       */
+      at: number;
+      type: "segment-replace";
+      segment: number;
+      text: string;
+      words?: TranscriptWord[];
+    }
   | { at: number; type: "stroke"; points: number; bounds: Rect }
   | {
       at: number;
@@ -228,6 +245,14 @@ export type IntentEvent =
        * a useful point of reference.
        */
       viewport?: boolean;
+      /**
+       * Where the pixels came from, when NOT a screen capture: `"paste"` =
+       * the user pasted an image into the turn (the panel's segment editor /
+       * end-of-turn paste). Same marker space, same disk blob, same
+       * `takenAt` anchoring — but the lowering labels it a pasted image, so
+       * the model never mistakes clipboard content for what was on screen.
+       */
+      origin?: "paste";
       /** Data-URL thumbnail (absent when no capture stream was granted). */
       thumb?: string;
       /** Absolute path of the saved image on disk (the thing the prompt hands the session). */
