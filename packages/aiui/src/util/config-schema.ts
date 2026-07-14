@@ -255,10 +255,12 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         key: "buildExtension",
         type: "boolean",
         default: true,
-        summary: "Rebuild the aiui-devtools-extension whenever a browser starts in a dev checkout.",
+        summary: "OBSOLETE — launches no longer auto-load (or rebuild) the DevTools extension.",
         doc:
-          "~0.3s of tsc so the auto-loaded DevTools panel is never stale. Only relevant in a " +
-          "dev checkout of pdum_aiui.",
+          "Since the intent-client switchover (2026-07-14) the only extension a launch " +
+          "auto-loads is the intent client, whose MV3 bundle is built deliberately " +
+          "(`pnpm -C packages/aiui-intent-client build:ext`). Still parsed so old configs " +
+          "stay valid; `aiui chrome extension` builds the DevTools panel on demand.",
       },
       {
         key: "autoCapture",

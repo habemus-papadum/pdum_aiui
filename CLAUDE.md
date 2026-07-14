@@ -16,16 +16,21 @@ transcript) at the center. Three layers:
    session via the custom channel (`aiui-claude-channel`: MCP server + on-disk registry + local
    web backend). Treated as an open research area — the pipeline should expose its intermediate
    representations.
-2. **Intent tools** — frontends for that pipeline. First one is working: the **web intent tool**
-   (`mountIntentTool` in `aiui-dev-overlay`) — dev-gated, stateless, pluggable modalities; text PoC
-   today, speech + screenshots + DOM capture next. Lowering runs are traced to the project-local
-   `.aiui-cache/` (gitignored). Debugging lives in the **aiui Chrome DevTools panel**
-   (`aiui-devtools-extension`, loaded unpacked): a server monitor + the trace debugger, live-following
-   one trace (the shared `debug-ui` viewer — the widget's 🔍 opens it at `/__aiui/debug`,
-   session-pinned; `aiui debug` serves it standalone with a channel switcher). The panel reads
-   `window.__AIUI__` page instrumentation only to discover the channel port. The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`,
-   `/health`); every page belongs to a frontend process. (One sidecar exception: the paint
-   sidecar's self-contained iPad client page at `/paint/` — an iPad has no frontend process.)
+2. **Intent tools** — frontends for that pipeline. The current one is the **intent client**
+   (`aiui-intent-client`): one client, three hosts — the channel-served plain page at
+   `/intent/` (drives real tabs over CDP, no extension) and the MV3 side panel (`dist-ext`,
+   the ONE extension `aiui claude` auto-loads since the 2026-07-14 switchover; warm `tabCapture`
+   video), both over the same mode-engine core; `PARITY.md`/`BEHAVIOR.md` in that package are
+   the decided contract. The older surfaces remain but demoted: the web intent tool
+   (`mountIntentTool` in `aiui-dev-overlay`, dev-gated overlay) and the frozen `aiui-extension`
+   (safety net, never auto-loaded). Lowering runs are traced to the project-local `.aiui-cache/`
+   (gitignored); the trace debugger (the shared `debug-ui` viewer) is EMBEDDED in the intent
+   panel, still served at `/__aiui/debug` (session-pinned) and standalone via `aiui debug`; the
+   **aiui Chrome DevTools panel** (`aiui-devtools-extension`) still exists as a manual install.
+   The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`, `/health`);
+   every page belongs to a frontend process. (Two sidecar exceptions: the paint sidecar's
+   self-contained iPad client page at `/paint/` — an iPad has no frontend process — and the
+   intent client's panel page under `/intent/`.)
 3. **Frontend for agents** — principles/utilities/Claude skills for agent-written scientific UI:
    SolidJS 2.0 (beta), Observable-style async dataflow in mainstream syntax, code debuggable by
    the agent's future self (source locators, self-installed debug hooks, HMR-mindful,

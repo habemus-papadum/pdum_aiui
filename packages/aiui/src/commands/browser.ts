@@ -41,13 +41,11 @@ import { execa } from "execa";
 import type { AiuiArgs } from "../util/aiui-args";
 import { syncChromeForTesting } from "../util/cft";
 import {
-  buildDevtoolsExtension,
   type ChromeSettings,
-  devtoolsExtensionDir,
-  findIntentExtension,
+  findIntentClientExtension,
   maybeExtensionAutoloadHint,
   resolveChromeSettings,
-  warnIntentExtensionState,
+  warnIntentClientState,
 } from "../util/chrome";
 import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { printError, printNote } from "../util/ui";
@@ -110,7 +108,7 @@ export async function runBrowser(opts: BrowserOptions): Promise<void> {
     // running browser may predate this checkout's native host.
     ensureProfileNativeHost(
       settings.userDataDir,
-      (await findIntentExtension()).state === "ready",
+      findIntentClientExtension().state === "ready",
       printNote,
     );
     report("session browser already running", settings, session);
@@ -211,20 +209,16 @@ export async function startSessionBrowser(
       settings = settle();
     }
   }
-  if (settings.buildExtension) {
-    await buildDevtoolsExtension();
-  }
-  const intent = await findIntentExtension();
-  const extensionDirs = [
-    devtoolsExtensionDir(),
-    intent.state === "ready" ? intent.dir : undefined,
-  ].filter((d): d is string => d !== undefined);
+  // The switchover (owner, 2026-07-14): launches auto-load ONLY the greenfield
+  // intent client — see the twin comment in claude.ts.
+  const intent = findIntentClientExtension();
+  const extensionDirs = intent.state === "ready" ? [intent.dir] : [];
   // The extension's channel discovery runs over native messaging, and CfT
   // looks the manifest up in the profile itself — keep it planted there.
   ensureProfileNativeHost(settings.userDataDir, intent.state === "ready", printNote);
   if (opts.interactive) {
     maybeExtensionAutoloadHint(settings, extensionDirs);
-    await warnIntentExtensionState(intent);
+    warnIntentClientState(intent);
   }
 
   let binary: string;

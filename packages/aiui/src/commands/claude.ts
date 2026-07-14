@@ -12,16 +12,14 @@ import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { syncChromeForTesting } from "../util/cft";
 import { channelLaunchFlags, resolveChannelLaunch } from "../util/channel-launch";
 import {
-  buildDevtoolsExtension,
   CHROME_SERVER_ID,
   chromeDevtoolsEnabled,
   chromeMcpAttachServer,
   chromeMcpServer,
-  devtoolsExtensionDir,
-  findIntentExtension,
+  findIntentClientExtension,
   maybeExtensionAutoloadHint,
   resolveChromeSettings,
-  warnIntentExtensionState,
+  warnIntentClientState,
 } from "../util/chrome";
 import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { nudgeChannelAck } from "../util/enter-nudge";
@@ -327,7 +325,7 @@ async function chromeServerEntry(
       // feature): keep the profile's NM manifest current even when attaching.
       ensureProfileNativeHost(
         settings.userDataDir,
-        (await findIntentExtension()).state === "ready",
+        findIntentClientExtension().state === "ready",
         printWarning,
       );
       return {
@@ -354,20 +352,20 @@ async function chromeServerEntry(
     }
   }
   mkdirSync(settings.userDataDir, { recursive: true });
-  if (settings.buildExtension) {
-    await buildDevtoolsExtension();
-  }
-  const intent = await findIntentExtension();
-  const extensionDirs = [
-    devtoolsExtensionDir(),
-    intent.state === "ready" ? intent.dir : undefined,
-  ].filter((d): d is string => d !== undefined);
+  // The switchover (owner, 2026-07-14): launches auto-load ONLY the greenfield
+  // intent client. The frozen extension retired to safety-net status (loaded
+  // by hand if ever needed; `aiui extension` still manages its artifacts), and
+  // the DevTools-panel extension is no longer auto-loaded either — its trace
+  // debugger now lives INSIDE the intent panel (`aiui chrome extension` still
+  // builds it for manual installs).
+  const intent = findIntentClientExtension();
+  const extensionDirs = intent.state === "ready" ? [intent.dir] : [];
   // The extension's channel discovery runs over native messaging, and CfT
   // looks the manifest up in the profile itself — keep it planted there.
   ensureProfileNativeHost(settings.userDataDir, intent.state === "ready", printWarning);
   if (interactive) {
     maybeExtensionAutoloadHint(settings, extensionDirs);
-    await warnIntentExtensionState(intent);
+    warnIntentClientState(intent);
   }
   const browserInfo = {
     userDataDir: settings.userDataDir,

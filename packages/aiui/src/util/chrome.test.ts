@@ -9,10 +9,12 @@ import {
   chromeMcpServer,
   chromeUserDataDir,
   devtoolsExtensionDir,
+  findIntentClientExtension,
   findIntentExtension,
   intentExtensionDevPort,
   readDevStamp,
   resolveChromeSettings,
+  resolveIntentClientExtension,
   resolveIntentExtension,
 } from "./chrome";
 
@@ -241,6 +243,33 @@ describe("findIntentExtension", () => {
         intent.dir.endsWith(join("aiui-extension", "dist")) ||
           intent.dir.endsWith(join("aiui-extension", "dist-dev")),
       ).toBe(true);
+      expect(existsSync(join(intent.dir, "manifest.json"))).toBe(true);
+    }
+  });
+});
+
+describe("resolveIntentClientExtension — the extension launches auto-load", () => {
+  it("absent when the package is not resolvable", () => {
+    expect(resolveIntentClientExtension(undefined)).toEqual({ state: "absent" });
+  });
+
+  it("unbuilt until the MV3 bundle exists; ready once manifest.json does", () => {
+    const root = mkdtempSync(join(tmpdir(), "aiui-intent-client-"));
+    const paths = { root, outDir: join(root, "dist-ext") };
+    expect(resolveIntentClientExtension(paths)).toEqual({ state: "unbuilt", root });
+
+    mkdirSync(paths.outDir, { recursive: true });
+    expect(resolveIntentClientExtension(paths)).toEqual({ state: "unbuilt", root }); // dir alone ≠ loadable
+
+    writeFileSync(join(paths.outDir, "manifest.json"), "{}\n");
+    expect(resolveIntentClientExtension(paths)).toEqual({ state: "ready", dir: paths.outDir });
+  });
+
+  it("resolves in this checkout, and ready always means a loadable unpacked dir", () => {
+    const intent = findIntentClientExtension();
+    expect(intent.state).not.toBe("absent"); // the workspace dep is here
+    if (intent.state === "ready") {
+      expect(intent.dir.endsWith(join("aiui-intent-client", "dist-ext"))).toBe(true);
       expect(existsSync(join(intent.dir, "manifest.json"))).toBe(true);
     }
   });

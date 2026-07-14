@@ -25,16 +25,17 @@
  *   on first use; `--aiui-chrome-data-dir <path>` escapes the convention
  *   entirely.
  *
- * - **Best-effort auto-load of the aiui extensions.** In a dev checkout we
- *   rebuild the `aiui-devtools-extension` package (~0.3s of tsc, so it is never
- *   stale), pick whichever artifact the `aiui-extension` intent tool currently
- *   offers — its live dev build, else its production build (never building
- *   either — see {@link findIntentExtension}) — and pass both via
- *   `--load-extension`. Chrome-branded builds
- *   ≥ 137 ignore that flag (Chromium and Chrome for Testing still honor it), so
- *   this is an attempt, not a guarantee — the reliable path is loading the
- *   extensions unpacked once at `chrome://extensions`, which the persistent
- *   profile then remembers.
+ * - **Best-effort auto-load of ONE extension: the intent client.** Since the
+ *   switchover (owner, 2026-07-14) launches pass exactly the greenfield intent
+ *   client's MV3 bundle via `--load-extension` (never building it — see
+ *   {@link findIntentClientExtension}). The frozen `aiui-extension` is the
+ *   safety net (loaded by hand if ever needed) and the DevTools-panel
+ *   extension is a manual install (`aiui chrome extension`) — the intent panel
+ *   embeds the same trace debugger now. Chrome-branded builds ≥ 137 ignore the
+ *   flag (Chromium and Chrome for Testing still honor it), so this is an
+ *   attempt, not a guarantee — the reliable path is loading the extension
+ *   unpacked once at `chrome://extensions`, which the persistent profile then
+ *   remembers.
  *
  * - **Config picks the browser.** `chrome.executablePath` (e.g. a Chrome for
  *   Testing binary) or `chrome.channel` choose what to launch;
@@ -62,8 +63,13 @@ export const CHROME_SERVER_ID = "chrome-devtools";
 
 const DEVTOOLS_PKG = "@habemus-papadum/aiui-devtools-extension";
 
-/** The browser-extension intent tool (side panel, capture, ink, page tools). */
+/** The FROZEN browser-extension intent tool — the safety net. Not auto-loaded
+ * since the switchover (owner, 2026-07-14); `aiui extension` still manages it. */
 const INTENT_PKG = "@habemus-papadum/aiui-extension";
+
+/** The greenfield intent client — what launches auto-load now. Its MV3 bundle
+ * is a static build (`pnpm -C packages/aiui-intent-client build:ext`). */
+const INTENT_CLIENT_PKG = "@habemus-papadum/aiui-intent-client";
 
 /** The profile used when neither flags nor config name one. */
 export const DEFAULT_CHROME_PROFILE = "default";
@@ -124,6 +130,9 @@ export interface ChromeSettings {
   /** Installed Chrome release channel to launch, if configured. */
   channel?: ChromeChannel;
   headless: boolean;
+  /** OBSOLETE since the switchover (2026-07-14): launches no longer auto-load
+   * the DevTools extension, so nothing rebuilds it at launch. Parsed and kept
+   * so old configs stay valid; `aiui chrome extension` builds on demand. */
   buildExtension: boolean;
 }
 
@@ -283,6 +292,70 @@ export function intentExtensionPaths():
   }
 }
 
+/** The intent client's MV3 bundle directory name (see its build-ext.ts: a
+ * THIRD shape of that package — dist/ is the library, dist-ext/ the unpacked
+ * extension). */
+export const INTENT_CLIENT_OUT_DIR = "dist-ext";
+
+/**
+ * What we found when looking for the greenfield intent client's extension —
+ * the one launches AUTO-LOAD (the frozen `aiui-extension` retired to
+ * safety-net status at the switchover; `aiui extension` still manages it, but
+ * no launcher loads it).
+ *
+ * Deliberately simpler than {@link IntentExtension}: the bundle is a static
+ * build with no dev server and no dev/prod split — the client's hot-iteration
+ * surface is the channel-served plain page, so the extension only ever needs
+ * to be BUILT.
+ */
+export type IntentClientExtension =
+  | { state: "absent" }
+  | { state: "unbuilt"; root: string }
+  | { state: "ready"; dir: string };
+
+/** Absolute paths for the intent client's bundle, in a checkout. */
+export function intentClientExtensionPaths(): { root: string; outDir: string } | undefined {
+  try {
+    // realpath for the same reason as above: the canonical load-unpacked path.
+    const root = realpathSync(packageRoot(INTENT_CLIENT_PKG));
+    return { root, outDir: join(root, INTENT_CLIENT_OUT_DIR) };
+  } catch {
+    return undefined;
+  }
+}
+
+/** {@link findIntentClientExtension}'s decision, against explicit paths. */
+export function resolveIntentClientExtension(
+  paths: { root: string; outDir: string } | undefined,
+): IntentClientExtension {
+  if (paths === undefined) {
+    return { state: "absent" };
+  }
+  return existsSync(join(paths.outDir, "manifest.json"))
+    ? { state: "ready", dir: paths.outDir }
+    : { state: "unbuilt", root: paths.root };
+}
+
+/** The intent client extension, as this checkout can load it. No build-on-
+ * launch (the same rule as the frozen extension's ladder): the bundle is a
+ * deliberate act — `pnpm -C packages/aiui-intent-client build:ext`. */
+export function findIntentClientExtension(): IntentClientExtension {
+  return resolveIntentClientExtension(intentClientExtensionPaths());
+}
+
+/** One launch-time note when the client is resolvable but unbuilt — printed
+ * every launch while true (actionable; it disappears once fixed). */
+export function warnIntentClientState(intent: IntentClientExtension): void {
+  if (intent.state === "unbuilt") {
+    printNote(
+      "the aiui intent client has no MV3 bundle yet, so this launch won't load it",
+      "Build it once:  pnpm -C packages/aiui-intent-client build:ext\n" +
+        "then relaunch — or load it into the RUNNING browser:\n" +
+        "  pnpm -C packages/aiui-intent-client ext",
+    );
+  }
+}
+
 /**
  * Decide which artifact this launch should load, never building either.
  *
@@ -414,50 +487,6 @@ export function intentExtensionDevPort(dir: string): number | undefined {
   }
   const match = loader.match(/https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)\//);
   return match ? Number(match[1]) : undefined;
-}
-
-/**
- * Loud-failure check for the intent extension at launch (dev checkouts only —
- * "absent" stays silent by design). The ways it can quietly not work, all of
- * which read as "the extension is broken" in the browser:
- *
- * - neither artifact exists → it simply won't be loaded this launch;
- * - the dev artifact is being loaded with nothing serving its port → Chrome
- *   loads it, but every surface shows CRXJS's "cannot connect" page;
- * - a pre-split dev-shaped `dist/` is lying around → confusing, and it is what
- *   gets published if anyone ever packs the package.
- *
- * Printed every launch while true (actionable, and it disappears once fixed),
- * not once-per-profile like {@link maybeExtensionAutoloadHint}.
- */
-export async function warnIntentExtensionState(intent: IntentExtension): Promise<void> {
-  if (intent.state === "unbuilt") {
-    printNote(
-      "the aiui intent-tool extension has no artifact yet, so this launch won't load it",
-      "Developing it?  aiui extension dev   (Vite + auto-reload; writes dist-dev/)\n" +
-        "Just using it?  pnpm -C packages/aiui-extension build   (writes dist/, needs no server)\n" +
-        "Then relaunch.",
-    );
-    return;
-  }
-  if (intent.state !== "ready") {
-    return;
-  }
-  if (intent.mode === "dev" && !intent.devServer) {
-    printWarning(
-      `the aiui intent-tool extension is dev-mode (${intent.dir}) but nothing is serving ` +
-        `:${intent.devPort} — its panel will show CRXJS's "cannot connect" page`,
-      "Start the dev loop (`aiui extension dev`), or build it standalone\n" +
-        "(`pnpm -C packages/aiui-extension build`) and relaunch to load dist/ instead.",
-    );
-  }
-  if (intent.legacyDevDist && intent.mode === "dev" && intent.dir !== intent.legacyDevDist) {
-    printNote(
-      `${intent.legacyDevDist} holds a stale dev-mode artifact from the old single-dist layout`,
-      'Harmless but confusing (and it is what `files: ["dist"]` would publish):\n' +
-        `  rm -rf ${intent.legacyDevDist}   # or: pnpm -C packages/aiui-extension build`,
-    );
-  }
 }
 
 /** Is the extension's Vite dev server answering on this port? */

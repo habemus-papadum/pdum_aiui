@@ -55,21 +55,22 @@ entirely through `dispatch()` + the FakeBus. Run `pnpm test`.
 **As a plain page** — no extension, real tabs. `aiui claude` serves it at
 `http://127.0.0.1:<channel-port>/intent/` and drives the session browser over CDP.
 
-**As the side panel** — the MV3 shell:
+**As the side panel** — the MV3 shell. Since the switchover (2026-07-14), **`aiui claude`
+auto-loads it at launch** — the one extension launches load (the frozen client retired to
+safety-net status; the DevTools-panel extension became a manual install, its trace debugger
+living inside this panel now). The bundle itself is still built deliberately, and the
+rebuild-into-a-running-browser loop is:
 
 ```sh
-pnpm -C packages/aiui-intent-client ext   # build the bundle, load it into the session browser
+pnpm -C packages/aiui-intent-client ext   # build:ext, then load into the session browser
 ```
 
 That is `build:ext` (Vite for the panel, esbuild for the content scripts and the worker — no
 CRXJS, ever) followed by `load:ext`, which is "Load unpacked" without the human: CDP's
-`Extensions.loadUnpacked` against the running session browser. Then **⌘B** on the tab you want
-to drive — the chord and the toolbar button are extension *invocations*, and an invocation is
-what mints the `tabCapture` grant, so they are what opens the panel and the turn together.
-
-Installing it is a deliberate act rather than something `aiui claude` does for you: the frozen
-extension is still auto-loaded, and two extensions cannot both hold ⌘B (Chrome drops the second
-binding without saying so). Which client the launcher loads is the parity gate's switchover.
+`Extensions.loadUnpacked` against the running session browser (a launch picks up whatever
+bundle exists — no build-on-launch). Then **⌘B** on the tab you want to drive — the chord and
+the toolbar button are extension *invocations*, and an invocation is what mints the
+`tabCapture` grant, so they are what opens the panel and the turn together.
 
 ## Status / road to parity
 
@@ -78,10 +79,10 @@ channel-served page; the `CdpBus` (real tabs, no extension); and the MV3 shell (
 the salvaged SW broker and warm-shot capture path, a static build, a new extension identity,
 `aiui2.*` storage). All three hosts are verified live.
 
-Left: the **parity gate** — walk the
-[inventory](../../docs/proposals/intent-client/04-parity-inventory.md) row by row against
-[PARITY.md](./PARITY.md), settle the open `DECIDE`s, then flip the launcher to this client and
-retire the old extension to safety-net status.
+The launcher is flipped (2026-07-14): `aiui claude` / `aiui browser` auto-load this client and
+nothing else; the frozen extension is retired to safety-net status. Left: the **parity gate** —
+walk the [inventory](../../docs/proposals/intent-client/04-parity-inventory.md) row by row
+against [PARITY.md](./PARITY.md) and settle the open `DECIDE`s.
 
 Coexistence policy (decided, and now enforced): the two clients are separate extensions with
 separate ids and separate storage (`aiui2.*`), and **never both armed** — the content script

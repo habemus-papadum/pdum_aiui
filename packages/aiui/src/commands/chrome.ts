@@ -19,6 +19,7 @@ import {
   chromeDevtoolsEnabled,
   chromeUserDataDir,
   devtoolsExtensionDir,
+  findIntentClientExtension,
   findIntentExtension,
   resolveChromeSettings,
 } from "../util/chrome";
@@ -125,43 +126,55 @@ async function printStatus(): Promise<void> {
     }
   }
 
-  console.log("\naiui DevTools panel:");
+  // The switchover (owner, 2026-07-14): the intent client is the ONE extension
+  // launches auto-load. The DevTools panel and the frozen intent tool are
+  // still buildable/loadable by hand, so they stay reported — as what they
+  // now are.
+  console.log("\naiui intent client (the extension launches auto-load):");
+  const client = findIntentClientExtension();
+  switch (client.state) {
+    case "absent":
+      console.log("  not available in this install (aiui-intent-client is not resolvable)");
+      break;
+    case "unbuilt":
+      console.log(
+        `  no MV3 bundle yet (${client.root})\n` +
+          "  build it:      pnpm -C packages/aiui-intent-client build:ext\n" +
+          "  build + load into the running browser:  pnpm -C packages/aiui-intent-client ext",
+      );
+      break;
+    case "ready":
+      console.log(`  ${client.dir}`);
+      printAutoloadability(settings.executablePath);
+      break;
+  }
+
+  console.log(
+    "\naiui DevTools panel (manual install only — the intent panel embeds its debugger):",
+  );
   const extension = devtoolsExtensionDir();
   if (!extension) {
     console.log("  not available (unbuilt dev checkout? run `aiui chrome extension` for help)");
   } else {
     console.log(`  ${extension}`);
-    printAutoloadability(settings.executablePath);
   }
 
-  console.log("\naiui intent-tool extension:");
+  console.log("\nfrozen intent-tool extension (safety net — never auto-loaded):");
   const intent = await findIntentExtension();
   switch (intent.state) {
     case "absent":
       console.log("  not available in this install (the aiui-extension package is not resolvable)");
       break;
     case "unbuilt":
-      console.log(
-        `  no artifact yet (${intent.root})\n` +
-          "  develop it:  aiui extension dev                          (writes dist-dev/)\n" +
-          "  just use it: pnpm -C packages/aiui-extension build       (writes dist/)",
-      );
+      console.log(`  no artifact (${intent.root}) — it is frozen; build only to fall back`);
       break;
     case "ready":
       console.log(`  ${intent.dir}`);
       console.log(
         intent.mode === "prod"
-          ? "  production build — no dev server needed"
-          : intent.devServer
-            ? `  dev build — its dev server is up on :${intent.devPort}` +
-              (intent.stamp ? ` (run ${intent.stamp.runId})` : "")
-            : `  dev build — NOTHING is serving :${intent.devPort}; it will load blank ` +
-              "(`aiui extension dev`)",
+          ? "  production build — load it unpacked if the safety net is ever needed"
+          : `  dev build (needs its dev server on :${intent.devPort})`,
       );
-      if (intent.legacyDevDist && intent.legacyDevDist !== intent.dir) {
-        console.log(`  note: ${intent.legacyDevDist} is a stale dev artifact from the old layout`);
-      }
-      printAutoloadability(settings.executablePath);
       break;
   }
 }
