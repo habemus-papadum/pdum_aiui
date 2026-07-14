@@ -10,6 +10,11 @@
  * peer that core consumers never pay for.
  */
 
+export type { Adoption, DurableCanvas, Release } from "./adopt";
+// adopt.ts — handing a durable resource to a disposable component, with cleanup
+// that is registered in the OWNER (a ref callback has none) and never takes a
+// resource back from a hot-swapped successor.
+export { adopt, durableCanvas } from "./adopt";
 export type { AgentTool, AgentToolkit, AgentToolkitHandle } from "./agent-tools";
 // agent-tools.ts — the WebMCP-flavored tool surface an agent drives.
 export { agentToolkit } from "./agent-tools";
@@ -60,6 +65,10 @@ export type { Scope } from "./scope";
 export { SCOPE_SEPARATOR, scope } from "./scope";
 // standard-tools.ts — the app-independent `locate` tool and `cells` reporter.
 export { registerStandardTools } from "./standard-tools";
+export type { ThrottledBox } from "./throttle";
+// throttle.ts — the imperative boundary's outbound valve: a write policy (at most
+// hz commits/sec, latest wins, the last value always lands) over any SignalBox.
+export { throttled } from "./throttle";
 export type { WorkerCancel, WorkerReply, WorkerRequest, WorkerRun } from "./worker-stream";
 // worker-stream.ts — cancellable request/stream protocol for Web Workers.
 export { fromWorker, workerStream } from "./worker-stream";

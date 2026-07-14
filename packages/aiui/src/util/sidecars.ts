@@ -101,6 +101,38 @@ const KNOWN_SIDECARS: KnownSidecar[] = [
       options: { root },
     }),
   },
+  {
+    // The remote command bar (aiui-pencil plan D5). Always on for the same
+    // reason paint is: it rides the channel's own port (no process, no extra
+    // listener), so hosting it costs nothing, and whether a remote can REACH it
+    // is the channel bind's decision, not this registry's. A page that has no
+    // mode engine simply never dials `/bar/host`, so the mounted sidecar sits
+    // idle. `--aiui-no-sidecar bar` / `sidecars.bar: false` turn it off.
+    // Same --no-publish devDependency posture as intent (see its NOTE).
+    name: "bar",
+    autoEnable: () => true,
+    descriptor: (root, resolveModule) => ({
+      name: "bar",
+      module: resolveModule("@habemus-papadum/aiui-remote-bar/sidecar"),
+      export: "barSidecar",
+      options: { root },
+    }),
+  },
+  {
+    // The remote pencil (aiui-pencil plan, phase 5): ink intent + WebRTC
+    // signaling on `/pencil`, no media (video is peer-to-peer, D1), and the
+    // built client app at GET /pencil/. Always on; `--aiui-no-sidecar pencil` /
+    // `sidecars.pencil: false` turn it off. Replaces `/paint` at phase 7.
+    // Same --no-publish devDependency posture as intent (see its NOTE).
+    name: "pencil",
+    autoEnable: () => true,
+    descriptor: (root, resolveModule) => ({
+      name: "pencil",
+      module: resolveModule("@habemus-papadum/aiui-pencil/sidecar"),
+      export: "pencilSidecar",
+      options: { root },
+    }),
+  },
 ];
 
 /**

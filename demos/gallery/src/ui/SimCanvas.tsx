@@ -7,8 +7,7 @@
  * this file all day — the morphogenesis keeps cooking.
  *
  */
-import { onCleanup } from "solid-js";
-import { brushRadius, sim, simCanvas, speed } from "../model/store";
+import { brushRadius, sim, simCanvas, simSurface, speed } from "../model/store";
 
 export function SimCanvas() {
   const uv = (e: PointerEvent): { x: number; y: number } => {
@@ -39,27 +38,27 @@ export function SimCanvas() {
     sim.engine.setBrush(null);
   };
 
-  // Solid 2.0 dropped onMount; the ref callback runs when the element exists,
-  // which is exactly when the durable canvas can be adopted.
-  let myHost: HTMLDivElement | undefined;
-  const adopt = (host: HTMLDivElement) => {
-    myHost = host;
-    host.appendChild(simCanvas);
-    simCanvas.addEventListener("pointerdown", down);
-    simCanvas.addEventListener("pointermove", move);
-    simCanvas.addEventListener("pointerup", up);
-    simCanvas.addEventListener("pointercancel", up);
+  // `simSurface.adopt` parents the durable canvas, registers this component's
+  // listeners, and — the part every hand-rolled copy of this had to re-derive —
+  // releases them without taking the canvas back from a hot-swapped successor.
+  const paint_events = (canvas: HTMLCanvasElement) => {
+    canvas.addEventListener("pointerdown", down);
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+    return () => {
+      canvas.removeEventListener("pointerdown", down);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointercancel", up);
+    };
   };
-  onCleanup(() => {
-    simCanvas.removeEventListener("pointerdown", down);
-    simCanvas.removeEventListener("pointermove", move);
-    simCanvas.removeEventListener("pointerup", up);
-    simCanvas.removeEventListener("pointercancel", up);
-    // HMR ordering hazard: the replacement component may have ALREADY adopted
-    // the canvas into its own host by the time this cleanup runs. Un-parent
-    // only if the canvas is still ours — never take it from the successor.
-    if (simCanvas.parentElement === myHost) simCanvas.remove();
-  });
 
-  return <div class="sim-host" ref={adopt} title="drag to paint chemical V into the field" />;
+  return (
+    <div
+      class="sim-host"
+      ref={simSurface.adopt(paint_events)}
+      title="drag to paint chemical V into the field"
+    />
+  );
 }
