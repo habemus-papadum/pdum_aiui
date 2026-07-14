@@ -33,8 +33,9 @@ import {
   type TranscriptWord,
 } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import { LiveDiffText } from "@habemus-papadum/aiui-viz/modal";
-import { createEffect, createMemo, For, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { ChannelLanes } from "../lanes";
+import { type EditorMode, SEGMENT_EDITOR_STYLES, SegmentEditor } from "./segment-editor";
 
 export const TURN_PREVIEW_STYLES = `
   .aiui-tp { margin: 8px 12px; font: 12px system-ui; max-width: 460px; }
@@ -78,7 +79,14 @@ export const TURN_PREVIEW_STYLES = `
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .aiui-tp-peek-text { color: #e8e8ea; white-space: pre-wrap; word-break: break-word;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
-`;
+  .aiui-tp-textwrap { position: relative; display: inline; }
+  .aiui-tp-edit { color: #8ab4f8; }
+  .aiui-tp-add { cursor: pointer; background: transparent; font: inherit; color: inherit;
+    opacity: 0.7; margin-top: 4px; }
+  .aiui-tp-add:hover { opacity: 1; }
+`
+  // The segment editor mounts from this pane; its styles travel with ours.
+  .concat(SEGMENT_EDITOR_STYLES);
 
 /** A URL as path+query+hash — the origin is noise inside one tab's preview. */
 export function shortRoute(url: string | undefined): string {
@@ -188,6 +196,10 @@ function createPeek(): {
 export function TurnPreview(props: { lanes: ChannelLanes }) {
   const peek = createPeek();
   const engine = () => props.lanes.engine;
+  /** The segment editor's door (undefined = closed). */
+  const [editing, setEditing] = createSignal<EditorMode | undefined>(undefined, {
+    ownedWrite: true,
+  });
   /** `threadOpen` is a plain engine property; every change to it is an engine
    * EVENT, so reading it under the cursor is what makes it reactive. */
   const threadOpen = createMemo(() => {
@@ -463,20 +475,59 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
               // so the row shape is decided once; content stays reactive
               // through the key-scoped memos inside each row.
               const p = untrack(piece);
-              return p.item.kind === "shot"
-                ? shotRow(p.key)
-                : p.item.kind === "app-selection"
-                  ? selectionRow(p.key, false)
-                  : p.item.kind === "code-selection"
-                    ? selectionRow(p.key, true)
-                    : p.item.kind === "navigation"
-                      ? navRow(p.key)
-                      : p.words?.some((w) => w.logprob !== undefined)
-                        ? heatRow(p.key)
-                        : textRow(p.key);
+              if (p.item.kind === "shot") {
+                return shotRow(p.key);
+              }
+              if (p.item.kind === "app-selection") {
+                return selectionRow(p.key, false);
+              }
+              if (p.item.kind === "code-selection") {
+                return selectionRow(p.key, true);
+              }
+              if (p.item.kind === "navigation") {
+                return navRow(p.key);
+              }
+              const inner = p.words?.some((w) => w.logprob !== undefined)
+                ? heatRow(p.key)
+                : textRow(p.key);
+              const segment = p.item.segment;
+              if (segment === undefined) {
+                return inner;
+              }
+              // A text row is EDITABLE: the hover ✎ opens the segment editor
+              // (one segment at a time — the owner's edit unit).
+              return (
+                <span class="aiui-tp-wrap aiui-tp-textwrap">
+                  {inner}
+                  <button
+                    type="button"
+                    class="aiui-tp-x aiui-tp-edit"
+                    title={`edit segment ${segment} (fix text, delete items, paste)`}
+                    onClick={() => setEditing({ kind: "segment", segment })}
+                  >
+                    ✎
+                  </button>
+                </span>
+              );
             }}
           </For>
         </div>
+      </Show>
+      <Show when={threadOpen()}>
+        <button
+          type="button"
+          class="aiui-tp-chip aiui-tp-add"
+          data-testid="add-to-turn"
+          title="add text or images to the end of the turn (paste works)"
+          onClick={() => setEditing({ kind: "append" })}
+        >
+          ＋ add
+        </button>
+      </Show>
+      <Show when={editing()} keyed>
+        {(mode) => (
+          <SegmentEditor lanes={props.lanes} mode={mode} onClose={() => setEditing(undefined)} />
+        )}
       </Show>
     </details>
   );

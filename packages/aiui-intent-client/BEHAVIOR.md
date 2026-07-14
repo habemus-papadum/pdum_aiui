@@ -153,6 +153,26 @@ availability is a gate, not a hint (above) — the key and the agent write are r
 The reverse (this client armed, the frozen one refusing) is not enforced; the frozen client is
 frozen. In practice one drives, the other is the safety net.
 
+## The segment editor (selective fixing of a turn)
+
+**One segment at a time** (a hands-free session / one push-to-talk hold), in a POPUP — never
+inline in the preview. The popup shows the segment's text with its interleaved items as **atomic
+emoji** (non-editable spans carrying their marker): they move whole or die. **Moves are
+ignored** — positions belong to the compiler's timestamp interleave; **deleting one is a delete
+command** (the same drop verbs as the preview's ✕). Apply re-timestamps the new text against the
+old words (kept words keep their MEASURED times — that is what keeps shots anchored through an
+edit; inserts interpolate; a total rewrite spreads over the original span) and speaks
+`segment-replace`; the pipeline reflows the images. The original transcript stays in the stream
+for the trace.
+
+**Paste** works in the same surface: text pastes plain (or as Markdown when the clipboard's HTML
+gains anything); an image paste drops an atom at the cursor and, on Apply, becomes a shot with
+`origin: "paste"` — lowered as `<pasted-image …/>`, never "screenshot" — anchored by a synthetic
+`takenAt` from the words around it, so the compiler's own interleave places it. "＋ add" at the
+preview's tail is the same editor in append mode: text becomes a contribution; images anchor at
+the end. A typed contribution has no talk window, so its mid-segment pastes keep arrival order
+(honest limitation). The popup claims Esc ahead of the ladder while open; ⌘⏎ applies.
+
 ## Instrumented pages (aiui support)
 
 Pages announce `window.__AIUI__` instrumentation as a world fact (`ctx.aiuiPage`, the `page`

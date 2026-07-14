@@ -61,6 +61,15 @@ them bind in P2:
 | config strip persistence | ✅ AUTO-SAVE (owner 2026-07-14, superseding the session-layering DECIDE): every control change persists on its own (debounced effect, config-store.ts `installConfigAutoSave`; store key `aiui2.config`); the save/reset verbs are gone |
 | advanced raw-JSON config panel (G) | **DECIDE** (default: defer past P5 — agent `set_config` covers the need) |
 
+## The segment editor (owner spec 2026-07-14 — new, never in the old client)
+
+| Row | Status |
+| --- | --- |
+| fix ONE transcript segment in a popup; atoms move-whole-or-die; moves ignored, deletes = drop commands | ✅ ui/segment-editor.tsx (contenteditable island, atoms with exact identity via data-marker) + segment-editor.test |
+| `segment-replace` + best-effort retiming; the pipeline reflows images | ✅ intent-pipeline segment-replace (multi-pass fold) + edit/retime.ts (wordDiff-anchored; kept words keep measured times) + tests both sides |
+| paste text (plain / rich→Markdown) mid-segment and at the end of the turn | ✅ editor paste handler + edit/html-md.ts (best-effort converter, plain fallback) + append mode (`contribute`) |
+| paste images mid-segment / at the end; lowered as "pasted image", never "screenshot" | ✅ shot `origin:"paste"` end to end (event → fold → `<pasted-image>`/text label) + synthetic takenAt anchoring; typed contributions keep arrival order (no talk window — honest limitation) |
+
 ## The bar + status pills (owner review 2026-07-13 — conscious divergence, improvement)
 
 | Row | Status |
