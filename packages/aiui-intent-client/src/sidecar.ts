@@ -102,23 +102,46 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
       // Vite resolves this package's own vite.config.ts (solid plugin et al).
       // `base` scopes the middlewares to /intent/* — requests outside the
       // base fall through to the channel's own routes, per the sidecar rule.
+      //
+      // HMR rides the channel's OWN port (the one-port posture — no second
+      // listener). Vite in middleware mode needs a server to hang its upgrade
+      // listener on, so it gets a never-listening SHIM: the channel offers
+      // unclaimed upgrades to sidecars (web.ts), ours forwards `/intent/hmr`
+      // into the shim, and vite completes the handshake from there. (This was
+      // `hmr: false` before — the page's vite client then "connected" to
+      // whatever answered its default port, and no update ever flowed: edits
+      // needed a manual reload, which is exactly the loop HMR exists to kill.)
       const { createServer } = await import("vite");
+      const { createServer: createHttpServer } = await import("node:http");
+      const hmrShim = createHttpServer();
       const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+      // Vite composes the ws path as base + hmr.path — hand it the RELATIVE
+      // piece or the client dials /intent/intent/hmr (measured; the constants
+      // are visible in the served /@vite/client).
+      const HMR_PATH = `${INTENT_PREFIX}/hmr`;
       const vite = await createServer({
         root: packageRoot,
         base: `${INTENT_PREFIX}/`,
         appType: "mpa",
-        server: { middlewareMode: true, hmr: false },
+        server: { middlewareMode: true, hmr: { server: hmrShim, path: "hmr" } },
         clearScreen: false,
         logLevel: "warn",
       });
       app.use(vite.middlewares);
-      ctx.log(`intent client mounted at ${INTENT_PREFIX}/ (vite middleware, source-first)`);
+      ctx.log(`intent client mounted at ${INTENT_PREFIX}/ (vite middleware, source-first, HMR)`);
       return {
-        handleUpgrade: (req, socket, head) => cdp.handleUpgrade(req, socket, head),
+        handleUpgrade: (req, socket, head) => {
+          const path = (req.url ?? "").split("?")[0];
+          if (path === HMR_PATH) {
+            hmrShim.emit("upgrade", req, socket, head);
+            return true;
+          }
+          return cdp.handleUpgrade(req, socket, head);
+        },
         dispose: async () => {
           cdp.dispose();
           await vite.close();
+          hmrShim.close();
         },
       };
     },
