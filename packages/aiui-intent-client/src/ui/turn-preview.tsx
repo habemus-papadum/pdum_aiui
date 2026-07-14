@@ -64,7 +64,7 @@ export const TURN_PREVIEW_STYLES = `
     padding: 1px 8px; display: inline-block; vertical-align: middle; white-space: nowrap; }
   .aiui-tp-sel-app { color: #8ab4f8; }
   .aiui-tp-sel-code { color: #a5c8ff; }
-  .aiui-tp-nav { color: #9aa0aa; }
+  .aiui-tp-nav { color: #7ee0a3; }
   /* Peeks: fixed-position and body-attached — the pane scrolls, so an
      absolutely-positioned child would clip (the overlay's measured lesson). */
   .aiui-tp-peek-img { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
