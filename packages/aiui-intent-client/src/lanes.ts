@@ -402,6 +402,14 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       });
       status("drag a region on the page (esc cancels)");
     },
+    armJump: (tab) => {
+      // One-shot and fully page-side: click opens the picker, commit opens
+      // `vscode://file/…` in the page — nothing reports back to the turn.
+      void host.transport.requestPage(tab, "jump", { arm: true }).catch(() => {
+        toast("could not arm jump-to-editor on this tab");
+      });
+      status("click an element to jump to its source (esc cancels)");
+    },
     takeShot: (tab) => {
       void (async () => {
         const takenAt = Date.now();

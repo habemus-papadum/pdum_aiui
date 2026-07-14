@@ -26,6 +26,7 @@ const noopLanes: IntentLanes = {
   cancelTurn: () => {},
   takeShot: () => {},
   armRegion: () => {},
+  armJump: () => {},
   addSelection: () => {},
   clearInk: () => {},
   startTalk: () => {},

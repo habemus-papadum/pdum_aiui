@@ -438,6 +438,22 @@ function pageBootstrap(version: string): void {
             );
           return { ok: true };
         }
+        case "jump": {
+          // Jump-to-editor (the `j` pick mode) — the heavy half lives in the
+          // evaluated bundle (jump-mode.ts); the bus delivers it before arming.
+          const ink = w.__aiuiIntentInk as
+            | { armJump?: () => void; disarmJump?: () => void }
+            | undefined;
+          if ((payload as { arm?: boolean } | undefined)?.arm === true) {
+            if (ink?.armJump === undefined) {
+              return { error: "jump surface not delivered" };
+            }
+            ink.armJump();
+          } else {
+            ink?.disarmJump?.();
+          }
+          return { ok: true };
+        }
         case "locate": {
           return null; // instrumented-page jump: anticipated, post-parity
         }

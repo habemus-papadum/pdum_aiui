@@ -31,6 +31,7 @@ function fakeLanes(log: string[]): IntentLanes {
     cancelTurn: entry("cancelTurn"),
     takeShot: entry("takeShot"),
     armRegion: entry("armRegion"),
+    armJump: entry("armJump"),
     addSelection: entry("addSelection"),
     clearInk: entry("clearInk"),
     startTalk: entry("startTalk"),
@@ -187,6 +188,23 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.bus.log.some((line) => line.startsWith("page:ink@9"))).toBe(true);
     r.client.dispatch("selection");
     expect(r.lanes).toContain("addSelection:9");
+  });
+
+  it("jump lights only on aiui-instrumented pages — the gate IS the detection", async () => {
+    // Jump-to-editor reads the page's stamps and source root; a page without
+    // `__AIUI__` has nothing to jump to, so the cap grays (owner, 2026-07-15).
+    // A page act: no grant involved, follows the tab in view.
+    const r = makeRig();
+    grantAndOpen(r);
+    expect(r.client.canDispatch("jump")).toBe(false);
+
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
+    expect(r.client.canDispatch("jump")).toBe(true);
+    r.client.dispatch("jump");
+    expect(r.lanes).toContain("armJump:7");
+
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: false });
+    expect(r.client.canDispatch("jump")).toBe(false);
   });
 });
 

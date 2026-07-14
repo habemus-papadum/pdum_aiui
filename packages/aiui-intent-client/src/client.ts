@@ -41,6 +41,9 @@ export interface IntentLanes {
   /** Arm a one-shot region drag on the page (the `a` area shot); the page
    * reports the drag as a `regionDrag` event and the lanes crop + upload. */
   armRegion(tab: number): void;
+  /** Arm the one-shot jump-to-editor pick (the `j` gesture; aiui pages only —
+   * the picker and the `vscode://` open live entirely in the page). */
+  armJump(tab: number): void;
   /** Pull the page's current selection into the turn. */
   addSelection(tab: number): void;
   /** Clear the page's ink strokes (the ONLY clearer besides disarm). */
@@ -147,6 +150,13 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         // otherwise); the drag itself happens on the granted tab in view.
         if (event.before.phase === "turn" && grantedTab !== undefined) {
           lanes.armRegion(grantedTab);
+        }
+        break;
+      case "jump":
+        // A page act (spec.available gates on the aiui page) — follows the
+        // tab in view, no pixels, no grant.
+        if (event.before.phase === "turn" && activeTab !== undefined) {
+          lanes.armJump(activeTab);
         }
         break;
       case "selection":

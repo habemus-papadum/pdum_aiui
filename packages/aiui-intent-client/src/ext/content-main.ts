@@ -14,10 +14,15 @@
  *     callId. The registry installs whenever the app's agentToolkit first
  *     runs — possibly after us — so a light poll subscribes once it appears,
  *     then stops.
+ *  3. **Jump-to-editor** (jump-mode.ts): the picker reads
+ *     `__AIUI__.sourceRoot` and `__aiuiCells` — main-world globals — so the
+ *     mode arms HERE, on an `aiuiJump` message from the isolated world.
  *
  * Code in the page's realm can be seen — and broken — by the page, so
  * everything here is defensive and small.
  */
+
+import { armJump, disarmJump } from "../page/jump-mode";
 
 interface ToolsRegistry {
   list(): Array<{
@@ -81,6 +86,15 @@ const poll = setInterval(() => {
 // back the same way, correlated by callId.
 window.addEventListener("message", (event) => {
   if (event.source !== window) {
+    return;
+  }
+  const jump = (event.data as { aiuiJump?: { arm?: boolean } })?.aiuiJump;
+  if (jump !== undefined) {
+    if (jump.arm === true) {
+      armJump();
+    } else {
+      disarmJump();
+    }
     return;
   }
   const call = (

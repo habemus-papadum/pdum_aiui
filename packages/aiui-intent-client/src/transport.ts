@@ -26,6 +26,10 @@ export type PageCapability =
   | "locate"
   /** Arm a ONE-SHOT rubber-band drag on the page (the `a` area shot). */
   | "region"
+  /** Arm the ONE-SHOT jump-to-editor pick (the `j` gesture, aiui pages):
+   * payload `{arm}` — click opens the in-page picker, commit opens
+   * `vscode://file/…`. Fully page-side; nothing reports back. */
+  | "jump"
   /** Invoke one page tool from `__AIUI__.tools` (the T2 bridge): payload
    * `{ns, name, args, callId}`; the page answers with a `toolsResult`
    * page EVENT (async — the call may take a while), not a return value. */

@@ -169,6 +169,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     shot: () => null,
     /** a — arm a one-shot region drag on the page (rubber band → cropped shot). */
     region: () => null,
+    /** j — arm the one-shot jump-to-editor pick (aiui pages only). */
+    jump: () => null,
     selection: () => null,
     clear: () => null,
   },
@@ -235,6 +237,10 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // grays and its tooltip points at tweak mode instead.
     selection: (s, ctx) =>
       s.phase === "turn" && ctx.activeTab !== undefined && ctx.selectionPresent,
+    // Jump-to-editor is a PAGE act on instrumented pages only: the picker
+    // reads the aiui stamps and source root, so a page without `__AIUI__`
+    // grays the cap — the gate IS the feature detection (owner, 2026-07-15).
+    jump: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined && ctx.aiuiPage,
     clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined,
   },
 };

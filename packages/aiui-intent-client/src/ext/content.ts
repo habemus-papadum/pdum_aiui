@@ -369,6 +369,16 @@ serveRelay(PAGE_ADDRESS, {
     window.postMessage({ aiuiToolsCall: payload }, "*");
     return { ok: true };
   },
+  jump: (payload) => {
+    // Jump-to-editor runs in the MAIN world too: the picker needs
+    // `__AIUI__.sourceRoot` and `__aiuiCells`, invisible from this isolated
+    // world. content-main.ts hosts it (see jump-mode.ts).
+    window.postMessage(
+      { aiuiJump: { arm: (payload as { arm?: boolean } | null)?.arm === true } },
+      "*",
+    );
+    return { ok: true };
+  },
   locate: () => null, // instrumented-page jump: anticipated, post-parity
 });
 

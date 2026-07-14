@@ -175,10 +175,15 @@ the end. A typed contribution has no talk window, so its mid-segment pastes keep
 
 ## Instrumented pages (aiui support)
 
-Pages announce `window.__AIUI__` instrumentation as a world fact (`ctx.aiuiPage`, the `page`
+Pages announce `window.__AIUI__` instrumentation as a world fact (`ctx.aiuiPage`, the `aiui`
 pill). Instrumented pages answer the `locate` capability (screenshot rectangle → components →
-source) — the seam the overlay's jump-to-VS-Code mode will ride when it lands (post-parity;
-it was never in the old extension).
+source), and they light the **jump** act (landed 2026-07-15; it was never in the old
+extension): `j` in a turn arms a ONE-SHOT pick on the page — move highlights the nearest
+stamped element, click opens the in-page picker (stamped element ancestors + containing cells
+at their definition sites, the overlay's interaction contract), commit opens
+`vscode://file/…`. Fully page-side (src/page/jump-mode.ts; the CDP tier evaluates it with the
+ink bundle, MV3 runs it in the MAIN world — the source root and cell registry live there).
+The gate IS the feature detection: no `__AIUI__`, gray cap.
 
 ## Status pills (permanent expert strip)
 

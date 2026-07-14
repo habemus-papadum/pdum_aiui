@@ -77,6 +77,7 @@ const consoleLanes: IntentLanes = {
   cancelTurn: () => console.info("[lanes] cancelTurn"),
   takeShot: (tab) => console.info("[lanes] takeShot", tab),
   armRegion: (tab) => console.info("[lanes] armRegion", tab),
+  armJump: (tab) => console.info("[lanes] armJump", tab),
   addSelection: (tab) => console.info("[lanes] addSelection", tab),
   clearInk: (tab) => console.info("[lanes] clearInk", tab),
   startTalk: (mode) => console.info("[lanes] startTalk", mode),

@@ -50,6 +50,7 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
           },
           { command: "shot", hint: { key: "s", label: "shot", icon: "🖼" } },
           { command: "region", hint: { key: "a", label: "area", icon: "⛶" } },
+          { command: "jump", hint: { key: "j", label: "jump", icon: "🎯" } },
           {
             command: "selection",
             hint: { key: "p", label: "selection", icon: "📋" },

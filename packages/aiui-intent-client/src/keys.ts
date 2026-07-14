@@ -65,6 +65,13 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       hint: { key: "a", label: "area shot", icon: "⛶" },
     },
     {
+      // 'j' = JUMP (owner, 2026-07-15): one-shot jump-to-editor pick on
+      // aiui-instrumented pages — click an element, pick a row, VS Code opens.
+      keys: ["j", "J"],
+      down: onPress("jump"),
+      hint: { key: "j", label: "jump to editor", icon: "🎯" },
+    },
+    {
       keys: ["p", "P"],
       down: onPress("selection"),
       hint: { key: "p", label: "pull selection", icon: "📋" },

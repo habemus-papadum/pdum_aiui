@@ -215,10 +215,10 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     capability: PageCapability | "ring",
     payload?: unknown,
   ): Promise<unknown> => {
-    if (capability === "ink" || capability === "region") {
-      // The region drag's locator rides the same evaluated bundle as the ink
-      // surface — deliver it before arming so instrumented pages can name
-      // the components the drag frames.
+    if (capability === "ink" || capability === "region" || capability === "jump") {
+      // The region drag's locator and the jump picker ride the same evaluated
+      // bundle as the ink surface — deliver it before arming so instrumented
+      // pages can name components / open the picker.
       await ensureInk(page);
     }
     const result = await evaluate(page.sessionId, invoke(capability, payload));
