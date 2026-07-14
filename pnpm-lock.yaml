@@ -540,7 +540,14 @@ importers:
         version: 9.6.1
 
   packages/aiui-viz:
+    dependencies:
+      vite:
+        specifier: '>=6'
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
     devDependencies:
+      '@babel/core':
+        specifier: ^7.29.0
+        version: 7.29.7
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev45.0
         version: 1.33.1-dev45.0
@@ -550,6 +557,9 @@ importers:
       '@solidjs/web':
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
+      '@types/babel__core':
+        specifier: ^7.20.5
+        version: 7.20.5
       '@uwdata/mosaic-plot':
         specifier: ^0.28.1
         version: 0.28.1

@@ -32,6 +32,8 @@
  * failure is swallowed so it never disturbs the page.
  */
 
+import { ensureAiuiGlobal } from "./aiui-global";
+
 export interface AgentTool {
   name: string;
   description: string;
@@ -95,10 +97,10 @@ const readyWired = new Set<string>();
  */
 function forwardToOverlay(ns: string, h: AgentToolkitHandle): void {
   try {
-    const bridge =
-      typeof window === "undefined"
-        ? undefined
-        : (window as unknown as { __AIUI__?: { tools?: OverlayToolsBridge } }).__AIUI__?.tools;
+    // The global's registry ALWAYS exists (aiui-global.ts — production
+    // included, since the 2026-07-14 restructure); the old overlay's ws
+    // bridge, where still wired, satisfies the same structural contract.
+    const bridge = ensureAiuiGlobal()?.tools as OverlayToolsBridge | undefined;
     if (!bridge?.register) {
       return;
     }

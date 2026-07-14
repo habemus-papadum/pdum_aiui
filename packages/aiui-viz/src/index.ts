@@ -13,6 +13,12 @@
 export type { AgentTool, AgentToolkit, AgentToolkitHandle } from "./agent-tools";
 // agent-tools.ts — the WebMCP-flavored tool surface an agent drives.
 export { agentToolkit } from "./agent-tools";
+export {
+  type AiuiGlobal,
+  type AiuiPageTool,
+  type AiuiToolsRegistry,
+  ensureAiuiGlobal,
+} from "./aiui-global";
 export type { Cell, CellCompute, CellContext, CellOptions, CellState } from "./cell";
 // cell.ts — Observable-style async dataflow cells for SolidJS 2.0.
 export {
@@ -24,7 +30,6 @@ export {
 } from "./cell";
 // cell-view.tsx — the notebook-feel wrapper (spinner, error+retry, keep-latest).
 export { CellView, ProgressStripe, Spinner } from "./cell-view";
-
 export type {
   ActionSpec,
   ControlBox,
