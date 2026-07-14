@@ -413,17 +413,32 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
     );
   };
 
-  /** A navigation boundary: a ⇢ chip at its stream position — a marker, not
-   * content, never retractable (the page really did change). */
+  /** A navigation boundary: a bare ⇢ chip at its stream position — a marker,
+   * not content, never retractable (the page really did change). The chip
+   * carries NO data (owner, 2026-07-14: icon + color only); the from → to
+   * detail lives in the instant hover peek — the native title tooltip's
+   * built-in delay is exactly the slowness the peek exists to beat. */
   const navRow = (key: string) => {
     const current = byKey(key);
+    let chip: HTMLSpanElement | undefined;
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: hover peek is enhancement only — the title attribute carries the content accessibly
       <span
         class="aiui-tp-chip aiui-tp-nav"
         data-testid="nav-chip"
+        ref={(el: HTMLSpanElement) => {
+          chip = el;
+        }}
         title={`navigated ${shortRoute(current()?.item.from)} → ${shortRoute(current()?.item.to)}`}
+        onMouseEnter={() => {
+          const item = current()?.item;
+          if (item !== undefined && chip !== undefined) {
+            peek.showText(chip, "navigation", `${item.from ?? "?"}\n→ ${item.to ?? "?"}`);
+          }
+        }}
+        onMouseLeave={() => peek.hide()}
       >
-        ⇢ {shortRoute(current()?.item.to)}
+        ⇢
       </span>
     );
   };

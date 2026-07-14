@@ -183,8 +183,8 @@ describe("TurnPreview — the accumulator's live behaviors", () => {
     expect(thumb?.src).toContain("data:image/png");
     expect(root.querySelector("[data-testid=selection-chip]")?.textContent).toContain("⌖ sel_1");
     const nav = root.querySelector("[data-testid=nav-chip]");
-    expect(nav?.textContent).toContain("⇢ /to?q=1"); // origin is noise in-preview
-    expect(nav?.getAttribute("title")).toContain("/from");
+    expect(nav?.textContent?.trim()).toBe("⇢"); // a chip carries NO data — icon only
+    expect(nav?.getAttribute("title")).toContain("/from"); // the data rides the hover
 
     // The hover ✕ retracts through the WIRE engine — the same drop verbs the
     // overlay used, now living behind this repo's component.
