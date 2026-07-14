@@ -165,7 +165,7 @@ stale-ring boot broadcast, replayed-armed GC.
 
 | Row | Status |
 | --- | --- |
-| turn preview = composeIntent rows (the literal lowering input) | ✅ panes.tsx |
+| turn preview = composeIntent rows (the literal lowering input) | ✅ ui/turn-preview.tsx — the overlay's full accumulator UX, LIVING IN THIS REPO as a first-class Solid component (owner 2026-07-14): shot thumbnails + hover peek + ✕ retraction through the wire engine's drop verbs; ⌖/⧉ selection pills with loc+text peeks; ⇢ navigation chips; PER-TURN RESET (no open thread renders nothing — the haunted-preview bug, pinned in panes.test) |
 | word-DIFF flash as transcript deltas revise (the overlay's LiveDiffText, modal kit) | ✅ panes.tsx TurnPane — the overlay's keyed-`<For>` + LiveDiffText-island structure, ported onto the lanes cursor; appends never animate, revisions flash and settle (panes.test "a REVISION flashes the word-diff") |
 | logprob confidence heat on finals (premium tier) | ✅ panes.tsx heat rows — per-word tint normalized against the TURN's own logprob range; the `:w` key suffix re-keys a row when its words arrive (the overlay's live lesson, kept as a comment + test) |
 | rich trace viewer | ✅ ui/trace-pane.tsx `RichTracePane` — the shared debug-ui `TracesPane` (the SAME surface `/__aiui/debug` mounts: trace list, follow-newest, prompt hero, stage cards) embedded as a Solid island in BOTH entries; polls only while the disclosure is open. No rewrite needed — the owner authorized one, but the viewer was already mountable; nothing forked. **Verified live in the extension panel**: pulled the channel's list and live-followed a real trace |

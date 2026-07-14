@@ -1,19 +1,24 @@
 // @vitest-environment jsdom
 /**
- * panes.test.tsx — the panes' live behaviors, each a bug shape:
+ * panes.test.tsx — the preview's and trace's live behaviors, each a bug shape:
  *  - the trace count that sat at zero on a live turn (reads must go through
  *    the cursor);
  *  - the preview's revision flash (appends never animate, rewrites diff);
  *  - the heat row (a final carrying logprobs re-keys its row — the overlay's
  *    live lesson: without the `:w` key suffix the plain row survives the
- *    final and the heat branch is unreachable).
+ *    final and the heat branch is unreachable);
+ *  - the RESET rule (the accumulator is per-turn: closing the thread empties
+ *    the preview — found live as navigations haunting a closed turn);
+ *  - the chips: shots as thumbnails, selections as pills, navigations as ⇢
+ *    route markers (the overlay's visual language, now living here).
  */
 import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import { render } from "@solidjs/web";
 import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ChannelLanes } from "../lanes";
-import { TracePane, TurnPane } from "./panes";
+import { TracePane } from "./panes";
+import { TurnPreview } from "./turn-preview";
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -26,20 +31,45 @@ afterEach(() => {
 function fakeThread() {
   const events: IntentEvent[] = [];
   const [rev, setRev] = createSignal(0);
+  const dropped: string[] = [];
+  const engine = {
+    events,
+    // What lanes.ts's wire engine really exposes: a plain property the
+    // component must read UNDER the cursor to see change.
+    get threadOpen() {
+      for (let i = events.length - 1; i >= 0; i--) {
+        if (events[i].type === "thread-open") {
+          return true;
+        }
+        if (events[i].type === "thread-close") {
+          return false;
+        }
+      }
+      return false;
+    },
+    dropShot: (marker: string) => dropped.push(`shot:${marker}`),
+    appSelectionDrop: (marker?: string) => dropped.push(`sel:${marker}`),
+    dropCodeSelection: (marker: string) => dropped.push(`code:${marker}`),
+  };
   const lanes = {
     eventsRev: rev,
     threadEvents: () => {
       void rev();
-      return [...events];
+      for (let i = events.length - 1; i >= 0; i--) {
+        if (events[i].type === "thread-open") {
+          return events.slice(i);
+        }
+      }
+      return [];
     },
-    engine: { events },
+    engine,
   } as unknown as ChannelLanes;
   const push = (...next: IntentEvent[]) => {
     events.push(...next);
     setRev((n) => n + 1);
     flush();
   };
-  return { lanes, push };
+  return { lanes, push, dropped };
 }
 
 const open = (): IntentEvent[] => [
@@ -47,12 +77,12 @@ const open = (): IntentEvent[] => [
   { at: 1, type: "thread-open", trigger: "explicit" },
 ];
 
-describe("TurnPane — the preview's live text", () => {
+describe("TurnPreview — the accumulator's live behaviors", () => {
   it("appends render clean; a REVISION flashes the word-diff and settles", () => {
     const { lanes, push } = fakeThread();
     const root = document.createElement("div");
     document.body.append(root);
-    dispose = render(() => <TurnPane lanes={lanes} />, root);
+    dispose = render(() => <TurnPreview lanes={lanes} />, root);
 
     push(...open(), { at: 2, type: "talk-start", segment: 1 });
     push({ at: 3, type: "transcript-delta", segment: 1, text: "make the panel" });
@@ -72,7 +102,7 @@ describe("TurnPane — the preview's live text", () => {
     const { lanes, push } = fakeThread();
     const root = document.createElement("div");
     document.body.append(root);
-    dispose = render(() => <TurnPane lanes={lanes} />, root);
+    dispose = render(() => <TurnPreview lanes={lanes} />, root);
 
     push(...open(), { at: 2, type: "talk-start", segment: 1 });
     push({ at: 3, type: "transcript-delta", segment: 1, text: "make it wider" });
@@ -99,6 +129,68 @@ describe("TurnPane — the preview's live text", () => {
     const byText = new Map(spans.map((s) => [s.textContent, s.style.background]));
     expect(byText.get("wider")).toContain("rgba(255, 92, 135");
     expect(byText.get("make") ?? "").toBe("");
+  });
+
+  it("RESETS when the thread closes — an abandoned turn stops haunting the preview", () => {
+    const { lanes, push } = fakeThread();
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = render(() => <TurnPreview lanes={lanes} />, root);
+
+    push(...open(), { at: 2, type: "transcript-delta", segment: 1, text: "hello there" });
+    expect(root.textContent).toContain("hello there");
+
+    // Abandon. The accumulator is per-turn: nothing may survive the close —
+    // found live as navigation chips piling into a preview whose turn died.
+    push({ at: 3, type: "thread-close", reason: "cancel" });
+    expect(root.textContent).not.toContain("hello there");
+    expect(root.textContent).toContain("no open turn");
+    push({ at: 4, type: "navigation", from: "https://a.test/x", to: "https://a.test/y" });
+    expect(root.textContent).toContain("turn preview — 0 items");
+
+    // A NEW turn starts clean.
+    push({ at: 5, type: "thread-open", trigger: "explicit" });
+    expect(root.textContent).toContain("empty turn (send would cancel)");
+  });
+
+  it("renders the overlay's chips: shot thumbnail, selection pill, ⇢ navigation", () => {
+    const { lanes, push, dropped } = fakeThread();
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = render(() => <TurnPreview lanes={lanes} />, root);
+
+    push(
+      ...open(),
+      {
+        at: 2,
+        type: "shot",
+        marker: "shot_1",
+        rect: { x: 0, y: 0, w: 8, h: 8 },
+        components: [],
+        thumb: "data:image/png;base64,x",
+      },
+      {
+        at: 3,
+        type: "app-selection",
+        marker: "sel_1",
+        text: "the selected words",
+        url: "https://a.test/",
+      },
+      { at: 4, type: "navigation", from: "https://a.test/from", to: "https://a.test/to?q=1" },
+    );
+
+    const thumb = root.querySelector("[data-testid=shot-chip] img") as HTMLImageElement;
+    expect(thumb?.src).toContain("data:image/png");
+    expect(root.querySelector("[data-testid=selection-chip]")?.textContent).toContain("⌖ sel_1");
+    const nav = root.querySelector("[data-testid=nav-chip]");
+    expect(nav?.textContent).toContain("⇢ /to?q=1"); // origin is noise in-preview
+    expect(nav?.getAttribute("title")).toContain("/from");
+
+    // The hover ✕ retracts through the WIRE engine — the same drop verbs the
+    // overlay used, now living behind this repo's component.
+    (root.querySelector("[data-testid=shot-chip] .aiui-tp-x") as HTMLButtonElement)?.click();
+    (root.querySelector("[data-testid=selection-chip] .aiui-tp-x") as HTMLButtonElement)?.click();
+    expect(dropped).toEqual(["shot:shot_1", "sel:sel_1"]);
   });
 });
 

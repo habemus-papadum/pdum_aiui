@@ -27,9 +27,10 @@ import { connectSessionBus, probeChannel, resolveChannelPort } from "../session"
 import type { IntentHost } from "../transport";
 import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./channel-header";
 import { Panel } from "./panel";
-import { PANES_STYLES, TracePane, TurnPane } from "./panes";
+import { PANES_STYLES, TracePane } from "./panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "./shell";
 import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
+import { TURN_PREVIEW_STYLES, TurnPreview } from "./turn-preview";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined, {
@@ -320,7 +321,9 @@ if (root === null) {
 render(
   () => (
     <>
-      <style>{PANES_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}</style>
+      <style>
+        {PANES_STYLES + TURN_PREVIEW_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}
+      </style>
       {/* The decided order (owner, 2026-07-14): channel first, then the bar,
           config, pills (inside Panel), the turn preview, the traces, and last
           the debugging surfaces that will eventually go. */}
@@ -347,7 +350,7 @@ render(
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
       />
       <Show when={lanes} keyed>
-        {(l) => <TurnPane lanes={l} />}
+        {(l) => <TurnPreview lanes={l} />}
       </Show>
       <Show when={lanes !== undefined && port !== undefined}>
         <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />

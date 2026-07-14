@@ -27,9 +27,10 @@ import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel } from "../session";
 import { CHANNEL_HEADER_STYLES, ChannelHeader } from "../ui/channel-header";
 import { Panel } from "../ui/panel";
-import { PANES_STYLES, TracePane, TurnPane } from "../ui/panes";
+import { PANES_STYLES, TracePane } from "../ui/panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "../ui/shell";
 import { RichTracePane, TRACE_PANE_STYLES } from "../ui/trace-pane";
+import { TURN_PREVIEW_STYLES, TurnPreview } from "../ui/turn-preview";
 import { discoverChannel, listChannels, rememberPort } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
@@ -197,7 +198,9 @@ if (root === null) {
 render(
   () => (
     <>
-      <style>{PANES_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}</style>
+      <style>
+        {PANES_STYLES + TURN_PREVIEW_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}
+      </style>
       {/* Same decided order as the plain page (ui/main.tsx) — the two entries
           must read identically; only the switch mechanism differs. */}
       <ChannelHeader
@@ -217,7 +220,7 @@ render(
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
       />
       <Show when={lanes} keyed>
-        {(l) => <TurnPane lanes={l} />}
+        {(l) => <TurnPreview lanes={l} />}
       </Show>
       <Show when={lanes !== undefined && port !== undefined}>
         <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />
