@@ -161,8 +161,8 @@ stale-ring boot broadcast, replayed-armed GC.
 | Row | Status |
 | --- | --- |
 | turn preview = composeIntent rows (the literal lowering input) | ✅ panes.tsx |
-| word-DIFF flash as transcript deltas revise (the overlay's LiveDiffText, modal kit) | **P5, in-gate** (owner 2026-07-14) — import `LiveDiffText`/`wordDiff` from the kit; wire to transcript-delta events |
-| logprob confidence heat on finals (premium tier) | **P5, in-gate** (owner 2026-07-14) — the events carry logprobs; render heat in the preview rows |
+| word-DIFF flash as transcript deltas revise (the overlay's LiveDiffText, modal kit) | ✅ panes.tsx TurnPane — the overlay's keyed-`<For>` + LiveDiffText-island structure, ported onto the lanes cursor; appends never animate, revisions flash and settle (panes.test "a REVISION flashes the word-diff") |
+| logprob confidence heat on finals (premium tier) | ✅ panes.tsx heat rows — per-word tint normalized against the TURN's own logprob range; the `:w` key suffix re-keys a row when its words arrive (the overlay's live lesson, kept as a comment + test) |
 | rich trace viewer | **DECIDED** (owner 2026-07-14): EMBEDDED in the panel — rewrite acceptable; Solid-native shell reusing debug-ui's pure parts; the standalone `/debug` page keeps the vanilla viewer |
 | turn cap needs no grant (turn = wire concept; capture acts gate individually) | ✅ spec.ts available (found live: the grant gate dead-ended the bar) |
 
