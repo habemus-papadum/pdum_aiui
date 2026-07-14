@@ -25,6 +25,7 @@ import { createIntentClient, type IntentClient, type IntentLanes } from "../clie
 import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel } from "../session";
+import { CHANNEL_HEADER_STYLES, ChannelHeader } from "../ui/channel-header";
 import { Panel } from "../ui/panel";
 import { PANES_STYLES, TracePane, TurnPane } from "../ui/panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "../ui/shell";
@@ -39,6 +40,10 @@ const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undef
   ownedWrite: true,
 });
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
+/** The bus phase, for the channel header's dot (written by onChange in boot). */
+const [busPhase, setBusPhase] = createSignal<"connected" | "connecting" | "closed">("closed", {
+  ownedWrite: true,
+});
 const narration: Narration = {
   statusLine,
   setStatusLine,
@@ -131,6 +136,7 @@ async function boot(): Promise<{
   const sessionBus = connectSessionBus({ port, label: "intent client (side panel)" });
   let recovered = false;
   sessionBus.onChange((state) => {
+    setBusPhase(state.phase);
     client.setContext({ connected: state.phase === "connected" });
     // See main.tsx: recovery waits for the channel, because re-arming is gated
     // on having one.
@@ -190,7 +196,19 @@ if (root === null) {
 render(
   () => (
     <>
-      <style>{PANES_STYLES + TRACE_PANE_STYLES}</style>
+      <style>{PANES_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}</style>
+      {/* Same decided order as the plain page (ui/main.tsx) — the two entries
+          must read identically; only the switch mechanism differs. */}
+      <ChannelHeader
+        port={port}
+        phase={busPhase}
+        baseUrl={port !== undefined ? `http://127.0.0.1:${port}` : ""}
+        onSwitch={(next) => {
+          // The extension's rebind: remember the port (discovery tries recent
+          // ports first), then reboot the panel document onto it.
+          void rememberPort(next).then(() => location.reload());
+        }}
+      />
       <Panel
         client={client}
         registerBlipSink={(sink) => (blipSink = sink)}
@@ -198,14 +216,17 @@ render(
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
       />
       <Show when={lanes} keyed>
-        {(l) => (
-          <>
-            <TurnPane lanes={l} />
-            <TracePane lanes={l} />
-            {port !== undefined && <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />}
-          </>
-        )}
+        {(l) => <TurnPane lanes={l} />}
       </Show>
+      <Show when={lanes !== undefined && port !== undefined}>
+        <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />
+      </Show>
+      <details class="aiui-pane" data-testid="extension-debugging" style="opacity: 0.85">
+        <summary>extension debugging</summary>
+        <Show when={lanes} keyed>
+          {(l) => <TracePane lanes={l} />}
+        </Show>
+      </details>
       <WirePane narration={narration} />
     </>
   ),

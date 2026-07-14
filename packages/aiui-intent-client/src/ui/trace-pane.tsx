@@ -68,7 +68,7 @@ export function RichTracePane(props: { baseUrl: string }) {
       data-testid="rich-trace-pane"
       onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}
     >
-      <summary>lowering traces</summary>
+      <summary>traces</summary>
       {host}
     </details>
   );

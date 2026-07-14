@@ -343,26 +343,6 @@ export function Panel(props: PanelProps) {
         </Repeat>
       </div>
 
-      <div class="aiui-pills" data-testid="pills">
-        <For each={pills()}>
-          {(pill) => (
-            <span
-              class="aiui-pill"
-              data-pill={pill.label}
-              data-state={pill.state}
-              title={pill.detail}
-            >
-              {pill.label}
-            </span>
-          )}
-        </For>
-        <Show when={client.state().talk !== "off" && props.micLevel !== undefined}>
-          <span class="aiui-meter" data-testid="mic-meter" title="mic level">
-            <div style={`width: ${Math.round(Math.min(1, micLevel()) * 100)}%`} />
-          </span>
-        </Show>
-      </div>
-
       <Show when={client.state().help === true}>
         <table class="aiui-help" data-testid="keymap-help">
           <tbody>
@@ -433,6 +413,27 @@ export function Panel(props: PanelProps) {
               </button>
             </span>
           )}
+        </Show>
+      </div>
+
+      {/* Pills BELOW the config strip (owner, 2026-07-14: bar → config → pills). */}
+      <div class="aiui-pills" data-testid="pills">
+        <For each={pills()}>
+          {(pill) => (
+            <span
+              class="aiui-pill"
+              data-pill={pill.label}
+              data-state={pill.state}
+              title={pill.detail}
+            >
+              {pill.label}
+            </span>
+          )}
+        </For>
+        <Show when={client.state().talk !== "off" && props.micLevel !== undefined}>
+          <span class="aiui-meter" data-testid="mic-meter" title="mic level">
+            <div style={`width: ${Math.round(Math.min(1, micLevel()) * 100)}%`} />
+          </span>
         </Show>
       </div>
     </div>

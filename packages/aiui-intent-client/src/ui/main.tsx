@@ -25,6 +25,7 @@ import { fakeBus } from "../fake-bus";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
 import type { IntentHost } from "../transport";
+import { CHANNEL_HEADER_STYLES, ChannelHeader } from "./channel-header";
 import { Panel } from "./panel";
 import { PANES_STYLES, TracePane, TurnPane } from "./panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "./shell";
@@ -131,6 +132,7 @@ async function boot(): Promise<{
     const sessionBus = connectSessionBus({ port, label: "intent client (detached page)" });
     let recovered = false;
     sessionBus.onChange((state) => {
+      setBusPhase(state.phase);
       client.setContext({ connected: state.phase === "connected" });
       // Recover a mirrored turn once the channel is actually THERE: re-arming
       // is gated on it (and the gate is the machine's, not the bar's), and a
@@ -180,6 +182,10 @@ async function boot(): Promise<{
 
 let blipSink: ((key: string) => void) | undefined;
 let navCounter = 0;
+/** The bus phase, for the channel header's dot (written by onChange below). */
+const [busPhase, setBusPhase] = createSignal<"connected" | "connecting" | "closed">("closed", {
+  ownedWrite: true,
+});
 
 const { client, mode, lanes, fake, cdp, port } = await boot();
 /** Whichever host is targeting pages — the CdpBus's real tabs, or the fake's. */
@@ -313,8 +319,20 @@ if (root === null) {
 render(
   () => (
     <>
-      <style>{PANES_STYLES + TRACE_PANE_STYLES}</style>
-      <SimulateStrip />
+      <style>{PANES_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}</style>
+      {/* The decided order (owner, 2026-07-14): channel first, then the bar,
+          config, pills (inside Panel), the turn preview, the traces, and last
+          the debugging surfaces that will eventually go. */}
+      <ChannelHeader
+        port={port}
+        phase={busPhase}
+        baseUrl={port !== undefined ? `http://127.0.0.1:${port}` : ""}
+        onSwitch={(next) => {
+          const url = new URL(location.href);
+          url.searchParams.set("channel", String(next));
+          location.assign(url.toString()); // resolveChannelPort honors ?channel=
+        }}
+      />
       <Panel
         client={client}
         registerBlipSink={(sink) => (blipSink = sink)}
@@ -322,14 +340,23 @@ render(
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
       />
       <Show when={lanes} keyed>
-        {(l) => (
-          <>
-            <TurnPane lanes={l} />
-            <TracePane lanes={l} />
-            {port !== undefined && <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />}
-          </>
-        )}
+        {(l) => <TurnPane lanes={l} />}
       </Show>
+      <Show when={lanes !== undefined && port !== undefined}>
+        <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />
+      </Show>
+      <details
+        class="aiui-pane"
+        data-testid="extension-debugging"
+        open={mode === "fake"}
+        style="opacity: 0.85"
+      >
+        <summary>extension debugging</summary>
+        <SimulateStrip />
+        <Show when={lanes} keyed>
+          {(l) => <TracePane lanes={l} />}
+        </Show>
+      </details>
       <WirePane narration={narration} />
     </>
   ),
