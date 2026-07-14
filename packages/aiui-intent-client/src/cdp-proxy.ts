@@ -111,6 +111,13 @@ export function createCdpProxy(options: CdpProxyOptions = {}): CdpProxy {
   const discover =
     options.discover ??
     (async (channelPort?: number): Promise<string | undefined> => {
+      // An explicit AIUI_USER_DATA_DIR wins over everything: the operator is
+      // POINTING at a profile (e.g. `pnpm test-app:channel` against a browser
+      // some other checkout launched) — read its DevToolsActivePort directly.
+      const explicitProfile = process.env.AIUI_USER_DATA_DIR;
+      if (explicitProfile !== undefined && explicitProfile !== "") {
+        return (await discoverSessionBrowser(explicitProfile))?.browserUrl;
+      }
       if (channelPort !== undefined) {
         const fromLaunch = await browserUrlFromLaunchInfo(channelPort);
         if (fromLaunch !== undefined) {

@@ -139,6 +139,7 @@ needs no ?channel=).
 | Live finding | State |
 | --- | --- |
 | **Cross-TIER coexistence is unhandled**: the CDP client (plain page) and the extension client can drive the SAME tab at once — seen live while verifying the hollow ring (the CDP tier's stale solid ring rendered beneath the extension's hollow one; both tiers use the same ring element id, so they stack invisibly). The never-both-armed policy covers the frozen client only. Needs an owner decision: same refuse-to-arm treatment between our own tiers (detection via distinct ring ids / a marker attribute), or a "one client per channel session" rule upstream | **DECIDE + wire** |
+| **Channel↔browser identity was invisible**: the extension can run in one Chrome while the channel's CDP endpoint points at another, and nothing surfaced the mismatch. Closed by the CDP tagger (owner design, 2026-07-15): the channel writes `{port, browserUrl}` into the extension's `chrome.storage.local` *through its own debug endpoint* — only the browser behind that endpoint can receive the write, so the tag is same-browser PROOF. Discovery reads it first; the debugging pane shows the verdict; an endpoint that MOVES after startup pushes a `/prompt` message so the agent can ask for a restart (`src/cdp/tagger.ts`, `ext/channel.ts`, sidecar wiring) | **DONE** |
 
 ### What Phase 4 taught us (each row is a test, or a structural answer)
 

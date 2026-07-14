@@ -25,6 +25,14 @@ import type { Express } from "express";
 export interface SidecarContext {
   /** Log sink (stderr — the `mcp` command's stdout carries the MCP protocol). */
   log: (message: string) => void;
+  /**
+   * The channel's own bound port — LAZY, because sidecars mount just before
+   * `listen` (the OS hasn't assigned it yet). `undefined` until listening.
+   * This is how a sidecar addresses its own server (e.g. the intent sidecar's
+   * CDP tagger stamping the channel port into the extension, or POSTing
+   * `/prompt` to push a message into the Claude session).
+   */
+  port: () => number | undefined;
 }
 
 /** The live handle a sidecar returns from {@link Sidecar.mount}. */

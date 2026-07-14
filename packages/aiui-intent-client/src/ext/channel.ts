@@ -6,20 +6,27 @@
  * URL and discovery disappears (session.ts). A side panel lives at
  * `chrome-extension://…` and must go looking.
  *
- * The order, cheapest first:
- *   1. the port we used last (`chrome.storage.local`) — the common case, and it
+ * The order, strongest evidence first:
+ *   1. the CDP tag (`aiui2.cdpChannel`) — written INTO our storage by the
+ *      channel itself, through this browser's own debug endpoint
+ *      (src/cdp/tagger.ts). Only the channel actually driving THIS browser
+ *      can plant it, so it is same-browser proof, not a guess — it wins
+ *      whenever the tagged channel is alive;
+ *   2. the port we used last (`chrome.storage.local`) — the common case, and it
  *      is verified before use, so a channel that has since died just falls
  *      through;
- *   2. the native host, if installed (`aiui extension install-native-host`) —
+ *   3. the native host, if installed (`aiui extension install-native-host`) —
  *      it reads the on-disk registry, so a COLD start finds channels with no
  *      ports known at all;
- *   3. any live channel's registry mirror (`/debug/api/channels`) — one
+ *   4. any live channel's registry mirror (`/debug/api/channels`) — one
  *      reachable channel enumerates the rest.
  *
  * Extension pages may fetch loopback freely (`host_permissions`), which is what
  * makes 1 and 3 possible at all. Storage keys are `aiui2.*`: the frozen client
  * has its own, under its own extension id, and the two never meet.
  */
+
+import { CDP_CHANNEL_TAG_KEY } from "./manifest";
 
 const RECENT_KEY = "aiui2.recentPorts";
 const RECENT_MAX = 6;
@@ -36,6 +43,34 @@ export interface ChannelEntry {
   /** A standalone `aiui serve`: reachable, but with no Claude session behind
    * it — structurally unable to carry a turn, so never auto-picked. */
   debug?: boolean;
+}
+
+/** The channel's CDP tag, as the tagger wrote it (same-browser proof). */
+export interface CdpChannelTag {
+  port: number;
+  browserUrl: string;
+  taggedAt: string;
+}
+
+/** Read the CDP tag, if a channel has tagged this browser. */
+export async function readCdpTag(): Promise<CdpChannelTag | undefined> {
+  const got = await chrome.storage.local.get(CDP_CHANNEL_TAG_KEY);
+  const raw = got[CDP_CHANNEL_TAG_KEY] as Partial<CdpChannelTag> | undefined;
+  return raw !== undefined && Number.isInteger(raw.port) && typeof raw.browserUrl === "string"
+    ? (raw as CdpChannelTag)
+    : undefined;
+}
+
+/**
+ * Watch the tag: the tagger retries until the worker is awake, so it may land
+ * (or move) AFTER a panel booted. Fires with the fresh tag on every write.
+ */
+export function onCdpTagChanged(handler: (tag: CdpChannelTag | undefined) => void): void {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && CDP_CHANNEL_TAG_KEY in changes) {
+      void readCdpTag().then(handler);
+    }
+  });
 }
 
 /** Newest-first, deduped, capped. Pure. */
@@ -115,6 +150,13 @@ export async function listChannels(currentPort?: number): Promise<ChannelEntry[]
 
 /** Find a channel to bind, or `undefined` (see the module doc for the order). */
 export async function discoverChannel(): Promise<number | undefined> {
+  // The CDP tag first: the channel that PROVED it drives this browser beats
+  // any remembered or registry channel — those may belong to another browser.
+  const tag = await readCdpTag();
+  if (tag !== undefined && (await alive(tag.port))) {
+    await rememberPort(tag.port);
+    return tag.port;
+  }
   for (const port of await loadRecentPorts()) {
     if (await alive(port)) {
       // Still up — but it may not be the newest session, so let it enumerate.

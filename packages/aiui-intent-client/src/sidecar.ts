@@ -20,6 +20,9 @@
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
 import type { Express } from "express";
+import { WebSocket } from "ws";
+import type { CdpSocket } from "./cdp/protocol";
+import { startCdpTagger } from "./cdp/tagger";
 import { createCdpProxy } from "./cdp-proxy";
 
 /** The path prefix the panel lives under on the channel's server. */
@@ -63,6 +66,59 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
       // The CDP bridge (see cdp-proxy.ts): the panel's page cannot dial the
       // browser's debug port itself, so the channel does it on its behalf.
       const cdp = createCdpProxy({ root: options.root, log: ctx.log });
+
+      // The CDP tagger + endpoint watcher (see cdp/tagger.ts). The tagger
+      // writes this channel's port into the extension THROUGH the browser's
+      // own debug endpoint — same-browser proof the extension's discovery
+      // reads first. The watcher rides the same discovery beat: if the
+      // endpoint MOVES after startup (browser relaunched → new ephemeral
+      // port), everything pinned at launch — the Chrome DevTools MCP above
+      // all — still points at the dead browser, invisibly. That is exactly
+      // when the agent should ask the user to restart, so we push the fact
+      // into the session via the channel's own `/prompt` route.
+      let bootUrl: string | undefined; // the endpoint at startup
+      let warnedUrl: string | undefined; // the move we already reported
+      const warnEndpointMoved = async (was: string, now: string): Promise<void> => {
+        const port = ctx.port();
+        ctx.log(`intent: the session browser's CDP endpoint moved (${was} -> ${now})`);
+        if (port === undefined) {
+          return;
+        }
+        const text =
+          `[aiui intent] The session browser's CDP endpoint changed while this channel was ` +
+          `running: it was ${was} at startup and is now ${now} (the browser was relaunched). ` +
+          `Connections pinned at launch — notably the Chrome DevTools MCP — still point at the ` +
+          `dead endpoint. Let the user know and suggest restarting \`aiui claude\` so the ` +
+          `session rebinds to the live browser.`;
+        try {
+          await fetch(`http://127.0.0.1:${port}/prompt`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+        } catch {
+          // The session may be gone; the log line above still tells the story.
+        }
+      };
+      const stopTagger = startCdpTagger({
+        channelPort: () => ctx.port(),
+        endpoint: async () => {
+          const info = await cdp.info(ctx.port());
+          const url = info.available ? info.browserUrl : undefined;
+          if (url !== undefined) {
+            if (bootUrl === undefined) {
+              bootUrl = url;
+            } else if (url !== bootUrl && url !== warnedUrl) {
+              warnedUrl = url;
+              void warnEndpointMoved(bootUrl, url);
+            }
+          }
+          return url;
+        },
+        log: ctx.log,
+        // The node `ws` client speaks the CdpSocket surface the tagger needs.
+        socketFactory: (url) => new WebSocket(url) as unknown as CdpSocket,
+      });
       app.use((req, res, next) => {
         if (req.path === `${INTENT_PREFIX}/page-ink.js`) {
           // The ink surface, bundled to ONE self-contained script for the bus
@@ -139,6 +195,7 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
           return cdp.handleUpgrade(req, socket, head);
         },
         dispose: async () => {
+          stopTagger();
           cdp.dispose();
           await vite.close();
           hmrShim.close();

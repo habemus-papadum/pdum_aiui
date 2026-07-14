@@ -14,7 +14,7 @@ async function mountOnChannel() {
   const sidecar = paintSidecar({ root: "/proj/demo" });
   const app = express();
   const logs: string[] = [];
-  const mounted = await sidecar.mount(app, { log: (m) => logs.push(m) });
+  const mounted = await sidecar.mount(app, { log: (m) => logs.push(m), port: () => undefined });
   const server: Server = createServer(app);
   server.on("upgrade", (req, socket, head) => {
     if (!mounted.handleUpgrade?.(req, socket, head)) {

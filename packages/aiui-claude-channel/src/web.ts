@@ -549,9 +549,11 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // Mount sidecars LAST — after every channel route (`/health`, `/prompt`,
   // `/debug`) — so a sidecar's path-scoped fallback can never shadow them. Each
   // is isolated: a mount that throws is logged and skipped, never fatal.
+  // `boundPort` is handed to them lazily: it resolves only after `listen`.
+  let boundPort: number | undefined;
   for (const sidecar of options.sidecars ?? []) {
     try {
-      mountedSidecars.push(await sidecar.mount(app, { log }));
+      mountedSidecars.push(await sidecar.mount(app, { log, port: () => boundPort }));
       log(`sidecar "${sidecar.name}" mounted`);
     } catch (err) {
       log(`sidecar "${sidecar.name}" failed to mount: ${errorMessage(err)}`);
@@ -568,6 +570,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   const address = httpServer.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
+  boundPort = port;
 
   const close = async (): Promise<void> => {
     // Dispose sidecars first — let them kill spawned language servers / close a

@@ -26,6 +26,16 @@ const PUBLIC_KEY =
 /** The id Chrome derives from {@link PUBLIC_KEY} (sha256 → a–p alphabet). */
 export const EXTENSION_ID = "cdpbfpcelmifhagikjlfpgfipggcmdeg";
 
+/**
+ * The `chrome.storage.local` key the channel's CDP tagger writes into THIS
+ * extension (src/cdp/tagger.ts) — `{port, browserUrl, taggedAt}`. Both halves
+ * of the contract import it from here: the tagger composes the write, the
+ * extension's channel discovery (ext/channel.ts) reads it first. The write
+ * arrives through the browser's own debug endpoint, so its presence is
+ * same-browser PROOF, not just a hint.
+ */
+export const CDP_CHANNEL_TAG_KEY = "aiui2.cdpChannel";
+
 export const manifest = {
   manifest_version: 3,
   name: "aiui intent client",

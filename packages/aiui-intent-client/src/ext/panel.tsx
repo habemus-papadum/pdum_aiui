@@ -32,7 +32,13 @@ import { PANES_STYLES, TracePane } from "../ui/panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "../ui/shell";
 import { RichTracePane, TRACE_PANE_STYLES } from "../ui/trace-pane";
 import { TURN_PREVIEW_STYLES, TurnPreview } from "../ui/turn-preview";
-import { discoverChannel, listChannels, rememberPort } from "./channel";
+import {
+  discoverChannel,
+  listChannels,
+  onCdpTagChanged,
+  readCdpTag,
+  rememberPort,
+} from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
 
@@ -169,6 +175,28 @@ let blipSink: ((key: string) => void) | undefined;
 const { client, lanes, windowId, port } = await boot();
 
 /**
+ * The CDP tag's verdict, for the debugging pane: the tag arrives through this
+ * browser's own debug endpoint (src/cdp/tagger.ts), so its presence PROVES
+ * which channel drives this browser — and a mismatch with the bound port is
+ * exactly the cross-browser confusion the tagger exists to expose.
+ */
+const [cdpVerdict, setCdpVerdict] = createSignal("CDP: no tag — no channel drives this browser", {
+  ownedWrite: true,
+});
+const applyTagVerdict = (tag: Awaited<ReturnType<typeof readCdpTag>>): void => {
+  if (tag === undefined) {
+    return;
+  }
+  setCdpVerdict(
+    tag.port === port
+      ? `CDP: this browser ✓ (:${tag.port}, via ${tag.browserUrl})`
+      : `CDP: this browser is driven by :${tag.port} (panel bound to :${port ?? "none"})`,
+  );
+};
+void readCdpTag().then(applyTagVerdict);
+onCdpTagChanged(applyTagVerdict); // the tagger may land after boot — track it
+
+/**
  * The activation gesture, arriving from OUTSIDE (the worker). The toolbar click
  * and the command chord are extension invocations — they are what grant
  * `tabCapture` standing on a tab — so the worker is where they land, and this is
@@ -231,6 +259,9 @@ render(
       </Show>
       <details class="aiui-pane" data-testid="extension-debugging" style="opacity: 0.85">
         <summary>extension debugging</summary>
+        <div style="font: 11px ui-monospace, monospace; opacity: 0.8; padding: 2px 0 4px">
+          {cdpVerdict()}
+        </div>
         <Show when={lanes} keyed>
           {(l) => <TracePane lanes={l} />}
         </Show>
