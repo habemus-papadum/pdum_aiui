@@ -25,6 +25,7 @@ import { createIntentClient, type IntentClient, type IntentLanes } from "../clie
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel } from "../session";
+import { createToolsLink } from "../tools-link";
 import { CHANNEL_HEADER_STYLES, ChannelHeader } from "../ui/channel-header";
 import { Panel } from "../ui/panel";
 import { PANES_STYLES, TracePane } from "../ui/panes";
@@ -136,6 +137,8 @@ async function boot(): Promise<{
   });
   lanes.bind(client);
 
+  // The page-tools bridge — real chrome tab/window identity in this tier.
+  createToolsLink({ host, port: () => port, windowId, log: (m) => console.info("[tools]", m) });
   const sessionBus = connectSessionBus({ port, label: "intent client (side panel)" });
   let recovered = false;
   sessionBus.onChange((state) => {

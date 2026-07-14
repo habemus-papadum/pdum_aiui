@@ -1,17 +1,107 @@
 /**
- * content-main.ts — five lines in the page's OWN world, because that is the
- * only place `window.__AIUI__` exists.
+ * content-main.ts — the extension's foothold in the page's OWN world, because
+ * that is the only place `window.__AIUI__` exists.
  *
  * A content script runs in an isolated world: it shares the DOM but not the
- * JavaScript realm, so the page's globals are invisible to it. The
- * aiui-instrumented-page fact (which unlocks `locate`, and one day the
- * jump-to-editor mode) is exactly such a global — hence this second, MAIN-world
- * script, whose whole job is to look and shout. `content.ts` listens.
+ * JavaScript realm, so the page's globals are invisible to it. Two jobs live
+ * here, both relayed to `content.ts` over `postMessage`:
  *
- * It touches nothing else. Code in the page's realm can be seen — and broken —
- * by the page, so it stays as small as the fact it carries.
+ *  1. **The instrumented-page fact** — `__AIUI__` exists → shout it (the
+ *     `aiui` pill, `locate`, one day jump-to-editor).
+ *  2. **The tools bridge's page half** (T2 of the plugin restructure): watch
+ *     `__AIUI__.tools.onChange`, relay DESCRIPTORS ONLY (never functions);
+ *     execute `toolsCall`s against the registry and relay the result by
+ *     callId. The registry installs whenever the app's agentToolkit first
+ *     runs — possibly after us — so a light poll subscribes once it appears,
+ *     then stops.
+ *
+ * Code in the page's realm can be seen — and broken — by the page, so
+ * everything here is defensive and small.
  */
+
+interface ToolsRegistry {
+  list(): Array<{
+    ns: string;
+    tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+  }>;
+  call(ns: string, name: string, args?: unknown): Promise<unknown>;
+  onChange(handler: () => void): () => void;
+}
+
+const registry = (): ToolsRegistry | undefined =>
+  (window as unknown as { __AIUI__?: { tools?: ToolsRegistry } }).__AIUI__?.tools;
 
 if ((window as unknown as { __AIUI__?: unknown }).__AIUI__ !== undefined) {
   window.postMessage({ aiuiInstrumented: true }, "*");
 }
+
+const reportTools = (): void => {
+  const r = registry();
+  if (r?.list === undefined) {
+    return;
+  }
+  try {
+    window.postMessage(
+      {
+        aiuiTools: r.list().map((entry) => ({
+          ns: entry.ns,
+          tools: entry.tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            ...(tool.inputSchema !== undefined ? { inputSchema: tool.inputSchema } : {}),
+          })),
+        })),
+      },
+      "*",
+    );
+  } catch {
+    // never break the host page
+  }
+};
+
+let watched = false;
+const watch = (): void => {
+  const r = registry();
+  if (watched || r?.onChange === undefined) {
+    return;
+  }
+  watched = true;
+  r.onChange(reportTools);
+  reportTools();
+};
+watch();
+const poll = setInterval(() => {
+  watch();
+  if (watched) {
+    clearInterval(poll);
+  }
+}, 2000);
+
+// toolsCall requests arrive from the ISOLATED world (content.ts); results go
+// back the same way, correlated by callId.
+window.addEventListener("message", (event) => {
+  if (event.source !== window) {
+    return;
+  }
+  const call = (
+    event.data as { aiuiToolsCall?: { ns: string; name: string; args?: unknown; callId: string } }
+  )?.aiuiToolsCall;
+  if (call === undefined) {
+    return;
+  }
+  const r = registry();
+  const respond = (result: { ok: boolean; value?: unknown; error?: string }): void => {
+    window.postMessage({ aiuiToolsResult: { callId: call.callId, ...result } }, "*");
+  };
+  if (r?.call === undefined) {
+    respond({ ok: false, error: "no tools registry" });
+    return;
+  }
+  void Promise.resolve()
+    .then(() => r.call(call.ns, call.name, call.args))
+    .then(
+      (value) => respond({ ok: true, value }),
+      (err: unknown) =>
+        respond({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+    );
+});

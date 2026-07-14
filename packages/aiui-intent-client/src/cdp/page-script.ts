@@ -47,6 +47,16 @@ export type PageReport =
       components?: unknown[];
     }
   | { kind: "stroke"; points: number }
+  /** The page's `__AIUI__.tools` registry — full current set, descriptors only. */
+  | {
+      kind: "tools";
+      registrations: Array<{
+        ns: string;
+        tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+      }>;
+    }
+  /** A `toolsCall` capability's answer, correlated by callId. */
+  | { kind: "toolsResult"; callId: string; ok: boolean; value?: unknown; error?: string }
   /** The FROZEN client has this tab armed (its ring says so). Two clients
    * inking one page is nonsense, so the new one stands down — see the
    * coexistence policy in the client's README. */
@@ -210,6 +220,8 @@ function pageBootstrap(version: string): void {
     focused: document.hasFocus(),
   });
   const sayHello = (): void => {
+    setTimeout(reportTools, 0); // after the hello: the current tool set
+
     report({
       kind: "hello",
       url: location.href,
@@ -218,6 +230,55 @@ function pageBootstrap(version: string): void {
       aiui: (w.__AIUI__ ?? undefined) !== undefined,
     });
   };
+
+  // ── page tools: watch __AIUI__.tools, report descriptors (the T2 bridge) ──
+  // The registry installs whenever the app's agentToolkit first runs — which
+  // may be AFTER this bootstrap. A light poll subscribes once it appears,
+  // then stops; onChange carries every later update.
+  type ToolsRegistry = {
+    list(): Array<{
+      ns: string;
+      tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+    }>;
+    call(ns: string, name: string, args?: unknown): Promise<unknown>;
+    onChange(handler: () => void): () => void;
+  };
+  const toolsRegistry = (): ToolsRegistry | undefined =>
+    (w.__AIUI__ as { tools?: ToolsRegistry } | undefined)?.tools;
+  const reportTools = (): void => {
+    const registry = toolsRegistry();
+    if (registry?.list === undefined) {
+      return;
+    }
+    report({
+      kind: "tools",
+      registrations: registry.list().map((entry) => ({
+        ns: entry.ns,
+        tools: entry.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          ...(tool.inputSchema !== undefined ? { inputSchema: tool.inputSchema } : {}),
+        })),
+      })),
+    });
+  };
+  let toolsWatched = false;
+  const watchTools = (): void => {
+    const registry = toolsRegistry();
+    if (toolsWatched || registry?.onChange === undefined) {
+      return;
+    }
+    toolsWatched = true;
+    registry.onChange(reportTools);
+    reportTools();
+  };
+  watchTools();
+  const toolsPoll = setInterval(() => {
+    watchTools();
+    if (toolsWatched) {
+      clearInterval(toolsPoll);
+    }
+  }, 2000);
 
   // ── the region rubber band: a ONE-SHOT drag overlay (the `a` area shot) ───
   let regionOverlay: HTMLElement | undefined;
@@ -348,6 +409,33 @@ function pageBootstrap(version: string): void {
           } else {
             disarmRegion();
           }
+          return { ok: true };
+        }
+        case "toolsCall": {
+          const p = (payload ?? {}) as {
+            ns?: string;
+            name?: string;
+            args?: unknown;
+            callId?: string;
+          };
+          const callId = String(p.callId ?? "");
+          const registry = toolsRegistry();
+          if (registry?.call === undefined) {
+            report({ kind: "toolsResult", callId, ok: false, error: "no tools registry" });
+            return { ok: true };
+          }
+          void Promise.resolve()
+            .then(() => registry.call(String(p.ns ?? ""), String(p.name ?? ""), p.args))
+            .then(
+              (value) => report({ kind: "toolsResult", callId, ok: true, value }),
+              (err: unknown) =>
+                report({
+                  kind: "toolsResult",
+                  callId,
+                  ok: false,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+            );
           return { ok: true };
         }
         case "locate": {

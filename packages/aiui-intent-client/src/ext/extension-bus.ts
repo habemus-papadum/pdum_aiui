@@ -149,6 +149,19 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
       case "foreign":
         emit({ kind: "foreignClient", tab, armed: report.armed });
         break;
+      case "tools":
+        emit({ kind: "pageTools", tab, registrations: report.registrations });
+        break;
+      case "toolsResult":
+        emit({
+          kind: "toolsResult",
+          tab,
+          callId: report.callId,
+          ok: report.ok,
+          ...(report.value !== undefined ? { value: report.value } : {}),
+          ...(report.error !== undefined ? { error: report.error } : {}),
+        });
+        break;
       case "region":
         emit({
           kind: "regionDrag",

@@ -24,6 +24,7 @@ import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
+import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
 import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./channel-header";
 import { Panel } from "./panel";
@@ -131,6 +132,9 @@ async function boot(): Promise<{
 
     // The session bus is the `connected` fact (and, later, peers/slots —
     // the iPad paint presence). Outages never disarm; they just gray the pill.
+    // The page-tools bridge: pages populate __AIUI__.tools; this represents
+    // them to the channel (CDP tab numbers ride as hints — the decided shape).
+    createToolsLink({ host, port: () => port, log: (m) => console.info("[tools]", m) });
     const sessionBus = connectSessionBus({ port, label: "intent client (detached page)" });
     let recovered = false;
     sessionBus.onChange((state) => {

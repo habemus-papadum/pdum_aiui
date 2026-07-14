@@ -259,12 +259,29 @@ for (const type of ["pointerdown", "keydown", "wheel", "scroll"] as const) {
   window.addEventListener(type, interaction, { passive: true, capture: true });
 }
 
-// ── the MAIN-world probe's answer: is this page aiui-instrumented? ───────────
+// ── the MAIN-world probe's answers: instrumentation, tools, tool results ─────
 let aiuiPage = false;
 window.addEventListener("message", (event) => {
-  if (event.source === window && (event.data as { aiuiInstrumented?: boolean })?.aiuiInstrumented) {
+  if (event.source !== window) {
+    return;
+  }
+  const data = event.data as {
+    aiuiInstrumented?: boolean;
+    aiuiTools?: Array<{
+      ns: string;
+      tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+    }>;
+    aiuiToolsResult?: { callId: string; ok: boolean; value?: unknown; error?: string };
+  };
+  if (data?.aiuiInstrumented) {
     aiuiPage = true;
     sayHello(); // the probe may land after our first hello — correct the record
+  }
+  if (data?.aiuiTools !== undefined) {
+    report({ kind: "tools", registrations: data.aiuiTools });
+  }
+  if (data?.aiuiToolsResult !== undefined) {
+    report({ kind: "toolsResult", ...data.aiuiToolsResult });
   }
 });
 
@@ -344,6 +361,12 @@ serveRelay(PAGE_ADDRESS, {
     } else {
       disarmRegion();
     }
+    return { ok: true };
+  },
+  toolsCall: (payload) => {
+    // Forward into the MAIN world (the registry lives there); the result
+    // comes back as a message → a `toolsResult` report, correlated by callId.
+    window.postMessage({ aiuiToolsCall: payload }, "*");
     return { ok: true };
   },
   locate: () => null, // instrumented-page jump: anticipated, post-parity

@@ -25,7 +25,11 @@ export type PageCapability =
   | "viewport"
   | "locate"
   /** Arm a ONE-SHOT rubber-band drag on the page (the `a` area shot). */
-  | "region";
+  | "region"
+  /** Invoke one page tool from `__AIUI__.tools` (the T2 bridge): payload
+   * `{ns, name, args, callId}`; the page answers with a `toolsResult`
+   * page EVENT (async — the call may take a while), not a return value. */
+  | "toolsCall";
 
 /** The on-page indicator's asserted state (a claim's desire, as data). */
 export interface RingState {
@@ -97,6 +101,26 @@ export type PageEvent =
       viewport: { w: number; h: number };
       takenAt: number;
       components?: unknown[];
+    }
+  /** The page's `__AIUI__.tools` registry changed: its FULL current tool set,
+   * descriptors only (names/descriptions/schemas — never functions). An empty
+   * `registrations` means the page has no tools (the link closes its socket). */
+  | {
+      kind: "pageTools";
+      tab: number;
+      registrations: Array<{
+        ns: string;
+        tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+      }>;
+    }
+  /** A `toolsCall`'s answer, correlated by callId. */
+  | {
+      kind: "toolsResult";
+      tab: number;
+      callId: string;
+      ok: boolean;
+      value?: unknown;
+      error?: string;
     };
 
 /** Tab-scoped request/response + ring broadcast + page→panel events. */

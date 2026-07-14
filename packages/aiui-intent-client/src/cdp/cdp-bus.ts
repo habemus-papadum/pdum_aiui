@@ -296,6 +296,19 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       case "foreign":
         emit({ kind: "foreignClient", tab: page.tab, armed: report.armed });
         break;
+      case "tools":
+        emit({ kind: "pageTools", tab: page.tab, registrations: report.registrations });
+        break;
+      case "toolsResult":
+        emit({
+          kind: "toolsResult",
+          tab: page.tab,
+          callId: report.callId,
+          ok: report.ok,
+          ...(report.value !== undefined ? { value: report.value } : {}),
+          ...(report.error !== undefined ? { error: report.error } : {}),
+        });
+        break;
       case "region":
         emit({
           kind: "regionDrag",
