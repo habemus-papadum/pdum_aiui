@@ -42,12 +42,21 @@ const report = (r: PageReport): void => {
 };
 
 // ── the ring: the page's ONLY evidence of the client's state ─────────────────
+// Four states: off · steady (armed) · breathing (turn) · HOLLOW — armed, but
+// this tab's pixels need a grant (the fourth state matters most HERE: MV3's
+// grant is per-tab, so every tab switch lands on an ungranted page). Hollow is
+// outline-only with the activation hint beside it; the hint text is whatever
+// the host handed down (the live chrome.commands binding) — this script never
+// knows what the key is.
 const RING_ID = "__aiui-intent-ring";
 let ring: HTMLElement | undefined;
-const assertRing = (on: boolean, turnTone: boolean): void => {
+let ringHint: HTMLElement | undefined;
+const assertRing = (on: boolean, turnTone: boolean, hollow: boolean, hint: string): void => {
   if (!on) {
     ring?.remove();
+    ringHint?.remove();
     ring = undefined;
+    ringHint = undefined;
     return;
   }
   if (ring === undefined || !ring.isConnected) {
@@ -55,15 +64,32 @@ const assertRing = (on: boolean, turnTone: boolean): void => {
     ring.id = RING_ID;
     ring.style.cssText =
       "position:fixed;top:8px;right:8px;width:12px;height:12px;border-radius:50%;" +
-      "z-index:2147483646;pointer-events:none;transition:background 200ms;";
+      "box-sizing:border-box;z-index:2147483646;pointer-events:none;transition:background 200ms;";
     const style = document.createElement("style");
     style.textContent =
       "@keyframes __aiui-breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}";
     ring.appendChild(style);
     (document.body ?? document.documentElement).appendChild(ring);
   }
-  ring.style.background = turnTone ? "#dc2626" : "#7c3aed";
+  const color = turnTone ? "#dc2626" : "#7c3aed";
+  ring.style.background = hollow ? "transparent" : color;
+  ring.style.border = hollow ? `2px solid ${color}` : "0";
   ring.style.animation = turnTone ? "__aiui-breathe 1.6s ease-in-out infinite" : "none";
+  if (hollow && hint !== "") {
+    if (ringHint === undefined || !ringHint.isConnected) {
+      ringHint = document.createElement("div");
+      ringHint.id = `${RING_ID}-hint`;
+      ringHint.style.cssText =
+        "position:fixed;top:7px;right:24px;z-index:2147483646;pointer-events:none;" +
+        "font:11px/14px ui-monospace,SFMono-Regular,Menlo,monospace;padding:0 5px;" +
+        "border-radius:7px;background:rgba(0,0,0,.55);color:#fff;";
+      (document.body ?? document.documentElement).appendChild(ringHint);
+    }
+    ringHint.textContent = hint;
+  } else {
+    ringHint?.remove();
+    ringHint = undefined;
+  }
 };
 
 const flash = (kind: string): void => {
@@ -179,8 +205,18 @@ const sayHello = (): void => {
 // ── the capability surface (the same command set the CDP page serves) ────────
 serveRelay(PAGE_ADDRESS, {
   ring: (payload) => {
-    const p = payload as { on?: boolean; turnTone?: boolean } | null;
-    assertRing(p?.on === true, p?.turnTone === true);
+    const p = payload as {
+      on?: boolean;
+      turnTone?: boolean;
+      hollow?: boolean;
+      hint?: string;
+    } | null;
+    assertRing(
+      p?.on === true,
+      p?.turnTone === true,
+      p?.hollow === true,
+      typeof p?.hint === "string" ? p.hint : "",
+    );
     return { ok: true };
   },
   flash: (payload) => {

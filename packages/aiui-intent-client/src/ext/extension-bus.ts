@@ -27,17 +27,19 @@
 
 import { relayRequest, relayRequestTab } from "@habemus-papadum/aiui-webext";
 import type { PageReport } from "../cdp/page-script";
-import type {
-  CaptureSource,
-  HeldStream,
-  IntentHost,
-  PageEvent,
-  PageTransport,
-  RingState,
-  SurfaceTargeting,
+import {
+  type CaptureSource,
+  type HeldStream,
+  type IntentHost,
+  type PageEvent,
+  type PageTransport,
+  type RingState,
+  ringForTab,
+  type SurfaceTargeting,
 } from "../transport";
 import { grabTabShot, holdTabStream, releaseTabStream } from "./capture";
 import {
+  ACTIVATE_COMMAND,
   BROKER_ADDRESS,
   isNavigationMessage,
   isReportMessage,
@@ -103,7 +105,7 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
    * the client's desire has not changed, so no claim re-applies on its own. */
   const replay = (tab: number): void => {
     if (ring.on) {
-      void request(tab, "ring", ring);
+      void request(tab, "ring", ringForTab(ring, tab));
     }
     const held = sticky.get(tab);
     if (held?.keylayer !== undefined) {
@@ -190,6 +192,14 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   chrome.tabs.onRemoved.addListener(onRemoved);
   await readActiveTab();
 
+  // The hollow ring's hint: the activation shortcut AS BOUND, read live —
+  // users rebind at chrome://extensions/shortcuts, and Chrome silently drops a
+  // conflicted suggestion (the frozen client claims the same chord), so the
+  // manifest's suggestion is NOT the truth and no key name is hard-coded.
+  const commands = (await chrome.commands?.getAll?.()) ?? [];
+  const shortcut = commands.find((c) => c.name === ACTIVATE_COMMAND)?.shortcut ?? "";
+  const grantHint = shortcut === "" ? "aiui toolbar button" : shortcut;
+
   const transport: PageTransport = {
     requestPage: (tab, capability, payload) => {
       if (capability === "keylayer" || capability === "ink") {
@@ -202,11 +212,13 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     broadcastRing: (state) => {
       ring = state;
       // Every tab in THIS window: the ring is the page's only evidence of the
-      // client's state, and the client belongs to one window.
+      // client's state, and the client belongs to one window. Projected per
+      // tab — the granted tab renders solid, every other tab hollow with the
+      // activation hint (the fourth ring state).
       void chrome.tabs.query({ windowId: options.windowId }).then((tabs) => {
         for (const tab of tabs) {
           if (tab.id !== undefined) {
-            void request(tab.id, "ring", state);
+            void request(tab.id, "ring", ringForTab(state, tab.id));
           }
         }
       });
@@ -236,8 +248,9 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   const capture: CaptureSource = {
     // `tabCapture` is invocation-gated per tab: it works only where the user
     // invoked the extension. The grant is REAL here — the activation gesture
-    // mints it, and shot/selection stay dark until it does.
+    // mints it, and the pixel acts stay dark until it does.
     grantless: false,
+    grantHint,
     holdStream: async (tab): Promise<HeldStream> => {
       await holdTabStream(tab, async (target) => {
         const { streamId } = await relayRequest<StreamIdResult>(BROKER_ADDRESS, "streamId", {

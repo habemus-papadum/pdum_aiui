@@ -21,6 +21,11 @@ import type { PageReport } from "../cdp/page-script";
 export const PAGE_ADDRESS = "intent-page";
 /** The relay address the service worker serves the broker commands under. */
 export const BROKER_ADDRESS = "intent-sw";
+/** The `chrome.commands` name of the activation gesture. One constant, three
+ * readers: the manifest declares it, the worker matches it, and the bus looks
+ * up its LIVE binding (`chrome.commands.getAll`) for the hollow ring's hint —
+ * which is why no key name is ever hard-coded anywhere. */
+export const ACTIVATE_COMMAND = "aiui-intent-activate";
 
 /** A page fact, on its way to the panel (`chrome.runtime.sendMessage`). */
 export interface ReportMessage {

@@ -39,7 +39,8 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | aiui-instrumented-page fact (`window.__AIUI__`) | ✅ `aiuiSupport` PageEvent → ctx.aiuiPage + the `page` pill; **real detection landed in P3** (the bootstrap's hello reports it — verified live: the `page` pill lit on an instrumented dev app and not on example.com). `locate` still stubbed (returns null) for the jump mode |
 | jump-to-VS-Code mode (overlay-only; never in the old extension) | ANTICIPATED: seam + fact above; the `jump` ladder region + picker remain the post-P5 DECIDE |
 | mic level meter while talking (the old HUD meter) | ✅ panel.tsx meter next to the pills (polls talk.level at display cadence) — **shows real levels once live talk is verified with a mic** |
-| ring three states (off · steady armed · breathing turn) | ✅ claim desire carries them; test walks all three; the ring pill shows off/on/live; **the page-side badge landed in P3** (purple steady when armed, red breathing in a turn — seen on real tabs) |
+| ring FOUR states (off · steady armed · breathing turn · **hollow = armed-but-ungranted**, owner 2026-07-14) | ✅ claim desire carries grant tab + hint; `ringForTab` projects per tab (shared by both buses); hollow renders outline + the activation hint, whose text is the LIVE `chrome.commands` binding (never hard-coded); client.test walks all four; extension-bus.test pins the projection + discovery |
+| gate split: page acts (selection/clear/ink/keys) follow the tab in view; only pixels (shot/stream/sampling) follow the grant — and only while granted tab IS the tab in view (owner 2026-07-14) | ✅ spec.ts `available` + claims derives; client.test "a tab switch under MV3 darkens CAPTURE only" |
 
 ## Config surface (inventory §1C controls — the "kept getting lost" list)
 
@@ -122,6 +123,12 @@ needs no ?channel=).
 | The bridge dropped the panel's first command (`ws` has no buffer before a listener attaches) — a bus that attaches to nothing | cdp-proxy.test "holding the commands it sends before the upstream opens" |
 | Only the ⌘B gesture minted a capture grant, so arming from the BAR left shot/selection/clear dark forever (owner found it) — and the grant, once minted, stayed pinned to that tab, against the decided "CDP shots follow the active tab" | `CaptureSource.grantless` (the host says whether a grant is a real fact); client.test "the capture grant is the HOST's business, not a ritual" |
 
+### Found in Phase 5 (open rows for the walk)
+
+| Live finding | State |
+| --- | --- |
+| **Cross-TIER coexistence is unhandled**: the CDP client (plain page) and the extension client can drive the SAME tab at once — seen live while verifying the hollow ring (the CDP tier's stale solid ring rendered beneath the extension's hollow one; both tiers use the same ring element id, so they stack invisibly). The never-both-armed policy covers the frozen client only. Needs an owner decision: same refuse-to-arm treatment between our own tiers (detection via distinct ring ids / a marker attribute), or a "one client per channel session" rule upstream | **DECIDE + wire** |
+
 ### What Phase 4 taught us (each row is a test, or a structural answer)
 
 | Live finding | Where it is pinned |
@@ -154,9 +161,9 @@ stale-ring boot broadcast, replayed-armed GC.
 | Row | Status |
 | --- | --- |
 | turn preview = composeIntent rows (the literal lowering input) | ✅ panes.tsx |
-| word-DIFF flash as transcript deltas revise (the overlay's LiveDiffText, modal kit) | **P2-polish** — import `LiveDiffText`/`wordDiff` from the kit; wire to transcript-delta events |
-| logprob confidence heat on finals (premium tier) | **P2-polish** — the events carry logprobs; render heat in the preview rows |
-| rich trace viewer | **DECIDE** (default: the panel's raw pane stays; LINK OUT to the channel's own `/debug` viewer, which already renders traces — same origin now) |
+| word-DIFF flash as transcript deltas revise (the overlay's LiveDiffText, modal kit) | **P5, in-gate** (owner 2026-07-14) — import `LiveDiffText`/`wordDiff` from the kit; wire to transcript-delta events |
+| logprob confidence heat on finals (premium tier) | **P5, in-gate** (owner 2026-07-14) — the events carry logprobs; render heat in the preview rows |
+| rich trace viewer | **DECIDED** (owner 2026-07-14): EMBEDDED in the panel — rewrite acceptable; Solid-native shell reusing debug-ui's pure parts; the standalone `/debug` page keeps the vanilla viewer |
 | turn cap needs no grant (turn = wire concept; capture acts gate individually) | ✅ spec.ts available (found live: the grant gate dead-ended the bar) |
 
 ## Known-open gaps carried from the old client (do not lose twice)
@@ -168,3 +175,6 @@ unconfirmed live — P3; stt tier mappings unverified live — P2.
 
 Overlay-only vscode/jump-picker mode: **DECIDE** (default: defer past P5; the overlay keeps it,
 and the detached page gets it cheaply later via a `jump` ladder region if wanted).
+
+Tab-switch toast: **dropped** (owner 2026-07-14) — the hollow ring + hint carry the information
+on the page itself; no panel toast on switch.

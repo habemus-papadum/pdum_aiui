@@ -26,7 +26,12 @@
  */
 
 import { serveRelay } from "@habemus-papadum/aiui-webext";
-import type { ActivateMessage, NavigationMessage, StreamIdResult } from "./protocol";
+import {
+  ACTIVATE_COMMAND,
+  type ActivateMessage,
+  type NavigationMessage,
+  type StreamIdResult,
+} from "./protocol";
 
 /** tabId → the last URL we saw, so a navigation can name both sides. */
 const lastUrl = new Map<number, string>();
@@ -87,7 +92,7 @@ const pending = new Map<number, ActivateMessage>();
 
 chrome.action.onClicked.addListener((tab) => invoke(tab.windowId, tab.id));
 chrome.commands.onCommand.addListener((command, tab) => {
-  if (command === "aiui-intent-activate") {
+  if (command === ACTIVATE_COMMAND) {
     invoke(tab?.windowId, tab?.id);
   }
 });

@@ -73,11 +73,18 @@ function pageBootstrap(version: string): void {
   };
 
   // ── the ring: the page's ONLY evidence of the client's state ──────────────
+  // Four states: off · steady (armed) · breathing (turn) · HOLLOW — armed, but
+  // this tab's pixels need a grant. Hollow renders outline-only with the
+  // activation hint beside it; the hint TEXT is whatever the host handed down
+  // (the live shortcut binding) — this page never knows what the key is.
   let ring: HTMLElement | undefined;
-  const assertRing = (on: boolean, turnTone: boolean): void => {
+  let ringHint: HTMLElement | undefined;
+  const assertRing = (on: boolean, turnTone: boolean, hollow: boolean, hint: string): void => {
     if (!on) {
       ring?.remove();
+      ringHint?.remove();
       ring = undefined;
+      ringHint = undefined;
       return;
     }
     if (ring === undefined || !ring.isConnected) {
@@ -85,15 +92,32 @@ function pageBootstrap(version: string): void {
       ring.id = "__aiui-intent-ring";
       ring.style.cssText =
         "position:fixed;top:8px;right:8px;width:12px;height:12px;border-radius:50%;" +
-        "z-index:2147483646;pointer-events:none;transition:background 200ms;";
+        "box-sizing:border-box;z-index:2147483646;pointer-events:none;transition:background 200ms;";
       const style = document.createElement("style");
       style.textContent =
         "@keyframes __aiui-breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}";
       ring.appendChild(style);
       (document.body ?? document.documentElement).appendChild(ring);
     }
-    ring.style.background = turnTone ? "#dc2626" : "#7c3aed";
+    const color = turnTone ? "#dc2626" : "#7c3aed";
+    ring.style.background = hollow ? "transparent" : color;
+    ring.style.border = hollow ? `2px solid ${color}` : "0";
     ring.style.animation = turnTone ? "__aiui-breathe 1.6s ease-in-out infinite" : "none";
+    if (hollow && hint !== "") {
+      if (ringHint === undefined || !ringHint.isConnected) {
+        ringHint = document.createElement("div");
+        ringHint.id = "__aiui-intent-ring-hint";
+        ringHint.style.cssText =
+          "position:fixed;top:7px;right:24px;z-index:2147483646;pointer-events:none;" +
+          "font:11px/14px ui-monospace,SFMono-Regular,Menlo,monospace;padding:0 5px;" +
+          "border-radius:7px;background:rgba(0,0,0,.55);color:#fff;";
+        (document.body ?? document.documentElement).appendChild(ringHint);
+      }
+      ringHint.textContent = hint;
+    } else {
+      ringHint?.remove();
+      ringHint = undefined;
+    }
   };
 
   // ── flash: shot confirmation / miss feedback ───────────────────────────────
@@ -194,14 +218,19 @@ function pageBootstrap(version: string): void {
      * Ink STROKES survive — they are the user's, not the client's. */
     adopt: (): void => {
       setKeyCapture(false);
-      assertRing(false, false);
+      assertRing(false, false, false, "");
       sayHello();
     },
     hello: sayHello,
     handle: (capability: string, payload: Record<string, unknown> | undefined): unknown => {
       switch (capability) {
         case "ring": {
-          assertRing(payload?.on === true, payload?.turnTone === true);
+          assertRing(
+            payload?.on === true,
+            payload?.turnTone === true,
+            payload?.hollow === true,
+            typeof payload?.hint === "string" ? payload.hint : "",
+          );
           return { ok: true };
         }
         case "flash": {

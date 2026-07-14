@@ -89,14 +89,34 @@ is per-tab and invocation-gated, so the warm stream re-points on switch; standal
 CdpBus tier needs no grant at all for stills (`Page.captureScreenshot`), so shots and sampled
 frames follow the active tab freely — only true continuous video inherits the pinning.
 
-**Whether a capture GRANT exists is the host's business, not the user's.** The machine gates
-shot/selection/clear on holding a grant for a tab, and that gate stays — but a host declares
+**Whether a capture GRANT exists is the host's business, not the user's.** A host declares
 whether the grant is free (`CaptureSource.grantless`). MV3's `tabCapture` is invocation-gated, so
-its grant is a real fact the activation gesture mints, and the capture acts stay dark until it
+its grant is a real fact the activation gesture mints, and the pixel acts stay dark until it
 does. The CDP tier's screenshots ask nobody, so there is nothing to mint: the grant simply *is*
 the tab in view. Consequence, and the bug it fixes (found live): arming from the BAR (`arm` →
 `turn`) must work exactly like ⌘B. It did not — the bar mints nothing, so the capture acts stayed
 disabled forever while ink, which follows the tab in view, worked fine.
+
+**The gate split (owner, 2026-07-14): the page transport follows the tab in view; pixels follow
+the grant.** Only the pixel acts — shot, the warm stream, video sampling — gate on the grant.
+Selection, clear, ink, and keys are PAGE acts: they ride the content script / bootstrap, which is
+on every tab, so they follow `activeTab` and never ask for a grant. Under MV3 a tab switch
+therefore darkens *capture only*; everything else keeps working on the new tab. And the pixel
+acts require the granted tab to BE the tab in view: after a switch the grant persists on the old
+tab, but shooting (or sampling) a tab you are not looking at would lie about what the turn saw —
+the acts go dark until the gesture re-grants, while the warm stream stays held on the granted tab
+so returning to it costs nothing.
+
+**The ring has FOUR states, and the fourth is how the page says "⌘B here" (owner, 2026-07-14 —
+no toast; the ring carries it).** Off · steady (armed) · breathing (turn) · **hollow**: armed,
+but THIS tab's pixels need a grant. Hollow renders outline-only in the phase's tone, with the
+activation hint beside it. The hint text is discovered by the host — the MV3 bus reads the
+command's LIVE binding from `chrome.commands.getAll()` (users rebind it; Chrome silently drops a
+conflicted suggestion, and the frozen client claims the same chord) — and handed down as a
+string; **no key name is hard-coded anywhere below the host.** The client's ring desire names
+the granted tab; each bus projects it per tab (`ringForTab`, one shared pure function): solid
+where the grant is, hollow everywhere else. Grantless hosts never produce a grant fact, so the
+hollow state simply cannot occur there.
 
 ## Which tab the client is aimed at (the leader)
 

@@ -204,8 +204,20 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // capture GRANT gates the capture-dependent acts individually (below);
     // the activation shortcut mints it (found live: gating the turn cap on
     // the grant dead-ended the bar for anyone who armed via the cap).
-    shot: (s, ctx) => s.phase === "turn" && ctx.grantedTab !== undefined,
-    selection: (s, ctx) => s.phase === "turn" && ctx.grantedTab !== undefined,
-    clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.grantedTab !== undefined,
+    // …and only while the tab in view IS the granted tab: after a tab switch
+    // the grant persists on the old tab, and shooting a tab you are not
+    // looking at would contradict the hollow ring saying "no pixels here".
+    // (Grantless hosts keep the two in lockstep, so this never bites there.)
+    shot: (s, ctx) =>
+      s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
+    // Selection and clear are PAGE acts, not pixel acts (owner, 2026-07-14):
+    // they ride the content script / bootstrap, which follows the tab in
+    // view — no grant involved. Only pixels (shot, the stream, sampling) need
+    // the invocation-gated grant. This is the tab-switch friction fix: under
+    // MV3, switching tabs darkens CAPTURE only, and the hollow ring says how
+    // to re-grant. The doctrine: the page transport follows the tab in view;
+    // pixels follow the grant.
+    selection: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined,
+    clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined,
   },
 };

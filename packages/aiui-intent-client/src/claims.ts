@@ -38,11 +38,14 @@ export function intentClaims(
 ): ClaimSpecs<EngineState, IntentContext> {
   const { transport, capture } = host;
   return {
-    /** Ink pointer routed at the granted tab while inking in an open turn. */
+    /** Ink pointer routed at the tab IN VIEW while inking in an open turn.
+     * Ink is a page act (the surface lives in the content script/bootstrap),
+     * so it follows `activeTab` like keys and selection do — the grant gates
+     * only pixels (owner, 2026-07-14: the tab-switch gate split). */
     inkPointer: {
       derive: (s, ctx) =>
-        s.phase === "turn" && s.ink === true && ctx.grantedTab !== undefined
-          ? { tab: ctx.grantedTab }
+        s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined
+          ? { tab: ctx.activeTab }
           : null,
       acquire: async (desire: { tab: number }) => {
         await transport.requestPage(desire.tab, "ink", {
@@ -71,8 +74,15 @@ export function intentClaims(
      * the real client passes `options.videoSampler`, whose start() runs the
      * VideoSampler pump (frames → engine shots → wire attachments). */
     videoSample: {
+      // Gated like `shot` (spec.ts): pixels only while the tab in view IS the
+      // granted tab — sampling a background tab would contradict the hollow
+      // ring. The warm stream below deliberately does NOT gate on this: it
+      // stays held on the granted tab so returning to it costs nothing.
       derive: (s, ctx) =>
-        s.phase === "turn" && s.video === true && ctx.grantedTab !== undefined
+        s.phase === "turn" &&
+        s.video === true &&
+        ctx.grantedTab !== undefined &&
+        ctx.grantedTab === ctx.activeTab
           ? { tab: ctx.grantedTab, mode: s.videoMode as string }
           : null,
       acquire: async (desire: { tab: number; mode: string }) => {
@@ -112,12 +122,29 @@ export function intentClaims(
 
     /** The on-page indicator — always asserted, tone from the phase. It was
      * the F1 poster child ("ring one state behind"): now it is a derivation
-     * committed with the dispatch, so it CANNOT lag. */
+     * committed with the dispatch, so it CANNOT lag.
+     *
+     * On a GATED host (MV3) the desire also names the granted tab and the
+     * activation hint: the buses project it per tab (ringForTab), and tabs
+     * without the grant render HOLLOW with the hint — the fourth ring state,
+     * which is how the page itself says "press ⌘B here" after a tab switch. */
     ring: {
-      derive: (s): RingState => ({
-        on: s.phase !== "disarmed",
-        turnTone: inTurn(s),
-      }),
+      derive: (s, ctx): RingState => {
+        const on = s.phase !== "disarmed";
+        const gated = capture.grantless !== true;
+        return {
+          on,
+          turnTone: inTurn(s),
+          ...(on && gated
+            ? {
+                grant: {
+                  ...(ctx.grantedTab !== undefined ? { tab: ctx.grantedTab } : {}),
+                  hint: capture.grantHint ?? "activate",
+                },
+              }
+            : {}),
+        };
+      },
       acquire: (desire: RingState) => {
         transport.broadcastRing(desire);
         return Promise.resolve(desire);

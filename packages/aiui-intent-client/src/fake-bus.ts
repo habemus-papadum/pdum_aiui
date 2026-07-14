@@ -40,7 +40,9 @@ export interface FakeBus extends IntentHost {
   clearLog(): void;
 }
 
-export function fakeBus(options: { activeTab?: number; grantless?: boolean } = {}): FakeBus {
+export function fakeBus(
+  options: { activeTab?: number; grantless?: boolean; grantHint?: string } = {},
+): FakeBus {
   const log: string[] = [];
   const failures = new Map<string, string>();
   const pageHandlers = new Set<(event: PageEvent) => void>();
@@ -62,7 +64,9 @@ export function fakeBus(options: { activeTab?: number; grantless?: boolean } = {
     broadcastRing: (state) => {
       ringCount += 1;
       bus.lastRing = state;
-      log.push(`ring#${ringCount} on=${state.on} turn=${state.turnTone}`);
+      const grant =
+        state.grant !== undefined ? ` grant=${state.grant.tab ?? "none"}(${state.grant.hint})` : "";
+      log.push(`ring#${ringCount} on=${state.on} turn=${state.turnTone}${grant}`);
     },
     onPageEvent: (handler) => {
       pageHandlers.add(handler);
@@ -85,6 +89,7 @@ export function fakeBus(options: { activeTab?: number; grantless?: boolean } = {
     // Model either host: MV3's per-tab invocation gate (a grant the activation
     // gesture mints) or the CDP tier's grantless screenshots.
     grantless: options.grantless === true,
+    ...(options.grantHint !== undefined ? { grantHint: options.grantHint } : {}),
     holdStream: (tab) => {
       const failure = failures.get("stream");
       if (failure !== undefined) {

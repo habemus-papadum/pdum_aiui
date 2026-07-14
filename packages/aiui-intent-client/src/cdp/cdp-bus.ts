@@ -38,16 +38,17 @@
  * bridge is loopback-only server-side; this guard is the client-side echo of it.
  */
 
-import type {
-  CaptureSource,
-  HeldStream,
-  IntentHost,
-  PageCapability,
-  PageEvent,
-  PageTransport,
-  PanelShot,
-  RingState,
-  SurfaceTargeting,
+import {
+  type CaptureSource,
+  type HeldStream,
+  type IntentHost,
+  type PageCapability,
+  type PageEvent,
+  type PageTransport,
+  type PanelShot,
+  type RingState,
+  ringForTab,
+  type SurfaceTargeting,
 } from "../transport";
 import { buildPageScript, PAGE_REPORT_BINDING, type PageReport } from "./page-script";
 import { type CdpSocket, connectCdp } from "./protocol";
@@ -224,7 +225,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   /** A document just announced itself: give it back what we had asserted. */
   const replay = (page: AttachedPage): void => {
     if (ring.on) {
-      void apply(page, "ring", ring).catch(() => {});
+      void apply(page, "ring", ringForTab(ring, page.tab)).catch(() => {});
     }
     for (const [capability, payload] of sticky.get(page.tab) ?? []) {
       void apply(page, capability, payload).catch(() => {});
@@ -446,8 +447,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     },
     broadcastRing: (state) => {
       ring = state;
+      // Projected per tab (ringForTab) for uniformity with the MV3 bus — this
+      // host is grantless, so the client never sets `grant` and the projection
+      // is the identity; the shared function is what KEEPS the two in step.
       for (const page of byTab.values()) {
-        void apply(page, "ring", state).catch(() => {});
+        void apply(page, "ring", ringForTab(state, page.tab)).catch(() => {});
       }
     },
     onPageEvent: (handler) => {

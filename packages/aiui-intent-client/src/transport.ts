@@ -24,6 +24,37 @@ export interface RingState {
   on: boolean;
   /** The richer tone while a turn is open (turn/tweak). */
   turnTone: boolean;
+  /**
+   * Present when this host's capture grant is REAL (not grantless) and the
+   * ring is on. `tab` is the granted tab — absent means no grant has been
+   * minted yet — and `hint` is how the user mints one: the activation
+   * shortcut's LIVE label, discovered by the host, never hard-coded (users
+   * rebind it, and Chrome silently drops a conflicted binding). Tabs other
+   * than `tab` render the HOLLOW ring with the hint (the fourth ring state,
+   * BEHAVIOR.md).
+   */
+  grant?: { tab?: number; hint: string };
+}
+
+/** What ONE page renders — the per-tab projection of a {@link RingState}. */
+export interface PageRing {
+  on: boolean;
+  turnTone: boolean;
+  /** Outline-only: "the client is armed, but THIS tab's pixels need a grant". */
+  hollow?: boolean;
+  /** Rendered beside the hollow ring — how to mint the grant ("⌘B"). */
+  hint?: string;
+}
+
+/** Project the ring desire onto one tab. Pure, and shared by every bus, so
+ * the solid-vs-hollow decision cannot drift between hosts. */
+export function ringForTab(state: RingState, tab: number): PageRing {
+  const hollow = state.on && state.grant !== undefined && state.grant.tab !== tab;
+  return {
+    on: state.on,
+    turnTone: state.turnTone,
+    ...(hollow ? { hollow: true, hint: state.grant?.hint } : {}),
+  };
 }
 
 /** Events pages push at the panel (the inbound half of the old relay). */
@@ -95,6 +126,14 @@ export interface CaptureSource {
    * the fact is free.
    */
   grantless?: boolean;
+  /**
+   * How the user mints a grant, as a short label the page shows beside the
+   * hollow ring ("⌘B"). The host discovers it live — the MV3 bus reads the
+   * command's actual binding from `chrome.commands.getAll()` — so nothing
+   * below the host ever knows (or hard-codes) what the key is. Gated hosts
+   * only; meaningless when `grantless`.
+   */
+  grantHint?: string;
   /** Warm a stream for a tab; the claim holds it for the turn's life. */
   holdStream(tab: number): Promise<HeldStream>;
   /** Grab one shot off the warm stream. */

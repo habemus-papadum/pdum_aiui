@@ -104,7 +104,9 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
   const runVerbs = (event: DispatchEvent): void => {
     const enteredTurn = !inTurn(event.before.phase) && inTurn(event.after.phase);
     const leftTurn = inTurn(event.before.phase) && !inTurn(event.after.phase);
-    const grantedTab = engine.context().grantedTab;
+    // The doctrine (spec.ts `available`): page acts follow the tab in view;
+    // only pixels follow the grant.
+    const { grantedTab, activeTab } = engine.context();
 
     // Armed-ness first (the wire engine gates turn-opening on it), then
     // opening — command-agnostic (the bar's turn cap, the activation
@@ -137,17 +139,13 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         }
         break;
       case "selection":
-        if (event.before.phase === "turn" && grantedTab !== undefined) {
-          lanes.addSelection(grantedTab);
+        if (event.before.phase === "turn" && activeTab !== undefined) {
+          lanes.addSelection(activeTab);
         }
         break;
       case "clear":
-        if (
-          event.before.phase === "turn" &&
-          event.before.ink === true &&
-          grantedTab !== undefined
-        ) {
-          lanes.clearInk(grantedTab);
+        if (event.before.phase === "turn" && event.before.ink === true && activeTab !== undefined) {
+          lanes.clearInk(activeTab);
         }
         break;
       default:

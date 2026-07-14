@@ -9,6 +9,8 @@
  * extension is a release shell, built and loaded unpacked.
  */
 
+import { ACTIVATE_COMMAND } from "./protocol";
+
 /** A NEW identity — deliberately not the frozen extension's key.
  *
  * Same key = same id = Chrome treats the new extension as an UPDATE of the old
@@ -42,7 +44,7 @@ export const manifest = {
   // at chrome://extensions/shortcuts — which is exactly what happens if the
   // FROZEN extension is also loaded, since it claims the same chord.
   commands: {
-    "aiui-intent-activate": {
+    [ACTIVATE_COMMAND]: {
       suggested_key: { default: "Ctrl+B", mac: "Command+B" },
       description: "aiui: arm and open a turn on this tab",
     },

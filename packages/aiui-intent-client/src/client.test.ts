@@ -11,6 +11,7 @@ import { activationGesture } from "./activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "./client";
 import { type FakeBus, fakeBus } from "./fake-bus";
 import { intentSpec } from "./spec";
+import { type RingState, ringForTab } from "./transport";
 
 const settle = async (rounds = 12): Promise<void> => {
   for (let i = 0; i < rounds; i++) {
@@ -46,8 +47,8 @@ interface Rig {
 
 let rig: Rig | undefined;
 
-function makeRig(options: { grantless?: boolean } = {}): Rig {
-  const bus = fakeBus({ activeTab: 7, grantless: options.grantless });
+function makeRig(options: { grantless?: boolean; grantHint?: string } = {}): Rig {
+  const bus = fakeBus({ activeTab: 7, grantless: options.grantless, grantHint: options.grantHint });
   const lanes: string[] = [];
   const blips: string[] = [];
   const client = createIntentClient({
@@ -141,7 +142,7 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.lanes).toContain("takeShot:9");
   });
 
-  it("a granted host (MV3 tabCapture) still needs the gesture — the acts stay dark until it runs", async () => {
+  it("a granted host (MV3 tabCapture) still needs the gesture — the PIXEL acts stay dark until it runs", async () => {
     const r = makeRig(); // grantless: false — the invocation-gated tier
     r.client.setContext({ connected: true });
     r.client.dispatch("arm");
@@ -151,10 +152,35 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.client.state().phase).toBe("turn");
     expect(r.client.context().grantedTab).toBeUndefined();
     expect(r.client.canDispatch("shot")).toBe(false);
+    // …but the PAGE acts never gated on it (the split, owner 2026-07-14):
+    // selection rides the content script, which follows the tab in view.
+    expect(r.client.canDispatch("selection")).toBe(true);
 
     activationGesture(r.client, 7); // the gesture mints the grant
     await settle();
     expect(r.client.canDispatch("shot")).toBe(true);
+  });
+
+  it("a tab switch under MV3 darkens CAPTURE only — page acts follow the tab in view", async () => {
+    // The friction this fixes (owner, 2026-07-14): switching tabs used to dark
+    // the whole act set until ⌘B. The doctrine now: the page transport follows
+    // the tab in view; only pixels follow the grant.
+    const r = makeRig();
+    grantAndOpen(r); // grant minted on tab 7
+    r.client.dispatch("ink");
+    await settle();
+    r.bus.clearLog();
+
+    r.bus.switchTab(9); // an UNGRANTED tab
+    await settle();
+
+    expect(r.client.canDispatch("shot")).toBe(false); // pixels: dark until ⌘B here
+    expect(r.client.canDispatch("selection")).toBe(true); // page act: follows the view
+    expect(r.client.canDispatch("clear")).toBe(true);
+    // The ink surface re-pointed at the tab in view, no grant asked.
+    expect(r.bus.log.some((line) => line.startsWith("page:ink@9"))).toBe(true);
+    r.client.dispatch("selection");
+    expect(r.lanes).toContain("addSelection:9");
   });
 });
 
@@ -204,7 +230,12 @@ describe("the ring — a claim, committed with the dispatch", () => {
     await settle();
     // ledger: "ring one state behind" (F1) — the desire derives from the
     // committed state, so the broadcast the bus saw is the CURRENT phase.
-    expect(r.bus.lastRing).toEqual({ on: true, turnTone: true });
+    // A GATED host's desire also names the granted tab + how to mint one.
+    expect(r.bus.lastRing).toEqual({
+      on: true,
+      turnTone: true,
+      grant: { tab: 7, hint: "activate" },
+    });
 
     r.client.dispatch("disarm");
     await settle();
@@ -213,24 +244,61 @@ describe("the ring — a claim, committed with the dispatch", () => {
     expect(r.client.state().phase).toBe("disarmed");
   });
 
-  it("walks all THREE ring states: off → steady (armed) → breathing (turn)", async () => {
-    const r = makeRig();
+  it("walks all FOUR ring states: off → steady → breathing, hollow where the grant isn't", async () => {
+    const r = makeRig({ grantHint: "⌘B" }); // gated, with a live-discovered hint
     await settle();
     expect(r.bus.lastRing).toEqual({ on: false, turnTone: false }); // off (boot broadcast)
 
     r.client.setContext({ connected: true });
-    r.client.dispatch("arm"); // armed, no turn — the STEADY middle state
+    r.client.dispatch("arm"); // armed, NOTHING granted yet (armed from the bar)
     await settle();
-    expect(r.bus.lastRing).toEqual({ on: true, turnTone: false });
+    // The desire says so: a grant block with no tab — so EVERY page projects
+    // hollow, each telling the user how to mint the grant right there.
+    expect(r.bus.lastRing).toEqual({ on: true, turnTone: false, grant: { hint: "⌘B" } });
+    expect(ringForTab(r.bus.lastRing as RingState, 7)).toEqual({
+      on: true,
+      turnTone: false,
+      hollow: true,
+      hint: "⌘B",
+    });
 
     r.client.setContext({ grantedTab: 7 });
     r.client.dispatch("turn");
     await settle();
-    expect(r.bus.lastRing).toEqual({ on: true, turnTone: true }); // breathing
+    expect(r.bus.lastRing).toEqual({
+      on: true,
+      turnTone: true,
+      grant: { tab: 7, hint: "⌘B" },
+    }); // breathing
+    // The per-tab projection: solid on the granted tab, hollow anywhere else —
+    // this is how a tab SWITCH surfaces "press ⌘B here" with no toast needed.
+    expect(ringForTab(r.bus.lastRing as RingState, 7)).toEqual({ on: true, turnTone: true });
+    expect(ringForTab(r.bus.lastRing as RingState, 9)).toEqual({
+      on: true,
+      turnTone: true,
+      hollow: true,
+      hint: "⌘B",
+    });
 
     r.client.dispatch("escape"); // back to steady
     await settle();
-    expect(r.bus.lastRing).toEqual({ on: true, turnTone: false });
+    expect(r.bus.lastRing).toEqual({
+      on: true,
+      turnTone: false,
+      grant: { tab: 7, hint: "⌘B" },
+    });
+  });
+
+  it("a GRANTLESS host's ring never carries a grant block — there is nothing to hint at", async () => {
+    const r = makeRig({ grantless: true });
+    r.client.setContext({ connected: true });
+    r.client.dispatch("arm");
+    r.client.dispatch("turn");
+    await settle();
+    // CDP shots ask nobody: no grant fact, no hollow state, no hint — the
+    // projection is the identity on every tab.
+    expect(r.bus.lastRing).toEqual({ on: true, turnTone: true });
+    expect(ringForTab(r.bus.lastRing as RingState, 9)).toEqual({ on: true, turnTone: true });
   });
 });
 
@@ -511,9 +579,10 @@ describe("the bar: a tree presented linearly", () => {
     expect(r.lanes).toContain("openTurn"); // the bar's turn opens the thread too
     expect(findCap(r, "ink")).toBeDefined();
     expect(findCap(r, "send")?.enabled).toBe(true);
-    // Grantless turn: the capture-dependent verbs say no, individually.
+    // Ungranted turn: only the PIXEL verbs say no (the gate split, owner
+    // 2026-07-14) — selection is a page act and follows the tab in view.
     expect(findCap(r, "shot")?.enabled).toBe(false);
-    expect(findCap(r, "selection")?.enabled).toBe(false);
+    expect(findCap(r, "selection")?.enabled).toBe(true);
     r.client.setContext({ grantedTab: 7 });
     expect(findCap(r, "shot")?.enabled).toBe(true);
   });
