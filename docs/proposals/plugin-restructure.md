@@ -83,3 +83,12 @@ Design (owner-confirmed, incl. "one literal WebSocket per tab-with-tools"):
 - `pnpm test:packaging` + full `-r` gates; the old `.port` consumers
   (devtools panel discovery) already have their replacement (the client
   discovers channels itself).
+
+## Residuals
+
+- Full docs/guide prose sweep (attribution, frontend-user-guide,
+  frontend-hard-won, getting-started, config, intent-overlay, web-intent-tool
+  still describe the old plugin in places; the two most load-bearing carry a
+  superseded banner). The frozen `aiui-extension` config deliberately keeps
+  the deprecated wrapper.
+- Demos' now-unused `aiui-dev-overlay` deps can drop once nothing imports it.

@@ -27,6 +27,7 @@
 
 import type { Plugin } from "vite";
 import {
+  cellFactory,
   defaultFactories,
   type FactorySpec,
   type SourceLocatorViteOptions,
@@ -49,9 +50,10 @@ export interface AiuiPluginOptions {
   /**
    * The locator pass's options (factories, stampJsx, include/exclude).
    * `true`/omitted = defaults; `false` disables the pass entirely (rare —
-   * durable factory identity dies with it).
+   * durable factory identity dies with it); `{ cellFactories: ["cell"] }` is
+   * back-compat sugar — names treated as cell-shaped factories.
    */
-  locator?: boolean | SourceLocatorViteOptions;
+  locator?: boolean | (SourceLocatorViteOptions & { cellFactories?: string[] });
   /**
    * The app's source root for absolutizing stamps (dev-only injection);
    * defaults to the Vite root at config-resolve time.
@@ -97,10 +99,20 @@ function sourceRootSeed(explicit: string | undefined): Plugin {
 export function aiui(options: AiuiPluginOptions = {}): Plugin[] {
   const plugins: Plugin[] = [];
   if (options.locator !== false) {
-    const locatorOptions: SourceLocatorViteOptions =
-      options.locator === undefined || options.locator === true
-        ? { factories: defaultFactories() as FactorySpec[] }
-        : options.locator;
+    let locatorOptions: SourceLocatorViteOptions;
+    if (options.locator === undefined || options.locator === true) {
+      locatorOptions = { factories: defaultFactories() as FactorySpec[] };
+    } else {
+      const { cellFactories, ...rest } = options.locator;
+      locatorOptions = {
+        ...rest,
+        factories:
+          rest.factories ??
+          (cellFactories !== undefined
+            ? cellFactories.map((name) => cellFactory(name))
+            : (defaultFactories() as FactorySpec[])),
+      };
+    }
     plugins.push(sourceLocatorVite(locatorOptions));
   }
   plugins.push(sourceRootSeed(options.sourceRoot));

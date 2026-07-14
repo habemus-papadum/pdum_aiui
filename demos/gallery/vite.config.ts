@@ -1,19 +1,20 @@
-import aiuiDevOverlay from "@habemus-papadum/aiui-dev-overlay/vite";
+import aiui from "@habemus-papadum/aiui-viz/vite";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
 // Solid 2.0 (beta) via vite-plugin-solid@next (bundles solid-refresh for HMR).
 //
-// aiuiDevOverlay is the aiui integration — the intent tool + channel port
-// bridging (see the overlay package's src/vite.ts for why it must be a plugin).
-// `locator: true` turns on the aiui compiler: every host JSX element gets
-// data-source-loc = "src/…:line:col" (dev-only), and cell()/control()/action()
-// call sites get their { name, loc, description } identity injected (build and
-// serve alike — control names are durable keys and tool identities).
+// aiui() is the build-time integration (@habemus-papadum/aiui-viz/vite): the
+// source-locator compiler pass — JSX gets data-source-loc = "src/…:line:col"
+// (dev-only stamps; production bundles ship clean) and `cell()` call sites get
+// their `{ name, loc }` identity injected in EVERY mode (load-bearing for
+// durable cells) — plus the dev-only sourceRoot seed. Nothing else: no overlay
+// injection, no channel port; connectivity arrives from the intent client
+// (window.__AIUI__ itself is the viz runtime's job, production included).
 //
-// Order matters: aiuiDevOverlay comes BEFORE solid() so the locator's `pre`
-// babel pass stamps JSX before vite-plugin-solid (also `pre`) compiles each
-// element into an opaque template. Same-enforce plugins run in array order.
+// Order matters: aiui() comes BEFORE solid() so the locator's `pre` babel pass
+// stamps JSX before vite-plugin-solid (also `pre`) compiles each element into
+// an opaque template. Same-enforce plugins run in array order.
 export default defineConfig(({ command, isPreview }) => ({
   // Static builds are published to https://habemus-papadum.net/aiui/ (see
   // publish.sh); dev keeps "/". Route hrefs are built from BASE_URL
@@ -34,7 +35,7 @@ export default defineConfig(({ command, isPreview }) => ({
     // the multimodal (intent-v1) tab active, with the text tab as the escape
     // hatch. (Sends fail against an old channel that doesn't know intent-v1;
     // that degrades to a widget error, not a crash.)
-    aiuiDevOverlay({ locator: true }),
+    aiui(),
     solid(),
   ],
 }));

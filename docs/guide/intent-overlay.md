@@ -1,5 +1,13 @@
 # Using the intent overlay
 
+> **Superseded (2026-07-14).** The build integration is `aiui()` from
+> `@habemus-papadum/aiui-viz/vite` (locator + dev-only sourceRoot — nothing
+> else), `window.__AIUI__` installs from the viz runtime (production
+> included), and channel connectivity arrives from the intent client, never
+> the app. See docs/proposals/plugin-restructure.md. The overlay described
+> below still works as an importable library; `aiuiDevOverlay()` is a
+> deprecated locator-only wrapper.
+
 The intent overlay is the default modality of the [web intent tool](./web-intent-tool): a
 floating widget over your app that collects a **multimodal turn** — dictation, pen ink,
 region screenshots, on-screen selections — and streams it to the running channel, where it is

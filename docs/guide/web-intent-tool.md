@@ -1,5 +1,13 @@
 # The Web Intent Tool
 
+> **Superseded (2026-07-14).** The build integration is `aiui()` from
+> `@habemus-papadum/aiui-viz/vite` (locator + dev-only sourceRoot — nothing
+> else), `window.__AIUI__` installs from the viz runtime (production
+> included), and channel connectivity arrives from the intent client, never
+> the app. See docs/proposals/plugin-restructure.md. The overlay described
+> below still works as an importable library; `aiuiDevOverlay()` is a
+> deprecated locator-only wrapper.
+
 The first concrete layer-2 tool: a widget you mount into the web app you're developing that
 collects intent — dictation, region screenshots, pen ink, and DOM context, with plain text as the
 escape hatch — and streams it to the running channel server, where it is **lowered** into a prompt
