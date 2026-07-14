@@ -17,7 +17,7 @@ import { runEnv } from "./commands/env";
 import { type ExtensionOptions, runExtension } from "./commands/extension";
 import { runMcp } from "./commands/mcp";
 import { runNativeHost } from "./commands/native-host";
-import { runPaintUrl } from "./commands/paint";
+import { runPaintUrl, runPencilUrl } from "./commands/paint";
 import { runVite } from "./commands/vite";
 
 import { VERSION } from "./util/version";
@@ -226,6 +226,17 @@ export function buildProgram(): Command {
     .description("print the URL(s) an iPad should open, per running paint-enabled channel")
     .option("--json", "machine-readable targets")
     .action((opts: { json?: boolean }) => runPaintUrl(opts));
+
+  // `aiui pencil …` — the remote pencil (paint's successor; both ride each
+  // channel's one web server, so resolution is identical modulo the prefix).
+  const pencil = program
+    .command("pencil")
+    .description("the remote pencil — url (where the iPad should connect)");
+  pencil
+    .command("url")
+    .description("print the URL(s) an iPad should open, per running pencil-enabled channel")
+    .option("--json", "machine-readable targets")
+    .action((opts: { json?: boolean }) => runPencilUrl(opts));
 
   return program;
 }

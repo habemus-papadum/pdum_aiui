@@ -1,0 +1,47 @@
+{
+  "name": "@habemus-papadum/aiui-pencil",
+  "version": "0.4.0+dev",
+  "description": "A pencil: pressure/tilt/azimuth-driven textured strokes, erasing, and vanishing ink, on a three-tier raster surface.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-pencil"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/backend.ts",
+    "./sidecar": "./src/sidecar.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json && pnpm build:client",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p lab/tsconfig.json",
+    "test": "vitest run",
+    "lab": "vite --config lab/vite.config.ts",
+    "build:client": "vite build --config lab/vite.client.config.ts"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@habemus-papadum/aiui-remote-bar": "workspace:^",
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
+    "@types/express": "^5.0.0",
+    "@types/ws": "^8.5.0",
+    "express": "^5.1.0",
+    "jsdom": "^29.0.0",
+    "solid-js": "2.0.0-beta.15",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "3.0.0-next.5"
+  },
+  "private": true,
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
