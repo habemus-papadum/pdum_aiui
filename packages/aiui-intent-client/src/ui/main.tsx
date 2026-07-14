@@ -20,12 +20,12 @@ import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
 import { type CdpBus, connectCdpBus } from "../cdp/cdp-bus";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
-import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
+import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
 import type { IntentHost } from "../transport";
-import { CHANNEL_HEADER_STYLES, ChannelHeader } from "./channel-header";
+import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./channel-header";
 import { Panel } from "./panel";
 import { PANES_STYLES, TracePane, TurnPane } from "./panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "./shell";
@@ -56,6 +56,7 @@ const narration: Narration = {
 
 // The saved config base applies BEFORE the lanes read stt/linter.
 loadConfigBase();
+installConfigAutoSave(); // every change persists — no save/reset verbs (owner)
 
 // Panel zoom: ⌘+/⌘−/⌘0 drive the uiScale control; the graph pushes the
 // root font size (nothing hand-called).
@@ -326,7 +327,14 @@ render(
       <ChannelHeader
         port={port}
         phase={busPhase}
-        baseUrl={port !== undefined ? `http://127.0.0.1:${port}` : ""}
+        listChannels={async () => {
+          // The channel-served page's discovery IS its origin: the registry
+          // mirror answers on the port we are bound to (or same-origin).
+          const base = port !== undefined ? `http://127.0.0.1:${port}` : "";
+          const res = await fetch(`${base}/debug/api/channels`);
+          const body = (await res.json()) as { channels?: ChannelEntry[] };
+          return body.channels ?? [];
+        }}
         onSwitch={(next) => {
           const url = new URL(location.href);
           url.searchParams.set("channel", String(next));
@@ -336,7 +344,6 @@ render(
       <Panel
         client={client}
         registerBlipSink={(sink) => (blipSink = sink)}
-        configActions={{ save: () => saveConfigBase(), reset: () => resetConfigToBase() }}
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
       />
       <Show when={lanes} keyed>

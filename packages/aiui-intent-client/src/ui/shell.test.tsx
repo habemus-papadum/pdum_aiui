@@ -10,7 +10,7 @@
 import { flush } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
 import { uiScale } from "../config";
-import { loadConfigBase, saveConfigBase } from "../config-store";
+import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { installUiScaleRoot } from "./shell";
 
 let dispose: (() => void) | undefined;
@@ -24,12 +24,16 @@ afterEach(() => {
 });
 
 describe("panel zoom — the uiScale root effect", () => {
-  it("applies the CURRENT value immediately (the restore half), then follows steps", () => {
+  it("applies the CURRENT value immediately (the restore half), then follows steps", async () => {
     // Boot order as both entries run it: config restored FIRST, effect second.
+    // The persistence is AUTO-SAVE now: the change itself writes the store.
+    const stopAutoSave = installConfigAutoSave(localStorage, 0);
     uiScale.set(1.4 as never);
-    saveConfigBase();
+    flush();
+    await new Promise((resolve) => setTimeout(resolve, 0)); // the debounce tick
+    stopAutoSave();
     uiScale.set(1 as never);
-    loadConfigBase(); // a fresh document restoring its saved base
+    loadConfigBase(); // a fresh document restoring what auto-save persisted
     flush();
 
     dispose = installUiScaleRoot();

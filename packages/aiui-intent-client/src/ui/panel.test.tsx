@@ -89,11 +89,15 @@ describe("the panel is a projection", () => {
   it("pill and caps follow a dispatch in the same breath — no repaint to forget", async () => {
     const m = mount();
     await settle();
-    expect(text(m.root, "phase-pill")).toBe("disarmed");
+    // No phase pill (owner, 2026-07-14): the ARM CAP carries the state — its
+    // lit attribute is the disarmed/armed indicator.
+    const armCap = () => m.root.querySelector('[data-command="arm"]');
+    expect(armCap()?.getAttribute("data-lit")).toBe("false"); // disarmed
 
     activationGesture(m.client, 7);
     await settle(); // effects paint on the flush inside dispatch; settle for jsdom
-    expect(text(m.root, "phase-pill")).toBe("turn");
+    expect(armCap()?.getAttribute("data-lit")).toBe("true"); // armed-or-deeper
+    expect(m.client.state().phase).toBe("turn");
 
     m.client.dispatch("ink");
     await settle();
@@ -110,7 +114,7 @@ describe("the panel is a projection", () => {
     sendCap?.click();
     await settle();
     expect(m.client.state().phase).toBe("armed");
-    expect(text(m.root, "phase-pill")).toBe("armed");
+    expect(m.root.querySelector('[data-command="arm"]')?.getAttribute("data-lit")).toBe("true");
   });
 
   it("the help table renders the working keymap and dies on Esc first", async () => {

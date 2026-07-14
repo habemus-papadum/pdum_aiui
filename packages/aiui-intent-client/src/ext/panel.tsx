@@ -22,7 +22,7 @@ import { render } from "@solidjs/web";
 import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
-import { loadConfigBase, resetConfigToBase, saveConfigBase } from "../config-store";
+import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { connectSessionBus, probeChannel } from "../session";
 import { CHANNEL_HEADER_STYLES, ChannelHeader } from "../ui/channel-header";
@@ -30,7 +30,7 @@ import { Panel } from "../ui/panel";
 import { PANES_STYLES, TracePane, TurnPane } from "../ui/panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "../ui/shell";
 import { RichTracePane, TRACE_PANE_STYLES } from "../ui/trace-pane";
-import { discoverChannel, rememberPort } from "./channel";
+import { discoverChannel, listChannels, rememberPort } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
 
@@ -58,6 +58,7 @@ const narration: Narration = {
 };
 
 loadConfigBase();
+installConfigAutoSave(); // every change persists — no save/reset verbs (owner)
 
 installUiScaleRoot();
 
@@ -202,7 +203,8 @@ render(
       <ChannelHeader
         port={port}
         phase={busPhase}
-        baseUrl={port !== undefined ? `http://127.0.0.1:${port}` : ""}
+        // Native host FIRST (the extension's one NM use), mirror fallback.
+        listChannels={() => listChannels(port)}
         onSwitch={(next) => {
           // The extension's rebind: remember the port (discovery tries recent
           // ports first), then reboot the panel document onto it.
@@ -212,7 +214,6 @@ render(
       <Panel
         client={client}
         registerBlipSink={(sink) => (blipSink = sink)}
-        configActions={{ save: () => saveConfigBase(), reset: () => resetConfigToBase() }}
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
       />
       <Show when={lanes} keyed>

@@ -58,7 +58,7 @@ them bind in P2:
 | `uiScale` (⌘+/⌘−/⌘0, deliberately no widget) | ✅ control + keys + root-font effect (main.tsx) |
 | `rescanTick` | P2 (internal, with discovery) |
 | engine choice + `pendingEngine` (applies at thread-close) | **P2** — control + deferred binding (the engine's `on:` bindings carry payloads for exactly this) |
-| config strip with session overrides / reset / save | ✅ config-store.ts (live values = session; saved base in localStorage under `aiui2.config`; save flushes first — the M2 boundary) + strip buttons |
+| config strip persistence | ✅ AUTO-SAVE (owner 2026-07-14, superseding the session-layering DECIDE): every control change persists on its own (debounced effect, config-store.ts `installConfigAutoSave`; store key `aiui2.config`); the save/reset verbs are gone |
 | advanced raw-JSON config panel (G) | **DECIDE** (default: defer past P5 — agent `set_config` covers the need) |
 
 ## The bar + status pills (owner review 2026-07-13 — conscious divergence, improvement)

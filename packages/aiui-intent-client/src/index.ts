@@ -25,7 +25,7 @@ export {
   type IntentLanes,
 } from "./client";
 export * as intentConfig from "./config";
-export { loadConfigBase, resetConfigToBase, saveConfigBase } from "./config-store";
+export { installConfigAutoSave, loadConfigBase } from "./config-store";
 export { type FakeBus, fakeBus } from "./fake-bus";
 export { hintsFor, type KeyVerdict, keyStack, keyVerdict, turnLayer } from "./keys";
 export {

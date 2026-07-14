@@ -1,15 +1,15 @@
 /**
- * config-store.ts — session layering, plain-page grade (the overlay's
- * config-strip semantics, adopted per the owner's DECIDE default).
+ * config-store.ts — config persistence: AUTO-SAVE (owner, 2026-07-14).
  *
- * The LIVE control values are the session layer (durable across hot edits,
- * gone on reload); the SAVED BASE lives in localStorage. Three verbs:
+ * The session-layering verbs (save/reset) are gone: every control change
+ * persists on its own, debounced a beat, and a reload starts from exactly
+ * where you left off. Two pieces:
  *
- *  - `loadConfigBase()`  — boot: apply the saved base to the controls (a
- *    reload starts from what you saved, not factory defaults);
- *  - `saveConfigBase()`  — S: the current values become the base;
- *  - `resetConfigToBase()` — R: discard session changes, restore the base
- *    (factory defaults when nothing was ever saved).
+ *  - `loadConfigBase()` — boot: apply the persisted values to the controls;
+ *  - `installConfigAutoSave()` — boot, AFTER load: an effect over every
+ *    persisted control's value that writes the store on any change (the
+ *    order matters — installing first would persist factory defaults over
+ *    the saved state before load ran).
  *
  * Writes go through each control's own `set` (validation included). The
  * key is `aiui2.config` — the coexistence namespace, away from the old
@@ -17,7 +17,7 @@
  */
 
 import type { ControlBox } from "@habemus-papadum/aiui-viz";
-import { flush } from "solid-js";
+import { createEffect, createRoot, onCleanup } from "solid-js";
 import * as config from "./config";
 
 const BASE_KEY = "aiui2.config";
@@ -60,29 +60,33 @@ export function loadConfigBase(storage: Storage = localStorage): void {
   }
 }
 
-/** The current values become the saved base (S). */
-export function saveConfigBase(storage: Storage = localStorage): void {
-  // A boundary that must OBSERVE writes: the caller may have set a control
-  // in this very tick ("move the slider, hit save"), and a boundary read
-  // before the commit would snapshot the PRE-write value (write-semantics
-  // M0). flush() is the sanctioned cure (M2): commit, then read.
-  flush();
-  const snapshot: Record<string, unknown> = {};
-  for (const [name, ctl] of Object.entries(CONTROLS)) {
-    snapshot[name] = ctl.get();
-  }
-  storage.setItem(BASE_KEY, JSON.stringify(snapshot));
-}
-
-/** Discard session changes: restore the base, or factory defaults (R). */
-export function resetConfigToBase(storage: Storage = localStorage): void {
-  const base = readBase(storage);
-  for (const [name, ctl] of Object.entries(CONTROLS)) {
-    const value = base !== undefined && name in base ? base[name] : ctl.initial;
-    try {
-      ctl.set(value as never);
-    } catch {
-      ctl.set(ctl.initial as never);
-    }
-  }
+/**
+ * Persist every control change, debounced (a slider drag is many writes; the
+ * page going away flushes nothing it hasn't already written within the
+ * debounce — 200 ms is well under any human open-to-close). Returns the
+ * disposer. Effects read INSIDE the compute, so the effect re-runs on any
+ * persisted control's change; the handler is the storage edge.
+ */
+export function installConfigAutoSave(
+  storage: Storage = localStorage,
+  debounceMs = 200,
+): () => void {
+  return createRoot((dispose) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    createEffect(
+      () => {
+        const snapshot: Record<string, unknown> = {};
+        for (const [name, ctl] of Object.entries(CONTROLS)) {
+          snapshot[name] = ctl.get();
+        }
+        return JSON.stringify(snapshot);
+      },
+      (serialized) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => storage.setItem(BASE_KEY, serialized), debounceMs);
+      },
+    );
+    onCleanup(() => clearTimeout(timer));
+    return dispose;
+  });
 }

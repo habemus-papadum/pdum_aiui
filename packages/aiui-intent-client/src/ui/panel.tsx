@@ -34,11 +34,7 @@ import type { IntentClient } from "../client";
 export const PANEL_STYLES = `
   :root { color-scheme: light dark; }
   .aiui-panel { font: 13px/1.45 system-ui, sans-serif; padding: 12px; max-width: 460px; }
-  .aiui-phase { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600;
-    border: 1px solid color-mix(in srgb, currentColor 35%, transparent); }
-  .aiui-phase[data-phase="disarmed"] { opacity: 0.55; }
-  .aiui-phase[data-phase="turn"], .aiui-phase[data-phase="tweak"] { color: #7c3aed; }
-  .aiui-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; align-items: center; }
+  .aiui-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .aiui-sep { opacity: 0.4; padding: 0 3px; font-weight: 600; user-select: none; }
   .aiui-cap { border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
     border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
@@ -63,28 +59,23 @@ export const PANEL_STYLES = `
   .aiui-pill[data-state="err"] { color: #dc2626; border-color: #dc2626; opacity: 1; }
   .aiui-pill[data-state="live"] { color: #fff; background: #dc2626; border-color: #dc2626;
     opacity: 1; font-weight: 600; }
-  .aiui-config { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-top: 8px;
+  .aiui-config { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; padding-top: 6px;
     border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
   .aiui-help { margin-top: 10px; border-collapse: collapse; }
   .aiui-help td { padding: 1px 8px 1px 0; }
   .aiui-help kbd { border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
     border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
-  .aiui-blip { margin-top: 8px; min-height: 1.2em; color: #dc2626; font-size: 12px; }
+  .aiui-blip { margin-top: 6px; color: #dc2626; font-size: 12px; }
   .aiui-meter { display: inline-block; width: 64px; height: 8px; border-radius: 4px;
     border: 1px solid color-mix(in srgb, currentColor 25%, transparent); overflow: hidden;
     vertical-align: middle; }
   .aiui-meter > div { height: 100%; background: #dc2626; transition: width 80ms linear; }
-  .aiui-config-verbs button { font: 11px system-ui; padding: 1px 7px; border-radius: 6px;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent); background: transparent;
-    cursor: pointer; }
 `;
 
 export interface PanelProps {
   client: IntentClient;
   /** Called once with the blip sink (blips are UI-local display state). */
   registerBlipSink?: (sink: (key: string) => void) => void;
-  /** Session-layering verbs (save the base / reset to it) — config-store.ts. */
-  configActions?: { save(): void; reset(): void };
   /** The live mic level 0..1 (talk.level) — renders the REC meter while talking. */
   micLevel?: () => number;
 }
@@ -168,7 +159,6 @@ function BarWidget(props: { item: () => Extract<BarItem, { kind: "widget" }> }) 
 /** The whole panel: pill · bar rows · status pills · help · blip · config. */
 export function Panel(props: PanelProps) {
   const { client } = props;
-  const phase = createMemo(() => String(client.state().phase));
 
   const [blip, setBlip] = createSignal<string | undefined>(undefined, { ownedWrite: true });
   let blipTimer: ReturnType<typeof setTimeout> | undefined;
@@ -316,10 +306,6 @@ export function Panel(props: PanelProps) {
   return (
     <div class="aiui-panel" data-testid="aiui-panel">
       <style>{PANEL_STYLES}</style>
-      <span class="aiui-phase" data-phase={phase()} data-testid="phase-pill">
-        {phase()}
-      </span>
-
       {/* The tree, flattened into ONE wrapping flow: depth tiers joined by a
           chevron divider, so a one-cap tier (turn) never sits alone on a
           line. The model still yields rows; only the presentation joins. */}
@@ -377,9 +363,13 @@ export function Panel(props: PanelProps) {
         </table>
       </Show>
 
-      <div class="aiui-blip" data-testid="blip">
-        <Show when={blip()}>{(key) => <>swallowed: {key()}</>}</Show>
-      </div>
+      <Show when={blip()}>
+        {(key) => (
+          <div class="aiui-blip" data-testid="blip">
+            swallowed: {key()}
+          </div>
+        )}
+      </Show>
 
       <div class="aiui-config" data-testid="config-strip">
         <Repeat count={client.configStrip().length}>
@@ -392,28 +382,6 @@ export function Panel(props: PanelProps) {
             );
           }}
         </Repeat>
-        <Show when={props.configActions} keyed>
-          {(actions) => (
-            <span class="aiui-config-verbs" style="display: inline-flex; gap: 4px">
-              <button
-                type="button"
-                data-testid="config-save"
-                title="save current config as the base (survives reload)"
-                onClick={() => actions.save()}
-              >
-                save
-              </button>
-              <button
-                type="button"
-                data-testid="config-reset"
-                title="discard session changes — restore the saved base"
-                onClick={() => actions.reset()}
-              >
-                reset
-              </button>
-            </span>
-          )}
-        </Show>
       </div>
 
       {/* Pills BELOW the config strip (owner, 2026-07-14: bar → config → pills). */}

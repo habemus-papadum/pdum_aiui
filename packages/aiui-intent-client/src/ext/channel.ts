@@ -98,6 +98,21 @@ async function channelsViaNativeHost(): Promise<ChannelEntry[] | undefined> {
   }
 }
 
+/**
+ * Every channel the registry knows — the chooser's list function, and THE one
+ * place the extension uses native messaging: the native host reads the
+ * on-disk registry (finds channels with zero live ports known); any live
+ * channel's mirror is the fallback. Boot discovery below shares the same
+ * helpers — native messaging stays confined to this module.
+ */
+export async function listChannels(currentPort?: number): Promise<ChannelEntry[]> {
+  const native = await channelsViaNativeHost();
+  if (native !== undefined) {
+    return native;
+  }
+  return currentPort !== undefined ? await channelsVia(currentPort) : [];
+}
+
 /** Find a channel to bind, or `undefined` (see the module doc for the order). */
 export async function discoverChannel(): Promise<number | undefined> {
   for (const port of await loadRecentPorts()) {

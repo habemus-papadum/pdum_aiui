@@ -1,49 +1,67 @@
 // @vitest-environment jsdom
 /**
- * config-store.test.ts — session layering: live values are the session,
- * the saved base lives in localStorage, save/reset/load move between them.
+ * config-store.test.ts — config persistence is AUTO-SAVE (owner, 2026-07-14):
+ * every control change writes the store on its own (debounced), and a reload
+ * starts from exactly where you left off. No save/reset verbs.
  */
 import { flush } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
 import { inkFade, linter, stt, uiScale } from "./config";
-import { loadConfigBase, resetConfigToBase, saveConfigBase } from "./config-store";
+import { installConfigAutoSave, loadConfigBase } from "./config-store";
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+let stop: (() => void) | undefined;
 
 afterEach(() => {
+  stop?.();
+  stop = undefined;
   localStorage.removeItem("aiui2.config");
   stt.set(stt.initial as never);
   linter.set(linter.initial as never);
   inkFade.set(inkFade.initial as never);
   uiScale.set(uiScale.initial as never);
+  flush();
 });
 
-describe("config session layering", () => {
-  it("save → change → reset restores the saved base", () => {
+describe("config auto-save", () => {
+  it("every change persists on its own — a 'reload' starts from it", async () => {
+    stop = installConfigAutoSave(localStorage, 0);
     stt.set("gpt-4o-transcribe" as never);
     inkFade.set(12 as never);
-    saveConfigBase();
+    flush();
+    await tick(); // the debounce beat
 
-    stt.set("scribe-v2" as never); // session drift
-    inkFade.set(3 as never);
-    resetConfigToBase(); // R: discard the session
-    flush(); // boundary reads below want the committed values
+    // The "reload": controls fall back to factory, boot re-applies the store.
+    stop();
+    stop = undefined;
+    stt.set(stt.initial as never);
+    inkFade.set(inkFade.initial as never);
+    loadConfigBase();
+    flush();
     expect(stt.get()).toBe("gpt-4o-transcribe");
     expect(inkFade.get()).toBe(12);
   });
 
-  it("reset with NO saved base restores factory defaults", () => {
-    stt.set("gpt-4o-mini-transcribe" as never);
-    resetConfigToBase();
-    flush();
-    expect(stt.get()).toBe(stt.initial);
+  it("debounces a slider drag into one write", async () => {
+    const writes: string[] = [];
+    const storage = {
+      getItem: () => null,
+      setItem: (_k: string, v: string) => void writes.push(v),
+    } as unknown as Storage;
+    stop = installConfigAutoSave(storage, 5);
+    for (const value of [2, 3, 4, 5, 6]) {
+      inkFade.set(value as never);
+      flush();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    // The drag collapsed to (at most) the trailing write, not five.
+    expect(writes.length).toBeLessThanOrEqual(2); // the mount write may precede it
+    expect(JSON.parse(writes.at(-1) ?? "{}").inkFade).toBe(6);
   });
 
-  it("load applies the base at boot (a reload starts from what you saved)", () => {
-    linter.set("gemini" as never);
-    uiScale.set(1.4 as never);
-    saveConfigBase();
-    linter.set("off" as never); // the 'reload' reset the controls…
-    uiScale.set(1 as never);
-    loadConfigBase(); // …boot re-applies the base
+  it("load applies the store at boot", () => {
+    localStorage.setItem("aiui2.config", JSON.stringify({ linter: "gemini", uiScale: 1.4 }));
+    loadConfigBase();
     flush();
     expect(linter.get()).toBe("gemini");
     expect(uiScale.get()).toBe(1.4);
