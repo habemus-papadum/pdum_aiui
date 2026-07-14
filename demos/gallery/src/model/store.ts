@@ -14,7 +14,7 @@
  * edited constantly. Splitting the two along module lines is what gives HMR
  * an easy job — see archive/agentic_ui_workflow/hmr_for_agentic_coding.md.
  */
-import { control, durable, durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, durable, durableCanvas, durableSignal } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";
 import { GrayScottEngine } from "../sim/gray-scott";
 import { type SimLoop, type Snapshot, startLoop } from "../sim/loop";
@@ -94,14 +94,17 @@ export const history: HistoryRing = durable("history", () => {
  * The canvas is created OUTSIDE any component and adopted by whichever
  * SimCanvas render is current — so a component hot-swap re-parents the same
  * canvas and the WebGL context (and the pattern in its textures) survives.
+ * `durableCanvas` owns both halves of that: the create-once element, and the
+ * adoption whose cleanup never takes the canvas back from a successor.
  */
-export const simCanvas: HTMLCanvasElement = durable("canvas", () => {
-  const canvas = document.createElement("canvas");
+export const simSurface = durableCanvas("canvas", (canvas) => {
   canvas.width = SIM_SIZE * 2; // presented with CSS upscaling on top
   canvas.height = SIM_SIZE * 2;
   canvas.className = "sim-canvas";
-  return canvas;
 });
+
+/** The element itself — what the engine draws into. */
+export const simCanvas: HTMLCanvasElement = simSurface.canvas;
 
 export interface SimHandle {
   engine: GrayScottEngine;

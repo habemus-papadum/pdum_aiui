@@ -77,10 +77,11 @@ async function getJson<T>(port: number, path: string): Promise<T | undefined> {
  * sidecar (or is not actually listening any more). */
 async function queryChannel(
   port: number,
+  prefix: string,
 ): Promise<{ lan: boolean; urls: string[]; hosts: number; clients: number } | undefined> {
   const info = await getJson<{ ok?: boolean; hosts?: number; clients?: number }>(
     port,
-    "/paint/info",
+    `${prefix}/info`,
   );
   if (!info?.ok) {
     return undefined;
@@ -91,14 +92,27 @@ async function queryChannel(
   return {
     lan,
     urls: lan
-      ? lanAddresses().map((ip) => `http://${ip}:${port}/paint/`)
-      : [`http://127.0.0.1:${port}/paint/`],
+      ? lanAddresses().map((ip) => `http://${ip}:${port}${prefix}/`)
+      : [`http://127.0.0.1:${port}${prefix}/`],
     hosts: info.hosts ?? 0,
     clients: info.clients ?? 0,
   };
 }
 
-export async function runPaintUrl(opts: { json?: boolean } = {}): Promise<void> {
+/** `aiui pencil url` — the same resolution against the pencil surface. */
+export function runPencilUrl(opts: { json?: boolean } = {}): Promise<void> {
+  return runSurfaceUrl("/pencil", "pencil", opts);
+}
+
+export function runPaintUrl(opts: { json?: boolean } = {}): Promise<void> {
+  return runSurfaceUrl("/paint", "paint", opts);
+}
+
+async function runSurfaceUrl(
+  prefix: string,
+  name: string,
+  opts: { json?: boolean } = {},
+): Promise<void> {
   const servers = listMcpServers();
   // One `claude agents` call names every target; skipped when nothing is
   // running so the command stays instant in the common empty case.
@@ -106,7 +120,7 @@ export async function runPaintUrl(opts: { json?: boolean } = {}): Promise<void> 
     servers.length > 0 ? agentsByPid(listClaudeAgents()) : new Map<number, ClaudeAgent>();
   const targets: PaintTarget[] = [];
   for (const server of servers) {
-    const paint = await queryChannel(server.port);
+    const paint = await queryChannel(server.port, prefix);
     if (paint) {
       const session = server.name ?? agents.get(server.ppid)?.name;
       targets.push({
@@ -125,13 +139,13 @@ export async function runPaintUrl(opts: { json?: boolean } = {}): Promise<void> 
   }
 
   if (targets.length === 0) {
-    console.log("No running channel is hosting the paint surface.");
+    console.log(`No running channel is hosting the ${name} surface.`);
     console.log("");
     console.log(
       `It is on by default — start a session with ${chalk.cyan("aiui claude")}. If it's off here,`,
     );
     console.log(
-      `check for ${chalk.cyan("sidecars.paint false")} in config or a --aiui-no-sidecar flag.`,
+      `check for ${chalk.cyan(`sidecars.${name} false`)} in config or a --aiui-no-sidecar flag.`,
     );
     process.exitCode = 1;
     return;

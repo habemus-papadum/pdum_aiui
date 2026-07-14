@@ -1,0 +1,54 @@
+{
+  "name": "@habemus-papadum/aiui-remote-bar",
+  "version": "0.4.0+dev",
+  "description": "The command bar as its own channel: a mode engine projected over a websocket, mounted as a channel sidecar, with a Solid client that renders the bar and dispatches taps.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-remote-bar"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/backend.ts",
+    "./sidecar": "./src/sidecar.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run"
+  },
+  "private": true,
+  "dependencies": {
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@types/express": "^5.0.0",
+    "@types/ws": "^8.5.0",
+    "express": "^5.1.0",
+    "jsdom": "^29.0.0",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "3.0.0-next.5"
+  },
+  "peerDependencies": {
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "express": "^5.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@habemus-papadum/aiui-claude-channel": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    }
+  }
+}

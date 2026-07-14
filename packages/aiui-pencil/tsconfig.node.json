@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "declarationDir": "dist",
+    "types": ["node"]
+  },
+  "include": [
+    "src/backend.ts",
+    "src/backend.test.ts",
+    "src/sidecar.ts",
+    "src/sidecar.test.ts",
+    "src/client-static.ts"
+  ],
+  "exclude": ["dist", "node_modules"]
+}

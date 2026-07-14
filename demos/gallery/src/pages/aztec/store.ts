@@ -13,7 +13,7 @@
  * carry the `aztec:` prefix, control/cell names must be unique app-wide (the
  * registries are global), and the agent-tool namespace stays window.__aztec.
  */
-import { control, durable, durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, durable, durableCanvas, durableSignal } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";
 import type { ShuffleFrame } from "./types";
 
@@ -90,13 +90,14 @@ export const frames: FrameRing = durable("aztec:frames", () => {
 
 // --- the durable canvas island (adopted by AztecCanvas) ----------------------
 
-export const aztecCanvas: HTMLCanvasElement = durable("aztec:canvas", () => {
-  const canvas = document.createElement("canvas");
+export const aztecSurface = durableCanvas("aztec:canvas", (canvas) => {
   canvas.width = CANVAS_PX;
   canvas.height = CANVAS_PX;
   canvas.className = "aztec-canvas";
-  return canvas;
 });
+
+/** The element itself — what the tiling is painted into. */
+export const aztecCanvas: HTMLCanvasElement = aztecSurface.canvas;
 
 export const ctx2d: CanvasRenderingContext2D = durable("aztec:ctx", () => {
   const c = aztecCanvas.getContext("2d");
