@@ -22,8 +22,13 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 - **The arm cap is a status indicator you can press**: lit = armed-or-deeper; press arms from
   disarmed (gated on the channel) and hard-disarms from anywhere else — a one-click abandon,
   no confirmation (owner-accepted).
-- **Send keeps you armed** (old divergence 2, kept). **The turn cap is lit-but-disabled while
-  a turn is open** — it reads as status; send/step-out are the exits.
+- **Send keeps you armed** (old divergence 2, kept). **The turn cap is a lit TOGGLE while a
+  turn is open** (owner, 2026-07-14, superseding lit-but-disabled): pressing it again abandons
+  the turn back to armed — the escape-from-turn rung as one click. Leaving via the cap cancels
+  the thread exactly like Esc.
+- **The selection cap is enabled only when the page HAS a selection** (owner, 2026-07-14): a
+  pull with nothing selected is a guaranteed miss. Disabled, its tooltip points at the remedy —
+  tweak mode (`t`), select something, come back. The `sel` pill mirrors the same fact.
 - **Tweak is a toggle**: `t` or the cap enters; the cap (or the activation gesture) releases.
   In tweak the page owns every ordinary key — pressing `t` on the page must reach the page.
 - **Help is a standing root-level toggle** (blank system: arm · step out · help). Esc

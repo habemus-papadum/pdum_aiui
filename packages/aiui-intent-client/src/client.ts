@@ -129,6 +129,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       case "escape":
       case "disarm":
       case "arm":
+      case "turn": // the toggle: pressed mid-turn, it abandons (owner 2026-07-14)
         if (leftTurn) {
           lanes.cancelTurn();
         }

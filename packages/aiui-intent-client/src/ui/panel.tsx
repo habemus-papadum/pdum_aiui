@@ -193,7 +193,7 @@ export function Panel(props: PanelProps) {
     client.dispatch(command, payload);
     setFlashed(command);
     clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => setFlashed(undefined), 220);
+    flashTimer = setTimeout(() => setFlashed(undefined), 120);
   };
   onCleanup(() => clearTimeout(flashTimer));
 
@@ -229,6 +229,11 @@ export function Panel(props: PanelProps) {
         detail: "off · steady=armed · red=turn",
       },
       {
+        label: "sel",
+        state: ctx.selectionPresent ? "on" : "off",
+        detail: ctx.selectionPresent ? "the page has a live selection" : "no selection",
+      },
+      {
         label: "page",
         state: ctx.aiuiPage ? "on" : "off",
         detail: ctx.aiuiPage ? "aiui-instrumented (locate/jump capable)" : "not instrumented",
@@ -257,9 +262,19 @@ export function Panel(props: PanelProps) {
         data-tone={item()?.hint.tone}
         data-hold={hold() !== undefined ? "true" : "false"}
         disabled={!item()?.enabled}
-        title={((h) => (h === undefined ? "" : h.key !== "" ? `${h.key} — ${h.label}` : h.label))(
-          item()?.hint,
-        )}
+        title={(() => {
+          const it = item();
+          if (it === undefined) {
+            return "";
+          }
+          // UI copy for the one cap whose disablement has a REMEDY the user
+          // can take right now (owner, 2026-07-14).
+          if (it.command === "selection" && !it.enabled) {
+            return "no selection on the page — consider tweak mode (t) and selecting something";
+          }
+          const h = it.hint;
+          return h.key !== "" ? `${h.key} — ${h.label}` : h.label;
+        })()}
         onClick={() => {
           const it = item();
           if (it !== undefined && it.hold === undefined) {

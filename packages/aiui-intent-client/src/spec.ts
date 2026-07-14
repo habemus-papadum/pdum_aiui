@@ -115,8 +115,16 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       }
       return { phase: "disarmed" };
     },
-    /** The bar's turn cap — open a turn from armed. */
-    turn: (s) => (s.phase === "armed" ? { phase: "turn" } : null),
+    /** The bar's turn cap — a TOGGLE (owner, 2026-07-14): opens a turn from
+     * armed; pressed again mid-turn it ABANDONS the turn back to armed (the
+     * escape-from-turn rung, one click). The verb effects treat it like
+     * escape: leaving the turn via `turn` cancels the thread. */
+    turn: (s) =>
+      s.phase === "armed"
+        ? { phase: "turn" }
+        : s.phase === "turn" || s.phase === "tweak"
+          ? { phase: "armed" }
+          : null,
     /** Enter — send the turn; the seat stays armed (divergence 2, decided). */
     send: (s) => (s.phase === "turn" || s.phase === "tweak" ? { phase: "armed" } : null),
     /** d — disarm from anywhere in-turn (same hard disarmed as everything). */
@@ -217,7 +225,11 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // MV3, switching tabs darkens CAPTURE only, and the hollow ring says how
     // to re-grant. The doctrine: the page transport follows the tab in view;
     // pixels follow the grant.
-    selection: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined,
+    // …and only when the page actually HAS one (owner, 2026-07-14): a
+    // selection pull with nothing selected is a guaranteed miss — the cap
+    // grays and its tooltip points at tweak mode instead.
+    selection: (s, ctx) =>
+      s.phase === "turn" && ctx.activeTab !== undefined && ctx.selectionPresent,
     clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined,
   },
 };

@@ -131,6 +131,7 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.client.state().phase).toBe("turn");
     expect(r.client.context().grantedTab).toBe(7);
     expect(r.client.canDispatch("shot")).toBe(true);
+    r.bus.firePageEvent({ kind: "selectionPresent", tab: 7, present: true });
     expect(r.client.canDispatch("selection")).toBe(true);
 
     // …and the grant follows the tab you look at (BEHAVIOR: in this tier shots
@@ -153,7 +154,10 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.client.context().grantedTab).toBeUndefined();
     expect(r.client.canDispatch("shot")).toBe(false);
     // …but the PAGE acts never gated on it (the split, owner 2026-07-14):
-    // selection rides the content script, which follows the tab in view.
+    // selection rides the content script, which follows the tab in view —
+    // gated only on a selection actually EXISTING (owner, same day).
+    expect(r.client.canDispatch("selection")).toBe(false);
+    r.bus.firePageEvent({ kind: "selectionPresent", tab: 7, present: true });
     expect(r.client.canDispatch("selection")).toBe(true);
 
     activationGesture(r.client, 7); // the gesture mints the grant
@@ -175,6 +179,7 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     await settle();
 
     expect(r.client.canDispatch("shot")).toBe(false); // pixels: dark until ⌘B here
+    r.bus.firePageEvent({ kind: "selectionPresent", tab: 9, present: true });
     expect(r.client.canDispatch("selection")).toBe(true); // page act: follows the view
     expect(r.client.canDispatch("clear")).toBe(true);
     // The ink surface re-pointed at the tab in view, no grant asked.
@@ -580,8 +585,10 @@ describe("the bar: a tree presented linearly", () => {
     expect(findCap(r, "ink")).toBeDefined();
     expect(findCap(r, "send")?.enabled).toBe(true);
     // Ungranted turn: only the PIXEL verbs say no (the gate split, owner
-    // 2026-07-14) — selection is a page act and follows the tab in view.
+    // 2026-07-14) — selection is a page act, gated on a selection EXISTING.
     expect(findCap(r, "shot")?.enabled).toBe(false);
+    expect(findCap(r, "selection")?.enabled).toBe(false); // nothing selected yet
+    r.client.setContext({ selectionPresent: true });
     expect(findCap(r, "selection")?.enabled).toBe(true);
     r.client.setContext({ grantedTab: 7 });
     expect(findCap(r, "shot")?.enabled).toBe(true);
