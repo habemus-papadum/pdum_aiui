@@ -63,6 +63,13 @@ export interface WireCap {
   lit: boolean;
   /** The cap renders but refuses taps (gating: "needs a bound port"). */
   enabled: boolean;
+  /**
+   * The cap is part of the REMOTE subset — a host's `filter` uses this to decide
+   * which of its caps a bar-only remote (the iPad) may see and tap. Set on the
+   * bar's cap node and threaded through by `barModel`/`barTree`; absent means
+   * desktop-only. Widgets can never be remote (widgets never wire).
+   */
+  remote?: boolean;
 }
 
 /**

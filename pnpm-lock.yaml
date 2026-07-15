@@ -417,6 +417,9 @@ importers:
       '@habemus-papadum/aiui-pencil':
         specifier: workspace:^
         version: link:../aiui-pencil
+      '@habemus-papadum/aiui-remote-bar':
+        specifier: workspace:^
+        version: link:../aiui-remote-bar
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz

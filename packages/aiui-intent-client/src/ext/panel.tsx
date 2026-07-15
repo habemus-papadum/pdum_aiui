@@ -21,6 +21,7 @@ import { relayRequest } from "@habemus-papadum/aiui-webext";
 import { render } from "@solidjs/web";
 import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
+import { createBarHost } from "../bar-host";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
@@ -162,6 +163,10 @@ async function boot(): Promise<{
     streamHint: () => "grant this tab with ⌘B to start its video",
     label: `aiui intent — window ${windowId}`,
   }).connect();
+
+  // The remote bar: the same mode engine's remote-flagged caps (hands-free,
+  // video), projected over /bar for the iPad pencil client's embedded RemoteBar.
+  createBarHost({ client, port, label: `aiui intent — window ${windowId}` }).connect();
   const sessionBus = connectSessionBus({ port, label: "intent client (side panel)" });
   let recovered = false;
   sessionBus.onChange((state) => {

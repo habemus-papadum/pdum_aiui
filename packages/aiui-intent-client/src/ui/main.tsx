@@ -18,6 +18,7 @@
 import { render } from "@solidjs/web";
 import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
+import { createBarHost } from "../bar-host";
 import { type CdpBus, connectCdpBus } from "../cdp/cdp-bus";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
@@ -160,6 +161,13 @@ async function boot(): Promise<{
       lanes: channelLanes,
       sessionBus,
     };
+
+    // The remote bar: project the mode engine's remote-flagged caps (hands-free,
+    // video) over /bar, so the iPad pencil client's embedded RemoteBar drives
+    // them. Tab-agnostic (one machine, projected), so it runs for any channel —
+    // both the CDP tier below and the fake-bus harness on a real channel.
+    createBarHost({ client, port, label: `aiui intent — ${location.host}` }).connect();
+
     if (cdp !== undefined) {
       // The remote pencil: an iPad marks up a screencast of the leader tab, its
       // strokes landing on the in-page surface next to the local stylus. The

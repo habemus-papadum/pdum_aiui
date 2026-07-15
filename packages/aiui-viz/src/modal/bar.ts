@@ -66,6 +66,13 @@ export interface CapSpec<Ctx> {
   enabledWhen?: (inputs: BarInputs<Ctx>) => boolean;
   /** The cap exists at all in this state (default: always). */
   showWhen?: (inputs: BarInputs<Ctx>) => boolean;
+  /**
+   * This cap belongs to the REMOTE subset — carried onto the projected view so a
+   * remote-bar host can filter its projection to what a bar-only remote (the
+   * iPad) may see and tap. Static per node (not a predicate): membership is a
+   * property of the affordance, not the moment. Absent ⇒ desktop-only.
+   */
+  remote?: boolean;
   /** Revealed one depth down while this cap is shown AND lit. */
   children?: readonly BarNode<Ctx>[];
 }
@@ -93,6 +100,10 @@ export interface CapView {
   hint: KeyHint;
   lit: boolean;
   enabled: boolean;
+  /** Mirrors {@link CapSpec.remote}: this cap is in the remote subset. Only
+   * emitted when the node declared it, so desktop-only caps stay field-free
+   * (keeps `barModel` snapshots and the WireCap drift guard unchanged). */
+  remote?: boolean;
 }
 
 /** One renderable widget. */
@@ -180,6 +191,7 @@ export function barTree<Ctx>(
         hint,
         lit,
         enabled,
+        ...(node.remote !== undefined ? { remote: node.remote } : {}),
       },
       depth,
       children: lit && node.children !== undefined ? barTree(node.children, inputs, depth + 1) : [],
@@ -235,6 +247,7 @@ export function barModel<Ctx>(nodes: readonly BarNode<Ctx>[], inputs: BarInputs<
         hint,
         lit,
         enabled,
+        ...(node.remote !== undefined ? { remote: node.remote } : {}),
       });
       if (lit && node.children !== undefined) {
         next.push(...node.children);

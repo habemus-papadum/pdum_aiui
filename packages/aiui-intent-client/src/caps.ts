@@ -72,7 +72,11 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
             litWhen: ({ state }) => state.talk === "hold",
           },
           {
+            // Remote: the iPad drives voice from across the room — its whole
+            // point (a wired-up remote surface). No child (mute) is remote; the
+            // subset is deliberately the two engagement toggles.
             command: "handsFree",
+            remote: true,
             hint: { key: "h", label: "hands-free", icon: "🎧" },
             litWhen: ({ state }) => state.talk === "handsFree",
             children: [
@@ -84,7 +88,11 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
             ],
           },
           {
+            // Remote: whether the tab is being filmed is exactly what the person
+            // holding the iPad wants to toggle. Its cadence children stay
+            // desktop-only (a slider can't wire; fpsMode isn't flagged).
             command: "video",
+            remote: true,
             hint: { key: "v", label: "video", icon: "🎥" },
             litWhen: ({ state }) => state.video === true,
             children: [
