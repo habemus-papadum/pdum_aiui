@@ -52,8 +52,8 @@ import { durable } from "./durable";
 /** What a `ref={…}` wants: called with the element once it exists. */
 export type Adoption = (host: HTMLElement) => void;
 
-/** Teardown returned by a setup function; `void` if there is nothing to undo. */
-export type Release = (() => void) | void;
+/** Teardown returned by a setup function; `undefined` if there is nothing to undo. */
+export type Release = (() => void) | undefined;
 
 /**
  * Adopt a durable resource into this component's lifetime.
