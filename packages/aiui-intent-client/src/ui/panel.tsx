@@ -31,6 +31,7 @@ import {
   Switch,
 } from "solid-js";
 import type { IntentClient } from "../client";
+import { type RingState, ringForTab } from "../transport";
 
 export const PANEL_STYLES = `
   :root { color-scheme: light dark; }
@@ -76,11 +77,18 @@ export const PANEL_STYLES = `
   /* The ring pill mirrors the ON-PAGE dot, not the generic pill palette
      (cdp/page-script.ts assertRing / ext/content.ts — the source of these
      literals): steady PURPLE #7c3aed = armed, breathing RED #dc2626 = turn,
-     same 1.6s ease-in-out rhythm. The two can't share a clock across
-     documents, so what aligns is color + cadence, not phase. */
-  .aiui-pill[data-pill="ring"][data-state="on"] { color: #7c3aed; border-color: #7c3aed; }
+     same 1.6s ease-in-out rhythm. Solid dot = FILLED pill; the dot's fourth
+     state — HOLLOW, "this tab's pixels need a grant" — is the outline pill
+     (dashed, so a glance says "missing something"). The two can't share a
+     clock across documents, so what aligns is color + cadence, not phase. */
+  .aiui-pill[data-pill="ring"][data-state="on"] { color: #fff; background: #7c3aed;
+    border-color: #7c3aed; font-weight: 600; }
+  .aiui-pill[data-pill="ring"][data-state="on"][data-hollow] { color: #7c3aed;
+    background: transparent; border: 1px dashed #7c3aed; font-weight: 400; }
   .aiui-pill[data-pill="ring"][data-state="live"] {
     animation: aiui-ring-breathe 1.6s ease-in-out infinite; }
+  .aiui-pill[data-pill="ring"][data-state="live"][data-hollow] { color: #dc2626;
+    background: transparent; border: 1px dashed #dc2626; font-weight: 400; }
   @keyframes aiui-ring-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   .aiui-config { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; padding-top: 6px;
     border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
@@ -108,6 +116,9 @@ interface Pill {
   label: string;
   state: "off" | "on" | "busy" | "err" | "live";
   detail?: string;
+  /** The ring pill's fourth axis: armed/turn but the tab IN VIEW lacks the
+   * grant — rendered outline-only, like the on-page hollow dot. */
+  hollow?: boolean;
 }
 
 const claimPillState = (status: ClaimStatus | undefined): Pill["state"] => {
@@ -242,15 +253,29 @@ export function Panel(props: PanelProps) {
       { label: "video", state: claimPillState(claims.videoSample) },
       { label: "ink", state: claimPillState(claims.inkPointer) },
       { label: "keys", state: claimPillState(claims.keyRouting) },
-      {
-        // The ring's own three states, from the claim's DESIRE: off · steady
-        // (armed) · breathing (in-turn) — the page indicator's exact contract.
-        label: "ring",
-        state: ((desire) => (desire?.on !== true ? "off" : desire.turnTone ? "live" : "on"))(
-          claims.ring?.desire as { on?: boolean; turnTone?: boolean } | undefined,
-        ),
-        detail: "off · purple=armed · red pulse=turn (the on-page dot, mirrored)",
-      },
+      ((): Pill => {
+        // The ring pill IS the on-page dot, projected onto the tab in view —
+        // through ringForTab, the same pure projection every bus uses, so the
+        // solid-vs-hollow verdict cannot drift from what the page shows.
+        const desire = claims.ring?.desire as RingState | undefined;
+        if (desire?.on !== true) {
+          return {
+            label: "ring",
+            state: "off",
+            detail: "off · purple=armed · red pulse=turn (the on-page dot, mirrored)",
+          };
+        }
+        const page = ringForTab(desire, ctx.activeTab ?? -1);
+        return {
+          label: "ring",
+          state: desire.turnTone ? "live" : "on",
+          ...(page.hollow === true ? { hollow: true } : {}),
+          detail:
+            page.hollow === true
+              ? `this tab's pixels need the grant — press ${page.hint ?? "activate"}`
+              : "off · purple=armed · red pulse=turn (the on-page dot, mirrored)",
+        };
+      })(),
       {
         label: "sel",
         state: ctx.selectionPresent ? "on" : "off",
@@ -436,6 +461,7 @@ export function Panel(props: PanelProps) {
               class="aiui-pill"
               data-pill={pill.label}
               data-state={pill.state}
+              data-hollow={pill.hollow === true ? "" : undefined}
               title={pill.detail}
             >
               {pill.label}

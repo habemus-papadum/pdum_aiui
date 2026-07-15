@@ -157,6 +157,28 @@ describe("the panel is a projection", () => {
     expect(pill("rec")).toBe("busy"); // recording but muted
   });
 
+  it("the ring pill goes HOLLOW when the tab in view lacks the grant — like the on-page dot", async () => {
+    const m = mount();
+    const ring = () => m.root.querySelector('[data-pill="ring"]');
+    activationGesture(m.client, 7); // grant minted on tab 7, turn open
+    await settle();
+    expect(ring()?.getAttribute("data-state")).toBe("live"); // in-turn: breathing red
+    expect(ring()?.hasAttribute("data-hollow")).toBe(false); // view IS the granted tab
+
+    // The user looks at another tab: the page there renders a hollow dot
+    // (ringForTab), and the pill must say the same thing.
+    m.client.setContext({ activeTab: 9 });
+    await settle();
+    expect(ring()?.getAttribute("data-state")).toBe("live");
+    expect(ring()?.hasAttribute("data-hollow")).toBe(true);
+    expect(ring()?.getAttribute("title")).toContain("grant");
+
+    // Back on the granted tab: solid again.
+    m.client.setContext({ activeTab: 7 });
+    await settle();
+    expect(ring()?.hasAttribute("data-hollow")).toBe(false);
+  });
+
   it("the push-to-talk cap survives its own press — hold, then release, on ONE node", async () => {
     // Regression (found live): a reference-keyed <For> re-created the button
     // when its own lit flipped, detaching the node mid-press and losing the
