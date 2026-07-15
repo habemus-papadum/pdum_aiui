@@ -30,6 +30,7 @@ import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./chann
 import { Panel } from "./panel";
 import { PANES_STYLES, TracePane } from "./panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "./shell";
+import { TARGET_TAB_STYLES, TargetTab } from "./target-tab";
 import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
 import { TURN_PREVIEW_STYLES, TurnPreview } from "./turn-preview";
 
@@ -328,7 +329,11 @@ render(
   () => (
     <>
       <style>
-        {PANES_STYLES + TURN_PREVIEW_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}
+        {PANES_STYLES +
+          TURN_PREVIEW_STYLES +
+          TRACE_PANE_STYLES +
+          CHANNEL_HEADER_STYLES +
+          TARGET_TAB_STYLES}
       </style>
       {/* The decided order (owner, 2026-07-14): channel first, then the bar,
           config, pills (inside Panel), the turn preview, the traces, and last
@@ -350,6 +355,12 @@ render(
           location.assign(url.toString()); // resolveChannelPort honors ?channel=
         }}
       />
+      {/* Which real tab this detached panel is aimed at — the ring lives in
+          that tab, invisible from here, so name it in the panel itself. Only
+          the CDP tier drives real tabs; the fake tier has none to identify. */}
+      <Show when={targeting !== undefined && cdp !== undefined}>
+        <TargetTab targeting={targeting as NonNullable<typeof targeting>} />
+      </Show>
       <Panel
         client={client}
         registerBlipSink={(sink) => (blipSink = sink)}
