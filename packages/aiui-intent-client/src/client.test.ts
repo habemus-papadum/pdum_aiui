@@ -69,7 +69,12 @@ function grantAndOpen(r: Rig, tab = 7): void {
 }
 
 /** All bar items, flattened across depth rows. */
-const flatBar = (r: Rig) => r.client.bar().flatMap((row) => row.items);
+// The bar is a depth-first forest now; flatten the whole subtree for lookups.
+const flattenNodes = (
+  nodes: ReturnType<Rig["client"]["bar"]>,
+): ReturnType<Rig["client"]["bar"]>[number]["item"][] =>
+  nodes.flatMap((node) => [node.item, ...flattenNodes(node.children)]);
+const flatBar = (r: Rig) => flattenNodes(r.client.bar());
 const findCap = (r: Rig, command: string) =>
   flatBar(r).find((item) => item.kind === "cap" && item.command === command) as
     | Extract<ReturnType<typeof flatBar>[number], { kind: "cap" }>
@@ -565,9 +570,11 @@ describe("the bar: a tree presented linearly", () => {
   it("blank system: arm · step out (disabled) · help — nothing else", () => {
     const r = makeRig();
     r.client.setContext({ connected: true });
-    const rows = r.client.bar();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].items.map((i) => (i.kind === "cap" ? i.command : ""))).toEqual([
+    const roots = r.client.bar();
+    // Depth-first forest: the blank system's roots ARE the whole bar (no lit
+    // parent, so nothing is revealed beneath them).
+    expect(roots.every((node) => node.children.length === 0)).toBe(true);
+    expect(roots.map((node) => (node.item.kind === "cap" ? node.item.command : ""))).toEqual([
       "arm",
       "escape",
       "help",

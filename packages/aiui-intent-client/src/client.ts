@@ -15,7 +15,9 @@
 import { type SolidModeEngine, solidModeEngine } from "@habemus-papadum/aiui-viz";
 import {
   type BarRow,
+  type BarTreeNode,
   barModel,
+  barTree,
   type DispatchEvent,
   type KeyHint,
 } from "@habemus-papadum/aiui-viz/modal";
@@ -87,8 +89,10 @@ export interface IntentClient
   handleKey(key: string, phase: "down" | "up", repeat: boolean): void;
   /** Derived availability — would this command do anything right now? */
   canDispatch(command: string, payload?: unknown): boolean;
-  /** The command bar: the mode tree flattened into depth rows (reactive). */
-  bar(): BarRow[];
+  /** The command bar: the mode tree as a DEPTH-FIRST pre-order forest — a
+   * parent sits immediately before its revealed children so the UI brackets
+   * each into one shaded group (reactive). */
+  bar(): BarTreeNode[];
   /** The standing config strip (one flat row of widgets; reactive). */
   configStrip(): BarRow[];
   /** The keymap help rows for the current state (reactive). */
@@ -245,7 +249,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     handleKey,
     canDispatch: engine.canDispatch,
     bar: () =>
-      barModel(intentBar, {
+      barTree(intentBar, {
         state: engine.state(),
         ctx: engine.context(),
         claims: engine.claimStatuses(),

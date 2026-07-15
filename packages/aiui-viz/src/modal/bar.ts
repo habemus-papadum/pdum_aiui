@@ -5,10 +5,14 @@
  *
  * The bar is a **tree presented linearly**: root caps are the standing
  * surface (arm · step out · help); a cap that is SHOWN and LIT reveals its
- * children, and the projection flattens the tree into depth rows — the UI
- * renders one linear row per depth, so engaging hands-free surfaces its mute
- * sibling-row, engaging video surfaces cadence and rate, without anything
- * jumping inside an existing row.
+ * children. Two projections of that one tree:
+ *
+ *  - {@link barTree} — DEPTH-FIRST (pre-order): a parent sits immediately
+ *    before its own revealed subtree, so the host renders a linear row of
+ *    caps where a lit parent and its descendants are bracketed as one shaded
+ *    group. THIS is what the command bar draws (owner, 2026-07-15).
+ *  - {@link barModel} — breadth-first depth rows (one row per tier). The flat
+ *    config strip still reads this; its single tier makes the two identical.
  *
  * Two rules the projection enforces by construction:
  *
@@ -106,6 +110,82 @@ export type BarItem = CapView | WidgetView;
 export interface BarRow {
   depth: number;
   items: BarItem[];
+}
+
+/**
+ * One node of the bar as a PRE-ORDER (depth-first) tree: the item itself plus
+ * the descendants revealed beneath it right now. `children` is non-empty only
+ * for a cap that is shown, lit, and actually declares children — so a node
+ * with children is exactly a live grouping the renderer can bracket (thin
+ * left/right borders, a depth-shaded tint), and the parent sits immediately
+ * before its own children in the flow, not on a separate tier.
+ */
+export interface BarTreeNode {
+  item: BarItem;
+  /** Nesting level from the root (0 = root); drives the grouping shade. */
+  depth: number;
+  /** The revealed subtree, in declaration order (empty for a leaf). */
+  children: BarTreeNode[];
+}
+
+/**
+ * Project the bar tree DEPTH-FIRST: each shown node in declaration order, its
+ * revealed children nested directly under it (pre-order). Same admission rule
+ * as {@link barModel} — a child tier appears only while its parent cap is
+ * shown AND lit — but the shape keeps a parent adjacent to its descendants so
+ * the UI can draw them as one bracketed group instead of splitting the tree
+ * across depth rows. This is what the command bar renders; {@link barModel}
+ * (breadth-first depth rows) stays for the flat config strip.
+ */
+export function barTree<Ctx>(
+  nodes: readonly BarNode<Ctx>[],
+  inputs: BarInputs<Ctx>,
+  depth = 0,
+): BarTreeNode[] {
+  const out: BarTreeNode[] = [];
+  for (const node of nodes) {
+    if (node.showWhen !== undefined && !node.showWhen(inputs)) {
+      continue;
+    }
+    if (node.kind === "widget") {
+      out.push({
+        item: {
+          kind: "widget",
+          control: node.control,
+          widget: node.widget,
+          label: node.label,
+          enabled: node.enabledWhen?.(inputs) ?? true,
+        },
+        depth,
+        children: [],
+      });
+      continue;
+    }
+    const hint = typeof node.hint === "function" ? node.hint(inputs) : node.hint;
+    if (hint === undefined) {
+      continue;
+    }
+    const lit = node.litWhen?.(inputs) ?? false;
+    const enabled =
+      node.enabledWhen?.(inputs) ??
+      (node.hold !== undefined
+        ? inputs.canDispatch(node.hold.down) || inputs.canDispatch(node.hold.up)
+        : inputs.canDispatch(node.command, node.payload));
+    out.push({
+      item: {
+        kind: "cap",
+        command: node.command,
+        ...(node.payload !== undefined ? { payload: node.payload } : {}),
+        ...(node.hold !== undefined ? { hold: node.hold } : {}),
+        hint,
+        lit,
+        enabled,
+      },
+      depth,
+      children: lit && node.children !== undefined ? barTree(node.children, inputs, depth + 1) : [],
+    });
+  }
+  return out;
 }
 
 /**

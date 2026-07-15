@@ -4,7 +4,7 @@
  * canDispatch, stable labels, widget descriptors.
  */
 import { describe, expect, it } from "vitest";
-import { type BarInputs, type BarNode, barModel } from "./bar";
+import { type BarInputs, type BarNode, type BarTreeNode, barModel, barTree } from "./bar";
 import type { EngineState } from "./engine";
 
 interface Ctx {
@@ -124,5 +124,50 @@ describe("widgets", () => {
       label: "fade",
       enabled: true,
     });
+  });
+});
+
+describe("barTree: the same tree, depth-first for grouped rendering", () => {
+  const cmd = (node: BarTreeNode): string =>
+    node.item.kind === "cap" ? node.item.command : `widget:${node.item.control}`;
+  /** Pre-order command sequence — the exact left-to-right render flow. */
+  const preorder = (nodes: BarTreeNode[]): string[] =>
+    nodes.flatMap((node) => [cmd(node), ...preorder(node.children)]);
+
+  it("disarmed: a flat forest of roots, no children revealed", () => {
+    const forest = barTree(tree, inputs({}));
+    expect(preorder(forest)).toEqual(["arm", "escape", "help"]);
+    expect(forest.every((n) => n.children.length === 0)).toBe(true);
+  });
+
+  it("a parent sits immediately before its own revealed subtree (pre-order)", () => {
+    const forest = barTree(tree, inputs({ phase: "turn", ink: true, talk: "handsFree" }));
+    // arm ⊃ turn ⊃ {ink ⊃ fade, handsFree ⊃ mute} — each parent adjacent to
+    // its descendants, NOT split onto a depth tier as barModel would.
+    expect(preorder(forest)).toEqual([
+      "arm",
+      "turn",
+      "ink",
+      "widget:inkFade",
+      "handsFree",
+      "mute",
+      "escape",
+      "help",
+    ]);
+  });
+
+  it("children nest with an increasing depth; unlit branches stay leaves", () => {
+    const forest = barTree(tree, inputs({ phase: "turn" }));
+    const arm = forest[0];
+    expect(arm.depth).toBe(0);
+    const turn = arm.children[0];
+    expect([turn.depth, cmd(turn)]).toEqual([1, "turn"]);
+    // turn is lit → ink/handsFree revealed at depth 2, but neither is lit, so
+    // each is a leaf (its own children stay closed).
+    expect(turn.children.map((c) => [c.depth, cmd(c)])).toEqual([
+      [2, "ink"],
+      [2, "handsFree"],
+    ]);
+    expect(turn.children.every((c) => c.children.length === 0)).toBe(true);
   });
 });

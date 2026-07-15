@@ -4,10 +4,11 @@
  * through control ports (widgets); there is nothing to hand-sync.
  *
  * Three strips (owner review 2026-07-13):
- *  - the **command bar**: the mode tree flattened into depth rows — root is
- *    arm · step out · help; tiers appear as their parents engage. Labels
- *    are stable; lit carries "engaged"; enabled is the engine's derived
- *    verdict.
+ *  - the **command bar**: the mode tree rendered DEPTH-FIRST — root is
+ *    arm · step out · help; a lit parent's revealed children flow inline
+ *    right after it, bracketed by a faint depth-shaded group so a linear row
+ *    of caps still shows its hierarchy. Labels are stable; lit carries
+ *    "engaged"; enabled is the engine's derived verdict.
  *  - the **status pills**: internal state an expert wants at a glance —
  *    channel, capture stream, video sampling, ink pointer, key routing,
  *    REC (talk), mic permission, iPad paint clients. Claim statuses and
@@ -17,7 +18,7 @@
  */
 
 import { type ControlBox, ControlToggle, controlByName } from "@habemus-papadum/aiui-viz";
-import type { BarItem, BarRow, ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
+import type { BarItem, BarTreeNode, ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
 import {
   createEffect,
   createMemo,
@@ -36,6 +37,19 @@ export const PANEL_STYLES = `
   .aiui-panel { font: 13px/1.45 system-ui, sans-serif; padding: 12px; max-width: 460px; }
   .aiui-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .aiui-sep { opacity: 0.4; padding: 0 3px; font-weight: 600; user-select: none; }
+  /* A group brackets a lit parent with its revealed children: thin left/right
+     rules and a faint tint that DEEPENS with nesting depth, so a linear row of
+     caps still shows which belong together and how deep. Children flow inline
+     right after their parent (depth-first), the group wraps as one unit. */
+  .aiui-group { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center;
+    padding: 2px 5px; border-radius: 7px;
+    border-left: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    background: color-mix(in srgb, currentColor 4%, transparent); }
+  .aiui-group[data-depth="1"] { background: color-mix(in srgb, currentColor 7%, transparent); }
+  .aiui-group[data-depth="2"] { background: color-mix(in srgb, currentColor 10%, transparent); }
+  .aiui-group[data-depth="3"] { background: color-mix(in srgb, currentColor 13%, transparent); }
+  .aiui-group[data-depth="4"] { background: color-mix(in srgb, currentColor 16%, transparent); }
   .aiui-cap { border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
     border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
     transition: background 250ms ease-out, border-color 250ms ease-out; }
@@ -316,32 +330,38 @@ export function Panel(props: PanelProps) {
     </>
   );
 
-  const rows = createMemo((): BarRow[] => client.bar());
+  const forest = createMemo((): BarTreeNode[] => client.bar());
+
+  // The tree rendered DEPTH-FIRST: each node in declaration order, and a node
+  // that has revealed children becomes a bracketed group wrapping the parent
+  // cap and — recursively — its subtree, so the flow reads left-to-right as
+  // one linear row of caps whose thin borders show the groupings. A leaf
+  // renders bare; the Show flips it into a group exactly when children appear.
+  const renderBranch = (nodes: () => BarTreeNode[]) => (
+    <Repeat count={nodes().length}>
+      {(index) => {
+        const node = () => nodes()[index];
+        return (
+          <Show when={(node()?.children.length ?? 0) > 0} fallback={renderItem(() => node()?.item)}>
+            <span class="aiui-group" data-depth={node()?.depth}>
+              {renderItem(() => node()?.item)}
+              {renderBranch(() => node()?.children ?? [])}
+            </span>
+          </Show>
+        );
+      }}
+    </Repeat>
+  );
 
   return (
     <div class="aiui-panel" data-testid="aiui-panel">
       <style>{PANEL_STYLES}</style>
-      {/* The tree, flattened into ONE wrapping flow: depth tiers joined by a
-          chevron divider, so a one-cap tier (turn) never sits alone on a
-          line. The model still yields rows; only the presentation joins. */}
+      {/* The mode tree, depth-first: a parent sits right before its children,
+          and a lit parent's subtree is bracketed by a faint depth-shaded
+          group — the vertical rules are the only hint that a linear row of
+          caps is actually a hierarchy. */}
       <div class="aiui-bar" data-testid="command-bar">
-        <Repeat count={rows().length}>
-          {(rowIndex) => {
-            const row = () => rows()[rowIndex];
-            return (
-              <>
-                <Show when={rowIndex > 0}>
-                  <span class="aiui-sep" aria-hidden="true">
-                    ›
-                  </span>
-                </Show>
-                <Repeat count={row()?.items.length ?? 0}>
-                  {(itemIndex) => renderItem(() => row()?.items[itemIndex])}
-                </Repeat>
-              </>
-            );
-          }}
-        </Repeat>
+        {renderBranch(forest)}
       </div>
 
       <Show when={client.state().help === true}>
