@@ -32,7 +32,11 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 - **Tweak is a toggle**: `t` or the cap enters; the cap (or the activation gesture) releases.
   In tweak the page owns every ordinary key — pressing `t` on the page must reach the page.
 - **Help is a standing root-level toggle** (blank system: arm · step out · help). Esc
-  dismisses it before anything else; window blur closes it.
+  dismisses it before anything else; it SURVIVES window blur (owner, 2026-07-15) — a
+  reference card must be readable while the target page has focus. Its table always shows
+  the full in-turn keymap from the one working source (`hintsFor`): live in a turn, and
+  outside one the same rows dimmed as a PREVIEW under a single "these keys live in-turn —
+  activate opens one" note, so pre-turn help is a real reference card, not a one-line shrug.
 - **Unknown in-turn keys swallow + blip** — never exit, never leak to the page.
 - **A dimmed cap is a REFUSED command, not a discouraged one.** Availability is a gate the
   machine enforces (`dispatch` consults `spec.available`), so every route in — a cap tap, a key,

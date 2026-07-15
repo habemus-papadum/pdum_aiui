@@ -31,6 +31,7 @@ import {
   Switch,
 } from "solid-js";
 import type { IntentClient } from "../client";
+import { hintsFor } from "../keys";
 import { type RingState, ringForTab } from "../transport";
 
 export const PANEL_STYLES = `
@@ -94,6 +95,9 @@ export const PANEL_STYLES = `
     border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
   .aiui-help { margin-top: 10px; border-collapse: collapse; }
   .aiui-help td { padding: 1px 8px 1px 0; }
+  /* Preview mode (no open turn): the same rows, dimmed — these keys aren't
+     live yet; the note row stays at full strength and says how to get there. */
+  .aiui-help[data-preview] tr:not(.aiui-help-note) { opacity: 0.45; }
   .aiui-help kbd { border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
     border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
   .aiui-blip { margin-top: 6px; color: #dc2626; font-size: 12px; }
@@ -230,6 +234,17 @@ export function Panel(props: PanelProps) {
     flashTimer = setTimeout(() => setFlashed(undefined), 120);
   };
   onCleanup(() => clearTimeout(flashTimer));
+
+  /** Help ALWAYS shows the real keymap. Outside a turn the layer is inactive
+   * (its keys genuinely do nothing yet), so the rows come from a PREVIEW of
+   * the turn state — same table, dimmed, under one header saying how to get
+   * there. The displayed keymap stays the working keymap: one source
+   * (hintsFor); the phase decides presentation, never existence. */
+  const helpView = createMemo(() => {
+    const state = client.state();
+    const live = state.phase === "turn";
+    return { live, rows: live ? hintsFor(state) : hintsFor({ ...state, phase: "turn" }) };
+  });
 
   /** The expert strip: claim statuses + context facts, stable labels. */
   const pills = createMemo((): Pill[] => {
@@ -399,35 +414,34 @@ export function Panel(props: PanelProps) {
       </div>
 
       <Show when={client.state().help === true}>
-        <table class="aiui-help" data-testid="keymap-help">
+        <table
+          class="aiui-help"
+          data-testid="keymap-help"
+          data-preview={helpView().live ? undefined : ""}
+        >
           <tbody>
-            <Show
-              when={client.hints().length > 0}
-              fallback={
+            <Show when={!helpView().live}>
+              <tr class="aiui-help-note" data-testid="keymap-help-note">
+                <td>
+                  <kbd>activate</kbd>
+                </td>
+                <td />
+                <td>
+                  these keys live in-turn — the activation shortcut (or the caps above) opens one
+                </td>
+              </tr>
+            </Show>
+            <For each={helpView().rows}>
+              {(hint) => (
                 <tr>
                   <td>
-                    <kbd>activate</kbd>
+                    <kbd>{hint.key}</kbd>
                   </td>
-                  <td />
-                  <td>
-                    the host's activation shortcut (or the caps above) grants + opens a turn — the
-                    keys live in-turn
-                  </td>
+                  <td>{hint.icon}</td>
+                  <td>{hint.label}</td>
                 </tr>
-              }
-            >
-              <For each={client.hints()}>
-                {(hint) => (
-                  <tr>
-                    <td>
-                      <kbd>{hint.key}</kbd>
-                    </td>
-                    <td>{hint.icon}</td>
-                    <td>{hint.label}</td>
-                  </tr>
-                )}
-              </For>
-            </Show>
+              )}
+            </For>
           </tbody>
         </table>
       </Show>

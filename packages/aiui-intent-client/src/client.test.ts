@@ -568,13 +568,13 @@ describe("system events", () => {
     expect(r.client.state().phase).toBe("armed");
   });
 
-  it("window blur kills transients and nothing else", () => {
+  it("window blur moves nothing — help included (a reference card you read while the page has focus)", () => {
     const r = makeRig();
     grantAndOpen(r);
     r.client.dispatch("ink");
     r.client.dispatch("help");
     r.client.emit("windowBlur");
-    expect(r.client.state()).toMatchObject({ help: false, phase: "turn", ink: true });
+    expect(r.client.state()).toMatchObject({ help: true, phase: "turn", ink: true });
   });
 
   it("selection pings move the affordance, never the modes", () => {

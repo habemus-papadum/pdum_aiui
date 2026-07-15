@@ -127,11 +127,30 @@ describe("the panel is a projection", () => {
     await settle();
     expect(m.root.querySelector('[data-testid="keymap-help"]')).not.toBeNull();
     expect(text(m.root, "keymap-help")).toContain("ink");
+    // In a turn the table is LIVE: no preview dimming, no how-to-get-there note.
+    expect(m.root.querySelector('[data-testid="keymap-help"]')?.hasAttribute("data-preview")).toBe(
+      false,
+    );
+    expect(m.root.querySelector('[data-testid="keymap-help-note"]')).toBeNull();
 
     m.client.handleKey("Escape", "down", false);
     await settle();
     expect(m.root.querySelector('[data-testid="keymap-help"]')).toBeNull(); // help died…
     expect(m.client.state().phase).toBe("turn"); // …the turn did not
+  });
+
+  it("help OUTSIDE a turn previews the full keymap, dimmed, under the activation note", async () => {
+    const m = mount();
+    m.client.dispatch("help"); // disarmed — no turn anywhere near
+    await settle();
+    const table = m.root.querySelector('[data-testid="keymap-help"]');
+    expect(table).not.toBeNull();
+    // The REAL rows, not a lone "activate" shrug — same source as in-turn.
+    expect(text(m.root, "keymap-help")).toContain("ink");
+    expect(text(m.root, "keymap-help")).toContain("send");
+    // …marked as a preview (dimmed), with the note saying how to get there.
+    expect(table?.hasAttribute("data-preview")).toBe(true);
+    expect(m.root.querySelector('[data-testid="keymap-help-note"]')).not.toBeNull();
   });
 
   it("status pills show the operations and the world's facts", async () => {

@@ -101,8 +101,11 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     talk: choice(["off", "hold", "handsFree"]),
     /** Mic muted — only meaningful while talking (an exclude clears it). */
     micMuted: toggle(),
-    /** The keymap table popup. Esc dismisses it BEFORE the cancel rung. */
-    help: toggle({ blurExits: true }),
+    /** The keymap table popup. Esc dismisses it BEFORE the cancel rung.
+     * Deliberately NOT blurExits (owner, 2026-07-15): help is a reference
+     * card you read while your hands are on the TARGET page — dying the
+     * moment the panel loses focus defeated it. */
+    help: toggle(),
   },
 
   commands: {
@@ -203,7 +206,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // Mute exists only while talking.
     { name: "mute-needs-talk", when: (s) => s.talk === "off", set: { micMuted: false } },
     // (help is a root-level standing toggle — owner review 2026-07-13: the
-    // blank system shows arm · step out · help. Blur still dismisses it.)
+    // blank system shows arm · step out · help. It survives blur — a
+    // reference card must be readable while the page has focus.)
   ],
 
   on: {
