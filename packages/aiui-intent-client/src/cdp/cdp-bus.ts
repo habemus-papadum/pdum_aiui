@@ -52,6 +52,7 @@ import {
 } from "../transport";
 import { buildPageScript, PAGE_REPORT_BINDING, type PageReport } from "./page-script";
 import { type CdpSocket, connectCdp } from "./protocol";
+import { createScreencast, type Screencast } from "./screencast";
 
 /** One attached page target and the facts it has reported. */
 export interface AttachedPage {
@@ -83,6 +84,11 @@ export interface CdpBusOptions {
 export interface CdpBus extends IntentHost {
   /** The attached, non-excluded pages — introspection for tests and the panel. */
   pages(): AttachedPage[];
+  /** A live MediaStream of the leader tab (screencast → canvas), for the remote
+   * pencil host. The MV3 tier has a real tabCapture stream instead; the CDP tier
+   * has to synthesize one (see cdp/screencast.ts). `onReady` fires when the
+   * stream first materializes (wire it to the pencil host's refresh). */
+  screencast(options?: { onReady?: () => void }): Screencast;
   dispose(): void;
 }
 
@@ -570,6 +576,14 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     targeting,
     capture,
     pages: () => [...byTab.values()],
+    screencast: (options) =>
+      createScreencast({
+        send: (method, params, sessionId) => cdp.send(method, params, sessionId),
+        onEvent: cdp.onEvent,
+        session: () => (activeTab !== undefined ? byTab.get(activeTab)?.sessionId : undefined),
+        onActiveTabChange: targeting.onActiveTabChange,
+        ...(options?.onReady ? { onReady: options.onReady } : {}),
+      }),
     dispose: () => cdp.close(),
   };
 }

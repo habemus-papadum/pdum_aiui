@@ -23,6 +23,7 @@ import { createIntentClient, type IntentClient, type IntentLanes } from "../clie
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
+import { createPencilHost } from "../pencil-host";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
 import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
@@ -160,6 +161,23 @@ async function boot(): Promise<{
       sessionBus,
     };
     if (cdp !== undefined) {
+      // The remote pencil: an iPad marks up a screencast of the leader tab, its
+      // strokes landing on the in-page surface next to the local stylus. The
+      // video is synthesized from CDP here (no tabCapture in this tier); a
+      // mutable `refresh` closes the onReady → re-offer loop (the host is built
+      // after the screencast that needs to call it).
+      let refreshPencil = (): void => {};
+      const screencast = cdp.screencast({ onReady: () => refreshPencil() });
+      const pencilHost = createPencilHost({
+        host,
+        port,
+        tab: () => host.targeting.activeTab(),
+        stream: () => screencast.stream(),
+        streamHint: () => "open a turn on the tab to start its video",
+        label: `aiui intent — ${location.host}`,
+      });
+      refreshPencil = () => pencilHost.refresh();
+      pencilHost.connect();
       setStatusLine(`driving ${cdp.pages().length} real tab(s) over CDP — no extension installed`);
       return { client, mode: "cdp", lanes: channelLanes, cdp, port };
     }

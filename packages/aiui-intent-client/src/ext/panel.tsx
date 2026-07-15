@@ -24,6 +24,7 @@ import { activationGesture } from "../activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
+import { createPencilHost } from "../pencil-host";
 import { connectSessionBus, probeChannel } from "../session";
 import { createToolsLink } from "../tools-link";
 import { CHANNEL_HEADER_STYLES, ChannelHeader } from "../ui/channel-header";
@@ -32,6 +33,7 @@ import { PANES_STYLES, TracePane } from "../ui/panes";
 import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "../ui/shell";
 import { RichTracePane, TRACE_PANE_STYLES } from "../ui/trace-pane";
 import { TURN_PREVIEW_STYLES, TurnPreview } from "../ui/turn-preview";
+import { heldStreamFor } from "./capture";
 import {
   discoverChannel,
   listChannels,
@@ -147,6 +149,19 @@ async function boot(): Promise<{
 
   // The page-tools bridge — real chrome tab/window identity in this tier.
   createToolsLink({ host, port: () => port, windowId, log: (m) => console.info("[tools]", m) });
+
+  // The remote pencil: an iPad marks up the tab, its strokes landing on the
+  // in-page surface. The video is the SAME warm tabCapture MediaStream the shot
+  // grabs off (heldStreamFor) — shared, not a second capture — so it appears
+  // exactly when a turn warms the stream. Strokes forward to the tab in view.
+  createPencilHost({
+    host,
+    port,
+    tab: () => host.activeTab(),
+    stream: () => heldStreamFor(host.activeTab()),
+    streamHint: () => "grant this tab with ⌘B to start its video",
+    label: `aiui intent — window ${windowId}`,
+  }).connect();
   const sessionBus = connectSessionBus({ port, label: "intent client (side panel)" });
   let recovered = false;
   sessionBus.onChange((state) => {

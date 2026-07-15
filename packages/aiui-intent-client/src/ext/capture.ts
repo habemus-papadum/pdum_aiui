@@ -45,6 +45,18 @@ export function streamHeldFor(tabId: number | undefined): boolean {
 }
 
 /**
+ * The warm `tabCapture` MediaStream for `tabId`, or `undefined` (none held, or
+ * held for another tab). This is the pencil host's video source in the MV3 tier
+ * (pencil-host.ts) — the same stream the shot grabs off, shared, not a second
+ * capture (a tab supports only one). Undefined outside a turn: the stream is
+ * warmed by the tabStream claim, so remote video appears exactly when capture
+ * does — which is the only time the iPad has anything to mark up.
+ */
+export function heldStreamFor(tabId: number | undefined): MediaStream | undefined {
+  return streamHeldFor(tabId) ? stream : undefined;
+}
+
+/**
  * Hold a warm capture stream for `tabId`, consuming a stream id minted by the
  * service worker. Idempotent for the same tab; switching tabs releases the old
  * one first (a tab supports ONE active capture stream — measured, M1/M2).
