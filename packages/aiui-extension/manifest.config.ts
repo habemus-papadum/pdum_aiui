@@ -1,9 +1,12 @@
 import { defineManifest } from "@habemus-papadum/aiui-webext/vite";
 
 /**
- * The extension manifest. Chrome needs plain dotted integers here, so this
- * version is deliberately independent of the workspace lockstep version (same
- * stance as aiui-devtools-extension).
+ * The extension manifest. Chrome needs plain dotted integers for `version`
+ * (no `+dev`/pre-release), so it can't carry the workspace's `X.Y.Z+dev`
+ * string verbatim — instead `scripts/versioning.mjs` stamps it with the semver
+ * CORE (`X.Y.Z`) in lockstep with every package.json, and `pnpm version:check`
+ * fails if it drifts. Don't hand-edit the version (same stance as
+ * aiui-devtools-extension and the intent client's manifest).
  *
  * Permissions are added per plan step, not hoarded: step 1 needs only the side
  * panel and storage (an unpacked extension re-prompts nothing, but permission
@@ -12,7 +15,7 @@ import { defineManifest } from "@habemus-papadum/aiui-webext/vite";
 export default defineManifest({
   manifest_version: 3,
   name: "aiui intent tool (dev)",
-  version: "0.1.0",
+  version: "0.4.0",
   // Pins the unpacked extension id to ngakidpkjdgaajnlpggbchpaikilkpmp on
   // every machine (the id is a hash of this public key, not of the install
   // path). The native-messaging manifest's allowed_origins depends on it —

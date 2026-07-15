@@ -39,7 +39,10 @@ export const CDP_CHANNEL_TAG_KEY = "aiui2.cdpChannel";
 export const manifest = {
   manifest_version: 3,
   name: "aiui intent client",
-  version: "0.1.0",
+  // Stamped by scripts/versioning.mjs with the workspace's semver CORE (Chrome
+  // rejects the `+dev` suffix the package.jsons carry). Don't hand-edit it —
+  // `pnpm version:check` fails if it drifts from lockstep.
+  version: "0.4.0",
   description:
     "The aiui intent client: a side panel that drives the page — ink, keys, capture, dictation — into a live Claude Code session.",
   key: PUBLIC_KEY,
