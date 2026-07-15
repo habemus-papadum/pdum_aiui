@@ -409,4 +409,33 @@ describe("CdpBus", () => {
     browser.report("GHOST", { kind: "interaction" });
     expect(events).not.toHaveBeenCalled();
   });
+
+  it("beats every attached page with its session id; dispose stops the pulse", async () => {
+    vi.useFakeTimers();
+    try {
+      const browser = scriptedBrowser();
+      const bus = await connectCdpBus({
+        cdpUrl: BRIDGE,
+        channelOrigin: ORIGIN,
+        socketFactory: browser.factory,
+      });
+      browser.attach("S1", "T1", "https://example.test/");
+      await vi.advanceTimersByTimeAsync(0);
+      const beats = () => browser.evaluated("S1").filter((e) => e.includes(call("heartbeat")));
+      expect(beats()).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(2100);
+      expect(beats()).toHaveLength(1);
+      expect(beats()[0]).toContain("session"); // the per-boot driver id rides every beat
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(beats()).toHaveLength(2);
+
+      bus.dispose();
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(beats()).toHaveLength(2); // the pulse died with the bus
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

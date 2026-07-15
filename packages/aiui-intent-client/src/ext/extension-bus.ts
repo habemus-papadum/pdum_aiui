@@ -29,6 +29,7 @@ import { relayRequest, relayRequestTab } from "@habemus-papadum/aiui-webext";
 import type { PageReport } from "../cdp/page-script";
 import {
   type CaptureSource,
+  HEARTBEAT_MS,
   type HeldStream,
   type IntentHost,
   type PageEvent,
@@ -290,12 +291,36 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     grabRegion: (_tab, rect, viewport) => grabTabShot({ rect, viewport }),
   };
 
+  // ── driver liveness: beat every tab in this window (page/driver-watch.ts) ─
+  // Same broadcast shape as the ring. Each content script's watchdog arms on
+  // our assertions and hard-cleans them when the beats stop — the side panel
+  // closing mid-turn, or this extension being reloaded under ext:watch (the
+  // orphaned old content script hears nothing ever again), IS the beats
+  // stopping. The session id is per panel BOOT: a reopened panel's first beat
+  // reads as a driver CHANGE page-side (soft reset; strokes survive).
+  const driverSession = crypto.randomUUID();
+  const beatTimer = setInterval(() => {
+    try {
+      void chrome.tabs.query({ windowId: options.windowId }).then((tabs) => {
+        for (const tab of tabs) {
+          if (tab.id !== undefined) {
+            void request(tab.id, "heartbeat", { session: driverSession });
+          }
+        }
+      });
+    } catch {
+      // the extension context can die under a reload — the page watchdogs
+      // handle exactly that; this timer just stops mattering
+    }
+  }, HEARTBEAT_MS);
+
   return {
     transport,
     targeting,
     capture,
     activeTab: () => activeTab,
     dispose: () => {
+      clearInterval(beatTimer);
       chrome.runtime.onMessage.removeListener(onMessage);
       chrome.tabs.onActivated.removeListener(onActivated);
       chrome.tabs.onRemoved.removeListener(onRemoved);

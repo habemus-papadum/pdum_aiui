@@ -423,6 +423,47 @@ function pageBootstrap(version: string): void {
     regionOverlay = overlay;
   };
 
+  // ── driver liveness: self-cleanup when the panel dies mid-assertion ───────
+  // INLINE TWIN of page/driver-watch.ts (this function may import nothing at
+  // runtime — keep the two aligned). Assertion-carrying requests note proof of
+  // life; the panel beats `heartbeat` with its per-boot session id. Silence
+  // past the timeout = the panel tab died mid-turn → HARD cleanup (the
+  // strokes belong to a dead session). A NEW session id = a reloaded panel →
+  // soft reset; strokes survive (the `adopt` rule — turn recovery must find
+  // its ink) and the new client re-asserts through the ordinary paths.
+  const DRIVER_TIMEOUT_MS = 7000; // transport.ts DRIVER_TIMEOUT_MS — aligned
+  let driverSession: string | undefined;
+  let driverLast = 0;
+  let driverTimer: number | undefined;
+  const dropAssertions = (): void => {
+    setKeyCapture(false);
+    assertRing(false, false, false, "");
+    disarmRegion();
+    handleInk({ on: false });
+    handlePencil({ op: "disengage" });
+  };
+  const driverAlive = (session?: string): void => {
+    if (session !== undefined && session !== "") {
+      if (driverSession !== undefined && driverSession !== session) {
+        dropAssertions();
+      }
+      driverSession = session;
+    }
+    driverLast = Date.now();
+    if (driverTimer === undefined) {
+      driverTimer = window.setInterval(() => {
+        if (Date.now() - driverLast > DRIVER_TIMEOUT_MS) {
+          window.clearInterval(driverTimer);
+          driverTimer = undefined;
+          driverSession = undefined;
+          handleInk({ clear: true });
+          handlePencil({ op: "clear" });
+          dropAssertions();
+        }
+      }, 2000);
+    }
+  };
+
   // ── the capability surface (the relay's command set, CDP-delivered) ───────
   w.__aiuiIntentPage = {
     /** Which build of this bootstrap is live in the document (see the guard). */
@@ -439,7 +480,12 @@ function pageBootstrap(version: string): void {
     hello: sayHello,
     handle: (capability: string, payload: Record<string, unknown> | undefined): unknown => {
       switch (capability) {
+        case "heartbeat": {
+          driverAlive(typeof payload?.session === "string" ? payload.session : "");
+          return { ok: true };
+        }
         case "ring": {
+          driverAlive();
           assertRing(
             payload?.on === true,
             payload?.turnTone === true,
@@ -453,6 +499,7 @@ function pageBootstrap(version: string): void {
           return { ok: true };
         }
         case "keylayer": {
+          driverAlive();
           setKeyCapture(payload?.capture === true);
           return { ok: true };
         }
@@ -465,12 +512,15 @@ function pageBootstrap(version: string): void {
           return { ok: true }; // sampling rides CDP screenshots panel-side
         }
         case "ink": {
+          driverAlive();
           return handleInk((payload ?? {}) as never);
         }
         case "pencil": {
+          driverAlive();
           return handlePencil((payload ?? {}) as Record<string, unknown>);
         }
         case "region": {
+          driverAlive();
           if ((payload as { arm?: boolean } | undefined)?.arm === true) {
             armRegion();
           } else {

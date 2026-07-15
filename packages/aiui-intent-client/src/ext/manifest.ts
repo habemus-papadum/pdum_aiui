@@ -43,8 +43,20 @@ export const manifest = {
   description:
     "The aiui intent client: a side panel that drives the page — ink, keys, capture, dictation — into a live Claude Code session.",
   key: PUBLIC_KEY,
+  // The aiui favicon (derived from avatar.png at build setup time via sips;
+  // sources live in src/ext/icons/, copied to dist-ext/icons by build-ext.ts).
+  icons: {
+    16: "icons/icon16.png",
+    32: "icons/icon32.png",
+    48: "icons/icon48.png",
+    128: "icons/icon128.png",
+  },
   action: {
     default_title: "aiui: invoke this tab / open the panel",
+    default_icon: {
+      16: "icons/icon16.png",
+      32: "icons/icon32.png",
+    },
   },
   // The activation gesture. A `chrome.commands` press is ALSO an extension
   // INVOCATION, which is what grants the tab `tabCapture` standing — so this

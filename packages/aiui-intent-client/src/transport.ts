@@ -38,7 +38,17 @@ export type PageCapability =
   /** Invoke one page tool from `__AIUI__.tools` (the T2 bridge): payload
    * `{ns, name, args, callId}`; the page answers with a `toolsResult`
    * page EVENT (async — the call may take a while), not a return value. */
-  | "toolsCall";
+  | "toolsCall"
+  /** Driver liveness: payload `{session}` — the panel client's per-boot id,
+   * beaten on a short cadence. The page's watchdog (page/driver-watch.ts)
+   * self-cleans stranded assertions when the beats stop. */
+  | "heartbeat";
+
+/** How often a live driver beats the pages it can reach. */
+export const HEARTBEAT_MS = 2000;
+/** Beat silence past this = the driver is gone (page/driver-watch.ts). More
+ * than three missed beats, so one slow relay hop never false-positives. */
+export const DRIVER_TIMEOUT_MS = 7000;
 
 /** The on-page indicator's asserted state (a claim's desire, as data). */
 export interface RingState {

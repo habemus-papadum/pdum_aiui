@@ -32,6 +32,8 @@ import { installSelectionWatcher } from "@habemus-papadum/aiui-dev-overlay/selec
 import { serveRelay } from "@habemus-papadum/aiui-webext";
 import { type InkHandle, mountInk, mountPencil, type PencilHandle } from "../cdp/page-ink";
 import type { PageReport } from "../cdp/page-script";
+import { createDriverWatch } from "../page/driver-watch";
+import { DRIVER_TIMEOUT_MS } from "../transport";
 import { LEGACY_RING_HOST_ID, PAGE_ADDRESS, type ReportMessage } from "./protocol";
 
 const report = (r: PageReport): void => {
@@ -300,9 +302,41 @@ const sayHello = (): void => {
   checkForeign();
 };
 
+// ── driver liveness: self-cleanup when the panel dies mid-assertion ──────────
+// Every assertion handler below notes proof-of-life; the panel additionally
+// beats `heartbeat` with its per-boot session id. Beats stop (panel closed
+// mid-turn, extension reloaded under ext:watch — THIS script is then an
+// orphan) → hard cleanup. New session id → soft reset; the reloaded panel's
+// claims re-assert what they want (see page/driver-watch.ts for the rules).
+const dropAssertions = (): void => {
+  setKeyCapture(false);
+  assertRing(false, false, false, "");
+  disarmRegion();
+  ink?.setOn(false, 0);
+  pencil?.disengage();
+  pencil = undefined;
+};
+const driverWatch = createDriverWatch({
+  timeoutMs: DRIVER_TIMEOUT_MS,
+  onGone: () => {
+    // Hard: the strokes belong to a DEAD session — nobody can clear them later.
+    ink?.clear();
+    pencil?.clear();
+    dropAssertions();
+  },
+  // Soft: strokes survive (the `adopt` rule — a reloaded panel's turn
+  // recovery must find its ink); assertions drop and get re-asserted.
+  onChanged: dropAssertions,
+});
+
 // ── the capability surface (the same command set the CDP page serves) ────────
 serveRelay(PAGE_ADDRESS, {
+  heartbeat: (payload) => {
+    driverWatch.alive(String((payload as { session?: string } | null)?.session ?? ""));
+    return { ok: true };
+  },
   ring: (payload) => {
+    driverWatch.alive();
     const p = payload as {
       on?: boolean;
       turnTone?: boolean;
@@ -322,6 +356,7 @@ serveRelay(PAGE_ADDRESS, {
     return { ok: true };
   },
   keylayer: (payload) => {
+    driverWatch.alive();
     setKeyCapture((payload as { capture?: boolean } | null)?.capture === true);
     return { ok: true };
   },
@@ -345,6 +380,7 @@ serveRelay(PAGE_ADDRESS, {
     dpr: window.devicePixelRatio || 1,
   }),
   ink: (payload) => {
+    driverWatch.alive();
     const p = (payload ?? {}) as { on?: boolean; fadeSec?: number; clear?: boolean };
     if (p.clear === true) {
       ink?.clear();
@@ -359,6 +395,7 @@ serveRelay(PAGE_ADDRESS, {
     return { ok: true };
   },
   region: (payload) => {
+    driverWatch.alive();
     if ((payload as { arm?: boolean } | null)?.arm === true) {
       armRegion();
     } else {
@@ -367,6 +404,7 @@ serveRelay(PAGE_ADDRESS, {
     return { ok: true };
   },
   pencil: (payload) => {
+    driverWatch.alive();
     // The pencil surface runs in THIS isolated world (it only needs the DOM, no
     // page globals) — like ink, unlike jump. `{op, …}` mirrors the CDP tier.
     const p = (payload ?? {}) as Record<string, unknown>;

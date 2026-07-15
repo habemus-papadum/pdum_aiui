@@ -40,6 +40,7 @@
 
 import {
   type CaptureSource,
+  HEARTBEAT_MS,
   type HeldStream,
   type IntentHost,
   type PageCapability,
@@ -587,6 +588,21 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     },
   };
 
+  // ── driver liveness: beat every attached page (page/driver-watch.ts) ──────
+  // Each page's watchdog arms on our assertions and hard-cleans them when the
+  // beats stop — the panel tab closing mid-turn IS the beats stopping. The
+  // session id is per panel BOOT, so a reloaded panel's first beat reads as a
+  // driver CHANGE page-side (soft reset; strokes survive for turn recovery).
+  const driverSession =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `drv-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const beatTimer = setInterval(() => {
+    for (const tab of byTab.keys()) {
+      void transport.requestPage(tab, "heartbeat", { session: driverSession }).catch(() => {});
+    }
+  }, HEARTBEAT_MS);
+
   return {
     transport,
     targeting,
@@ -600,6 +616,9 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         onActiveTabChange: targeting.onActiveTabChange,
         ...(options?.onReady ? { onReady: options.onReady } : {}),
       }),
-    dispose: () => cdp.close(),
+    dispose: () => {
+      clearInterval(beatTimer);
+      cdp.close();
+    },
   };
 }
