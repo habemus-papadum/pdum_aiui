@@ -56,6 +56,19 @@ export const inkFade = control({
   description: "vanishing-ink stroke lifetime",
 });
 
+/** The pencil's vanishing lifetime, seconds — the fade slider (live re-relayed
+ * while a turn is open). Vanishing on/off is the `pencilVanish` mode command;
+ * this is only how LONG it takes. Mirrors {@link inkFade}. */
+export const pencilFade = control({
+  name: "pencilFade",
+  value: 6,
+  min: 2,
+  max: 20,
+  step: 0.1,
+  unit: "s",
+  description: "vanishing-pencil stroke lifetime",
+});
+
 /** Blue confirmation flash after a MANUAL shot (sampled frames never flash). */
 export const shotFlash = control({
   name: "shotFlash",

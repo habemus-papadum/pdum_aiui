@@ -30,7 +30,7 @@
 import { locateComponents } from "@habemus-papadum/aiui-dev-overlay/multimodal-shot";
 import { installSelectionWatcher } from "@habemus-papadum/aiui-dev-overlay/selection";
 import { serveRelay } from "@habemus-papadum/aiui-webext";
-import { type InkHandle, mountInk } from "../cdp/page-ink";
+import { type InkHandle, mountInk, mountPencil, type PencilHandle } from "../cdp/page-ink";
 import type { PageReport } from "../cdp/page-script";
 import { LEGACY_RING_HOST_ID, PAGE_ADDRESS, type ReportMessage } from "./protocol";
 
@@ -214,6 +214,9 @@ const armRegion = (): void => {
 // ── ink: the real surface, imported (no injection, no CSP fight) ─────────────
 let ink: InkHandle | undefined;
 
+// ── pencil: a second surface, local stylus + forwarded iPad strokes ──────────
+let pencil: PencilHandle | undefined;
+
 // ── selection: structured, via the overlay's watcher ─────────────────────────
 const watcher = installSelectionWatcher({
   onChange: (snap) => report({ kind: "selection", present: snap !== undefined }),
@@ -362,6 +365,51 @@ serveRelay(PAGE_ADDRESS, {
       disarmRegion();
     }
     return { ok: true };
+  },
+  pencil: (payload) => {
+    // The pencil surface runs in THIS isolated world (it only needs the DOM, no
+    // page globals) — like ink, unlike jump. `{op, …}` mirrors the CDP tier.
+    const p = (payload ?? {}) as Record<string, unknown>;
+    const op = String(p.op ?? "");
+    if (op === "engage") {
+      pencil ??= mountPencil();
+      pencil.engage(Number(p.fadeSec ?? 0));
+      return { ok: true };
+    }
+    if (pencil === undefined) {
+      return { ok: true };
+    }
+    switch (op) {
+      case "disengage":
+        pencil.disengage();
+        pencil = undefined;
+        return { ok: true };
+      case "fade":
+        pencil.setFade(Number(p.fadeSec ?? 0));
+        return { ok: true };
+      case "clear":
+        pencil.clear();
+        return { ok: true };
+      case "undo":
+        pencil.undo();
+        return { ok: true };
+      case "size":
+        return pencil.size();
+      case "rbegin":
+        pencil.remoteBegin(String(p.id), p.init as never);
+        return { ok: true };
+      case "rpoint":
+        pencil.remotePoint(String(p.id), p.point as never);
+        return { ok: true };
+      case "rend":
+        pencil.remoteEnd(String(p.id), p.point as never);
+        return { ok: true };
+      case "rcancel":
+        pencil.remoteCancel(String(p.id));
+        return { ok: true };
+      default:
+        return { error: `unknown pencil op: ${op}` };
+    }
   },
   toolsCall: (payload) => {
     // Forward into the MAIN world (the registry lives there); the result

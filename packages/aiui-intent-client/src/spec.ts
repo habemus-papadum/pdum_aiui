@@ -83,6 +83,14 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       agent: "videoOn",
       description: "sample tab frames into the turn",
     }),
+    /** Pencil vanishing mode — standing, durable, agent-visible. Off = strokes
+     * persist on the page; on = they fade over the pencilFade lifetime. The
+     * pencil surface itself engages with the turn (page/pencil-mount.ts). */
+    pencilVanish: toggle({
+      durable: true,
+      agent: "pencilVanish",
+      description: "pencil strokes fade out instead of persisting",
+    }),
     /** Cadence: smart (interaction-gated) or constant (the period slider). */
     videoMode: choice(["smart", "constant"], {
       durable: true,
@@ -141,6 +149,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     ink: (s) => ({ ink: !(s.ink as boolean) }),
     /** v — toggle video sampling (standing; the claim gates on turn). */
     video: (s) => ({ video: !(s.video as boolean) }),
+    /** Toggle pencil vanishing mode (standing; the live effect re-relays fade). */
+    pencilVanish: (s) => ({ pencilVanish: !(s.pencilVanish as boolean) }),
     /** f — flip the cadence. */
     fpsMode: (s) => ({ videoMode: s.videoMode === "smart" ? "constant" : "smart" }),
     /** Space down — open a hold-to-talk window (starts unmuted). */
@@ -171,6 +181,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     region: () => null,
     /** j — arm the one-shot jump-to-editor pick (aiui pages only). */
     jump: () => null,
+    /** Clear the pencil surface (the pencil's own clear, distinct from ink's). */
+    pencilClear: () => null,
     selection: () => null,
     clear: () => null,
   },
@@ -242,5 +254,11 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // grays the cap — the gate IS the feature detection (owner, 2026-07-15).
     jump: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined && ctx.aiuiPage,
     clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined,
+    // Pencil markup is a PAGE act (the surface follows the tab in view, no grant
+    // — a stylus and the iPad's strokes both land in-page). The vanish MODE is a
+    // standing setting but only meaningful with a live surface, so both gate on
+    // an open turn with a tab (owner, 2026-07-15).
+    pencilVanish: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined,
+    pencilClear: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined,
   },
 };

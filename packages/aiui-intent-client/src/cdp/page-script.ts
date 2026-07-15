@@ -214,6 +214,70 @@ function pageBootstrap(version: string): void {
     return { ok: true };
   };
 
+  // ── pencil: the same evaluated bundle, a second surface (local + remote) ────
+  // One `mountPencil()` handle, engaged for the turn; the panel drives it with
+  // `{op, …}` payloads (engage/fade/clear/undo and the forwarded iPad strokes).
+  type PencilHandle = {
+    engage: (fadeSec: number) => void;
+    disengage: () => void;
+    setFade: (fadeSec: number) => void;
+    clear: () => void;
+    undo: () => void;
+    size: () => { width: number; height: number };
+    remoteBegin: (id: string, init: unknown) => void;
+    remotePoint: (id: string, point: unknown) => void;
+    remoteEnd: (id: string, point?: unknown) => void;
+    remoteCancel: (id: string) => void;
+  };
+  let pencilHandle: PencilHandle | undefined;
+  const handlePencil = (payload: Record<string, unknown>): unknown => {
+    const mount = (w.__aiuiIntentInk as { mountPencil?: () => PencilHandle } | undefined)
+      ?.mountPencil;
+    const op = String(payload.op ?? "");
+    if (op === "engage") {
+      if (mount === undefined) {
+        return { error: "the pencil surface was not injected" };
+      }
+      pencilHandle ??= mount();
+      pencilHandle.engage(Number(payload.fadeSec ?? 0));
+      return { ok: true };
+    }
+    if (pencilHandle === undefined) {
+      return { ok: true }; // nothing mounted yet — a stray op after disengage
+    }
+    switch (op) {
+      case "disengage":
+        pencilHandle.disengage();
+        pencilHandle = undefined;
+        return { ok: true };
+      case "fade":
+        pencilHandle.setFade(Number(payload.fadeSec ?? 0));
+        return { ok: true };
+      case "clear":
+        pencilHandle.clear();
+        return { ok: true };
+      case "undo":
+        pencilHandle.undo();
+        return { ok: true };
+      case "size":
+        return pencilHandle.size();
+      case "rbegin":
+        pencilHandle.remoteBegin(String(payload.id), payload.init);
+        return { ok: true };
+      case "rpoint":
+        pencilHandle.remotePoint(String(payload.id), payload.point);
+        return { ok: true };
+      case "rend":
+        pencilHandle.remoteEnd(String(payload.id), payload.point);
+        return { ok: true };
+      case "rcancel":
+        pencilHandle.remoteCancel(String(payload.id));
+        return { ok: true };
+      default:
+        return { error: `unknown pencil op: ${op}` };
+    }
+  };
+
   // ── world facts, callback-based ────────────────────────────────────────────
   const facts = (): { visible: boolean; focused: boolean } => ({
     visible: document.visibilityState === "visible",
@@ -402,6 +466,9 @@ function pageBootstrap(version: string): void {
         }
         case "ink": {
           return handleInk((payload ?? {}) as never);
+        }
+        case "pencil": {
+          return handlePencil((payload ?? {}) as Record<string, unknown>);
         }
         case "region": {
           if ((payload as { arm?: boolean } | undefined)?.arm === true) {

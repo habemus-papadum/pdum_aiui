@@ -414,6 +414,9 @@ importers:
       '@habemus-papadum/aiui-ink':
         specifier: workspace:^
         version: link:../aiui-ink
+      '@habemus-papadum/aiui-pencil':
+        specifier: workspace:^
+        version: link:../aiui-pencil
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz

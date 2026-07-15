@@ -34,6 +34,7 @@ function fakeLanes(log: string[]): IntentLanes {
     armJump: entry("armJump"),
     addSelection: entry("addSelection"),
     clearInk: entry("clearInk"),
+    clearPencil: entry("clearPencil"),
     startTalk: entry("startTalk"),
     stopTalk: entry("stopTalk"),
     setMicMuted: entry("setMicMuted"),
@@ -210,6 +211,26 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
 
     r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: false });
     expect(r.client.canDispatch("jump")).toBe(false);
+  });
+
+  it("pencil markup gates on an open turn; clear is a page act on the tab in view", async () => {
+    // The pencil is a page act (surface follows the tab, no grant). Its three
+    // affordances live only in a turn (owner, 2026-07-15): vanish MODE and clear.
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    expect(r.client.canDispatch("pencilVanish")).toBe(false); // disarmed
+    expect(r.client.canDispatch("pencilClear")).toBe(false);
+
+    grantAndOpen(r);
+    expect(r.client.canDispatch("pencilVanish")).toBe(true);
+    expect(r.client.canDispatch("pencilClear")).toBe(true);
+
+    // Vanish is a standing toggle in state; clear is a one-shot lane call.
+    expect(r.client.state().pencilVanish).not.toBe(true);
+    r.client.dispatch("pencilVanish");
+    expect(r.client.state().pencilVanish).toBe(true);
+    r.client.dispatch("pencilClear");
+    expect(r.lanes).toContain("clearPencil:7");
   });
 });
 

@@ -30,6 +30,11 @@ export type PageCapability =
    * payload `{arm}` — click opens the in-page picker, commit opens
    * `vscode://file/…`. Fully page-side; nothing reports back. */
   | "jump"
+  /** The pencil markup surface (local stylus + forwarded iPad strokes). Payload
+   * is `{op, …}`: engage/disengage/fade/clear/undo, and the remote stroke ops
+   * rbegin/rpoint/rend/rcancel the panel's HostSession forwards (Phase 2). A
+   * `size` op returns the plane. See page/pencil-mount.ts. */
+  | "pencil"
   /** Invoke one page tool from `__AIUI__.tools` (the T2 bridge): payload
    * `{ns, name, args, callId}`; the page answers with a `toolsResult`
    * page EVENT (async — the call may take a while), not a return value. */

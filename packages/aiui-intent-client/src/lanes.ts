@@ -41,7 +41,7 @@ import { createWire, type Wire } from "@habemus-papadum/aiui-dev-overlay/wire";
 import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { ClaimLaneOptions } from "./claims";
 import type { IntentClient, IntentLanes } from "./client";
-import { inkFade, inkVanish, linter, shotFlash, stt, videoPeriodSec } from "./config";
+import { inkFade, inkVanish, linter, pencilFade, shotFlash, stt, videoPeriodSec } from "./config";
 import type { IntentHost } from "./transport";
 
 /**
@@ -455,6 +455,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
         engine.inkCleared(false);
       }
     },
+    clearPencil: (tab) => {
+      void host.transport.requestPage(tab, "pencil", { op: "clear" }).catch(() => {});
+    },
     startTalk: () => {
       talk.startMainListening();
     },
@@ -522,9 +525,44 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       return dispose;
     });
 
+    // The pencil surface follows the TURN and the tab in view (no claim, no
+    // grant — a page act). One stateful effect engages the active tab on turn
+    // open, re-relays the fade lifetime live while open, disengages on turn
+    // close, and hands off (disengage old, engage new) across a tab switch —
+    // the ink surface's re-point, done here for the second surface.
+    let pencilAt: { tab: number | undefined; engaged: boolean } = {
+      tab: undefined,
+      engaged: false,
+    };
+    const disposePencil = createRoot((dispose) => {
+      createEffect(
+        () => ({
+          engaged: client.state().phase === "turn",
+          tab: client.context().activeTab,
+          fade: client.state().pencilVanish === true ? (pencilFade.get() as number) : 0,
+        }),
+        ({ engaged, tab, fade }) => {
+          const prev = pencilAt;
+          const left = prev.engaged && (!engaged || prev.tab !== tab) && prev.tab !== undefined;
+          if (left) {
+            void host.transport
+              .requestPage(prev.tab as number, "pencil", { op: "disengage" })
+              .catch(() => {});
+          }
+          if (engaged && tab !== undefined) {
+            const op = !prev.engaged || prev.tab !== tab ? "engage" : "fade";
+            void host.transport.requestPage(tab, "pencil", { op, fadeSec: fade }).catch(() => {});
+          }
+          pencilAt = { tab, engaged };
+        },
+      );
+      return dispose;
+    });
+
     return () => {
       offEngine();
       disposeFade();
+      disposePencil();
     };
   };
 

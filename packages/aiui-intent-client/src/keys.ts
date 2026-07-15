@@ -77,6 +77,18 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       hint: { key: "p", label: "pull selection", icon: "📋" },
     },
     {
+      // pencil: 'k' toggles vanishing mode; the clear + fade slider live in the
+      // bar (the pencil surface engages with the turn — no on/off key).
+      keys: ["k", "K"],
+      down: onPress("pencilVanish"),
+      hint: (s) => ({
+        key: "k",
+        label: "pencil vanish",
+        icon: "🖊",
+        active: s.pencilVanish === true,
+      }),
+    },
+    {
       keys: ["c", "C"],
       down: (state, _key, repeat) => (!repeat && state.ink === true ? command("clear") : "swallow"),
       hint: (s) => (s.ink === true ? { key: "c", label: "clear ink", icon: "🧹" } : undefined),

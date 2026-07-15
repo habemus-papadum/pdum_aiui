@@ -30,6 +30,7 @@
   "dependencies": {
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-ink": "workspace:^",
+    "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@habemus-papadum/aiui-webext": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",

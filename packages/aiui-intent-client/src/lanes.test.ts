@@ -350,6 +350,38 @@ describe("the fade re-relay effect", () => {
   });
 });
 
+describe("the pencil surface follows the turn and the tab in view", () => {
+  it("engages on turn open, re-relays fade live, hands off across a tab switch, disengages on close", async () => {
+    const r = makeRig();
+    activationGesture(r.client, 7); // grant + arm + turn on tab 7
+    await settle(30);
+    // Engaged on the tab in view, permanent by default (fade 0).
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"engage","fadeSec":0}');
+    r.bus.clearLog();
+
+    // Vanishing on + a fade move → a LIVE fade re-relay (already engaged, same tab).
+    const { pencilFade } = await import("./config");
+    r.client.dispatch("pencilVanish");
+    pencilFade.set(9 as never);
+    await settle(30);
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"fade","fadeSec":9}');
+    r.bus.clearLog();
+
+    // A tab switch hands the surface off: disengage the old, engage the new.
+    r.bus.switchTab(9);
+    await settle(30);
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"disengage"}');
+    expect(r.bus.log.some((l) => l.startsWith('page:pencil@9 {"op":"engage"'))).toBe(true);
+    r.bus.clearLog();
+
+    // Leaving the turn disengages (nothing outlives it).
+    r.client.dispatch("disarm");
+    await settle(30);
+    expect(r.bus.log).toContain('page:pencil@9 {"op":"disengage"}');
+    pencilFade.set(6 as never);
+  });
+});
+
 describe("turn recovery — the mirror", () => {
   it("a mirrored open turn survives a 'reload': events replayed, wire re-dialed, machine re-opened", async () => {
     // One shared in-memory mirror = the surviving sessionStorage.

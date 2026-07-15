@@ -94,3 +94,7 @@ export { locateComponents } from "@habemus-papadum/aiui-dev-overlay/multimodal-s
 // Jump-to-editor rides here too: the bootstrap's `jump` capability calls
 // `__aiuiIntentInk.armJump()` / `disarmJump()` (see ../page/jump-mode.ts).
 export { armJump, disarmJump } from "../page/jump-mode";
+
+// The pencil surface rides the same evaluated bundle: the bootstrap's `pencil`
+// capability calls `__aiuiIntentInk.mountPencil()` (see ../page/pencil-mount.ts).
+export { mountPencil, type PencilHandle } from "../page/pencil-mount";

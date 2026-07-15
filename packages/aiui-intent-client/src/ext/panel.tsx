@@ -80,6 +80,7 @@ const consoleLanes: IntentLanes = {
   armJump: (tab) => console.info("[lanes] armJump", tab),
   addSelection: (tab) => console.info("[lanes] addSelection", tab),
   clearInk: (tab) => console.info("[lanes] clearInk", tab),
+  clearPencil: (tab) => console.info("[lanes] clearPencil", tab),
   startTalk: (mode) => console.info("[lanes] startTalk", mode),
   stopTalk: () => console.info("[lanes] stopTalk"),
   setMicMuted: (muted) => console.info("[lanes] setMicMuted", muted),

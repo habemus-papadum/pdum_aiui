@@ -102,6 +102,23 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
               },
             ],
           },
+          // The pencil markup surface (local stylus + remote iPad), parallel to
+          // ink — three flat affordances (NOT nested: clear must stay reachable
+          // for permanent ink, which auto-fades never touches): a vanish-mode
+          // toggle, a clear, and the fade slider (shown only while vanishing).
+          {
+            command: "pencilVanish",
+            hint: { key: "k", label: "pencil", icon: "🖊" },
+            litWhen: ({ state }) => state.pencilVanish === true,
+          },
+          { command: "pencilClear", hint: { key: "", label: "pencil clear", icon: "🧹" } },
+          {
+            kind: "widget",
+            control: "pencilFade",
+            widget: "slider",
+            label: "pencil fade s",
+            showWhen: ({ state }) => state.pencilVanish === true,
+          },
           { command: "send", hint: { key: "⏎", label: "send", icon: "📤" } },
         ],
       },

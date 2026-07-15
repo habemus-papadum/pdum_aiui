@@ -29,6 +29,7 @@ const noopLanes: IntentLanes = {
   armJump: () => {},
   addSelection: () => {},
   clearInk: () => {},
+  clearPencil: () => {},
   startTalk: () => {},
   stopTalk: () => {},
   setMicMuted: () => {},

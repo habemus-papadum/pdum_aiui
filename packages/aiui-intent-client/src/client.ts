@@ -50,6 +50,8 @@ export interface IntentLanes {
   addSelection(tab: number): void;
   /** Clear the page's ink strokes (the ONLY clearer besides disarm). */
   clearInk(tab: number): void;
+  /** Clear the pencil surface (the pencil's own clear, distinct from ink's). */
+  clearPencil(tab: number): void;
   /** Talk window lifecycle (mode: hold | handsFree). */
   startTalk(mode: string): void;
   stopTalk(): void;
@@ -171,6 +173,12 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       case "clear":
         if (event.before.phase === "turn" && event.before.ink === true && activeTab !== undefined) {
           lanes.clearInk(activeTab);
+        }
+        break;
+      case "pencilClear":
+        // A page act — clears the pencil surface on the tab in view (no grant).
+        if (event.before.phase === "turn" && activeTab !== undefined) {
+          lanes.clearPencil(activeTab);
         }
         break;
       default:
