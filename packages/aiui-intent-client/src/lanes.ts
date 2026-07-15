@@ -189,9 +189,16 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   // playback gets a visible remedy. The panels need that where the overlay
   // never did: with keys forwarded from the target tab, this document may hold
   // no user gesture when the first linter clip arrives — the player parks the
-  // clip and resumes on the first click/keypress HERE (speech.ts). The session
-  // browser also launches with autoplay pre-allowed, so the hint only ever
-  // shows on a manually-installed panel in a regular Chrome.
+  // clip and resumes on the first click/keypress HERE (speech.ts).
+  //
+  // Which host can actually be blocked (measured, CfT 150, 2026-07-15 — an
+  // AudioContext with zero user activation): a chrome-extension:// document is
+  // EXEMPT from the autoplay gate (state "running"; the MV3 side panel plays
+  // unconditionally — extension documents are, e.g. why MV2 background pages
+  // could ding), while a plain web document is gated ("suspended"). So the
+  // block is reachable only on the STANDALONE page — and the session browser
+  // launches with autoplay pre-allowed, leaving exactly one blockable case: a
+  // detached page opened in a regular, non-session browser.
   const speech = new SpeechPlayer({
     onSpeak: (label) => status(label === undefined ? "🔊 speaking…" : `🔊 ${label}`),
     onBlocked: () =>
