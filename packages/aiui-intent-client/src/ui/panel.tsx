@@ -73,6 +73,15 @@ export const PANEL_STYLES = `
   .aiui-pill[data-state="err"] { color: #dc2626; border-color: #dc2626; opacity: 1; }
   .aiui-pill[data-state="live"] { color: #fff; background: #dc2626; border-color: #dc2626;
     opacity: 1; font-weight: 600; }
+  /* The ring pill mirrors the ON-PAGE dot, not the generic pill palette
+     (cdp/page-script.ts assertRing / ext/content.ts — the source of these
+     literals): steady PURPLE #7c3aed = armed, breathing RED #dc2626 = turn,
+     same 1.6s ease-in-out rhythm. The two can't share a clock across
+     documents, so what aligns is color + cadence, not phase. */
+  .aiui-pill[data-pill="ring"][data-state="on"] { color: #7c3aed; border-color: #7c3aed; }
+  .aiui-pill[data-pill="ring"][data-state="live"] {
+    animation: aiui-ring-breathe 1.6s ease-in-out infinite; }
+  @keyframes aiui-ring-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   .aiui-config { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; padding-top: 6px;
     border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
   .aiui-help { margin-top: 10px; border-collapse: collapse; }
@@ -240,7 +249,7 @@ export function Panel(props: PanelProps) {
         state: ((desire) => (desire?.on !== true ? "off" : desire.turnTone ? "live" : "on"))(
           claims.ring?.desire as { on?: boolean; turnTone?: boolean } | undefined,
         ),
-        detail: "off · steady=armed · red=turn",
+        detail: "off · purple=armed · red pulse=turn (the on-page dot, mirrored)",
       },
       {
         label: "sel",

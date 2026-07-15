@@ -32,7 +32,7 @@ import { PageToolDirectory } from "./page-tools";
 import { SessionHub } from "./session-hub";
 import type { MountedSidecar, Sidecar } from "./sidecar";
 import { createTransportStats } from "./stats";
-import { createTraceStore, sessionLabel, type TraceStore } from "./trace";
+import { createTraceStore, sessionLabel, type TraceStageSink, type TraceStore } from "./trace";
 import { withTracing } from "./tracing";
 
 /**
@@ -115,6 +115,16 @@ export interface WebServerOptions {
    * itself is always kept, sink or not.
    */
   frameSink?: FrameLogSink;
+  /**
+   * Observes every lowering-trace **stage** as it is recorded (linter results,
+   * cost, transcription outcomes, composed intents — the pipeline's own IRs),
+   * across all threads. The one live seam for pipeline events that never reach
+   * the frame log; the `mcp` command has no use for it (its client reads traces
+   * over `/debug`), but the standalone `serve` command narrates a curated subset
+   * to stderr. Requires {@link WebServerOptions.traceDir} — no store, no stages.
+   * Best-effort: a throwing sink never breaks lowering (see {@link TraceStageSink}).
+   */
+  traceSink?: TraceStageSink;
   /**
    * Fixed loopback port to bind. Defaults to 0 — an OS-assigned free port —
    * which is right everywhere a human isn't typing the URL by hand (registered
@@ -314,7 +324,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // reloads swap code, not identity, so every trace of the server's lifetime
   // carries the same label.
   const traceStore: TraceStore | undefined = options.traceDir
-    ? createTraceStore(options.traceDir, sessionLabel(options.tag))
+    ? createTraceStore(options.traceDir, sessionLabel(options.tag), options.traceSink)
     : undefined;
 
   // How each (re)load produces the base format registry. An explicit `formats`

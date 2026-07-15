@@ -43,16 +43,38 @@
  *   --- meta ---            (only when the prompt carries attachment meta)
  *   <the meta, as JSON>
  *   --- end ---
+ *
+ * Page-tool transitions print the same delimited way — the register/unregister
+ * events that `mcp` would voice to its session (as `tools/list_changed` + a
+ * page-tools push) have no session here, so `serve` narrates them to stdout as
+ * plain text: a diff of which `ns/tool` names appeared and disappeared, then
+ * the current set.
+ *
+ *   --- page tools ---
+ *   + morpho/plot_spectrum, morpho/set_range   (active tab: Morphogen)
+ *   - aztec/step
+ *   = now: morpho/plot_spectrum, morpho/set_range
+ *   --- end ---
+ *
+ * Everything else worth watching narrates to **stderr** (never stdout — that is
+ * the parseable protocol above), alongside the lifecycle lines: each connection
+ * (`hello`), a *coalesced* summary of a thread's inbound media at `fin`
+ * (audio/shots/events — byte counts only, so streaming binary never spams the
+ * terminal), outbound `speech`, malformed frames, and a curated slice of
+ * pipeline trace stages (linter, transcription, cost, the composed intent) that
+ * otherwise live only in the on-disk trace. This is the register/unregister-style
+ * visibility a debug run wants for the *rest* of the wire, without an agent.
  */
 
 import { randomUUID } from "node:crypto";
 import { createChannelLog } from "../channel-log";
+import type { FrameLogEntry } from "../frame-log";
 import { channelSourceDir, watchChannelSource } from "../hot";
 import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
 import { createJsonlRecorder, type JsonlRecorder } from "../recording";
 import { registerServer } from "../registry";
 import type { Sidecar } from "../sidecar";
-import { projectCacheDir } from "../trace";
+import { projectCacheDir, type TraceStageEvent } from "../trace";
 import { startWebServer } from "../web";
 
 export interface ServeOptions {
@@ -117,6 +139,157 @@ export function parsePort(value: string): number {
   return port;
 }
 
+/** Bytes as a compact human size for a narration line. */
+function humanBytes(bytes: number): string {
+  return bytes < 1024 ? `${bytes}B` : `${(bytes / 1024).toFixed(1)}KB`;
+}
+
+/**
+ * Whether a trace stage is one `serve` narrates: the pipeline events a debug run
+ * cares about (linter, transcription, cost, the composed intent), out of the
+ * many IRs a lowering run records. Exported for unit testing.
+ */
+export function isNarratedTraceStage(label: string): boolean {
+  return (
+    label.startsWith("linter") ||
+    label.startsWith("transcription") ||
+    label.startsWith("cost:") ||
+    label === "composed intent" ||
+    label === "fin compose"
+  );
+}
+
+/** One line describing a `hello`: what format connected, its actor, and from where. */
+function helloNarration(data: unknown): string {
+  const env = data as
+    | { format?: unknown; meta?: { tab?: { title?: unknown; url?: unknown }; actor?: unknown } }
+    | undefined;
+  const format = typeof env?.format === "string" ? env.format : "?";
+  const actor = typeof env?.meta?.actor === "string" ? env.meta.actor : undefined;
+  const tab = env?.meta?.tab;
+  const where =
+    typeof tab?.title === "string" ? tab.title : typeof tab?.url === "string" ? tab.url : undefined;
+  return `connected: ${format}${actor !== undefined ? ` (${actor})` : ""}${
+    where !== undefined ? ` — ${where}` : ""
+  }`;
+}
+
+/** Per-thread running counts, coalesced into one summary line at the thread's fin. */
+interface ThreadTally {
+  audio: number;
+  audioBytes: number;
+  shots: number;
+  shotBytes: number;
+  events: number;
+  context: number;
+  data: number;
+  dataBytes: number;
+}
+
+/**
+ * A stateful narrator over the frame log. It prints a line per connection,
+ * outbound speech, and malformed frame, and *coalesces* a thread's inbound media
+ * into one summary at `fin` — so a talked turn's hundreds of audio frames never
+ * spam the terminal. Binary is safe by construction: the frame log hands byte
+ * counts, never payloads (frame-log.ts). The returned function is fed every
+ * frame-log entry; it writes through `narrate`. Exported for unit testing.
+ */
+export function makeFrameNarrator(
+  narrate: (message: string) => void,
+): (entry: FrameLogEntry) => void {
+  const threads = new Map<string, ThreadTally>();
+  const tallyFor = (id: string): ThreadTally => {
+    let tally = threads.get(id);
+    if (tally === undefined) {
+      tally = {
+        audio: 0,
+        audioBytes: 0,
+        shots: 0,
+        shotBytes: 0,
+        events: 0,
+        context: 0,
+        data: 0,
+        dataBytes: 0,
+      };
+      threads.set(id, tally);
+    }
+    return tally;
+  };
+  const flush = (id: string): void => {
+    const tally = threads.get(id);
+    if (tally === undefined) {
+      return;
+    }
+    threads.delete(id);
+    const parts: string[] = [];
+    if (tally.audio > 0) parts.push(`${tally.audio} audio (~${humanBytes(tally.audioBytes)})`);
+    if (tally.shots > 0) {
+      parts.push(
+        `${tally.shots} shot${tally.shots > 1 ? "s" : ""} (${humanBytes(tally.shotBytes)})`,
+      );
+    }
+    if (tally.events > 0) parts.push(`${tally.events} event batch${tally.events > 1 ? "es" : ""}`);
+    if (tally.context > 0) parts.push(`${tally.context} context`);
+    if (tally.data > 0) parts.push(`${tally.data} data (~${humanBytes(tally.dataBytes)})`);
+    if (parts.length > 0) {
+      narrate(`thread ${id}: ${parts.join(", ")} → fin`);
+    }
+  };
+
+  return (entry) => {
+    const bytes = entry.bytes ?? 0;
+    if (entry.dir === "out") {
+      if (!entry.label.startsWith("push ")) {
+        return; // acks are pure transport, not worth a line
+      }
+      const kind = entry.label.slice("push ".length);
+      if (kind === "lowered-prompt") {
+        return; // the prompt itself already lands on stdout via onPrompt
+      }
+      if (kind === "speech") {
+        const chars = (entry.data as { data?: unknown } | undefined)?.data;
+        narrate(`spoke${typeof chars === "number" ? ` (${chars} chars)` : ""}`);
+      } else {
+        narrate(`push ${kind}`);
+      }
+      return;
+    }
+    if (entry.label === "hello") {
+      narrate(helloNarration(entry.data));
+      return;
+    }
+    if (entry.label === "malformed frame") {
+      narrate(`malformed frame (${bytes}B)`);
+      return;
+    }
+    const id = entry.threadId ?? "-";
+    const { label } = entry;
+    if (label.startsWith("chunk audio")) {
+      const tally = tallyFor(id);
+      tally.audio += 1;
+      tally.audioBytes += bytes;
+    } else if (label.startsWith("chunk attachment")) {
+      const tally = tallyFor(id);
+      tally.shots += 1;
+      tally.shotBytes += bytes;
+    } else if (label.startsWith("chunk events")) {
+      tallyFor(id).events += 1;
+    } else if (label.startsWith("chunk context")) {
+      tallyFor(id).context += 1;
+    } else if (label.startsWith("data")) {
+      const tally = tallyFor(id);
+      tally.data += 1;
+      tally.dataBytes += bytes;
+    }
+    // Only the THREAD terminator flushes — the bare intent-v1 `fin`, or the
+    // text-concat `data (fin)`. A chunk's own `(fin)` (one audio segment ending)
+    // is not the thread's end, so it must never print a partial summary.
+    if (label === "fin" || label === "data (fin)") {
+      flush(id);
+    }
+  };
+}
+
 /** The running debug server, for tests (the CLI just lets it run). */
 export interface ServeHandle {
   /** The loopback port the server bound to. */
@@ -147,6 +320,14 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     sidecars = await loadSidecars(parseSidecarDescriptors(options.sidecars));
   }
 
+  // Wire-event narration lands on stderr, next to the lifecycle lines (stdout is
+  // the parseable protocol). `narrateFrame` coalesces per-thread media; the
+  // trace sink narrates the pipeline stages that never reach the frame log.
+  const narrate = (message: string): void => {
+    process.stderr.write(`[aiui-channel serve] ${message}\n`);
+  };
+  const narrateFrame = makeFrameNarrator(narrate);
+
   let web: Awaited<ReturnType<typeof startWebServer>>;
   try {
     web = await startWebServer({
@@ -166,10 +347,19 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       // Names this run's trace session ("channel·…" when untagged), so /debug's
       // list separates a debug server's traces from a real session's.
       ...(options.tag !== undefined ? { tag: options.tag } : {}),
-      // The recorder (when on) and the diagnostic log share the one sink seam.
+      // The recorder (when on), the diagnostic log, and the wire narrator all
+      // share the one frame seam.
       frameSink: (entry) => {
         recorder?.sink(entry);
         channelLog.frameSink(entry);
+        narrateFrame(entry);
+      },
+      // The live pipeline seam: narrate the curated stages (linter/cost/…) that
+      // only ever land in the on-disk trace otherwise.
+      traceSink: (event: TraceStageEvent) => {
+        if (isNarratedTraceStage(event.stage.label)) {
+          narrate(`${event.threadId} ${event.stage.label}`);
+        }
       },
       ...(options.bind === "host" ? { host: "0.0.0.0" } : {}),
       ...(options.port !== undefined ? { port: options.port } : {}),
@@ -204,6 +394,41 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     ...(options.name !== undefined ? { name: options.name } : {}),
   });
   process.once("exit", registration.remove);
+
+  // Narrate page-tool transitions to stdout (see the header's stdout protocol).
+  // The `/tools` websocket feeds `web.pageTools` here exactly as it would under
+  // `mcp`; the only thing missing in a debug server is the MCP layer that would
+  // voice the change to a session. So we diff the tool-name set on every change
+  // and print what registered/unregistered — the register/unregister visibility
+  // a debug run needs, without an agent on the wire.
+  const toolNames = (): Set<string> =>
+    new Set(web.pageTools.list().flatMap((reg) => reg.tools.map((t) => `${reg.ns}/${t.name}`)));
+  const activeTabLabel = (): string | undefined => {
+    const active = web.pageTools.list().find((reg) => reg.activeTab);
+    return active ? (active.tab?.title ?? active.tab?.url ?? active.url) : undefined;
+  };
+  let lastTools = new Set<string>();
+  const unsubscribeTools = web.pageTools.onChange(() => {
+    const current = toolNames();
+    const added = [...current].filter((n) => !lastTools.has(n));
+    const removed = [...lastTools].filter((n) => !current.has(n));
+    lastTools = current;
+    // onChange coalesces by a content signature, but an active-tab flip changes
+    // the signature without changing the tool set — nothing to narrate then.
+    if (added.length === 0 && removed.length === 0) {
+      return;
+    }
+    const label = activeTabLabel();
+    const lines = ["--- page tools ---"];
+    if (added.length > 0) {
+      lines.push(`+ ${added.join(", ")}${label !== undefined ? ` (active tab: ${label})` : ""}`);
+    }
+    if (removed.length > 0) {
+      lines.push(`- ${removed.join(", ")}`);
+    }
+    lines.push(`= now: ${current.size === 0 ? "none" : [...current].join(", ")}`, "--- end ---");
+    process.stdout.write(`${lines.join("\n")}\n`);
+  });
 
   let stopWatch: (() => void) | undefined;
   if (process.env.AIUI_CHANNEL_WATCH === "1") {
@@ -244,6 +469,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     closed = true;
     channelLog.log("shutdown");
     stopWatch?.();
+    unsubscribeTools();
     registration.remove();
     await web.close().catch(() => {});
     await recorder?.close();

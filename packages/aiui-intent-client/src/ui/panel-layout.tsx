@@ -1,0 +1,107 @@
+/**
+ * PanelLayout — the panel's render tree, shared by both entries.
+ *
+ * The plain page (ui/main.tsx) and the MV3 side panel (ext/panel.tsx) are two
+ * shells around the same client: they differ only in HOW the host and channel
+ * are wired, never in what the panel LOOKS like. This is that look, in one
+ * place — so "the two entries read identically" is structural, not a comment
+ * each file has to keep honoring by hand.
+ *
+ * The three places the shells legitimately differ are props, not forks:
+ *  - `listChannels`/`onSwitch` — how a channel is listed and switched (the
+ *    page rebinds via its URL; the extension via chrome.storage + reload);
+ *  - `targetTab` — only the CDP tier aims at a real tab worth naming (the
+ *    extension drives its own tab; the fake tier has none);
+ *  - `debug` — the debugging pane's shell-specific content and whether it
+ *    starts open (the page's simulate strip; the extension's CDP verdict).
+ */
+
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
+import type { IntentClient } from "../client";
+import type { ChannelLanes } from "../lanes";
+import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./channel-header";
+import { Panel } from "./panel";
+import { PANES_STYLES, TracePane } from "./panes";
+import { type Narration, WirePane } from "./shell";
+import { TARGET_TAB_STYLES } from "./target-tab";
+import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
+import { TURN_PREVIEW_STYLES, TurnPreview } from "./turn-preview";
+
+/** Every stylesheet the layout's panes need, concatenated (emitted once). */
+export const PANEL_LAYOUT_STYLES =
+  PANES_STYLES +
+  TURN_PREVIEW_STYLES +
+  TRACE_PANE_STYLES +
+  CHANNEL_HEADER_STYLES +
+  TARGET_TAB_STYLES;
+
+export interface PanelLayoutProps {
+  /** The channel this panel is bound to (undefined = none found). */
+  port: number | undefined;
+  /** The session-bus phase — the header dot's color (a reactive read). */
+  phase: () => "connected" | "connecting" | "closed";
+  /** How the header lists channels (URL registry vs the extension's native host). */
+  listChannels: () => Promise<ChannelEntry[]>;
+  /** How the header rebinds to another channel (URL assign vs storage + reload). */
+  onSwitch: (port: number) => void;
+  /** The intent client this panel drives. */
+  client: IntentClient;
+  /** Registers the UI-local blip sink (blips are display-only state). */
+  registerBlipSink?: (sink: (key: string) => void) => void;
+  /** Live mic level 0..1 when the tier supplies one — drives the REC meter. */
+  micLevel?: () => number;
+  /** The channel lanes; their presence gates the turn preview and trace panes. */
+  lanes?: ChannelLanes;
+  /** The panes' shared narration (status line, toast, lowered prompt). */
+  narration: Narration;
+  /** The CDP tier's target-tab strip; absent in every other tier. */
+  targetTab?: JSX.Element;
+  /** The debugging pane's shell-specific content and whether it starts open. */
+  debug?: { open?: boolean; content?: JSX.Element };
+}
+
+/**
+ * The panel's render tree. Emits its own `<style>`, so an entry renders exactly
+ * `<PanelLayout … />` and nothing else. The decided order (owner, 2026-07-14):
+ * channel first, then the target tab (CDP only), the panel (bar + pills), the
+ * turn preview, the traces, and last the debugging surfaces that will go.
+ */
+export function PanelLayout(props: PanelLayoutProps): JSX.Element {
+  return (
+    <>
+      <style>{PANEL_LAYOUT_STYLES}</style>
+      <ChannelHeader
+        port={props.port}
+        phase={props.phase}
+        listChannels={props.listChannels}
+        onSwitch={props.onSwitch}
+      />
+      {props.targetTab}
+      <Panel
+        client={props.client}
+        registerBlipSink={props.registerBlipSink}
+        micLevel={props.micLevel}
+      />
+      <Show when={props.lanes} keyed>
+        {(lanes) => <TurnPreview lanes={lanes} />}
+      </Show>
+      <Show when={props.lanes !== undefined && props.port !== undefined}>
+        <RichTracePane baseUrl={`http://127.0.0.1:${props.port}`} />
+      </Show>
+      <details
+        class="aiui-pane"
+        data-testid="extension-debugging"
+        open={props.debug?.open}
+        style="opacity: 0.85"
+      >
+        <summary>extension debugging</summary>
+        {props.debug?.content}
+        <Show when={props.lanes} keyed>
+          {(lanes) => <TracePane lanes={lanes} />}
+        </Show>
+      </details>
+      <WirePane narration={props.narration} />
+    </>
+  );
+}

@@ -20,11 +20,13 @@
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "build:ext": "tsx scripts/build-ext.ts",
+    "ext:watch": "tsx scripts/build-ext.ts --watch",
     "load:ext": "tsx scripts/load-ext.ts",
     "ext": "pnpm build:ext && pnpm load:ext",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "dev": "vite"
+    "dev": "tsx scripts/dev.ts",
+    "dev:plain": "vite"
   },
   "private": true,
   "dependencies": {

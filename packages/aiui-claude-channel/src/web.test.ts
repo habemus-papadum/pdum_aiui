@@ -69,6 +69,26 @@ describe("startWebServer", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("forwards traceSink — recorded trace stages reach the sink live", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-web-trace-"));
+    const stages: string[] = [];
+    server = await startWebServer({
+      onPrompt: () => {},
+      traceDir: cache,
+      traceSink: (event) => stages.push(event.stage.label),
+    });
+    const client = await connect("text-concat");
+    await client.openThread("t-trace").finish({ text: "hello" });
+    await client.close();
+
+    // A traced run records at least its client context + the lowered output; the
+    // sink sees them as they happen (this is the seam `serve` narrates from).
+    for (let i = 0; i < 40 && stages.length === 0; i += 1) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(stages.length).toBeGreaterThan(0);
+  });
+
   it("propagates handler errors as a 500", async () => {
     server = await startWebServer({
       onPrompt: () => {

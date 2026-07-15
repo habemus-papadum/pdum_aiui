@@ -55,6 +55,30 @@ export interface TraceStage {
   file?: string;
 }
 
+/**
+ * A stage as it is recorded, tagged with the thread it belongs to — the live
+ * seam that lets a debug server narrate pipeline events (linter results, cost,
+ * transcription outcomes, composed intents) that never touch the frame log. The
+ * on-disk trace is the durable record; this is the "as it happens" tap.
+ */
+export interface TraceStageEvent {
+  /** The trace this stage was recorded on. */
+  traceId: string;
+  /** The client-generated thread id the trace is for. */
+  threadId: string;
+  /** The stream (modality) format the thread speaks. */
+  format: string;
+  /** The recorded stage, `at` timestamp filled in. */
+  stage: TraceStage;
+}
+
+/**
+ * Observes every {@link TraceStage} as {@link TraceHandle.record} appends it,
+ * across all threads a store serves. Best-effort by contract: the store wraps
+ * the call so a throwing sink can never break the prompt path.
+ */
+export type TraceStageSink = (event: TraceStageEvent) => void;
+
 /** The `trace.json` manifest of one lowering run. */
 export interface TraceManifest {
   id: string;
@@ -205,7 +229,11 @@ const noopHandle = (id: string, dir: string): TraceHandle => ({
  * stores), manifests simply have no session — the "unknown" bucket in
  * session-filtered trace lists.
  */
-export function createTraceStore(cacheDir: string, session?: string): TraceStore {
+export function createTraceStore(
+  cacheDir: string,
+  session?: string,
+  onStage?: TraceStageSink,
+): TraceStore {
   const tracesDir = join(cacheDir, "traces");
 
   const begin = (format: string, threadId: string, actor?: string): TraceHandle => {
@@ -246,8 +274,16 @@ export function createTraceStore(cacheDir: string, session?: string): TraceStore
         if (ended) {
           return;
         }
-        manifest.stages.push({ at: new Date().toISOString(), ...stage });
+        const full: TraceStage = { at: new Date().toISOString(), ...stage };
+        manifest.stages.push(full);
         flush();
+        if (onStage) {
+          try {
+            onStage({ traceId: id, threadId, format, stage: full });
+          } catch {
+            // A narrator throw must never break the prompt path.
+          }
+        }
       },
       recordBlob(stage, bytes, filename) {
         if (ended || !SAFE_NAME.test(filename)) {

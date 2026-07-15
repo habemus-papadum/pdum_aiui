@@ -8,6 +8,7 @@ import {
   projectCacheDir,
   readTrace,
   sessionLabel,
+  type TraceStageEvent,
   traceBlobPath,
 } from "./trace";
 
@@ -52,6 +53,32 @@ describe("createTraceStore", () => {
     expect(manifest?.endedAt).toBeDefined();
     expect(manifest?.stages.map((s) => s.kind)).toEqual(["input", "ir", "output"]);
     expect(manifest?.stages[0].data).toEqual({ text: "hi" });
+  });
+
+  it("fires the onStage sink for every recorded stage, tagged with thread + format", () => {
+    const cache = freshCache();
+    const events: TraceStageEvent[] = [];
+    const store = createTraceStore(cache, "wb·1·010203", (e) => events.push(e));
+    const trace = store.begin("intent-v1", "t-99", "agent");
+
+    trace.record({ kind: "info", label: "cost: transcription", data: { usd: 0.0004 } });
+    trace.record({ kind: "ir", label: "composed intent", data: "x" });
+
+    expect(events.map((e) => e.stage.label)).toEqual(["cost: transcription", "composed intent"]);
+    expect(events[0]).toMatchObject({ traceId: trace.id, threadId: "t-99", format: "intent-v1" });
+    // The `at` timestamp is filled in before the sink sees the stage.
+    expect(typeof events[0].stage.at).toBe("string");
+  });
+
+  it("swallows a throwing onStage sink — the stage still lands, the record never throws", () => {
+    const cache = freshCache();
+    const store = createTraceStore(cache, undefined, () => {
+      throw new Error("narrator boom");
+    });
+    const trace = store.begin("f", "t");
+
+    expect(() => trace.record({ kind: "info", label: "x" })).not.toThrow();
+    expect(readTrace(cache, trace.id)?.stages.map((s) => s.label)).toEqual(["x"]);
   });
 
   it("records the actor on the manifest only when one is given", () => {

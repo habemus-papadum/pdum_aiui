@@ -19,7 +19,7 @@
 import { WorkletPcmSource } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
 import { relayRequest } from "@habemus-papadum/aiui-webext";
 import { render } from "@solidjs/web";
-import { createSignal, Show } from "solid-js";
+import { createSignal } from "solid-js";
 import { activationGesture } from "../activation";
 import { createBarHost } from "../bar-host";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
@@ -28,12 +28,8 @@ import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { createPencilHost } from "../pencil-host";
 import { connectSessionBus, probeChannel } from "../session";
 import { createToolsLink } from "../tools-link";
-import { CHANNEL_HEADER_STYLES, ChannelHeader } from "../ui/channel-header";
-import { Panel } from "../ui/panel";
-import { PANES_STYLES, TracePane } from "../ui/panes";
-import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "../ui/shell";
-import { RichTracePane, TRACE_PANE_STYLES } from "../ui/trace-pane";
-import { TURN_PREVIEW_STYLES, TurnPreview } from "../ui/turn-preview";
+import { PanelLayout } from "../ui/panel-layout";
+import { installPanelKeys, installUiScaleRoot, type Narration } from "../ui/shell";
 import { heldStreamFor } from "./capture";
 import {
   discoverChannel,
@@ -251,45 +247,30 @@ if (root === null) {
 }
 render(
   () => (
-    <>
-      <style>
-        {PANES_STYLES + TURN_PREVIEW_STYLES + TRACE_PANE_STYLES + CHANNEL_HEADER_STYLES}
-      </style>
-      {/* Same decided order as the plain page (ui/main.tsx) — the two entries
-          must read identically; only the switch mechanism differs. */}
-      <ChannelHeader
-        port={port}
-        phase={busPhase}
-        // Native host FIRST (the extension's one NM use), mirror fallback.
-        listChannels={() => listChannels(port)}
-        onSwitch={(next) => {
-          // The extension's rebind: remember the port (discovery tries recent
-          // ports first), then reboot the panel document onto it.
-          void rememberPort(next).then(() => location.reload());
-        }}
-      />
-      <Panel
-        client={client}
-        registerBlipSink={(sink) => (blipSink = sink)}
-        micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
-      />
-      <Show when={lanes} keyed>
-        {(l) => <TurnPreview lanes={l} />}
-      </Show>
-      <Show when={lanes !== undefined && port !== undefined}>
-        <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />
-      </Show>
-      <details class="aiui-pane" data-testid="extension-debugging" style="opacity: 0.85">
-        <summary>extension debugging</summary>
-        <div style="font: 11px ui-monospace, monospace; opacity: 0.8; padding: 2px 0 4px">
-          {cdpVerdict()}
-        </div>
-        <Show when={lanes} keyed>
-          {(l) => <TracePane lanes={l} />}
-        </Show>
-      </details>
-      <WirePane narration={narration} />
-    </>
+    <PanelLayout
+      port={port}
+      phase={busPhase}
+      // Native host FIRST (the extension's one NM use), mirror fallback.
+      listChannels={() => listChannels(port)}
+      onSwitch={(next) => {
+        // The extension's rebind: remember the port (discovery tries recent
+        // ports first), then reboot the panel document onto it.
+        void rememberPort(next).then(() => location.reload());
+      }}
+      client={client}
+      registerBlipSink={(sink) => (blipSink = sink)}
+      micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
+      lanes={lanes}
+      narration={narration}
+      // The extension drives its own tab; there is no separate CDP target to name.
+      debug={{
+        content: (
+          <div style="font: 11px ui-monospace, monospace; opacity: 0.8; padding: 2px 0 4px">
+            {cdpVerdict()}
+          </div>
+        ),
+      }}
+    />
   ),
   root,
 );

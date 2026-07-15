@@ -6,8 +6,10 @@
  * Port resolution, in order (the whole discovery story for a PLAIN page —
  * no native host, no chrome.storage):
  *  1. an explicit `port` (tests, embedding hosts);
- *  2. `?channel=<port>` in the page URL (the dev workflow);
- *  3. the page's OWN origin (the endgame: the channel serves the panel, so
+ *  2. `?channel=<port>` in the page URL (the per-URL override / channel switcher);
+ *  3. `VITE_AIUI_PORT` (the standalone dev launcher wires the chosen channel in —
+ *     scripts/dev.ts — so the dev page, on Vite's own origin, can still drive one);
+ *  4. the page's OWN origin (the endgame: the channel serves the panel, so
  *     the page's origin IS the channel and discovery disappears).
  *
  * The bus shapes mirror the channel's session hub (`aiui-claude-channel`
@@ -58,6 +60,21 @@ export function reduceBusMessage(state: BusState, msg: unknown): BusState {
 }
 
 /** Resolve the channel port for this page (see the module doc for the order). */
+/**
+ * The channel port the page should dial, in precedence order:
+ *  1. an explicit argument (tests);
+ *  2. `?channel=<port>` — the user's per-URL override (the channel switcher);
+ *  3. `VITE_AIUI_PORT` — injected by the dev launcher (scripts/dev.ts) so the
+ *     standalone Vite page can drive a channel it was NOT served by;
+ *  4. same-origin `location.port` — when the CHANNEL served this page (`/intent/`
+ *     via the sidecar), the port we're bound to IS the channel's.
+ *
+ * The env sits ABOVE same-origin deliberately. On the standalone dev page
+ * `location.port` is *Vite's*, not a channel's, so trusting it dropped the page
+ * to the fake tier — the confusion behind the "why do the two servings differ"
+ * question. When the channel serves the page, `VITE_AIUI_PORT` is unset and
+ * same-origin wins, exactly as before.
+ */
 export function resolveChannelPort(explicit?: number): number | undefined {
   if (explicit !== undefined) {
     return explicit;
@@ -67,11 +84,21 @@ export function resolveChannelPort(explicit?: number): number | undefined {
     if (fromQuery !== null && /^\d+$/.test(fromQuery)) {
       return Number(fromQuery);
     }
-    if (location.port !== "") {
-      return Number(location.port); // same-origin: the channel served us
-    }
+  }
+  const injected = injectedChannelPort();
+  if (injected !== undefined) {
+    return injected;
+  }
+  if (typeof location !== "undefined" && location.port !== "") {
+    return Number(location.port); // same-origin: the channel served us
   }
   return undefined;
+}
+
+/** The channel port the dev launcher wired in via `VITE_AIUI_PORT` (scripts/dev.ts). */
+function injectedChannelPort(): number | undefined {
+  const raw: unknown = import.meta.env?.VITE_AIUI_PORT;
+  return typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : undefined;
 }
 
 /** What `/health` answers (the fields this page uses). */

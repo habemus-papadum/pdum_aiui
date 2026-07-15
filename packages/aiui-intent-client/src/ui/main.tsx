@@ -28,13 +28,10 @@ import { createPencilHost } from "../pencil-host";
 import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
 import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
-import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./channel-header";
-import { Panel } from "./panel";
-import { PANES_STYLES, TracePane } from "./panes";
-import { installPanelKeys, installUiScaleRoot, type Narration, WirePane } from "./shell";
-import { TARGET_TAB_STYLES, TargetTab } from "./target-tab";
-import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
-import { TURN_PREVIEW_STYLES, TurnPreview } from "./turn-preview";
+import type { ChannelEntry } from "./channel-header";
+import { PanelLayout } from "./panel-layout";
+import { installPanelKeys, installUiScaleRoot, type Narration } from "./shell";
+import { TargetTab } from "./target-tab";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined, {
@@ -354,65 +351,37 @@ if (root === null) {
 }
 render(
   () => (
-    <>
-      <style>
-        {PANES_STYLES +
-          TURN_PREVIEW_STYLES +
-          TRACE_PANE_STYLES +
-          CHANNEL_HEADER_STYLES +
-          TARGET_TAB_STYLES}
-      </style>
-      {/* The decided order (owner, 2026-07-14): channel first, then the bar,
-          config, pills (inside Panel), the turn preview, the traces, and last
-          the debugging surfaces that will eventually go. */}
-      <ChannelHeader
-        port={port}
-        phase={busPhase}
-        listChannels={async () => {
-          // The channel-served page's discovery IS its origin: the registry
-          // mirror answers on the port we are bound to (or same-origin).
-          const base = port !== undefined ? `http://127.0.0.1:${port}` : "";
-          const res = await fetch(`${base}/debug/api/channels`);
-          const body = (await res.json()) as { channels?: ChannelEntry[] };
-          return body.channels ?? [];
-        }}
-        onSwitch={(next) => {
-          const url = new URL(location.href);
-          url.searchParams.set("channel", String(next));
-          location.assign(url.toString()); // resolveChannelPort honors ?channel=
-        }}
-      />
-      {/* Which real tab this detached panel is aimed at — the ring lives in
-          that tab, invisible from here, so name it in the panel itself. Only
-          the CDP tier drives real tabs; the fake tier has none to identify. */}
-      <Show when={targeting !== undefined && cdp !== undefined}>
-        <TargetTab targeting={targeting as NonNullable<typeof targeting>} />
-      </Show>
-      <Panel
-        client={client}
-        registerBlipSink={(sink) => (blipSink = sink)}
-        micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
-      />
-      <Show when={lanes} keyed>
-        {(l) => <TurnPreview lanes={l} />}
-      </Show>
-      <Show when={lanes !== undefined && port !== undefined}>
-        <RichTracePane baseUrl={`http://127.0.0.1:${port}`} />
-      </Show>
-      <details
-        class="aiui-pane"
-        data-testid="extension-debugging"
-        open={mode === "fake"}
-        style="opacity: 0.85"
-      >
-        <summary>extension debugging</summary>
-        <SimulateStrip />
-        <Show when={lanes} keyed>
-          {(l) => <TracePane lanes={l} />}
-        </Show>
-      </details>
-      <WirePane narration={narration} />
-    </>
+    <PanelLayout
+      port={port}
+      phase={busPhase}
+      listChannels={async () => {
+        // The channel-served page's discovery IS its origin: the registry
+        // mirror answers on the port we are bound to (or same-origin).
+        const base = port !== undefined ? `http://127.0.0.1:${port}` : "";
+        const res = await fetch(`${base}/debug/api/channels`);
+        const body = (await res.json()) as { channels?: ChannelEntry[] };
+        return body.channels ?? [];
+      }}
+      onSwitch={(next) => {
+        const url = new URL(location.href);
+        url.searchParams.set("channel", String(next));
+        location.assign(url.toString()); // resolveChannelPort honors ?channel=
+      }}
+      client={client}
+      registerBlipSink={(sink) => (blipSink = sink)}
+      micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
+      lanes={lanes}
+      narration={narration}
+      // Which real tab this detached panel is aimed at — the ring lives in that
+      // tab, invisible from here, so name it in the panel. Only the CDP tier
+      // drives real tabs; every other tier has none to identify.
+      targetTab={
+        cdp !== undefined && targeting !== undefined ? (
+          <TargetTab targeting={targeting} />
+        ) : undefined
+      }
+      debug={{ open: mode === "fake", content: <SimulateStrip /> }}
+    />
   ),
   root,
 );
