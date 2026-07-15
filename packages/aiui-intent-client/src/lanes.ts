@@ -184,7 +184,19 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   const engine = new Engine(panelIntentConfig(stt.get() as string, linter.get() as string));
 
   // ── speech playback (server-pushed clips; talking barges in) ───────────────
-  const speech = new SpeechPlayer();
+  // The overlay's composition, adapted to the panel: the speaker line rides the
+  // status line (🔊 — the overlay renders a dedicated label), and BLOCKED
+  // playback gets a visible remedy. The panels need that where the overlay
+  // never did: with keys forwarded from the target tab, this document may hold
+  // no user gesture when the first linter clip arrives — the player parks the
+  // clip and resumes on the first click/keypress HERE (speech.ts). The session
+  // browser also launches with autoplay pre-allowed, so the hint only ever
+  // shows on a manually-installed panel in a regular Chrome.
+  const speech = new SpeechPlayer({
+    onSpeak: (label) => status(label === undefined ? "🔊 speaking…" : `🔊 ${label}`),
+    onBlocked: () =>
+      toast("audio is blocked until you click or press a key in this panel (browser policy)"),
+  });
 
   // ── the wire: batching, attachment discipline, finalize/cancel ────────────
   const dialThread: OpenThread =
@@ -559,10 +571,34 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       return dispose;
     });
 
+    // Live config: the stt/linter selects moving mid-session re-apply the
+    // engine's IntentPipelineConfig IN PLACE — the overlay's `applyEffective`,
+    // distilled (modality.ts: delete-then-assign on the live object, which
+    // every consumer reads through a thunk). Without this the selects were
+    // boot-frozen: the next hello still declared the OLD linter, and the
+    // wire's linter-clip gate (`config().linter !== "off"`, shell/wire.ts)
+    // silently dropped the clips a mid-session switch-on should have played.
+    const disposeConfig = createRoot((dispose) => {
+      createEffect(
+        () => panelIntentConfig(stt.get() as string, linter.get() as string),
+        (effective) => {
+          const live = engine.settings as unknown as Record<string, unknown>;
+          for (const key of Object.keys(live)) {
+            if (!(key in effective)) {
+              delete live[key]; // e.g. ttsModel when stepping down from premium
+            }
+          }
+          Object.assign(engine.settings, effective);
+        },
+      );
+      return dispose;
+    });
+
     return () => {
       offEngine();
       disposeFade();
       disposePencil();
+      disposeConfig();
     };
   };
 

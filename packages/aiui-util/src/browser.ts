@@ -169,6 +169,16 @@ export async function launchSessionBrowser(opts: {
     //    launching process, not of the switch. Test in a browser started from a
     //    real terminal, or headless.
     "--auto-accept-this-tab-capture",
+    //  - allow audio PLAYBACK without a user gesture — the outbound half of the
+    //    same media posture (the two flags above pre-answer capture). The
+    //    intent client's panels play server-pushed speech (the linter's spoken
+    //    notes, TTS acks) via Audio.play(), and with keys forwarded from the
+    //    target tab the panel document may never receive the gesture Chrome's
+    //    autoplay policy wants — the clip would be refused with
+    //    NotAllowedError. The SpeechPlayer parks blocked clips and resumes on
+    //    a gesture (dev-overlay speech.ts), so outside this browser nothing is
+    //    lost — but in the session browser the linter should simply be HEARD.
+    "--autoplay-policy=no-user-gesture-required",
   ];
   if (opts.extensionDirs?.length) {
     args.push(`--load-extension=${opts.extensionDirs.join(",")}`);

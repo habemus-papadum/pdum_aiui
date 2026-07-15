@@ -40,6 +40,17 @@ export interface SpeechPlayerOptions {
   onSpeak?: (label: string | undefined) => void;
   /** Notified when the queue drains (clears the indicator). */
   onIdle?: () => void;
+  /**
+   * Playback was refused by the browser's autoplay policy (`NotAllowedError`):
+   * the document has never seen a user gesture. The clip is PARKED, not
+   * dropped — the player resumes it on the next pointerdown/keydown in this
+   * document. Fired once per blocked stretch: surface a visible hint ("click
+   * anywhere to hear it"). The overlay never needs this (it lives in the page
+   * the user is actively using), but the intent client's PANELS do: with keys
+   * forwarded from the target tab, the panel document itself may never have
+   * been touched when the first linter clip arrives.
+   */
+  onBlocked?: () => void;
 }
 
 const defaultCreateAudio: SpeechAudioFactory = (src) => new Audio(src);
@@ -49,6 +60,8 @@ export class SpeechPlayer {
   private queue: SpeechClip[] = [];
   private current: SpeechAudioElement | undefined;
   private playing = false;
+  private blocked = false;
+  private unlockArmed = false;
   private readonly createAudio: SpeechAudioFactory;
 
   constructor(private readonly opts: SpeechPlayerOptions = {}) {
@@ -58,7 +71,7 @@ export class SpeechPlayer {
   /** Queue a clip; starts playback if the player is idle. */
   enqueue(clip: SpeechClip): void {
     this.queue.push(clip);
-    if (!this.playing) {
+    if (!this.playing && !this.blocked) {
       this.playNext();
     }
   }
@@ -87,11 +100,56 @@ export class SpeechPlayer {
     try {
       const result = audio.play();
       if (result && typeof (result as Promise<void>).catch === "function") {
-        (result as Promise<void>).catch(() => advance());
+        (result as Promise<void>).catch((error: unknown) => {
+          // The autoplay policy (no user gesture yet in THIS document) is the
+          // one refusal worth waiting out: park the clip and resume on the
+          // next gesture. Anything else (decode failure, bad data) advances —
+          // replaying it on a gesture would just fail again.
+          if ((error as { name?: string } | null)?.name === "NotAllowedError") {
+            this.park(clip, audio);
+          } else {
+            advance();
+          }
+        });
       }
     } catch {
       advance();
     }
+  }
+
+  /** Autoplay refused: put the clip back at the head and wait for a gesture. */
+  private park(clip: SpeechClip, audio: SpeechAudioElement): void {
+    if (this.current !== audio) {
+      return; // a barge-in got here first — the clip is deliberately gone
+    }
+    this.queue.unshift(clip);
+    this.playing = false;
+    this.current = undefined;
+    this.blocked = true;
+    this.armUnlock();
+    this.opts.onBlocked?.();
+    this.opts.onIdle?.(); // nothing is audibly playing — clear the indicator
+  }
+
+  /** One-shot resume on the next user gesture (what unblocks autoplay). */
+  private armUnlock(): void {
+    if (this.unlockArmed || typeof document === "undefined") {
+      return;
+    }
+    this.unlockArmed = true;
+    const resume = (): void => {
+      document.removeEventListener("pointerdown", resume, true);
+      document.removeEventListener("keydown", resume, true);
+      this.unlockArmed = false;
+      if (this.blocked) {
+        this.blocked = false;
+        if (!this.playing) {
+          this.playNext();
+        }
+      }
+    };
+    document.addEventListener("pointerdown", resume, true);
+    document.addEventListener("keydown", resume, true);
   }
 
   /** Barge-in: stop the current clip and drop the queue (talk-start). */
@@ -106,6 +164,9 @@ export class SpeechPlayer {
     }
     this.current = undefined;
     this.playing = false;
+    // A parked queue is dropped with the rest; the next clip retries playback
+    // (and re-parks if the document still has no gesture).
+    this.blocked = false;
     this.opts.onIdle?.();
   }
 

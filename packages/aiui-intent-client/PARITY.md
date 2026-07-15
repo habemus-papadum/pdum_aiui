@@ -50,9 +50,9 @@ them bind in P2:
 
 | Row | Status | Where / when |
 | --- | --- | --- |
-| `stt` transcriber choice (scribe-v2 default, 4 models) | ✅ control + strip select; **consumed**: panelIntentConfig → the hello's `meta.intent` (lanes.test) |
+| `stt` transcriber choice (scribe-v2 default, 4 models) | ✅ control + strip select; **consumed**: panelIntentConfig → the hello's `meta.intent`, re-applied LIVE on change (lanes.bind, lanes.test) |
 | `videoPeriodSec` (constant-mode s/frame, 1–10 slider) | ✅ control + slider; **consumed**: the frame pump's intervalMs reads it per tick (lanes.ts) |
-| `linter` off/openai/gemini | ✅ control + strip select; **consumed**: rides the hello via panelIntentConfig |
+| `linter` off/openai/gemini | ✅ control + strip select; **consumed**: rides the hello via panelIntentConfig, re-applied LIVE (a mid-session switch reaches the next hello AND the wire's spoken-note gate); its `lint_` clips play through the SpeechPlayer — parked-on-autoplay-block, resumed on a panel gesture (speech.unlock.test) |
 | `inkVanish` + `inkFade` (2–20 s) | ✅ controls + widgets; **consumed**: the ink claim's fadeSec + the live re-relay effect (lanes.bind) |
 | `shotFlash` / `logLevel` | ✅ controls; shotFlash **consumed** (manual shots flash, sampled never — lanes.test); logLevel consumer pending with the console channel |
 | `uiScale` (⌘+/⌘−/⌘0, deliberately no widget) | ✅ control + keys + root-font effect (main.tsx) |

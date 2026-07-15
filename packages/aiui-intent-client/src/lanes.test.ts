@@ -11,6 +11,7 @@ import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { activationGesture } from "./activation";
 import { createIntentClient, type IntentClient } from "./client";
+import { linter, stt } from "./config";
 import { type FakeBus, fakeBus } from "./fake-bus";
 import {
   type ChannelLanes,
@@ -479,5 +480,35 @@ describe("config consumers", () => {
     expect(events[0]?.type).toBe("thread-open");
     // contribute() rides the transcript lane (model: "contribution")
     expect(events.some((e) => e.type === "transcript-final")).toBe(true);
+  });
+
+  it("the stt/linter selects re-apply LIVE — the next hello (and the clip gate) see them", async () => {
+    const r = makeRig();
+    try {
+      // Boot: linter off, scribe-v2 = premium posture (audioBack acks + ttsModel).
+      expect(r.lanes.engine.settings.linter).toBe("off");
+      expect(r.lanes.engine.settings.audioBack).toBe("acks");
+
+      // The user flips the selects mid-session. This used to be boot-frozen:
+      // the engine's settings were built once at construction, so the linter
+      // never reached the next hello and the wire's lint_-clip gate stayed
+      // reading "off" — the silent-linter bug, panel edition.
+      linter.set("gemini");
+      stt.set("gpt-realtime-whisper");
+      await settle();
+      expect(r.lanes.engine.settings.linter).toBe("gemini");
+      // The premium-only keys are SCRUBBED, not left frozen on the live object.
+      expect(r.lanes.engine.settings.audioBack).toBe("off");
+      expect(r.lanes.engine.settings.ttsModel).toBeUndefined();
+
+      // The next thread's hello declares the new config (openThread reads it fresh).
+      activationGesture(r.client, 7);
+      r.client.dispatch("ink");
+      await settle(30);
+      expect((r.thread.dials[0]?.intent as { linter?: string }).linter).toBe("gemini");
+    } finally {
+      linter.set("off");
+      stt.set("scribe-v2");
+    }
   });
 });
