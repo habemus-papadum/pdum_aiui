@@ -423,9 +423,6 @@ importers:
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
-      '@habemus-papadum/aiui-webext':
-        specifier: workspace:^
-        version: link:../aiui-webext
       '@solidjs/web':
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)

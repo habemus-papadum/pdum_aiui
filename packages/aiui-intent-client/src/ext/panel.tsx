@@ -17,7 +17,6 @@
  */
 
 import { WorkletPcmSource } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
-import { relayRequest } from "@habemus-papadum/aiui-webext";
 import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { activationGesture } from "../activation";
@@ -40,6 +39,7 @@ import {
 } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
+import { relayRequest } from "./relay";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [toastLine, setToastLine] = createSignal<string | undefined>(undefined, { ownedWrite: true });

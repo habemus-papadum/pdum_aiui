@@ -17,6 +17,27 @@
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./sidecar": {
+        "types": "./dist/sidecar.d.ts",
+        "import": "./dist/sidecar.js",
+        "default": "./dist/sidecar.js"
+      }
+    }
+  },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "build:ext": "tsx scripts/build-ext.ts",
@@ -28,14 +49,12 @@
     "dev": "tsx scripts/dev.ts",
     "dev:plain": "vite"
   },
-  "private": true,
   "dependencies": {
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-ink": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-remote-bar": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
-    "@habemus-papadum/aiui-webext": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",
     "solid-js": "2.0.0-beta.15"
   },

@@ -29,12 +29,12 @@
 
 import { locateComponents } from "@habemus-papadum/aiui-dev-overlay/multimodal-shot";
 import { installSelectionWatcher } from "@habemus-papadum/aiui-dev-overlay/selection";
-import { serveRelay } from "@habemus-papadum/aiui-webext";
 import { type InkHandle, mountInk, mountPencil, type PencilHandle } from "../cdp/page-ink";
 import type { PageReport } from "../cdp/page-script";
 import { createDriverWatch } from "../page/driver-watch";
 import { DRIVER_TIMEOUT_MS } from "../transport";
 import { LEGACY_RING_HOST_ID, PAGE_ADDRESS, type ReportMessage } from "./protocol";
+import { serveRelay } from "./relay";
 
 /** Set once this script learns it is an ORPHAN (the extension was reloaded
  * under it — ext:watch does that on every rebuild). Reports stand down; the

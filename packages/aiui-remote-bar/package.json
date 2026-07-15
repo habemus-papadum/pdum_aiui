@@ -18,12 +18,37 @@
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./server": {
+        "types": "./dist/backend.d.ts",
+        "import": "./dist/backend.js",
+        "default": "./dist/backend.js"
+      },
+      "./sidecar": {
+        "types": "./dist/sidecar.d.ts",
+        "import": "./dist/sidecar.js",
+        "default": "./dist/sidecar.js"
+      }
+    }
+  },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run"
   },
-  "private": true,
   "dependencies": {
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",

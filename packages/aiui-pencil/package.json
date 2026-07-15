@@ -18,6 +18,33 @@
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./server": {
+        "types": "./dist/backend.d.ts",
+        "import": "./dist/backend.js",
+        "default": "./dist/backend.js"
+      },
+      "./sidecar": {
+        "types": "./dist/sidecar.d.ts",
+        "import": "./dist/sidecar.js",
+        "default": "./dist/sidecar.js"
+      }
+    }
+  },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json && pnpm build:client",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p lab/tsconfig.json",
@@ -40,7 +67,6 @@
     "vite": "^6.4.1",
     "vite-plugin-solid": "3.0.0-next.5"
   },
-  "private": true,
   "dependencies": {
     "ws": "^8.18.0"
   }

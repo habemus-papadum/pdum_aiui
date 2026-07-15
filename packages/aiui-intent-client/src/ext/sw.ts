@@ -25,13 +25,13 @@
  * every open tab. In development, reloads are constant. So: re-inject.
  */
 
-import { serveRelay } from "@habemus-papadum/aiui-webext";
 import {
   ACTIVATE_COMMAND,
   type ActivateMessage,
   type NavigationMessage,
   type StreamIdResult,
 } from "./protocol";
+import { serveRelay } from "./relay";
 
 /** tabId → the last URL we saw, so a navigation can name both sides. */
 const lastUrl = new Map<number, string>();

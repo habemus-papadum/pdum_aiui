@@ -25,7 +25,6 @@
  * as a tab that has gone away.
  */
 
-import { relayRequest, relayRequestTab } from "@habemus-papadum/aiui-webext";
 import type { PageReport } from "../cdp/page-script";
 import {
   type CaptureSource,
@@ -47,6 +46,7 @@ import {
   PAGE_ADDRESS,
   type StreamIdResult,
 } from "./protocol";
+import { relayRequest, relayRequestTab } from "./relay";
 
 export interface ExtensionBusOptions {
   /** The window this side panel belongs to — the tabs it may drive. */
