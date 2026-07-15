@@ -136,6 +136,13 @@ not a page the client drives — it is excluded from targeting entirely, along w
 browser pages), and **closing the leader hands the role on** rather than leaving the client aimed
 at nothing.
 
+The exclusion covers the panel's **entire own origin**, not just recognizable `/intent/` URLs:
+the dev-served panel lives at a root path (`localhost:<vite>/?channel=…`) that no URL pattern
+can identify, so the bus excludes everything on `location.origin` — the origin it itself is
+served from. Before this rule the panel instrumented ITSELF (rang, inked, keylayered its own
+document, with no way to clear the ink short of ending the turn — found live 2026-07-15).
+Self-driving is an explicit non-goal: the panel is furniture, never a markup target.
+
 Under the extension the browser answers this question directly (`chrome.tabs.query({active:
 true})`) — no visibility heuristic is needed or wanted — and a **side panel drives only its own
 window's tabs**. It is per-window by construction, so a panel never aims at a tab you cannot see

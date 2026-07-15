@@ -74,6 +74,9 @@ export interface CdpBusOptions {
   /** The channel origin: where the panel reads the ink bundle, and which pages
    * are the panel's own (never driven). */
   channelOrigin: string;
+  /** The origin THIS bus's document is served from (default: `location.origin`).
+   * Everything on it is excluded from targeting — see `excluded` below. */
+  selfOrigin?: string;
   /** Socket factory (tests script the far end); defaults to `WebSocket`. */
   socketFactory?: (url: string) => CdpSocket;
   /** The ink bundle's source (tests override; defaults to the channel route). */
@@ -138,7 +141,20 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
    * local `/intent/` page counts, not just our own origin: a second panel on
    * another channel is still a panel, and a client that inks one is absurd. */
   const PANEL_PAGE = /^https?:\/\/(127\.0\.0\.1|\[::1\]|localhost)(:\d+)?\/intent(\/|$)/;
+  /** …and so is the panel's OWN origin, wholesale. The `/intent/` pattern
+   * recognizes the channel-served panel, but the DEV-served panel lives at
+   * the ROOT path (`localhost:<vite>/?channel=…`) — no URL shape says
+   * "panel" there. The bus doesn't have to guess: it RUNS in the panel's
+   * document, so everything on `location.origin` is its own furniture, not
+   * a markup target (found live: the panel armed, then ringed, inked and
+   * keylayered ITSELF, and the ink had no un-ink short of ending the turn).
+   * For the channel-served panel this widens to the whole channel origin —
+   * paint/debug pages — which are aiui furniture too. Self-driving is an
+   * explicit non-goal (owner, 2026-07-15). */
+  const selfOrigin =
+    options.selfOrigin ?? (typeof location !== "undefined" ? location.origin : undefined);
   const excluded = (url: string): boolean =>
+    (selfOrigin !== undefined && (url === selfOrigin || url.startsWith(`${selfOrigin}/`))) ||
     url.startsWith(`${options.channelOrigin}/intent`) ||
     PANEL_PAGE.test(url) ||
     url.startsWith("devtools://") ||

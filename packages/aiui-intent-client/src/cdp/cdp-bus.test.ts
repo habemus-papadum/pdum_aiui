@@ -115,6 +115,10 @@ describe("CdpBus", () => {
         targetInfos: [
           { type: "page", targetId: "T1", url: "https://example.test/" },
           { type: "page", targetId: "PANEL", url: `${ORIGIN}/intent/` },
+          // The DEV-served panel: the bus's OWN origin at the root path — no
+          // /intent/ shape to recognize, excluded because it is where this
+          // bus lives (found live: the panel inked itself).
+          { type: "page", targetId: "SELF", url: "http://localhost:5173/?channel=49317" },
           { type: "background_page", targetId: "BG", url: "chrome://x" },
         ],
       },
@@ -122,6 +126,7 @@ describe("CdpBus", () => {
     await connectCdpBus({
       cdpUrl: BRIDGE,
       channelOrigin: ORIGIN,
+      selfOrigin: "http://localhost:5173",
       socketFactory: browser.factory,
     });
     await settle();
