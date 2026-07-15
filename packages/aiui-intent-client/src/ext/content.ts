@@ -36,12 +36,33 @@ import { createDriverWatch } from "../page/driver-watch";
 import { DRIVER_TIMEOUT_MS } from "../transport";
 import { LEGACY_RING_HOST_ID, PAGE_ADDRESS, type ReportMessage } from "./protocol";
 
+/** Set once this script learns it is an ORPHAN (the extension was reloaded
+ * under it — ext:watch does that on every rebuild). Reports stand down; the
+ * new content script, injected on the next tab reload, owns the page. */
+let orphaned = false;
+
 const report = (r: PageReport): void => {
+  if (orphaned) {
+    return;
+  }
   const message: ReportMessage = { aiuiIntentReport: 1, report: r };
-  chrome.runtime.sendMessage(message).catch(() => {
-    // No panel open (or the extension reloaded): facts are re-reported on the
-    // next hello, so a dropped one is never load-bearing.
-  });
+  try {
+    chrome.runtime.sendMessage(message).catch(() => {
+      // No panel open: facts are re-reported on the next hello, so a dropped
+      // one is never load-bearing.
+    });
+  } catch {
+    // "Extension context invalidated" — sendMessage THROWS (synchronously,
+    // so the .catch above never applies; found live on visibilitychange →
+    // sayHello after an ext:watch reload). It means no driver can EVER
+    // reach this script again: the driver-gone verdict, delivered sync.
+    // Hard-clean like the watchdog would and go quiet.
+    orphaned = true;
+    ink?.clear();
+    pencil?.clear();
+    dropAssertions();
+    driverWatch.dispose();
+  }
 };
 
 // ── the ring: the page's ONLY evidence of the client's state ─────────────────
