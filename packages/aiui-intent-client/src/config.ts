@@ -94,9 +94,10 @@ export const logLevel = control({
   description: "console narration level",
 });
 
-/** Panel zoom — ⌘⇧+/⌘⇧−/⌘⇧0, the SIDE PANEL only (browser zoom can't reach it;
- * the plain page uses the browser's). Keyboard only, no widget (decided
- * 2026-07-12; the shift chord + side-panel scoping, owner 2026-07-16). */
+/** Panel zoom — driven by the SIDE PANEL's own −/%/+ buttons (top-right corner;
+ * ext/side-panel-zoom.tsx). Side panel only: the plain page has real browser
+ * zoom. No keyboard shortcut, no bar widget (owner, 2026-07-16: buttons replaced
+ * the ⌘-chord — a visible control beats a hidden one). */
 export const uiScale = control({
   name: "uiScale",
   value: 1,

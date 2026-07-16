@@ -9,31 +9,14 @@
  * two copies would drift the moment one is edited.
  */
 
-import { createEffect, createRoot, Show } from "solid-js";
+import { Show } from "solid-js";
 import type { IntentClient } from "../client";
-import { uiScale } from "../config";
 import { keyVerdict } from "../keys";
 
-/**
- * Drive the document's root font size off the `uiScale` control (panel zoom —
- * browser zoom does not reach side panels, which is why this exists at all).
- * Shared by both entries, and the APPLY half of zoom restore: the effect runs
- * immediately with the control's current value, so a scale restored by
- * `loadConfigBase()` lands on the document at boot. The frozen client's
- * "zoom restore" ledger bug was exactly this half going wrong — the value
- * came back, the application of it didn't. Returns the disposer.
- */
-export function installUiScaleRoot(doc: Document = document): () => void {
-  return createRoot((dispose) => {
-    createEffect(
-      () => uiScale.get() as number,
-      (scale) => {
-        doc.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
-      },
-    );
-    return dispose;
-  });
-}
+// NOTE: panel zoom used to live here (installUiScaleRoot + a ⌘-key block in
+// installPanelKeys). It moved OUT (owner, 2026-07-16): it is a side-panel-only
+// concern — the plain page has real browser zoom — so the whole of it (buttons +
+// the uiScale→font-size apply effect) is now ext/side-panel-zoom.tsx.
 
 /** The panel's running commentary — one set of signals, shared by the panes. */
 export interface Narration {

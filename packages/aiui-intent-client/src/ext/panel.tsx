@@ -40,7 +40,7 @@ import {
 import { connectExtensionBus } from "./extension-bus";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
 import { relayRequest } from "./relay";
-import { installSidePanelZoom } from "./side-panel-zoom";
+import { SidePanelZoom } from "./side-panel-zoom";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [toastLine, setToastLine] = createSignal<string | undefined>(undefined, { ownedWrite: true });
@@ -67,10 +67,6 @@ const narration: Narration = {
 
 loadConfigBase();
 installConfigAutoSave(); // every change persists — no save/reset verbs (owner)
-
-// Panel zoom lives ONLY in the side panel (owner, 2026-07-16): browser zoom can't
-// reach it, so ⌘⇧+/⌘⇧−/⌘⇧0 drive the uiScale control and the root font size.
-installSidePanelZoom();
 
 /** Lanes that only narrate — the panel is fully usable with no channel found. */
 const consoleLanes: IntentLanes = {
@@ -248,30 +244,36 @@ if (root === null) {
 }
 render(
   () => (
-    <PanelLayout
-      port={port}
-      phase={busPhase}
-      // Native host FIRST (the extension's one NM use), mirror fallback.
-      listChannels={() => listChannels(port)}
-      onSwitch={(next) => {
-        // The extension's rebind: remember the port (discovery tries recent
-        // ports first), then reboot the panel document onto it.
-        void rememberPort(next).then(() => location.reload());
-      }}
-      client={client}
-      registerBlipSink={(sink) => (blipSink = sink)}
-      micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
-      lanes={lanes}
-      narration={narration}
-      // The extension drives its own tab; there is no separate CDP target to name.
-      debug={{
-        content: (
-          <div style="font: 11px ui-monospace, monospace; opacity: 0.8; padding: 2px 0 4px">
-            {cdpVerdict()}
-          </div>
-        ),
-      }}
-    />
+    <>
+      {/* The side panel's own zoom (owner, 2026-07-16): a fixed top-right cluster,
+          the plain page has none. It floats over the layout, so it sits here as a
+          sibling rather than threading through PanelLayout. */}
+      <SidePanelZoom />
+      <PanelLayout
+        port={port}
+        phase={busPhase}
+        // Native host FIRST (the extension's one NM use), mirror fallback.
+        listChannels={() => listChannels(port)}
+        onSwitch={(next) => {
+          // The extension's rebind: remember the port (discovery tries recent
+          // ports first), then reboot the panel document onto it.
+          void rememberPort(next).then(() => location.reload());
+        }}
+        client={client}
+        registerBlipSink={(sink) => (blipSink = sink)}
+        micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
+        lanes={lanes}
+        narration={narration}
+        // The extension drives its own tab; there is no separate CDP target to name.
+        debug={{
+          content: (
+            <div style="font: 11px ui-monospace, monospace; opacity: 0.8; padding: 2px 0 4px">
+              {cdpVerdict()}
+            </div>
+          ),
+        }}
+      />
+    </>
   ),
   root,
 );
