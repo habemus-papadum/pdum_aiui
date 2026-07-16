@@ -13,9 +13,18 @@
  * in the corner over the panel without disturbing the layout.
  *
  * Two halves, both here: the buttons (step the `uiScale` control — which clamps
- * to [min,max] and snaps the step itself) and the APPLY effect (uiScale → root
- * font-size), which runs immediately with the restored value so a saved zoom
- * lands on the document at boot.
+ * to [min,max] and snaps the step itself) and the APPLY effect (uiScale → the
+ * panel-content root's CSS `zoom`), which runs immediately with the restored
+ * value so a saved zoom lands on the document at boot.
+ *
+ * The zoom target is the panel's `#root`, NOT `document.documentElement`, and
+ * that placement is load-bearing: the turn preview's hover peek is `position:
+ * fixed` appended to `document.body` — a SIBLING of `#root`, not a descendant —
+ * so it escapes the zoom and stays in true-viewport space, exactly as it does on
+ * the standalone page. Zooming the document root instead dragged the peek into
+ * the zoomed coordinate space (its fixed top/left scaled by the zoom while the
+ * anchor rect it measured from did not), which threw it across the panel. `#root`
+ * still holds every visible piece of the panel, so the content scales the same.
  */
 
 import type { JSX } from "@solidjs/web";
@@ -41,18 +50,21 @@ const ZOOM_STYLES = `
     font-variant-numeric: tabular-nums; }
 `;
 
-export function SidePanelZoom(): JSX.Element {
-  // Apply half: uiScale → the document's CSS `zoom` (browser zoom can't reach a
+export function SidePanelZoom(props: { target?: HTMLElement }): JSX.Element {
+  // Apply half: uiScale → the panel root's CSS `zoom` (browser zoom can't reach a
   // side panel). NOT a root font-size — every size in this panel is px, so a
   // percentage font-size scales nothing (found live: the % readout moved, the
-  // panel did not). The `zoom` property magnifies the whole document, px and all;
+  // panel did not). The `zoom` property magnifies the whole subtree, px and all;
   // it is non-standard but the side panel is always Chrome, which supports it.
+  // The target is `#root` (see the file header): zooming the panel content, not
+  // the document, is what keeps the body-attached hover peek in viewport space.
   // Two-arg createEffect (compute, effect); it runs immediately, so the scale
   // restored by loadConfigBase() lands on the document at boot.
+  const target = (): HTMLElement => props.target ?? document.documentElement;
   createEffect(
     () => uiScale.get() as number,
     (scale) => {
-      document.documentElement.style.setProperty("zoom", String(scale));
+      target().style.setProperty("zoom", String(scale));
     },
   );
 

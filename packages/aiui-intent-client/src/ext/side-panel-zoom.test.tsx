@@ -11,22 +11,26 @@ import { afterEach, describe, expect, it } from "vitest";
 import { uiScale } from "../config";
 import { SidePanelZoom } from "./side-panel-zoom";
 
-const zoom = (): string => document.documentElement.style.getPropertyValue("zoom");
+const zoom = (): string => target.style.getPropertyValue("zoom");
 
+// The panel zooms its content `#root`, not `document.documentElement`, so the
+// body-attached hover peek escapes the zoom (file header). The test mirrors that:
+// a dedicated target element, the same one the component writes `zoom` onto.
+let target: HTMLElement;
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   dispose = undefined;
   uiScale.set(uiScale.initial as never);
   flush();
-  document.documentElement.style.removeProperty("zoom");
   document.body.replaceChildren();
 });
 
 function mount(): { minus: HTMLButtonElement; reset: HTMLButtonElement; plus: HTMLButtonElement } {
   const root = document.createElement("div");
+  target = root;
   document.body.appendChild(root);
-  dispose = render(() => <SidePanelZoom />, root);
+  dispose = render(() => <SidePanelZoom target={root} />, root);
   flush();
   const [minus, reset, plus] = [...root.querySelectorAll("button")] as HTMLButtonElement[];
   return { minus, reset, plus };

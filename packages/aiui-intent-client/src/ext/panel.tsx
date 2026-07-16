@@ -247,8 +247,10 @@ render(
     <>
       {/* The side panel's own zoom (owner, 2026-07-16): a fixed top-right cluster,
           the plain page has none. It floats over the layout, so it sits here as a
-          sibling rather than threading through PanelLayout. */}
-      <SidePanelZoom />
+          sibling rather than threading through PanelLayout. It zooms `#root` (the
+          panel content), NOT the document — so the turn preview's body-attached
+          hover peek escapes the zoom and stays in viewport space. */}
+      <SidePanelZoom target={root} />
       <PanelLayout
         port={port}
         phase={busPhase}
