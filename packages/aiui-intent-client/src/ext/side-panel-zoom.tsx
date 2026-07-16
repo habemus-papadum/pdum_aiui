@@ -42,13 +42,17 @@ const ZOOM_STYLES = `
 `;
 
 export function SidePanelZoom(): JSX.Element {
-  // Apply half: uiScale → root font size (browser zoom can't reach a side panel).
+  // Apply half: uiScale → the document's CSS `zoom` (browser zoom can't reach a
+  // side panel). NOT a root font-size — every size in this panel is px, so a
+  // percentage font-size scales nothing (found live: the % readout moved, the
+  // panel did not). The `zoom` property magnifies the whole document, px and all;
+  // it is non-standard but the side panel is always Chrome, which supports it.
   // Two-arg createEffect (compute, effect); it runs immediately, so the scale
   // restored by loadConfigBase() lands on the document at boot.
   createEffect(
     () => uiScale.get() as number,
     (scale) => {
-      document.documentElement.style.fontSize = pct(scale);
+      document.documentElement.style.setProperty("zoom", String(scale));
     },
   );
 

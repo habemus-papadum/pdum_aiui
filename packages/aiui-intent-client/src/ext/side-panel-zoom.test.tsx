@@ -11,13 +11,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { uiScale } from "../config";
 import { SidePanelZoom } from "./side-panel-zoom";
 
+const zoom = (): string => document.documentElement.style.getPropertyValue("zoom");
+
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   dispose = undefined;
   uiScale.set(uiScale.initial as never);
   flush();
-  document.documentElement.style.fontSize = "";
+  document.documentElement.style.removeProperty("zoom");
   document.body.replaceChildren();
 });
 
@@ -31,18 +33,20 @@ function mount(): { minus: HTMLButtonElement; reset: HTMLButtonElement; plus: HT
 }
 
 describe("SidePanelZoom — the side panel's zoom buttons", () => {
-  it("+ grows, − shrinks, the middle button resets — font-size and label follow", () => {
-    // Apply half: a value set BEFORE mount lands on the document at mount.
+  it("+ grows, − shrinks, the middle button resets — the document zoom and label follow", () => {
+    // Apply half: a value set BEFORE mount lands on the document at mount. It is
+    // the CSS `zoom` (px content won't scale off a root font-size), the readout
+    // is the percent.
     uiScale.set(1.3 as never);
     flush();
     const { minus, reset, plus } = mount();
-    expect(document.documentElement.style.fontSize).toBe("130%");
+    expect(zoom()).toBe("1.3");
     expect(reset.textContent).toBe("130%");
 
     plus.click();
     flush();
     expect(uiScale.get()).toBeCloseTo(1.4);
-    expect(document.documentElement.style.fontSize).toBe("140%");
+    expect(zoom()).toBe("1.4");
     expect(reset.textContent).toBe("140%"); // the middle button is a live readout
 
     minus.click();
@@ -53,7 +57,7 @@ describe("SidePanelZoom — the side panel's zoom buttons", () => {
     reset.click(); // the readout doubles as reset-to-100%
     flush();
     expect(uiScale.get()).toBe(1);
-    expect(document.documentElement.style.fontSize).toBe("100%");
+    expect(zoom()).toBe("1");
     expect(reset.textContent).toBe("100%");
   });
 
