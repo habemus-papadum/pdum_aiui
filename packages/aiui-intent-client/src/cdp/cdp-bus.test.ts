@@ -139,6 +139,10 @@ describe("CdpBus", () => {
 
     const autoAttach = browser.sent.find((c) => c.method === "Target.setAutoAttach");
     expect(autoAttach?.params).toMatchObject({ autoAttach: true, flatten: true });
+    // Without discovery, targetInfoChanged never arrives (measured live) —
+    // and the parked-tab adoption below would be deaf.
+    const discover = browser.sent.find((c) => c.method === "Target.setDiscoverTargets");
+    expect(discover?.params).toMatchObject({ discover: true });
     const attached = browser.sent
       .filter((c) => c.method === "Target.attachToTarget")
       .map((c) => c.params.targetId);

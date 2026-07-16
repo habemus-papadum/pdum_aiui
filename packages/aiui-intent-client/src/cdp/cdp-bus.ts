@@ -514,6 +514,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     waitForDebuggerOnStart: false,
     flatten: true,
   });
+  // Discovery is what makes `Target.targetInfoChanged` flow — auto-attach
+  // alone does NOT subscribe to it (measured live, 2026-07-16: 0 events
+  // without this call, on the very navigation the parked-tab adoption keys
+  // on). Without it a + tab navigating to the app was never reconsidered.
+  await cdp.send("Target.setDiscoverTargets", { discover: true });
   // Auto-attach only covers targets created from now on — adopt the open ones.
   const { targetInfos } = (await cdp.send("Target.getTargets")) as {
     targetInfos?: Array<{ type?: string; targetId?: string; url?: string }>;
