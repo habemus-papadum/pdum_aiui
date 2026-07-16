@@ -67,6 +67,12 @@ function scriptedBrowser(results: Record<string, unknown> = {}) {
       }),
     detach: (sessionId: string) =>
       deliver({ method: "Target.detachedFromTarget", params: { sessionId } }),
+    /** The target navigated (URL changed) — no sessionId; a browser-level event. */
+    infoChanged: (targetId: string, url: string) =>
+      deliver({
+        method: "Target.targetInfoChanged",
+        params: { targetInfo: { type: "page", targetId, url, title: url, attached: true } },
+      }),
     /** A document committed. `parentId` set = an iframe, not the page itself. */
     navigated: (sessionId: string, parentId?: string) =>
       deliver({
@@ -408,6 +414,50 @@ describe("CdpBus", () => {
     bus.transport.onPageEvent(events);
     browser.report("GHOST", { kind: "interaction" });
     expect(events).not.toHaveBeenCalled();
+  });
+
+  it("a tab born as browser chrome is adopted when it navigates somewhere driveable", async () => {
+    // The + button: a fresh tab attaches as chrome://newtab — excluded — and
+    // then navigates to the app. The verdict must be re-rendered on the NEW
+    // url (found live: the third tab was never instrumented).
+    const browser = scriptedBrowser();
+    const bus = await connectCdpBus({
+      cdpUrl: BRIDGE,
+      channelOrigin: ORIGIN,
+      socketFactory: browser.factory,
+    });
+    browser.attach("S9", "T9", "chrome://new-tab-page/");
+    await settle();
+    expect(bus.pages()).toHaveLength(0); // parked, not driven
+    expect(browser.sent.some((c) => c.sessionId === "S9")).toBe(false); // untouched
+
+    browser.infoChanged("T9", "http://localhost:5173/app");
+    await settle();
+    expect(bus.pages()).toHaveLength(1); // adopted on the navigation…
+    expect(
+      browser.sent.some((c) => c.sessionId === "S9" && c.method === "Runtime.addBinding"),
+    ).toBe(true); // …and instrumented through the ordinary path
+
+    // Later navigations of an ADOPTED tab change nothing (no double-adopt).
+    browser.infoChanged("T9", "http://localhost:5173/other");
+    await settle();
+    expect(bus.pages()).toHaveLength(1);
+  });
+
+  it("a parked tab that closes without navigating is forgotten", async () => {
+    const browser = scriptedBrowser();
+    const bus = await connectCdpBus({
+      cdpUrl: BRIDGE,
+      channelOrigin: ORIGIN,
+      socketFactory: browser.factory,
+    });
+    browser.attach("S9", "T9", "chrome://new-tab-page/");
+    browser.detach("S9");
+    await settle();
+    // A navigation event for the dead target must not resurrect it.
+    browser.infoChanged("T9", "http://localhost:5173/app");
+    await settle();
+    expect(bus.pages()).toHaveLength(0);
   });
 
   it("beats every attached page with its session id; dispose stops the pulse", async () => {

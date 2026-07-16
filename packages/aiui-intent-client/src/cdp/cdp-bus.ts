@@ -365,6 +365,44 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     await evaluate(sessionId, script); // the document already loaded
   };
 
+  /**
+   * Auto-attached but not (yet) driveable: a tab BORN as browser chrome — the
+   * + button's chrome://newtab — parks here with its live session, and
+   * `Target.targetInfoChanged` adopts it the moment it navigates somewhere
+   * real. Found live (2026-07-16): the adoption verdict was rendered once,
+   * against the URL the tab was born with, so a fresh tab navigated to the
+   * app was never instrumented. targetId → sessionId.
+   */
+  const parked = new Map<string, string>();
+
+  /** Take one auto-attached page in as a driven tab and instrument it. */
+  const adoptPage = (
+    sessionId: string,
+    info: { targetId: string; url?: string; title?: string },
+  ): void => {
+    const page: AttachedPage = {
+      sessionId,
+      targetId: info.targetId,
+      tab: nextTab++,
+      url: "",
+      title: info.title ?? "",
+      visible: false,
+      focused: false,
+      aiui: false,
+      inkInjected: false,
+    };
+    bySession.set(sessionId, page);
+    byTarget.set(page.targetId, page);
+    byTab.set(page.tab, page);
+    if (activeTab === undefined) {
+      setActive(page.tab); // something must be the target before any focus report
+    }
+    void prepare(sessionId).catch((err: unknown) => {
+      log(`could not instrument ${info.url}: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    log(`attached tab ${page.tab} → ${info.url}`);
+  };
+
   cdp.onEvent((event) => {
     if (event.method === "Target.attachedToTarget") {
       const sessionId = String(event.params.sessionId);
@@ -378,7 +416,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         return;
       }
       if (excluded(info.url ?? "")) {
-        log(`ignoring ${info.url} (a panel page, or browser chrome)`);
+        // Not detached — PARKED: browser chrome may become a real page (the
+        // + button's fresh tab navigating to the app), and the kept session
+        // is what lets targetInfoChanged adopt it without a re-attach.
+        parked.set(info.targetId, sessionId);
+        log(`parking ${info.url} (panel page or browser chrome — adopted if it navigates)`);
         return;
       }
       if (byTarget.has(info.targetId)) {
@@ -390,33 +432,35 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         void cdp.send("Target.detachFromTarget", { sessionId }).catch(() => {});
         return;
       }
-      const page: AttachedPage = {
-        sessionId,
-        targetId: info.targetId,
-        tab: nextTab++,
-        url: "",
-        title: info.title ?? "",
-        visible: false,
-        focused: false,
-        aiui: false,
-        inkInjected: false,
+      adoptPage(sessionId, info as { targetId: string; url?: string; title?: string });
+      return;
+    }
+    if (event.method === "Target.targetInfoChanged") {
+      // A parked tab navigated: reconsider the verdict its birth URL got.
+      const info = event.params.targetInfo as {
+        type?: string;
+        targetId?: string;
+        url?: string;
+        title?: string;
       };
-      bySession.set(sessionId, page);
-      byTarget.set(page.targetId, page);
-      byTab.set(page.tab, page);
-      if (activeTab === undefined) {
-        setActive(page.tab); // something must be the target before any focus report
+      if (info?.type !== "page" || typeof info.targetId !== "string") {
+        return;
       }
-      void prepare(sessionId).catch((err: unknown) => {
-        log(
-          `could not instrument ${info.url}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-      log(`attached tab ${page.tab} → ${info.url}`);
+      const sessionId = parked.get(info.targetId);
+      if (sessionId !== undefined && !excluded(info.url ?? "") && !byTarget.has(info.targetId)) {
+        parked.delete(info.targetId);
+        adoptPage(sessionId, info as { targetId: string; url?: string; title?: string });
+      }
       return;
     }
     if (event.method === "Target.detachedFromTarget") {
-      const page = bySession.get(String(event.params.sessionId));
+      const gone = String(event.params.sessionId);
+      for (const [targetId, parkedSession] of parked) {
+        if (parkedSession === gone) {
+          parked.delete(targetId); // a parked tab closed without ever navigating
+        }
+      }
+      const page = bySession.get(gone);
       if (page === undefined) {
         return;
       }
