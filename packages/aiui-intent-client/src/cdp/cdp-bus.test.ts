@@ -234,6 +234,7 @@ describe("CdpBus", () => {
       to: "https://example.test/next",
       navKind: "push",
     });
+    browser.report("S1", { kind: "jumpDone" });
 
     expect(events).toEqual([
       { kind: "aiuiSupport", tab: 1, supported: true },
@@ -247,6 +248,7 @@ describe("CdpBus", () => {
         to: "https://example.test/next",
         navKind: "push",
       },
+      { kind: "jumpDone", tab: 1 },
     ]);
   });
 

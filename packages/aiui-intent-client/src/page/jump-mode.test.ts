@@ -82,6 +82,34 @@ describe("the pick mode", () => {
     expect(opened).toEqual([]);
   });
 
+  it("onExit fires once on a commit and once on Esc — the panel's auto-exit signal", () => {
+    // The completion callback (owner, 2026-07-16) is what flips jump mode off in
+    // the panel; it fires on a user-driven end, not on programmatic disarm.
+    page(`<div data-source-loc="src/App.tsx:3"><span id="t">hi</span></div>`);
+    let exits = 0;
+    armJump(
+      () => {},
+      () => {
+        exits += 1;
+      },
+    );
+    (document.getElementById("t") as Element).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "1" })); // commit
+    expect(exits).toBe(1);
+
+    // A fresh pick cancelled by Esc also reports exactly one exit.
+    armJump(
+      () => {},
+      () => {
+        exits += 1;
+      },
+    );
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(exits).toBe(2);
+  });
+
   it("the jump click never reaches the page (capture + stopImmediatePropagation)", () => {
     page(`<button id="t" data-source-loc="src/App.tsx:3">danger</button>`);
     let pageSaw = 0;

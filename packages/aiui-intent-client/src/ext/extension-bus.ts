@@ -173,6 +173,9 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
           ...(report.components !== undefined ? { components: report.components } : {}),
         });
         break;
+      case "jumpDone":
+        emit({ kind: "jumpDone", tab });
+        break;
       case "focus":
       case "stroke":
         break; // focus is the browser's business here; strokes enrich shots later

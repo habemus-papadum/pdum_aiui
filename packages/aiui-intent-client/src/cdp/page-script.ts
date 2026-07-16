@@ -47,6 +47,9 @@ export type PageReport =
       components?: unknown[];
     }
   | { kind: "stroke"; points: number }
+  /** A jump pick finished — committed (VS Code opens) or cancelled (Esc /
+   * click-away). Auto-exits jump mode (owner, 2026-07-16). */
+  | { kind: "jumpDone" }
   /** The page's `__AIUI__.tools` registry — full current set, descriptors only. */
   | {
       kind: "tools";
@@ -426,14 +429,10 @@ function pageBootstrap(version: string): void {
         ...(components !== undefined && components.length > 0 ? { components } : {}),
       });
     });
-    const onEsc = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") {
-        e.stopImmediatePropagation();
-        disarmRegion();
-        document.removeEventListener("keydown", onEsc, true);
-      }
-    };
-    document.addEventListener("keydown", onEsc, true);
+    // No private Escape listener (owner, 2026-07-16): area is a mode-engine
+    // TOGGLE now, and Escape unwinds it through the panel's escOrder — the in-turn
+    // key layer forwards Escape to the panel, which flips `region` off, and the
+    // regionSurface claim lowers this overlay. One Escape source, no split-brain.
     (document.body ?? document.documentElement).appendChild(overlay);
     regionOverlay = overlay;
   };
@@ -454,6 +453,7 @@ function pageBootstrap(version: string): void {
     setKeyCapture(false);
     assertRing(false, false, false, "");
     disarmRegion();
+    (w.__aiuiIntentInk as { disarmJump?: () => void } | undefined)?.disarmJump?.();
     handleInk({ on: false });
     handlePencil({ op: "disengage" });
   };
@@ -490,6 +490,7 @@ function pageBootstrap(version: string): void {
       setKeyCapture(false);
       assertRing(false, false, false, "");
       disarmRegion();
+      (w.__aiuiIntentInk as { disarmJump?: () => void } | undefined)?.disarmJump?.();
       sayHello();
     },
     hello: sayHello,
@@ -574,13 +575,19 @@ function pageBootstrap(version: string): void {
           // Jump-to-editor (the `j` pick mode) — the heavy half lives in the
           // evaluated bundle (jump-mode.ts); the bus delivers it before arming.
           const ink = w.__aiuiIntentInk as
-            | { armJump?: () => void; disarmJump?: () => void }
+            | {
+                armJump?: (open?: (url: string) => void, onExit?: () => void) => void;
+                disarmJump?: () => void;
+              }
             | undefined;
           if ((payload as { arm?: boolean } | undefined)?.arm === true) {
             if (ink?.armJump === undefined) {
               return { error: "jump surface not delivered" };
             }
-            ink.armJump();
+            // onExit: the page's completion signal — a committed or cancelled pick
+            // reports `jumpDone`, and the panel auto-exits the mode (owner,
+            // 2026-07-16). `undefined` open keeps jump-mode's default `vscode://`.
+            ink.armJump(undefined, () => report({ kind: "jumpDone" }));
           } else {
             ink?.disarmJump?.();
           }

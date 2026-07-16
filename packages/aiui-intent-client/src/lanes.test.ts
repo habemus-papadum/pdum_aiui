@@ -161,6 +161,41 @@ describe("the region drag (the `a` area shot)", () => {
     // …and uploaded as the marker's attachment.
     await settle(30);
     expect(r.thread.chunks.some((c) => c.kind.startsWith("attachment:shot_"))).toBe(true);
+
+    // Auto-exit (owner, 2026-07-16): a completed drag flips area mode OFF, and
+    // the regionSurface claim lowers the overlay (disarms the page).
+    expect(r.client.state().region).toBe(false);
+    expect(r.bus.log.some((line) => line === 'page:region@7 {"arm":false}')).toBe(true);
+  });
+});
+
+describe("the jump-to-editor toggle", () => {
+  it("arms the picker on an instrumented page; a jumpDone auto-exits and lowers it", async () => {
+    const r = makeRig();
+    activationGesture(r.client, 7);
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
+    r.client.dispatch("jump");
+    await settle();
+    expect(r.client.state().jump).toBe(true);
+    // The jumpSurface claim armed the page picker.
+    expect(r.bus.log.some((l) => l.startsWith("page:jump@7"))).toBe(true);
+
+    // The user commits or cancels; the page reports `jumpDone` → auto-exit.
+    r.bus.firePageEvent({ kind: "jumpDone", tab: 7 });
+    await settle();
+    expect(r.client.state().jump).toBe(false);
+    expect(r.bus.log.some((l) => l === 'page:jump@7 {"arm":false}')).toBe(true);
+  });
+
+  it("turning a page-pointer tool on turns the others off (mutual exclusion, real gate)", async () => {
+    const r = makeRig();
+    activationGesture(r.client, 7);
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
+    r.client.dispatch("ink");
+    expect(r.client.state().ink).toBe(true);
+    r.client.dispatch("jump"); // needs __AIUI__ (fired above) + the open turn
+    expect(r.client.state().jump).toBe(true);
+    expect(r.client.state().ink).toBe(false); // ink yielded — one tool at a time
   });
 });
 

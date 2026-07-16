@@ -84,6 +84,48 @@ export function intentClaims(
       },
     },
 
+    /** The area drag surface — the crosshair rubber-band raised while area mode
+     * is on in an open turn (owner, 2026-07-16). PIXELS, so it follows the GRANT
+     * (the tab in view must be the granted tab), unlike ink/pencil. acquire arms
+     * the page overlay; release lowers it. The mode auto-exits after a drag
+     * (client.ts dispatches `regionDone` on the page's `regionDrag`), so this
+     * claim's steady state is "armed until the user drags or steps out". */
+    regionSurface: {
+      derive: (s, ctx) =>
+        s.phase === "turn" &&
+        s.region === true &&
+        ctx.grantedTab !== undefined &&
+        ctx.grantedTab === ctx.activeTab
+          ? { tab: ctx.activeTab }
+          : null,
+      acquire: async (desire: { tab: number }) => {
+        await transport.requestPage(desire.tab, "region", { arm: true });
+        return desire.tab;
+      },
+      release: async (tab: number) => {
+        await transport.requestPage(tab, "region", { arm: false });
+      },
+    },
+
+    /** The jump-to-editor picker — raised while jump mode is on in an open turn
+     * on an INSTRUMENTED page (owner, 2026-07-16). A page act (follows the tab in
+     * view, no grant — the picker reads the page's own stamps). acquire arms the
+     * picker; release lowers it. Auto-exits on a commit/cancel: the page reports
+     * `jumpDone` and client.ts dispatches the force-off. */
+    jumpSurface: {
+      derive: (s, ctx) =>
+        s.phase === "turn" && s.jump === true && ctx.aiuiPage && ctx.activeTab !== undefined
+          ? { tab: ctx.activeTab }
+          : null,
+      acquire: async (desire: { tab: number }) => {
+        await transport.requestPage(desire.tab, "jump", { arm: true });
+        return desire.tab;
+      },
+      release: async (tab: number) => {
+        await transport.requestPage(tab, "jump", { arm: false });
+      },
+    },
+
     /** The warm capture stream, held for the turn's life (shots ride it). */
     tabStream: {
       derive: (s, ctx) =>

@@ -81,6 +81,32 @@ remote iPad client's job (its `shouldCapture` veto), never the desktop's. The on
 difference from ink is the colour — the pencil is red. The iPad rides the same surface through
 the `remote*` ops, unchanged by this.
 
+## The page-pointer tools are one mode at a time (owner, 2026-07-16)
+
+**`ink` · `pencil` · `area` · `jump` each own the page pointer with a full-viewport overlay, so
+exactly one is on.** Turning any on turns the other three off (the command clears them — an
+exclude can't express "the last one pressed wins"). This is what made `area` (`a`) and `jump`
+(`j`) real **toggles** instead of one-shot command-flashes: pressing the key enters a lit mode
+that stays until you act, toggle it off, hit Esc, or leave the turn — the cap lights (`active`)
+while engaged, exactly like ink/pencil.
+
+- **`area`** raises the crosshair rubber-band on the granted tab (a `regionSurface` claim, pixels
+  → follows the grant). It **auto-exits after one drag**: the page reports `regionDrag`, the
+  lanes crop + upload the shot, and the mode flips off (`regionDone`).
+- **`jump`** raises the editor picker on an instrumented tab (a `jumpSurface` claim, a page act →
+  follows the tab in view). It **auto-exits on a commit or cancel**: the page reports `jumpDone`
+  (jump-mode's `onExit`) and the mode flips off.
+- **Transient**: `area`/`jump` need an open turn (area needs pixels, jump needs a live picker;
+  tweak hands the page to the user), so leaving the turn clears them (`tools-need-turn`).
+  `ink`/`pencil` are durable and survive into tweak; only disarm clears those.
+- **Escape is one source of truth.** With a tool on, Esc cancels *that tool* and keeps the turn
+  (`escOrder: help → area → jump → phase`), then the next Esc steps the phase ladder. The page
+  overlays no longer run their own private Escape listeners — the old split-brain (page-Esc
+  cancelled the drag while panel-Esc stepped the phase, neither knowing about the other) is gone.
+- **Never stranded**: once a tool is on you can always toggle it off, even if its precondition
+  lapses (the tab de-instruments, the grant moves) — `available` gates the turn-*on*, not the
+  turn-*off*, and Esc bypasses `available` entirely.
+
 ## Talk
 
 **One exclusive talk region (`off | hold | handsFree`), two engagement affordances.** A second
@@ -223,12 +249,13 @@ the end. A typed contribution has no talk window, so its mid-segment pastes keep
 Pages announce `window.__AIUI__` instrumentation as a world fact (`ctx.aiuiPage`, the `aiui`
 pill). Instrumented pages answer the `locate` capability (screenshot rectangle → components →
 source), and they light the **jump** act (landed 2026-07-15; it was never in the old
-extension): `j` in a turn arms a ONE-SHOT pick on the page — move highlights the nearest
-stamped element, click opens the in-page picker (stamped element ancestors + containing cells
-at their definition sites, the overlay's interaction contract), commit opens
-`vscode://file/…`. Fully page-side (src/page/jump-mode.ts; the CDP tier evaluates it with the
-ink bundle, MV3 runs it in the MAIN world — the source root and cell registry live there).
-The gate IS the feature detection: no `__AIUI__`, gray cap.
+extension): `j` in a turn toggles jump mode on (see "The page-pointer tools are one mode at a
+time") — move highlights the nearest stamped element, click opens the in-page picker (stamped
+element ancestors + containing cells at their definition sites, the overlay's interaction
+contract), commit opens `vscode://file/…`. A commit or cancel auto-exits the mode. Fully
+page-side (src/page/jump-mode.ts; the CDP tier evaluates it with the ink bundle, MV3 runs it in
+the MAIN world — the source root and cell registry live there). The gate IS the feature
+detection: no `__AIUI__`, gray cap (and once on, always toggleable off).
 
 ## Status pills (permanent expert strip)
 

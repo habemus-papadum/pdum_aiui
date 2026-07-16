@@ -222,14 +222,10 @@ const armRegion = (): void => {
       ...(components !== undefined && components.length > 0 ? { components } : {}),
     });
   });
-  const onEsc = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") {
-      e.stopImmediatePropagation();
-      disarmRegion();
-      document.removeEventListener("keydown", onEsc, true);
-    }
-  };
-  document.addEventListener("keydown", onEsc, true);
+  // No private Escape listener (owner, 2026-07-16): area is a mode-engine TOGGLE,
+  // and Escape unwinds it through the panel's escOrder — one source, no
+  // split-brain. The regionSurface claim lowers this overlay when `region` flips
+  // off. (Twin of cdp/page-script.ts.)
   (document.body ?? document.documentElement).appendChild(overlay);
   regionOverlay = overlay;
 };
@@ -298,6 +294,7 @@ window.addEventListener("message", (event) => {
       tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
     }>;
     aiuiToolsResult?: { callId: string; ok: boolean; value?: unknown; error?: string };
+    aiuiJumpDone?: boolean;
   };
   if (data?.aiuiInstrumented) {
     aiuiPage = true;
@@ -308,6 +305,11 @@ window.addEventListener("message", (event) => {
   }
   if (data?.aiuiToolsResult !== undefined) {
     report({ kind: "toolsResult", ...data.aiuiToolsResult });
+  }
+  if (data?.aiuiJumpDone === true) {
+    // The MAIN world's jump pick finished (commit / click-away / Esc): relay the
+    // completion so the panel auto-exits jump mode (owner, 2026-07-16).
+    report({ kind: "jumpDone" });
   }
 });
 

@@ -121,6 +121,10 @@ export type PageEvent =
       takenAt: number;
       components?: unknown[];
     }
+  /** The user finished a jump pick — committed a row (VS Code opens) or cancelled
+   * (Esc / click-away). The page's completion signal that auto-exits jump mode
+   * (owner, 2026-07-16); carries no payload beyond the tab. */
+  | { kind: "jumpDone"; tab: number }
   /** The page's `__AIUI__.tools` registry changed: its FULL current tool set,
    * descriptors only (names/descriptions/schemas — never functions). An empty
    * `registrations` means the page has no tools (the link closes its socket). */

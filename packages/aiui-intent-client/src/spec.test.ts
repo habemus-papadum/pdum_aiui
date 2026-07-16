@@ -184,6 +184,65 @@ const rows: Array<{
     command: "mute",
     expected: { micMuted: false },
   },
+  // The four page-pointer tools (ink · pencil · area · jump) are MUTUALLY
+  // EXCLUSIVE (owner, 2026-07-16): turning one ON clears the others. (Turning a
+  // tool ON needs the world's gate — grant for area, __AIUI__ for jump — so
+  // those rows live in client.test.ts; here the always-available commands
+  // exercise the exclusion by clearing a seeded tool.)
+  {
+    name: "ink turns off a live area (one page-pointer tool at a time)",
+    start: { phase: "turn", region: true },
+    command: "ink",
+    expected: { ink: true, region: false, jump: false },
+  },
+  {
+    name: "pencil turns off a live jump (and is exclusive with ink)",
+    start: { phase: "turn", jump: true, ink: true },
+    command: "pencil",
+    expected: { pencil: true, jump: false, ink: false },
+  },
+  {
+    name: "area toggles OFF once on (always allowed — never stranded)",
+    start: { phase: "turn", region: true },
+    command: "region",
+    expected: { region: false },
+  },
+  {
+    name: "jump toggles OFF once on",
+    start: { phase: "turn", jump: true },
+    command: "jump",
+    expected: { jump: false },
+  },
+  {
+    name: "regionDone auto-exits area (a completed drag)",
+    start: { phase: "turn", region: true },
+    command: "regionDone",
+    expected: { region: false },
+  },
+  {
+    name: "jumpDone auto-exits jump (a committed/cancelled pick)",
+    start: { phase: "turn", jump: true },
+    command: "jumpDone",
+    expected: { jump: false },
+  },
+  {
+    name: "tweak clears area/jump — they need an open turn (tools-need-turn)",
+    start: { phase: "turn", region: true },
+    command: "tweak",
+    expected: { phase: "tweak", region: false },
+  },
+  {
+    name: "disarm clears a live jump too",
+    start: { phase: "turn", jump: true },
+    command: "disarm",
+    expected: { phase: "disarmed", jump: false },
+  },
+  {
+    name: "esc cancels the active area first, staying in the turn (escOrder)",
+    start: { phase: "turn", region: true },
+    command: "escape",
+    expected: { phase: "turn", region: false },
+  },
 ];
 
 describe("the §13.6 tables", () => {
@@ -246,5 +305,22 @@ describe("spec-level properties", () => {
     e.dispatch("help");
     expect(e.state().help).toBe(true); // no turn required
     expect(e.dispatch("escape").help).toBe(false); // esc still dismisses it first
+  });
+
+  it("ink and pencil are mutually exclusive — one markup surface at a time", () => {
+    // Before 2026-07-16 both could be on; now they are two of the four
+    // page-pointer tools, so turning one on turns the other off.
+    const e = engine({ phase: "turn", ink: true });
+    expect(e.dispatch("pencil")).toMatchObject({ ink: false, pencil: true });
+    expect(e.dispatch("ink")).toMatchObject({ pencil: false, ink: true });
+  });
+
+  it("esc unwinds the active page-tool BEFORE the phase ladder (escOrder), one press each", () => {
+    const e = engine({ phase: "turn", region: true });
+    // First press cancels the pick but keeps the turn (the old split-brain
+    // stepped the phase AND cancelled the drag in one press).
+    expect(e.dispatch("escape")).toMatchObject({ phase: "turn", region: false });
+    // Only now does esc step the phase rung.
+    expect(e.dispatch("escape")).toMatchObject({ phase: "armed" });
   });
 });

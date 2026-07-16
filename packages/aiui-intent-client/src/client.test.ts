@@ -30,8 +30,6 @@ function fakeLanes(log: string[]): IntentLanes {
     sendTurn: entry("sendTurn"),
     cancelTurn: entry("cancelTurn"),
     takeShot: entry("takeShot"),
-    armRegion: entry("armRegion"),
-    armJump: entry("armJump"),
     addSelection: entry("addSelection"),
     clearInk: entry("clearInk"),
     clearPencil: entry("clearPencil"),
@@ -202,15 +200,22 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     // A page act: no grant involved, follows the tab in view.
     const r = makeRig();
     grantAndOpen(r);
-    expect(r.client.canDispatch("jump")).toBe(false);
+    expect(r.client.canDispatch("jump")).toBe(false); // no __AIUI__: can't ENTER
 
     r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
     expect(r.client.canDispatch("jump")).toBe(true);
+    // A TOGGLE now, not a one-shot verb (owner, 2026-07-16): dispatch turns the
+    // mode on and lights the cap; the jumpSurface claim arms the page picker.
     r.client.dispatch("jump");
-    expect(r.lanes).toContain("armJump:7");
+    expect(r.client.state().jump).toBe(true);
+    expect(findCap(r, "jump")?.lit).toBe(true);
 
+    // Once ON, toggling OFF is always allowed — a page that de-instruments (or a
+    // lost grant, for area) must never strand you in a mode you can't leave.
     r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: false });
-    expect(r.client.canDispatch("jump")).toBe(false);
+    expect(r.client.canDispatch("jump")).toBe(true);
+    r.client.dispatch("jump");
+    expect(r.client.state().jump).toBe(false);
   });
 
   it("page facts are PER-TAB — a background tab's hello never describes the one in view", async () => {

@@ -347,6 +347,9 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
           ...(report.components !== undefined ? { components: report.components } : {}),
         });
         break;
+      case "jumpDone":
+        emit({ kind: "jumpDone", tab: page.tab });
+        break;
       case "stroke":
         break; // stroke counts enrich the shot payload later (post-v1)
     }

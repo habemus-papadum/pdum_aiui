@@ -91,7 +91,9 @@ window.addEventListener("message", (event) => {
   const jump = (event.data as { aiuiJump?: { arm?: boolean } })?.aiuiJump;
   if (jump !== undefined) {
     if (jump.arm === true) {
-      armJump();
+      // onExit relays the pick's completion back to the isolated world (which
+      // reports `jumpDone`) so the panel auto-exits jump mode (owner, 2026-07-16).
+      armJump(undefined, () => window.postMessage({ aiuiJumpDone: true }, "*"));
     } else {
       disarmJump();
     }

@@ -13,7 +13,13 @@
  *  - Esc steps out one level (help before turn-cancel), never destructive
  *    beyond scope, and never disarms (the ladder's escFloor)
  *  - send keeps you armed; disarm is its own deliberate command
- *  - disarm turns ink mode off; nothing else does (parity 1C, divergence 5)
+ *  - ink · pencil · area · jump are the four PAGE-POINTER TOOLS, mutually
+ *    exclusive — one owns the page pointer at a time (turning any on turns the
+ *    others off). ink/pencil are durable (survive turns; disarm clears them);
+ *    area/jump are transient (need an open turn — tools-need-turn clears them off
+ *    it) and AUTO-EXIT after their one act (regionDone/jumpDone). Esc unwinds the
+ *    active tool before the phase ladder (escOrder) — one Escape source, no
+ *    page-side split-brain. (owner, 2026-07-16)
  *  - standing video/videoMode survive turns and disarm (standing settings)
  *  - talk is per-turn: leaving the turn SCOPE (armed/disarmed) ends it — but
  *    tweak PAUSES hands-free talk (mic quiet, resumes on return); hold always
@@ -84,6 +90,18 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      * surface (mouse + pen + iPad); strokes survive turns until cleared. Vanish
      * on/off + fade live in config (pencilVanish/pencilFade), like ink's. */
     pencil: toggle({ durable: true }),
+    /** Area drag — the rubber-band region shot (`a`), now a TOGGLE, not a
+     * one-shot verb (owner, 2026-07-16). On ⇒ the regionSurface claim raises the
+     * crosshair overlay on the granted tab; a completed drag fires the shot AND
+     * flips this off (auto-exit). TRANSIENT: it needs an open turn and pixels, so
+     * leaving the turn clears it (tools-need-turn). One of the four page-pointer
+     * tools — turning it on turns ink/pencil/jump off (the command clears them). */
+    region: toggle(),
+    /** Jump-to-editor pick (`j`), a TOGGLE like area (owner, 2026-07-16). On ⇒
+     * the jumpSurface claim raises the picker on the instrumented tab in view; a
+     * commit or cancel flips this off (auto-exit, via the page's jumpDone). Also
+     * a page-pointer tool: mutually exclusive with ink/pencil/area. Transient. */
+    jump: toggle(),
     /** Video sampling — standing, durable, agent-visible. */
     video: toggle({
       durable: true,
@@ -147,10 +165,17 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      */
     tweak: (s) =>
       s.phase === "turn" ? { phase: "tweak" } : s.phase === "tweak" ? { phase: "turn" } : null,
-    /** i — toggle ink mode (standing). */
-    ink: (s) => ({ ink: !(s.ink as boolean) }),
+    // The four page-pointer tools are MUTUALLY EXCLUSIVE (owner, 2026-07-16):
+    // ink, pencil, area, and jump each own the page pointer with a full-viewport
+    // overlay, so at most one is on. Turning any ON clears the other three; the
+    // reducer expresses the exclusion directly (an exclude can't — it can't say
+    // "the last one pressed wins"). Turning OFF just clears itself.
+    /** i — toggle ink mode (standing); on ⇒ pencil/area/jump off. */
+    ink: (s): StatePatch =>
+      s.ink ? { ink: false } : { ink: true, pencil: false, region: false, jump: false },
     /** k — toggle pencil markup mode (standing; the claim gates on turn). Ink's twin. */
-    pencil: (s) => ({ pencil: !(s.pencil as boolean) }),
+    pencil: (s): StatePatch =>
+      s.pencil ? { pencil: false } : { pencil: true, ink: false, region: false, jump: false },
     /** v — toggle video sampling (standing; the claim gates on turn). */
     video: (s) => ({ video: !(s.video as boolean) }),
     /** f — flip the cadence. */
@@ -175,23 +200,40 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     /** The wire closed the thread under us (idle timeout, server end). */
     turnEnded: (s) => (s.phase === "turn" || s.phase === "tweak" ? { phase: "armed" } : null),
 
+    /** a — toggle the area drag (rubber band → cropped shot); on ⇒ ink/pencil/jump
+     * off. The regionSurface claim raises/lowers the crosshair; a completed drag
+     * auto-exits via `regionDone`. */
+    region: (s): StatePatch =>
+      s.region ? { region: false } : { region: true, ink: false, pencil: false, jump: false },
+    /** j — toggle the jump-to-editor pick (aiui pages only); on ⇒ ink/pencil/area
+     * off. The jumpSurface claim raises/lowers the picker; a commit/cancel
+     * auto-exits via `jumpDone`. */
+    jump: (s): StatePatch =>
+      s.jump ? { jump: false } : { jump: true, ink: false, pencil: false, region: false },
+    /** The page reported a completed area drag — auto-exit the mode (idempotent
+     * force-off, so it never toggles back ON if already cleared). */
+    regionDone: () => ({ region: false }),
+    /** The page reported a committed/cancelled jump pick — auto-exit (force-off). */
+    jumpDone: () => ({ jump: false }),
+
     // Pure verbs — no state to move; the client's effect layer acts on the
     // dispatch event (shot flash, selection pull, stroke clear). Declared so
     // caps/keys/tests share one command vocabulary.
     shot: () => null,
-    /** a — arm a one-shot region drag on the page (rubber band → cropped shot). */
-    region: () => null,
-    /** j — arm the one-shot jump-to-editor pick (aiui pages only). */
-    jump: () => null,
     /** Clear the pencil surface (the pencil's own clear, distinct from ink's). */
     pencilClear: () => null,
     selection: () => null,
     clear: () => null,
   },
 
-  /** Esc's one-level ladder: help first, then the phase rung (tweak → turn
-   * → armed — never past the floor to disarmed). */
-  escOrder: ["help", "phase"],
+  /** Esc's one-level ladder (owner, 2026-07-16): help first, then the active
+   * page-pointer TOOL (area/jump — one press cancels the pick and stays in the
+   * turn), then the phase rung (tweak → turn → armed, never past the floor).
+   * This is what dissolves the old region/jump Escape split-brain: the tool is
+   * mode-engine state now, so ONE Escape source unwinds it — the page overlay no
+   * longer runs its own private Escape listener. (area and jump are mutually
+   * exclusive, so at most one of these two ever steps.) */
+  escOrder: ["help", "region", "jump", "phase"],
 
   excludes: [
     // ONE disarmed, and it is HARD (owner, 2026-07-13): however you get
@@ -203,6 +245,17 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       name: "disarmed-is-hard",
       when: (s) => s.phase === "disarmed",
       set: { ink: false, pencil: false },
+    },
+    // The page-pointer TOOLS that need pixels/a live pick — area and jump — are
+    // transient (owner, 2026-07-16): they only make sense inside an open turn
+    // (area needs the grant, jump needs the picker on the tab in view), and in
+    // tweak the page owns the pointer. So leaving the turn SCOPE — into tweak,
+    // armed, or disarmed — clears them. (ink/pencil are durable and survive into
+    // tweak; only disarm clears those, above.)
+    {
+      name: "tools-need-turn",
+      when: (s) => s.phase !== "turn" && (s.region === true || s.jump === true),
+      set: { region: false, jump: false },
     },
     // Talk and tweak (owner, 2026-07-16): tweak PAUSES hands-free talk rather
     // than ending it — the mic goes quiet (client.ts drives the mute off the
@@ -258,9 +311,12 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // (Grantless hosts keep the two in lockstep, so this never bites there.)
     shot: (s, ctx) =>
       s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
-    // The region drag is pixels too — same gate as shot.
+    // The area drag is pixels too — turning it ON wants the same grant as a shot;
+    // turning it OFF is always allowed (so a lost grant can't strand you in area
+    // mode — you can always toggle back out, and Esc bypasses `available`).
     region: (s, ctx) =>
-      s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
+      s.region === true ||
+      (s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
     // Selection and clear are PAGE acts, not pixel acts (owner, 2026-07-14):
     // they ride the content script / bootstrap, which follows the tab in
     // view — no grant involved. Only pixels (shot, the stream, sampling) need
@@ -276,7 +332,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // Jump-to-editor is a PAGE act on instrumented pages only: the picker
     // reads the aiui stamps and source root, so a page without `__AIUI__`
     // grays the cap — the gate IS the feature detection (owner, 2026-07-15).
-    jump: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined && ctx.aiuiPage,
+    jump: (s, ctx) =>
+      s.jump === true || (s.phase === "turn" && ctx.activeTab !== undefined && ctx.aiuiPage),
     clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined,
     // Pencil markup is a PAGE act (the surface follows the tab in view, no grant
     // — a mouse, a stylus, and the iPad's strokes all land in-page). Its clear is

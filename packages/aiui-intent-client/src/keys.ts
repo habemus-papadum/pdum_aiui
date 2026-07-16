@@ -58,18 +58,20 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       hint: { key: "s", label: "shot", icon: "🖼" },
     },
     {
-      // 'a' = AREA (owner, 2026-07-14): arm a one-shot drag on the page —
-      // rubber-band a region, get a cropped shot with located components.
+      // 'a' = AREA (owner, 2026-07-16): TOGGLE the crosshair drag — rubber-band a
+      // region for a cropped shot. `active` carries engagement; a completed drag
+      // auto-exits. One of the four mutually-exclusive page-pointer tools.
       keys: ["a", "A"],
       down: onPress("region"),
-      hint: { key: "a", label: "area shot", icon: "⛶" },
+      hint: (s) => ({ key: "a", label: "area shot", icon: "⛶", active: s.region === true }),
     },
     {
-      // 'j' = JUMP (owner, 2026-07-15): one-shot jump-to-editor pick on
+      // 'j' = JUMP (owner, 2026-07-16): TOGGLE the jump-to-editor pick on
       // aiui-instrumented pages — click an element, pick a row, VS Code opens.
+      // A commit/cancel auto-exits; mutually exclusive with ink/pencil/area.
       keys: ["j", "J"],
       down: onPress("jump"),
-      hint: { key: "j", label: "jump to editor", icon: "🎯" },
+      hint: (s) => ({ key: "j", label: "jump to editor", icon: "🎯", active: s.jump === true }),
     },
     {
       keys: ["p", "P"],

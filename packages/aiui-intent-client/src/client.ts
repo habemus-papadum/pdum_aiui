@@ -40,12 +40,6 @@ export interface IntentLanes {
   cancelTurn(): void;
   /** One manual shot into the turn (flash on the page; sampled frames never flash). */
   takeShot(tab: number): void;
-  /** Arm a one-shot region drag on the page (the `a` area shot); the page
-   * reports the drag as a `regionDrag` event and the lanes crop + upload. */
-  armRegion(tab: number): void;
-  /** Arm the one-shot jump-to-editor pick (the `j` gesture; aiui pages only —
-   * the picker and the `vscode://` open live entirely in the page). */
-  armJump(tab: number): void;
   /** Pull the page's current selection into the turn. */
   addSelection(tab: number): void;
   /** Clear the page's ink strokes (the ONLY clearer besides disarm). */
@@ -158,20 +152,11 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
           lanes.takeShot(grantedTab);
         }
         break;
-      case "region":
-        // Pixels, so the grant gate applies (spec.available refused us here
-        // otherwise); the drag itself happens on the granted tab in view.
-        if (event.before.phase === "turn" && grantedTab !== undefined) {
-          lanes.armRegion(grantedTab);
-        }
-        break;
-      case "jump":
-        // A page act (spec.available gates on the aiui page) — follows the
-        // tab in view, no pixels, no grant.
-        if (event.before.phase === "turn" && activeTab !== undefined) {
-          lanes.armJump(activeTab);
-        }
-        break;
+      // NOTE: no `region`/`jump` cases — those are TOGGLE modes now (owner,
+      // 2026-07-16), not verbs. The regionSurface/jumpSurface claims arm and
+      // lower the page overlays as the toggle flips; the claim reconciler owns
+      // the page act. Auto-exit (a completed drag / pick flips the mode off)
+      // rides the page-event handler below, not this dispatch switch.
       case "selection":
         if (event.before.phase === "turn" && activeTab !== undefined) {
           lanes.addSelection(activeTab);
@@ -279,6 +264,17 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       factsFor(event.tab).aiui = event.supported;
     } else if (event.kind === "foreignClient") {
       factsFor(event.tab).foreign = event.armed;
+    } else if (event.kind === "regionDrag") {
+      // Area mode auto-exits after a drag (owner, 2026-07-16): the lanes crop +
+      // upload the shot on this same event; here we flip the mode off so the cap
+      // unlights and the regionSurface claim lowers the overlay. Force-off, not a
+      // toggle — a stray double-report can't turn area back ON.
+      engine.dispatch("regionDone");
+      return;
+    } else if (event.kind === "jumpDone") {
+      // Jump mode auto-exits on a commit/cancel — the page's completion signal.
+      engine.dispatch("jumpDone");
+      return;
     } else {
       return;
     }

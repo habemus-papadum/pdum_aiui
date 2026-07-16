@@ -182,10 +182,17 @@ export function disarmJump(): void {
 }
 
 /**
- * Enter the one-shot pick (re-arm replaces). `open` is injectable for tests —
- * the default hands the `vscode://` link to the browser.
+ * Enter the pick (re-arm replaces). `open` is injectable for tests — the
+ * default hands the `vscode://` link to the browser. `onExit` fires ONCE when
+ * the user finishes the pick — a committed row, a click-away, or Esc — so the
+ * panel can auto-exit jump mode (owner, 2026-07-16). It does NOT fire on a
+ * programmatic `disarmJump()` (claim release / re-arm / driver death), only on a
+ * user-driven end, so there is no engage/disengage feedback loop.
  */
-export function armJump(open: (url: string) => void = (url) => window.location.assign(url)): void {
+export function armJump(
+  open: (url: string) => void = (url) => window.location.assign(url),
+  onExit?: () => void,
+): void {
   disarmJump();
   document.getElementById(HOST_ID)?.remove(); // a stale host from an earlier client
 
@@ -281,6 +288,7 @@ export function armJump(open: (url: string) => void = (url) => window.location.a
     if (url !== undefined) {
       open(url);
     }
+    onExit?.();
   };
 
   const pickerOpen = (): boolean => picker.style.display === "block";
@@ -305,6 +313,7 @@ export function armJump(open: (url: string) => void = (url) => window.location.a
         commit(flat);
       } else if (target === null || !picker.contains(target)) {
         disarmJump();
+        onExit?.();
       }
       return;
     }
@@ -330,6 +339,7 @@ export function armJump(open: (url: string) => void = (url) => window.location.a
       event.preventDefault();
       event.stopImmediatePropagation();
       disarmJump();
+      onExit?.();
       return;
     }
     if (!pickerOpen()) {
