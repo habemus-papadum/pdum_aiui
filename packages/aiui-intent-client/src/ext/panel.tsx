@@ -28,7 +28,7 @@ import { createPencilHost } from "../pencil-host";
 import { connectSessionBus, probeChannel } from "../session";
 import { createToolsLink } from "../tools-link";
 import { PanelLayout } from "../ui/panel-layout";
-import { installPanelKeys, installUiScaleRoot, type Narration } from "../ui/shell";
+import { installPanelKeys, type Narration } from "../ui/shell";
 import { heldStreamFor } from "./capture";
 import {
   discoverChannel,
@@ -40,6 +40,7 @@ import {
 import { connectExtensionBus } from "./extension-bus";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
 import { relayRequest } from "./relay";
+import { installSidePanelZoom } from "./side-panel-zoom";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [toastLine, setToastLine] = createSignal<string | undefined>(undefined, { ownedWrite: true });
@@ -67,7 +68,9 @@ const narration: Narration = {
 loadConfigBase();
 installConfigAutoSave(); // every change persists — no save/reset verbs (owner)
 
-installUiScaleRoot();
+// Panel zoom lives ONLY in the side panel (owner, 2026-07-16): browser zoom can't
+// reach it, so ⌘⇧+/⌘⇧−/⌘⇧0 drive the uiScale control and the root font size.
+installSidePanelZoom();
 
 /** Lanes that only narrate — the panel is fully usable with no channel found. */
 const consoleLanes: IntentLanes = {

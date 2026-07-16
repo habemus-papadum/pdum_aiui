@@ -53,8 +53,6 @@ export interface Narration {
  *  - the **activation gesture** (⌘B on the plain page; the extension's command
  *    chord arrives from the service worker instead — an imperative event from
  *    outside, never a key in the grammar. See activation.ts);
- *  - **panel zoom** (⌘+/⌘−/⌘0), registered before the grammar so it wins
- *    mid-turn, as the old panel did;
  *  - **Esc**, which steps out even when the grammar claims nothing: on the
  *    TARGET page keys belong to the page, but in the panel's own document Esc
  *    may still disarm.
@@ -88,24 +86,9 @@ export function installPanelKeys(config: {
       config.activate();
       return;
     }
-    if (event.metaKey && phase === "down") {
-      const scale = uiScale.get() as number;
-      if (event.key === "=" || event.key === "+") {
-        event.preventDefault();
-        uiScale.set((Math.round((scale + 0.1) * 10) / 10) as never);
-        return;
-      }
-      if (event.key === "-") {
-        event.preventDefault();
-        uiScale.set((Math.round((scale - 0.1) * 10) / 10) as never);
-        return;
-      }
-      if (event.key === "0") {
-        event.preventDefault();
-        uiScale.set(1 as never);
-        return;
-      }
-    }
+    // NOTE: panel zoom is NOT here anymore (owner, 2026-07-16). It is a side-panel
+    // concern only — the plain page has real browser zoom — so it lives in
+    // ext/side-panel-zoom.ts on the ⌘⇧+/⌘⇧−/⌘⇧0 chord the browser doesn't reserve.
     const verdict = keyVerdict(client.state(), event.key, phase, event.repeat);
     if (verdict.kind === "pass") {
       if (phase === "down" && event.key === "Escape" && client.canDispatch("escape")) {

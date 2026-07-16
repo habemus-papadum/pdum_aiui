@@ -94,7 +94,9 @@ export const logLevel = control({
   description: "console narration level",
 });
 
-/** Panel zoom — ⌘+/⌘−/⌘0 only, deliberately no widget (decided 2026-07-12). */
+/** Panel zoom — ⌘⇧+/⌘⇧−/⌘⇧0, the SIDE PANEL only (browser zoom can't reach it;
+ * the plain page uses the browser's). Keyboard only, no widget (decided
+ * 2026-07-12; the shift chord + side-panel scoping, owner 2026-07-16). */
 export const uiScale = control({
   name: "uiScale",
   value: 1,

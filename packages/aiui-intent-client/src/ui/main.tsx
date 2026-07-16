@@ -30,7 +30,7 @@ import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
 import type { ChannelEntry } from "./channel-header";
 import { PanelLayout } from "./panel-layout";
-import { installPanelKeys, installUiScaleRoot, type Narration } from "./shell";
+import { installPanelKeys, type Narration } from "./shell";
 import { TargetTab } from "./target-tab";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
@@ -60,9 +60,8 @@ const narration: Narration = {
 loadConfigBase();
 installConfigAutoSave(); // every change persists — no save/reset verbs (owner)
 
-// Panel zoom: ⌘+/⌘−/⌘0 drive the uiScale control; the graph pushes the
-// root font size (nothing hand-called).
-installUiScaleRoot();
+// NOTE: no panel zoom on the plain page (owner, 2026-07-16) — it has real browser
+// zoom. Zoom is a side-panel-only concern; see ext/side-panel-zoom.ts.
 
 /**
  * The CdpBus, when this machine's session browser is up: the channel tells us
