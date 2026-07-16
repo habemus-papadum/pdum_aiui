@@ -219,20 +219,55 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
   // pinned to the tab it was minted on, so shots could not follow a tab switch
   // the way BEHAVIOR.md says they do in this tier.
   const grantless = host.capture.grantless === true;
+
+  // Page facts are PER-TAB facts (owner, 2026-07-16). They used to be written
+  // straight into the global context by WHICHEVER tab reported last — and a
+  // tab switch fires visibilitychange hellos on BOTH sides, so two hellos
+  // raced and the loser's facts (aiui pill, the jump gate, the selection dot,
+  // the foreign-client refusal) could describe a tab you are not looking at.
+  // Facts now live in a by-tab map; the context carries the ACTIVE tab's,
+  // re-derived on every switch and on every event for the tab in view.
+  // (Entries for closed tabs linger — three booleans a tab; nothing reads a
+  // dead tab's entry, since derivation only ever follows the active id.)
+  const tabFacts = new Map<number, { aiui?: boolean; selection?: boolean; foreign?: boolean }>();
+  const factsFor = (tab: number): { aiui?: boolean; selection?: boolean; foreign?: boolean } => {
+    let facts = tabFacts.get(tab);
+    if (facts === undefined) {
+      facts = {};
+      tabFacts.set(tab, facts);
+    }
+    return facts;
+  };
+  const deriveTabFacts = (tab: number | undefined): void => {
+    const facts = tab !== undefined ? tabFacts.get(tab) : undefined;
+    engine.setContext({
+      selectionPresent: facts?.selection === true,
+      aiuiPage: facts?.aiui === true,
+      foreignArmed: facts?.foreign === true,
+    });
+  };
+
   const noteTab = (tab: number | undefined): void => {
     engine.setContext(grantless ? { activeTab: tab, grantedTab: tab } : { activeTab: tab });
+    deriveTabFacts(tab);
   };
   host.targeting.onActiveTabChange(noteTab);
   noteTab(host.targeting.activeTab());
   host.transport.onPageEvent((event) => {
     if (event.kind === "selectionPresent") {
-      engine.setContext({ selectionPresent: event.present });
+      factsFor(event.tab).selection = event.present;
     } else if (event.kind === "keyForward") {
       handleKey(event.key, event.phase, event.repeat);
+      return;
     } else if (event.kind === "aiuiSupport") {
-      engine.setContext({ aiuiPage: event.supported });
+      factsFor(event.tab).aiui = event.supported;
     } else if (event.kind === "foreignClient") {
-      engine.setContext({ foreignArmed: event.armed });
+      factsFor(event.tab).foreign = event.armed;
+    } else {
+      return;
+    }
+    if (event.tab === engine.context().activeTab) {
+      deriveTabFacts(event.tab);
     }
   });
 

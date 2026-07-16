@@ -213,6 +213,38 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.client.canDispatch("jump")).toBe(false);
   });
 
+  it("page facts are PER-TAB — a background tab's hello never describes the one in view", async () => {
+    // Found live (2026-07-16): a tab switch fires visibilitychange hellos on
+    // BOTH sides, and the flags were global last-writer-wins — the aiui pill
+    // (and the jump/selection gates) could describe a tab you weren't looking
+    // at, nondeterministically. Facts now live by tab; the context carries the
+    // active tab's, re-derived on every switch.
+    const r = makeRig();
+    grantAndOpen(r);
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
+    r.bus.firePageEvent({ kind: "selectionPresent", tab: 7, present: true });
+    expect(r.client.context().aiuiPage).toBe(true);
+
+    // The race, replayed: the BACKGROUND tab's hello lands after the active
+    // tab's. It must update the map, never the view.
+    r.bus.firePageEvent({ kind: "aiuiSupport", tab: 9, supported: false });
+    r.bus.firePageEvent({ kind: "selectionPresent", tab: 9, present: false });
+    expect(r.client.context().aiuiPage).toBe(true); // still tab 7's truth
+    expect(r.client.context().selectionPresent).toBe(true);
+
+    // Switching the view re-derives from the map — no new hello needed…
+    r.bus.switchTab(9);
+    await settle();
+    expect(r.client.context().aiuiPage).toBe(false);
+    expect(r.client.context().selectionPresent).toBe(false);
+
+    // …and back: tab 7's remembered facts return intact.
+    r.bus.switchTab(7);
+    await settle();
+    expect(r.client.context().aiuiPage).toBe(true);
+    expect(r.client.context().selectionPresent).toBe(true);
+  });
+
   it("pencil markup gates on an open turn; clear is a page act on the tab in view", async () => {
     // The pencil is a page act (surface follows the tab, no grant). Its three
     // affordances live only in a turn (owner, 2026-07-15): vanish MODE and clear.

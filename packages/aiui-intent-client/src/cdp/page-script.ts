@@ -283,15 +283,19 @@ function pageBootstrap(version: string): void {
     visible: document.visibilityState === "visible",
     focused: document.hasFocus(),
   });
+  /** What the last hello CLAIMED about instrumentation — the poll below
+   * corrects the record when `__AIUI__` lands after we said false. */
+  let saidAiui = false;
   const sayHello = (): void => {
     setTimeout(reportTools, 0); // after the hello: the current tool set
 
+    saidAiui = (w.__AIUI__ ?? undefined) !== undefined;
     report({
       kind: "hello",
       url: location.href,
       title: document.title,
       ...facts(),
-      aiui: (w.__AIUI__ ?? undefined) !== undefined,
+      aiui: saidAiui,
     });
   };
 
@@ -339,7 +343,16 @@ function pageBootstrap(version: string): void {
   watchTools();
   const toolsPoll = setInterval(() => {
     watchTools();
-    if (toolsWatched) {
+    // The late-instrumentation correction (found live, 2026-07-16): on a
+    // FRESH navigation this bootstrap runs at document-start, before the
+    // app's runtime installs `__AIUI__`, so the first hello says aiui:false —
+    // and nothing corrected it until the next visibilitychange (the pill sat
+    // gray after every dev-server reload). The MV3 probe re-hellos when the
+    // global appears (content-main.ts); this is that correction, CDP tier.
+    if (!saidAiui && (w.__AIUI__ ?? undefined) !== undefined) {
+      sayHello();
+    }
+    if (toolsWatched && saidAiui) {
       clearInterval(toolsPoll);
     }
   }, 2000);
