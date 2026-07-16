@@ -82,6 +82,7 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
         client={props.client}
         registerBlipSink={props.registerBlipSink}
         micLevel={props.micLevel}
+        linterPulse={props.lanes !== undefined ? props.lanes.linterPulse : undefined}
       />
       <Show when={props.lanes} keyed>
         {(lanes) => <TurnPreview lanes={lanes} />}

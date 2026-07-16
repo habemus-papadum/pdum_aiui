@@ -32,6 +32,7 @@ import {
 } from "solid-js";
 import type { IntentClient } from "../client";
 import { hintsFor } from "../keys";
+import type { LinterPulseView } from "../linter-pulse";
 import { type RingState, ringForTab } from "../transport";
 
 export const PANEL_STYLES = `
@@ -93,6 +94,22 @@ export const PANEL_STYLES = `
   @keyframes aiui-ring-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   .aiui-config { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; padding-top: 6px;
     border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+  /* The lint lifecycle dot: a PERMANENT fixed box (1.4em) — phases swap glyph
+     and color only, so the strip never relayouts. Phases mirror the sidecar's
+     machine (linter-pulse.ts). */
+  .aiui-linter-pulse { display: inline-block; width: 1.4em; text-align: center;
+    font-size: 12px; line-height: 1; align-self: center; opacity: 0.35;
+    margin-left: -6px; user-select: none; }
+  .aiui-linter-pulse[data-phase="listening"] { opacity: 1; color: #16a34a; }
+  .aiui-linter-pulse[data-phase="transcript-wait"] { opacity: 1; color: #d97706;
+    animation: aiui-pulse-breathe 0.9s ease-in-out infinite; }
+  .aiui-linter-pulse[data-phase="thinking"] { opacity: 1; color: #7c3aed;
+    animation: aiui-pulse-breathe 0.9s ease-in-out infinite; }
+  .aiui-linter-pulse[data-phase="tool"] { opacity: 1; color: #7c3aed;
+    animation: aiui-pulse-breathe 0.9s ease-in-out infinite; }
+  .aiui-linter-pulse[data-phase="noted"] { opacity: 1; }
+  .aiui-linter-pulse[data-phase="stale"] { opacity: 1; color: #dc2626; }
+  @keyframes aiui-pulse-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
   .aiui-help { margin-top: 10px; border-collapse: collapse; }
   .aiui-help td { padding: 1px 8px 1px 0; }
   /* Preview mode (no open turn): the same rows, dimmed — these keys aren't
@@ -113,6 +130,8 @@ export interface PanelProps {
   registerBlipSink?: (sink: (key: string) => void) => void;
   /** The live mic level 0..1 (talk.level) — renders the REC meter while talking. */
   micLevel?: () => number;
+  /** The lint lifecycle (lanes.linterPulse) — the pulse dot by the linter select. */
+  linterPulse?: () => LinterPulseView;
 }
 
 /** One status pill's view: stable label, varying state. */
@@ -124,6 +143,18 @@ interface Pill {
    * grant — rendered outline-only, like the on-page hollow dot. */
   hollow?: boolean;
 }
+
+/** The pulse dot's glyph per phase — every glyph fits the same fixed box. */
+const PULSE_GLYPHS: Record<LinterPulseView["phase"], string> = {
+  off: "·",
+  idle: "·",
+  listening: "●",
+  "transcript-wait": "◔",
+  thinking: "◍",
+  tool: "⚒",
+  noted: "💡",
+  stale: "⚠",
+};
 
 const claimPillState = (status: ClaimStatus | undefined): Pill["state"] => {
   switch (status?.phase) {
@@ -460,7 +491,32 @@ export function Panel(props: PanelProps) {
             const row = () => client.configStrip()[rowIndex];
             return (
               <Repeat count={row()?.items.length ?? 0}>
-                {(itemIndex) => renderItem(() => row()?.items[itemIndex])}
+                {(itemIndex) => {
+                  const item = () => row()?.items[itemIndex];
+                  const isLinter = () => {
+                    const it = item();
+                    return it?.kind === "widget" && it.control === "linter";
+                  };
+                  return (
+                    <>
+                      {renderItem(item)}
+                      {/* The lint lifecycle dot, INSIDE the strip right after
+                          the linter select. A permanent fixed-width span —
+                          state changes swap its glyph/color, never its box, so
+                          nothing relayouts (owner, 2026-07-16). */}
+                      <Show when={props.linterPulse !== undefined && isLinter()}>
+                        <span
+                          class="aiui-linter-pulse"
+                          data-testid="linter-pulse"
+                          data-phase={props.linterPulse?.().phase}
+                          title={props.linterPulse?.().detail}
+                        >
+                          {PULSE_GLYPHS[props.linterPulse?.().phase ?? "off"]}
+                        </span>
+                      </Show>
+                    </>
+                  );
+                }}
               </Repeat>
             );
           }}

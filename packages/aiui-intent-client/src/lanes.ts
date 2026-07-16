@@ -42,6 +42,7 @@ import { type Accessor, createEffect, createRoot, createSignal } from "solid-js"
 import type { ClaimLaneOptions } from "./claims";
 import type { IntentClient, IntentLanes } from "./client";
 import { inkFade, inkVanish, linter, pencilFade, shotFlash, stt, videoPeriodSec } from "./config";
+import { createLinterPulse, type LinterPulseView } from "./linter-pulse";
 import type { IntentHost } from "./transport";
 
 /**
@@ -155,6 +156,9 @@ export interface ChannelLanes {
   wire: Wire;
   talk: Talk;
   speech: SpeechPlayer;
+  /** Where a lint is in its lifecycle (the sidecar's machine, mirrored) —
+   * the tiny pulse dot beside the linter select reads this. */
+  linterPulse: () => LinterPulseView;
   /**
    * Reactive event cursor: reading it inside the graph subscribes to every
    * engine event, so panes over `engine.events` re-render per event.
@@ -495,12 +499,19 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     },
   };
 
+  // ── the linter pulse: the sidecar's state machine, mirrored for the dot ────
+  const pulse = createLinterPulse({
+    enabled: () => linter.get() !== "off",
+    onStale: () => toast("linter: no note within 4s — check the channel log"),
+  });
+
   // ── the engine → wire feed: every event, then the close verbs (the
   // overlay modality's exact composition; the wire does not self-subscribe).
   // Plus: the reactive event cursor for panes, and the turn mirror.
   const [eventsRev, setEventsRev] = createSignal(0);
   const mirror = config.mirror === null ? undefined : (config.mirror ?? sessionStorageMirror());
   engine.onEvent((event) => {
+    pulse.feed(event);
     wire.onEngineEvent(event);
     if (event.type === "thread-close") {
       if ((event as { reason?: string }).reason === "send") {
@@ -649,6 +660,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     wire,
     talk,
     speech,
+    linterPulse: pulse.view,
     eventsRev,
     threadEvents: () => {
       void eventsRev(); // subscribe (in-graph readers re-run per event)
