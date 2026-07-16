@@ -489,6 +489,29 @@ export class Engine {
     return true;
   }
 
+  /**
+   * Record a tab boundary — the user looked at a different tab mid-turn. A
+   * sibling of {@link navigation} (same rule: context riding a turn, a no-op
+   * without an open thread), but its own event so the lowering can say "you
+   * switched tabs" and carry the two tab identities. Returns whether an event
+   * was recorded.
+   */
+  tabSwitch(from: string, to: string, fromTab?: number, toTab?: number): boolean {
+    if (!this.threadOpen) {
+      return false;
+    }
+    this.emit(
+      this.stamp({
+        type: "tab-switch",
+        from,
+        to,
+        ...(fromTab !== undefined ? { fromTab } : {}),
+        ...(toTab !== undefined ? { toTab } : {}),
+      }),
+    );
+    return true;
+  }
+
   shotDone(
     rect: Rect,
     components: LocatedComponent[],
@@ -608,11 +631,14 @@ export class Engine {
 // ── the first IR pass, pure ──────────────────────────────────────────────────
 
 export interface ComposedItem {
-  kind: "text" | "shot" | "code-selection" | "app-selection" | "navigation";
+  kind: "text" | "shot" | "code-selection" | "app-selection" | "navigation" | "tab-switch";
   text?: string;
-  /** A navigation item's `location.href` before / after the boundary. */
+  /** A navigation / tab-switch item's `location.href` before / after the boundary. */
   from?: string;
   to?: string;
+  /** A tab-switch item's driver tab handles (the tab left / the tab entered). */
+  fromTab?: number;
+  toTab?: number;
   /** A text item's source segment ordinal — the accumulator view's stable key. */
   segment?: number;
   /** The item's stream identity (`shot_N` / `sel_N` / `code_N`) — absent for
@@ -968,6 +994,16 @@ function placeItems(
       // `from`, everything after on `to`. Rendering is the compiler's call
       // (renderNavigation below) — the event travels structured.
       items.push({ kind: "navigation", from: event.from, to: event.to });
+    } else if (event.type === "tab-switch") {
+      // The sibling boundary: a different TAB, not the same tab navigating.
+      // Same positional attribution; renderTabSwitch phrases it as a switch.
+      items.push({
+        kind: "tab-switch",
+        from: event.from,
+        to: event.to,
+        ...(event.fromTab !== undefined ? { fromTab: event.fromTab } : {}),
+        ...(event.toTab !== undefined ? { toTab: event.toTab } : {}),
+      });
     } else if (event.type === "shot" && !facts.droppedShots.has(event.marker)) {
       items.push({
         kind: "shot",
@@ -1163,6 +1199,8 @@ function renderPass(
       promptParts.push(renderAppSelection(item));
     } else if (item.kind === "navigation") {
       promptParts.push(renderNavigation(item));
+    } else if (item.kind === "tab-switch") {
+      promptParts.push(renderTabSwitch(item));
     }
   }
   if (policy === "note") {
@@ -1416,6 +1454,15 @@ function pageLabel(url: string | undefined): string {
  */
 export function renderNavigation(item: Pick<ComposedItem, "from" | "to">): string {
   return `(page navigation: now on ${pageLabel(item.to)} — content above was on ${pageLabel(item.from)})`;
+}
+
+/**
+ * The tab boundary, lowered: distinct from a same-tab navigation — the user
+ * turned to a different tab, so references above are to the tab they left.
+ * Deliberately plain; refinements belong here (the shared lowering).
+ */
+export function renderTabSwitch(item: Pick<ComposedItem, "from" | "to">): string {
+  return `(switched tabs: now looking at ${pageLabel(item.to)} — content above was on ${pageLabel(item.from)})`;
 }
 
 export function renderAppSelection(

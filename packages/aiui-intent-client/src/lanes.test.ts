@@ -299,7 +299,7 @@ describe("navigation continuity — context riding the turn", () => {
     expect(nav).toMatchObject({ from: "fake://tab/7/a", to: "fake://tab/7/b", kind: "push" });
   });
 
-  it("a tab SWITCH mid-turn is a navigation event naming both sides", async () => {
+  it("a tab SWITCH mid-turn is its OWN event (tab-switch), not a navigation, naming both sides and both tabs", async () => {
     const r = makeRig();
     r.bus.setTabUrl(7, "fake://tab/7/docs");
     r.bus.setTabUrl(9, "fake://tab/9/app");
@@ -307,19 +307,27 @@ describe("navigation continuity — context riding the turn", () => {
     await settle(); // seed lastActiveTab
     r.bus.switchTab(9);
     await settle(20);
-    const nav = r.lanes.engine.events.find((e) => e.type === "navigation") as
-      | { from: string; to: string }
+    // A tab switch is a distinct boundary — no `navigation` event is minted.
+    expect(r.lanes.engine.events.some((e) => e.type === "navigation")).toBe(false);
+    const sw = r.lanes.engine.events.find((e) => e.type === "tab-switch") as
+      | { from: string; to: string; fromTab?: number; toTab?: number }
       | undefined;
-    expect(nav).toMatchObject({ from: "fake://tab/7/docs", to: "fake://tab/9/app" });
+    expect(sw).toMatchObject({
+      from: "fake://tab/7/docs",
+      to: "fake://tab/9/app",
+      fromTab: 7,
+      toTab: 9,
+    });
   });
 
-  it("navigations OUTSIDE a turn record nothing (never a turn opener)", async () => {
+  it("boundaries OUTSIDE a turn record nothing (never a turn opener)", async () => {
     const r = makeRig();
     r.client.setContext({ connected: true });
     r.bus.firePageEvent({ kind: "navigation", tab: 7, from: "a", to: "b" });
     r.bus.switchTab(9);
     await settle(20);
     expect(r.lanes.engine.events.some((e) => e.type === "navigation")).toBe(false);
+    expect(r.lanes.engine.events.some((e) => e.type === "tab-switch")).toBe(false);
   });
 });
 
@@ -513,6 +521,36 @@ describe("config consumers", () => {
     } finally {
       linter.set("off");
       stt.set("scribe-v2");
+    }
+  });
+
+  it("changing the linter WHILE a turn is open sends a mid-thread control chunk (live start/stop/swap)", async () => {
+    const r = makeRig();
+    try {
+      activationGesture(r.client, 7); // opens a turn → thread-open → socket dialed
+      await settle(30);
+      expect(r.lanes.engine.threadOpen).toBe(true);
+      const before = r.thread.chunks.length;
+
+      linter.set("gemini");
+      await settle(30);
+      const control = r.thread.chunks.slice(before).find((c) => c.kind === "chunk:control");
+      expect(control?.payload).toEqual({ control: "linter", value: "gemini" });
+      expect(control?.fin).toBe(false); // reconfiguration rides the open thread, never fins it
+    } finally {
+      linter.set("off");
+    }
+  });
+
+  it("changing the linter with NO open thread sends no control — it rides the next hello", async () => {
+    const r = makeRig();
+    try {
+      expect(r.lanes.engine.threadOpen).toBe(false);
+      linter.set("gemini");
+      await settle(30);
+      expect(r.thread.chunks.some((c) => c.kind === "chunk:control")).toBe(false);
+    } finally {
+      linter.set("off");
     }
   });
 });

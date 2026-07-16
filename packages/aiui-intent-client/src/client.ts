@@ -104,6 +104,13 @@ export interface IntentClient
 
 const inTurn = (phase: unknown): boolean => phase === "turn" || phase === "tweak";
 
+/** The mic is silenced by the user's toggle OR by the tweak pause: tweak hands
+ * keys to the page and quiets the mic without ending the talk window (spec.ts
+ * `handsfree-off-turn` keeps the window open), so the linter window survives
+ * and the mic resumes on return to the turn. */
+const effectiveMuted = (s: { micMuted?: unknown; phase?: unknown }): boolean =>
+  s.micMuted === true || s.phase === "tweak";
+
 export function createIntentClient(config: IntentClientConfig): IntentClient {
   const { host, lanes } = config;
 
@@ -186,7 +193,9 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     }
 
     // Talk lifecycle: derived from the talk REGION's movement so every path
-    // (space, h, excludes on send/cancel/disarm/tweak) lands here.
+    // (space, h, excludes on send/cancel/disarm) lands here. Entering tweak no
+    // longer moves the talk region (hands-free survives it; see spec.ts), so a
+    // talk window is opened/closed only on a real region change.
     if (event.before.talk !== event.after.talk) {
       if (event.after.talk !== "off") {
         lanes.startTalk(event.after.talk as string);
@@ -194,8 +203,15 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         lanes.stopTalk();
       }
     }
-    if (event.before.micMuted !== event.after.micMuted && event.after.talk !== "off") {
-      lanes.setMicMuted(event.after.micMuted === true);
+    // Effective mute = the user's toggle OR the tweak pause. Tweak keeps the
+    // hands-free window OPEN (no talk-end, so the server-side linter window
+    // isn't triggered) but silences the mic; stepping back to the turn resumes
+    // it. So the mic obeys `micMuted || phase === "tweak"`, and we relay only
+    // when that effective value actually flips (and a window is open to mute).
+    const muteBefore = event.before.talk !== "off" && effectiveMuted(event.before);
+    const muteAfter = event.after.talk !== "off" && effectiveMuted(event.after);
+    if (event.after.talk !== "off" && muteBefore !== muteAfter) {
+      lanes.setMicMuted(muteAfter);
     }
   };
 

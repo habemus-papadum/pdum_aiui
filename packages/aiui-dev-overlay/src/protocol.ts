@@ -38,7 +38,7 @@ export interface Ack {
  * and streaming-turns handoffs. Mirrors `ChunkDescriptor` in the channel's
  * `frame.ts` — the source of truth; change both together.
  */
-export type JsonChunk = { kind: "events" } | { kind: "context" };
+export type JsonChunk = { kind: "events" } | { kind: "context" } | { kind: "control" };
 export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
 export type AudioChunk = { kind: "audio"; id: string; seq: number; mime: string };
 /** LEGACY: one sampled screen-share frame as its own chunk kind. The overlay

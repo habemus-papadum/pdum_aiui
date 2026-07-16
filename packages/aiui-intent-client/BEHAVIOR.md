@@ -74,16 +74,36 @@ simultaneous talk window is unrepresentable by construction. Push-to-talk is a *
 hold Space, or press-and-hold the 🎙 cap (pointer down/up = the same `talkPress`/`talkRelease`
 commands). Hands-free is a *mode*: the `h` key or the 🎧 toggle cap. While one grip is engaged
 the other's cap disables (`h` switches grips; Space during hands-free does nothing; Space-up
-only ends a hold). Talk is per-turn — leaving the turn ends it, whoever caused the exit. Mute
-exists only while talking; starting talk starts unmuted. The REC pill is the always-visible
+only ends a hold). Talk is per-turn — leaving the turn SCOPE ends it, whoever caused the exit.
+Mute exists only while talking; starting talk starts unmuted. The REC pill is the always-visible
 recording indicator: red while live, amber while muted.
+
+**Tweak pauses talk, it does not end it (owner, 2026-07-16).** Tweak hands every ordinary key to
+the page, so a *hold* window — bound to a physical key you can no longer be holding — ends on
+entry. A *hands-free* window instead **pauses**: the mic goes quiet (the effective mute is
+`micMuted || phase === "tweak"`, driven off the phase in `client.ts`) but the talk window stays
+open, so its server-side linter window is not triggered, and stepping back to the turn resumes
+the mic where it left off. Leaving the turn scope entirely (armed/disarmed) still ends it.
+
+## The prompt linter, reconfigurable mid-turn
+
+The linter select (`off | openai | gemini`) rides the hello on every thread-open, but it also
+takes effect **live** (owner, 2026-07-16): flipping it while a turn is open sends a `control`
+chunk on the open thread, and the channel processor starts / stops / swaps the linter sidecar
+without closing the turn. With no open thread the change simply rides the next hello. So all
+three — start, stop, and vendor swap — work mid-turn; a swap gets a *fresh* sidecar (it lints
+from that point on, it does not inherit the prior session's audio/selections). The model,
+instructions, and voice stay the hello's — the select carries only the vendor.
 
 ## Continuity: navigations and tab switches
 
-A same-tab navigation and a tab SWITCH are both **navigation events riding the open turn** —
-context, never a turn opener (no thread, no event) — and both render into the lowered prompt.
-A tab boundary names both sides, with `from` re-read at boundary time (the tab may have
-navigated since it was last active).
+A same-tab navigation and a tab SWITCH are **two distinct boundary events**, both riding the open
+turn as context (never a turn opener — no thread, no event) and both rendered into the lowered
+prompt. They are separate on purpose (owner, 2026-07-16): a same-tab move is a `navigation`
+event (with a `navKind`: push/replace/traverse/reload/hash), a tab change is a `tab-switch` event
+carrying **both tab identities** (`fromTab`/`toTab`) plus both hrefs — so the compiler can phrase
+"you switched tabs" distinctly from "the page navigated". A tab boundary re-reads `from` at
+boundary time (the tab may have navigated since it was last active).
 
 **What survives a mid-turn reload (decided in Phase 3, on real pages):** the turn does. A reload
 gives the page a new document, which carries none of what the client asserted into the old one —

@@ -736,6 +736,49 @@ describe("navigation (a context boundary riding the turn, never opening one)", (
   });
 });
 
+describe("tab-switch (the sibling boundary — a different tab, not the same tab navigating)", () => {
+  const A = "http://app.test/";
+  const B = "http://other.test/dashboard";
+
+  it("is a no-op without an open thread — a switch is context, not content", () => {
+    const engine = armedEngine();
+    expect(engine.tabSwitch(A, B, 1, 2)).toBe(false);
+    expect(engine.threadOpen).toBe(false);
+    expect(engine.events.some((e) => e.type === "tab-switch")).toBe(false);
+  });
+
+  it("records the boundary on an open thread, tab identities included", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    expect(engine.tabSwitch(A, B, 1, 2)).toBe(true);
+    const event = engine.events.find((e) => e.type === "tab-switch");
+    expect(event).toMatchObject({ type: "tab-switch", from: A, to: B, fromTab: 1, toTab: 2 });
+  });
+
+  it("is distinct from navigation — its own kind and its own rendering", () => {
+    const engine = armedEngine();
+    const seg = engine.talkStart() as number;
+    engine.transcriptFinal(seg, "compare against this one", 5, "test");
+    engine.talkEnd();
+    engine.tabSwitch(A, B, 1, 2);
+    const seg2 = engine.talkStart() as number;
+    engine.transcriptFinal(seg2, "which is faster", 5, "test");
+    engine.talkEnd();
+
+    const composed = composeIntent(engine.events, "replace");
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "tab-switch", "text"]);
+    const prompt = composed.prompt;
+    // Phrased as a tab switch, NOT a page navigation.
+    const boundary = prompt.indexOf(
+      "(switched tabs: now looking at /dashboard — content above was on /)",
+    );
+    expect(boundary).toBeGreaterThan(prompt.indexOf("compare against this one"));
+    expect(boundary).toBeLessThan(prompt.indexOf("which is faster"));
+    expect(prompt).not.toContain("page navigation");
+    expect(composed.transcript).toBe("compare against this one which is faster");
+  });
+});
+
 describe("code selection (the reader's contribution, rendered at lowering time)", () => {
   it("opens the thread like a contribution and inlines a short selection", () => {
     const engine = armedEngine();

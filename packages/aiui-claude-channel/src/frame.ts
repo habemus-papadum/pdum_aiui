@@ -100,10 +100,16 @@ export interface HelloMeta {
  *    format relies on, so `PROTOCOL_VERSION` is unaffected;
  *  - `context` — payload is UTF-8 JSON `{ selection?: … }`, sent at most once,
  *    just before `fin`.
+ *  - `control` — payload is UTF-8 JSON `{ control, value }`: a mid-thread
+ *    reconfiguration the processor applies live, distinct from turn content
+ *    (it never reaches the composed prompt). Today the one control is
+ *    `{ control: "linter", value: "off" | "openai" | "gemini" }` — the client
+ *    switching the prompt-linter on/off/vendor without closing the turn.
  */
 export type ChunkDescriptor =
   | { kind: "events" }
   | { kind: "context" }
+  | { kind: "control" }
   | { kind: "attachment"; id: string; mime: string }
   | { kind: "audio"; id: string; seq: number; mime: string }
   // One sampled video frame of the realtime submode's screen share (~1 fps).

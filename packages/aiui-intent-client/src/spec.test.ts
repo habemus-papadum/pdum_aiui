@@ -167,8 +167,14 @@ const rows: Array<{
     expected: { talk: "handsFree" },
   },
   {
-    name: "tweak ends the talk window (talk is per-turn)",
+    name: "tweak PAUSES hands-free talk (the window survives the detour)",
     start: { phase: "turn", talk: "handsFree" },
+    command: "tweak",
+    expected: { phase: "tweak", talk: "handsFree" },
+  },
+  {
+    name: "tweak ends a HOLD window (its physical key leaves with tweak)",
+    start: { phase: "turn", talk: "hold" },
     command: "tweak",
     expected: { phase: "tweak", talk: "off" },
   },
@@ -208,7 +214,9 @@ describe("spec-level properties", () => {
     const e = engine({ phase: "turn", talk: "handsFree", micMuted: true, help: true });
     for (const command of ["send", "turn", "handsFree", "disarm", "arm", "turn", "escape", "arm"]) {
       const s: EngineState = e.dispatch(command);
-      if (s.phase !== "turn") {
+      // Leaving the turn SCOPE ends talk; tweak alone would pause it (not
+      // reached here — no `tweak` in the sequence).
+      if (s.phase !== "turn" && s.phase !== "tweak") {
         expect(s.talk).toBe("off");
       }
       if (s.talk === "off") {
@@ -218,6 +226,19 @@ describe("spec-level properties", () => {
         expect(s.ink).toBe(false); // one disarmed, and it is hard
       }
     }
+  });
+
+  it("tweak pauses then resumes hands-free talk (turn → tweak → turn keeps the window)", () => {
+    const e = engine({ phase: "turn", talk: "handsFree" });
+    expect(e.dispatch("tweak")).toMatchObject({ phase: "tweak", talk: "handsFree" });
+    expect(e.dispatch("tweak")).toMatchObject({ phase: "turn", talk: "handsFree" });
+  });
+
+  it("stepping OUT of a tweak-paused window (to armed) finally ends it", () => {
+    const e = engine({ phase: "tweak", talk: "handsFree" });
+    // esc from tweak lands in turn (talk kept); a second esc leaves the turn.
+    expect(e.dispatch("escape")).toMatchObject({ phase: "turn", talk: "handsFree" });
+    expect(e.dispatch("escape")).toMatchObject({ phase: "armed", talk: "off" });
   });
 
   it("help is a standing root-level toggle (blank system: arm · step out · help)", () => {

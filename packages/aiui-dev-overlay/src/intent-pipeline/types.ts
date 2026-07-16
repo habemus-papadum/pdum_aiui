@@ -204,9 +204,8 @@ export type IntentEvent =
        * `to` — which also makes the stream self-describing after the hello's
        * one-shot `location.href` snapshot goes stale.
        *
-       * This is the first of the context-boundary family — an extension host
-       * later adds siblings like `tab-switch` (see
-       * docs/proposals/browser-extension-intent-tool.md §2).
+       * This is the first of the context-boundary family — the host that
+       * drives real tabs adds the `tab-switch` sibling below.
        */
       at: number;
       type: "navigation";
@@ -216,6 +215,29 @@ export type IntentEvent =
       to: string;
       /** How it happened, when the watcher could cheaply attribute it. */
       kind?: "push" | "replace" | "traverse" | "reload" | "hash";
+    }
+  | {
+      /**
+       * The user changed WHICH TAB they are looking at mid-turn — a different
+       * boundary from `navigation` (same tab navigating in place). Its own
+       * event so the compiler can phrase "you switched tabs" distinctly from
+       * "the page navigated", and so the tab identities travel: `fromTab`/
+       * `toTab` are the driver's tab handles (CDP targetId-derived ids / MV3
+       * `chrome.tabs` ids), `from`/`to` the two tabs' `location.href`. Like
+       * `navigation`, it is context riding a turn — emitted only while a thread
+       * is open, and its POSITION is the attribution (content above it belongs
+       * to the tab you left). See docs/proposals/browser-extension-intent-tool.md §2.
+       */
+      at: number;
+      type: "tab-switch";
+      /** `location.href` of the tab left behind. */
+      from: string;
+      /** `location.href` of the tab switched to. */
+      to: string;
+      /** The driver's handle for the tab left behind, when known. */
+      fromTab?: number;
+      /** The driver's handle for the tab switched to, when known. */
+      toTab?: number;
     }
   | {
       at: number;

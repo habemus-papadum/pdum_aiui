@@ -120,6 +120,8 @@ function keyOf(item: ComposedItem, index: number): string {
       return `code:${item.marker ?? `@${index}`}`;
     case "navigation":
       return `nav:@${index}`;
+    case "tab-switch":
+      return `tab:@${index}`;
   }
 }
 
@@ -488,6 +490,33 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
     );
   };
 
+  /** The tab-switch sibling of {@link navRow}: the ⇥ chip — the user turned to
+   * a different tab (distinct from a same-tab navigation). Same discipline. */
+  const tabRow = (key: string) => {
+    const current = byKey(key);
+    let chip: HTMLSpanElement | undefined;
+    return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: hover peek is enhancement only — the title attribute carries the content accessibly
+      <span
+        class="aiui-tp-chip aiui-tp-nav"
+        data-testid="tab-chip"
+        ref={(el: HTMLSpanElement) => {
+          chip = el;
+        }}
+        title={`switched tabs ${shortRoute(current()?.item.from)} → ${shortRoute(current()?.item.to)}`}
+        onMouseEnter={() => {
+          const item = current()?.item;
+          if (item !== undefined && chip !== undefined) {
+            peek.showText(chip, "tab switch", `${item.from ?? "?"}\n→ ${item.to ?? "?"}`);
+          }
+        }}
+        onMouseLeave={() => peek.hide()}
+      >
+        ⇥
+      </span>
+    );
+  };
+
   return (
     <details class="aiui-tp" data-testid="turn-pane" open>
       <summary>
@@ -519,6 +548,9 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
               }
               if (p.item.kind === "navigation") {
                 return navRow(p.key);
+              }
+              if (p.item.kind === "tab-switch") {
+                return tabRow(p.key);
               }
               const inner = p.words?.some((w) => w.logprob !== undefined)
                 ? heatRow(p.key)

@@ -70,6 +70,12 @@ export interface Wire {
   uploadAttachment(id: string, mime: string, bytes: Uint8Array): Promise<void>;
   /** One captured PCM frame → an `audio` chunk on `seg_N`, in seq order. */
   uploadAudio(segment: number, seq: number, bytes: Uint8Array): Promise<void>;
+  /**
+   * A mid-thread `control` chunk — reconfiguration, never turn content. Today
+   * the one control is the prompt linter: start / stop / swap it live. A no-op
+   * when no thread is open (the change rides the next hello instead).
+   */
+  sendControl(control: "linter", value: string): Promise<void>;
   /** The send path: flush, consume the selection, `fin`, surface the ack. */
   finalizeThread(): Promise<void>;
   /** Close the socket without `fin` (a cancel) and reset the wire state. */
@@ -242,6 +248,21 @@ export function createWire(deps: WireDeps): Wire {
     }
   }
 
+  async function sendControl(control: "linter", value: string): Promise<void> {
+    const thread = await getThread();
+    if (!thread) {
+      return; // no open thread — the change rides the next hello instead
+    }
+    try {
+      reportBadAck(
+        `control ${control}`,
+        await thread.sendChunk({ kind: "control" }, { control, value }, false),
+      );
+    } catch (error) {
+      reportThrow(`control ${control}`, error);
+    }
+  }
+
   async function finalizeThread(): Promise<void> {
     const thread = await getThread();
     if (flushTimer) {
@@ -369,6 +390,7 @@ export function createWire(deps: WireDeps): Wire {
     flushOutbox,
     uploadAttachment,
     uploadAudio,
+    sendControl,
     finalizeThread,
     cancelThread,
     dispose: () => {

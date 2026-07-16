@@ -15,7 +15,9 @@
  *  - send keeps you armed; disarm is its own deliberate command
  *  - disarm turns ink mode off; nothing else does (parity 1C, divergence 5)
  *  - standing video/videoMode survive turns and disarm (standing settings)
- *  - talk is per-turn: leaving the turn ends it (an exclude, not a memory)
+ *  - talk is per-turn: leaving the turn SCOPE (armed/disarmed) ends it — but
+ *    tweak PAUSES hands-free talk (mic quiet, resumes on return); hold always
+ *    ends (its physical key leaves with tweak). Excludes, not a memory.
  *  - mute exists only while talking; starting talk starts unmuted
  */
 
@@ -200,9 +202,25 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // mode clears. Declared once as an invariant, not remembered per route.
     // (Standing video/videoMode survive disarm, as in the old client.)
     { name: "disarmed-is-hard", when: (s) => s.phase === "disarmed", set: { ink: false } },
-    // Talk is per-turn: whoever moved the phase, leaving "turn" ends it
-    // (send, cancel, disarm, tweak, idle-timeout binding — no site can forget).
-    { name: "talk-is-per-turn", when: (s) => s.phase !== "turn", set: { talk: "off" } },
+    // Talk and tweak (owner, 2026-07-16): tweak PAUSES hands-free talk rather
+    // than ending it — the mic goes quiet (client.ts drives the mute off the
+    // phase) and RESUMES when you step back to the turn, so the talk window
+    // and its linter window survive the detour. Two rules encode that:
+    //  · a HOLD window is bound to a physical key, and tweak hands keys to the
+    //    page — you can no longer be "holding" — so hold ends whenever you
+    //    leave the turn, tweak included.
+    {
+      name: "hold-needs-turn",
+      when: (s) => s.phase !== "turn" && s.talk === "hold",
+      set: { talk: "off" },
+    },
+    //  · hands-free talk ends only when you leave the turn SCOPE entirely
+    //    (armed/disarmed) — not into tweak, where it is merely paused.
+    {
+      name: "handsfree-off-turn",
+      when: (s) => s.phase !== "turn" && s.phase !== "tweak" && s.talk === "handsFree",
+      set: { talk: "off" },
+    },
     // Mute exists only while talking.
     { name: "mute-needs-talk", when: (s) => s.talk === "off", set: { micMuted: false } },
     // (help is a root-level standing toggle — owner review 2026-07-13: the

@@ -90,6 +90,8 @@ interface Driver {
   feedEvents(events: IntentEvent[], fin?: boolean): Promise<void>;
   feedAttachment(id: string, bytes: Uint8Array): Promise<void>;
   feedVideo(id: string, seq: number, bytes: Uint8Array): Promise<void>;
+  /** A mid-thread `control` chunk (the client's linter select moving). */
+  feedControl(control: string, value: string): Promise<void>;
   fin(): Promise<void>;
   close(): void;
   sent: Array<{ text: string }>;
@@ -121,6 +123,10 @@ function drive(intent: Record<string, unknown>, options: IntentV1Options = {}): 
       Promise.resolve(send(bytes, { kind: "attachment", id, mime: "image/png" }, false)),
     feedVideo: (id, seq, bytes) =>
       Promise.resolve(send(bytes, { kind: "video", id, seq, mime: "image/jpeg" }, false)),
+    feedControl: (control, value) =>
+      Promise.resolve(
+        send(enc.encode(JSON.stringify({ control, value })), { kind: "control" }, false),
+      ),
     fin: () => Promise.resolve(send(new Uint8Array(0), undefined, true)),
     close: () => processor.onClose?.(),
     sent,
@@ -223,6 +229,61 @@ describe("the turn-end lint sequence (wire order)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("mid-thread linter control (start / stop / swap live, no turn boundary)", () => {
+  it("STARTS the linter mid-thread — a control chunk builds the sidecar the hello omitted", async () => {
+    const live = fakeLive();
+    const d = drive({ transcriber: "mock", linter: "off" }, { linterSessionFactory: live.factory });
+    await d.feedEvents([...opening(), ...talkSegment(1, "first utterance")]);
+    // linter "off": the session was never opened, so seg 1 lints nothing.
+    expect(() => live.callbacks()).toThrow();
+
+    await d.feedControl("linter", "openai");
+    await d.feedEvents(talkSegment(2, "second utterance"));
+    // Now the sidecar exists and lints the SECOND segment.
+    const ops = live.calls.map((c) => c.op);
+    expect(ops).toContain("activityStart");
+    expect(ops).toContain("activityEnd");
+    expect(live.calls.find((c) => c.op === "injectContextText")?.arg).toBe(
+      '[transcript seg_2: "second utterance"]',
+    );
+  });
+
+  it("STOPS the linter mid-thread — a control 'off' closes the sidecar; later talk lints nothing", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    await d.feedEvents([...opening(), ...talkSegment(1, "first")]);
+    expect(live.calls.map((c) => c.op)).toContain("activityEnd");
+
+    await d.feedControl("linter", "off");
+    expect(live.calls.at(-1)?.op).toBe("close"); // the sidecar closed
+    await d.feedEvents(talkSegment(2, "second"));
+    expect(live.calls.at(-1)?.op).toBe("close"); // nothing since — no re-lint
+  });
+
+  it("SWAPS the linter vendor mid-thread — the old sidecar closes, a fresh one lints on", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory }); // openai
+    await d.feedEvents([...opening(), ...talkSegment(1, "first")]);
+    const closesBefore = live.calls.filter((c) => c.op === "close").length;
+
+    await d.feedControl("linter", "gemini");
+    expect(live.calls.filter((c) => c.op === "close").length).toBe(closesBefore + 1);
+    await d.feedEvents(talkSegment(2, "second"));
+    expect(live.calls.at(-1)?.op).toBe("activityEnd"); // the fresh sidecar lints seg 2
+  });
+
+  it("ignores an unchanged / unrecognized / non-linter control (no churn)", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    await d.feedEvents([...opening(), ...talkSegment(1, "first")]);
+    const n = live.calls.length;
+    await d.feedControl("linter", "openai"); // unchanged
+    await d.feedControl("linter", "banana"); // unrecognized value
+    await d.feedControl("other", "thing"); // not the linter control
+    expect(live.calls.length).toBe(n); // no close, no reopen
   });
 });
 

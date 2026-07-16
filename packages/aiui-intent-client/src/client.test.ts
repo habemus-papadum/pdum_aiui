@@ -553,7 +553,7 @@ describe("talk — per-turn, hold vs hands-free", () => {
     expect(r.client.state().micMuted).toBe(false); // mute needs talk
   });
 
-  it("every exit from the turn ends the talk window (the exclude, not memory)", () => {
+  it("every exit from the turn SCOPE ends the talk window (the exclude, not memory)", () => {
     const r = makeRig();
     grantAndOpen(r);
     r.client.dispatch("handsFree");
@@ -561,6 +561,37 @@ describe("talk — per-turn, hold vs hands-free", () => {
 
     r.client.dispatch("send"); // ledger: "stuck `talking` outlived its thread"
     expect(r.client.state().talk).toBe("off");
+    expect(r.lanes).toContain("stopTalk");
+  });
+
+  it("tweak PAUSES hands-free talk — mic quiets on entry, resumes on return, the window is kept", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("handsFree");
+    expect(r.lanes).toContain("startTalk:handsFree");
+
+    r.client.dispatch("tweak");
+    expect(r.client.state()).toMatchObject({ phase: "tweak", talk: "handsFree" });
+    // The window is NOT closed (no stopTalk, so the server-side linter window
+    // survives) — only the mic goes quiet.
+    expect(r.lanes).not.toContain("stopTalk");
+    expect(r.lanes).toContain("setMicMuted:true");
+
+    r.client.dispatch("tweak"); // back to the turn
+    expect(r.client.state()).toMatchObject({ phase: "turn", talk: "handsFree" });
+    expect(r.lanes).toContain("setMicMuted:false"); // mic resumes
+    expect(r.lanes.filter((l) => l === "startTalk:handsFree")).toHaveLength(1); // no re-open
+    expect(r.lanes).not.toContain("stopTalk");
+  });
+
+  it("tweak ENDS a hold window — its physical key leaves with tweak", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.handleKey(" ", "down", false);
+    expect(r.client.state().talk).toBe("hold");
+
+    r.client.dispatch("tweak");
+    expect(r.client.state()).toMatchObject({ phase: "tweak", talk: "off" });
     expect(r.lanes).toContain("stopTalk");
   });
 });

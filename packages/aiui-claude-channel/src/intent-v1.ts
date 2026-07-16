@@ -820,9 +820,20 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // Purely advisory: it observes the same turn through a live session in
   // linter mode and speaks one short diagnostic per pause. Keyless → disabled
   // LOUDLY, once, and dictation still works (the promise in the error text).
+  //
+  // (Re)buildable to a vendor so a mid-thread `control` chunk can start / stop /
+  // swap it LIVE — the client's linter select moving mid-turn, not only at
+  // thread-open (owner, 2026-07-16). Teardown is idempotent; `off` leaves no
+  // sidecar. The model/instructions/voice stay the hello's — the client's
+  // select carries only the vendor, and those advanced fields default to the
+  // vendor default when unset (the common case).
   let sidecar: LinterSidecar | undefined;
-  if (intent.linter !== "off") {
-    const vendor = intent.linter;
+  const buildLinter = (vendor: "off" | "openai" | "gemini"): void => {
+    sidecar?.close();
+    sidecar = undefined;
+    if (vendor === "off") {
+      return;
+    }
     const linterKey = vendor === "gemini" ? geminiApiKey : apiKey;
     const linterSocketFactory =
       vendor === "gemini" ? options.geminiLiveSocketFactory : options.openaiLiveSocketFactory;
@@ -870,7 +881,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       });
       trace?.record({ kind: "info", label: "linter disabled", data: { vendor, reason: "no key" } });
     }
-  }
+  };
+  buildLinter(intent.linter);
 
   // ── realtime (streaming) transcription session ───────────────────────────────
   // Opened here, at processor construction (≈ thread-open), so the handshake +
@@ -1326,6 +1338,30 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     selection = asSelection(decoded) ?? selection;
   };
 
+  // A mid-thread `control` chunk — reconfiguration, never turn content. Today's
+  // one control is the prompt linter: start / stop / swap the sidecar live
+  // (the client's linter select moving mid-turn). A no-op when the value is
+  // unchanged or unrecognized. `intent.linter` is updated too so a later
+  // `control` sees the current mode (and the trace reads honestly).
+  const onControlChunk = (bytes: Uint8Array): void => {
+    const decoded = decodeJson(bytes) as { control?: unknown; value?: unknown } | undefined;
+    if (decoded === undefined || decoded.control !== "linter") {
+      return;
+    }
+    const value = decoded.value;
+    const recognized = value === "off" || value === "openai" || value === "gemini";
+    if (!recognized || value === intent.linter) {
+      return;
+    }
+    trace?.record({
+      kind: "info",
+      label: "linter control",
+      data: { from: intent.linter, to: value },
+    });
+    intent.linter = value;
+    buildLinter(value);
+  };
+
   /** Speak the premium tier's send-received ack, or say loudly why it can't. */
   const speakAck = async (): Promise<void> => {
     if (intent.audioBack !== "acks") {
@@ -1499,6 +1535,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         onVideoChunk(chunk, bytes);
       } else if (chunk?.kind === "context") {
         onContextChunk(bytes);
+      } else if (chunk?.kind === "control") {
+        onControlChunk(bytes);
       }
       if (meta.fin) {
         await lower();

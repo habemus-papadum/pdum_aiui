@@ -312,6 +312,8 @@ function describe(event: IntentEvent): string {
       return `⇢ navigated ${shortUrl(event.from)} → ${shortUrl(event.to)}${
         event.kind !== undefined ? ` (${event.kind})` : ""
       }`;
+    case "tab-switch":
+      return `⇥ switched tab ${shortUrl(event.from)} → ${shortUrl(event.to)}`;
     case "shot-drop":
       return `${event.marker} retracted (✕ on the preview thumb)`;
     case "segment-replace":

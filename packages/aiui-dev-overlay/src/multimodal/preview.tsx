@@ -75,6 +75,8 @@ function keyOf(item: ComposedItem, index: number): string {
       return `code:${item.marker ?? `@${index}`}`;
     case "navigation":
       return `nav:@${index}`;
+    case "tab-switch":
+      return `tab:@${index}`;
   }
 }
 
@@ -373,6 +375,9 @@ export class Preview {
             if (piece.item.kind === "navigation") {
               return renderNavigationChip(piece.item);
             }
+            if (piece.item.kind === "tab-switch") {
+              return renderTabSwitchChip(piece.item);
+            }
             if (piece.words?.some((w) => w.logprob !== undefined)) {
               return heatRow(piece.key);
             }
@@ -610,6 +615,16 @@ function renderNavigationChip(item: ComposedItem): HTMLElement {
   chip.className = "mm-nav-chip";
   chip.textContent = `⇢ ${shortRoute(item.to)}`;
   chip.title = `navigated ${shortRoute(item.from)} → ${shortRoute(item.to)}`;
+  return chip;
+}
+
+/** A tab boundary in the accumulator: the ⇥ sibling of the ⇢ nav chip — the
+ * user turned to a different tab. Same discipline (a marker, not content). */
+function renderTabSwitchChip(item: ComposedItem): HTMLElement {
+  const chip = document.createElement("span");
+  chip.className = "mm-nav-chip";
+  chip.textContent = `⇥ ${shortRoute(item.to)}`;
+  chip.title = `switched tabs ${shortRoute(item.from)} → ${shortRoute(item.to)}`;
   return chip;
 }
 

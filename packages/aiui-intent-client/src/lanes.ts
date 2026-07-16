@@ -320,9 +320,11 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     }
   });
 
-  // ── tab boundaries: a switch mid-turn is a navigation event too — the
-  // prompt should name where the user LEFT and where they went (the old
-  // panel's exact semantics, minus chrome.tabs: identity via tabInfo).
+  // ── tab boundaries: switching WHICH tab you look at mid-turn is its own
+  // boundary — a `tab-switch` event, distinct from a same-tab navigation, so
+  // the prompt says "you switched tabs" and carries both tab identities (the
+  // old panel conflated the two into one navigation; the split is owner,
+  // 2026-07-16). Identity via tabInfo, not chrome.tabs.
   let lastActiveTab: { id: number; url?: string } | undefined;
   const seedTab = host.targeting.activeTab();
   if (seedTab !== undefined) {
@@ -342,9 +344,10 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
         return;
       }
       // `from` re-read at boundary time: the tab may have navigated since it
-      // was last active; the boundary names where the user actually left.
+      // was last active; the boundary names where the user actually left, and
+      // the two tab handles ride along.
       const from = (await host.targeting.tabInfo?.(prev.id))?.url ?? prev.url;
-      engine.navigation(from ?? "", to?.url ?? "");
+      engine.tabSwitch(from ?? "", to?.url ?? "", prev.id, tab);
     })();
   });
 
@@ -619,11 +622,35 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       return dispose;
     });
 
+    // Mid-thread linter control: the linter select moving WHILE a turn is open
+    // sends a `control` chunk so the sidecar starts/stops/swaps on the CURRENT
+    // thread — not just the next hello (which disposeConfig above already
+    // updated engine.settings for). No open thread → no-op (the hello carries
+    // it). Seeded from the current value so the first real change is caught,
+    // never the mount.
+    const disposeLinterControl = createRoot((dispose) => {
+      let last = linter.get() as string;
+      createEffect(
+        () => linter.get() as string,
+        (value) => {
+          if (value === last) {
+            return;
+          }
+          last = value;
+          if (engine.threadOpen) {
+            void wire.sendControl("linter", value);
+          }
+        },
+      );
+      return dispose;
+    });
+
     return () => {
       offEngine();
       disposeFade();
       disposePencil();
       disposeConfig();
+      disposeLinterControl();
     };
   };
 
