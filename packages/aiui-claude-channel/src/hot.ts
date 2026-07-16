@@ -99,6 +99,18 @@ export interface WatchOptions {
 
 const defaultWatch: WatchFn = (dir, listener) => fsWatch(dir, { recursive: true }, listener);
 
+/**
+ * The staleness notice a running channel raises when its own backend source
+ * changes on disk. The channel does NOT hot-reload (the old shallow
+ * format-registry swap gave a false sense of HMR and was removed), so the honest
+ * signal is: tell the human/agent the process is now running OLD code, and a
+ * restart is the only way to apply the edit.
+ */
+export const STALE_NOTICE =
+  "⚠️ aiui channel source changed on disk. The running MCP server does NOT hot-reload, " +
+  "so it is now STALE — your edits take effect only after the channel restarts (restart the " +
+  "aiui session). Treat the channel's behavior as out-of-date until then.";
+
 /** A source filename worth reacting to: a .ts/.tsx that isn't a test. */
 const isSourceEdit = (filename: string | null): boolean =>
   filename !== null && /\.tsx?$/.test(filename) && !/\.test\.tsx?$/.test(filename);

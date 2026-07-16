@@ -38,7 +38,8 @@ beforeEach(async () => {
   writeFileSync(join(clientDir, "assets", "app.js"), "console.log('client')");
 
   const app = express();
-  const ctx = { log: () => {}, port: () => undefined };
+  // Prod mode: the test provides a prebuilt clientDir and asserts static serving.
+  const ctx = { mode: "prod" as const, log: () => {}, port: () => undefined };
   mounted = [
     await pencilSidecar({ root: "/proj", clientDir }).mount(app, ctx),
     await barSidecar({ root: "/proj" }).mount(app, ctx),

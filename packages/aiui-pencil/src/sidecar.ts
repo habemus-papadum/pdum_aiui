@@ -15,15 +15,21 @@
  * **The relay carries no media** (D1): video is a peer-to-peer WebRTC track, and
  * this socket moves ink intent and signaling — a few JSON frames a second.
  *
- * One HTML route, deliberately: `GET /pencil/` serves the **built client app**
- * (paint's iPad exception — an iPad has no frontend process). Everything else
+ * One HTML route, deliberately: `GET /pencil/` serves the client app (paint's
+ * iPad exception — an iPad has no frontend process). HOW it is served is a
+ * {@link SidecarContext.mode} decision, delegated to the shared helper
+ * (aiui-util's `serveClientSurface`): in DEV a Vite dev server in middleware
+ * mode over the lab client sources (HMR riding the channel's one port); in PROD
+ * the prebuilt `assets/client` bundle (built by `build:client`). Everything else
  * on this prefix stays JSON/websocket.
  */
 
+import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
+import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
 import type { Express } from "express";
 import { createPencilBackend } from "./backend";
-import { clientStatic } from "./client-static";
+import { defaultClientDir } from "./client-static";
 
 /** The path prefix the pencil routes live under on the channel's server. */
 export const PENCIL_PREFIX = "/pencil";
@@ -39,29 +45,46 @@ export interface PencilSidecarOptions {
 export function pencilSidecar(options: PencilSidecarOptions): Sidecar {
   return {
     name: "pencil",
-    mount(app: Express, ctx: SidecarContext): MountedSidecar {
+    async mount(app: Express, ctx: SidecarContext): Promise<MountedSidecar> {
       const backend = createPencilBackend({
         prefix: PENCIL_PREFIX,
         session: { project: options.root },
         log: ctx.log,
       });
-      // The iPad's page: `GET /pencil/` serves the BUILT client app — the one
-      // page-serving exception (an iPad has no frontend process), inherited
-      // from paint. JSON routes are checked first so `/pencil/info` and
-      // friends never fall through to the static handler.
-      const page = clientStatic(PENCIL_PREFIX, options.clientDir);
-
+      // The backend's JSON routes (`/pencil/info`, `/health`, `/sessions`) go on
+      // FIRST, so they win over the client middleware `serveClientSurface` adds
+      // for `/pencil/` and its assets.
       app.use((req, res, next) => {
-        if (!backend.handleHttp(req, res) && !page.handle(req, res)) {
+        if (!backend.handleHttp(req, res)) {
           next();
         }
+      });
+
+      // The iPad's page (`GET /pencil/`), served per mode. Dev roots Vite at the
+      // lab client sources through `lab/vite.client.config.ts` (the client-only
+      // build config — solid, no lab rig, no dev-overlay) and serves `client.html`
+      // at the base; prod serves the `assets/client` bundle that config builds.
+      const surface = await serveClientSurface(app, {
+        mode: ctx.mode,
+        prefix: PENCIL_PREFIX,
+        viteRoot: fileURLToPath(new URL("../lab", import.meta.url)),
+        viteConfigFile: fileURLToPath(new URL("../lab/vite.client.config.ts", import.meta.url)),
+        devEntry: "client.html",
+        distDir: options.clientDir ?? defaultClientDir(),
+        notBuiltHint: "pnpm -C packages/aiui-pencil build:client",
+        log: ctx.log,
       });
       ctx.log(`pencil: mounted at ${PENCIL_PREFIX}/ on the channel port`);
 
       return {
-        handleUpgrade: (req, socket, head) => backend.handleUpgrade(req, socket, head),
-        dispose: () => {
+        // The surface claims its HMR socket (dev only); the host/client sockets
+        // are the backend's.
+        handleUpgrade: (req, socket, head) =>
+          surface.handleUpgrade?.(req, socket, head) === true ||
+          backend.handleUpgrade(req, socket, head),
+        dispose: async () => {
           backend.dispose();
+          await surface.dispose?.();
         },
       };
     },

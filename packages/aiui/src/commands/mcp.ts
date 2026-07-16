@@ -21,14 +21,13 @@ const CHANNEL_PKG = "@habemus-papadum/aiui-claude-channel";
  *
  * **One thing is not verbatim.** The subcommands that *are* a channel process —
  * `serve` (standalone debug channel) and `mcp` (the stdio MCP server) — get the
- * same config-derived `--bind` and `--sidecars` that `aiui claude` computes when
- * it tells Claude Code how to spawn the channel (see util/channel-launch). Both
- * ways of starting a channel therefore honor `channel.bind` and `sidecars.*`
- * identically. Without this, a standalone `aiui mcp serve` had no `/paint/`
- * route — the channel mounts only the sidecars it is handed, and a verbatim
- * forward handed it none. Flags you pass explicitly always win. Every other
- * subcommand (`quick`, `config`) talks to a channel someone *else* is running
- * and forwards untouched.
+ * same config-derived `--bind` that `aiui claude` computes when it tells Claude
+ * Code how to spawn the channel (see util/channel-launch), so both ways of
+ * starting a channel honor `channel.bind` identically. (Sidecars need no such
+ * plumbing: the channel imports and mounts its own standard set — paint, intent,
+ * bar, pencil — so every channel hosts all four.) Flags you pass explicitly
+ * always win. Every other subcommand (`quick`, `config`) talks to a channel
+ * someone *else* is running and forwards untouched.
  *
  * Like `aiui vite`, the channel CLI is a declared dependency, so we resolve it
  * from node_modules (tsx-from-source in a dev checkout, the built `dist` when
@@ -47,15 +46,10 @@ export async function runMcp(passthrough: string[] = []): Promise<void> {
     return;
   }
 
-  // Only resolve when this invocation actually starts a channel: the sidecar
-  // registry does real module resolution (and warns when a sidecar package is
-  // missing), which `quick`/`config` have no business triggering. The channel
-  // process inherits this cwd, so the project root it hosts sidecars for is ours.
+  // Only compute the bind when this invocation actually starts a channel;
+  // `quick`/`config` talk to someone else's channel and forward verbatim.
   const args = isChannelLaunch(passthrough)
-    ? applyChannelLaunchArgs(
-        passthrough,
-        resolveChannelLaunch({ root: process.cwd(), config: loadAiuiConfig() }),
-      )
+    ? applyChannelLaunchArgs(passthrough, resolveChannelLaunch({ config: loadAiuiConfig() }))
     : passthrough;
 
   // stdio inherit so interactive channel commands (e.g. `quick`'s selector) own

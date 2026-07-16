@@ -7,13 +7,34 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 const require = createRequire(import.meta.url);
 
 // Externalize Node builtins + everything this package declares as a runtime/peer
-// dependency, so the library bundle never inlines a consumer-provided module.
+// dependency, so the library bundle never inlines a consumer-provided module —
+// plus `vite` and `esbuild`, which the sidecar imports LAZILY (only at mount,
+// for the /intent/ dev server and the page-ink bundle). Bundling them would
+// pull all of Vite/esbuild into dist/sidecar.js; kept external, the dynamic
+// import resolves at runtime (and, absent in a published install, fails at mount
+// and is skipped — the Phase-4 static-dist replacement is what makes it work
+// installed).
 const external = [
   ...builtinModules,
   ...builtinModules.map((name) => `node:${name}`),
   ...Object.keys(pkg.dependencies ?? {}),
   ...Object.keys(pkg.peerDependencies ?? {}),
+  "vite",
+  "esbuild",
 ];
+
+// The browser conditions + ws pin are ONLY for Vitest — node conditions hand the
+// .tsx tests a SERVER build of solid, and the browser conditions then need `ws`
+// pinned to its node entry so the relay tests don't get ws's throwing browser
+// stub. The lib build wants none of it (its deps are all external), and the ws
+// alias would rewrite `ws` to an absolute path and defeat its externalization —
+// so gate the whole `resolve` block to test runs.
+const testResolve = process.env.VITEST
+  ? {
+      conditions: ["browser", "development", "import", "module", "default"],
+      alias: { ws: require.resolve("ws") },
+    }
+  : {};
 
 export default defineConfig({
   // Compiles the panel's JSX; dev serving (`pnpm dev`) gets the plain page.
@@ -32,22 +53,16 @@ export default defineConfig({
       },
     },
   },
-  resolve: {
-    // Only meaningful under Vitest (the lib build's externals never resolve).
-    conditions: ["browser", "development", "import", "module", "default"],
-    alias: {
-      // …but this package has a NODE half (the sidecar + its CDP bridge), and
-      // `browser` hands it ws's browser stub — a module whose whole job is to
-      // throw. Pin ws to the real node entry; nothing in the page graph imports
-      // it, so the app build is unaffected.
-      ws: require.resolve("ws"),
-    },
-  },
+  resolve: testResolve,
   build: {
     lib: {
-      entry: "src/index.ts",
+      // Two entrypoints: the browser panel (`.`) and the Node channel sidecar
+      // (`./sidecar`, imported by the channel's standard-sidecars.ts). The Node
+      // entry's ws/CDP graph is kept out of the browser `index` bundle by being
+      // its own entry.
+      entry: { index: "src/index.ts", sidecar: "src/sidecar.ts" },
       formats: ["es"],
-      fileName: "index",
+      fileName: (_format, entryName) => `${entryName}.js`,
     },
     outDir: "dist",
     sourcemap: true,

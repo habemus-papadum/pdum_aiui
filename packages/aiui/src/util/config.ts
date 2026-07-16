@@ -64,10 +64,6 @@ export interface AiuiConfig {
     /** Which interface the channel web server binds: loopback (default) or host (LAN). */
     bind?: ChannelBind;
   };
-  sidecars?: {
-    /** Host the iPad paint sidecar on the channel's port (default: true). */
-    paint?: boolean;
-  };
   chrome?: {
     /** Attach the Chrome DevTools MCP (default: true). */
     enabled?: boolean;
@@ -98,6 +94,17 @@ export interface AiuiConfig {
 
 /** The untyped view validation and merging work in: section → leaf values. */
 type SectionValues = Record<string, ConfigValue>;
+
+/**
+ * Top-level sections that USED to be valid and are now gone. A config file that
+ * still carries one must not hard-fail — that would break every existing
+ * config on upgrade — so it is accepted and ignored, distinct from a
+ * genuinely-unknown key (a typo), which still throws. `sidecars.*` retired when
+ * the channel began hosting its whole standard set unconditionally (paint,
+ * intent, bar, pencil): there is nothing left to toggle, so the key is inert and
+ * safe to delete.
+ */
+const DEPRECATED_SECTIONS = new Set(["sidecars"]);
 
 /** The `config.json` paths consulted, user-level first (base: the project dir). */
 export function configPaths(base: string = process.cwd()): { user: string; project: string } {
@@ -150,12 +157,17 @@ export function readConfigFile(file: string): AiuiConfig | undefined {
 /** Walk `CONFIG_SECTIONS`, rejecting unknown keys, wrong types, and bad values. */
 function validateConfig(raw: unknown, file: string): AiuiConfig {
   const root = asSection(raw, file, "the top level");
-  rejectUnknownKeys(
-    root,
-    CONFIG_SECTIONS.map((s) => s.name),
-    file,
-    "the top level",
-  );
+  const knownSections = CONFIG_SECTIONS.map((s) => s.name);
+  for (const key of Object.keys(root)) {
+    // A retired section is tolerated (accepted, then ignored below); a truly
+    // unknown one is a typo and still throws — see DEPRECATED_SECTIONS.
+    if (knownSections.includes(key) || DEPRECATED_SECTIONS.has(key)) {
+      continue;
+    }
+    throw new Error(
+      `unknown key "${key}" at the top level of ${file} — known keys: ${knownSections.join(", ")}`,
+    );
+  }
 
   const config: Record<string, SectionValues> = {};
   for (const section of CONFIG_SECTIONS) {

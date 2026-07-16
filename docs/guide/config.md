@@ -74,10 +74,6 @@ writing, so you can't `set` a config that would then fail the launch.
   "channel": {
     "bind": "loopback"
   },
-  "sidecars": {
-    "code": true,
-    "paint": true
-  },
   "chrome": {
     "enabled": true,
     "mode": "attach",
@@ -94,16 +90,15 @@ writing, so you can't `set` a config that would then fail the launch.
 }
 ```
 
-Everything is optional; the values above are the defaults (except `browserUrl`, `dataDir`,
-`executablePath`, and `sidecars.code`, which default to unset). `claude.skipPermissions`,
-`claude.enterNudge`, and `channel.bind` are asked on the first interactive launch and persisted.
+Everything is optional; the values above are the defaults (except `browserUrl`, `dataDir`, and
+`executablePath`, which default to unset). `claude.skipPermissions`, `claude.enterNudge`, and
+`channel.bind` are asked on the first interactive launch and persisted.
 
 | Key                     | Meaning                                                                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `claude.skipPermissions` | Launch with `--dangerously-skip-permissions` — a [personal preference with real consequences](./warning); aiui works fine either way. Asked on the first interactive launch (no default — you must answer); unset non-interactive sessions fall back to `true`. |
 | `claude.enterNudge`     | Auto-dismiss Claude Code's development-channel acknowledgement prompt by injecting one Enter keystroke into your terminal at startup (best-effort TIOCSTI; some platforms forbid it, harmlessly). Asked on the first interactive launch; saying no just means pressing Enter yourself each launch. |
 | `channel.bind`          | Which interface the channel's web server binds. `"loopback"` (default) keeps the whole surface this-machine-only; `"host"` (0.0.0.0) makes it — the [iPad paint](./paint-stream) page, but also prompt injection, `/debug`, and every sidecar — reachable by **anyone on your network, unauthenticated** ([the trusted-LAN posture](./warning)). Asked on the first interactive launch, like `claude.skipPermissions`. Per-launch flag: `--aiui-bind`. |
-| `sidecars.paint`        | Host the [iPad paint](./paint-stream) sidecar. On by default — it rides the channel's one port (no extra process or listener); whether an iPad can *reach* it is `channel.bind`'s call. `false` turns it off. Per-launch flags win: `--aiui-sidecar` / `--aiui-no-sidecar paint`. |
 | `chrome.enabled`        | Attach the [Chrome DevTools MCP](./chrome). `false` turns it off everywhere; `true` restates the default and does **not** override the CI default-off — only the `--aiui-chrome` flag does. |
 | `chrome.mode`           | [`"attach"`](./chrome#how-the-browser-connects-attach-vs-launch) (default): share a user-visible session browser. `"launch"`: chrome-devtools-mcp keeps a private browser, started lazily on the agent's first tool call. |
 | `chrome.browserUrl`     | Attach to this DevTools endpoint (e.g. `"http://127.0.0.1:9222"`) and manage no browser locally — the [remote development](./remote) key (per-launch flag: `--aiui-browser-url`). Implies `mode: "attach"`; makes the other browser keys irrelevant. |

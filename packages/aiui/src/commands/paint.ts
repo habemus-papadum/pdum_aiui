@@ -141,11 +141,9 @@ async function runSurfaceUrl(
   if (targets.length === 0) {
     console.log(`No running channel is hosting the ${name} surface.`);
     console.log("");
+    console.log(`Every channel hosts it — start a session with ${chalk.cyan("aiui claude")} (or a`);
     console.log(
-      `It is on by default — start a session with ${chalk.cyan("aiui claude")}. If it's off here,`,
-    );
-    console.log(
-      `check for ${chalk.cyan(`sidecars.${name} false`)} in config or a --aiui-no-sidecar flag.`,
+      `standalone ${chalk.cyan("aiui mcp serve")}), then run this again to reach the ${name} surface.`,
     );
     process.exitCode = 1;
     return;

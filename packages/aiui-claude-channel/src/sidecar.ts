@@ -23,6 +23,15 @@ import type { Express } from "express";
 
 /** What the channel hands a sidecar at mount time. */
 export interface SidecarContext {
+  /**
+   * Whether the channel is running from source (`"dev"`) or from an installed
+   * build (`"prod"`). Derived from whether the channel package itself is running
+   * off `src/` (see the channel's `isSourceRun`), overridable via `--mode`. A
+   * web-serving sidecar uses it to choose a Vite dev server (HMR, source-first)
+   * vs. serving a prebuilt static bundle — see aiui-util's `serveClientSurface`.
+   * Sidecars with no web surface can ignore it.
+   */
+  mode: "dev" | "prod";
   /** Log sink (stderr — the `mcp` command's stdout carries the MCP protocol). */
   log: (message: string) => void;
   /**

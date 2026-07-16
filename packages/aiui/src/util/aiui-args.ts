@@ -57,17 +57,6 @@ export interface AiuiArgs {
    */
   browserUrl?: string;
   /**
-   * Names collected from repeatable `--aiui-sidecar <name>` flags — session
-   * sidecars to force-enable even when they wouldn't auto-detect for this
-   * project (e.g. `--aiui-sidecar paint`).
-   */
-  sidecar: string[];
-  /**
-   * Names collected from repeatable `--aiui-no-sidecar <name>` flags — session
-   * sidecars to disable for this run. Disable wins over enable.
-   */
-  noSidecar: string[];
-  /**
    * The `--aiui-bind <loopback|host>` value, if provided — where the channel's
    * web backend binds for this launch, overriding `channel.bind` in config.
    * `host` is the trusted-LAN posture: the whole (unauthenticated) channel
@@ -118,9 +107,6 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
  *    dir instead of a named profile. Mutually exclusive with the above.
  *  - `--aiui-browser-url <url>` — attach the Chrome DevTools MCP to this
  *    endpoint (e.g. a tunneled remote browser) instead of managing one.
- *  - `--aiui-sidecar <name>` / `--aiui-no-sidecar <name>` — force-enable /
- *    disable a session sidecar by name. Both are repeatable and accumulate;
- *    disable wins over enable when the same name appears in both.
  *  - `--aiui-bind <loopback|host>` — where the channel's web backend binds for
  *    this launch (see `channel.bind` in the config guide). Any other value is
  *    an error.
@@ -138,8 +124,6 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
   let chromeProfile: string | undefined;
   let chromeDataDir: string | undefined;
   let browserUrl: string | undefined;
-  const sidecar: string[] = [];
-  const noSidecar: string[] = [];
   let bind: ChannelBind | undefined;
   const passthrough: string[] = [];
 
@@ -233,26 +217,6 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         browserUrl = value;
         break;
       }
-      case "--aiui-sidecar": {
-        if (value === undefined) {
-          value = args[++i];
-        }
-        if (!value) {
-          throw new Error("--aiui-sidecar requires a non-empty value");
-        }
-        sidecar.push(value);
-        break;
-      }
-      case "--aiui-no-sidecar": {
-        if (value === undefined) {
-          value = args[++i];
-        }
-        if (!value) {
-          throw new Error("--aiui-no-sidecar requires a non-empty value");
-        }
-        noSidecar.push(value);
-        break;
-      }
       case "--aiui-bind": {
         if (value === undefined) {
           value = args[++i];
@@ -294,8 +258,6 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
     chromeProfile,
     chromeDataDir,
     browserUrl,
-    sidecar,
-    noSidecar,
     bind,
     passthrough,
   };

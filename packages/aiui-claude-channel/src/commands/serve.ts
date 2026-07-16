@@ -17,10 +17,11 @@
  *    and nothing *auto*-picks one (see select.ts): connecting a tool to a
  *    server that answers to nobody is always a human's deliberate choice.
  *
- * Everything else the real channel hosts is fair game — including session
- * sidecars (`--sidecars`, the same descriptor contract as `mcp`): a client
- * under development against this server needs the sidecar's endpoints on the
- * very channel port it is pointed at.
+ * Everything else the real channel hosts is fair game — including the session
+ * sidecars: like `mcp`, `serve` mounts the channel's {@link standardSidecars}
+ * (paint, intent, bar, pencil) by default, because a client under development
+ * against this server needs the sidecar's endpoints on the very channel port it
+ * is pointed at. (Callers — the tests — may inject their own set instead.)
  *
  * The server runs with `debug: true` (surfaced on `/health`,
  * `/debug/api/info`, and every hello ack, so clients can tell), traces to the
@@ -70,10 +71,10 @@ import { randomUUID } from "node:crypto";
 import { createChannelLog } from "../channel-log";
 import type { FrameLogEntry } from "../frame-log";
 import { channelSourceDir, watchChannelSource } from "../hot";
-import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
 import { createJsonlRecorder, type JsonlRecorder } from "../recording";
 import { registerServer } from "../registry";
 import type { Sidecar } from "../sidecar";
+import { standardSidecars } from "../standard-sidecars";
 import { projectCacheDir, type TraceStageEvent } from "../trace";
 import { startWebServer } from "../web";
 
@@ -105,14 +106,13 @@ export interface ServeOptions {
    */
   port?: number;
   /**
-   * JSON array of session sidecar descriptors to host (`--sidecars`) — the
-   * exact contract `mcp` accepts (see load-sidecars.ts). A debug server hosts
-   * sidecars for the same reason the real one does: a client under development
-   * needs the sidecar's endpoints on the channel port it is pointed at. Parse
-   * and load are best-effort — a bad value or one failing descriptor is logged
-   * to stderr and skipped, never fatal.
+   * The sidecars to host, as live {@link Sidecar} objects. Defaults to
+   * {@link standardSidecars} — a debug server hosts the same set the real one
+   * does, so a client under development finds the sidecar's endpoints on the
+   * channel port it is pointed at. Tests pass their own (often `[]`) to stay
+   * hermetic. A sidecar whose `mount` throws is isolated by `startWebServer`.
    */
-  sidecars?: string;
+  sidecars?: Sidecar[];
   /**
    * Where the web backend binds — the exact contract `mcp` accepts:
    * `"loopback"` (127.0.0.1, the default) or `"host"` (0.0.0.0 — the
@@ -122,6 +122,12 @@ export interface ServeOptions {
    * obeys). See docs/guide/warning.md.
    */
   bind?: "loopback" | "host";
+  /**
+   * Force the sidecars' dev/prod mode (`--mode`), same contract as `mcp` — omit
+   * to derive it from whether the channel runs off `src/`. The debug server is
+   * the natural place to exercise a built (`prod`) surface from a checkout.
+   */
+  mode?: "dev" | "prod";
 }
 
 /**
@@ -312,13 +318,11 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     process.stderr.write(`[aiui-channel serve] recording frames to ${recorder.path}\n`);
   }
 
-  // Resolve the supervisor's sidecar descriptors into live sidecars, exactly
-  // like `mcp` does (load-sidecars.ts logs failures to stderr — stdout stays
-  // the ready-line + lowered-prompt protocol).
-  let sidecars: Sidecar[] | undefined;
-  if (options.sidecars !== undefined) {
-    sidecars = await loadSidecars(parseSidecarDescriptors(options.sidecars));
-  }
+  // Host the channel's standard sidecar set (rooted at cwd), exactly like `mcp`
+  // does — unless the caller injects its own (the tests pass `[]` to stay
+  // hermetic). A failing mount is logged to stderr by `startWebServer`; stdout
+  // stays the ready-line + lowered-prompt protocol.
+  const sidecars = options.sidecars ?? standardSidecars(process.cwd());
 
   // Wire-event narration lands on stderr, next to the lifecycle lines (stdout is
   // the parseable protocol). `narrateFrame` coalesces per-thread media; the
@@ -344,6 +348,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       traceDir: cacheDir,
       debug: true,
       sidecars,
+      ...(options.mode !== undefined ? { mode: options.mode } : {}),
       // Names this run's trace session ("channel·…" when untagged), so /debug's
       // list separates a debug server's traces from a real session's.
       ...(options.tag !== undefined ? { tag: options.tag } : {}),
@@ -381,11 +386,6 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     throw error;
   }
 
-  // The same dev auto-reload `mcp` has (AIUI_CHANNEL_WATCH=1, source checkout
-  // only): edit the lowering code and the format registry hot-rebuilds — open
-  // sockets drop with 1012 and the next turn runs the new code. A supervisor
-  // spawns serve with the flag set, so pipeline edits apply without a restart.
-  // POST /debug/api/reload remains the always-on manual trigger.
   // Join the shared registry, marked as debug (see the header: selectors show
   // the mark, and never auto-pick a debug entry). Same lifecycle as `mcp`:
   // remove on close, with an exit backstop for paths that skip close().
@@ -430,6 +430,9 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     process.stdout.write(`${lines.join("\n")}\n`);
   });
 
+  // Dev-only STALENESS watch (AIUI_CHANNEL_WATCH=1, source only). Like `mcp`, no
+  // hot-reload — but a debug server has no agent to tell, so the notice goes to
+  // stderr, next to the wire narration. Restart the debug channel to apply edits.
   let stopWatch: (() => void) | undefined;
   if (process.env.AIUI_CHANNEL_WATCH === "1") {
     const srcDir = channelSourceDir();
@@ -437,22 +440,11 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       stopWatch = watchChannelSource({
         dir: srcDir,
         onChange: () => {
-          web
-            .reload()
-            .then((s) =>
-              process.stderr.write(
-                `[aiui-channel serve] reloaded on edit — generation=${s.generation} socketsDropped=${s.socketsDropped}\n`,
-              ),
-            )
-            .catch((err) =>
-              process.stderr.write(
-                `[aiui-channel serve] reload failed: ${err instanceof Error ? err.message : String(err)}\n`,
-              ),
-            );
+          narrate("source changed — this debug channel is now STALE; restart it to apply edits");
         },
       });
       process.stderr.write(
-        `[aiui-channel serve] watching ${srcDir} for edits (AIUI_CHANNEL_WATCH=1)\n`,
+        `[aiui-channel serve] watching ${srcDir} for staleness (AIUI_CHANNEL_WATCH=1)\n`,
       );
     } else {
       process.stderr.write(

@@ -2,19 +2,27 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import WebSocket from "ws";
 import { connectChannelClient } from "../client";
 import type { FrameLogEntry } from "../frame-log";
 import { listMcpServers } from "../list";
+import type { Sidecar } from "../sidecar";
 import {
   isNarratedTraceStage,
   makeFrameNarrator,
   parsePort,
-  runServe,
+  runServe as runServeRaw,
   type ServeHandle,
+  type ServeOptions,
 } from "./serve";
+
+// Every `runServe` here is hermetic: the real `serve` composes standardSidecars
+// (which would spin up the intent Vite dev server, a CDP bridge, …), so the
+// tests inject `sidecars: []` by default and opt in to a fake when they mean to
+// exercise sidecar hosting. A test that needs the real set would pass its own.
+const runServe = (opts: ServeOptions = {}): Promise<ServeHandle> =>
+  runServeRaw({ sidecars: [], ...opts });
 
 const freshCache = () => mkdtempSync(join(tmpdir(), "aiui-serve-"));
 
@@ -254,16 +262,17 @@ describe("runServe (standalone debug channel server)", () => {
     expect(health.ok).toBe(true);
   });
 
-  it("--sidecars hosts descriptors on the debug server (same contract as mcp)", async () => {
-    // A real module on disk, reached by absolute path — the shape launchers
-    // hand over (load-sidecars dynamic-imports whatever specifier it's given).
-    const fixture = fileURLToPath(new URL("./serve-sidecar.fixture.mjs", import.meta.url));
-    handle = await runServe({
-      cacheDir: freshCache(),
-      sidecars: JSON.stringify([
-        { name: "test", module: fixture, export: "testSidecar", options: { root: "/proj" } },
-      ]),
-    });
+  it("hosts the sidecars it is handed (a client finds their endpoints on the port)", async () => {
+    // The real `serve` composes standardSidecars; here we inject one live
+    // Sidecar to prove hosting works without booting the heavy standard set.
+    const testSidecar: Sidecar = {
+      name: "test",
+      mount(app) {
+        app.get("/__test_sidecar", (_req, res) => res.json({ root: "/proj" }));
+        return {};
+      },
+    };
+    handle = await runServe({ cacheDir: freshCache(), sidecars: [testSidecar] });
 
     const res = await fetch(`http://127.0.0.1:${handle.port}/__test_sidecar`);
     expect(await res.json()).toEqual({ root: "/proj" });

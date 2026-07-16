@@ -131,24 +131,6 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
     ],
   },
   {
-    name: "sidecars",
-    summary: "which session sidecars a launched channel hosts",
-    fields: [
-      {
-        key: "paint",
-        type: "boolean",
-        default: true,
-        summary: "Host the iPad paint sidecar (on the channel's own port).",
-        doc:
-          "The iPad paint stream (docs/guide/paint-stream) rides the channel's one port — no " +
-          "extra process, no extra listener — so it is on by default; false turns it off. " +
-          "Whether an iPad can actually reach it is channel.bind's call (host, or a tunnel " +
-          "you own). Per-launch flags win: --aiui-sidecar paint / --aiui-no-sidecar paint. " +
-          "`aiui paint url` prints the URL to open on the iPad.",
-      },
-    ],
-  },
-  {
     name: "chrome",
     summary: "the agent's browser and the Chrome DevTools MCP",
     fields: [

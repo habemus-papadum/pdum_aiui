@@ -26,7 +26,7 @@ import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import { createChannelConnection, type FormatRegistry } from "./channel";
 import { registerDebugRoutes } from "./debug";
 import { ackEntry, createFrameLog, type FrameLogSink, inboundEntry, pushEntry } from "./frame-log";
-import { defaultFormatLoader, type FormatLoader } from "./hot";
+import { defaultFormatLoader, type FormatLoader, isSourceRun } from "./hot";
 import type { LaunchInfo } from "./launch-info";
 import { PageToolDirectory } from "./page-tools";
 import { SessionHub } from "./session-hub";
@@ -143,6 +143,14 @@ export interface WebServerOptions {
    * chooses and constructs these; the channel treats them opaquely.
    */
   sidecars?: Sidecar[];
+  /**
+   * Dev vs. prod, handed to each sidecar as {@link SidecarContext.mode}. Defaults
+   * to `isSourceRun()` — `"dev"` when the channel runs off `src/` (tsx), `"prod"`
+   * from an installed `dist/` build. A web-serving sidecar reads it to pick a
+   * Vite dev server (dev) or a prebuilt static bundle (prod); the launcher can
+   * force it (`--mode`) to test the prod path in a source checkout.
+   */
+  mode?: "dev" | "prod";
   /**
    * Log sink for server-level messages (sidecar mounts, etc.). Defaults to a
    * stderr writer — never stdout, which the `mcp` command's MCP protocol owns.
@@ -560,10 +568,12 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // `/debug`) — so a sidecar's path-scoped fallback can never shadow them. Each
   // is isolated: a mount that throws is logged and skipped, never fatal.
   // `boundPort` is handed to them lazily: it resolves only after `listen`.
+  // `mode` (dev/prod) defaults to whether the channel itself runs from source.
+  const mode = options.mode ?? (isSourceRun() ? "dev" : "prod");
   let boundPort: number | undefined;
   for (const sidecar of options.sidecars ?? []) {
     try {
-      mountedSidecars.push(await sidecar.mount(app, { log, port: () => boundPort }));
+      mountedSidecars.push(await sidecar.mount(app, { mode, log, port: () => boundPort }));
       log(`sidecar "${sidecar.name}" mounted`);
     } catch (err) {
       log(`sidecar "${sidecar.name}" failed to mount: ${errorMessage(err)}`);

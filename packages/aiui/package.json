@@ -46,7 +46,6 @@
     "@habemus-papadum/aiui-claude-plugin": "workspace:^",
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-devtools-extension": "workspace:^",
-    "@habemus-papadum/aiui-paint": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
     "@inquirer/prompts": "^7.2.0",
     "@puppeteer/browsers": "^2.10.5",
@@ -54,10 +53,5 @@
     "commander": "^15.0.0",
     "execa": "^9.6.1",
     "vite": "^6.4.3"
-  },
-  "devDependencies": {
-    "@habemus-papadum/aiui-intent-client": "workspace:^",
-    "@habemus-papadum/aiui-pencil": "workspace:^",
-    "@habemus-papadum/aiui-remote-bar": "workspace:^"
   }
 }

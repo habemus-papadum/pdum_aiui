@@ -163,34 +163,32 @@ check("…with the PATH explanation", /not found on your PATH/.test(claude.stder
 const mcp = run(["mcp", "--help"]);
 check("aiui mcp --help (channel CLI from dist) exits 0", mcp.status === 0, mcp.stderr);
 
-// The installed sidecar path, end to end: resolve the paint sidecar the way the
-// CLI does (require.resolve against the exports map → an absolute dist path),
-// then load + construct + mount it the way the channel does — under plain node,
-// from the packed tarballs. This is the dev/installed seam that source-first
-// masks: in the workspace this resolves to src/*.ts under tsx; installed it
-// must resolve to dist/*.js and import cleanly with no loader. (lanPort: 0 —
-// an OS-assigned ephemeral port, immediately disposed.)
+// The installed sidecar path, end to end: import the four sidecar factories the
+// way the channel's standard-sidecars.ts does (a bare `/sidecar` subpath, no
+// descriptors), construct all four, and mount the lightweight one — under plain
+// node, from the packed tarballs. This is the dev/installed seam that
+// source-first masks: in the workspace these resolve to src/*.ts under tsx;
+// installed they must resolve to dist/*.js and import cleanly with no loader.
 const sidecarProbe = join(scratch, "sidecar-probe.mjs");
 writeFileSync(
   sidecarProbe,
   `import { createRequire } from "node:module";
-import { loadSidecars } from "@habemus-papadum/aiui-claude-channel";
+import { paintSidecar } from "@habemus-papadum/aiui-paint/sidecar";
+import { intentSidecar } from "@habemus-papadum/aiui-intent-client/sidecar";
+import { pencilSidecar } from "@habemus-papadum/aiui-pencil/sidecar";
+import { barSidecar } from "@habemus-papadum/aiui-remote-bar/sidecar";
 const resolved = createRequire(import.meta.url).resolve(
   "@habemus-papadum/aiui-paint/sidecar",
 );
 if (!resolved.endsWith(".js")) throw new Error("expected a dist .js path, got: " + resolved);
-// The raw absolute path, exactly as aiui's resolveSidecars hands it over.
-const sidecars = await loadSidecars([
-  {
-    name: "paint",
-    module: resolved,
-    export: "paintSidecar",
-    options: { root: process.cwd(), lanPort: 0, lanHost: "127.0.0.1" },
-  },
-]);
-if (sidecars.length !== 1) throw new Error("the paint sidecar did not load");
+// Construct all four exactly as standardSidecars does — proves every /sidecar
+// subpath resolves to dist and its factory runs under plain node.
+const root = process.cwd();
+const built = [paintSidecar({ root }), intentSidecar({ root }), barSidecar({ root }), pencilSidecar({ root })];
+if (built.length !== 4) throw new Error("expected four sidecars, got " + built.length);
+// Mount the lightweight one (paint) to exercise the mount/ctx/express seam.
 const express = (await import("express")).default;
-const mounted = await sidecars[0].mount(express(), { log: () => {} });
+const mounted = await built[0].mount(express(), { mode: "prod", log: () => {}, port: () => undefined });
 await mounted.dispose?.();
 console.log(resolved);
 `,

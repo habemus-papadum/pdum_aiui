@@ -43,10 +43,10 @@ a network you trust, and don't run it on café Wi-Fi. See [Read before running](
 
 ## In an aiui session: the paint sidecar
 
-The paint sidecar is **on by default** — it rides the channel's own web server (mounted at
-`/paint`, one port, no extra process or listener), so hosting it costs nothing until something
-connects. The integrated flow — the iPad draws into the intent tool of the app your agent session
-is serving — is one choice and one command:
+The paint sidecar is **always hosted** — every channel mounts it (along with the other standard
+sidecars) on its own web server (mounted at `/paint`, one port, no extra process or listener), so
+hosting it costs nothing until something connects. The integrated flow — the iPad draws into the
+intent tool of the app your agent session is serving — is one choice and one command:
 
 ```sh
 aiui claude          # first interactive launch asks where the channel binds; answer "host"
@@ -68,8 +68,9 @@ Everything hangs off the channel's **bind**:
   `aiui paint url` reminds you of that instead of printing LAN URLs.
 
 The durable switch is [`channel.bind`](./config#all-keys) (asked once at first run, like
-skip-permissions); `--aiui-bind host|loopback` overrides it per launch. To turn the sidecar itself
-off, set `sidecars.paint false` or pass `--aiui-no-sidecar paint`.
+skip-permissions); `--aiui-bind host|loopback` overrides it per launch. There is no per-sidecar
+off switch — the bind is the only knob, because it is the only thing that decides who can reach the
+port.
 
 Arming from the iPad arms the intent turn; strokes land on the intent tool's ink layer and travel
 into screenshots and the prompt, exactly like mouse ink. When a viewer is waiting on the

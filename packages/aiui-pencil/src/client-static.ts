@@ -1,16 +1,23 @@
 /**
  * client-static.ts — serve the built remote-pencil client (node side).
  *
- * The iPad has no frontend process, so the relay hands it the client app at
- * `GET <prefix>/` — the one page-serving exception the channel's "JSON routes
- * only" posture allows, inherited from paint. The app itself is a real built
- * Solid bundle (`lab/vite.client.config.ts` → `assets/client/`), not a
- * hand-written HTML string.
+ * The iPad has no frontend process, so it gets the client app at `GET <prefix>/`
+ * — the one page-serving exception the channel's "JSON routes only" posture
+ * allows, inherited from paint. The app itself is a real built Solid bundle
+ * (`lab/vite.client.config.ts` → `assets/client/`), not a hand-written HTML
+ * string.
  *
- * Deliberately hand-rolled rather than `express.static`: the sidecar receives
- * an Express *app* but must not import Express at runtime (it would resolve a
- * second copy beside the channel's own), and thirty lines of static serving
- * with a traversal guard is cheaper than that risk.
+ * The channel sidecar no longer routes through `clientStatic` — it serves the
+ * client per mode via aiui-util's `serveClientSurface` (dev: Vite middleware;
+ * prod: the same static bundle this serves). What survives here: `clientStatic`
+ * still backs the LAB's own dev rig (`lab/vite.config.ts`), which serves the
+ * built artifact at `/pencil/` on the lab origin; and `defaultClientDir` is the
+ * shared `assets/client` locator the sidecar's prod path reuses.
+ *
+ * Deliberately hand-rolled rather than `express.static`: the mounting side
+ * receives an Express *app* but must not import Express at runtime (it would
+ * resolve a second copy beside the host's own), and thirty lines of static
+ * serving with a traversal guard is cheaper than that risk.
  *
  * When the artifact has not been built (a fresh checkout — `assets/client/`
  * is gitignored), `<prefix>/` answers 503 with the command to run, instead of

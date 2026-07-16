@@ -16,9 +16,17 @@ const external = [
 export default defineConfig({
   build: {
     lib: {
-      entry: "src/index.ts",
+      // Three entrypoints mirroring the exports map: the library (`.`), the
+      // host-neutral Node backend (`./server`), and the channel sidecar
+      // (`./sidecar`, imported by the channel's standard-sidecars.ts). The Node
+      // entries' ws graph stays out of the `index` bundle by being separate.
+      entry: {
+        index: "src/index.ts",
+        backend: "src/backend.ts",
+        sidecar: "src/sidecar.ts",
+      },
       formats: ["es"],
-      fileName: "index",
+      fileName: (_format, entryName) => `${entryName}.js`,
     },
     outDir: "dist",
     sourcemap: true,

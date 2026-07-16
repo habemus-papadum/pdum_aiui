@@ -11,7 +11,8 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./web-surface": "./src/web-surface.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -29,6 +30,11 @@
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js",
         "default": "./dist/index.js"
+      },
+      "./web-surface": {
+        "types": "./dist/web-surface.d.ts",
+        "import": "./dist/web-surface.js",
+        "default": "./dist/web-surface.js"
       }
     }
   },
@@ -40,5 +46,10 @@
   "dependencies": {
     "@puppeteer/browsers": "^2.10.5",
     "execa": "^9.6.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "express": "^5.1.0",
+    "vite": "^6.4.1"
   }
 }

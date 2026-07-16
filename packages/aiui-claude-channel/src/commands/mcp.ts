@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createChannelLog } from "../channel-log";
-import { channelSourceDir, watchChannelSource } from "../hot";
+import { channelSourceDir, STALE_NOTICE, watchChannelSource } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
-import { loadSidecars, parseSidecarDescriptors } from "../load-sidecars";
 import { formatPageToolsChanged, PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
 import type { Sidecar } from "../sidecar";
+import { standardSidecars } from "../standard-sidecars";
 import { projectCacheDir } from "../trace";
 import { startWebServer, type WebServer } from "../web";
 
@@ -24,13 +24,13 @@ export interface McpOptions {
    */
   launchInfo?: string;
   /**
-   * JSON array of session sidecar descriptors the launcher wants this channel to
-   * host (see load-sidecars.ts). Each is dynamic-imported and constructed, then
-   * passed to `startWebServer({ sidecars })`. The channel takes no dependency on
-   * any concrete sidecar — the descriptor's `module` string is the caller's. A
-   * descriptor that fails to load is logged to stderr and skipped, never fatal.
+   * The sidecars to host, as live {@link Sidecar} objects. Defaults to
+   * {@link standardSidecars} (paint, intent, bar, pencil — the channel imports
+   * and composes them itself now that they are published; see
+   * standard-sidecars.ts). Tests pass their own set (often `[]`) to stay
+   * hermetic. A sidecar whose `mount` throws is isolated by `startWebServer`.
    */
-  sidecars?: string;
+  sidecars?: Sidecar[];
   /**
    * Where the web backend binds: `"loopback"` (127.0.0.1, the default) or
    * `"host"` (0.0.0.0 — the trusted-LAN posture: every unauthenticated channel
@@ -39,6 +39,12 @@ export interface McpOptions {
    * choice). See docs/guide/warning.md.
    */
   bind?: "loopback" | "host";
+  /**
+   * Force the sidecars' dev/prod mode (`--mode`). Omitted, the channel derives
+   * it from whether it is running off `src/` (see `startWebServer`); pass it to
+   * exercise the prod static-serving path from a source checkout.
+   */
+  mode?: "dev" | "prod";
   /**
    * Push a terse "page tools changed: ns/name, …" note into the session when
    * the page-tool directory changes — rung 2 of the notification ladder
@@ -84,15 +90,12 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
       process.stderr.write("[aiui-channel] ignoring malformed --launch-info JSON\n");
     }
   }
-  // Resolve the launcher's sidecar descriptors into live sidecars. Both the
-  // parse and each load are best-effort (see load-sidecars.ts): a malformed
-  // value or one bad descriptor is logged to stderr and skipped, never fatal, so
-  // this can't stop the server from coming up. Stays generic — the channel
-  // dynamic-imports whatever `module` specifiers it's handed.
-  let sidecars: Sidecar[] | undefined;
-  if (options.sidecars !== undefined) {
-    sidecars = await loadSidecars(parseSidecarDescriptors(options.sidecars));
-  }
+  // The sidecars to host. The channel composes its own standard set by ordinary
+  // import (standard-sidecars.ts) — rooted at this process's cwd, which the
+  // launcher sets to the project root. Tests inject their own to stay hermetic.
+  // Each mount is isolated by `startWebServer`: one that throws is logged and
+  // skipped, never fatal.
+  const sidecars = options.sidecars ?? standardSidecars(process.cwd());
   // The page-tool registry is shared by the MCP tools (which read and drive it)
   // and the `/tools` websocket in the web backend (which feeds it), so create it
   // once and hand the same instance to both.
@@ -171,6 +174,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     sidecars,
     pageTools,
     frameSink: channelLog.frameSink,
+    ...(options.mode !== undefined ? { mode: options.mode } : {}),
     ...(options.bind === "host" ? { host: "0.0.0.0" } : {}),
     // The *explicit* --tag only (not the UUID minted above): the UUID is an
     // address for the registry, not a human label — an untagged server's
@@ -179,32 +183,38 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   });
   const registration = registerServer(web.port, tag);
 
-  // Dev-only auto-reload on source edits, opt-in via AIUI_CHANNEL_WATCH=1 and
-  // only meaningful in a source checkout (a packaged install has nothing on disk
-  // to watch). Off by default — the `channel_reload` tool and POST /debug/api/reload
-  // are the always-on triggers.
+  // Dev-only STALENESS watch, opt-in via AIUI_CHANNEL_WATCH=1 and only
+  // meaningful in a source checkout (a packaged install has nothing on disk to
+  // watch). The channel does NOT hot-reload — a shallow format-registry swap
+  // used to run here and gave a false sense of HMR; it was removed. Instead,
+  // when the channel's own backend source changes, we tell the AGENT its running
+  // channel is now stale, so nobody trusts behavior that no longer matches disk.
+  // (Manual reload — the `channel_reload` tool and POST /debug/api/reload —
+  // stays for the deliberate case.)
   let stopWatch: (() => void) | undefined;
   if (process.env.AIUI_CHANNEL_WATCH === "1") {
     const srcDir = channelSourceDir();
     if (srcDir) {
+      let notified = false;
       stopWatch = watchChannelSource({
         dir: srcDir,
         onChange: () => {
-          web
-            ?.reload()
-            .then((s) =>
-              process.stderr.write(
-                `[aiui-channel] reloaded on edit — generation=${s.generation} socketsDropped=${s.socketsDropped}\n`,
-              ),
-            )
-            .catch((err) =>
-              process.stderr.write(
-                `[aiui-channel] reload failed: ${err instanceof Error ? err.message : String(err)}\n`,
-              ),
-            );
+          const notice = notified
+            ? "aiui channel source changed again — still running the OLD build; restart to apply."
+            : STALE_NOTICE;
+          notified = true;
+          channelLog.log("stale");
+          pushToSession(notice, "channel-stale").catch((err) => {
+            channelLog.log("stale push failed", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+          process.stderr.write("[aiui-channel] source changed — told the session it is stale\n");
         },
       });
-      process.stderr.write(`[aiui-channel] watching ${srcDir} for edits (AIUI_CHANNEL_WATCH=1)\n`);
+      process.stderr.write(
+        `[aiui-channel] watching ${srcDir} for staleness (AIUI_CHANNEL_WATCH=1)\n`,
+      );
     } else {
       process.stderr.write(
         "[aiui-channel] AIUI_CHANNEL_WATCH=1 ignored — not running from source\n",

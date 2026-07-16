@@ -64,6 +64,15 @@ describe("readConfigFile", () => {
     );
   });
 
+  it("tolerates a retired section (sidecars) instead of hard-failing on upgrade", () => {
+    // A config written before the channel hosted its whole standard set still
+    // carries `sidecars` — accept and ignore it (a typo would still throw).
+    const config = readConfigFile(
+      write("legacy.json", { sidecars: { paint: false }, channel: { bind: "host" } }),
+    );
+    expect(config).toEqual({ channel: { bind: "host" } });
+  });
+
   it("rejects wrong value types and bad channels", () => {
     expect(() => readConfigFile(write("a.json", { claude: { skipPermissions: "yes" } }))).toThrow(
       /expected a boolean for claude.skipPermissions/,
@@ -171,7 +180,6 @@ describe("loadAiuiConfig", () => {
     expect(loadAiuiConfig(join(dir, "empty-project"))).toEqual({
       claude: {},
       channel: {},
-      sidecars: {},
       chrome: {},
     });
   });

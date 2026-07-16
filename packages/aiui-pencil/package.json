@@ -46,7 +46,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json && pnpm build:client",
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json && vite build && pnpm build:client",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p lab/tsconfig.json",
     "test": "vitest run",
     "lab": "vite --config lab/vite.config.ts",
@@ -56,18 +56,19 @@
     "@babel/core": "^7.29.7",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
-    "@habemus-papadum/aiui-remote-bar": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
-    "@solidjs/web": "2.0.0-beta.15",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",
     "express": "^5.1.0",
     "jsdom": "^29.0.0",
-    "solid-js": "2.0.0-beta.15",
     "vite": "^6.4.1",
     "vite-plugin-solid": "3.0.0-next.5"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-remote-bar": "workspace:^",
+    "@habemus-papadum/aiui-util": "workspace:^",
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15",
     "ws": "^8.18.0"
   }
 }

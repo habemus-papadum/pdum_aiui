@@ -8,92 +8,62 @@
  *  - **`aiui mcp serve` / `aiui mcp mcp`** run the very same channel CLI
  *    directly, with no Claude Code anywhere in the loop.
  *
- * The second path used to forward its arguments verbatim, so it never computed
- * the two settings that the first path derives from config — where the web
- * backend binds (`channel.bind`) and which session sidecars to host
- * (`sidecars.*`). The visible consequence: a standalone `serve` channel had no
- * `/paint/` route, because {@link resolveSidecars} was never called and the
- * channel only mounts sidecars it is handed. That is what this module fixes —
- * both launchers now resolve the same {@link ChannelLaunch} and emit the same
- * flags, so a standalone channel is configured exactly like a session's.
+ * The one durable setting they must both derive from config is where the web
+ * backend binds (`channel.bind`) — the trusted-LAN posture. The second path
+ * used to forward its arguments verbatim and so never computed it; this module
+ * is what makes both paths resolve the same {@link ChannelLaunch} and emit the
+ * same `--bind` flag, so a standalone channel binds exactly like a session's.
  *
- * What deliberately does NOT live here: `--launch-info` (a summary of *how a
- * Claude Code session was assembled* — browser wiring, key preflight — which a
- * direct launch has nothing to say about, and which `serve` does not even
+ * Which sidecars a channel hosts is NOT decided here anymore. The channel
+ * imports and mounts its own standard set (paint, intent, bar, pencil — see the
+ * channel's standard-sidecars.ts), so there is nothing to pass: every channel
+ * hosts all four, and `channel.bind` alone decides whether a remote device can
+ * reach them.
+ *
+ * What else deliberately does NOT live here: `--launch-info` (a summary of *how
+ * a Claude Code session was assembled* — browser wiring, key preflight — which
+ * a direct launch has nothing to say about, and which `serve` does not even
  * accept), and `--tag` / `--name` / `--port`, which are per-invocation identity
  * rather than durable configuration.
  */
 
 import type { AiuiConfig, ChannelBind } from "./config";
-import { type ResolveSidecarsDeps, resolveSidecars, type SidecarDescriptor } from "./sidecars";
 
 /** Everything a launcher knows that can influence the channel's configuration. */
 export interface ChannelLaunchInput {
-  /** Project root the sidecars are resolved against (the channel inherits this cwd). */
-  root: string;
   /** Merged user + project config (`util/config`). */
   config: AiuiConfig;
   /** An explicit per-launch bind (`--aiui-bind`, or `serve`'s own `--bind`). */
   bind?: ChannelBind;
-  /** Names from repeatable `--aiui-sidecar` — force-enable. */
-  sidecar?: string[];
-  /** Names from repeatable `--aiui-no-sidecar` — disable. Beats enable. */
-  noSidecar?: string[];
 }
 
 /** The resolved settings, ready to be rendered as channel CLI flags. */
 export interface ChannelLaunch {
   bind: ChannelBind;
-  sidecars: SidecarDescriptor[];
 }
 
 /**
- * Resolve the channel's bind and sidecar set for a launch.
- *
- * Both settings follow the same three-tier precedence the docs promise:
- * per-launch flag, then durable config, then the built-in default
- * (`loopback`; sidecar auto-detection).
+ * Resolve the channel's bind for a launch. Follows the three-tier precedence
+ * the docs promise: per-launch flag, then durable config, then the built-in
+ * default (`loopback`).
  */
-export function resolveChannelLaunch(
-  input: ChannelLaunchInput,
-  deps: ResolveSidecarsDeps = {},
-): ChannelLaunch {
-  const bind = input.bind ?? input.config.channel?.bind ?? "loopback";
-
-  const enable = [...(input.sidecar ?? [])];
-  const disable = [...(input.noSidecar ?? [])];
-  // Fold the durable `sidecars.*` settings in underneath the flags: a
-  // per-launch flag for a given name beats that name's config entry, and
-  // silence in config leaves auto-detection to decide.
-  for (const [name, on] of Object.entries(input.config.sidecars ?? {})) {
-    if (on === undefined || enable.includes(name) || disable.includes(name)) {
-      continue;
-    }
-    (on ? enable : disable).push(name);
-  }
-
-  return { bind, sidecars: resolveSidecars(input.root, { enable, disable }, deps) };
+export function resolveChannelLaunch(input: ChannelLaunchInput): ChannelLaunch {
+  return { bind: input.bind ?? input.config.channel?.bind ?? "loopback" };
 }
 
 /**
  * Render a {@link ChannelLaunch} as flags for the channel CLI. Both the `mcp`
- * and `serve` subcommands accept exactly this pair (see the channel's
- * program.ts); `--sidecars` is omitted when empty, since the channel
- * distinguishes "no descriptors" from "the flag was never passed".
+ * and `serve` subcommands accept `--bind` (see the channel's program.ts).
  */
 export function channelLaunchFlags(launch: ChannelLaunch): string[] {
-  const flags = ["--bind", launch.bind];
-  if (launch.sidecars.length > 0) {
-    flags.push("--sidecars", JSON.stringify(launch.sidecars));
-  }
-  return flags;
+  return ["--bind", launch.bind];
 }
 
 /**
  * The channel subcommands that *are a channel process* — the ones that accept
- * `--bind` and `--sidecars`, and so want the config-derived defaults. Everything
- * else the channel CLI offers (`quick`, `config`) talks to a channel someone
- * else is running, and forwards verbatim.
+ * `--bind`, and so want the config-derived default. Everything else the channel
+ * CLI offers (`quick`, `config`) talks to a channel someone else is running and
+ * forwards verbatim.
  */
 const CONFIGURABLE_SUBCOMMANDS = new Set(["serve", "mcp"]);
 
@@ -104,9 +74,9 @@ function hasFlag(args: string[], flag: string): boolean {
 
 /**
  * Whether `aiui mcp <args...>` will start a channel process, and so wants the
- * config-derived settings. Callers use this to avoid the cost (and the
- * "sidecar failed to resolve" warnings) of {@link resolveChannelLaunch} for the
- * subcommands that merely talk to a channel someone else is running.
+ * config-derived settings. Callers use this to leave the subcommands that
+ * merely talk to a channel someone else is running (`quick`, `config`)
+ * untouched.
  */
 export function isChannelLaunch(args: string[]): boolean {
   // The subcommand is the first bare token; `aiui mcp --help` has none.
@@ -120,9 +90,7 @@ export function isChannelLaunch(args: string[]): boolean {
  *
  * Returns `args` untouched unless its subcommand actually launches a channel.
  * A setting the caller named explicitly is never overridden — `aiui mcp serve
- * --bind host` means `host` no matter what config says, and an explicit
- * `--sidecars` replaces the computed set wholesale (that is the escape hatch
- * for hosting something the CLI's registry doesn't know how to build).
+ * --bind host` means `host` no matter what config says.
  */
 export function applyChannelLaunchArgs(args: string[], launch: ChannelLaunch): string[] {
   if (!isChannelLaunch(args)) {

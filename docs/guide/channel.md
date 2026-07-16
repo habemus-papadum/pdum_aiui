@@ -102,47 +102,46 @@ practical: edit, `channel_reload`, try again — no session restart.
 
 ## Sidecars
 
-The channel is also a generic **host** for other session backends. A **sidecar** is an extra HTTP
-(and optional websocket) surface the channel mounts alongside its own — so one session process, on
-one port, can serve more than the intent pipeline. The concrete one today is the
-[iPad paint stream](./paint-stream) (always on — it rides the same port, and whether a second
-device can reach it is the channel bind's decision, not the sidecar's). A git viewer would be
-the next.
+The channel is also a **host** for other session backends. A **sidecar** is an extra HTTP (and
+optional websocket) surface the channel mounts alongside its own — so one session process, on one
+port, can serve more than the intent pipeline. Four ship today, and **every channel hosts all
+four**: the [iPad paint stream](./paint-stream) (`/paint/`), the detached
+[intent client](./web-intent-tool) panel (`/intent/`), the remote command bar (`/bar/`), and the
+remote pencil (`/pencil/`). Each rides the same port, so hosting one costs nothing; whether a
+second device can *reach* it is the [channel bind](./config)'s decision, not the sidecar's.
 
-The channel stays **sidecar-agnostic**: it takes no dependency on any concrete sidecar and hardcodes
-no names. The launcher (`aiui claude`) decides which to run and hands the channel a JSON array of
-descriptors on `aiui-claude-channel mcp --sidecars <json>` (the standalone debug server takes the
-same flag, `serve --sidecars <json>` — so a debug channel hosts the same sidecars a real
-session would). Each descriptor names an importable module and the export to call as a factory:
+The channel composes them by **ordinary import**. It depends on the four sidecar packages and
+builds them in one place (`standard-sidecars.ts` → `standardSidecars(root)`), calling each
+package's `sidecar` factory directly:
 
 ```ts
-interface SidecarDescriptor {
-  name: string;      // stable id, used in logs and the CLI flags (e.g. "paint")
-  module: string;    // an importable specifier the channel `import()`s
-  export?: string;   // the factory export to call; defaults to "default"
-  options?: unknown; // passed opaquely to the factory (e.g. { root: "/proj" })
-}
+import { paintSidecar } from "@habemus-papadum/aiui-paint/sidecar";
+// … intent, bar, pencil
+export const standardSidecars = (root: string): Sidecar[] => [paintSidecar({ root }), /* … */];
 ```
 
-At startup the channel dynamic-imports each `module`, calls `mod[export ?? "default"](options)`, and
-mounts the returned sidecar on its Express app. It never resolves a bare specifier from its own
-isolated `node_modules`, so the launcher hands it an **absolute** `module` path — the launcher, not
-the channel, depends on the sidecar package.
+Both channel entry points use it: the real `aiui-claude-channel mcp` (spawned by `aiui claude`) and
+the standalone debug server (`aiui-claude-channel serve`, behind `aiui mcp serve`) each host the
+same set, rooted at their cwd — so a debug channel is configured exactly like a real session's.
+(Programmatically, `runMcp` / `runServe` accept a `sidecars: Sidecar[]` and fall back to
+`standardSidecars`; that seam is how the tests stay hermetic.)
+
+> This used to be indirect — the launcher passed a JSON array of descriptors on `--sidecars` and
+> the channel dynamic-imported each by absolute path, so it could depend on no sidecar. That
+> existed only because the sidecar packages were unpublished dev-deps; now that they are published,
+> the channel simply imports them, and `--sidecars` / the `--aiui-sidecar` / `--aiui-no-sidecar`
+> toggles are gone. The `channel.bind` posture is the only knob — it decides reachability, not
+> which sidecars exist.
 
 **Mount ordering is deliberate.** The channel's own routes go on first and always win: `/health`,
 `POST /prompt`, and the `/ws` / `/tools` / `/session` websocket upgrades. A sidecar confines itself
 to its own base path, is offered every websocket upgrade the channel didn't claim (return `true`
 to take the socket), and is disposed on shutdown.
 
-**One bad sidecar can't sink the session.** A descriptor that fails to import, whose export isn't
-callable, that throws, or that returns something that isn't a sidecar is **logged to stderr and
-skipped** — the channel starts anyway. (Malformed `--sidecars` JSON is tolerated the same way.)
-
-Which sidecars are on for a launch — and the `--aiui-sidecar` / `--aiui-no-sidecar` flags that
-override auto-detection — is the launcher's call. The auto-detect policy (`resolveSidecars`) is
-exported from the aiui package so other supervisors can reuse it verbatim. See [The iPad Paint Stream](./paint-stream) for the worked example (the
-`Sidecar` interface lives in `packages/aiui-claude-channel/src/sidecar.ts`; the descriptor loader
-in `load-sidecars.ts`).
+**One bad sidecar can't sink the session.** A sidecar whose `mount` throws is **logged to stderr
+and skipped** — the channel starts anyway. See [The iPad Paint Stream](./paint-stream) for the
+worked example (the `Sidecar` interface lives in
+`packages/aiui-claude-channel/src/sidecar.ts`).
 
 ## Keys and degradation
 

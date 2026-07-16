@@ -17,6 +17,14 @@ const VERSION =
  * Kept separate from the executable entrypoint (cli.ts) so tests can construct
  * and inspect the program without actually running it.
  */
+/** `--mode` validator, shared by `mcp` and `serve` (dev = source, prod = built). */
+function parseMode(value: string): "dev" | "prod" {
+  if (value !== "dev" && value !== "prod") {
+    throw new InvalidArgumentError("expected 'dev' or 'prod'");
+  }
+  return value;
+}
+
 export function buildProgram(): Command {
   const program = new Command();
 
@@ -33,7 +41,6 @@ export function buildProgram(): Command {
       "--launch-info <json>",
       "launcher-provided session summary (browser/DevTools MCP wiring), surfaced at /debug/api/info",
     )
-    .option("--sidecars <json>", "JSON array of session sidecar descriptors to host")
     .option(
       "--bind <mode>",
       "bind the web backend to 'loopback' (127.0.0.1, default) or 'host' (0.0.0.0 — " +
@@ -44,6 +51,12 @@ export function buildProgram(): Command {
         }
         return value;
       },
+    )
+    .option(
+      "--mode <mode>",
+      "force sidecar dev/prod mode: 'dev' (Vite dev servers, source) or 'prod' " +
+        "(prebuilt static bundles). Default: derived from whether the channel runs from source",
+      parseMode,
     )
     .option(
       "--no-page-tools-notify",
@@ -68,7 +81,6 @@ export function buildProgram(): Command {
     .option("--tag <tag>", "registry address + stderr/trace label (defaults to a UUID)")
     .option("--name <name>", 'display name selectors show for this server (e.g. "aiui debug")')
     .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/")
-    .option("--sidecars <json>", "JSON array of session sidecar descriptors to host")
     .option(
       "--bind <mode>",
       "bind the web backend to 'loopback' (127.0.0.1, default) or 'host' (0.0.0.0 — " +
@@ -79,6 +91,12 @@ export function buildProgram(): Command {
         }
         return value;
       },
+    )
+    .option(
+      "--mode <mode>",
+      "force sidecar dev/prod mode: 'dev' (Vite dev servers) or 'prod' (prebuilt " +
+        "static bundles). Default: derived from whether the channel runs from source",
+      parseMode,
     )
     // The validator is the pure parsePort (tested in serve.test.ts); re-wrapped
     // here so commander renders a bad value as a usage error, not a crash.

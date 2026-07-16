@@ -122,13 +122,6 @@ export {
   type LiveSessionCallbacks,
 } from "./live-session";
 export {
-  type LoadSidecarsOptions,
-  loadSidecars,
-  parseSidecarDescriptors,
-  type SidecarDescriptor,
-  type SidecarImport,
-} from "./load-sidecars";
-export {
   DEFAULT_OPENAI_LIVE_MODEL,
   type OpenAiLiveSessionOptions,
   openOpenAiLiveSession,

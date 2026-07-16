@@ -13,21 +13,15 @@ describe("aiui-claude-channel cli", () => {
     expect(names).toEqual(["config", "mcp", "quick", "serve"]);
   });
 
-  it("serve declares --tag, --name, --record, --port, --sidecars, and --bind", () => {
+  it("serve declares --tag, --name, --record, --port, --bind, and --mode", () => {
     const serve = buildProgram().commands.find((cmd) => cmd.name() === "serve");
     const flags = serve?.options.map((option) => option.long).sort();
-    expect(flags).toEqual(["--bind", "--name", "--port", "--record", "--sidecars", "--tag"]);
+    expect(flags).toEqual(["--bind", "--mode", "--name", "--port", "--record", "--tag"]);
   });
 
-  it("mcp declares --tag, --launch-info, --sidecars, --bind, and --no-page-tools-notify", () => {
+  it("mcp declares --tag, --launch-info, --bind, --mode, and --no-page-tools-notify", () => {
     const mcp = buildProgram().commands.find((cmd) => cmd.name() === "mcp");
     const flags = mcp?.options.map((option) => option.long).sort();
-    expect(flags).toEqual([
-      "--bind",
-      "--launch-info",
-      "--no-page-tools-notify",
-      "--sidecars",
-      "--tag",
-    ]);
+    expect(flags).toEqual(["--bind", "--launch-info", "--mode", "--no-page-tools-notify", "--tag"]);
   });
 });

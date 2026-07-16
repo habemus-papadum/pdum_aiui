@@ -18,7 +18,8 @@
   "module": "./src/index.ts",
   "types": "./src/index.ts",
   "files": [
-    "dist"
+    "dist",
+    "assets"
   ],
   "publishConfig": {
     "access": "public",
@@ -39,7 +40,8 @@
     }
   },
   "scripts": {
-    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build && pnpm build:panel",
+    "build:panel": "vite build --config vite.panel.config.ts",
     "build:ext": "tsx scripts/build-ext.ts",
     "ext:watch": "tsx scripts/build-ext.ts --watch",
     "load:ext": "tsx scripts/load-ext.ts",
@@ -54,13 +56,14 @@
     "@habemus-papadum/aiui-ink": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-remote-bar": "workspace:^",
+    "@habemus-papadum/aiui-util": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",
-    "solid-js": "2.0.0-beta.15"
+    "solid-js": "2.0.0-beta.15",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "@habemus-papadum/aiui-util": "workspace:^",
     "@types/chrome": "^0.0.287",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",
@@ -69,7 +72,6 @@
     "jsdom": "^25.0.1",
     "tsx": "^4.22.5",
     "vite": "^6.4.1",
-    "vite-plugin-solid": "3.0.0-next.5",
-    "ws": "^8.18.0"
+    "vite-plugin-solid": "3.0.0-next.5"
   }
 }

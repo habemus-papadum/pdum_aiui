@@ -42,6 +42,10 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@habemus-papadum/aiui-intent-client": "workspace:^",
+    "@habemus-papadum/aiui-paint": "workspace:^",
+    "@habemus-papadum/aiui-pencil": "workspace:^",
+    "@habemus-papadum/aiui-remote-bar": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
     "@inquirer/prompts": "^7.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -133,21 +133,15 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   if (tag) {
     mcpArgs.push("--tag", tag);
   }
-  // Where the channel's web backend binds, and which session sidecars it hosts.
-  // Both are resolved by the shared launcher (util/channel-launch), so a
-  // standalone `aiui mcp serve` is configured identically to a session's
-  // channel. bind: loopback (the default) keeps every route this-machine-only;
-  // host puts the whole unauthenticated surface — iPad paint page, prompt
-  // injection, /debug — on the network (the trusted-LAN posture; asked at first
-  // run, see docs/guide/warning). The channel process inherits this session's
-  // cwd, so the project root sidecars resolve against is process.cwd().
-  const launch = resolveChannelLaunch({
-    root: process.cwd(),
-    config,
-    bind: aiuiArgs.bind,
-    sidecar: aiuiArgs.sidecar,
-    noSidecar: aiuiArgs.noSidecar,
-  });
+  // Where the channel's web backend binds — resolved by the shared launcher
+  // (util/channel-launch), so a standalone `aiui mcp serve` binds identically to
+  // a session's channel. bind: loopback (the default) keeps every route
+  // this-machine-only; host puts the whole unauthenticated surface — iPad paint
+  // page, prompt injection, /debug — on the network (the trusted-LAN posture;
+  // asked at first run, see docs/guide/warning). The channel hosts its own
+  // standard sidecar set regardless; the channel process inherits this session's
+  // cwd, so the project root it roots them at is process.cwd().
+  const launch = resolveChannelLaunch({ config, bind: aiuiArgs.bind });
   mcpArgs.push(...channelLaunchFlags(launch));
   const mcpServers: Record<string, { command: string; args: string[] }> = {
     [CHANNEL_SERVER_ID]: { command: channel.command, args: mcpArgs },
@@ -276,12 +270,9 @@ aiui's own flags (everything else forwards to claude verbatim):
                                  whole network can reach the session's web
                                  surface — the iPad paint page included;
                                  trusted networks only)
-  --aiui-sidecar <name>          host this session sidecar (repeatable);
-                                 \`paint\` (iPad ink) and \`intent\` (the
-                                 channel-served intent panel at /intent/)
-                                 are always on
-  --aiui-no-sidecar <name>       don't host this session sidecar (repeatable)
 
+Every channel hosts the same session sidecars — paint (iPad ink), the intent panel
+at /intent/, the remote bar, and the remote pencil — reachable per --aiui-bind.
 Durable settings live in config.json (project .aiui-cache/ + user cache) — see the
 Configuration guide. What follows is claude's own --help:
 `);

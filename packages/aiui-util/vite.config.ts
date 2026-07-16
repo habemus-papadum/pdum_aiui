@@ -5,20 +5,25 @@ import { defineConfig } from "vite";
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 // Externalize Node builtins + everything this package declares as a runtime/peer
-// dependency, so the library bundle never inlines a consumer-provided module.
+// dependency, plus `vite` — which `web-surface` imports LAZILY (dev only, for
+// the Vite dev server), so it must never be inlined into the bundle; the dynamic
+// import resolves at runtime in a source checkout and is unreached in prod.
 const external = [
   ...builtinModules,
   ...builtinModules.map((name) => `node:${name}`),
   ...Object.keys(pkg.dependencies ?? {}),
   ...Object.keys(pkg.peerDependencies ?? {}),
+  "vite",
 ];
 
 export default defineConfig({
   build: {
     lib: {
-      entry: "src/index.ts",
+      // The library (`.`) and the Node client-serving helper (`./web-surface`),
+      // separate so the main entry never pulls the lazy-vite module.
+      entry: { index: "src/index.ts", "web-surface": "src/web-surface.ts" },
       formats: ["es"],
-      fileName: "index",
+      fileName: (_format, entryName) => `${entryName}.js`,
     },
     outDir: "dist",
     sourcemap: true,

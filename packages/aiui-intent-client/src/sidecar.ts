@@ -6,12 +6,14 @@
  *
  * Mounted under `/intent/` on the channel's one port, exactly like the iPad
  * paint page under `/paint/` (the standing exception to "the channel serves
- * no HTML": a page whose frontend process IS the channel). Serving is a Vite
- * dev server in middleware mode rooted at this package — source-first, like
- * everything in the workspace; a static dist build can replace it at
- * packaging time (Phase 4). HMR is off through the channel (the standalone
- * `pnpm dev` page remains the hot-iteration surface); the channel-served
- * page is the stable, always-there one.
+ * no HTML": a page whose frontend process IS the channel). HOW it is served is
+ * a {@link SidecarContext.mode} decision, delegated to the shared helper
+ * (aiui-util's `serveClientSurface`): in DEV a Vite dev server in middleware
+ * mode rooted at this package — source-first, HMR riding the channel's one port
+ * via a shim; in PROD the prebuilt static bundle under `assets/panel` (built by
+ * `build:panel`), so an installed session needs no Vite. The standalone
+ * `pnpm dev` page remains a second hot-iteration surface; the channel-served
+ * page is the always-there one, and in dev it hot-reloads too.
  *
  * Reachability follows the channel's bind decision (`channel.bind`), same
  * as paint — the sidecar adds no listener and no new posture.
@@ -19,6 +21,7 @@
 
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
+import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
 import type { Express } from "express";
 import { WebSocket } from "ws";
 import type { CdpSocket } from "./cdp/protocol";
@@ -155,50 +158,32 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
         next();
       });
 
-      // Vite resolves this package's own vite.config.ts (solid plugin et al).
-      // `base` scopes the middlewares to /intent/* — requests outside the
-      // base fall through to the channel's own routes, per the sidecar rule.
-      //
-      // HMR rides the channel's OWN port (the one-port posture — no second
-      // listener). Vite in middleware mode needs a server to hang its upgrade
-      // listener on, so it gets a never-listening SHIM: the channel offers
-      // unclaimed upgrades to sidecars (web.ts), ours forwards `/intent/hmr`
-      // into the shim, and vite completes the handshake from there. (This was
-      // `hmr: false` before — the page's vite client then "connected" to
-      // whatever answered its default port, and no update ever flowed: edits
-      // needed a manual reload, which is exactly the loop HMR exists to kill.)
-      const { createServer } = await import("vite");
-      const { createServer: createHttpServer } = await import("node:http");
-      const hmrShim = createHttpServer();
-      const packageRoot = fileURLToPath(new URL("..", import.meta.url));
-      // Vite composes the ws path as base + hmr.path — hand it the RELATIVE
-      // piece or the client dials /intent/intent/hmr (measured; the constants
-      // are visible in the served /@vite/client).
-      const HMR_PATH = `${INTENT_PREFIX}/hmr`;
-      const vite = await createServer({
-        root: packageRoot,
-        base: `${INTENT_PREFIX}/`,
-        appType: "mpa",
-        server: { middlewareMode: true, hmr: { server: hmrShim, path: "hmr" } },
-        clearScreen: false,
-        logLevel: "warn",
+      // How the panel is served is a mode decision, delegated to the shared
+      // helper (aiui-util's serveClientSurface): in DEV a Vite dev server in
+      // middleware mode rooted at this package (source-first, HMR riding the
+      // channel's one port via a shim); in PROD the prebuilt static bundle under
+      // `assets/panel` (built by `build:panel`). The special routes registered
+      // above (page-ink, /cdp/info) go on first, so they win over the client
+      // middleware. `base`/prefix scoping means requests outside /intent/ fall
+      // through to the channel's own routes, per the sidecar rule.
+      const surface = await serveClientSurface(app, {
+        mode: ctx.mode,
+        prefix: INTENT_PREFIX,
+        viteRoot: fileURLToPath(new URL("..", import.meta.url)),
+        distDir: fileURLToPath(new URL("../assets/panel", import.meta.url)),
+        notBuiltHint: "pnpm -C packages/aiui-intent-client build:panel",
+        log: ctx.log,
       });
-      app.use(vite.middlewares);
-      ctx.log(`intent client mounted at ${INTENT_PREFIX}/ (vite middleware, source-first, HMR)`);
       return {
-        handleUpgrade: (req, socket, head) => {
-          const path = (req.url ?? "").split("?")[0];
-          if (path === HMR_PATH) {
-            hmrShim.emit("upgrade", req, socket, head);
-            return true;
-          }
-          return cdp.handleUpgrade(req, socket, head);
-        },
+        // The surface claims its HMR socket (dev only); everything else the
+        // channel didn't handle is the CDP bridge's.
+        handleUpgrade: (req, socket, head) =>
+          surface.handleUpgrade?.(req, socket, head) === true ||
+          cdp.handleUpgrade(req, socket, head),
         dispose: async () => {
           stopTagger();
           cdp.dispose();
-          await vite.close();
-          hmrShim.close();
+          await surface.dispose?.();
         },
       };
     },
