@@ -245,24 +245,28 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.client.context().selectionPresent).toBe(true);
   });
 
-  it("pencil markup gates on an open turn; clear is a page act on the tab in view", async () => {
-    // The pencil is a page act (surface follows the tab, no grant). Its three
-    // affordances live only in a turn (owner, 2026-07-15): vanish MODE and clear.
+  it("pencil markup is ink's twin: a durable on/off mode; clear gates on pencil-on in a turn", async () => {
+    // The pencil is a page act (surface follows the tab, no grant), now modeled
+    // exactly like ink: a durable `pencil` toggle, and a clear enabled only while
+    // that mode is on in an open turn (owner, 2026-07-16).
     const r = makeRig();
     r.client.setContext({ connected: true });
-    expect(r.client.canDispatch("pencilVanish")).toBe(false); // disarmed
-    expect(r.client.canDispatch("pencilClear")).toBe(false);
+    expect(r.client.canDispatch("pencilClear")).toBe(false); // disarmed
 
     grantAndOpen(r);
-    expect(r.client.canDispatch("pencilVanish")).toBe(true);
-    expect(r.client.canDispatch("pencilClear")).toBe(true);
+    // Mode off by default (like ink); its clear is dark until you turn it on.
+    expect(r.client.state().pencil).not.toBe(true);
+    expect(r.client.canDispatch("pencilClear")).toBe(false);
 
-    // Vanish is a standing toggle in state; clear is a one-shot lane call.
-    expect(r.client.state().pencilVanish).not.toBe(true);
-    r.client.dispatch("pencilVanish");
-    expect(r.client.state().pencilVanish).toBe(true);
+    r.client.dispatch("pencil"); // markup mode ON
+    expect(r.client.state().pencil).toBe(true);
+    expect(r.client.canDispatch("pencilClear")).toBe(true);
     r.client.dispatch("pencilClear");
     expect(r.lanes).toContain("clearPencil:7");
+
+    // Disarm clears the mode — the hard-disarm exclude, ink's twin.
+    r.client.dispatch("disarm");
+    expect(r.client.state().pencil).not.toBe(true);
   });
 });
 

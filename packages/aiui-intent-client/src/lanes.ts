@@ -16,7 +16,8 @@
  *  - stt / linter → the engine's IntentPipelineConfig, declared on every
  *    hello (panelIntentConfig, salvaged from the old panel's turn.ts);
  *  - videoPeriodSec → the sampler's constant-mode cadence, read per tick;
- *  - inkFade/inkVanish → the ink claim's fadeSec + a live re-relay effect;
+ *  - inkFade/inkVanish (and pencilFade/pencilVanish, ink's twin) → the ink /
+ *    pencilSurface claims' fadeSec + a live re-relay effect each;
  *  - shotFlash → the manual-shot flash gate (sampled frames never flash).
  */
 
@@ -41,7 +42,16 @@ import {
 import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { ClaimLaneOptions } from "./claims";
 import type { IntentClient, IntentLanes } from "./client";
-import { inkFade, inkVanish, linter, pencilFade, shotFlash, stt, videoPeriodSec } from "./config";
+import {
+  inkFade,
+  inkVanish,
+  linter,
+  pencilFade,
+  pencilVanish,
+  shotFlash,
+  stt,
+  videoPeriodSec,
+} from "./config";
 import { createLinterPulse, type LinterPulseView } from "./linter-pulse";
 import type { IntentHost } from "./transport";
 
@@ -353,6 +363,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
 
   const claimOptions: ClaimLaneOptions = {
     inkFadeSec: () => (inkVanish.get() === true ? (inkFade.get() as number) : 0),
+    pencilFadeSec: () => (pencilVanish.get() === true ? (pencilFade.get() as number) : 0),
     videoSampler: {
       start: async (desire) => {
         const sampler = new VideoSampler({
@@ -565,35 +576,23 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       return dispose;
     });
 
-    // The pencil surface follows the TURN and the tab in view (no claim, no
-    // grant — a page act). One stateful effect engages the active tab on turn
-    // open, re-relays the fade lifetime live while open, disengages on turn
-    // close, and hands off (disengage old, engage new) across a tab switch —
-    // the ink surface's re-point, done here for the second surface.
-    let pencilAt: { tab: number | undefined; engaged: boolean } = {
-      tab: undefined,
-      engaged: false,
-    };
-    const disposePencil = createRoot((dispose) => {
+    // Pencil live fade — the EXACT twin of ink's disposeFade above (owner,
+    // 2026-07-16). Engage / disengage / re-point across a tab switch are now the
+    // `pencilSurface` CLAIM's job (claims.ts), so this effect only re-relays the
+    // vanish lifetime while the claim is active — no hand-rolled lifecycle.
+    const disposePencilFade = createRoot((dispose) => {
       createEffect(
         () => ({
-          engaged: client.state().phase === "turn",
+          fade: pencilVanish.get() === true ? (pencilFade.get() as number) : 0,
+          active: client.claimStatuses().pencilSurface?.phase === "active",
           tab: client.context().activeTab,
-          fade: client.state().pencilVanish === true ? (pencilFade.get() as number) : 0,
         }),
-        ({ engaged, tab, fade }) => {
-          const prev = pencilAt;
-          const left = prev.engaged && (!engaged || prev.tab !== tab) && prev.tab !== undefined;
-          if (left) {
+        ({ fade, active, tab }) => {
+          if (active && tab !== undefined) {
             void host.transport
-              .requestPage(prev.tab as number, "pencil", { op: "disengage" })
+              .requestPage(tab, "pencil", { op: "fade", fadeSec: fade })
               .catch(() => {});
           }
-          if (engaged && tab !== undefined) {
-            const op = !prev.engaged || prev.tab !== tab ? "engage" : "fade";
-            void host.transport.requestPage(tab, "pencil", { op, fadeSec: fade }).catch(() => {});
-          }
-          pencilAt = { tab, engaged };
         },
       );
       return dispose;
@@ -648,7 +647,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     return () => {
       offEngine();
       disposeFade();
-      disposePencil();
+      disposePencilFade();
       disposeConfig();
       disposeLinterControl();
     };

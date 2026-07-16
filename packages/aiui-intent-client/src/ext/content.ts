@@ -440,8 +440,9 @@ serveRelay(PAGE_ADDRESS, {
     }
     switch (op) {
       case "disengage":
+        // Keep the handle (and its strokes) — disengage only stops owning the
+        // pointer, like ink's setOn(false); re-engage reuses the same surface.
         pencil.disengage();
-        pencil = undefined;
         return { ok: true };
       case "fade":
         pencil.setFade(Number(p.fadeSec ?? 0));

@@ -57,15 +57,29 @@ boundary: it re-reads committed state between dispatches, which the engine makes
 ## The bar
 
 - **A tree presented linearly**: root `arm · step out · help`; arming reveals the turn tier;
-  an engaged cap reveals its children (ink → clear · vanish · fade; hands-free → mute; video →
-  cadence · rate). The renderer joins the depth tiers into one wrapping flow with a `›`
-  divider — no indentation, no one-cap rows.
+  an engaged cap reveals its children (ink → clear · vanish · fade; pencil → clear · vanish ·
+  fade; hands-free → mute; video → cadence · rate). The renderer joins the depth tiers into one
+  wrapping flow with a `›` divider — no indentation, no one-cap rows.
 - **Labels are stable**: a cap's text never changes with state; the lit highlight carries
   "engaged". Keyboard shortcuts are never cap text — tooltips and the help table only.
 - **Enabled is derived**: the engine dry-runs the reducer (`canDispatch`); verbs and gates
   declare `available` in the spec. Nothing is hand-written per button.
 - Verb caps (shot · selection · clear) flash briefly on tap — they move no region, so the
   acknowledgment is the reaction.
+
+## Markup: ink and pencil are twins (owner, 2026-07-16)
+
+Pencil is integrated **exactly like ink**, and is meant to replace it (both stay wired in
+parallel for now). Same shape at every layer: a durable on/off mode region (`ink` / `pencil`,
+`i` / `k`, cleared by `disarmed-is-hard`), a reconciler claim that engages the in-page surface
+while the mode is on in an open turn and re-points it on a tab switch (`inkPointer` /
+`pencilSurface`), a clear gated on the mode, and vanish/fade as config controls with a live
+re-relay effect. The surface owns the pointer only while the mode is on (`setActive`), and
+**strokes survive leaving the mode / the turn** — only a clear or a fade removes them. On the
+host the pencil takes **mouse, pen, and touch** (native `localInput`); palm rejection is the
+remote iPad client's job (its `shouldCapture` veto), never the desktop's. The one visible
+difference from ink is the colour — the pencil is red. The iPad rides the same surface through
+the `remote*` ops, unchanged by this.
 
 ## Talk
 

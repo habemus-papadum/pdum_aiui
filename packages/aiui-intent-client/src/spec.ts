@@ -79,19 +79,16 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     phase: ladder(["disarmed", "armed", "turn", "tweak"]),
     /** Ink mode — standing (survives turns), durable; disarm clears it. */
     ink: toggle({ durable: true }),
+    /** Pencil markup mode — the EXACT twin of ink (owner, 2026-07-16): standing,
+     * durable, disarm clears it. On ⇒ the pencilSurface claim engages the page
+     * surface (mouse + pen + iPad); strokes survive turns until cleared. Vanish
+     * on/off + fade live in config (pencilVanish/pencilFade), like ink's. */
+    pencil: toggle({ durable: true }),
     /** Video sampling — standing, durable, agent-visible. */
     video: toggle({
       durable: true,
       agent: "videoOn",
       description: "sample tab frames into the turn",
-    }),
-    /** Pencil vanishing mode — standing, durable, agent-visible. Off = strokes
-     * persist on the page; on = they fade over the pencilFade lifetime. The
-     * pencil surface itself engages with the turn (page/pencil-mount.ts). */
-    pencilVanish: toggle({
-      durable: true,
-      agent: "pencilVanish",
-      description: "pencil strokes fade out instead of persisting",
     }),
     /** Cadence: smart (interaction-gated) or constant (the period slider). */
     videoMode: choice(["smart", "constant"], {
@@ -152,10 +149,10 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       s.phase === "turn" ? { phase: "tweak" } : s.phase === "tweak" ? { phase: "turn" } : null,
     /** i — toggle ink mode (standing). */
     ink: (s) => ({ ink: !(s.ink as boolean) }),
+    /** k — toggle pencil markup mode (standing; the claim gates on turn). Ink's twin. */
+    pencil: (s) => ({ pencil: !(s.pencil as boolean) }),
     /** v — toggle video sampling (standing; the claim gates on turn). */
     video: (s) => ({ video: !(s.video as boolean) }),
-    /** Toggle pencil vanishing mode (standing; the live effect re-relays fade). */
-    pencilVanish: (s) => ({ pencilVanish: !(s.pencilVanish as boolean) }),
     /** f — flip the cadence. */
     fpsMode: (s) => ({ videoMode: s.videoMode === "smart" ? "constant" : "smart" }),
     /** Space down — open a hold-to-talk window (starts unmuted). */
@@ -198,10 +195,15 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
 
   excludes: [
     // ONE disarmed, and it is HARD (owner, 2026-07-13): however you get
-    // there — the d key, the arm toggle, Esc unwinding the last rung — ink
-    // mode clears. Declared once as an invariant, not remembered per route.
-    // (Standing video/videoMode survive disarm, as in the old client.)
-    { name: "disarmed-is-hard", when: (s) => s.phase === "disarmed", set: { ink: false } },
+    // there — the d key, the arm toggle, Esc unwinding the last rung — ink AND
+    // pencil markup modes clear (pencil is ink's twin, owner 2026-07-16).
+    // Declared once as an invariant, not remembered per route. (Standing
+    // video/videoMode survive disarm, as in the old client.)
+    {
+      name: "disarmed-is-hard",
+      when: (s) => s.phase === "disarmed",
+      set: { ink: false, pencil: false },
+    },
     // Talk and tweak (owner, 2026-07-16): tweak PAUSES hands-free talk rather
     // than ending it — the mic goes quiet (client.ts drives the mute off the
     // phase) and RESUMES when you step back to the turn, so the talk window
@@ -277,10 +279,9 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     jump: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined && ctx.aiuiPage,
     clear: (s, ctx) => s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined,
     // Pencil markup is a PAGE act (the surface follows the tab in view, no grant
-    // — a stylus and the iPad's strokes both land in-page). The vanish MODE is a
-    // standing setting but only meaningful with a live surface, so both gate on
-    // an open turn with a tab (owner, 2026-07-15).
-    pencilVanish: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined,
-    pencilClear: (s, ctx) => s.phase === "turn" && ctx.activeTab !== undefined,
+    // — a mouse, a stylus, and the iPad's strokes all land in-page). Its clear is
+    // the EXACT twin of ink's: enabled only while pencil mode is on in an open
+    // turn (owner, 2026-07-16). Vanish/fade are config controls now, not commands.
+    pencilClear: (s, ctx) => s.phase === "turn" && s.pencil === true && ctx.activeTab !== undefined,
   },
 };

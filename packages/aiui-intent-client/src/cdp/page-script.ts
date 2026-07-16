@@ -247,8 +247,10 @@ function pageBootstrap(version: string): void {
     }
     switch (op) {
       case "disengage":
+        // Keep the handle (and its strokes) — disengage only stops owning the
+        // pointer, exactly like ink's setOn(false). Re-engage reuses the same
+        // surface, so markup survives across turns.
         pencilHandle.disengage();
-        pencilHandle = undefined;
         return { ok: true };
       case "fade":
         pencilHandle.setFade(Number(payload.fadeSec ?? 0));

@@ -359,34 +359,39 @@ describe("the fade re-relay effect", () => {
   });
 });
 
-describe("the pencil surface follows the turn and the tab in view", () => {
-  it("engages on turn open, re-relays fade live, hands off across a tab switch, disengages on close", async () => {
+describe("the pencilSurface claim (ink's twin: mode-gated, tab-following)", () => {
+  it("engages only when markup is ON, re-relays fade live, re-points on tab switch, releases on disarm", async () => {
     const r = makeRig();
     activationGesture(r.client, 7); // grant + arm + turn on tab 7
     await settle(30);
-    // Engaged on the tab in view, permanent by default (fade 0).
+    // Pencil mode is OFF by default (ink's twin — not auto-on), so nothing engages.
+    expect(r.bus.log.some((l) => l.startsWith("page:pencil@"))).toBe(false);
+
+    r.client.dispatch("pencil"); // markup ON → the claim engages the tab in view
+    await settle(30);
     expect(r.bus.log).toContain('page:pencil@7 {"op":"engage","fadeSec":0}');
     r.bus.clearLog();
 
-    // Vanishing on + a fade move → a LIVE fade re-relay (already engaged, same tab).
-    const { pencilFade } = await import("./config");
-    r.client.dispatch("pencilVanish");
+    // Vanishing on + a fade move → a LIVE fade re-relay (claim active, same tab).
+    const { pencilVanish, pencilFade } = await import("./config");
+    pencilVanish.set(true as never);
     pencilFade.set(9 as never);
     await settle(30);
     expect(r.bus.log).toContain('page:pencil@7 {"op":"fade","fadeSec":9}');
     r.bus.clearLog();
 
-    // A tab switch hands the surface off: disengage the old, engage the new.
+    // A tab switch RE-POINTS the claim: release the old tab, acquire the new.
     r.bus.switchTab(9);
     await settle(30);
     expect(r.bus.log).toContain('page:pencil@7 {"op":"disengage"}');
     expect(r.bus.log.some((l) => l.startsWith('page:pencil@9 {"op":"engage"'))).toBe(true);
     r.bus.clearLog();
 
-    // Leaving the turn disengages (nothing outlives it).
+    // Disarm clears pencil mode AND leaves the turn → the claim releases.
     r.client.dispatch("disarm");
     await settle(30);
     expect(r.bus.log).toContain('page:pencil@9 {"op":"disengage"}');
+    pencilVanish.set(false as never);
     pencilFade.set(6 as never);
   });
 });

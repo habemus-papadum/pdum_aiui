@@ -1,51 +1,58 @@
 /**
  * pencil-mount.ts — the in-page pencil surface: ONE `PencilSurface` that both
- * the local stylus and a remote iPad draw on (owner, 2026-07-15).
+ * the local host input and a remote iPad draw on (owner, 2026-07-15; clean
+ * reintegration 2026-07-16).
  *
- * This is the pencil's answer to `cdp/page-ink.ts`: a markup surface mounted in
- * the target page, delivered the same way (bundled into the evaluated ink
- * bundle for the CDP tier; imported by the content script for MV3). The pencil
- * supersedes ink's `InkSurface` for this surface, but ink stays wired in
- * parallel — this is additive.
+ * This is the pencil's answer to `cdp/page-ink.ts`, and it mirrors it exactly —
+ * because the two are the same shape: a floating markup surface mounted in the
+ * target page, delivered the same way (bundled into the evaluated ink bundle for
+ * the CDP tier; imported by the content script for MV3), driven by the same
+ * mode-engine claim (`pencilSurface` ↔ `inkPointer`).
  *
- * The design choice that shapes the file: the surface NEVER blocks the page.
- * `PencilSurface.setActive(true)` makes the canvas `pointer-events: auto` — a
- * full-viewport overlay that swallows every click (surface.ts records that
- * footgun). So we mount with `localInput: false` (the canvas stays
- * `pointer-events: none`) and feed it two ways, BOTH through the same
- * `remote*` API:
+ * The first integration passed `localInput: false` and hand-rolled a *pen-only*
+ * capture shim that fed strokes through the `remote*` API, and it tore the
+ * surface DOWN on every turn end. Both were wrong. `PencilSurface` was built to
+ * be used like `InkSurface`:
  *
- *   - **local stylus** — a capture-phase pointer listener that intercepts only
- *     `pointerType === "pen"` (a real stylus / Apple Pencil on the desktop),
- *     `preventDefault`s it so the page never also sees the pen, and feeds it as
- *     a stroke. Mouse and touch fall straight through to the page — you draw
- *     with the pen and keep using the page with everything else. A pencil is a
- *     stylus instrument (pressure/tilt); a mouse has no business drawing one.
- *   - **remote iPad** — the panel's `HostSession` forwards the iPad's strokes
- *     over the page transport as `rbegin/rpoint/rend/rcancel` ops (Phase 2);
- *     they land on this same surface, so the desktop human sees the marks.
+ *   - **native input, all devices.** `localInput: true` lets the surface own the
+ *     pointer for mouse, pen, AND touch (surface.ts `bindLocalInput`). On the
+ *     HOST that is exactly what we want — draw with whatever you have. Palm
+ *     rejection ("only the pen when a stylus is present") is the REMOTE iPad
+ *     client's job, expressed there as the surface's `shouldCapture` veto; it
+ *     does not belong on the desktop.
+ *   - **engage/disengage is `setActive`, not mount/dispose.** `engage` mounts
+ *     once and `setActive(true)` (the canvas owns the pointer); `disengage`
+ *     `setActive(false)` — the strokes STAY, the page owns the pointer again,
+ *     exactly like ink leaving ink-mode (§13.6). The surface is disposed only on
+ *     a real teardown (page unload / driver-death hard clean), or when vanishing
+ *     ink has faded the last stroke away while inactive (`onAutoClear`).
  *
- * Engagement is per-turn: `engage(fadeSec)` mounts and starts listening,
- * `disengage()` tears down (the turn ended — nothing outlives it). The three
- * user-facing knobs ride here: fade lifetime (`setFade`), the clear
- * (`clearAnimated`), and vanishing-on/off (fade 0 vs >0).
+ * The remote iPad rides the SAME surface through the `remote*` API — the
+ * panel's `HostSession` forwards `rbegin/rpoint/rend/rcancel`, and those land
+ * beside the host's native strokes (the surface reports the two through separate
+ * `onStrokeEnd` / `onRemoteStrokeEnd` callbacks). Local host input and the iPad
+ * coexist; this file adds the former back without disturbing the latter.
  */
 
 import {
   type PencilParams,
   PencilSurface,
   type PenSample,
-  penSample,
   type Tool,
   WRITE,
 } from "@habemus-papadum/aiui-pencil";
 
 const HOST_ID = "__aiui-intent-pencil";
 
+/** The markup pencil is a RED editing pencil on the host (ink's family colour is
+ * `#ff5c87`; the pencil is a distinct, franker red). The instrument geometry is
+ * `WRITE` — graphite dynamics, red lead. */
+const MARKUP: PencilParams = { ...WRITE, color: "#e5484d" };
+
 export interface PencilHandle {
-  /** Enter markup for the turn: mount the surface, listen for the local pen. */
+  /** Enter markup for the turn: mount once, then the surface owns the pointer. */
   engage(fadeSec: number): void;
-  /** Leave markup (turn ended): stop listening and dispose (clears the ink). */
+  /** Leave markup (turn/claim released): stop owning the pointer — strokes STAY. */
   disengage(): void;
   /** Live vanishing lifetime, seconds (0 = persist). Restarts the clock when
    * switched on, so flipping vanish doesn't instantly evaporate old strokes. */
@@ -54,146 +61,106 @@ export interface PencilHandle {
   clear(): void;
   /** Undo the last committed stroke (an eraser undo restores the ink). */
   undo(): void;
+  /** Whether anything is drawn (live, retained, or flattened) — ink parity. */
+  hasInk(): boolean;
   /** The plane size, for the remote host (must equal the captured frame). */
   size(): { width: number; height: number };
-  /** Remote iPad strokes, forwarded by the panel's HostSession (Phase 2). */
+  /** Remote iPad strokes, forwarded by the panel's HostSession. */
   remoteBegin(id: string, init: { tool: Tool; params: PencilParams; point: PenSample }): void;
   remotePoint(id: string, point: PenSample): void;
   remoteEnd(id: string, point?: PenSample): void;
   remoteCancel(id: string): void;
+  /** Full teardown: remove the host from the page (page unload / hard clean). */
   dispose(): void;
 }
 
 export function mountPencil(): PencilHandle {
-  let host: HTMLElement | undefined;
-  let surface: PencilSurface | undefined;
   let fadeSec = 0;
-  let localId = 0;
-  let activePointer: number | undefined;
-  let activeStroke: string | undefined;
-
-  const ensureMounted = (): PencilSurface => {
-    if (surface !== undefined) {
-      return surface;
-    }
-    document.getElementById(HOST_ID)?.remove(); // a stale host from an earlier client
-    const el = document.createElement("div");
-    el.id = HOST_ID;
-    el.style.cssText =
-      "position:fixed;inset:0;z-index:2147483643;pointer-events:none;touch-action:none;";
-    document.documentElement.append(el);
-    host = el;
-    surface = new PencilSurface({
-      target: el,
-      params: () => WRITE,
-      fadeSec: () => fadeSec,
-      // Never own the pointer — we route the pen ourselves (see the module doc).
-      localInput: false,
-      // Float over the page, ink-on-transparent (NOT the scratchpad's paper).
-      background: () => undefined,
-    });
-    return surface;
-  };
-
-  // ── the local pen: capture-phase, pen only, page keeps the rest ─────────────
-  const onDown = (event: PointerEvent): void => {
-    if (event.pointerType !== "pen" || activePointer !== undefined) {
-      return; // mouse/touch fall through to the page; one pen at a time
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const s = ensureMounted();
-    activePointer = event.pointerId;
-    localId += 1;
-    activeStroke = `local-${localId}`;
-    s.remoteBegin(activeStroke, {
-      tool: "draw",
-      params: WRITE,
-      point: penSample(event),
-    });
-  };
-  const onMove = (event: PointerEvent): void => {
-    if (event.pointerId !== activePointer || activeStroke === undefined) {
-      return;
-    }
-    event.preventDefault();
-    surface?.remotePoint(activeStroke, penSample(event));
-  };
-  const endLocal = (event: PointerEvent, cancel: boolean): void => {
-    if (event.pointerId !== activePointer || activeStroke === undefined) {
-      return;
-    }
-    event.preventDefault();
-    if (cancel) {
-      surface?.remoteCancel(activeStroke);
-    } else {
-      surface?.remoteEnd(activeStroke, penSample(event));
-    }
-    activePointer = undefined;
-    activeStroke = undefined;
-  };
-  const onUp = (event: PointerEvent): void => endLocal(event, false);
-  const onCancel = (event: PointerEvent): void => endLocal(event, true);
-
-  let listening = false;
-  const listen = (on: boolean): void => {
-    if (on === listening) {
-      return;
-    }
-    listening = on;
-    const fn = on ? document.addEventListener : document.removeEventListener;
-    fn.call(document, "pointerdown", onDown as EventListener, true);
-    fn.call(document, "pointermove", onMove as EventListener, true);
-    fn.call(document, "pointerup", onUp as EventListener, true);
-    fn.call(document, "pointercancel", onCancel as EventListener, true);
-  };
+  let active = false;
+  let mounted: { surface: PencilSurface; host: HTMLElement } | undefined;
 
   const teardown = (): void => {
-    listen(false);
-    surface?.dispose();
-    surface = undefined;
-    host?.remove();
-    host = undefined;
-    activePointer = undefined;
-    activeStroke = undefined;
+    mounted?.surface.dispose();
+    mounted?.host.remove();
+    mounted = undefined;
+    active = false;
+  };
+
+  const ensureMounted = (): PencilSurface => {
+    if (mounted !== undefined) {
+      return mounted.surface;
+    }
+    document.getElementById(HOST_ID)?.remove(); // a stale host from an earlier client
+    const host = document.createElement("div");
+    host.id = HOST_ID;
+    host.style.cssText =
+      "position:fixed;inset:0;z-index:2147483643;pointer-events:none;touch-action:none;";
+    document.documentElement.append(host);
+    const surface = new PencilSurface({
+      target: host,
+      params: () => MARKUP,
+      fadeSec: () => fadeSec,
+      // Own the pointer natively — mouse, pen, AND touch (setActive gates it).
+      // No `shouldCapture`: the host takes every device; palm rejection is the
+      // remote client's veto, not the desktop's.
+      localInput: true,
+      // Float over the page, ink-on-transparent (NOT the scratchpad's paper).
+      background: () => undefined,
+      // Vanishing ink that faded its last stroke while we're not active: the
+      // turn is over and nothing is left — remove the host (ink's onAutoClear).
+      onAutoClear: () => {
+        if (!active) {
+          teardown();
+        }
+      },
+    });
+    mounted = { surface, host };
+    return surface;
   };
 
   return {
     engage(fade) {
       fadeSec = fade;
-      ensureMounted();
-      listen(true);
+      const surface = ensureMounted();
+      surface.setActive(true);
+      active = true;
     },
-    disengage: teardown,
+    disengage() {
+      active = false;
+      mounted?.surface.setActive(false); // strokes stay — §13.6, exactly like ink
+    },
     setFade(fade) {
       const was = fadeSec;
       fadeSec = fade;
       // Turning vanishing ON restarts the fade clock — otherwise every stroke
       // older than the new window would pop the instant you flip the switch.
       if (fade > 0 && was === 0) {
-        surface?.restartFade();
+        mounted?.surface.restartFade();
       }
     },
     clear() {
-      surface?.clearAnimated();
+      mounted?.surface.clearAnimated();
     },
     undo() {
-      surface?.undo();
+      mounted?.surface.undo();
+    },
+    hasInk() {
+      return mounted?.surface.hasInk() ?? false;
     },
     size() {
-      return surface?.size() ?? { width: window.innerWidth, height: window.innerHeight };
+      return mounted?.surface.size() ?? { width: window.innerWidth, height: window.innerHeight };
     },
     remoteBegin(id, init) {
       ensureMounted().remoteBegin(id, init);
     },
     remotePoint(id, point) {
-      surface?.remotePoint(id, point);
+      mounted?.surface.remotePoint(id, point);
     },
     remoteEnd(id, point) {
-      surface?.remoteEnd(id, point);
+      mounted?.surface.remoteEnd(id, point);
     },
     remoteCancel(id) {
-      surface?.remoteCancel(id);
+      mounted?.surface.remoteCancel(id);
     },
     dispose: teardown,
   };

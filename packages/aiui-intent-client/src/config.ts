@@ -56,9 +56,19 @@ export const inkFade = control({
   description: "vanishing-ink stroke lifetime",
 });
 
+/** Vanishing pencil: off = strokes persist on the page; on = they fade over
+ * `pencilFade`. A config control, exactly like {@link inkVanish} (owner,
+ * 2026-07-16: pencil reintegrated as an ink twin — the on/off is the `pencil`
+ * mode region, vanish is this standing setting). */
+export const pencilVanish = control({
+  name: "pencilVanish",
+  value: false,
+  description: "pencil strokes fade out instead of persisting",
+});
+
 /** The pencil's vanishing lifetime, seconds — the fade slider (live re-relayed
- * while a turn is open). Vanishing on/off is the `pencilVanish` mode command;
- * this is only how LONG it takes. Mirrors {@link inkFade}. */
+ * while pencil is claimed). Only how LONG vanishing takes; the on/off is
+ * `pencilVanish`. Mirrors {@link inkFade}. */
 export const pencilFade = control({
   name: "pencilFade",
   value: 6,

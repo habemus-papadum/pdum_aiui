@@ -26,6 +26,8 @@ const inTurn = (s: EngineState): boolean => s.phase === "turn" || s.phase === "t
 export interface ClaimLaneOptions {
   /** Vanishing-ink lifetime for the ink assertion (0 = page-permanent). */
   inkFadeSec?: () => number;
+  /** Vanishing lifetime for the pencil assertion (0 = persist). Mirrors ink. */
+  pencilFadeSec?: () => number;
   /** The real frame pump: start sampling for a desire, return the stop. */
   videoSampler?: {
     start: (desire: { tab: number; mode: string }) => Promise<() => void>;
@@ -56,6 +58,29 @@ export function intentClaims(
       },
       release: async (tab: number) => {
         await transport.requestPage(tab, "ink", { on: false });
+      },
+    },
+
+    /** The pencil markup surface — the exact twin of inkPointer (owner,
+     * 2026-07-16): a PAGE act that follows the tab in view (no grant — a stylus,
+     * a mouse, and the iPad's strokes all land in-page), asserted while pencil
+     * mode is on in an open turn. acquire ENGAGES (the surface owns the pointer);
+     * release DISENGAGES (strokes STAY — page-side keeps the surface). The live
+     * fade re-relay is a separate effect in lanes.ts, like ink's. */
+    pencilSurface: {
+      derive: (s, ctx) =>
+        s.phase === "turn" && s.pencil === true && ctx.activeTab !== undefined
+          ? { tab: ctx.activeTab }
+          : null,
+      acquire: async (desire: { tab: number }) => {
+        await transport.requestPage(desire.tab, "pencil", {
+          op: "engage",
+          fadeSec: options.pencilFadeSec?.() ?? 0,
+        });
+        return desire.tab;
+      },
+      release: async (tab: number) => {
+        await transport.requestPage(tab, "pencil", { op: "disengage" });
       },
     },
 
