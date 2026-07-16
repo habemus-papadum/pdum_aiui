@@ -71,9 +71,13 @@ export const TURN_PREVIEW_STYLES = `
   .aiui-tp-nav { color: #7ee0a3; }
   /* Peeks: fixed-position and body-attached — the pane scrolls, so an
      absolutely-positioned child would clip (the overlay's measured lesson). */
-  .aiui-tp-peek-img { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
-    max-height: 50vh; border: 2px solid #ffd166; border-radius: 8px; background: #0f1117;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none; }
+  /* The peek is a MAGNIFIED tile, not the raw frame: same 46×34 aspect and the
+     same object-fit: cover crop as .aiui-tp-thumb, so the hover shows the tile
+     bigger (same framing, no letterbox bars) instead of a differently-shaped
+     image. Keep 23/17 in sync with the thumb's width/height. */
+  .aiui-tp-peek-img { position: fixed; z-index: 2147483644; width: min(440px, 60vw);
+    aspect-ratio: 23 / 17; object-fit: cover; border: 2px solid #ffd166; border-radius: 8px;
+    background: #0f1117; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none; }
   .aiui-tp-peek { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
     border: 1px solid #8ab4f8; border-radius: 8px; background: #0f1117;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none;
