@@ -23,8 +23,8 @@
  * through {@link CaptureDeps}.
  */
 
+import type { Engine, Rect, VideoCaptureMode } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { OverlayErrorInput } from "../../errors";
-import type { Engine, Rect, VideoCaptureMode } from "../../intent-pipeline";
 import { createDisplayCapture, type DisplayCapture } from "../display-capture";
 import type { Ink } from "../ink";
 import { encodeCanvas, type ShotPixels, ShotTool } from "../shot";

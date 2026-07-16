@@ -8,9 +8,9 @@
  * (`[screenshot: <path> (elements: …)]` — paths relativized to this process's
  * cwd, the agent's working directory; see composeIntent).
  * The pipeline core — `composeIntent`, the V4A applier, the config shape — is
- * imported from `@habemus-papadum/aiui-dev-overlay/intent-pipeline`, the same
- * module the browser modality runs, so one implementation and one set of
- * captured fixtures cover both sides (see the graduation handoff, P2).
+ * imported from `@habemus-papadum/aiui-lowering-pipeline`, the same module the
+ * browser modality runs, so one implementation and one set of captured fixtures
+ * cover both sides (see the graduation handoff, P2).
  *
  * Frames are tagged in the envelope ({@link ChunkDescriptor}); the codec is the
  * identity codec ({@link rawCodec}) because a payload's meaning depends on its
@@ -58,7 +58,7 @@ import {
   DEFAULT_INTENT_CONFIG,
   expandTier,
   type IntentEvent,
-} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   type ChannelFormat,
   type MessageMeta,

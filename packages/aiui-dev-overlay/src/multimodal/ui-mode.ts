@@ -21,8 +21,9 @@
  * up, and the ring should say so even mid-REC (ink stays drawable while
  * talking, so talking otherwise looks like composing).
  */
+
+import type { Mode } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { ModeTable } from "@habemus-papadum/aiui-viz/modal";
-import type { Mode } from "../intent-pipeline";
 
 export type UiMode = "off" | "ready" | "composing" | "shooting" | "talking" | "tweaking" | "vscode";
 

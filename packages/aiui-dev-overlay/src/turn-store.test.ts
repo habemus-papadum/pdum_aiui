@@ -6,8 +6,9 @@
  * the `navigation` boundary; see the SPA-navigation proposal, gotcha #5).
  */
 // @vitest-environment jsdom
+
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { IntentEvent } from "./intent-pipeline";
 import { TURN_STORAGE_KEY, TurnStore } from "./turn-store";
 
 const EVENTS: IntentEvent[] = [

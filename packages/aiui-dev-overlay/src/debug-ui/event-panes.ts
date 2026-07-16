@@ -15,7 +15,7 @@
  * bound to a {@link DebugSource}), so the same panes render a live engine, a
  * captured fixture, or a channel trace's embedded event log.
  */
-import { composeIntent, type IntentEvent } from "../intent-pipeline";
+import { composeIntent, type IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { defaultPreviewUrl, type PreviewUrl, pathNode, renderPathText } from "./paths";
 import type { DebugSource } from "./sources";
 import { injectDebugUiStyles } from "./styles";

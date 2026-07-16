@@ -18,7 +18,7 @@
  * a sensible generic card instead of breaking the view. That keeps a new stage
  * type visible the day it's added, before anyone teaches this file about it.
  */
-import type { IntentEvent } from "../intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { TraceStageLike } from "./sources";
 
 /**

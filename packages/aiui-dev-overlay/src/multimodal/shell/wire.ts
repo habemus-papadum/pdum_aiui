@@ -16,8 +16,12 @@
  * engine and the host context only through {@link WireDeps}.
  */
 
+import type {
+  Engine,
+  IntentEvent,
+  IntentPipelineConfig,
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import type { OverlayErrorInput } from "../../errors";
-import type { Engine, IntentEvent, IntentPipelineConfig } from "../../intent-pipeline";
 import type { IntentThread, OpenThreadOptions } from "../../intent-types";
 import type { ThreadSocketState } from "../../overlay-tools";
 import type { Ack } from "../../protocol";

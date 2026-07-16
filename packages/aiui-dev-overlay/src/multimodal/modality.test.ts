@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { decodeFrame, jsonCodec } from "@habemus-papadum/aiui-claude-channel";
+import type { IntentEvent, IntentPipelineConfig } from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountIntentTool, unmountIntentTool } from "../intent";
-import type { IntentEvent, IntentPipelineConfig } from "../intent-pipeline";
 import { fakeSocketFactory } from "../test-support/fake-socket";
 import { installLocalStorage } from "../test-support/local-storage";
 import { INTENT_CONFIG_STORAGE_KEY, loadIntentOverrides } from "./advanced-config";

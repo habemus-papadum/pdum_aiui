@@ -10,7 +10,7 @@ import {
   expandTier,
   type IntentEvent,
   type IntentPipelineConfig,
-} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+} from "@habemus-papadum/aiui-lowering-pipeline";
 
 /**
  * The panel's effective config, declared on every hello as `meta.intent` so

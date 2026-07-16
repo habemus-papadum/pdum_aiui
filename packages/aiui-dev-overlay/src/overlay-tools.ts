@@ -32,7 +32,7 @@
  * namespace and drop the handle. Wrapping the toolkit to add that back would
  * share ~30 lines and fork the semantics — dogfood theater, not reuse.
  */
-import type { IntentEvent, IntentPipelineConfig } from "./intent-pipeline";
+import type { IntentEvent, IntentPipelineConfig } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { BridgeTool } from "./tools-bridge";
 
 /** The identifier-shaped page namespace the overlay registers under. */

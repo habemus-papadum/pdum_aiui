@@ -32,7 +32,7 @@ import {
   composeIntent,
   type IntentEvent,
   type TranscriptWord,
-} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import { onCleanup } from "solid-js";
 import { htmlToMarkdown } from "../edit/html-md";
 import { retimeWords } from "../edit/retime";

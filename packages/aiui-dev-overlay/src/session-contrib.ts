@@ -11,7 +11,7 @@
  * under a location header — see the pipeline's `SHORT_SELECTION_CHARS`). A
  * **text** contribution still lands as plain turn text via `Engine.contribute`.
  */
-import { SHORT_SELECTION_CHARS } from "./intent-pipeline";
+import { SHORT_SELECTION_CHARS } from "@habemus-papadum/aiui-lowering-pipeline";
 
 /** The bus topic contributions are published on. */
 export const SESSION_CONTRIBUTION_TOPIC = "contribution";

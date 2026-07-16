@@ -4,7 +4,7 @@
  * contract: kept words keep their MEASURED times (that is what keeps shots
  * anchored through an edit); everything else is a documented approximation.
  */
-import type { TranscriptWord } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { TranscriptWord } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 import { retimeWords } from "./retime";
 

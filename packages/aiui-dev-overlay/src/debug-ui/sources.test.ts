@@ -1,6 +1,6 @@
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
+import { Engine } from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { IntentEvent } from "../intent-pipeline";
-import { Engine } from "../intent-pipeline";
 import {
   createTracePoll,
   engineSource,

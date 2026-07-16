@@ -29,7 +29,7 @@
  * bytes are handed back for the modality to upload as an `intent-v1` attachment
  * frame, and the channel assigns the on-disk path.
  */
-import type { LocatedCell, LocatedComponent, Rect } from "../intent-pipeline";
+import type { LocatedCell, LocatedComponent, Rect } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createDisplayCapture, type DisplayCapture } from "./display-capture";
 import type { Ink } from "./ink";
 import { cellSourceLoc } from "./vscode";

@@ -6,8 +6,9 @@
  * engine directly, the same calls mergeLowered makes for server echoes, and
  * assert what renders.
  */
+
+import { composeIntent, Engine } from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, describe, expect, it } from "vitest";
-import { composeIntent, Engine } from "../intent-pipeline";
 import { Preview } from "./preview";
 
 /** The body is Solid-rendered — writes are batched, DOM lands post-flush. */

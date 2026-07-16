@@ -1,5 +1,5 @@
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
-import type { IntentEvent } from "../intent-pipeline";
 import type { TraceStageLike } from "./sources";
 import {
   buildCards,

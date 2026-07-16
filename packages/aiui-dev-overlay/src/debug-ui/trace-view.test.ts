@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
-import type { IntentEvent } from "../intent-pipeline";
 import type { LiveTrace } from "./sources";
 import { TraceView } from "./trace-view";
 

@@ -34,15 +34,16 @@
  * renders structure; the peeks stay imperative islands (the animation
  * doctrine).
  */
-import { render } from "@solidjs/web";
-import { createEffect, createMemo, createSignal, For, untrack } from "solid-js";
+
 import {
   type ComposedItem,
   composeIntent,
   type Engine,
   type IntentEvent,
   type TranscriptWord,
-} from "../intent-pipeline";
+} from "@habemus-papadum/aiui-lowering-pipeline";
+import { render } from "@solidjs/web";
+import { createEffect, createMemo, createSignal, For, untrack } from "solid-js";
 import { LiveDiffText } from "./diff-flash";
 
 /** One rendered row of the accumulator: a composed item plus its stable key. */

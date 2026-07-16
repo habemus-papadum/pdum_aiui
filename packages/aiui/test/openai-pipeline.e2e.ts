@@ -23,14 +23,12 @@
  */
 import { readFileSync } from "node:fs";
 import { openaiSpeaker, SYSTEM_PROMPT } from "@habemus-papadum/aiui-claude-channel";
-import { describe, expect, it } from "vitest";
 // The correction prompt + V4A applier graduated from the retired workbench lab into the
 // shared packages (multimodal-intent-graduation.md P1): the SYSTEM_PROMPT is
 // re-exported by the channel's corrector seam (a dependency here); `applyPatch`
-// graduated to the intent-pipeline core — imported by relative source path since
-// aiui-dev-overlay is not a dependency of this package (as an overlay import
-// was before).
-import { applyPatch } from "../../aiui-dev-overlay/src/intent-pipeline/patch";
+// comes from the lowering pipeline's own package (a devDependency here).
+import { applyPatch } from "@habemus-papadum/aiui-lowering-pipeline";
+import { describe, expect, it } from "vitest";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 

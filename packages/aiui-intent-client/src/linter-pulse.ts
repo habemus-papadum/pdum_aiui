@@ -26,7 +26,7 @@
  * dot being briefly wrong, never a behavior.
  */
 
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createSignal } from "solid-js";
 
 /** Mirrors the sidecar's TRANSCRIPT_WAIT_MS (linter-sidecar.ts) — keep aligned. */

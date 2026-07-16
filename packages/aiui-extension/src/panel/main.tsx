@@ -10,12 +10,6 @@
  * open turn and applies the ink-clear rule (mirroring the SPA navigation rule).
  */
 
-import {
-  type AppSelection,
-  composeIntent,
-  Engine,
-  type Rect,
-} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import { openIntentThread } from "@habemus-papadum/aiui-dev-overlay/intent-thread";
 import {
   createTalk,
@@ -25,6 +19,12 @@ import {
 import { VideoSampler } from "@habemus-papadum/aiui-dev-overlay/multimodal-video";
 import { isErrorMessage } from "@habemus-papadum/aiui-dev-overlay/protocol";
 import { createWire } from "@habemus-papadum/aiui-dev-overlay/wire";
+import {
+  type AppSelection,
+  composeIntent,
+  Engine,
+  type Rect,
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import { CellView, liveSignal } from "@habemus-papadum/aiui-viz";
 import { isTypingTarget } from "@habemus-papadum/aiui-viz/modal";
 import {

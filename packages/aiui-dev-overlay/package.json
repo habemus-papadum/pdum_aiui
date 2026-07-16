@@ -13,7 +13,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts",
-    "./intent-pipeline": "./src/intent-pipeline/index.ts",
     "./debug-ui": "./src/debug-ui/index.ts",
     "./protocol": "./src/protocol.ts",
     "./selection": "./src/selection.ts",
@@ -48,11 +47,6 @@
         "types": "./dist/vite.d.ts",
         "import": "./dist/vite.js",
         "default": "./dist/vite.js"
-      },
-      "./intent-pipeline": {
-        "types": "./dist/intent-pipeline/index.d.ts",
-        "import": "./dist/intent-pipeline.js",
-        "default": "./dist/intent-pipeline.js"
       },
       "./debug-ui": {
         "types": "./dist/debug-ui/index.d.ts",
@@ -131,6 +125,7 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-ink": "workspace:^",
+    "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-paint": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^"
   },

@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 import {
   type ChannelFormat,

@@ -6,14 +6,14 @@ import type { IntentEvent } from "./types";
 
 /**
  * Replay the real interaction fixtures (recorded from live turns — see
- * ../../fixtures/README.md) through the moved
- * pipeline. This is the whole point of capturing them: they are the regression
+ * ../fixtures/README.md) through the pipeline. This is the whole point of
+ * capturing them: they are the regression
  * net that catches a contract drifting silently (segments-as-lines, event
  * shapes, Option-C assembly). Assertions target stable structure/content, not
  * brittle full snapshots — `at` timestamps vary run to run.
  */
 
-const fixturesDir = fileURLToPath(new URL("../../fixtures/", import.meta.url));
+const fixturesDir = fileURLToPath(new URL("../fixtures/", import.meta.url));
 
 function load(name: string): IntentEvent[] {
   return JSON.parse(readFileSync(`${fixturesDir}${name}`, "utf8")) as IntentEvent[];

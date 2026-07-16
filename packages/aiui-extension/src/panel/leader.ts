@@ -52,7 +52,7 @@ import faPen from "@fortawesome/fontawesome-free/svgs/solid/pen.svg?raw";
 import faVideo from "@fortawesome/fontawesome-free/svgs/solid/video.svg?raw";
 import faWrench from "@fortawesome/fontawesome-free/svgs/solid/wrench.svg?raw";
 import faXmark from "@fortawesome/fontawesome-free/svgs/solid/xmark.svg?raw";
-import type { KeymapHelpSection } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { KeymapHelpSection } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   type KeyClaim,
   type KeyHint,

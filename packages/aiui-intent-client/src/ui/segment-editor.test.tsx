@@ -10,7 +10,7 @@
  *  - Apply replaces the text with retimed words (kept words keep their times);
  *  - a pasted image anchors by the words around it.
  */
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { render } from "@solidjs/web";
 import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";

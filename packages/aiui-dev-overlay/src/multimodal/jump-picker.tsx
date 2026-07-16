@@ -30,9 +30,10 @@
  * light-DOM root, because the keymap reads `open` mid-keydown, before any
  * flush.
  */
+
+import type { KeyCommand } from "@habemus-papadum/aiui-lowering-pipeline";
 import { render } from "@solidjs/web";
 import { createSignal, For, Show } from "solid-js";
-import type { KeyCommand } from "../intent-pipeline";
 import type { JumpTarget, JumpTargets } from "./vscode";
 
 /** One rendered row: its target, flat index, and digit (openable rows only). */

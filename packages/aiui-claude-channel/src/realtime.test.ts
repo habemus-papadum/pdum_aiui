@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { composeIntent, type IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import { composeIntent, type IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
@@ -574,7 +574,7 @@ interface StreamFixture {
 }
 
 const fixturePath = fileURLToPath(
-  new URL("../../aiui-dev-overlay/fixtures/streaming/realtime-turn.json", import.meta.url),
+  new URL("../../aiui-lowering-pipeline/fixtures/streaming/realtime-turn.json", import.meta.url),
 );
 
 describe("intent-v1 realtime streaming fixture", () => {

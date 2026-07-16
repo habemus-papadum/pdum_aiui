@@ -33,7 +33,7 @@ import { openIntentThread } from "./intent-thread";
 
 export type { IntentThread, OpenThreadOptions } from "./intent-types";
 
-import type { AppSelection, IntentPipelineConfig } from "./intent-pipeline";
+import type { AppSelection, IntentPipelineConfig } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { IntentThread, OpenThreadOptions } from "./intent-types";
 import { multimodalModality } from "./multimodal";
 import { installNavigationWatcher, type NavigationChange } from "./navigation";

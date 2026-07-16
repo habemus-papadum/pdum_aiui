@@ -6,7 +6,7 @@
  * rules, the transcript timeout, the 4s stale warning (once), and the tool
  * overlay. The mirrored constants must match linter-sidecar.ts.
  */
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createLinterPulse,

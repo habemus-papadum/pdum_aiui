@@ -264,15 +264,19 @@ importers:
       vite:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+    devDependencies:
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
 
   packages/aiui-claude-channel:
     dependencies:
-      '@habemus-papadum/aiui-dev-overlay':
-        specifier: workspace:^
-        version: link:../aiui-dev-overlay
       '@habemus-papadum/aiui-intent-client':
         specifier: workspace:^
         version: link:../aiui-intent-client
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
       '@habemus-papadum/aiui-paint':
         specifier: workspace:^
         version: link:../aiui-paint
@@ -322,6 +326,9 @@ importers:
       '@habemus-papadum/aiui-ink':
         specifier: workspace:^
         version: link:../aiui-ink
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
       '@habemus-papadum/aiui-paint':
         specifier: workspace:^
         version: link:../aiui-paint
@@ -380,6 +387,9 @@ importers:
       '@habemus-papadum/aiui-ink':
         specifier: workspace:^
         version: link:../aiui-ink
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
       '@habemus-papadum/aiui-paint':
         specifier: workspace:^
         version: link:../aiui-paint
@@ -413,6 +423,9 @@ importers:
       '@habemus-papadum/aiui-ink':
         specifier: workspace:^
         version: link:../aiui-ink
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
       '@habemus-papadum/aiui-pencil':
         specifier: workspace:^
         version: link:../aiui-pencil
@@ -465,6 +478,12 @@ importers:
       vite-plugin-solid:
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
+
+  packages/aiui-lowering-pipeline:
+    dependencies:
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../aiui-viz
 
   packages/aiui-oscillator:
     dependencies:

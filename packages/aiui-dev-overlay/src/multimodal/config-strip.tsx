@@ -22,10 +22,11 @@
  * and the {@link ConfigStrip.open} read stay synchronous classList on the
  * light-DOM root — the keymap reads `open` mid-keydown, before any flush.
  */
+
+import type { IntentPipelineConfig, KeyCommand } from "@habemus-papadum/aiui-lowering-pipeline";
+import { engineOf, TRANSCRIPTION_ENGINES } from "@habemus-papadum/aiui-lowering-pipeline";
 import { render } from "@solidjs/web";
 import { createSignal, For } from "solid-js";
-import type { IntentPipelineConfig, KeyCommand } from "../intent-pipeline";
-import { engineOf, TRANSCRIPTION_ENGINES } from "../intent-pipeline";
 
 export interface ConfigStripState {
   /** The effective config right now (the strip shows its engine). */

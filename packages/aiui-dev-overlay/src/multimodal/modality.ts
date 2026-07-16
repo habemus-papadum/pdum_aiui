@@ -45,11 +45,6 @@
  * session-bus host role, turn recovery, and unmount.
  */
 
-import { blurExitTarget, createReconciler, type KeyHint } from "@habemus-papadum/aiui-viz/modal";
-import { makeDraggable } from "../drag";
-import { getInstrumentation, type RemotePaintSink } from "../instrumentation";
-import type { IntentModality, IntentToolContext } from "../intent";
-import { toAppSelection } from "../intent";
 import {
   composeIntent,
   Engine,
@@ -67,7 +62,12 @@ import {
   keymapHelp,
   TRANSCRIPTION_ENGINES,
   type VideoCaptureMode,
-} from "../intent-pipeline";
+} from "@habemus-papadum/aiui-lowering-pipeline";
+import { blurExitTarget, createReconciler, type KeyHint } from "@habemus-papadum/aiui-viz/modal";
+import { makeDraggable } from "../drag";
+import { getInstrumentation, type RemotePaintSink } from "../instrumentation";
+import type { IntentModality, IntentToolContext } from "../intent";
+import { toAppSelection } from "../intent";
 import { installOverlayTools, type OverlayReport, type SetConfigResult } from "../overlay-tools";
 import {
   type PreviewItem,

@@ -39,8 +39,9 @@
  * and the shot pixels / capture grant / live socket die with the page by
  * construction (documented degradation, same as the no-capture path).
  */
+
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { durable } from "./durable";
-import type { IntentEvent } from "./intent-pipeline";
 
 /** sessionStorage key for the reload-survivable turn mirror (per tab). */
 export const TURN_STORAGE_KEY = "aiui-intent-turn";

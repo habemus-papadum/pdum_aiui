@@ -54,6 +54,7 @@
   "dependencies": {
     "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-ink": "workspace:^",
+    "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-remote-bar": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",

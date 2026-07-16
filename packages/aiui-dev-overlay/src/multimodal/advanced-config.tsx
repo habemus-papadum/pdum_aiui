@@ -20,15 +20,16 @@
  * signals created INSIDE the render root, ui/widget.tsx-style; the JSON
  * textarea stays an imperative island because the user's caret lives there).
  */
-import { render } from "@solidjs/web";
-import { createSignal } from "solid-js";
+
 import {
   DEFAULT_TIER,
   expandTier,
   type IntentPipelineConfig,
   TIER_CONTROLLED_KEYS,
   TIER_PRESETS,
-} from "../intent-pipeline";
+} from "@habemus-papadum/aiui-lowering-pipeline";
+import { render } from "@solidjs/web";
+import { createSignal } from "solid-js";
 
 /** localStorage key for the panel's override layer (per origin). */
 export const INTENT_CONFIG_STORAGE_KEY = "aiui-intent-config";

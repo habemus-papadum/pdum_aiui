@@ -7,7 +7,7 @@
  * pane tenant.
  */
 
-import type { Engine } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { Engine } from "@habemus-papadum/aiui-lowering-pipeline";
 import { Pane } from "@habemus-papadum/aiui-webext";
 import { createSignal, Show } from "solid-js";
 

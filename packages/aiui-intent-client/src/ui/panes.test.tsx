@@ -12,7 +12,7 @@
  *  - the chips: shots as thumbnails, selections as pills, navigations as ⇢
  *    route markers (the overlay's visual language, now living here).
  */
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { render } from "@solidjs/web";
 import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";

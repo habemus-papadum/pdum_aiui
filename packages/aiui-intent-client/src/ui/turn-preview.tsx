@@ -31,7 +31,7 @@ import {
   type ComposedItem,
   composeIntent,
   type TranscriptWord,
-} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import { LiveDiffText } from "@habemus-papadum/aiui-viz/modal";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { ChannelLanes } from "../lanes";

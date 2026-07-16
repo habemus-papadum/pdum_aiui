@@ -20,14 +20,6 @@
  *  - shotFlash → the manual-shot flash gate (sampled frames never flash).
  */
 
-import {
-  composeIntent,
-  DEFAULT_INTENT_CONFIG,
-  Engine,
-  expandTier,
-  type IntentEvent,
-  type IntentPipelineConfig,
-} from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
 import { openIntentThread } from "@habemus-papadum/aiui-dev-overlay/intent-thread";
 import {
   createTalk,
@@ -38,6 +30,14 @@ import {
 } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
 import { VideoSampler } from "@habemus-papadum/aiui-dev-overlay/multimodal-video";
 import { createWire, type Wire } from "@habemus-papadum/aiui-dev-overlay/wire";
+import {
+  composeIntent,
+  DEFAULT_INTENT_CONFIG,
+  Engine,
+  expandTier,
+  type IntentEvent,
+  type IntentPipelineConfig,
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { ClaimLaneOptions } from "./claims";
 import type { IntentClient, IntentLanes } from "./client";

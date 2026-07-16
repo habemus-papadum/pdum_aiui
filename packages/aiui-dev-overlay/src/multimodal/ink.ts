@@ -24,7 +24,7 @@
  * the modality's injected STYLES (the surface's inline defaults agree).
  */
 import { boundsOf, type InkPoint, InkSurface } from "@habemus-papadum/aiui-ink";
-import type { Rect } from "../intent-pipeline";
+import type { Rect } from "@habemus-papadum/aiui-lowering-pipeline";
 
 // The curve constants/functions live in aiui-ink now; re-exported so the
 // existing tests (ink.test.ts) and any curve-reading UI keep their import.

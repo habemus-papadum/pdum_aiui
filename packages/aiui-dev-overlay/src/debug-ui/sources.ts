@@ -15,7 +15,7 @@
  * thread is a fetch every second, not an open socket. See the channel's
  * debug.ts for the route.
  */
-import type { Engine, IntentEvent } from "../intent-pipeline";
+import type { Engine, IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 
 /** A subscribable source of the current thread's event stream. */
 export interface DebugSource {

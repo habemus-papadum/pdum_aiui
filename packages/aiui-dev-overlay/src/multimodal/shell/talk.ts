@@ -23,8 +23,8 @@
  * wire, and the host context only through {@link TalkDeps}.
  */
 
+import type { Engine, IntentPipelineConfig } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { OverlayErrorInput } from "../../errors";
-import type { Engine, IntentPipelineConfig } from "../../intent-pipeline";
 import type { IntentThread } from "../../intent-types";
 import { AudioCapture, type PcmSource } from "../audio";
 import { mockTranscriber, type Transcriber } from "../transcribe";

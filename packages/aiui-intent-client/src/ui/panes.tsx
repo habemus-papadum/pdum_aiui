@@ -5,7 +5,7 @@
  * cursor — nothing here is hand-synced.
  */
 
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createMemo, For } from "solid-js";
 import type { ChannelLanes } from "../lanes";
 

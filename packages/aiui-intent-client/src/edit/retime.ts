@@ -21,7 +21,7 @@
  * words would be a lie.
  */
 
-import type { TranscriptWord } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { TranscriptWord } from "@habemus-papadum/aiui-lowering-pipeline";
 import { wordDiff } from "@habemus-papadum/aiui-viz/modal";
 
 /** Fallback duration when the old words carry no usable timings at all. */

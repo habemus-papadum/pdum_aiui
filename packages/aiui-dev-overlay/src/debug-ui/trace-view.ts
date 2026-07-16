@@ -29,7 +29,7 @@
  * disclosures the user opened (keyed by the card's first stage index) and the
  * filter state (instance-held, the chips are built once).
  */
-import { wordDiff } from "../intent-pipeline/patch";
+import { wordDiff } from "@habemus-papadum/aiui-lowering-pipeline";
 import { renderJsonTree } from "./json-tree";
 import { defaultPreviewUrl, type PreviewUrl, renderPathText } from "./paths";
 import type { LiveTrace, TraceStageLike } from "./sources";

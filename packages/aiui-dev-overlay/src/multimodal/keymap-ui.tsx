@@ -17,10 +17,10 @@
  * root; visibility toggles stay synchronous classList on the light-DOM root.
  */
 
+import type { KeymapHelpSection } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { KeyHint } from "@habemus-papadum/aiui-viz/modal";
 import { render } from "@solidjs/web";
 import { createSignal, For, Show } from "solid-js";
-import type { KeymapHelpSection } from "../intent-pipeline";
 
 /**
  * One cheat-sheet cap — the kit's condensed-surface pattern (see

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
+
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 // Real captured interaction streams (recorded in the retired workbench lab). Imported
 // statically so vite resolves them at the module's location — jsdom mangles the
 // runtime `import.meta.url` these tests would otherwise resolve against.
-import cancelTurn from "../../fixtures/cancel-turn.json";
-import fullTurnSend from "../../fixtures/full-turn-send.json";
-import plainDictation from "../../fixtures/plain-dictation.json";
-import type { IntentEvent } from "../intent-pipeline";
+import cancelTurn from "../../../aiui-lowering-pipeline/fixtures/cancel-turn.json";
+import fullTurnSend from "../../../aiui-lowering-pipeline/fixtures/full-turn-send.json";
+import plainDictation from "../../../aiui-lowering-pipeline/fixtures/plain-dictation.json";
 import { EventPanes } from "./event-panes";
 import { staticSource } from "./sources";
 

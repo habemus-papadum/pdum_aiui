@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 import type { ChannelFormat, ThreadContext } from "./channel";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
@@ -15,7 +15,9 @@ import { mockTranscriber, type Transcriber } from "./transcribe";
 
 const enc = new TextEncoder();
 
-const fixturesDir = fileURLToPath(new URL("../../aiui-dev-overlay/fixtures/", import.meta.url));
+const fixturesDir = fileURLToPath(
+  new URL("../../aiui-lowering-pipeline/fixtures/", import.meta.url),
+);
 const loadFixture = (name: string): IntentEvent[] =>
   JSON.parse(readFileSync(join(fixturesDir, name), "utf8")) as IntentEvent[];
 

@@ -1,4 +1,4 @@
-import type { IntentEvent } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 import type { ChannelFormat, MessageMeta, ThreadContext } from "./channel";
 import type { ChunkDescriptor, HelloMeta } from "./frame";

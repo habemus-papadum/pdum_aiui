@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
+
+import {
+  DEFAULT_INTENT_CONFIG,
+  expandTier,
+  TIER_PRESETS,
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_INTENT_CONFIG, expandTier, TIER_PRESETS } from "../intent-pipeline";
 import { installLocalStorage } from "../test-support/local-storage";
 import {
   clearIntentOverrides,

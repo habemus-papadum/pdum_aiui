@@ -16,8 +16,9 @@
  * block filling the pane — overridden by MORE SPECIFIC selectors here, never
  * by editing the shared stylesheet.
  */
-import type { Engine } from "@habemus-papadum/aiui-dev-overlay/intent-pipeline";
+
 import { Preview, STYLES } from "@habemus-papadum/aiui-dev-overlay/multimodal-ui";
+import type { Engine } from "@habemus-papadum/aiui-lowering-pipeline";
 
 const STYLE_ID = "aiui-panel-preview-styles";
 
