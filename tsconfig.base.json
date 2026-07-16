@@ -6,6 +6,16 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": [],
     "strict": true,
+    // Allow explicit `.ts` relative imports (source-first packages can then say
+    // `./x.ts`, which native ESM config-loading and bundlers all resolve without
+    // an internal `#`-imports map), and rewrite `.ts` → `.js` on declaration
+    // emit so the published `.d.ts` still points at the built artifact. Only
+    // touches imports that carry a `.ts`/`.tsx` extension — every existing
+    // extensionless import is unaffected. (A package that emits real JS via
+    // `tsc` — `aiui-devtools-extension` — turns `allowImportingTsExtensions`
+    // back off, since it's incompatible with JS emit.)
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,

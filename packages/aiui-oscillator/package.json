@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
-    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
     "solid-js": "2.0.0-beta.15",
     "@solidjs/web": "2.0.0-beta.15"
   }

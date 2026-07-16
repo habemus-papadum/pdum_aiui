@@ -1,8 +1,8 @@
-import aiui from "@habemus-papadum/aiui-viz/vite";
+import aiui from "@habemus-papadum/aiui-source-processor";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
-// aiui() is the build-time integration (@habemus-papadum/aiui-viz/vite): the
+// aiui() is the build-time integration (@habemus-papadum/aiui-source-processor): the
 // source-locator compiler pass + the dev-only sourceRoot seed — no overlay
 // injection, no channel port (connectivity arrives from the intent client).
 //

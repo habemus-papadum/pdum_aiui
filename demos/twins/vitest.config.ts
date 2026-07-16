@@ -1,4 +1,4 @@
-import aiuiDevOverlay from "@habemus-papadum/aiui-dev-overlay/vite";
+import { aiui } from "@habemus-papadum/aiui-source-processor";
 import { defineConfig } from "vitest/config";
 
 // Vitest prefers THIS file over vite.config.ts, so tests run without the dev
@@ -17,8 +17,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   // The aiui compiler must run under Vitest too: control()/cell() names,
   // locations, and descriptions are compiler-injected, and tests exercise the
-  // same inference the app gets (mount: false keeps the intent tool out).
-  plugins: [aiuiDevOverlay({ locator: true, mount: false })],
+  // same inference the app gets (the locator is all it runs — no overlay).
+  plugins: [aiui({ locator: true })],
   resolve: {
     conditions: ["browser", "development", "import", "module", "default"],
   },

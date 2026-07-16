@@ -1,9 +1,9 @@
 /**
- * source-locator.ts — MOVED to `@habemus-papadum/aiui-viz` (the 2026-07-14
- * plugin restructure: the compiler pass serves the component layer, so it
- * lives with it). This shim keeps the overlay's `#source-locator` imports —
- * and any direct consumer — working; new code imports
- * `@habemus-papadum/aiui-viz/vite`.
+ * source-locator.ts — MOVED to its own package `@habemus-papadum/aiui-source-processor`
+ * (extracted from `aiui-viz/vite`, itself moved from the dev overlay in the
+ * 2026-07-14 restructure). This shim keeps the overlay's `#source-locator`
+ * imports — and any direct consumer — working; new code imports
+ * `@habemus-papadum/aiui-source-processor`.
  */
 export {
   cellFactory,
@@ -14,4 +14,4 @@ export {
   type SourceLocatorViteOptions,
   sourceLocatorBabel,
   sourceLocatorVite,
-} from "@habemus-papadum/aiui-viz/vite";
+} from "@habemus-papadum/aiui-source-processor";

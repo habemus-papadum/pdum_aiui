@@ -67,8 +67,6 @@ export default defineConfig({
         site: "src/site/index.ts",
         modal: "src/modal/index.ts",
         testing: "src/testing.ts",
-        vite: "src/vite.ts",
-        "source-locator": "src/source-locator.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

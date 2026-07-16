@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.33.1-dev45.0",
-    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@observablehq/plot": "^0.6.17",
     "@solidjs/web": "2.0.0-beta.15",

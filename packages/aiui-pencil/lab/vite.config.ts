@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import aiuiDevOverlay from "@habemus-papadum/aiui-dev-overlay/vite";
+import { aiui } from "@habemus-papadum/aiui-source-processor";
 import { defineConfig, type Plugin } from "vite";
 import solid from "vite-plugin-solid";
 // Relative, not the package specifier: vite bundles a config's RELATIVE imports
@@ -74,13 +74,12 @@ function pencilRelay(): Plugin {
 /**
  * Pencil Lab's dev server.
  *
- * `aiuiDevOverlay({ locator: true })` is not optional decoration here: the aiui
- * compiler is what injects `control()` names from their bindings, and without it
- * every control in store.ts throws "needs a name". It also stamps source
- * locations so the intent tool can resolve a drag on the canvas back to the code
- * that drew it.
+ * `aiui({ locator: true })` is not optional decoration here: the aiui compiler
+ * is what injects `control()` names from their bindings, and without it every
+ * control in store.ts throws "needs a name". It also stamps source locations so
+ * the intent tool can resolve a drag on the canvas back to the code that drew it.
  *
- * Order matters — the overlay's `pre` babel pass must stamp JSX *before*
+ * Order matters — the locator's `pre` babel pass must stamp JSX *before*
  * vite-plugin-solid (also `pre`) compiles each element into an opaque template.
  * Same-enforce plugins run in array order.
  *
@@ -96,7 +95,7 @@ export default defineConfig({
   // (the package dir), finds no index.html, and serves a 404 at `/`. Derive it
   // from the module URL instead.
   root: fileURLToPath(new URL(".", import.meta.url)),
-  plugins: [pencilRelay(), aiuiDevOverlay({ locator: true }), solid()],
+  plugins: [pencilRelay(), aiui({ locator: true }), solid()],
   server: {
     // The iPad is a different machine. Binding to 0.0.0.0 is the whole point of
     // this app existing — see the trusted-LAN note in docs/guide/warning.md.

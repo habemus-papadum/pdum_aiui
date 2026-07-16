@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
-import { sourceLocatorVite } from "@habemus-papadum/aiui-source-processor";
 import { defineConfig } from "vite";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
@@ -15,20 +14,6 @@ const external = [
 ];
 
 export default defineConfig({
-  // The aiui compiler in THIS package's own toolchain — the "library-grade
-  // identity" story: the slice's control()/cell()/action() call sites get
-  // their names, descriptions, and locs injected here, so the built dist (and
-  // this package's own tests) carry identity without any consumer involvement.
-  // `locPrefix` package-qualifies the locs ("@habemus-papadum/aiui-oscillator/
-  // src/slice.ts:57") so they stay meaningful wherever they surface. In-repo
-  // consumers (demos/twins) import the SOURCE and their own compiler injects
-  // dotdot-relative locs instead — same identity, app-resolvable paths.
-  plugins: [
-    sourceLocatorVite({
-      locPrefix: `${pkg.name}/`,
-      stampJsx: false, // a headless slice ships no JSX; identity only
-    }),
-  ],
   build: {
     lib: {
       entry: "src/index.ts",

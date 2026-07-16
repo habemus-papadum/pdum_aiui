@@ -33,8 +33,8 @@ module tree, lazily imported and code-split; leaving a route parks its rAF loops
 components while every durable survives for the return visit.
 
 Source/cell/control stamping (`data-source-loc` + `cell()`/`control()`/`action()` identity
-injection) is enabled via the `aiuiDevOverlay({ locator: true })` option in `vite.config.ts`; the
-implementation lives in the overlay (`packages/aiui-dev-overlay/src/source-locator.ts`).
+injection) is enabled via the `aiui()` plugin in `vite.config.ts`; the implementation lives in
+`packages/aiui-source-processor/src/source-locator.ts`.
 
 Per-build findings ledgers: `src/pages/aztec/NOTES.md` (already folded into the docs;
 kept as the raw record).

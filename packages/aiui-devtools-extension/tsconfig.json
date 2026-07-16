@@ -8,6 +8,11 @@
     "outDir": "extension/js",
     "declaration": false,
     "emitDeclarationOnly": false,
+    // This package emits real JS via tsc (NodeNext, `./x.js` specifiers), which
+    // is incompatible with the base's `allowImportingTsExtensions`; turn the
+    // `.ts`-import flags off here.
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": false,
     "types": ["chrome"]
   },
   "include": ["src"],

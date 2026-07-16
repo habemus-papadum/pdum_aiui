@@ -1,10 +1,12 @@
 /**
- * vite.ts — THE aiui Vite plugin (`@habemus-papadum/aiui-viz/vite`), home of
- * the whole build-time integration since the 2026-07-14 restructure. One
+ * index.ts — THE aiui Vite plugin (`@habemus-papadum/aiui-source-processor`),
+ * home of the whole build-time integration. Extracted into its own package
+ * (from `aiui-viz/vite`, itself moved from the dev overlay in the 2026-07-14
+ * restructure) so the source transform is a standalone, testable library. One
  * plugin, two jobs — and deliberately nothing else:
  *
- *  1. **The source-locator compiler pass** (#source-locator, moved here from
- *     the dev overlay). It applies to serve AND build: factory identity
+ *  1. **The source-locator compiler pass** (./source-locator). It applies to
+ *     serve AND build: factory identity
  *     injection is load-bearing (durable cells need their `{name, loc}`
  *     identity in production), so a build that violates the pass's
  *     expectations FAILS in prod exactly as it would in dev. What is dev-only
@@ -32,7 +34,7 @@ import {
   type FactorySpec,
   type SourceLocatorViteOptions,
   sourceLocatorVite,
-} from "#source-locator";
+} from "./source-locator.ts";
 
 // Configs import factory helpers from this one subpath.
 export {
@@ -44,7 +46,7 @@ export {
   type SourceLocatorViteOptions,
   sourceLocatorBabel,
   sourceLocatorVite,
-} from "#source-locator";
+} from "./source-locator.ts";
 
 export interface AiuiPluginOptions {
   /**
@@ -89,7 +91,7 @@ function sourceRootSeed(explicit: string | undefined): Plugin {
  * The aiui integration for an app's Vite config:
  *
  * ```ts
- * import aiui from "@habemus-papadum/aiui-viz/vite";
+ * import aiui from "@habemus-papadum/aiui-source-processor";
  * export default defineConfig({ plugins: [aiui(), solid()] });
  * ```
  *

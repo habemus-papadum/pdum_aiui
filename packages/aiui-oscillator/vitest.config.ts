@@ -1,4 +1,4 @@
-import { sourceLocatorVite } from "@habemus-papadum/aiui-dev-overlay/vite";
+import { sourceLocatorVite } from "@habemus-papadum/aiui-source-processor";
 import { defineConfig } from "vitest/config";
 
 // Vitest prefers THIS file over vite.config.ts (which is the lib build). The

@@ -17,8 +17,7 @@
     "./duckdb": "./src/duckdb.ts",
     "./site": "./src/site/index.ts",
     "./modal": "./src/modal/index.ts",
-    "./testing": "./src/testing.ts",
-    "./vite": "./src/vite.ts"
+    "./testing": "./src/testing.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -66,15 +65,7 @@
         "types": "./dist/testing.d.ts",
         "import": "./dist/testing.js",
         "default": "./dist/testing.js"
-      },
-      "./vite": {
-        "types": "./dist/vite.d.ts",
-        "import": "./dist/vite.js",
-        "default": "./dist/vite.js"
       }
-    },
-    "imports": {
-      "#source-locator": "./dist/source-locator.js"
     }
   },
   "scripts": {
@@ -88,9 +79,7 @@
     "@solidjs/web": ">=2.0.0-beta.0 <2.0.0-experimental.0",
     "@uwdata/mosaic-plot": ">=0.28",
     "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0",
-    "katex": "^0.16 || ^0.17",
-    "@babel/core": "^7.29.0",
-    "vite": ">=6"
+    "katex": "^0.16 || ^0.17"
   },
   "peerDependenciesMeta": {
     "@duckdb/duckdb-wasm": {
@@ -104,12 +93,6 @@
     },
     "katex": {
       "optional": true
-    },
-    "@babel/core": {
-      "optional": true
-    },
-    "vite": {
-      "optional": true
     }
   },
   "devDependencies": {
@@ -118,12 +101,8 @@
     "@solidjs/web": "2.0.0-beta.15",
     "@uwdata/mosaic-plot": "^0.28.1",
     "solid-js": "2.0.0-beta.15",
+    "vite": "^6.4.1",
     "vite-plugin-solid": "3.0.0-next.5",
-    "katex": "^0.17.0",
-    "@babel/core": "^7.29.0",
-    "@types/babel__core": "^7.20.5"
-  },
-  "imports": {
-    "#source-locator": "./src/source-locator.ts"
+    "katex": "^0.17.0"
   }
 }

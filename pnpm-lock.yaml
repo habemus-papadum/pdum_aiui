@@ -53,9 +53,9 @@ importers:
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev45.0
         version: 1.33.1-dev45.0
-      '@habemus-papadum/aiui-dev-overlay':
+      '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
-        version: link:../../packages/aiui-dev-overlay
+        version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../../packages/aiui-viz
@@ -114,6 +114,9 @@ importers:
 
   demos/july09:
     dependencies:
+      '@habemus-papadum/aiui-source-processor':
+        specifier: workspace:^
+        version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../../packages/aiui-viz
@@ -130,9 +133,6 @@ importers:
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
-      '@habemus-papadum/aiui-dev-overlay':
-        specifier: workspace:^
-        version: link:../../packages/aiui-dev-overlay
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -151,6 +151,9 @@ importers:
       '@habemus-papadum/aiui-oscillator':
         specifier: workspace:^
         version: link:../../packages/aiui-oscillator
+      '@habemus-papadum/aiui-source-processor':
+        specifier: workspace:^
+        version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../../packages/aiui-viz
@@ -167,9 +170,6 @@ importers:
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
-      '@habemus-papadum/aiui-dev-overlay':
-        specifier: workspace:^
-        version: link:../../packages/aiui-dev-overlay
       jsdom:
         specifier: ^29.0.0
         version: 29.1.1
@@ -191,6 +191,9 @@ importers:
 
   demos/walkthrough:
     dependencies:
+      '@habemus-papadum/aiui-source-processor':
+        specifier: workspace:^
+        version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../../packages/aiui-viz
@@ -207,9 +210,6 @@ importers:
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
-      '@habemus-papadum/aiui-dev-overlay':
-        specifier: workspace:^
-        version: link:../../packages/aiui-dev-overlay
       jsdom:
         specifier: ^29.0.0
         version: 29.1.1
@@ -332,6 +332,9 @@ importers:
       '@habemus-papadum/aiui-paint':
         specifier: workspace:^
         version: link:../aiui-paint
+      '@habemus-papadum/aiui-source-processor':
+        specifier: workspace:^
+        version: link:../aiui-source-processor
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
@@ -494,9 +497,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.7
         version: 7.29.7
-      '@habemus-papadum/aiui-dev-overlay':
+      '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
-        version: link:../aiui-dev-overlay
+        version: link:../aiui-source-processor
       '@solidjs/web':
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
@@ -556,9 +559,9 @@ importers:
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
-      '@habemus-papadum/aiui-dev-overlay':
+      '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
-        version: link:../aiui-dev-overlay
+        version: link:../aiui-source-processor
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
@@ -615,11 +618,23 @@ importers:
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
 
+  packages/aiui-source-processor:
+    devDependencies:
+      '@babel/core':
+        specifier: ^7.29.0
+        version: 7.29.7
+      '@types/babel__core':
+        specifier: ^7.20.5
+        version: 7.20.5
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+
   packages/aiui-test-app:
     dependencies:
-      '@habemus-papadum/aiui-dev-overlay':
+      '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
-        version: link:../aiui-dev-overlay
+        version: link:../aiui-source-processor
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
@@ -663,14 +678,7 @@ importers:
         version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-viz:
-    dependencies:
-      vite:
-        specifier: '>=6'
-        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
     devDependencies:
-      '@babel/core':
-        specifier: ^7.29.0
-        version: 7.29.7
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev45.0
         version: 1.33.1-dev45.0
@@ -680,9 +688,6 @@ importers:
       '@solidjs/web':
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
-      '@types/babel__core':
-        specifier: ^7.20.5
-        version: 7.20.5
       '@uwdata/mosaic-plot':
         specifier: ^0.28.1
         version: 0.28.1
@@ -692,6 +697,9 @@ importers:
       solid-js:
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
@@ -742,9 +750,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.7
         version: 7.29.7
-      '@habemus-papadum/aiui-dev-overlay':
+      '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
-        version: link:../aiui-dev-overlay
+        version: link:../aiui-source-processor
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz

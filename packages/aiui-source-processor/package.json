@@ -1,13 +1,13 @@
 {
-  "name": "@habemus-papadum/create-aiui",
+  "name": "@habemus-papadum/aiui-source-processor",
   "version": "0.4.0+dev",
-  "description": "Scaffold a SolidJS + aiui starter app: pnpm create @habemus-papadum/aiui",
+  "description": "The aiui source processor: the compile-time Babel pass that injects factory identity (name/loc/description for cell/control/action) and dev-only JSX source-location stamps, plus its Vite plugin. One transform, serve and build.",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
-    "directory": "packages/create-aiui"
+    "directory": "packages/aiui-source-processor"
   },
   "sideEffects": false,
   "exports": {
@@ -16,12 +16,8 @@
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
-  "bin": {
-    "create-aiui": "./dist/cli.js"
-  },
   "files": [
-    "dist",
-    "templates"
+    "dist"
   ],
   "publishConfig": {
     "access": "public",
@@ -38,18 +34,24 @@
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.template.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
+  "peerDependencies": {
+    "@babel/core": "^7.29.0",
+    "vite": ">=6"
+  },
+  "peerDependenciesMeta": {
+    "@babel/core": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
-    "@solidjs/web": "2.0.0-beta.15",
-    "solid-js": "2.0.0-beta.15",
-    "typescript": "^5.6.0",
-    "vite": "^6.4.1",
-    "vite-plugin-solid": "3.0.0-next.5",
-    "vitest": "^3.2.0"
+    "@babel/core": "^7.29.0",
+    "@types/babel__core": "^7.20.5",
+    "vite": "^6.4.1"
   }
 }

@@ -127,6 +127,7 @@
     "@habemus-papadum/aiui-ink": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-paint": "workspace:^",
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^"
   },
   "devDependencies": {

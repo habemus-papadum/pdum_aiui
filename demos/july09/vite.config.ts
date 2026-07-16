@@ -1,10 +1,10 @@
-import aiui from "@habemus-papadum/aiui-viz/vite";
+import aiui from "@habemus-papadum/aiui-source-processor";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
 // Solid 2.0 (beta) via vite-plugin-solid@next (bundles solid-refresh for HMR).
 //
-// aiui() is the build-time integration (@habemus-papadum/aiui-viz/vite): the
+// aiui() is the build-time integration (@habemus-papadum/aiui-source-processor): the
 // source-locator compiler pass — JSX gets data-source-loc = "src/…:line:col"
 // (dev-only stamps; production bundles ship clean) and `cell()` call sites get
 // their `{ name, loc }` identity injected in EVERY mode (load-bearing for

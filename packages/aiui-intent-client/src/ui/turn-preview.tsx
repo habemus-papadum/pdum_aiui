@@ -51,8 +51,11 @@ export const TURN_PREVIEW_STYLES = `
   /* Chips + thumbs — the overlay's visual language, verbatim: amber = pixels,
      blue family = selections, gray = boundaries; substance rides the peek. */
   .aiui-tp-wrap { position: relative; display: inline-block; margin: 0 4px; vertical-align: middle; }
-  .aiui-tp-thumb { height: 34px; border-radius: 4px; border: 2px solid #ffd166; vertical-align: middle;
-    display: block; }
+  /* A compact tile, not a strip: a wide capture (3840×1600) at a fixed height
+     alone runs the whole pane's width, so cap the WIDTH and object-fit: cover —
+     the tile is text-height, the full image lives in the hover peek. */
+  .aiui-tp-thumb { height: 34px; width: 46px; object-fit: cover; border-radius: 4px;
+    border: 2px solid #ffd166; vertical-align: middle; display: block; }
   .aiui-tp-thumb-chip { font-size: 11px; color: #ffd166; border: 1px solid #3a4152; border-radius: 999px;
     padding: 1px 8px; display: inline-block; }
   .aiui-tp-x { position: absolute; top: -7px; right: -7px; width: 16px; height: 16px; padding: 0;
@@ -149,11 +152,13 @@ function createPeek(): {
     peek?.remove();
     peek = undefined;
   };
-  const place = (anchor: HTMLElement, el: HTMLElement): void => {
-    hide();
+  /** Measure the attached peek and flip it above/below (and clamp left) against
+   * the anchor. Re-runnable: an <img> reports 0×0 until it decodes, so the
+   * image path calls this again on load — the FIRST measurement placed a text
+   * card correctly (it has its size at once) but left a not-yet-decoded image
+   * pinned to 0×0. */
+  const position = (anchor: HTMLElement, el: HTMLElement): void => {
     const rect = anchor.getBoundingClientRect();
-    document.body.append(el);
-    peek = el;
     const height = el.getBoundingClientRect().height;
     const gap = 8;
     const above = rect.top - gap;
@@ -169,11 +174,24 @@ function createPeek(): {
     const left = Math.min(Math.max(gap, rect.left), Math.max(gap, window.innerWidth - width - gap));
     el.style.left = `${left}px`;
   };
+  const place = (anchor: HTMLElement, el: HTMLElement): void => {
+    hide();
+    document.body.append(el);
+    peek = el;
+    position(anchor, el);
+  };
   onCleanup(hide);
   return {
     showImage: (anchor, src) => {
       const img = document.createElement("img");
       img.className = "aiui-tp-peek-img";
+      // Re-measure once the pixels are known — until decode the img is 0×0, so
+      // the flip and left-clamp above would compute off a zero box.
+      img.onload = () => {
+        if (peek === img) {
+          position(anchor, img);
+        }
+      };
       img.src = src;
       place(anchor, img);
     },

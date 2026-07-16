@@ -55,7 +55,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",
     "express": "^5.1.0",
