@@ -176,7 +176,10 @@ export interface PanelShot {
   height: number;
   mime: string;
   bytes: Uint8Array;
-  /** Small data-URL preview for the engine event / preview pane. */
+  /** Data-URL preview for the engine event / preview pane. FULL resolution for a
+   * manual/area shot (so the hover peek is crisp — the same pixels as `bytes`),
+   * downscaled for a video sample (a `thumbMaxPx` cap, since it rides every
+   * frame). */
   thumb?: string;
 }
 
@@ -203,8 +206,11 @@ export interface CaptureSource {
   grantHint?: string;
   /** Warm a stream for a tab; the claim holds it for the turn's life. */
   holdStream(tab: number): Promise<HeldStream>;
-  /** Grab one shot off the warm stream. */
-  grabShot(tab: number): Promise<PanelShot>;
+  /** Grab one shot off the warm stream. `opts.thumbMaxPx` caps the inline thumb's
+   * longest edge — the video sampler passes it so frequent frames stay lean;
+   * omitted, the thumb is FULL resolution for a crisp preview peek. Hosts may
+   * ignore opts (the CDP tier's thumb is already the full screenshot). */
+  grabShot(tab: number, opts?: { thumbMaxPx?: number }): Promise<PanelShot>;
   /** Crop a REGION of the tab (rect in CSS px; viewport for scale mapping).
    * Optional: hosts without it degrade to the full-frame grabShot. */
   grabRegion?(

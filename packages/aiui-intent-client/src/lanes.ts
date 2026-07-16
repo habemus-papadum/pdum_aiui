@@ -369,7 +369,11 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
         const sampler = new VideoSampler({
           captureFrame: async () => {
             try {
-              return await host.capture.grabShot(desire.tab);
+              // Sampled frames keep a CAPPED thumb (owner, 2026-07-16): a full-res
+              // thumb rides every frame, so it would bloat the events + the trace.
+              // Manual/area shots (infrequent) leave it full-res for a crisp peek.
+              // 1024 matches the dev-overlay's sampled-frame cap.
+              return await host.capture.grabShot(desire.tab, { thumbMaxPx: 1024 });
             } catch {
               return undefined; // no warm stream right now — the tick owes nothing
             }

@@ -288,10 +288,13 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
       log(`holding a warm tab stream for tab ${tab}`);
       return { tab, release: releaseTabStream };
     },
-    grabShot: () => grabTabShot(),
+    // opts?.thumbMaxPx flows straight through — the video sampler caps the thumb,
+    // a manual shot leaves it full-res for a crisp peek.
+    grabShot: (_tab, opts) => grabTabShot({ thumbMaxPx: opts?.thumbMaxPx }),
     // The crop happens on the SAME warm-stream canvas as a full shot — the
-    // region rect (CSS px) maps to stream pixels by the viewport width.
-    grabRegion: (_tab, rect, viewport) => grabTabShot({ rect, viewport }),
+    // region rect (CSS px) maps to stream pixels by the viewport width. No cap:
+    // an area shot's thumb is full-res too.
+    grabRegion: (_tab, rect, viewport) => grabTabShot({ region: { rect, viewport } }),
   };
 
   // ── driver liveness: beat every tab in this window (page/driver-watch.ts) ─

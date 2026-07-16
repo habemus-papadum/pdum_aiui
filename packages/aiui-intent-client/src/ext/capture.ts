@@ -32,9 +32,6 @@ let heldTabId: number | undefined;
 let stream: MediaStream | undefined;
 let video: HTMLVideoElement | undefined;
 
-/** Longest edge of the inline preview thumbnail, px. */
-const THUMB_MAX_PX = 360;
-
 /** Full-frame encode: fastest AND small (M10) — PNG was 2× slower and 6× bigger. */
 const SHOT_MIME = "image/jpeg";
 const SHOT_QUALITY = 0.85;
@@ -108,11 +105,22 @@ export function releaseTabStream(): void {
 /**
  * One frame off the warm stream: encoded bytes + a thumb. Pure draw + encode —
  * no acquisition, no messaging. Rejects when no stream is held.
+ *
+ * The thumb is FULL RESOLUTION by default (the dev-overlay's shot methodology):
+ * the same pixels as the upload, so the preview's hover peek shows real detail
+ * rather than an upscaled 360-px blur. `thumbMaxPx` downscales it — the video
+ * sampler passes a cap, because a full-res thumb riding EVERY sampled frame would
+ * bloat the events and the trace; a manual/area shot is infrequent, so it pays
+ * the full data URL for a crisp peek.
  */
-export async function grabTabShot(region?: {
-  rect: { x: number; y: number; w: number; h: number };
-  viewport: { w: number; h: number };
+export async function grabTabShot(opts?: {
+  region?: {
+    rect: { x: number; y: number; w: number; h: number };
+    viewport: { w: number; h: number };
+  };
+  thumbMaxPx?: number;
 }): Promise<PanelShot> {
+  const region = opts?.region;
   const el = video;
   if (el === undefined || stream === undefined) {
     throw new Error("no capture stream held for this tab");
@@ -156,21 +164,33 @@ export async function grabTabShot(region?: {
   }
   const bytes = new Uint8Array(await blob.arrayBuffer());
 
-  // The thumb rides the engine event (it is what the preview renders inline),
-  // so it stays a data URL — it is small by construction.
-  const scale = Math.min(1, THUMB_MAX_PX / Math.max(w, h));
-  const thumbCanvas = document.createElement("canvas");
-  thumbCanvas.width = Math.max(1, Math.round(w * scale));
-  thumbCanvas.height = Math.max(1, Math.round(h * scale));
-  thumbCanvas.getContext("2d")?.drawImage(el, 0, 0, thumbCanvas.width, thumbCanvas.height);
-
   return {
     bytes,
     mime: SHOT_MIME,
-    thumb: thumbCanvas.toDataURL("image/jpeg", 0.6),
+    thumb: makeThumb(canvas, opts?.thumbMaxPx),
     width: w,
     height: h,
   };
+}
+
+/**
+ * The inline preview's thumb, as a data URL, drawn from the SHOT canvas (never
+ * the live `<video>` — so a region crop's thumb is the crop, not the whole frame
+ * squished into it, the old bug). With no `maxPx` it is the full shot at capture
+ * quality — the same detail as the upload, so the hover peek is crisp. `maxPx`
+ * caps the longest edge (the video path) but never upscales.
+ */
+function makeThumb(canvas: HTMLCanvasElement, maxPx?: number): string {
+  const longest = Math.max(canvas.width, canvas.height);
+  if (maxPx === undefined || longest <= maxPx) {
+    return canvas.toDataURL(SHOT_MIME, SHOT_QUALITY);
+  }
+  const scale = maxPx / longest;
+  const thumbCanvas = document.createElement("canvas");
+  thumbCanvas.width = Math.max(1, Math.round(canvas.width * scale));
+  thumbCanvas.height = Math.max(1, Math.round(canvas.height * scale));
+  thumbCanvas.getContext("2d")?.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+  return thumbCanvas.toDataURL("image/jpeg", 0.6);
 }
 
 /** Resolve once a frame has actually been PRESENTED — `play()` alone can race a
