@@ -51,10 +51,13 @@ export const TURN_PREVIEW_STYLES = `
   /* Chips + thumbs — the overlay's visual language, verbatim: amber = pixels,
      blue family = selections, gray = boundaries; substance rides the peek. */
   .aiui-tp-wrap { position: relative; display: inline-block; margin: 0 4px; vertical-align: middle; }
-  /* A compact tile, not a strip: a wide capture (3840×1600) at a fixed height
-     alone runs the whole pane's width, so cap the WIDTH and object-fit: cover —
-     the tile is text-height, the full image lives in the hover peek. */
-  .aiui-tp-thumb { height: 34px; width: 46px; object-fit: cover; border-radius: 4px;
+  /* Respect the capture's TRUE aspect ratio, just bounded: max-width/max-height
+     scale the image down to fit while preserving its shape, so the amber border
+     hugs the real image (a 16:9 reads as 16:9, a portrait as a portrait). A
+     fixed object-fit: cover tile was compact but LIED — every capture became the
+     same rectangle, edges cropped away. The max-width keeps even an ultrawide
+     from running the pane; the hover peek carries the detail. */
+  .aiui-tp-thumb { max-height: 38px; max-width: 72px; border-radius: 4px;
     border: 2px solid #ffd166; vertical-align: middle; display: block; }
   .aiui-tp-thumb-chip { font-size: 11px; color: #ffd166; border: 1px solid #3a4152; border-radius: 999px;
     padding: 1px 8px; display: inline-block; }
@@ -71,13 +74,13 @@ export const TURN_PREVIEW_STYLES = `
   .aiui-tp-nav { color: #7ee0a3; }
   /* Peeks: fixed-position and body-attached — the pane scrolls, so an
      absolutely-positioned child would clip (the overlay's measured lesson). */
-  /* The peek is a MAGNIFIED tile, not the raw frame: same 46×34 aspect and the
-     same object-fit: cover crop as .aiui-tp-thumb, so the hover shows the tile
-     bigger (same framing, no letterbox bars) instead of a differently-shaped
-     image. Keep 23/17 in sync with the thumb's width/height. */
-  .aiui-tp-peek-img { position: fixed; z-index: 2147483644; width: min(440px, 60vw);
-    aspect-ratio: 23 / 17; object-fit: cover; border: 2px solid #ffd166; border-radius: 8px;
-    background: #0f1117; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none; }
+  /* The peek is the same capture at its NATURAL aspect within a bigger box — the
+     same shape as the thumbnail (both just show the real image), so the hover is
+     a faithful magnification, not a re-crop. Its box size is only known once the
+     image decodes, which is why showImage re-measures on load. */
+  .aiui-tp-peek-img { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
+    max-height: 60vh; border: 2px solid #ffd166; border-radius: 8px; background: #0f1117;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none; }
   .aiui-tp-peek { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
     border: 1px solid #8ab4f8; border-radius: 8px; background: #0f1117;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none;
