@@ -230,12 +230,13 @@ export class PageToolDirectory {
 
   /**
    * Subscribe to the debounced change signal. Fires once per quiet period
-   * after the *observable* state changes: a registration under a new hash, a
-   * namespace lost to socket close, or an activation flip that re-flags an
-   * entry. Same-hash re-registrations (HMR churn) and reconnects that restore
-   * an identical set within the debounce window never fire — the signature
-   * gate below is the same dedupe-by-content-hash discipline registration
-   * logging uses. Returns an unsubscribe function.
+   * after the TOOL SET changes: a registration under a new hash, or a
+   * namespace lost to socket close. Same-hash re-registrations (HMR churn),
+   * reconnects that restore an identical set within the debounce window, and
+   * ACTIVATION flips (tab switches — deliberately unobservable here; see
+   * `signature`) never fire — the signature gate below is the same
+   * dedupe-by-content-hash discipline registration logging uses. Returns an
+   * unsubscribe function.
    */
   onChange(listener: () => void): () => void {
     this.changeListeners.add(listener);
@@ -266,7 +267,8 @@ export class PageToolDirectory {
       // deactivation must not clobber a newer activation.
       this.activeTabs.delete(windowId);
     }
-    this.maybeSignalChange();
+    // Deliberately NO change signal: activation is not in the signature
+    // (see `signature` — tab switches must not announce an unchanged set).
   }
 
   /** Whether a registration's page sits in some window's active tab. */
@@ -284,17 +286,22 @@ export class PageToolDirectory {
   }
 
   /**
-   * The observable state as a stable string: `ns|hash|active` per
-   * registration, sorted. Deliberately excludes clientId, so a page that
-   * reconnects (page reload, channel reload) and re-registers an unchanged
-   * set has an unchanged signature — a set's identity is its content hash,
-   * not its socket.
+   * The observable state as a stable string: `ns|hash` per registration,
+   * sorted. Deliberately excludes clientId, so a page that reconnects (page
+   * reload, channel reload) and re-registers an unchanged set has an
+   * unchanged signature — a set's identity is its content hash, not its
+   * socket. Deliberately excludes the ACTIVE flag too (owner, 2026-07-16):
+   * activation flips on every tab switch, and firing "page tools changed"
+   * for an unchanged tool list thrashed the session (found live: switching
+   * between a tools tab and a plain tab announced the same four tools on
+   * every switch). Activation stays tracked — `list()` flags it and call
+   * routing steers by it — it just isn't a notification-worthy change.
    */
   private signature(): string {
     const parts: string[] = [];
     for (const conn of this.connections.values()) {
       for (const reg of conn.registrations.values()) {
-        parts.push(`${reg.ns}|${reg.hash}|${this.isActive(reg) ? "a" : "-"}`);
+        parts.push(`${reg.ns}|${reg.hash}`);
       }
     }
     return parts.sort().join(",");

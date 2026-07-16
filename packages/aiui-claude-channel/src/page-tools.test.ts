@@ -405,23 +405,29 @@ describe("PageToolDirectory change signal", () => {
     expect(changes()).toBe(2);
   });
 
-  it("emits on an activation flip that re-flags an entry, and only then", () => {
+  it("NEVER emits on activation flips — tab switches must not announce an unchanged set", () => {
+    // The thrash found live (2026-07-15): switching between a tools tab and a
+    // plain tab re-announced the same four tools on every switch, because the
+    // active flag sat in the change signature. Activation stays tracked (the
+    // list() flag, call routing) — it just isn't a notification-worthy change.
     const { dir, changes } = makeObserved();
     const page = connectPage(dir);
-    page.register("morpho", [{ name: "a", description: "d" }], "h1", {
+    page.register("testapp", [{ name: "report", description: "d" }], "h1", {
       tab: { chromeTabId: 10, windowId: 1 },
     });
     vi.advanceTimersByTime(500);
-    expect(changes()).toBe(1);
+    expect(changes()).toBe(1); // the registration itself, once
 
-    // Activation of a tab holding no registrations changes nothing observable.
-    activation(dir, page.clientId, { chromeTabId: 99, windowId: 1 }, true);
-    vi.advanceTimersByTime(5000);
-    expect(changes()).toBe(1);
+    // The user flips between the tools tab (10) and a plain tab (99), twice.
+    for (const tabId of [99, 10, 99, 10]) {
+      activation(dir, page.clientId, { chromeTabId: tabId, windowId: 1 }, true);
+      vi.advanceTimersByTime(5000);
+    }
+    expect(changes()).toBe(1); // not a peep
 
-    activation(dir, page.clientId, { chromeTabId: 10, windowId: 1 }, true);
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(2);
+    // …and the flag itself still tracks: the directory's list() reflects the
+    // final activation even though no notification fired for it.
+    expect(dir.list().find((r) => r.ns === "testapp")?.activeTab).toBe(true);
   });
 
   it("stops notifying after unsubscribe", () => {
