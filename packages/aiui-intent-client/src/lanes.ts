@@ -61,6 +61,13 @@ export function panelIntentConfig(sttName: string, linterName?: string): IntentP
   return {
     ...DEFAULT_INTENT_CONFIG,
     ...base,
+    // No spoken "sent" ack, whatever the tier (owner, 2026-07-16): the premium
+    // preset bundles audioBack:"acks" with its STT, but the panel confirms a
+    // send VISUALLY (status line + preview) — a voice saying "sent" is noise.
+    // Server-side this also skips the TTS seam entirely. The LINTER's spoken
+    // notes are unaffected: their clips gate on `linter`, never `audioBack`
+    // (the silent-linter rule, shell/wire.ts).
+    audioBack: "off" as const,
     ...(linterName !== undefined && linterName !== "off" ? { linter: linterName as never } : {}),
   };
 }

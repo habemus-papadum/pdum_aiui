@@ -468,6 +468,9 @@ describe("config consumers", () => {
     expect(panelIntentConfig("gpt-4o-mini-transcribe").transcriber).toBe("openai-realtime");
     // rapid no longer pins a transcriber — a tier is its audio-back posture
     expect(panelIntentConfig("gpt-realtime-whisper").audioBack).toBe("off");
+    // …and in the PANEL, no tier speaks a "sent" ack (sends confirm visually).
+    expect(panelIntentConfig("scribe-v2").audioBack).toBe("off");
+    expect(panelIntentConfig("gpt-4o-mini-transcribe").audioBack).toBe("off");
     expect(panelIntentConfig("scribe-v2", "openai").linter).toBe("openai");
     expect(panelIntentConfig("scribe-v2", "off").linter).toBe("off"); // the default
   });
@@ -485,9 +488,11 @@ describe("config consumers", () => {
   it("the stt/linter selects re-apply LIVE — the next hello (and the clip gate) see them", async () => {
     const r = makeRig();
     try {
-      // Boot: linter off, scribe-v2 = premium posture (audioBack acks + ttsModel).
+      // Boot: linter off, scribe-v2 = premium STT (ttsModel rides along) —
+      // but NEVER spoken acks (the panel confirms sends visually).
       expect(r.lanes.engine.settings.linter).toBe("off");
-      expect(r.lanes.engine.settings.audioBack).toBe("acks");
+      expect(r.lanes.engine.settings.audioBack).toBe("off");
+      expect(r.lanes.engine.settings.ttsModel).toBe("gpt-4o-mini-tts");
 
       // The user flips the selects mid-session. This used to be boot-frozen:
       // the engine's settings were built once at construction, so the linter
@@ -498,7 +503,6 @@ describe("config consumers", () => {
       await settle();
       expect(r.lanes.engine.settings.linter).toBe("gemini");
       // The premium-only keys are SCRUBBED, not left frozen on the live object.
-      expect(r.lanes.engine.settings.audioBack).toBe("off");
       expect(r.lanes.engine.settings.ttsModel).toBeUndefined();
 
       // The next thread's hello declares the new config (openThread reads it fresh).
