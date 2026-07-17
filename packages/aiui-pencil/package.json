@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-pencil",
-  "version": "0.5.0+dev",
+  "version": "0.6.0",
   "description": "A pencil: pressure/tilt/azimuth-driven textured strokes, erasing, and vanishing ink, on a three-tier raster surface.",
   "type": "module",
   "license": "MIT",
