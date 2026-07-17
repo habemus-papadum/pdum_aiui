@@ -31,9 +31,9 @@ aiui browser --tunnel [user@]remote-host
 
 That does the whole local half:
 
-1. **Launches (or finds) the session browser** — Chrome for Testing if you let it install one
-   (recommended: the [aiui DevTools panel](./devtools) then auto-loads), your regular Chrome
-   otherwise. Tunneled browsers keep their profile in the **user cache**, keyed by the host
+1. **Launches (or finds) the session browser** — the managed browser (Chromium by default) if you
+   let it install one (recommended: the intent client's extension then auto-loads), your regular
+   Chrome otherwise. Tunneled browsers keep their profile in the **user cache**, keyed by the host
    (`~/.cache/aiui/browser-profiles/<host>`), so reconnecting to the same box reuses the same
    browser state — there's usually no local checkout to be project-local to. (`--profile <name>`
    renames the key; `--data-dir <path>` is the escape hatch.)
@@ -49,7 +49,7 @@ tunneling dev-box:9222 → localhost:55007 — on dev-box, run:
 
 Paste that on the remote box and you're done. With `--aiui-browser-url` (or the durable
 equivalent, `chrome.browserUrl` in [config](./config)), the remote `aiui claude` skips everything
-local-browser-shaped — no Chrome for Testing sync or prompts, no profile creation, no extension
+local-browser-shaped — no managed-browser sync or prompts, no profile creation, no extension
 loading, no browser launch — and hands chrome-devtools-mcp the URL. `aiui chrome status` on the
 remote box will say exactly that. Even `aiui open http://localhost:5173` works from the remote
 side: it opens a tab in *your local* browser through the tunnel.

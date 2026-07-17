@@ -9,7 +9,6 @@ import {
 } from "@habemus-papadum/aiui-util";
 import { execa } from "execa";
 import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
-import { syncChromeForTesting } from "../util/cft";
 import { channelLaunchFlags, resolveChannelLaunch } from "../util/channel-launch";
 import {
   CHROME_SERVER_ID,
@@ -21,10 +20,16 @@ import {
   resolveChromeSettings,
   warnIntentClientState,
 } from "../util/chrome";
-import { type AiuiConfig, loadAiuiConfig } from "../util/config";
+import {
+  type AiuiConfig,
+  loadAiuiConfig,
+  resolveManagedFlavor,
+  resolveManageMode,
+} from "../util/config";
 import { nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
 import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-preflight";
+import { syncManagedBrowser } from "../util/managed-browser";
 import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
 import { printError, printWarning } from "../util/ui";
@@ -212,7 +217,13 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // nudgeChannelAck for the mechanism). Never outside an interactive TTY — the
   // prompt only appears in the interactive TUI, and the e2e harness drives its
   // own keypresses over tmux.
-  if (interactive && (config.claude?.enterNudge ?? true)) {
+  //
+  // DISABLED for now (owner, 2026-07-17): the whole mechanism stays — the
+  // config option, the first-run prompt, and nudgeChannelAck — but we hold off
+  // actually pressing Enter. Flip this one flag back to `true` to restore it;
+  // nothing else changes.
+  const ENTER_NUDGE_ENABLED = false;
+  if (ENTER_NUDGE_ENABLED && interactive && (config.claude?.enterNudge ?? true)) {
     nudgeChannelAck();
   }
 
@@ -306,7 +317,7 @@ async function chromeServerEntry(
     };
   }
 
-  let cfg = { ...chromeCfg };
+  const cfg = chromeCfg;
   let settings = resolveChromeSettings(aiuiArgs, cfg);
 
   if (settings.mode === "attach") {
@@ -332,14 +343,21 @@ async function chromeServerEntry(
   }
 
   // From here a browser will be launched one way or the other — pick the
-  // binary. Chrome for Testing is the recommended default: unless config
-  // names a browser explicitly, prefer the managed install (and offer to
-  // install/update it interactively — see syncChromeForTesting).
+  // binary. Unless config names a browser explicitly, prefer the managed
+  // browser (Chromium by default, or Chrome for Testing per chrome.managed;
+  // offer to install/update it interactively — see syncManagedBrowser). Patch
+  // the resolved executable onto `settings` WITHOUT re-deriving userDataDir:
+  // the profile is partitioned by the managed *flavor*, not by this path, and
+  // re-resolving would misread the injected binary as an explicit
+  // executablePath (a `custom-*` variant) and move the profile.
   if (!cfg.executablePath && !cfg.channel) {
-    const cft = await syncChromeForTesting({ mode: cfg.forTesting ?? "prompt", interactive });
-    if (cft) {
-      cfg = { ...cfg, executablePath: cft };
-      settings = resolveChromeSettings(aiuiArgs, cfg);
+    const exe = await syncManagedBrowser({
+      flavor: resolveManagedFlavor(cfg),
+      mode: resolveManageMode(cfg),
+      interactive,
+    });
+    if (exe) {
+      settings = { ...settings, executablePath: exe };
     }
   }
   mkdirSync(settings.userDataDir, { recursive: true });

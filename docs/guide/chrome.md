@@ -53,26 +53,42 @@ ladder at `aiui claude` time:
    on one profile: a launch-mode session can't start Chrome on a profile a session browser
    already holds.)
 
-## Chrome for Testing: the recommended browser
+## The managed browser: Chromium (default) or Chrome for Testing
 
-Whenever aiui launches a browser (rules 3 and 4), the binary it recommends — and manages — is
-**Chrome for Testing** (CfT), Google's automation build of Chrome. It is *not* a different
-browser and has no extra features: same engine, same behavior, same security (sandboxing intact)
-as branded Chrome of the same version. The differences are operational, and they're exactly what
-an agent-driven browser wants:
+Whenever aiui launches a browser (rules 3 and 4), the binary it recommends — and manages — is a
+version-pinned **Chromium-family** build that aiui downloads and keeps current for you. Two
+flavors are available, chosen by `chrome.managed`:
 
-- **No auto-update**, and every version stays downloadable — your automation runs a pinned,
-  reproducible browser, not whatever stable updated itself to overnight.
-- **No first-run friction** — default-browser prompts, sign-in promos and similar branded-Chrome
-  UX are absent.
-- **Automation-hostile branded restrictions don't apply** — notably `--load-extension` still
-  works (branded Chrome ≥ 137 ignores it), so the aiui DevTools panel loads automatically.
+- **`chromium`** (the default) — the open-source Chromium build.
+- **`chrome-for-testing`** — Google's branded automation build of Chrome (CfT).
 
-One CfT wart has no cure: the *"Chrome for Testing … is only for automated testing"* infobar is
-baked into headed CfT — no flag removes it ([puppeteer#10516]). If it bothers you more than the
-benefits above, point config at branded Chrome (`chrome.channel: "stable"` or
-`chrome.executablePath`) — the trade is loading the DevTools panel by hand (chrome://extensions →
-Load unpacked, once per profile), since branded Chrome ignores `--load-extension`.
+Both are the same engine as branded Chrome, with the operational properties an agent-driven
+browser wants: **no auto-update** (a pinned, reproducible browser — not whatever stable updated
+itself to overnight), **no first-run friction** (no default-browser prompts or sign-in promos),
+and — critically — **`--load-extension` still works** (branded Chrome ≥ 137 ignores it), so the
+intent client's extension loads automatically.
+
+**Why Chromium is the default.** Chrome for Testing carries an automation fingerprint that Google
+recognizes: as soon as you use Google Search (or other Google properties) inside it, you tend to
+get a *"verify you're human"* reCAPTCHA — annoying in a browser you actually drive around. The
+open-source Chromium build doesn't wear that fingerprint, so it behaves like an ordinary browser
+for everyday navigation. CfT also bakes in an unremovable *"… is only for automated testing"*
+infobar ([puppeteer#10516]); Chromium has none.
+
+**What Chromium gives up** (pick `chrome-for-testing` if you need these): Widevine **DRM** and
+some proprietary **codecs** (so some streaming video / protected media won't play), and Google
+**account sign-in / profile sync**. For scientific-visualization work these rarely matter; if they
+do for you, flip the default (below).
+
+**To make Chrome for Testing your global default** on this machine:
+
+```sh
+aiui config set chrome.managed chrome-for-testing
+```
+
+(or set `chrome.managed` in [config.json](./config)). Flip it back with
+`aiui config set chrome.managed chromium`, or `aiui config unset chrome.managed`. The two flavors
+keep **separate** installs and **separate** profiles, so switching never mixes their state.
 
 [puppeteer#10516]: https://github.com/puppeteer/puppeteer/issues/10516
 
@@ -85,7 +101,7 @@ for (`getDisplayMedia({ preferCurrentTab: true })`) skips the share picker — t
 no macOS Screen Recording grant. Without these, dictation re-prompts per **origin** — every
 dev-server port is a distinct origin — and Chrome never persists screen-share consent at all.
 (Not the older `--use-fake-ui-for-media-stream`: that flag also hijacks the `getDisplayMedia`
-picker and auto-selects the *entire screen*, which fails with `NotReadableError` when the CfT
+picker and auto-selects the *entire screen*, which fails with `NotReadableError` when the managed
 binary lacks the macOS Screen Recording permission — it silently broke the paint host's screen
 share.) This is a deliberate posture choice for a dev browser that already runs an
 unauthenticated debug port (see [the warning](./warning)): treat every page you open in it as
@@ -94,24 +110,26 @@ able to hear the mic and see the tab without asking.
 ### The managed install
 
 Unless config picks a browser explicitly (`chrome.executablePath` / `chrome.channel`), every
-**interactive** launch that needs a browser syncs the managed CfT — never in CI, never without a
-TTY, never in `-p`/`--print` mode; those sessions just use whatever is already installed:
+**interactive** launch that needs a browser syncs the managed browser (the `chrome.managed`
+flavor) — never in CI, never without a TTY, never in `-p`/`--print` mode; those sessions just use
+whatever is already installed:
 
-- **CfT not installed** → you're offered a download (yes / not now / never). "Not now" snoozes
-  the offer for a day and that launch uses your regular Chrome; "never" writes
-  `chrome.forTesting: "off"` to your user config.
-- **CfT installed but stale** (checked against latest stable at most once per day, short network
-  timeout, silently skipped offline) → *"Your Chrome for Testing is out of date. Update?"*
+- **Not installed** → you're offered a download (yes / not now / never). "Not now" snoozes the
+  offer for a day and that launch uses your regular Chrome; "never" writes `chrome.manage: "off"`
+  to your user config.
+- **Installed but stale** (checked against the latest build at most once per day, short network
+  timeout, silently skipped offline) → *"Your Chromium is out of date. Update?"*
   - **yes, just this once** — update now, ask again next time.
-  - **automatically** — update now and write `chrome.forTesting: "auto"`: from then on it stays
+  - **automatically** — update now and write `chrome.manage: "auto"`: from then on it stays
     current without asking.
   - **skip** — keep the current version and don't ask again *for this version*.
-  - **never ask again** — writes `chrome.forTesting: "off"`.
-- **CfT installed and current** → it's simply used. This also holds with `forTesting: "off"` —
-  "off" silences checks and prompts, it doesn't un-prefer an install you made deliberately.
+  - **never ask again** — writes `chrome.manage: "off"`.
+- **Installed and current** → it's simply used. This also holds with `manage: "off"` — "off"
+  silences checks and prompts, it doesn't un-prefer an install you made deliberately.
 
-The knob is `chrome.forTesting` in [config.json](./config): `"prompt"` (default) / `"auto"` /
-`"off"`. Prompt answers are persisted to the **user-level** config, never the project file.
+The knob is `chrome.manage` in [config.json](./config): `"prompt"` (default) / `"auto"` / `"off"`.
+Prompt answers are persisted to the **user-level** config, never the project file. (The old name
+`chrome.forTesting` still works as a deprecated alias when `chrome.manage` is unset.)
 
 ## The commands
 
@@ -119,8 +137,9 @@ The knob is `chrome.forTesting` in [config.json](./config): `"prompt"` (default)
 aiui browser            # start (or find) the session browser; prints its debug endpoint
 aiui browser --tunnel <host>   # …and reverse-tunnel it to a remote box (the remote-dev local half)
 aiui open <url>         # open a URL as a tab in the session browser
-aiui chrome install     # install (or bring to latest stable) the managed CfT
-aiui chrome update      # same thing, by its other name
+aiui chrome install     # install (or bring to latest) the managed browser (chrome.managed)
+aiui chrome install chrome-for-testing   # …or target a specific flavor explicitly
+aiui chrome update      # same as install, by its other name
 aiui chrome status      # what would launch/attach from this directory, and why
 aiui chrome extension   # print the devtools extension path (for Load unpacked)
 ```
@@ -142,10 +161,10 @@ open the app as a tab in the session browser instead, so you and the agent are l
 same page. (`aiui vite` does this automatically when the dev server comes up — `--aiui-no-browser`
 opts out, and headless environments get a printed URL instead of a window.)
 
-`aiui chrome status` is the diagnostic to reach for first: the managed CfT install and its
-freshness, how *this* directory would connect (attach/launch, any running session browser),
-which browser and user data dir it would use, the profiles that exist here, and whether the
-devtools panel will auto-load. For a *running* session, the [DevTools panel](./devtools)'s
+`aiui chrome status` is the diagnostic to reach for first: the managed-browser installs (both
+flavors) and their freshness, which flavor is preferred, how *this* directory would connect
+(attach/launch, any running session browser), which browser and user data dir it would use, the
+profiles that exist here, and whether the intent client will auto-load. For a *running* session, the [DevTools panel](./devtools)'s
 Server tab shows the same wiring **as the session actually saw it at launch** — `aiui claude`
 hands the channel server a launch summary (`--launch-info`), surfaced at `/debug/api/info`.
 
@@ -158,9 +177,9 @@ touching config, the browser, or Chrome for Testing — same idea for `--version
 
 | What                                   | Where                                                                   |
 | -------------------------------------- | ----------------------------------------------------------------------- |
-| Chrome **user data dirs** (profiles)   | `.aiui-cache/chrome/<profile>` under the directory `aiui claude` runs in (default profile: `default`); gitignored, project-local |
+| Chrome **user data dirs** (profiles)   | `.aiui-cache/chrome/<variant>/<profile>` under the directory `aiui claude` runs in, partitioned by browser variant (`chromium`, `chrome-for-testing`, `chrome-<channel>`, or `custom-<hash>`; default profile: `default`); gitignored, project-local |
 | The session browser's **debug port**   | `DevToolsActivePort` inside the profile dir — written by Chrome itself; aiui's discovery reads it (plus an informational `aiui-browser.json` breadcrumb) |
-| Managed **Chrome for Testing** builds  | `~/.cache/aiui/chrome/` — user-level (respects `AIUI_CACHE`/`XDG_CACHE_HOME`), shared across projects, plus its `update-state.json` bookkeeping |
+| Managed **browser** builds             | `~/.cache/aiui/chromium/` and `~/.cache/aiui/chrome/` (one per flavor) — user-level (respects `AIUI_CACHE`/`XDG_CACHE_HOME`), shared across projects, each with its own `update-state.json` bookkeeping |
 | [Config](./config)                     | `~/.cache/aiui/config.json` (user) and `.aiui-cache/config.json` (project) |
 | chrome-devtools-mcp's own default      | `~/.cache/chrome-devtools-mcp/chrome-profile` — only if you run it *without* aiui; aiui always pins the profile |
 
@@ -170,8 +189,15 @@ The session browser never touches your personal browser profile. Because the pro
 persists, browser state accumulates usefully across sessions: logins, DevTools settings, manually
 installed extensions.
 
-- `--aiui-chrome-profile <name>` — use `.aiui-cache/chrome/<name>` instead. Naming a new profile
-  creates it; that's the whole lifecycle. (`rm -r` the directory to reset one.)
+Profiles are **partitioned by browser variant** — `.aiui-cache/chrome/<variant>/<profile>` — so
+Chromium, Chrome for Testing, and any branded channel each keep their own state. This is
+deliberate: a Chrome user data dir is version- and build-sensitive, and pointing two different
+builds at one dir can make a launch refuse to start ("profile created by a newer version") or
+silently migrate state. It also means switching `chrome.managed` starts from that flavor's own
+clean profile rather than inheriting the other's logins.
+
+- `--aiui-chrome-profile <name>` — use `.aiui-cache/chrome/<variant>/<name>` instead. Naming a new
+  profile creates it; that's the whole lifecycle. (`rm -r` the directory to reset one.)
 - `--aiui-chrome-data-dir <path>` — use an explicit directory anywhere on disk, e.g. to share one
   profile across projects.
 - The same choices can be made durable with `chrome.profile` / `chrome.dataDir` in
@@ -189,8 +215,8 @@ The intent client's MV3 bundle (`packages/aiui-intent-client/dist-ext`, a static
 `pnpm -C packages/aiui-intent-client build:ext`) is auto-loaded via `--load-extension` whenever
 aiui starts the session browser. Whether it *loads* depends on the browser:
 
-- **Chrome for Testing (or Chromium)** — auto-loads. This is the main reason CfT is the
-  recommended browser.
+- **The managed browser (Chromium or Chrome for Testing)** — auto-loads. This is the main reason
+  a managed build is the recommended browser.
 - **Branded Chrome (installed stable, or any `channel`)** — ≥ 137 ignores `--load-extension`
   (the flag was removed because malware abused it), so auto-load is a no-op. The fix is
   manual-but-once: in the session browser, `chrome://extensions` → Developer mode → Load
@@ -222,10 +248,13 @@ Config keys that override the defaults:
   [above](#how-the-browser-connects-attach-vs-launch).
 - `chrome.browserUrl` — attach to this endpoint and manage nothing; the
   [remote development](./remote) key.
-- `chrome.executablePath` — launch exactly this binary (a CfT you manage yourself, a Chromium, a
-  nightly build…). Disables the CfT sync.
+- `chrome.managed` — `"chromium"` (default) or `"chrome-for-testing"`: which flavor aiui
+  downloads and manages. Ignored when `executablePath` or `channel` picks a browser explicitly.
+- `chrome.executablePath` — launch exactly this binary (a CfT or Chromium you manage yourself, a
+  nightly build…). Disables the managed-browser sync.
 - `chrome.channel` — `"stable" | "beta" | "dev" | "canary"`: launch an *installed* branded
-  Chrome release channel, e.g. to exercise upcoming Chrome behavior. Also disables the CfT sync;
-  being branded, these can't auto-load the intent client's extension. Mutually exclusive with `executablePath`.
+  Chrome release channel, e.g. to exercise upcoming Chrome behavior. Also disables the
+  managed-browser sync; being branded, these can't auto-load the intent client's extension.
+  Mutually exclusive with `executablePath`.
 - `chrome.debugPort` — pin the session browser's debug port (default: OS-assigned) when
   something else needs to find it, like an ssh tunnel.

@@ -92,7 +92,7 @@ describe("runConfigGet", () => {
   it("falls back to the built-in default when unset", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
-    runConfigGet("chrome.forTesting", project);
+    runConfigGet("chrome.manage", project);
     expect(log).toHaveBeenCalledWith("prompt");
   });
 

@@ -30,8 +30,33 @@ import { CHROME_CHANNELS } from "@habemus-papadum/aiui-util";
 
 export { CHROME_CHANNELS, type ChromeChannel } from "@habemus-papadum/aiui-util";
 
-export const FOR_TESTING_MODES = ["prompt", "auto", "off"] as const;
-export type ForTestingMode = (typeof FOR_TESTING_MODES)[number];
+/**
+ * Which browser aiui downloads and manages for you when config names none
+ * explicitly. Both honor `--load-extension` (so the intent client auto-loads)
+ * and take the media auto-accept flags; the trade-off is Chromium's open-source
+ * build dodges the "verify you're human" reCAPTCHA that Google serves to the
+ * Chrome-for-Testing automation build, at the cost of Widevine/DRM + proprietary
+ * codecs and Google account sign-in. Chromium is the default; flip the global
+ * default with `chrome.managed`.
+ */
+export const MANAGED_FLAVORS = ["chromium", "chrome-for-testing"] as const;
+export type ManagedFlavor = (typeof MANAGED_FLAVORS)[number];
+
+/** The preferred managed browser when config doesn't say otherwise. */
+export const DEFAULT_MANAGED_FLAVOR: ManagedFlavor = "chromium";
+
+/**
+ * How aggressively `aiui claude` keeps the managed browser installed/current.
+ * (Formerly `chrome.forTesting`, back when Chrome for Testing was the only
+ * managed flavor — that key still works as a deprecated alias.)
+ */
+export const MANAGE_MODES = ["prompt", "auto", "off"] as const;
+export type ManageMode = (typeof MANAGE_MODES)[number];
+
+/** @deprecated Use {@link MANAGE_MODES}. Kept for the `chrome.forTesting` alias. */
+export const FOR_TESTING_MODES = MANAGE_MODES;
+/** @deprecated Use {@link ManageMode}. */
+export type ForTestingMode = ManageMode;
 
 export const CHROME_MODES = ["attach", "launch"] as const;
 export type ChromeMode = (typeof CHROME_MODES)[number];
@@ -201,11 +226,12 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
       {
         key: "executablePath",
         type: "string",
-        defaultText: "unset (managed Chrome for Testing when installed, else installed Chrome)",
-        summary: "Chrome binary to launch — e.g. a Chrome for Testing install.",
+        defaultText: "unset (the managed browser — see chrome.managed — else installed Chrome)",
+        summary: "Explicit browser binary to launch — e.g. a Chrome for Testing install.",
         doc:
-          "Chrome for Testing still honors --load-extension, so the aiui DevTools panel can " +
-          "auto-load. Mutually exclusive with chrome.channel.",
+          "Overrides chrome.managed. Chrome for Testing and Chromium both honor " +
+          "--load-extension, so the intent client auto-loads. Mutually exclusive with " +
+          "chrome.channel.",
       },
       {
         key: "channel",
@@ -213,19 +239,45 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         values: CHROME_CHANNELS,
         defaultText: 'unset ("stable" when launching an installed Chrome)',
         summary: "Installed Chrome release channel to launch.",
-        doc: "Mutually exclusive with chrome.executablePath.",
+        doc: "Overrides chrome.managed. Mutually exclusive with chrome.executablePath.",
       },
       {
-        key: "forTesting",
+        key: "managed",
         type: "enum",
-        values: FOR_TESTING_MODES,
+        values: MANAGED_FLAVORS,
+        default: DEFAULT_MANAGED_FLAVOR,
+        summary: "Which browser aiui downloads and manages: Chromium, or Chrome for Testing.",
+        doc:
+          '"chromium" (default) is the open-source build — it dodges the "verify you\'re ' +
+          'human" reCAPTCHA that Google serves to the Chrome-for-Testing automation build, ' +
+          "at the cost of Widevine DRM, some proprietary codecs, and Google account sign-in. " +
+          '"chrome-for-testing" is Google\'s branded automation build. Both auto-load the ' +
+          "intent client and take the media auto-accept flags. Ignored when executablePath or " +
+          "channel names a browser explicitly. Each flavor keeps its own project profile " +
+          "under .aiui-cache/chrome/<flavor>/.",
+      },
+      {
+        key: "manage",
+        type: "enum",
+        values: MANAGE_MODES,
         default: "prompt",
-        summary: "How `aiui claude` manages the recommended Chrome for Testing install.",
+        summary: "How `aiui claude` keeps the managed browser (chrome.managed) installed/current.",
         doc:
           '"prompt" asks before installing or updating it — interactive sessions only, never ' +
           'under CI; "auto" installs/updates without asking; "off" never checks. Prompt ' +
           'answers ("automatically", "never ask again") persist here at the user level. ' +
-          "Skipped entirely when executablePath or channel picks a browser explicitly.",
+          "Skipped entirely when executablePath or channel picks a browser explicitly. " +
+          "(Was chrome.forTesting.)",
+      },
+      {
+        key: "forTesting",
+        type: "enum",
+        values: MANAGE_MODES,
+        defaultText: "unset (deprecated alias for chrome.manage)",
+        summary: "DEPRECATED — old name for chrome.manage; still honored when manage is unset.",
+        doc:
+          "Renamed to chrome.manage now that Chromium is also a managed flavor. Old configs " +
+          "keep working: when chrome.manage is unset, this value is used.",
       },
       {
         key: "headless",
@@ -233,26 +285,11 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         default: false,
         summary: "Launch Chrome with no UI.",
       },
-      {
-        key: "buildExtension",
-        type: "boolean",
-        default: true,
-        summary: "OBSOLETE — parsed and ignored (the DevTools extension is deleted).",
-        doc:
-          "The only extension a launch auto-loads is the intent client, whose MV3 bundle " +
-          "is built deliberately (`pnpm -C packages/aiui-intent-client build:ext`). " +
-          "Kept in the schema so old configs stay valid.",
-      },
-      {
-        key: "autoCapture",
-        type: "boolean",
-        default: true,
-        summary: "OBSOLETE — parsed and ignored (page-side getDisplayMedia capture is gone).",
-        doc:
-          "The intent client's hosts capture natively (CDP screenshots / the extension's " +
-          "tabCapture stream); nothing reads the page-side capture marker any more. Kept in " +
-          "the schema so old configs stay valid.",
-      },
+      // NOTE: `chrome.buildExtension` and `chrome.autoCapture` were removed here
+      // (owner, 2026-07-17) — both had long been parsed-and-ignored (the DevTools
+      // extension is deleted; page-side getDisplayMedia capture is gone). A config
+      // still carrying either is tolerated and dropped by validation, not a hard
+      // error — see DEPRECATED_FIELDS in util/config.ts.
     ],
   },
 ];

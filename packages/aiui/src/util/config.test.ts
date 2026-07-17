@@ -47,7 +47,6 @@ describe("readConfigFile", () => {
         executablePath: undefined,
         channel: "beta",
         headless: true,
-        buildExtension: undefined,
       },
     });
   });
@@ -71,6 +70,20 @@ describe("readConfigFile", () => {
       write("legacy.json", { sidecars: { paint: false }, channel: { bind: "host" } }),
     );
     expect(config).toEqual({ channel: { bind: "host" } });
+  });
+
+  it("tolerates retired chrome fields (buildExtension/autoCapture), dropping them", () => {
+    // Both were removed after a long parsed-and-ignored life; an old config that
+    // still carries them loads fine and drops them (a real typo still throws).
+    const config = readConfigFile(
+      write("legacy-chrome.json", {
+        chrome: { enabled: false, buildExtension: true, autoCapture: false },
+      }),
+    );
+    expect(config).toEqual({ chrome: { enabled: false } });
+    expect(() => readConfigFile(write("typo.json", { chrome: { autocapture: true } }))).toThrow(
+      /unknown key "autocapture"/,
+    );
   });
 
   it("rejects wrong value types and bad channels", () => {

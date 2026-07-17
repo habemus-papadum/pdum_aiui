@@ -9,7 +9,7 @@
  *
  *   aiui browser --tunnel dev-box
  *
- * launches the browser (Chrome for Testing preferred, devtools panel loaded),
+ * launches the browser (the managed browser preferred, intent client loaded),
  * reverse-tunnels its debug port to `dev-box` on a **fixed remote port**
  * (default 9222 — the remote port is the one worth pinning: it's what the
  * remote session and any VS Code launch config reference; the local port can
@@ -39,7 +39,6 @@ import {
 } from "@habemus-papadum/aiui-util";
 import { execa } from "execa";
 import type { AiuiArgs } from "../util/aiui-args";
-import { syncChromeForTesting } from "../util/cft";
 import {
   type ChromeSettings,
   findIntentClientExtension,
@@ -47,7 +46,13 @@ import {
   resolveChromeSettings,
   warnIntentClientState,
 } from "../util/chrome";
-import { type AiuiConfig, loadAiuiConfig } from "../util/config";
+import {
+  type AiuiConfig,
+  loadAiuiConfig,
+  resolveManagedFlavor,
+  resolveManageMode,
+} from "../util/config";
+import { syncManagedBrowser } from "../util/managed-browser";
 import { printError, printNote } from "../util/ui";
 import { ensureProfileNativeHost } from "./extension";
 
@@ -176,12 +181,12 @@ export interface StartSessionBrowserOptions {
  * it:
  *
  *  1. Resolve settings from flags + config.
- *  2. Prefer the managed Chrome for Testing unless config names a browser
- *     explicitly (the sync may prompt to install/update — only when
- *     `interactive`; otherwise it just reports what's installed).
- *  3. Rebuild and load the aiui devtools extension, and pick up the
- *     intent-tool extension's dist/ if its dev loop has produced one
- *     (dev checkouts only).
+ *  2. Prefer the managed browser (Chromium by default, or Chrome for Testing
+ *     per chrome.managed) unless config names a browser explicitly (the sync
+ *     may prompt to install/update — only when `interactive`; otherwise it just
+ *     reports what's installed).
+ *  3. Load the intent client's MV3 bundle if it has been built (dev checkouts
+ *     only).
  *  4. Launch on the profile's user data dir and wait for the debug endpoint.
  *
  * Throws with a remediation-bearing message when no browser can be found or
@@ -191,22 +196,24 @@ export interface StartSessionBrowserOptions {
 export async function startSessionBrowser(
   opts: StartSessionBrowserOptions,
 ): Promise<{ session: SessionBrowser; settings: ChromeSettings }> {
-  let cfg = opts.config ?? {};
+  const cfg = opts.config ?? {};
   const flags = opts.flags ?? {};
-  const settle = () => {
-    const settings = resolveChromeSettings(flags, cfg);
-    return opts.debugPort === undefined ? settings : { ...settings, debugPort: opts.debugPort };
-  };
-  let settings = settle();
+  let settings = resolveChromeSettings(flags, cfg);
+  if (opts.debugPort !== undefined) {
+    settings = { ...settings, debugPort: opts.debugPort };
+  }
 
   if (!cfg.executablePath && !cfg.channel) {
-    const cft = await syncChromeForTesting({
-      mode: cfg.forTesting ?? "prompt",
+    // Patch the resolved managed binary onto settings without re-deriving the
+    // data dir — the profile is partitioned by the managed flavor, not this
+    // path (twin of the comment in claude.ts).
+    const exe = await syncManagedBrowser({
+      flavor: resolveManagedFlavor(cfg),
+      mode: resolveManageMode(cfg),
       interactive: opts.interactive,
     });
-    if (cft) {
-      cfg = { ...cfg, executablePath: cft };
-      settings = settle();
+    if (exe) {
+      settings = { ...settings, executablePath: exe };
     }
   }
   // Launches auto-load ONLY the intent client's extension — see the twin
@@ -227,7 +234,7 @@ export async function startSessionBrowser(
   } catch (error) {
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\n` +
-        "Install Chrome for Testing with `aiui chrome install`, or set chrome.executablePath.",
+        "Install the managed browser with `aiui chrome install`, or set chrome.executablePath.",
     );
   }
   const session = await launchSessionBrowser({

@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-july09",
-  "version": "0.5.0",
+  "version": "0.5.0+dev",
   "description": "In-repo aiui demo: july09.",
   "private": true,
   "type": "module",

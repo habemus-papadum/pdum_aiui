@@ -74,9 +74,10 @@ you and the agent share. aiui starts it (or finds it already running for this pr
 attaches the **Chrome DevTools MCP** to it, so the agent drives *the same tabs you're looking
 at* — navigate, click, screenshot, read the console. It uses a persistent, project-local profile
 under `.aiui-cache/chrome/`, never your personal browser profile. On your first interactive
-launch, aiui offers to download **Chrome for Testing**, its recommended browser (version-pinned,
-separate from your real Chrome, auto-loads the intent client's extension) — and keeps it current
-from then on, per your answer. [The Agent's Browser](./chrome) covers the rest: turning it off
+launch, aiui offers to download a managed browser — **Chromium** by default (version-pinned,
+separate from your real Chrome, auto-loads the intent client's extension, and — unlike Chrome for
+Testing — dodges Google's "verify you're human" reCAPTCHA) — and keeps it current from then on,
+per your answer. [The Agent's Browser](./chrome) covers the rest: turning it off
 (`--aiui-no-chrome`; automatic under CI), the attach-vs-launch modes, alternate profiles, and the
 `aiui browser` / `aiui chrome` commands. Durable settings for all of this — and for the launcher
 itself, like `skipPermissions` — live in [config.json](./config); working remotely (session on

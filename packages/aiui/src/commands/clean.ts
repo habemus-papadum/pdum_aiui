@@ -9,12 +9,12 @@
  *   <user cache>/           ~/.cache/aiui — the user config.json (incl. the
  *                           persisted `claude.skipPermissions` first-run answer),
  *                           the running-server registry (mcp/), remote-tunnel
- *                           browser-profiles/, and the ~160 MB managed Chrome for
- *                           Testing install (chrome/)
+ *                           browser-profiles/, and the ~150-160 MB managed
+ *                           browser installs (chromium/, chrome/)
  *
  * `clean` removes both so the next `aiui claude` behaves like a fresh install:
- * the first-run permission prompt returns, the Chrome for Testing offer returns,
- * and traces + browser logins are gone. Re-showing the CfT download is the whole
+ * the first-run permission prompt returns, the managed-browser offer returns,
+ * and traces + browser logins are gone. Re-showing that download is the whole
  * reason the browser is in scope by default — `--keep-browser` spares the
  * re-download when you only want to reset the cheap state. Because it deletes
  * hundreds of MB and login state, it confirms first (skip with `--yes`) and
@@ -25,7 +25,7 @@ import { join, resolve } from "node:path";
 import { listMcpServers, projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
 import { cacheDir } from "@habemus-papadum/aiui-util";
 import chalk from "chalk";
-import { cftCacheDir } from "../util/cft";
+import { allManagedCacheDirs } from "../util/managed-browser";
 import { choose } from "../util/prompt";
 import { printError, printNote, printWarning } from "../util/ui";
 
@@ -34,7 +34,7 @@ export interface CleanOptions {
   projectOnly?: boolean;
   /** Limit the reset to the user cache (`~/.cache/aiui`). */
   userOnly?: boolean;
-  /** Keep the managed Chrome for Testing install (skip the ~160 MB re-download). */
+  /** Keep the managed browser installs (skip the ~150-160 MB re-download). */
   keepBrowser?: boolean;
   /** Print what would be deleted, then stop. */
   dryRun?: boolean;
@@ -48,8 +48,8 @@ export interface CleanRoots {
   project: string;
   /** `~/.cache/aiui` (respects `$AIUI_CACHE` / `$XDG_CACHE_HOME`). */
   user: string;
-  /** The managed Chrome for Testing dir — a child of {@link CleanRoots.user}. */
-  browser: string;
+  /** The managed-browser dirs (chromium/, chrome/) — children of {@link CleanRoots.user}. */
+  browsers: string[];
 }
 
 /** One thing `clean` will delete: a root path, optionally sparing some children. */
@@ -60,7 +60,8 @@ export interface CleanTarget {
   path: string;
   /**
    * Absolute child paths to preserve instead of deleting `path` wholesale. Used
-   * by `--keep-browser` to clear the user cache while keeping `chrome/`.
+   * by `--keep-browser` to clear the user cache while keeping the managed
+   * browser dirs (`chromium/`, `chrome/`).
    */
   keep?: string[];
 }
@@ -70,7 +71,7 @@ export function cleanRoots(base: string = process.cwd()): CleanRoots {
   return {
     project: projectCacheDir(base),
     user: cacheDir(undefined, { create: false }),
-    browser: cftCacheDir(false),
+    browsers: allManagedCacheDirs(false),
   };
 }
 
@@ -87,9 +88,9 @@ export function planCleanTargets(opts: CleanOptions, roots: CleanRoots): CleanTa
     targets.push(
       opts.keepBrowser
         ? {
-            label: "user cache (keeping Chrome for Testing)",
+            label: "user cache (keeping the managed browsers)",
             path: roots.user,
-            keep: [roots.browser],
+            keep: roots.browsers,
           }
         : { label: "user cache", path: roots.user },
     );
@@ -156,7 +157,7 @@ export async function runClean(opts: CleanOptions = {}): Promise<void> {
   const consequences = [
     "traces and session-browser logins are cleared",
     clearingUser && "the Claude permission prompt (claude.skipPermissions) returns on next launch",
-    removingBrowser && "Chrome for Testing re-downloads (~160 MB) on the next `aiui claude`",
+    removingBrowser && "the managed browser re-downloads (~150-160 MB) on the next `aiui claude`",
   ].filter((line): line is string => Boolean(line));
   console.log("This resets aiui toward a fresh install:");
   for (const line of consequences) {

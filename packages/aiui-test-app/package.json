@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-test-app",
-  "version": "0.5.0",
+  "version": "0.5.0+dev",
   "description": "Internal test app: a mixture-of-Gaussians cell graph for exercising the intent overlay and the channel.",
   "private": true,
   "type": "module",

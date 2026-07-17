@@ -15,8 +15,8 @@ Settings resolve through a fixed ladder — the first level that speaks, wins:
 4. **Built-in defaults.**
 
 The two config files are merged **per key** (a project file that only sets `chrome.profile`
-still inherits your user-level `chrome.forTesting`). Put personal defaults (your Chrome for
-Testing preference, `skipPermissions`) at the user level and project specifics (a dedicated
+still inherits your user-level `chrome.manage`). Put personal defaults (your `chrome.managed`
+browser preference, `skipPermissions`) at the user level and project specifics (a dedicated
 profile, headless, a remote `browserUrl`) in the project file.
 
 Two asymmetries to know about:
@@ -26,8 +26,8 @@ Two asymmetries to know about:
   up there.
 - **aiui writes the user config too**: the **first interactive launch asks** for the settings
   that deserve a deliberate answer — skip permissions? auto-dismiss the channel prompt? — and
-  persists them as `claude.skipPermissions` / `claude.enterNudge`; Chrome for Testing prompt
-  answers ("automatically", "never ask again") persist as `chrome.forTesting` the same way.
+  persists them as `claude.skipPermissions` / `claude.enterNudge`; managed-browser prompt
+  answers ("automatically", "never ask again") persist as `chrome.manage` the same way.
   Always the *user* file — never the project file, which may be shared or committed by a team.
 
 ## The files
@@ -83,7 +83,8 @@ writing, so you can't `set` a config that would then fail the launch.
     "dataDir": "/absolute/path/to/user-data-dir",
     "executablePath": "/path/to/chrome-for-testing/chrome",
     "channel": "stable",
-    "forTesting": "prompt",
+    "managed": "chromium",
+    "manage": "prompt",
     "headless": false
   }
 }
@@ -102,18 +103,19 @@ Everything is optional; the values above are the defaults (except `browserUrl`, 
 | `chrome.mode`           | [`"attach"`](./chrome#how-the-browser-connects-attach-vs-launch) (default): share a user-visible session browser. `"launch"`: chrome-devtools-mcp keeps a private browser, started lazily on the agent's first tool call. |
 | `chrome.browserUrl`     | Attach to this DevTools endpoint (e.g. `"http://127.0.0.1:9222"`) and manage no browser locally — the [remote development](./remote) key (per-launch flag: `--aiui-browser-url`). Implies `mode: "attach"`; makes the other browser keys irrelevant. |
 | `chrome.debugPort`      | Fixed debug port for session browsers aiui launches (default `0` = OS-assigned). Pin it when something external must find it — e.g. a [VS Code attach-to-Chrome launch config](./remote#bonus-breakpoints-via-vs-code) for local sessions. (Tunnels don't need it: `aiui browser --tunnel` fixes the *remote* port instead.) |
-| `chrome.profile`        | Named profile under `.aiui-cache/chrome/` (flag: `--aiui-chrome-profile`).                                                                        |
+| `chrome.profile`        | Named profile under `.aiui-cache/chrome/<variant>/` (flag: `--aiui-chrome-profile`). Profiles are partitioned by browser variant.                 |
 | `chrome.dataDir`        | Explicit Chrome user data dir; beats `profile` (flag: `--aiui-chrome-data-dir`).                                                                  |
-| `chrome.executablePath` | Chrome binary to launch — e.g. [Chrome for Testing](./chrome#chrome-for-testing-the-recommended-browser). Mutually exclusive with `channel`.      |
-| `chrome.channel`        | Installed Chrome release channel to launch: `stable`, `beta`, `dev`, `canary`.                                                                    |
-| `chrome.forTesting`     | How launches manage the recommended [Chrome for Testing](./chrome#the-managed-install): `"prompt"` (offer installs/updates — interactive sessions only, never CI), `"auto"` (keep current without asking), `"off"` (never check). Prompt answers ("automatically", "never ask again") are written **here, at the user level**, by the launcher itself. Skipped when `executablePath`/`channel` picks a browser explicitly. |
+| `chrome.executablePath` | Explicit browser binary to launch — e.g. a [Chrome for Testing](./chrome#the-managed-browser-chromium-default-or-chrome-for-testing) you manage yourself. Overrides `chrome.managed`. Mutually exclusive with `channel`. |
+| `chrome.channel`        | Installed Chrome release channel to launch: `stable`, `beta`, `dev`, `canary`. Overrides `chrome.managed`.                                        |
+| `chrome.managed`        | Which browser aiui downloads and manages: [`"chromium"`](./chrome#the-managed-browser-chromium-default-or-chrome-for-testing) (default — dodges the CfT reCAPTCHA fingerprint) or `"chrome-for-testing"`. Each flavor keeps its own install and its own project profiles. Ignored when `executablePath`/`channel` picks a browser explicitly. |
+| `chrome.manage`         | How launches keep the managed browser installed/current: `"prompt"` (offer installs/updates — interactive sessions only, never CI), `"auto"` (keep current without asking), `"off"` (never check). Prompt answers ("automatically", "never ask again") are written **here, at the user level**, by the launcher itself. Skipped when `executablePath`/`channel` picks a browser explicitly. *(The old name `chrome.forTesting` still works as a deprecated alias when `chrome.manage` is unset.)* |
 | `chrome.headless`       | Launch Chrome with no UI.                                                                                                                          |
 
 ## Environment variables
 
 | Variable              | Effect                                                                                                                                       |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AIUI_CACHE`          | Overrides the **user cache root** entirely. Everything user-level lives under it: the channel server registry (`<cache>/mcp/`), the user `config.json`, managed Chrome for Testing installs and their update bookkeeping (`<cache>/chrome/`). Tests and the e2e harness use this to sandbox a whole aiui world. |
+| `AIUI_CACHE`          | Overrides the **user cache root** entirely. Everything user-level lives under it: the channel server registry (`<cache>/mcp/`), the user `config.json`, managed browser installs and their update bookkeeping (`<cache>/chromium/`, `<cache>/chrome/`). Tests and the e2e harness use this to sandbox a whole aiui world. |
 | `XDG_CACHE_HOME`      | Standard cache-home: when set (and absolute), the user cache root is `$XDG_CACHE_HOME/aiui`; otherwise `~/.cache/aiui`. `AIUI_CACHE` beats it. |
 | `CI`                  | Truthy values (anything but unset, empty, `"0"`, `"false"`) mean: Chrome DevTools MCP off by default, and **no interactive behavior at all** — no CfT install/update prompts or downloads, no one-time hints. `aiui claude --aiui-chrome` opts the MCP back in. |
 | `OPENAI_API_KEY`      | The intent pipeline's speech transcription and dictation correction call OpenAI, from the channel process aiui spawns — so the key is read from **this environment** and nowhere else (never `config.json`; a shared/committed file must not hold secrets). `aiui claude` [preflights it](#the-intent-pipeline-openai-key) at launch; unset or invalid leaves those features **unavailable** (the widget says so; `mock` is the explicit offline choice), never blocking the launch. |

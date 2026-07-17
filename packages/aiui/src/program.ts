@@ -72,13 +72,16 @@ export function buildProgram(): Command {
     .action((opts: DebugOptions) => runDebug(opts));
 
   // Unlike its siblings, `aiui chrome` is a real subcommand (not a forwarding
-  // wrapper): it manages the agent's browser — the Chrome for Testing install
-  // and launch status.
+  // wrapper): it manages the agent's browser — the managed-browser install
+  // (Chromium or Chrome for Testing) and launch status.
   program
     .command("chrome")
     .description("manage the agent's browser: install | update | status")
     .argument("<action>", "install | update | status")
-    .action((action: string) => runChrome([action]));
+    .argument("[flavor]", "for install/update: chromium | chrome-for-testing (default: configured)")
+    .action((action: string, flavor: string | undefined) =>
+      runChrome(flavor === undefined ? [action] : [action, flavor]),
+    );
 
   // The shared session browser (human + agent in one window). `browser` starts
   // or finds it — locally before/without a session, or on your local machine
@@ -130,11 +133,11 @@ export function buildProgram(): Command {
   program
     .command("clean")
     .description(
-      "reset aiui state (project + user cache, incl. Chrome for Testing) for a clean-slate demo",
+      "reset aiui state (project + user cache, incl. the managed browser) for a clean-slate demo",
     )
     .option("--project-only", "only this repo's .aiui-cache/")
     .option("--user-only", "only the user cache (~/.cache/aiui)")
-    .option("--keep-browser", "keep Chrome for Testing (skip the ~160 MB re-download)")
+    .option("--keep-browser", "keep the managed browser (skip the ~150-160 MB re-download)")
     .option("-n, --dry-run", "print what would be deleted, then stop")
     .option("-y, --yes", "delete without the confirmation prompt")
     .action((opts: CleanOptions) => runClean(opts));

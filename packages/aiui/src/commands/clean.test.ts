@@ -7,7 +7,7 @@ import { type CleanRoots, formatBytes, planCleanTargets, resolveDeletions } from
 const roots: CleanRoots = {
   project: "/proj/.aiui-cache",
   user: "/home/.cache/aiui",
-  browser: "/home/.cache/aiui/chrome",
+  browsers: ["/home/.cache/aiui/chromium", "/home/.cache/aiui/chrome"],
 };
 
 describe("planCleanTargets", () => {
@@ -17,12 +17,12 @@ describe("planCleanTargets", () => {
     expect(targets.every((t) => t.keep === undefined)).toBe(true);
   });
 
-  it("--keep-browser spares only the Chrome for Testing dir inside the user cache", () => {
+  it("--keep-browser spares only the managed-browser dirs inside the user cache", () => {
     const targets = planCleanTargets({ keepBrowser: true }, roots);
     expect(targets.map((t) => t.path)).toEqual([roots.project, roots.user]);
-    // The project cache is still wiped entirely; only the user target keeps CfT.
+    // The project cache is still wiped entirely; only the user target keeps them.
     expect(targets.find((t) => t.path === roots.project)?.keep).toBeUndefined();
-    expect(targets.find((t) => t.path === roots.user)?.keep).toEqual([roots.browser]);
+    expect(targets.find((t) => t.path === roots.user)?.keep).toEqual(roots.browsers);
   });
 
   it("--project-only / --user-only narrow the scope to one root", () => {

@@ -61,7 +61,7 @@ guides, and a TypeDoc API reference automatically.
 - [Getting Started](./getting-started) — run the whole loop: session, app, intent tool.
 - [Prompt Lowering](./prompt-lowering) — the core idea, mechanism, and research program.
 - [VS Code Integration](./vscode) — send editor selections into the turn; double-click the page to jump to source.
-- [The Agent's Browser](./chrome) — the shared session browser, Chrome for Testing, profiles.
+- [The Agent's Browser](./chrome) — the shared session browser, the managed browser (Chromium / Chrome for Testing), profiles.
 - [Remote Development](./remote) — session on a remote box, browser on yours.
 - [Configuration](./config) — config.json: locations, keys, precedence.
 - [Frontend for Agents](./frontend-for-agents) — how the code itself should be written.

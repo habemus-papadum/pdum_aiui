@@ -8,6 +8,7 @@ import {
   chromeMcpAttachServer,
   chromeMcpServer,
   chromeUserDataDir,
+  chromeVariant,
   findIntentClientExtension,
   resolveChromeSettings,
   resolveIntentClientExtension,
@@ -54,16 +55,33 @@ describe("chromeDevtoolsEnabled", () => {
   });
 });
 
+describe("chromeVariant", () => {
+  it("defaults to the managed flavor (chromium), and follows chrome.managed", () => {
+    expect(chromeVariant({})).toBe("chromium");
+    expect(chromeVariant({ managed: "chrome-for-testing" })).toBe("chrome-for-testing");
+  });
+
+  it("tags a branded channel by name and an explicit binary by a stable hash", () => {
+    expect(chromeVariant({ channel: "beta" })).toBe("chrome-beta");
+    const a = chromeVariant({ executablePath: "/opt/chrome" });
+    expect(a).toMatch(/^custom-[0-9a-z]+$/);
+    expect(chromeVariant({ executablePath: "/opt/chrome" })).toBe(a); // stable
+    expect(chromeVariant({ executablePath: "/opt/other" })).not.toBe(a); // path-specific
+  });
+});
+
 describe("chromeUserDataDir", () => {
   const base = "/proj";
 
-  it("defaults to .aiui-cache/chrome/default under the base dir", () => {
-    expect(chromeUserDataDir({}, base)).toBe(join(base, ".aiui-cache", "chrome", "default"));
+  it("defaults to .aiui-cache/chrome/<chromium>/default under the base dir", () => {
+    expect(chromeUserDataDir({}, base)).toBe(
+      join(base, ".aiui-cache", "chrome", "chromium", "default"),
+    );
   });
 
-  it("maps a named profile to a sibling directory", () => {
-    expect(chromeUserDataDir({ profile: "scratch" }, base)).toBe(
-      join(base, ".aiui-cache", "chrome", "scratch"),
+  it("partitions by variant, then profile", () => {
+    expect(chromeUserDataDir({ variant: "chrome-for-testing", profile: "scratch" }, base)).toBe(
+      join(base, ".aiui-cache", "chrome", "chrome-for-testing", "scratch"),
     );
   });
 
@@ -73,7 +91,7 @@ describe("chromeUserDataDir", () => {
     expect(() => chromeUserDataDir({ profile: ".hidden" }, base)).toThrow(/invalid/);
   });
 
-  it("uses an explicit data dir verbatim (absolute) or resolved against base", () => {
+  it("uses an explicit data dir verbatim (no variant partition)", () => {
     expect(chromeUserDataDir({ dataDir: "/elsewhere/profile" }, base)).toBe("/elsewhere/profile");
     expect(chromeUserDataDir({ dataDir: "rel/profile" }, base)).toBe(resolve(base, "rel/profile"));
   });
@@ -81,11 +99,12 @@ describe("chromeUserDataDir", () => {
 
 describe("resolveChromeSettings", () => {
   const base = "/proj";
-  const defaultDir = join(base, ".aiui-cache", "chrome", "default");
+  const defaultDir = join(base, ".aiui-cache", "chrome", "chromium", "default");
 
   it("uses plain defaults when neither flags nor config say anything", () => {
     expect(resolveChromeSettings({}, {}, base)).toEqual({
       userDataDir: defaultDir,
+      variant: "chromium",
       mode: "attach",
       browserUrl: undefined,
       debugPort: 0,
@@ -93,6 +112,14 @@ describe("resolveChromeSettings", () => {
       channel: undefined,
       headless: false,
     });
+  });
+
+  it("partitions the managed CfT profile separately from Chromium", () => {
+    const settings = resolveChromeSettings({}, { managed: "chrome-for-testing" }, base);
+    expect(settings.variant).toBe("chrome-for-testing");
+    expect(settings.userDataDir).toBe(
+      join(base, ".aiui-cache", "chrome", "chrome-for-testing", "default"),
+    );
   });
 
   it("carries mode and debugPort from config, and browserUrl forces attach", () => {
@@ -111,7 +138,10 @@ describe("resolveChromeSettings", () => {
       { profile: "research", channel: "beta", headless: true },
       base,
     );
-    expect(settings.userDataDir).toBe(join(base, ".aiui-cache", "chrome", "research"));
+    expect(settings.userDataDir).toBe(
+      join(base, ".aiui-cache", "chrome", "chrome-beta", "research"),
+    );
+    expect(settings.variant).toBe("chrome-beta");
     expect(settings.channel).toBe("beta");
     expect(settings.headless).toBe(true);
   });
@@ -122,7 +152,7 @@ describe("resolveChromeSettings", () => {
       { profile: "cfg", dataDir: "/cfg/dir" },
       base,
     );
-    expect(settings.userDataDir).toBe(join(base, ".aiui-cache", "chrome", "cli"));
+    expect(settings.userDataDir).toBe(join(base, ".aiui-cache", "chrome", "chromium", "cli"));
   });
 
   it("lets a data-dir flag beat both config identities", () => {
@@ -154,6 +184,7 @@ describe("resolveChromeSettings", () => {
 describe("chromeMcpServer", () => {
   const settings = (over: Partial<ChromeSettings> = {}): ChromeSettings => ({
     userDataDir: "/data/dir",
+    variant: "chromium",
     mode: "launch",
     debugPort: 0,
     headless: false,

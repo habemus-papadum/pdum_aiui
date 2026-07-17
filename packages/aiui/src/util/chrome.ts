@@ -44,6 +44,7 @@ import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
 import { isCi } from "@habemus-papadum/aiui-util";
 import type { AiuiArgs } from "./aiui-args";
 import type { AiuiConfig, ChromeChannel, ChromeMode } from "./config";
+import { DEFAULT_MANAGED_FLAVOR, resolveManagedFlavor } from "./config";
 import { packageRoot } from "./resolve-cli";
 import { printNote } from "./ui";
 
@@ -105,6 +106,13 @@ export interface ChromeSettings {
   /** Absolute user data dir for this launch. */
   userDataDir: string;
   /**
+   * The browser-variant tag the profile is partitioned under (see
+   * {@link chromeVariant}) — `chromium`, `chrome-for-testing`, `chrome-<channel>`,
+   * or `custom-<hash>`. Informational; `custom-*` when an explicit `dataDir`
+   * escapes the convention.
+   */
+  variant: string;
+  /**
    * "attach" (default): share a session browser — discover or eagerly launch
    * one and point the MCP at its debug endpoint. "launch": chrome-devtools-mcp
    * owns a private browser, started lazily on first tool use.
@@ -143,8 +151,16 @@ export function resolveChromeSettings(
   const flagged = args.chromeProfile !== undefined || args.chromeDataDir !== undefined;
   const dataDir = args.chromeDataDir ?? (flagged ? undefined : config.dataDir);
   const profile = args.chromeProfile ?? (flagged ? undefined : config.profile);
+  // The variant is derived from the config's *declared* browser intent (channel
+  // / explicit executablePath / managed flavor), NOT from an executablePath the
+  // launch path later injects for the managed flavor — so a managed Chromium
+  // and a managed CfT keep distinct profiles, and injecting the resolved binary
+  // never moves the profile out from under a running session. Callers patch
+  // `executablePath` post-sync; they must not re-derive the data dir.
+  const variant = chromeVariant(config);
   return {
-    userDataDir: chromeUserDataDir({ dataDir, profile }, base),
+    userDataDir: chromeUserDataDir({ dataDir, profile, variant }, base),
+    variant,
     // A configured endpoint means the browser is managed elsewhere (usually
     // another machine) — that's always attach, whatever `mode` says.
     mode: config.browserUrl ? "attach" : (config.mode ?? "attach"),
@@ -157,15 +173,53 @@ export function resolveChromeSettings(
 }
 
 /**
+ * The variant tag a launch's profile is partitioned under. Distinct browser
+ * builds must not share a Chrome user data dir — a downgrade or a
+ * different-channel launch on the same profile can refuse to start ("profile
+ * was created by a newer version") or silently migrate state — so each variant
+ * gets its own directory:
+ *
+ *  - an explicit `channel` → `chrome-<channel>` (e.g. `chrome-beta`)
+ *  - an explicit `executablePath` → `custom-<hash>` (stable per binary path, so
+ *    two hand-picked binaries don't collide)
+ *  - otherwise the managed flavor → `chromium` or `chrome-for-testing`
+ *
+ * `channel` and `executablePath` are mutually exclusive (validated in
+ * {@link resolveChromeSettings}); channel is checked first only for definiteness.
+ */
+export function chromeVariant(
+  config: Pick<ChromeConfig, "channel" | "executablePath" | "managed">,
+): string {
+  if (config.channel) {
+    return `chrome-${config.channel}`;
+  }
+  if (config.executablePath) {
+    return `custom-${executablePathHash(config.executablePath)}`;
+  }
+  return resolveManagedFlavor(config);
+}
+
+/** A short, stable, filesystem-safe hash of a binary path (djb2, base36). */
+function executablePathHash(path: string): string {
+  let hash = 5381;
+  for (let i = 0; i < path.length; i++) {
+    hash = ((hash * 33) ^ path.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+/**
  * The Chrome user data dir to use (absolute).
  *
  * An explicit `dataDir` wins, resolved against `base`. Otherwise the named
  * profile (default: {@link DEFAULT_CHROME_PROFILE}) maps to
- * `.aiui-cache/chrome/<name>` under `base` — alternate profiles are just other
- * names, created on first use by the caller's mkdir.
+ * `.aiui-cache/chrome/<variant>/<name>` under `base`, partitioned by browser
+ * variant (see {@link chromeVariant}) so distinct builds never share a profile.
+ * Alternate profiles are just other names, created on first use by the caller's
+ * mkdir; `variant` defaults to {@link DEFAULT_MANAGED_FLAVOR}.
  */
 export function chromeUserDataDir(
-  ids: { dataDir?: string; profile?: string },
+  ids: { dataDir?: string; profile?: string; variant?: string },
   base: string = process.cwd(),
 ): string {
   if (ids.dataDir) {
@@ -178,7 +232,8 @@ export function chromeUserDataDir(
         "(or --aiui-chrome-data-dir for an arbitrary path)",
     );
   }
-  return join(projectCacheDir(base), "chrome", profile);
+  const variant = ids.variant ?? DEFAULT_MANAGED_FLAVOR;
+  return join(projectCacheDir(base), "chrome", variant, profile);
 }
 
 /** The intent client's MV3 bundle directory name (see its build-ext.ts: a
@@ -265,7 +320,7 @@ export function maybeExtensionAutoloadHint(
     "the aiui intent client can't auto-load into regular Chrome (≥ 137 ignores --load-extension)",
     `Load it once in the launched Chrome — chrome://extensions → Developer mode → Load unpacked →\n` +
       `${extensionDirs.join("\n")}\n` +
-      "— and this profile remembers it. Or switch to Chrome for Testing (`aiui chrome install`),\n" +
+      "— and this profile remembers it. Or use the managed browser (`aiui chrome install`),\n" +
       "which auto-loads it. This note won't repeat for this profile.",
   );
   try {

@@ -13,8 +13,9 @@ and can launch Claude Code with permissions skipped.
 - **Node ≥ 24** and a package manager (npm/pnpm).
 - The **[Claude Code](https://claude.com/claude-code) CLI** (`claude`) on your PATH, logged in.
 - **Chrome.** Interactive launches offer to install a managed
-  [Chrome for Testing](./chrome#chrome-for-testing-the-recommended-browser) under `~/.cache/aiui/chrome/` — say yes;
-  branded Chrome ≥ 137 won't auto-load the DevTools extension and newer versions restrict the
+  [browser](./chrome#the-managed-browser-chromium-default-or-chrome-for-testing) — **Chromium** by
+  default (under `~/.cache/aiui/chromium/`), or Chrome for Testing if you prefer — so say yes;
+  branded Chrome ≥ 137 won't auto-load the intent-client extension and newer versions restrict the
   debug port setup aiui relies on.
 - **`OPENAI_API_KEY`** in your shell if you want real voice transcription and corrections —
   the intent pipeline's model calls run in the channel process and read only this environment

@@ -29,10 +29,12 @@ import {
   type ChromeMode,
   CONFIG_SECTIONS,
   type ConfigValue,
-  type ForTestingMode,
+  DEFAULT_MANAGED_FLAVOR,
   fieldRuntimeType,
   formatConfigValue,
   invalidReason,
+  type ManagedFlavor,
+  type ManageMode,
 } from "./config-schema";
 
 export {
@@ -42,8 +44,13 @@ export {
   type ChannelBind,
   type ChromeChannel,
   type ChromeMode,
+  DEFAULT_MANAGED_FLAVOR,
   FOR_TESTING_MODES,
   type ForTestingMode,
+  MANAGE_MODES,
+  MANAGED_FLAVORS,
+  type ManagedFlavor,
+  type ManageMode,
 } from "./config-schema";
 
 export const CONFIG_FILENAME = "config.json";
@@ -77,20 +84,18 @@ export interface AiuiConfig {
     profile?: string;
     /** Explicit Chrome user data dir; takes precedence over `profile`. */
     dataDir?: string;
-    /** Chrome binary to launch. Mutually exclusive with `channel`. */
+    /** Explicit browser binary to launch. Mutually exclusive with `channel`. */
     executablePath?: string;
     /** Installed Chrome release channel to launch. */
     channel?: ChromeChannel;
-    /** How `aiui claude` manages the Chrome for Testing install. */
-    forTesting?: ForTestingMode;
+    /** Which browser aiui downloads and manages (default: chromium). */
+    managed?: ManagedFlavor;
+    /** How `aiui claude` keeps the managed browser installed/current. */
+    manage?: ManageMode;
+    /** @deprecated Old name for `manage`; still honored when `manage` is unset. */
+    forTesting?: ManageMode;
     /** Launch Chrome headless (default: false). */
     headless?: boolean;
-    /** OBSOLETE (the devtools extension is deleted): parsed and ignored so old
-     * configs stay valid. */
-    buildExtension?: boolean;
-    /** OBSOLETE (page-side getDisplayMedia capture is gone): parsed and
-     * ignored so old configs stay valid. */
-    autoCapture?: boolean;
   };
 }
 
@@ -107,6 +112,18 @@ type SectionValues = Record<string, ConfigValue>;
  * safe to delete.
  */
 const DEPRECATED_SECTIONS = new Set(["sidecars"]);
+
+/**
+ * Leaf keys that USED to be valid within a section and are now GONE — the
+ * field-level twin of {@link DEPRECATED_SECTIONS}. A config still carrying one
+ * is accepted and dropped (never copied into the loaded config), not a hard
+ * error on upgrade. `chrome.buildExtension` / `chrome.autoCapture` retired with
+ * the DevTools extension and page-side getDisplayMedia capture — both were long
+ * parsed-and-ignored, and nothing reads them (owner, 2026-07-17).
+ */
+const DEPRECATED_FIELDS: Record<string, readonly string[]> = {
+  chrome: ["buildExtension", "autoCapture"],
+};
 
 /** The `config.json` paths consulted, user-level first (base: the project dir). */
 export function configPaths(base: string = process.cwd()): { user: string; project: string } {
@@ -179,7 +196,10 @@ function validateConfig(raw: unknown, file: string): AiuiConfig {
     const values = asSection(root[section.name], file, `"${section.name}"`);
     rejectUnknownKeys(
       values,
-      section.fields.map((f) => f.key),
+      // Known leaf keys PLUS any retired-but-tolerated ones for this section;
+      // the copy loop below only carries `section.fields`, so a deprecated key
+      // is accepted here and then dropped.
+      [...section.fields.map((f) => f.key), ...(DEPRECATED_FIELDS[section.name] ?? [])],
       file,
       `"${section.name}"`,
     );
@@ -231,6 +251,24 @@ export function updateConfigFile(file: string, mutate: (config: AiuiConfig) => v
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   return file;
+}
+
+/**
+ * The managed browser this config prefers when nothing names a browser
+ * explicitly — {@link DEFAULT_MANAGED_FLAVOR} (chromium) unless `chrome.managed`
+ * overrides it. Flip the global default with
+ * `aiui config set chrome.managed chrome-for-testing`.
+ */
+export function resolveManagedFlavor(chrome: AiuiConfig["chrome"] = {}): ManagedFlavor {
+  return chrome.managed ?? DEFAULT_MANAGED_FLAVOR;
+}
+
+/**
+ * The manage mode, honoring the deprecated `chrome.forTesting` alias: an
+ * explicit `chrome.manage` wins, else the old key, else "prompt".
+ */
+export function resolveManageMode(chrome: AiuiConfig["chrome"] = {}): ManageMode {
+  return chrome.manage ?? chrome.forTesting ?? "prompt";
 }
 
 function asSection(value: unknown, file: string, where: string): Record<string, unknown> {
