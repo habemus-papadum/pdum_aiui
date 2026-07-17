@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-intent-runtime",
-  "version": "0.4.0+dev",
+  "version": "0.5.0",
   "description": "The intent client's host-agnostic capture + transport runtime: mic/screen capture, the frame sampler, the selection watcher, and the channel wire.",
   "type": "module",
   "license": "MIT",
