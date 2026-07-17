@@ -247,3 +247,7 @@ is a small, isolated last step with the data already flowing.
 - **Wire/versioning:** `spans` is additive to `ComposedIntent` and to the trace stage payloads;
   older traces simply lack it and the hero falls back to raw text with no overlays. No breaking
   wire change.
+- **Where the sent prompt's spans are recorded** — the one implementation call with real
+  alternatives (a hidden trace stage vs. widening the `SendPrompt` transport contract vs. deriving
+  in the hero) is written up separately in
+  [sent-prompt-spans-trace-recording](./sent-prompt-spans-trace-recording.md).
