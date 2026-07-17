@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-lowering-pipeline",
-  "version": "0.6.0",
+  "version": "0.6.0+dev",
   "description": "The intent lowering pipeline: the framework-free core that folds a multimodal intent event stream into the lowered agent prompt (composeIntent), shared by the channel and the intent tools.",
   "type": "module",
   "license": "MIT",
