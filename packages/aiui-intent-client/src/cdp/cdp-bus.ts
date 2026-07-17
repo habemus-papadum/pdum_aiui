@@ -219,12 +219,27 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     setActive(focusedTab ?? visibleTab);
   };
 
-  const evaluate = (sessionId: string, expression: string, awaitPromise = false) =>
-    cdp.send(
+  const evaluate = async (sessionId: string, expression: string, awaitPromise = false) => {
+    const outcome = (await cdp.send(
       "Runtime.evaluate",
       { expression, returnByValue: true, awaitPromise },
       sessionId,
-    ) as Promise<{ result?: { value?: unknown } }>;
+    )) as {
+      result?: { value?: unknown };
+      exceptionDetails?: { text?: string; exception?: { description?: string } };
+    };
+    // A page-side throw must FAIL the caller, not read as `undefined` — a
+    // swallowed TypeError is how the bundle-clobber bug hid behind "active"
+    // claims for a whole tier (found live, 2026-07-17).
+    if (outcome.exceptionDetails !== undefined) {
+      const detail =
+        outcome.exceptionDetails.exception?.description ??
+        outcome.exceptionDetails.text ??
+        "page evaluate threw";
+      throw new Error(detail.split("\n")[0]);
+    }
+    return outcome;
+  };
 
   /** The capability call, as an expression evaluated in the page's own world. */
   const invoke = (capability: PageCapability | "ring", payload?: unknown): string =>

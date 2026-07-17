@@ -466,7 +466,14 @@ function pageBootstrap(version: string): void {
   };
 
   // ── the capability surface (the relay's command set, CDP-delivered) ───────
-  w.__aiuiIntentPage = {
+  // MERGED onto whatever already lives at the global, never assigned over it:
+  // the evaluated page bundle (locator · jump · pencil) shares this object —
+  // `handle` below reads `mountPencil`/`locateComponents`/`armJump` off it —
+  // and a reinstall (relead on hello, a version bump) must not wipe those
+  // exports while the bus still thinks the bundle is delivered (found live,
+  // 2026-07-17: the two writers clobbering each other took down pencil, area,
+  // AND the heartbeat — the claims read "active" over a dead surface).
+  w.__aiuiIntentPage = Object.assign((w.__aiuiIntentPage as object | undefined) ?? {}, {
     /** Which build of this bootstrap is live in the document (see the guard). */
     v: version,
     /** A new client took this document over (see the install guard): forget the
@@ -582,7 +589,7 @@ function pageBootstrap(version: string): void {
           return { error: `unknown capability: ${capability}` };
       }
     },
-  };
+  });
 
   // ── world facts, callback-based (no polling: the panel learns by report) ──
   const reportFocus = (): void => {

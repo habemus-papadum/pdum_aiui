@@ -48,12 +48,21 @@ export async function pageBundle(): Promise<string> {
     bundle: true,
     write: false,
     format: "iife",
-    globalName: PAGE_GLOBAL,
+    globalName: "__aiuiIntentPageExports",
     platform: "browser",
     target: "es2022",
     logLevel: "silent",
   });
-  return bundled.outputFiles[0].text;
+  // MERGE the exports into the page global — never assign over it. The
+  // page-script's capability surface (v · adopt · hello · handle) lives on the
+  // SAME object, and `globalName: PAGE_GLOBAL` was found live (2026-07-17)
+  // replacing it wholesale: the moment the bundle landed, `handle` was gone,
+  // so heartbeats/pencil/region all evaluated to a swallowed TypeError while
+  // the claims read "active". (The page-script's install merges in the other
+  // direction for the same reason.) The arrow wrapper keeps the IIFE's `var`
+  // function-scoped, so nothing but the merged global lands on the page.
+  return `(() => { ${bundled.outputFiles[0].text}
+Object.assign(window.${PAGE_GLOBAL} = window.${PAGE_GLOBAL} || {}, __aiuiIntentPageExports); })();`;
 }
 
 export interface IntentSidecarOptions {
