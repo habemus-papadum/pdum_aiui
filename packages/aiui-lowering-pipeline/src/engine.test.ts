@@ -544,24 +544,25 @@ describe("app selection (a positional stream event, interleaved like text and sh
     });
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toBe(
-      "make this wider " +
-        'Regarding the on-screen selection "the histogram title" ' +
-        "(authored at src/Hist.tsx:10:2; produced by cell hist defined at src/model/cells.ts:7)",
+      "make this wider \n" +
+        '[selected text: "the histogram title"]\n' +
+        '<selection-metadata source="src/Hist.tsx:10:2">\n' +
+        '  <cell name="hist" source="src/model/cells.ts:7"/>\n' +
+        "</selection-metadata>",
     );
     // Selection text is never transcript text — corrections can't touch it.
     expect(composed.transcript).toBe("make this wider");
   });
 
-  it("fences a long selection and carries the TeX attribution", () => {
+  it("fences a long selection and carries the TeX attribution in metadata", () => {
     const engine = armedEngine();
     engine.talkStart();
     const long = "a very long run of selected page text ".repeat(10).trim();
     engine.appSelection({ text: long, sourceLoc: "src/Doc.tsx:3:1", tex: "\\frac{a}{b}" });
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toContain(
-      "Regarding this on-screen selection " +
-        "(authored at src/Doc.tsx:3:1; rendered mathematics — TeX source: \\frac{a}{b}):\n" +
-        `\`\`\`\n${long}\n\`\`\``,
+      `[selected text (1 line)]:\n\`\`\`\n${long}\n\`\`\`\n` +
+        '<selection-metadata source="src/Doc.tsx:3:1" tex="\\frac{a}{b}"/>',
     );
   });
 
@@ -788,7 +789,7 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     const composed = composeIntent(engine.events);
     expect(composed.items.map((i) => i.kind)).toEqual(["code-selection"]);
     expect(composed.items[0]).toMatchObject({ marker: "code_1" });
-    expect(composed.prompt).toBe("Regarding `src/a.ts:5:1`: `const x = 1;`");
+    expect(composed.prompt).toBe("[code selection at `src/a.ts:5:1`: `const x = 1;`]");
     // Structured code is NOT transcript text — corrections can't touch it.
     expect(composed.transcript).toBe("");
   });
@@ -804,7 +805,7 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     // The retracted selection vanishes from the composition; the kept one stays.
     expect(composed.items.map((i) => i.kind)).toEqual(["code-selection"]);
     expect(composed.items[0]).toMatchObject({ marker: "code_2" });
-    expect(composed.prompt).toBe("Regarding `src/b.ts:2:2`: `const b = 2;`");
+    expect(composed.prompt).toBe("[code selection at `src/b.ts:2:2`: `const b = 2;`]");
     // ...but the event itself stays in the stream (append-only; traces keep it).
     expect(engine.events.some((e) => e.type === "code-selection" && e.marker === "code_1")).toBe(
       true,
@@ -819,7 +820,7 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     );
     engine.codeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
     const composed = composeIntent(engine.events);
-    expect(composed.prompt).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
+    expect(composed.prompt).toContain("[code selection at `src/b.ts:10-21` (12 lines)]:\n```\n");
     expect(composed.prompt).toContain(`${code}\n\`\`\``);
   });
 
@@ -854,7 +855,7 @@ describe("selection render helpers (exported — the channel's live resolver re-
   // back to the SAME rendering composeIntent inlines — one implementation, so
   // these pin that the exported helpers ARE that rendering.
 
-  it("renderAppSelection: short → inline sentence with the attribution parenthetical", () => {
+  it("renderAppSelection: short → bracket line with the attribution in metadata", () => {
     expect(
       renderAppSelection({
         text: "the histogram title",
@@ -862,8 +863,10 @@ describe("selection render helpers (exported — the channel's live resolver re-
         cell: "hist",
       }),
     ).toBe(
-      'Regarding the on-screen selection "the histogram title" ' +
-        "(authored at src/Hist.tsx:10:2; produced by cell hist)",
+      '\n[selected text: "the histogram title"]\n' +
+        '<selection-metadata source="src/Hist.tsx:10:2">\n' +
+        '  <cell name="hist"/>\n' +
+        "</selection-metadata>\n",
     );
   });
 
@@ -878,16 +881,36 @@ describe("selection render helpers (exported — the channel's live resolver re-
     );
   });
 
-  it("renderCodeSelection: short → inline; long → fenced under its locator", () => {
+  it("renderCodeSelection: short → inline bracket; long → fenced under its locator", () => {
     expect(renderCodeSelection({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1" })).toBe(
-      "Regarding `src/a.ts:5:1`: `const x = 1;`",
+      "[code selection at `src/a.ts:5:1`: `const x = 1;`]",
     );
     const code = Array.from({ length: 12 }, (_, i) => `line ${i} of something long enough`).join(
       "\n",
     );
     const block = renderCodeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
-    expect(block).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
+    expect(block).toContain("[code selection at `src/b.ts:10-21` (12 lines)]:\n```\n");
     expect(block).toContain(`${code}\n\`\`\``);
+  });
+
+  it("elides a fenced selection past 50 lines, saying how many were cut", () => {
+    const code = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join("\n");
+    const block = renderCodeSelection({ text: code, sourceLoc: "src/big.ts:1-60", lines: 60 });
+    expect(block).toContain("(60 lines)]:");
+    expect(block).toContain("line 50\n… (+10 more lines elided)\n```");
+    expect(block).not.toContain("line 51");
+  });
+
+  it("renders the page's <tab> record (full URL) in selection metadata", () => {
+    expect(renderAppSelection({ text: "42.7", url: "http://localhost:5173/sim?run=3" })).toBe(
+      '\n[selected text: "42.7"]\n' +
+        "<selection-metadata>\n" +
+        '  <tab url="http://localhost:5173/sim?run=3"/>\n' +
+        "</selection-metadata>\n",
+    );
+    expect(
+      renderCodeSelection({ text: "const x = 1;", url: "http://localhost:5173/reader" }),
+    ).toContain('<tab url="http://localhost:5173/reader"/>');
   });
 });
 

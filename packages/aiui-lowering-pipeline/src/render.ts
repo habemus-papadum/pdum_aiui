@@ -70,7 +70,7 @@ export function renderPrompt(
         components: item.components ?? [],
       });
     } else if (item.kind === "code-selection") {
-      const { start, end } = append(renderCodeSelection(item));
+      const { start, end } = append(renderCodeSelection(item, options.cwd));
       rawSpans.push({
         kind: "code-selection",
         start,
@@ -78,9 +78,10 @@ export function renderPrompt(
         ...(item.marker !== undefined ? { marker: item.marker } : {}),
         ...(item.sourceLoc !== undefined ? { sourceLoc: item.sourceLoc } : {}),
         ...(item.lines !== undefined ? { lines: item.lines } : {}),
+        ...(item.url !== undefined ? { url: item.url } : {}),
       });
     } else if (item.kind === "app-selection") {
-      const { start, end } = append(renderAppSelection(item));
+      const { start, end } = append(renderAppSelection(item, options.cwd));
       rawSpans.push({
         kind: "app-selection",
         start,
@@ -90,6 +91,7 @@ export function renderPrompt(
         ...(item.cell !== undefined ? { cell: item.cell } : {}),
         ...(item.cellLoc !== undefined ? { cellLoc: item.cellLoc } : {}),
         ...(item.tex !== undefined ? { tex: item.tex } : {}),
+        ...(item.url !== undefined ? { url: item.url } : {}),
       });
     } else if (item.kind === "navigation") {
       const { start, end } = append(renderNavigation(item));
@@ -125,53 +127,123 @@ export function renderPrompt(
   };
 }
 
-// ── selection rendering (the deferred decision) ──────────────────────────────
+// ── selection rendering ──────────────────────────────────────────────────────
 
 /** At or below this many characters a selection is inlined; above, fenced. */
 export const SHORT_SELECTION_CHARS = 240;
 
-/**
- * One contributed code selection, rendered at its position in the prose. The
- * short/long rule (formerly the bus host's `contributionToText`, now a compose
- * pass so the decision happens at LOWERING time): a **short** selection is
- * inlined — "Regarding `file:line`: `code`" — the location and the code right
- * in the sentence; a **long** one becomes a fenced block under its location
- * header, set apart from the prose like a multi-line screenshot block.
- *
- * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
- * re-attaches a selection the live model referenced by bare id (`code_1`)
- * with THIS exact rendering — one implementation, per the defer-rendering
- * rule. The parameter is the `ComposedItem` subset the rendering reads, so a
- * caller need not fabricate a full item.
- */
-export function renderCodeSelection(
-  item: Pick<ComposedItem, "text" | "sourceLoc" | "lines">,
-): string {
-  const text = item.text ?? "";
-  const loc = item.sourceLoc !== undefined ? `\`${item.sourceLoc}\`` : "the selection";
-  if (text.trim().length <= SHORT_SELECTION_CHARS) {
-    return `Regarding ${loc}: \`${text.trim()}\``;
+/** Fenced selection blocks keep this many lines; the rest elide with a count. */
+const MAX_SELECTION_LINES = 50;
+
+/** Cap a fenced selection at {@link MAX_SELECTION_LINES}, saying what was cut. */
+function elideLines(text: string): string {
+  const lines = text.split("\n");
+  if (lines.length <= MAX_SELECTION_LINES) {
+    return text;
   }
-  const n = item.lines ?? text.split("\n").length;
-  return `\nRegarding ${loc} (${n} lines):\n\`\`\`\n${text}\n\`\`\`\n`;
+  return [
+    ...lines.slice(0, MAX_SELECTION_LINES),
+    `… (+${lines.length - MAX_SELECTION_LINES} more lines elided)`,
+  ].join("\n");
 }
 
 /**
- * One on-screen (app) selection, rendered at its position in the prose — the
- * same short/long rule code selections use, worded for page text rather than
- * source: a **short** selection is inlined — `Regarding the on-screen
- * selection "…" (authored at file:line:col)` — and a **long** one becomes a
- * fenced block under the same header. The attribution parenthetical (the
- * authored-at locator, the producing cell, the TeX source of selected
- * mathematics) keeps the wording the context preamble used, now placed where
- * the selection actually sits in the stream. (The preamble path —
- * `selectionSections` in the channel's prompt-context — remains only for the
- * text modality's send-time `context` chunk.)
+ * The `<selection-metadata>` sidecar block — derived attribution only, never
+ * the selection's content: `source` (the authored-at locator) and `tex` as
+ * attributes; the producing `<cell>` and the page's `<tab>` record as
+ * children, reusing the exact vocabulary screenshot metadata established
+ * (`<cell name source/>`) and the canonical tab record (`<tab url …/>` — full
+ * URL, the agent's `list_pages` matching key; see the context preamble's
+ * correlation guidance). Undefined when there is nothing to say.
+ */
+function selectionMetadata(
+  item: Pick<ComposedItem, "sourceLoc" | "cell" | "cellLoc" | "tex" | "url">,
+  cwd: string | undefined,
+): string | undefined {
+  const attrs: string[] = [];
+  if (item.sourceLoc !== undefined) {
+    attrs.push(`source="${escapeXml(relativizePath(item.sourceLoc, cwd))}"`);
+  }
+  if (item.tex !== undefined) {
+    attrs.push(`tex="${escapeXml(item.tex)}"`);
+  }
+  const kids: string[] = [];
+  if (item.cell !== undefined) {
+    const src =
+      item.cellLoc !== undefined ? ` source="${escapeXml(relativizePath(item.cellLoc, cwd))}"` : "";
+    kids.push(`  <cell name="${escapeXml(item.cell)}"${src}/>`);
+  }
+  if (item.url !== undefined) {
+    kids.push(`  <tab url="${escapeXml(item.url)}"/>`);
+  }
+  if (attrs.length === 0 && kids.length === 0) {
+    return undefined;
+  }
+  const open = `<selection-metadata${attrs.length > 0 ? ` ${attrs.join(" ")}` : ""}`;
+  return kids.length === 0
+    ? `${open}/>`
+    : [`${open}>`, ...kids, "</selection-metadata>"].join("\n");
+}
+
+/**
+ * One contributed code selection, rendered at its position in the prose, in
+ * the shot format's design language (2026-07-17 render audit): a plain-text
+ * bracket line carries the content, XML carries derived metadata. The
+ * location stays IN the bracket — a code selection *is* a range of a file —
+ * and `MISSING_LOCATION` marks one that arrived without a locator:
  *
- * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
- * re-attaches a selection the live model referenced by bare id (`sel_2`)
- * with THIS exact rendering — one implementation, per the defer-rendering
- * rule. The parameter is the `ComposedItem` subset the rendering reads.
+ *   [code selection at `src/a.ts:5:1`: `const x = 1;`]
+ *
+ * A **long** selection (> {@link SHORT_SELECTION_CHARS} chars) turns the
+ * bracket line into a header and fences the code, elided past
+ * {@link MAX_SELECTION_LINES} lines. The only metadata block a code selection
+ * carries is the contributing view's `<tab>` record, when known.
+ *
+ * Exported (P3/RT4): the channel's realtime resolver re-attaches a selection
+ * the live model referenced by bare id (`code_1`) with THIS exact rendering —
+ * one implementation, per the defer-rendering rule. The parameter is the
+ * `ComposedItem` subset the rendering reads.
+ */
+export function renderCodeSelection(
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "lines" | "url">,
+  cwd?: string,
+): string {
+  const text = item.text ?? "";
+  const loc =
+    item.sourceLoc !== undefined
+      ? `\`${relativizePath(item.sourceLoc, cwd)}\``
+      : "MISSING_LOCATION";
+  const meta = selectionMetadata({ url: item.url }, cwd);
+  if (text.trim().length <= SHORT_SELECTION_CHARS) {
+    const head = `[code selection at ${loc}: \`${text.trim()}\`]`;
+    return meta === undefined ? head : `\n${head}\n${meta}\n`;
+  }
+  const n = item.lines ?? text.split("\n").length;
+  const head = `[code selection at ${loc} (${n} ${n === 1 ? "line" : "lines"})]:`;
+  const fence = `\`\`\`\n${elideLines(text)}\n\`\`\``;
+  return `\n${[head, fence, ...(meta !== undefined ? [meta] : [])].join("\n")}\n`;
+}
+
+/**
+ * One on-screen (app) selection — same design language: the bracket line
+ * carries the selected text, and every piece of derived attribution (the
+ * authored-at locator, the producing cell, TeX source, the page's tab) moves
+ * to the `<selection-metadata>` sidecar:
+ *
+ *   [selected text: "42.7"]
+ *   <selection-metadata source="src/Readout.tsx:12:4">
+ *     <cell name="meanValue" source="src/model.ts:33"/>
+ *     <tab url="http://localhost:5173/sim"/>
+ *   </selection-metadata>
+ *
+ * A **long** selection fences the text under a `[selected text (N lines)]:`
+ * header, same elision rule as code. (The preamble path — `selectionSections`
+ * in the channel's prompt-context — remains only for the text modality's
+ * send-time `context` chunk.)
+ *
+ * Exported (P3/RT4): the channel's realtime resolver re-attaches a selection
+ * the live model referenced by bare id (`sel_2`) with THIS exact rendering —
+ * one implementation, per the defer-rendering rule.
  */
 /** A URL as the short label a prompt should carry: path+query+hash (or the
  * full string when it doesn't parse — tests, exotic schemes). */
@@ -206,28 +278,19 @@ export function renderTabSwitch(item: Pick<ComposedItem, "from" | "to">): string
 }
 
 export function renderAppSelection(
-  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "cellLoc" | "tex">,
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "cellLoc" | "tex" | "url">,
+  cwd?: string,
 ): string {
-  const attribution: string[] = [];
-  if (item.sourceLoc !== undefined) {
-    attribution.push(`authored at ${item.sourceLoc}`);
-  }
-  if (item.cell !== undefined) {
-    // The definition site (the `cell(...)` call) rides along when stamped —
-    // the file an agent should open for "the computation behind this".
-    attribution.push(
-      `produced by cell ${item.cell}${item.cellLoc !== undefined ? ` defined at ${item.cellLoc}` : ""}`,
-    );
-  }
-  if (item.tex !== undefined) {
-    attribution.push(`rendered mathematics — TeX source: ${item.tex}`);
-  }
-  const attr = attribution.length > 0 ? ` (${attribution.join("; ")})` : "";
   const text = (item.text ?? "").trim();
+  const meta = selectionMetadata(item, cwd);
   if (text.length <= SHORT_SELECTION_CHARS) {
-    return `Regarding the on-screen selection "${text}"${attr}`;
+    const head = `[selected text: "${text}"]`;
+    return meta === undefined ? head : `\n${head}\n${meta}\n`;
   }
-  return `\nRegarding this on-screen selection${attr}:\n\`\`\`\n${text}\n\`\`\`\n`;
+  const n = text.split("\n").length;
+  const head = `[selected text (${n} ${n === 1 ? "line" : "lines"})]:`;
+  const fence = `\`\`\`\n${elideLines(text)}\n\`\`\``;
+  return `\n${[head, fence, ...(meta !== undefined ? [meta] : [])].join("\n")}\n`;
 }
 
 // ── shot rendering (the inline block) ────────────────────────────────────────

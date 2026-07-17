@@ -852,6 +852,7 @@ function placeItems(
         ...(event.cell !== undefined ? { cell: event.cell } : {}),
         ...(event.cellLoc !== undefined ? { cellLoc: event.cellLoc } : {}),
         ...(event.tex !== undefined ? { tex: event.tex } : {}),
+        ...(event.url !== undefined ? { url: event.url } : {}),
         ...(event.marker !== undefined ? { marker: event.marker } : {}),
       };
       const existing = selectionByKey.get(key);
@@ -881,6 +882,7 @@ function placeItems(
         kind: "code-selection",
         text: event.text,
         ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
+        ...(event.url !== undefined ? { url: event.url } : {}),
         lines: event.lines ?? event.text.split("\n").length,
         ...(event.marker !== undefined ? { marker: event.marker } : {}),
       });

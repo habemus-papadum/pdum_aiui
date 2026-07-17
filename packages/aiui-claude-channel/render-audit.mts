@@ -239,9 +239,24 @@ show("Short code selection with locator (inlined)", "Trigger: ≤240 chars.", [
   },
 ]);
 
-show("Short code selection, no locator", 'Trigger: `sourceLoc` absent → "the selection".', [
+show("Short code selection, no locator", "Trigger: `sourceLoc` absent → `MISSING_LOCATION`.", [
   { kind: "code-selection", marker: "code_1", text: "let y = 2;" },
 ]);
+
+show(
+  "Short code selection with a contributing view's tab",
+  "Trigger: the event carried `url` → the canonical `<tab>` record in metadata.",
+  [
+    {
+      kind: "code-selection",
+      marker: "code_1",
+      text: "const x = 1;",
+      sourceLoc: `${CWD}/src/a.ts:5:1`,
+      url: "http://localhost:5173/reader",
+      lines: 1,
+    },
+  ],
+);
 
 show("Long code selection (fenced block with line count)", "Trigger: >240 chars.", [
   text("refactor this"),
@@ -258,24 +273,45 @@ show("Long code selection (fenced block with line count)", "Trigger: >240 chars.
   text("into one generic"),
 ]);
 
+show(
+  "Very long code selection (elided past 50 lines)",
+  "Trigger: >50 lines → first 50 + an elision count inside the fence.",
+  [
+    {
+      kind: "code-selection",
+      marker: "code_1",
+      text: Array.from({ length: 60 }, (_, i) => `const row${i + 1} = compute(${i + 1});`).join(
+        "\n",
+      ),
+      sourceLoc: `${CWD}/src/table.ts:1-60`,
+      lines: 60,
+    },
+  ],
+);
+
 md("## D. App (on-screen) selections\n");
 
 show("Short app selection, no attribution", "", [
   { kind: "app-selection", marker: "sel_1", text: "42.7" },
 ]);
 
-show("Short app selection, full attribution", "Trigger: sourceLoc + cell + cellLoc.", [
-  text("why is"),
-  {
-    kind: "app-selection",
-    marker: "sel_1",
-    text: "42.7",
-    sourceLoc: `${CWD}/src/Readout.tsx:12:4`,
-    cell: "meanValue",
-    cellLoc: `${CWD}/src/model.ts:33`,
-  },
-  text("so high"),
-]);
+show(
+  "Short app selection, full attribution (metadata block with cell + tab)",
+  "Trigger: sourceLoc + cell + cellLoc + the page url.",
+  [
+    text("why is"),
+    {
+      kind: "app-selection",
+      marker: "sel_1",
+      text: "42.7",
+      sourceLoc: `${CWD}/src/Readout.tsx:12:4`,
+      cell: "meanValue",
+      cellLoc: `${CWD}/src/model.ts:33`,
+      url: "http://localhost:5173/sim?run=3",
+    },
+    text("so high"),
+  ],
+);
 
 show("App selection of rendered mathematics (TeX attribution)", "", [
   {

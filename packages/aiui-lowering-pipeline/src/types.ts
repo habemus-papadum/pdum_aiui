@@ -475,6 +475,8 @@ export interface ComposedItem {
   origin?: "paste";
   /** A selection item's locator (`file:line:col` / `file:start-end`). */
   sourceLoc?: string;
+  /** A selection item's page `location.href` — rendered as the `<tab>` record. */
+  url?: string;
   /** A code-selection item's line count. */
   lines?: number;
   /** An app-selection item's producing dataflow cell (`data-cell`). */
@@ -527,6 +529,7 @@ export type PromptSpan =
       cell?: string;
       cellLoc?: string;
       tex?: string;
+      url?: string;
     }
   | {
       kind: "code-selection";
@@ -535,6 +538,7 @@ export type PromptSpan =
       marker?: string;
       sourceLoc?: string;
       lines?: number;
+      url?: string;
     }
   | { kind: "navigation" | "tab-switch"; start: number; end: number; from: string; to: string }
   | { kind: "preamble"; start: number; end: number };

@@ -589,9 +589,11 @@ describe("intent-v1 lowering — selections", () => {
     // The selection is intent, placed where it happened in the stream —
     // BEFORE the spoken words here — with the attribution wording inline.
     expect(d.sent[0].text).toBe(
-      'Regarding the on-screen selection "reaction-diffusion on the GPU" ' +
-        "(authored at src/ui/App.tsx:35:13; produced by cell catalog) " +
-        "make this wider",
+      '[selected text: "reaction-diffusion on the GPU"]\n' +
+        '<selection-metadata source="src/ui/App.tsx:35:13">\n' +
+        '  <cell name="catalog"/>\n' +
+        "</selection-metadata>\n" +
+        " make this wider",
     );
     // No preamble section: the stream path never rides selectionSections.
     expect(d.sent[0].text).not.toContain("It concerns this on-screen selection");
@@ -616,7 +618,7 @@ describe("intent-v1 lowering — selections", () => {
     ]);
     await d.fin();
     expect(d.sent[0].text).toBe(
-      "make this wider and match this " + 'Regarding the on-screen selection "the legend caption"',
+      'make this wider and match this [selected text: "the legend caption"]',
     );
   });
 
@@ -631,7 +633,7 @@ describe("intent-v1 lowering — selections", () => {
     await d.fin();
     // The stream's selection rides the body inline; the stale chunk would
     // duplicate it in the preamble — it stands down for this turn.
-    expect(d.sent[0].text).toContain('Regarding the on-screen selection "the fresh selection"');
+    expect(d.sent[0].text).toContain('[selected text: "the fresh selection"]');
     expect(d.sent[0].text).not.toContain("stale send-time selection");
     expect(d.sent[0].text).not.toContain("It concerns this on-screen selection");
 
@@ -674,7 +676,7 @@ describe("intent-v1 lowering — selections", () => {
     ]);
     await d.fin();
     expect(d.sent[0].text).toBe(
-      "rename this helper Regarding `src/c.ts:12:1`: `export function curb() {}`",
+      "rename this helper [code selection at `src/c.ts:12:1`: `export function curb() {}`]",
     );
   });
 
@@ -688,7 +690,9 @@ describe("intent-v1 lowering — selections", () => {
       { at: 5, type: "code-selection-drop", marker: "code_1" },
     ]);
     await d.fin();
-    expect(d.sent[0].text).toBe("compare these Regarding the selection: `const b = 2;`");
+    expect(d.sent[0].text).toBe(
+      "compare these [code selection at MISSING_LOCATION: `const b = 2;`]",
+    );
   });
 
   it("records first-class trace stages for both selection kinds and both drops", async () => {
