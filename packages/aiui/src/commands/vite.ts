@@ -19,11 +19,12 @@ import { startSessionBrowser } from "./browser";
 const VITE_PKG = "vite";
 
 // The environment variable that tells the Vite dev server which channel
-// server's web backend to talk to. Read in the dev-server process by the
-// aiuiDevOverlay() plugin (@habemus-papadum/aiui-dev-overlay/vite), which
-// mounts the intent tool and hands it the port; app source can also read it
-// via Vite's `import.meta.env`. It can NOT be read from inside the prebuilt
-// overlay bundle — see the overlay package's src/vite.ts for that subtlety.
+// server's web backend to talk to. Consumers read it via Vite's
+// `import.meta.env` (e.g. the intent client's channel-port resolution,
+// aiui-intent-client/src/session.ts, and app source that wants the port).
+// That substitution happens when a bundler compiles the file, so it can NOT
+// be read from inside a prebuilt dist bundle — only from source-compiled
+// code (the reason the old dev-overlay integration rode a Vite plugin).
 const VITE_PORT_ENV = "VITE_AIUI_PORT";
 
 /** The channel server `runVite` should point Vite at, or why it couldn't. */

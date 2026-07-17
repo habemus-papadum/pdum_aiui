@@ -21,12 +21,15 @@ transcript) at the center. Three layers:
    `/intent/` (drives real tabs over CDP, no extension) and the MV3 side panel (`dist-ext`,
    the ONE extension `aiui claude` auto-loads since the 2026-07-14 switchover; warm `tabCapture`
    video), both over the same mode-engine core; `PARITY.md`/`BEHAVIOR.md` in that package are
-   the decided contract. The older surfaces remain but demoted: the web intent tool
-   (`mountIntentTool` in `aiui-dev-overlay`, dev-gated overlay) and the frozen `aiui-extension`
-   (safety net, never auto-loaded). Lowering runs are traced to the project-local `.aiui-cache/`
-   (gitignored); the trace debugger (the shared `debug-ui` viewer) is EMBEDDED in the intent
-   panel, still served at `/__aiui/debug` (session-pinned) and standalone via `aiui debug`; the
-   **aiui Chrome DevTools panel** (`aiui-devtools-extension`) still exists as a manual install.
+   the decided contract. Its host-agnostic capture/transport runtime lives in
+   `aiui-intent-runtime` (mic/screen capture, frame sampler, selection watcher, channel wire).
+   The older surfaces are FROZEN read-only awaiting deletion (`docs/proposals/
+   dev-overlay-retirement.md`): `aiui-dev-overlay` (the original web intent tool) and
+   `aiui-extension` (safety net, never auto-loaded). Lowering runs are traced to the
+   project-local `.aiui-cache/` (gitignored); the trace debugger (`aiui-trace-ui`) is EMBEDDED
+   in the intent panel, served at `/__aiui/debug` by its `./vite` plugin (what `aiui debug`
+   runs, session-pinned); the **aiui Chrome DevTools panel** (`aiui-devtools-extension`) still
+   exists as a manual install, frozen with the batch.
    The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`, `/health`);
    every page belongs to a frontend process. (Two sidecar exceptions: the paint sidecar's
    self-contained iPad client page at `/paint/` — an iPad has no frontend process — and the

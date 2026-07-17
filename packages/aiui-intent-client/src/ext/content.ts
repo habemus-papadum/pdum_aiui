@@ -10,7 +10,7 @@
  *
  * Being a real module (Vite bundles it) buys what the CDP bootstrap could not
  * have: it *imports* the ink surface (`../cdp/page-ink`) instead of having a
- * bundle evaluated into it, and it imports the overlay's selection watcher, so
+ * bundle evaluated into it, and it imports the runtime's selection watcher, so
  * selections here are STRUCTURED (source locators, cell ids, TeX) rather than
  * plain text.
  *
@@ -27,8 +27,8 @@
  * for injection and so may not import anything at all.
  */
 
-import { locateComponents } from "@habemus-papadum/aiui-dev-overlay/multimodal-shot";
-import { installSelectionWatcher } from "@habemus-papadum/aiui-dev-overlay/selection";
+import { installSelectionWatcher } from "@habemus-papadum/aiui-intent-runtime/selection";
+import { locateComponents } from "@habemus-papadum/aiui-intent-runtime/shot";
 import { type InkHandle, mountInk, mountPencil, type PencilHandle } from "../cdp/page-ink";
 import type { PageReport } from "../cdp/page-script";
 import { createDriverWatch } from "../page/driver-watch";

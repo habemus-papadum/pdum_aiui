@@ -21,16 +21,16 @@
  *  - shotFlash → the manual-shot flash gate (sampled frames never flash).
  */
 
-import { openIntentThread } from "@habemus-papadum/aiui-dev-overlay/intent-thread";
 import {
   createTalk,
   type PcmSource,
   SpeechPlayer,
   type Talk,
   WorkletPcmSource,
-} from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
-import { VideoSampler } from "@habemus-papadum/aiui-dev-overlay/multimodal-video";
-import { createWire, type Wire } from "@habemus-papadum/aiui-dev-overlay/wire";
+} from "@habemus-papadum/aiui-intent-runtime/talk";
+import { openIntentThread } from "@habemus-papadum/aiui-intent-runtime/thread";
+import { VideoSampler } from "@habemus-papadum/aiui-intent-runtime/video";
+import { createWire, type Wire } from "@habemus-papadum/aiui-intent-runtime/wire";
 import {
   composeIntent,
   DEFAULT_INTENT_CONFIG,

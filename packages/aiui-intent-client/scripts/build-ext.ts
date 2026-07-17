@@ -37,7 +37,7 @@ import { existsSync, watch as fsWatch } from "node:fs";
 import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PCM_WORKLET_SOURCE } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
+import { PCM_WORKLET_SOURCE } from "@habemus-papadum/aiui-intent-runtime/talk";
 import { discoverSessionBrowser, loadUnpackedExtension } from "@habemus-papadum/aiui-util";
 import {
   type BuildOptions,

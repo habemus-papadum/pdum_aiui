@@ -89,7 +89,7 @@ export function mountInk(reportStroke: (points: number) => void): InkHandle {
 // The component locator rides the same evaluated bundle: the bootstrap calls
 // `__aiuiIntentInk.locateComponents(rect)` when a region drag completes on an
 // aiui-instrumented page (data-source-loc stamps → LocatedComponent[]).
-export { locateComponents } from "@habemus-papadum/aiui-dev-overlay/multimodal-shot";
+export { locateComponents } from "@habemus-papadum/aiui-intent-runtime/shot";
 
 // Jump-to-editor rides here too: the bootstrap's `jump` capability calls
 // `__aiuiIntentInk.armJump()` / `disarmJump()` (see ../page/jump-mode.ts).

@@ -6,31 +6,28 @@
  * server to piggyback on: it picks a running channel (the same registry +
  * selector `aiui vite` uses — a lone channel is taken directly, several
  * prompt), then runs a small Vite dev server whose only job is the
- * `aiuiDevOverlay()` plugin's `/__aiui/debug` page — the shared debug-ui
- * viewer (trace list + live-followed TraceView). The page's header offers a
- * **channel switcher** fed by the channel's `/debug/api/channels` route, so
- * one command inspects every channel on the machine, hopping between them
- * mid-session.
+ * `traceViewer()` plugin's `/__aiui/debug` page — the shared trace-debugger
+ * viewer (trace list + live-followed TraceView; `@habemus-papadum/aiui-trace-ui`).
+ * The page's header offers a **channel switcher** fed by the channel's
+ * `/debug/api/channels` route, so one command inspects every channel on the
+ * machine, hopping between them mid-session.
  *
  * Vite (a real dependency of this package) is used as the module server so the
- * viewer is served exactly the way the in-app `/__aiui/debug` page is — one
- * implementation, no prebuilt bundle to keep in sync. The server root is this
- * package's own directory: that is where `@habemus-papadum/aiui-dev-overlay`
- * (the virtual mount module's import) resolves from, in both the workspace
- * (source-first) and installed (dist) shapes.
+ * viewer is served from source, one implementation, no prebuilt bundle to keep
+ * in sync. The server root is this package's own directory: that is where
+ * `@habemus-papadum/aiui-trace-ui` (the virtual mount module's import)
+ * resolves from, in both the workspace (source-first) and installed (dist)
+ * shapes.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel";
-import { aiuiDevOverlay } from "@habemus-papadum/aiui-dev-overlay/vite";
+import { DEBUG_ROUTE, traceViewer } from "@habemus-papadum/aiui-trace-ui/vite";
 import chalk from "chalk";
 import { createServer, type Plugin } from "vite";
 import { printError } from "../util/ui";
 import { resolveChannelTarget } from "./vite";
-
-/** The route the overlay plugin serves the viewer at (its contract). */
-const DEBUG_ROUTE = "/__aiui/debug";
 
 /** Default UI port; Vite walks up from here when it's taken. */
 const DEFAULT_UI_PORT = 4747;
@@ -109,10 +106,9 @@ export async function runDebug(opts: DebugOptions = {}): Promise<void> {
   const ui = await createServer({
     root,
     configFile: false,
-    // `mount: false`: this server hosts the viewer, not an app — nothing to
-    // arm, so the intent tool stays out of it. The plugin still serves the
-    // DEBUG_ROUTE page and seeds the picked channel's port into it.
-    plugins: [home, aiuiDevOverlay({ port: server.port, mount: false }) as Plugin],
+    // The plugin serves the DEBUG_ROUTE page and seeds the picked channel's
+    // port into it; this server hosts the viewer, not an app.
+    plugins: [home, traceViewer({ port: server.port }) as Plugin],
     server: {
       port: Number.isInteger(uiPort) && uiPort > 0 ? uiPort : DEFAULT_UI_PORT,
       open: opts.open === false ? false : DEBUG_ROUTE,

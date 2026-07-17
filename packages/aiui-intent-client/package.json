@@ -52,11 +52,12 @@
     "dev:plain": "vite"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-dev-overlay": "workspace:^",
     "@habemus-papadum/aiui-ink": "workspace:^",
+    "@habemus-papadum/aiui-intent-runtime": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-remote-bar": "workspace:^",
+    "@habemus-papadum/aiui-trace-ui": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",

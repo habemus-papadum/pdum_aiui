@@ -1,11 +1,17 @@
 # Retiring the dev overlay (and the extensions with it)
 
-Status: **paused — decision pending** (2026-07-16). This is the next chapter after
-[the plugin restructure](./plugin-restructure.md): that plan pulled the app-side integration out
-of the overlay; this one retires the overlay itself, along with the two browser extensions that
-still lean on it. The mechanical groundwork has landed; the structural question that gates the rest
-is left open **on purpose** — the owner wants to decide whether to keep pushing this refactor or
-bank it and move on to features. Read this cold and you should be able to pick up either way.
+Status: **steps 1–3 landed** (2026-07-16, same day the pause was recorded — the owner decided to
+continue). Both open decisions are settled and executed: the runtime was copied into
+**`aiui-intent-runtime`** (capture + transport) and the trace UI into its own
+**`aiui-trace-ui`** (decision #2: own package), both `--public`; the intent client is repointed
+at them; `aiui-dev-overlay` is frozen as a read-only reference (README/CLAUDE banners); and
+`aiui debug` is fixed (the trace-ui package's `./vite` plugin now owns serving `/__aiui/debug`).
+What remains is **step 4 only** — deleting the batch (`aiui-dev-overlay` + `aiui-extension` +
+`aiui-devtools-extension`) later, with the stale-docs loose ends below folded into that pass.
+
+This is the next chapter after [the plugin restructure](./plugin-restructure.md): that plan
+pulled the app-side integration out of the overlay; this one retires the overlay itself, along
+with the two browser extensions that still lean on it.
 
 ## The goal
 
@@ -178,35 +184,39 @@ duplicate** of ~6.7k source lines (`multimodal/` ≈ 5,250; substrate + `selecti
 > and shim only what the frozen extension still needs. That reaches one-copy sooner but guts the
 > reference. We chose to keep the reference (owner priority: "useful to have around now").
 
-## Open decisions (this is why we paused)
+## Open decisions — both DECIDED and executed (2026-07-16)
 
-1. **Separate package vs. fold into the intent client — DECIDED: separate package.** The owner
-   wants it as its own package (name TBD; something honest about what it *is* — an intent/capture
-   runtime — not the overlay lineage). Note for the record: the usual argument *against* a separate
+1. **Separate package vs. fold into the intent client — DECIDED: separate package.** Landed as
+   **`aiui-intent-runtime`** (`--public` — forced anyway: the intent client publishes public and
+   its artifact depends on it). Note for the record: the usual argument *against* a separate
    package is that a package earns its keep only with a second live host, and today the intent
-   client is the only one (the extension, the other historical host, is in this deletion batch). The
-   owner's call stands regardless; noting it so the tradeoff is on paper.
+   client is the only one (the extension, the other historical host, is in this deletion batch).
+   The owner's call stands regardless; noting it so the tradeoff is on paper.
 
-2. **Where the trace UI (`debug-ui` / `TracesPane`) lives — UNDECIDED. This is the pause point.**
-   It was a surprise that the rich trace viewer *is* the debug-ui portion, and it is **live in the
-   panel today** (`ui/trace-pane.tsx` mounts `TracesPane` as a Solid island;
-   `panel-layout.tsx` wires it; `trace-pane.test.tsx` covers it). So "kill debug-ui" is not a
-   no-op — it deletes a shipping feature. Three futures, unranked:
-   - it comes along into the new runtime package (it *is* the "Inspect" third of the runtime);
-   - it becomes **its own** package (it is genuinely standalone and framework-free — three homes
-     already: the panel island, the DevTools extension, and the `/__aiui/debug` page);
-   - the panel drops the rich pane entirely.
-   Until this is settled, the cleanest interim is to **leave the intent client importing `debug-ui`
-   from the frozen dev-overlay** — it is self-contained and doesn't need to move on the same clock
-   as the capture/transport runtime.
+2. **Where the trace UI (`debug-ui` / `TracesPane`) lives — DECIDED: its own package,
+   `aiui-trace-ui`** (`--public`). It is genuinely standalone and framework-free, and it kept a
+   second live host after the batch dies: the panel island *and* the `aiui` CLI's standalone
+   viewer. Folding it into the runtime would have made the CLI depend on the whole capture stack
+   just to serve a trace page. The package also owns **serving** its standalone page: a new
+   `./vite` entry (`traceViewer({ port })`) serves `/__aiui/debug` — which is what fixed
+   `aiui debug`.
 
-## Loose ends to fold into the pass (not before it)
+### How the copy was slimmed (differs from the map above — deliberately)
 
-- **`aiui debug` is currently broken.** The CLI's standalone trace viewer calls the
-  `aiuiDevOverlay({ port, mount })` shim expecting it to serve `/__aiui/debug`, but the restructure
-  reduced that shim to locator-only — so `aiui debug` now redirects `/` → `/__aiui/debug` and 404s.
-  This is a **debug-ui** problem and should be re-homed together with decision #2 (whoever owns the
-  trace UI owns serving its standalone page).
+The `overlay-tools`/`tools-bridge` pair was **not** copied. Its entire contribution to the
+closure was one four-value string union (`ThreadSocketState`, reached through type-only
+imports), now defined in the runtime's `wire.ts` directly. Everything else came whole:
+20 source files → 17 (flattened, no `multimodal/` nesting; `talk-entry`/`video-entry` became
+the `./talk` entry barrel and a direct `./video` export), 11 test files + `fake-socket`,
+`OverlayError*` → `IntentError*`, stale composer references (`modality.ts`) rewritten to "the
+host". The core-plus-injected-edge discipline is documented in the runtime's README as the
+thing to preserve.
+
+## Loose ends to fold into the deletion pass (not before it)
+
+- ~~**`aiui debug` is currently broken.**~~ **FIXED** with decision #2: `aiui-trace-ui/vite`'s
+  `traceViewer({ port })` serves `/__aiui/debug`, and `commands/debug.ts` rides it (verified live
+  against a running channel). The `aiui` package no longer depends on `aiui-dev-overlay`.
 - **Stale `CLAUDE.md` ground-rules.** The demo/template CLAUDE files (twins, walkthrough, july09,
   the create-aiui template) still say *"the `aiuiDevOverlay()` plugin in `vite.config.ts` mounts the
   intent tool and connects it to this session's channel."* Post-restructure that is doubly wrong —
@@ -218,8 +228,10 @@ duplicate** of ~6.7k source lines (`multimodal/` ≈ 5,250; substrate + `selecti
 
 ## Status line for whoever picks this up
 
-Groundwork done and staged. **Nothing structural should start until decision #2 is made.** If the
-answer is "move on to features for now," this document is the durable snapshot — the runtime map,
-the copy-paste rationale, and the two open questions are all here, and the frozen overlay is still
-readable in-tree. If the answer is "continue," step 1 (freeze) and step 3 (repoint, import-site by
-import-site) are mechanical; step 2's only judgment call is the `debug-ui` home.
+Steps 1–3 are landed (all gates green: repo typecheck, `pnpm -r test`, `pnpm test:packaging` with
+the two new packages in the tarball matrix, version lockstep, biome). What's left is **step 4** —
+delete `aiui-dev-overlay` + `aiui-extension` + `aiui-devtools-extension` as one batch when we're
+sure nothing wants them as reference — folding in the stale-`CLAUDE.md` ground-rules and the docs
+prose sweep above. One operational note: the new names still need their one-time npm provisioning
+before the next release (`pnpm npm:reserve aiui-intent-runtime aiui-trace-ui`, then
+`pnpm npm:trust …` — run locally; see CLAUDE.md "Trusted publishing").

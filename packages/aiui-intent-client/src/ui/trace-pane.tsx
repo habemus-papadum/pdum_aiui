@@ -21,7 +21,7 @@
  * panel polls the discovered channel port (loopback fetch — host_permissions).
  */
 
-import { TracesPane } from "@habemus-papadum/aiui-dev-overlay/debug-ui";
+import { TracesPane } from "@habemus-papadum/aiui-trace-ui";
 import { createEffect, createSignal, onCleanup } from "solid-js";
 
 export const TRACE_PANE_STYLES = `

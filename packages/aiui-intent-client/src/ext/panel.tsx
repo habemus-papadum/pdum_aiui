@@ -16,7 +16,7 @@
  * worker's message and crosses the imperative boundary exactly as the page does.
  */
 
-import { WorkletPcmSource } from "@habemus-papadum/aiui-dev-overlay/multimodal-talk";
+import { WorkletPcmSource } from "@habemus-papadum/aiui-intent-runtime/talk";
 import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { activationGesture } from "../activation";

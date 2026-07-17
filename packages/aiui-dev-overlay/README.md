@@ -1,5 +1,12 @@
 # @habemus-papadum/aiui-dev-overlay
 
+> **FROZEN — read-only reference (2026-07-16).** This package is retired and awaiting deletion
+> alongside `aiui-extension` and `aiui-devtools-extension` (see
+> `docs/proposals/dev-overlay-retirement.md`). It stays intact and compiling so the original
+> design can be read against, but **nobody edits it**. Its live runtime moved to
+> `@habemus-papadum/aiui-intent-runtime` (capture + transport) and
+> `@habemus-papadum/aiui-trace-ui` (the trace-debugger UI) — make changes there.
+
 Browser-side aiui tools for a page under development — dev-gated, double-injection safe,
 Shadow-DOM isolated, dependency-free. The bundled Vite plugin (`./vite`) injects and mounts them
 for you; importing and mounting manually stays available for custom setups.

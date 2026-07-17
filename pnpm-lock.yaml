@@ -237,12 +237,12 @@ importers:
       '@habemus-papadum/aiui-claude-plugin':
         specifier: workspace:^
         version: link:../aiui-claude-plugin
-      '@habemus-papadum/aiui-dev-overlay':
-        specifier: workspace:^
-        version: link:../aiui-dev-overlay
       '@habemus-papadum/aiui-devtools-extension':
         specifier: workspace:^
         version: link:../aiui-devtools-extension
+      '@habemus-papadum/aiui-trace-ui':
+        specifier: workspace:^
+        version: link:../aiui-trace-ui
       '@habemus-papadum/aiui-util':
         specifier: workspace:^
         version: link:../aiui-util
@@ -420,12 +420,12 @@ importers:
 
   packages/aiui-intent-client:
     dependencies:
-      '@habemus-papadum/aiui-dev-overlay':
-        specifier: workspace:^
-        version: link:../aiui-dev-overlay
       '@habemus-papadum/aiui-ink':
         specifier: workspace:^
         version: link:../aiui-ink
+      '@habemus-papadum/aiui-intent-runtime':
+        specifier: workspace:^
+        version: link:../aiui-intent-runtime
       '@habemus-papadum/aiui-lowering-pipeline':
         specifier: workspace:^
         version: link:../aiui-lowering-pipeline
@@ -435,6 +435,9 @@ importers:
       '@habemus-papadum/aiui-remote-bar':
         specifier: workspace:^
         version: link:../aiui-remote-bar
+      '@habemus-papadum/aiui-trace-ui':
+        specifier: workspace:^
+        version: link:../aiui-trace-ui
       '@habemus-papadum/aiui-util':
         specifier: workspace:^
         version: link:../aiui-util
@@ -481,6 +484,25 @@ importers:
       vite-plugin-solid:
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
+
+  packages/aiui-intent-runtime:
+    dependencies:
+      '@habemus-papadum/aiui-ink':
+        specifier: workspace:^
+        version: link:../aiui-ink
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
+    devDependencies:
+      '@habemus-papadum/aiui-claude-channel':
+        specifier: workspace:^
+        version: link:../aiui-claude-channel
+      jsdom:
+        specifier: ^29.0.0
+        version: 29.1.1
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-lowering-pipeline:
     dependencies:
@@ -657,6 +679,19 @@ importers:
       vite-plugin-solid:
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
+
+  packages/aiui-trace-ui:
+    dependencies:
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
+    devDependencies:
+      jsdom:
+        specifier: ^29.0.0
+        version: 29.1.1
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-util:
     dependencies:
