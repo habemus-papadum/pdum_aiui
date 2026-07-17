@@ -160,22 +160,39 @@ export function selectionSections(selection: SelectionContext | undefined): stri
 }
 
 /**
- * Wrap a user prompt in already-assembled context sections. The one place the
- * enclosing wording lives — {@link augmentTextPrompt} and the `intent-v1`
- * lowering both feed it their sections so the two formats stay byte-identical.
- * No sections → the text is returned unchanged (a bare client still works).
+ * Wrap a user prompt in already-assembled context sections, also reporting the
+ * length of the prepended preamble. `preambleLen` is the character offset the
+ * body was shifted by (0 when no sections were added) — the intent lowering
+ * uses it to prepend a `preamble` {@link PromptSpan} and shift the body spans,
+ * so the trace hero can grey the preamble without string-splitting on the
+ * `---` separator. The body is the join's last segment, so its offset is
+ * exactly `result.length - text.length`.
  */
-export function wrapWithContext(sections: string[], text: string): string {
+export function wrapWithContextParts(
+  sections: string[],
+  text: string,
+): { text: string; preambleLen: number } {
   if (sections.length === 0) {
-    return text;
+    return { text, preambleLen: 0 };
   }
-  return [
+  const result = [
     "This prompt was sent from the aiui web intent tool running in a web app under development.",
     ...sections,
     "The user's prompt follows.",
     "---",
     text,
   ].join("\n\n");
+  return { text: result, preambleLen: result.length - text.length };
+}
+
+/**
+ * Wrap a user prompt in already-assembled context sections. The one place the
+ * enclosing wording lives — {@link augmentTextPrompt} and the `intent-v1`
+ * lowering both feed it their sections so the two formats stay byte-identical.
+ * No sections → the text is returned unchanged (a bare client still works).
+ */
+export function wrapWithContext(sections: string[], text: string): string {
+  return wrapWithContextParts(sections, text).text;
 }
 
 /**

@@ -58,6 +58,7 @@ import {
   DEFAULT_INTENT_CONFIG,
   expandTier,
   type IntentEvent,
+  type PromptSpan,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   type ChannelFormat,
@@ -80,7 +81,7 @@ import {
   promptContextSections,
   type SelectionContext,
   selectionSections,
-  wrapWithContext,
+  wrapWithContextParts,
 } from "./prompt-context";
 import {
   DEFAULT_REALTIME_MODEL,
@@ -126,6 +127,13 @@ export interface LoweredPromptMessage {
   threadId: string;
   /** The full composed prompt (context preamble + body), exactly as sent. */
   prompt: string;
+  /**
+   * Offset-annotated structure over {@link prompt} — the body spans from
+   * {@link composeIntent}, shifted past the context preamble, with a leading
+   * `preamble` span. A client renders the raw prompt with hover-previews and a
+   * de-emphasized preamble from these instead of re-parsing. Additive.
+   */
+  spans?: PromptSpan[];
   /** The Option-C attachment paths, when the prompt carries `{shot_N}` tokens. */
   meta?: Record<string, string>;
 }
@@ -732,7 +740,14 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     trace?.record({
       kind: "ir",
       label: "composed (speculative)",
-      data: { transcript: lastComposed.transcript, prompt: lastComposed.prompt },
+      // The speculative prompt is the BODY only (no context preamble yet), so
+      // its spans are composeIntent's body spans as-is — the hero renders them
+      // over the body while the turn is still in flight.
+      data: {
+        transcript: lastComposed.transcript,
+        prompt: lastComposed.prompt,
+        spans: lastComposed.spans,
+      },
     });
   };
 
@@ -1492,10 +1507,27 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // already part of composed.prompt. The preamble's selection section
       // survives only for the legacy send-time `context` chunk (older
       // clients), and stands down when the stream carried its own selections.
-      const prompt = wrapWithContext(
+      const { text: prompt, preambleLen } = wrapWithContextParts(
         [...staticSections, ...selectionSections(streamHasSelection ? undefined : selection)],
         composed.prompt,
       );
+      // The sent prompt's spans: composeIntent's body spans shifted past the
+      // context preamble, with the preamble itself as a leading span so the
+      // hero can grey it. Recorded as its own stage because the `lowered prompt`
+      // output stage is written by the generic sendPrompt tracer (which carries
+      // only the text) — the hero pairs the two by threadId/proximity.
+      const spans: PromptSpan[] =
+        preambleLen > 0
+          ? [
+              { kind: "preamble", start: 0, end: preambleLen },
+              ...composed.spans.map((s) => ({
+                ...s,
+                start: s.start + preambleLen,
+                end: s.end + preambleLen,
+              })),
+            ]
+          : composed.spans;
+      trace?.record({ kind: "ir", label: "lowered prompt spans", data: { spans } });
       const meta = Object.keys(composed.meta).length > 0 ? composed.meta : undefined;
       // Show the client what is about to be committed (pushed first, so the
       // widget's view of the prompt never lags the session notification).
@@ -1503,6 +1535,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         kind: "lowered-prompt",
         threadId: ctx.threadId,
         prompt,
+        // Omit when empty (a bare-client text-only prompt) — additive, like meta.
+        ...(spans.length > 0 ? { spans } : {}),
         ...(meta !== undefined ? { meta } : {}),
       } satisfies LoweredPromptMessage);
       await ctx.sendPrompt(prompt, meta);

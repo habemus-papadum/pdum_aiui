@@ -29,7 +29,7 @@
  * disclosures the user opened (keyed by the card's first stage index) and the
  * filter state (instance-held, the chips are built once).
  */
-import { wordDiff } from "@habemus-papadum/aiui-lowering-pipeline";
+import { type PromptSpan, wordDiff } from "@habemus-papadum/aiui-lowering-pipeline";
 import { renderJsonTree } from "./json-tree";
 import { defaultPreviewUrl, type PreviewUrl, renderPathText } from "./paths";
 import type { LiveTrace, TraceStageLike } from "./sources";
@@ -47,6 +47,7 @@ import {
   eventTypesSummary,
   formatDuration,
   formatUsd,
+  heroPrompt,
   isImageFile,
   isPartialLabel,
   isPlayableAudioFile,
@@ -54,15 +55,11 @@ import {
   liveOpenLine,
   liveResolvedSummary,
   liveToolSegments,
-  loweredPromptText,
   noPromptMessage,
   parsePatchLines,
-  parseShotBlocks,
   previousPartialText,
   savedFrameFiles,
   shotBlobName,
-  speculativePromptText,
-  splitLoweredPrompt,
   TOGGLE_CATEGORIES,
   type TraceCard,
   traceDurationMs,
@@ -238,66 +235,90 @@ export class TraceView {
 
   private renderHero(trace: LiveTrace): void {
     this.heroEl.replaceChildren();
-    const stage = (trace.stages ?? []).find((s) => s.label === "lowered prompt");
-    const sent = loweredPromptText(stage);
-    // Before the turn commits there is no `lowered prompt` stage — but the
-    // accumulator has been recording its rendered prompt at every fold, so show
-    // that instead of "no prompt". Badged, because a speculative prompt is not
-    // what was (or will be) sent: later interactions still change it.
-    const speculative = sent === "" ? speculativePromptText(trace.stages) : "";
-    const text = sent || speculative;
+    // The prompt the agent actually reads, as ONE raw block — plus the spans
+    // composeIntent handed us. The hero renders the text verbatim and overlays
+    // structure from the spans; it no longer re-parses the string.
+    const { text, spans, speculative } = heroPrompt(trace.stages);
     if (text === "") {
       const note = this.el("div", "aiui-dbg-hero-none");
       note.textContent = noPromptMessage(traceOutcome(trace).state);
       this.heroEl.append(note);
       return;
     }
-    if (speculative !== "") {
+    if (speculative) {
+      // A speculative fold is not what was (or will be) sent — later
+      // interactions still change it.
       const badge = this.el("div", "aiui-dbg-hero-preview");
       badge.textContent = "preview · the prompt as last folded, not yet sent";
       this.heroEl.append(badge);
     }
-    const { preamble, body } = splitLoweredPrompt(text);
-    if (preamble) {
-      const pre = this.el("div", "aiui-dbg-hero-preamble");
-      renderPathText(pre, preamble, this.previewUrl);
-      this.heroEl.append(pre);
-    }
-    const bodyEl = this.el("div", "aiui-dbg-hero-body");
-    for (const seg of parseShotBlocks(body)) {
-      if (seg.kind === "text") {
-        const span = this.doc.createElement("span");
-        renderPathText(span, seg.text, this.previewUrl);
-        bodyEl.append(span);
-      } else {
-        bodyEl.append(this.renderHeroShot(trace.id ?? "", seg.path, seg.block));
-      }
-    }
-    this.heroEl.append(bodyEl);
+    const raw = this.el("pre", "aiui-dbg-hero-raw");
+    this.renderAnnotatedPrompt(raw, text, spans, trace.id ?? "");
+    this.heroEl.append(raw);
   }
 
-  /** A screenshot block in the hero body → a bounded, clickable thumbnail + caption. */
-  private renderHeroShot(traceId: string, path: string | undefined, block: string): HTMLElement {
-    const fig = this.el("figure", "aiui-dbg-shot");
-    const url = this.shotUrl(traceId, path);
-    if (url) {
-      const img = this.doc.createElement("img");
-      img.src = url;
-      img.loading = "lazy";
-      img.style.maxHeight = `${THUMB_MAX}px`;
-      img.alt = path ?? "screenshot";
-      img.addEventListener("click", () => this.doc.defaultView?.open(url, "_blank"));
-      attachImagePeek(img, url, this.doc);
-      fig.append(img);
-    } else {
-      const missing = this.el("div", "aiui-dbg-shot-missing");
-      missing.textContent = "🖼 (image not captured)";
-      fig.append(missing);
+  /**
+   * Render `text` verbatim into `container`, cutting only at the spans the hero
+   * styles specially: `shot` (the raw block becomes a hover-preview link to the
+   * captured image) and `preamble` (de-emphasized). Every other region — and
+   * every other span kind, e.g. a selection's `file:line` locator — is plain
+   * text that `renderPathText` turns into a preview hyperlink for free. Spans
+   * are trusted from the compiler; out-of-range or overlapping ones are skipped
+   * defensively so a malformed payload degrades to plain text, never throws.
+   */
+  private renderAnnotatedPrompt(
+    container: HTMLElement,
+    text: string,
+    spans: PromptSpan[],
+    traceId: string,
+  ): void {
+    const cuts = spans
+      .filter((s) => s.kind === "shot" || s.kind === "preamble")
+      .filter((s) => s.start >= 0 && s.start < s.end && s.end <= text.length)
+      .sort((a, b) => a.start - b.start);
+    const plain = (slice: string): void => {
+      if (slice === "") {
+        return;
+      }
+      const span = this.doc.createElement("span");
+      renderPathText(span, slice, this.previewUrl);
+      container.append(span);
+    };
+    let cursor = 0;
+    for (const cut of cuts) {
+      if (cut.start < cursor) {
+        continue; // overlapping span — keep the earlier one, skip this
+      }
+      plain(text.slice(cursor, cut.start));
+      const slice = text.slice(cut.start, cut.end);
+      if (cut.kind === "preamble") {
+        const pre = this.el("span", "aiui-dbg-hero-preamble");
+        renderPathText(pre, slice, this.previewUrl);
+        container.append(pre);
+      } else {
+        container.append(this.renderShotSpan(traceId, cut, slice));
+      }
+      cursor = cut.end;
     }
-    const caption = this.el("figcaption", "aiui-dbg-shot-cap");
-    caption.textContent = shotCaption(path, block);
-    fig.append(caption);
-    return fig;
+    plain(text.slice(cursor));
+  }
+
+  /**
+   * A `shot` span → its raw screenshot block, styled as a hover-preview link:
+   * hovering peeks the captured image (attachImagePeek), clicking opens it. The
+   * pixels resolve from the span's own `path` (shotUrl → trace blob), so no
+   * attribute is parsed back out of the text.
+   */
+  private renderShotSpan(traceId: string, span: PromptSpan, slice: string): HTMLElement {
+    const el = this.el("span", "aiui-dbg-hero-shot");
+    el.textContent = slice;
+    const url = this.shotUrl(traceId, span.kind === "shot" ? span.path : undefined);
+    if (url) {
+      el.classList.add("aiui-dbg-hero-shot-link");
+      el.addEventListener("click", () => this.doc.defaultView?.open(url, "_blank"));
+      attachImagePeek(el, url, this.doc);
+    }
+    return el;
   }
 
   /** The best URL for a shot: its stable trace blob if we can name it, else the path preview. */
@@ -838,19 +859,6 @@ export class TraceView {
     node.className = className;
     return node;
   }
-}
-
-/** A short caption for a hero screenshot: its element names, else the shot id. */
-function shotCaption(path: string | undefined, block: string): string {
-  const elements = [...block.matchAll(/<element\b[^>]*\bname="([^"]*)"/g)].map((m) => m[1]);
-  const id = path ? (shotBlobName(path) ?? path.split(/[\\/]/).pop() ?? path) : "screenshot";
-  if (elements.length === 0) {
-    return id;
-  }
-  // A big drag frames many panels; the caption is triage, so first few + count.
-  const shown = elements.slice(0, 4).join(", ");
-  const more = elements.length - 4;
-  return `${id} · ${shown}${more > 0 ? ` +${more}` : ""}`;
 }
 
 /**

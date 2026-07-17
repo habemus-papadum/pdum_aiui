@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { composeIntent, Engine, renderAppSelection, renderCodeSelection } from "./engine";
+import { composeIntent, Engine } from "./engine";
+import { renderAppSelection, renderCodeSelection } from "./render";
 
 function armedEngine(): Engine {
   let t = 0;

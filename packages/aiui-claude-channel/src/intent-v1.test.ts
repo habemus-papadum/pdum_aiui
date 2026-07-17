@@ -326,6 +326,38 @@ describe("intent-v1 lowered-prompt push", () => {
     expect(message.meta).toBeUndefined();
     expect(d.sent[0].meta).toBeUndefined();
   });
+
+  it("pushes spans that slice the wrapped prompt (shot block + shifted past the preamble)", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-intent-"));
+    // A source-root hello produces a context preamble, so the body spans get
+    // shifted — exercising the preambleLen > 0 path, not just the bare case.
+    const d = drive({ cache, hello: { source: { root: "/proj" }, intent: {} } as HelloMeta });
+    await d.feedEvents(loadFixture("full-turn-send.json"));
+    await d.feedAttachment("shot_1", "image/png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    await d.fin();
+
+    const message = d.pushed.find(
+      (m) => (m as { kind?: string }).kind === "lowered-prompt",
+    ) as LoweredPromptMessage;
+    expect(message.spans).toBeDefined();
+    const spans = message.spans ?? [];
+    // Every span's offsets land inside the wrapped prompt and slice their kind.
+    for (const span of spans) {
+      expect(span.start).toBeGreaterThanOrEqual(0);
+      expect(span.end).toBeLessThanOrEqual(message.prompt.length);
+      const sliced = message.prompt.slice(span.start, span.end);
+      if (span.kind === "shot") {
+        // The shot span brackets the screenshot block even though it sits
+        // AFTER the context preamble — i.e. the preamble shift is correct.
+        expect(sliced).toContain("<screenshot");
+      } else if (span.kind === "preamble") {
+        expect(span.start).toBe(0);
+        expect(sliced).toContain("The user's prompt follows.");
+      }
+    }
+    // There is at least one shot span to have exercised the offset math.
+    expect(spans.some((s) => s.kind === "shot")).toBe(true);
+  });
 });
 
 describe("intent-v1 server transcription", () => {

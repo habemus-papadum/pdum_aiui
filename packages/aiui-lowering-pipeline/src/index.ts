@@ -28,19 +28,8 @@ export {
   TRANSCRIPTION_ENGINES,
   type TranscriptionEngine,
 } from "./config";
-export type {
-  ComposedIntent,
-  ComposedItem,
-  ComposeOptions,
-  EngineListener,
-} from "./engine";
-export {
-  composeIntent,
-  Engine,
-  renderAppSelection,
-  renderCodeSelection,
-  SHORT_SELECTION_CHARS,
-} from "./engine";
+export type { EngineListener } from "./engine";
+export { composeIntent, Engine } from "./engine";
 export type { KeyCommand, KeymapHelpSection, KeyState } from "./keymap";
 export {
   ENGINE_DIGITS,
@@ -52,13 +41,23 @@ export {
 } from "./keymap";
 export type { DiffRun } from "./patch";
 export { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
+export {
+  renderAppSelection,
+  renderCodeSelection,
+  renderPrompt,
+  SHORT_SELECTION_CHARS,
+} from "./render";
 export type {
   AppSelection,
   CodeSelection,
+  ComposedIntent,
+  ComposedItem,
+  ComposeOptions,
   IntentEvent,
   LocatedCell,
   LocatedComponent,
   Mode,
+  PromptSpan,
   Rect,
   ShotShare,
   TranscriptWord,

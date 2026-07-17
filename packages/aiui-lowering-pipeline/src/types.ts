@@ -441,3 +441,171 @@ export type IntentEvent =
    * lives in the trace stage's data). Compiler-skipped like its request.
    */
   | { at: number; type: "linter-tool-result"; tool: string; ok: boolean; summary: string };
+
+// ── the composed IR: composeIntent's output (folded from the stream above) ────
+//
+// These shapes live here, beside IntentEvent, so the compiler (engine.ts) and
+// the item→text renderer (render.ts) can both depend on them without importing
+// each other — engine.ts → render.ts → types.ts stays acyclic.
+
+export interface ComposedItem {
+  kind: "text" | "shot" | "code-selection" | "app-selection" | "navigation" | "tab-switch";
+  text?: string;
+  /** A navigation / tab-switch item's `location.href` before / after the boundary. */
+  from?: string;
+  to?: string;
+  /** A tab-switch item's driver tab handles (the tab left / the tab entered). */
+  fromTab?: number;
+  toTab?: number;
+  /** A text item's source segment ordinal — the accumulator view's stable key. */
+  segment?: number;
+  /** The item's stream identity (`shot_N` / `sel_N` / `code_N`) — absent for
+   * text runs and for selections from pre-marker traces. */
+  marker?: string;
+  thumb?: string;
+  path?: string;
+  components?: LocatedComponent[];
+  /** True for a whole-viewport shot (renders with no element metadata). */
+  viewport?: boolean;
+  /** A shot item's capture-gesture wall-clock (see the shot event's doc). */
+  takenAt?: number;
+  /** Set when this shot is a frame sampled by a video share (see {@link ShotShare}). */
+  share?: ShotShare;
+  /** `"paste"` when the image came from the clipboard (labeled in the prompt). */
+  origin?: "paste";
+  /** A selection item's locator (`file:line:col` / `file:start-end`). */
+  sourceLoc?: string;
+  /** A code-selection item's line count. */
+  lines?: number;
+  /** An app-selection item's producing dataflow cell (`data-cell`). */
+  cell?: string;
+  /** That cell's definition site (`file:line` — the `cell(...)` call), when stamped. */
+  cellLoc?: string;
+  /** An app-selection item's TeX source (selected rendered mathematics). */
+  tex?: string;
+  /**
+   * A text run the transcriber has not finalized: the still-streaming
+   * segment's cumulative `transcript-delta` text. Only ever produced under
+   * {@link ComposeOptions.streaming}, which only the preview passes — the
+   * committed prompt is built from finals alone. Survives the timestamp
+   * interleave's split, so a run either side of a mid-utterance shot stays
+   * marked provisional.
+   */
+  provisional?: boolean;
+}
+
+/**
+ * A typed region of the rendered `prompt` string — the structure the renderer
+ * already knows, handed to consumers (the trace hero) so they annotate the raw
+ * text instead of re-discovering it with a regex. `[start, end)` are character
+ * offsets into {@link ComposedIntent.prompt}. Body spans are produced by
+ * `renderPrompt` (render.ts); the channel prepends a `preamble` span and shifts
+ * the body spans when it wraps the body in its context preamble.
+ */
+export type PromptSpan =
+  | {
+      kind: "shot";
+      start: number;
+      end: number;
+      marker: string;
+      path?: string;
+      thumb?: string;
+      viewport?: boolean;
+      origin?: "paste";
+      share?: ShotShare;
+      components: LocatedComponent[];
+    }
+  | {
+      kind: "app-selection";
+      start: number;
+      end: number;
+      marker?: string;
+      sourceLoc?: string;
+      cell?: string;
+      cellLoc?: string;
+      tex?: string;
+    }
+  | {
+      kind: "code-selection";
+      start: number;
+      end: number;
+      marker?: string;
+      sourceLoc?: string;
+      lines?: number;
+    }
+  | { kind: "navigation" | "tab-switch"; start: number; end: number; from: string; to: string }
+  | { kind: "preamble"; start: number; end: number };
+
+export interface ComposedIntent {
+  /** Transcript with `replace`-policy corrections applied. */
+  transcript: string;
+  /** Chronological interleave of text runs, shots, and selections (app + code). */
+  items: ComposedItem[];
+  corrections: Array<{
+    original: string;
+    instruction: string;
+    applied: boolean;
+    patch?: string;
+    /** The chunk window the fix was scoped to (see the correction event). */
+    scope?: { fromLine: number; toLine: number };
+  }>;
+  components: LocatedComponent[];
+  /**
+   * The lowered body: prose with each screenshot **inlined at its position**
+   * as `[screenshot: <path> (elements: …)]` — path (relativized against
+   * {@link ComposeOptions.cwd} when given), located elements, and their cell
+   * frontier, all in the text where the image belongs. This replaced the
+   * Option-C `{shot_n}` token + meta-map scheme: the indirection cost a hint
+   * line and a metadata block the agent had to correlate, for structure
+   * nothing downstream actually consumed (`meta` only ever became text
+   * attributes on the rendered channel tag).
+   */
+  prompt: string;
+  /**
+   * Offset-annotated structure over {@link prompt}: shots, on-screen and code
+   * selections, navigation/tab boundaries, and — once the channel wraps the
+   * body — the context preamble. Consumers (the trace hero) render the raw
+   * prompt and overlay hover-previews / source hyperlinks / a de-emphasized
+   * preamble from these instead of re-parsing the string. Purely additive: the
+   * `prompt` text is byte-identical whether or not anyone reads `spans`.
+   */
+  spans: PromptSpan[];
+  /**
+   * Retained for wire/API compatibility; shots no longer populate it (their
+   * paths and element info are inlined in {@link prompt}).
+   */
+  meta: Record<string, string>;
+}
+
+/** Options for {@link composeIntent}. */
+export interface ComposeOptions {
+  /**
+   * The agent's working directory: screenshot paths AND source locations
+   * under it render relative (shorter, stable across machines); paths outside
+   * it stay absolute. Only the channel passes this — the browser has no cwd
+   * and its compose is a preview, not the committed prompt.
+   */
+  cwd?: string;
+  /**
+   * How screenshots render in the body: an indented `<screenshot>` XML block
+   * (default — Claude-family models attend reliably to tags, and it stays
+   * human-readable), or the plain-text bracket block. See `renderShot` (render.ts).
+   */
+  shotFormat?: "xml" | "text";
+  /**
+   * Compose a **provisional** text run for each segment that has `transcript
+   * -delta`s but no final yet — the words you are still speaking. Off by
+   * default, and the channel never turns it on: what gets sent is built from
+   * finals alone, so in-flight words never reach a prompt or a paid call.
+   *
+   * The **transcript preview** turns it on, and gets one thing for free that
+   * it used to fake: with a text run to anchor against, the existing
+   * timestamp interleave (below) drops a mid-utterance screenshot **where it
+   * was taken**, live, instead of stacking shots ahead of the segment until
+   * the final arrives and reorders everything at once. Streaming transcribers
+   * (ElevenLabs Scribe, OpenAI realtime, Gemini Live) carry the deltas that
+   * make this possible; a whole-segment REST transcriber has none, so its
+   * shots keep their arrival position, exactly as before.
+   */
+  streaming?: boolean;
+}

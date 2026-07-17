@@ -16,9 +16,13 @@
  */
 import { DEFAULT_INTENT_CONFIG, type IntentPipelineConfig } from "./config";
 import { applyCorrectionToLines } from "./patch";
+import { renderPrompt } from "./render";
 import type {
   AppSelection,
   CodeSelection,
+  ComposedIntent,
+  ComposedItem,
+  ComposeOptions,
   IntentEvent,
   LocatedComponent,
   Mode,
@@ -628,118 +632,9 @@ export class Engine {
   }
 }
 
-// ── the first IR pass, pure ──────────────────────────────────────────────────
-
-export interface ComposedItem {
-  kind: "text" | "shot" | "code-selection" | "app-selection" | "navigation" | "tab-switch";
-  text?: string;
-  /** A navigation / tab-switch item's `location.href` before / after the boundary. */
-  from?: string;
-  to?: string;
-  /** A tab-switch item's driver tab handles (the tab left / the tab entered). */
-  fromTab?: number;
-  toTab?: number;
-  /** A text item's source segment ordinal — the accumulator view's stable key. */
-  segment?: number;
-  /** The item's stream identity (`shot_N` / `sel_N` / `code_N`) — absent for
-   * text runs and for selections from pre-marker traces. */
-  marker?: string;
-  thumb?: string;
-  path?: string;
-  components?: LocatedComponent[];
-  /** True for a whole-viewport shot (renders with no element metadata). */
-  viewport?: boolean;
-  /** A shot item's capture-gesture wall-clock (see the shot event's doc). */
-  takenAt?: number;
-  /** Set when this shot is a frame sampled by a video share (see {@link ShotShare}). */
-  share?: ShotShare;
-  /** `"paste"` when the image came from the clipboard (labeled in the prompt). */
-  origin?: "paste";
-  /** A selection item's locator (`file:line:col` / `file:start-end`). */
-  sourceLoc?: string;
-  /** A code-selection item's line count. */
-  lines?: number;
-  /** An app-selection item's producing dataflow cell (`data-cell`). */
-  cell?: string;
-  /** That cell's definition site (`file:line` — the `cell(...)` call), when stamped. */
-  cellLoc?: string;
-  /** An app-selection item's TeX source (selected rendered mathematics). */
-  tex?: string;
-  /**
-   * A text run the transcriber has not finalized: the still-streaming
-   * segment's cumulative `transcript-delta` text. Only ever produced under
-   * {@link ComposeOptions.streaming}, which only the preview passes — the
-   * committed prompt is built from finals alone. Survives the timestamp
-   * interleave's split, so a run either side of a mid-utterance shot stays
-   * marked provisional.
-   */
-  provisional?: boolean;
-}
-
-export interface ComposedIntent {
-  /** Transcript with `replace`-policy corrections applied. */
-  transcript: string;
-  /** Chronological interleave of text runs, shots, and selections (app + code). */
-  items: ComposedItem[];
-  corrections: Array<{
-    original: string;
-    instruction: string;
-    applied: boolean;
-    patch?: string;
-    /** The chunk window the fix was scoped to (see the correction event). */
-    scope?: { fromLine: number; toLine: number };
-  }>;
-  components: LocatedComponent[];
-  /**
-   * The lowered body: prose with each screenshot **inlined at its position**
-   * as `[screenshot: <path> (elements: …)]` — path (relativized against
-   * {@link ComposeOptions.cwd} when given), located elements, and their cell
-   * frontier, all in the text where the image belongs. This replaced the
-   * Option-C `{shot_n}` token + meta-map scheme: the indirection cost a hint
-   * line and a metadata block the agent had to correlate, for structure
-   * nothing downstream actually consumed (`meta` only ever became text
-   * attributes on the rendered channel tag).
-   */
-  prompt: string;
-  /**
-   * Retained for wire/API compatibility; shots no longer populate it (their
-   * paths and element info are inlined in {@link prompt}).
-   */
-  meta: Record<string, string>;
-}
-
-/** Options for {@link composeIntent}. */
-export interface ComposeOptions {
-  /**
-   * The agent's working directory: screenshot paths AND source locations
-   * under it render relative (shorter, stable across machines); paths outside
-   * it stay absolute. Only the channel passes this — the browser has no cwd
-   * and its compose is a preview, not the committed prompt.
-   */
-  cwd?: string;
-  /**
-   * How screenshots render in the body: an indented `<screenshot>` XML block
-   * (default — Claude-family models attend reliably to tags, and it stays
-   * human-readable), or the plain-text bracket block. See {@link renderShot}.
-   */
-  shotFormat?: "xml" | "text";
-  /**
-   * Compose a **provisional** text run for each segment that has `transcript
-   * -delta`s but no final yet — the words you are still speaking. Off by
-   * default, and the channel never turns it on: what gets sent is built from
-   * finals alone, so in-flight words never reach a prompt or a paid call.
-   *
-   * The **transcript preview** turns it on, and gets one thing for free that
-   * it used to fake: with a text run to anchor against, the existing
-   * timestamp interleave (below) drops a mid-utterance screenshot **where it
-   * was taken**, live, instead of stacking shots ahead of the segment until
-   * the final arrives and reorders everything at once. Streaming transcribers
-   * (ElevenLabs Scribe, OpenAI realtime, Gemini Live) carry the deltas that
-   * make this possible; a whole-segment REST transcriber has none, so its
-   * shots keep their arrival position, exactly as before.
-   */
-  streaming?: boolean;
-}
+// ── the compiler: composeIntent and its passes ─────────────────────────────
+// (ComposedItem / ComposedIntent / ComposeOptions moved to ./types; the
+//  item→text renderer is ./render — see renderPrompt, imported below.)
 
 /**
  * Fold the current thread's events into the composed intent. Pure — the
@@ -788,7 +683,7 @@ export function composeIntent(
   const { items, corrections } = placeItems(scope, facts, options);
   applyCorrectionsPass(items, corrections, policy);
   interleavePass(items, facts);
-  return renderPass(items, corrections, policy, options);
+  return renderPrompt(items, corrections, policy, options);
 }
 
 /**
@@ -992,11 +887,11 @@ function placeItems(
     } else if (event.type === "navigation") {
       // A positional boundary: everything composed before it happened on
       // `from`, everything after on `to`. Rendering is the compiler's call
-      // (renderNavigation below) — the event travels structured.
+      // (renderNavigation, in ./render) — the event travels structured.
       items.push({ kind: "navigation", from: event.from, to: event.to });
     } else if (event.type === "tab-switch") {
       // The sibling boundary: a different TAB, not the same tab navigating.
-      // Same positional attribution; renderTabSwitch phrases it as a switch.
+      // Same positional attribution; renderTabSwitch (in ./render) phrases it as a switch.
       items.push({
         kind: "tab-switch",
         from: event.from,
@@ -1173,52 +1068,6 @@ function interleavePass(items: ComposedItem[], facts: StreamFacts): void {
   }
 }
 
-/** Pass 5 — render: the transcript and the lowered prompt body. */
-function renderPass(
-  items: ComposedItem[],
-  corrections: ComposedIntent["corrections"],
-  policy: "replace" | "note",
-  options: ComposeOptions,
-): ComposedIntent {
-  const components = items.flatMap((item) => item.components ?? []);
-  const transcript = items
-    .filter((item) => item.kind === "text")
-    .map((item) => item.text)
-    .join(" ")
-    .trim();
-
-  const promptParts: string[] = [];
-  for (const item of items) {
-    if (item.kind === "text" && item.text) {
-      promptParts.push(item.text);
-    } else if (item.kind === "shot" && item.marker) {
-      promptParts.push(renderShot(item, options));
-    } else if (item.kind === "code-selection") {
-      promptParts.push(renderCodeSelection(item));
-    } else if (item.kind === "app-selection") {
-      promptParts.push(renderAppSelection(item));
-    } else if (item.kind === "navigation") {
-      promptParts.push(renderNavigation(item));
-    } else if (item.kind === "tab-switch") {
-      promptParts.push(renderTabSwitch(item));
-    }
-  }
-  if (policy === "note") {
-    for (const correction of corrections) {
-      promptParts.push(`(transcription fix: "${correction.original}" → ${correction.instruction})`);
-    }
-  }
-
-  return {
-    transcript,
-    items,
-    corrections,
-    components,
-    prompt: promptParts.join(" ").trim(),
-    meta: {},
-  };
-}
-
 // ── the timestamp interleave's pure helpers ──────────────────────────────────
 
 /**
@@ -1383,292 +1232,4 @@ function nudgeToBoundary(text: string, offset: number): number {
     return i + sentence[1].length;
   }
   return i;
-}
-
-// ── selection rendering (the deferred decision) ──────────────────────────────
-
-/** At or below this many characters a selection is inlined; above, fenced. */
-export const SHORT_SELECTION_CHARS = 240;
-
-/**
- * One contributed code selection, rendered at its position in the prose. The
- * short/long rule (formerly the bus host's `contributionToText`, now a compose
- * pass so the decision happens at LOWERING time): a **short** selection is
- * inlined — "Regarding `file:line`: `code`" — the location and the code right
- * in the sentence; a **long** one becomes a fenced block under its location
- * header, set apart from the prose like a multi-line screenshot block.
- *
- * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
- * re-attaches a selection the live model referenced by bare id (`code_1`)
- * with THIS exact rendering — one implementation, per the defer-rendering
- * rule. The parameter is the `ComposedItem` subset the rendering reads, so a
- * caller need not fabricate a full item.
- */
-export function renderCodeSelection(
-  item: Pick<ComposedItem, "text" | "sourceLoc" | "lines">,
-): string {
-  const text = item.text ?? "";
-  const loc = item.sourceLoc !== undefined ? `\`${item.sourceLoc}\`` : "the selection";
-  if (text.trim().length <= SHORT_SELECTION_CHARS) {
-    return `Regarding ${loc}: \`${text.trim()}\``;
-  }
-  const n = item.lines ?? text.split("\n").length;
-  return `\nRegarding ${loc} (${n} lines):\n\`\`\`\n${text}\n\`\`\`\n`;
-}
-
-/**
- * One on-screen (app) selection, rendered at its position in the prose — the
- * same short/long rule code selections use, worded for page text rather than
- * source: a **short** selection is inlined — `Regarding the on-screen
- * selection "…" (authored at file:line:col)` — and a **long** one becomes a
- * fenced block under the same header. The attribution parenthetical (the
- * authored-at locator, the producing cell, the TeX source of selected
- * mathematics) keeps the wording the context preamble used, now placed where
- * the selection actually sits in the stream. (The preamble path —
- * `selectionSections` in the channel's prompt-context — remains only for the
- * text modality's send-time `context` chunk.)
- *
- * Exported (P3/RT4): the channel's realtime resolver (`live-resolve.ts`)
- * re-attaches a selection the live model referenced by bare id (`sel_2`)
- * with THIS exact rendering — one implementation, per the defer-rendering
- * rule. The parameter is the `ComposedItem` subset the rendering reads.
- */
-/** A URL as the short label a prompt should carry: path+query+hash (or the
- * full string when it doesn't parse — tests, exotic schemes). */
-function pageLabel(url: string | undefined): string {
-  if (url === undefined || url === "") {
-    return "?";
-  }
-  try {
-    const u = new URL(url);
-    return `${u.pathname}${u.search}${u.hash}` || url;
-  } catch {
-    return url;
-  }
-}
-
-/**
- * The navigation boundary, lowered: one parenthetical the model reads as "the
- * page changed here — references above are to the old page". Deliberately
- * plain; refinements belong here (the shared lowering), never in the watcher.
- */
-export function renderNavigation(item: Pick<ComposedItem, "from" | "to">): string {
-  return `(page navigation: now on ${pageLabel(item.to)} — content above was on ${pageLabel(item.from)})`;
-}
-
-/**
- * The tab boundary, lowered: distinct from a same-tab navigation — the user
- * turned to a different tab, so references above are to the tab they left.
- * Deliberately plain; refinements belong here (the shared lowering).
- */
-export function renderTabSwitch(item: Pick<ComposedItem, "from" | "to">): string {
-  return `(switched tabs: now looking at ${pageLabel(item.to)} — content above was on ${pageLabel(item.from)})`;
-}
-
-export function renderAppSelection(
-  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "cellLoc" | "tex">,
-): string {
-  const attribution: string[] = [];
-  if (item.sourceLoc !== undefined) {
-    attribution.push(`authored at ${item.sourceLoc}`);
-  }
-  if (item.cell !== undefined) {
-    // The definition site (the `cell(...)` call) rides along when stamped —
-    // the file an agent should open for "the computation behind this".
-    attribution.push(
-      `produced by cell ${item.cell}${item.cellLoc !== undefined ? ` defined at ${item.cellLoc}` : ""}`,
-    );
-  }
-  if (item.tex !== undefined) {
-    attribution.push(`rendered mathematics — TeX source: ${item.tex}`);
-  }
-  const attr = attribution.length > 0 ? ` (${attribution.join("; ")})` : "";
-  const text = (item.text ?? "").trim();
-  if (text.length <= SHORT_SELECTION_CHARS) {
-    return `Regarding the on-screen selection "${text}"${attr}`;
-  }
-  return `\nRegarding this on-screen selection${attr}:\n\`\`\`\n${text}\n\`\`\`\n`;
-}
-
-// ── shot rendering (the inline block) ────────────────────────────────────────
-
-/** Cells listed per element before collapsing behind `cells-omitted`/"+N more". */
-const MAX_CELLS_IN_PROMPT = 4;
-
-/**
- * Elements listed per shot before collapsing behind `elements-omitted`. A huge
- * drag legitimately frames many panels (the locator reports what was framed);
- * the prompt needs reference points, not a full inventory, and document order
- * keeps the visually-first panels.
- */
-const MAX_ELEMENTS_IN_PROMPT = 8;
-
-/**
- * One shot, inlined as a block at its position in the prose. Two styles,
- * chosen by {@link ComposeOptions.shotFormat}:
- *
- * `"xml"` (the default — Claude-family models attend reliably to XML tags,
- * and the indented form stays perfectly readable for a human):
- *
- *   <screenshot path=".aiui-cache/traces/…/shot_1.png">
- *     <element name="Legend" source="src/Legend.tsx:30:2">
- *       <cell name="colorScale" source="src/Legend.tsx:41:8"/>
- *       <cell name="ticks"/>
- *     </element>
- *   </screenshot>
- *
- * `"text"` (the plain-prose alternative, same content):
- *
- *   [screenshot: .aiui-cache/traces/…/shot_1.png
- *     Legend @ src/Legend.tsx:30:2 — cells: colorScale @ src/Legend.tsx:41:8, ticks
- *   ]
- *
- * Everything is relativized against `cwd` — the image path *and* every
- * source location. Viewport shots render as a single self-closing tag /
- * one-liner with no element info by design; a `within` anchor (the drag
- * enclosed nothing) is marked so the agent knows it's context, not framing.
- *
- * A frame sampled by a video share renders as an ordinary screenshot — it *is*
- * one, taken by the sampler instead of by the S key — plus two hints from
- * {@link ShotShare}: `capture="on-change"|"continuous"`, and, for a continuous
- * (machine-gun) share only, `at="N.Ns"`, the frame's offset from that share's
- * first frame. Smart-mode frames are already self-describing: one exists
- * exactly because the user touched the app, and it sits at the moment they did.
- */
-function renderShot(item: ComposedItem, options: ComposeOptions): string {
-  return (options.shotFormat ?? "xml") === "xml"
-    ? renderShotXml(item, options.cwd)
-    : renderShotText(item, options.cwd);
-}
-
-/** Seconds-with-one-decimal, the resolution the cadence slider works in. */
-function formatOffset(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function shareAttrs(share: ShotShare): string[] {
-  const attrs = [`capture="${share.mode === "continuous" ? "continuous" : "on-change"}"`];
-  if (share.mode === "continuous") {
-    attrs.push(`at="${formatOffset(share.offsetMs)}"`);
-  }
-  return attrs;
-}
-
-function shareNote(share: ShotShare): string {
-  return share.mode === "continuous"
-    ? `continuous capture, +${formatOffset(share.offsetMs)}`
-    : "captured on change";
-}
-
-function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
-  // A pasted image is a screenshot in every mechanical respect (marker space,
-  // disk blob, takenAt anchoring) — but the model must never mistake clipboard
-  // content for what was on screen, so it gets its own tag.
-  const tag = item.origin === "paste" ? "pasted-image" : "screenshot";
-  const attrs: string[] = [];
-  if (item.path) {
-    attrs.push(`path="${escapeXml(relativizePath(item.path, cwd))}"`);
-  } else {
-    // No file on disk (capture denied/unavailable) — the reference still helps.
-    attrs.push(`marker="${escapeXml(item.marker ?? "")}"`, `missing="image not captured"`);
-  }
-  if (item.share) {
-    attrs.push(...shareAttrs(item.share));
-  }
-  if (item.viewport) {
-    attrs.push(`view="full-viewport"`);
-    return `<${tag} ${attrs.join(" ")}/>`;
-  }
-  const components = item.components ?? [];
-  if (components.length === 0) {
-    return `<${tag} ${attrs.join(" ")}/>`;
-  }
-  if (components.length > MAX_ELEMENTS_IN_PROMPT) {
-    attrs.push(`elements-omitted="${components.length - MAX_ELEMENTS_IN_PROMPT}"`);
-  }
-  const lines = components.slice(0, MAX_ELEMENTS_IN_PROMPT).map((c) => {
-    const el: string[] = [`name="${escapeXml(c.component)}"`];
-    if (c.source && c.source !== "unknown") {
-      el.push(`source="${escapeXml(relativizePath(c.source, cwd))}"`);
-    }
-    if (c.containment === "within") {
-      el.push(`containment="within"`);
-    }
-    const cells = c.cells ?? [];
-    if (cells.length > MAX_CELLS_IN_PROMPT) {
-      el.push(`cells-omitted="${cells.length - MAX_CELLS_IN_PROMPT}"`);
-    }
-    if (cells.length === 0) {
-      return `  <element ${el.join(" ")}/>`;
-    }
-    const kids = cells.slice(0, MAX_CELLS_IN_PROMPT).map((cell) => {
-      const src = cell.source ? ` source="${escapeXml(relativizePath(cell.source, cwd))}"` : "";
-      return `    <cell name="${escapeXml(cell.name)}"${src}/>`;
-    });
-    return [`  <element ${el.join(" ")}>`, ...kids, "  </element>"].join("\n");
-  });
-  // Multi-line blocks get a blank line's worth of separation from the prose
-  // around them; the single-line forms (viewport, no elements) read fine
-  // inline mid-sentence and stay there.
-  return `\n${[`<${tag} ${attrs.join(" ")}>`, ...lines, `</${tag}>`].join("\n")}\n`;
-}
-
-function renderShotText(item: ComposedItem, cwd: string | undefined): string {
-  const label = item.origin === "paste" ? "pasted image" : "screenshot";
-  const base = item.path
-    ? `[${label}: ${relativizePath(item.path, cwd)}`
-    : `[${label} ${item.marker} — image not captured`;
-  const head = item.share ? `${base} (${shareNote(item.share)})` : base;
-  if (item.viewport) {
-    return `${head} (full viewport)]`;
-  }
-  const components = item.components ?? [];
-  if (components.length === 0) {
-    return `${head}]`;
-  }
-  const omitted = components.length - MAX_ELEMENTS_IN_PROMPT;
-  const refs = components.slice(0, MAX_ELEMENTS_IN_PROMPT).map((c) => {
-    const where = c.source && c.source !== "unknown" ? ` @ ${relativizePath(c.source, cwd)}` : "";
-    const anchor = c.containment === "within" ? "within " : "";
-    let ref = `  ${anchor}${c.component}${where}`;
-    const cells = c.cells ?? [];
-    if (cells.length > 0) {
-      const shown = cells
-        .slice(0, MAX_CELLS_IN_PROMPT)
-        .map((cell) =>
-          cell.source ? `${cell.name} @ ${relativizePath(cell.source, cwd)}` : cell.name,
-        );
-      const more = cells.length - MAX_CELLS_IN_PROMPT;
-      ref += ` — cells: ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`;
-    }
-    return ref;
-  });
-  if (omitted > 0) {
-    refs.push(`  +${omitted} more elements`);
-  }
-  // Same separation rule as the XML form: multi-line blocks stand apart.
-  return `\n${[head, ...refs, "]"].join("\n")}\n`;
-}
-
-/**
- * Render a path relative to `cwd` when it lives under it; otherwise keep it
- * absolute (a path outside the agent's tree relativized would be a lie).
- * Works on `file:line:col` source locations too (prefix logic). Pure string
- * logic — this module stays browser-safe.
- */
-function relativizePath(path: string, cwd: string | undefined): string {
-  if (!cwd) {
-    return path;
-  }
-  const base = cwd.endsWith("/") ? cwd : `${cwd}/`;
-  return path.startsWith(base) ? path.slice(base.length) : path;
-}
-
-/** Minimal XML attribute escaping (paths and names are attribute values). */
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
