@@ -147,12 +147,97 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
+      # Check out the TAG, not the dispatch SHA: the tag carries the real
+      # release version across every package.json AND every Chrome manifest
+      # (scripts/versioning.mjs stamped them in `prepare`), so the .vsix and the
+      # extension zip come out correctly versioned rather than `X.Y.Z+dev`.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      # Both builds are source-first (esbuild/tsx transpile the linked workspace
+      # deps), so a plain install is the only prep — no `pnpm -r build` needed.
+      - run: pnpm install --frozen-lockfile
+
+      # The VS Code extension. `vsix` runs build-extension.mjs, which stages a
+      # VS Code-shaped manifest (strips the `+dev` metadata) and packs it with
+      # vsce → packages/aiui-vscode/dist/aiui-vscode.vsix. Install locally with
+      # `code --install-extension aiui-vscode.vsix`.
+      - name: Build the VS Code extension (.vsix)
+        run: pnpm --filter @habemus-papadum/aiui-vscode run vsix
+
+      # The Chrome (MV3) extension — the intent client's browser shell. build:ext
+      # emits the unpacked dir dist-ext/; we rename it to a friendly top-level
+      # folder and zip that, so a user unzips `aiui-chrome-<version>/` and points
+      # chrome://extensions (Developer mode → Load unpacked) straight at it.
+      # NOTE: this is only for installing into a user's *everyday* Chrome — the
+      # managed session browser already auto-loads dist-ext/ over CDP.
+      - name: Build the Chrome extension (unpacked) and zip it
+        run: |
+          pnpm --filter @habemus-papadum/aiui-intent-client run build:ext
+          cd packages/aiui-intent-client
+          mv dist-ext "aiui-chrome-${VERSION}"
+          zip -r "aiui-chrome-${VERSION}.zip" "aiui-chrome-${VERSION}"
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           generate_release_notes: true
+          files: |
+            packages/aiui-vscode/dist/aiui-vscode.vsix
+            packages/aiui-intent-client/aiui-chrome-*.zip
+
+  # ---------------------------------------------------------------------------
+  # Chrome Web Store publish — STUB, intentionally disabled ("zip now, store
+  # later"). The release above ships a load-unpacked zip, which needs no account
+  # and no secrets. A Web Store listing is the only path to one-click install +
+  # auto-update in a user's everyday Chrome, but it costs: a $5 developer
+  # account, OAuth secrets, and every release clears review (slower given this
+  # extension's permission set — <all_urls>, tabCapture, scripting,
+  # nativeMessaging). To enable:
+  #   1. Create an UNLISTED item in the Chrome Web Store; note its item id.
+  #   2. Provision OAuth creds (client id / secret / refresh token) per
+  #      github.com/fregante/chrome-webstore-upload-keys and store them as repo
+  #      secrets CWS_CLIENT_ID / CWS_CLIENT_SECRET / CWS_REFRESH_TOKEN, plus the
+  #      item id as CWS_EXTENSION_ID.
+  #   3. Uncomment this job and drop the `false &&` guard.
+  #
+  # chrome-web-store:
+  #   needs: [prepare, github-release]
+  #   if: ${{ false && !inputs.dry_run }}   # remove `false &&` to enable
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #       with:
+  #         ref: ${{ needs.prepare.outputs.tag }}
+  #     - uses: pnpm/action-setup@v4
+  #     - uses: actions/setup-node@v5
+  #       with:
+  #         node-version-file: .nvmrc
+  #         cache: pnpm
+  #         cache-dependency-path: pnpm-lock.yaml
+  #     - run: pnpm install --frozen-lockfile
+  #     - name: Build and package the extension
+  #       run: |
+  #         pnpm --filter @habemus-papadum/aiui-intent-client run build:ext
+  #         cd packages/aiui-intent-client/dist-ext && zip -r ../cws.zip .
+  #     - name: Upload + publish to the Chrome Web Store
+  #       run: npx chrome-webstore-upload-cli@3 upload --auto-publish
+  #       working-directory: packages/aiui-intent-client
+  #       env:
+  #         EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+  #         CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+  #         CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+  #         REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+  #         # source: cws.zip  (chrome-webstore-upload-cli reads --source; wire as needed)
 
   finalize:
     needs: [prepare, npm-publish]
