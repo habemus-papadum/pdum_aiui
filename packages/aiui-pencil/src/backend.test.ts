@@ -12,7 +12,7 @@ import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { createPencilBackend, type PencilBackend } from "./backend";
-import { decode, encode, type WireMessage } from "./protocol";
+import { decode, encode, type RemotePresentation, type WireMessage } from "./protocol";
 
 let server: Server;
 let backend: PencilBackend;
@@ -120,6 +120,33 @@ async function pair(): Promise<{ host: Peer; client: Peer; hostId: string; clien
 }
 
 describe("the pencil relay", () => {
+  it("carries the host's presentation into the session list and the joined frame", async () => {
+    const client = new Peer("/pencil/client");
+    await client.open();
+    await client.nextOf("sessions");
+
+    const host = new Peer("/pencil/host");
+    await host.open();
+    await host.nextOf("registered");
+    const presentation: RemotePresentation = {
+      title: "aiui intent",
+      tools: ["draw"],
+      navigation: true,
+    };
+    host.send({ type: "register", label: "intent", presentation });
+
+    const update = (await client.nextOf("sessions")) as {
+      sessions: Array<{ id: string; presentation?: unknown }>;
+    };
+    expect(update.sessions[0].presentation).toEqual(presentation);
+
+    client.send({ type: "join", host: update.sessions[0].id });
+    const joined = (await client.nextOf("joined")) as { presentation?: unknown };
+    expect(joined.presentation).toEqual(presentation);
+    host.close();
+    client.close();
+  });
+
   it("lists a registered host, with the sidecar's project attached", async () => {
     // Client first, so the registration is an OBSERVED broadcast rather than a
     // fact baked into the initial list — the update path is the one under test.

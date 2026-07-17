@@ -31,6 +31,7 @@ import {
   type PencilParams,
   type PencilSurface,
   type PenSample,
+  resolveParams,
   type Surface,
   type Tool,
 } from "@habemus-papadum/aiui-pencil";
@@ -88,8 +89,16 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
   // forwarded to the in-page surface. Cast because we deliberately implement a
   // sliver of PencilSurface — the exact sliver the remote host touches.
   const proxy = {
+    // Clamp what the presentation doesn't offer (a stale or foreign client
+    // could still send it): draw only, and the write preset's own color/size
+    // — RemoteHost merged any overrides before we got here, so re-resolving
+    // is not enough; force the fields.
     remoteBegin: (id: string, init: { tool: Tool; params: PencilParams; point: PenSample }) =>
-      forward({ op: "rbegin", id, init }),
+      forward({
+        op: "rbegin",
+        id,
+        init: { ...init, tool: "draw", params: resolveParams("write") },
+      }),
     remotePoint: (id: string, point: PenSample) => forward({ op: "rpoint", id, point }),
     remoteEnd: (id: string, point?: PenSample) =>
       forward({ op: "rend", id, ...(point !== undefined ? { point } : {}) }),
@@ -118,6 +127,21 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
   const session = factory({
     url: `ws://127.0.0.1:${opts.port}/pencil/host`,
     label: opts.label,
+    // The paved-road customization (owner, 2026-07-17): the intent client's
+    // remote is a MARKUP surface, not a paint studio — one tool, one preset,
+    // no brush knobs. Navigation stays on (two-finger scroll/zoom forward to
+    // the page). undo/clear stay: the iPad should be able to take back a
+    // stroke without reaching for the desktop's `c`.
+    presentation: {
+      title: "aiui intent",
+      tools: ["draw"],
+      modes: ["write"],
+      undo: true,
+      clear: true,
+      navigation: true,
+      color: false,
+      size: false,
+    },
     surface: () => proxy,
     size: () => size,
     stream: opts.stream,

@@ -34,6 +34,7 @@ import type {
   PointerKind,
   RelayToClient,
   RelayToHost,
+  StrokeOverrides,
   Surface,
   VideoStatus,
   WirePoint,
@@ -110,6 +111,8 @@ export interface RemoteClientOptions {
   /** The instrument, as the iPad currently holds it. */
   tool: () => Tool;
   mode: () => PencilMode;
+  /** The user's brush knobs, when the host's presentation offers them. */
+  overrides?: () => StrokeOverrides | undefined;
   onVideoStatus?: (status: VideoStatus) => void;
   /** WebRTC signaling from the host — feed it straight to the peer connection. */
   onSignal?: (data: unknown) => void;
@@ -131,12 +134,14 @@ export class RemoteClient {
   // ── local pen → the wire ────────────────────────────────────────────────
 
   begin(id: string, sample: PenSample, pointerType: PointerKind = "pen"): void {
+    const overrides = this.opts.overrides?.();
     this.opts.send({
       type: "strokeBegin",
       id,
       pointerType,
       tool: this.opts.tool(),
       mode: this.opts.mode(),
+      ...(overrides !== undefined ? { overrides } : {}),
       point: toNorm(sample, this.opts.surface()),
     });
   }
@@ -257,13 +262,27 @@ export class RemoteHost {
     const surface = this.opts.surface();
     const size = this.opts.size();
     switch (intent.type) {
-      case "strokeBegin":
+      case "strokeBegin": {
+        // The host owns the brush: the preset resolves HERE, and the client's
+        // overrides (offered only when this host's presentation exposes the
+        // knobs) merge over it — never replace it.
+        const base = (this.opts.params ?? resolveParams)(intent.mode);
+        const o = intent.overrides;
+        const params =
+          o === undefined
+            ? base
+            : {
+                ...base,
+                ...(o.color !== undefined ? { color: o.color } : {}),
+                ...(o.size !== undefined ? { size: o.size } : {}),
+              };
         surface.remoteBegin(intent.id, {
           tool: intent.tool,
-          params: (this.opts.params ?? resolveParams)(intent.mode),
+          params,
           point: fromNorm(intent.point, size, intent.pointerType),
         });
         break;
+      }
       case "strokePoints":
         for (const point of intent.points) {
           surface.remotePoint(intent.id, fromNorm(point, size));

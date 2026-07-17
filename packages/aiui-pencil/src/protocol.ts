@@ -37,6 +37,10 @@
  * **host owns the brush**. The iPad resolves the same preset locally for its
  * preview, so the two agree without the wire carrying a parameter block per
  * stroke — and when the presets are re-tuned, they are re-tuned in one place.
+ * The one exception is deliberate and narrow: {@link StrokeOverrides} carries
+ * the user-facing brush knobs (color, size) a host's {@link RemotePresentation}
+ * chose to offer — the host merges them over its resolved preset, so it stays
+ * authoritative (a host that offers no knobs can ignore them outright).
  *
  * Pure and dependency-free: shared verbatim by the relay (node), the host
  * (browser), the iPad client (browser), and the tests.
@@ -84,6 +88,8 @@ export type InkIntent =
       /** Which end of the instrument, and which preset. The host resolves both. */
       tool: Tool;
       mode: PencilMode;
+      /** User brush knobs, present only when the host's presentation offers them. */
+      overrides?: StrokeOverrides;
       point: WirePoint;
     }
   | { type: "strokePoints"; id: string; points: WirePoint[] }
@@ -158,10 +164,46 @@ export interface VideoStatus {
 // sidecar, socket, and package (`aiui-remote-bar`) — so a bar-only remote exists
 // without the pencil, and this wire carries ink and its view plane, nothing else.
 
+/** The brush knobs a client may override per stroke (see the module doc). */
+export interface StrokeOverrides {
+  /** CSS color. */
+  color?: string;
+  /** Nominal dab radius, px (the preset's `size`). */
+  size?: number;
+}
+
+/**
+ * How a host wants its remote client PRESENTED — the paved-road customization
+ * (owner, 2026-07-17). Declared on `register`, echoed in {@link SessionInfo}
+ * and `joined`; the shared client app renders from it. Absent fields default
+ * to fully-featured (the Lab's behavior). Presentation only: the host remains
+ * authoritative over what strokes it accepts.
+ */
+export interface RemotePresentation {
+  /** Heading the client shows for this session (falls back to the label). */
+  title?: string;
+  /** Accent color hint (CSS) for the client's chrome. */
+  accent?: string;
+  /** Which tools the strip offers (absent = all). */
+  tools?: Tool[];
+  /** Which presets the strip offers (absent = all non-auto). */
+  modes?: PencilMode[];
+  /** Offer undo / clear (absent = true). */
+  undo?: boolean;
+  clear?: boolean;
+  /** Send two-finger scroll/zoom intents at all (absent = true). */
+  navigation?: boolean;
+  /** Offer the brush color / size knobs (absent = true). */
+  color?: boolean;
+  size?: boolean;
+}
+
 export interface SessionInfo {
   id: string;
   label: string;
   project?: string;
+  /** How this host wants the client presented, when it declared it. */
+  presentation?: RemotePresentation;
   /** The aiui channel this host belongs to, when it declared one. */
   channelTag?: string;
   busy: boolean;
@@ -174,7 +216,7 @@ export type ClientToRelay = { type: "join"; host: string } | { type: "leave" } |
 /** relay → iPad client. */
 export type RelayToClient =
   | { type: "sessions"; sessions: SessionInfo[] }
-  | { type: "joined"; host: string; label: string }
+  | { type: "joined"; host: string; label: string; presentation?: RemotePresentation }
   | { type: "joinRejected"; reason: string }
   | { type: "hostGone" }
   | VideoStatus
@@ -182,7 +224,13 @@ export type RelayToClient =
 
 /** browser host → relay. */
 export type HostToRelay =
-  | { type: "register"; label: string; project?: string; channelPort?: number }
+  | {
+      type: "register";
+      label: string;
+      project?: string;
+      channelPort?: number;
+      presentation?: RemotePresentation;
+    }
   | VideoStatus
   | Signal;
 

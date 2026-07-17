@@ -164,6 +164,29 @@ describe("RemoteHost — wire intent becomes the same pencil", () => {
     expect(calls.at(-1)?.op).toBe("end");
   });
 
+  it("merges the client's brush overrides over the host-resolved preset (host stays authoritative)", () => {
+    const { calls, surface } = stubSurface();
+    const host = new RemoteHost({
+      send: () => {},
+      surface: () => surface,
+      size: () => ({ width: 100, height: 100 }),
+    });
+    host.receive({
+      type: "strokeBegin",
+      id: "s1",
+      pointerType: "pen",
+      tool: "draw",
+      mode: "write",
+      overrides: { color: "#ff0000", size: 9 },
+      point: { u: 0, v: 0, t: 0 },
+    });
+    // Preset fields survive; only the offered knobs move.
+    const params = calls[0].params as { color: string; size: number; spacing: number };
+    expect(params.color).toBe("#ff0000");
+    expect(params.size).toBe(9);
+    expect(params.spacing).toBeGreaterThan(0); // the rest of the preset intact
+  });
+
   it("resolves the brush on the host — the wire carries a mode, never parameters", () => {
     const { calls, surface } = stubSurface();
     const myBrush = { ...WRITE, size: 9 };

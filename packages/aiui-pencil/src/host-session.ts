@@ -24,7 +24,14 @@
  */
 
 import type { PencilMode, PencilParams } from "./pencil";
-import { decode, encode, type HostToRelay, type RelayToHost, type Surface } from "./protocol";
+import {
+  decode,
+  encode,
+  type HostToRelay,
+  type RelayToHost,
+  type RemotePresentation,
+  type Surface,
+} from "./protocol";
 import { RemoteHost } from "./remote";
 import type { PencilSurface } from "./surface";
 
@@ -44,6 +51,8 @@ export interface HostSessionOptions {
   url: string;
   /** Shown in every client's session list. */
   label: string;
+  /** How the remote client should present this session (see the protocol). */
+  presentation?: RemotePresentation;
   /** The surface remote strokes land on. Read per message — planes may switch. */
   surface: () => PencilSurface;
   /**
@@ -113,7 +122,11 @@ export class HostSession {
     this.core = core;
 
     ws.addEventListener("open", () => {
-      this.send({ type: "register", label: this.opts.label });
+      this.send({
+        type: "register",
+        label: this.opts.label,
+        ...(this.opts.presentation !== undefined ? { presentation: this.opts.presentation } : {}),
+      });
       this.pushVideoStatus();
       this.publish("hosting");
     });

@@ -12,6 +12,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
     "./server": "./src/backend.ts",
     "./sidecar": "./src/sidecar.ts"
   },
@@ -33,6 +34,11 @@
         "import": "./dist/index.js",
         "default": "./dist/index.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client.js",
+        "default": "./dist/client.js"
+      },
       "./server": {
         "types": "./dist/backend.d.ts",
         "import": "./dist/backend.js",
@@ -47,10 +53,11 @@
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json && vite build && pnpm build:client",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p lab/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p lab/tsconfig.json && tsc --noEmit -p client/tsconfig.json",
     "test": "vitest run",
     "lab": "vite --config lab/vite.config.ts",
-    "build:client": "vite build --config lab/vite.client.config.ts"
+    "build:client": "vite build --config client/vite.config.ts",
+    "dev:client": "vite client"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

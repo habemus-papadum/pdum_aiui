@@ -60,16 +60,16 @@ export function pencilSidecar(options: PencilSidecarOptions): Sidecar {
         }
       });
 
-      // The iPad's page (`GET /pencil/`), served per mode. Dev roots Vite at the
-      // lab client sources through `lab/vite.client.config.ts` (the client-only
-      // build config — solid, no lab rig, no dev-overlay) and serves `client.html`
-      // at the base; prod serves the `assets/client` bundle that config builds.
+      // The iPad's page (`GET /pencil/`), served per mode. Dev roots Vite at
+      // `client/` (the kit's paved-road composition; solid, no lab rig) and
+      // serves its `index.html` at the base; prod serves the `assets/client`
+      // bundle that same config builds.
       const surface = await serveClientSurface(app, {
         mode: ctx.mode,
         prefix: PENCIL_PREFIX,
-        viteRoot: fileURLToPath(new URL("../lab", import.meta.url)),
-        viteConfigFile: fileURLToPath(new URL("../lab/vite.client.config.ts", import.meta.url)),
-        devEntry: "client.html",
+        viteRoot: fileURLToPath(new URL("../client", import.meta.url)),
+        viteConfigFile: fileURLToPath(new URL("../client/vite.config.ts", import.meta.url)),
+        devEntry: "index.html",
         distDir: options.clientDir ?? defaultClientDir(),
         notBuiltHint: "pnpm -C packages/aiui-pencil build:client",
         log: ctx.log,

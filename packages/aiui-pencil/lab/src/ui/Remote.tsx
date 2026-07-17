@@ -76,7 +76,7 @@ export function Remote(): JSX.Element {
             ? "connecting to the relay…"
             : "relay offline — retrying"}
         {" · "}
-        <code>/client.html</code> on another machine joins here.
+        <code>/pencil/</code> on another machine joins here.
       </p>
     </section>
   );

@@ -27,7 +27,9 @@ import {
   encode,
   type PointerKind,
   type RelayToClient,
+  type RemotePresentation,
   type SessionInfo,
+  type StrokeOverrides,
   type Surface,
   type VideoStatus,
 } from "./protocol";
@@ -47,10 +49,12 @@ export interface ClientSessionOptions {
   /** The instrument, as this client currently holds it. */
   tool: () => Tool;
   mode: () => PencilMode;
+  /** The user's brush knobs, when the joined host's presentation offers them. */
+  overrides?: () => StrokeOverrides | undefined;
   /** Where the host's track lands. Read when the offer arrives. */
   video: () => HTMLVideoElement | undefined;
   onSessions?: (sessions: SessionInfo[]) => void;
-  onJoined?: (host: string, label: string) => void;
+  onJoined?: (host: string, label: string, presentation?: RemotePresentation) => void;
   onJoinRejected?: (reason: string) => void;
   onHostGone?: () => void;
   onVideoStatus?: (status: VideoStatus) => void;
@@ -73,6 +77,7 @@ export class ClientSession {
       surface: opts.surface,
       tool: opts.tool,
       mode: opts.mode,
+      ...(opts.overrides ? { overrides: opts.overrides } : {}),
       onSignal: (data) => void this.onSignal(data),
       ...(opts.onVideoStatus ? { onVideoStatus: opts.onVideoStatus } : {}),
       onHostGone: () => {
@@ -96,7 +101,7 @@ export class ClientSession {
           this.opts.onSessions?.(message.sessions);
           return;
         case "joined":
-          this.opts.onJoined?.(message.host, message.label);
+          this.opts.onJoined?.(message.host, message.label, message.presentation);
           return;
         case "joinRejected":
           this.opts.onJoinRejected?.(message.reason);

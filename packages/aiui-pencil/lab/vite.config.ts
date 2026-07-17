@@ -41,7 +41,7 @@ function pencilRelay(): Plugin {
       });
       // The BUILT client artifact at /pencil/ — the very page the channel
       // sidecar serves an iPad — so the deployable is testable on this origin
-      // (the live-reload copy stays at /client.html). 503s with the build
+      // (HMR iteration on the client app: `pnpm dev:client`). 503s with the build
       // command until `pnpm build:client` has run.
       // The dir is passed explicitly: this code is BUNDLED into vite's temp
       // config file, where client-static's own import.meta.url (its default)

@@ -324,7 +324,7 @@ export const ink = durable("ink-signals", () => inkSignals(paper));
  * streams back as WebRTC video — the scratchpad use case, end to end, with no
  * permission grant anywhere. The relay is mounted into the Lab's own Vite
  * server (see lab/vite.config.ts), so `pnpm lab` IS the whole rig: open
- * `/client.html` in a second tab (or on the iPad) and draw.
+ * `/pencil/` in a second tab (or on the iPad) and draw.
  */
 /**
  * The page-markup plane: a transparent `PencilSurface` fixed over the WHOLE Lab

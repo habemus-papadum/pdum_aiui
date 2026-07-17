@@ -189,6 +189,9 @@ export function createPencilBackend(options: PencilBackendOptions = {}): PencilB
         if (message.project) {
           conn.info.project = message.project;
         }
+        if (message.presentation !== undefined) {
+          conn.info.presentation = message.presentation;
+        }
         if (message.channelPort !== undefined && options.resolveChannel) {
           const resolved = options.resolveChannel(message.channelPort);
           if (resolved) {
@@ -267,7 +270,12 @@ export function createPencilBackend(options: PencilBackendOptions = {}): PencilB
         conn.host = host;
         host.clients.set(conn.id, conn);
         host.info.busy = true;
-        send(ws, { type: "joined", host: host.id, label: host.info.label });
+        send(ws, {
+          type: "joined",
+          host: host.id,
+          label: host.info.label,
+          ...(host.info.presentation !== undefined ? { presentation: host.info.presentation } : {}),
+        });
         // Join replay: the capture state is event-driven, so a quiet host would
         // otherwise leave a new viewer staring at black with no explanation.
         if (host.lastVideoStatus) {
