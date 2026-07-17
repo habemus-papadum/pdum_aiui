@@ -44,6 +44,7 @@ import {
   isNavigationMessage,
   isReportMessage,
   PAGE_ADDRESS,
+  PANEL_PORT_PREFIX,
   type StreamIdResult,
 } from "./protocol";
 import { relayRequest, relayRequestTab } from "./relay";
@@ -279,21 +280,40 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     grantless: false,
     grantHint,
     holdStream: async (tab): Promise<HeldStream> => {
-      await holdTabStream(tab, async (target) => {
-        const { streamId } = await relayRequest<StreamIdResult>(BROKER_ADDRESS, "streamId", {
-          tabId: target,
-        });
-        return streamId;
-      });
-      log(`holding a warm tab stream for tab ${tab}`);
+      // Measure the tab FIRST so the stream comes out tab-sized: an
+      // unconstrained "tab" track aspect-fits into a display-sized frame with
+      // black bars, which broke every region crop's coordinates (found live,
+      // 2026-07-17 — see holdTabStream). No viewport answer (no content
+      // script) → hold unconstrained; the letterbox mapping in grabTabShot
+      // still lands the crop.
+      const vp = (await request(tab, "viewport")) as
+        | { w: number; h: number; dpr: number }
+        | undefined;
+      const size =
+        vp !== undefined && vp.w > 0 && vp.h > 0
+          ? { width: Math.round(vp.w * vp.dpr), height: Math.round(vp.h * vp.dpr) }
+          : undefined;
+      await holdTabStream(
+        tab,
+        async (target) => {
+          const { streamId } = await relayRequest<StreamIdResult>(BROKER_ADDRESS, "streamId", {
+            tabId: target,
+          });
+          return streamId;
+        },
+        size,
+      );
+      log(
+        `holding a warm tab stream for tab ${tab}${size !== undefined ? ` (${size.width}×${size.height})` : " (unconstrained)"}`,
+      );
       return { tab, release: releaseTabStream };
     },
     // opts?.thumbMaxPx flows straight through — the video sampler caps the thumb,
     // a manual shot leaves it full-res for a crisp peek.
     grabShot: (_tab, opts) => grabTabShot({ thumbMaxPx: opts?.thumbMaxPx }),
     // The crop happens on the SAME warm-stream canvas as a full shot — the
-    // region rect (CSS px) maps to stream pixels by the viewport width. No cap:
-    // an area shot's thumb is full-res too.
+    // region rect (CSS px) maps to stream pixels through the letterbox-aware
+    // fit in grabTabShot. No cap: an area shot's thumb is full-res too.
     grabRegion: (_tab, rect, viewport) => grabTabShot({ region: { rect, viewport } }),
   };
 
@@ -305,6 +325,35 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   // stopping. The session id is per panel BOOT: a reopened panel's first beat
   // reads as a driver CHANGE page-side (soft reset; strokes survive).
   const driverSession = crypto.randomUUID();
+
+  // ── the liveness port: the worker's affirmative panel-close signal ────────
+  // A named port for this window (protocol.ts PANEL_PORT_PREFIX). The WORKER
+  // sweeps this window's pages the moment it disconnects without a prompt
+  // reconnect (sw.ts) — closing the side panel cleans the pages in ~1.5 s
+  // instead of the watchdog's silence timeout. Guarded: the fake chrome in
+  // tests has no `runtime.connect`. A disconnect while WE are alive means the
+  // worker bounced (MV3 idles it out): reconnect, which also re-wakes it.
+  let livenessPort: chrome.runtime.Port | undefined;
+  let portStopped = false;
+  const connectLivenessPort = (): void => {
+    if (portStopped || typeof chrome.runtime?.connect !== "function") {
+      return;
+    }
+    try {
+      livenessPort = chrome.runtime.connect({ name: `${PANEL_PORT_PREFIX}${options.windowId}` });
+      livenessPort.onDisconnect.addListener(() => {
+        livenessPort = undefined;
+        if (!portStopped) {
+          setTimeout(connectLivenessPort, 300);
+        }
+      });
+    } catch {
+      // The extension context is tearing down — the watchdog backup owns
+      // cleanup from here.
+    }
+  };
+  connectLivenessPort();
+
   const beatTimer = setInterval(() => {
     try {
       void chrome.tabs.query({ windowId: options.windowId }).then((tabs) => {
@@ -327,6 +376,8 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     activeTab: () => activeTab,
     dispose: () => {
       clearInterval(beatTimer);
+      portStopped = true;
+      livenessPort?.disconnect();
       chrome.runtime.onMessage.removeListener(onMessage);
       chrome.tabs.onActivated.removeListener(onActivated);
       chrome.tabs.onRemoved.removeListener(onRemoved);

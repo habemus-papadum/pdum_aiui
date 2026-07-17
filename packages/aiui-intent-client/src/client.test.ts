@@ -32,6 +32,7 @@ function fakeLanes(log: string[]): IntentLanes {
     takeShot: entry("takeShot"),
     addSelection: entry("addSelection"),
     clearPencil: entry("clearPencil"),
+    clearAllPencils: entry("clearAllPencils"),
     startTalk: entry("startTalk"),
     stopTalk: entry("stopTalk"),
     setMicMuted: entry("setMicMuted"),
@@ -271,6 +272,33 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     // Disarm clears the mode — the hard-disarm exclude, ink's twin.
     r.client.dispatch("disarm");
     expect(r.client.state().pencil).not.toBe(true);
+    // …and the STROKES: disarm is hard for the markup too (owner, 2026-07-17).
+    // The sweep clears every engaged tab, not just the one in view.
+    expect(r.lanes).toContain("clearAllPencils");
+  });
+
+  it("EVERY route into disarmed sweeps the strokes (d, arm-toggle, Esc floor)", async () => {
+    // The `disarmed-is-hard` exclude clears the pencil MODE on all routes;
+    // the strokes' half must be just as route-agnostic — it hangs off the
+    // armed→disarmed transition in the verb effects, not off the `disarm`
+    // command specifically.
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+
+    grantAndOpen(r);
+    r.client.dispatch("disarm");
+    expect(r.lanes.filter((l) => l === "clearAllPencils")).toHaveLength(1);
+
+    grantAndOpen(r);
+    r.client.dispatch("arm"); // the bar's arm cap pressed while armed = disarm
+    expect(r.lanes.filter((l) => l === "clearAllPencils")).toHaveLength(2);
+
+    // …but a turn ending WITHOUT disarming (send keeps the seat armed) does
+    // NOT sweep — strokes are durable across turns until cleared or disarmed.
+    grantAndOpen(r);
+    r.client.dispatch("send");
+    expect(r.client.state().phase).toBe("armed");
+    expect(r.lanes.filter((l) => l === "clearAllPencils")).toHaveLength(2);
   });
 });
 

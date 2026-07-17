@@ -421,9 +421,11 @@ function pageBootstrap(version: string): void {
   // strokes belong to a dead session). A NEW session id = a reloaded panel →
   // soft reset; strokes survive (the `adopt` rule — turn recovery must find
   // its markup) and the new client re-asserts through the ordinary paths.
-  const DRIVER_TIMEOUT_MS = 7000; // transport.ts DRIVER_TIMEOUT_MS — aligned
+  const DRIVER_TIMEOUT_MS = 2500; // transport.ts DRIVER_TIMEOUT_MS — aligned
+  const DRIVER_CHECK_MS = 833; // max(250, timeout/3) — driver-watch.ts, aligned
   let driverSession: string | undefined;
   let driverLast = 0;
+  let driverLastCheck = 0;
   let driverTimer: number | undefined;
   const dropAssertions = (): void => {
     setKeyCapture(false);
@@ -441,15 +443,25 @@ function pageBootstrap(version: string): void {
     }
     driverLast = Date.now();
     if (driverTimer === undefined) {
+      driverLastCheck = Date.now();
       driverTimer = window.setInterval(() => {
-        if (Date.now() - driverLast > DRIVER_TIMEOUT_MS) {
+        const now = Date.now();
+        const stalled = now - driverLastCheck > DRIVER_CHECK_MS * 2;
+        driverLastCheck = now;
+        if (stalled) {
+          // The page stalled (GC, debugger, heavy frame): beats froze WITH
+          // this check — give the queued ones a round before convicting
+          // (driver-watch.ts, aligned; matters at the tightened timeout).
+          return;
+        }
+        if (now - driverLast > DRIVER_TIMEOUT_MS) {
           window.clearInterval(driverTimer);
           driverTimer = undefined;
           driverSession = undefined;
           handlePencil({ op: "clear" });
           dropAssertions();
         }
-      }, 2000);
+      }, DRIVER_CHECK_MS);
     }
   };
 

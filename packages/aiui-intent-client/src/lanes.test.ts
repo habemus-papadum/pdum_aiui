@@ -398,6 +398,11 @@ describe("the pencilSurface claim (mode-gated, tab-following)", () => {
     r.client.dispatch("disarm");
     await settle(30);
     expect(r.bus.log).toContain('page:pencil@9 {"op":"disengage"}');
+    // …and SWEEPS the strokes on EVERY tab engaged this session (owner,
+    // 2026-07-17): tab 7 kept its markup through the switch-away (the claim
+    // only disengages); disarm is the actual end, so both tabs get a clear.
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"clear"}');
+    expect(r.bus.log).toContain('page:pencil@9 {"op":"clear"}');
     pencilVanish.set(false as never);
     pencilFade.set(6 as never);
   });

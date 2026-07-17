@@ -338,6 +338,8 @@ const driverWatch = createDriverWatch({
   timeoutMs: DRIVER_TIMEOUT_MS,
   onGone: () => {
     // Hard: the strokes belong to a DEAD session — nobody can clear them later.
+    console.info("[aiui-intent] watchdog verdict: driver silent — hard clean (backup)");
+    document.documentElement.dataset.aiuiIntentVerdict = `watchdog@${new Date().toISOString()}`;
     pencil?.clear();
     dropAssertions();
   },
@@ -350,6 +352,22 @@ const driverWatch = createDriverWatch({
 serveRelay(PAGE_ADDRESS, {
   heartbeat: (payload) => {
     driverWatch.alive(String((payload as { session?: string } | null)?.session ?? ""));
+    return { ok: true };
+  },
+  /** The WORKER's affirmative panel-close verdict (sw.ts, owner 2026-07-17):
+   * the same hard clean the silence watchdog reaches, delivered seconds
+   * sooner. The watchdog timer is quieted (nothing left to convict) and
+   * re-arms on the next driver's first beat. */
+  driverGone: () => {
+    // Which verdict fired is a live debugging question (SW port vs silence
+    // watchdog). The console line is for a human DevTools; the dataset stamp
+    // is for tooling — isolated-world console output is invisible to a CDP
+    // reader, but the DOM is shared.
+    console.info("[aiui-intent] worker verdict: panel closed — hard clean (port)");
+    document.documentElement.dataset.aiuiIntentVerdict = `worker-port@${new Date().toISOString()}`;
+    pencil?.clear();
+    dropAssertions();
+    driverWatch.dispose();
     return { ok: true };
   },
   ring: (payload) => {

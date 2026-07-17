@@ -21,6 +21,13 @@ import type { PageReport } from "../cdp/page-script";
 export const PAGE_ADDRESS = "intent-page";
 /** The relay address the service worker serves the broker commands under. */
 export const BROKER_ADDRESS = "intent-sw";
+/** The panel's liveness port name: `<prefix><windowId>` (`chrome.runtime.connect`).
+ * The WORKER watches its disconnect — the affirmative "panel closed" signal
+ * (owner, 2026-07-17): no reconnect within the worker's grace window means the
+ * panel is gone, and the worker sweeps the window's pages immediately. A
+ * reloading panel reconnects well inside the grace. The content-script silence
+ * watchdog stays as the BACKUP verdict (a dying worker can't speak). */
+export const PANEL_PORT_PREFIX = "aiui-intent-panel:";
 /** The `chrome.commands` name of the activation gesture. One constant, three
  * readers: the manifest declares it, the worker matches it, and the bus looks
  * up its LIVE binding (`chrome.commands.getAll`) for the hollow ring's hint —

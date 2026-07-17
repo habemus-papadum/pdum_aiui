@@ -352,8 +352,14 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     })();
   });
 
+  // Tabs holding pencil strokes (every engage lands here; the pencilSurface
+  // claim's release only disengages, so a mid-turn tab switch leaves markup on
+  // more than one tab). Disarm sweeps them all (clearAllPencils below).
+  const pencilTabs = new Set<number>();
+
   const claimOptions: ClaimLaneOptions = {
     pencilFadeSec: () => (pencilVanish.get() === true ? (pencilFade.get() as number) : 0),
+    onPencilEngaged: (tab) => pencilTabs.add(tab),
     videoSampler: {
       start: async (desire) => {
         const sampler = new VideoSampler({
@@ -477,6 +483,15 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     },
     clearPencil: (tab) => {
       void host.transport.requestPage(tab, "pencil", { op: "clear" }).catch(() => {});
+    },
+    clearAllPencils: () => {
+      // Disarm's stroke sweep (client.ts runVerbs). Fire-and-forget per tab:
+      // a closed tab or dead content script just misses its clear — the page
+      // watchdog hard-cleans those anyway.
+      for (const tab of pencilTabs) {
+        void host.transport.requestPage(tab, "pencil", { op: "clear" }).catch(() => {});
+      }
+      pencilTabs.clear();
     },
     startTalk: () => {
       talk.startMainListening();

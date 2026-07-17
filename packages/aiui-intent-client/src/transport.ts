@@ -44,10 +44,15 @@ export type PageCapability =
   | "heartbeat";
 
 /** How often a live driver beats the pages it can reach. */
-export const HEARTBEAT_MS = 2000;
-/** Beat silence past this = the driver is gone (page/driver-watch.ts). More
- * than three missed beats, so one slow relay hop never false-positives. */
-export const DRIVER_TIMEOUT_MS = 7000;
+export const HEARTBEAT_MS = 750;
+/** Beat silence past this = the driver is gone (page/driver-watch.ts). Three
+ * missed beats — tightened from 7000/2000 (owner, 2026-07-17: a closed panel
+ * should clean its pages in seconds, not most of ten). Two things keep the
+ * shorter window honest: the MV3 tier's PRIMARY close signal is the worker's
+ * port verdict (sw.ts — this watchdog is its backup there), and the watch
+ * skips one round after a main-thread stall (GC, debugger, heavy frame), so
+ * queued beats get to land before silence convicts. */
+export const DRIVER_TIMEOUT_MS = 2500;
 
 /** The on-page indicator's asserted state (a claim's desire, as data). */
 export interface RingState {

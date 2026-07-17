@@ -44,6 +44,14 @@ export interface IntentLanes {
   addSelection(tab: number): void;
   /** Clear the pencil surface. */
   clearPencil(tab: number): void;
+  /**
+   * Disarm's stroke sweep: clear EVERY pencil surface engaged since the last
+   * sweep (a mid-turn tab switch leaves strokes on more than one tab).
+   * Disarm is hard (spec `disarmed-is-hard` clears the pencil MODE); this is
+   * the strokes' half of that hardness (owner, 2026-07-17). Optional: hosts
+   * that never engage a pencil (tests' fakes) omit it.
+   */
+  clearAllPencils?(): void;
   /** Talk window lifecycle (mode: hold | handsFree). */
   startTalk(mode: string): void;
   stopTalk(): void;
@@ -127,6 +135,14 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     const isArmed = event.after.phase !== "disarmed";
     if (wasArmed !== isArmed) {
       lanes.setArmed?.(isArmed);
+      if (!isArmed) {
+        // Disarm is HARD: the `disarmed-is-hard` exclude cleared the pencil
+        // MODE in this same commit; the strokes go with it (owner, 2026-07-17).
+        // Every tab that got a pencil surface this session is swept — the
+        // pencilSurface claim's release only disengages (strokes stay for
+        // mid-turn mode flips and tab switches; disarm is the actual end).
+        lanes.clearAllPencils?.();
+      }
     }
     if (enteredTurn) {
       lanes.openTurn();

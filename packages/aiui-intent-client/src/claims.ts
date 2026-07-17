@@ -26,6 +26,9 @@ const inTurn = (s: EngineState): boolean => s.phase === "turn" || s.phase === "t
 export interface ClaimLaneOptions {
   /** Vanishing lifetime for the pencil assertion (0 = persist). */
   pencilFadeSec?: () => number;
+  /** A tab's pencil surface got engaged — lanes track the set so disarm can
+   * sweep-clear strokes on every tab that has any (client.ts runVerbs). */
+  onPencilEngaged?: (tab: number) => void;
   /** The real frame pump: start sampling for a desire, return the stop. */
   videoSampler?: {
     start: (desire: { tab: number; mode: string }) => Promise<() => void>;
@@ -54,6 +57,7 @@ export function intentClaims(
           op: "engage",
           fadeSec: options.pencilFadeSec?.() ?? 0,
         });
+        options.onPencilEngaged?.(desire.tab);
         return desire.tab;
       },
       release: async (tab: number) => {

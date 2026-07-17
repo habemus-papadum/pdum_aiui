@@ -42,6 +42,26 @@ export function streamHeldFor(tabId: number | undefined): boolean {
 }
 
 /**
+ * How a captured tab sits inside a stream frame: Chrome aspect-FITS the tab
+ * into the frame, CENTERED, black filling the rest (measured live 2026-07-17:
+ * a 5120×1440 display-defaulted frame carried an 897×751-CSS tab as 1719×1440
+ * centered at x≈1700). `scale` is stream px per CSS px; `offX`/`offY` are the
+ * centering bars. An exactly tab-sized frame degenerates to scale = dpr,
+ * offsets 0. Pure — exported for tests.
+ */
+export function letterboxFit(
+  frame: { w: number; h: number },
+  viewport: { w: number; h: number },
+): { scale: number; offX: number; offY: number } {
+  const scale = Math.min(frame.w / viewport.w, frame.h / viewport.h);
+  return {
+    scale,
+    offX: (frame.w - viewport.w * scale) / 2,
+    offY: (frame.h - viewport.h * scale) / 2,
+  };
+}
+
+/**
  * The warm `tabCapture` MediaStream for `tabId`, or `undefined` (none held, or
  * held for another tab). This is the pencil host's video source in the MV3 tier
  * (pencil-host.ts) — the same stream the shot grabs off, shared, not a second
@@ -64,6 +84,14 @@ export function heldStreamFor(tabId: number | undefined): MediaStream | undefine
 export async function holdTabStream(
   tabId: number,
   mintStreamId: (tabId: number) => Promise<string>,
+  /** The tab's device-pixel size (viewport × dpr). WITHOUT it the "tab" track
+   * is NOT tab-sized: Chrome aspect-fits the tab into a display-sized frame,
+   * centered, black filling the rest (measured live 2026-07-17 — a 5120×1440
+   * ultrawide frame carried a 1719×1440 tab image at x≈1700; M1's claim that
+   * the source alone picks tab pixels no longer holds). Passed as max
+   * constraints so the stream IS the tab; grabTabShot's letterbox mapping
+   * below is the belt for any residual mismatch. */
+  size?: { width: number; height: number },
 ): Promise<void> {
   if (streamHeldFor(tabId)) {
     return;
@@ -73,11 +101,13 @@ export async function holdTabStream(
   const media = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
-      // The tab's own pixels, not the display's: an unconstrained tab track
-      // defaults to display-sized crop-and-scale (measured, M1).
       mandatory: {
         chromeMediaSource: "tab",
         chromeMediaSourceId: streamId,
+        // max*, not min/max: the capture scales to FIT the box preserving
+        // aspect, and the box matches the tab's aspect exactly, so the frame
+        // comes out tab-sized. mins could overconstrain and throw.
+        ...(size !== undefined ? { maxWidth: size.width, maxHeight: size.height } : {}),
       },
     } as MediaTrackConstraints,
   });
@@ -125,10 +155,17 @@ export async function grabTabShot(opts?: {
   if (el === undefined || stream === undefined) {
     throw new Error("no capture stream held for this tab");
   }
-  // The stream is in DEVICE pixels at the tab's captured size; the region
-  // rect arrives in CSS pixels — the viewport width maps between them.
-  const streamScale =
-    region !== undefined && region.viewport.w > 0 ? el.videoWidth / region.viewport.w : 1;
+  // CSS px → stream px, through the LETTERBOX. The frame should be tab-sized
+  // (holdTabStream constrains it), but when it is not — an unconstrained hold,
+  // a zoom/resize since acquisition — Chrome aspect-fits the tab into the
+  // frame, CENTERED, black filling the rest (measured live, 2026-07-17). So:
+  // scale by the smaller axis ratio, offset by the centering bars. With an
+  // exactly tab-sized frame this is scale = dpr, offsets 0 — the old math.
+  const fit =
+    region !== undefined && region.viewport.w > 0 && region.viewport.h > 0
+      ? letterboxFit({ w: el.videoWidth, h: el.videoHeight }, region.viewport)
+      : { scale: 1, offX: 0, offY: 0 };
+  const { scale: streamScale, offX, offY } = fit;
   const w =
     region !== undefined ? Math.max(1, Math.round(region.rect.w * streamScale)) : el.videoWidth;
   const h =
@@ -143,8 +180,8 @@ export async function grabTabShot(opts?: {
   if (region !== undefined) {
     ctx.drawImage(
       el,
-      Math.round(region.rect.x * streamScale),
-      Math.round(region.rect.y * streamScale),
+      Math.round(offX + region.rect.x * streamScale),
+      Math.round(offY + region.rect.y * streamScale),
       w,
       h,
       0,

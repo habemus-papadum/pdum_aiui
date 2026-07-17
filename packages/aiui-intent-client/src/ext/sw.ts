@@ -29,9 +29,11 @@ import {
   ACTIVATE_COMMAND,
   type ActivateMessage,
   type NavigationMessage,
+  PAGE_ADDRESS,
+  PANEL_PORT_PREFIX,
   type StreamIdResult,
 } from "./protocol";
-import { serveRelay } from "./relay";
+import { relayRequestTab, serveRelay } from "./relay";
 
 /** tabId → the last URL we saw, so a navigation can name both sides. */
 const lastUrl = new Map<number, string>();
@@ -148,6 +150,62 @@ function getMediaStreamId(targetTabId: number): Promise<string> {
     });
   });
 }
+
+// ── panel liveness: the affirmative close verdict (owner, 2026-07-17) ────────
+// The panel holds a named port for its window (extension-bus.ts). A disconnect
+// followed by a short grace with NO reconnect = the panel CLOSED — a reloading
+// panel (a panel refresh, an `ext:watch` rebuild) reconnects well inside the
+// grace, and a worker bounce (MV3 idles us out) shows up panel-side, where the
+// bus reconnects and re-wakes us. On the verdict: sweep the window's pages —
+// the same hard clean the content-script silence watchdog reaches, seconds
+// sooner. The watchdog stays armed as the BACKUP: a worker killed mid-grace
+// loses this timer (no precious state — the module doc), and silence still
+// convicts.
+const PANEL_CLOSE_GRACE_MS = 1500;
+const panelPorts = new Map<number, chrome.runtime.Port>();
+const panelGrace = new Map<number, ReturnType<typeof setTimeout>>();
+
+const sweepWindow = async (windowId: number): Promise<void> => {
+  console.info(`[aiui-sw] panel closed (no reconnect in grace) — sweeping window ${windowId}`);
+  const tabs = await chrome.tabs.query({ windowId });
+  await Promise.allSettled(
+    tabs.flatMap((tab) =>
+      // Tabs without a content script (chrome://, the web store) just reject.
+      tab.id === undefined ? [] : [relayRequestTab(tab.id, PAGE_ADDRESS, "driverGone")],
+    ),
+  );
+};
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port.name.startsWith(PANEL_PORT_PREFIX)) {
+    return;
+  }
+  const windowId = Number(port.name.slice(PANEL_PORT_PREFIX.length));
+  if (!Number.isFinite(windowId)) {
+    return;
+  }
+  const pendingGrace = panelGrace.get(windowId);
+  if (pendingGrace !== undefined) {
+    clearTimeout(pendingGrace); // a prompt reconnect — a reload, not a close
+    panelGrace.delete(windowId);
+  }
+  console.info(`[aiui-sw] panel port connected (window ${windowId})`);
+  panelPorts.set(windowId, port);
+  port.onDisconnect.addListener(() => {
+    if (panelPorts.get(windowId) !== port) {
+      return; // an older instance's tail — a newer port owns this window
+    }
+    console.info(`[aiui-sw] panel port disconnected (window ${windowId}) — grace running`);
+    panelPorts.delete(windowId);
+    panelGrace.set(
+      windowId,
+      setTimeout(() => {
+        panelGrace.delete(windowId);
+        void sweepWindow(windowId);
+      }, PANEL_CLOSE_GRACE_MS),
+    );
+  });
+});
 
 serveRelay("intent-sw", {
   /** Mint a tabCapture stream id for `tabId` — the PANEL consumes it (M10). A

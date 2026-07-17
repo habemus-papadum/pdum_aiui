@@ -83,4 +83,27 @@ describe("createDriverWatch", () => {
     vi.advanceTimersByTime(30000);
     expect(gone).toHaveLength(0);
   });
+
+  it("a main-thread STALL is not silence — queued beats get one round to land", () => {
+    // A GC pause / debugger break freezes beats AND this check together, so
+    // `last` goes stale through no fault of the driver's. The check detects
+    // its own late wake-up and skips one round: a beat that was queued behind
+    // the stall refreshes `last` before the next round convicts.
+    const { w, gone } = watch();
+    w.alive("driver-a");
+    // The page freezes for 30s: wall-clock jumps with NO timer runs between.
+    vi.setSystemTime(Date.now() + 30000);
+    vi.advanceTimersByTime(1); // the overdue check fires — sees the stall, skips
+    expect(gone).toHaveLength(0);
+    w.alive("driver-a"); // the queued beat lands right behind it
+    vi.advanceTimersByTime(4000); // regular rounds resume — driver is fine
+    expect(gone).toHaveLength(0);
+
+    // But a stall with NO beat behind it only defers the verdict one round.
+    vi.setSystemTime(Date.now() + 30000);
+    vi.advanceTimersByTime(1);
+    expect(gone).toHaveLength(0); // the skipped round
+    vi.advanceTimersByTime(3000); // next regular round: still silent → gone
+    expect(gone).toHaveLength(1);
+  });
 });

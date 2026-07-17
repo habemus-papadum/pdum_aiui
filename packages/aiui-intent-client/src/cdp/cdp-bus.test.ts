@@ -373,6 +373,40 @@ describe("CdpBus", () => {
     expect(shot.thumb).toBe(`data:image/png;base64,${png}`);
   });
 
+  it("crops a region against browser ZOOM — the clip is unzoomed px, the rubber band is not", async () => {
+    // A real PNG header so pngSize reads a device-resolution 450×300 out of IHDR.
+    const ihdr = Buffer.alloc(24);
+    ihdr.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0); // signature
+    ihdr.write("IHDR", 12, "ascii");
+    ihdr.writeUInt32BE(450, 16);
+    ihdr.writeUInt32BE(300, 20);
+    const browser = scriptedBrowser({
+      "Page.captureScreenshot": { data: ihdr.toString("base64") },
+      // zoom 1.5: clientX-space rects need ×1.5 to land in the clip's unzoomed space.
+      "Page.getLayoutMetrics": { cssVisualViewport: { zoom: 1.5 } },
+    });
+    const bus = await connectCdpBus({
+      cdpUrl: BRIDGE,
+      channelOrigin: ORIGIN,
+      socketFactory: browser.factory,
+    });
+    browser.attach("S1", "T1", "https://example.test/");
+    await settle();
+
+    const shot = await bus.capture.grabRegion?.(
+      1,
+      { x: 10, y: 20, w: 300, h: 200 },
+      { w: 897, h: 751 },
+    );
+
+    // The clip is the rubber-band rect multiplied by the live zoom, scale 1.
+    const cap = browser.sent.find((c) => c.method === "Page.captureScreenshot");
+    expect(cap?.params.clip).toEqual({ x: 15, y: 30, width: 450, height: 300, scale: 1 });
+    // Reported size is the PNG's true (device) pixels, not the CSS rect.
+    expect(shot?.width).toBe(450);
+    expect(shot?.height).toBe(300);
+  });
+
   it("injects the page bundle before a pencil op — the page fetches nothing", async () => {
     // Found live: the page imported its surface module from the channel origin,
     // which an https page refuses as mixed content — the ring appeared on
@@ -480,11 +514,11 @@ describe("CdpBus", () => {
       const beats = () => browser.evaluated("S1").filter((e) => e.includes(call("heartbeat")));
       expect(beats()).toHaveLength(0);
 
-      await vi.advanceTimersByTimeAsync(2100);
+      await vi.advanceTimersByTimeAsync(800);
       expect(beats()).toHaveLength(1);
       expect(beats()[0]).toContain("session"); // the per-boot driver id rides every beat
 
-      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(750);
       expect(beats()).toHaveLength(2);
 
       bus.dispose();

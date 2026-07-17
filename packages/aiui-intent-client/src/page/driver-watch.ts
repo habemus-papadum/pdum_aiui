@@ -67,16 +67,25 @@ export function createDriverWatch(options: DriverWatchOptions): DriverWatch {
         // The check runs at a fraction of the timeout so death is noticed
         // promptly; it stops with the verdict and re-arms on the next sign of
         // life, so an idle page (no driver ever) spends nothing.
-        timer = setInterval(
-          () => {
-            if (Date.now() - last > options.timeoutMs) {
-              stop();
-              session = undefined;
-              options.onGone();
-            }
-          },
-          Math.max(250, Math.floor(options.timeoutMs / 3)),
-        );
+        const checkMs = Math.max(250, Math.floor(options.timeoutMs / 3));
+        let lastCheck = Date.now();
+        timer = setInterval(() => {
+          const now = Date.now();
+          const stalled = now - lastCheck > checkMs * 2;
+          lastCheck = now;
+          if (stalled) {
+            // The PAGE stalled (GC, a debugger pause, a heavy frame) — beats
+            // and this check froze together, so `last` is stale through no
+            // fault of the driver's. Give the queued beats one round to land
+            // before silence convicts (matters at the tightened timeout).
+            return;
+          }
+          if (now - last > options.timeoutMs) {
+            stop();
+            session = undefined;
+            options.onGone();
+          }
+        }, checkMs);
       }
     },
     dispose: stop,
