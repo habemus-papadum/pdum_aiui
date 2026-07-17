@@ -145,6 +145,9 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
           from: report.from,
           to: report.to,
           navKind: report.navKind,
+          // A page-reported navigation: the content script built the
+          // destination's record in the page (DOM-probed aiui detection).
+          ...(report.tab !== undefined ? { tabRecord: report.tab } : {}),
         });
         break;
       case "foreign":
@@ -191,13 +194,17 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
       return;
     }
     if (isNavigationMessage(msg)) {
-      // From the WORKER (no sender.tab), so it carries its own tab id.
+      // From the WORKER (no sender.tab), so it carries its own tab id. The
+      // worker knows only ids and URLs — a minimal synchronous record (no
+      // chrome.tabs.get here: an await would reorder events around the
+      // boundary; the title is usually still loading anyway).
       emit({
         kind: "navigation",
         tab: msg.tabId,
         from: msg.from,
         to: msg.to,
         navKind: msg.navKind,
+        tabRecord: { url: msg.to, chromeTabId: msg.tabId },
       });
     }
   };
@@ -264,8 +271,17 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     },
     tabInfo: async (tab) => {
       try {
+        // This host's id namespace IS chrome.tabs — contribute the canonical
+        // tab-record fields the extension can know (the boundary's <tab>
+        // element renders them for MCP correlation).
         const info = await chrome.tabs.get(tab);
-        return { url: info.url, title: info.title };
+        return {
+          url: info.url,
+          title: info.title,
+          chromeTabId: tab,
+          ...(info.windowId !== undefined ? { windowId: info.windowId } : {}),
+          ...(info.index !== undefined ? { tabIndex: info.index } : {}),
+        };
       } catch {
         return undefined;
       }

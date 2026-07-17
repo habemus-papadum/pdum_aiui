@@ -305,6 +305,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
           from: report.from,
           to: report.to,
           navKind: report.navKind,
+          // The page-built record, enriched with THIS host's id namespace
+          // (the CDP target and the driver's tab handle).
+          ...(report.tab !== undefined
+            ? { tabRecord: { ...report.tab, targetId: page.targetId, driverTab: page.tab } }
+            : {}),
         });
         page.url = report.to;
         break;
@@ -569,8 +574,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       return () => tabHandlers.delete(handler);
     },
     tabInfo: (tab) => {
+      // This host's id namespace: the CDP target id and the driver handle.
       const page = byTab.get(tab);
-      return Promise.resolve(page && { url: page.url, title: page.title });
+      return Promise.resolve(
+        page && { url: page.url, title: page.title, targetId: page.targetId, driverTab: tab },
+      );
     },
   };
 

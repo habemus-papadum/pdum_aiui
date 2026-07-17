@@ -27,6 +27,7 @@
  * for injection and so may not import anything at all.
  */
 
+import { pageTabRecord } from "@habemus-papadum/aiui-intent-runtime/instrumentation";
 import { locateComponents } from "@habemus-papadum/aiui-intent-runtime/locator";
 import { installSelectionWatcher } from "@habemus-papadum/aiui-intent-runtime/selection";
 import { mountPencil, type PencilHandle } from "../cdp/page-bundle";
@@ -389,6 +390,9 @@ serveRelay(PAGE_ADDRESS, {
           ...(snap.tex !== undefined ? { tex: snap.tex } : {}),
           ...(snap.url !== "" ? { url: snap.url } : {}),
           title: document.title,
+          // The canonical tab record (shared builder; isolated world → aiui
+          // detection via the DOM footprint, sourceRoot absent by design).
+          tab: pageTabRecord(),
         };
   },
   viewport: () => ({

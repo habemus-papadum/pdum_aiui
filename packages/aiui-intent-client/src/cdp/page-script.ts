@@ -22,6 +22,11 @@
  * injection by `buildPageScript()`.
  */
 
+import {
+  type PageTabRecord,
+  pageTabRecord,
+} from "@habemus-papadum/aiui-intent-runtime/instrumentation";
+
 /** What one instrumented document reports — the page→panel contract, shared by
  * BOTH hosts (the extension's content script speaks it too; see ext/protocol). */
 export type PageReport =
@@ -34,6 +39,8 @@ export type PageReport =
       from: string;
       to: string;
       navKind: "push" | "replace" | "traverse" | "hash";
+      /** The DESTINATION's canonical tab record (`pageTabRecord`), when built. */
+      tab?: PageTabRecord;
     }
   | { kind: "key"; key: string; phase: "down" | "up"; repeat: boolean }
   /** A completed region drag (the armed `a` gesture): rect + viewport in CSS
@@ -68,8 +75,11 @@ export type PageReport =
 const BINDING = "__aiuiIntentReport";
 
 /* The function below runs INSIDE arbitrary pages. Keep it dependency-free,
- * idempotent, and defensive — it must never break a host page. */
-function pageBootstrap(version: string): void {
+ * idempotent, and defensive — it must never break a host page. `tabRecord` is
+ * the runtime's SELF-CONTAINED `pageTabRecord`, stringified in by
+ * `buildPageScript` — the one shared builder for the canonical tab record,
+ * not a second implementation. */
+function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefined): void {
   const w = window as unknown as Record<string, unknown>;
   const installed = w.__aiuiIntentPage as { v?: string; adopt?: () => void } | undefined;
   if (installed?.v === version && installed.adopt !== undefined) {
@@ -496,7 +506,9 @@ function pageBootstrap(version: string): void {
         case "selection": {
           const selection = window.getSelection?.();
           const text = selection?.toString() ?? "";
-          return text.trim() === "" ? null : { text, url: location.href, title: document.title };
+          return text.trim() === ""
+            ? null
+            : { text, url: location.href, title: document.title, tab: tabRecord?.() };
         }
         case "viewport": {
           return { ok: true }; // sampling rides CDP screenshots panel-side
@@ -630,7 +642,8 @@ function pageBootstrap(version: string): void {
   const nav = (navKind: "push" | "replace" | "traverse" | "hash") => (): void => {
     const to = location.href;
     if (to !== hereUrl) {
-      report({ kind: "navigation", from: hereUrl, to, navKind });
+      // `tab: undefined` is dropped by the report's JSON.stringify — safe bare.
+      report({ kind: "navigation", from: hereUrl, to, navKind, tab: tabRecord?.() });
       hereUrl = to;
     }
   };
@@ -651,10 +664,14 @@ function pageBootstrap(version: string): void {
   sayHello();
 }
 
-/** The injectable source, with the channel origin baked in. */
+/** The injectable source, with the channel origin baked in. The runtime's
+ * self-contained `pageTabRecord` rides in as the second argument (stringified
+ * — the page fetches nothing), and joins the fingerprint so editing the
+ * builder busts the version like editing the bootstrap does. */
 export function buildPageScript(): string {
   const source = pageBootstrap.toString();
-  return `(${source})(${JSON.stringify(fingerprint(source))});`;
+  const tabSource = pageTabRecord.toString();
+  return `(${source})(${JSON.stringify(fingerprint(source + tabSource))}, (${tabSource}));`;
 }
 
 /** A cheap content hash: the bootstrap's identity, so a document carrying an

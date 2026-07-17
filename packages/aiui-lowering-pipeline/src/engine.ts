@@ -28,6 +28,7 @@ import type {
   Mode,
   Rect,
   ShotShare,
+  TabRecord,
   TranscriptWord,
   VideoCaptureMode,
 } from "./types";
@@ -483,12 +484,20 @@ export class Engine {
     from: string,
     to: string,
     kind?: "push" | "replace" | "traverse" | "reload" | "hash",
+    /** The destination tab's full record, when the watcher gathered one. */
+    tab?: TabRecord,
   ): boolean {
     if (!this.threadOpen) {
       return false;
     }
     this.emit(
-      this.stamp({ type: "navigation", from, to, ...(kind !== undefined ? { kind } : {}) }),
+      this.stamp({
+        type: "navigation",
+        from,
+        to,
+        ...(kind !== undefined ? { kind } : {}),
+        ...(tab !== undefined ? { tab } : {}),
+      }),
     );
     return true;
   }
@@ -500,7 +509,14 @@ export class Engine {
    * switched tabs" and carry the two tab identities. Returns whether an event
    * was recorded.
    */
-  tabSwitch(from: string, to: string, fromTab?: number, toTab?: number): boolean {
+  tabSwitch(
+    from: string,
+    to: string,
+    fromTab?: number,
+    toTab?: number,
+    /** The destination tab's full record, when the host gathered one. */
+    tab?: TabRecord,
+  ): boolean {
     if (!this.threadOpen) {
       return false;
     }
@@ -511,6 +527,7 @@ export class Engine {
         to,
         ...(fromTab !== undefined ? { fromTab } : {}),
         ...(toTab !== undefined ? { toTab } : {}),
+        ...(tab !== undefined ? { tab } : {}),
       }),
     );
     return true;

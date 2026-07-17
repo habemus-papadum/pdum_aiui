@@ -12,6 +12,7 @@
  * types only. That is the whole point — the brain is host-agnostic and
  * headless-testable, and the host is a constructor argument.
  */
+import type { PageTabRecord } from "@habemus-papadum/aiui-intent-runtime";
 
 /** The page capabilities a transport must deliver (the relay's command set).
  * `locate` is the aiui-instrumented-page capability (screenshot rectangle →
@@ -93,13 +94,16 @@ export type PageEvent =
   | { kind: "interaction"; tab: number }
   | { kind: "keyForward"; tab: number; key: string; phase: "down" | "up"; repeat: boolean }
   /** A same-tab navigation (SPA route, reload, hash) — context riding the
-   * turn, rendered into the prompt by the wire engine. */
+   * turn, rendered into the prompt by the wire engine. `tabRecord` is the
+   * DESTINATION's canonical record (`pageTabRecord`), when the reporter could
+   * build one. */
   | {
       kind: "navigation";
       tab: number;
       from: string;
       to: string;
       navKind?: "push" | "replace" | "traverse" | "reload" | "hash";
+      tabRecord?: PageTabRecord;
     }
   /** The page announced whether it is aiui-INSTRUMENTED (window.__AIUI__):
    * instrumented pages answer `locate` and can host jump-to-editor. */
@@ -159,8 +163,16 @@ export interface PageTransport {
 export interface SurfaceTargeting {
   activeTab(): number | undefined;
   onActiveTabChange(handler: (tab: number | undefined) => void): () => void;
-  /** Identity of one tab (tab-boundary events name where the user left/went). */
-  tabInfo?(tab: number): Promise<{ url?: string; title?: string } | undefined>;
+  /**
+   * Identity of one tab (tab-boundary events name where the user left/went).
+   * Beyond url/title, a host contributes whatever of the canonical tab-record
+   * fields live in ITS namespace — the extension its chrome ids, the CDP
+   * driver its target id / driver handle — so the boundary's `<tab>` record
+   * carries everything known without the host-agnostic caller guessing.
+   */
+  tabInfo?(
+    tab: number,
+  ): Promise<({ url?: string; title?: string } & Omit<PageTabRecord, "url" | "title">) | undefined>;
 }
 
 /** A warm, held capture stream (36–48 ms shots ride it). */

@@ -698,6 +698,20 @@ describe("navigation (a context boundary riding the turn, never opening one)", (
     expect(event).toMatchObject({ type: "navigation", from: A, to: B, kind: "push" });
   });
 
+  it("carries a destination tab record through to the rendered <tab> element", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.navigation(A, B, "push", { url: B, title: "Aztec", aiui: true });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt).toContain(
+      `[page navigation: /aztec]\n<tab url="${B}" title="Aztec" aiui-app="true"/>`,
+    );
+    // The span carries the record too — the trace hero's overlay data.
+    expect(composed.spans.find((s) => s.kind === "navigation")).toMatchObject({
+      tab: { url: B, title: "Aztec", aiui: true },
+    });
+  });
+
   it("composes positionally: content before the boundary reads as the old page's", () => {
     const engine = armedEngine();
     const seg = engine.talkStart() as number;

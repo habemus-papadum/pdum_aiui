@@ -52,6 +52,86 @@ declare global {
   }
 }
 
+/**
+ * The wire shape of a tab record — a structural mirror of the lowering
+ * pipeline's `TabRecord` (kept import-free so {@link pageTabRecord} stays
+ * standalone; the types are asserted compatible where the client hands the
+ * record to the engine).
+ */
+export interface PageTabRecord {
+  url: string;
+  title?: string;
+  aiui?: boolean;
+  sourceRoot?: string;
+  chromeTabId?: number;
+  windowId?: number;
+  tabIndex?: number;
+  targetId?: string;
+  driverTab?: number;
+}
+
+/**
+ * The canonical tab record for the CURRENT page — the ONE builder both intent
+ * hosts use to describe a tab on selection/navigation events (the lowering
+ * pipeline renders it as the `<tab …/>` element).
+ *
+ * SELF-CONTAINED BY CONTRACT: the CDP host injects this function into driven
+ * pages by STRINGIFYING it (see the intent client's `buildPageScript`), so its
+ * body must reference nothing outside itself — no imports, no module consts,
+ * no other functions. The extension's content script imports and calls it
+ * directly; there it runs in the ISOLATED world, where the page-realm
+ * `window.__AIUI__` is invisible but the DOM footprint (stamped
+ * `data-source-loc` / `data-cell` attributes) still marks an aiui app —
+ * `sourceRoot` is page-realm-only and simply stays absent.
+ *
+ * Detection READS the global, never creates it — {@link getInstrumentation}
+ * would mint `__AIUI__` on a page that has no aiui at all.
+ */
+export function pageTabRecord(): PageTabRecord | undefined {
+  if (typeof location === "undefined" || typeof document === "undefined") {
+    return undefined;
+  }
+  const record: PageTabRecord = { url: location.href };
+  if (document.title !== "") {
+    record.title = document.title;
+  }
+  // The extension-stamped tab identity (data-aiui-tab; the literal dataset key
+  // is TAB_DATASET_KEY — inlined here per the self-containment contract).
+  const stamped = document.documentElement.dataset.aiuiTab;
+  if (stamped !== undefined) {
+    try {
+      const ids = JSON.parse(stamped) as Record<string, unknown>;
+      if (typeof ids.chromeTabId === "number") {
+        record.chromeTabId = ids.chromeTabId;
+      }
+      if (typeof ids.windowId === "number") {
+        record.windowId = ids.windowId;
+      }
+      if (typeof ids.tabIndex === "number") {
+        record.tabIndex = ids.tabIndex;
+      }
+      if (typeof ids.targetId === "string") {
+        record.targetId = ids.targetId;
+      }
+    } catch {
+      // A malformed stamp never blocks the record.
+    }
+  }
+  const inst =
+    typeof window === "undefined"
+      ? undefined
+      : (window as { __AIUI__?: { sourceRoot?: string } }).__AIUI__;
+  if (inst !== undefined) {
+    record.aiui = true;
+    if (typeof inst.sourceRoot === "string") {
+      record.sourceRoot = inst.sourceRoot;
+    }
+  } else if (document.querySelector("[data-source-loc],[data-cell]") !== null) {
+    record.aiui = true;
+  }
+  return record;
+}
+
 /** How many frame metrics the ring keeps. */
 const FRAME_LIMIT = 256;
 

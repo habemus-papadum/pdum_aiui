@@ -5,6 +5,7 @@ import {
   collectClientMeta,
   type FrameMetric,
   getInstrumentation,
+  pageTabRecord,
   recordFrameMetric,
   setChannelPort,
   TAB_DATASET_KEY,
@@ -73,6 +74,52 @@ describe("page instrumentation (window.__AIUI__)", () => {
     await socket.send("t-1", { text: "x" }, false);
     const last = (getInstrumentation()?.frames ?? []).at(-1);
     expect(last).toMatchObject({ ok: false, error: "thread closed" });
+  });
+});
+
+describe("pageTabRecord (the canonical tab record, shared by both hosts)", () => {
+  it("reports url + title, and no aiui flag on a plain page", () => {
+    document.title = "plain";
+    expect(pageTabRecord()).toEqual({ url: location.href, title: "plain" });
+  });
+
+  it("merges the extension's tab stamp (data-aiui-tab)", () => {
+    document.documentElement.dataset[TAB_DATASET_KEY] = JSON.stringify({
+      chromeTabId: 7,
+      windowId: 2,
+      tabIndex: 3,
+      targetId: "ABC",
+    });
+    expect(pageTabRecord()).toMatchObject({
+      chromeTabId: 7,
+      windowId: 2,
+      tabIndex: 3,
+      targetId: "ABC",
+    });
+  });
+
+  it("detects an aiui app from the page-realm global, source root included", () => {
+    window.__AIUI__ = { v: 1, sourceRoot: "/repo/app", frames: [] };
+    expect(pageTabRecord()).toMatchObject({ aiui: true, sourceRoot: "/repo/app" });
+  });
+
+  it("detects an aiui app from the DOM footprint when the global is invisible (isolated world)", () => {
+    const el = document.createElement("div");
+    el.setAttribute("data-source-loc", "src/App.tsx:1:1");
+    document.body.append(el);
+    try {
+      const record = pageTabRecord();
+      expect(record?.aiui).toBe(true);
+      // sourceRoot lives in the page realm only — absent here by design.
+      expect(record?.sourceRoot).toBeUndefined();
+    } finally {
+      el.remove();
+    }
+  });
+
+  it("never creates the __AIUI__ global — detection is read-only", () => {
+    pageTabRecord();
+    expect(window.__AIUI__).toBeUndefined();
   });
 });
 
