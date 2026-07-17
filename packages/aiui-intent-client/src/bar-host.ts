@@ -4,8 +4,8 @@
  * The panel's command bar is the one mode engine's projection; this registers a
  * SUBSET of it over the `/bar` channel so a bar-only remote — the iPad pencil
  * client, which already embeds `RemoteBar` on `/bar/client` — can see and tap
- * the caps the owner marked `remote: true` (hands-free, video). One machine, one
- * truth: the remote holds no engine, it renders what we publish and sends taps
+ * the caps the owner marked `remote: true` (hands-free, video, pencil). One machine,
+ * one truth: the remote holds no engine, it renders what we publish and sends taps
  * back, exactly as the desktop panel is itself a projection.
  *
  * ## The source is FLAT, on purpose

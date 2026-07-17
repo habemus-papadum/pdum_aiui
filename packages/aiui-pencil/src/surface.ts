@@ -451,6 +451,7 @@ export class PencilSurface {
   private cssWidth = 0;
   private cssHeight = 0;
   private readonly onResize = () => this.resize();
+  private ro: ResizeObserver | undefined;
 
   constructor(opts: PencilSurfaceOptions) {
     this.opts = opts;
@@ -471,6 +472,25 @@ export class PencilSurface {
     this.target.append(this.canvas);
     this.resize();
     window.addEventListener("resize", this.onResize);
+    // The TARGET's size is the coordinate truth, and it can change without a
+    // window resize — the remote client's plane div re-fits on every VIDEO
+    // resize (WebRTC ramps resolution; aspect changes on a tab switch). Found
+    // live (2026-07-17): the preview surface kept its creation-time system
+    // (the plane had no size yet, so the window fallback), its canvas was
+    // CSS-stretched into the real plane, and preview ink landed scaled by the
+    // difference — the further the stage's aspect from the video's, the
+    // farther the preview from where the echoed stroke would land. Observe the
+    // canvas itself; guard so an unchanged layout tick never clears the paper.
+    if (typeof ResizeObserver === "function") {
+      this.ro = new ResizeObserver(() => {
+        const w = this.canvas.clientWidth || window.innerWidth;
+        const h = this.canvas.clientHeight || window.innerHeight;
+        if (w !== this.cssWidth || h !== this.cssHeight) {
+          this.resize();
+        }
+      });
+      this.ro.observe(this.canvas);
+    }
 
     if (opts.localInput ?? true) {
       this.bindLocalInput();
@@ -703,6 +723,7 @@ export class PencilSurface {
       cancelAnimationFrame(this.raf);
     }
     window.removeEventListener("resize", this.onResize);
+    this.ro?.disconnect();
     this.canvas.remove();
   }
 
@@ -986,10 +1007,45 @@ export class PencilSurface {
    * come back addressable, which is a resize bonus, not a bug.
    */
   private rescale(sx: number, sy: number): void {
-    const sizeScale = Math.sqrt(sx * sy);
+    // Fresh fade clocks (keepAge false): a resize re-times ink like it always
+    // has — old ink under a fade window must not blink out with the reflow.
+    this.rebuild((pt) => ({ ...pt, x: pt.x * sx, y: pt.y * sy }), Math.sqrt(sx * sy), false);
+  }
+
+  /**
+   * Translate every stroke by (dx, dy) CSS px — the document-anchored
+   * overlay's REBASE (owner, 2026-07-17). Stroke tiles are bounds-local, so
+   * ink translated past the canvas edge keeps its points AND its pixels and
+   * re-bakes back into view on a later translate: the overlay's window slides
+   * over an unbounded drawing, viewport-sized memory for the visible raster.
+   * `settled` (raster past the points horizon) cannot move and is dropped —
+   * rescale's same honest degradation; fade-active surfaces never grow one.
+   * Fade clocks are PRESERVED (a rebase is bookkeeping, not new ink).
+   */
+  translate(dx: number, dy: number): void {
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+    this.rebuild((pt) => ({ ...pt, x: pt.x + dx, y: pt.y + dy }), 1, true);
+  }
+
+  /** The shared re-bake under {@link rescale} and {@link translate}: every
+   * stroke re-begun from its raw points through `map`, each under its own
+   * brush (sized by `sizeScale`); live strokes shift in place and re-stamp. */
+  private rebuild(map: (pt: PenSample) => PenSample, sizeScale: number, keepAge: boolean): void {
     const strokes = [
-      ...this.flattened.map((f) => ({ tool: f.tool, points: f.points, params: f.params })),
-      ...this.retained.map((r) => ({ tool: r.tool, points: r.points, params: r.params })),
+      ...this.flattened.map((f) => ({
+        tool: f.tool,
+        points: f.points,
+        params: f.params,
+        bornAt: f.bornAt,
+      })),
+      ...this.retained.map((r) => ({
+        tool: r.tool,
+        points: r.points,
+        params: r.params,
+        bornAt: r.bornAt,
+      })),
     ];
     const liveStrokes = [...this.live.values()];
 
@@ -998,26 +1054,35 @@ export class PencilSurface {
     this.settled = undefined;
     this.live.clear();
 
-    for (let i = 0; i < strokes.length; i++) {
-      const stroke = strokes[i];
-      const params = { ...stroke.params, size: stroke.params.size * sizeScale };
-      const scaled = stroke.points.map((pt) => ({ ...pt, x: pt.x * sx, y: pt.y * sy }));
-      const id = `rescale-${this.seq++}`;
-      this.beginStroke(id, stroke.tool, params, scaled[0], undefined);
+    for (const stroke of strokes) {
+      const params =
+        sizeScale === 1
+          ? stroke.params
+          : { ...stroke.params, size: stroke.params.size * sizeScale };
+      const mapped = stroke.points.map(map);
+      const id = `rebuild-${this.seq++}`;
+      this.beginStroke(id, stroke.tool, params, mapped[0], undefined);
       const live = this.live.get(id);
       if (live !== undefined) {
-        live.samples.push(...scaled.slice(1));
+        live.samples.push(...mapped.slice(1));
         this.commit(live, true);
+        if (keepAge) {
+          const record = this.retained[this.retained.length - 1];
+          if (record !== undefined && record.id === id) {
+            record.bornAt = stroke.bornAt;
+          }
+        }
       }
     }
 
-    // A stroke under the pen mid-resize scales in place; its wet buffer is at
-    // the old scale, so it re-stamps from zero next frame.
+    // A stroke under the pen mid-rebuild maps in place; its wet buffer is at
+    // the old geometry, so it re-stamps from zero next frame.
     for (const stroke of liveStrokes) {
-      stroke.params = { ...stroke.params, size: stroke.params.size * sizeScale };
-      for (const sample of stroke.samples) {
-        sample.x *= sx;
-        sample.y *= sy;
+      if (sizeScale !== 1) {
+        stroke.params = { ...stroke.params, size: stroke.params.size * sizeScale };
+      }
+      for (let i = 0; i < stroke.samples.length; i++) {
+        stroke.samples[i] = map(stroke.samples[i]);
       }
       stroke.wet = undefined;
       stroke.stamped = 0;

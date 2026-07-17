@@ -56,6 +56,9 @@ describe("createPencilHost", () => {
     });
     host.connect();
     expect(fs.options().url).toBe("ws://127.0.0.1:5050/pencil/host");
+    // The presentation declares the one brush's color so the iPad's local
+    // preview paints the same red the host inks (the proxy clamp enforces it).
+    expect(fs.options().presentation?.strokeColor).toBe("#e5484d");
     expect(fs.calls).toContain("connect");
     // The plane size is queried from the page on connect.
     expect(bus.log).toContain('page:pencil@7 {"op":"size"}');
@@ -82,6 +85,12 @@ describe("createPencilHost", () => {
     surface.undo();
 
     expect(bus.log.some((l) => l.startsWith('page:pencil@7 {"op":"rbegin","id":"r1"'))).toBe(true);
+    // The clamp: whatever params arrived, the forwarded stroke wears the ONE
+    // brush — the red MARKUP pencil, the same instrument the local stylus
+    // holds (owner, 2026-07-17: no grey remote ink).
+    const rbegin = bus.log.find((l) => l.startsWith('page:pencil@7 {"op":"rbegin"'));
+    expect(rbegin).toContain('"color":"#e5484d"');
+    expect(rbegin).toContain('"tool":"draw"');
     expect(bus.log.some((l) => l.startsWith('page:pencil@7 {"op":"rpoint","id":"r1"'))).toBe(true);
     expect(bus.log.some((l) => l.startsWith('page:pencil@7 {"op":"rend","id":"r1"'))).toBe(true);
     expect(bus.log).toContain('page:pencil@7 {"op":"clear"}');

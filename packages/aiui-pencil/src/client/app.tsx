@@ -77,14 +77,19 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
     return { ...(c !== undefined ? { color: c } : {}), ...(s !== undefined ? { size: s } : {}) };
   };
 
-  /** The preview's params: the local preset merged with the same overrides. */
+  /** The preview's params: the local preset, the host's fixed ink color when
+   * the presentation declares one (a markup host's red pencil — the preview
+   * must match the ink the video will echo back), then the user's overrides
+   * (only offered when the knobs are on, in which case they win). */
   const previewParams = () => {
+    const p = presentation();
     const base = resolveParams(mode());
+    const fixed = p.strokeColor !== undefined ? { ...base, color: p.strokeColor } : base;
     const o = overrides();
     return o === undefined
-      ? base
+      ? fixed
       : {
-          ...base,
+          ...fixed,
           ...(o.color !== undefined ? { color: o.color } : {}),
           ...(o.size !== undefined ? { size: o.size } : {}),
         };

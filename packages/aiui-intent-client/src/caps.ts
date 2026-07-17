@@ -66,7 +66,8 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
           {
             // Remote: the iPad drives voice from across the room — its whole
             // point (a wired-up remote surface). No child (mute) is remote; the
-            // subset is deliberately the two engagement toggles.
+            // subset is deliberately the engagement toggles (hands-free, video,
+            // pencil below).
             command: "handsFree",
             remote: true,
             hint: { key: "h", label: "hands-free", icon: "🎧" },
@@ -105,8 +106,13 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
           // The pencil markup surface (mouse + stylus locally, iPad remotely) —
           // a `k` on/off toggle that lights, revealing clear · vanish · fade
           // (owner, 2026-07-16).
+          // Remote: the iPad IS the remote pencil — the person holding it must
+          // be able to enter/leave ink mode without reaching for the desktop
+          // (owner, 2026-07-17). Children stay desktop-only: the iPad strip
+          // already carries its own undo/clear.
           {
             command: "pencil",
+            remote: true,
             hint: { key: "k", label: "pencil", icon: "🖊" },
             litWhen: ({ state }) => state.pencil === true,
             children: [

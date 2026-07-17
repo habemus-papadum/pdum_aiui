@@ -95,10 +95,10 @@ function fakeSocket() {
 }
 
 describe("intentBarSource — the remote subset", () => {
-  it("projects exactly the remote-flagged caps (hands-free, video) while in a turn", () => {
+  it("projects exactly the remote-flagged caps (hands-free, video, pencil) while in a turn", () => {
     const client = makeClient();
     enterTurn(client);
-    expect(remoteCommands(client)).toEqual(["handsFree", "video"]);
+    expect(remoteCommands(client)).toEqual(["handsFree", "video", "pencil"]);
   });
 
   it("projects nothing remote outside a turn — the tier is not even revealed", () => {
@@ -129,7 +129,7 @@ describe("createBarHost", () => {
       label: "aiui intent — test",
       channelPort: 5099,
     });
-    expect(fs.lastBar()?.rows.map((r) => r.command)).toEqual(["handsFree", "video"]);
+    expect(fs.lastBar()?.rows.map((r) => r.command)).toEqual(["handsFree", "video", "pencil"]);
   });
 
   it("routes an inbound remote tap into the one engine (single writer)", async () => {

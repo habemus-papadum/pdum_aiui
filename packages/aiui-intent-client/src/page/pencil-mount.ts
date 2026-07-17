@@ -47,8 +47,11 @@ const HOST_ID = "__aiui-intent-pencil";
 
 /** The markup pencil is a RED editing pencil on the host (ink's family colour is
  * `#ff5c87`; the pencil is a distinct, franker red). The instrument geometry is
- * `WRITE` — graphite dynamics, red lead. */
-const MARKUP: PencilParams = { ...WRITE, color: "#e5484d" };
+ * `WRITE` — graphite dynamics, red lead. Exported: the remote pencil host
+ * (pencil-host.ts) clamps every iPad stroke to THIS brush and declares its
+ * color in the presentation, so the local pencil, the remote ink, and the
+ * iPad's preview are all the same red. */
+export const MARKUP: PencilParams = { ...WRITE, color: "#e5484d" };
 
 export interface PencilHandle {
   /** Enter markup for the turn: mount once, then the surface owns the pointer. */
@@ -80,7 +83,121 @@ export function mountPencil(): PencilHandle {
   let active = false;
   let mounted: { surface: PencilSurface; host: HTMLElement } | undefined;
 
+  // ── document anchoring (the ink-era §13.6 contract, upgraded 2026-07-17).
+  // Strokes mark CONTENT, so they follow it. Two mechanisms, layered:
+  //
+  //   WHILE scrolling — the host div is translated by the scroll delta since
+  //   the anchor: every stroke glides with the page, smooth and free (local
+  //   input self-corrects — the surface maps pointer events through the
+  //   canvas's own bounding rect; remote points get the same shift at
+  //   ingestion).
+  //
+  //   AT REST (debounced) — the surface REBASES: `translate` re-bakes every
+  //   stroke shifted by the delta and the anchor moves to here, so the canvas
+  //   always covers the viewport you are looking at. Stroke tiles are
+  //   bounds-local, so ink rebased off-canvas keeps its points and pixels and
+  //   re-bakes back into view when you scroll back — the overlay is a WINDOW
+  //   over an unbounded drawing, never a clear. (The first cut retired at a
+  //   scroll threshold; it read as "my ink vanished when I scrolled".)
+  //
+  // A RESIZE or ZOOM retires the markup with the animated clear —
+  // UNCONDITIONALLY (owner, 2026-07-17: a threshold made it feel random;
+  // reflow breaks coordinate anchoring either way, and D4's pop reads as
+  // intentional where stale marks would silently detach from their content).
+  // Content reflow is otherwise untracked — coordinates, not DOM anchors.
+  let anchor = { x: 0, y: 0 };
+  let vp = { w: 0, h: 0, dpr: 1 };
+  let restTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const scrollNow = (): { x: number; y: number } => ({
+    x: window.scrollX || 0,
+    y: window.scrollY || 0,
+  });
+  const viewportNow = (): { w: number; h: number; dpr: number } => ({
+    w: window.innerWidth,
+    h: window.innerHeight,
+    dpr: window.devicePixelRatio || 1,
+  });
+
+  /** Re-anchor HERE: re-bake the drawing shifted by the delta, reset the
+   * glide transform. Idempotent at rest; cheap when nothing moved. */
+  const rebase = (): void => {
+    if (mounted === undefined) {
+      return;
+    }
+    const s = scrollNow();
+    const tx = anchor.x - s.x;
+    const ty = anchor.y - s.y;
+    if (tx !== 0 || ty !== 0) {
+      mounted.surface.translate(tx, ty);
+    }
+    anchor = s;
+    mounted.host.style.transform = "";
+  };
+
+  const applyAnchor = (): void => {
+    if (mounted === undefined) {
+      return;
+    }
+    const s = scrollNow();
+    if (!mounted.surface.hasInk()) {
+      anchor = s;
+      mounted.host.style.transform = "";
+      return;
+    }
+    const dx = anchor.x - s.x;
+    const dy = anchor.y - s.y;
+    mounted.host.style.transform = dx === 0 && dy === 0 ? "" : `translate(${dx}px, ${dy}px)`;
+  };
+  const onScroll = (): void => {
+    applyAnchor();
+    clearTimeout(restTimer);
+    restTimer = setTimeout(rebase, 150);
+  };
+
+  /** ANY resize or zoom step: the reflow broke the anchoring — the ink fades
+   * (the D4 pop), no thresholds (owner, 2026-07-17). */
+  const onViewportChange = (): void => {
+    const now = viewportNow();
+    if (
+      (now.w !== vp.w || now.h !== vp.h || now.dpr !== vp.dpr) &&
+      mounted?.surface.hasInk() === true
+    ) {
+      mounted.surface.clearAnimated();
+    }
+    vp = now;
+  };
+
+  /** A frame-relative (viewport CSS px) point, shifted into the anchored
+   * canvas's space — the remote twin of the local input's rect mapping. */
+  const toAnchored = (point: PenSample): PenSample => {
+    const s = scrollNow();
+    const dx = s.x - anchor.x;
+    const dy = s.y - anchor.y;
+    return dx === 0 && dy === 0 ? point : { ...point, x: point.x + dx, y: point.y + dy };
+  };
+
+  /** A stroke is about to BEGIN at frame point (x, y) — mid-glide, before
+   * the rest debounce lands. If the anchored mapping would fall outside the
+   * canvas coverage, rebase NOW so the stroke lands on paper. Nothing is
+   * lost: the rebase re-bakes, never clears. */
+  const guardCoverage = (x: number, y: number): void => {
+    if (mounted === undefined) {
+      return;
+    }
+    const s = scrollNow();
+    const cx = x + (s.x - anchor.x);
+    const cy = y + (s.y - anchor.y);
+    const size = mounted.surface.size();
+    if (cx < 0 || cy < 0 || cx > size.width || cy > size.height) {
+      rebase();
+    }
+  };
+
   const teardown = (): void => {
+    window.removeEventListener("scroll", onScroll);
+    window.removeEventListener("resize", onViewportChange);
+    clearTimeout(restTimer);
     mounted?.surface.dispose();
     mounted?.host.remove();
     mounted = undefined;
@@ -116,6 +233,15 @@ export function mountPencil(): PencilHandle {
       },
     });
     mounted = { surface, host };
+    anchor = scrollNow();
+    vp = viewportNow();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onViewportChange);
+    // Capture phase: runs before the surface's own canvas listener, so a
+    // rebase here re-anchors the rect the surface is about to map through.
+    host.addEventListener("pointerdown", (e) => guardCoverage(e.clientX, e.clientY), {
+      capture: true,
+    });
     return surface;
   };
 
@@ -149,16 +275,24 @@ export function mountPencil(): PencilHandle {
       return mounted?.surface.hasInk() ?? false;
     },
     size() {
-      return mounted?.surface.size() ?? { width: window.innerWidth, height: window.innerHeight };
+      // The CAPTURED FRAME's CSS box, not the surface's: a tab capture (and
+      // the CDP screencast) frames innerWidth×innerHeight — scrollbar
+      // included — while the fixed-inset surface host stops at the scrollbar
+      // (measured live 2026-07-17: 1063 vs 1051 CSS px, a ~1% horizontal skew
+      // on every remote stroke). The remote plane must equal the frame; a
+      // stroke aimed under the scrollbar clips harmlessly.
+      return { width: window.innerWidth, height: window.innerHeight };
     },
     remoteBegin(id, init) {
-      ensureMounted().remoteBegin(id, init);
+      const surface = ensureMounted();
+      guardCoverage(init.point.x, init.point.y);
+      surface.remoteBegin(id, { ...init, point: toAnchored(init.point) });
     },
     remotePoint(id, point) {
-      mounted?.surface.remotePoint(id, point);
+      mounted?.surface.remotePoint(id, toAnchored(point));
     },
     remoteEnd(id, point) {
-      mounted?.surface.remoteEnd(id, point);
+      mounted?.surface.remoteEnd(id, point !== undefined ? toAnchored(point) : undefined);
     },
     remoteCancel(id) {
       mounted?.surface.remoteCancel(id);

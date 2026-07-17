@@ -241,6 +241,13 @@ export class HostSession {
     this.publish();
 
     for (const track of stream.getTracks()) {
+      // The plane is SCREEN content (a tab, a canvas): bias the encoder toward
+      // spatial quality — crisp text and line work — over frame rate. Without
+      // the hint Chrome treats the track like a camera and blurs text under
+      // pressure. (Everything else stays adaptive: bitrate ramps via GCC.)
+      if (track.kind === "video" && "contentHint" in track) {
+        track.contentHint = "detail";
+      }
       pc.addTrack(track, stream);
     }
     pc.onicecandidate = (e) => {

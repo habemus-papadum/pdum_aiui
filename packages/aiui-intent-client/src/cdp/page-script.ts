@@ -213,6 +213,15 @@ function pageBootstrap(version: string): void {
     const mount = (w.__aiuiIntentPage as { mountPencil?: () => PencilHandle } | undefined)
       ?.mountPencil;
     const op = String(payload.op ?? "");
+    if (op === "size") {
+      // The remote plane is the FRAME's box (innerWidth×innerHeight — a tab
+      // capture/screencast frames the scrollbar too), a fact of the window,
+      // not of the mount. Answering only from a mounted handle left the
+      // panel's cache on a stale value or its 1280×720 default whenever size
+      // was asked before the first engage (found live, 2026-07-17: a ~1%
+      // rightward-growing skew on every remote stroke).
+      return { width: window.innerWidth, height: window.innerHeight };
+    }
     if (op === "engage") {
       if (mount === undefined) {
         return { error: "the pencil surface was not injected" };
@@ -240,8 +249,6 @@ function pageBootstrap(version: string): void {
       case "undo":
         pencilHandle.undo();
         return { ok: true };
-      case "size":
-        return pencilHandle.size();
       case "rbegin":
         pencilHandle.remoteBegin(String(payload.id), payload.init);
         return { ok: true };

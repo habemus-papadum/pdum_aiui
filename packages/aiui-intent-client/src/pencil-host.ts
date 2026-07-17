@@ -31,10 +31,10 @@ import {
   type PencilParams,
   type PencilSurface,
   type PenSample,
-  resolveParams,
   type Surface,
   type Tool,
 } from "@habemus-papadum/aiui-pencil";
+import { MARKUP } from "./page/pencil-mount";
 import type { IntentHost } from "./transport";
 
 /** The session surface we drive — HostSession's, narrowed to what we fake. */
@@ -90,14 +90,15 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
   // sliver of PencilSurface — the exact sliver the remote host touches.
   const proxy = {
     // Clamp what the presentation doesn't offer (a stale or foreign client
-    // could still send it): draw only, and the write preset's own color/size
-    // — RemoteHost merged any overrides before we got here, so re-resolving
-    // is not enough; force the fields.
+    // could still send it): draw only, and the intent client's ONE brush — the
+    // red MARKUP pencil, the same instrument the local stylus holds
+    // (pencil-mount.ts). RemoteHost merged any overrides before we got here,
+    // so re-resolving is not enough; force the fields.
     remoteBegin: (id: string, init: { tool: Tool; params: PencilParams; point: PenSample }) =>
       forward({
         op: "rbegin",
         id,
-        init: { ...init, tool: "draw", params: resolveParams("write") },
+        init: { ...init, tool: "draw", params: MARKUP },
       }),
     remotePoint: (id: string, point: PenSample) => forward({ op: "rpoint", id, point }),
     remoteEnd: (id: string, point?: PenSample) =>
@@ -141,6 +142,9 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
       navigation: true,
       color: false,
       size: false,
+      // The one brush's color, declared so the iPad's local PREVIEW paints
+      // the same red the host inks (the clamp above enforces it wire-side).
+      strokeColor: MARKUP.color,
     },
     surface: () => proxy,
     size: () => size,

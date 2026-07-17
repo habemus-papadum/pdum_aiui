@@ -196,6 +196,15 @@ export interface RemotePresentation {
   /** Offer the brush color / size knobs (absent = true). */
   color?: boolean;
   size?: boolean;
+  /**
+   * The ink's FIXED color (CSS), for hosts whose remote is a markup surface
+   * with one brush (the intent client's red pencil). The client paints its
+   * local PREVIEW with it, so the stroke doesn't change color when the video
+   * echo replaces the preview (the D3 crossfade). Presentation only — the
+   * host still clamps what it accepts; declare the same color there. Ignored
+   * when the color knob is offered (a user override wins).
+   */
+  strokeColor?: string;
 }
 
 export interface SessionInfo {

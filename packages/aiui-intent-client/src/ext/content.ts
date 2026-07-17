@@ -429,6 +429,11 @@ serveRelay(PAGE_ADDRESS, {
     // page globals) — unlike jump. `{op, …}` mirrors the CDP tier.
     const p = (payload ?? {}) as Record<string, unknown>;
     const op = String(p.op ?? "");
+    if (op === "size") {
+      // The FRAME's box, a window fact — never gated on the mount (the CDP
+      // twin says why; keep the two aligned).
+      return { width: window.innerWidth, height: window.innerHeight };
+    }
     if (op === "engage") {
       pencil ??= mountPencil();
       pencil.engage(Number(p.fadeSec ?? 0));
@@ -452,8 +457,6 @@ serveRelay(PAGE_ADDRESS, {
       case "undo":
         pencil.undo();
         return { ok: true };
-      case "size":
-        return pencil.size();
       case "rbegin":
         pencil.remoteBegin(String(p.id), p.init as never);
         return { ok: true };

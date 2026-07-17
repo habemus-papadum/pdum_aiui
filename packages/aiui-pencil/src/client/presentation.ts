@@ -19,6 +19,8 @@ import type { Tool } from "../surface";
 export interface ResolvedPresentation {
   title?: string;
   accent?: string;
+  /** A fixed ink color: the preview paints with it (see the protocol doc). */
+  strokeColor?: string;
   tools: Tool[];
   modes: PencilMode[];
   undo: boolean;
@@ -44,6 +46,7 @@ export function resolvePresentation(p?: RemotePresentation): ResolvedPresentatio
   return {
     ...(p?.title !== undefined ? { title: p.title } : {}),
     ...(p?.accent !== undefined ? { accent: p.accent } : {}),
+    ...(p?.strokeColor !== undefined ? { strokeColor: p.strokeColor } : {}),
     tools: p?.tools ?? FULL_PRESENTATION.tools,
     modes: p?.modes ?? FULL_PRESENTATION.modes,
     undo: p?.undo ?? true,
