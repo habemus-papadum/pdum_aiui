@@ -660,7 +660,11 @@ function speculativeSpans(stages: TraceStageLike[]): PromptSpan[] {
 
 export function heroPrompt(stages: TraceStageLike[] | undefined): HeroPrompt {
   const list = Array.isArray(stages) ? stages : [];
-  const sent = loweredPromptText(list.find((stage) => stage.label === "lowered prompt"));
+  // Newest-wins, matching the spans lookups below — one pairing policy, so a
+  // hypothetical multi-send trace pairs the last prompt with the last spans.
+  const sent = loweredPromptText(
+    [...list].reverse().find((stage) => stage.label === "lowered prompt"),
+  );
   if (sent !== "") {
     return { text: sent, spans: loweredPromptSpans(list), speculative: false };
   }

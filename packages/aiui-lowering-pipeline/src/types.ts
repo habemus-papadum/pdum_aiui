@@ -508,6 +508,9 @@ export type PromptSpan =
       start: number;
       end: number;
       marker: string;
+      /** The image's RAW disk path — deliberately NOT the cwd-relativized form
+       * the prompt *text* shows: consumers (the hero's blob/preview routes)
+       * need the real path, and can derive the basename either way. */
       path?: string;
       thumb?: string;
       viewport?: boolean;
