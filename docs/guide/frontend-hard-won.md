@@ -191,10 +191,8 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
   compilation *and* HMR component boundaries in every consumer. Verified live: editing the
   library's `cell-view.tsx` hot-updates a running app with no reload, sim state intact.
 - **`import.meta.env.*` is substituted when a package is *built*.** Prebuilt library code can
-  never read its consumer's env — the full write-up is in the
-  [web intent tool internals](./web-intent-tool#how-the-plugin-gets-the-tool-into-the-page-subtle);
-  the general rule: runtime configuration for prebuilt code must travel through runtime channels
-  (injected globals, plugin-generated modules).
+  never read its consumer's env; the general rule: runtime configuration for prebuilt code must
+  travel through runtime channels (injected globals, plugin-generated modules).
 
 ## Ecosystem status (transient — recheck before relying on it)
 
@@ -202,7 +200,7 @@ Found building the seismos notebook (full detail: `demos/gallery/src/pages/seism
   `@locator/runtime` ships precompiled Solid 1.x (`solid-js/web` import) and crashes the dep
   optimizer; `solid-devtools` pins solid-js `^1.9`. Hence the in-repo source locator
   (`data-source-loc` with real line:col, dependency-free bar `@babel/core`), now owned by the dev
-  overlay (`packages/aiui-dev-overlay/src/source-locator.ts`, enabled via `aiuiDevOverlay({ locator })`).
+  source processor (`packages/aiui-source-processor`, the `aiui()` plugin).
 - **The 2.0 toolchain that works together:** `solid-js@next` + `@solidjs/web@next` +
   `vite-plugin-solid@next` (bundles a 2.0-compatible solid-refresh). TypeScript ≥ 5.x with
   `jsx: "preserve"`, `jsxImportSource: "@solidjs/web"`.

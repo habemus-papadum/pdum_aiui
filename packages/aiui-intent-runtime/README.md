@@ -6,16 +6,15 @@ DOM-free (host-agnostic cores + injected browser edges) so it tests in plain Nod
 multiple hosts — today the intent client's CDP tier and its MV3 side panel.
 
 Lineage: this is the live runtime of the retired `aiui-dev-overlay` (its "B2.4 / C1"
-extraction), copied out — deliberately not moved — in the overlay retirement
-(`docs/proposals/dev-overlay-retirement.md`). The frozen original remains in-tree as a
-read-only reference until its deletion batch.
+extraction), copied out in the overlay retirement
+(`docs/proposals/dev-overlay-retirement.md`). The original is deleted; read it in git history.
 
 ## Entries
 
 | Subpath | Job |
 | ------- | --- |
 | `.` | the shared substrate: the error-toast model, the `window.__AIUI__` page instrumentation, the binary `/ws` protocol client, the intent-thread contract |
-| `./shot` | region screenshots + `locateComponents` (screenshot-rect → components → source, via the source-processor's `data-source-loc`/`data-cell` stamps) and the one-grant display-capture broker |
+| `./locator` | `locateComponents` — screenshot-rect → components → source, via the source-processor's `data-source-loc`/`data-cell` stamps |
 | `./talk` | the audio stack: `createTalk` lanes (REST segments + realtime PCM), `WorkletPcmSource`, `SpeechPlayer` (TTS with barge-in), the mock transcriber |
 | `./video` | `VideoSampler` — the screen-share frame sampler (smart gate / continuous cadence) |
 | `./selection` | `installSelectionWatcher` — "select text/equation, then ask about it" |

@@ -43,7 +43,6 @@
   "dependencies": {
     "@habemus-papadum/aiui-intent-client": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
-    "@habemus-papadum/aiui-paint": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-remote-bar": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",

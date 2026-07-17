@@ -45,7 +45,7 @@ pnpm test:e2e        # live Claude Code session e2e (spends subscription usage)
 (The intent overlay's offline lab — the **workbench** — has been retired; `packages/aiui-test-app`
 and the in-repo demos are the places to exercise the overlay now. Its findings ledgers live in
 `archive/workbench/`, and the interaction fixtures it recorded live on as the intent pipeline's
-regression corpus in `packages/aiui-dev-overlay/fixtures/`.)
+regression corpus in `packages/aiui-lowering-pipeline/fixtures/`.)
 
 ### Editable workspace dependencies (source-first)
 
@@ -76,8 +76,8 @@ keep the scheme honest:
 - **The [packaging test](#the-packaging-test) is the guard for the published form.** Source-first
   dev means the workspace *never* exercises `dist/` — and some bugs only exist there. The classic:
   `import.meta.env.*` is substituted when a package is *built*, so prebuilt code can never read
-  its consumer's env (the reason the intent tool integrates via a Vite plugin — see the
-  [Web Intent Tool internals](./web-intent-tool#how-the-plugin-gets-the-tool-into-the-page-subtle)).
+  its consumer's env (the reason runtime configuration for prebuilt code travels through runtime
+  channels — injected globals, plugin-generated modules).
   Run `pnpm test:packaging` whenever packaging fields or build config change.
 - **Never `optimizeDeps.include` a workspace package** in a Vite config — the dep-optimizer
   cache is keyed by the lockfile, not file contents, so the linked package would be served stale

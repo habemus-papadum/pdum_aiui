@@ -2,8 +2,7 @@
  * `aiui chrome <action>` — manage the agent's browser.
  *
  *   install | update   bring the managed Chrome for Testing to latest stable
- *   status             what would launch here, and is the devtools panel available
- *   extension          print the aiui-devtools-extension directory (for Load unpacked)
+ *   status             what would launch here, and is the intent client loadable
  *
  * `install` and `update` are the same operation (idempotent "ensure latest");
  * both names exist because both questions get asked. `status` is the
@@ -15,12 +14,9 @@ import { join } from "node:path";
 import { discoverSessionBrowser } from "@habemus-papadum/aiui-util";
 import { ensureLatestCft, installedCft, latestStableCft } from "../util/cft";
 import {
-  buildDevtoolsExtension,
   chromeDevtoolsEnabled,
   chromeUserDataDir,
-  devtoolsExtensionDir,
   findIntentClientExtension,
-  findIntentExtension,
   resolveChromeSettings,
 } from "../util/chrome";
 import { loadAiuiConfig } from "../util/config";
@@ -36,24 +32,10 @@ export async function runChrome(args: string[]): Promise<void> {
     case "status":
       await printStatus();
       return;
-    case "extension": {
-      await buildDevtoolsExtension();
-      const dir = devtoolsExtensionDir();
-      if (!dir) {
-        printError(
-          "the aiui-devtools-extension is not available in this install",
-          "In a dev checkout, build it first: pnpm --filter @habemus-papadum/aiui-devtools-extension build",
-        );
-        process.exitCode = 1;
-        return;
-      }
-      console.log(dir);
-      return;
-    }
     default:
       printError(
         action ? `unknown aiui chrome action: ${action}` : "aiui chrome needs an action",
-        "Usage: aiui chrome <install | update | status | extension>",
+        "Usage: aiui chrome <install | update | status>",
       );
       process.exitCode = 1;
       return;
@@ -126,10 +108,6 @@ async function printStatus(): Promise<void> {
     }
   }
 
-  // The switchover (owner, 2026-07-14): the intent client is the ONE extension
-  // launches auto-load. The DevTools panel and the frozen intent tool are
-  // still buildable/loadable by hand, so they stay reported — as what they
-  // now are.
   console.log("\naiui intent client (the extension launches auto-load):");
   const client = findIntentClientExtension();
   switch (client.state) {
@@ -146,35 +124,6 @@ async function printStatus(): Promise<void> {
     case "ready":
       console.log(`  ${client.dir}`);
       printAutoloadability(settings.executablePath);
-      break;
-  }
-
-  console.log(
-    "\naiui DevTools panel (manual install only — the intent panel embeds its debugger):",
-  );
-  const extension = devtoolsExtensionDir();
-  if (!extension) {
-    console.log("  not available (unbuilt dev checkout? run `aiui chrome extension` for help)");
-  } else {
-    console.log(`  ${extension}`);
-  }
-
-  console.log("\nfrozen intent-tool extension (safety net — never auto-loaded):");
-  const intent = await findIntentExtension();
-  switch (intent.state) {
-    case "absent":
-      console.log("  not available in this install (the aiui-extension package is not resolvable)");
-      break;
-    case "unbuilt":
-      console.log(`  no artifact (${intent.root}) — it is frozen; build only to fall back`);
-      break;
-    case "ready":
-      console.log(`  ${intent.dir}`);
-      console.log(
-        intent.mode === "prod"
-          ? "  production build — load it unpacked if the safety net is ever needed"
-          : `  dev build (needs its dev server on :${intent.devPort})`,
-      );
       break;
   }
 }

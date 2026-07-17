@@ -42,28 +42,27 @@ The [frontend user guide](./frontend-user-guide) is how to write into it.
 In a Vite-based project:
 
 ```sh
-npm install -D @habemus-papadum/aiui @habemus-papadum/aiui-dev-overlay
+npm install -D @habemus-papadum/aiui @habemus-papadum/aiui-source-processor
 ```
 
 - **`@habemus-papadum/aiui`** — the CLI: `aiui claude` (session + channel + session browser)
   and `aiui vite` (your dev server, wired to the channel).
-- **`@habemus-papadum/aiui-dev-overlay`** — the Vite plugin + the intent tool. One line in
+- **`@habemus-papadum/aiui-source-processor`** — the Vite plugin (the locator pass). One line in
   `vite.config.ts`:
 
 ```ts
-import aiuiDevOverlay from "@habemus-papadum/aiui-dev-overlay/vite";
+import aiui from "@habemus-papadum/aiui-source-processor";
 
 export default defineConfig({
-  plugins: [aiuiDevOverlay({ locator: true })],
+  plugins: [aiui()],
 });
 ```
 
-The plugin is dev-server-only (it can never leak into a production build), auto-mounts the
-intent tool, wires the channel port, and — with `locator` on — stamps your elements with the
-source locations that make screenshots and selections resolve to code. Options (including the
-intent pipeline's `tier` and other knobs) are covered in
-[Using the Intent Overlay](./intent-overlay#configuring-the-pipeline) and
-[Configuration](./config).
+The plugin stamps your elements with the source locations that make screenshots and
+selections resolve to code, and injects cell/control identities; it is build-shape aware
+(dev serves stamps, production builds keep only the factory identities). The intent client —
+the session browser's side panel, or the channel-served `/intent/` page — carries channel
+connectivity; the app wires nothing. Knobs are covered in [Configuration](./config).
 
 Optionally, for apps built to the [frontend-for-agents](./frontend-for-agents) methodology:
 

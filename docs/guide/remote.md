@@ -91,9 +91,8 @@ durable in `.aiui-cache/config.json`:
 ## Viewing the app itself
 
 Nothing new: VS Code (or plain `ssh -L`) forwards the remote Vite port and the channel server's
-websocket port to your local machine as usual, so the app and the
-[intent tool](./web-intent-tool) run in your local session browser — which is the same browser
-the agent drives. The loop closes: the agent's screenshots are of the page you're looking at.
+websocket port to your local machine as usual, so the app and the intent client run in your
+local session browser — which is the same browser the agent drives. The loop closes: the agent's screenshots are of the page you're looking at.
 
 ## Bonus: breakpoints, via VS Code
 

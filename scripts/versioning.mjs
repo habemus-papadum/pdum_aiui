@@ -82,11 +82,7 @@ function versionFiles() {
 // explicitly because none are package.json files (two are TS source, one is
 // static JSON) and the workspace globs never reach them — a new extension's
 // manifest belongs in this list.
-const MANIFEST_FILES = [
-  "packages/aiui-intent-client/src/ext/manifest.ts",
-  "packages/aiui-extension/manifest.config.ts",
-  "packages/aiui-devtools-extension/extension/manifest.json",
-];
+const MANIFEST_FILES = ["packages/aiui-intent-client/src/ext/manifest.ts"];
 
 // The sole `version: "..."` / `"version": "..."` field (quoted or bare key),
 // captured so it can be read or rewritten while leaving the rest of the file

@@ -19,8 +19,9 @@ Two things live here on purpose:
    Solid 2.0 / Vite HMR / LocatorJS findings, each paid for with a real bug. Read it
    next to the code; the file layout *is* the methodology.
 
-It is also still the playground for the [web intent tool](../../docs/guide/web-intent-tool.md):
-the `aiuiDevOverlay()` plugin in `vite.config.ts` mounts the widget — nothing in app code.
+It is also a ready-made playground for the intent client: launch through `aiui claude` and
+the session browser's side panel (or the channel-served `/intent/` page) drives these pages;
+the `aiui()` plugin in `vite.config.ts` provides the source-location stamps attribution reads.
 
 ## Run it
 

@@ -2,15 +2,15 @@
  * content.ts — the extension's entire in-page footprint (the CDP tier's
  * `page-script.ts`, wearing the other transport).
  *
- * The page carries ONLY what should be capturable — the ring, the ink, the
+ * The page carries ONLY what should be capturable — the ring, the pencil, the
  * feedback flashes. No pill, no badge, no hints: every control lives in the
  * panel. Modes are the PANEL's state; this script obeys capability commands and
  * reports facts back. It speaks the same `PageReport` union the injected CDP
  * bootstrap speaks, so both hosts map page facts with one vocabulary.
  *
  * Being a real module (Vite bundles it) buys what the CDP bootstrap could not
- * have: it *imports* the ink surface (`../cdp/page-ink`) instead of having a
- * bundle evaluated into it, and it imports the runtime's selection watcher, so
+ * have: it *imports* the pencil surface (`../page/pencil-mount`) instead of
+ * having a bundle evaluated into it, and it imports the runtime's selection watcher, so
  * selections here are STRUCTURED (source locators, cell ids, TeX) rather than
  * plain text.
  *
@@ -27,9 +27,9 @@
  * for injection and so may not import anything at all.
  */
 
+import { locateComponents } from "@habemus-papadum/aiui-intent-runtime/locator";
 import { installSelectionWatcher } from "@habemus-papadum/aiui-intent-runtime/selection";
-import { locateComponents } from "@habemus-papadum/aiui-intent-runtime/shot";
-import { type InkHandle, mountInk, mountPencil, type PencilHandle } from "../cdp/page-ink";
+import { mountPencil, type PencilHandle } from "../cdp/page-bundle";
 import type { PageReport } from "../cdp/page-script";
 import { createDriverWatch } from "../page/driver-watch";
 import { DRIVER_TIMEOUT_MS } from "../transport";
@@ -58,7 +58,6 @@ const report = (r: PageReport): void => {
     // reach this script again: the driver-gone verdict, delivered sync.
     // Hard-clean like the watchdog would and go quiet.
     orphaned = true;
-    ink?.clear();
     pencil?.clear();
     dropAssertions();
     driverWatch.dispose();
@@ -230,10 +229,7 @@ const armRegion = (): void => {
   regionOverlay = overlay;
 };
 
-// ── ink: the real surface, imported (no injection, no CSP fight) ─────────────
-let ink: InkHandle | undefined;
-
-// ── pencil: a second surface, local stylus + forwarded iPad strokes ──────────
+// ── pencil: the markup surface, imported (no injection, no CSP fight) ────────
 let pencil: PencilHandle | undefined;
 
 // ── selection: structured, via the overlay's watcher ─────────────────────────
@@ -335,7 +331,6 @@ const dropAssertions = (): void => {
   setKeyCapture(false);
   assertRing(false, false, false, "");
   disarmRegion();
-  ink?.setOn(false, 0);
   pencil?.disengage();
   pencil = undefined;
 };
@@ -343,12 +338,11 @@ const driverWatch = createDriverWatch({
   timeoutMs: DRIVER_TIMEOUT_MS,
   onGone: () => {
     // Hard: the strokes belong to a DEAD session — nobody can clear them later.
-    ink?.clear();
     pencil?.clear();
     dropAssertions();
   },
   // Soft: strokes survive (the `adopt` rule — a reloaded panel's turn
-  // recovery must find its ink); assertions drop and get re-asserted.
+  // recovery must find its markup); assertions drop and get re-asserted.
   onChanged: dropAssertions,
 });
 
@@ -402,21 +396,6 @@ serveRelay(PAGE_ADDRESS, {
     h: window.innerHeight,
     dpr: window.devicePixelRatio || 1,
   }),
-  ink: (payload) => {
-    driverWatch.alive();
-    const p = (payload ?? {}) as { on?: boolean; fadeSec?: number; clear?: boolean };
-    if (p.clear === true) {
-      ink?.clear();
-      return { ok: true };
-    }
-    if (p.on === true) {
-      ink ??= mountInk((points) => report({ kind: "stroke", points }));
-      ink.setOn(true, p.fadeSec ?? 0);
-      return { ok: true };
-    }
-    ink?.setOn(false, p.fadeSec ?? 0);
-    return { ok: true };
-  },
   region: (payload) => {
     driverWatch.alive();
     if ((payload as { arm?: boolean } | null)?.arm === true) {
@@ -429,7 +408,7 @@ serveRelay(PAGE_ADDRESS, {
   pencil: (payload) => {
     driverWatch.alive();
     // The pencil surface runs in THIS isolated world (it only needs the DOM, no
-    // page globals) — like ink, unlike jump. `{op, …}` mirrors the CDP tier.
+    // page globals) — unlike jump. `{op, …}` mirrors the CDP tier.
     const p = (payload ?? {}) as Record<string, unknown>;
     const op = String(p.op ?? "");
     if (op === "engage") {
@@ -443,7 +422,7 @@ serveRelay(PAGE_ADDRESS, {
     switch (op) {
       case "disengage":
         // Keep the handle (and its strokes) — disengage only stops owning the
-        // pointer, like ink's setOn(false); re-engage reuses the same surface.
+        // pointer; re-engage reuses the same surface.
         pencil.disengage();
         return { ok: true };
       case "fade":
@@ -493,7 +472,7 @@ serveRelay(PAGE_ADDRESS, {
 });
 
 // The boot hello: a fresh document knows nothing, and the panel may hold state
-// for this tab (ring, key layer, ink mode). Saying hello is what re-arms it —
+// for this tab (ring, key layer, pencil mode). Saying hello is what re-arms it —
 // the bus replays on every hello (the reload lesson, learned in Phase 3).
 sayHello();
 document.addEventListener("visibilitychange", sayHello);

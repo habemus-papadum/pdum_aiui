@@ -16,8 +16,8 @@
  *  - stt / linter → the engine's IntentPipelineConfig, declared on every
  *    hello (panelIntentConfig, salvaged from the old panel's turn.ts);
  *  - videoPeriodSec → the sampler's constant-mode cadence, read per tick;
- *  - inkFade/inkVanish (and pencilFade/pencilVanish, ink's twin) → the ink /
- *    pencilSurface claims' fadeSec + a live re-relay effect each;
+ *  - pencilFade/pencilVanish → the pencilSurface claim's fadeSec + a live
+ *    re-relay effect;
  *  - shotFlash → the manual-shot flash gate (sampled frames never flash).
  */
 
@@ -42,16 +42,7 @@ import {
 import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { ClaimLaneOptions } from "./claims";
 import type { IntentClient, IntentLanes } from "./client";
-import {
-  inkFade,
-  inkVanish,
-  linter,
-  pencilFade,
-  pencilVanish,
-  shotFlash,
-  stt,
-  videoPeriodSec,
-} from "./config";
+import { linter, pencilFade, pencilVanish, shotFlash, stt, videoPeriodSec } from "./config";
 import { createLinterPulse, type LinterPulseView } from "./linter-pulse";
 import type { IntentHost } from "./transport";
 
@@ -362,7 +353,6 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   });
 
   const claimOptions: ClaimLaneOptions = {
-    inkFadeSec: () => (inkVanish.get() === true ? (inkFade.get() as number) : 0),
     pencilFadeSec: () => (pencilVanish.get() === true ? (pencilFade.get() as number) : 0),
     videoSampler: {
       start: async (desire) => {
@@ -485,12 +475,6 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
         }
       })();
     },
-    clearInk: (tab) => {
-      void host.transport.requestPage(tab, "ink", { clear: true }).catch(() => {});
-      if (engine.threadOpen) {
-        engine.inkCleared(false);
-      }
-    },
     clearPencil: (tab) => {
       void host.transport.requestPage(tab, "pencil", { op: "clear" }).catch(() => {});
     },
@@ -541,37 +525,14 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       }
     });
 
-    // Live fade: the inkFade/inkVanish controls moving while ink is claimed
-    // re-relay the new lifetime (idempotent re-assert; no release/acquire
-    // flicker). The graph pushes — nothing hand-called. Owned by a root so
-    // unbind disposes it (bind is called from plain page bootstrap code).
-    const disposeFade = createRoot((dispose) => {
-      createEffect(
-        // EVERYTHING the handler needs is computed HERE — a read inside the
-        // handler is untracked and warns STRICT_READ_UNTRACKED (the ledger's
-        // "consume the value the source computed" rule; found live on this
-        // very effect when grantedTab was read in the handler).
-        () => ({
-          fade: inkVanish.get() === true ? (inkFade.get() as number) : 0,
-          // re-run when the claim lands too, not just when the controls move
-          inkActive: client.claimStatuses().inkPointer?.phase === "active",
-          tab: client.context().grantedTab,
-        }),
-        ({ fade, inkActive, tab }) => {
-          if (inkActive && tab !== undefined) {
-            void host.transport
-              .requestPage(tab, "ink", { on: true, fadeSec: fade })
-              .catch(() => {});
-          }
-        },
-      );
-      return dispose;
-    });
-
-    // Pencil live fade — the EXACT twin of ink's disposeFade above (owner,
-    // 2026-07-16). Engage / disengage / re-point across a tab switch are now the
-    // `pencilSurface` CLAIM's job (claims.ts), so this effect only re-relays the
-    // vanish lifetime while the claim is active — no hand-rolled lifecycle.
+    // Pencil live fade (owner, 2026-07-16): the pencilVanish/pencilFade
+    // controls moving while the pencil is claimed re-relay the new lifetime
+    // (idempotent re-assert). Engage / disengage / re-point across a tab
+    // switch are the `pencilSurface` CLAIM's job (claims.ts), so this effect
+    // only re-relays the vanish lifetime while the claim is active — no
+    // hand-rolled lifecycle. Owned by a root so unbind disposes it. EVERYTHING
+    // the handler needs is computed in the compute (a read inside the handler
+    // is untracked and warns STRICT_READ_UNTRACKED).
     const disposePencilFade = createRoot((dispose) => {
       createEffect(
         () => ({
@@ -638,7 +599,6 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
 
     return () => {
       offEngine();
-      disposeFade();
       disposePencilFade();
       disposeConfig();
       disposeLinterControl();

@@ -229,7 +229,7 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
 
   const transport: PageTransport = {
     requestPage: (tab, capability, payload) => {
-      if (capability === "keylayer" || capability === "ink") {
+      if (capability === "keylayer") {
         const held = sticky.get(tab) ?? {};
         held[capability] = payload;
         sticky.set(tab, held);

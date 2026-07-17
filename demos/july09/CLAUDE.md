@@ -14,9 +14,9 @@ It differs from a scaffolded sandbox in exactly two ways, both deliberate:
 
 Ground rules (the same ones the starter ships with):
 
-- **Don't remove the integration.** The `aiuiDevOverlay()` plugin in `vite.config.ts` mounts the
-  intent tool and connects it to this session's channel; its `locator` option stamps JSX with
-  `data-source-loc` and injects `cell()` identities. The loop stops working without it.
+- **Don't remove the integration.** The `aiui()` plugin in `vite.config.ts` stamps JSX with
+  `data-source-loc` and injects `cell()` identities — the handles the intent client's
+  screenshot/selection attribution reads. The loop stops working without it.
 - **Keep the architecture's split.** `src/model/store.ts` holds the *durable roots* (signals
   created via `durableSignal()` — they survive hot edits). `src/model/graph.ts` is *disposable
   logic*: the cell graph, built by `hotCellGraph()` and rebuilt over the roots on every hot edit,

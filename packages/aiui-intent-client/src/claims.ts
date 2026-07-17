@@ -9,7 +9,7 @@
  * UI's "warming / live / failed" truth.
  *
  * The old panel's five sync functions map:
- *   syncInkPointer → inkPointer       syncTabStream → tabStream
+ *   syncPencilSurface → pencilSurface   syncTabStream → tabStream
  *   syncVideo      → videoSample      key routing   → keyRouting
  *   broadcastRing  → ring
  */
@@ -24,9 +24,7 @@ const inTurn = (s: EngineState): boolean => s.phase === "turn" || s.phase === "t
  * transport assertions remain the default, which is what harness tests
  * drive). */
 export interface ClaimLaneOptions {
-  /** Vanishing-ink lifetime for the ink assertion (0 = page-permanent). */
-  inkFadeSec?: () => number;
-  /** Vanishing lifetime for the pencil assertion (0 = persist). Mirrors ink. */
+  /** Vanishing lifetime for the pencil assertion (0 = persist). */
   pencilFadeSec?: () => number;
   /** The real frame pump: start sampling for a desire, return the stop. */
   videoSampler?: {
@@ -40,33 +38,12 @@ export function intentClaims(
 ): ClaimSpecs<EngineState, IntentContext> {
   const { transport, capture } = host;
   return {
-    /** Ink pointer routed at the tab IN VIEW while inking in an open turn.
-     * Ink is a page act (the surface lives in the content script/bootstrap),
-     * so it follows `activeTab` like keys and selection do — the grant gates
-     * only pixels (owner, 2026-07-14: the tab-switch gate split). */
-    inkPointer: {
-      derive: (s, ctx) =>
-        s.phase === "turn" && s.ink === true && ctx.activeTab !== undefined
-          ? { tab: ctx.activeTab }
-          : null,
-      acquire: async (desire: { tab: number }) => {
-        await transport.requestPage(desire.tab, "ink", {
-          on: true,
-          fadeSec: options.inkFadeSec?.() ?? 0,
-        });
-        return desire.tab;
-      },
-      release: async (tab: number) => {
-        await transport.requestPage(tab, "ink", { on: false });
-      },
-    },
-
-    /** The pencil markup surface — the exact twin of inkPointer (owner,
-     * 2026-07-16): a PAGE act that follows the tab in view (no grant — a stylus,
-     * a mouse, and the iPad's strokes all land in-page), asserted while pencil
-     * mode is on in an open turn. acquire ENGAGES (the surface owns the pointer);
-     * release DISENGAGES (strokes STAY — page-side keeps the surface). The live
-     * fade re-relay is a separate effect in lanes.ts, like ink's. */
+    /** The pencil markup surface — a PAGE act that follows the tab in view
+     * (no grant — a stylus, a mouse, and the iPad's strokes all land in-page),
+     * asserted while pencil mode is on in an open turn (owner, 2026-07-16).
+     * acquire ENGAGES (the surface owns the pointer); release DISENGAGES
+     * (strokes STAY — page-side keeps the surface). The live fade re-relay is
+     * a separate effect in lanes.ts. */
     pencilSurface: {
       derive: (s, ctx) =>
         s.phase === "turn" && s.pencil === true && ctx.activeTab !== undefined
@@ -86,7 +63,7 @@ export function intentClaims(
 
     /** The area drag surface — the crosshair rubber-band raised while area mode
      * is on in an open turn (owner, 2026-07-16). PIXELS, so it follows the GRANT
-     * (the tab in view must be the granted tab), unlike ink/pencil. acquire arms
+     * (the tab in view must be the granted tab), unlike pencil. acquire arms
      * the page overlay; release lowers it. The mode auto-exits after a drag
      * (client.ts dispatches `regionDone` on the page's `regionDrag`), so this
      * claim's steady state is "armed until the user drags or steps out". */

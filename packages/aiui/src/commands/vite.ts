@@ -3,7 +3,6 @@ import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-ch
 import {
   decideBrowserAction,
   discoverSessionBrowser,
-  installCaptureMarker,
   openInSessionBrowser,
 } from "@habemus-papadum/aiui-util";
 import chalk from "chalk";
@@ -295,9 +294,6 @@ async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> 
     if (chromeCfg.browserUrl) {
       await openInSessionBrowser(chromeCfg.browserUrl, url);
       console.error(chalk.dim(`aiui: opened ${url} in the browser at ${chromeCfg.browserUrl}`));
-      // A browser managed elsewhere was still started by `aiui browser`, so it
-      // carries the auto-accept flag; mark its documents like any other.
-      await markCaptureAuto(chromeCfg.browserUrl, chromeCfg);
       return;
     }
     const settings = resolveChromeSettings(aiuiArgs, chromeCfg);
@@ -305,48 +301,18 @@ async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> 
     if (running) {
       await openInSessionBrowser(running.browserUrl, url);
       console.error(chalk.dim(`aiui: opened ${url} in the session browser`));
-      await markCaptureAuto(running.browserUrl, chromeCfg);
     } else {
-      const started = await startSessionBrowser({
+      await startSessionBrowser({
         flags: aiuiArgs,
         config: chromeCfg,
         interactive: false,
         startUrl: url,
       });
       console.error(chalk.dim(`aiui: opened ${url} in a new session browser`));
-      await markCaptureAuto(started.session.browserUrl, chromeCfg);
     }
   } catch (error) {
     printWarning(
       "couldn't open the app in the session browser — the dev server is unaffected",
-      error instanceof Error ? error.message : String(error),
-    );
-  }
-}
-
-/**
- * Define `window.__AIUI_CAPTURE__ = "auto"` in every document of the session
- * browser, so the intent tool's screenshots and the paint host's video may take
- * the display-capture grant without a click — the browser was launched with
- * `--auto-accept-this-tab-capture`, and no page-visible surface reveals that
- * (aiui-util's capture-marker module explains why it can't be feature-detected).
- *
- * This dev server is the right owner: it serves the pages that read the marker,
- * and the CDP injection lives exactly as long as its connection. The disposer
- * is deliberately dropped — the connection should last for the process, and
- * process exit closes it. Best-effort throughout: an unmarked browser just asks
- * for a click, which is what it did before any of this existed.
- */
-async function markCaptureAuto(browserUrl: string, chromeCfg: ChromeConfig): Promise<void> {
-  if (chromeCfg.autoCapture === false) {
-    return;
-  }
-  try {
-    await installCaptureMarker(browserUrl);
-  } catch (error) {
-    printWarning(
-      "couldn't mark the session browser as auto-accepting screen capture — " +
-        "screenshots and iPad sharing will ask for a click first",
       error instanceof Error ? error.message : String(error),
     );
   }

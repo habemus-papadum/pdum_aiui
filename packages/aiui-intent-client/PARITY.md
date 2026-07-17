@@ -20,9 +20,9 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | tweak: cap toggles out; page keys pass through in tweak | ✅ spec.ts `tweak` (toggle), keyRouting claim releases in tweak |
 | send keeps armed (divergence 2) | ✅ spec.ts `send` + tests |
 | Esc ladder: help → tweak → turn-cancel → armed → disarmed (CONSCIOUS DEVIATION: the old client's Esc never disarmed; owner 2026-07-13 — step out of armed IS disarm) | ✅ escOrder, floorless ladder + tests |
-| ONE hard disarmed: every route (esc, arm cap, d) clears ink; standing video kept | ✅ the `disarmed-is-hard` exclude + tests |
+| ONE hard disarmed: every route (esc, arm cap, d) clears pencil; standing video kept | ✅ the `disarmed-is-hard` exclude + tests |
 | blip on unknown in-turn keys (swallow, 500 ms) | ✅ keys.ts verdict + panel blip line |
-| `inkOn` standing/durable; only c/disarm clear strokes | ✅ spec.ts `ink` (durable) + `clear` verb; the real surface lands on real pages in P3 (cdp/page-ink.ts — InkSurface, document-anchored, live fade) — verified live by drawing on an https page |
+| markup mode standing/durable; only c/disarm clear strokes | ✅ spec.ts `pencil` (durable) + `pencilClear` verb; the real surface lands on real pages (page/pencil-mount.ts, document-anchored, live fade). The legacy ink surface was REMOVED with `aiui-ink` — the pencil is the sole markup tool |
 | `videoOn`/`videoMode` standing/durable, agent-visible | ✅ spec.ts agent regions (single-writer bridge) |
 | talk: ONE exclusive region (off/hold/handsFree), TWO affordances — hold Space or the press-and-hold 🎙 cap; the 🎧 toggle; per-turn; Space-up ends only a hold | ✅ spec.ts + caps.ts hold cap + tests |
 | `micMuted` only while talking; reset on talk start | ✅ spec.ts + excludes + tests |
@@ -40,7 +40,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | jump-to-VS-Code mode (overlay-only; never in the old extension) | ANTICIPATED: seam + fact above; the `jump` ladder region + picker remain the post-P5 DECIDE |
 | mic level meter while talking (the old HUD meter) | ✅ panel.tsx meter next to the pills (polls talk.level at display cadence) — **shows real levels once live talk is verified with a mic** |
 | ring FOUR states (off · steady armed · breathing turn · **hollow = armed-but-ungranted**, owner 2026-07-14) | ✅ claim desire carries grant tab + hint; `ringForTab` projects per tab (shared by both buses); hollow renders outline + the activation hint, whose text is the LIVE `chrome.commands` binding (never hard-coded); client.test walks all four; extension-bus.test pins the projection + discovery |
-| gate split: page acts (selection/clear/ink/keys) follow the tab in view; only pixels (shot/stream/sampling) follow the grant — and only while granted tab IS the tab in view (owner 2026-07-14) | ✅ spec.ts `available` + claims derives; client.test "a tab switch under MV3 darkens CAPTURE only" |
+| gate split: page acts (selection/pencil/keys) follow the tab in view; only pixels (shot/stream/sampling) follow the grant — and only while granted tab IS the tab in view (owner 2026-07-14) | ✅ spec.ts `available` + claims derives; client.test "a tab switch under MV3 darkens CAPTURE only" |
 
 ## Config surface (inventory §1C controls — the "kept getting lost" list)
 
@@ -53,7 +53,7 @@ them bind in P2:
 | `stt` transcriber choice (scribe-v2 default, 4 models) | ✅ control + strip select; **consumed**: panelIntentConfig → the hello's `meta.intent`, re-applied LIVE on change (lanes.bind, lanes.test) |
 | `videoPeriodSec` (constant-mode s/frame, 1–10 slider) | ✅ control + slider; **consumed**: the frame pump's intervalMs reads it per tick (lanes.ts) |
 | `linter` off/openai/gemini | ✅ control + strip select; **consumed**: rides the hello via panelIntentConfig, re-applied LIVE (a mid-session switch reaches the next hello AND the wire's spoken-note gate); its `lint_` clips play through the SpeechPlayer — parked-on-autoplay-block, resumed on a panel gesture (speech.unlock.test) |
-| `inkVanish` + `inkFade` (2–20 s) | ✅ controls + widgets; **consumed**: the ink claim's fadeSec + the live re-relay effect (lanes.bind) |
+| `pencilVanish` + `pencilFade` (2–20 s) | ✅ controls + widgets; **consumed**: the pencil claim's fadeSec + the live re-relay effect (lanes.bind) |
 | `shotFlash` / `logLevel` | ✅ controls; shotFlash **consumed** (manual shots flash, sampled never — lanes.test); logLevel consumer pending with the console channel |
 | `uiScale` (⌘+/⌘−/⌘0, deliberately no widget) | ✅ control + keys + root-font effect (main.tsx) |
 | `rescanTick` | P2 (internal, with discovery) |
@@ -78,16 +78,16 @@ them bind in P2:
 | Enabled DERIVED (engine canDispatch dry-run; spec.available for verbs/gates) | ✅ modal/engine.ts |
 | Stable cap labels (lit carries engagement; no relayout) | ✅ caps.ts + keys.ts hints |
 | Arm cap = armed status + toggle (gated on channel; mid-turn press = full abandon, no confirm) | ✅ spec.ts `arm` |
-| Status pills: channel · mic grant · REC (talk/muted) · stream · video · ink · keys · iPad | ✅ panel.tsx — mic/iPad facts are context now, **real suppliers P2 (talk lane) / P2-paint** |
+| Status pills: channel · mic grant · REC (talk/muted) · stream · video · pencil · keys · iPad | ✅ panel.tsx — mic/iPad facts are context now, **real suppliers P2 (talk lane) / P2-paint** |
 
 ## Operations (inventory §2 — claims)
 
 | Row | Status | Where / when |
 | --- | --- | --- |
-| ink pointer / tab stream / video sampling / key routing / ring | ✅ claims.ts over the host seam + harness tests |
+| pencil surface / tab stream / video sampling / key routing / ring | ✅ claims.ts over the host seam + harness tests |
 | smart-mode interaction gate (page pings arm one frame) | ✅ the frame pump's shouldCapture/rearm over `interaction` PageEvents (lanes.ts + test) |
 | capture pre-warm on arm (overlay 2A row) | DECIDE (default: keep the panel's turn-scoped warm; pre-warm-on-arm was overlay-only). **Moot in the CDP tier**: `Page.captureScreenshot` needs no grant and no MediaStream, so there is nothing to warm — `holdStream` is a bookkeeping handle |
-| region drag ('a' — owner 2026-07-14; the old client's D-drag, D now means disarm): one-shot rubber band on the page → host-native crop (CDP `clip` / MV3 warm-stream canvas) → shot with the drag's rect + LOCATED COMPONENTS (the overlay's `locateComponents` — data-source-loc stamps; direct import in the content script, the evaluated ink bundle in the CDP tier) | ✅ page overlays in both tiers + `grabRegion` on both hosts + lanes.test "arms the page, then a regionDrag event crops, composes, and uploads". Selection's key moved a → **p** (pull) |
+| region drag ('a' — owner 2026-07-14; the old client's D-drag, D now means disarm): one-shot rubber band on the page → host-native crop (CDP `clip` / MV3 warm-stream canvas) → shot with the drag's rect + LOCATED COMPONENTS (the overlay's `locateComponents` — data-source-loc stamps; direct import in the content script, the evaluated page bundle in the CDP tier) | ✅ page overlays in both tiers + `grabRegion` on both hosts + lanes.test "arms the page, then a regionDrag event crops, composes, and uploads". Selection's key moved a → **p** (pull) |
 | page-tools ACTIVATION on tab change (the old tools-link: registration is the PAGE's own job — instrumented pages dial `/tools` directly; the client only contributes which tab is active, so the directory can re-route and disengage) | **P5 wiring** — the old `tools-link.ts` ports near-verbatim into the extension panel (real chrome tab ids); the CDP tier needs a tab-identity mapping DECIDE |
 | M10 warm-shot pixel path (36–48 ms) | ✅ ext/capture.ts — the old panel's measured code, salvaged near-verbatim behind `CaptureSource`: SW mints the stream id, the panel document consumes it, JPEG 0.85, one warm stream per turn, `firstFrame` guards the black first paint. The CDP tier gets its pixels straight from the protocol instead |
 | M9 panel-document mic (grant persistence) | P2 (plain page = stable origin, same property) |
@@ -117,7 +117,7 @@ needs no ?channel=).
 | Row | Status |
 | --- | --- |
 | FakeBus | ✅ |
-| CdpBus (real tabs, extension-free; refuse non-loopback CDP) | ✅ cdp/{protocol,page-script,page-ink,cdp-bus}.ts + the sidecar's `/intent/cdp` bridge (cdp-proxy.ts) — **verified live**: ring · page keys · ink · shots on real tabs, including an https page, with no extension installed |
+| CdpBus (real tabs, extension-free; refuse non-loopback CDP) | ✅ cdp/{protocol,page-script,page-bundle,cdp-bus}.ts + the sidecar's `/intent/cdp` bridge (cdp-proxy.ts) — **verified live**: ring · page keys · markup · shots on real tabs, including an https page, with no extension installed |
 | ExtensionBus + SW broker (copied) + content glue + static build + new identity + `aiui2.*` prefixes + never-both-armed policy | ✅ ext/{extension-bus,sw,content,content-main,capture,panel,channel,protocol,manifest}.ts + scripts/build-ext.ts — **verified live** in the session browser: the extension loads at its pinned id, the worker registers, the content script serves every capability on a real tab, the panel boots with no console errors, discovers the channel through the native host and connects |
 | activation shortcut via `chrome.commands` (in-page listener until then) | ✅ real: `aiui-intent-activate` (⌘B) + the toolbar action, both landing in the WORKER (they are the invocations that mint the `tabCapture` grant), broadcast to the panel — with a parked press the panel pulls on boot, because a panel opened BY the gesture missed the broadcast |
 
@@ -127,9 +127,9 @@ needs no ?channel=).
 | --- | --- |
 | Browser-level auto-attach ALSO adopts open tabs, so our adoption pass attached each page twice — two sessions, two tabs, and the second `addBinding` stole the first's reports | cdp-bus.test "one tab per page, however many times the browser attaches it" |
 | A page carrying an older bootstrap went DEAF to a re-attaching panel (the install guard returned early, so it never said hello) | the versioned surface + `adopt()`; cdp-bus.test attach/hello rows |
-| A reloaded page came back BARE while its session stayed healthy — ring, keys, ink gone, and no claim re-applies because the client's desire never changed | `Page.enable` + re-inject on `Page.frameNavigated` + the bus's sticky `replay`; cdp-bus.test reload rows |
+| A reloaded page came back BARE while its session stayed healthy — ring, keys, markup gone, and no claim re-applies because the client's desire never changed | `Page.enable` + re-inject on `Page.frameNavigated` + the bus's sticky `replay`; cdp-bus.test reload rows |
 | The leader tab followed FOCUS, and `document.hasFocus()` is false for every page whenever the browser app isn't frontmost — the turn ended up aimed at an `about:blank` | `relead()`: visibility leads, focus refines; cdp-bus.test "follows the tab you are LOOKING at" |
-| Ink imported its module from the channel origin — silently blocked as MIXED CONTENT on every https page (the ring showed up; the ink didn't) | the sidecar bundles `/intent/page-ink.js`; the bus evaluates it INTO the page (`ensureInk`); cdp-bus.test "the page fetches nothing" |
+| The page surface imported its module from the channel origin — silently blocked as MIXED CONTENT on every https page (the ring showed up; the surface didn't) | the sidecar bundles `/intent/page-bundle.js`; the bus evaluates it INTO the page (`ensureBundle`); cdp-bus.test "the page fetches nothing" |
 | The trace pane's count read `engine.events.length` straight from the array — subscribing to nothing, and reading 0 through a live turn | panes.test "counts events as they arrive" |
 | The bridge dropped the panel's first command (`ws` has no buffer before a listener attaches) — a bus that attaches to nothing | cdp-proxy.test "holding the commands it sends before the upstream opens" |
 | Only the ⌘B gesture minted a capture grant, so arming from the BAR left shot/selection/clear dark forever (owner found it) — and the grant, once minted, stayed pinned to that tab, against the decided "CDP shots follow the active tab" | `CaptureSource.grantless` (the host says whether a grant is a real fact); client.test "the capture grant is the HOST's business, not a ritual" |

@@ -36,9 +36,9 @@ const rows: Array<{
   },
   {
     name: "arm from armed disarms (full abandon, like d)",
-    start: { phase: "armed", ink: true },
+    start: { phase: "armed", pencil: true },
     command: "arm",
-    expected: { phase: "disarmed", ink: false },
+    expected: { phase: "disarmed", pencil: false },
   },
   {
     name: "arm mid-turn abandons the turn",
@@ -111,10 +111,10 @@ const rows: Array<{
     expected: { phase: "armed" },
   },
   {
-    name: "esc from armed steps out to the ONE hard disarmed (ink clears)",
-    start: { phase: "armed", ink: true },
+    name: "esc from armed steps out to the ONE hard disarmed (pencil clears)",
+    start: { phase: "armed", pencil: true },
     command: "escape",
-    expected: { phase: "disarmed", ink: false },
+    expected: { phase: "disarmed", pencil: false },
   },
   {
     name: "esc dismisses help before the cancel rung",
@@ -124,16 +124,16 @@ const rows: Array<{
   },
   // d column — the hard-disarmed exclude does the clearing on EVERY route
   {
-    name: "disarm clears ink mode (the disarmed-is-hard invariant)",
-    start: { phase: "turn", ink: true },
+    name: "disarm clears pencil mode (the disarmed-is-hard invariant)",
+    start: { phase: "turn", pencil: true },
     command: "disarm",
-    expected: { phase: "disarmed", ink: false },
+    expected: { phase: "disarmed", pencil: false },
   },
   {
     name: "the arm toggle from a turn reaches the same hard disarmed",
-    start: { phase: "turn", ink: true },
+    start: { phase: "turn", pencil: true },
     command: "arm",
-    expected: { phase: "disarmed", ink: false },
+    expected: { phase: "disarmed", pencil: false },
   },
   {
     name: "disarm leaves standing video settings alone",
@@ -184,22 +184,22 @@ const rows: Array<{
     command: "mute",
     expected: { micMuted: false },
   },
-  // The four page-pointer tools (ink · pencil · area · jump) are MUTUALLY
+  // The three page-pointer tools (pencil · area · jump) are MUTUALLY
   // EXCLUSIVE (owner, 2026-07-16): turning one ON clears the others. (Turning a
   // tool ON needs the world's gate — grant for area, __AIUI__ for jump — so
   // those rows live in client.test.ts; here the always-available commands
   // exercise the exclusion by clearing a seeded tool.)
   {
-    name: "ink turns off a live area (one page-pointer tool at a time)",
+    name: "pencil turns off a live area (one page-pointer tool at a time)",
     start: { phase: "turn", region: true },
-    command: "ink",
-    expected: { ink: true, region: false, jump: false },
+    command: "pencil",
+    expected: { pencil: true, region: false, jump: false },
   },
   {
-    name: "pencil turns off a live jump (and is exclusive with ink)",
-    start: { phase: "turn", jump: true, ink: true },
+    name: "pencil turns off a live jump",
+    start: { phase: "turn", jump: true },
     command: "pencil",
-    expected: { pencil: true, jump: false, ink: false },
+    expected: { pencil: true, jump: false },
   },
   {
     name: "area toggles OFF once on (always allowed — never stranded)",
@@ -257,7 +257,7 @@ describe("the §13.6 tables", () => {
 
 describe("spec-level properties", () => {
   it("esc terminates at quiescence from the deepest state", () => {
-    const e = engine({ phase: "tweak", help: true, ink: true, talk: "off" });
+    const e = engine({ phase: "tweak", help: true, pencil: true, talk: "off" });
     let steps = 0;
     for (; steps < 10; steps++) {
       const before = e.state();
@@ -266,7 +266,7 @@ describe("spec-level properties", () => {
       }
     }
     expect(steps).toBeLessThanOrEqual(4); // help + tweak→turn + turn→armed + armed→disarmed
-    expect(e.state()).toMatchObject({ phase: "disarmed", help: false, ink: false });
+    expect(e.state()).toMatchObject({ phase: "disarmed", help: false, pencil: false });
   });
 
   it("excludes hold after every command from a hostile seed", () => {
@@ -282,7 +282,7 @@ describe("spec-level properties", () => {
         expect(s.micMuted).toBe(false);
       }
       if (s.phase === "disarmed") {
-        expect(s.ink).toBe(false); // one disarmed, and it is hard
+        expect(s.pencil).toBe(false); // one disarmed, and it is hard
       }
     }
   });
@@ -305,14 +305,6 @@ describe("spec-level properties", () => {
     e.dispatch("help");
     expect(e.state().help).toBe(true); // no turn required
     expect(e.dispatch("escape").help).toBe(false); // esc still dismisses it first
-  });
-
-  it("ink and pencil are mutually exclusive — one markup surface at a time", () => {
-    // Before 2026-07-16 both could be on; now they are two of the four
-    // page-pointer tools, so turning one on turns the other off.
-    const e = engine({ phase: "turn", ink: true });
-    expect(e.dispatch("pencil")).toMatchObject({ ink: false, pencil: true });
-    expect(e.dispatch("ink")).toMatchObject({ pencil: false, ink: true });
   });
 
   it("esc unwinds the active page-tool BEFORE the phase ladder (escOrder), one press each", () => {

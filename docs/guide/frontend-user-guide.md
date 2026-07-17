@@ -579,7 +579,7 @@ they're written down. The full ledger, with the debugging stories, is
 - **Never re-type a control's bounds in the UI.** `min`/`max`/`step` in a slider's JSX will
   silently drift from the declaration; `<ControlSlider of={c} />` reads them from the control.
 - **The name stamps need the plugin.** Cell and control names, descriptions, and the registry
-  are injected at compile time by `aiuiDevOverlay({ locator: true })` in `vite.config.ts` (and
+  are injected at compile time by `aiui()` in `vite.config.ts` (and
   the same plugin in `vitest.config.ts`). The scaffold has both; if names come up `undefined`,
   that's what's missing.
 
@@ -661,7 +661,7 @@ const lissajous = cell(() => ({ x: leftCells.trace(), y: rightCells.trace() }), 
   carries baked, package-qualified identity. Or write explicit `{ name }`s and descriptions —
   the un-ergonomic fallback.
 
-The living reference is `packages/aiui-oscillator` (the slice, with its own compiled identity
+The living reference is `demos/oscillator` (the slice, with its own compiled identity
 and tests) consumed twice by `demos/twins` (two scoped instruments composed into a Lissajous
 figure — call `__app.call("report")` there to see a qualified surface).
 

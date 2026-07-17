@@ -8,14 +8,9 @@ import {
   chromeMcpAttachServer,
   chromeMcpServer,
   chromeUserDataDir,
-  devtoolsExtensionDir,
   findIntentClientExtension,
-  findIntentExtension,
-  intentExtensionDevPort,
-  readDevStamp,
   resolveChromeSettings,
   resolveIntentClientExtension,
-  resolveIntentExtension,
 } from "./chrome";
 
 describe("chromeDevtoolsEnabled", () => {
@@ -97,7 +92,6 @@ describe("resolveChromeSettings", () => {
       executablePath: undefined,
       channel: undefined,
       headless: false,
-      buildExtension: true,
     });
   });
 
@@ -114,13 +108,12 @@ describe("resolveChromeSettings", () => {
   it("takes profile/dataDir and browser choices from config", () => {
     const settings = resolveChromeSettings(
       {},
-      { profile: "research", channel: "beta", headless: true, buildExtension: false },
+      { profile: "research", channel: "beta", headless: true },
       base,
     );
     expect(settings.userDataDir).toBe(join(base, ".aiui-cache", "chrome", "research"));
     expect(settings.channel).toBe("beta");
     expect(settings.headless).toBe(true);
-    expect(settings.buildExtension).toBe(false);
   });
 
   it("lets a profile flag beat both config identities", () => {
@@ -164,7 +157,6 @@ describe("chromeMcpServer", () => {
     mode: "launch",
     debugPort: 0,
     headless: false,
-    buildExtension: true,
     ...over,
   });
 
@@ -220,34 +212,6 @@ describe("chromeMcpAttachServer", () => {
   });
 });
 
-describe("devtoolsExtensionDir", () => {
-  it("resolves to an extension dir in a dev checkout, or undefined", () => {
-    // The concrete result depends on whether aiui-devtools-extension has been built in
-    // this checkout (extension/js is gitignored tsc output) — assert the
-    // invariant rather than the environment.
-    const dir = devtoolsExtensionDir();
-    if (dir !== undefined) {
-      expect(dir.endsWith(join("aiui-devtools-extension", "extension"))).toBe(true);
-    }
-  });
-});
-
-describe("findIntentExtension", () => {
-  it("never reports an unloadable dir", async () => {
-    // Environment-dependent like devtoolsExtensionDir above: the state varies
-    // with which artifacts this checkout has produced — but "ready" must always
-    // mean a loadable unpacked extension, in one of the two known directories.
-    const intent = await findIntentExtension();
-    if (intent.state === "ready") {
-      expect(
-        intent.dir.endsWith(join("aiui-extension", "dist")) ||
-          intent.dir.endsWith(join("aiui-extension", "dist-dev")),
-      ).toBe(true);
-      expect(existsSync(join(intent.dir, "manifest.json"))).toBe(true);
-    }
-  });
-});
-
 describe("resolveIntentClientExtension — the extension launches auto-load", () => {
   it("absent when the package is not resolvable", () => {
     expect(resolveIntentClientExtension(undefined)).toEqual({ state: "absent" });
@@ -272,119 +236,5 @@ describe("resolveIntentClientExtension — the extension launches auto-load", ()
       expect(intent.dir.endsWith(join("aiui-intent-client", "dist-ext"))).toBe(true);
       expect(existsSync(join(intent.dir, "manifest.json"))).toBe(true);
     }
-  });
-});
-
-describe("resolveIntentExtension", () => {
-  const up = async () => true;
-  const down = async () => false;
-
-  /** A package root with whichever artifacts the test asks for. */
-  function checkout(artifacts: { dev?: "dev"; out?: "dev" | "prod" }) {
-    const root = mkdtempSync(join(tmpdir(), "aiui-intent-"));
-    const paths = { root, devDir: join(root, "dist-dev"), outDir: join(root, "dist") };
-    const write = (dir: string, shape: "dev" | "prod") => {
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, "manifest.json"), "{}\n");
-      writeFileSync(
-        join(dir, "service-worker-loader.js"),
-        shape === "dev"
-          ? "import 'http://localhost:5317/src/sw.ts';\n"
-          : "import './assets/sw.js';\n",
-      );
-      if (shape === "dev") {
-        writeFileSync(
-          join(dir, "aiui-dev.json"),
-          JSON.stringify({
-            runId: "r1",
-            origin: "http://localhost:5317",
-            port: 5317,
-            startedAt: "now",
-          }),
-        );
-      }
-    };
-    if (artifacts.dev) {
-      write(paths.devDir, artifacts.dev);
-    }
-    if (artifacts.out) {
-      write(paths.outDir, artifacts.out);
-    }
-    return paths;
-  }
-
-  it("reports unbuilt when neither artifact exists", async () => {
-    const paths = checkout({});
-    expect(await resolveIntentExtension(paths, up)).toEqual({ state: "unbuilt", root: paths.root });
-  });
-
-  it("prefers the dev artifact when its dev server is answering", async () => {
-    const paths = checkout({ dev: "dev", out: "prod" });
-    const intent = await resolveIntentExtension(paths, up);
-    expect(intent).toMatchObject({
-      state: "ready",
-      dir: paths.devDir,
-      mode: "dev",
-      devPort: 5317,
-      devServer: true,
-    });
-  });
-
-  it("falls back to the production build when no dev server answers", async () => {
-    const paths = checkout({ dev: "dev", out: "prod" });
-    expect(await resolveIntentExtension(paths, down)).toMatchObject({
-      state: "ready",
-      dir: paths.outDir,
-      mode: "prod",
-    });
-  });
-
-  it("loads a serverless dev artifact anyway when there is no production build", async () => {
-    const paths = checkout({ dev: "dev" });
-    expect(await resolveIntentExtension(paths, down)).toMatchObject({
-      state: "ready",
-      dir: paths.devDir,
-      mode: "dev",
-      devServer: false,
-    });
-  });
-
-  it("never mistakes a pre-split dev-shaped dist/ for a production build", async () => {
-    const paths = checkout({ out: "dev" });
-    const intent = await resolveIntentExtension(paths, down);
-    expect(intent).toMatchObject({
-      state: "ready",
-      dir: paths.outDir,
-      mode: "dev",
-      legacyDevDist: paths.outDir,
-    });
-  });
-
-  it("reads the dev stamp the kit writes when the artifact is complete", () => {
-    const paths = checkout({ dev: "dev" });
-    expect(readDevStamp(paths.devDir)).toMatchObject({ runId: "r1", port: 5317 });
-    expect(readDevStamp(paths.outDir)).toBeUndefined();
-  });
-});
-
-describe("intentExtensionDevPort", () => {
-  it("reads the dev-server port out of CRXJS dev loader stubs", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aiui-intent-ext-"));
-    writeFileSync(
-      join(dir, "service-worker-loader.js"),
-      "import 'http://localhost:5317/@vite/env';\nimport 'http://localhost:5317/src/sw.ts';\n",
-    );
-    expect(intentExtensionDevPort(dir)).toBe(5317);
-  });
-
-  it("treats relative (production) imports as not dev-shaped", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aiui-intent-ext-"));
-    writeFileSync(join(dir, "service-worker-loader.js"), "import './assets/sw.js';\n");
-    expect(intentExtensionDevPort(dir)).toBeUndefined();
-  });
-
-  it("is undefined when the loader stub is missing entirely", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aiui-intent-ext-"));
-    expect(intentExtensionDevPort(dir)).toBeUndefined();
   });
 });

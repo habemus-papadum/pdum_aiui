@@ -52,7 +52,6 @@
     "dev:plain": "vite"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-ink": "workspace:^",
     "@habemus-papadum/aiui-intent-runtime": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",

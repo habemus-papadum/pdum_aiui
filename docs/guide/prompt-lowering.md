@@ -83,13 +83,12 @@ you are developing:
   triggers.
 
 ::: tip Status
-The first version is designed and working: the [**web intent tool**](./web-intent-tool) —
-mounted from app code, dev-gated, stateless — ships in `@habemus-papadum/aiui-dev-overlay` with a
-text modality proving the full path (widget → binary websocket → lowering → session), plus
-server-side lowering **traces** and a debug viewer over them (`aiui debug`, or `/__aiui/debug` on
-the app's dev server). Voice/screenshot modalities, the
-DevTools-panel/extension delivery question, and custom per-modality debug views are still open —
-see [the design page](./web-intent-tool) and [Questions](/questions).
+The pipeline is live end to end: the **intent client** (`@habemus-papadum/aiui-intent-client` —
+the session browser's side panel and the channel-served `/intent/` page, over one mode-engine
+core) streams voice, screenshots, ink, and selections through lowering into the session, with
+server-side lowering **traces** and a debug viewer over them (embedded in the panel, and
+standalone via `aiui debug`). Custom per-modality debug views and dynamically shaped tool
+surfaces are still open — see [Questions](/questions).
 :::
 
 ## Instrumented apps (layer 3)

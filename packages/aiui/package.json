@@ -44,7 +44,6 @@
   "dependencies": {
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-claude-plugin": "workspace:^",
-    "@habemus-papadum/aiui-devtools-extension": "workspace:^",
     "@habemus-papadum/aiui-trace-ui": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
     "@inquirer/prompts": "^7.2.0",

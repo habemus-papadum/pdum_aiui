@@ -209,8 +209,8 @@ export async function startSessionBrowser(
       settings = settle();
     }
   }
-  // The switchover (owner, 2026-07-14): launches auto-load ONLY the greenfield
-  // intent client — see the twin comment in claude.ts.
+  // Launches auto-load ONLY the intent client's extension — see the twin
+  // comment in claude.ts.
   const intent = findIntentClientExtension();
   const extensionDirs = intent.state === "ready" ? [intent.dir] : [];
   // The extension's channel discovery runs over native messaging, and CfT

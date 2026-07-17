@@ -26,7 +26,6 @@ const noopLanes: IntentLanes = {
   cancelTurn: () => {},
   takeShot: () => {},
   addSelection: () => {},
-  clearInk: () => {},
   clearPencil: () => {},
   startTalk: () => {},
   stopTalk: () => {},
@@ -100,10 +99,10 @@ describe("the panel is a projection", () => {
     expect(armCap()?.getAttribute("data-lit")).toBe("true"); // armed-or-deeper
     expect(m.client.state().phase).toBe("turn");
 
-    m.client.dispatch("ink");
+    m.client.dispatch("pencil");
     await settle();
-    const inkCap = m.root.querySelector('[data-command="ink"]');
-    expect(inkCap?.getAttribute("data-lit")).toBe("true"); // ledger: cap inversions
+    const pencilCap = m.root.querySelector('[data-command="pencil"]');
+    expect(pencilCap?.getAttribute("data-lit")).toBe("true"); // ledger: cap inversions
   });
 
   it("cap clicks dispatch the same command as the key", async () => {
@@ -124,7 +123,7 @@ describe("the panel is a projection", () => {
     m.client.handleKey("?", "down", false);
     await settle();
     expect(m.root.querySelector('[data-testid="keymap-help"]')).not.toBeNull();
-    expect(text(m.root, "keymap-help")).toContain("ink");
+    expect(text(m.root, "keymap-help")).toContain("pencil");
     // In a turn the table is LIVE: no preview dimming, no how-to-get-there note.
     expect(m.root.querySelector('[data-testid="keymap-help"]')?.hasAttribute("data-preview")).toBe(
       false,
@@ -144,7 +143,7 @@ describe("the panel is a projection", () => {
     const table = m.root.querySelector('[data-testid="keymap-help"]');
     expect(table).not.toBeNull();
     // The REAL rows, not a lone "activate" shrug — same source as in-turn.
-    expect(text(m.root, "keymap-help")).toContain("ink");
+    expect(text(m.root, "keymap-help")).toContain("pencil");
     expect(text(m.root, "keymap-help")).toContain("send");
     // …marked as a preview (dimmed), with the note saying how to get there.
     expect(table?.hasAttribute("data-preview")).toBe(true);

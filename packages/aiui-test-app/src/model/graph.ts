@@ -16,7 +16,7 @@
  *   curves     the plottable geometry            (recomputes as `fit` streams)
  *
  * Note what is NOT written here: no `cell(deps, compute, { name, loc })`. The
- * source-locator babel pass (enabled by `aiuiDevOverlay({ locator })` in
+ * source-locator babel pass (the `aiui()` plugin in
  * vite.config.ts) injects each cell's `{ name, loc }` from its declaration at
  * compile time, so `const samples = cell(…)` registers as "samples" and
  * `CellView` stamps `data-cell="samples"` on the element that renders it.

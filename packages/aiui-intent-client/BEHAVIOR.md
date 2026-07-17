@@ -17,7 +17,7 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
   in the **panel's own document** (a panel-local listener) — on the target page, keys belong
   to the page outside a turn, so Esc there rightly passes through. The ✖ cap always works.
 - **There is ONE disarmed, and it is hard**: however you reach it (Esc's last step, the arm
-  cap, the `d` key), ink mode clears. Declared once as the `disarmed-is-hard` exclude — not
+  cap, the `d` key), pencil mode clears. Declared once as the `disarmed-is-hard` exclude — not
   remembered per route. Standing video/videoMode survive disarm (as in the old client).
 - **The arm cap is a status indicator you can press**: lit = armed-or-deeper; press arms from
   disarmed (gated on the channel) and hard-disarms from anywhere else — a one-click abandon,
@@ -57,8 +57,8 @@ boundary: it re-reads committed state between dispatches, which the engine makes
 ## The bar
 
 - **A tree presented linearly**: root `arm · step out · help`; arming reveals the turn tier;
-  an engaged cap reveals its children (ink → clear · vanish · fade; pencil → clear · vanish ·
-  fade; hands-free → mute; video → cadence · rate). The renderer joins the depth tiers into one
+  an engaged cap reveals its children (pencil → clear · vanish · fade; hands-free → mute;
+  video → cadence · rate). The renderer joins the depth tiers into one
   wrapping flow with a `›` divider — no indentation, no one-cap rows.
 - **Labels are stable**: a cap's text never changes with state; the lit highlight carries
   "engaged". Keyboard shortcuts are never cap text — tooltips and the help table only.
@@ -67,28 +67,27 @@ boundary: it re-reads committed state between dispatches, which the engine makes
 - Verb caps (shot · selection · clear) flash briefly on tap — they move no region, so the
   acknowledgment is the reaction.
 
-## Markup: ink and pencil are twins (owner, 2026-07-16)
+## Markup: the pencil (owner, 2026-07-16; sole markup tool since the ink removal)
 
-Pencil is integrated **exactly like ink**, and is meant to replace it (both stay wired in
-parallel for now). Same shape at every layer: a durable on/off mode region (`ink` / `pencil`,
-`i` / `k`, cleared by `disarmed-is-hard`), a reconciler claim that engages the in-page surface
-while the mode is on in an open turn and re-points it on a tab switch (`inkPointer` /
-`pencilSurface`), a clear gated on the mode, and vanish/fade as config controls with a live
-re-relay effect. The surface owns the pointer only while the mode is on (`setActive`), and
-**strokes survive leaving the mode / the turn** — only a clear or a fade removes them. On the
+The pencil replaced the legacy ink surface (it was integrated as ink's exact twin, and the
+twin won). The shape, at every layer: a durable on/off mode region (`pencil`, `k`, cleared by
+`disarmed-is-hard`), a reconciler claim that engages the in-page surface while the mode is on
+in an open turn and re-points it on a tab switch (`pencilSurface`), a clear gated on the mode
+(`c` / the bar), and vanish/fade as config controls with a live re-relay effect. The surface
+owns the pointer only while the mode is on, and **strokes survive leaving the mode / the
+turn** — only a clear or a fade removes them. On the
 host the pencil takes **mouse, pen, and touch** (native `localInput`); palm rejection is the
-remote iPad client's job (its `shouldCapture` veto), never the desktop's. The one visible
-difference from ink is the colour — the pencil is red. The iPad rides the same surface through
-the `remote*` ops, unchanged by this.
+remote iPad client's job (its `shouldCapture` veto), never the desktop's. The iPad rides the
+same surface through the `remote*` ops.
 
 ## The page-pointer tools are one mode at a time (owner, 2026-07-16)
 
-**`ink` · `pencil` · `area` · `jump` each own the page pointer with a full-viewport overlay, so
-exactly one is on.** Turning any on turns the other three off (the command clears them — an
+**`pencil` · `area` · `jump` each own the page pointer with a full-viewport overlay, so
+exactly one is on.** Turning any on turns the other two off (the command clears them — an
 exclude can't express "the last one pressed wins"). This is what made `area` (`a`) and `jump`
 (`j`) real **toggles** instead of one-shot command-flashes: pressing the key enters a lit mode
 that stays until you act, toggle it off, hit Esc, or leave the turn — the cap lights (`active`)
-while engaged, exactly like ink/pencil.
+while engaged, exactly like pencil.
 
 - **`area`** raises the crosshair rubber-band on the granted tab (a `regionSurface` claim, pixels
   → follows the grant). It **auto-exits after one drag**: the page reports `regionDrag`, the
@@ -98,7 +97,7 @@ while engaged, exactly like ink/pencil.
   (jump-mode's `onExit`) and the mode flips off.
 - **Transient**: `area`/`jump` need an open turn (area needs pixels, jump needs a live picker;
   tweak hands the page to the user), so leaving the turn clears them (`tools-need-turn`).
-  `ink`/`pencil` are durable and survive into tweak; only disarm clears those.
+  `pencil` is durable and survives into tweak; only disarm clears it.
 - **Escape is one source of truth.** With a tool on, Esc cancels *that tool* and keeps the turn
   (`escOrder: help → area → jump → phase`), then the next Esc steps the phase ladder. The page
   overlays no longer run their own private Escape listeners — the old split-brain (page-Esc
@@ -148,8 +147,8 @@ boundary time (the tab may have navigated since it was last active).
 **What survives a mid-turn reload (decided in Phase 3, on real pages):** the turn does. A reload
 gives the page a new document, which carries none of what the client asserted into the old one —
 and the client's *desire* has not changed, so no claim re-applies on its own. The host therefore
-re-arms the new document: the ring and the key layer come back, ink MODE comes back (a fresh
-surface), and the **strokes do not** — they were drawn on the document that is gone. The turn's
+re-arms the new document: the ring and the key layer come back, pencil MODE comes back (a
+fresh surface), and the **strokes do not** — they were drawn on the document that is gone. The turn's
 events, including the navigation itself, are untouched.
 
 **Capture across a tab switch differs by host — decided facts:** the extension's `tabCapture`
@@ -164,11 +163,11 @@ its grant is a real fact the activation gesture mints, and the pixel acts stay d
 does. The CDP tier's screenshots ask nobody, so there is nothing to mint: the grant simply *is*
 the tab in view. Consequence, and the bug it fixes (found live): arming from the BAR (`arm` →
 `turn`) must work exactly like ⌘B. It did not — the bar mints nothing, so the capture acts stayed
-disabled forever while ink, which follows the tab in view, worked fine.
+disabled forever while the page acts, which follow the tab in view, worked fine.
 
 **The gate split (owner, 2026-07-14): the page transport follows the tab in view; pixels follow
 the grant.** Only the pixel acts — shot, the warm stream, video sampling — gate on the grant.
-Selection, clear, ink, and keys are PAGE acts: they ride the content script / bootstrap, which is
+Selection, the pencil, its clear, and keys are PAGE acts: they ride the content script / bootstrap, which is
 on every tab, so they follow `activeTab` and never ask for a grant. Under MV3 a tab switch
 therefore darkens *capture only*; everything else keeps working on the new tab. And the pixel
 acts require the granted tab to BE the tab in view: after a switch the grant persists on the old
@@ -203,8 +202,9 @@ at nothing.
 The exclusion covers the panel's **entire own origin**, not just recognizable `/intent/` URLs:
 the dev-served panel lives at a root path (`localhost:<vite>/?channel=…`) that no URL pattern
 can identify, so the bus excludes everything on `location.origin` — the origin it itself is
-served from. Before this rule the panel instrumented ITSELF (rang, inked, keylayered its own
-document, with no way to clear the ink short of ending the turn — found live 2026-07-15).
+served from. Before this rule the panel instrumented ITSELF (rang, marked up, keylayered its
+own document, with no way to clear the strokes short of ending the turn — found live
+2026-07-15).
 Self-driving is an explicit non-goal: the panel is furniture, never a markup target.
 
 Under the extension the browser answers this question directly (`chrome.tabs.query({active:
@@ -253,7 +253,7 @@ extension): `j` in a turn toggles jump mode on (see "The page-pointer tools are 
 time") — move highlights the nearest stamped element, click opens the in-page picker (stamped
 element ancestors + containing cells at their definition sites, the overlay's interaction
 contract), commit opens `vscode://file/…`. A commit or cancel auto-exits the mode. Fully
-page-side (src/page/jump-mode.ts; the CDP tier evaluates it with the ink bundle, MV3 runs it in
+page-side (src/page/jump-mode.ts; the CDP tier evaluates it with the page bundle, MV3 runs it in
 the MAIN world — the source root and cell registry live there). The gate IS the feature
 detection: no `__AIUI__`, gray cap (and once on, always toggleable off).
 

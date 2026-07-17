@@ -10,7 +10,7 @@
  * run and did the right files ship". Run it with `pnpm test:packaging`.
  *
  * What it catches that nothing else does: a missing `files` entry (the
- * aiui-devtools-extension shipping without its built `js/`), a bin that only
+ * a package shipping without its built assets), a bin that only
  * resolves in the workspace layout, a workspace:^ range that doesn't convert,
  * a dependency that should have been a devDependency.
  *
@@ -121,17 +121,6 @@ check(
   /chrome/.test(help.stdout) && /claude/.test(help.stdout),
 );
 
-const ext = run(["chrome", "extension"]);
-const extDir = ext.stdout.trim();
-check("aiui chrome extension exits 0", ext.status === 0, ext.stderr);
-check(
-  "packed extension ships manifest + built js",
-  !!extDir &&
-    existsSync(join(extDir, "manifest.json")) &&
-    existsSync(join(extDir, "js", "panel.js")),
-  extDir || "(no path printed)",
-);
-
 const marketplace = join(
   scratch,
   "node_modules",
@@ -154,7 +143,7 @@ check(
 
 const status = run(["chrome", "status"]);
 check("aiui chrome status exits 0", status.status === 0, status.stderr);
-check("status reports the devtools panel", /DevTools panel/.test(status.stdout));
+check("status reports the intent client", /intent client/.test(status.stdout));
 
 const claude = run(["claude"]);
 check("aiui claude without claude on PATH fails politely", claude.status === 1);
@@ -163,32 +152,31 @@ check("…with the PATH explanation", /not found on your PATH/.test(claude.stder
 const mcp = run(["mcp", "--help"]);
 check("aiui mcp --help (channel CLI from dist) exits 0", mcp.status === 0, mcp.stderr);
 
-// The installed sidecar path, end to end: import the four sidecar factories the
-// way the channel's standard-sidecars.ts does (a bare `/sidecar` subpath, no
-// descriptors), construct all four, and mount the lightweight one — under plain
-// node, from the packed tarballs. This is the dev/installed seam that
+// The installed sidecar path, end to end: import the three sidecar factories
+// the way the channel's standard-sidecars.ts does (a bare `/sidecar` subpath,
+// no descriptors), construct all three, and mount the lightweight one — under
+// plain node, from the packed tarballs. This is the dev/installed seam that
 // source-first masks: in the workspace these resolve to src/*.ts under tsx;
 // installed they must resolve to dist/*.js and import cleanly with no loader.
 const sidecarProbe = join(scratch, "sidecar-probe.mjs");
 writeFileSync(
   sidecarProbe,
   `import { createRequire } from "node:module";
-import { paintSidecar } from "@habemus-papadum/aiui-paint/sidecar";
 import { intentSidecar } from "@habemus-papadum/aiui-intent-client/sidecar";
 import { pencilSidecar } from "@habemus-papadum/aiui-pencil/sidecar";
 import { barSidecar } from "@habemus-papadum/aiui-remote-bar/sidecar";
 const resolved = createRequire(import.meta.url).resolve(
-  "@habemus-papadum/aiui-paint/sidecar",
+  "@habemus-papadum/aiui-remote-bar/sidecar",
 );
 if (!resolved.endsWith(".js")) throw new Error("expected a dist .js path, got: " + resolved);
-// Construct all four exactly as standardSidecars does — proves every /sidecar
+// Construct all three exactly as standardSidecars does — proves every /sidecar
 // subpath resolves to dist and its factory runs under plain node.
 const root = process.cwd();
-const built = [paintSidecar({ root }), intentSidecar({ root }), barSidecar({ root }), pencilSidecar({ root })];
-if (built.length !== 4) throw new Error("expected four sidecars, got " + built.length);
-// Mount the lightweight one (paint) to exercise the mount/ctx/express seam.
+const built = [intentSidecar({ root }), barSidecar({ root }), pencilSidecar({ root })];
+if (built.length !== 3) throw new Error("expected three sidecars, got " + built.length);
+// Mount the lightweight one (the remote bar) to exercise the mount/ctx/express seam.
 const express = (await import("express")).default;
-const mounted = await built[0].mount(express(), { mode: "prod", log: () => {}, port: () => undefined });
+const mounted = await built[1].mount(express(), { mode: "prod", log: () => {}, port: () => undefined });
 await mounted.dispose?.();
 console.log(resolved);
 `,
@@ -200,7 +188,7 @@ const probe = spawnSync(process.execPath, [sidecarProbe], {
   timeout: 60_000,
 });
 check(
-  "paint sidecar resolves to dist and mounts under plain node",
+  "bar sidecar resolves to dist and mounts under plain node",
   probe.status === 0 && /dist[\\/]sidecar\.js\s*$/.test(probe.stdout),
   probe.stderr || probe.stdout,
 );

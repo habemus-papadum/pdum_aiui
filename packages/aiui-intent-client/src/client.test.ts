@@ -31,7 +31,6 @@ function fakeLanes(log: string[]): IntentLanes {
     cancelTurn: entry("cancelTurn"),
     takeShot: entry("takeShot"),
     addSelection: entry("addSelection"),
-    clearInk: entry("clearInk"),
     clearPencil: entry("clearPencil"),
     startTalk: entry("startTalk"),
     stopTalk: entry("stopTalk"),
@@ -126,8 +125,8 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
   it("a grantless host lights the capture acts however you armed (found live: the bar left them dark)", async () => {
     // The CDP tier's screenshots ask nobody, so there is no grant to acquire —
     // and arming from the BAR (arm → turn), which mints nothing, must work
-    // exactly like the ⌘B gesture. It did not: shot/selection/clear stayed
-    // disabled forever, and only ink (which follows the tab in view) worked.
+    // exactly like the ⌘B gesture. It did not: shot/selection stayed
+    // disabled forever, and only the page acts (which follow the tab in view) worked.
     const r = makeRig({ grantless: true });
     r.client.setContext({ connected: true });
     r.client.dispatch("arm");
@@ -177,7 +176,7 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     // the tab in view; only pixels follow the grant.
     const r = makeRig();
     grantAndOpen(r); // grant minted on tab 7
-    r.client.dispatch("ink");
+    r.client.dispatch("pencil");
     await settle();
     r.bus.clearLog();
 
@@ -187,9 +186,9 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.client.canDispatch("shot")).toBe(false); // pixels: dark until ⌘B here
     r.bus.firePageEvent({ kind: "selectionPresent", tab: 9, present: true });
     expect(r.client.canDispatch("selection")).toBe(true); // page act: follows the view
-    expect(r.client.canDispatch("clear")).toBe(true);
-    // The ink surface re-pointed at the tab in view, no grant asked.
-    expect(r.bus.log.some((line) => line.startsWith("page:ink@9"))).toBe(true);
+    expect(r.client.canDispatch("pencilClear")).toBe(true);
+    // The pencil surface re-pointed at the tab in view, no grant asked.
+    expect(r.bus.log.some((line) => line.startsWith("page:pencil@9"))).toBe(true);
     r.client.dispatch("selection");
     expect(r.lanes).toContain("addSelection:9");
   });
@@ -427,40 +426,40 @@ describe("send vs cancel vs disarm", () => {
     expect(r.client.state().phase).toBe("armed");
     expect(r.lanes).toEqual(["openTurn", "cancelTurn"]);
 
-    r.client.dispatch("ink"); // standing setting, to prove the hard clear
+    r.client.dispatch("pencil"); // standing setting, to prove the hard clear
     r.client.dispatch("escape"); // the last rung: step out of armed = disarm
-    expect(r.client.state()).toMatchObject({ phase: "disarmed", ink: false });
+    expect(r.client.state()).toMatchObject({ phase: "disarmed", pencil: false });
 
     const before = r.client.state();
     r.client.dispatch("escape"); // quiescent: nothing left to step out of
     expect(r.client.state()).toBe(before);
   });
 
-  it("disarm abandons everything: turn cancelled, ink off, pointer released", async () => {
+  it("disarm abandons everything: turn cancelled, pencil off, pointer released", async () => {
     const r = makeRig();
     grantAndOpen(r);
-    r.client.dispatch("ink");
+    r.client.dispatch("pencil");
     await settle();
-    expect(r.bus.log).toContain('page:ink@7 {"on":true,"fadeSec":0}');
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"engage","fadeSec":0}');
 
     r.client.dispatch("disarm");
     await settle();
     expect(r.lanes).toContain("cancelTurn");
-    expect(r.client.state()).toMatchObject({ phase: "disarmed", ink: false });
-    expect(r.bus.log).toContain('page:ink@7 {"on":false}'); // claim released
+    expect(r.client.state()).toMatchObject({ phase: "disarmed", pencil: false });
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"disengage"}'); // claim released
     expect(r.bus.heldStreams()).toEqual([]); // warm stream let go
   });
 });
 
 describe("claims — the end of hand-called syncs", () => {
-  it("ink mid-turn asserts the pointer with no sync call anywhere", async () => {
+  it("pencil mid-turn asserts the surface with no sync call anywhere", async () => {
     const r = makeRig();
     grantAndOpen(r);
     await settle();
     r.bus.clearLog();
-    r.client.dispatch("ink"); // ledger (F2): "caps stale after selection change",
-    await settle(); //            "command bar completely missing" — the class
-    expect(r.bus.log).toContain('page:ink@7 {"on":true,"fadeSec":0}');
+    r.client.dispatch("pencil"); // ledger (F2): "caps stale after selection change",
+    await settle(); //              "command bar completely missing" — the class
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"engage","fadeSec":0}');
   });
 
   it("the warm stream is held for the turn's life and re-pointed on re-grant", async () => {
@@ -485,7 +484,7 @@ describe("claims — the end of hand-called syncs", () => {
     expect(r.bus.log).toContain('page:keylayer@7 {"capture":false}');
     expect(r.bus.log).toContain('page:keylayer@9 {"capture":true}');
 
-    r.client.dispatch("tweak"); // ledger: "ink kept drawing in tweak" — in
+    r.client.dispatch("tweak"); // ledger: "the pen kept drawing in tweak" — in
     await settle(); //             tweak the page owns keys; capture released
     expect(r.bus.log).toContain('page:keylayer@9 {"capture":false}');
   });
@@ -508,15 +507,15 @@ describe("claims — the end of hand-called syncs", () => {
 
   it("a failing applier parks in error with the reason — visible, not silent", async () => {
     const r = makeRig();
-    r.bus.failCapability("ink", "surface refused");
+    r.bus.failCapability("pencil", "surface refused");
     const errors: unknown[] = [];
     vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
       errors.push(args);
     });
     grantAndOpen(r);
-    r.client.dispatch("ink");
+    r.client.dispatch("pencil");
     await settle();
-    expect(r.client.claimStatuses().inkPointer?.phase).toBe("error");
+    expect(r.client.claimStatuses().pencilSurface?.phase).toBe("error");
   });
 });
 
@@ -619,16 +618,16 @@ describe("keys — the grammar is the machine's only keyboard", () => {
 
   it("outside a turn every key passes to the page", () => {
     const r = makeRig();
-    r.client.handleKey("i", "down", false);
-    expect(r.client.state().ink).toBe(false); // not in turn: the page keeps `i`
+    r.client.handleKey("k", "down", false);
+    expect(r.client.state().pencil).toBe(false); // not in turn: the page keeps `k`
     expect(r.blips).toEqual([]);
   });
 
   it("forwarded page keys take the identical path", () => {
     const r = makeRig();
     grantAndOpen(r);
-    r.bus.firePageEvent({ kind: "keyForward", tab: 7, key: "i", phase: "down", repeat: false });
-    expect(r.client.state().ink).toBe(true);
+    r.bus.firePageEvent({ kind: "keyForward", tab: 7, key: "k", phase: "down", repeat: false });
+    expect(r.client.state().pencil).toBe(true);
   });
 });
 
@@ -643,10 +642,10 @@ describe("system events", () => {
   it("window blur moves nothing — help included (a reference card you read while the page has focus)", () => {
     const r = makeRig();
     grantAndOpen(r);
-    r.client.dispatch("ink");
+    r.client.dispatch("pencil");
     r.client.dispatch("help");
     r.client.emit("windowBlur");
-    expect(r.client.state()).toMatchObject({ help: true, phase: "turn", ink: true });
+    expect(r.client.state()).toMatchObject({ help: true, phase: "turn", pencil: true });
   });
 
   it("selection pings move the affordance, never the modes", () => {
@@ -697,11 +696,11 @@ describe("the bar: a tree presented linearly", () => {
     // dead-ended the bar for anyone who armed via the cap). The capture acts
     // below gate on the grant individually.
     expect(findCap(r, "turn")?.enabled).toBe(true);
-    expect(findCap(r, "ink")).toBeUndefined(); // turn tier closed
+    expect(findCap(r, "pencil")).toBeUndefined(); // turn tier closed
 
     r.client.dispatch("turn");
     expect(r.lanes).toContain("openTurn"); // the bar's turn opens the thread too
-    expect(findCap(r, "ink")).toBeDefined();
+    expect(findCap(r, "pencil")).toBeDefined();
     expect(findCap(r, "send")?.enabled).toBe(true);
     // Ungranted turn: only the PIXEL verbs say no (the gate split, owner
     // 2026-07-14) — selection is a page act, gated on a selection EXISTING.
@@ -770,10 +769,10 @@ describe("projections", () => {
   it("bar and hints derive from the same state the keys act on", () => {
     const r = makeRig();
     grantAndOpen(r);
-    r.client.dispatch("ink");
-    expect(findCap(r, "ink")?.lit).toBe(true);
-    expect(findCap(r, "clear")).toBeDefined(); // ink's child tier
+    r.client.dispatch("pencil");
+    expect(findCap(r, "pencil")?.lit).toBe(true);
+    expect(findCap(r, "pencilClear")).toBeDefined(); // pencil's child tier
     const hints = r.client.hints();
-    expect(hints.find((h) => h.key === "i")?.active).toBe(true); // stable label, active flag
+    expect(hints.find((h) => h.key === "k")?.active).toBe(true); // stable label, active flag
   });
 });

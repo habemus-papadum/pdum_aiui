@@ -373,39 +373,39 @@ describe("CdpBus", () => {
     expect(shot.thumb).toBe(`data:image/png;base64,${png}`);
   });
 
-  it("injects the ink bundle into the page before inking it — the page fetches nothing", async () => {
-    // Found live: the page imported its ink module from the channel origin,
+  it("injects the page bundle before a pencil op — the page fetches nothing", async () => {
+    // Found live: the page imported its surface module from the channel origin,
     // which an https page refuses as mixed content — the ring appeared on
-    // example.com and the ink, silently, did not. The bus reads the bundle from
-    // its OWN origin and evaluates the source into the page.
+    // example.com and the surface, silently, did not. The bus reads the bundle
+    // from its OWN origin and evaluates the source into the page.
     const browser = scriptedBrowser();
     const bus = await connectCdpBus({
       cdpUrl: BRIDGE,
       channelOrigin: ORIGIN,
       socketFactory: browser.factory,
-      inkSource: async () => "/* the ink bundle */ window.__aiuiIntentInk = {};",
+      bundleSource: async () => "/* the page bundle */ window.__aiuiIntentPage = {};",
     });
     browser.attach("S1", "T1", "https://example.test/");
     await settle();
 
-    await bus.transport.requestPage(1, "ink", { on: true, fadeSec: 4 });
+    await bus.transport.requestPage(1, "pencil", { op: "engage", fadeSec: 4 });
     const evaluated = browser.evaluated("S1");
-    const bundleAt = evaluated.findIndex((e) => e.includes("the ink bundle"));
-    const inkAt = evaluated.findIndex((e) => e.includes(call("ink")));
+    const bundleAt = evaluated.findIndex((e) => e.includes("the page bundle"));
+    const pencilAt = evaluated.findIndex((e) => e.includes(call("pencil")));
     expect(bundleAt).toBeGreaterThanOrEqual(0);
-    expect(bundleAt).toBeLessThan(inkAt); // the surface exists before we use it
-    expect(evaluated[inkAt]).toContain('"fadeSec":4');
+    expect(bundleAt).toBeLessThan(pencilAt); // the surface exists before we use it
+    expect(evaluated[pencilAt]).toContain('"fadeSec":4');
 
-    // One document, one injection: inking again does not re-evaluate the bundle.
-    await bus.transport.requestPage(1, "ink", { on: false });
-    expect(browser.evaluated("S1").filter((e) => e.includes("the ink bundle"))).toHaveLength(1);
+    // One document, one injection: a second op does not re-evaluate the bundle.
+    await bus.transport.requestPage(1, "pencil", { op: "disengage" });
+    expect(browser.evaluated("S1").filter((e) => e.includes("the page bundle"))).toHaveLength(1);
 
-    // …but a NEW document has no bundle in it, so the next ink re-injects.
+    // …but a NEW document has no bundle in it, so the next op re-injects.
     browser.report("S1", hello("https://example.test/next"));
     await settle();
-    await bus.transport.requestPage(1, "ink", { on: true });
+    await bus.transport.requestPage(1, "pencil", { op: "engage" });
     expect(
-      browser.evaluated("S1").filter((e) => e.includes("the ink bundle")).length,
+      browser.evaluated("S1").filter((e) => e.includes("the page bundle")).length,
     ).toBeGreaterThanOrEqual(2);
   });
 

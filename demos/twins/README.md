@@ -4,7 +4,7 @@
 (`scope`, slice factories, cross-package identity):
 
 - Both oscilloscopes are the SAME reusable slice —
-  [`@habemus-papadum/aiui-oscillator`](../../packages/aiui-oscillator) — instantiated in
+  [`@habemus-papadum/aiui-oscillator`](../oscillator) — instantiated in
   `src/model/store.ts` under two scopes (`scope("left")`, `scope("right")`). Each instance gets
   qualified controls (`left/freq`, `right/freq`), its own durable state, and its own agent tools
   (`left/kick`, `right/kick`).

@@ -85,9 +85,11 @@ export interface AiuiConfig {
     forTesting?: ForTestingMode;
     /** Launch Chrome headless (default: false). */
     headless?: boolean;
-    /** Rebuild the aiui-devtools-extension on every launch in a dev checkout. */
+    /** OBSOLETE (the devtools extension is deleted): parsed and ignored so old
+     * configs stay valid. */
     buildExtension?: boolean;
-    /** Mark session-browser documents as auto-accepting display capture. */
+    /** OBSOLETE (page-side getDisplayMedia capture is gone): parsed and
+     * ignored so old configs stay valid. */
     autoCapture?: boolean;
   };
 }

@@ -237,28 +237,21 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         key: "buildExtension",
         type: "boolean",
         default: true,
-        summary: "OBSOLETE — launches no longer auto-load (or rebuild) the DevTools extension.",
+        summary: "OBSOLETE — parsed and ignored (the DevTools extension is deleted).",
         doc:
-          "Since the intent-client switchover (2026-07-14) the only extension a launch " +
-          "auto-loads is the intent client, whose MV3 bundle is built deliberately " +
-          "(`pnpm -C packages/aiui-intent-client build:ext`). Still parsed so old configs " +
-          "stay valid; `aiui chrome extension` builds the DevTools panel on demand.",
+          "The only extension a launch auto-loads is the intent client, whose MV3 bundle " +
+          "is built deliberately (`pnpm -C packages/aiui-intent-client build:ext`). " +
+          "Kept in the schema so old configs stay valid.",
       },
       {
         key: "autoCapture",
         type: "boolean",
         default: true,
-        summary: "Let session-browser pages take the screen-capture grant without a click.",
+        summary: "OBSOLETE — parsed and ignored (page-side getDisplayMedia capture is gone).",
         doc:
-          "The session browser launches with --auto-accept-this-tab-capture, so getDisplayMedia " +
-          "resolves there with no picker and no user gesture — but a page cannot detect that " +
-          '(display-capture is not a permission; permissions.query always answers "prompt"), and ' +
-          "guessing wrong opens a dialog that cannot be aborted. `aiui vite` therefore defines " +
-          'window.__AIUI_CAPTURE__ = "auto" over CDP in exactly the browser it launched. The ' +
-          "intent tool then takes the grant on arm rather than on the first screenshot, and the " +
-          'paint host never needs its "Share screen with iPad" button. false suppresses the ' +
-          "marker: capture waits for a real click, as it did before. Never set it on a browser " +
-          "aiui did not launch. See docs/guide/screen-capture.md.",
+          "The intent client's hosts capture natively (CDP screenshots / the extension's " +
+          "tabCapture stream); nothing reads the page-side capture marker any more. Kept in " +
+          "the schema so old configs stay valid.",
       },
     ],
   },

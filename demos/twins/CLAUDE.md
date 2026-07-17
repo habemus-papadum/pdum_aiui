@@ -1,7 +1,7 @@
 # demo: twins
 
 **This demo is the composability worked example** (one slice, two instances): the oscillators
-come from `packages/aiui-oscillator` (a workspace slice library), instantiated under
+come from `demos/oscillator` (a workspace slice library), instantiated under
 `scope("left")`/`scope("right")` in `src/model/store.ts`. Keep that shape — the demo exists to
 show scoped slice reuse; don't inline the slice's code into the app.
 
@@ -25,11 +25,10 @@ It differs from a scaffolded sandbox in exactly two ways, both deliberate:
 
 Ground rules (the same ones the starter ships with):
 
-- **Don't remove the integration.** The `aiuiDevOverlay()` plugin in `vite.config.ts` mounts the
-  intent tool and connects it to this session's channel; its `locator` option stamps JSX with
-  `data-source-loc` and injects `cell()`/`control()`/`action()` identities. The loop stops
-  working without it. (And never hand-write a `data-source-loc`/`data-cell-loc` — locations
-  are compiler output.)
+- **Don't remove the integration.** The `aiui()` plugin in `vite.config.ts` stamps JSX with
+  `data-source-loc` and injects `cell()`/`control()`/`action()` identities — the handles the
+  intent client's screenshot/selection attribution reads. The loop stops working without it.
+  (And never hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.)
 - **Keep the architecture's split.** `src/model/store.ts` holds the *durable roots* AND the
   **control surface**: user-movable parameters are `control({ value, min, max, … })` with a real
   doc comment (the compiler injects the name from the binding and lifts the comment as the

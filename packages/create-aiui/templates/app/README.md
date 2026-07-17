@@ -37,7 +37,7 @@ The layout is the [frontend-for-agents](https://habemus-papadum.github.io/pdum_a
 methodology in miniature:
 
 ```
-vite.config.ts        the ENTIRE aiui integration: one aiuiDevOverlay() plugin
+vite.config.ts        the ENTIRE aiui integration: one aiui() plugin (source stamps)
 src/
   model/store.ts      durable roots + the control surface (described, constrained knobs)
   model/rose.ts       pure math (the picture; playbook layer 1, with rose.test.ts)

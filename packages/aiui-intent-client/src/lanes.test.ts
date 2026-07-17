@@ -191,11 +191,11 @@ describe("the jump-to-editor toggle", () => {
     const r = makeRig();
     activationGesture(r.client, 7);
     r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
-    r.client.dispatch("ink");
-    expect(r.client.state().ink).toBe(true);
+    r.client.dispatch("pencil");
+    expect(r.client.state().pencil).toBe(true);
     r.client.dispatch("jump"); // needs __AIUI__ (fired above) + the open turn
     expect(r.client.state().jump).toBe(true);
-    expect(r.client.state().ink).toBe(false); // ink yielded — one tool at a time
+    expect(r.client.state().pencil).toBe(false); // pencil yielded — one tool at a time
   });
 });
 
@@ -204,7 +204,7 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
     const r = makeRig();
     activationGesture(r.client, 7);
     expect(r.lanes.engine.threadOpen).toBe(true); // the wire engine followed
-    r.client.dispatch("ink"); // a contentful event so the wire dials
+    r.client.dispatch("pencil"); // a contentful event so the wire dials
     await settle(30);
     expect(r.thread.dials.length).toBeGreaterThan(0);
     const meta = r.thread.dials[0];
@@ -248,7 +248,7 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
   it("a lowered-prompt push reaches the page; channel errors reach the toast line", async () => {
     const r = makeRig();
     activationGesture(r.client, 7);
-    r.client.dispatch("ink");
+    r.client.dispatch("pencil");
     await settle(30);
     r.thread.serverPush?.({ kind: "lowered-prompt", prompt: "LOWERED" });
     r.thread.serverPush?.({ kind: "error", message: "no such model", source: "channel" });
@@ -366,35 +366,7 @@ describe("navigation continuity — context riding the turn", () => {
   });
 });
 
-describe("the fade re-relay effect", () => {
-  it("re-relays a moved fade while ink is claimed — with NO untracked handler reads", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const r = makeRig();
-    activationGesture(r.client, 7);
-    r.client.dispatch("ink");
-    await settle(30); // ink claim active → the effect asserts once
-    r.bus.clearLog();
-
-    const { inkFade, inkVanish } = await import("./config");
-    inkVanish.set(true as never);
-    inkFade.set(9 as never);
-    await settle(30);
-    expect(r.bus.log).toContain('page:ink@7 {"on":true,"fadeSec":9}'); // live re-relay
-
-    // Regression (found live): grantedTab was read in the effect HANDLER —
-    // untracked, STRICT_READ_UNTRACKED on every run. Everything the handler
-    // needs must arrive through the compute.
-    const diagnostics = [...warn.mock.calls, ...error.mock.calls]
-      .flat()
-      .filter((arg) => typeof arg === "string" && arg.includes("STRICT_READ_UNTRACKED"));
-    expect(diagnostics).toEqual([]);
-    inkVanish.set(false as never);
-    inkFade.set(6 as never);
-  });
-});
-
-describe("the pencilSurface claim (ink's twin: mode-gated, tab-following)", () => {
+describe("the pencilSurface claim (mode-gated, tab-following)", () => {
   it("engages only when markup is ON, re-relays fade live, re-points on tab switch, releases on disarm", async () => {
     const r = makeRig();
     activationGesture(r.client, 7); // grant + arm + turn on tab 7
@@ -555,7 +527,7 @@ describe("config consumers", () => {
 
       // The next thread's hello declares the new config (openThread reads it fresh).
       activationGesture(r.client, 7);
-      r.client.dispatch("ink");
+      r.client.dispatch("pencil");
       await settle(30);
       expect((r.thread.dials[0]?.intent as { linter?: string }).linter).toBe("gemini");
     } finally {

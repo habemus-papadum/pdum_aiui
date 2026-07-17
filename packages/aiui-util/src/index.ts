@@ -7,10 +7,10 @@
  */
 
 export * from "./browser";
-export * from "./capture-marker";
 export * from "./environment";
 export * from "./extension";
 export * from "./provenance";
+export * from "./socket-url";
 
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";

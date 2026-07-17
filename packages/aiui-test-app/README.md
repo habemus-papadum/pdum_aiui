@@ -1,7 +1,7 @@
 # @habemus-papadum/aiui-test-app
 
 **Internal, never published.** A deliberately small SolidJS app for exercising the
-[intent overlay](../../docs/guide/intent-overlay.md) and the [channel](../../docs/guide/channel.md)
+intent client and the [channel](../../docs/guide/channel.md)
 without the weight of `demos/gallery` (no workers, no DuckDB, no Mosaic, no multi-page routing).
 
 It fits a **mixture of two Gaussians**: draw a sample, bin it, measure it, and recover the
@@ -28,8 +28,8 @@ samples ──┬─→ histogram ──┐
 `src/model/mixture.ts` is pure mathematics — no Solid, no aiui, no async. Everything reactive is in
 `src/model/graph.ts`; everything visual is in `src/ui/`.
 
-**No cell writes its own `name` or `loc`.** The source-locator babel pass (`aiuiDevOverlay({ locator
-})` in `vite.config.ts`) injects both at compile time from the declaration, so `const samples =
+**No cell writes its own `name` or `loc`.** The source-locator babel pass (the `aiui()`
+plugin in `vite.config.ts`) injects both at compile time from the declaration, so `const samples =
 cell(…)` registers as `"samples"` and `CellView` stamps `data-cell="samples"`. Writing them by hand
 is redundant and goes stale the moment the code moves.
 
@@ -53,8 +53,7 @@ has no MCP transport at all (see `aiui-claude-channel serve`).
 
 The standalone channel is configured exactly like a session's — `aiui mcp serve` resolves
 `channel.bind` and `sidecars.*` from config the same way `aiui claude` does (see
-`packages/aiui/src/util/channel-launch.ts`), so it hosts the [iPad paint](../../docs/guide/paint-stream.md)
-sidecar on its own port. `aiui paint url` lists it alongside real sessions.
+`packages/aiui/src/util/channel-launch.ts`), so it hosts the standard sidecars on its own port.
 
 Against a **real** session instead, run `aiui claude` in one terminal and `pnpm test-app` in another;
 the selector will offer the real channel.

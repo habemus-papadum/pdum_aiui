@@ -22,7 +22,6 @@ const noopLanes: IntentLanes = {
   armRegion: () => {},
   armJump: () => {},
   addSelection: () => {},
-  clearInk: () => {},
   clearPencil: () => {},
   startTalk: () => {},
   stopTalk: () => {},
@@ -163,10 +162,10 @@ describe("createBarHost", () => {
     fs.open();
     await settle();
 
-    // `ink` is a desktop-only cap — never in the remote projection — yet the
+    // `pencil` is a desktop-only cap — never in the remote projection — yet the
     // host has no membership check, so a socket that sends it still moves state.
-    expect(client.state().ink).not.toBe(true);
-    fs.message(encode({ type: "command", command: "ink" }));
-    expect(client.state().ink).toBe(true);
+    expect(client.state().pencil).not.toBe(true);
+    fs.message(encode({ type: "command", command: "pencil" }));
+    expect(client.state().pencil).toBe(true);
   });
 });

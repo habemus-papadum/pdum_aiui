@@ -3,7 +3,7 @@
  *
  * Everything the client needs from "the pages it drives" fits behind three
  * small interfaces. The page-side contract is the one the old content script
- * already serves — `serveRelay("page", { selection, viewport, ink, keylayer,
+ * already serves — `serveRelay("page", { selection, viewport, pencil, keylayer,
  * flash })` — so the production `ExtensionBus` is today's relay verbatim;
  * the `CdpBus` delivers the same capabilities over Runtime.evaluate; and the
  * `FakeBus` (./fake-bus.ts) is what every harness test drives.
@@ -18,7 +18,6 @@
  * components → source): declared now so the seam anticipates the overlay's
  * jump-to-VS-Code mode; only instrumented pages answer it. */
 export type PageCapability =
-  | "ink"
   | "keylayer"
   | "flash"
   | "selection"
@@ -107,7 +106,7 @@ export type PageEvent =
   | { kind: "aiuiSupport"; tab: number; supported: boolean }
   /** The FROZEN client holds this tab (its on-page ring says armed). The two
    * clients share a DOM but no messaging, so this is how they see each other —
-   * and the new one stands down rather than ink over the old one's page. */
+   * and the new one stands down rather than draw over the old one's page. */
   | { kind: "foreignClient"; tab: number; armed: boolean }
   /** The user completed a region drag (the armed `a` gesture): the rect in
    * CSS px (viewport coords), the viewport for crop scaling, the gesture's
@@ -156,7 +155,7 @@ export interface PageTransport {
   onPageEvent(handler: (event: PageEvent) => void): () => void;
 }
 
-/** Which tab the user is looking at — targeting for ring/keys/ink. */
+/** Which tab the user is looking at — targeting for ring/keys/pencil. */
 export interface SurfaceTargeting {
   activeTab(): number | undefined;
   onActiveTabChange(handler: (tab: number | undefined) => void): () => void;

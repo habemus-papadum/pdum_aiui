@@ -3,7 +3,8 @@
  * the local host input and a remote iPad draw on (owner, 2026-07-15; clean
  * reintegration 2026-07-16).
  *
- * This is the pencil's answer to `cdp/page-ink.ts`, and it mirrors it exactly —
+ * This is the pencil's markup surface for driven pages, and it mirrors the
+ * old ink surface exactly —
  * because the two are the same shape: a floating markup surface mounted in the
  * target page, delivered the same way (bundled into the evaluated ink bundle for
  * the CDP tier; imported by the content script for MV3), driven by the same

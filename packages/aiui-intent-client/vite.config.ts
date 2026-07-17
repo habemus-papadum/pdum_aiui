@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 // Externalize Node builtins + everything this package declares as a runtime/peer
 // dependency, so the library bundle never inlines a consumer-provided module —
 // plus `vite` and `esbuild`, which the sidecar imports LAZILY (only at mount,
-// for the /intent/ dev server and the page-ink bundle). Bundling them would
+// for the /intent/ dev server and the page bundle). Bundling them would
 // pull all of Vite/esbuild into dist/sidecar.js; kept external, the dynamic
 // import resolves at runtime (and, absent in a published install, fails at mount
 // and is skipped — the Phase-4 static-dist replacement is what makes it work

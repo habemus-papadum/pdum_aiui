@@ -3,7 +3,7 @@
 VS Code extension: a selection provider for the aiui dev overlay — pick a connected browser tab
 and send editor selections into its session's turn.
 
-A peer of the [session bus](../../docs/guide/multi-view-sessions.md): it contributes structured
+A peer of the channel's `/session` bus: it contributes structured
 `SelectionContribution` payloads on the `"contribution"` topic, and the app tab renders them as
 chips and lets `composeIntent` decide how they read in the prompt at lowering time. Unlike a
 browser peer it holds no websocket — it goes through the channel web backend's session HTTP
@@ -65,7 +65,6 @@ URL computed on the fly from the same DOM attribution contract this extension's 
 in on. A click with nothing to open is named in the picker ("no source location on or around
 this element"), never a silent no-op, and the mode ends itself when the jump blurs the window,
 so returning to the tab resumes composing. Details in
-[Using the Intent Overlay](../../docs/guide/intent-overlay.md) and
 [VS Code Integration](../../docs/guide/vscode.md).
 
 ## Install locally

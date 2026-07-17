@@ -19,17 +19,15 @@ transcript) at the center. Three layers:
 2. **Intent tools** — frontends for that pipeline. The current one is the **intent client**
    (`aiui-intent-client`): one client, three hosts — the channel-served plain page at
    `/intent/` (drives real tabs over CDP, no extension) and the MV3 side panel (`dist-ext`,
-   the ONE extension `aiui claude` auto-loads since the 2026-07-14 switchover; warm `tabCapture`
-   video), both over the same mode-engine core; `PARITY.md`/`BEHAVIOR.md` in that package are
-   the decided contract. Its host-agnostic capture/transport runtime lives in
-   `aiui-intent-runtime` (mic/screen capture, frame sampler, selection watcher, channel wire).
-   The older surfaces are FROZEN read-only awaiting deletion (`docs/proposals/
-   dev-overlay-retirement.md`): `aiui-dev-overlay` (the original web intent tool) and
-   `aiui-extension` (safety net, never auto-loaded). Lowering runs are traced to the
-   project-local `.aiui-cache/` (gitignored); the trace debugger (`aiui-trace-ui`) is EMBEDDED
-   in the intent panel, served at `/__aiui/debug` by its `./vite` plugin (what `aiui debug`
-   runs, session-pinned); the **aiui Chrome DevTools panel** (`aiui-devtools-extension`) still
-   exists as a manual install, frozen with the batch.
+   the ONE extension `aiui claude` auto-loads; warm `tabCapture` video), both over the same
+   mode-engine core; `PARITY.md`/`BEHAVIOR.md` in that package are the decided contract. Its
+   host-agnostic capture/transport runtime lives in `aiui-intent-runtime` (mic capture, frame
+   sampler, selection watcher, channel wire). The historical surfaces — `aiui-dev-overlay` (the
+   original web intent tool), `aiui-extension` (the first browser extension), and the
+   `aiui-devtools-extension` panel — are DELETED (`docs/proposals/dev-overlay-retirement.md`;
+   read them in git history). Lowering runs are traced to the project-local `.aiui-cache/`
+   (gitignored); the trace debugger (`aiui-trace-ui`) is EMBEDDED in the intent panel and served
+   at `/__aiui/debug` by its `./vite` plugin (what `aiui debug` runs, session-pinned).
    The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`, `/health`);
    every page belongs to a frontend process. (Two sidecar exceptions: the paint sidecar's
    self-contained iPad client page at `/paint/` — an iPad has no frontend process — and the
@@ -95,7 +93,7 @@ artifact is unchanged. Rules that keep this working:
 
 - **New packages get the shape from the skeleton** (`scripts/_skeleton/package.json.tmpl`) via
   `pnpm new-package`; keep dev fields and `publishConfig` overrides in sync when adding entry
-  points (subpath exports go in *both*, like `aiui-dev-overlay`'s `./vite`).
+  points (subpath exports go in *both*, like `aiui-trace-ui`'s `./vite`).
 - **`bin` stays pointing at `dist/`** in both forms: bins are executed by plain `node` from
   installed tarballs; in-workspace CLI spawning already runs source via tsx
   (`packages/aiui/src/util/resolve-cli.ts`).
@@ -103,12 +101,12 @@ artifact is unchanged. Rules that keep this working:
   `publishConfig` swap, so it tests what consumers install. Run it whenever packaging fields
   change. This matters doubly because source-first dev *masks* dist-only bugs: e.g.
   `import.meta.env.*` is substituted at build time, so `dist/` code can never read its consumer's
-  env (the reason the overlay integrates via a Vite plugin — internals note in
-  `docs/guide/web-intent-tool.md`). In-repo, source mode hides that class of bug; the packaging
-  test and the plugin design are what stand between you and them.
+  env (the reason runtime configuration for prebuilt code travels through runtime channels —
+  injected globals, plugin-generated modules). In-repo, source mode hides that class of bug; the
+  packaging test and that design rule are what stand between you and them.
 - **Never `optimizeDeps.include` a workspace package** in a Vite config: the dep-optimizer cache
   is keyed by the lockfile, not package contents, so a linked package would be served stale (see
-  the comment in `packages/aiui-dev-overlay/src/vite.ts`).
+  the comment in `packages/aiui-trace-ui/src/vite.ts`).
 
 ## In-repo demo apps — `pnpm new-demo <name>`
 
@@ -145,7 +143,7 @@ starter — workers, WebGL, DuckDB/Mosaic, the modal kit — and it is *not* a t
 scaffolds from it.
 
 **`demos/twins` is the composability worked example**: one reusable slice
-(`packages/aiui-oscillator`, an internal never-published package) instantiated twice under
+(`demos/oscillator`, an internal never-published package) instantiated twice under
 `scope("left")`/`scope("right")` and composed into a Lissajous figure — the living reference for
 slices, scopes, and cross-package compiler identity (user guide, "Composing bigger apps").
 

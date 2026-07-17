@@ -3,7 +3,7 @@
  * the bar is feature-complete NOW and nothing gets lost (PARITY.md "kept
  * getting lost" list). Values, bounds, and options mirror the old panel's
  * store (aiui-extension panel/model/store.ts) verbatim; the lanes that READ
- * them (hello expansion, sampler cadence, ink relay) bind in Phase 2.
+ * them (hello expansion, sampler cadence, pencil relay) bind in Phase 2.
  *
  * Every entry is a `control()` — durable, agent-visible through the standard
  * tools, and rendered in the bar/config strip as widget nodes bound by name.
@@ -38,28 +38,9 @@ export const videoPeriodSec = control({
   description: "constant-mode video cadence, seconds per frame",
 });
 
-/** Vanishing ink: off = strokes are page-permanent (§13.6 default). */
-export const inkVanish = control({
-  name: "inkVanish",
-  value: false,
-  description: "strokes fade out instead of staying page-permanent",
-});
-
-/** Vanishing ink's lifetime, seconds (live re-relayed while inked). */
-export const inkFade = control({
-  name: "inkFade",
-  value: 6,
-  min: 2,
-  max: 20,
-  step: 0.1,
-  unit: "s",
-  description: "vanishing-ink stroke lifetime",
-});
-
-/** Vanishing pencil: off = strokes persist on the page; on = they fade over
- * `pencilFade`. A config control, exactly like {@link inkVanish} (owner,
- * 2026-07-16: pencil reintegrated as an ink twin — the on/off is the `pencil`
- * mode region, vanish is this standing setting). */
+/** Vanishing pencil: off = strokes persist on the page (§13.6 default); on =
+ * they fade over `pencilFade`. A standing config control (owner, 2026-07-16:
+ * the on/off is the `pencil` mode region, vanish is this setting). */
 export const pencilVanish = control({
   name: "pencilVanish",
   value: false,
@@ -68,7 +49,7 @@ export const pencilVanish = control({
 
 /** The pencil's vanishing lifetime, seconds — the fade slider (live re-relayed
  * while pencil is claimed). Only how LONG vanishing takes; the on/off is
- * `pencilVanish`. Mirrors {@link inkFade}. */
+ * `pencilVanish`. */
 export const pencilFade = control({
   name: "pencilFade",
   value: 6,

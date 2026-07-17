@@ -9,14 +9,14 @@
  *    signal — callback-based, no polling), selection presence, interaction
  *    pings (the smart-video gate), SPA navigations, captured keys;
  *  - serves the page capabilities under `window.__aiuiIntentPage.handle`:
- *    ring · flash · keylayer · selection · viewport · ink · locate.
+ *    ring · flash · keylayer · selection · viewport · pencil · jump · locate.
  *
  * **The page fetches nothing.** Not the bootstrap (it arrives as a string over
- * CDP), and not the heavy ink surface (the bus evaluates its bundle into the
- * page — see cdp-bus's `ensureInk`). An https page may not load a module from
+ * CDP), and not the heavy page bundle (the bus evaluates it into the page —
+ * see cdp-bus's `ensureBundle`). An https page may not load a module from
  * the channel's `http://127.0.0.1:…` origin: that is mixed content, and it is
- * most of the web. Found live — the ring appeared on example.com and the ink,
- * quietly, did not.
+ * most of the web. Found live — the ring appeared on example.com and the
+ * surfaces, quietly, did not.
  *
  * Authored as a real function (so it typechecks) and stringified for
  * injection by `buildPageScript()`.
@@ -185,37 +185,13 @@ function pageBootstrap(version: string): void {
     document.addEventListener("keyup", keyHandlers.up, true);
   };
 
-  // ── ink: the real surface, INJECTED by the bus (never fetched by the page) ─
+  // ── the page bundle: INJECTED by the bus (never fetched by the page) ───────
   //
   // The page pulls nothing over the network. An https page cannot import a
   // module from the channel's `http://127.0.0.1:…` origin — mixed content, and
-  // that is most of the web (found live: ring on example.com, ink silently
-  // absent). So the bus evaluates the bundle here first, and this handler just
-  // uses the global it defines.
-  let inkHandle:
-    | { setOn: (on: boolean, fadeSec: number) => void; clear: () => void; dispose: () => void }
-    | undefined;
-  const handleInk = (payload: { on?: boolean; fadeSec?: number; clear?: boolean }): unknown => {
-    const ink = w.__aiuiIntentInk as
-      | { mountInk: (report: (points: number) => void) => typeof inkHandle }
-      | undefined;
-    if (payload.clear === true) {
-      inkHandle?.clear();
-      return { ok: true };
-    }
-    if (payload.on === true) {
-      if (inkHandle === undefined) {
-        if (ink === undefined) {
-          return { error: "the ink surface was not injected" };
-        }
-        inkHandle = ink.mountInk((points) => report({ kind: "stroke", points }));
-      }
-      inkHandle?.setOn(true, payload.fadeSec ?? 0);
-      return { ok: true };
-    }
-    inkHandle?.setOn(false, 0);
-    return { ok: true };
-  };
+  // that is most of the web (found live: ring on example.com, surfaces
+  // silently absent). So the bus evaluates the bundle first, and the handlers
+  // below just use the global it defines.
 
   // ── pencil: the same evaluated bundle, a second surface (local + remote) ────
   // One `mountPencil()` handle, engaged for the turn; the panel drives it with
@@ -234,7 +210,7 @@ function pageBootstrap(version: string): void {
   };
   let pencilHandle: PencilHandle | undefined;
   const handlePencil = (payload: Record<string, unknown>): unknown => {
-    const mount = (w.__aiuiIntentInk as { mountPencil?: () => PencilHandle } | undefined)
+    const mount = (w.__aiuiIntentPage as { mountPencil?: () => PencilHandle } | undefined)
       ?.mountPencil;
     const op = String(payload.op ?? "");
     if (op === "engage") {
@@ -251,8 +227,8 @@ function pageBootstrap(version: string): void {
     switch (op) {
       case "disengage":
         // Keep the handle (and its strokes) — disengage only stops owning the
-        // pointer, exactly like ink's setOn(false). Re-engage reuses the same
-        // surface, so markup survives across turns.
+        // pointer. Re-engage reuses the same surface, so markup survives
+        // across turns.
         pencilHandle.disengage();
         return { ok: true };
       case "fade":
@@ -412,10 +388,10 @@ function pageBootstrap(version: string): void {
         return; // a click, not a drag — cancelled
       }
       // Located components when this page is aiui-instrumented and the
-      // evaluated bundle is present (ensureInk delivered it with the ink).
+      // evaluated bundle is present (ensureBundle delivered it).
       let components: unknown[] | undefined;
       try {
-        const locate = (w.__aiuiIntentInk as { locateComponents?: (r: unknown) => unknown[] })
+        const locate = (w.__aiuiIntentPage as { locateComponents?: (r: unknown) => unknown[] })
           ?.locateComponents;
         components = locate?.(r);
       } catch {
@@ -444,7 +420,7 @@ function pageBootstrap(version: string): void {
   // past the timeout = the panel tab died mid-turn → HARD cleanup (the
   // strokes belong to a dead session). A NEW session id = a reloaded panel →
   // soft reset; strokes survive (the `adopt` rule — turn recovery must find
-  // its ink) and the new client re-asserts through the ordinary paths.
+  // its markup) and the new client re-asserts through the ordinary paths.
   const DRIVER_TIMEOUT_MS = 7000; // transport.ts DRIVER_TIMEOUT_MS — aligned
   let driverSession: string | undefined;
   let driverLast = 0;
@@ -453,8 +429,7 @@ function pageBootstrap(version: string): void {
     setKeyCapture(false);
     assertRing(false, false, false, "");
     disarmRegion();
-    (w.__aiuiIntentInk as { disarmJump?: () => void } | undefined)?.disarmJump?.();
-    handleInk({ on: false });
+    (w.__aiuiIntentPage as { disarmJump?: () => void } | undefined)?.disarmJump?.();
     handlePencil({ op: "disengage" });
   };
   const driverAlive = (session?: string): void => {
@@ -471,7 +446,6 @@ function pageBootstrap(version: string): void {
           window.clearInterval(driverTimer);
           driverTimer = undefined;
           driverSession = undefined;
-          handleInk({ clear: true });
           handlePencil({ op: "clear" });
           dropAssertions();
         }
@@ -485,12 +459,12 @@ function pageBootstrap(version: string): void {
     v: version,
     /** A new client took this document over (see the install guard): forget the
      * last one's assertions, then re-announce to the binding that is live now.
-     * Ink STROKES survive — they are the user's, not the client's. */
+     * Pencil STROKES survive — they are the user's, not the client's. */
     adopt: (): void => {
       setKeyCapture(false);
       assertRing(false, false, false, "");
       disarmRegion();
-      (w.__aiuiIntentInk as { disarmJump?: () => void } | undefined)?.disarmJump?.();
+      (w.__aiuiIntentPage as { disarmJump?: () => void } | undefined)?.disarmJump?.();
       sayHello();
     },
     hello: sayHello,
@@ -526,10 +500,6 @@ function pageBootstrap(version: string): void {
         }
         case "viewport": {
           return { ok: true }; // sampling rides CDP screenshots panel-side
-        }
-        case "ink": {
-          driverAlive();
-          return handleInk((payload ?? {}) as never);
         }
         case "pencil": {
           driverAlive();
@@ -574,7 +544,7 @@ function pageBootstrap(version: string): void {
         case "jump": {
           // Jump-to-editor (the `j` pick mode) — the heavy half lives in the
           // evaluated bundle (jump-mode.ts); the bus delivers it before arming.
-          const ink = w.__aiuiIntentInk as
+          const ink = w.__aiuiIntentPage as
             | {
                 armJump?: (open?: (url: string) => void, onExit?: () => void) => void;
                 disarmJump?: () => void;

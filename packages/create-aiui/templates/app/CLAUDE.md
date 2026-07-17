@@ -42,10 +42,10 @@ vertical slices first:
 
 Ground rules:
 
-- **Don't remove the integration.** The `aiuiDevOverlay()` plugin in `vite.config.ts` mounts the
-  intent tool and connects it to this session's channel; its `locator` option stamps JSX with
-  `data-source-loc` and injects `cell()` identities. The loop stops working without it. (And
-  never hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.)
+- **Don't remove the integration.** The `aiui()` plugin in `vite.config.ts` stamps JSX with
+  `data-source-loc` and injects `cell()` identities — the handles the intent client's
+  screenshot/selection attribution reads. The loop stops working without it. (And never
+  hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.)
 - **Keep the architecture's split.** `src/model/store.ts` holds the *durable roots* AND the
   **control surface**: user-movable parameters are `control({ value, min, max, … })` with a real
   doc comment (the compiler injects the name from the binding and lifts the comment as the

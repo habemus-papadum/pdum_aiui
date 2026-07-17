@@ -194,7 +194,6 @@ async function boot(): Promise<{
     cancelTurn: () => console.info("[lanes] cancelTurn"),
     takeShot: (tab) => console.info("[lanes] takeShot", tab),
     addSelection: (tab) => console.info("[lanes] addSelection", tab),
-    clearInk: (tab) => console.info("[lanes] clearInk", tab),
     clearPencil: (tab) => console.info("[lanes] clearPencil", tab),
     startTalk: (mode) => console.info("[lanes] startTalk", mode),
     stopTalk: () => console.info("[lanes] stopTalk"),

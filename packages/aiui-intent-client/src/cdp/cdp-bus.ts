@@ -14,7 +14,7 @@
  *  - **PageTransport.requestPage** → `Runtime.evaluate` of
  *    `__aiuiIntentPage.handle(cap, payload)` in that page's world;
  *    **broadcastRing** → the same call on every attached page. The heavy ink
- *    surface is evaluated INTO the page first (`ensureInk`) — the page never
+ *    bundle is evaluated INTO the page first (`ensureBundle`) — the page never
  *    fetches anything, because an https page cannot import from the channel's
  *    http origin.
  *  - **SurfaceTargeting** → the tab you are LOOKING at (visibility, not focus —
@@ -65,8 +65,8 @@ export interface AttachedPage {
   visible: boolean;
   focused: boolean;
   aiui: boolean;
-  /** Whether THIS document already carries the ink bundle (see `ensureInk`). */
-  inkInjected: boolean;
+  /** Whether THIS document already carries the page bundle (see `ensureBundle`). */
+  bundleInjected: boolean;
 }
 
 export interface CdpBusOptions {
@@ -81,7 +81,7 @@ export interface CdpBusOptions {
   /** Socket factory (tests script the far end); defaults to `WebSocket`. */
   socketFactory?: (url: string) => CdpSocket;
   /** The ink bundle's source (tests override; defaults to the channel route). */
-  inkSource?: () => Promise<string>;
+  bundleSource?: () => Promise<string>;
   log?: (message: string) => void;
 }
 
@@ -99,7 +99,7 @@ export interface CdpBus extends IntentHost {
 const LOOPBACK = /^wss?:\/\/(127\.0\.0\.1|\[::1\]|localhost)(:\d+)?(\/|$)/;
 
 /** Capabilities whose effect lives in the DOCUMENT — replay them on reload. */
-const STICKY: ReadonlySet<PageCapability> = new Set(["keylayer", "ink"]);
+const STICKY: ReadonlySet<PageCapability> = new Set(["keylayer"]);
 
 export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   if (!LOOPBACK.test(options.cdpUrl)) {
@@ -111,17 +111,17 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   const log = options.log ?? (() => {});
   const cdp = await connectCdp(options.cdpUrl, options.socketFactory);
   const script = buildPageScript();
-  /** The ink bundle, read ONCE from our own origin and re-used for every page. */
-  const inkSource =
-    options.inkSource ??
+  /** The page bundle, read ONCE from our own origin and re-used for every page. */
+  const bundleSource =
+    options.bundleSource ??
     (() =>
-      fetch(`${options.channelOrigin}/intent/page-ink.js`).then((res) => {
+      fetch(`${options.channelOrigin}/intent/page-bundle.js`).then((res) => {
         if (!res.ok) {
-          throw new Error(`the channel could not bundle the ink surface (${res.status})`);
+          throw new Error(`the channel could not build the page bundle (${res.status})`);
         }
         return res.text();
       }));
-  let inkBundle: Promise<string> | undefined;
+  let pageBundle: Promise<string> | undefined;
 
   const bySession = new Map<string, AttachedPage>();
   const byTarget = new Map<string, AttachedPage>();
@@ -218,18 +218,19 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     `window.__aiuiIntentPage && window.__aiuiIntentPage.handle(${JSON.stringify(capability)}, ${JSON.stringify(payload ?? null)})`;
 
   /**
-   * The ink surface, evaluated INTO the page (once per document). The page
-   * cannot fetch it: on an https page a module from the channel's http origin
-   * is mixed content, so the panel reads the bundle from its own origin and
-   * hands over the source. Any page can be inked; that is the point.
+   * The page bundle (locator · jump · pencil), evaluated INTO the page (once
+   * per document). The page cannot fetch it: on an https page a module from
+   * the channel's http origin is mixed content, so the panel reads the bundle
+   * from its own origin and hands over the source. Any page can be marked up;
+   * that is the point.
    */
-  const ensureInk = async (page: AttachedPage): Promise<void> => {
-    if (page.inkInjected) {
+  const ensureBundle = async (page: AttachedPage): Promise<void> => {
+    if (page.bundleInjected) {
       return;
     }
-    inkBundle ??= inkSource();
-    await evaluate(page.sessionId, await inkBundle);
-    page.inkInjected = true;
+    pageBundle ??= bundleSource();
+    await evaluate(page.sessionId, await pageBundle);
+    page.bundleInjected = true;
   };
 
   /** Deliver one capability to one page — the single path everything takes. */
@@ -238,16 +239,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     capability: PageCapability | "ring",
     payload?: unknown,
   ): Promise<unknown> => {
-    if (
-      capability === "ink" ||
-      capability === "region" ||
-      capability === "jump" ||
-      capability === "pencil"
-    ) {
-      // The region drag's locator, the jump picker, and the pencil surface ride
-      // the same evaluated bundle as the ink surface — deliver it before the op
-      // so instrumented pages can name components / open the picker / draw.
-      await ensureInk(page);
+    if (capability === "region" || capability === "jump" || capability === "pencil") {
+      // The region drag's locator, the jump picker, and the pencil surface all
+      // ride the evaluated bundle — deliver it before the op so instrumented
+      // pages can name components / open the picker / draw.
+      await ensureBundle(page);
     }
     const result = await evaluate(page.sessionId, invoke(capability, payload));
     return result.result?.value;
@@ -274,7 +270,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         // A hello means a document that has just installed the bootstrap —
         // and a fresh document carries none of the ink bundle we evaluated
         // into the last one.
-        page.inkInjected = false;
+        page.bundleInjected = false;
         page.url = report.url;
         page.title = report.title;
         page.visible = report.visible;
@@ -392,7 +388,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       visible: false,
       focused: false,
       aiui: false,
-      inkInjected: false,
+      bundleInjected: false,
     };
     bySession.set(sessionId, page);
     byTarget.set(page.targetId, page);

@@ -27,8 +27,8 @@ into your live, permission-skipping Claude Code session (loaded via
 `--dangerously-load-development-channels`). Think about what that means:
 
 - Anything that can reach the channel's local web backend can steer your agent.
-- The [iPad paint stream](./paint-stream) rides the same port (its sidecar is on by default —
-  it costs nothing until something connects).
+- The remote-device sidecars (the iPad pencil, the command bar) ride the same port (on by
+  default — they cost nothing until something connects).
 - **So does the intent client, and it bridges the browser.** The channel serves the panel at
   `/intent/`, and — so the panel can drive real tabs without a browser extension — proxies the
   Chrome DevTools protocol at `/intent/cdp` to the [session browser](./chrome). The browser's own

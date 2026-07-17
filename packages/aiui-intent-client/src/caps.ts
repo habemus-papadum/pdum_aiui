@@ -1,7 +1,7 @@
 /**
  * caps.ts — the command bar, declared as a TREE (owner review 2026-07-13):
  * root = arm · step out · help; arming reveals the turn tier; engaging a cap
- * reveals its children (ink → clear/vanish/fade, hands-free → mute, video →
+ * reveals its children (pencil → clear/vanish/fade, hands-free → mute, video →
  * cadence/rate). The projection flattens it into depth rows; a tap
  * dispatches the same command its key does.
  *
@@ -32,22 +32,6 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         hint: { key: "", label: "turn", icon: "💬" },
         litWhen: ({ state }) => inTurn(state.phase),
         children: [
-          {
-            command: "ink",
-            hint: { key: "i", label: "ink", icon: "✏️" },
-            litWhen: ({ state }) => state.ink === true,
-            children: [
-              { command: "clear", hint: { key: "c", label: "clear", icon: "🧹" } },
-              { kind: "widget", control: "inkVanish", widget: "toggle", label: "vanish" },
-              {
-                kind: "widget",
-                control: "inkFade",
-                widget: "slider",
-                label: "fade",
-                showWhen: ({ state }) => state.ink === true,
-              },
-            ],
-          },
           { command: "shot", hint: { key: "s", label: "shot", icon: "🖼" } },
           {
             command: "region",
@@ -119,14 +103,14 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
             ],
           },
           // The pencil markup surface (mouse + stylus locally, iPad remotely) —
-          // now the EXACT twin of the ink group above (owner, 2026-07-16): a
-          // `k` on/off toggle that lights, revealing clear · vanish · fade.
+          // a `k` on/off toggle that lights, revealing clear · vanish · fade
+          // (owner, 2026-07-16).
           {
             command: "pencil",
             hint: { key: "k", label: "pencil", icon: "🖊" },
             litWhen: ({ state }) => state.pencil === true,
             children: [
-              { command: "pencilClear", hint: { key: "", label: "clear", icon: "🧹" } },
+              { command: "pencilClear", hint: { key: "c", label: "clear", icon: "🧹" } },
               { kind: "widget", control: "pencilVanish", widget: "toggle", label: "vanish" },
               {
                 kind: "widget",

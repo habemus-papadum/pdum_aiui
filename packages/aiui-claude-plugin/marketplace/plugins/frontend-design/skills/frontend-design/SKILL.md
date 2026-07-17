@@ -256,7 +256,7 @@ without distinct scopes** — same call site means same injected name, and the i
 share one durable state (indistinguishable from an HMR re-eval; nothing warns). Identity across a
 package boundary: a workspace-linked slice is compiled by the consuming app (dotdot-relative
 locs, automatic); a published library runs `sourceLocatorVite({ locPrefix: "@you/pkg/" })` in its
-own build/vitest configs. Worked example: `packages/aiui-oscillator` consumed twice by
+own build/vitest configs. Worked example: `demos/oscillator` consumed twice by
 `demos/twins`.
 
 ## The library is young — treat it as improvable, not frozen

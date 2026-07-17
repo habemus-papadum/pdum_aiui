@@ -141,7 +141,6 @@ The protocol questions were answered empirically (full timelines:
 
 ## See also
 
-- [Using the Intent Overlay](./intent-overlay) — the strip, the preview, the keys.
 - [Prompt Linting](./prompt-linting) — the realtime observer that consumes the same turn.
 - [Realtime: the Wire](./realtime-vendors) — the linter-session dialects and the research
   note on why Gemini can't power transcription today.

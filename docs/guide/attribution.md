@@ -48,7 +48,7 @@ The division of labor: compile time owns *locations*, declarations own *identity
 Two properties of this contract carry most of the weight:
 
 - **Names are injected, not written.** The overlay's Vite plugin
-  (`aiuiDevOverlay({ locator: { cellFactories: ["cell"] } })`) stamps JSX with `data-source-loc`
+  (`aiui({ locator: { cellFactories: ["cell"] } })`) stamps JSX with `data-source-loc`
   and rewrites `cell(...)` call sites to carry their declaration name and location. Application
   code contains **zero** attribution affordances; delete the plugin and the app still runs, just
   unresolvable.
@@ -160,7 +160,7 @@ cell's state without any further wiring. The VS Code extension's jump mode rides
 
 The resolution is only as good as the stamps. The failure modes, in the order you'll meet them:
 
-- **No stamps at all** — the `aiuiDevOverlay({ locator })` option is missing from
+- **No stamps at all** — the `aiui()` plugin is missing from
   `vite.config.ts`. Everything degrades to tags and `source="unknown"`.
 - **Cells without `data-cell`** — values rendered outside `CellView` need the one manual
   attribute (`data-cell="name"`) to join the contract.

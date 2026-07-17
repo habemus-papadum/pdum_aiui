@@ -27,8 +27,6 @@ const CONTROLS: Record<string, ControlBox<unknown>> = {
   stt: config.stt as ControlBox<unknown>,
   linter: config.linter as ControlBox<unknown>,
   videoPeriodSec: config.videoPeriodSec as ControlBox<unknown>,
-  inkVanish: config.inkVanish as ControlBox<unknown>,
-  inkFade: config.inkFade as ControlBox<unknown>,
   pencilFade: config.pencilFade as ControlBox<unknown>,
   shotFlash: config.shotFlash as ControlBox<unknown>,
   logLevel: config.logLevel as ControlBox<unknown>,

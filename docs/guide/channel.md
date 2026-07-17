@@ -58,7 +58,7 @@ Each running server advertises itself in a small on-disk registry
 (`~/.cache/aiui/mcp/<pid>.json`): a stable `tag`, its `pid`, the `ppid` of the Claude Code
 session that owns it, the web backend `port`, and the launch `cwd`. Entries are removed on exit
 and pruned when stale. This is how `aiui vite` finds the right server for a project (exporting
-the port to the dev server as `VITE_AIUI_PORT`), how the `aiuiDevOverlay()` plugin seeds it into
+the port to the dev server as `VITE_AIUI_PORT`), how the `aiui()` plugin seeds the source root into
 pages (`window.__AIUI__.port`), and how CLI helpers like `aiui-claude-channel quick` pick a
 server to push a test prompt into.
 
@@ -68,10 +68,10 @@ server to push a test prompt into.
 | --- | --- | --- |
 | `/ws` | binary frames | The intent protocol: a client's hello picks a **format** (`text-concat`, `intent-v1`), then each thread streams events, audio, and screenshots to that format's lowering processor. |
 | `/tools` | JSON frames | The page-tools bridge: pages declare their `agentToolkit` tools here; the directory backs the `page_tools_*` MCP tools, and calls route back to the live page function. |
-| `/session` | JSON frames | The **session bus**: several browser views of one session share arming + the prompt preview and pass code contributions between tabs. See [Multi-View Sessions](/guide/multi-view-sessions). |
+| `/session` | JSON frames | The **session bus**: external views contribute to the running turn (today: the [VS Code extension](./vscode)'s code selections, over the bus's HTTP surface). |
 | `POST /prompt` | JSON | Push plain text into the session — the simplest integration and the end-to-end smoke test. |
 | `GET /health` | JSON | Liveness, plus page-tools and session summaries; served with a permissive CORS header so pages can probe capability before dialing a websocket. |
-| `/debug/api/*` | JSON + blobs | The lowering-trace **API** (the channel serves no HTML — viewers are frontend processes: `aiui debug`, the plugin's `/__aiui/debug` page, the DevTools panel). `/debug/api/channels` lists the machine's registry so a viewer can switch channels; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
+| `/debug/api/*` | JSON + blobs | The lowering-trace **API** (the channel serves no HTML — viewers are frontend processes: the intent panel's embedded pane, and `aiui debug`). `/debug/api/channels` lists the machine's registry so a viewer can switch channels; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
 
 ## Lowering, traces, and what reaches the session
 
@@ -104,20 +104,19 @@ practical: edit, `channel_reload`, try again — no session restart.
 
 The channel is also a **host** for other session backends. A **sidecar** is an extra HTTP (and
 optional websocket) surface the channel mounts alongside its own — so one session process, on one
-port, can serve more than the intent pipeline. Four ship today, and **every channel hosts all
-four**: the [iPad paint stream](./paint-stream) (`/paint/`), the detached
-[intent client](./web-intent-tool) panel (`/intent/`), the remote command bar (`/bar/`), and the
+port, can serve more than the intent pipeline. Three ship today, and **every channel hosts all
+three**: the detached intent client panel (`/intent/`), the remote command bar (`/bar/`), and the
 remote pencil (`/pencil/`). Each rides the same port, so hosting one costs nothing; whether a
 second device can *reach* it is the [channel bind](./config)'s decision, not the sidecar's.
 
-The channel composes them by **ordinary import**. It depends on the four sidecar packages and
+The channel composes them by **ordinary import**. It depends on the three sidecar packages and
 builds them in one place (`standard-sidecars.ts` → `standardSidecars(root)`), calling each
 package's `sidecar` factory directly:
 
 ```ts
-import { paintSidecar } from "@habemus-papadum/aiui-paint/sidecar";
-// … intent, bar, pencil
-export const standardSidecars = (root: string): Sidecar[] => [paintSidecar({ root }), /* … */];
+import { pencilSidecar } from "@habemus-papadum/aiui-pencil/sidecar";
+// … intent, bar
+export const standardSidecars = (root: string): Sidecar[] => [intentSidecar({ root }), /* … */];
 ```
 
 Both channel entry points use it: the real `aiui-claude-channel mcp` (spawned by `aiui claude`) and
@@ -139,9 +138,8 @@ to its own base path, is offered every websocket upgrade the channel didn't clai
 to take the socket), and is disposed on shutdown.
 
 **One bad sidecar can't sink the session.** A sidecar whose `mount` throws is **logged to stderr
-and skipped** — the channel starts anyway. See [The iPad Paint Stream](./paint-stream) for the
-worked example (the `Sidecar` interface lives in
-`packages/aiui-claude-channel/src/sidecar.ts`).
+and skipped** — the channel starts anyway. (The `Sidecar` interface lives in
+`packages/aiui-claude-channel/src/sidecar.ts`.)
 
 ## Keys and degradation
 

@@ -63,8 +63,8 @@ with the cell reporting `held` so the UI shows it quietly rather than as endless
 > concepts page: [Attribution: gesture → source](./attribution).
 
 Attribution, the registry, and HMR all need stable identity, and nobody should have to write it.
-A compile-time pass — the aiui compiler (`packages/aiui-dev-overlay/src/source-locator.ts`,
-enabled via `aiuiDevOverlay({ locator })` in an app's Vite config) — rewrites factory call-sites:
+A compile-time pass — the aiui compiler (`packages/aiui-source-processor`, the `aiui()`
+plugin in an app's Vite config) — rewrites factory call-sites:
 
 ```ts
 const catalog = cell(deps, compute);
@@ -209,7 +209,7 @@ back) is **implemented**: `agentToolkit` forwards each namespace's tool set to t
 tools bridge (`window.__AIUI__.tools`, installed by the Vite plugin's mount module), which
 declares it over the channel's `/tools` websocket; the session reaches it through the
 `page_tools_list` / `page_tools_call` MCP tools. The load-bearing properties, carried over from
-the handoff (`packages/aiui-dev-overlay/handoff/frontend-tool-registry.md`): registration is
+the handoff (see git history: aiui-dev-overlay's handoff/frontend-tool-registry.md): registration is
 *declarative* (always re-register the full set; identity = namespace + name), forwarding is
 *content-hashed* (page reloads with unchanged tool sets are invisible upstream), and
 implementations are resolved *at call time* (HMR swaps closures invisibly).

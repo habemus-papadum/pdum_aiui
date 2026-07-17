@@ -1,8 +1,7 @@
 # Live Mode: the Realtime Engines
 
 A realtime model joins the pipeline in exactly one role: the [**prompt
-linter**](./prompt-linting) (`linter: "openai" | "gemini"` — the **L** chip in the
-[config strip](./intent-overlay#quick-config-the-k-strip)). It hears the mic continuously,
+linter**](./prompt-linting) (`linter: "openai" | "gemini"` — the panel's linter select). It hears the mic continuously,
 sees labeled screenshots, selections, and (while you share) sampled screen frames, and at each
 pause speaks one short observation about the briefing you're composing. It **never composes**:
 the compiler (`composeIntent`) assembles the prompt in every configuration, and everything the
@@ -60,9 +59,8 @@ vendor dialect. Each engine declares `LiveCapabilities` (`video`,
 `imageInjection: "stream" | "turn-item"`), the honest record of *how* the model came to see an
 image.
 
-**Audio comes only from the microphone.** The screen share is captured with
-`getDisplayMedia({ video: true, audio: false })` — the document's one
-[display-capture grant](./screen-capture), shared with the shot tool. Push-to-talk is both
+**Audio comes only from the microphone.** The screen share is the intent client's warm
+capture stream, sampled by the clock — every frame an ordinary screenshot. Push-to-talk is both
 the audio source and the **turn boundary** — both vendors run with server-side voice
 detection off (manual VAD), so a linter turn is bounded by your Space windows.
 

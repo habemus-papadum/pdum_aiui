@@ -28,7 +28,7 @@ import { scope } from "@habemus-papadum/aiui-viz";
 // ── two instances of ONE slice — the composability demo ──────────────────────
 //
 // `oscillatorStore` is a reusable slice factory from a workspace library
-// (packages/aiui-oscillator). The explicit Scope is what makes two instances
+// (demos/oscillator). The explicit Scope is what makes two instances
 // possible at all: each gets qualified identity ("left/freq", "right/freq")
 // and its own durable state. Without the scope, both would silently share one
 // control (same call site → same injected leaf name → same durable key).

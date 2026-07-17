@@ -21,7 +21,7 @@ Each job is a lean subpath entry; a host composes the ones it needs and injects 
 edges. The smallest useful example — locate the components a screenshot rectangle framed:
 
 ```ts
-import { locateComponents } from "@habemus-papadum/aiui-intent-runtime/shot";
+import { locateComponents } from "@habemus-papadum/aiui-intent-runtime/locator";
 
 const components = locateComponents({ x: 40, y: 120, w: 480, h: 260 });
 // → [{ component: "Controls", source: "src/ui/Controls.tsx:44:7", … }]

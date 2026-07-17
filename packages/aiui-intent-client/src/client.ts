@@ -42,9 +42,7 @@ export interface IntentLanes {
   takeShot(tab: number): void;
   /** Pull the page's current selection into the turn. */
   addSelection(tab: number): void;
-  /** Clear the page's ink strokes (the ONLY clearer besides disarm). */
-  clearInk(tab: number): void;
-  /** Clear the pencil surface (the pencil's own clear, distinct from ink's). */
+  /** Clear the pencil surface. */
   clearPencil(tab: number): void;
   /** Talk window lifecycle (mode: hold | handsFree). */
   startTalk(mode: string): void;
@@ -61,7 +59,7 @@ export interface IntentLanes {
 export interface IntentClientConfig {
   host: IntentHost;
   lanes: IntentLanes;
-  /** Lane hooks for the claims (real video pump, ink fade) — see claims.ts. */
+  /** Lane hooks for the claims (real video pump, pencil fade) — see claims.ts. */
   claimOptions?: ClaimLaneOptions;
   /** Trace sink — every dispatch (mode timelines in the debug UI). */
   onDispatch?: (event: DispatchEvent) => void;
@@ -160,11 +158,6 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       case "selection":
         if (event.before.phase === "turn" && activeTab !== undefined) {
           lanes.addSelection(activeTab);
-        }
-        break;
-      case "clear":
-        if (event.before.phase === "turn" && event.before.ink === true && activeTab !== undefined) {
-          lanes.clearInk(activeTab);
         }
         break;
       case "pencilClear":

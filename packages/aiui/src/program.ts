@@ -17,7 +17,7 @@ import { runEnv } from "./commands/env";
 import { type ExtensionOptions, runExtension } from "./commands/extension";
 import { runMcp } from "./commands/mcp";
 import { runNativeHost } from "./commands/native-host";
-import { runPaintUrl, runPencilUrl } from "./commands/paint";
+import { runPencilUrl } from "./commands/pencil-url";
 import { runVite } from "./commands/vite";
 
 import { VERSION } from "./util/version";
@@ -74,12 +74,12 @@ export function buildProgram(): Command {
     .action((opts: DebugOptions) => runDebug(opts));
 
   // Unlike its siblings, `aiui chrome` is a real subcommand (not a forwarding
-  // wrapper): it manages the agent's browser — the Chrome for Testing install,
-  // launch status, and the devtools extension path.
+  // wrapper): it manages the agent's browser — the Chrome for Testing install
+  // and launch status.
   program
     .command("chrome")
-    .description("manage the agent's browser: install | update | status | extension")
-    .argument("<action>", "install | update | status | extension")
+    .description("manage the agent's browser: install | update | status")
+    .argument("<action>", "install | update | status")
     .action((action: string) => runChrome([action]));
 
   // The shared session browser (human + agent in one window). `browser` starts
@@ -105,17 +105,13 @@ export function buildProgram(): Command {
     .option("--remote-port <port>", "fixed port on the tunnel's remote side (default: 9222)")
     .action((opts: BrowserOptions) => runBrowser(opts));
 
-  // The aiui browser extension: its dev loop (`dev` = Vite + an ordered reload
-  // of the session browser; `reload` = that reload on its own) and its native
-  // side (the Chrome native-messaging host that gives it channel discovery a
-  // browser can't get from the on-disk registry — proposal §4).
+  // The intent client extension's native side: the Chrome native-messaging
+  // host that gives it channel discovery a browser can't get from the on-disk
+  // registry.
   program
     .command("extension")
-    .description("the aiui browser extension: dev | reload | install-native-host | status")
-    .argument("<action>", "dev | reload | install-native-host | status")
-    .option("--prod", "reload: force the standalone build, even with a dev server running")
-    .option("--profile <name>", "named profile under .aiui-cache/chrome/ (which browser to reload)")
-    .option("--data-dir <path>", "explicit Chrome user data dir (which browser to reload)")
+    .description("the intent client extension's native host: install-native-host | status")
+    .argument("<action>", "install-native-host | status")
     .option("--extension-id <id>", "extension id for allowed_origins (default: the pinned id)")
     .action((action: string, opts: ExtensionOptions) => runExtension(action, opts));
 
@@ -202,7 +198,7 @@ export function buildProgram(): Command {
   // in-process MCP server. The subcommands that launch a channel (`serve`,
   // `mcp`) additionally get this project's channel settings — `channel.bind`
   // and `sidecars.*` — resolved exactly as `aiui claude` resolves them, so a
-  // standalone channel hosts the same sidecars (paint) and binds the same way
+  // standalone channel hosts the same sidecars and binds the same way
   // as a session's. See util/channel-launch.
   program
     .command("mcp")
@@ -213,22 +209,11 @@ export function buildProgram(): Command {
     .argument("[args...]", "arguments forwarded to the aiui-claude-channel CLI")
     .action((args: string[]) => runMcp(args));
 
-  // `aiui paint …` — the iPad paint stream. `url` prints where the iPad should
-  // point its browser: the paint surface rides each channel's one web server
-  // (`/paint/` on the channel port), so this resolves every running channel
-  // that answers `/paint/info` — plus whether its bind makes it LAN-reachable —
+  // `aiui pencil …` — the remote pencil. `url` prints where the iPad should
+  // point its browser: the pencil surface rides each channel's one web server
+  // (`/pencil/` on the channel port), so this resolves every running channel
+  // that answers `/pencil/info` — plus whether its bind makes it LAN-reachable —
   // so you can copy-paste the URL.
-  const paint = program
-    .command("paint")
-    .description("the iPad paint stream — url (where the iPad should connect)");
-  paint
-    .command("url")
-    .description("print the URL(s) an iPad should open, per running paint-enabled channel")
-    .option("--json", "machine-readable targets")
-    .action((opts: { json?: boolean }) => runPaintUrl(opts));
-
-  // `aiui pencil …` — the remote pencil (paint's successor; both ride each
-  // channel's one web server, so resolution is identical modulo the prefix).
   const pencil = program
     .command("pencil")
     .description("the remote pencil — url (where the iPad should connect)");

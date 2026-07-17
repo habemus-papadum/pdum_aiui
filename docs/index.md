@@ -21,8 +21,8 @@ features:
     details: Intent compilation — multimodal prompts (voice, screenshots, DOM context, even pronouns) lowered through inspectable stages into the form a coding agent executes best.
     link: /guide/prompt-lowering
   - title: Intent tools
-    details: Frontends for the lowering pipeline — starting with the web intent tool, a widget over the page you're developing that captures what you say, see, and point at.
-    link: /guide/web-intent-tool
+    details: Frontends for the lowering pipeline — the intent client, a side panel (and plain page) that drives the page you're developing, capturing what you say, see, and point at.
+    link: /guide/getting-started
   - title: Frontend for agents
     details: Principles, utilities, and Claude skills for agent-written scientific UI — SolidJS 2.0, async dataflow, and code that's debuggable by the agent's future self.
     link: /guide/frontend-for-agents

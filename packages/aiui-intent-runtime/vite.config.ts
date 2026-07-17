@@ -27,7 +27,7 @@ export default defineConfig({
       // it composes.
       entry: {
         index: "src/index.ts",
-        shot: "src/shot.ts",
+        locator: "src/locator.ts",
         talk: "src/talk.ts",
         video: "src/video.ts",
         selection: "src/selection.ts",

@@ -13,9 +13,9 @@
  * locations of what you pointed at) land in the Claude session as a prompt,
  * and the agent edits this very code while you watch it hot-reload.
  *
- * There is deliberately almost nothing in this file. The aiui intent tool is
- * mounted by the aiuiDevOverlay() plugin (vite.config.ts — the entire
- * integration); the app splits along HMR lines:
+ * There is deliberately almost nothing in this file. The aiui() plugin
+ * (vite.config.ts — the entire integration) stamps the source locations the
+ * intent client's attribution reads; the app splits along HMR lines:
  *
  *   src/model/store.ts   durable roots — parameters survive hot edits
  * <aiui-scenery>

@@ -15,7 +15,7 @@
  * same `--bind` flag, so a standalone channel binds exactly like a session's.
  *
  * Which sidecars a channel hosts is NOT decided here anymore. The channel
- * imports and mounts its own standard set (paint, intent, bar, pencil — see the
+ * imports and mounts its own standard set (intent, bar, pencil — see the
  * channel's standard-sidecars.ts), so there is nothing to pass: every channel
  * hosts all four, and `channel.bind` alone decides whether a remote device can
  * reach them.

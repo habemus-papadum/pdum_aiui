@@ -4,9 +4,9 @@ The **lowering-trace debugger UI** — deliberately framework-free imperative DO
 panes mount anywhere: the intent client's panel embeds `TracesPane` as a Solid island, and the
 `./vite` plugin serves the full page at `/__aiui/debug` (what `aiui debug` runs).
 
-Lineage: this is the `debug-ui` third of the retired `aiui-dev-overlay`, copied out —
-deliberately not moved — in the overlay retirement (`docs/proposals/dev-overlay-retirement.md`).
-The frozen original remains in-tree as a read-only reference until its deletion batch.
+Lineage: this is the `debug-ui` third of the retired `aiui-dev-overlay`, copied out in the
+overlay retirement (`docs/proposals/dev-overlay-retirement.md`). The original is deleted; read
+it in git history.
 
 ## The pieces
 

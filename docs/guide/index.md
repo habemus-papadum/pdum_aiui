@@ -23,13 +23,13 @@ into the running session via a custom channel. This is also framed as a
 **research area**: the pipeline should expose its intermediate representations for inspection,
 like compiler IRs. → [Prompt Lowering](./prompt-lowering)
 
-**2. Concrete intent tools.** The lowering pipeline needs frontends. The first — the
-[**web intent tool**](./web-intent-tool), now a working proof of concept — is a widget mounted
-over the page you're developing: today a text panel that exercises the whole pipeline; next,
-speak the change you want, capture screenshots and DOM data, and send it all through lowering to
-your session. It will cooperate with a Chrome DevTools MCP server and annotate the app's
-affordances in a superset of [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
-→ [The Web Intent Tool](./web-intent-tool)
+**2. Concrete intent tools.** The lowering pipeline needs frontends. The current one is the
+**intent client**: one client, two hosts — the session browser's side panel and the
+channel-served plain page at `/intent/` — driving the page you're developing: speak the change
+you want, capture screenshots, draw on the page, select the thing you mean, and send it all
+through lowering to your session. It cooperates with the Chrome DevTools MCP and annotates the
+app's affordances in a superset of [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
+→ [Getting Started](./getting-started)
 
 **3. Frontend code for agents.** Principles, utilities, examples, and workflows — a TypeScript
 library plus Claude skills — for the kind of code agents should *write* in this loop: SolidJS 2.0
@@ -60,11 +60,8 @@ guides, and a TypeDoc API reference automatically.
 - [Motivation — a personal workflow](./motivation) — why this exists, in first person.
 - [Getting Started](./getting-started) — run the whole loop: session, app, intent tool.
 - [Prompt Lowering](./prompt-lowering) — the core idea, mechanism, and research program.
-- [The Web Intent Tool](./web-intent-tool) — the first layer-2 tool, designed and working.
 - [VS Code Integration](./vscode) — send editor selections into the turn; double-click the page to jump to source.
-- [The DevTools Panel](./devtools) — monitor the channel, the transport, and lowering traces.
 - [The Agent's Browser](./chrome) — the shared session browser, Chrome for Testing, profiles.
-- [Multi-View Sessions](./multi-view-sessions) — several tabs of one session share arming, the prompt preview, and code selections.
 - [Remote Development](./remote) — session on a remote box, browser on yours.
 - [Configuration](./config) — config.json: locations, keys, precedence.
 - [Frontend for Agents](./frontend-for-agents) — how the code itself should be written.

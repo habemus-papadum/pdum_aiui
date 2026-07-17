@@ -1,13 +1,17 @@
 # Retiring the dev overlay (and the extensions with it)
 
-Status: **steps 1–3 landed** (2026-07-16, same day the pause was recorded — the owner decided to
-continue). Both open decisions are settled and executed: the runtime was copied into
+Status: **COMPLETE — the batch is deleted** (2026-07-16, all in one day: pause recorded,
+decisions made, steps 1–3 landed, and step 4 executed the same evening on the owner's
+instruction). `aiui-dev-overlay`, `aiui-extension`, `aiui-devtools-extension` — and `aiui-webext`,
+the CRXJS kit whose only consumer was the frozen extension — are gone from the tree; read them in
+git history. The same pass removed `aiui-ink`/`aiui-paint` (superseded by `aiui-pencil`, per that
+package's own charter) and the intent client's ink integration, and moved `aiui-oscillator` to
+`demos/`. Both open decisions are settled and executed: the runtime was copied into
 **`aiui-intent-runtime`** (capture + transport) and the trace UI into its own
 **`aiui-trace-ui`** (decision #2: own package), both `--public`; the intent client is repointed
 at them; `aiui-dev-overlay` is frozen as a read-only reference (README/CLAUDE banners); and
 `aiui debug` is fixed (the trace-ui package's `./vite` plugin now owns serving `/__aiui/debug`).
-What remains is **step 4 only** — deleting the batch (`aiui-dev-overlay` + `aiui-extension` +
-`aiui-devtools-extension`) later, with the stale-docs loose ends below folded into that pass.
+Nothing remains open in this proposal.
 
 This is the next chapter after [the plugin restructure](./plugin-restructure.md): that plan
 pulled the app-side integration out of the overlay; this one retires the overlay itself, along

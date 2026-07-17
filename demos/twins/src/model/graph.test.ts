@@ -2,7 +2,7 @@
  * graph.test.ts — the composed app, headless (playbook layer 2 testing): two
  * slice instances driven through the DERIVED tool surface, exactly as an
  * agent would drive them. The slice's own unit tests live with the slice
- * (packages/aiui-oscillator); what belongs HERE is the composition — the
+ * (demos/oscillator); what belongs HERE is the composition — the
  * qualified surface, instance independence through the tools, and the
  * cross-instance lissajous cell.
  */
@@ -48,7 +48,7 @@ describe("the composed surface (what the agent sees)", () => {
 
   it("the slice's identity survives the workspace boundary (dotdot locs)", () => {
     expect(left.freq.description).toMatch(/Natural frequency/);
-    expect(left.freq.loc).toMatch(/packages\/aiui-oscillator\/src\/slice\.ts:\d+$/);
+    expect(left.freq.loc).toMatch(/oscillator\/src\/slice\.ts:\d+$/);
   });
 });
 

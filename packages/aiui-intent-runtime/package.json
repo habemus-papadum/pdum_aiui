@@ -12,7 +12,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./shot": "./src/shot.ts",
+    "./locator": "./src/locator.ts",
     "./talk": "./src/talk.ts",
     "./video": "./src/video.ts",
     "./selection": "./src/selection.ts",
@@ -36,10 +36,10 @@
         "import": "./dist/index.js",
         "default": "./dist/index.js"
       },
-      "./shot": {
-        "types": "./dist/shot.d.ts",
-        "import": "./dist/shot.js",
-        "default": "./dist/shot.js"
+      "./locator": {
+        "types": "./dist/locator.d.ts",
+        "import": "./dist/locator.js",
+        "default": "./dist/locator.js"
       },
       "./talk": {
         "types": "./dist/talk.d.ts",
@@ -74,7 +74,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-ink": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^"
   },
   "devDependencies": {

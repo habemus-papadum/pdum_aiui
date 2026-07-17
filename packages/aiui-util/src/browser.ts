@@ -156,18 +156,15 @@ export async function launchSessionBrowser(opts: {
     //    video source"), silently defeating the tab-capture flag below (this
     //    broke the paint host's screen share; verified against CfT 150).
     "--auto-accept-camera-and-microphone-capture",
-    //  - auto-accept the current-tab share the shot tool and the paint host
-    //    ask for (getDisplayMedia({ preferCurrentTab: true })) — no picker
-    //    dialog, no user gesture needed, and tab capture needs no OS-level
-    //    screen-recording grant. Verified against CfT 150: the call resolves in
-    //    ~320ms with `navigator.userActivation.isActive === false`. It is what
-    //    `chrome.autoCapture` lets pages rely on (docs/guide/screen-capture.md).
-    //
-    //    Trap for anyone re-measuring this: a Chrome spawned from a process that
-    //    lacks the macOS Screen Recording grant inherits that lack, and then the
-    //    call HANGS instead — no dialog, no rejection. That is an artifact of the
-    //    launching process, not of the switch. Test in a browser started from a
-    //    real terminal, or headless.
+    //  - auto-accept a current-tab share (getDisplayMedia({ preferCurrentTab:
+    //    true })) — no picker, no gesture, no OS-level screen-recording grant.
+    //    No shipped page calls getDisplayMedia any more (the intent client's
+    //    hosts capture natively), but the flag is kept: it is harmless, and a
+    //    scratch page an agent writes can rely on it. Verified against CfT
+    //    150: the call resolves in ~320ms with userActivation.isActive false.
+    //    Trap for anyone re-measuring: a Chrome spawned from a process that
+    //    lacks the macOS Screen Recording grant inherits that lack, and the
+    //    call HANGS instead — test from a real terminal, or headless.
     "--auto-accept-this-tab-capture",
     //  - allow audio PLAYBACK without a user gesture — the outbound half of the
     //    same media posture (the two flags above pre-answer capture). The

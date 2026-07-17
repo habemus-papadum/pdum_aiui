@@ -84,8 +84,7 @@ writing, so you can't `set` a config that would then fail the launch.
     "executablePath": "/path/to/chrome-for-testing/chrome",
     "channel": "stable",
     "forTesting": "prompt",
-    "headless": false,
-    "buildExtension": true
+    "headless": false
   }
 }
 ```
@@ -98,7 +97,7 @@ Everything is optional; the values above are the defaults (except `browserUrl`, 
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `claude.skipPermissions` | Launch with `--dangerously-skip-permissions` — a [personal preference with real consequences](./warning); aiui works fine either way. Asked on the first interactive launch (no default — you must answer); unset non-interactive sessions fall back to `true`. |
 | `claude.enterNudge`     | Auto-dismiss Claude Code's development-channel acknowledgement prompt by injecting one Enter keystroke into your terminal at startup (best-effort TIOCSTI; some platforms forbid it, harmlessly). Asked on the first interactive launch; saying no just means pressing Enter yourself each launch. |
-| `channel.bind`          | Which interface the channel's web server binds. `"loopback"` (default) keeps the whole surface this-machine-only; `"host"` (0.0.0.0) makes it — the [iPad paint](./paint-stream) page, but also prompt injection, `/debug`, and every sidecar — reachable by **anyone on your network, unauthenticated** ([the trusted-LAN posture](./warning)). Asked on the first interactive launch, like `claude.skipPermissions`. Per-launch flag: `--aiui-bind`. |
+| `channel.bind`          | Which interface the channel's web server binds. `"loopback"` (default) keeps the whole surface this-machine-only; `"host"` (0.0.0.0) makes it — the remote-device sidecar pages, but also prompt injection, `/debug`, and everything else — reachable by **anyone on your network, unauthenticated** ([the trusted-LAN posture](./warning)). Asked on the first interactive launch, like `claude.skipPermissions`. Per-launch flag: `--aiui-bind`. |
 | `chrome.enabled`        | Attach the [Chrome DevTools MCP](./chrome). `false` turns it off everywhere; `true` restates the default and does **not** override the CI default-off — only the `--aiui-chrome` flag does. |
 | `chrome.mode`           | [`"attach"`](./chrome#how-the-browser-connects-attach-vs-launch) (default): share a user-visible session browser. `"launch"`: chrome-devtools-mcp keeps a private browser, started lazily on the agent's first tool call. |
 | `chrome.browserUrl`     | Attach to this DevTools endpoint (e.g. `"http://127.0.0.1:9222"`) and manage no browser locally — the [remote development](./remote) key (per-launch flag: `--aiui-browser-url`). Implies `mode: "attach"`; makes the other browser keys irrelevant. |
@@ -109,7 +108,6 @@ Everything is optional; the values above are the defaults (except `browserUrl`, 
 | `chrome.channel`        | Installed Chrome release channel to launch: `stable`, `beta`, `dev`, `canary`.                                                                    |
 | `chrome.forTesting`     | How launches manage the recommended [Chrome for Testing](./chrome#the-managed-install): `"prompt"` (offer installs/updates — interactive sessions only, never CI), `"auto"` (keep current without asking), `"off"` (never check). Prompt answers ("automatically", "never ask again") are written **here, at the user level**, by the launcher itself. Skipped when `executablePath`/`channel` picks a browser explicitly. |
 | `chrome.headless`       | Launch Chrome with no UI.                                                                                                                          |
-| `chrome.buildExtension` | Rebuild the [aiui DevTools panel](./devtools) (~0.3 s of tsc) whenever a browser starts in a dev checkout, so the auto-loaded extension is never stale. |
 
 ## Environment variables
 
@@ -119,7 +117,7 @@ Everything is optional; the values above are the defaults (except `browserUrl`, 
 | `XDG_CACHE_HOME`      | Standard cache-home: when set (and absolute), the user cache root is `$XDG_CACHE_HOME/aiui`; otherwise `~/.cache/aiui`. `AIUI_CACHE` beats it. |
 | `CI`                  | Truthy values (anything but unset, empty, `"0"`, `"false"`) mean: Chrome DevTools MCP off by default, and **no interactive behavior at all** — no CfT install/update prompts or downloads, no one-time hints. `aiui claude --aiui-chrome` opts the MCP back in. |
 | `OPENAI_API_KEY`      | The intent pipeline's speech transcription and dictation correction call OpenAI, from the channel process aiui spawns — so the key is read from **this environment** and nowhere else (never `config.json`; a shared/committed file must not hold secrets). `aiui claude` [preflights it](#the-intent-pipeline-openai-key) at launch; unset or invalid leaves those features **unavailable** (the widget says so; `mock` is the explicit offline choice), never blocking the launch. |
-| `VITE_AIUI_PORT`      | **Written by aiui, not read**: `aiui vite` sets it to the chosen channel server's port. The `aiuiDevOverlay()` Vite plugin reads it in the dev-server process and injects it into the page for the [intent tool](./web-intent-tool); app source can also read it via `import.meta.env.VITE_AIUI_PORT` (the prebuilt overlay itself cannot — see the intent-tool page's internals note). |
+| `VITE_AIUI_PORT`      | **Written by aiui, not read**: `aiui vite` sets it to the chosen channel server's port. Consumers read it via Vite's `import.meta.env.VITE_AIUI_PORT` — the intent client's channel-port resolution, and app source that wants the port. (Prebuilt dist code cannot: the substitution happens when a bundler compiles the file.) |
 
 (Repo CI additionally uses `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_MODEL`, and `IS_SANDBOX` when it
 shells out to Claude Code itself — those configure Claude Code, not aiui; see
@@ -127,7 +125,7 @@ shells out to Claude Code itself — those configure Claude Code, not aiui; see
 
 ## The intent pipeline (OpenAI key)
 
-The [multimodal intent overlay](./web-intent-tool)'s speech transcription and dictation
+The intent pipeline's speech transcription and dictation
 correction run against OpenAI, in the **channel process** `aiui claude` spawns. That process
 inherits the launcher's environment, so the key comes from `OPENAI_API_KEY` in the shell you run
 `aiui claude` from — deliberately the *only* source. It is never read from `config.json` (a
@@ -154,21 +152,19 @@ key is set: the widget says so rather than silently switching to the mock backen
 explicit offline choice, `transcriber: "mock"`). The launcher only informs (the same posture as the
 browser-side degradations). CI and other non-interactive sessions skip
 the network check silently. Either way the outcome (a *status*, never the key) is recorded in the
-channel's launch summary at `GET /debug/api/info`, so the [DevTools panel](./devtools) can
-explain a degraded pipeline.
+channel's launch summary at `GET /debug/api/info`, so a viewer can explain a degraded
+pipeline.
 
-**Pipeline configuration lives in the overlay, not here.** Which transcription models, the
+**Pipeline configuration lives in the intent client, not here.** Which transcription models, the
 [prompt linter](./prompt-linting), silence gating, keyword priming — all of that is
-`IntentPipelineConfig`, owned and configured by the overlay
-(`aiuiDevOverlay({ intent: { … } })` plus channel-side config), not by `aiui claude` flags.
+`IntentPipelineConfig`, owned and declared by the client on every hello, not by `aiui claude`
+flags.
 Transcription is streaming (`transcriber: "openai-realtime"` — partial transcripts as you
 speak, using the same channel key; `"mock"` is the offline choice). The easy way to pick a
-rung is the `tier` field — `rapid` (the default) or `premium`; see the overlay guide's
-[Tiers](./intent-overlay#tiers-one-dial-for-transcription). The linter is orthogonal
+rung is the `tier` field — `rapid` (the default) or `premium`. The linter is orthogonal
 (`linter: "off" | "openai" | "gemini"`; a Gemini linter needs `GEMINI_API_KEY` in the same
 environment). The launcher's whole job is preflighting the OpenAI key and passing the
-environment through. The [Using the intent overlay](./intent-overlay) guide page covers those
-knobs.
+environment through.
 
 ## State aiui keeps (and how it affects behavior)
 

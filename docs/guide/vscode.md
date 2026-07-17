@@ -5,9 +5,8 @@ VS Code and an aiui session meet in two directions:
 - **Editor → turn** — the **aiui VS Code extension** (`@habemus-papadum/aiui-vscode`) sends
   editor selections into the running session's turn: pick a connected browser tab once, then
   fire code at it from the editor's context menu.
-- **Page → editor** — the dev overlay's **[VS Code jump mode](./intent-overlay#vs-code-jump-mode-double-click-to-source)**
-  jumps the other way: double-click anything the app renders and VS Code opens at the source
-  that drew it.
+- **Page → editor** — the intent client's **VS Code jump mode** jumps the other way:
+  double-click anything the app renders and VS Code opens at the source that drew it.
 
 Together they close the loop: the file you jump to from the page is the same editor window that
 contributes selections back into the turn.
@@ -58,9 +57,8 @@ remote story is [Remote Development](./remote).
 
 ## From the page back to the editor: VS Code jump mode
 
-The dev overlay's **J** key enters VS Code jump mode — a
-[tweak-shaped handover](./intent-overlay#tweak-mode-adjust-the-app-mid-turn) (dashed **blue**
-ring) where the page keeps the pointer and keyboard, and the overlay claims exactly one
+The intent client's **J** key enters VS Code jump mode — a tweak-shaped handover (dashed
+**blue** ring) where the page keeps the pointer and keyboard, and the client claims exactly one
 gesture: **double-click**, which opens the **jump picker** — a popup listing everything the
 click point can jump to. Two groups: the stamped **element** ancestors (`data-source-loc`,
 nearest → outermost, nearest preselected) and the containing **cells** (`data-cell`), each at
@@ -73,7 +71,7 @@ source root — the same annotations screenshots and selections attribute with (
 [Frontend for Agents](./frontend-for-agents)). Misses are always **named** — an unstamped click
 opens a picker that says "no source location on or around this element"; a cell with no
 recorded definition shows grayed — a jump never silently does nothing. The full interaction is
-documented in [Using the Intent Overlay](./intent-overlay#vs-code-jump-mode-double-click-to-source).
+named — a jump never silently does nothing.
 
 Because a jump takes you out of the browser, the mode **ends itself when the window blurs**:
 coming back to the tab resumes composing rather than leaving a double-click trap armed. An open
@@ -98,6 +96,6 @@ VS Code ──POST /session/publish {clientId, topic:"contribution", payload}─
 ```
 
 The extension holds no websocket — it goes through the channel web backend's session HTTP
-surface, a peer of the [session bus](./multi-view-sessions). The payload stays structured
+surface (a peer of the `/session` bus — see [the channel](./channel)). The payload stays structured
 (verbatim text + locator); rendering is deferred to `composeIntent` at lowering time, like
 every other contribution.

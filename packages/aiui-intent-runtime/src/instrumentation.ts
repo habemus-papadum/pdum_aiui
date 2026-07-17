@@ -15,13 +15,7 @@
  * eval boundary), versioned so the panel can detect shape changes. Everything
  * degrades to a no-op without a global scope, and the ring is bounded so an
  * idle tab never grows.
- *
- * Two live seams also hang off it — {@link RemotePaintSink} and the display
- * capture broker — for the same reason in both cases: two packages that must
- * not import each other need one object to meet on. Those are not JSON-able,
- * and the panel doesn't read them.
  */
-import type { DisplayCapture } from "./display-capture";
 
 /** One sent frame, as measured by the page. */
 export interface FrameMetric {
@@ -40,32 +34,6 @@ export interface FrameMetric {
   error?: string;
 }
 
-/** A point the {@link RemotePaintSink} draws with, in viewport CSS pixels. */
-export interface RemoteInkPoint {
-  x: number;
-  y: number;
-  pressure?: number;
-}
-
-/**
- * The seam an external controller uses to drive the intent tool's ink from a
- * remote pen — published at `window.__AIUI__.remotePaint` by whichever intent
- * host mounts an ink layer. `@habemus-papadum/aiui-paint`'s host consumes
- * it (its `InkSink`): arming here arms the intent turn, and injected strokes
- * land on the same ink layer local drawing uses (so they composite into shots
- * and become part of the turn). The two packages agree by *shape* across the
- * global — neither imports the other. Coordinates are viewport CSS px; the
- * caller maps its normalized 0..1 wire coordinates against {@link size}.
- */
-export interface RemotePaintSink {
-  setArmed(on: boolean): void;
-  beginStroke(id: string, style: { color: string; width: number }, point: RemoteInkPoint): void;
-  extendStroke(id: string, point: RemoteInkPoint): void;
-  endStroke(id: string, point?: RemoteInkPoint): void;
-  cancelStroke(id: string): void;
-  size(): { width: number; height: number };
-}
-
 /** The shape of `window.__AIUI__`. */
 export interface PageInstrumentation {
   /** Bump when this shape changes incompatibly. */
@@ -76,30 +44,11 @@ export interface PageInstrumentation {
   sourceRoot?: string;
   /** Recent frame metrics, oldest first (bounded ring). */
   frames: FrameMetric[];
-  /** Remote-paint seam, present while the multimodal intent tool is mounted. */
-  remotePaint?: RemotePaintSink;
-  /**
-   * The document's single display-capture grant, published by whichever
-   * intent host holds it. The paint host reads it so the iPad's video rides
-   * the same `getDisplayMedia` stream the screenshots do — one ask per
-   * document, not one per consumer.
-   */
-  displayCapture?: DisplayCapture;
 }
 
 declare global {
   interface Window {
     __AIUI__?: PageInstrumentation;
-    /**
-     * `"auto"` when this document lives in a browser `aiui` launched with
-     * `--auto-accept-this-tab-capture`, so `getDisplayMedia` resolves with no
-     * user gesture and no picker. Defined over CDP at launch (aiui-util's
-     * capture-marker), NOT by the page's own bundle: the fact is a property of
-     * the browser process, and nothing a page can observe reveals it. Absent
-     * everywhere else — including a personal Chrome open on the same dev
-     * server — where capture must be asked for behind a real click.
-     */
-    __AIUI_CAPTURE__?: "auto";
   }
 }
 

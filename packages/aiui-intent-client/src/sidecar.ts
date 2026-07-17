@@ -31,24 +31,24 @@ import { createCdpProxy } from "./cdp-proxy";
 /** The path prefix the panel lives under on the channel's server. */
 export const INTENT_PREFIX = "/intent";
 
-/** The global the injected ink bundle defines in the victim page. */
-export const INK_GLOBAL = "__aiuiIntentInk";
+/** The global the injected page bundle defines in the victim page. */
+export const PAGE_GLOBAL = "__aiuiIntentPage";
 
 /**
- * Bundle `src/cdp/page-ink.ts` (and the ink library under it) into one IIFE
- * that assigns {@link INK_GLOBAL}. Built on demand — this is a dev-time
- * surface, and a rebuild costs tens of milliseconds — so editing the ink
- * surface needs no restart, just a page that mounts it again.
+ * Bundle `src/cdp/page-bundle.ts` (locator · jump · pencil) into one IIFE
+ * that assigns {@link PAGE_GLOBAL}. Built on demand — this is a dev-time
+ * surface, and a rebuild costs tens of milliseconds — so editing the page
+ * surfaces needs no restart, just a page that mounts them again.
  */
-export async function pageInkBundle(): Promise<string> {
+export async function pageBundle(): Promise<string> {
   const { build } = await import("esbuild");
-  const entry = fileURLToPath(new URL("./cdp/page-ink.ts", import.meta.url));
+  const entry = fileURLToPath(new URL("./cdp/page-bundle.ts", import.meta.url));
   const bundled = await build({
     entryPoints: [entry],
     bundle: true,
     write: false,
     format: "iife",
-    globalName: INK_GLOBAL,
+    globalName: PAGE_GLOBAL,
     platform: "browser",
     target: "es2022",
     logLevel: "silent",
@@ -123,24 +123,24 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
         socketFactory: (url) => new WebSocket(url) as unknown as CdpSocket,
       });
       app.use((req, res, next) => {
-        if (req.path === `${INTENT_PREFIX}/page-ink.js`) {
-          // The ink surface, bundled to ONE self-contained script for the bus
-          // to evaluate inside a victim page.
+        if (req.path === `${INTENT_PREFIX}/page-bundle.js`) {
+          // The page bundle (locator · jump · pencil), bundled to ONE
+          // self-contained script for the bus to evaluate inside a victim page.
           //
           // It cannot be an ES module the page imports: the channel is
           // `http://127.0.0.1:…`, and any https page — i.e. most of the web —
           // blocks that import as mixed content (found live: the ring landed
-          // on example.com, the ink silently did not). So the page fetches
+          // on example.com, the surfaces silently did not). So the page fetches
           // NOTHING. The panel reads this route from its own origin and hands
           // the source to the page over CDP. Same reason the bootstrap is a
           // stringified function.
           res.setHeader("Access-Control-Allow-Origin", "*");
           res.type("application/javascript");
-          void pageInkBundle()
+          void pageBundle()
             .then((source) => res.end(source))
             .catch((err: unknown) => {
-              ctx.log(`intent: could not bundle the page ink surface — ${String(err)}`);
-              res.status(500).end("/* ink bundle failed */");
+              ctx.log(`intent: could not build the page bundle — ${String(err)}`);
+              res.status(500).end("/* page bundle failed */");
             });
           return;
         }
@@ -163,7 +163,7 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
       // middleware mode rooted at this package (source-first, HMR riding the
       // channel's one port via a shim); in PROD the prebuilt static bundle under
       // `assets/panel` (built by `build:panel`). The special routes registered
-      // above (page-ink, /cdp/info) go on first, so they win over the client
+      // above (page-bundle, /cdp/info) go on first, so they win over the client
       // middleware. `base`/prefix scoping means requests outside /intent/ fall
       // through to the channel's own routes, per the sidecar rule.
       const surface = await serveClientSurface(app, {

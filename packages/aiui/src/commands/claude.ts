@@ -343,12 +343,9 @@ async function chromeServerEntry(
     }
   }
   mkdirSync(settings.userDataDir, { recursive: true });
-  // The switchover (owner, 2026-07-14): launches auto-load ONLY the greenfield
-  // intent client. The frozen extension retired to safety-net status (loaded
-  // by hand if ever needed; `aiui extension` still manages its artifacts), and
-  // the DevTools-panel extension is no longer auto-loaded either — its trace
-  // debugger now lives INSIDE the intent panel (`aiui chrome extension` still
-  // builds it for manual installs).
+  // Launches auto-load ONLY the intent client's extension (the historical
+  // overlay/extension surfaces are deleted; the trace debugger lives INSIDE
+  // the intent panel).
   const intent = findIntentClientExtension();
   const extensionDirs = intent.state === "ready" ? [intent.dir] : [];
   // The extension's channel discovery runs over native messaging, and CfT

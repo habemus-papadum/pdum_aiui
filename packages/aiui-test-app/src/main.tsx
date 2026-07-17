@@ -1,7 +1,7 @@
 /**
  * main.tsx — the entry point, and deliberately almost empty.
  *
- * The aiui intent tool is mounted by the `aiuiDevOverlay()` Vite plugin (see
+ * The `aiui()` Vite plugin provides the attribution stamps (see
  * vite.config.ts — that plugin *is* the whole aiui integration). The app splits
  * along HMR lines:
  *

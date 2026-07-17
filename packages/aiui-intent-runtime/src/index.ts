@@ -1,8 +1,8 @@
 /**
  * The intent client's host-agnostic **capture + transport runtime** — the
  * live half of what the retired dev overlay carved out for its two hosts
- * (copied here in the overlay retirement; the frozen original remains
- * readable in `aiui-dev-overlay`).
+ * (copied here in the overlay retirement; the original is deleted — read it
+ * in git history).
  *
  * The discipline every module keeps: a DOM-free, framework-free *core* (a
  * state machine, an algorithm, a batching loop) with the thin browser *edge*
@@ -13,7 +13,7 @@
  *
  * This root entry is the shared substrate; the jobs ride subpath entries:
  *
- *  - `./shot` — region screenshots + the component locator
+ *  - `./locator` — the component locator
  *    (screenshot-rect → components → source, off the source-processor stamps)
  *  - `./talk` — the audio stack: mic → PCM (AudioWorklet), REST segments,
  *    realtime PCM streaming, TTS playback with barge-in, offline transcriber
@@ -34,8 +34,6 @@ export type {
   CollectClientMetaOptions,
   FrameMetric,
   PageInstrumentation,
-  RemoteInkPoint,
-  RemotePaintSink,
   TabInfo,
 } from "./instrumentation";
 export {

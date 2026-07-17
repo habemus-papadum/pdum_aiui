@@ -47,12 +47,6 @@ export const turnLayer: KeyLayer<EngineState, string> = {
   active: (state) => state.phase === "turn",
   bindings: [
     {
-      keys: ["i", "I"],
-      down: onPress("ink"),
-      // Labels are STABLE (owner review): `active` carries engagement.
-      hint: (s) => ({ key: "i", label: "ink", icon: "✏️", active: s.ink === true }),
-    },
-    {
       keys: ["s", "S"],
       down: onPress("shot"),
       hint: { key: "s", label: "shot", icon: "🖼" },
@@ -68,7 +62,7 @@ export const turnLayer: KeyLayer<EngineState, string> = {
     {
       // 'j' = JUMP (owner, 2026-07-16): TOGGLE the jump-to-editor pick on
       // aiui-instrumented pages — click an element, pick a row, VS Code opens.
-      // A commit/cancel auto-exits; mutually exclusive with ink/pencil/area.
+      // A commit/cancel auto-exits; mutually exclusive with pencil/area.
       keys: ["j", "J"],
       down: onPress("jump"),
       hint: (s) => ({ key: "j", label: "jump to editor", icon: "🎯", active: s.jump === true }),
@@ -79,7 +73,7 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       hint: { key: "p", label: "pull selection", icon: "📋" },
     },
     {
-      // pencil: 'k' toggles markup MODE on/off — ink's twin (owner, 2026-07-16).
+      // pencil: 'k' toggles markup MODE on/off (owner, 2026-07-16).
       // clear + vanish + fade live in the bar; vanish/fade are config controls.
       keys: ["k", "K"],
       down: onPress("pencil"),
@@ -92,8 +86,10 @@ export const turnLayer: KeyLayer<EngineState, string> = {
     },
     {
       keys: ["c", "C"],
-      down: (state, _key, repeat) => (!repeat && state.ink === true ? command("clear") : "swallow"),
-      hint: (s) => (s.ink === true ? { key: "c", label: "clear ink", icon: "🧹" } : undefined),
+      down: (state, _key, repeat) =>
+        !repeat && state.pencil === true ? command("pencilClear") : "swallow",
+      hint: (s) =>
+        s.pencil === true ? { key: "c", label: "clear pencil", icon: "🧹" } : undefined,
     },
     {
       keys: ["t", "T"],

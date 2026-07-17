@@ -183,62 +183,24 @@ project **share** the one session browser (that's attach mode working as intende
 only one instance per user data dir anyway; give a session its own `--aiui-chrome-profile` if you
 want isolation instead).
 
-## The aiui DevTools panel: when is it available?
+## The intent client's extension rides along
 
-The [panel](./devtools) ships **inside the npm package**
-(`@habemus-papadum/aiui-devtools-extension`, `extension/` prebuilt), so it's present however you
-got aiui:
+The intent client's MV3 bundle (`packages/aiui-intent-client/dist-ext`, a static build:
+`pnpm -C packages/aiui-intent-client build:ext`) is auto-loaded via `--load-extension` whenever
+aiui starts the session browser. Whether it *loads* depends on the browser:
 
-- **Dev checkout of this repo** — every browser start rebuilds it from source first (a full `tsc`
-  is ~0.3 s, so it's rebuilt every time rather than tracking staleness; a compile failure warns
-  loudly and continues with the last build). `chrome.buildExtension: false` skips the rebuild.
-- **aiui as a dependency in your project** — the published package contains the built extension;
-  nothing to compile. `aiui chrome extension` prints its path.
-
-Whether it *loads* depends on the browser:
-
-- **Chrome for Testing (or Chromium)** — auto-loads via `--load-extension` whenever aiui starts
-  the session browser (and in launch mode too). This is the main reason CfT is the recommended
-  browser.
+- **Chrome for Testing (or Chromium)** — auto-loads. This is the main reason CfT is the
+  recommended browser.
 - **Branded Chrome (installed stable, or any `channel`)** — ≥ 137 ignores `--load-extension`
   (the flag was removed because malware abused it), so auto-load is a no-op. The fix is
   manual-but-once: in the session browser, `chrome://extensions` → Developer mode → Load
-  unpacked → the directory `aiui chrome extension` prints. The persistent profile remembers it
-  for every later session. Interactive launches print a one-time note per profile reminding you
-  of exactly this (then a marker in the profile keeps it quiet).
+  unpacked → `packages/aiui-intent-client/dist-ext`. The persistent profile remembers it for
+  every later session. Interactive launches print a one-time note per profile reminding you of
+  exactly this (then a marker in the profile keeps it quiet).
 
-## The intent-tool extension rides along
-
-The [browser-extension intent tool](../proposals/browser-extension-intent-tool.md)
-(`@habemus-papadum/aiui-extension` — per-window side panel, capture, ink, page tools) is
-auto-loaded the same way, appended to the same `--load-extension` list. Two deliberate
-differences from the DevTools panel:
-
-- **It has two artifacts, and aiui picks one.** `dist-dev/` is what its Vite dev server writes
-  (CRXJS loader stubs — inert without that server); `dist/` is the standalone production build.
-  The launcher loads **`dist-dev/` when its dev server is answering**, and `dist/` otherwise — so
-  a stale dev artifact can never hijack a launch, and "just use the tool" needs no dev server at
-  all. With neither present, it prints a note telling you how to get one.
-- **aiui never builds it.** Building from the launcher would be a surprise write into someone
-  else's dev loop. Whoever owns the loop owns the artifact:
-
-  ```sh
-  aiui extension dev      # develop it: Vite + an ordered reload of this project's browser
-  pnpm -C packages/aiui-extension build   # just use it: standalone dist/, no server
-  aiui extension reload   # make the running browser re-read whichever artifact applies
-  ```
-
-- **A dev artifact with no dev server behind it** still loads (you asked for it), but interactive
-  launches warn loudly — otherwise every surface comes up on CRXJS's "cannot connect" page, which
-  reads as "broken" instead of "not being served".
-
-Chrome installs an unpacked extension **by path**, so a profile that was loaded against one of the
-two directories keeps re-reading that one — no amount of reloading changes it. `aiui extension
-dev`/`reload` check (they read the extension's own dev stamp back out of the browser) and
-**re-point the running browser** at the right directory over CDP (`Extensions.loadUnpacked`;
-best-effort — it falls back to naming the clicks). The extension id comes from the manifest key,
-not the path, so this never disturbs anything keyed to the id (the native-messaging host above
-all).
+aiui never builds the bundle at launch — building from the launcher would be a surprise write
+into someone else's dev loop. `pnpm -C packages/aiui-intent-client ext` builds it and loads it
+into the running session browser in one step.
 
 The extension's channel discovery runs over Chrome native messaging, and Chrome for Testing
 looks the host manifest up **inside the user data dir** (measured — not in
@@ -248,7 +210,7 @@ loadable — on launch *and* when attaching to an already-running session browse
 `aiui extension install-native-host` remains for browsers aiui does not manage (e.g. branded
 Chrome with the extension loaded unpacked by hand).
 
-`aiui chrome status` reports which shape (if any) it found and whether the chosen browser will
+`aiui chrome status` reports whether the bundle exists and whether the chosen browser will
 auto-load it; `aiui extension status` shows every native-host manifest, including the current
 project's profiles.
 
@@ -264,6 +226,6 @@ Config keys that override the defaults:
   nightly build…). Disables the CfT sync.
 - `chrome.channel` — `"stable" | "beta" | "dev" | "canary"`: launch an *installed* branded
   Chrome release channel, e.g. to exercise upcoming Chrome behavior. Also disables the CfT sync;
-  being branded, these can't auto-load the panel. Mutually exclusive with `executablePath`.
+  being branded, these can't auto-load the intent client's extension. Mutually exclusive with `executablePath`.
 - `chrome.debugPort` — pin the session browser's debug port (default: OS-assigned) when
   something else needs to find it, like an ssh tunnel.
