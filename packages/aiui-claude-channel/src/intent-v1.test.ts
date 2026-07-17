@@ -143,7 +143,7 @@ describe("intent-v1 lowering — fixtures", () => {
     await d.fin();
     expect(d.sent).toHaveLength(1);
     // No pixels were captured → degraded inline reference, element info in the text.
-    expect(d.sent[0].text).toContain('<screenshot marker="shot_1" missing="image not captured"');
+    expect(d.sent[0].text).toContain("[screenshot shot_1 located at MISSING]");
     expect(d.sent[0].meta).toBeUndefined();
   });
 
@@ -163,7 +163,7 @@ describe("intent-v1 lowering — fixtures", () => {
     // The path is inlined in the text (the temp cache is outside the compose
     // cwd, so it stays absolute), the blob was actually written, and there is
     // no meta block anymore — everything the agent needs is in the sentence.
-    const inlinePath = /<screenshot path="([^"]+)"/.exec(text)?.[1];
+    const inlinePath = /\[screenshot located at ([^ \]]+)/.exec(text)?.[1];
     expect(inlinePath).toBeDefined();
     expect(isAbsolute(inlinePath ?? "")).toBe(true);
     expect(existsSync(inlinePath ?? "")).toBe(true);
@@ -322,7 +322,7 @@ describe("intent-v1 lowered-prompt push", () => {
       (m) => (m as { kind?: string }).kind === "lowered-prompt",
     ) as LoweredPromptMessage;
     expect(message.prompt).toBe(d.sent[0].text);
-    expect(message.prompt).toContain('<screenshot path="');
+    expect(message.prompt).toContain("[screenshot located at ");
     expect(message.meta).toBeUndefined();
     expect(d.sent[0].meta).toBeUndefined();
   });
@@ -349,7 +349,7 @@ describe("intent-v1 lowered-prompt push", () => {
       if (span.kind === "shot") {
         // The shot span brackets the screenshot block even though it sits
         // AFTER the context preamble — i.e. the preamble shift is correct.
-        expect(sliced).toContain("<screenshot");
+        expect(sliced).toContain("[screenshot located at");
       } else if (span.kind === "preamble") {
         expect(span.start).toBe(0);
         expect(sliced).toContain("The user's prompt follows.");
@@ -504,7 +504,7 @@ describe("intent-v1 incremental lowering (S1)", () => {
 
     // The wired path made it into the committed prompt, inlined…
     expect(d.sent).toHaveLength(1);
-    const inlinePath = /<screenshot path="([^"]+)"/.exec(d.sent[0].text)?.[1];
+    const inlinePath = /\[screenshot located at ([^ \]]+)/.exec(d.sent[0].text)?.[1];
     expect(inlinePath).toBeDefined();
     expect(existsSync(inlinePath ?? "")).toBe(true);
     // …and fin REUSED the cache: the attachment-arrival recompose already

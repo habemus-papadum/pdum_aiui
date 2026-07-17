@@ -126,20 +126,22 @@ lowering time, never at capture time (the repo's defer-rendering rule). The comp
 inlines each shot at its position in the prose:
 
 ```xml
-<screenshot path=".aiui-cache/traces/…/shot_1.png">
+[screenshot located at .aiui-cache/traces/…/shot_1.png]
+<screenshot-metadata path=".aiui-cache/traces/…/shot_1.png">
   <element name="SimCanvas" source="src/ui/SimCanvas.tsx:64:10"/>
   <element name="AnalysisPanel" source="src/ui/AnalysisPanel.tsx:99:5">
     <cell name="analysis" source="src/model/graph.ts:31"/>
   </element>
-</screenshot>
+</screenshot-metadata>
 ```
 
-Every path — the image and each source — is relativized against the agent's working directory.
-Two render-time caps keep a big drag from flooding the prompt while the structured record stays
-complete: at most **8 elements** per shot (`elements-omitted="N"` says what was dropped) and at
-most **4 cells** per element (`cells-omitted="N"`). A `within` anchor renders as
-`containment="within"` so the agent knows it's context, not framing. A plain-prose rendering
-(`shotFormat: "text"`) exists with the same content.
+The image reference is a plain-text bracket line; the XML block carries the located-element
+metadata and appears only when elements were located. Every path — the image and each source —
+is relativized against the agent's working directory. Two render-time caps keep a big drag from
+flooding the prompt while the structured record stays complete: at most **8 elements** per shot
+(`elements-omitted="N"` says what was dropped) and at most **4 cells** per element
+(`cells-omitted="N"`). A `within` anchor renders as `containment="within"` so the agent knows
+it's context, not framing.
 
 The debug UI's transcript preview shows the same resolution in miniature — each screenshot's
 caption lists the first few element names — so a caption reading `shot_1 · SimCanvas, Controls,

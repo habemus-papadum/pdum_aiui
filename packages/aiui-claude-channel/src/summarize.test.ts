@@ -2,25 +2,28 @@ import { describe, expect, it, vi } from "vitest";
 import { openaiSummarizer, summaryPromptInput } from "./summarize";
 
 describe("summaryPromptInput", () => {
-  it("collapses a self-closing screenshot block to [screenshot]", () => {
-    const body = 'move this <screenshot path="a/shot_1.png" view="full-viewport"/> a bit left';
+  it("collapses a bare bracket reference to [screenshot]", () => {
+    const body = "move this [screenshot located at a/shot_1.png (full viewport)] a bit left";
     expect(summaryPromptInput(body)).toBe("move this [screenshot] a bit left");
   });
 
-  it("collapses a multi-line paired screenshot block to [screenshot]", () => {
+  it("drops a metadata block and collapses its bracket line", () => {
     const body = [
       "make the legend match",
-      '<screenshot path="shot_1.png">',
+      "[screenshot located at shot_1.png]",
+      '<screenshot-metadata path="shot_1.png">',
       '  <element name="Legend" source="src/Legend.tsx:30:2"/>',
-      "</screenshot>",
+      "</screenshot-metadata>",
       "thanks",
     ].join("\n");
     expect(summaryPromptInput(body)).toBe("make the legend match\n[screenshot]\nthanks");
   });
 
-  it("collapses every screenshot, not just the first", () => {
-    const body = "a <screenshot path='1.png'/> b <screenshot path='2.png'/> c";
-    expect(summaryPromptInput(body)).toBe("a [screenshot] b [screenshot] c");
+  it("collapses every screenshot (and pasted images), not just the first", () => {
+    const body =
+      "a [screenshot located at 1.png] b [pasted image located at 2.png] c" +
+      " [screenshot shot_3 located at MISSING] d";
+    expect(summaryPromptInput(body)).toBe("a [screenshot] b [screenshot] c [screenshot] d");
   });
 
   it("truncates to 1000 characters", () => {
@@ -44,7 +47,7 @@ describe("openaiSummarizer", () => {
     const fetchSpy = ok("rewrite the beet essay to say vite");
     const summarizer = openaiSummarizer({ apiKey: "sk-test", fetch: fetchSpy });
     const line = await summarizer.summarize(
-      'write about beets <screenshot path="shot_1.png"/> please',
+      "write about beets [screenshot located at shot_1.png] please",
     );
     expect(line.text).toBe("rewrite the beet essay to say vite");
 

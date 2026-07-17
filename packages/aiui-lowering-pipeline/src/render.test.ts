@@ -50,7 +50,8 @@ describe("renderPrompt spans", () => {
 
     const sliced = composed.prompt.slice(span.start, span.end);
     // The span brackets the screenshot block — and nothing of the prose.
-    expect(sliced).toContain("<screenshot");
+    expect(sliced).toContain("[screenshot located at");
+    expect(sliced).toContain("<screenshot-metadata");
     expect(sliced).toContain(".aiui-cache/traces/t1/shot_1.png");
     expect(sliced).not.toContain("before shot");
     expect(sliced).not.toContain("after shot");
@@ -87,7 +88,7 @@ describe("renderPrompt spans", () => {
       // The leading newline was trimmed → the shot span starts at 0 and its
       // slice still opens the screenshot block.
       expect(span.start).toBe(0);
-      expect(composed.prompt.slice(span.start, span.end)).toContain("<screenshot");
+      expect(composed.prompt.slice(span.start, span.end)).toContain("[screenshot located at");
     }
     // The prompt itself never has leading/trailing whitespace.
     expect(composed.prompt).toBe(composed.prompt.trim());

@@ -99,7 +99,7 @@ export const DEBUG_UI_CSS = /* css */ `
   white-space: pre-wrap; word-break: break-word; }
 /* A preamble span: de-emphasized context the agent reads past. */
 .aiui-dbg-hero-preamble { color: #6f7686; }
-/* A shot span: its raw <screenshot> block, a hover-preview link to the image. */
+/* A shot span: its raw [screenshot …] reference (+ metadata block), a hover-preview link to the image. */
 .aiui-dbg-hero-shot { color: #cdd3e0; }
 .aiui-dbg-hero-shot-link { cursor: zoom-in; color: #8ab4f8;
   text-decoration: underline; text-decoration-style: dotted; }

@@ -5,8 +5,9 @@
  * Where `text-concat` accumulates a string, `intent-v1` accumulates the intent
  * tool's **event log** plus binary attachments, and on `fin` lowers the whole
  * turn into one prompt with each screenshot inlined at its position
- * (`[screenshot: <path> (elements: …)]` — paths relativized to this process's
- * cwd, the agent's working directory; see composeIntent).
+ * (`[screenshot located at <path>]` + a `<screenshot-metadata>` block when
+ * elements were located — paths relativized to this process's cwd, the
+ * agent's working directory; see composeIntent).
  * The pipeline core — `composeIntent`, the V4A applier, the config shape — is
  * imported from `@habemus-papadum/aiui-lowering-pipeline`, the same module the
  * browser modality runs, so one implementation and one set of captured fixtures
@@ -242,8 +243,6 @@ interface ResolvedIntent {
   realtimeTools: "none" | "submit_intent" | "page";
   /** Reasoning effort for the flagship model (`minimal`…`high`); undefined → model default. */
   realtimeReasoning: string | undefined;
-  /** How screenshots render in the lowered body (see ComposeOptions.shotFormat). */
-  shotFormat: "xml" | "text";
   /** The prompt linter: off, or which live vendor observes the composition. */
   linter: "off" | "openai" | "gemini";
   /** Linter model id; undefined → the vendor default. */
@@ -418,7 +417,6 @@ function resolveIntent(raw: unknown): ResolvedIntent {
       preset.realtimeTools ?? "none",
     ),
     realtimeReasoning: optStr(cfg.realtimeReasoning ?? preset.realtimeReasoning),
-    shotFormat: oneOf(cfg.shotFormat, ["xml", "text"] as const, "xml"),
     linter: oneOf(cfg.linter, ["off", "openai", "gemini"] as const, preset.linter ?? "off"),
     linterModel: optStr(cfg.linterModel ?? preset.linterModel),
     linterInstructions: optStr(cfg.linterInstructions ?? preset.linterInstructions),
@@ -556,7 +554,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // whose cwd is elsewhere overrides via AIUI_PROMPT_CWD (a supervisor that
   // spawns its channel in a subdirectory but wants repo-root-relative paths).
   const promptCwd = process.env.AIUI_PROMPT_CWD || process.cwd();
-  const composeOptions = { cwd: promptCwd, shotFormat: intent.shotFormat };
+  const composeOptions = { cwd: promptCwd };
 
   // Resolve the pipe seams once. `openai` requested but keyless (and no test
   // override) → the seam is absent and that stage degrades (no transcript /

@@ -555,13 +555,14 @@ export interface ComposedIntent {
   components: LocatedComponent[];
   /**
    * The lowered body: prose with each screenshot **inlined at its position**
-   * as `[screenshot: <path> (elements: …)]` — path (relativized against
-   * {@link ComposeOptions.cwd} when given), located elements, and their cell
-   * frontier, all in the text where the image belongs. This replaced the
-   * Option-C `{shot_n}` token + meta-map scheme: the indirection cost a hint
-   * line and a metadata block the agent had to correlate, for structure
-   * nothing downstream actually consumed (`meta` only ever became text
-   * attributes on the rendered channel tag).
+   * as a `[screenshot located at <path>]` bracket line plus, when elements
+   * were located, a `<screenshot-metadata>` XML block — path (relativized
+   * against {@link ComposeOptions.cwd} when given), located elements, and
+   * their cell frontier, all in the text where the image belongs. This
+   * replaced the Option-C `{shot_n}` token + meta-map scheme: the indirection
+   * cost a hint line and a metadata block the agent had to correlate, for
+   * structure nothing downstream actually consumed (`meta` only ever became
+   * text attributes on the rendered channel tag).
    */
   prompt: string;
   /**
@@ -589,12 +590,6 @@ export interface ComposeOptions {
    * and its compose is a preview, not the committed prompt.
    */
   cwd?: string;
-  /**
-   * How screenshots render in the body: an indented `<screenshot>` XML block
-   * (default — Claude-family models attend reliably to tags, and it stays
-   * human-readable), or the plain-text bracket block. See `renderShot` (render.ts).
-   */
-  shotFormat?: "xml" | "text";
   /**
    * Compose a **provisional** text run for each segment that has `transcript
    * -delta`s but no final yet — the words you are still speaking. Off by

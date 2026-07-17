@@ -103,7 +103,7 @@ describe("ink-and-region-shot.json", () => {
     expect(shot?.path).toBeUndefined();
     expect(composed.components.length).toBeGreaterThan(0);
     // No saved file → degraded inline reference, element info kept in the text.
-    expect(composed.prompt).toContain('<screenshot marker="shot_1" missing="image not captured"');
+    expect(composed.prompt).toContain("[screenshot shot_1 located at MISSING]");
     expect(composed.meta).toEqual({});
   });
 });

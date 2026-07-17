@@ -25,7 +25,7 @@ const loweredText =
   "This prompt was sent from the aiui web intent tool running in a web app under development.\n\n" +
   "The source code of the web app in that tab is located at: /proj\n\n" +
   "The user's prompt follows.\n\n---\n\n" +
-  'make this wider <screenshot path=".aiui-cache/traces/trace-42/shot_1.png"/> please';
+  "make this wider [screenshot located at .aiui-cache/traces/trace-42/shot_1.png] please";
 
 /** A rich, completed intent-v1 trace exercising most card types. */
 function fullTrace(over: Partial<LiveTrace> = {}): LiveTrace {
@@ -84,7 +84,7 @@ function fullTrace(over: Partial<LiveTrace> = {}): LiveTrace {
 
 /** The spans over `loweredText` the channel would record — a preamble region
  * and the one screenshot block, located by search so offsets can't drift. */
-const shotBlock = '<screenshot path=".aiui-cache/traces/trace-42/shot_1.png"/>';
+const shotBlock = "[screenshot located at .aiui-cache/traces/trace-42/shot_1.png]";
 const loweredSpans = [
   { kind: "preamble", start: 0, end: loweredText.indexOf("make this wider") },
   {
@@ -137,11 +137,11 @@ describe("TraceView — the prompt hero", () => {
     expect(preamble).toContain("The user's prompt follows.");
     const raw = view.root.querySelector(".aiui-dbg-hero-raw");
     expect(raw?.textContent).toContain("make this wider");
-    // The <screenshot> block is a hover-preview LINK over the raw text — not a
+    // The [screenshot …] reference is a hover-preview LINK over the raw text — not a
     // re-parsed <img>, and not the old regex.
     const shot = view.root.querySelector<HTMLElement>(".aiui-dbg-hero-shot-link");
     expect(shot).toBeTruthy();
-    expect(shot?.textContent).toContain("<screenshot");
+    expect(shot?.textContent).toContain("[screenshot located at");
     // Hovering peeks the image off the stable trace blob route (path from the span).
     shot?.dispatchEvent(new MouseEvent("mouseenter"));
     const peek = view.root.ownerDocument.querySelector<HTMLImageElement>(".aiui-dbg-peek");

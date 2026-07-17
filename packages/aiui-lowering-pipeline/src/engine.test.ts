@@ -222,9 +222,10 @@ describe("composeIntent", () => {
     expect(composed.components[0].component).toBe("Legend");
     // No saved file → the reference degrades but keeps the element info inline.
     expect(composed.prompt).toContain(
-      '<screenshot marker="shot_1" missing="image not captured">\n' +
+      "[screenshot shot_1 located at MISSING]\n" +
+        '<screenshot-metadata marker="shot_1">\n' +
         '  <element name="Legend" source="scenery.ts:33"/>\n' +
-        "</screenshot>",
+        "</screenshot-metadata>",
     );
     expect(composed.meta).toEqual({});
   });
@@ -254,12 +255,13 @@ describe("composeIntent", () => {
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toContain(
       "compare this \n" +
-        '<screenshot path="/tmp/aiui-lab/1-shot_1.png">\n' +
+        "[screenshot located at /tmp/aiui-lab/1-shot_1.png]\n" +
+        '<screenshot-metadata path="/tmp/aiui-lab/1-shot_1.png">\n' +
         '  <element name="Legend" source="scenery.ts:33">\n' +
         '    <cell name="colorScale" source="scenery.ts:41"/>\n' +
         '    <cell name="ticks"/>\n' +
         "  </element>\n" +
-        "</screenshot>\n " +
+        "</screenshot-metadata>\n " +
         "against the mock",
     );
     // Everything is in the text now: no meta block, no token↔meta hint line.
@@ -287,7 +289,7 @@ describe("composeIntent", () => {
     expect(composed.components).toHaveLength(11);
   });
 
-  it("renders the plain-text style on request (shotFormat: text), sources relativized", () => {
+  it("relativizes element and cell sources in the metadata block", () => {
     const engine = armedEngine();
     engine.shotDone(
       { x: 1, y: 2, w: 30, h: 20 },
@@ -302,14 +304,14 @@ describe("composeIntent", () => {
       "data:image/png;base64,x",
       "/repo/app/.aiui-cache/traces/t1/shot_1.png",
     );
-    const composed = composeIntent(engine.events, "replace", {
-      cwd: "/repo/app",
-      shotFormat: "text",
-    });
+    const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
     expect(composed.prompt).toContain(
-      "[screenshot: .aiui-cache/traces/t1/shot_1.png\n" +
-        "  Legend @ src/Legend.tsx:30:2 — cells: colorScale @ src/Legend.tsx:41:8\n" +
-        "]",
+      "[screenshot located at .aiui-cache/traces/t1/shot_1.png]\n" +
+        '<screenshot-metadata path=".aiui-cache/traces/t1/shot_1.png">\n' +
+        '  <element name="Legend" source="src/Legend.tsx:30:2">\n' +
+        '    <cell name="colorScale" source="src/Legend.tsx:41:8"/>\n' +
+        "  </element>\n" +
+        "</screenshot-metadata>",
     );
   });
 
@@ -330,15 +332,16 @@ describe("composeIntent", () => {
     );
 
     const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
-    // Inside cwd → relative; the viewport shot is a single self-closing tag.
+    // Inside cwd → relative; the viewport shot is a bare bracket line.
     expect(composed.prompt).toContain(
-      '<screenshot path=".aiui-cache/traces/t1/shot_1.png" view="full-viewport"/>',
+      "[screenshot located at .aiui-cache/traces/t1/shot_1.png (full viewport)]",
     );
     // Outside cwd → the absolute path is the truth; keep it.
     expect(composed.prompt).toContain(
-      '<screenshot path="/somewhere/else/shot_2.png">\n' +
+      "[screenshot located at /somewhere/else/shot_2.png]\n" +
+        '<screenshot-metadata path="/somewhere/else/shot_2.png">\n' +
         '  <element name="Legend" source="scenery.ts:33"/>\n' +
-        "</screenshot>",
+        "</screenshot-metadata>",
     );
   });
 
@@ -369,21 +372,13 @@ describe("composeIntent", () => {
 
     const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
     expect(composed.prompt).toContain(
-      '<screenshot path=".aiui-cache/traces/t1/shot_1.jpg" capture="on-change" view="full-viewport"/>',
+      "[screenshot located at .aiui-cache/traces/t1/shot_1.jpg (captured on change; full viewport)]",
     );
     expect(composed.prompt).toContain(
-      '<screenshot path=".aiui-cache/traces/t1/shot_2.jpg" capture="continuous" at="5.0s" view="full-viewport"/>',
+      "[screenshot located at .aiui-cache/traces/t1/shot_2.jpg at +5.0s (full viewport)]",
     );
     // The items carry the terms through for the preview/debug viewers.
     expect(composed.items.map((i) => i.share?.mode)).toEqual(["smart", "continuous"]);
-
-    const text = composeIntent(engine.events, "replace", { cwd: "/repo/app", shotFormat: "text" });
-    expect(text.prompt).toContain(
-      "[screenshot: .aiui-cache/traces/t1/shot_1.jpg (captured on change) (full viewport)]",
-    );
-    expect(text.prompt).toContain(
-      "[screenshot: .aiui-cache/traces/t1/shot_2.jpg (continuous capture, +5.0s) (full viewport)]",
-    );
   });
 
   it("excludes retracted shots (shot-drop) from items and prompt", () => {
@@ -410,7 +405,7 @@ describe("composeIntent", () => {
     expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot"]);
     expect(composed.items[1].marker).toBe("shot_2");
     expect(composed.prompt).not.toContain("shot_1");
-    expect(composed.prompt).toContain('<screenshot path="/tmp/aiui-lab/2-shot_2.png"/>');
+    expect(composed.prompt).toContain("[screenshot located at /tmp/aiui-lab/2-shot_2.png]");
     expect(composed.meta).toEqual({});
     // ...but the shot event itself is still in the stream (append-only; traces keep it).
     expect(engine.events.some((e) => e.type === "shot" && e.marker === "shot_1")).toBe(true);
@@ -1195,7 +1190,7 @@ describe("segment-replace (the panel's segment editor)", () => {
 });
 
 describe("pasted images (clipboard pixels, labeled honestly)", () => {
-  it("renders <pasted-image> in xml and '[pasted image' in text — never 'screenshot'", () => {
+  it("renders '[pasted image located at …]' — never 'screenshot'", () => {
     const events: IntentEvent[] = [
       { at: 0, type: "armed", on: true },
       { at: 1, type: "thread-open", trigger: "explicit" },
@@ -1209,14 +1204,10 @@ describe("pasted images (clipboard pixels, labeled honestly)", () => {
         origin: "paste",
       },
     ];
-    const xml = composeIntent(events, "replace", { shotFormat: "xml" });
-    expect(xml.prompt).toContain("<pasted-image");
-    expect(xml.prompt).not.toContain("<screenshot");
-    expect(xml.items[0].origin).toBe("paste");
-
-    const text = composeIntent(events, "replace", { shotFormat: "text" });
-    expect(text.prompt).toContain("[pasted image:");
-    expect(text.prompt).not.toContain("screenshot");
+    const composed = composeIntent(events, "replace");
+    expect(composed.prompt).toContain("[pasted image located at /tmp/paste.png]");
+    expect(composed.prompt).not.toContain("screenshot");
+    expect(composed.items[0].origin).toBe("paste");
   });
 
   it("the engine verb stamps provenance; a capture stays unmarked", () => {

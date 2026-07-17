@@ -56,7 +56,7 @@ export function renderPrompt(
     if (item.kind === "text" && item.text) {
       append(item.text);
     } else if (item.kind === "shot" && item.marker) {
-      const { start, end } = append(renderShot(item, options));
+      const { start, end } = append(renderShot(item, options.cwd));
       rawSpans.push({
         kind: "shot",
         start,
@@ -244,85 +244,59 @@ const MAX_CELLS_IN_PROMPT = 4;
 const MAX_ELEMENTS_IN_PROMPT = 8;
 
 /**
- * One shot, inlined as a block at its position in the prose. Two styles,
- * chosen by {@link ComposeOptions.shotFormat}:
+ * One shot, inlined at its position in the prose. ONE format (the old
+ * xml-vs-text `shotFormat` knob is retired, 2026-07-17 render audit): a
+ * plain-text bracket line names the image, and an XML block carries the
+ * located-element metadata — only when any elements were located:
  *
- * `"xml"` (the default — Claude-family models attend reliably to XML tags,
- * and the indented form stays perfectly readable for a human):
- *
- *   <screenshot path=".aiui-cache/traces/…/shot_1.png">
+ *   [screenshot located at .aiui-cache/traces/…/shot_1.png]
+ *   <screenshot-metadata path=".aiui-cache/traces/…/shot_1.png">
  *     <element name="Legend" source="src/Legend.tsx:30:2">
  *       <cell name="colorScale" source="src/Legend.tsx:41:8"/>
  *       <cell name="ticks"/>
  *     </element>
- *   </screenshot>
- *
- * `"text"` (the plain-prose alternative, same content):
- *
- *   [screenshot: .aiui-cache/traces/…/shot_1.png
- *     Legend @ src/Legend.tsx:30:2 — cells: colorScale @ src/Legend.tsx:41:8, ticks
- *   ]
+ *   </screenshot-metadata>
  *
  * Everything is relativized against `cwd` — the image path *and* every
- * source location. Viewport shots render as a single self-closing tag /
- * one-liner with no element info by design; a `within` anchor (the drag
- * enclosed nothing) is marked so the agent knows it's context, not framing.
+ * source location. The bracket line's variants:
  *
- * A frame sampled by a video share renders as an ordinary screenshot — it *is*
- * one, taken by the sampler instead of by the S key — plus two hints from
- * {@link ShotShare}: `capture="on-change"|"continuous"`, and, for a continuous
- * (machine-gun) share only, `at="N.Ns"`, the frame's offset from that share's
- * first frame. Smart-mode frames are already self-describing: one exists
- * exactly because the user touched the app, and it sits at the moment they did.
+ *  - a pasted image reads `[pasted image located at …]` — mechanically a shot
+ *    (marker space, disk blob, takenAt anchoring), but the model must never
+ *    mistake clipboard content for what was on screen;
+ *  - a missing capture keeps its marker so the reference stays resolvable:
+ *    `[screenshot shot_2 located at MISSING]`;
+ *  - a whole-viewport shot is suffixed `(full viewport)` and carries no
+ *    element metadata by design;
+ *  - a frame sampled by a video share is an ordinary screenshot — taken by
+ *    the sampler instead of the S key — annotated from {@link ShotShare}: a
+ *    continuous (machine-gun) frame dates itself with its offset right at the
+ *    path (`… at +5.0s`); a smart-mode frame reads `(captured on change)` —
+ *    it exists exactly because the user touched the app, and its position in
+ *    the prose already dates it.
  */
-function renderShot(item: ComposedItem, options: ComposeOptions): string {
-  return (options.shotFormat ?? "xml") === "xml"
-    ? renderShotXml(item, options.cwd)
-    : renderShotText(item, options.cwd);
-}
-
-/** Seconds-with-one-decimal, the resolution the cadence slider works in. */
-function formatOffset(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function shareAttrs(share: ShotShare): string[] {
-  const attrs = [`capture="${share.mode === "continuous" ? "continuous" : "on-change"}"`];
-  if (share.mode === "continuous") {
-    attrs.push(`at="${formatOffset(share.offsetMs)}"`);
-  }
-  return attrs;
-}
-
-function shareNote(share: ShotShare): string {
-  return share.mode === "continuous"
-    ? `continuous capture, +${formatOffset(share.offsetMs)}`
-    : "captured on change";
-}
-
-function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
-  // A pasted image is a screenshot in every mechanical respect (marker space,
-  // disk blob, takenAt anchoring) — but the model must never mistake clipboard
-  // content for what was on screen, so it gets its own tag.
-  const tag = item.origin === "paste" ? "pasted-image" : "screenshot";
-  const attrs: string[] = [];
-  if (item.path) {
-    attrs.push(`path="${escapeXml(relativizePath(item.path, cwd))}"`);
-  } else {
-    // No file on disk (capture denied/unavailable) — the reference still helps.
-    attrs.push(`marker="${escapeXml(item.marker ?? "")}"`, `missing="image not captured"`);
-  }
-  if (item.share) {
-    attrs.push(...shareAttrs(item.share));
+function renderShot(item: ComposedItem, cwd: string | undefined): string {
+  const label = item.origin === "paste" ? "pasted image" : "screenshot";
+  const subject = item.path ? label : `${label} ${item.marker}`;
+  const target = item.path ? relativizePath(item.path, cwd) : "MISSING";
+  const at = item.share?.mode === "continuous" ? ` at +${formatOffset(item.share.offsetMs)}` : "";
+  const notes: string[] = [];
+  if (item.share !== undefined && item.share.mode !== "continuous") {
+    notes.push("captured on change");
   }
   if (item.viewport) {
-    attrs.push(`view="full-viewport"`);
-    return `<${tag} ${attrs.join(" ")}/>`;
+    notes.push("full viewport");
   }
+  const note = notes.length > 0 ? ` (${notes.join("; ")})` : "";
+  const head = `[${subject} located at ${target}${at}${note}]`;
   const components = item.components ?? [];
-  if (components.length === 0) {
-    return `<${tag} ${attrs.join(" ")}/>`;
+  if (item.viewport || components.length === 0) {
+    return head;
   }
+  const attrs: string[] = [
+    item.path
+      ? `path="${escapeXml(relativizePath(item.path, cwd))}"`
+      : `marker="${escapeXml(item.marker ?? "")}"`,
+  ];
   if (components.length > MAX_ELEMENTS_IN_PROMPT) {
     attrs.push(`elements-omitted="${components.length - MAX_ELEMENTS_IN_PROMPT}"`);
   }
@@ -347,47 +321,15 @@ function renderShotXml(item: ComposedItem, cwd: string | undefined): string {
     });
     return [`  <element ${el.join(" ")}>`, ...kids, "  </element>"].join("\n");
   });
-  // Multi-line blocks get a blank line's worth of separation from the prose
-  // around them; the single-line forms (viewport, no elements) read fine
-  // inline mid-sentence and stay there.
-  return `\n${[`<${tag} ${attrs.join(" ")}>`, ...lines, `</${tag}>`].join("\n")}\n`;
+  // A shot with metadata is a multi-line unit and gets a blank line's worth of
+  // separation from the prose around it; the bare bracket line reads fine
+  // inline mid-sentence and stays there.
+  return `\n${[head, `<screenshot-metadata ${attrs.join(" ")}>`, ...lines, "</screenshot-metadata>"].join("\n")}\n`;
 }
 
-function renderShotText(item: ComposedItem, cwd: string | undefined): string {
-  const label = item.origin === "paste" ? "pasted image" : "screenshot";
-  const base = item.path
-    ? `[${label}: ${relativizePath(item.path, cwd)}`
-    : `[${label} ${item.marker} — image not captured`;
-  const head = item.share ? `${base} (${shareNote(item.share)})` : base;
-  if (item.viewport) {
-    return `${head} (full viewport)]`;
-  }
-  const components = item.components ?? [];
-  if (components.length === 0) {
-    return `${head}]`;
-  }
-  const omitted = components.length - MAX_ELEMENTS_IN_PROMPT;
-  const refs = components.slice(0, MAX_ELEMENTS_IN_PROMPT).map((c) => {
-    const where = c.source && c.source !== "unknown" ? ` @ ${relativizePath(c.source, cwd)}` : "";
-    const anchor = c.containment === "within" ? "within " : "";
-    let ref = `  ${anchor}${c.component}${where}`;
-    const cells = c.cells ?? [];
-    if (cells.length > 0) {
-      const shown = cells
-        .slice(0, MAX_CELLS_IN_PROMPT)
-        .map((cell) =>
-          cell.source ? `${cell.name} @ ${relativizePath(cell.source, cwd)}` : cell.name,
-        );
-      const more = cells.length - MAX_CELLS_IN_PROMPT;
-      ref += ` — cells: ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`;
-    }
-    return ref;
-  });
-  if (omitted > 0) {
-    refs.push(`  +${omitted} more elements`);
-  }
-  // Same separation rule as the XML form: multi-line blocks stand apart.
-  return `\n${[head, ...refs, "]"].join("\n")}\n`;
+/** Seconds-with-one-decimal, the resolution the cadence slider works in. */
+function formatOffset(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 /**
