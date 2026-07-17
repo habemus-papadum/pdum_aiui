@@ -62,15 +62,13 @@ export function buildProgram(): Command {
     .argument("[args...]", "arguments forwarded to vite")
     .action((args: string[]) => runVite(args));
 
-  // The standalone trace-debugger frontend: the channel serves no HTML, so
-  // this serves the shared debug-ui viewer against a picked running channel
-  // (with an in-page switcher for the rest of the machine's channels).
+  // Open the channel console (its dashboard + the trace debugger) in the
+  // session browser, for a picked running channel.
   program
     .command("debug")
-    .description("open the lowering-trace viewer for a running channel (switchable in-page)")
+    .description("open the channel console (dashboard + trace debugger) in the session browser")
     .option("--mcp <tag>", "target a channel by registry tag (skips the selector)")
-    .option("--port <port>", "UI port for the viewer's dev server (default 4747)")
-    .option("--no-open", "don't open the browser")
+    .option("--no-open", "print the URL but don't open the browser")
     .action((opts: DebugOptions) => runDebug(opts));
 
   // Unlike its siblings, `aiui chrome` is a real subcommand (not a forwarding
@@ -219,8 +217,8 @@ export function buildProgram(): Command {
     .description("the remote pencil — url (where the iPad should connect)");
   pencil
     .command("url")
-    .description("print the URL(s) an iPad should open, per running pencil-enabled channel")
-    .option("--json", "machine-readable targets")
+    .description("pick a channel + interface, print the iPad URL and copy it to the clipboard")
+    .option("--json", "machine-readable targets (every hosting channel, no prompts)")
     .action((opts: { json?: boolean }) => runPencilUrl(opts));
 
   return program;

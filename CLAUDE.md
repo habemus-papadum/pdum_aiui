@@ -26,12 +26,13 @@ transcript) at the center. Three layers:
    original web intent tool), `aiui-extension` (the first browser extension), and the
    `aiui-devtools-extension` panel — are DELETED (`docs/proposals/dev-overlay-retirement.md`;
    read them in git history). Lowering runs are traced to the project-local `.aiui-cache/`
-   (gitignored); the trace debugger (`aiui-trace-ui`) is EMBEDDED in the intent panel and served
-   at `/__aiui/debug` by its `./vite` plugin (what `aiui debug` runs, session-pinned).
-   The channel itself serves **no HTML** — JSON/data routes only (`/debug/api/*`, `/health`);
-   every page belongs to a frontend process. (Two sidecar exceptions: the paint sidecar's
-   self-contained iPad client page at `/paint/` — an iPad has no frontend process — and the
-   intent client's panel page under `/intent/`.)
+   (gitignored); the trace debugger (`aiui-trace-ui`) is EMBEDDED in the intent panel and also
+   reachable at `/__aiui/debug` — a client route of the **console** (`aiui-console`), the channel's
+   own dashboard served at its root (`/` redirects there). `aiui debug` opens that console in the
+   session browser. The channel serves **no HTML of its own** — JSON/data routes only
+   (`/debug/api/*`, `/health`); every page belongs to a sidecar frontend. (The page-serving
+   sidecars: the console at `/` + `/__aiui`; the paint sidecar's self-contained iPad client at
+   `/paint/`; the intent client's panel under `/intent/`; the pencil client at `/pencil/`.)
 3. **Frontend for agents** — principles/utilities/Claude skills for agent-written scientific UI:
    SolidJS 2.0 (beta), Observable-style async dataflow in mainstream syntax, code debuggable by
    the agent's future self (source locators, self-installed debug hooks, HMR-mindful,

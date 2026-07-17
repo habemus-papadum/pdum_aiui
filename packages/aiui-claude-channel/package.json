@@ -42,6 +42,7 @@
     "render-audit": "tsx render-audit.mts"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-console": "workspace:^",
     "@habemus-papadum/aiui-intent-client": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",

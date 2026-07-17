@@ -57,10 +57,10 @@ flowchart TB
 Each running server advertises itself in a small on-disk registry
 (`~/.cache/aiui/mcp/<pid>.json`): a stable `tag`, its `pid`, the `ppid` of the Claude Code
 session that owns it, the web backend `port`, and the launch `cwd`. Entries are removed on exit
-and pruned when stale. This is how `aiui vite` finds the right server for a project (exporting
-the port to the dev server as `VITE_AIUI_PORT`), how the `aiui()` plugin seeds the source root into
-pages (`window.__AIUI__.port`), and how CLI helpers like `aiui-claude-channel quick` pick a
-server to push a test prompt into.
+and pruned when stale. This is how the standalone intent panel's dev launcher and `aiui debug`
+pick a channel to attach to (exporting its port to Vite as `VITE_AIUI_PORT`), how the `aiui()`
+plugin seeds the source root into pages (`window.__AIUI__.sourceRoot`), and how CLI helpers like
+`aiui-claude-channel quick` pick a server to push a test prompt into.
 
 ## The surfaces
 
@@ -71,7 +71,8 @@ server to push a test prompt into.
 | `/session` | JSON frames | The **session bus**: external views contribute to the running turn (today: the [VS Code extension](./vscode)'s code selections, over the bus's HTTP surface). |
 | `POST /prompt` | JSON | Push plain text into the session — the simplest integration and the end-to-end smoke test. |
 | `GET /health` | JSON | Liveness, plus page-tools and session summaries; served with a permissive CORS header so pages can probe capability before dialing a websocket. |
-| `/debug/api/*` | JSON + blobs | The lowering-trace **API** (the channel serves no HTML — viewers are frontend processes: the intent panel's embedded pane, and `aiui debug`). `/debug/api/channels` lists the machine's registry so a viewer can switch channels; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
+| `/debug/api/*` | JSON + blobs | The lowering-trace **API**. `/debug/api/channels` lists the machine's registry so a viewer can switch channels; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
+| `GET /` → `/__aiui` | HTML | The **console** — the channel's own dashboard (channel + launch + connected-Chrome info, and links to the pencil client, the standalone panel, and the trace debugger at `/__aiui/debug`). Served by the `aiui-console` sidecar; the channel serves no HTML of its own. `aiui debug` opens it in the session browser. |
 
 ## Lowering, traces, and what reaches the session
 

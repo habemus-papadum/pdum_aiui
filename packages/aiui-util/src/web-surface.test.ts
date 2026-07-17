@@ -7,9 +7,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import { serveClientSurface } from "./web-surface";
 
 /** Mount a prod static surface over a temp dist dir and return its base URL. */
-async function mount(distDir: string, prefix = "/x"): Promise<{ url: string; server: Server }> {
+async function mount(
+  distDir: string,
+  prefix = "/x",
+  appType?: "mpa" | "spa",
+): Promise<{ url: string; server: Server }> {
   const app = express();
-  await serveClientSurface(app, { mode: "prod", prefix, distDir, notBuiltHint: "pnpm build:me" });
+  await serveClientSurface(app, {
+    mode: "prod",
+    prefix,
+    distDir,
+    notBuiltHint: "pnpm build:me",
+    ...(appType ? { appType } : {}),
+  });
   app.use((_req, res) => res.status(404).end("fell through"));
   const server = createServer(app);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -75,6 +85,24 @@ describe("serveClientSurface (prod static)", () => {
     const res = await fetch(`${base}/health`);
     expect(res.status).toBe(404);
     expect(await res.text()).toBe("fell through");
+  });
+
+  it("appType spa serves index.html for a client ROUTE, but not an unknown asset", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aiui-surface-"));
+    writeFileSync(join(dir, "index.html"), "<!doctype html><title>app</title>");
+    ({ server } = await mount(dir, "/x", "spa"));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+
+    // A route with no file extension (e.g. `/__aiui/debug`) → the app's shell.
+    const route = await fetch(`${base}/x/debug`);
+    expect(route.status).toBe(200);
+    expect(await route.text()).toContain("<title>app</title>");
+
+    // A missing asset (has an extension) still falls through — it may be a
+    // sibling's, and swallowing it would mask a real 404.
+    const asset = await fetch(`${base}/x/missing.js`);
+    expect(asset.status).toBe(404);
+    expect(await asset.text()).toBe("fell through");
   });
 });
 

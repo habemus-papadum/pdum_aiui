@@ -23,6 +23,7 @@
  * spins up a Vite dev server or a CDP bridge unless a real launch asks for it.
  */
 
+import { consoleSidecar } from "@habemus-papadum/aiui-console/sidecar";
 import { intentSidecar } from "@habemus-papadum/aiui-intent-client/sidecar";
 import { pencilSidecar } from "@habemus-papadum/aiui-pencil/sidecar";
 import { barSidecar } from "@habemus-papadum/aiui-remote-bar/sidecar";
@@ -36,5 +37,7 @@ import type { Sidecar } from "./sidecar";
  * `startWebServer` (logged and skipped, never fatal).
  */
 export function standardSidecars(root: string): Sidecar[] {
-  return [intentSidecar({ root }), barSidecar({ root }), pencilSidecar({ root })];
+  // The console mounts LAST and adds the channel's own `GET /` → dashboard
+  // redirect; every path-scoped sibling above it wins its own routes first.
+  return [intentSidecar({ root }), barSidecar({ root }), pencilSidecar({ root }), consoleSidecar()];
 }

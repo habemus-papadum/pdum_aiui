@@ -88,10 +88,9 @@ another machine, browser on yours) is its own short guide: [Remote Development](
 aiui vite dev
 ```
 
-`aiui vite` finds the running channel server (one running → auto-selected; several → an
-interactive picker; or pin one with `--aiui-mcp <tag>`) and launches Vite with
-**`VITE_AIUI_PORT`** set to the channel's port. That env var is how the intent-tool plugin
-(next step) finds the channel.
+`aiui vite` is a thin wrapper: it launches Vite, then opens your app in the session browser. It
+does **not** wire the app to a channel — that is the intent client's job (step 3), so plain
+`vite dev` serves the app just as well; the wrapper only adds the browser step.
 
 When Vite prints your app's URL, aiui opens it **in the session browser** for you — not your
 default browser — so you and the agent are on the same page (literally). `--aiui-no-browser`
@@ -148,8 +147,9 @@ renders it.
 
 Every submission records a **lowering trace** — the inputs as they arrived, any intermediate
 representations, and the final prompt. The intent panel embeds the trace debugger (the *traces*
-disclosure); `aiui debug` opens the same viewer standalone at `/__aiui/debug`, with an in-page
-switcher across every running channel:
+disclosure); `aiui debug` opens the channel **console** in the session browser — its dashboard
+links to the same viewer at `/__aiui/debug`, which carries an in-page switcher across every
+running channel:
 
 ![The lowering debugger showing a trace's input and output stages](/lowering-debugger.png)
 

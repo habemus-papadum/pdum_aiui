@@ -185,6 +185,27 @@ function serveProd(
   }
   const root = resolve(options.distDir);
   const { prefix } = options;
+  const spa = options.appType === "spa";
+
+  const notBuilt = (res: ServerResponse): void => {
+    res.statusCode = 503;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end(
+      `The ${prefix} client has not been built.\n\n` +
+        (options.notBuiltHint ? `  ${options.notBuiltHint}\n\n` : "") +
+        `(serving from ${root})\n`,
+    );
+  };
+
+  const sendFile = (res: ServerResponse, file: string): void => {
+    const dot = file.lastIndexOf(".");
+    const type = dot >= 0 ? MIME[file.slice(dot)] : undefined;
+    res.statusCode = 200;
+    if (type) {
+      res.setHeader("Content-Type", type);
+    }
+    res.end(readFileSync(file));
+  };
 
   // Hand-rolled rather than `express.static`: the helper receives an Express app
   // but must not import Express at runtime (it would resolve a second copy
@@ -216,24 +237,25 @@ function serveProd(
     }
     if (!existsSync(file) || !statSync(file).isFile()) {
       if (rel === "/index.html") {
-        res.statusCode = 503;
-        res.setHeader("Content-Type", "text/plain; charset=utf-8");
-        res.end(
-          `The ${prefix} client has not been built.\n\n` +
-            (options.notBuiltHint ? `  ${options.notBuiltHint}\n\n` : "") +
-            `(serving from ${root})\n`,
-        );
+        notBuilt(res);
+        return true;
+      }
+      // SPA fallback: a client ROUTE (a path with no file extension, e.g.
+      // `/__aiui/debug`) has no file of its own — serve the app's index.html
+      // and let the client router take it. Asset paths (with an extension)
+      // keep falling through: an unknown `.js` may belong to a sibling.
+      if (spa && !rel.slice(rel.lastIndexOf("/") + 1).includes(".")) {
+        const index = resolve(join(root, "index.html"));
+        if (existsSync(index)) {
+          sendFile(res, index);
+        } else {
+          notBuilt(res);
+        }
         return true;
       }
       return false; // an unknown asset path may belong to someone else
     }
-    const dot = file.lastIndexOf(".");
-    const type = dot >= 0 ? MIME[file.slice(dot)] : undefined;
-    res.statusCode = 200;
-    if (type) {
-      res.setHeader("Content-Type", type);
-    }
-    res.end(readFileSync(file));
+    sendFile(res, file);
     return true;
   };
 

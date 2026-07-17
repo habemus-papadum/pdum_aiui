@@ -1,5 +1,3 @@
-import type { RunningServer } from "@habemus-papadum/aiui-claude-channel";
-import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel";
 import {
   decideBrowserAction,
   discoverSessionBrowser,
@@ -17,62 +15,20 @@ import { startSessionBrowser } from "./browser";
 
 const VITE_PKG = "vite";
 
-// The environment variable that tells the Vite dev server which channel
-// server's web backend to talk to. Consumers read it via Vite's
-// `import.meta.env` (e.g. the intent client's channel-port resolution,
-// aiui-intent-client/src/session.ts, and app source that wants the port).
-// That substitution happens when a bundler compiles the file, so it can NOT
-// be read from inside a prebuilt dist bundle — only from source-compiled
-// code (the reason the old dev-overlay integration rode a Vite plugin).
-const VITE_PORT_ENV = "VITE_AIUI_PORT";
-
-/** The channel server `runVite` should point Vite at, or why it couldn't. */
-export interface ChannelTarget {
-  /** The server resolved without prompting (by tag). */
-  server?: RunningServer;
-  /** Servers to offer in the interactive selector (no tag given, ≥1 running). */
-  select?: RunningServer[];
-  /** A human-readable reason a requested server couldn't be resolved. */
-  error?: string;
-}
-
-/**
- * Decide which running channel server Vite should connect to.
- *
- * Pure so it can be unit-tested without spawning anything:
- *  - With a `targetTag`, return the server whose `tag` matches exactly; if none
- *    matches, return an `error` naming the tag and the tags that *are* running.
- *  - Without a `targetTag`, don't guess: return `{}` when nothing is running, or
- *    `{ select }` so the caller runs the same selector as `quick` (which
- *    auto-picks a lone server and prompts when there are several).
- */
-export function resolveChannelTarget(
-  servers: RunningServer[],
-  targetTag: string | undefined,
-): ChannelTarget {
-  if (targetTag !== undefined) {
-    const server = servers.find((s) => s.tag === targetTag);
-    if (!server) {
-      const running = servers.length > 0 ? servers.map((s) => s.tag).join(", ") : "(none running)";
-      return {
-        error: `no running aiui channel with tag "${targetTag}" — running tags: ${running}`,
-      };
-    }
-    return { server };
-  }
-  return servers.length > 0 ? { select: servers } : {};
-}
+// NOTE: `aiui vite` no longer wires the app to a channel (owner, 2026-07-17).
+// The build-time `VITE_AIUI_PORT` injection existed for the dev-overlay era,
+// when a component injected into the app connected to the channel by port.
+// That component is gone: an app reaches the channel through the intent client
+// served at `/intent/` (same origin, no build-time port). So this command is
+// now purely "run Vite, then open the app in the session browser". The one
+// surface that still needs a build-time port — the standalone intent panel,
+// served on Vite's OWN origin — wires it itself in aiui-intent-client's
+// `scripts/dev.ts`, and `aiui debug` resolves a channel through
+// `util/channel-target.ts`.
 
 /**
  * Launch Vite, forwarding any extra args (e.g. `aiui vite dev`,
  * `aiui vite --port 3000`, `aiui vite --version`).
- *
- * Before launching, resolve which running aiui channel server the dev server
- * should talk to — either the one named by `--aiui-mcp <tag>` (or `--aiui-tag`),
- * or, with no tag, the one you pick from the same selector `quick` uses (which
- * auto-selects when only one is running) — and inject its port as
- * {@link VITE_PORT_ENV} so the app can reach it. When a specific tag was asked
- * for but isn't running, we fail loudly instead of connecting to the wrong one.
  *
  * Unlike `claude` — an external tool we look up on the PATH — Vite is a declared
  * dependency of this package, so we resolve it straight out of node_modules and
@@ -93,8 +49,7 @@ export async function runVite(rawArgs: string[] = []): Promise<void> {
   const aiuiArgs = splitAiuiArgs(rawArgs);
   const { mcp, tag, passthrough } = aiuiArgs;
 
-  // `--help` / `--version` are inert: aiui's own answer, then Vite's — with no
-  // channel discovery (which could otherwise block on an interactive picker).
+  // `--help` / `--version` are inert: aiui's own answer, then Vite's.
   const info = infoFlag(passthrough);
   if (info) {
     if (info === "help") {
@@ -106,31 +61,16 @@ export async function runVite(rawArgs: string[] = []): Promise<void> {
     return;
   }
 
-  // `--aiui-mcp` is the purpose-built selector; `--aiui-tag` is accepted too.
-  const targetTag = mcp ?? tag;
-
-  const target = resolveChannelTarget(listMcpServers(), targetTag);
-  if (target.error) {
-    printError("Could not resolve an aiui channel", target.error);
-    process.exitCode = 1;
-    return;
-  }
-
-  // A tag resolves directly; otherwise the selector (shared with `quick`) picks
-  // — returning the lone server without prompting, or asking when there's more
-  // than one.
-  const server = target.select ? await selectMcpServer(target.select) : target.server;
-
-  let port: string | undefined;
-  if (server) {
-    port = String(server.port);
-    console.error(
-      chalk.dim(
-        `aiui: connecting vite to channel "${server.tag}" (${server.cwd}) on port ${port} via ${VITE_PORT_ENV}`,
-      ),
+  // A stray `--aiui-mcp`/`--aiui-tag` from muscle memory or an old script: the
+  // channel wiring is gone (see the header), so it can only mislead. Say so
+  // rather than accept it silently.
+  if (mcp !== undefined || tag !== undefined) {
+    printWarning(
+      "aiui vite no longer connects the app to a channel",
+      "--aiui-mcp / --aiui-tag are ignored. The app reaches the channel through the intent " +
+        "client served at /intent/, not a build-time port. (The standalone panel's own `pnpm dev` " +
+        "still selects a channel — that page is served on Vite's origin, not the channel's.)",
     );
-  } else {
-    console.error(chalk.dim(`aiui: no running channel found — ${VITE_PORT_ENV} left unset`));
   }
 
   const vite = resolveVite();
@@ -140,9 +80,6 @@ export async function runVite(rawArgs: string[] = []): Promise<void> {
 
   // execa merges `env` over process.env, so we only add entries deliberately.
   const env: NodeJS.ProcessEnv = {};
-  if (port) {
-    env[VITE_PORT_ENV] = port;
-  }
   // Piping stdout (below) makes Vite see a non-TTY and drop its colors. When
   // *our* stdout is a real terminal the tee lands there verbatim, so tell the
   // child to keep coloring — unless the user already voted (FORCE_COLOR /
@@ -270,7 +207,7 @@ type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
  * owns stdin — so the Chrome for Testing sync never prompts here; it just
  * uses whatever browser is already available.
  */
-async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> {
+export async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> {
   try {
     // `--aiui-browser-url` beats a configured chrome.browserUrl for this run,
     // the same precedence `aiui claude` gives it.
@@ -349,21 +286,22 @@ async function forwardToVite(args: string[]): Promise<void> {
 
 /** The aiui half of `aiui vite --help` (vite's own --help follows it). */
 function printViteWrapperHelp(): void {
-  console.log(`aiui vite — launch Vite connected to the running aiui channel
+  console.log(`aiui vite — launch Vite and open the app in the session browser
 
 aiui's own flags (everything else forwards to vite verbatim):
-  --aiui-mcp <tag>               connect to the channel server with this tag
-  --aiui-tag <tag>               accepted alias for --aiui-mcp
   --aiui-browser                 open the app in the session browser even when
                                  the environment looks headless (CI, SSH, no display)
   --aiui-no-browser              never open a browser for this run
   --aiui-chrome-profile <name>   browser profile at .aiui-cache/chrome/<name>
   --aiui-chrome-data-dir <path>  explicit browser user data dir
 
-The chosen channel's port is exported as VITE_AIUI_PORT; the aiuiDevOverlay()
-Vite plugin picks it up there and wires the intent tool to it. When Vite prints
-its Local: URL, aiui opens it in the shared session browser (the one \`aiui
-claude\` and \`aiui open\` use); in headless environments it prints the URL to
-open on your own machine instead. What follows is vite's own --help:
+When Vite prints its Local: URL, aiui opens it in the shared session browser
+(the one \`aiui claude\` and \`aiui open\` use); in headless environments it
+prints the URL to open on your own machine instead.
+
+The app reaches the aiui channel through the intent client served at /intent/,
+not through this command — so there is no channel to pick here. (The standalone
+intent panel, served on Vite's own origin, is the exception: its \`pnpm dev\`
+selects a channel itself.) What follows is vite's own --help:
 `);
 }

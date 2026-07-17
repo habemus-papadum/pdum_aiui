@@ -46,7 +46,7 @@ npm install -D @habemus-papadum/aiui @habemus-papadum/aiui-source-processor
 ```
 
 - **`@habemus-papadum/aiui`** — the CLI: `aiui claude` (session + channel + session browser)
-  and `aiui vite` (your dev server, wired to the channel).
+  and `aiui vite` (your dev server, opened in the session browser).
 - **`@habemus-papadum/aiui-source-processor`** — the Vite plugin (the locator pass). One line in
   `vite.config.ts`:
 

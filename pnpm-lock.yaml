@@ -287,6 +287,9 @@ importers:
 
   packages/aiui-claude-channel:
     dependencies:
+      '@habemus-papadum/aiui-console':
+        specifier: workspace:^
+        version: link:../aiui-console
       '@habemus-papadum/aiui-intent-client':
         specifier: workspace:^
         version: link:../aiui-intent-client
@@ -333,6 +336,40 @@ importers:
       commander:
         specifier: ^15.0.0
         version: 15.0.0
+
+  packages/aiui-console:
+    dependencies:
+      '@habemus-papadum/aiui-trace-ui':
+        specifier: workspace:^
+        version: link:../aiui-trace-ui
+      '@habemus-papadum/aiui-util':
+        specifier: workspace:^
+        version: link:../aiui-util
+      '@solidjs/web':
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
+      solid-js:
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15
+    devDependencies:
+      '@habemus-papadum/aiui-claude-channel':
+        specifier: workspace:^
+        version: link:../aiui-claude-channel
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.6
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      jsdom:
+        specifier: ^29.0.0
+        version: 29.1.1
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+      vite-plugin-solid:
+        specifier: 3.0.0-next.5
+        version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-intent-client:
     dependencies:
