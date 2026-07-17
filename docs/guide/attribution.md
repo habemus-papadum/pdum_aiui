@@ -136,7 +136,9 @@ inlines each shot at its position in the prose:
 ```
 
 The image reference is a plain-text bracket line; the XML block carries the located-element
-metadata and appears only when elements were located. Every path — the image and each source —
+metadata and appears only when elements were located. (Every render path — shots, selections,
+boundaries, the preamble — is cataloged with real outputs in the
+[Prompt Rendering Reference](./prompt-rendering).) Every path — the image and each source —
 is relativized against the agent's working directory. Two render-time caps keep a big drag from
 flooding the prompt while the structured record stays complete: at most **8 elements** per shot
 (`elements-omitted="N"` says what was dropped) and at most **4 cells** per element

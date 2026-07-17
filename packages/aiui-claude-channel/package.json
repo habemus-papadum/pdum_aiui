@@ -38,7 +38,8 @@
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "render-audit": "tsx render-audit.mts"
   },
   "dependencies": {
     "@habemus-papadum/aiui-intent-client": "workspace:^",
