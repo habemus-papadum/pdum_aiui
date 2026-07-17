@@ -206,6 +206,7 @@ function main() {
           { text: "Installation", link: "/guide/installation" },
           { text: "Prompt Linting", link: "/guide/prompt-linting" },
           { text: "VS Code Integration", link: "/guide/vscode" },
+          { text: "The Browser Extension", link: "/guide/browser-extension" },
           { text: "Configuration", link: "/guide/config" },
           { text: "⚠️ Read Before Running", link: "/guide/warning" },
         ],
