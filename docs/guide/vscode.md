@@ -32,7 +32,21 @@ Staleness is handled: a channel reload hands the tab a new client id, and sends 
 re-bind to the same tab (by id, then URL, then "it's the only tab") — you only hear about it
 when the tab or channel is genuinely gone.
 
-### Install
+### Install a release build
+
+You don't need the repo to use the extension. Every
+[GitHub release](https://github.com/habemus-papadum/pdum_aiui/releases/latest) attaches a packaged
+`aiui-vscode.vsix`. Download it, then install with either:
+
+```sh
+code --install-extension aiui-vscode.vsix
+```
+
+or from the UI: the **Extensions** view → the `⋯` menu → **Install from VSIX…** → pick the file.
+Reload the window afterward. The extension is not on the VS Code Marketplace or Open VSX yet, so the
+`.vsix` is the install path for now.
+
+### Install from source (development)
 
 From the repo root, either flavor, then reload the VS Code window:
 
@@ -41,8 +55,8 @@ pnpm vscode:install   # pack the .vsix and `code --install-extension` it
 pnpm vscode:link      # symlink the staged extension (live-dev: rebuild + reload)
 ```
 
-The extension is not on the marketplace (yet); the npm package ships the underlying library
-(channel discovery, the session HTTP client, the contribution builder) for other editor tools.
+The npm package (`@habemus-papadum/aiui-vscode`) ships the underlying library (channel discovery,
+the session HTTP client, the contribution builder) for other editor tools.
 
 ### Remote windows (SSH / WSL / containers)
 
