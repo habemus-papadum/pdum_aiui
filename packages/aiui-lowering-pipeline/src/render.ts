@@ -29,8 +29,9 @@ import type {
  *
  * Spans are produced HERE because this is the one place that knows every part's
  * rendered text and its offset. Offsets are derived from the assembled string
- * (a running cursor over the `join(" ")`, then shifted by the leading trim) so
- * the final `.trim()` can never desync them.
+ * (a running cursor that folds in each part's separator — a single space
+ * between inline runs, one blank line around a multi-line block — then shifted
+ * by the leading trim) so the final `.trim()` can never desync them.
  */
 export function renderPrompt(
   items: ComposedItem[],
@@ -47,15 +48,28 @@ export function renderPrompt(
 
   const parts: string[] = [];
   const rawSpans: PromptSpan[] = [];
-  let cursor = 0; // offset of the next part's start in parts.join(" ")
-  /** Append a rendered part, returning the [start, end) it occupies pre-trim. */
-  const append = (text: string): { start: number; end: number } => {
-    if (parts.length > 0) {
-      cursor += 1; // the single space the join inserts before this part
+  let cursor = 0; // offset of the next part's start in parts.join("")
+  let started = false;
+  let prevBlock = false;
+  /**
+   * Append a rendered part, returning the [start, end) it occupies pre-trim.
+   * A multi-line **block** (shot metadata, an attributed selection, a boundary
+   * carrying a `<tab>` record) is set off from its neighbours by one blank
+   * line; inline runs are joined by a single space. The chosen separator's
+   * length is folded into `cursor` right here, so spans stay exact under the
+   * final trim (the boundary logic can never desync them).
+   */
+  const append = (text: string, block = text.includes("\n")): { start: number; end: number } => {
+    if (started) {
+      const sep = prevBlock || block ? "\n\n" : " ";
+      parts.push(sep);
+      cursor += sep.length;
     }
     const start = cursor;
     parts.push(text);
     cursor += text.length;
+    started = true;
+    prevBlock = block;
     return { start, end: cursor };
   };
 
@@ -103,7 +117,9 @@ export function renderPrompt(
         ...(item.tab !== undefined ? { tab: item.tab } : {}),
       });
     } else if (item.kind === "navigation") {
-      const { start, end } = append(renderNavigation(item));
+      // A boundary carrying a full record is a block (its own line, blank-line
+      // set off); a bare `[current page changed: /path]` reads fine inline.
+      const { start, end } = append(renderNavigation(item), item.tab !== undefined);
       rawSpans.push({
         kind: "navigation",
         start,
@@ -113,7 +129,8 @@ export function renderPrompt(
         ...(item.tab !== undefined ? { tab: item.tab } : {}),
       });
     } else if (item.kind === "tab-switch") {
-      const { start, end } = append(renderTabSwitch(item));
+      const hasRecord = item.tab !== undefined || item.toTab !== undefined;
+      const { start, end } = append(renderTabSwitch(item), hasRecord);
       rawSpans.push({
         kind: "tab-switch",
         start,
@@ -131,7 +148,7 @@ export function renderPrompt(
     }
   }
 
-  const raw = parts.join(" ");
+  const raw = parts.join("");
   const leading = raw.length - raw.trimStart().length;
   const prompt = raw.trim();
   const clamp = (n: number): number => Math.max(0, Math.min(prompt.length, n - leading));
@@ -283,12 +300,12 @@ export function renderCodeSelection(
   );
   if (text.trim().length <= SHORT_SELECTION_CHARS) {
     const head = `[code selection at ${loc}: \`${text.trim()}\`]`;
-    return meta === undefined ? head : `\n${head}\n${meta}\n`;
+    return meta === undefined ? head : `${head}\n${meta}`;
   }
   const n = item.lines ?? text.split("\n").length;
   const head = `[code selection at ${loc} (${n} ${n === 1 ? "line" : "lines"})]:`;
   const fence = `\`\`\`\n${elideLines(text)}\n\`\`\``;
-  return `\n${[head, fence, ...(meta !== undefined ? [meta] : [])].join("\n")}\n`;
+  return [head, fence, ...(meta !== undefined ? [meta] : [])].join("\n");
 }
 
 /**
@@ -329,34 +346,35 @@ function pageLabel(url: string | undefined): string {
 /**
  * The navigation boundary, lowered in the CURRENT-TAB model (2026-07-17
  * audit): the marker names only where the user IS now — the agent tracks the
- * current tab as it reads, so the prior page needs no restating. When the
- * event carried a full {@link TabRecord} for the destination, it follows as
- * the canonical `<tab>` element with everything the client knew.
+ * current tab as it reads, so the prior page needs no restating. The
+ * destination's {@link TabRecord} rides INLINE in the marker
+ * (`[current page changed: <tab …/>]`, the format `renderTabSwitch` and the
+ * preamble's `[current tab: …]` share); a bare page label is the fallback when
+ * no record was gathered.
  */
 export function renderNavigation(item: Pick<ComposedItem, "to" | "tab">): string {
-  const head = `[page navigation: ${pageLabel(item.to)}]`;
   if (item.tab === undefined) {
-    return head;
+    return `[current page changed: ${pageLabel(item.to)}]`;
   }
-  return `\n${head}\n${renderTabRecord(item.tab)}\n`;
+  return `[current page changed: ${renderTabRecord(item.tab)}]`;
 }
 
 /**
  * The tab boundary, lowered — distinct from a same-tab navigation: the user
- * turned to a different TAB. Same current-tab model as
- * {@link renderNavigation}; when no full record rides the event, the driver's
- * tab handle (the one thing tab-switch events always tried to carry) still
- * yields a minimal `<tab>` record.
+ * turned to a different TAB. Same current-tab model and inline-record format as
+ * {@link renderNavigation} (`[current tab changed: <tab …/>]`); when no full
+ * record rides the event, the driver's tab handle (the one thing tab-switch
+ * events always tried to carry) still yields a minimal `<tab>` record, and a
+ * bare page label is the last resort.
  */
 export function renderTabSwitch(item: Pick<ComposedItem, "to" | "toTab" | "tab">): string {
-  const head = `[tab switch: ${pageLabel(item.to)}]`;
   const tab =
     item.tab ??
     (item.toTab !== undefined ? { url: item.to ?? "", driverTab: item.toTab } : undefined);
   if (tab === undefined) {
-    return head;
+    return `[current tab changed: ${pageLabel(item.to)}]`;
   }
-  return `\n${head}\n${renderTabRecord(tab)}\n`;
+  return `[current tab changed: ${renderTabRecord(tab)}]`;
 }
 
 export function renderAppSelection(
@@ -367,12 +385,12 @@ export function renderAppSelection(
   const meta = selectionMetadata(item, cwd);
   if (text.length <= SHORT_SELECTION_CHARS) {
     const head = `[selected text: "${text}"]`;
-    return meta === undefined ? head : `\n${head}\n${meta}\n`;
+    return meta === undefined ? head : `${head}\n${meta}`;
   }
   const n = text.split("\n").length;
   const head = `[selected text (${n} ${n === 1 ? "line" : "lines"})]:`;
   const fence = `\`\`\`\n${elideLines(text)}\n\`\`\``;
-  return `\n${[head, fence, ...(meta !== undefined ? [meta] : [])].join("\n")}\n`;
+  return [head, fence, ...(meta !== undefined ? [meta] : [])].join("\n");
 }
 
 // ── shot rendering (the inline block) ────────────────────────────────────────
@@ -433,7 +451,7 @@ function renderShot(item: ComposedItem, cwd: string | undefined): string {
   }
   const note = notes.length > 0 ? ` (${notes.join("; ")})` : "";
   const head = `[${subject} located at ${target}${at}${note}]`;
-  const components = item.components ?? [];
+  const components = collapseDuplicates(item.components ?? []);
   if (item.viewport || components.length === 0) {
     return head;
   }
@@ -449,6 +467,9 @@ function renderShot(item: ComposedItem, cwd: string | undefined): string {
     const el: string[] = [`name="${escapeXml(c.component)}"`];
     if (c.source && c.source !== "unknown") {
       el.push(`source="${escapeXml(relativizePath(c.source, cwd))}"`);
+    }
+    if (c.count > 1) {
+      el.push(`count="${c.count}"`);
     }
     if (c.containment === "within") {
       el.push(`containment="within"`);
@@ -466,10 +487,50 @@ function renderShot(item: ComposedItem, cwd: string | undefined): string {
     });
     return [`  <element ${el.join(" ")}>`, ...kids, "  </element>"].join("\n");
   });
-  // A shot with metadata is a multi-line unit and gets a blank line's worth of
-  // separation from the prose around it; the bare bracket line reads fine
-  // inline mid-sentence and stays there.
-  return `\n${[head, `<screenshot-metadata ${attrs.join(" ")}>`, ...lines, "</screenshot-metadata>"].join("\n")}\n`;
+  // A shot with metadata is a multi-line block; `renderPrompt` sets it off from
+  // the surrounding prose with a blank line. The bare bracket line (a viewport
+  // shot, or one that framed nothing) reads fine inline mid-sentence.
+  return [
+    head,
+    `<screenshot-metadata ${attrs.join(" ")}>`,
+    ...lines,
+    "</screenshot-metadata>",
+  ].join("\n");
+}
+
+/** A shot element with its collapse count, as {@link collapseDuplicates} yields it. */
+type CountedElement = NonNullable<ComposedItem["components"]>[number] & { count: number };
+
+/**
+ * Collapse located elements that resolve to the SAME identity — one JSX
+ * expression instantiated N times. Two host elements carry an identical
+ * `source` stamp only when they are the same `file:line:col` rendered
+ * repeatedly (a `<For>`/`.map()` over marks: every histogram bar shares its
+ * `<rect>`'s stamp), so N identical `<element>` lines are an inventory of a
+ * single reference point, not N references. Keep the first occurrence in
+ * document order (its cell frontier stands for the run) and carry the count;
+ * a >1 count renders as `count="N"`. Identity is the `source` stamp when
+ * present, else the resolved `component` name, so unstamped bare-tag repeats
+ * (`name="div"` × N — the noise the naming ladder already fights) collapse too.
+ *
+ * Render-time only, per the defer-rendering rule: the located record keeps
+ * every element (each with its own rect); the prompt view is what collapses.
+ */
+function collapseDuplicates(components: NonNullable<ComposedItem["components"]>): CountedElement[] {
+  const out: CountedElement[] = [];
+  const byIdentity = new Map<string, CountedElement>();
+  for (const c of components) {
+    const key = c.source && c.source !== "unknown" ? `src ${c.source}` : `name ${c.component}`;
+    const existing = byIdentity.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      const entry: CountedElement = { ...c, count: 1 };
+      byIdentity.set(key, entry);
+      out.push(entry);
+    }
+  }
+  return out;
 }
 
 /** Seconds-with-one-decimal, the resolution the cadence slider works in. */

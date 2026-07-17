@@ -245,7 +245,140 @@ Rendered:
 </screenshot-metadata>
 ````
 
-### 6. Missing image (capture denied/unavailable)
+### 6. Duplicate elements collapse (a `<For>` over marks shares one source stamp)
+
+Trigger: 27 elements at the SAME source loc — the histogram-bar case (every `<rect>` carries its JSX stamp). They collapse to one line with `count`; identical entries are an inventory of one reference point, not 27 references.
+
+Input:
+
+````json
+{
+  "kind": "shot",
+  "marker": "shot_1",
+  "path": "/repo/app/.aiui-cache/traces/t1/shot_1.png",
+  "components": [
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    },
+    {
+      "component": "DensityChart",
+      "source": "/repo/app/src/ui/DensityChart.tsx:62:23"
+    }
+  ]
+}
+````
+
+Rendered:
+
+````text
+[screenshot located at .aiui-cache/traces/t1/shot_1.png]
+<screenshot-metadata path=".aiui-cache/traces/t1/shot_1.png">
+  <element name="DensityChart" source="src/ui/DensityChart.tsx:62:23" count="27"/>
+</screenshot-metadata>
+````
+
+### 7. Missing image (capture denied/unavailable)
 
 Trigger: no `path`. The marker keeps the reference alive.
 
@@ -265,7 +398,7 @@ Rendered:
 [screenshot shot_2 located at MISSING]
 ````
 
-### 7. Pasted image (clipboard, not screen)
+### 8. Pasted image (clipboard, not screen)
 
 Trigger: `origin: "paste"` — its own tag so the model can't mistake clipboard for screen.
 
@@ -287,7 +420,7 @@ Rendered:
 [pasted image located at .aiui-cache/traces/t1/shot_1.png]
 ````
 
-### 8. Video-share frame, smart mode (captured on change)
+### 9. Video-share frame, smart mode (captured on change)
 
 Trigger: `share.mode: "smart"`.
 
@@ -313,7 +446,7 @@ Rendered:
 [screenshot located at .aiui-cache/traces/t1/shot_1.png (captured on change)]
 ````
 
-### 9. Video-share frame, continuous mode (capture time rides with the path)
+### 10. Video-share frame, continuous mode (capture time rides with the path)
 
 Trigger: `share.mode: "continuous"`, offset 12340ms.
 
@@ -339,7 +472,7 @@ Rendered:
 [screenshot located at .aiui-cache/traces/t1/shot_1.png at +12.3s]
 ````
 
-### 10. Path outside cwd stays absolute; XML escaping in names
+### 11. Path outside cwd stays absolute; XML escaping in names
 
 Trigger: shot path outside cwd; a component named `A<B> & "C"`.
 
@@ -383,7 +516,7 @@ Input schema (`ComposedItem`, `kind: "code-selection"`):
 }
 ````
 
-### 11. Short code selection with locator (inlined)
+### 12. Short code selection with locator (inlined)
 
 Trigger: ≤240 chars.
 
@@ -405,7 +538,7 @@ Rendered:
 [code selection at `src/a.ts:5:1`: `const x = 1;`]
 ````
 
-### 12. Short code selection, no locator
+### 13. Short code selection, no locator
 
 Trigger: `sourceLoc` absent → `MISSING_LOCATION`.
 
@@ -425,7 +558,7 @@ Rendered:
 [code selection at MISSING_LOCATION: `let y = 2;`]
 ````
 
-### 13. Short code selection with a contributing view's tab
+### 14. Short code selection with a contributing view's tab
 
 Trigger: the event carried `url` → the canonical `<tab>` record in metadata.
 
@@ -451,7 +584,7 @@ Rendered:
 </selection-metadata>
 ````
 
-### 14. Long code selection (fenced block with line count)
+### 15. Long code selection (fenced block with line count)
 
 Trigger: >240 chars.
 
@@ -483,7 +616,7 @@ export function helper7(input: number): number { return input * 7; }
 ```
 ````
 
-### 15. Very long code selection (elided past 50 lines)
+### 16. Very long code selection (elided past 50 lines)
 
 Trigger: >50 lines → first 50 + an elision count inside the fence.
 
@@ -575,7 +708,7 @@ Input schema (`ComposedItem`, `kind: "app-selection"`):
 }
 ````
 
-### 16. Short app selection, no attribution
+### 17. Short app selection, no attribution
 
 Input:
 
@@ -593,7 +726,7 @@ Rendered:
 [selected text: "42.7"]
 ````
 
-### 17. Short app selection, full attribution (metadata block with cell + tab)
+### 18. Short app selection, full attribution (metadata block with cell + tab)
 
 Trigger: sourceLoc + cell + cellLoc + the page url.
 
@@ -621,7 +754,7 @@ Rendered:
 </selection-metadata>
 ````
 
-### 18. App selection of rendered mathematics (TeX attribution)
+### 19. App selection of rendered mathematics (TeX attribution)
 
 Input:
 
@@ -642,7 +775,7 @@ Rendered:
 <selection-metadata source="src/Equation.tsx:8:2" tex="\frac{\partial u}{\partial t} = D \frac{\partial^2 u}{\partial x^2}"/>
 ````
 
-### 19. Long app selection (fenced)
+### 20. Long app selection (fenced)
 
 Trigger: >240 chars of page text.
 
@@ -697,7 +830,7 @@ Input schema (`ComposedItem`, `kind: "navigation" | "tab-switch"`, and the canon
 }
 ````
 
-### 20. Navigation (same tab), URL only
+### 21. Navigation (same tab), URL only
 
 The prior page needs no restating — the agent tracks the current tab.
 
@@ -714,10 +847,10 @@ Input:
 Rendered:
 
 ````text
-[page navigation: /detail#sec]
+[current page changed: /detail#sec]
 ````
 
-### 21. Navigation with a full destination tab record
+### 22. Navigation with a full destination tab record
 
 Trigger: the event carried `tab` — as much debug/correlation info as the client had.
 
@@ -742,11 +875,10 @@ Input:
 Rendered:
 
 ````text
-[page navigation: /sim]
-<tab url="http://localhost:5173/sim" title="Spectra — dev" aiui-app="true" chrome-tab-id="712" window-id="3" cdp-target-id="F00D"/>
+[current page changed: <tab url="http://localhost:5173/sim" title="Spectra — dev" aiui-app="true" chrome-tab-id="712" window-id="3" cdp-target-id="F00D"/>]
 ````
 
-### 22. Navigation with unparseable URLs
+### 23. Navigation with unparseable URLs
 
 Trigger: strings `new URL` rejects → raw string; empty → `?`.
 
@@ -763,10 +895,10 @@ Input:
 Rendered:
 
 ````text
-[page navigation: ?]
+[current page changed: ?]
 ````
 
-### 23. Tab switch (no full record — the driver handle still yields a minimal <tab>)
+### 24. Tab switch (no full record — the driver handle still yields a minimal `<tab>`)
 
 Trigger: `toTab` present, `tab` absent.
 
@@ -785,8 +917,7 @@ Input:
 Rendered:
 
 ````text
-[tab switch: /api/ref]
-<tab url="https://docs.test/api/ref" driver-tab="2"/>
+[current tab changed: <tab url="https://docs.test/api/ref" driver-tab="2"/>]
 ````
 
 ## F. Corrections (note policy)
@@ -797,7 +928,7 @@ Input schema (a correction entry, alongside the transcript items):
 // policy "note" + applied: false → appended parenthetical
 ````
 
-### 24. Unapplied correction under `policy: "note"`
+### 25. Unapplied correction under `policy: "note"`
 
 Trigger: a correction the patcher could not apply → appended parenthetical.
 
@@ -829,9 +960,9 @@ make the plot tall her (transcription fix: "tall her" → taller)
 
 ## G. A full interleaved turn (joins, trims, blank-line separation)
 
-### 25. Transcript runs · rich shot · selection · navigation · viewport shot
+### 26. Transcript runs · rich shot · selection · navigation · viewport shot
 
-The `kind: "text"` items are TRANSCRIPT RUNS (the user's spoken words) — this case audits the seams between them and the blocks: single-space joins, the multi-line block's surrounding newlines (note the trailing space before each block's leading newline), leading/trailing trim.
+The `kind: "text"` items are TRANSCRIPT RUNS (the user's spoken words) — this case audits the seams between them and the blocks: inline runs join with a single space, every multi-line block is set off by one blank line (no stray leading/lone spaces at the seams), leading/trailing trim.
 
 Input:
 
@@ -888,17 +1019,21 @@ Input:
 Rendered:
 
 ````text
-make this legend 
+make this legend
+
 [screenshot located at .aiui-cache/traces/t1/shot_1.png]
 <screenshot-metadata path=".aiui-cache/traces/t1/shot_1.png">
   <element name="Legend" source="src/Legend.tsx:30:2">
     <cell name="colorScale"/>
   </element>
 </screenshot-metadata>
- wider, and align it with 
+
+wider, and align it with
+
 [selected text: "Mean: 42.7"]
 <selection-metadata source="src/Readout.tsx:12:4"/>
- [page navigation: /b] then check the whole page [screenshot located at .aiui-cache/traces/t1/shot_2.png (full viewport)]
+
+[current page changed: /b] then check the whole page [screenshot located at .aiui-cache/traces/t1/shot_2.png (full viewport)]
 ````
 
 ## H. The context preamble (channel, `prompt-context.ts`)
@@ -912,9 +1047,9 @@ Input schema (the hello's `TabInfo` + `SourceInfo`, fixed at connect time; the b
 }
 ````
 
-### 26. Full hello (aiui app detected: every tab hint + source root) — the wrapped prompt
+### 27. Full hello (aiui app detected: every tab hint + source root) — the wrapped prompt
 
-The body starts right after the `---` rule. (`preambleLen` = 336.)
+The body starts right after the `---` rule. (`preambleLen` = 311.)
 
 Input:
 
@@ -939,8 +1074,7 @@ Rendered:
 ````text
 This prompt was sent from the aiui intent tool attached to a web app under development.
 
-It was submitted from this browser tab:
-<tab url="http://localhost:5173/" title="Spectra — dev" aiui-app="true" chrome-tab-id="712" window-id="3" tab-index="0" cdp-target-id="F00D"/>
+[current tab: <tab url="http://localhost:5173/" title="Spectra — dev" aiui-app="true" chrome-tab-id="712" window-id="3" tab-index="0" cdp-target-id="F00D"/>]
 
 Relative paths in this prompt are relative to: /repo/app
 
@@ -949,7 +1083,7 @@ Relative paths in this prompt are relative to: /repo/app
 make this wider
 ````
 
-### 27. Minimal hello (title+url only, NO aiui app): the neutral opening, no dev framing
+### 28. Minimal hello (title+url only, NO aiui app): the neutral opening, no dev framing
 
 Input:
 
@@ -967,17 +1101,16 @@ Rendered:
 ````text
 This prompt was sent from the aiui intent tool.
 
-It was submitted from this browser tab:
-<tab url="http://localhost:5173/" title="App"/>
+[current tab: <tab url="http://localhost:5173/" title="App"/>]
 
 ---
 
 make this wider
 ````
 
-### 28. A SPEECH turn (aiui hello + transcription note appended at fin)
+### 29. A SPEECH turn (aiui hello + transcription note appended at fin)
 
-Input shows the hello; the note is turn-dependent, not hello-fixed. (`preambleLen` = 414.)
+Input shows the hello; the note is turn-dependent, not hello-fixed. (`preambleLen` = 389.)
 
 Input:
 
@@ -1002,8 +1135,7 @@ Rendered:
 ````text
 This prompt was sent from the aiui intent tool attached to a web app under development.
 
-It was submitted from this browser tab:
-<tab url="http://localhost:5173/" title="Spectra — dev" aiui-app="true" chrome-tab-id="712" window-id="3" tab-index="0" cdp-target-id="F00D"/>
+[current tab: <tab url="http://localhost:5173/" title="Spectra — dev" aiui-app="true" chrome-tab-id="712" window-id="3" tab-index="0" cdp-target-id="F00D"/>]
 
 Relative paths in this prompt are relative to: /repo/app
 
@@ -1014,7 +1146,7 @@ Portions of the prompt were transcribed and might have transcription errors.
 make this wider
 ````
 
-### 29. LEGACY selection section — text-concat (text modality) ONLY; retired from intent-v1
+### 30. LEGACY selection section — text-concat (text modality) ONLY; retired from intent-v1
 
 intent-v1 now IGNORES the legacy context chunk entirely; this wording survives only for `text-concat`'s submit-time selection. (`preambleLen` = 245.)
 
@@ -1041,7 +1173,7 @@ The selected content is rendered mathematics; its TeX source: \bar{x} = 42.7
 explain this
 ````
 
-### 30. Bare client (no hello context): body passes through unwrapped
+### 31. Bare client (no hello context): body passes through unwrapped
 
 Input:
 
@@ -1057,21 +1189,21 @@ just the body
 
 ## I. The MCP server's self-description (static strings, quoted verbatim)
 
-### 31. Server `instructions` (server.ts) — the once-per-session lesson: the channel + the prompt vocabulary
+### 32. Server `instructions` (server.ts) — the once-per-session lesson: the channel + the prompt vocabulary
 
 Imported from the source, so this quote can never drift. The correlation workflow lives HERE (taught once), not in every turn's preamble.
 
 ````text
 This is the aiui channel, a one-way event feed into your session. Events arrive as `<channel source="aiui" ...>` blocks: read them and act on them as context. The channel itself is one-way — there is nothing to reply to and no tool to call back into it (this server's tools stand alone).
 
-Prompts lowered by the aiui intent tool embed a small vocabulary you should know. Plain-text bracket markers carry the user's captured context inline, at the position it happened in their turn: `[screenshot located at <path>]` (a captured image saved at <path> — read it with your image tools; `[pasted image located at …]` is CLIPBOARD content, not what was on screen; `MISSING` means the pixels were never captured), `[selected text: "…"]` (an on-screen selection), `[code selection at `<loc>`: `<code>`]` (contributed code; long selections fence below a `(N lines)` header, elided past 50 lines), and `[page navigation: <path>]` / `[tab switch: <path>]` (the user changed page or tab mid-turn — text ABOVE such a marker refers to the previous page).
+Prompts lowered by the aiui intent tool embed a small vocabulary you should know. Plain-text bracket markers carry the user's captured context inline, at the position it happened in their turn: `[screenshot located at <path>]` (a captured image saved at <path> — read it with your image tools; `[pasted image located at …]` is CLIPBOARD content, not what was on screen; `MISSING` means the pixels were never captured), `[selected text: "…"]` (an on-screen selection), `[code selection at `<loc>`: `<code>`]` (contributed code; long selections fence below a `(N lines)` header, elided past 50 lines), and `[current page changed: <tab …/>]` / `[current tab changed: <tab …/>]` (the user navigated the same tab, or turned to a different tab, mid-turn — the destination's `<tab>` record rides inline in the marker, and text ABOVE it refers to the previous page).
 
 XML sidecar blocks carry machine-readable metadata about the marker they follow. `<screenshot-metadata>` lists the UI elements a capture framed: `<element name source>` children with nested `<cell name source/>` cells. `<selection-metadata>` carries a selection's provenance: `source` (where it was authored), `tex` (TeX source of selected mathematics), and `<cell>` / `<tab>` children. Cells are dataflow nodes of the aiui framework — they only exist on pages marked as aiui apps; on other pages expect no element/cell metadata at all.
 
-`<tab …/>` is the canonical browser-tab record, used everywhere a tab is described (the prompt preamble, navigation/tab-switch boundaries, selection metadata). Attributes, all optional except url: `url`, `title`, `aiui-app="true"` (the page carries aiui instrumentation), `source-root` (the app's source directory), `chrome-tab-id`, `window-id`, `tab-index`, `cdp-target-id`, `driver-tab`. To act on a tab with the Chrome DevTools MCP: every id is a correlation HINT only — none is the DevTools MCP's own pageId. Call list_pages, match by url/title, select_page with the pageId it returned, and verify you selected the right page. The session-browser skill covers this workflow.
+`<tab …/>` is the canonical browser-tab record, used everywhere a tab is described: the `[current tab: <tab …/>]` preamble marker (the tab the turn was sent from), the `[current page/tab changed: <tab …/>]` boundary markers, and `<selection-metadata>`. Attributes, all optional except url: `url`, `title`, `aiui-app="true"` (the page carries aiui instrumentation), `source-root` (the app's source directory), `chrome-tab-id`, `window-id`, `tab-index`, `cdp-target-id`, `driver-tab`. To act on a tab with the Chrome DevTools MCP: every id is a correlation HINT only — none is the DevTools MCP's own pageId. Call list_pages, match by url/title, select_page with the pageId it returned, and verify you selected the right page. The session-browser skill covers this workflow.
 ````
 
-### 32. The prompt's delivery envelope (commands/mcp.ts:124)
+### 33. The prompt's delivery envelope (commands/mcp.ts:124)
 
 Every lowered prompt reaches the session as an MCP notification; Claude Code renders it as the `<channel>` block the instructions describe. The channel controls `content` and `meta`; the block's final wording is Claude Code's.
 
@@ -1080,25 +1212,25 @@ method: "notifications/claude/channel"
 params: { content: <the wrapped prompt>, meta: { kind: "prompt", ...optionC attachment paths } }
 ````
 
-### 33. Tool: `channel_info` (tools.ts:130)
+### 34. Tool: `channel_info` (tools.ts:130)
 
 ````text
 Return this aiui channel's own info: its tag, pid, ppid, port, cwd, and the Claude Code session it's attached to (name, sessionId, status). Returns a JSON object.
 ````
 
-### 34. Tool: `page_tools_list` (tools.ts:72)
+### 35. Tool: `page_tools_list` (tools.ts:72)
 
 ````text
 List the tools that live in the connected browser page(s) under development (registered by the page's aiui instrumentation). Returns a JSON array of directory entries: clientId, ns (page namespace), url, tab, and each tool's name/description/inputSchema. Entries from the browser's active tab sort first and carry activeTab: true (when a client reports tab activation; otherwise the flag is simply absent). Call this FIRST to discover what's available, then invoke one with page_tools_call. The list is empty when no dev page is connected.
 ````
 
-### 35. Tool: `page_tools_call` (tools.ts:81)
+### 36. Tool: `page_tools_call` (tools.ts:81)
 
 ````text
 Invoke one of the browser page's tools (discover them with page_tools_list first) and return its JSON result. Args: { name (required), args? (must match that tool's inputSchema), ns? and clientId? to disambiguate }. When exactly one registered tool has the given name you may omit ns/clientId; if several pages expose the same name, the one on the browser's active tab wins — when that still doesn't single one out the call errors and lists the candidates (pass ns and/or clientId to pick one). Errors if no page is connected, no tool matches, the page is mid-reload, or the call times out.
 ````
 
-### 36. Tool: `channel_reload` (tools.ts:90)
+### 37. Tool: `channel_reload` (tools.ts:90)
 
 ````text
 After you edit this channel's own source, reload its lowering layer in place — the format registry is rebuilt from the code now on disk, no session restart. Live websockets drop and reconnect on their own (an in-flight intent turn is abandoned; the page stays up), and the MCP stdio session and web port are unaffected. Returns { reloaded, generation, socketsDropped }. Only reloads the format-entry modules (processors, intent-v1) and their edits; changes deeper in the import graph still need a full relaunch.

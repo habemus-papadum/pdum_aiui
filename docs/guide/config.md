@@ -16,7 +16,7 @@ Settings resolve through a fixed ladder — the first level that speaks, wins:
 
 The two config files are merged **per key** (a project file that only sets `chrome.profile`
 still inherits your user-level `chrome.manage`). Put personal defaults (your `chrome.managed`
-browser preference, `skipPermissions`) at the user level and project specifics (a dedicated
+browser preference, `claude.args`) at the user level and project specifics (a dedicated
 profile, headless, a remote `browserUrl`) in the project file.
 
 Two asymmetries to know about:
@@ -25,8 +25,8 @@ Two asymmetries to know about:
   defaults off regardless of `chrome.enabled` — only an explicit `--aiui-chrome` flag brings it
   up there.
 - **aiui writes the user config too**: the **first interactive launch asks** for the settings
-  that deserve a deliberate answer — skip permissions? auto-dismiss the channel prompt? — and
-  persists them as `claude.skipPermissions` / `claude.enterNudge`; managed-browser prompt
+  that deserve a deliberate answer — auto-dismiss the channel prompt? bind the channel to your
+  LAN? — and persists them as `claude.enterNudge` / `channel.bind`; managed-browser prompt
   answers ("automatically", "never ask again") persist as `chrome.manage` the same way.
   Always the *user* file — never the project file, which may be shared or committed by a team.
 
@@ -50,7 +50,8 @@ aiui config show --json  # machine-readable: file paths, per-level values, effec
 aiui config get chrome.mode            # the effective value (provenance on stderr)
 aiui config set chrome.mode launch     # validated write to the user config
 aiui config set chrome.headless true --project   # …or to .aiui-cache/config.json here
-aiui config unset claude.skipPermissions         # remove a key (get re-asked on first run)
+aiui config set-dsp                     # add --dangerously-skip-permissions to claude.args
+aiui config unset claude.args           # drop the extra-args list (undoes set-dsp)
 ```
 
 The **TUI** (bare `aiui config`, in a real terminal) lists every key grouped by section; the
@@ -68,7 +69,7 @@ writing, so you can't `set` a config that would then fail the launch.
 ```json
 {
   "claude": {
-    "skipPermissions": true,
+    "args": ["--dangerously-skip-permissions"],
     "enterNudge": true
   },
   "channel": {
@@ -90,15 +91,15 @@ writing, so you can't `set` a config that would then fail the launch.
 }
 ```
 
-Everything is optional; the values above are the defaults (except `browserUrl`, `dataDir`, and
-`executablePath`, which default to unset). `claude.skipPermissions`, `claude.enterNudge`, and
-`channel.bind` are asked on the first interactive launch and persisted.
+Everything is optional; the values above are the defaults (except `claude.args`, `browserUrl`,
+`dataDir`, and `executablePath`, which default to unset). `claude.enterNudge` and `channel.bind`
+are asked on the first interactive launch and persisted.
 
 | Key                     | Meaning                                                                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `claude.skipPermissions` | Launch with `--dangerously-skip-permissions` — a [personal preference with real consequences](./warning); aiui works fine either way. Asked on the first interactive launch (no default — you must answer); unset non-interactive sessions fall back to `true`. |
+| `claude.args`           | Extra argv passed verbatim to `claude` on **every** launch, ahead of any per-launch passthrough. This is where `--dangerously-skip-permissions` lives — add it with `aiui config set-dsp`, a [personal preference with real consequences](./warning) that is **opt-in and never added by default**. Set the whole list with `aiui config set claude.args '["--foo"]'` (JSON); clear it with `aiui config unset claude.args`. |
 | `claude.enterNudge`     | Auto-dismiss Claude Code's development-channel acknowledgement prompt by injecting one Enter keystroke into your terminal at startup (best-effort TIOCSTI; some platforms forbid it, harmlessly). Asked on the first interactive launch; saying no just means pressing Enter yourself each launch. |
-| `channel.bind`          | Which interface the channel's web server binds. `"loopback"` (default) keeps the whole surface this-machine-only; `"host"` (0.0.0.0) makes it — the remote-device sidecar pages, but also prompt injection, `/debug`, and everything else — reachable by **anyone on your network, unauthenticated** ([the trusted-LAN posture](./warning)). Asked on the first interactive launch, like `claude.skipPermissions`. Per-launch flag: `--aiui-bind`. |
+| `channel.bind`          | Which interface the channel's web server binds. `"loopback"` (default) keeps the whole surface this-machine-only; `"host"` (0.0.0.0) makes it — the remote-device sidecar pages, but also prompt injection, `/debug`, and everything else — reachable by **anyone on your network, unauthenticated** ([the trusted-LAN posture](./warning)). Asked on the first interactive launch. Per-launch flag: `--aiui-bind`. |
 | `chrome.enabled`        | Attach the [Chrome DevTools MCP](./chrome). `false` turns it off everywhere; `true` restates the default and does **not** override the CI default-off — only the `--aiui-chrome` flag does. |
 | `chrome.mode`           | [`"attach"`](./chrome#how-the-browser-connects-attach-vs-launch) (default): share a user-visible session browser. `"launch"`: chrome-devtools-mcp keeps a private browser, started lazily on the agent's first tool call. |
 | `chrome.browserUrl`     | Attach to this DevTools endpoint (e.g. `"http://127.0.0.1:9222"`) and manage no browser locally — the [remote development](./remote) key (per-launch flag: `--aiui-browser-url`). Implies `mode: "attach"`; makes the other browser keys irrelevant. |
@@ -183,5 +184,7 @@ Not configuration you edit, but worth knowing when behavior seems sticky:
 
 A malformed `config.json`, an unknown key, or a wrong value type **fails the launch** with an
 error naming the file — no warn-and-continue. These settings gate security-relevant behavior
-(`skipPermissions`), and a typo that silently falls back to the dangerous default would be worse
-than a failed start.
+(`claude.args`, e.g. whether `--dangerously-skip-permissions` is passed), and a typo that
+silently drops such a flag would be worse than a failed start. (Keys retired in an upgrade — like
+the old `claude.skipPermissions` boolean — are the one exception: they're tolerated and ignored,
+never a hard error.)

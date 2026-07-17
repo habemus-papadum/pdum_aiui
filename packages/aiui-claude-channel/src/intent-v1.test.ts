@@ -613,8 +613,8 @@ describe("intent-v1 lowering — selections", () => {
         '[selected text: "reaction-diffusion on the GPU"]\n' +
           '<selection-metadata source="src/ui/App.tsx:35:13">\n' +
           '  <cell name="catalog"/>\n' +
-          "</selection-metadata>\n" +
-          " make this wider",
+          "</selection-metadata>\n\n" +
+          "make this wider",
       ),
     );
     // No preamble section: the stream path never rides selectionSections.

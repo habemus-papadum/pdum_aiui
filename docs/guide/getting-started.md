@@ -63,11 +63,12 @@ This is a normal, interactive Claude Code session — with a channel attached. U
 spawns the channel MCP server, which starts a loopback web backend on a random port and registers
 itself (port, pid, tag) in the user cache so other tools can find it.
 
-The very first interactive launch asks two one-time questions — skip Claude's permission prompts?
-auto-dismiss the channel acknowledgement? — with no default, so the answers are yours; they're
-saved to your user [config](./config). Claude Code then asks you to confirm loading the
-development channel at each startup; aiui presses Enter for you if you said yes to the
-enter nudge.
+The very first interactive launch asks two one-time questions — auto-dismiss the channel
+acknowledgement? bind the channel to your LAN? — with no default, so the answers are yours;
+they're saved to your user [config](./config). (Claude's own permission prompts stay in charge
+unless you opt out with `aiui config set-dsp` — see the [warning](./warning).) Claude Code then
+asks you to confirm loading the development channel at each startup; aiui presses Enter for you if
+you said yes to the enter nudge.
 
 The launch also brings up the **[session browser](./chrome)**: one visible Chrome window that
 you and the agent share. aiui starts it (or finds it already running for this project) and
@@ -80,7 +81,7 @@ Testing — dodges Google's "verify you're human" reCAPTCHA) — and keeps it cu
 per your answer. [The Agent's Browser](./chrome) covers the rest: turning it off
 (`--aiui-no-chrome`; automatic under CI), the attach-vs-launch modes, alternate profiles, and the
 `aiui browser` / `aiui chrome` commands. Durable settings for all of this — and for the launcher
-itself, like `skipPermissions` — live in [config.json](./config); working remotely (session on
+itself, like `claude.args` — live in [config.json](./config); working remotely (session on
 another machine, browser on yours) is its own short guide: [Remote Development](./remote).
 
 ## 2. Terminal two — your app

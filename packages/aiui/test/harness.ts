@@ -60,14 +60,14 @@ export async function launchClaudeSession(opts) {
 
   // Preseed the first-run choices (the isolated cache has no user config, and
   // the launcher would otherwise prompt on the tmux TTY and stall the run):
-  // permissions skipped — the TUI flow under test — and the enter nudge on,
-  // with the harness's own send-keys rules as the fallback dismisser.
+  // --dangerously-skip-permissions passed via claude.args, and the enter nudge
+  // on, with the harness's own send-keys rules as the fallback dismisser.
   writeFileSync(
     join(cacheDir, "config.json"),
-    `${JSON.stringify({ claude: { skipPermissions: true, enterNudge: true } })}\n`,
+    `${JSON.stringify({ claude: { args: ["--dangerously-skip-permissions"], enterNudge: true } })}\n`,
   );
 
-  // IS_SANDBOX skips the first-run --dangerously-skip-permissions confirmation.
+  // IS_SANDBOX skips Claude Code's own --dangerously-skip-permissions confirmation.
   // If a subscription login exists, drop any ambient ANTHROPIC_API_KEY so Claude
   // authenticates via the subscription (CI sets CLAUDE_CODE_OAUTH_TOKEN instead).
   const unset = subscriptionAuthAvailable() ? "-u ANTHROPIC_API_KEY " : "";

@@ -71,7 +71,8 @@ describe("renderPrompt spans", () => {
 
   it("offsets stay correct across the final trim (a leading shot)", () => {
     const engine = armedEngine();
-    // Shot first (multi-line block → a leading '\n' that the final .trim() drops).
+    // Shot first (a multi-line block): it opens the prompt with no leading
+    // separator, so the span starts at 0 and the trim is a no-op there.
     engine.shotDone(
       { x: 0, y: 0, w: 30, h: 20 },
       [{ component: "Plot", source: "src/Plot.tsx:3:1", rect: { x: 0, y: 0, w: 10, h: 10 } }],
@@ -113,7 +114,7 @@ describe("renderPrompt spans", () => {
       } else if (span.kind === "app-selection") {
         expect(sliced).toContain("42.7");
       } else if (span.kind === "navigation") {
-        expect(sliced).toContain("page navigation");
+        expect(sliced).toContain("current page changed");
       }
     }
     // composeIntent never emits a preamble span — that is the channel's to add.

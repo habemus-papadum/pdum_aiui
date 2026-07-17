@@ -45,10 +45,12 @@ exploratory notes are retired to `archive/` — readable on GitHub, deliberately
 docs site.
 
 **Security posture (deliberate, documented — do not "fix" without being asked):** `aiui claude`
-asks on the first interactive run whether to launch Claude Code with
-`--dangerously-skip-permissions` and persists the answer (`claude.skipPermissions`;
-non-interactive default: skip — see `packages/aiui/src/util/first-run.ts`), asks where the
-channel's web server binds and persists that too (`channel.bind`: `loopback` keeps the
+passes `--dangerously-skip-permissions` only when it is present in the general `claude.args` list
+(argv forwarded to `claude` on every launch); it is **opt-in and off by default** — add it with
+`aiui config set-dsp`, remove it with `aiui config unset claude.args` (see
+`packages/aiui/src/commands/config.ts`; the retired `claude.skipPermissions` boolean is tolerated
+and dropped for old configs). `aiui claude` asks on the first interactive run where the
+channel's web server binds and persists that (`channel.bind`: `loopback` keeps the
 unauthenticated surface this-machine-only, non-interactive default; `host` binds `0.0.0.0` so a
 LAN iPad can reach the always-on paint sidecar — and everything else on the port; the trusted-LAN
 posture), loads

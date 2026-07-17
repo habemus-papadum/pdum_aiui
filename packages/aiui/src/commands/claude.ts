@@ -196,12 +196,14 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // `aiui claude --chrome`) — it is independent of the Chrome DevTools MCP
   // above. Automated/CI contexts pass `--no-chrome` themselves (see the e2e
   // test harness) to skip the browser-detection startup prompt.
-  // Skipping permissions is still the (documented, dangerous) default, but no
-  // longer hard-coded: `claude.skipPermissions: false` in config.json opts out
-  // and leaves Claude's own permission behavior in charge.
-  const skipPermissions = config.claude?.skipPermissions ?? true;
+  // Extra argv the user wants on every launch, forwarded verbatim ahead of the
+  // machinery below (`claude.args`). This is where --dangerously-skip-permissions
+  // lives now — opt in with `aiui config set-dsp`; nothing adds it by default, so
+  // out of the box Claude Code's own permission prompts stay in charge
+  // (docs/guide/warning).
+  const configArgs = config.claude?.args ?? [];
   const args = [
-    ...(skipPermissions ? ["--dangerously-skip-permissions"] : []),
+    ...configArgs,
     "--mcp-config",
     mcpConfig,
     ...plugins.flatMap((dir) => ["--plugin-dir", dir]),

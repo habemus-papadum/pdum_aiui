@@ -21,11 +21,12 @@ the level of abstraction you prompt it at. Three layers:
 [frontend for agents](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-for-agents)
 
 > [!CAUTION]
-> **This codebase is dangerous to run.** It launches Claude Code with
-> `--dangerously-skip-permissions` (currently hard-coded) and injects externally-supplied prompts
-> into your live session through a custom channel — which means trusting this code completely.
-> It is **safer to read than to run**: treat it as reference and parts for building your own
-> system. Details: [Read before running](https://habemus-papadum.github.io/pdum_aiui/guide/warning).
+> **This codebase is dangerous to run.** It injects externally-supplied prompts into your live
+> Claude Code session through a custom channel — and can launch that session with
+> `--dangerously-skip-permissions` (opt-in via `aiui config set-dsp`, off by default) — which
+> means trusting this code completely. It is **safer to read than to run**: treat it as reference
+> and parts for building your own system. Details:
+> [Read before running](https://habemus-papadum.github.io/pdum_aiui/guide/warning).
 
 A pnpm + TypeScript monorepo. Packages live under `packages/*` in the `@habemus-papadum` scope,
 versioned in **lockstep** (one shared version across the whole repo). Each package declares a

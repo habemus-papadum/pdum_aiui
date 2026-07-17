@@ -7,6 +7,7 @@ import {
   readLevels,
   runConfigGet,
   runConfigSet,
+  runConfigSetDsp,
   runConfigShow,
   runConfigUnset,
 } from "./config";
@@ -143,12 +144,35 @@ describe("runConfigSet", () => {
 describe("runConfigUnset", () => {
   it("removes the key and drops an emptied section", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    writeLevel("user", { claude: { skipPermissions: false }, chrome: { mode: "launch" } });
-    runConfigUnset("claude.skipPermissions", {}, project);
+    writeLevel("user", {
+      claude: { args: ["--dangerously-skip-permissions"] },
+      chrome: { mode: "launch" },
+    });
+    runConfigUnset("claude.args", {}, project);
     expect(readConfig("user")).toEqual({ chrome: { mode: "launch" } });
     // A second unset is a no-op note, not an error.
-    runConfigUnset("claude.skipPermissions", {}, project);
+    runConfigUnset("claude.args", {}, project);
     expect(process.exitCode ?? 0).toBe(0);
+  });
+});
+
+describe("runConfigSetDsp", () => {
+  it("adds --dangerously-skip-permissions to claude.args, idempotently", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    runConfigSetDsp({}, project);
+    expect(readConfig("user")).toEqual({ claude: { args: ["--dangerously-skip-permissions"] } });
+    // Running again does not duplicate the flag.
+    runConfigSetDsp({}, project);
+    expect(readConfig("user")).toEqual({ claude: { args: ["--dangerously-skip-permissions"] } });
+  });
+
+  it("appends to existing args without disturbing them", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    writeLevel("user", { claude: { args: ["--verbose"] } });
+    runConfigSetDsp({}, project);
+    expect(readConfig("user")).toEqual({
+      claude: { args: ["--verbose", "--dangerously-skip-permissions"] },
+    });
   });
 });
 

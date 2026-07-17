@@ -64,14 +64,17 @@ export type ChromeMode = (typeof CHROME_MODES)[number];
 export const CHANNEL_BINDS = ["loopback", "host"] as const;
 export type ChannelBind = (typeof CHANNEL_BINDS)[number];
 
-/** Every config leaf is a JSON scalar; sections never nest further. */
-export type ConfigValue = boolean | number | string;
+/**
+ * A config leaf is a JSON scalar, or — for list-valued keys like `claude.args`
+ * — an array of strings. Sections never nest further.
+ */
+export type ConfigValue = boolean | number | string | string[];
 
 export interface ConfigFieldSchema {
-  /** Leaf key within its section, e.g. `"skipPermissions"`. */
+  /** Leaf key within its section, e.g. `"args"`. */
   key: string;
-  /** `"enum"` is a string constrained to {@link values}. */
-  type: "boolean" | "number" | "string" | "enum";
+  /** `"enum"` is a string constrained to {@link values}; `"string[]"` is a list of strings. */
+  type: "boolean" | "number" | "string" | "enum" | "string[]";
   /** The allowed values when {@link type} is `"enum"`. */
   values?: readonly string[];
   /** The built-in default, when the fallback is a plain value. */
@@ -106,16 +109,18 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
     summary: "how `aiui claude` launches Claude Code",
     fields: [
       {
-        key: "skipPermissions",
-        type: "boolean",
-        default: true,
-        defaultText: "true (unset: the first interactive launch asks, then persists the answer)",
-        summary: "Launch Claude Code with --dangerously-skip-permissions.",
+        key: "args",
+        type: "string[]",
+        defaultText: "unset (no extra arguments)",
+        summary: "Extra arguments passed verbatim to `claude` on every launch.",
         doc:
-          "A personal preference with real consequences (docs/guide/warning): every agent " +
-          "action — shell commands, file writes, network, the browser — runs without asking " +
-          "first. aiui works fine either way. The first interactive launch asks and persists " +
-          "the answer at the user level; when unset, non-interactive sessions fall back to true.",
+          "An argv list prepended to the `claude` invocation on every `aiui claude`, ahead of " +
+          "any per-launch passthrough. This is how --dangerously-skip-permissions is applied " +
+          "now — there is no separate skipPermissions flag. Add that flag with `aiui config " +
+          "set-dsp`, or replace the whole list with `aiui config set claude.args` (a JSON " +
+          "array). With --dangerously-skip-permissions every agent action — shell commands, " +
+          "file writes, network, the browser — runs without asking first (docs/guide/warning); " +
+          "it is opt-in and never added by default.",
       },
       {
         key: "enterNudge",
@@ -314,9 +319,20 @@ export function findConfigField(path: string): ResolvedField | undefined {
   return allConfigFields().find((entry) => entry.path === path);
 }
 
-/** The `typeof` a field's values (enums are strings). */
+/** True when the field holds a list of strings rather than a scalar. */
+export function isArrayField(field: ConfigFieldSchema): boolean {
+  return field.type === "string[]";
+}
+
+/**
+ * The `typeof` a scalar field's values (enums are strings). Array fields have no
+ * single `typeof`, so callers must guard with {@link isArrayField} first.
+ */
 export function fieldRuntimeType(field: ConfigFieldSchema): "boolean" | "number" | "string" {
-  return field.type === "enum" ? "string" : field.type;
+  if (field.type === "boolean" || field.type === "number") {
+    return field.type;
+  }
+  return "string"; // "string", "enum" — and, when guarded away, "string[]"
 }
 
 /**
@@ -338,6 +354,20 @@ export function parseFieldValue(
   field: ConfigFieldSchema,
   raw: string,
 ): { value: ConfigValue } | { error: string } {
+  if (isArrayField(field)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { error: 'expected a JSON array of strings, e.g. ["--foo", "--bar"]' };
+    }
+    if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
+      return { error: 'expected a JSON array of strings, e.g. ["--foo", "--bar"]' };
+    }
+    const list = parsed as string[];
+    const reason = invalidReason(field, list);
+    return reason ? { error: reason } : { value: list };
+  }
   let value: ConfigValue;
   switch (fieldRuntimeType(field)) {
     case "boolean": {
@@ -361,8 +391,11 @@ export function parseFieldValue(
   return reason ? { error: reason } : { value };
 }
 
-/** Render a value the way config.json would hold it (strings quoted). */
+/** Render a value the way config.json would hold it (strings quoted, arrays as JSON). */
 export function formatConfigValue(value: ConfigValue): string {
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
   return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 

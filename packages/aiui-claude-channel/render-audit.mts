@@ -216,6 +216,25 @@ show(
 );
 
 show(
+  "Duplicate elements collapse (a `<For>` over marks shares one source stamp)",
+  "Trigger: 27 elements at the SAME source loc — the histogram-bar case (every " +
+    "`<rect>` carries its JSX stamp). They collapse to one line with `count`; " +
+    "identical entries are an inventory of one reference point, not 27 references.",
+  [
+    {
+      kind: "shot",
+      marker: "shot_1",
+      path: SHOT_PATH,
+      components: Array.from({ length: 27 }, () => ({
+        component: "DensityChart",
+        source: `${CWD}/src/ui/DensityChart.tsx:62:23`,
+        rect: { x: 0, y: 0, w: 10, h: 10 },
+      })),
+    },
+  ],
+);
+
+show(
   "Missing image (capture denied/unavailable)",
   "Trigger: no `path`. The marker keeps the reference alive.",
   [{ kind: "shot", marker: "shot_2", components: [] }],
@@ -470,7 +489,7 @@ show(
 );
 
 show(
-  "Tab switch (no full record — the driver handle still yields a minimal <tab>)",
+  "Tab switch (no full record — the driver handle still yields a minimal `<tab>`)",
   "Trigger: `toTab` present, `tab` absent.",
   [
     {
@@ -515,8 +534,9 @@ md("## G. A full interleaved turn (joins, trims, blank-line separation)\n");
 show(
   "Transcript runs · rich shot · selection · navigation · viewport shot",
   'The `kind: "text"` items are TRANSCRIPT RUNS (the user\'s spoken words) — this case audits the ' +
-    "seams between them and the blocks: single-space joins, the multi-line block's surrounding " +
-    "newlines (note the trailing space before each block's leading newline), leading/trailing trim.",
+    "seams between them and the blocks: inline runs join with a single space, every multi-line " +
+    "block is set off by one blank line (no stray leading/lone spaces at the seams), leading/" +
+    "trailing trim.",
   [
     text("make this legend"),
     {

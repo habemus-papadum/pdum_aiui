@@ -27,8 +27,16 @@ import type { Express } from "express";
 /** The path prefix the console app mounts under on the channel's server. */
 export const CONSOLE_PREFIX = "/__aiui";
 
+/** The prebuilt dashboard bundle's default location (`build:app` writes here). */
+const defaultDistDir = (): string => fileURLToPath(new URL("../assets/app", import.meta.url));
+
+export interface ConsoleSidecarOptions {
+  /** Override where the prebuilt dashboard bundle is served from (tests). */
+  distDir?: string;
+}
+
 /** Package the channel console as a {@link Sidecar}. */
-export function consoleSidecar(): Sidecar {
+export function consoleSidecar(options: ConsoleSidecarOptions = {}): Sidecar {
   return {
     name: "console",
     async mount(app: Express, ctx: SidecarContext): Promise<MountedSidecar> {
@@ -45,7 +53,7 @@ export function consoleSidecar(): Sidecar {
         appType: "spa",
         viteRoot: fileURLToPath(new URL("../app", import.meta.url)),
         viteConfigFile: fileURLToPath(new URL("../app/vite.config.ts", import.meta.url)),
-        distDir: fileURLToPath(new URL("../assets/app", import.meta.url)),
+        distDir: options.distDir ?? defaultDistDir(),
         notBuiltHint: "pnpm -C packages/aiui-console build:app",
         log: ctx.log,
       });

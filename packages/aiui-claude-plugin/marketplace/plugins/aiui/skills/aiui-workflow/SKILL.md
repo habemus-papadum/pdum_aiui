@@ -65,13 +65,16 @@ Do **not** enumerate options in prose from this file — run:
   touched (shown at their defaults, with docs).
 - `aiui config get <key>` / `set <key> <value>` / `unset <key>` — dotted keys, validated
   against the schema (`--project` writes the project layer instead of the user's).
+- `aiui config set-dsp` — opt into `--dangerously-skip-permissions` (appends it to `claude.args`).
 - `aiui config tui` — the interactive browser, for humans exploring.
 
 Two settings worth knowing exist (look them up with `config show` rather than trusting
-this list to stay complete): `claude.skipPermissions` and `channel.bind` are asked once at
-first interactive run and persisted; `chrome.*` controls browser mode/enablement. API keys
-are deliberately **not** config — they come from the environment `aiui claude` is launched
-in (see the preflight statuses above).
+this list to stay complete): `channel.bind` is asked once at first interactive run and
+persisted, and `claude.args` carries extra argv passed to `claude` on every launch —
+`--dangerously-skip-permissions` lives there, opt-in via `aiui config set-dsp` and off by
+default. `chrome.*` controls browser mode/enablement. API keys are deliberately **not**
+config — they come from the environment `aiui claude` is launched in (see the preflight
+statuses above).
 
 ## When something's wrong
 

@@ -7,18 +7,23 @@ before running anything, and prefer **reading the code to running it**.
 
 ## 1. Skipping permissions is a choice — make it deliberately
 
-Your first interactive `aiui claude` asks whether to launch Claude Code with
-`--dangerously-skip-permissions`, and saves the answer (`claude.skipPermissions` in
-[config.json](./config)). With it on, every action the agent takes (shell commands, file writes,
-network, the browser) runs without asking you first. That's the author's personal preference, not
-a recommendation — aiui works perfectly well with Claude's own permission prompts left in charge;
-there's no reason you can't use these tools without it.
+Skipping permissions is **opt-in and off by default**. Out of the box, `aiui claude` leaves
+Claude Code's own permission prompts in charge — nothing runs without asking. To launch with
+`--dangerously-skip-permissions`, add it yourself:
 
-The honest warning: one-time setup prompts are easy to wave through without reading. If you
-answered on autopilot, you may now be running an unrestricted agent without ever deciding to.
-Check what you chose (`~/.cache/aiui/config.json`), edit it to change your mind, or delete the
-key to be asked again. One asymmetry to know: non-interactive launches (`-p`, scripts) with no
-saved answer still default to skipping — set the key explicitly for headless use.
+```sh
+aiui config set-dsp        # appends --dangerously-skip-permissions to claude.args
+```
+
+That flag lives in the general [`claude.args`](./config) list (the argv passed to `claude` on
+every launch); `set-dsp` is just the ergonomic way to add it. With it on, every action the agent
+takes (shell commands, file writes, network, the browser) runs without asking you first. That's
+the author's personal preference, not a recommendation — aiui works perfectly well without it.
+
+The honest warning: once you've opted in, you're running an unrestricted agent on **every**
+launch, interactive or headless, until you remove the flag. Check what you've set
+(`aiui config get claude.args`, or read `~/.cache/aiui/config.json`), and remove it with
+`aiui config unset claude.args` (or edit the list) to change your mind.
 
 ## 2. The custom channel requires total trust
 
@@ -87,9 +92,9 @@ credentials you can revoke.
 
 ## Roadmap for softening this
 
-- [x] Make skipping permissions an explicit, persisted choice (first-run prompt +
-      `claude.skipPermissions` in [config.json](./config)). Choosing a specific
-      `--permission-mode` is still open.
+- [x] Make skipping permissions explicit and off by default — opt in with `aiui config set-dsp`,
+      which adds `--dangerously-skip-permissions` to `claude.args` in [config.json](./config).
+      Choosing a specific `--permission-mode` is still open.
 - [ ] Document the channel's exact attack surface (what listens where, who can connect).
 - [ ] Narrow the channel backend to authenticated clients (partially done: it binds to
       `127.0.0.1` unless `channel.bind: "host"` deliberately widens it).

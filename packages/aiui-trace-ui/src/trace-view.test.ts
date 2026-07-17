@@ -23,7 +23,7 @@ const patch = [
 
 const loweredText =
   "This prompt was sent from the aiui intent tool attached to a web app under development.\n\n" +
-  'It was submitted from this browser tab:\n<tab url="http://localhost:5173/" aiui-app="true"/>\n\n' +
+  '[current tab: <tab url="http://localhost:5173/" aiui-app="true"/>]\n\n' +
   "Relative paths in this prompt are relative to: /proj\n\n---\n\n" +
   "make this wider [screenshot located at .aiui-cache/traces/trace-42/shot_1.png] please";
 

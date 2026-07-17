@@ -254,14 +254,14 @@ describe("composeIntent", () => {
 
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toContain(
-      "compare this \n" +
+      "compare this\n\n" +
         "[screenshot located at /tmp/aiui-lab/1-shot_1.png]\n" +
         '<screenshot-metadata path="/tmp/aiui-lab/1-shot_1.png">\n' +
         '  <element name="Legend" source="scenery.ts:33">\n' +
         '    <cell name="colorScale" source="scenery.ts:41"/>\n' +
         '    <cell name="ticks"/>\n' +
         "  </element>\n" +
-        "</screenshot-metadata>\n " +
+        "</screenshot-metadata>\n\n" +
         "against the mock",
     );
     // Everything is in the text now: no meta block, no token↔meta hint line.
@@ -544,7 +544,7 @@ describe("app selection (a positional stream event, interleaved like text and sh
     });
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toBe(
-      "make this wider \n" +
+      "make this wider\n\n" +
         '[selected text: "the histogram title"]\n' +
         '<selection-metadata source="src/Hist.tsx:10:2">\n' +
         '  <cell name="hist" source="src/model/cells.ts:7"/>\n' +
@@ -704,7 +704,7 @@ describe("navigation (a context boundary riding the turn, never opening one)", (
     engine.navigation(A, B, "push", { url: B, title: "Aztec", aiui: true });
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toContain(
-      `[page navigation: /aztec]\n<tab url="${B}" title="Aztec" aiui-app="true"/>`,
+      `[current page changed: <tab url="${B}" title="Aztec" aiui-app="true"/>]`,
     );
     // The span carries the record too — the trace hero's overlay data.
     expect(composed.spans.find((s) => s.kind === "navigation")).toMatchObject({
@@ -728,7 +728,7 @@ describe("navigation (a context boundary riding the turn, never opening one)", (
     // The lowered prompt carries the boundary between the two utterances,
     // rendered as short routes (origin is noise).
     const prompt = composed.prompt;
-    const boundary = prompt.indexOf("[page navigation: /aztec]");
+    const boundary = prompt.indexOf("[current page changed: /aztec]");
     expect(boundary).toBeGreaterThan(prompt.indexOf("make this wider"));
     expect(boundary).toBeLessThan(prompt.indexOf("and this taller"));
     // The transcript (text-only view) is unpolluted by the boundary.
@@ -782,7 +782,7 @@ describe("tab-switch (the sibling boundary — a different tab, not the same tab
     // Phrased as a tab switch, NOT a page navigation — and the driver's tab
     // handle still yields a minimal <tab> record when no full one rode along.
     const boundary = prompt.indexOf(
-      '[tab switch: /dashboard]\n<tab url="http://other.test/dashboard" driver-tab="2"/>',
+      '[current tab changed: <tab url="http://other.test/dashboard" driver-tab="2"/>]',
     );
     expect(boundary).toBeGreaterThan(prompt.indexOf("compare against this one"));
     expect(boundary).toBeLessThan(prompt.indexOf("which is faster"));
@@ -878,10 +878,10 @@ describe("selection render helpers (exported — the channel's live resolver re-
         cell: "hist",
       }),
     ).toBe(
-      '\n[selected text: "the histogram title"]\n' +
+      '[selected text: "the histogram title"]\n' +
         '<selection-metadata source="src/Hist.tsx:10:2">\n' +
         '  <cell name="hist"/>\n' +
-        "</selection-metadata>\n",
+        "</selection-metadata>",
     );
   });
 
@@ -918,10 +918,10 @@ describe("selection render helpers (exported — the channel's live resolver re-
 
   it("renders the page's <tab> record (full URL) in selection metadata", () => {
     expect(renderAppSelection({ text: "42.7", url: "http://localhost:5173/sim?run=3" })).toBe(
-      '\n[selected text: "42.7"]\n' +
+      '[selected text: "42.7"]\n' +
         "<selection-metadata>\n" +
         '  <tab url="http://localhost:5173/sim?run=3"/>\n' +
-        "</selection-metadata>\n",
+        "</selection-metadata>",
     );
     expect(
       renderCodeSelection({ text: "const x = 1;", url: "http://localhost:5173/reader" }),

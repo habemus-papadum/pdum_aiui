@@ -94,11 +94,13 @@ export const TRANSCRIPTION_NOTE =
  *   an aiui app was DETECTED — interim signal: the hello carried a source
  *   root (the vite plugin stamps it). The side panel sits on arbitrary
  *   pages; those get the neutral opening line.
- * - The tab renders as the canonical `<tab …/>` element
- *   ({@link renderTabRecord}) — the same record used at navigation/tab-switch
- *   boundaries and in selection metadata. The MCP server's instructions teach
- *   the element once (ids are correlation hints; match via `list_pages` by
- *   url/title), so the per-turn preamble carries data, not lessons.
+ * - The tab renders as a `[current tab: <tab …/>]` marker — the same
+ *   canonical `<tab …/>` record ({@link renderTabRecord}) the boundary markers
+ *   (`[current page/tab changed: …]`) and selection metadata carry, so the
+ *   agent learns ONE way to read "the current tab is X". The MCP server's
+ *   instructions teach the element once (ids are correlation hints; match via
+ *   `list_pages` by url/title), so the per-turn preamble carries data, not
+ *   lessons.
  */
 export function promptContextSections(meta: HelloMeta | undefined): string[] {
   const tab = meta?.tab;
@@ -125,7 +127,7 @@ export function promptContextSections(meta: HelloMeta | undefined): string[] {
       ...(tab.tabIndex !== undefined ? { tabIndex: tab.tabIndex } : {}),
       ...(tab.targetId !== undefined ? { targetId: tab.targetId } : {}),
     };
-    sections.push(`It was submitted from this browser tab:\n${renderTabRecord(record)}`);
+    sections.push(`[current tab: ${renderTabRecord(record)}]`);
   }
 
   if (aiui && source?.root !== undefined) {

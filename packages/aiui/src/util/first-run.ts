@@ -2,18 +2,21 @@
  * First-run choices: settings that deserve a deliberate answer, not a silent
  * default.
  *
- * Three of `aiui claude`'s behaviors are pure personal preference with real
- * consequences: whether to launch with `--dangerously-skip-permissions`,
- * whether to auto-dismiss the development-channel acknowledgement prompt by
- * typing into the user's terminal, and whether the channel's web server binds
- * loopback-only or the host interface (the trusted-LAN posture that makes the
- * whole unauthenticated surface — iPad paint page included — reachable from
- * the network). None should be something the user "tagged along" with because
- * a default existed — so the first interactive launch asks (definitively: the
- * prompts have no Enter-through default), and the answers persist to the
- * **user-level** config, after which nothing asks again. Non-interactive
- * sessions never prompt; unset values fall back to the documented defaults
- * (skip: true, nudge: true, bind: loopback).
+ * Two of `aiui claude`'s behaviors are pure personal preference with real
+ * consequences: whether to auto-dismiss the development-channel acknowledgement
+ * prompt by typing into the user's terminal, and whether the channel's web
+ * server binds loopback-only or the host interface (the trusted-LAN posture
+ * that makes the whole unauthenticated surface — iPad paint page included —
+ * reachable from the network). Neither should be something the user "tagged
+ * along" with because a default existed — so the first interactive launch asks
+ * (definitively: the prompts have no Enter-through default), and the answers
+ * persist to the **user-level** config, after which nothing asks again.
+ * Non-interactive sessions never prompt; unset values fall back to the
+ * documented defaults (nudge: true, bind: loopback).
+ *
+ * (Whether to pass `--dangerously-skip-permissions` is no longer a first-run
+ * question: it lives in `claude.args`, opt-in via `aiui config set-dsp`, and is
+ * never added by default — see docs/guide/warning.)
  */
 import { type AiuiConfig, type ChannelBind, updateUserConfig } from "./config";
 import { type Choice, choose } from "./prompt";
@@ -21,13 +24,6 @@ import { printNote } from "./ui";
 
 /** Injectable for tests; matches {@link choose} without a default key. */
 type Ask = (question: string, choices: Choice[]) => Promise<string>;
-
-const SKIP_PERMISSIONS_QUESTION =
-  "One-time setup — how should aiui launch Claude Code?\n" +
-  "With --dangerously-skip-permissions, every agent action (shell commands, file writes,\n" +
-  "network, the browser) runs without asking you first. Fast, and dangerous. It's a personal\n" +
-  "preference — aiui works fine either way. Saved as claude.skipPermissions in your user\n" +
-  "config; edit or delete it there to change your mind.";
 
 const CHANNEL_BIND_QUESTION =
   "One-time setup — where should the channel's web server bind?\n" +
@@ -59,14 +55,6 @@ export async function ensureLaunchChoices(
 ): Promise<AiuiConfig> {
   let updated = config;
 
-  if (updated.claude?.skipPermissions === undefined) {
-    const answer = await ask(SKIP_PERMISSIONS_QUESTION, [
-      { key: "y", label: "yes — skip permissions; nothing asks before acting" },
-      { key: "n", label: "no — keep Claude Code's own permission prompts" },
-    ]);
-    updated = persist(updated, "skipPermissions", answer === "y");
-  }
-
   if (updated.claude?.enterNudge === undefined) {
     const answer = await ask(ENTER_NUDGE_QUESTION, [
       { key: "y", label: "yes — press Enter for me at startup" },
@@ -86,11 +74,7 @@ export async function ensureLaunchChoices(
   return updated;
 }
 
-function persist(
-  config: AiuiConfig,
-  key: "skipPermissions" | "enterNudge",
-  value: boolean,
-): AiuiConfig {
+function persist(config: AiuiConfig, key: "enterNudge", value: boolean): AiuiConfig {
   const file = updateUserConfig((c) => {
     c.claude = { ...c.claude, [key]: value };
   });

@@ -192,9 +192,17 @@ async function askValue(state: FieldState): Promise<ConfigValue | undefined> {
       })),
     });
   }
+  // Array fields round-trip through their JSON form (the input parses JSON);
+  // scalars keep their bare text so a plain string edits as itself.
+  const seeded =
+    state.effective === undefined
+      ? undefined
+      : Array.isArray(state.effective)
+        ? formatConfigValue(state.effective)
+        : String(state.effective);
   const raw = await input({
     message: `${state.path} = `,
-    default: state.effective !== undefined ? String(state.effective) : undefined,
+    default: seeded,
     validate: (text) => {
       const parsed = parseFieldValue(state.field, text);
       return "error" in parsed ? parsed.error : true;

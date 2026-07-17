@@ -7,13 +7,13 @@
  *   <repo>/.aiui-cache/     traces, recordings, the session-browser profile(s),
  *                           and the project-level config.json (see projectCacheDir)
  *   <user cache>/           ~/.cache/aiui — the user config.json (incl. the
- *                           persisted `claude.skipPermissions` first-run answer),
+ *                           persisted first-run answers: channel.bind, enterNudge),
  *                           the running-server registry (mcp/), remote-tunnel
  *                           browser-profiles/, and the ~150-160 MB managed
  *                           browser installs (chromium/, chrome/)
  *
  * `clean` removes both so the next `aiui claude` behaves like a fresh install:
- * the first-run permission prompt returns, the managed-browser offer returns,
+ * the first-run prompts return, the managed-browser offer returns,
  * and traces + browser logins are gone. Re-showing that download is the whole
  * reason the browser is in scope by default — `--keep-browser` spares the
  * re-download when you only want to reset the cheap state. Because it deletes
@@ -156,7 +156,8 @@ export async function runClean(opts: CleanOptions = {}): Promise<void> {
   const removingBrowser = clearingUser && !opts.keepBrowser;
   const consequences = [
     "traces and session-browser logins are cleared",
-    clearingUser && "the Claude permission prompt (claude.skipPermissions) returns on next launch",
+    clearingUser &&
+      "the one-time first-run prompts (channel bind, enter-nudge) return on next launch",
     removingBrowser && "the managed browser re-downloads (~150-160 MB) on the next `aiui claude`",
   ].filter((line): line is string => Boolean(line));
   console.log("This resets aiui toward a fresh install:");

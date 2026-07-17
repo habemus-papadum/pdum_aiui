@@ -6,6 +6,7 @@ import { type CleanOptions, runClean } from "./commands/clean";
 import {
   runConfigGet,
   runConfigSet,
+  runConfigSetDsp,
   runConfigShow,
   runConfigUnset,
   type ShowOptions,
@@ -183,13 +184,21 @@ export function buildProgram(): Command {
     .command("set")
     .description("set a key in the user config (or the project's with --project)")
     .argument("<key>", 'dotted key, e.g. "chrome.mode"')
-    .argument("<value>", "the new value, validated against the schema")
+    .argument(
+      "<value>",
+      "the new value, validated against the schema (arrays as JSON, e.g. '[\"--foo\"]')",
+    )
     .option("--project", "write .aiui-cache/config.json here instead of the user config")
     .action((key: string, value: string, opts: WriteOptions) => runConfigSet(key, value, opts));
   config
+    .command("set-dsp")
+    .description("opt in to --dangerously-skip-permissions: add it to claude.args (idempotent)")
+    .option("--project", "write .aiui-cache/config.json here instead of the user config")
+    .action((opts: WriteOptions) => runConfigSetDsp(opts));
+  config
     .command("unset")
     .description("remove a key from the user config (or the project's with --project)")
-    .argument("<key>", 'dotted key, e.g. "claude.skipPermissions"')
+    .argument("<key>", 'dotted key, e.g. "claude.args"')
     .option("--project", "remove from .aiui-cache/config.json here instead of the user config")
     .action((key: string, opts: WriteOptions) => runConfigUnset(key, opts));
 

@@ -10,9 +10,10 @@
  *
  * CLI flags override both. Everything is optional; a missing file is an empty
  * config. A *malformed* file is a hard error, not a warning — these settings
- * gate security-relevant behavior (`claude.skipPermissions`), and a typo that
- * silently reverts to the dangerous default is worse than a failed launch. The
- * same reasoning rejects unknown keys.
+ * gate security-relevant behavior (`claude.args`, e.g. whether
+ * `--dangerously-skip-permissions` is passed), and a typo that silently drops
+ * such a flag is worse than a failed launch. The same reasoning rejects unknown
+ * keys.
  *
  * What the keys are — types, enums, defaults, and documentation — lives in one
  * declarative table, `config-schema.ts`. Validation here walks that schema, and
@@ -33,6 +34,7 @@ import {
   fieldRuntimeType,
   formatConfigValue,
   invalidReason,
+  isArrayField,
   type ManagedFlavor,
   type ManageMode,
 } from "./config-schema";
@@ -62,8 +64,8 @@ export const CONFIG_FILENAME = "config.json";
  */
 export interface AiuiConfig {
   claude?: {
-    /** Launch Claude Code with `--dangerously-skip-permissions`. */
-    skipPermissions?: boolean;
+    /** Extra argv passed verbatim to `claude` on every launch (e.g. `--dangerously-skip-permissions`). */
+    args?: string[];
     /** Auto-dismiss Claude Code's development-channel prompt (util/enter-nudge.ts). */
     enterNudge?: boolean;
   };
@@ -120,8 +122,14 @@ const DEPRECATED_SECTIONS = new Set(["sidecars"]);
  * error on upgrade. `chrome.buildExtension` / `chrome.autoCapture` retired with
  * the DevTools extension and page-side getDisplayMedia capture — both were long
  * parsed-and-ignored, and nothing reads them (owner, 2026-07-17).
+ *
+ * `claude.skipPermissions` retired when `--dangerously-skip-permissions` moved
+ * into the general `claude.args` list (owner, 2026-07-17): a config still
+ * carrying the old boolean is tolerated and dropped — it no longer adds the
+ * flag, so run `aiui config set-dsp` to opt back in (docs/guide/warning).
  */
 const DEPRECATED_FIELDS: Record<string, readonly string[]> = {
+  claude: ["skipPermissions"],
   chrome: ["buildExtension", "autoCapture"],
 };
 
@@ -212,9 +220,15 @@ function validateConfig(raw: unknown, file: string): AiuiConfig {
         continue;
       }
       const path = `${section.name}.${field.key}`;
-      const type = fieldRuntimeType(field);
-      if (typeof value !== type) {
-        throw new Error(`expected a ${type} for ${path} in ${file}`);
+      if (isArrayField(field)) {
+        if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+          throw new Error(`expected an array of strings for ${path} in ${file}`);
+        }
+      } else {
+        const type = fieldRuntimeType(field);
+        if (typeof value !== type) {
+          throw new Error(`expected a ${type} for ${path} in ${file}`);
+        }
       }
       const reason = invalidReason(field, value as ConfigValue);
       if (reason) {

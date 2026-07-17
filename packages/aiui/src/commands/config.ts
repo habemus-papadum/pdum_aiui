@@ -167,21 +167,26 @@ export function valueCell(state: FieldState): string {
 
 // ── get ──────────────────────────────────────────────────────────────────────
 
+/** A key's value for stdout: bare text for scalars, JSON for arrays. */
+function scriptValue(value: ConfigValue): string {
+  return Array.isArray(value) ? formatConfigValue(value) : String(value);
+}
+
 export function runConfigGet(key: string, base: string = process.cwd()): void {
   const levels = readLevels(base);
   const state = resolveKeyArg(key, levels);
   if (!state) {
     return;
   }
-  // Value on stdout (raw, script-friendly); provenance on stderr.
+  // Value on stdout (raw, script-friendly — arrays as JSON); provenance on stderr.
   if (state.effective !== undefined) {
-    console.log(String(state.effective));
+    console.log(scriptValue(state.effective));
     const file = state.source === "project" ? levels.paths.project : levels.paths.user;
     console.error(chalk.dim(`# set in the ${state.source} config: ${file}`));
     return;
   }
   if (state.field.default !== undefined) {
-    console.log(String(state.field.default));
+    console.log(scriptValue(state.field.default));
     console.error(chalk.dim(`# built-in default — ${describeDefault(state.field)}`));
     return;
   }
@@ -229,6 +234,33 @@ export function writeValue(
     sections[state.section.name] = { ...sections[state.section.name], [state.field.key]: value };
   });
   printNote(`wrote ${state.path}: ${formatConfigValue(value)} to ${file}`);
+}
+
+// ── set-dsp ──────────────────────────────────────────────────────────────────
+
+/** The one dangerous flag `set-dsp` toggles into `claude.args`. */
+export const DSP_FLAG = "--dangerously-skip-permissions";
+
+/**
+ * `aiui config set-dsp` — idempotently append `--dangerously-skip-permissions`
+ * to `claude.args` (the user config by default, the project's with `--project`).
+ *
+ * The ergonomic opt-in for skipping Claude Code's permission prompts, which is
+ * OFF by default now that there is no `claude.skipPermissions` flag: nothing
+ * adds this unless you ask (docs/guide/warning). Running it twice is a no-op.
+ */
+export function runConfigSetDsp(options: WriteOptions = {}, base: string = process.cwd()): void {
+  const levels = readLevels(base);
+  const level: ConfigLevel = options.project ? "project" : "user";
+  const existing = (level === "project" ? levels.project : levels.user).claude?.args ?? [];
+  if (existing.includes(DSP_FLAG)) {
+    printNote(`${DSP_FLAG} is already in claude.args (${level} config: ${levels.paths[level]})`);
+    return;
+  }
+  const file = updateConfigFile(levels.paths[level], (config) => {
+    config.claude = { ...config.claude, args: [...(config.claude?.args ?? []), DSP_FLAG] };
+  });
+  printNote(`added ${DSP_FLAG} to claude.args in ${file}`);
 }
 
 export function runConfigUnset(

@@ -35,11 +35,11 @@ describe("readConfigFile", () => {
 
   it("parses a full config", () => {
     const path = write("config.json", {
-      claude: { skipPermissions: false },
+      claude: { args: ["--dangerously-skip-permissions"] },
       chrome: { enabled: true, profile: "p", headless: true, channel: "beta" },
     });
     expect(readConfigFile(path)).toEqual({
-      claude: { skipPermissions: false },
+      claude: { args: ["--dangerously-skip-permissions"] },
       chrome: {
         enabled: true,
         profile: "p",
@@ -87,12 +87,33 @@ describe("readConfigFile", () => {
   });
 
   it("rejects wrong value types and bad channels", () => {
-    expect(() => readConfigFile(write("a.json", { claude: { skipPermissions: "yes" } }))).toThrow(
-      /expected a boolean for claude.skipPermissions/,
+    expect(() => readConfigFile(write("a.json", { chrome: { headless: "yes" } }))).toThrow(
+      /expected a boolean for chrome.headless/,
     );
     expect(() => readConfigFile(write("b.json", { chrome: { channel: "nightly" } }))).toThrow(
       /invalid chrome.channel "nightly"/,
     );
+  });
+
+  it("validates claude.args as an array of strings", () => {
+    expect(readConfigFile(write("ok.json", { claude: { args: ["--foo", "--bar"] } }))).toEqual({
+      claude: { args: ["--foo", "--bar"] },
+    });
+    expect(() => readConfigFile(write("scalar.json", { claude: { args: "--foo" } }))).toThrow(
+      /expected an array of strings for claude.args/,
+    );
+    expect(() => readConfigFile(write("mixed.json", { claude: { args: ["--foo", 3] } }))).toThrow(
+      /expected an array of strings for claude.args/,
+    );
+  });
+
+  it("tolerates the retired claude.skipPermissions, dropping it", () => {
+    // The old boolean moved into claude.args; a config still carrying it loads
+    // fine and drops it (it no longer adds the flag — run `aiui config set-dsp`).
+    const config = readConfigFile(
+      write("legacy-claude.json", { claude: { skipPermissions: true, enterNudge: false } }),
+    );
+    expect(config).toEqual({ claude: { enterNudge: false } });
   });
 
   it("accepts and validates chrome.forTesting", () => {
@@ -154,21 +175,21 @@ describe("updateUserConfig", () => {
     });
     expect(file).toBe(join(dir, "user-cache", "config.json"));
     updateUserConfig((c) => {
-      c.claude = { skipPermissions: false };
+      c.claude = { args: ["--dangerously-skip-permissions"] };
     });
     const config = readConfigFile(file);
     expect(config?.chrome?.forTesting).toBe("off");
-    expect(config?.claude?.skipPermissions).toBe(false);
+    expect(config?.claude?.args).toEqual(["--dangerously-skip-permissions"]);
   });
 });
 
 describe("mergeAiuiConfig", () => {
   it("merges section-by-section with the override winning per key", () => {
     const merged = mergeAiuiConfig(
-      { claude: { skipPermissions: false }, chrome: { profile: "user", headless: true } },
+      { claude: { enterNudge: false }, chrome: { profile: "user", headless: true } },
       { chrome: { profile: "project" } },
     );
-    expect(merged.claude?.skipPermissions).toBe(false);
+    expect(merged.claude?.enterNudge).toBe(false);
     expect(merged.chrome?.profile).toBe("project");
     expect(merged.chrome?.headless).toBe(true);
   });
