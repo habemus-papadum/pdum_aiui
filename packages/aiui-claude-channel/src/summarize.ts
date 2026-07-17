@@ -33,17 +33,17 @@ export interface Summarizer {
 
 /**
  * Prepare the composed body for the summarizer's user turn: screenshots carry no
- * signal for a one-line gloss (and their XML blocks would blow the budget), so
- * collapse each `<screenshot …/>` / `<screenshot …>…</screenshot>` block to the
- * literal `[screenshot]`, then cap at 1000 chars — a summary of the opening is
- * as good as a summary of the whole, and the model call stays cheap. Pure and
+ * signal for a one-line gloss (and their metadata blocks would blow the budget),
+ * so drop each `<screenshot-metadata …>` block and collapse each
+ * `[screenshot located at …]` / `[pasted image located at …]` bracket line to
+ * the literal `[screenshot]`, then cap at 1000 chars — a summary of the opening
+ * is as good as a summary of the whole, and the model call stays cheap. Pure and
  * exported so the transform is unit-tested independently of the network seam.
  */
 export function summaryPromptInput(body: string): string {
-  const withoutShots = body.replace(
-    /<screenshot[^>]*(?:\/>|>[\s\S]*?<\/screenshot>)/g,
-    "[screenshot]",
-  );
+  const withoutShots = body
+    .replace(/<screenshot-metadata[^>]*(?:\/>|>[\s\S]*?<\/screenshot-metadata>)\n?/g, "")
+    .replace(/\[(?:screenshot|pasted image)[^\]]*\]/g, "[screenshot]");
   return withoutShots.slice(0, 1000);
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { composeIntent, Engine, renderAppSelection, renderCodeSelection } from "./engine";
+import { composeIntent, Engine } from "./engine";
+import { renderAppSelection, renderCodeSelection } from "./render";
 
 function armedEngine(): Engine {
   let t = 0;
@@ -221,9 +222,10 @@ describe("composeIntent", () => {
     expect(composed.components[0].component).toBe("Legend");
     // No saved file → the reference degrades but keeps the element info inline.
     expect(composed.prompt).toContain(
-      '<screenshot marker="shot_1" missing="image not captured">\n' +
+      "[screenshot shot_1 located at MISSING]\n" +
+        '<screenshot-metadata marker="shot_1">\n' +
         '  <element name="Legend" source="scenery.ts:33"/>\n' +
-        "</screenshot>",
+        "</screenshot-metadata>",
     );
     expect(composed.meta).toEqual({});
   });
@@ -253,12 +255,13 @@ describe("composeIntent", () => {
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toContain(
       "compare this \n" +
-        '<screenshot path="/tmp/aiui-lab/1-shot_1.png">\n' +
+        "[screenshot located at /tmp/aiui-lab/1-shot_1.png]\n" +
+        '<screenshot-metadata path="/tmp/aiui-lab/1-shot_1.png">\n' +
         '  <element name="Legend" source="scenery.ts:33">\n' +
         '    <cell name="colorScale" source="scenery.ts:41"/>\n' +
         '    <cell name="ticks"/>\n' +
         "  </element>\n" +
-        "</screenshot>\n " +
+        "</screenshot-metadata>\n " +
         "against the mock",
     );
     // Everything is in the text now: no meta block, no token↔meta hint line.
@@ -286,7 +289,7 @@ describe("composeIntent", () => {
     expect(composed.components).toHaveLength(11);
   });
 
-  it("renders the plain-text style on request (shotFormat: text), sources relativized", () => {
+  it("relativizes element and cell sources in the metadata block", () => {
     const engine = armedEngine();
     engine.shotDone(
       { x: 1, y: 2, w: 30, h: 20 },
@@ -301,14 +304,14 @@ describe("composeIntent", () => {
       "data:image/png;base64,x",
       "/repo/app/.aiui-cache/traces/t1/shot_1.png",
     );
-    const composed = composeIntent(engine.events, "replace", {
-      cwd: "/repo/app",
-      shotFormat: "text",
-    });
+    const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
     expect(composed.prompt).toContain(
-      "[screenshot: .aiui-cache/traces/t1/shot_1.png\n" +
-        "  Legend @ src/Legend.tsx:30:2 — cells: colorScale @ src/Legend.tsx:41:8\n" +
-        "]",
+      "[screenshot located at .aiui-cache/traces/t1/shot_1.png]\n" +
+        '<screenshot-metadata path=".aiui-cache/traces/t1/shot_1.png">\n' +
+        '  <element name="Legend" source="src/Legend.tsx:30:2">\n' +
+        '    <cell name="colorScale" source="src/Legend.tsx:41:8"/>\n' +
+        "  </element>\n" +
+        "</screenshot-metadata>",
     );
   });
 
@@ -329,15 +332,16 @@ describe("composeIntent", () => {
     );
 
     const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
-    // Inside cwd → relative; the viewport shot is a single self-closing tag.
+    // Inside cwd → relative; the viewport shot is a bare bracket line.
     expect(composed.prompt).toContain(
-      '<screenshot path=".aiui-cache/traces/t1/shot_1.png" view="full-viewport"/>',
+      "[screenshot located at .aiui-cache/traces/t1/shot_1.png (full viewport)]",
     );
     // Outside cwd → the absolute path is the truth; keep it.
     expect(composed.prompt).toContain(
-      '<screenshot path="/somewhere/else/shot_2.png">\n' +
+      "[screenshot located at /somewhere/else/shot_2.png]\n" +
+        '<screenshot-metadata path="/somewhere/else/shot_2.png">\n' +
         '  <element name="Legend" source="scenery.ts:33"/>\n' +
-        "</screenshot>",
+        "</screenshot-metadata>",
     );
   });
 
@@ -368,21 +372,13 @@ describe("composeIntent", () => {
 
     const composed = composeIntent(engine.events, "replace", { cwd: "/repo/app" });
     expect(composed.prompt).toContain(
-      '<screenshot path=".aiui-cache/traces/t1/shot_1.jpg" capture="on-change" view="full-viewport"/>',
+      "[screenshot located at .aiui-cache/traces/t1/shot_1.jpg (captured on change; full viewport)]",
     );
     expect(composed.prompt).toContain(
-      '<screenshot path=".aiui-cache/traces/t1/shot_2.jpg" capture="continuous" at="5.0s" view="full-viewport"/>',
+      "[screenshot located at .aiui-cache/traces/t1/shot_2.jpg at +5.0s (full viewport)]",
     );
     // The items carry the terms through for the preview/debug viewers.
     expect(composed.items.map((i) => i.share?.mode)).toEqual(["smart", "continuous"]);
-
-    const text = composeIntent(engine.events, "replace", { cwd: "/repo/app", shotFormat: "text" });
-    expect(text.prompt).toContain(
-      "[screenshot: .aiui-cache/traces/t1/shot_1.jpg (captured on change) (full viewport)]",
-    );
-    expect(text.prompt).toContain(
-      "[screenshot: .aiui-cache/traces/t1/shot_2.jpg (continuous capture, +5.0s) (full viewport)]",
-    );
   });
 
   it("excludes retracted shots (shot-drop) from items and prompt", () => {
@@ -409,7 +405,7 @@ describe("composeIntent", () => {
     expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot"]);
     expect(composed.items[1].marker).toBe("shot_2");
     expect(composed.prompt).not.toContain("shot_1");
-    expect(composed.prompt).toContain('<screenshot path="/tmp/aiui-lab/2-shot_2.png"/>');
+    expect(composed.prompt).toContain("[screenshot located at /tmp/aiui-lab/2-shot_2.png]");
     expect(composed.meta).toEqual({});
     // ...but the shot event itself is still in the stream (append-only; traces keep it).
     expect(engine.events.some((e) => e.type === "shot" && e.marker === "shot_1")).toBe(true);
@@ -548,24 +544,25 @@ describe("app selection (a positional stream event, interleaved like text and sh
     });
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toBe(
-      "make this wider " +
-        'Regarding the on-screen selection "the histogram title" ' +
-        "(authored at src/Hist.tsx:10:2; produced by cell hist defined at src/model/cells.ts:7)",
+      "make this wider \n" +
+        '[selected text: "the histogram title"]\n' +
+        '<selection-metadata source="src/Hist.tsx:10:2">\n' +
+        '  <cell name="hist" source="src/model/cells.ts:7"/>\n' +
+        "</selection-metadata>",
     );
     // Selection text is never transcript text — corrections can't touch it.
     expect(composed.transcript).toBe("make this wider");
   });
 
-  it("fences a long selection and carries the TeX attribution", () => {
+  it("fences a long selection and carries the TeX attribution in metadata", () => {
     const engine = armedEngine();
     engine.talkStart();
     const long = "a very long run of selected page text ".repeat(10).trim();
     engine.appSelection({ text: long, sourceLoc: "src/Doc.tsx:3:1", tex: "\\frac{a}{b}" });
     const composed = composeIntent(engine.events);
     expect(composed.prompt).toContain(
-      "Regarding this on-screen selection " +
-        "(authored at src/Doc.tsx:3:1; rendered mathematics — TeX source: \\frac{a}{b}):\n" +
-        `\`\`\`\n${long}\n\`\`\``,
+      `[selected text (1 line)]:\n\`\`\`\n${long}\n\`\`\`\n` +
+        '<selection-metadata source="src/Doc.tsx:3:1" tex="\\frac{a}{b}"/>',
     );
   });
 
@@ -701,6 +698,20 @@ describe("navigation (a context boundary riding the turn, never opening one)", (
     expect(event).toMatchObject({ type: "navigation", from: A, to: B, kind: "push" });
   });
 
+  it("carries a destination tab record through to the rendered <tab> element", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.navigation(A, B, "push", { url: B, title: "Aztec", aiui: true });
+    const composed = composeIntent(engine.events);
+    expect(composed.prompt).toContain(
+      `[page navigation: /aztec]\n<tab url="${B}" title="Aztec" aiui-app="true"/>`,
+    );
+    // The span carries the record too — the trace hero's overlay data.
+    expect(composed.spans.find((s) => s.kind === "navigation")).toMatchObject({
+      tab: { url: B, title: "Aztec", aiui: true },
+    });
+  });
+
   it("composes positionally: content before the boundary reads as the old page's", () => {
     const engine = armedEngine();
     const seg = engine.talkStart() as number;
@@ -717,7 +728,7 @@ describe("navigation (a context boundary riding the turn, never opening one)", (
     // The lowered prompt carries the boundary between the two utterances,
     // rendered as short routes (origin is noise).
     const prompt = composed.prompt;
-    const boundary = prompt.indexOf("(page navigation: now on /aztec — content above was on /)");
+    const boundary = prompt.indexOf("[page navigation: /aztec]");
     expect(boundary).toBeGreaterThan(prompt.indexOf("make this wider"));
     expect(boundary).toBeLessThan(prompt.indexOf("and this taller"));
     // The transcript (text-only view) is unpolluted by the boundary.
@@ -768,9 +779,10 @@ describe("tab-switch (the sibling boundary — a different tab, not the same tab
     const composed = composeIntent(engine.events, "replace");
     expect(composed.items.map((i) => i.kind)).toEqual(["text", "tab-switch", "text"]);
     const prompt = composed.prompt;
-    // Phrased as a tab switch, NOT a page navigation.
+    // Phrased as a tab switch, NOT a page navigation — and the driver's tab
+    // handle still yields a minimal <tab> record when no full one rode along.
     const boundary = prompt.indexOf(
-      "(switched tabs: now looking at /dashboard — content above was on /)",
+      '[tab switch: /dashboard]\n<tab url="http://other.test/dashboard" driver-tab="2"/>',
     );
     expect(boundary).toBeGreaterThan(prompt.indexOf("compare against this one"));
     expect(boundary).toBeLessThan(prompt.indexOf("which is faster"));
@@ -792,7 +804,7 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     const composed = composeIntent(engine.events);
     expect(composed.items.map((i) => i.kind)).toEqual(["code-selection"]);
     expect(composed.items[0]).toMatchObject({ marker: "code_1" });
-    expect(composed.prompt).toBe("Regarding `src/a.ts:5:1`: `const x = 1;`");
+    expect(composed.prompt).toBe("[code selection at `src/a.ts:5:1`: `const x = 1;`]");
     // Structured code is NOT transcript text — corrections can't touch it.
     expect(composed.transcript).toBe("");
   });
@@ -808,7 +820,7 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     // The retracted selection vanishes from the composition; the kept one stays.
     expect(composed.items.map((i) => i.kind)).toEqual(["code-selection"]);
     expect(composed.items[0]).toMatchObject({ marker: "code_2" });
-    expect(composed.prompt).toBe("Regarding `src/b.ts:2:2`: `const b = 2;`");
+    expect(composed.prompt).toBe("[code selection at `src/b.ts:2:2`: `const b = 2;`]");
     // ...but the event itself stays in the stream (append-only; traces keep it).
     expect(engine.events.some((e) => e.type === "code-selection" && e.marker === "code_1")).toBe(
       true,
@@ -823,7 +835,7 @@ describe("code selection (the reader's contribution, rendered at lowering time)"
     );
     engine.codeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
     const composed = composeIntent(engine.events);
-    expect(composed.prompt).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
+    expect(composed.prompt).toContain("[code selection at `src/b.ts:10-21` (12 lines)]:\n```\n");
     expect(composed.prompt).toContain(`${code}\n\`\`\``);
   });
 
@@ -858,7 +870,7 @@ describe("selection render helpers (exported — the channel's live resolver re-
   // back to the SAME rendering composeIntent inlines — one implementation, so
   // these pin that the exported helpers ARE that rendering.
 
-  it("renderAppSelection: short → inline sentence with the attribution parenthetical", () => {
+  it("renderAppSelection: short → bracket line with the attribution in metadata", () => {
     expect(
       renderAppSelection({
         text: "the histogram title",
@@ -866,8 +878,10 @@ describe("selection render helpers (exported — the channel's live resolver re-
         cell: "hist",
       }),
     ).toBe(
-      'Regarding the on-screen selection "the histogram title" ' +
-        "(authored at src/Hist.tsx:10:2; produced by cell hist)",
+      '\n[selected text: "the histogram title"]\n' +
+        '<selection-metadata source="src/Hist.tsx:10:2">\n' +
+        '  <cell name="hist"/>\n' +
+        "</selection-metadata>\n",
     );
   });
 
@@ -882,16 +896,36 @@ describe("selection render helpers (exported — the channel's live resolver re-
     );
   });
 
-  it("renderCodeSelection: short → inline; long → fenced under its locator", () => {
+  it("renderCodeSelection: short → inline bracket; long → fenced under its locator", () => {
     expect(renderCodeSelection({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1" })).toBe(
-      "Regarding `src/a.ts:5:1`: `const x = 1;`",
+      "[code selection at `src/a.ts:5:1`: `const x = 1;`]",
     );
     const code = Array.from({ length: 12 }, (_, i) => `line ${i} of something long enough`).join(
       "\n",
     );
     const block = renderCodeSelection({ text: code, sourceLoc: "src/b.ts:10-21", lines: 12 });
-    expect(block).toContain("Regarding `src/b.ts:10-21` (12 lines):\n```\n");
+    expect(block).toContain("[code selection at `src/b.ts:10-21` (12 lines)]:\n```\n");
     expect(block).toContain(`${code}\n\`\`\``);
+  });
+
+  it("elides a fenced selection past 50 lines, saying how many were cut", () => {
+    const code = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join("\n");
+    const block = renderCodeSelection({ text: code, sourceLoc: "src/big.ts:1-60", lines: 60 });
+    expect(block).toContain("(60 lines)]:");
+    expect(block).toContain("line 50\n… (+10 more lines elided)\n```");
+    expect(block).not.toContain("line 51");
+  });
+
+  it("renders the page's <tab> record (full URL) in selection metadata", () => {
+    expect(renderAppSelection({ text: "42.7", url: "http://localhost:5173/sim?run=3" })).toBe(
+      '\n[selected text: "42.7"]\n' +
+        "<selection-metadata>\n" +
+        '  <tab url="http://localhost:5173/sim?run=3"/>\n' +
+        "</selection-metadata>\n",
+    );
+    expect(
+      renderCodeSelection({ text: "const x = 1;", url: "http://localhost:5173/reader" }),
+    ).toContain('<tab url="http://localhost:5173/reader"/>');
   });
 });
 
@@ -1194,7 +1228,7 @@ describe("segment-replace (the panel's segment editor)", () => {
 });
 
 describe("pasted images (clipboard pixels, labeled honestly)", () => {
-  it("renders <pasted-image> in xml and '[pasted image' in text — never 'screenshot'", () => {
+  it("renders '[pasted image located at …]' — never 'screenshot'", () => {
     const events: IntentEvent[] = [
       { at: 0, type: "armed", on: true },
       { at: 1, type: "thread-open", trigger: "explicit" },
@@ -1208,14 +1242,10 @@ describe("pasted images (clipboard pixels, labeled honestly)", () => {
         origin: "paste",
       },
     ];
-    const xml = composeIntent(events, "replace", { shotFormat: "xml" });
-    expect(xml.prompt).toContain("<pasted-image");
-    expect(xml.prompt).not.toContain("<screenshot");
-    expect(xml.items[0].origin).toBe("paste");
-
-    const text = composeIntent(events, "replace", { shotFormat: "text" });
-    expect(text.prompt).toContain("[pasted image:");
-    expect(text.prompt).not.toContain("screenshot");
+    const composed = composeIntent(events, "replace");
+    expect(composed.prompt).toContain("[pasted image located at /tmp/paste.png]");
+    expect(composed.prompt).not.toContain("screenshot");
+    expect(composed.items[0].origin).toBe("paste");
   });
 
   it("the engine verb stamps provenance; a capture stays unmarked", () => {

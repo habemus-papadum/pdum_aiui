@@ -327,11 +327,14 @@ describe("navigation continuity — context riding the turn", () => {
       from: "fake://tab/7/a",
       to: "fake://tab/7/b",
       navKind: "push",
+      tabRecord: { url: "fake://tab/7/b", title: "b", aiui: true },
     });
     const nav = r.lanes.engine.events.find((e) => e.type === "navigation") as
-      | { from: string; to: string; kind?: string }
+      | { from: string; to: string; kind?: string; tab?: unknown }
       | undefined;
     expect(nav).toMatchObject({ from: "fake://tab/7/a", to: "fake://tab/7/b", kind: "push" });
+    // The destination's canonical tab record rides the event untouched.
+    expect(nav?.tab).toEqual({ url: "fake://tab/7/b", title: "b", aiui: true });
   });
 
   it("a tab SWITCH mid-turn is its OWN event (tab-switch), not a navigation, naming both sides and both tabs", async () => {
@@ -345,7 +348,7 @@ describe("navigation continuity — context riding the turn", () => {
     // A tab switch is a distinct boundary — no `navigation` event is minted.
     expect(r.lanes.engine.events.some((e) => e.type === "navigation")).toBe(false);
     const sw = r.lanes.engine.events.find((e) => e.type === "tab-switch") as
-      | { from: string; to: string; fromTab?: number; toTab?: number }
+      | { from: string; to: string; fromTab?: number; toTab?: number; tab?: unknown }
       | undefined;
     expect(sw).toMatchObject({
       from: "fake://tab/7/docs",
@@ -353,6 +356,8 @@ describe("navigation continuity — context riding the turn", () => {
       fromTab: 7,
       toTab: 9,
     });
+    // The destination's record is assembled from whatever tabInfo contributed.
+    expect(sw?.tab).toEqual({ url: "fake://tab/9/app" });
   });
 
   it("boundaries OUTSIDE a turn record nothing (never a turn opener)", async () => {

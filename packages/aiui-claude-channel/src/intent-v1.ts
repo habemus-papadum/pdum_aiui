@@ -5,8 +5,9 @@
  * Where `text-concat` accumulates a string, `intent-v1` accumulates the intent
  * tool's **event log** plus binary attachments, and on `fin` lowers the whole
  * turn into one prompt with each screenshot inlined at its position
- * (`[screenshot: <path> (elements: …)]` — paths relativized to this process's
- * cwd, the agent's working directory; see composeIntent).
+ * (`[screenshot located at <path>]` + a `<screenshot-metadata>` block when
+ * elements were located — paths relativized to this process's cwd, the
+ * agent's working directory; see composeIntent).
  * The pipeline core — `composeIntent`, the V4A applier, the config shape — is
  * imported from `@habemus-papadum/aiui-lowering-pipeline`, the same module the
  * browser modality runs, so one implementation and one set of captured fixtures
@@ -24,14 +25,12 @@
  *    arrival, and — when the hello asked for server-side transcription —
  *    transcribed here; the produced `transcript-final` event is both merged
  *    into the stream and pushed back to the client as a `lowered` message.
- *  - `context`  → JSON `{ selection }`: the on-screen selection, at most once —
- *    the LEGACY carrier. Current clients ride selections on the stream itself
- *    as positional `app-selection` events (marker `sel_N`; one at thread-open,
- *    one per mid-turn selection, each retractable by marker via
+ *  - `context`  → LEGACY (pre-greenfield clients): a submit-time `{ selection }`.
+ *    Accepted and ignored — current clients ride selections on the stream as
+ *    positional `app-selection` events (marker `sel_N`, retractable via
  *    `app-selection-drop`), which `composeIntent` renders INLINE in the body
- *    at their stream position. Only this legacy chunk still lowers through the
- *    context preamble (`selectionSections`) — and only when the stream carried
- *    no `app-selection` events of its own.
+ *    at their stream position; the preamble path was retired (render audit,
+ *    2026-07).
  *
  * A thread that ends in `cancel` (or never fins) lowers to nothing. (The
  * corrector round-trip — patchless `correction` requests answered with V4A
@@ -58,6 +57,7 @@ import {
   DEFAULT_INTENT_CONFIG,
   expandTier,
   type IntentEvent,
+  type PromptSpan,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   type ChannelFormat,
@@ -75,13 +75,7 @@ import { createLinterSidecar, type LinterSidecar } from "./linter-sidecar";
 import type { SelectionEntry } from "./live-resolve";
 import type { LiveSession, LiveSessionCallbacks } from "./live-session";
 import { DEFAULT_OPENAI_LIVE_MODEL } from "./openai-live";
-import {
-  asSelection,
-  promptContextSections,
-  type SelectionContext,
-  selectionSections,
-  wrapWithContext,
-} from "./prompt-context";
+import { promptContextSections, TRANSCRIPTION_NOTE, wrapWithContextParts } from "./prompt-context";
 import {
   DEFAULT_REALTIME_MODEL,
   openRealtimeSession,
@@ -126,6 +120,13 @@ export interface LoweredPromptMessage {
   threadId: string;
   /** The full composed prompt (context preamble + body), exactly as sent. */
   prompt: string;
+  /**
+   * Offset-annotated structure over {@link prompt} — the body spans from
+   * {@link composeIntent}, shifted past the context preamble, with a leading
+   * `preamble` span. A client renders the raw prompt with hover-previews and a
+   * de-emphasized preamble from these instead of re-parsing. Additive.
+   */
+  spans?: PromptSpan[];
   /** The Option-C attachment paths, when the prompt carries `{shot_N}` tokens. */
   meta?: Record<string, string>;
 }
@@ -234,8 +235,6 @@ interface ResolvedIntent {
   realtimeTools: "none" | "submit_intent" | "page";
   /** Reasoning effort for the flagship model (`minimal`…`high`); undefined → model default. */
   realtimeReasoning: string | undefined;
-  /** How screenshots render in the lowered body (see ComposeOptions.shotFormat). */
-  shotFormat: "xml" | "text";
   /** The prompt linter: off, or which live vendor observes the composition. */
   linter: "off" | "openai" | "gemini";
   /** Linter model id; undefined → the vendor default. */
@@ -410,7 +409,6 @@ function resolveIntent(raw: unknown): ResolvedIntent {
       preset.realtimeTools ?? "none",
     ),
     realtimeReasoning: optStr(cfg.realtimeReasoning ?? preset.realtimeReasoning),
-    shotFormat: oneOf(cfg.shotFormat, ["xml", "text"] as const, "xml"),
     linter: oneOf(cfg.linter, ["off", "openai", "gemini"] as const, preset.linter ?? "off"),
     linterModel: optStr(cfg.linterModel ?? preset.linterModel),
     linterInstructions: optStr(cfg.linterInstructions ?? preset.linterInstructions),
@@ -548,7 +546,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // whose cwd is elsewhere overrides via AIUI_PROMPT_CWD (a supervisor that
   // spawns its channel in a subdirectory but wants repo-root-relative paths).
   const promptCwd = process.env.AIUI_PROMPT_CWD || process.cwd();
-  const composeOptions = { cwd: promptCwd, shotFormat: intent.shotFormat };
+  const composeOptions = { cwd: promptCwd };
 
   // Resolve the pipe seams once. `openai` requested but keyless (and no test
   // override) → the seam is absent and that stage degrades (no transcript /
@@ -659,11 +657,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // (its bytes are saved then, not at fin) and wired into the matching shot
   // event so fin does no disk I/O.
   const shotPaths = new Map<string, string>();
-  // The LEGACY context-chunk selection (older clients). Ignored the moment the
-  // stream carries its own `app-selection` events — those render inline in the
-  // body, and the preamble section must not duplicate them.
-  let selection: SelectionContext | undefined;
-  let streamHasSelection = false;
   let engagedSilenceTrim = false;
   let engagedImageDownscale = false;
 
@@ -732,7 +725,14 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     trace?.record({
       kind: "ir",
       label: "composed (speculative)",
-      data: { transcript: lastComposed.transcript, prompt: lastComposed.prompt },
+      // The speculative prompt is the BODY only (no context preamble yet), so
+      // its spans are composeIntent's body spans as-is — the hero renders them
+      // over the body while the turn is still in flight.
+      data: {
+        transcript: lastComposed.transcript,
+        prompt: lastComposed.prompt,
+        spans: lastComposed.spans,
+      },
     });
   };
 
@@ -1139,10 +1139,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // raw input frames. (The composed/fin stages then show what they
       // lowered to.)
       if (event.type === "app-selection") {
-        // The stream carries its own selections now: they render INLINE in
-        // the body (composeIntent), so the legacy context-chunk preamble
-        // must stand down for this turn or the selection would ride twice.
-        streamHasSelection = true;
         const { at: _at, type: _type, marker, ...data } = event;
         trace?.record({ kind: "ir", label: "app selection", data: { ...data, marker } });
         const entry: SelectionEntry = { kind: "app", item: data };
@@ -1334,8 +1330,12 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   };
 
   const onContextChunk = (bytes: Uint8Array): void => {
-    const decoded = decodeJson(bytes);
-    selection = asSelection(decoded) ?? selection;
+    // LEGACY: pre-greenfield clients rode a submit-time selection on this
+    // chunk. Current clients send positional `app-selection` events instead
+    // (rendered inline by composeIntent), and the preamble path was retired
+    // in the 2026-07 render audit. Accepted and ignored so an old client
+    // still gets its frame acked instead of an error.
+    decodeJson(bytes);
   };
 
   // A mid-thread `control` chunk — reconfiguration, never turn content. Today's
@@ -1487,15 +1487,36 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
 
     // A cancelled turn (or one with nothing to say) lowers to no notification.
     if (!cancelled && composed.prompt !== "") {
-      // App selections are stream events, folded by composeIntent into the
-      // BODY at their positions (marker-keyed latest-wins, drops honored) —
-      // already part of composed.prompt. The preamble's selection section
-      // survives only for the legacy send-time `context` chunk (older
-      // clients), and stands down when the stream carried its own selections.
-      const prompt = wrapWithContext(
-        [...staticSections, ...selectionSections(streamHasSelection ? undefined : selection)],
+      // The preamble: the hello-fixed sections (pre-warmed at thread-open)
+      // plus the TURN-dependent ones, decided here at fin — today that is the
+      // transcription warning, added only when the stream actually contains
+      // speech-transcribed text (typed contributions carry model
+      // "contribution" and never trigger it). This is the seam every future
+      // event-dependent preamble section rides through.
+      const hasSpeech = events.some(
+        (e) => e.type === "transcript-final" && e.model !== "contribution",
+      );
+      const { text: prompt, preambleLen } = wrapWithContextParts(
+        [...staticSections, ...(hasSpeech ? [TRANSCRIPTION_NOTE] : [])],
         composed.prompt,
       );
+      // The sent prompt's spans: composeIntent's body spans shifted past the
+      // context preamble, with the preamble itself as a leading span so the
+      // hero can grey it. Recorded as its own stage because the `lowered prompt`
+      // output stage is written by the generic sendPrompt tracer (which carries
+      // only the text) — the hero pairs the two by threadId/proximity.
+      const spans: PromptSpan[] =
+        preambleLen > 0
+          ? [
+              { kind: "preamble", start: 0, end: preambleLen },
+              ...composed.spans.map((s) => ({
+                ...s,
+                start: s.start + preambleLen,
+                end: s.end + preambleLen,
+              })),
+            ]
+          : composed.spans;
+      trace?.record({ kind: "ir", label: "lowered prompt spans", data: { spans } });
       const meta = Object.keys(composed.meta).length > 0 ? composed.meta : undefined;
       // Show the client what is about to be committed (pushed first, so the
       // widget's view of the prompt never lags the session notification).
@@ -1503,6 +1524,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         kind: "lowered-prompt",
         threadId: ctx.threadId,
         prompt,
+        // Omit when empty (a bare-client text-only prompt) — additive, like meta.
+        ...(spans.length > 0 ? { spans } : {}),
         ...(meta !== undefined ? { meta } : {}),
       } satisfies LoweredPromptMessage);
       await ctx.sendPrompt(prompt, meta);

@@ -94,8 +94,15 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-sec-body { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1 1 auto; }
 .aiui-dbg-events-body { display: flex; flex-direction: column; min-height: 0; }
 .aiui-dbg-hero { padding: 12px 14px; }
-.aiui-dbg-hero-preamble { color: #6f7686; font: 11px/1.55 ui-monospace, monospace;
-  white-space: pre-wrap; word-break: break-word; margin-bottom: 8px; }
+/* The hero is now ONE raw <pre> block; spans style regions inline within it. */
+.aiui-dbg-hero-raw { margin: 0; color: #e8e8ea; font: 13px/1.6 ui-monospace, monospace;
+  white-space: pre-wrap; word-break: break-word; }
+/* A preamble span: de-emphasized context the agent reads past. */
+.aiui-dbg-hero-preamble { color: #6f7686; }
+/* A shot span: its raw [screenshot …] reference (+ metadata block), a hover-preview link to the image. */
+.aiui-dbg-hero-shot { color: #cdd3e0; }
+.aiui-dbg-hero-shot-link { cursor: zoom-in; color: #8ab4f8;
+  text-decoration: underline; text-decoration-style: dotted; }
 .aiui-dbg-hero-body { color: #e8e8ea; font: 13px/1.6 ui-monospace, monospace;
   white-space: pre-wrap; word-break: break-word; }
 .aiui-dbg-hero-none { color: #9aa0aa; font-style: italic; }

@@ -22,10 +22,10 @@ const patch = [
 ].join("\n");
 
 const loweredText =
-  "This prompt was sent from the aiui web intent tool running in a web app under development.\n\n" +
-  "The source code of the web app in that tab is located at: /proj\n\n" +
-  "The user's prompt follows.\n\n---\n\n" +
-  'make this wider <screenshot path=".aiui-cache/traces/trace-42/shot_1.png"/> please';
+  "This prompt was sent from the aiui intent tool attached to a web app under development.\n\n" +
+  'It was submitted from this browser tab:\n<tab url="http://localhost:5173/" aiui-app="true"/>\n\n' +
+  "Relative paths in this prompt are relative to: /proj\n\n---\n\n" +
+  "make this wider [screenshot located at .aiui-cache/traces/trace-42/shot_1.png] please";
 
 /** A rich, completed intent-v1 trace exercising most card types. */
 function fullTrace(over: Partial<LiveTrace> = {}): LiveTrace {
@@ -76,10 +76,26 @@ function fullTrace(over: Partial<LiveTrace> = {}): LiveTrace {
         data: { mime: "audio/mpeg", bytes: 1234, text: "sent" },
       },
       { kind: "output", label: "lowered prompt", data: loweredText },
+      { kind: "ir", label: "lowered prompt spans", data: { spans: loweredSpans } },
     ],
     ...over,
   };
 }
+
+/** The spans over `loweredText` the channel would record — a preamble region
+ * and the one screenshot block, located by search so offsets can't drift. */
+const shotBlock = "[screenshot located at .aiui-cache/traces/trace-42/shot_1.png]";
+const loweredSpans = [
+  { kind: "preamble", start: 0, end: loweredText.indexOf("make this wider") },
+  {
+    kind: "shot",
+    start: loweredText.indexOf(shotBlock),
+    end: loweredText.indexOf(shotBlock) + shotBlock.length,
+    marker: "shot_1",
+    path: ".aiui-cache/traces/trace-42/shot_1.png",
+    components: [],
+  },
+];
 
 const mount = (): TraceView =>
   new TraceView({
@@ -97,7 +113,7 @@ describe("TraceView — status header", () => {
     const meta = view.root.querySelector(".aiui-dbg-status-meta")?.textContent ?? "";
     expect(meta).toContain("intent-v1");
     expect(meta).toContain("6.9s");
-    expect(meta).toContain("13 stages");
+    expect(meta).toContain("14 stages");
   });
 
   it("marks a cancelled turn and shows the no-prompt hero note", () => {
@@ -113,16 +129,28 @@ describe("TraceView — status header", () => {
 });
 
 describe("TraceView — the prompt hero", () => {
-  it("renders the body with a dimmed preamble and a screenshot thumbnail off the blob route", () => {
+  it("renders the raw prompt with a dimmed preamble span and a shot hover-preview link", () => {
     const view = mount();
     view.update(fullTrace());
+    // The whole prompt is one raw block; the preamble region is dimmed via its span.
     const preamble = view.root.querySelector(".aiui-dbg-hero-preamble")?.textContent ?? "";
-    expect(preamble).toContain("The user's prompt follows.");
-    const body = view.root.querySelector(".aiui-dbg-hero-body");
-    expect(body?.textContent).toContain("make this wider");
-    // The <screenshot> block became an <img> pointing at the stable trace blob.
-    const img = body?.querySelector<HTMLImageElement>(".aiui-dbg-shot img");
-    expect(img?.getAttribute("src")).toBe("http://host/blob/trace-42/shot_1.png");
+    expect(preamble).toContain("This prompt was sent from the aiui intent tool");
+    const raw = view.root.querySelector(".aiui-dbg-hero-raw");
+    expect(raw?.textContent).toContain("make this wider");
+    // The [screenshot …] reference is a hover-preview LINK over the raw text — not a
+    // re-parsed <img>, and not the old regex.
+    const shot = view.root.querySelector<HTMLElement>(".aiui-dbg-hero-shot-link");
+    expect(shot).toBeTruthy();
+    expect(shot?.textContent).toContain("[screenshot located at");
+    // Hovering peeks the image off the stable trace blob route (path from the span).
+    shot?.dispatchEvent(new MouseEvent("mouseenter"));
+    const peek = view.root.ownerDocument.querySelector<HTMLImageElement>(".aiui-dbg-peek");
+    expect(peek?.getAttribute("src")).toBe("http://host/blob/trace-42/shot_1.png");
+    // …and the peek is actually VISIBLE: the shared .aiui-dbg-peek stylesheet
+    // rule defaults to display:none (paths.ts's container widget), so the img
+    // must carry an inline display of its own.
+    expect(peek?.style.display).toBe("block");
+    shot?.dispatchEvent(new MouseEvent("mouseleave"));
   });
 });
 
@@ -474,9 +502,7 @@ describe("streaming partials + the in-flight prompt hero", () => {
     const root = mount(inFlight());
     expect(root.querySelector(".aiui-dbg-hero-none")).toBeNull();
     expect(root.querySelector(".aiui-dbg-hero-preview")?.textContent).toContain("not yet sent");
-    expect(root.querySelector(".aiui-dbg-hero-body")?.textContent).toContain(
-      "please draw a circle",
-    );
+    expect(root.querySelector(".aiui-dbg-hero-raw")?.textContent).toContain("please draw a circle");
   });
 
   it("prefers the real lowered prompt over the speculative one, with no badge", () => {
@@ -485,7 +511,7 @@ describe("streaming partials + the in-flight prompt hero", () => {
     trace.stages?.push({ kind: "output", label: "lowered prompt", data: { text: "the real one" } });
     const root = mount(trace);
     expect(root.querySelector(".aiui-dbg-hero-preview")).toBeNull();
-    expect(root.querySelector(".aiui-dbg-hero-body")?.textContent).toContain("the real one");
+    expect(root.querySelector(".aiui-dbg-hero-raw")?.textContent).toContain("the real one");
   });
 
   it("still says 'no prompt' when nothing has composed yet", () => {

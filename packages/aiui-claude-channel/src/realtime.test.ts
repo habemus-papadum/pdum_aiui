@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format } from "./intent-v1";
+import { TRANSCRIPTION_NOTE } from "./prompt-context";
 import {
   captureUnexpectedResponse,
   checkRealtimeConfigEcho,
@@ -422,7 +423,7 @@ describe("intent-v1 realtime transcription (streaming)", () => {
     expect(d.isClosed()).toBe(true);
     expect(up.closed).toBe(true); // the session was closed at fin
     expect(d.sent).toHaveLength(1);
-    expect(d.sent[0].text).toBe("make the plot wider");
+    expect(d.sent[0].text).toBe(`${TRANSCRIPTION_NOTE}\n\n---\n\nmake the plot wider`);
 
     // The trace saved the streamed PCM as one blob at commit.
     const [trace] = listTraces(cache);
@@ -484,7 +485,7 @@ describe("intent-v1 realtime transcription (streaming)", () => {
     await finished;
 
     expect(d.sent).toHaveLength(1);
-    expect(d.sent[0].text).toBe("reaction diffusion on the gpu");
+    expect(d.sent[0].text).toBe(`${TRANSCRIPTION_NOTE}\n\n---\n\nreaction diffusion on the gpu`);
   });
 
   it("tolerates out-of-order / gapped seq (forwards in arrival order, notes it)", async () => {
@@ -627,8 +628,8 @@ describe("intent-v1 realtime streaming fixture", () => {
     >;
     const expected = composeIntent([...clientEvents, final], "replace").prompt;
     expect(d.sent).toHaveLength(1);
-    expect(d.sent[0].text).toBe(expected);
-    expect(d.sent[0].text).toBe("reaction diffusion on the GPU");
+    expect(d.sent[0].text).toBe(`${TRANSCRIPTION_NOTE}\n\n---\n\n${expected}`);
+    expect(d.sent[0].text).toBe(`${TRANSCRIPTION_NOTE}\n\n---\n\nreaction diffusion on the GPU`);
   });
 });
 

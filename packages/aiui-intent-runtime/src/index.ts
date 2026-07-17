@@ -34,12 +34,14 @@ export type {
   CollectClientMetaOptions,
   FrameMetric,
   PageInstrumentation,
+  PageTabRecord,
   TabInfo,
 } from "./instrumentation";
 export {
   ACTOR_STORAGE_KEY,
   collectClientMeta,
   getInstrumentation,
+  pageTabRecord,
   recordFrameMetric,
   setChannelPort,
   TAB_DATASET_KEY,

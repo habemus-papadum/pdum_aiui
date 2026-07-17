@@ -317,7 +317,8 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     } else if (event.kind === "navigation") {
       // Same-tab navigation: context riding the turn (the engine no-ops
       // without an open thread), rendered into the prompt by composeIntent.
-      engine.navigation(event.from, event.to, event.navKind);
+      // The destination's tab record rides along when the reporter built one.
+      engine.navigation(event.from, event.to, event.navKind, event.tabRecord);
     }
   });
 
@@ -346,9 +347,12 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       }
       // `from` re-read at boundary time: the tab may have navigated since it
       // was last active; the boundary names where the user actually left, and
-      // the two tab handles ride along.
+      // the two tab handles ride along. The destination's canonical record is
+      // assembled from whatever the host's tabInfo contributed (its own id
+      // namespace included) — the lowering renders it as the <tab> element.
       const from = (await host.targeting.tabInfo?.(prev.id))?.url ?? prev.url;
-      engine.tabSwitch(from ?? "", to?.url ?? "", prev.id, tab);
+      const record = to?.url !== undefined ? { ...to, url: to.url } : undefined;
+      engine.tabSwitch(from ?? "", to?.url ?? "", prev.id, tab, record);
     })();
   });
 

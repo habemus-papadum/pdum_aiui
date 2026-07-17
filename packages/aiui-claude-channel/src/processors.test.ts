@@ -79,13 +79,17 @@ describe("textConcatProcessor with hello context", () => {
     await processor.onMessage(chunk("Make the plot wider"), fin);
     expect(prompts).toHaveLength(1);
     const prompt = prompts[0];
-    // The context preamble…
-    expect(prompt).toContain('"spectra" at http://localhost:5199/');
-    expect(prompt).toContain("chrome tab id 7");
-    expect(prompt).toContain("window id 2");
-    expect(prompt).toContain("list_pages");
-    expect(prompt).toContain("session-browser skill");
-    expect(prompt).toContain("/repo/packages/aiui-demo");
+    // The context preamble: the honest opening (a source root means an aiui
+    // app), the canonical <tab> record, and the relative-paths line — the
+    // correlation LESSON lives in the MCP server instructions, not per turn.
+    expect(prompt).toContain("attached to a web app under development");
+    expect(prompt).toContain(
+      '<tab url="http://localhost:5199/" title="spectra" aiui-app="true" ' +
+        'chrome-tab-id="7" window-id="2"/>',
+    );
+    expect(prompt).toContain(
+      "Relative paths in this prompt are relative to: /repo/packages/aiui-demo",
+    );
     // …then the user's text, verbatim and last.
     expect(prompt.endsWith("Make the plot wider")).toBe(true);
   });
@@ -119,8 +123,8 @@ describe("augmentTextPrompt", () => {
     const prompt = augmentTextPrompt("hi", {
       tab: { url: "http://x/", title: "t", tabIndex: 3, targetId: "ABC123" },
     });
-    expect(prompt).toContain("tab index 3");
-    expect(prompt).toContain("CDP target id ABC123");
+    expect(prompt).toContain('tab-index="3"');
+    expect(prompt).toContain('cdp-target-id="ABC123"');
   });
 });
 
@@ -165,7 +169,7 @@ describe("augmentTextPrompt with an on-screen selection", () => {
     );
     const srcIdx = prompt.indexOf("/repo/app");
     const selIdx = prompt.indexOf("on-screen selection");
-    const promptIdx = prompt.indexOf("The user's prompt follows.");
+    const promptIdx = prompt.indexOf("\n\n---\n\nmake it bigger");
     expect(srcIdx).toBeGreaterThan(-1);
     expect(selIdx).toBeGreaterThan(srcIdx);
     expect(promptIdx).toBeGreaterThan(selIdx);

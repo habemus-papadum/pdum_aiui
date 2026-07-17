@@ -59,6 +59,9 @@ The infrastructure that makes lowering *deliverable* is a **custom Claude Code c
    multimodal payloads, and stream results.
 3. Payloads pass through the lowering stage, and the finalized prompt is injected into the
    *running, interactive* session over the channel — the transcript you're already watching.
+   What each captured item (screenshot, selection, navigation boundary, the context preamble)
+   actually renders to is cataloged, with real outputs, in the
+   [Prompt Rendering Reference](./prompt-rendering).
 
 Utilities like `aiui mcp quick` (send a prompt to a chosen session) and the registry/selector
 library exist so tools — and test harnesses — can find and address the right session. See the

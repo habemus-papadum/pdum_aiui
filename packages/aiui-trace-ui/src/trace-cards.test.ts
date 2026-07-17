@@ -12,6 +12,7 @@ import {
   eventTypesSummary,
   formatDuration,
   formatUsd,
+  heroPrompt,
   isImageFile,
   isPartialLabel,
   isPlayableAudioFile,
@@ -21,12 +22,10 @@ import {
   loweredPromptText,
   noPromptMessage,
   parsePatchLines,
-  parseShotBlocks,
   previousPartialText,
   savedFrameFiles,
   shotBlobName,
   speculativePromptText,
-  splitLoweredPrompt,
   traceDurationMs,
   traceOutcome,
 } from "./trace-cards";
@@ -398,44 +397,62 @@ describe("traceOutcome", () => {
   });
 });
 
-describe("loweredPromptText + splitLoweredPrompt", () => {
+describe("loweredPromptText", () => {
   it("reads a plain-string or { text } output stage", () => {
     expect(loweredPromptText({ data: "hi" })).toBe("hi");
     expect(loweredPromptText({ data: { text: "hi", meta: {} } })).toBe("hi");
     expect(loweredPromptText(undefined)).toBe("");
   });
+});
 
-  it("splits the preamble from the body at the --- rule", () => {
-    const text = "intro\n\nsource line\n\nThe user's prompt follows.\n\n---\n\nmake it wider";
-    const { preamble, body } = splitLoweredPrompt(text);
-    expect(preamble).toContain("The user's prompt follows.");
-    expect(body).toBe("make it wider");
+describe("heroPrompt (the hero's text + spans, sent vs speculative)", () => {
+  const sentStage = (text: string): TraceStageLike => ({
+    kind: "output",
+    label: "lowered prompt",
+    data: text,
+  });
+  const spansStage = (spans: unknown): TraceStageLike => ({
+    kind: "ir",
+    label: "lowered prompt spans",
+    data: { spans },
+  });
+  const specStage = (prompt: string, spans?: unknown): TraceStageLike => ({
+    kind: "ir",
+    label: "composed (speculative)",
+    data: { transcript: "", prompt, ...(spans !== undefined ? { spans } : {}) },
   });
 
-  it("treats a bare-client prompt (no wrapping) as all body", () => {
-    expect(splitLoweredPrompt("just the body")).toEqual({ preamble: "", body: "just the body" });
+  it("prefers the sent prompt and pairs it with its companion spans stage", () => {
+    const spans = [{ kind: "preamble", start: 0, end: 5 }];
+    const hero = heroPrompt([sentStage("hello world"), spansStage(spans)]);
+    expect(hero).toEqual({ text: "hello world", spans, speculative: false });
+  });
+
+  it("a sent prompt with no companion spans stage (old trace) → raw text, no spans", () => {
+    expect(heroPrompt([sentStage("hello")])).toEqual({
+      text: "hello",
+      spans: [],
+      speculative: false,
+    });
+  });
+
+  it("falls back to the freshest speculative fold and its spans, badged speculative", () => {
+    const spans = [{ kind: "shot", start: 0, end: 4, marker: "shot_1", components: [] }];
+    const hero = heroPrompt([specStage("body", spans)]);
+    expect(hero).toEqual({ text: "body", spans, speculative: true });
+  });
+
+  it("is empty when nothing has composed or sent yet", () => {
+    expect(heroPrompt(undefined)).toEqual({ text: "", spans: [], speculative: false });
+    expect(heroPrompt([{ kind: "info", label: "intent config" }])).toEqual({
+      text: "",
+      spans: [],
+      speculative: false,
+    });
   });
 });
 
-describe("parseShotBlocks + shotBlobName", () => {
-  it("splits prose from self-closing and paired screenshot blocks", () => {
-    const body = [
-      "before ",
-      '<screenshot path="a/shot_1.png" view="full-viewport"/>',
-      " middle ",
-      '<screenshot path=".aiui-cache/x/shot_2.png">',
-      '  <element name="Legend"/>',
-      "</screenshot>",
-      " after",
-    ].join("");
-    const segments = parseShotBlocks(body);
-    const shots = segments.filter((s) => s.kind === "shot");
-    expect(shots).toHaveLength(2);
-    expect(shots[0]).toMatchObject({ path: "a/shot_1.png" });
-    expect(shots[1]).toMatchObject({ path: ".aiui-cache/x/shot_2.png" });
-    expect(segments[0]).toEqual({ kind: "text", text: "before " });
-  });
-
+describe("shotBlobName", () => {
   it("resolves a shot path to its stable blob basename", () => {
     expect(shotBlobName(".aiui-cache/traces/t/shot_1.png")).toBe("shot_1.png");
     expect(shotBlobName("/abs/shot_12.PNG")).toBe("shot_12.PNG");

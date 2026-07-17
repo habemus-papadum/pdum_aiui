@@ -136,14 +136,6 @@ export interface IntentPipelineConfig {
    * structure is real even while the passes are stubs. Off by default.
    */
   passes?: { silenceTrim?: boolean; imageDownscale?: boolean };
-  /**
-   * How screenshots render in the lowered prompt: an indented `<screenshot>`
-   * XML block (absent → `"xml"`, the default — Claude-family models attend
-   * reliably to tags and it stays human-readable), or `"text"` for the plain
-   * bracket block. A lowering choice, read channel-side off the hello.
-   */
-  shotFormat?: "xml" | "text";
-
   // ── the prompt linter (realtime_prompt_linter_design.md) ────────────────────
   /**
    * The realtime **prompt linter** — on/off plus a vendor, orthogonal to the

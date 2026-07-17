@@ -18,7 +18,7 @@
  * a sensible generic card instead of breaking the view. That keeps a new stage
  * type visible the day it's added, before anyone teaches this file about it.
  */
-import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
+import type { IntentEvent, PromptSpan } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { TraceStageLike } from "./sources";
 
 /**
@@ -216,6 +216,11 @@ export function classifyStage(stage: TraceStageLike): StageClass {
   // ── server-side lowering (IRs) ─────────────────────────────────────────────
   if (label.startsWith("composed (speculative)")) {
     return { ...norm("internal", "compose", "🧮", "speculative compose"), coalesceKey: "spec" };
+  }
+  if (label === "lowered prompt spans") {
+    // The sent prompt's PromptSpan annotations — the hero's overlay data. Debug
+    // detail, grouped with the compose IRs so it's hidden by default.
+    return norm("internal", "compose", "📐", "prompt spans");
   }
   if (/^condition .*silenceTrim/.test(label)) {
     return norm("internal", "audio", "⚙", `condition · silence-trim${id ? ` · ${id}` : ""}`);
@@ -607,60 +612,64 @@ export function previousPartialText(stages: TraceStageLike[] | undefined, index:
 }
 
 /**
- * Split a lowered prompt into its de-emphasizable context preamble and the
- * actual request body. `wrapWithContext` (channel prompt-context.ts) joins the
- * intro line, the tab/source sections, `"The user's prompt follows."`, a `---`
- * rule, and the body with blank lines — so the body begins right after the first
- * `\n\n---\n\n`. A bare-client prompt has no wrapping (no separator): it is all
- * body, no preamble.
+ * The hero's prompt to render: the raw text plus its {@link PromptSpan}
+ * annotations, and whether it is the in-flight speculative fold or what was
+ * actually sent. The hero renders `text` verbatim and overlays shot
+ * hover-previews and a de-emphasized preamble FROM the spans — no regex over
+ * the prompt string, no assumption about the shot format. Empty `spans` (an old
+ * trace recorded before spans existed, or a bare text-only prompt) just means
+ * no overlays: the raw text still renders.
+ *
+ * Preference: the committed `lowered prompt` (paired with its `lowered prompt
+ * spans` companion stage — the sendPrompt tracer records only the text, so the
+ * spans ride their own stage) when the turn has sent; otherwise the newest
+ * speculative fold, which the accumulator records on every mutation so an
+ * in-flight or abandoned turn still shows something.
  */
-export function splitLoweredPrompt(text: string): { preamble: string; body: string } {
-  const sep = "\n\n---\n\n";
-  const at = text.indexOf(sep);
-  if (at === -1) {
-    return { preamble: "", body: text };
-  }
-  return { preamble: text.slice(0, at), body: text.slice(at + sep.length) };
+export interface HeroPrompt {
+  text: string;
+  spans: PromptSpan[];
+  speculative: boolean;
 }
 
-/** A piece of a rendered body: prose, or an inlined screenshot block. */
-export type PromptSegment =
-  | { kind: "text"; text: string }
-  | { kind: "shot"; path?: string; marker?: string; block: string };
+/** Defensively read a `{ spans: PromptSpan[] }` stage payload. */
+function readSpans(data: unknown): PromptSpan[] {
+  const spans = (data as { spans?: unknown } | undefined)?.spans;
+  return Array.isArray(spans) ? (spans as PromptSpan[]) : [];
+}
 
-const SHOT_BLOCK = /<screenshot\b[^>]*?(?:\/>|>[\s\S]*?<\/screenshot>)/g;
-
-/**
- * Split a prompt body into prose runs and screenshot blocks, so the hero can
- * render each `<screenshot …>` as a real thumbnail with its element/cell info as
- * a caption. Both the self-closing (`… view="full-viewport"/>`) and paired
- * (`…>…</screenshot>`) forms are recognized (see `renderShotXml` in the
- * pipeline's engine.ts). The `path` attribute is pulled out for the thumbnail
- * source; the whole `block` rides along as the caption/alt.
- */
-export function parseShotBlocks(body: string): PromptSegment[] {
-  const segments: PromptSegment[] = [];
-  let last = 0;
-  SHOT_BLOCK.lastIndex = 0;
-  for (let m = SHOT_BLOCK.exec(body); m; m = SHOT_BLOCK.exec(body)) {
-    if (m.index > last) {
-      segments.push({ kind: "text", text: body.slice(last, m.index) });
+/** The sent prompt's spans — the newest `lowered prompt spans` stage. */
+function loweredPromptSpans(stages: TraceStageLike[]): PromptSpan[] {
+  for (let i = stages.length - 1; i >= 0; i--) {
+    if (stages[i].label === "lowered prompt spans") {
+      return readSpans(stages[i].data);
     }
-    const block = m[0];
-    const path = /\bpath="([^"]*)"/.exec(block)?.[1];
-    const marker = /\bmarker="([^"]*)"/.exec(block)?.[1];
-    segments.push({
-      kind: "shot",
-      ...(path !== undefined ? { path } : {}),
-      ...(marker !== undefined ? { marker } : {}),
-      block,
-    });
-    last = m.index + block.length;
   }
-  if (last < body.length) {
-    segments.push({ kind: "text", text: body.slice(last) });
+  return [];
+}
+
+/** The newest speculative fold's spans — the same stage speculativePromptText reads. */
+function speculativeSpans(stages: TraceStageLike[]): PromptSpan[] {
+  for (let i = stages.length - 1; i >= 0; i--) {
+    if ((stages[i].label ?? "").startsWith("composed (speculative)")) {
+      return readSpans(stages[i].data);
+    }
   }
-  return segments;
+  return [];
+}
+
+export function heroPrompt(stages: TraceStageLike[] | undefined): HeroPrompt {
+  const list = Array.isArray(stages) ? stages : [];
+  // Newest-wins, matching the spans lookups below — one pairing policy, so a
+  // hypothetical multi-send trace pairs the last prompt with the last spans.
+  const sent = loweredPromptText(
+    [...list].reverse().find((stage) => stage.label === "lowered prompt"),
+  );
+  if (sent !== "") {
+    return { text: sent, spans: loweredPromptSpans(list), speculative: false };
+  }
+  const text = speculativePromptText(list);
+  return { text, spans: text !== "" ? speculativeSpans(list) : [], speculative: text !== "" };
 }
 
 /**

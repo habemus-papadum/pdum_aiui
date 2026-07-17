@@ -216,6 +216,7 @@ function main() {
         items: [
           { text: "Motivation & Workflow", link: "/guide/motivation" },
           { text: "Prompt Lowering", link: "/guide/prompt-lowering" },
+          { text: "Prompt Rendering Reference", link: "/guide/prompt-rendering" },
           { text: "The Channel MCP Server", link: "/guide/channel" },
           { text: "The Transcription Layer", link: "/guide/transcription" },
           { text: "Realtime Live Mode", link: "/guide/realtime-live" },

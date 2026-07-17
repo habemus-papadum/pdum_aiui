@@ -16,6 +16,7 @@
     "./talk": "./src/talk.ts",
     "./video": "./src/video.ts",
     "./selection": "./src/selection.ts",
+    "./instrumentation": "./src/instrumentation.ts",
     "./wire": "./src/wire.ts",
     "./thread": "./src/thread.ts"
   },
@@ -55,6 +56,11 @@
         "types": "./dist/selection.d.ts",
         "import": "./dist/selection.js",
         "default": "./dist/selection.js"
+      },
+      "./instrumentation": {
+        "types": "./dist/instrumentation.d.ts",
+        "import": "./dist/instrumentation.js",
+        "default": "./dist/instrumentation.js"
       },
       "./wire": {
         "types": "./dist/wire.d.ts",

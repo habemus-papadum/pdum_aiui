@@ -59,10 +59,10 @@ export { DEBUG_UI_CSS, injectDebugUiStyles } from "./styles";
 export type {
   CardCategory,
   CardDirection,
+  HeroPrompt,
   LiveSegment,
   PatchLine,
   PatchLineKind,
-  PromptSegment,
   StageClass,
   TraceCard,
   TraceOutcome,
@@ -74,14 +74,13 @@ export {
   classifyStage,
   correctionLines,
   eventTypesSummary,
+  heroPrompt,
   liveOpenLine,
   liveResolvedSummary,
   liveToolSegments,
   loweredPromptText,
   parsePatchLines,
-  parseShotBlocks,
   savedFrameFiles,
-  splitLoweredPrompt,
   traceOutcome,
 } from "./trace-cards";
 export type { TraceViewConfig } from "./trace-view";

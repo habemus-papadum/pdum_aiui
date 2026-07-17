@@ -20,12 +20,50 @@ export interface ChannelServerOptions {
   reload?: ChannelReload;
 }
 
-const INSTRUCTIONS = [
-  "This is the aiui channel, a one-way event feed into your session.",
-  'Events arrive as `<channel source="aiui" ...>` blocks: read them and act on',
-  "them as context. This channel is one-way — there is nothing to reply to and",
-  "no tool to call back into it.",
-].join(" ");
+/** Exported for the render-audit harness, which quotes it verbatim. */
+export const INSTRUCTIONS = [
+  [
+    "This is the aiui channel, a one-way event feed into your session.",
+    'Events arrive as `<channel source="aiui" ...>` blocks: read them and act on',
+    "them as context. The channel itself is one-way — there is nothing to reply",
+    "to and no tool to call back into it (this server's tools stand alone).",
+  ].join(" "),
+  [
+    "Prompts lowered by the aiui intent tool embed a small vocabulary you should",
+    "know. Plain-text bracket markers carry the user's captured context inline,",
+    "at the position it happened in their turn:",
+    "`[screenshot located at <path>]` (a captured image saved at <path> — read it",
+    "with your image tools; `[pasted image located at …]` is CLIPBOARD content,",
+    "not what was on screen; `MISSING` means the pixels were never captured),",
+    '`[selected text: "…"]` (an on-screen selection),',
+    "`[code selection at `<loc>`: `<code>`]` (contributed code; long selections",
+    "fence below a `(N lines)` header, elided past 50 lines), and",
+    "`[page navigation: <path>]` / `[tab switch: <path>]` (the user changed page",
+    "or tab mid-turn — text ABOVE such a marker refers to the previous page).",
+  ].join(" "),
+  [
+    "XML sidecar blocks carry machine-readable metadata about the marker they",
+    "follow. `<screenshot-metadata>` lists the UI elements a capture framed:",
+    "`<element name source>` children with nested `<cell name source/>` cells.",
+    "`<selection-metadata>` carries a selection's provenance: `source` (where it",
+    "was authored), `tex` (TeX source of selected mathematics), and `<cell>` /",
+    "`<tab>` children. Cells are dataflow nodes of the aiui framework — they",
+    "only exist on pages marked as aiui apps; on other pages expect no",
+    "element/cell metadata at all.",
+  ].join(" "),
+  [
+    "`<tab …/>` is the canonical browser-tab record, used everywhere a tab is",
+    "described (the prompt preamble, navigation/tab-switch boundaries, selection",
+    "metadata). Attributes, all optional except url: `url`, `title`,",
+    '`aiui-app="true"` (the page carries aiui instrumentation), `source-root`',
+    "(the app's source directory), `chrome-tab-id`, `window-id`, `tab-index`,",
+    "`cdp-target-id`, `driver-tab`. To act on a tab with the Chrome DevTools",
+    "MCP: every id is a correlation HINT only — none is the DevTools MCP's own",
+    "pageId. Call list_pages, match by url/title, select_page with the pageId it",
+    "returned, and verify you selected the right page. The session-browser skill",
+    "covers this workflow.",
+  ].join(" "),
+].join("\n\n");
 
 /**
  * Construct the aiui Claude channel MCP `Server`.

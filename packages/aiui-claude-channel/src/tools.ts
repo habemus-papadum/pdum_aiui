@@ -71,7 +71,7 @@ export function selfChannelInfo(): ChannelInfo | UnregisteredInfo {
 
 const PAGE_TOOLS_LIST_DESCRIPTION =
   "List the tools that live in the connected browser page(s) under development " +
-  "(registered by the aiui dev overlay). Returns a JSON array of directory entries: " +
+  "(registered by the page's aiui instrumentation). Returns a JSON array of directory entries: " +
   "clientId, ns (page namespace), url, tab, and each tool's name/description/inputSchema. " +
   "Entries from the browser's active tab sort first and carry activeTab: true (when a " +
   "client reports tab activation; otherwise the flag is simply absent). " +

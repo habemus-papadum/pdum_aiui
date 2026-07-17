@@ -31,6 +31,7 @@ export default defineConfig({
         talk: "src/talk.ts",
         video: "src/video.ts",
         selection: "src/selection.ts",
+        instrumentation: "src/instrumentation.ts",
         wire: "src/wire.ts",
         thread: "src/thread.ts",
       },
