@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ChannelFormat, MessageMeta, ThreadContext } from "./channel";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format, type SpeechMessage } from "./intent-v1";
+import { TRANSCRIPTION_NOTE } from "./prompt-context";
 import { mockSpeaker, openaiSpeaker, type Speaker } from "./speak";
 import type { FetchLike } from "./transcribe";
 
@@ -122,7 +123,7 @@ describe("intent-v1 premium TTS acks", () => {
 
     // The prompt was sent…
     expect(d.sent).toHaveLength(1);
-    expect(d.sent[0].text).toBe("make the plot wider");
+    expect(d.sent[0].text).toBe(`${TRANSCRIPTION_NOTE}\n\n---\n\nmake the plot wider`);
     // …and a base64 `speech` message followed, labelled with the spoken phrase.
     const speeches = d.pushed.filter(
       (m): m is SpeechMessage => (m as { kind?: string }).kind === "speech",

@@ -853,6 +853,7 @@ function placeItems(
         ...(event.cellLoc !== undefined ? { cellLoc: event.cellLoc } : {}),
         ...(event.tex !== undefined ? { tex: event.tex } : {}),
         ...(event.url !== undefined ? { url: event.url } : {}),
+        ...(event.tab !== undefined ? { tab: event.tab } : {}),
         ...(event.marker !== undefined ? { marker: event.marker } : {}),
       };
       const existing = selectionByKey.get(key);
@@ -883,6 +884,7 @@ function placeItems(
         text: event.text,
         ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
         ...(event.url !== undefined ? { url: event.url } : {}),
+        ...(event.tab !== undefined ? { tab: event.tab } : {}),
         lines: event.lines ?? event.text.split("\n").length,
         ...(event.marker !== undefined ? { marker: event.marker } : {}),
       });
@@ -890,7 +892,12 @@ function placeItems(
       // A positional boundary: everything composed before it happened on
       // `from`, everything after on `to`. Rendering is the compiler's call
       // (renderNavigation, in ./render) — the event travels structured.
-      items.push({ kind: "navigation", from: event.from, to: event.to });
+      items.push({
+        kind: "navigation",
+        from: event.from,
+        to: event.to,
+        ...(event.tab !== undefined ? { tab: event.tab } : {}),
+      });
     } else if (event.type === "tab-switch") {
       // The sibling boundary: a different TAB, not the same tab navigating.
       // Same positional attribution; renderTabSwitch (in ./render) phrases it as a switch.
@@ -900,6 +907,7 @@ function placeItems(
         to: event.to,
         ...(event.fromTab !== undefined ? { fromTab: event.fromTab } : {}),
         ...(event.toTab !== undefined ? { toTab: event.toTab } : {}),
+        ...(event.tab !== undefined ? { tab: event.tab } : {}),
       });
     } else if (event.type === "shot" && !facts.droppedShots.has(event.marker)) {
       items.push({

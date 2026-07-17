@@ -12,7 +12,14 @@
  * prompt?" is a one-file question; the compiler and the state machine stay next
  * door in engine.ts, the shared shapes in types.ts.
  */
-import type { ComposedIntent, ComposedItem, ComposeOptions, PromptSpan, ShotShare } from "./types";
+import type {
+  ComposedIntent,
+  ComposedItem,
+  ComposeOptions,
+  PromptSpan,
+  ShotShare,
+  TabRecord,
+} from "./types";
 
 /**
  * Pass 5 — render: fold the placed/interleaved items into the transcript and
@@ -79,6 +86,7 @@ export function renderPrompt(
         ...(item.sourceLoc !== undefined ? { sourceLoc: item.sourceLoc } : {}),
         ...(item.lines !== undefined ? { lines: item.lines } : {}),
         ...(item.url !== undefined ? { url: item.url } : {}),
+        ...(item.tab !== undefined ? { tab: item.tab } : {}),
       });
     } else if (item.kind === "app-selection") {
       const { start, end } = append(renderAppSelection(item, options.cwd));
@@ -92,13 +100,28 @@ export function renderPrompt(
         ...(item.cellLoc !== undefined ? { cellLoc: item.cellLoc } : {}),
         ...(item.tex !== undefined ? { tex: item.tex } : {}),
         ...(item.url !== undefined ? { url: item.url } : {}),
+        ...(item.tab !== undefined ? { tab: item.tab } : {}),
       });
     } else if (item.kind === "navigation") {
       const { start, end } = append(renderNavigation(item));
-      rawSpans.push({ kind: "navigation", start, end, from: item.from ?? "", to: item.to ?? "" });
+      rawSpans.push({
+        kind: "navigation",
+        start,
+        end,
+        from: item.from ?? "",
+        to: item.to ?? "",
+        ...(item.tab !== undefined ? { tab: item.tab } : {}),
+      });
     } else if (item.kind === "tab-switch") {
       const { start, end } = append(renderTabSwitch(item));
-      rawSpans.push({ kind: "tab-switch", start, end, from: item.from ?? "", to: item.to ?? "" });
+      rawSpans.push({
+        kind: "tab-switch",
+        start,
+        end,
+        from: item.from ?? "",
+        to: item.to ?? "",
+        ...(item.tab !== undefined ? { tab: item.tab } : {}),
+      });
     }
   }
   if (policy === "note") {
@@ -148,16 +171,53 @@ function elideLines(text: string): string {
 }
 
 /**
+ * The canonical `<tab>` element — ONE rendering for {@link TabRecord}
+ * everywhere a tab is described (selection metadata, navigation/tab-switch
+ * boundaries, and the channel's context preamble): full URL first (the
+ * agent's `list_pages` matching key), then whatever else the producer knew.
+ * The attribute vocabulary is fixed here and taught once in the MCP server's
+ * instructions; every id is a correlation hint, never the DevTools MCP's own
+ * pageId.
+ */
+export function renderTabRecord(tab: TabRecord, indent = ""): string {
+  const attrs: string[] = [`url="${escapeXml(tab.url)}"`];
+  if (tab.title !== undefined) {
+    attrs.push(`title="${escapeXml(tab.title)}"`);
+  }
+  if (tab.aiui) {
+    attrs.push(`aiui-app="true"`);
+  }
+  if (tab.sourceRoot !== undefined) {
+    attrs.push(`source-root="${escapeXml(tab.sourceRoot)}"`);
+  }
+  if (tab.chromeTabId !== undefined) {
+    attrs.push(`chrome-tab-id="${tab.chromeTabId}"`);
+  }
+  if (tab.windowId !== undefined) {
+    attrs.push(`window-id="${tab.windowId}"`);
+  }
+  if (tab.tabIndex !== undefined) {
+    attrs.push(`tab-index="${tab.tabIndex}"`);
+  }
+  if (tab.targetId !== undefined) {
+    attrs.push(`cdp-target-id="${escapeXml(tab.targetId)}"`);
+  }
+  if (tab.driverTab !== undefined) {
+    attrs.push(`driver-tab="${tab.driverTab}"`);
+  }
+  return `${indent}<tab ${attrs.join(" ")}/>`;
+}
+
+/**
  * The `<selection-metadata>` sidecar block — derived attribution only, never
  * the selection's content: `source` (the authored-at locator) and `tex` as
  * attributes; the producing `<cell>` and the page's `<tab>` record as
  * children, reusing the exact vocabulary screenshot metadata established
- * (`<cell name source/>`) and the canonical tab record (`<tab url …/>` — full
- * URL, the agent's `list_pages` matching key; see the context preamble's
- * correlation guidance). Undefined when there is nothing to say.
+ * (`<cell name source/>`) and the canonical tab record
+ * ({@link renderTabRecord}). Undefined when there is nothing to say.
  */
 function selectionMetadata(
-  item: Pick<ComposedItem, "sourceLoc" | "cell" | "cellLoc" | "tex" | "url">,
+  item: Pick<ComposedItem, "sourceLoc" | "cell" | "cellLoc" | "tex" | "url" | "tab">,
   cwd: string | undefined,
 ): string | undefined {
   const attrs: string[] = [];
@@ -173,8 +233,9 @@ function selectionMetadata(
       item.cellLoc !== undefined ? ` source="${escapeXml(relativizePath(item.cellLoc, cwd))}"` : "";
     kids.push(`  <cell name="${escapeXml(item.cell)}"${src}/>`);
   }
-  if (item.url !== undefined) {
-    kids.push(`  <tab url="${escapeXml(item.url)}"/>`);
+  const tab = item.tab ?? (item.url !== undefined ? { url: item.url } : undefined);
+  if (tab !== undefined) {
+    kids.push(renderTabRecord(tab, "  "));
   }
   if (attrs.length === 0 && kids.length === 0) {
     return undefined;
@@ -205,7 +266,7 @@ function selectionMetadata(
  * `ComposedItem` subset the rendering reads.
  */
 export function renderCodeSelection(
-  item: Pick<ComposedItem, "text" | "sourceLoc" | "lines" | "url">,
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "lines" | "url" | "tab">,
   cwd?: string,
 ): string {
   const text = item.text ?? "";
@@ -213,7 +274,13 @@ export function renderCodeSelection(
     item.sourceLoc !== undefined
       ? `\`${relativizePath(item.sourceLoc, cwd)}\``
       : "MISSING_LOCATION";
-  const meta = selectionMetadata({ url: item.url }, cwd);
+  const meta = selectionMetadata(
+    {
+      ...(item.url !== undefined ? { url: item.url } : {}),
+      ...(item.tab ? { tab: item.tab } : {}),
+    },
+    cwd,
+  );
   if (text.trim().length <= SHORT_SELECTION_CHARS) {
     const head = `[code selection at ${loc}: \`${text.trim()}\`]`;
     return meta === undefined ? head : `\n${head}\n${meta}\n`;
@@ -260,25 +327,40 @@ function pageLabel(url: string | undefined): string {
 }
 
 /**
- * The navigation boundary, lowered: one parenthetical the model reads as "the
- * page changed here — references above are to the old page". Deliberately
- * plain; refinements belong here (the shared lowering), never in the watcher.
+ * The navigation boundary, lowered in the CURRENT-TAB model (2026-07-17
+ * audit): the marker names only where the user IS now — the agent tracks the
+ * current tab as it reads, so the prior page needs no restating. When the
+ * event carried a full {@link TabRecord} for the destination, it follows as
+ * the canonical `<tab>` element with everything the client knew.
  */
-export function renderNavigation(item: Pick<ComposedItem, "from" | "to">): string {
-  return `(page navigation: now on ${pageLabel(item.to)} — content above was on ${pageLabel(item.from)})`;
+export function renderNavigation(item: Pick<ComposedItem, "to" | "tab">): string {
+  const head = `[page navigation: ${pageLabel(item.to)}]`;
+  if (item.tab === undefined) {
+    return head;
+  }
+  return `\n${head}\n${renderTabRecord(item.tab)}\n`;
 }
 
 /**
- * The tab boundary, lowered: distinct from a same-tab navigation — the user
- * turned to a different tab, so references above are to the tab they left.
- * Deliberately plain; refinements belong here (the shared lowering).
+ * The tab boundary, lowered — distinct from a same-tab navigation: the user
+ * turned to a different TAB. Same current-tab model as
+ * {@link renderNavigation}; when no full record rides the event, the driver's
+ * tab handle (the one thing tab-switch events always tried to carry) still
+ * yields a minimal `<tab>` record.
  */
-export function renderTabSwitch(item: Pick<ComposedItem, "from" | "to">): string {
-  return `(switched tabs: now looking at ${pageLabel(item.to)} — content above was on ${pageLabel(item.from)})`;
+export function renderTabSwitch(item: Pick<ComposedItem, "to" | "toTab" | "tab">): string {
+  const head = `[tab switch: ${pageLabel(item.to)}]`;
+  const tab =
+    item.tab ??
+    (item.toTab !== undefined ? { url: item.to ?? "", driverTab: item.toTab } : undefined);
+  if (tab === undefined) {
+    return head;
+  }
+  return `\n${head}\n${renderTabRecord(tab)}\n`;
 }
 
 export function renderAppSelection(
-  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "cellLoc" | "tex" | "url">,
+  item: Pick<ComposedItem, "text" | "sourceLoc" | "cell" | "cellLoc" | "tex" | "url" | "tab">,
   cwd?: string,
 ): string {
   const text = (item.text ?? "").trim();

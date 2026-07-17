@@ -10,6 +10,7 @@ import { encodeFrame, PROTOCOL_VERSION } from "./frame";
 import type { FrameLogEntry } from "./frame-log";
 import { createIntentV1Format } from "./intent-v1";
 import type { LaunchInfo } from "./launch-info";
+import { TRANSCRIPTION_NOTE } from "./prompt-context";
 import { mockSpeaker } from "./speak";
 import { createTraceStore } from "./trace";
 import { startWebServer, type WebServer } from "./web";
@@ -400,7 +401,7 @@ describe("web backend frame log (/debug/api/frames)", () => {
     });
     const base = `http://127.0.0.1:${server.port}`;
     await runTurn(server.port, "t-frames");
-    expect(prompts).toEqual(["make it wider"]);
+    expect(prompts).toEqual([`${TRANSCRIPTION_NOTE}\n\n---\n\nmake it wider`]);
 
     const { seq, entries } = (await (await fetch(`${base}/debug/api/frames`)).json()) as {
       seq: number;
@@ -426,10 +427,12 @@ describe("web backend frame log (/debug/api/frames)", () => {
     expect(entries[0].data).toMatchObject({ kind: "hello", meta: { actor: "agent" } });
     expect(entries[2]).toMatchObject({ threadId: "t-frames" });
     expect((entries[2].data as { events: unknown[] }).events).toHaveLength(4);
+    const wrapped = `${TRANSCRIPTION_NOTE}\n\n---\n\nmake it wider`;
     expect(entries[5].data).toEqual({
       kind: "lowered-prompt",
       threadId: "t-frames",
-      prompt: "make it wider",
+      prompt: wrapped,
+      spans: [{ kind: "preamble", start: 0, end: wrapped.indexOf("make it wider") }],
     });
     // CORS, like the rest of /debug.
     const res = await fetch(`${base}/debug/api/frames`);

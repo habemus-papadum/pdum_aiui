@@ -714,7 +714,7 @@ describe("navigation (a context boundary riding the turn, never opening one)", (
     // The lowered prompt carries the boundary between the two utterances,
     // rendered as short routes (origin is noise).
     const prompt = composed.prompt;
-    const boundary = prompt.indexOf("(page navigation: now on /aztec — content above was on /)");
+    const boundary = prompt.indexOf("[page navigation: /aztec]");
     expect(boundary).toBeGreaterThan(prompt.indexOf("make this wider"));
     expect(boundary).toBeLessThan(prompt.indexOf("and this taller"));
     // The transcript (text-only view) is unpolluted by the boundary.
@@ -765,9 +765,10 @@ describe("tab-switch (the sibling boundary — a different tab, not the same tab
     const composed = composeIntent(engine.events, "replace");
     expect(composed.items.map((i) => i.kind)).toEqual(["text", "tab-switch", "text"]);
     const prompt = composed.prompt;
-    // Phrased as a tab switch, NOT a page navigation.
+    // Phrased as a tab switch, NOT a page navigation — and the driver's tab
+    // handle still yields a minimal <tab> record when no full one rode along.
     const boundary = prompt.indexOf(
-      "(switched tabs: now looking at /dashboard — content above was on /)",
+      '[tab switch: /dashboard]\n<tab url="http://other.test/dashboard" driver-tab="2"/>',
     );
     expect(boundary).toBeGreaterThan(prompt.indexOf("compare against this one"));
     expect(boundary).toBeLessThan(prompt.indexOf("which is faster"));

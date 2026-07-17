@@ -22,9 +22,9 @@ const patch = [
 ].join("\n");
 
 const loweredText =
-  "This prompt was sent from the aiui web intent tool running in a web app under development.\n\n" +
-  "The source code of the web app in that tab is located at: /proj\n\n" +
-  "The user's prompt follows.\n\n---\n\n" +
+  "This prompt was sent from the aiui intent tool attached to a web app under development.\n\n" +
+  'It was submitted from this browser tab:\n<tab url="http://localhost:5173/" aiui-app="true"/>\n\n' +
+  "Relative paths in this prompt are relative to: /proj\n\n---\n\n" +
   "make this wider [screenshot located at .aiui-cache/traces/trace-42/shot_1.png] please";
 
 /** A rich, completed intent-v1 trace exercising most card types. */
@@ -134,7 +134,7 @@ describe("TraceView — the prompt hero", () => {
     view.update(fullTrace());
     // The whole prompt is one raw block; the preamble region is dimmed via its span.
     const preamble = view.root.querySelector(".aiui-dbg-hero-preamble")?.textContent ?? "";
-    expect(preamble).toContain("The user's prompt follows.");
+    expect(preamble).toContain("This prompt was sent from the aiui intent tool");
     const raw = view.root.querySelector(".aiui-dbg-hero-raw");
     expect(raw?.textContent).toContain("make this wider");
     // The [screenshot …] reference is a hover-preview LINK over the raw text — not a

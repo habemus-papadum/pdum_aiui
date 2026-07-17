@@ -76,6 +76,8 @@ export interface AppSelection {
   tex?: string;
   /** `location.href` of the page the selection was made on. */
   url?: string;
+  /** The page's full tab record, when the client gathered one (supersedes `url`). */
+  tab?: TabRecord;
 }
 
 /**
@@ -91,6 +93,8 @@ export interface CodeSelection {
   sourceLoc?: string;
   /** The contributing view's `location.href`. */
   url?: string;
+  /** The contributing view's full tab record, when gathered (supersedes `url`). */
+  tab?: TabRecord;
   /** Line count (derived from `text` when omitted). */
   lines?: number;
 }
@@ -123,6 +127,39 @@ export interface TranscriptWord {
  * Both modes ride the compiled prompt so the agent knows which it is reading.
  */
 export type VideoCaptureMode = "smart" | "continuous";
+
+/**
+ * The canonical tab record — ONE shape for "which browser tab" everywhere a
+ * tab is described: the context preamble, navigation/tab-switch boundaries,
+ * and selection metadata all render it as the same `<tab …/>` element (see
+ * `renderTabRecord`, render.ts), so the agent learns one format (taught in the
+ * MCP server's instructions) and recognizes it everywhere.
+ *
+ * Every field beyond `url` is optional — producers fill what they know, the
+ * renderer prints what it gets. The ids live in different namespaces and NONE
+ * of them is the Chrome DevTools MCP's own pageId: they are correlation hints;
+ * the reliable matching keys are `url` and `title` (via `list_pages`).
+ */
+export interface TabRecord {
+  /** The page's full `location.href` — the primary matching key. */
+  url: string;
+  /** The page's `document.title`. */
+  title?: string;
+  /** True when the page carries aiui instrumentation (an aiui app under development). */
+  aiui?: boolean;
+  /** The dev server's source root, when the page is an instrumented aiui app. */
+  sourceRoot?: string;
+  /** `chrome.tabs.Tab.id` — extension-layer tab id. */
+  chromeTabId?: number;
+  /** `chrome.tabs.Tab.windowId`. */
+  windowId?: number;
+  /** The tab's index in its window (drifts as tabs move; a hint only). */
+  tabIndex?: number;
+  /** CDP `Target.TargetID`. */
+  targetId?: string;
+  /** The plain-page host's CDP driver handle for this tab. */
+  driverTab?: number;
+}
 
 /**
  * A shot's provenance when it came from the screen share's sampler rather than
@@ -215,6 +252,8 @@ export type IntentEvent =
       to: string;
       /** How it happened, when the watcher could cheaply attribute it. */
       kind?: "push" | "replace" | "traverse" | "reload" | "hash";
+      /** The DESTINATION tab's full record, when the client gathered one. */
+      tab?: TabRecord;
     }
   | {
       /**
@@ -238,6 +277,8 @@ export type IntentEvent =
       fromTab?: number;
       /** The driver's handle for the tab switched to, when known. */
       toTab?: number;
+      /** The DESTINATION tab's full record, when the client gathered one. */
+      tab?: TabRecord;
     }
   | {
       at: number;
@@ -477,6 +518,8 @@ export interface ComposedItem {
   sourceLoc?: string;
   /** A selection item's page `location.href` — rendered as the `<tab>` record. */
   url?: string;
+  /** A selection/boundary item's full tab record (supersedes `url`/`to`). */
+  tab?: TabRecord;
   /** A code-selection item's line count. */
   lines?: number;
   /** An app-selection item's producing dataflow cell (`data-cell`). */
@@ -530,6 +573,7 @@ export type PromptSpan =
       cellLoc?: string;
       tex?: string;
       url?: string;
+      tab?: TabRecord;
     }
   | {
       kind: "code-selection";
@@ -539,8 +583,16 @@ export type PromptSpan =
       sourceLoc?: string;
       lines?: number;
       url?: string;
+      tab?: TabRecord;
     }
-  | { kind: "navigation" | "tab-switch"; start: number; end: number; from: string; to: string }
+  | {
+      kind: "navigation" | "tab-switch";
+      start: number;
+      end: number;
+      from: string;
+      to: string;
+      tab?: TabRecord;
+    }
   | { kind: "preamble"; start: number; end: number };
 
 export interface ComposedIntent {

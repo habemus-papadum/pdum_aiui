@@ -28,8 +28,10 @@ import {
 import {
   promptContextSections,
   selectionSections,
+  TRANSCRIPTION_NOTE,
   wrapWithContextParts,
 } from "./src/prompt-context";
+import { INSTRUCTIONS } from "./src/server";
 
 const CWD = "/repo/app";
 const out: string[] = [];
@@ -378,8 +380,10 @@ show("Long app selection (fenced)", "Trigger: >240 chars of page text.", [
   },
 ]);
 
-md("## E. Boundaries\n");
-md('Input schema (`ComposedItem`, `kind: "navigation" | "tab-switch"`):\n');
+md("## E. Boundaries (the current-tab model)\n");
+md(
+  'Input schema (`ComposedItem`, `kind: "navigation" | "tab-switch"`, and the canonical `TabRecord`):\n',
+);
 md(
   "````ts\n" +
     `{
@@ -388,17 +392,54 @@ md(
   to: string;        // location.href after
   fromTab?: number;  // tab-switch only: the driver's handle for the tab left
   toTab?: number;    // tab-switch only: the driver's handle for the tab entered
+  tab?: TabRecord;   // the DESTINATION tab's full record, when the client gathered one
+}
+
+// TabRecord — ONE shape wherever a tab is described (preamble, boundaries,
+// selection metadata); renders as <tab …/> with only the known fields:
+{
+  url: string;           // full location.href — the list_pages matching key
+  title?: string;        // document.title
+  aiui?: boolean;        // page carries aiui instrumentation → aiui-app="true"
+  sourceRoot?: string;   // the app's source root, when aiui
+  chromeTabId?: number; windowId?: number; tabIndex?: number;  // extension ids
+  targetId?: string;     // CDP Target.TargetID → cdp-target-id
+  driverTab?: number;    // the plain-page host's CDP driver handle
 }` +
     "\n````\n",
 );
 
-show("Navigation (same tab)", "", [
-  {
-    kind: "navigation",
-    from: "https://app.test/dashboard?tab=1",
-    to: "https://app.test/detail#sec",
-  },
-]);
+show(
+  "Navigation (same tab), URL only",
+  "The prior page needs no restating — the agent tracks the current tab.",
+  [
+    {
+      kind: "navigation",
+      from: "https://app.test/dashboard?tab=1",
+      to: "https://app.test/detail#sec",
+    },
+  ],
+);
+
+show(
+  "Navigation with a full destination tab record",
+  "Trigger: the event carried `tab` — as much debug/correlation info as the client had.",
+  [
+    {
+      kind: "navigation",
+      from: "https://app.test/dashboard?tab=1",
+      to: "http://localhost:5173/sim",
+      tab: {
+        url: "http://localhost:5173/sim",
+        title: "Spectra — dev",
+        aiui: true,
+        chromeTabId: 712,
+        windowId: 3,
+        targetId: "F00D",
+      },
+    },
+  ],
+);
 
 show(
   "Navigation with unparseable URLs",
@@ -406,15 +447,19 @@ show(
   [{ kind: "navigation", from: "not a url", to: "" }],
 );
 
-show("Tab switch", "", [
-  {
-    kind: "tab-switch",
-    from: "https://app.test/a",
-    to: "https://docs.test/api/ref",
-    fromTab: 1,
-    toTab: 2,
-  },
-]);
+show(
+  "Tab switch (no full record — the driver handle still yields a minimal <tab>)",
+  "Trigger: `toTab` present, `tab` absent.",
+  [
+    {
+      kind: "tab-switch",
+      from: "https://app.test/a",
+      to: "https://docs.test/api/ref",
+      fromTab: 1,
+      toTab: 2,
+    },
+  ],
+);
 
 md("## F. Corrections (note policy)\n");
 md(
@@ -499,7 +544,10 @@ md("## H. The context preamble (channel, `prompt-context.ts`)\n");
   };
   md(
     "Input schema (the hello's `TabInfo` + `SourceInfo`, fixed at connect time; the body is the " +
-      "composed prompt from sections A–G):\n" +
+      "composed prompt from sections A–G). A present `source.root` is the INTERIM aiui-app " +
+      "detection signal: it gates the “web app under development” framing, the `aiui-app` tab " +
+      "attribute, and the relative-paths line. The transcription note is TURN-dependent — " +
+      "`intent-v1` appends it at fin only when the stream contains speech-transcribed text:\n" +
       "````ts\n" +
       `{
   tab?: { url?: string; title?: string; chromeTabId?: number;
@@ -528,7 +576,7 @@ md("## H. The context preamble (channel, `prompt-context.ts`)\n");
   };
 
   wrapCase(
-    "Full hello (tab with every hint + source root) — the wrapped prompt",
+    "Full hello (aiui app detected: every tab hint + source root) — the wrapped prompt",
     "The body starts right after the `---` rule.",
     fullHello,
     promptContextSections(fullHello as never),
@@ -537,10 +585,18 @@ md("## H. The context preamble (channel, `prompt-context.ts`)\n");
 
   const minimalHello = { tab: { title: "App", url: "http://localhost:5173/" } };
   wrapCase(
-    "Minimal hello (title+url only, no source root)",
+    "Minimal hello (title+url only, NO aiui app): the neutral opening, no dev framing",
     "",
     minimalHello,
     promptContextSections(minimalHello as never),
+    "make this wider",
+  );
+
+  wrapCase(
+    "A SPEECH turn (aiui hello + transcription note appended at fin)",
+    "Input shows the hello; the note is turn-dependent, not hello-fixed.",
+    fullHello,
+    [...promptContextSections(fullHello as never), TRANSCRIPTION_NOTE],
     "make this wider",
   );
 
@@ -552,8 +608,9 @@ md("## H. The context preamble (channel, `prompt-context.ts`)\n");
     tex: "\\bar{x} = 42.7",
   };
   wrapCase(
-    "LEGACY selection section (context-chunk path: text modality / old clients only)",
-    "Input here is the legacy `SelectionContext` chunk, not a stream event.",
+    "LEGACY selection section — text-concat (text modality) ONLY; retired from intent-v1",
+    "intent-v1 now IGNORES the legacy context chunk entirely; this wording survives only for " +
+      "`text-concat`'s submit-time selection.",
     legacySelection,
     selectionSections(legacySelection),
     "explain this",
@@ -580,9 +637,10 @@ function quote(title: string, note: string, body: string): void {
 }
 
 quote(
-  "Server `instructions` (server.ts:23) — what Claude Code shows the agent about the channel",
-  "",
-  'This is the aiui channel, a one-way event feed into your session. Events arrive as `<channel source="aiui" ...>` blocks: read them and act on them as context. This channel is one-way — there is nothing to reply to and no tool to call back into it.',
+  "Server `instructions` (server.ts) — the once-per-session lesson: the channel + the prompt vocabulary",
+  "Imported from the source, so this quote can never drift. The correlation workflow lives HERE " +
+    "(taught once), not in every turn's preamble.",
+  INSTRUCTIONS,
 );
 
 quote(
@@ -600,7 +658,7 @@ quote(
 quote(
   "Tool: `page_tools_list` (tools.ts:72)",
   "",
-  "List the tools that live in the connected browser page(s) under development (registered by the aiui dev overlay). Returns a JSON array of directory entries: clientId, ns (page namespace), url, tab, and each tool's name/description/inputSchema. Entries from the browser's active tab sort first and carry activeTab: true (when a client reports tab activation; otherwise the flag is simply absent). Call this FIRST to discover what's available, then invoke one with page_tools_call. The list is empty when no dev page is connected.",
+  "List the tools that live in the connected browser page(s) under development (registered by the page's aiui instrumentation). Returns a JSON array of directory entries: clientId, ns (page namespace), url, tab, and each tool's name/description/inputSchema. Entries from the browser's active tab sort first and carry activeTab: true (when a client reports tab activation; otherwise the flag is simply absent). Call this FIRST to discover what's available, then invoke one with page_tools_call. The list is empty when no dev page is connected.",
 );
 
 quote(

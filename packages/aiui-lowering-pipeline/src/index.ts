@@ -45,6 +45,7 @@ export {
   renderAppSelection,
   renderCodeSelection,
   renderPrompt,
+  renderTabRecord,
   SHORT_SELECTION_CHARS,
 } from "./render";
 export type {
@@ -60,6 +61,7 @@ export type {
   PromptSpan,
   Rect,
   ShotShare,
+  TabRecord,
   TranscriptWord,
   VideoCaptureMode,
 } from "./types";

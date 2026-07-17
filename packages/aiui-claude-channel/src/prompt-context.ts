@@ -13,6 +13,7 @@
  * {@link augmentTextPrompt}. {@link asSelection} normalizes a loosely-typed
  * selection block the same way for both formats.
  */
+import { renderTabRecord, type TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { HelloMeta } from "./frame";
 
 /**
@@ -74,51 +75,61 @@ export const asSelection = (payload: unknown): SelectionContext | undefined => {
 };
 
 /**
+ * The note appended to the preamble when the turn contains SPEECH-transcribed
+ * text (the intent lowering adds it; typed contributions never trigger it).
+ * Exported so the section list and its tests share one string.
+ */
+export const TRANSCRIPTION_NOTE =
+  "Portions of the prompt were transcribed and might have transcription errors.";
+
+/**
  * The tab + source context sections — everything the hello fixes at connect
- * time, independent of the (late-arriving) on-screen selection. Split out from
- * {@link augmentTextPrompt} so a processor can **pre-warm** this skeleton once
- * at thread-open and only concatenate the body + selection at `fin` (the
- * incremental-lowering seam; see streaming-turns.md §2). Empty for a bare
- * client with no tab/source context.
+ * time. Split out from {@link augmentTextPrompt} so a processor can
+ * **pre-warm** this skeleton once at thread-open and only concatenate the
+ * body + turn-dependent sections at `fin` (the incremental-lowering seam; see
+ * streaming-turns.md §2). Empty for a bare client with no tab/source context.
  *
- * The tab ids are labeled as *hints* on purpose: Chrome's extension tab id,
- * the CDP target id, and the Chrome DevTools MCP's pageId are three different
- * namespaces, and only `list_pages` can produce the last one (see the
- * session-browser skill, which this preamble points the agent at).
+ * Honesty rules (2026-07-17 render audit):
+ * - "web app under development" and the relative-paths line appear only when
+ *   an aiui app was DETECTED — interim signal: the hello carried a source
+ *   root (the vite plugin stamps it). The side panel sits on arbitrary
+ *   pages; those get the neutral opening line.
+ * - The tab renders as the canonical `<tab …/>` element
+ *   ({@link renderTabRecord}) — the same record used at navigation/tab-switch
+ *   boundaries and in selection metadata. The MCP server's instructions teach
+ *   the element once (ids are correlation hints; match via `list_pages` by
+ *   url/title), so the per-turn preamble carries data, not lessons.
  */
 export function promptContextSections(meta: HelloMeta | undefined): string[] {
   const tab = meta?.tab;
   const source = meta?.source;
+  const aiui = source?.root !== undefined;
   const sections: string[] = [];
 
-  if (tab !== undefined && (tab.url !== undefined || tab.title !== undefined)) {
-    const hints: string[] = [];
-    if (tab.chromeTabId !== undefined) {
-      hints.push(`chrome tab id ${tab.chromeTabId}`);
-    }
-    if (tab.windowId !== undefined) {
-      hints.push(`window id ${tab.windowId}`);
-    }
-    if (tab.tabIndex !== undefined) {
-      hints.push(`tab index ${tab.tabIndex}`);
-    }
-    if (tab.targetId !== undefined) {
-      hints.push(`CDP target id ${tab.targetId}`);
-    }
+  const hasTab = tab !== undefined && (tab.url !== undefined || tab.title !== undefined);
+  if (hasTab || aiui) {
     sections.push(
-      [
-        `It was submitted from the browser tab "${tab.title ?? "(untitled)"}" at ${tab.url ?? "(unknown url)"}`,
-        hints.length > 0 ? ` (${hints.join(", ")})` : "",
-        ".\n",
-        "To act on that tab with the Chrome DevTools MCP: the ids above are correlation hints only — ",
-        "call list_pages, match by URL/title, then select_page with the pageId list_pages returned, ",
-        "and verify you selected the right page. The session-browser skill covers this workflow.",
-      ].join(""),
+      aiui
+        ? "This prompt was sent from the aiui intent tool attached to a web app under development."
+        : "This prompt was sent from the aiui intent tool.",
     );
   }
 
-  if (source?.root !== undefined) {
-    sections.push(`The source code of the web app in that tab is located at: ${source.root}`);
+  if (hasTab) {
+    const record: TabRecord = {
+      url: tab.url ?? "",
+      ...(tab.title !== undefined ? { title: tab.title } : {}),
+      ...(aiui ? { aiui: true } : {}),
+      ...(tab.chromeTabId !== undefined ? { chromeTabId: tab.chromeTabId } : {}),
+      ...(tab.windowId !== undefined ? { windowId: tab.windowId } : {}),
+      ...(tab.tabIndex !== undefined ? { tabIndex: tab.tabIndex } : {}),
+      ...(tab.targetId !== undefined ? { targetId: tab.targetId } : {}),
+    };
+    sections.push(`It was submitted from this browser tab:\n${renderTabRecord(record)}`);
+  }
+
+  if (aiui && source?.root !== undefined) {
+    sections.push(`Relative paths in this prompt are relative to: ${source.root}`);
   }
 
   return sections;
@@ -167,6 +178,11 @@ export function selectionSections(selection: SelectionContext | undefined): stri
  * so the trace hero can grey the preamble without string-splitting on the
  * `---` separator. The body is the join's last segment, so its offset is
  * exactly `result.length - text.length`.
+ *
+ * The bare `---` rule is the whole context/prompt divider (the "The user's
+ * prompt follows." sentence was boilerplate — dropped in the render audit);
+ * the opening line is {@link promptContextSections}'s, so it can be honest
+ * about whether an aiui app is attached.
  */
 export function wrapWithContextParts(
   sections: string[],
@@ -175,13 +191,7 @@ export function wrapWithContextParts(
   if (sections.length === 0) {
     return { text, preambleLen: 0 };
   }
-  const result = [
-    "This prompt was sent from the aiui web intent tool running in a web app under development.",
-    ...sections,
-    "The user's prompt follows.",
-    "---",
-    text,
-  ].join("\n\n");
+  const result = [...sections, "---", text].join("\n\n");
   return { text: result, preambleLen: result.length - text.length };
 }
 

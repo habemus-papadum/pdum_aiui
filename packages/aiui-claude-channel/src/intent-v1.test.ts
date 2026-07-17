@@ -8,6 +8,7 @@ import type { ChannelFormat, ThreadContext } from "./channel";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format, type LoweredPromptMessage } from "./intent-v1";
 import { defaultFormats } from "./processors";
+import { TRANSCRIPTION_NOTE } from "./prompt-context";
 import type { Summarizer } from "./summarize";
 import { createTraceStore, listTraces } from "./trace";
 import { withTracing } from "./tracing";
@@ -20,6 +21,13 @@ const fixturesDir = fileURLToPath(
 );
 const loadFixture = (name: string): IntentEvent[] =>
   JSON.parse(readFileSync(join(fixturesDir, name), "utf8")) as IntentEvent[];
+
+/**
+ * A SPEECH turn's wrapped prompt under a bare hello: the transcription note is
+ * the whole preamble (typed contributions never trigger it), then the rule,
+ * then the body.
+ */
+const spoken = (body: string): string => `${TRANSCRIPTION_NOTE}\n\n---\n\n${body}`;
 
 interface SentPrompt {
   text: string;
@@ -120,8 +128,10 @@ describe("intent-v1 lowering — fixtures", () => {
     expect(d.isClosed()).toBe(true);
     expect(d.sent).toHaveLength(1);
     expect(d.sent[0].text).toBe(
-      "make the baseline curve a bit thicker and color it amber " +
-        "the legend overlaps the plot on narrow screens can you move it below",
+      spoken(
+        "make the baseline curve a bit thicker and color it amber " +
+          "the legend overlaps the plot on narrow screens can you move it below",
+      ),
     );
     // No shots → no Option-C meta.
     expect(d.sent[0].meta).toBeUndefined();
@@ -305,8 +315,16 @@ describe("intent-v1 lowered-prompt push", () => {
     await d.fin();
 
     expect(d.sent).toHaveLength(1);
-    // The pushed prompt is exactly what sendPrompt committed (no meta: no shots).
-    expect(d.pushed).toEqual([{ kind: "lowered-prompt", threadId: "t-1", prompt: d.sent[0].text }]);
+    // The pushed prompt is exactly what sendPrompt committed (no meta: no
+    // shots); the spans carry the preamble region (the transcription note).
+    expect(d.pushed).toEqual([
+      {
+        kind: "lowered-prompt",
+        threadId: "t-1",
+        prompt: d.sent[0].text,
+        spans: [{ kind: "preamble", start: 0, end: d.sent[0].text.indexOf("make the baseline") }],
+      },
+    ]);
     // …and it went out before the notification, so a widget's view never lags.
     expect(d.timeline).toEqual(["push lowered-prompt", "sent"]);
   });
@@ -352,7 +370,7 @@ describe("intent-v1 lowered-prompt push", () => {
         expect(sliced).toContain("[screenshot located at");
       } else if (span.kind === "preamble") {
         expect(span.start).toBe(0);
-        expect(sliced).toContain("The user's prompt follows.");
+        expect(sliced).toContain("This prompt was sent from the aiui intent tool");
       }
     }
     // There is at least one shot span to have exercised the offset math.
@@ -387,7 +405,7 @@ describe("intent-v1 server transcription", () => {
 
     // The server-produced transcript is merged into the stream and lowered.
     await d.fin();
-    expect(d.sent[0].text).toBe("make the plot wider");
+    expect(d.sent[0].text).toBe(spoken("make the plot wider"));
   });
 
   it("skips transcription when the hello did not ask for the openai transcriber", async () => {
@@ -482,8 +500,10 @@ describe("intent-v1 incremental lowering (S1)", () => {
     // The output is the same as ever…
     expect(d.sent).toHaveLength(1);
     expect(d.sent[0].text).toBe(
-      "make the baseline curve a bit thicker and color it amber " +
-        "the legend overlaps the plot on narrow screens can you move it below",
+      spoken(
+        "make the baseline curve a bit thicker and color it amber " +
+          "the legend overlaps the plot on narrow screens can you move it below",
+      ),
     );
     // …and it came from the cache, not a fin-time recompute.
     expect(finReused(cache)).toBe(true);
@@ -589,11 +609,13 @@ describe("intent-v1 lowering — selections", () => {
     // The selection is intent, placed where it happened in the stream —
     // BEFORE the spoken words here — with the attribution wording inline.
     expect(d.sent[0].text).toBe(
-      '[selected text: "reaction-diffusion on the GPU"]\n' +
-        '<selection-metadata source="src/ui/App.tsx:35:13">\n' +
-        '  <cell name="catalog"/>\n' +
-        "</selection-metadata>\n" +
-        " make this wider",
+      spoken(
+        '[selected text: "reaction-diffusion on the GPU"]\n' +
+          '<selection-metadata source="src/ui/App.tsx:35:13">\n' +
+          '  <cell name="catalog"/>\n' +
+          "</selection-metadata>\n" +
+          " make this wider",
+      ),
     );
     // No preamble section: the stream path never rides selectionSections.
     expect(d.sent[0].text).not.toContain("It concerns this on-screen selection");
@@ -618,11 +640,11 @@ describe("intent-v1 lowering — selections", () => {
     ]);
     await d.fin();
     expect(d.sent[0].text).toBe(
-      'make this wider and match this [selected text: "the legend caption"]',
+      spoken('make this wider and match this [selected text: "the legend caption"]'),
     );
   });
 
-  it("suppresses the legacy context chunk when the stream carries its own selections", async () => {
+  it("ignores the legacy context chunk entirely (selections ride the stream now)", async () => {
     const d = drive();
     await d.feedContext({ text: "stale send-time selection" });
     await d.feedEvents([
@@ -631,21 +653,19 @@ describe("intent-v1 lowering — selections", () => {
       seg(3, "explain this"),
     ]);
     await d.fin();
-    // The stream's selection rides the body inline; the stale chunk would
-    // duplicate it in the preamble — it stands down for this turn.
+    // The stream's selection rides the body inline; the legacy chunk is
+    // accepted (old clients still get their frame acked) and ignored.
     expect(d.sent[0].text).toContain('[selected text: "the fresh selection"]');
     expect(d.sent[0].text).not.toContain("stale send-time selection");
-    expect(d.sent[0].text).not.toContain("It concerns this on-screen selection");
 
-    // An old client that only sends the context chunk still gets the preamble
-    // — the one surviving selectionSections path in intent-v1.
+    // Even a turn with ONLY the legacy chunk lowers without it — the
+    // preamble selection path was retired in the render audit.
     const legacy = drive();
     await legacy.feedEvents([open(), seg(2, "explain this")]);
     await legacy.feedContext({ text: "context-chunk selection", cell: "flow" });
     await legacy.fin();
-    expect(legacy.sent[0].text).toContain(
-      'It concerns this on-screen selection: "context-chunk selection" (produced by cell flow).',
-    );
+    expect(legacy.sent[0].text).toBe(spoken("explain this"));
+    expect(legacy.sent[0].text).not.toContain("context-chunk selection");
   });
 
   it("tolerates pre-marker streams: a markerless drop retracts the latest selection", async () => {
@@ -657,7 +677,7 @@ describe("intent-v1 lowering — selections", () => {
       { at: 4, type: "app-selection-drop" },
     ]);
     await d.fin();
-    expect(d.sent[0].text).toBe("just do the thing");
+    expect(d.sent[0].text).toBe(spoken("just do the thing"));
   });
 
   it("renders a code-selection event into the body at its position (short → inline)", async () => {
@@ -676,7 +696,7 @@ describe("intent-v1 lowering — selections", () => {
     ]);
     await d.fin();
     expect(d.sent[0].text).toBe(
-      "rename this helper [code selection at `src/c.ts:12:1`: `export function curb() {}`]",
+      spoken("rename this helper [code selection at `src/c.ts:12:1`: `export function curb() {}`]"),
     );
   });
 
@@ -691,7 +711,7 @@ describe("intent-v1 lowering — selections", () => {
     ]);
     await d.fin();
     expect(d.sent[0].text).toBe(
-      "compare these [code selection at MISSING_LOCATION: `const b = 2;`]",
+      spoken("compare these [code selection at MISSING_LOCATION: `const b = 2;`]"),
     );
   });
 
