@@ -146,6 +146,10 @@ describe("TraceView — the prompt hero", () => {
     shot?.dispatchEvent(new MouseEvent("mouseenter"));
     const peek = view.root.ownerDocument.querySelector<HTMLImageElement>(".aiui-dbg-peek");
     expect(peek?.getAttribute("src")).toBe("http://host/blob/trace-42/shot_1.png");
+    // …and the peek is actually VISIBLE: the shared .aiui-dbg-peek stylesheet
+    // rule defaults to display:none (paths.ts's container widget), so the img
+    // must carry an inline display of its own.
+    expect(peek?.style.display).toBe("block");
     shot?.dispatchEvent(new MouseEvent("mouseleave"));
   });
 });
