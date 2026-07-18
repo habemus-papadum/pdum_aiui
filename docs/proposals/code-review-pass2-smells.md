@@ -1,11 +1,17 @@
 # Code review, pass 2 — the code-smell sweep
 
-**Status: marked up 2026-07-18; direct dimensions IMPLEMENTED, catalog dimensions
-CATALOGED the same day.** The direct fixes landed as four commits (S9 `cefb0c2`, S8
-`4dfbbe8`, S6 `58808a8`, S7 `504987a` — all gates green), and the S1–S5 catalog run
-(35 agents; 773 exports audited, 41 mirrors classified, 9 split plans, 3 consolidation
-designs, 2 wire inventories; every delete/unexport and importable claim adversarially
-verified) produced five decision documents awaiting markup:
+**Status: EXECUTED in full, 2026-07-18.** The direct fixes landed as four commits
+(S9 `cefb0c2`, S8 `4dfbbe8`, S6 `58808a8`, S7 `504987a`), and after wholesale approval
+of the five decision documents the catalog dimensions landed as five stage commits —
+S4 `84ddd7d` (surface pruning + the channel /internal seam), S1 `cf2072f` (mirror
+collapses + drift guards), S5 `517d15c` (PageCapabilityMap + the trace-stage label
+contract), S2 `74bebaa` (aiui-room-relay + session-core + lifecycle/common.mjs),
+S3 `095f525` (all nine module splits) — every stage gated on the full workspace
+suite (typecheck, tests, biome, test:packaging, version:check). Outstanding
+side-flags: `pnpm npm:reserve aiui-room-relay` + `npm:trust` before the next release;
+a live `aiui claude` verify of runMcp is belt-and-braces; hot-reload depth for
+intent-v1's new wing modules now requires a channel restart. The decision documents
+below record what was approved:
 
 - [S1 — mirror & twin contracts](./code-review-pass2-s1-mirrors.md)
 - [S2 — copy-descended subsystems](./code-review-pass2-s2-subsystems.md)
