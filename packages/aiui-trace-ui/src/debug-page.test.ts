@@ -48,15 +48,21 @@ describe("mountDebugPage", () => {
     expect([...picker.options].map((o) => o.value)).toEqual(["50001", "50002"]);
     expect(picker.value).toBe("50001");
     expect(picker.disabled).toBe(false);
-    expect(calls.some((u) => u.startsWith("http://127.0.0.1:50001/debug/api/traces"))).toBe(true);
+    expect(
+      calls.some((u) => u.startsWith(`http://${location.hostname}:50001/debug/api/traces`)),
+    ).toBe(true);
 
     // Switch: the pane remounts against the picked channel's port and the
     // registry is re-enumerated through it.
     picker.value = "50002";
     picker.dispatchEvent(new Event("change"));
     await tick();
-    expect(calls.some((u) => u.startsWith("http://127.0.0.1:50002/debug/api/traces"))).toBe(true);
-    expect(calls.some((u) => u.startsWith("http://127.0.0.1:50002/debug/api/channels"))).toBe(true);
+    expect(
+      calls.some((u) => u.startsWith(`http://${location.hostname}:50002/debug/api/traces`)),
+    ).toBe(true);
+    expect(
+      calls.some((u) => u.startsWith(`http://${location.hostname}:50002/debug/api/channels`)),
+    ).toBe(true);
     // One pane at a time.
     expect(document.querySelectorAll(".aiui-dbgt")).toHaveLength(1);
   });

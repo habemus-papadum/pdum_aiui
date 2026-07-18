@@ -150,14 +150,13 @@ describe("TraceView — the prompt hero", () => {
     const shot = view.root.querySelector<HTMLElement>(".aiui-dbg-hero-shot-link");
     expect(shot).toBeTruthy();
     expect(shot?.textContent).toContain("[screenshot located at");
-    // Hovering peeks the image off the stable trace blob route (path from the span).
+    // Hovering peeks the image off the stable trace blob route (path from the
+    // span). The peek carries its OWN class — it once shared .aiui-dbg-peek
+    // with paths.ts's hidden-by-default container, whose display:none
+    // swallowed it.
     shot?.dispatchEvent(new MouseEvent("mouseenter"));
-    const peek = view.root.ownerDocument.querySelector<HTMLImageElement>(".aiui-dbg-peek");
+    const peek = view.root.ownerDocument.querySelector<HTMLImageElement>(".aiui-dbg-img-peek");
     expect(peek?.getAttribute("src")).toBe("http://host/blob/trace-42/shot_1.png");
-    // …and the peek is actually VISIBLE: the shared .aiui-dbg-peek stylesheet
-    // rule defaults to display:none (paths.ts's container widget), so the img
-    // must carry an inline display of its own.
-    expect(peek?.style.display).toBe("block");
     shot?.dispatchEvent(new MouseEvent("mouseleave"));
   });
 });

@@ -879,13 +879,10 @@ export function attachImagePeek(el: HTMLElement, src: string, doc: Document): vo
   el.addEventListener("mouseenter", () => {
     hide();
     peek = doc.createElement("img");
-    peek.className = "aiui-dbg-peek";
-    // The class is shared with paths.ts's peek CONTAINER, whose stylesheet
-    // rule hides it by default (that widget shows itself via inline style).
-    // This peek is the <img> itself — without this inline display it renders
-    // display:none and the hover shows nothing, which DOM-level tests cannot
-    // catch. Found in the render-audit follow-up, 2026-07-17.
-    peek.style.display = "block";
+    // Its OWN class: this peek is the <img> itself, distinct from paths.ts's
+    // hidden-by-default peek CONTAINER (the two once shared .aiui-dbg-peek,
+    // whose display:none swallowed this one).
+    peek.className = "aiui-dbg-img-peek";
     peek.src = src;
     const rect = el.getBoundingClientRect();
     const win = doc.defaultView;

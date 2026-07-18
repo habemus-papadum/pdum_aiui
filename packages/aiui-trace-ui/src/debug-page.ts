@@ -39,6 +39,19 @@ interface ChannelEntry {
 }
 
 /**
+ * A channel origin for `port`: the same HOST this page was served from. Under
+ * the trusted-LAN posture (`channel.bind: host`) a viewer reaches this page at
+ * `http://<lan-ip>:<port>/__aiui/debug` — its polls must go to that same LAN
+ * address, not a hardcoded loopback (which would poll the VIEWER's machine).
+ * Registry siblings listen on other ports of the same machine, so the page's
+ * hostname is right for them too. Loopback only when there is no page host.
+ */
+const channelOrigin = (port: number): string =>
+  typeof location !== "undefined" && location.hostname !== ""
+    ? `${location.protocol}//${location.hostname}:${port}`
+    : `http://127.0.0.1:${port}`;
+
+/**
  * Boot the trace debugger page: read the `?session=` pin and mount a
  * full-viewport {@link TracesPane} under a channel-switcher header. Without a
  * port there is no channel to poll — the page says so instead of rendering an
@@ -87,7 +100,7 @@ export function mountDebugPage(opts: MountDebugPageOptions = {}): void {
     pane?.root.remove();
     currentPort = port;
     pane = new TracesPane({
-      baseUrl: `http://127.0.0.1:${port}`,
+      baseUrl: channelOrigin(port),
       ...(session !== undefined && session !== "" ? { session } : {}),
     });
     paneHost.appendChild(pane.root);
@@ -98,7 +111,7 @@ export function mountDebugPage(opts: MountDebugPageOptions = {}): void {
   const refreshChannels = async (): Promise<void> => {
     let channels: ChannelEntry[] = [];
     try {
-      const res = await fetch(`http://127.0.0.1:${currentPort}/debug/api/channels`);
+      const res = await fetch(`${channelOrigin(currentPort)}/debug/api/channels`);
       if (res.ok) {
         channels = ((await res.json()) as { channels?: ChannelEntry[] }).channels ?? [];
       }

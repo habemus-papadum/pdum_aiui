@@ -161,7 +161,7 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-video-more { margin-top: 4px; font: 11px ui-sans-serif, system-ui, sans-serif;
   color: #8ab4f8; background: none; border: 1px solid #3a4152; border-radius: 4px;
   padding: 2px 8px; cursor: pointer; }
-.aiui-dbg-peek { position: fixed; z-index: 2147483647; max-width: min(720px, 70vw);
+.aiui-dbg-img-peek { position: fixed; z-index: 2147483647; max-width: min(720px, 70vw);
   max-height: 60vh; border: 1px solid #3a4152; border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.55); background: #14161d; pointer-events: none; }
 .aiui-dbg-video-thumbs img { max-height: 64px; border-radius: 4px; border: 1px solid #2a3140;
@@ -220,10 +220,18 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbgt-bar { display: flex; align-items: center; gap: 4px; padding: 6px 10px;
   color: #9aa0aa; border-bottom: 1px solid #262c3a; flex: none; }
 .aiui-dbgt-bar label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
-/* The picker — a chooser, not the content: since the 2026-07-12 rework it is
-   a one-line dropdown (trigger + popup menu; see traces-pane.ts). */
-.aiui-dbgt-list { max-height: 5.5rem; overflow-y: auto;
-  border-bottom: 1px solid #262c3a; flex: none; }
+/* The picker — a chooser, not the content: a one-line dropdown (trigger +
+   popup menu; see traces-pane.ts). */
+.aiui-dbgt-list { position: relative; border-bottom: 1px solid #262c3a; flex: none; }
+.aiui-dbgt-trigger { display: flex; align-items: center; gap: 6px; width: 100%;
+  text-align: left; background: transparent; border: none; color: #cfd3da;
+  font: inherit; padding: 4px 10px; cursor: pointer; }
+.aiui-dbgt-trigger:hover { background: #171b25; }
+.aiui-dbgt-caret { margin-left: auto; color: #9aa0aa; flex: none; }
+.aiui-dbgt-menu { position: absolute; left: 0; right: 0; top: 100%; z-index: 40;
+  max-height: 60vh; overflow-y: auto; background: #14161d;
+  border: 1px solid #262c3a; border-top: none; border-radius: 0 0 8px 8px;
+  box-shadow: 0 10px 30px #000a; }
 .aiui-dbgt-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
   background: transparent; border: none; color: #cfd3da; font: inherit; padding: 4px 10px;
   cursor: pointer; }
