@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import "./test-support/worker-stub";
 import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { describe, expect, it } from "vitest";

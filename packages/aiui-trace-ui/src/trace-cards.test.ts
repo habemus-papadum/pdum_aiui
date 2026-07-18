@@ -487,7 +487,15 @@ describe("eventTypesSummary + correctionLines", () => {
     { at: 2, type: "talk-start", segment: 1 },
     { at: 3, type: "transcript-final", segment: 1, text: "a", latencyMs: 1, model: "m" },
     { at: 4, type: "transcript-final", segment: 2, text: "b", latencyMs: 1, model: "m" },
-    { at: 5, type: "correction", via: "typed", original: "beat", instruction: "vite" },
+    {
+      at: 5,
+      type: "correction",
+      via: "typed",
+      from: 0,
+      to: 4,
+      original: "beat",
+      instruction: "vite",
+    },
   ];
   it("summarizes types in first-seen order with ×N repeats", () => {
     expect(eventTypesSummary(events)).toBe(
@@ -498,7 +506,7 @@ describe("eventTypesSummary + correctionLines", () => {
     expect(correctionLines(events)).toEqual(["“beat” → “vite”"]);
     expect(
       correctionLines([
-        { at: 1, type: "correction", via: "typed", original: "", instruction: "x" },
+        { at: 1, type: "correction", via: "typed", from: 0, to: 0, original: "", instruction: "x" },
       ]),
     ).toEqual(["whole transcript → “x”"]);
   });

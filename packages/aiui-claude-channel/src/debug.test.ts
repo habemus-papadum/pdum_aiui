@@ -257,7 +257,7 @@ describe("web backend with traceDir", () => {
 
   it("keeps /debug and tracing off without a traceDir", async () => {
     const prompts: string[] = [];
-    server = await startWebServer({ onPrompt: (t) => prompts.push(t) });
+    server = await startWebServer({ onPrompt: (t) => void prompts.push(t) });
     const res = await fetch(`http://127.0.0.1:${server.port}/debug`);
     expect(res.status).toBe(404);
   });
@@ -330,7 +330,7 @@ describe("web backend frame log (/debug/api/frames)", () => {
       if ("kind" in message) {
         pushes.push(message);
       } else {
-        ackWaiters.shift()?.(message as ChannelResponse);
+        ackWaiters.shift()?.(message as unknown as ChannelResponse);
       }
     });
     await new Promise<void>((resolve, reject) => {

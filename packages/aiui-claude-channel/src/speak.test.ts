@@ -79,7 +79,7 @@ function drivePremium(opts: { speaker?: Speaker; apiKey?: string; hello?: HelloM
   const ctx: ThreadContext = {
     threadId: "t-ack",
     hello: opts.hello ?? { intent: { tier: "premium" } },
-    sendPrompt: (text) => sent.push({ text }),
+    sendPrompt: (text) => void sent.push({ text }),
     push: (message) => pushed.push(message),
     close: () => {},
   };
@@ -89,7 +89,12 @@ function drivePremium(opts: { speaker?: Speaker; apiKey?: string; hello?: HelloM
   });
   const processor = format.createProcessor(ctx);
   const send = (payload: Uint8Array, chunk: ChunkDescriptor | undefined, fin: boolean) =>
-    processor.onMessage(payload, { fin, ...(chunk !== undefined ? { chunk } : {}) } as MessageMeta);
+    Promise.resolve(
+      processor.onMessage(payload, {
+        fin,
+        ...(chunk !== undefined ? { chunk } : {}),
+      } as MessageMeta),
+    );
   return {
     feedEvents: (events, fin = false) =>
       send(enc.encode(JSON.stringify({ events })), { kind: "events" }, fin),

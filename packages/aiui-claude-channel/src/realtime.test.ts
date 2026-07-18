@@ -344,7 +344,7 @@ function driveRealtime(opts: {
   const ctx: ThreadContext = {
     threadId: "t-rt",
     hello: opts.hello ?? { intent: { transcriber: "openai-realtime" } },
-    sendPrompt: (text, meta) => sent.push({ text, ...(meta !== undefined ? { meta } : {}) }),
+    sendPrompt: (text, meta) => void sent.push({ text, ...(meta !== undefined ? { meta } : {}) }),
     push: (message) => pushed.push(message as { events: IntentEvent[] }),
     close: () => {
       closed = true;
@@ -361,7 +361,12 @@ function driveRealtime(opts: {
   }
   const processor: StreamProcessor = format.createProcessor(ctx);
   const send = (payload: Uint8Array, chunk: ChunkDescriptor | undefined, fin: boolean) =>
-    processor.onMessage(payload, { fin, ...(chunk !== undefined ? { chunk } : {}) } as MessageMeta);
+    Promise.resolve(
+      processor.onMessage(payload, {
+        fin,
+        ...(chunk !== undefined ? { chunk } : {}),
+      } as MessageMeta),
+    );
   return {
     feedEvents: (events, fin = false) =>
       send(enc.encode(JSON.stringify({ events })), { kind: "events" }, fin),

@@ -95,7 +95,9 @@ function drive(opts: DriveOptions = {}): Driver {
   const processor = format.createProcessor(ctx);
 
   const send = (payload: Uint8Array, chunk: ChunkDescriptor | undefined, fin: boolean) =>
-    processor.onMessage(payload, { fin, ...(chunk !== undefined ? { chunk } : {}) });
+    Promise.resolve(
+      processor.onMessage(payload, { fin, ...(chunk !== undefined ? { chunk } : {}) }),
+    );
 
   return {
     feedEvents: (events, fin = false) =>
@@ -215,6 +217,8 @@ describe("intent-v1 cost accounting", () => {
         speak: async () => ({
           bytes: new Uint8Array([1, 2, 3]),
           mime: "audio/mpeg",
+          latencyMs: 5,
+          model: "gpt-4o-mini-tts",
           // The shape a real seam produces (see speak.ts + cost.ts).
           cost: {
             usd: 0.000455,

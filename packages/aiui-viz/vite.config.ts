@@ -21,6 +21,10 @@ export default defineConfig({
   // transform from their own solid plugin (the editable-deps convention).
   plugins: [solid()],
   test: {
+    // The Worker stub must exist before @duckdb/duckdb-wasm's module body
+    // runs (it references `Worker` at module scope). setupFiles run before
+    // any test module, so no test has to remember to import the stub first.
+    setupFiles: ["./src/test-support/worker-stub.ts"],
     server: {
       deps: {
         // Solid must be INLINED under Vitest, not node-resolved — this file is

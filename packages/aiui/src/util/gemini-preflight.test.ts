@@ -67,7 +67,7 @@ describe("preflightGeminiKey", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(fetchImpl).toHaveBeenCalledOnce();
-    const [url] = fetchImpl.mock.calls[0] as [string];
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
     expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models?key=gm-secret");
   });
 

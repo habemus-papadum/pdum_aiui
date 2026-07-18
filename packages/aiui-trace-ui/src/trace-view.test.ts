@@ -9,7 +9,15 @@ const events: IntentEvent[] = [
   { at: 1, type: "thread-open", trigger: "talk" },
   { at: 2, type: "talk-start", segment: 1 },
   { at: 3, type: "transcript-final", segment: 1, text: "make it wider", latencyMs: 20, model: "m" },
-  { at: 4, type: "correction", via: "typed", original: "beat", instruction: "vite" },
+  {
+    at: 4,
+    type: "correction",
+    via: "typed",
+    from: 0,
+    to: 4,
+    original: "beat",
+    instruction: "vite",
+  },
 ];
 
 const patch = [

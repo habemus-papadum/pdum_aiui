@@ -18,13 +18,13 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChannelFormat, StreamProcessor, ThreadContext } from "./channel";
-import type { ChunkDescriptor, MessageMeta } from "./frame";
+import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
+import type { ChunkDescriptor } from "./frame";
 import { createIntentV1Format, type IntentV1Options } from "./intent-v1";
 import { TRANSCRIPT_WAIT_MS } from "./linter-sidecar";
 import type { LiveSession, LiveSessionCallbacks } from "./live-session";
-import type { IntentEvent } from "./overlay-types";
 
 const enc = new TextEncoder();
 
@@ -111,7 +111,12 @@ function drive(intent: Record<string, unknown>, options: IntentV1Options = {}): 
   const format: ChannelFormat = createIntentV1Format(options);
   const processor: StreamProcessor = format.createProcessor(ctx);
   const send = (payload: Uint8Array, chunk: ChunkDescriptor | undefined, fin: boolean) =>
-    processor.onMessage(payload, { fin, ...(chunk !== undefined ? { chunk } : {}) } as MessageMeta);
+    Promise.resolve(
+      processor.onMessage(payload, {
+        fin,
+        ...(chunk !== undefined ? { chunk } : {}),
+      } as MessageMeta),
+    );
   return {
     feedEvents: (events, fin = false) =>
       Promise.resolve(send(enc.encode(JSON.stringify({ events })), { kind: "events" }, fin)),

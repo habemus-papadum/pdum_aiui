@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Intercept the perl spawn so we can assert on it without touching a real tty.
 const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(() => ({ on: () => {} })),
+  spawnMock: vi.fn((..._args: [string, string[], object]) => ({ on: () => {} })),
 }));
 vi.mock("node:child_process", () => ({ spawn: spawnMock }));
 

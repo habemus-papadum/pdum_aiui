@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { composeIntent, Engine } from "./engine";
 import { renderAppSelection, renderCodeSelection } from "./render";
+import type { IntentEvent } from "./types";
 
 function armedEngine(): Engine {
   let t = 0;
@@ -1272,7 +1273,7 @@ describe("streaming compose (the live transcript preview)", () => {
     cumulative: Array<[number, string]>,
     shots: IntentEvent[] = [],
   ): IntentEvent[] {
-    return [
+    const events: IntentEvent[] = [
       { at: T0 - 10, type: "armed", on: true },
       { at: T0 - 5, type: "thread-open", trigger: "talk" },
       { at: T0, type: "talk-start", segment: 1 },
@@ -1280,7 +1281,8 @@ describe("streaming compose (the live transcript preview)", () => {
         ([at, text]): IntentEvent => ({ at, type: "transcript-delta", segment: 1, text }),
       ),
       ...shots,
-    ].sort((a, b) => a.at - b.at);
+    ];
+    return events.sort((a, b) => a.at - b.at);
   }
   /** A shot whose gesture lands at `takenAt`; the event reaches the stream 70 ms later. */
   const shot = (marker: string, takenAt: number): IntentEvent => ({

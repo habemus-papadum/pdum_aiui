@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import "./test-support/worker-stub";
 import { fetchWithProgress } from "./duckdb";
 
 /** A streamed Response of `chunks` with an optional Content-Length header. */

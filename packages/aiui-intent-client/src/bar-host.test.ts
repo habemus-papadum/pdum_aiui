@@ -19,8 +19,6 @@ const noopLanes: IntentLanes = {
   sendTurn: () => {},
   cancelTurn: () => {},
   takeShot: () => {},
-  armRegion: () => {},
-  armJump: () => {},
   addSelection: () => {},
   clearPencil: () => {},
   startTalk: () => {},
@@ -49,7 +47,7 @@ function enterTurn(client: IntentClient): void {
 function remoteCommands(client: IntentClient): string[] {
   return intentBarSource(client)
     .bar()
-    .flatMap((row) => (row as { items: unknown[] }).items)
+    .flatMap((row) => (row as unknown as { items: unknown[] }).items)
     .filter((it): it is CapView => (it as CapView).kind === "cap")
     .filter((cap) => isRemoteCap(cap as WireCap))
     .map((cap) => cap.command);

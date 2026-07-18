@@ -81,7 +81,7 @@ describe("selectMcpServer auto-pick", () => {
     vi.mocked(select).mockResolvedValueOnce(debug);
     await expect(selectMcpServer([debug])).resolves.toBe(debug);
     expect(select).toHaveBeenCalledOnce();
-    const { choices } = vi.mocked(select).mock.calls[0][0] as {
+    const { choices } = vi.mocked(select).mock.calls[0][0] as unknown as {
       choices: Array<{ name: string }>;
     };
     expect(choices[0].name).toContain("debug");

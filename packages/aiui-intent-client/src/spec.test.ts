@@ -11,7 +11,7 @@ import { initialContext, intentSpec } from "./spec";
  * gate is enforced by `dispatch` itself, not merely greyed out in the bar) and
  * no frozen client holding the tab. These rows are about the MACHINE; the
  * world's gates have their own tests, in client.test.ts. */
-const engine = (overrides: Partial<Record<string, string | boolean>> = {}) =>
+const engine = (overrides: Record<string, string | boolean> = {}) =>
   createModeEngine(intentSpec, {
     context: { ...initialContext, connected: true },
     initial: overrides,
@@ -20,7 +20,7 @@ const engine = (overrides: Partial<Record<string, string | boolean>> = {}) =>
 /** One §13.6-style row: state × command → expected regions. */
 const rows: Array<{
   name: string;
-  start: Partial<Record<string, string | boolean>>;
+  start: Record<string, string | boolean>;
   command: string;
   expected: Partial<Record<string, string | boolean>>;
 }> = [

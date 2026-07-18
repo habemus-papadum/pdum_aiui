@@ -94,7 +94,7 @@ describe("preflightOpenAiKey", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(fetchImpl).toHaveBeenCalledOnce();
-    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.openai.com/v1/models");
     expect((init.headers as Record<string, string>).authorization).toBe("Bearer sk-secret");
   });

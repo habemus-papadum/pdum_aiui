@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-intent-client",
   "version": "0.6.0+dev",
-  "description": "The greenfield intent client: a detached plain-page panel on the mode engine — agent-drivable, HMR-native; the MV3 extension is a shell added last.",
+  "description": "The greenfield intent client: a detached plain-page panel on the mode engine \u2014 agent-drivable, HMR-native; the MV3 extension is a shell added last.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -47,7 +47,7 @@
     "ext:watch": "tsx scripts/build-ext.ts --watch",
     "load:ext": "tsx scripts/load-ext.ts",
     "ext": "pnpm build:ext && pnpm load:ext",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "dev": "tsx scripts/dev.ts",
     "dev:plain": "vite"

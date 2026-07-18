@@ -37,7 +37,7 @@
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "render-audit": "tsx render-audit.mts"
   },

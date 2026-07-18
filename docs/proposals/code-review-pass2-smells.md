@@ -58,7 +58,7 @@ shared home. That classification needs the full inventory and per-site constrain
 
 **Recommendation: catalog it.**
 
-- [ ] Catalog it (include in the agent run)
+- [ X] Catalog it (include in the agent run)
 - [ ] Fix directly
 - [ ] Defer
 - [ ] Drop
@@ -88,7 +88,7 @@ the twins — agent work.
 
 **Recommendation: catalog it** (same run as S1 — the finders overlap heavily).
 
-- [ ] Catalog it (include in the agent run)
+- [ X] Catalog it (include in the agent run)
 - [ ] Fix directly
 - [ ] Defer
 - [ ] Drop
@@ -119,7 +119,7 @@ boundaries are, which internals become exports, what the tests pin. A per-file s
 **Recommendation: catalog it** — as per-file split plans, executed one file per sitting,
 never in bulk.
 
-- [ ] Catalog it (include in the agent run)
+- [ X] Catalog it (include in the agent run)
 - [ ] Fix directly
 - [ ] Defer
 - [ ] Drop
@@ -141,7 +141,7 @@ agent territory. Interacts with packaging (`publishConfig` exports, `pnpm test:p
 
 **Recommendation: catalog it.**
 
-- [ ] Catalog it (include in the agent run)
+- [ X] Catalog it (include in the agent run)
 - [ ] Fix directly
 - [ ] Defer
 - [ ] Drop
@@ -165,7 +165,7 @@ determines how big the typed contract needs to be.
 
 **Recommendation: catalog it** (cheap catalog, mostly mechanical fix afterwards).
 
-- [ ] Catalog it (include in the agent run)
+- [ X] Catalog it (include in the agent run)
 - [ ] Fix directly
 - [ ] Defer
 - [ ] Drop
@@ -183,7 +183,7 @@ sites, bounded fixes (derive from globs/manifests, or single-source the strings)
 **Recommendation: fix directly** — no catalog needed.
 
 - [ ] Catalog it
-- [ ] Fix directly (recommended)
+- [ X] Fix directly (recommended)
 - [ ] Defer
 - [ ] Drop
 
@@ -206,8 +206,8 @@ rides with `pnpm test:packaging` and a full test run.
 
 **Recommendation: fix directly** — no catalog needed, but land it as its own commit.
 
-- [ ] Catalog it
-- [ ] Fix directly (recommended)
+- [  Catalog it
+- [ X] Fix directly (recommended)
 - [ ] Defer
 - [ ] Drop
 
@@ -228,7 +228,7 @@ port-only form for loopback tools).
 **Recommendation: fix directly.**
 
 - [ ] Catalog it
-- [ ] Fix directly (recommended)
+- [ X] Fix directly (recommended)
 - [ ] Defer
 - [ ] Drop
 
@@ -252,7 +252,7 @@ into S3's catalog if S3 is approved.
 **Recommendation: fix directly** (capture.ts deferred to S3).
 
 - [ ] Catalog it
-- [ ] Fix directly (recommended)
+- [ X] Fix directly (recommended)
 - [ ] Defer
 - [ ] Drop
 
@@ -271,12 +271,12 @@ regrowth. No sweep: existing comments stay until touched.
 **Recommendation: adopt the policy** (a decision, not a work item; text lands with the docs
 pass).
 
-- [ ] Adopt the policy
+- [X ] Adopt the policy
 - [ ] Different policy (see comments)
 - [ ] Drop
 
 Comments:
-
+Agreed -- making long essays with proper nouns is going to be impossible to maintain. Even the one sentence history should be very, very selective. About which ones we want and which ones we can just forget about.  at This point is not a good idea: to keep every single war story. 
 ---
 
 ## The plan, once this is marked up
