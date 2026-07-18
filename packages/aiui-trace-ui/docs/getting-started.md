@@ -25,9 +25,8 @@ npm install @habemus-papadum/aiui-trace-ui
 Embed the pane in any DOM (the intent client's panel does this as a Solid island):
 
 ```ts
-import { injectDebugUiStyles, TracesPane } from "@habemus-papadum/aiui-trace-ui";
+import { TracesPane } from "@habemus-papadum/aiui-trace-ui";
 
-injectDebugUiStyles(document);
 const pane = new TracesPane({ baseUrl: "http://127.0.0.1:52424" });
 host.append(pane.root);
 pane.activate(); // starts the list/follow polls; deactivate() stops them

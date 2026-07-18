@@ -9,7 +9,7 @@
 export * from "./browser";
 export * from "./environment";
 export * from "./extension";
-export * from "./provenance";
+export { packageRoot, runningFromSource } from "./provenance";
 export * from "./socket-url";
 
 import { mkdirSync } from "node:fs";

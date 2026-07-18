@@ -29,7 +29,7 @@ import { startCdpTagger } from "./cdp/tagger";
 import { createCdpProxy } from "./cdp-proxy";
 
 /** The path prefix the panel lives under on the channel's server. */
-export const INTENT_PREFIX = "/intent";
+const INTENT_PREFIX = "/intent";
 
 /** The global the injected page bundle defines in the victim page. */
 export const PAGE_GLOBAL = "__aiuiIntentPage";

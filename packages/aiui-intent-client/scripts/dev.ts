@@ -21,7 +21,7 @@
  *    non-interactive escape hatch, e.g. `VITE_AIUI_PORT=49317 pnpm dev`).
  */
 
-import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel";
+import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel/internal";
 import { createServer } from "vite";
 
 if (process.env.VITE_AIUI_PORT) {

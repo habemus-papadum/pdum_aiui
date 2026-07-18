@@ -1,4 +1,4 @@
-import type { RunningServer } from "@habemus-papadum/aiui-claude-channel";
+import type { RunningServer } from "@habemus-papadum/aiui-claude-channel/internal";
 import { describe, expect, it } from "vitest";
 import { resolveChannelTarget } from "./channel-target";
 

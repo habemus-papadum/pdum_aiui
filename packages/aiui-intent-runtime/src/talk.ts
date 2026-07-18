@@ -12,7 +12,6 @@
  *  - {@link mockTranscriber} — the offline tier's local transcriber.
  */
 export {
-  AudioCapture,
   PCM_WORKLET_SOURCE,
   type PcmSource,
   REALTIME_PCM_MIME,

@@ -33,38 +33,9 @@ export { mountDebugPage } from "./debug-page";
 export type { JsonTreeOptions } from "./json-tree";
 export { renderJsonTree } from "./json-tree";
 export type { PreviewUrl } from "./paths";
-export { defaultPreviewUrl } from "./paths";
 export type { LiveTrace, TracePollOptions, TracePollResult, TraceStageLike } from "./sources";
 export { createTracePoll } from "./sources";
-export { DEBUG_UI_CSS, injectDebugUiStyles } from "./styles";
-export type {
-  CardCategory,
-  CardDirection,
-  HeroPrompt,
-  LiveSegment,
-  PatchLine,
-  PatchLineKind,
-  StageClass,
-  TraceCard,
-  TraceOutcome,
-  TraceState,
-} from "./trace-cards";
-export {
-  buildCards,
-  cardVisible,
-  classifyStage,
-  correctionLines,
-  eventTypesSummary,
-  heroPrompt,
-  liveOpenLine,
-  liveResolvedSummary,
-  liveToolSegments,
-  loweredPromptText,
-  parsePatchLines,
-  savedFrameFiles,
-  traceOutcome,
-} from "./trace-cards";
 export type { TraceViewConfig } from "./trace-view";
 export { TraceView } from "./trace-view";
 export type { TracesPaneOptions } from "./traces-pane";
-export { inSession, TracesPane, traceRowParts } from "./traces-pane";
+export { TracesPane } from "./traces-pane";

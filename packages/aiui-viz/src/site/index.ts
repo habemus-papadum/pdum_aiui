@@ -14,7 +14,7 @@
  * `.toc-*`, `.math-*` class names) — the same CSS-ownership seam as CellView.
  */
 export type { ColorMode } from "./color-mode";
-export { colorMode, isDark } from "./color-mode";
+export { colorMode } from "./color-mode";
 export type { SiteHeaderProps, SiteTab } from "./site-header";
 export { SiteHeader } from "./site-header";
 export { TeX } from "./tex";

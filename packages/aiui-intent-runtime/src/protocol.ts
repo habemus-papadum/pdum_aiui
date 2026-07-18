@@ -41,7 +41,6 @@ export interface Ack {
 export type JsonChunk = { kind: "events" } | { kind: "control" };
 export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
 export type AudioChunk = { kind: "audio"; id: string; seq: number; mime: string };
-export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk;
 
 /**
  * A server→client push on the same socket, distinguished from an {@link Ack} by

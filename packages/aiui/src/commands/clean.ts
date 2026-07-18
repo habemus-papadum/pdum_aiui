@@ -22,7 +22,7 @@
  */
 import { existsSync, lstatSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { listMcpServers, projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
+import { listMcpServers, projectCacheDir } from "@habemus-papadum/aiui-claude-channel/internal";
 import { cacheDir } from "@habemus-papadum/aiui-util";
 import chalk from "chalk";
 import { allManagedCacheDirs } from "../util/managed-browser";

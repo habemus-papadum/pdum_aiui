@@ -22,7 +22,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
+import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel/internal";
 import { cacheDir } from "@habemus-papadum/aiui-util";
 import {
   type ChannelBind,

@@ -15,42 +15,15 @@
  *  - fake-bus.ts— the in-memory host (tests + the dev harness)
  */
 
-export { activationGesture } from "./activation";
-export { configBar, intentBar } from "./caps";
-export { type ClaimLaneOptions, intentClaims } from "./claims";
+export type { ClaimLaneOptions } from "./claims";
 export {
   createIntentClient,
   type IntentClient,
   type IntentClientConfig,
   type IntentLanes,
 } from "./client";
-export * as intentConfig from "./config";
-export { installConfigAutoSave, loadConfigBase } from "./config-store";
 export { type FakeBus, fakeBus } from "./fake-bus";
-export { hintsFor, type KeyVerdict, keyStack, keyVerdict, turnLayer } from "./keys";
-export {
-  type ChannelLanes,
-  type ChannelLanesConfig,
-  createChannelLanes,
-  currentThreadEvents,
-  type OpenThread,
-  panelIntentConfig,
-  sessionStorageMirror,
-  type TurnMirror,
-} from "./lanes";
-export {
-  type BusPeer,
-  type BusPhase,
-  type BusState,
-  type ChannelHealth,
-  connectSessionBus,
-  INITIAL_BUS_STATE,
-  probeChannel,
-  reduceBusMessage,
-  resolveChannelPort,
-  type SessionBusClient,
-} from "./session";
-export { type IntentContext, initialContext, intentSpec } from "./spec";
+export type { IntentContext } from "./spec";
 export type {
   CaptureSource,
   HeldStream,

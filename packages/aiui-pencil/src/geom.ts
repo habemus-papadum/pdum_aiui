@@ -25,24 +25,6 @@ export interface Rect {
   h: number;
 }
 
-/** The tight bounding box of a point list. An empty rect for zero points. */
-export function boundsOf(points: readonly Vec[]): Rect {
-  if (points.length === 0) {
-    return { x: 0, y: 0, w: 0, h: 0 };
-  }
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-}
-
 export function dist(a: Vec, b: Vec): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
 }

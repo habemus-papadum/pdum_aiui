@@ -27,7 +27,7 @@ import {
   listMcpServers,
   type RunningServer,
   selectMcpServer,
-} from "@habemus-papadum/aiui-claude-channel";
+} from "@habemus-papadum/aiui-claude-channel/internal";
 import { select } from "@inquirer/prompts";
 import chalk from "chalk";
 import { execa } from "execa";

@@ -27,8 +27,7 @@
  * @packageDocumentation
  */
 
-export type { AddErrorOptions, IntentError, IntentErrorInput } from "./errors";
-export { addError, dismissError, ERROR_TOAST_CAP, formatErrorData } from "./errors";
+export type { IntentErrorInput } from "./errors";
 export type {
   ClientMeta,
   CollectClientMetaOptions,
@@ -48,7 +47,6 @@ export type {
   AttachmentChunk,
   AudioChunk,
   ErrorMessage,
-  FrameChunk,
   IntentSocket,
   JsonChunk,
   LoweredPromptMessage,
@@ -56,10 +54,4 @@ export type {
   WebSocketFactory,
   WebSocketLike,
 } from "./protocol";
-export {
-  connectIntentSocket,
-  encodeFrame,
-  encodeJsonPayload,
-  isErrorMessage,
-  PROTOCOL_VERSION,
-} from "./protocol";
+export { connectIntentSocket, isErrorMessage, PROTOCOL_VERSION } from "./protocol";

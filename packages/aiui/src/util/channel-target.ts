@@ -11,7 +11,7 @@
  * it moved here when vite stopped connecting — owner, 2026-07-17.)
  */
 
-import type { RunningServer } from "@habemus-papadum/aiui-claude-channel";
+import type { RunningServer } from "@habemus-papadum/aiui-claude-channel/internal";
 
 /** The channel a command should point at, or why it couldn't be resolved. */
 export interface ChannelTarget {

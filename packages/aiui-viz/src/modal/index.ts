@@ -74,22 +74,11 @@ export {
   type ToggleRegion,
   toggle,
 } from "./engine";
-export {
-  DEFAULT_DIFF_CLASSES,
-  type DiffRunClasses,
-  isExtension,
-  LIVE_FLASH_MS,
-  LiveDiffText,
-  type LiveDiffTextOptions,
-  renderRuns,
-  runsFragment,
-  SETTLE_FLASH_MS,
-} from "./flash";
+export { type DiffRunClasses, LiveDiffText, type LiveDiffTextOptions } from "./flash";
 export { createFocusTracker, type FocusTracker } from "./focus";
 export {
   type InstallKeysOptions,
   installKeys,
-  isTypingTarget,
   type KeyBinding,
   type KeyClaim,
   type KeyHint,

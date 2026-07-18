@@ -36,12 +36,11 @@ import {
   sourceLocatorVite,
 } from "./source-locator.ts";
 
-// Configs import factory helpers from this one subpath.
+// The locator pass's config surface; `defaultFactories` is how a custom
+// factories list extends (rather than replaces) the defaults.
 export {
-  cellFactory,
   defaultFactories,
   type FactorySpec,
-  optionsFactory,
   type SourceLocatorOptions,
   type SourceLocatorViteOptions,
   sourceLocatorBabel,

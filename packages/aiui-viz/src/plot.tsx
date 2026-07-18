@@ -21,14 +21,3 @@ export function PlotFigure(props: { options: () => Plot.PlotOptions }) {
   );
   return <div class="plot-host" ref={host} />;
 }
-
-/**
- * A neutral default for Plot cosmetics on a dark panel surface. Series colors
- * are intentionally *not* here — pick those per app with the dataviz procedure
- * (validate against your surface) and pass them into your marks.
- */
-export const PLOT_STYLE = {
-  background: "transparent",
-  color: "#9aa0aa",
-  fontSize: "11px",
-} as const;

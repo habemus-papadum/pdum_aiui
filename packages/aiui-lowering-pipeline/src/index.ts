@@ -14,12 +14,12 @@
  * @packageDocumentation
  */
 
-export type { IntentPipelineConfig, IntentTier } from "./config";
-export { DEFAULT_INTENT_CONFIG, expandTier, TIER_PRESETS } from "./config";
+export type { IntentPipelineConfig } from "./config";
+export { DEFAULT_INTENT_CONFIG, expandTier } from "./config";
 export type { EngineListener } from "./engine";
 export { composeIntent, Engine } from "./engine";
 export type { DiffRun } from "./patch";
-export { applyCorrectionToLines, applyPatch, wordDiff } from "./patch";
+export { applyPatch, wordDiff } from "./patch";
 export { renderPrompt, renderTabRecord } from "./render";
 export type {
   AppSelection,

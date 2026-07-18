@@ -39,42 +39,16 @@
  */
 
 export { ClientSession, type ClientSessionOptions } from "./client-session";
-export { type CuspConfig, detectCusps, turnAt } from "./corners";
+export { type CuspConfig, detectCusps } from "./corners";
+export { type Dab, dabAt, filterSamples, planStroke, type StrokePlan } from "./dabs";
+export type { OneEuroConfig } from "./filter";
 export {
-  type Dab,
-  dabAt,
-  effectivePressure,
-  filterSamples,
-  planStroke,
-  ramp,
-  type StrokePlan,
-  speedsOf,
-} from "./dabs";
-export {
-  CHARGE_GLOW,
-  crossfadeStyle,
-  type FadeStyle,
-  FULL_STYLE,
-  fadeStyle,
-  heat,
-  INK_CHARGE,
-  INK_HOLD,
-  isFullStyle,
-} from "./fade";
-export { OneEuro, type OneEuroConfig, PointFilter, smoothingAlpha } from "./filter";
-export {
-  boundsOf,
-  dist,
-  lerp,
-  lerpAngle,
-  normalizeAngle,
   polygonArea,
   polylineLength,
   type Rect,
   resampleByArcLength,
   type Vec,
 } from "./geom";
-export { GrainCache, grainTexture, noiseField } from "./grain";
 // host-session.ts / client-session.ts — the two ends of the remote pencil as
 // consumables: relay socket, WebRTC lifecycle, videoStatus. An integrator
 // constructs one of these instead of ever touching an RTCPeerConnection.
@@ -122,12 +96,7 @@ export {
 } from "./protocol";
 // reactive.ts — the Solid face of a surface: the drawing as signals (committed
 // immediately; the live stroke throttled but LOSSLESS — cumulative snapshots).
-export {
-  DEFAULT_LIVE_HZ,
-  type InkSignals,
-  type InkSource,
-  inkSignals,
-} from "./reactive";
+export { type InkSignals, type InkSource, inkSignals } from "./reactive";
 // remote.ts — the endpoint cores (no socket in them), and the preview fade
 // window: ~500 ms from pen-up (the policy retired paint v1 proved, D3), sized
 // from the receiver's measured delays when stats are available.
@@ -140,7 +109,7 @@ export {
   RemoteHost,
   type RemoteHostOptions,
 } from "./remote";
-export { blendSample, catmullRom, type DensifyConfig, densify } from "./spline";
+export { type DensifyConfig, densify } from "./spline";
 export {
   type InkEvent,
   type InkState,
@@ -152,25 +121,19 @@ export {
 } from "./surface";
 export {
   emptyTelemetry,
-  IDLE_GAP_MS,
   type InputReport,
   inputReport,
-  median,
   observe,
   type PenKind,
   type PenSample,
   type PenSupport,
   type PointerLike,
-  penKind,
   penSample,
   penSupport,
   type Range,
-  sphericalFromTilt,
   type Telemetry,
   type TiltVerdict,
-  tiltFromSpherical,
   tiltVerdict,
-  varied,
 } from "./telemetry";
 
 /** The published package name — handy for smoke tests. */

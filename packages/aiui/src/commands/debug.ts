@@ -10,7 +10,7 @@
  * browser** (the managed browser window `aiui claude` and `aiui open` use).
  * The root redirects to the dashboard; the trace debugger is one click away.
  */
-import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel";
+import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel/internal";
 import chalk from "chalk";
 import { splitAiuiArgs } from "../util/aiui-args";
 import { resolveChannelTarget } from "../util/channel-target";

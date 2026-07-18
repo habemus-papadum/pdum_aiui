@@ -26,15 +26,9 @@ export {
 } from "./aiui-global";
 export type { Cell, CellCompute, CellContext, CellOptions, CellState } from "./cell";
 // cell.ts — Observable-style async dataflow cells for SolidJS 2.0.
-export {
-  cell,
-  cellByName,
-  cellGraph,
-  cellRegistry,
-  settledOnly,
-} from "./cell";
+export { cell, cellGraph, cellRegistry, settledOnly } from "./cell";
 // cell-view.tsx — the notebook-feel wrapper (spinner, error+retry, keep-latest).
-export { CellView, ProgressStripe, Spinner } from "./cell-view";
+export { CellView } from "./cell-view";
 export type {
   ActionSpec,
   ControlBox,
@@ -66,7 +60,7 @@ export {
 } from "./mode-solid";
 export type { Scope } from "./scope";
 // scope.ts — instance identity for composable slices (qualified names).
-export { SCOPE_SEPARATOR, scope } from "./scope";
+export { scope } from "./scope";
 // standard-tools.ts — the app-independent `locate` tool and `cells` reporter.
 export { registerStandardTools } from "./standard-tools";
 export type { ThrottledBox } from "./throttle";

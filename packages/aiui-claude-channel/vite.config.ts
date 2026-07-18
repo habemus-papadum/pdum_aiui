@@ -13,8 +13,9 @@ export default defineConfig({
   },
   build: {
     lib: {
-      // Two entrypoints: the library (index) and the `aiui-claude-channel` bin (cli).
-      entry: { index: "src/index.ts", cli: "src/cli.ts" },
+      // Entrypoints: the library (index), the workspace-internal seam
+      // (internal), and the `aiui-claude-channel` bin (cli).
+      entry: { index: "src/index.ts", internal: "src/internal.ts", cli: "src/cli.ts" },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },

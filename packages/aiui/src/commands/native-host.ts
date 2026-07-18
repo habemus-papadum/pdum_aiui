@@ -15,7 +15,7 @@
  * Requests:  { cmd: "listChannels" } | { cmd: "version" } | { cmd: "ping" }
  * Responses: { ok: true, ... } | { ok: false, error }
  */
-import { listMcpServers } from "@habemus-papadum/aiui-claude-channel";
+import { listMcpServers } from "@habemus-papadum/aiui-claude-channel/internal";
 
 /** Encode one native-messaging frame (native-endian u32 length + JSON). Pure. */
 export function encodeNativeFrame(message: unknown): Buffer {

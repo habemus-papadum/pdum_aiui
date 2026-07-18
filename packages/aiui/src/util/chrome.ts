@@ -40,7 +40,7 @@
  */
 import { existsSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel";
+import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel/internal";
 import { isCi } from "@habemus-papadum/aiui-util";
 import type { AiuiArgs } from "./aiui-args";
 import type { AiuiConfig, ChromeChannel, ChromeMode } from "./config";
