@@ -29,6 +29,7 @@
 import {
   ACTIVATE_COMMAND,
   type ActivateMessage,
+  type ExtOnlyCommand,
   type NavigationMessage,
   PAGE_ADDRESS,
   PANEL_PORT_PREFIX,
@@ -172,7 +173,9 @@ const sweepWindow = async (windowId: number): Promise<void> => {
   await Promise.allSettled(
     tabs.flatMap((tab) =>
       // Tabs without a content script (chrome://, the web store) just reject.
-      tab.id === undefined ? [] : [relayRequestTab(tab.id, PAGE_ADDRESS, "driverGone")],
+      tab.id === undefined
+        ? []
+        : [relayRequestTab(tab.id, PAGE_ADDRESS, "driverGone" satisfies ExtOnlyCommand)],
     ),
   );
 };

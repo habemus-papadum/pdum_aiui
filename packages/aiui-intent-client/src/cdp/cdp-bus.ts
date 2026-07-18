@@ -44,7 +44,7 @@ import {
   type HeldStream,
   type IntentHost,
   type PageCapability,
-  type PageCapabilityOrRing,
+  type PageCapabilityMap,
   type PageEvent,
   type PageTransport,
   type PanelShot,
@@ -246,7 +246,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   };
 
   /** The capability call, as an expression evaluated in the page's own world. */
-  const invoke = (capability: PageCapabilityOrRing, payload?: unknown): string =>
+  const invoke = (capability: PageCapability, payload?: unknown): string =>
     `window.__aiuiIntentPage && window.__aiuiIntentPage.handle(${JSON.stringify(capability)}, ${JSON.stringify(payload ?? null)})`;
 
   /**
@@ -268,7 +268,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   /** Deliver one capability to one page — the single path everything takes. */
   const apply = async (
     page: AttachedPage,
-    capability: PageCapabilityOrRing,
+    capability: PageCapability,
     payload?: unknown,
   ): Promise<unknown> => {
     if (capability === "region" || capability === "jump" || capability === "pencil") {
@@ -581,7 +581,12 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         perTab.set(capability, payload);
         sticky.set(tab, perTab);
       }
-      return apply(page, capability, payload);
+      // CDP's evaluate returns `unknown`; the reply is asserted to the
+      // capability's declared shape here — the one wire-boundary cast this
+      // tier needs (a stale/foreign page could return anything).
+      return apply(page, capability, payload) as Promise<
+        PageCapabilityMap[PageCapability]["reply"] | undefined
+      >;
     },
     broadcastRing: (state) => {
       ring = state;

@@ -104,7 +104,10 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
       }
     });
     socket.addEventListener("message", ((event: { data: unknown }) => {
-      let msg: { type?: string; callId?: string; ns?: string; name?: string; args?: unknown };
+      // A directory `{type:"call"}` message carries ns/name (the module doc's
+      // contract); the parse is an unchecked JSON assertion, and the page
+      // handler coerces defensively regardless.
+      let msg: { type?: string; callId?: string; ns: string; name: string; args?: unknown };
       try {
         msg = JSON.parse(String(event.data)) as typeof msg;
       } catch {

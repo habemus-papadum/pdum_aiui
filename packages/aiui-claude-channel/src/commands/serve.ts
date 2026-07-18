@@ -68,6 +68,10 @@
  */
 
 import { randomUUID } from "node:crypto";
+import {
+  parseStageLabel,
+  type StageTag,
+} from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import { createChannelLog } from "../channel-log";
 import type { FrameLogEntry } from "../frame-log";
 import { channelSourceDir, watchChannelSource } from "../hot";
@@ -151,18 +155,42 @@ function humanBytes(bytes: number): string {
 }
 
 /**
- * Whether a trace stage is one `serve` narrates: the pipeline events a debug run
- * cares about (linter, transcription, cost, the composed intent), out of the
- * many IRs a lowering run records. Exported for unit testing.
+ * The parsed-stage tags `serve` narrates: the pipeline events a debug run cares
+ * about (the whole linter family, cost, the composed intent, the fin compose),
+ * out of the many IRs a lowering run records. Membership over the shared
+ * trace-stage vocabulary. (The old prefix ladder also matched a
+ * `transcription…` label; no living writer produces one on this live tap — the
+ * transcription spend narrates as `cost: realtime transcription seg_N` — so that
+ * branch was unreachable and is dropped.)
+ */
+const NARRATED: ReadonlySet<StageTag> = new Set<StageTag>([
+  "linter-open",
+  "linter-disabled",
+  "linter-note",
+  "linter-tool-call",
+  "linter-tool-result",
+  "linter-transcript",
+  "linter-label",
+  "linter-selection",
+  "linter-selection-retracted",
+  "linter-turn-end",
+  "linter-turn-merged",
+  "linter-interrupted",
+  "linter-go-away",
+  "linter-transcript-timeout",
+  "linter-error",
+  "linter-close",
+  "linter-control",
+  "cost",
+  "composed-intent",
+  "fin-compose",
+]);
+
+/**
+ * Whether a trace stage is one `serve` narrates. Exported for unit testing.
  */
 export function isNarratedTraceStage(label: string): boolean {
-  return (
-    label.startsWith("linter") ||
-    label.startsWith("transcription") ||
-    label.startsWith("cost:") ||
-    label === "composed intent" ||
-    label === "fin compose"
-  );
+  return NARRATED.has(parseStageLabel(label).t);
 }
 
 /** One line describing a `hello`: what format connected, its actor, and from where. */

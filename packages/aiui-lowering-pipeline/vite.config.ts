@@ -7,9 +7,12 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 export default defineConfig({
   build: {
     lib: {
-      entry: "src/index.ts",
+      // Two entrypoints: the pipeline core (`.`) and the internal trace-stage
+      // label contract (`./trace-stages`), so dist/trace-stages.js exists for
+      // installed consumers (the channel + trace-ui import it by subpath).
+      entry: { index: "src/index.ts", "trace-stages": "src/trace-stages.ts" },
       formats: ["es"],
-      fileName: "index",
+      fileName: (_format, entryName) => `${entryName}.js`,
     },
     outDir: "dist",
     sourcemap: true,

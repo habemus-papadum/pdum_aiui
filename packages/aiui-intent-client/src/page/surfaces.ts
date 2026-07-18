@@ -12,6 +12,7 @@
  */
 
 import type { PageReport } from "../cdp/page-script";
+import type { PageCapabilityMap } from "../transport";
 import type { PencilHandle } from "./pencil-mount";
 
 /** The region-drag report — the only PageReport a region surface emits. */
@@ -174,9 +175,9 @@ export function createRegionSurface(deps: {
  * are tolerated as no-ops (a stray op after disengage). */
 export function createPencilOps(
   getMount: () => (() => PencilHandle) | undefined,
-): (payload: Record<string, unknown>) => unknown {
+): (payload: Record<string, unknown>) => PageCapabilityMap["pencil"]["reply"] {
   let handle: PencilHandle | undefined;
-  return (payload: Record<string, unknown>): unknown => {
+  return (payload: Record<string, unknown>): PageCapabilityMap["pencil"]["reply"] => {
     const op = String(payload.op ?? "");
     if (op === "size") {
       return { width: window.innerWidth, height: window.innerHeight };

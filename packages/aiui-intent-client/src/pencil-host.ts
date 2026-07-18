@@ -35,7 +35,7 @@ import {
   type Tool,
 } from "@habemus-papadum/aiui-pencil";
 import { MARKUP } from "./page/pencil-mount";
-import type { IntentHost } from "./transport";
+import type { IntentHost, PencilOp } from "./transport";
 
 /** The session surface we drive — HostSession's, narrowed to what we fake. */
 export interface PencilHostSession {
@@ -78,10 +78,10 @@ const DEFAULT_PLANE: Surface = { width: 1280, height: 720 };
 export function createPencilHost(opts: PencilHostOptions): PencilHost {
   let size: Surface = DEFAULT_PLANE;
 
-  const forward = (payload: Record<string, unknown>): void => {
+  const forward = (op: PencilOp): void => {
     const tab = opts.tab();
     if (tab !== undefined) {
-      void opts.host.transport.requestPage(tab, "pencil", payload).catch(() => {});
+      void opts.host.transport.requestPage(tab, "pencil", op).catch(() => {});
     }
   };
 

@@ -462,7 +462,7 @@ describe("CdpBus", () => {
     // …but a NEW document has no bundle in it, so the next op re-injects.
     browser.report("S1", hello("https://example.test/next"));
     await settle();
-    await bus.transport.requestPage(1, "pencil", { op: "engage" });
+    await bus.transport.requestPage(1, "pencil", { op: "engage", fadeSec: 0 });
     expect(
       browser.evaluated("S1").filter((e) => e.includes("the page bundle")).length,
     ).toBeGreaterThanOrEqual(2);

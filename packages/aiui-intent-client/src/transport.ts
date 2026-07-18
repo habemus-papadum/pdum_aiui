@@ -14,38 +14,98 @@
  * headless-testable, and the host is a constructor argument.
  */
 import type { PageTabRecord } from "@habemus-papadum/aiui-intent-runtime";
+import type { AppSelection } from "@habemus-papadum/aiui-lowering-pipeline";
+import type { PencilParams, PenSample, Tool } from "@habemus-papadum/aiui-pencil";
 
-/** The page capabilities a transport must deliver (the relay's command set). */
-export type PageCapability =
-  | "keylayer"
-  | "flash"
-  | "selection"
-  | "viewport"
-  /** Arm a ONE-SHOT rubber-band drag on the page (the `a` area shot). */
-  | "region"
-  /** Arm the ONE-SHOT jump-to-editor pick (the `j` gesture, aiui pages):
-   * payload `{arm}` — click opens the in-page picker, commit opens
-   * `vscode://file/…`. Fully page-side; nothing reports back. */
-  | "jump"
-  /** The pencil markup surface (local stylus + forwarded iPad strokes). Payload
-   * is `{op, …}`: engage/disengage/fade/clear/undo, and the remote stroke ops
-   * rbegin/rpoint/rend/rcancel the panel's HostSession forwards (Phase 2). A
-   * `size` op returns the plane. See page/pencil-mount.ts. */
-  | "pencil"
-  /** Invoke one page tool from `__AIUI__.tools` (the T2 bridge): payload
-   * `{ns, name, args, callId}`; the page answers with a `toolsResult`
-   * page EVENT (async — the call may take a while), not a return value. */
-  | "toolsCall"
-  /** Driver liveness: payload `{session}` — the panel client's per-boot id,
-   * beaten on a short cadence. The page's watchdog (page/driver-watch.ts)
-   * self-cleans stranded assertions when the beats stop. */
-  | "heartbeat";
+/** The two shapes almost every capability reply is built from. */
+export type Ack = { ok: true };
+export type CapError = { error: string };
 
-/** `ring` deliberately sits OUTSIDE {@link PageCapability}: it is asserted
- * everywhere at once (broadcastRing), never a per-tab request. The two internal
- * buses widen their apply/invoke seam to it — this is that one widening, named,
- * so it is not restated at each site. Not part of the requestable set. */
-export type PageCapabilityOrRing = PageCapability | "ring";
+/** The pencil `{op, …}` command set: engage/disengage/fade/clear/undo and the
+ * remote stroke ops (rbegin/rpoint/rend/rcancel) the panel's HostSession
+ * forwards from an iPad. Pure data, so it serializes across the wire;
+ * `pencil-host.ts` clamps remote strokes to the markup brush before sending.
+ * A `size` op answers the plane. See page/pencil-mount.ts. */
+export type PencilOp =
+  | { op: "size" }
+  | { op: "engage"; fadeSec: number }
+  | { op: "disengage" }
+  | { op: "fade"; fadeSec: number }
+  | { op: "clear" }
+  | { op: "undo" }
+  | { op: "rbegin"; id: string; init: { tool: Tool; params: PencilParams; point: PenSample } }
+  | { op: "rpoint"; id: string; point: PenSample }
+  | { op: "rend"; id: string; point?: PenSample }
+  | { op: "rcancel"; id: string };
+
+/**
+ * The page capabilities a transport must deliver — one entry per relay command,
+ * each carrying its request `payload` and its `reply`. {@link PageCapability}
+ * (the requestable set) is DERIVED from the keys, so this map is the single
+ * inventory both tiers serve: the MV3 content script's `serveRelay` table and
+ * the CDP bootstrap's `handle` switch each satisfy it, and `requestPage` is
+ * typed by it. The reverse wire (PageReport / PageEvent) is its own typed union.
+ *
+ * `ring` lives here though it is only ever BROADCAST (broadcastRing), never a
+ * per-tab request — folding it in closes the one stringly hole the two buses
+ * used to widen past. `driverGone` deliberately does NOT: it is the MV3 service
+ * worker's page command, not a panel capability (see ext/protocol.ts's
+ * `ExtOnlyCommand`), so `requestPage` never carries it.
+ *
+ * Tier divergence is real, not incidental: `selection` and `viewport` genuinely
+ * reply DIFFERENT shapes per tier. The reply unions document that drift; they do
+ * not fix it. Compile-time types also do not validate the wire — payloads cross
+ * JSON / structured-clone from possibly-stale speakers, so both tiers' handlers
+ * keep their runtime coercions; this map anchors those to one declared shape per
+ * capability instead of ten scattered ad-hoc casts.
+ */
+export interface PageCapabilityMap {
+  /** Driver liveness: `{session}` is the panel client's per-boot id, beaten on a
+   * short cadence; the page's watchdog (page/driver-watch.ts) self-cleans
+   * stranded assertions when the beats stop. */
+  heartbeat: { payload: { session: string }; reply: Ack };
+  /** The on-page indicator ring — projected per tab by {@link ringForTab}.
+   * Broadcast everywhere at once, never a per-tab request. */
+  ring: { payload: PageRing; reply: Ack };
+  /** The full-frame flash wash. Only `"shot"` is ever sent today; `"miss"` is
+   * handler-supported vocabulary with no live sender (kept as declared). */
+  flash: { payload: { kind: "shot" | "miss" }; reply: Ack };
+  /** The in-turn wholesale key claim (STICKY: replayed by both buses on reload). */
+  keylayer: { payload: { capture: boolean }; reply: Ack };
+  /** The on-page selection, request/reply — no payload. The reply is
+   * {@link AppSelection} plus a `title` the event schema omits (the extra field
+   * rides the wire and `engine.appSelection` ignores it). Diverges per tier: CDP
+   * is text-only, MV3 is structured (source locators, cell ids, TeX). */
+  selection: { payload?: undefined; reply: (AppSelection & { title?: string }) | null };
+  /** Viewport measure / video-sample flag. The `{sample, mode}` payload is
+   * VESTIGIAL — only the videoSample claim's fake-host default applier sends it;
+   * both real handlers ignore it. The reply diverges per tier: CDP `{ok}`
+   * (sampling rides screenshots panel-side), MV3 `{w,h,dpr}` (the ext-bus tab
+   * measurement). */
+  viewport: {
+    payload?: { sample: boolean; mode?: string };
+    reply: Ack | { w: number; h: number; dpr: number };
+  };
+  /** Arm a ONE-SHOT rubber-band drag (the `a` area shot); completion rides the
+   * report wire as a `regionDrag` PageEvent, not this reply. */
+  region: { payload: { arm: boolean }; reply: Ack };
+  /** Arm the ONE-SHOT jump-to-editor pick (the `j` gesture, aiui pages) — click
+   * opens the in-page picker, commit opens `vscode://file/…`. The CDP tier
+   * answers a CapError when the jump surface was not delivered. */
+  jump: { payload: { arm: boolean }; reply: Ack | CapError };
+  /** The pencil markup surface (local stylus + forwarded iPad strokes): a
+   * {@link PencilOp}. `size` answers the plane; `engage` answers a CapError when
+   * the surface was not injected. */
+  pencil: { payload: PencilOp; reply: Ack | CapError | { width: number; height: number } };
+  /** Invoke one page tool from `__AIUI__.tools` (the T2 bridge): the reply is
+   * only the ack — the real answer rides the report wire as a `toolsResult`
+   * PageEvent, correlated by callId (async — the call may take a while). */
+  toolsCall: { payload: { ns: string; name: string; args?: unknown; callId: string }; reply: Ack };
+}
+
+/** The requestable page-capability set — derived from {@link PageCapabilityMap}
+ * so the union and the per-capability payload/reply shapes cannot drift. */
+export type PageCapability = keyof PageCapabilityMap;
 
 /** How often a live driver beats the pages it can reach. */
 export const HEARTBEAT_MS = 750;
@@ -155,8 +215,14 @@ export type PageEvent =
 
 /** Tab-scoped request/response + ring broadcast + page→panel events. */
 export interface PageTransport {
-  /** Invoke one page capability on one tab (the relayRequestTab shape). */
-  requestPage(tab: number, capability: PageCapability, payload?: unknown): Promise<unknown>;
+  /** Invoke one page capability on one tab (the relayRequestTab shape). The
+   * payload and reply are typed per capability by {@link PageCapabilityMap}; an
+   * `undefined` reply means the tab was unreachable (no content script, gone). */
+  requestPage<C extends PageCapability>(
+    tab: number,
+    capability: C,
+    payload?: PageCapabilityMap[C]["payload"],
+  ): Promise<PageCapabilityMap[C]["reply"] | undefined>;
   /** Assert the indicator ring everywhere (fire-and-forget, idempotent). */
   broadcastRing(state: RingState): void;
   /** Subscribe to page events. Returns the unsubscribe. */

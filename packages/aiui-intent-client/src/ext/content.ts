@@ -39,9 +39,26 @@ import {
   createRegionSurface,
   createRingSurface,
 } from "../page/surfaces";
-import { DRIVER_TIMEOUT_MS } from "../transport";
-import { PAGE_ADDRESS, type ReportMessage } from "./protocol";
-import { serveRelay } from "./relay";
+import {
+  type Ack,
+  DRIVER_TIMEOUT_MS,
+  type PageCapability,
+  type PageCapabilityMap,
+} from "../transport";
+import { type ExtOnlyCommand, PAGE_ADDRESS, type ReportMessage } from "./protocol";
+import { type RelayHandler, serveRelay } from "./relay";
+
+/** Serve the PAGE_ADDRESS table with per-capability RETURN typing: every handler
+ * still narrows its own untrusted payload (the wire crosses structured-clone from
+ * possibly-stale speakers), but its reply is now checked against
+ * {@link PageCapabilityMap}, so tier drift surfaces at compile time. `driverGone`
+ * rides alongside as the MV3-only {@link ExtOnlyCommand}. `serveRelay` itself
+ * stays string-keyed — the sw.ts broker table uses it too. */
+const servePageCapabilities = (
+  handlers: { [C in PageCapability]: (payload: unknown) => PageCapabilityMap[C]["reply"] } & {
+    [K in ExtOnlyCommand]: () => Ack;
+  },
+): (() => void) => serveRelay(PAGE_ADDRESS, handlers as Record<string, RelayHandler>);
 
 /** Set once this script learns it is an ORPHAN (the extension was reloaded
  * under it — ext:watch does that on every rebuild). Reports stand down; the
@@ -153,7 +170,9 @@ window.addEventListener("message", (event) => {
       ns: string;
       tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
     }>;
-    aiuiToolsResult?: { callId: string; ok: boolean; value?: unknown; error?: string };
+    // The toolsResult shape, reused from the PageReport union rather than
+    // re-declared (the field-tagged envelope stays ad-hoc).
+    aiuiToolsResult?: Omit<Extract<PageReport, { kind: "toolsResult" }>, "kind">;
     aiuiJumpDone?: boolean;
   };
   if (data?.aiuiInstrumented) {
@@ -216,7 +235,7 @@ const driverWatch = createDriverWatch({
 });
 
 // ── the capability surface (the same command set the CDP page serves) ────────
-serveRelay(PAGE_ADDRESS, {
+servePageCapabilities({
   heartbeat: (payload) => {
     const session = String((payload as { session?: string } | null)?.session ?? "");
     // A session id this script has not seen means a NEW panel boot — one that

@@ -18,6 +18,7 @@
  * trace?.record({ kind: "ir", label: "resolved pronouns", data: rewritten });
  * ```
  */
+import { stageLabel } from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import type { ChannelFormat, FormatRegistry, ThreadContext } from "./channel";
 import type { TraceHandle, TraceStore } from "./trace";
 
@@ -47,7 +48,7 @@ function traceFormat(name: string, format: ChannelFormat, store: TraceStore): Ch
       // The connection's client context (tab identity, source location) shapes
       // the lowering — make it visible on every trace, whatever the format.
       if (ctx.hello !== undefined) {
-        trace.record({ kind: "info", label: "client context", data: ctx.hello });
+        trace.record({ kind: "info", label: stageLabel.clientContext(), data: ctx.hello });
       }
 
       const tracedCtx: TracingThreadContext = {
@@ -58,7 +59,7 @@ function traceFormat(name: string, format: ChannelFormat, store: TraceStore): Ch
         sendPrompt: async (text, meta) => {
           trace.record({
             kind: "output",
-            label: "lowered prompt",
+            label: stageLabel.loweredPrompt(),
             data: meta !== undefined ? { text, meta } : text,
           });
           await ctx.sendPrompt(text, meta);
@@ -87,10 +88,16 @@ function traceFormat(name: string, format: ChannelFormat, store: TraceStore): Ch
         onMessage(payload, meta) {
           // Name the input stage after its chunk (intent-v1) so the /debug
           // viewer reads "frame 3 attachment shot_1" rather than a bare index.
-          const chunk = meta.chunk
-            ? ` ${meta.chunk.kind}${meta.chunk.kind === "attachment" ? ` ${meta.chunk.id}` : ""}`
-            : "";
-          const label = `frame ${frame}${chunk}${meta.fin ? " (fin)" : ""}`;
+          const label = stageLabel.inputFrame({
+            n: frame,
+            ...(meta.chunk
+              ? {
+                  chunk: meta.chunk.kind,
+                  ...(meta.chunk.kind === "attachment" ? { id: meta.chunk.id } : {}),
+                }
+              : {}),
+            fin: meta.fin === true,
+          });
           if (payload instanceof Uint8Array) {
             // Binary payloads (screenshots, audio) go straight to a blob file.
             trace.recordBlob({ kind: "input", label }, payload, `input-${frame}.bin`);

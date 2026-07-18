@@ -9,8 +9,8 @@
  *    signal — callback-based, no polling), selection presence, interaction
  *    pings (the smart-video gate), SPA navigations, captured keys;
  *  - serves the page capabilities under `window.__aiuiIntentPage.handle` — the
- *    `PageCapability` set (transport.ts, the single inventory), plus `ring`,
- *    which rides beside the union as the broadcast-not-request path.
+ *    `PageCapability` set (transport.ts's `PageCapabilityMap`, the single
+ *    inventory; `ring` is in it, but is only ever BROADCAST, never requested).
  *
  * **The page fetches nothing.** Not the bootstrap (it arrives as a string over
  * CDP), and not the heavy page bundle (the bus evaluates it into the page —
@@ -36,7 +36,7 @@ import {
   createRegionSurface,
   createRingSurface,
 } from "../page/surfaces";
-import { DRIVER_TIMEOUT_MS } from "../transport";
+import { type CapError, DRIVER_TIMEOUT_MS, type PageCapabilityMap } from "../transport";
 
 /** One page tool as it travels page→panel: the MCP-shaped subset of viz's
  * `AiuiPageTool` (no `run`). Structurally the channel's `PageToolDescriptor`,
@@ -104,8 +104,11 @@ interface PageBootstrapDeps {
 }
 
 /* The function below runs INSIDE arbitrary pages. Keep it dependency-free
- * (its only non-global references arrive through `deps`), idempotent, and
- * defensive — it must never break a host page. */
+ * (its only non-global VALUE references arrive through `deps`), idempotent, and
+ * defensive — it must never break a host page. Type-only references are fine:
+ * `import type` and inline `satisfies`/annotations erase before
+ * `buildPageScript` stringifies this function, so they leave zero runtime trace
+ * (a value import in this body would inject a ReferenceError into every page). */
 function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
   const w = window as unknown as Record<string, unknown>;
   const installed = w.__aiuiIntentPage as { v?: string; adopt?: () => void } | undefined;
@@ -316,10 +319,14 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
     },
     hello: sayHello,
     handle: (capability: string, payload: Record<string, unknown> | undefined): unknown => {
+      // Each case's return is anchored to the capability's declared reply via
+      // `satisfies` (PageCapabilityMap), so tier drift surfaces at compile time.
+      // These are type-only annotations — they erase before `buildPageScript`
+      // stringifies this bootstrap, so they never reach the injected page.
       switch (capability) {
         case "heartbeat": {
           driverWatch.alive(typeof payload?.session === "string" ? payload.session : "");
-          return { ok: true };
+          return { ok: true } satisfies PageCapabilityMap["heartbeat"]["reply"];
         }
         case "ring": {
           driverWatch.alive();
@@ -329,26 +336,29 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
             payload?.hollow === true,
             typeof payload?.hint === "string" ? payload.hint : "",
           );
-          return { ok: true };
+          return { ok: true } satisfies PageCapabilityMap["ring"]["reply"];
         }
         case "flash": {
           flash(String(payload?.kind ?? "shot"));
-          return { ok: true };
+          return { ok: true } satisfies PageCapabilityMap["flash"]["reply"];
         }
         case "keylayer": {
           driverWatch.alive();
           setKeyCapture(payload?.capture === true);
-          return { ok: true };
+          return { ok: true } satisfies PageCapabilityMap["keylayer"]["reply"];
         }
         case "selection": {
           const selection = window.getSelection?.();
           const text = selection?.toString() ?? "";
-          return text.trim() === ""
-            ? null
-            : { text, url: location.href, title: document.title, tab: tabRecord?.() };
+          return (
+            text.trim() === ""
+              ? null
+              : { text, url: location.href, title: document.title, tab: tabRecord?.() }
+          ) satisfies PageCapabilityMap["selection"]["reply"];
         }
         case "viewport": {
-          return { ok: true }; // sampling rides CDP screenshots panel-side
+          // Sampling rides CDP screenshots panel-side, so this tier just acks.
+          return { ok: true } satisfies PageCapabilityMap["viewport"]["reply"];
         }
         case "pencil": {
           driverWatch.alive();
@@ -361,7 +371,7 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
           } else {
             disarmRegion();
           }
-          return { ok: true };
+          return { ok: true } satisfies PageCapabilityMap["region"]["reply"];
         }
         case "toolsCall": {
           const p = (payload ?? {}) as {
@@ -374,7 +384,7 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
           const registry = toolsRegistry();
           if (registry?.call === undefined) {
             report({ kind: "toolsResult", callId, ok: false, error: "no tools registry" });
-            return { ok: true };
+            return { ok: true } satisfies PageCapabilityMap["toolsCall"]["reply"];
           }
           void Promise.resolve()
             .then(() => registry.call(String(p.ns ?? ""), String(p.name ?? ""), p.args))
@@ -388,7 +398,7 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
                   error: err instanceof Error ? err.message : String(err),
                 }),
             );
-          return { ok: true };
+          return { ok: true } satisfies PageCapabilityMap["toolsCall"]["reply"];
         }
         case "jump": {
           // Jump-to-editor (the `j` pick mode) — the heavy half lives in the
@@ -401,7 +411,9 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
             | undefined;
           if ((payload as { arm?: boolean } | undefined)?.arm === true) {
             if (ink?.armJump === undefined) {
-              return { error: "jump surface not delivered" };
+              return {
+                error: "jump surface not delivered",
+              } satisfies PageCapabilityMap["jump"]["reply"];
             }
             // onExit: the page's completion signal — a committed or cancelled pick
             // reports `jumpDone`, and the panel auto-exits the mode (owner,
@@ -410,10 +422,10 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
           } else {
             ink?.disarmJump?.();
           }
-          return { ok: true };
+          return { ok: true } satisfies PageCapabilityMap["jump"]["reply"];
         }
         default:
-          return { error: `unknown capability: ${capability}` };
+          return { error: `unknown capability: ${capability}` } satisfies CapError;
       }
     },
   });

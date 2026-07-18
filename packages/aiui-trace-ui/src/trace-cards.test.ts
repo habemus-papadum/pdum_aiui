@@ -1,4 +1,5 @@
 import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
+import { parseStageLabel } from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import { describe, expect, it } from "vitest";
 import type { TraceStageLike } from "./sources";
 import {
@@ -277,6 +278,7 @@ describe("buildCards", () => {
 describe("cardVisible", () => {
   const card = (over: Partial<ReturnType<typeof classifyStage>>) => ({
     ...classifyStage(stage({ label: "merged events", kind: "ir" })),
+    parsed: parseStageLabel("merged events"),
     indices: [0],
     stage: stage({}),
     count: 1,

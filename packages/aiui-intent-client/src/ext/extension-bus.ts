@@ -31,6 +31,8 @@ import {
   HEARTBEAT_MS,
   type HeldStream,
   type IntentHost,
+  type PageCapability,
+  type PageCapabilityMap,
   type PageEvent,
   type PageTransport,
   type RingState,
@@ -110,7 +112,11 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     setActive(tab?.id);
   };
 
-  const request = async (tab: number, capability: string, payload?: unknown): Promise<unknown> => {
+  const request = async (
+    tab: number,
+    capability: PageCapability,
+    payload?: unknown,
+  ): Promise<unknown> => {
     try {
       return await relayRequestTab(tab, PAGE_ADDRESS, capability, payload);
     } catch {
@@ -255,10 +261,15 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     requestPage: (tab, capability, payload) => {
       if (capability === "keylayer") {
         const held = sticky.get(tab) ?? {};
-        held[capability] = payload;
+        held.keylayer = payload;
         sticky.set(tab, held);
       }
-      return request(tab, capability, payload);
+      // The relay result is `unknown`; assert it to the capability's declared
+      // reply here — the wire-boundary cast (a stale/foreign content script
+      // could answer anything).
+      return request(tab, capability, payload) as Promise<
+        PageCapabilityMap[PageCapability]["reply"] | undefined
+      >;
     },
     broadcastRing: (state) => {
       ring = state;
@@ -335,7 +346,9 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
       // 2026-07-17 — see holdTabStream). No viewport answer (no content
       // script) → hold unconstrained; the letterbox mapping in grabTabShot
       // still lands the crop.
-      const vp = (await request(tab, "viewport")) as
+      // The typed viewport reply is per-tier (CDP `{ok}`, MV3 `{w,h,dpr}`);
+      // narrow the union to this tier's arm.
+      const vp = (await transport.requestPage(tab, "viewport")) as
         | { w: number; h: number; dpr: number }
         | undefined;
       const size =

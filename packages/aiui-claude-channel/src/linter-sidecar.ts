@@ -31,6 +31,10 @@
  * human talking over the lint wants to keep briefing, not listen.
  */
 import { LINTER_TRANSCRIPT_WAIT_MS } from "@habemus-papadum/aiui-lowering-pipeline";
+import {
+  type LinterStageLabel,
+  stageLabel,
+} from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import type { CallCost } from "./cost";
 import { DEFAULT_GEMINI_LIVE_MODEL, openGeminiLiveSession } from "./gemini-live";
 import { executeReadFile, READ_FILE_TOOL_NAME } from "./linter-tools";
@@ -78,8 +82,10 @@ export interface LinterSidecarOptions {
   recordCost(what: string, cost: CallCost | undefined): void;
   /** Surface a failure loudly (the processor wraps pushError). */
   onError(message: string, data?: unknown): void;
-  /** Trace stages (the processor's trace, narrowed). */
-  record?(stage: { kind: "info" | "ir"; label: string; data: unknown }): void;
+  /** Trace stages (the processor's trace, narrowed). The `label` is a
+   *  {@link LinterStageLabel} so a new linter label must go through the shared
+   *  contract's builders — it cannot bypass the vocabulary. */
+  record?(stage: { kind: "info" | "ir"; label: LinterStageLabel; data: unknown }): void;
   /** Test seam: the upstream socket for the vendor engine. */
   socketFactory?: RealtimeSocketFactory;
   /** Test seam: replaces the whole engine (a scripted LiveSession). */
@@ -132,7 +138,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       args: call.args,
     };
     options.appendEvent(callEvent);
-    record({ kind: "ir", label: `linter tool call ${call.tool}`, data: call.args });
+    record({ kind: "ir", label: stageLabel.linterToolCall(call.tool), data: call.args });
     if (call.tool !== READ_FILE_TOOL_NAME) {
       const summary = `unknown tool "${call.tool}"`;
       const resultEvent: ProducedEvent = {
@@ -144,7 +150,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       };
       options.appendEvent(resultEvent);
       options.push([callEvent, resultEvent]);
-      record({ kind: "info", label: "linter tool result", data: { ok: false, summary } });
+      record({ kind: "info", label: stageLabel.linterToolResult(), data: { ok: false, summary } });
       call.respond(`error: ${summary}`);
       return;
     }
@@ -162,7 +168,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
     // is only honest because everything read is recorded.
     record({
       kind: "ir",
-      label: "linter tool result",
+      label: stageLabel.linterToolResult(),
       data: { ok: result.ok, summary: result.summary, content: result.content },
     });
     call.respond(result.content);
@@ -179,23 +185,27 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       };
       options.appendEvent(note);
       options.push([note]);
-      record({ kind: "info", label: "linter note", data: { text, segment: lintedSegment } });
+      record({
+        kind: "info",
+        label: stageLabel.linterNote(),
+        data: { text, segment: lintedSegment },
+      });
     },
     onReplyAudio: (bytes, mime) => {
       options.pushSpeech(`lint_${noteSeq++}`, mime, bytes);
     },
     onInterrupted: () => {
-      record({ kind: "info", label: "linter interrupted", data: {} });
+      record({ kind: "info", label: stageLabel.linterInterrupted(), data: {} });
     },
     onUsage: (cost) => {
       options.recordCost("linter response", cost);
     },
     onError: (message, data) => {
-      record({ kind: "info", label: "linter error", data: { message } });
+      record({ kind: "info", label: stageLabel.linterError(), data: { message } });
       options.onError(`prompt linter: ${message} — dictation still works`, data);
     },
     onGoAway: (msLeft) => {
-      record({ kind: "info", label: "linter go-away", data: { msLeft } });
+      record({ kind: "info", label: stageLabel.linterGoAway(), data: { msLeft } });
     },
     onToolCall,
   };
@@ -229,7 +239,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
 
   record({
     kind: "info",
-    label: "linter open",
+    label: stageLabel.linterOpen(),
     data: { vendor: options.vendor, model: options.model ?? "(vendor default)" },
   });
 
@@ -241,7 +251,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
     windowOpen = false;
     lintedSegment = segment ?? lastSegment;
     session.activityEnd();
-    record({ kind: "info", label: "linter turn end", data: { segment: lintedSegment } });
+    record({ kind: "info", label: stageLabel.linterTurnEnd(), data: { segment: lintedSegment } });
   };
 
   return {
@@ -259,7 +269,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
         clearTimeout(pendingEnd.timer);
         record({
           kind: "info",
-          label: "linter turn merged",
+          label: stageLabel.linterTurnMerged(),
           data: { pending: pendingEnd.segment, resumed: segment },
         });
         stats.merged += 1;
@@ -289,7 +299,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
         timer: setTimeout(() => {
           pendingEnd = undefined;
           stats.timeouts += 1;
-          record({ kind: "info", label: "linter transcript timeout", data: { segment } });
+          record({ kind: "info", label: stageLabel.linterTranscriptTimeout(), data: { segment } });
           endTurn(segment);
         }, TRANSCRIPT_WAIT_MS),
       };
@@ -311,7 +321,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
         session.injectContextText(`[transcript seg_${segment}: "${text}"]`);
         record({
           kind: "ir",
-          label: `linter transcript seg_${segment}`,
+          label: stageLabel.linterTranscript(segment),
           data: { text, late: !awaited },
         });
       }
@@ -324,7 +334,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
         return;
       }
       session.injectLabeledImage(label, bytes, mime);
-      record({ kind: "info", label: `linter label ${label}`, data: { mime } });
+      record({ kind: "info", label: stageLabel.linterLabel(label), data: { mime } });
     },
     onSelection(marker, entry, updated) {
       if (closed) {
@@ -332,7 +342,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       }
       const text = selectionInjectionLabel(marker, entry, updated);
       session.injectContextText(text);
-      record({ kind: "info", label: "linter selection", data: { text } });
+      record({ kind: "info", label: stageLabel.linterSelection(), data: { text } });
     },
     onSelectionDrop(marker) {
       if (closed) {
@@ -340,7 +350,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       }
       const text = selectionRetractionLabel(marker);
       session.injectContextText(text);
-      record({ kind: "info", label: "linter selection retracted", data: { text } });
+      record({ kind: "info", label: stageLabel.linterSelectionRetracted(), data: { text } });
     },
     close() {
       if (closed) {
@@ -352,7 +362,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
         pendingEnd = undefined;
       }
       session.close();
-      record({ kind: "info", label: "linter close", data: stats });
+      record({ kind: "info", label: stageLabel.linterClose(), data: stats });
     },
   };
 }

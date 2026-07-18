@@ -479,7 +479,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
             status("no selection on the page");
             return;
           }
-          engine.appSelection(selection as never);
+          // The reply is AppSelection plus a `title` the event schema omits;
+          // appSelection takes the AppSelection and ignores the extra field.
+          engine.appSelection(selection);
         } catch (err) {
           toast(`selection failed: ${err instanceof Error ? err.message : String(err)}`);
         }

@@ -11,12 +11,20 @@
  * host it is running on. That is the seam doing its job.
  *
  * The capability surface is likewise the same command set the CDP page serves —
- * the `PageCapability` set (transport.ts, the single inventory), plus `ring`
- * (broadcast, not requested) and the MV3-only `driverGone` worker verdict — here
- * it arrives over the relay instead of `Runtime.evaluate`.
+ * the `PageCapability` set (transport.ts's `PageCapabilityMap`, the single
+ * inventory; `ring` is in it, broadcast-only) plus the MV3-only `driverGone`
+ * worker verdict (the {@link ExtOnlyCommand}) — here it arrives over the relay
+ * instead of `Runtime.evaluate`.
  */
 
 import type { PageReport } from "../cdp/page-script";
+
+/** The worker→page command that is NOT a panel capability, so it stays OUT of
+ * {@link PageCapabilityMap} (the shared both-tiers contract): the MV3 service
+ * worker's affirmative panel-close verdict, served only by the content script's
+ * relay table (never by `requestPage`, never by the CDP tier). Its reply is an
+ * `Ack`. Sent by sw.ts, served by content.ts's `servePageCapabilities`. */
+export type ExtOnlyCommand = "driverGone";
 
 /** The relay address the content script serves its capabilities under. */
 export const PAGE_ADDRESS = "intent-page";

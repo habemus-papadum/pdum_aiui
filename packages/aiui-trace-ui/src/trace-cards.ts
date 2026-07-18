@@ -19,6 +19,10 @@
  * type visible the day it's added, before anyone teaches this file about it.
  */
 import type { IntentEvent, PromptSpan } from "@habemus-papadum/aiui-lowering-pipeline";
+import {
+  type ParsedStage,
+  parseStageLabel,
+} from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import type { TraceStageLike } from "./sources";
 
 /**
@@ -135,6 +139,8 @@ export interface TraceCard extends StageClass {
   indices: number[];
   /** The representative stage — the *last* of a run, so the freshest shows. */
   stage: TraceStageLike;
+  /** The representative stage's parsed label — the renderer switches on this. */
+  parsed: ParsedStage;
   /** The run length (1 when not coalesced). */
   count: number;
 }
@@ -155,280 +161,14 @@ const fail = (direction: CardDirection, icon: string, title: string): StageClass
   coalesceKey: null,
 });
 
-/** The trailing attachment id in a label (`… attachment shot_1` → `shot_1`). */
-function attachmentId(label: string): string | undefined {
-  return /\b(shot_\d+|seg_\d+)\b/.exec(label)?.[1];
-}
-
 /**
- * Classify one stage into its lane, bucket, icon, and title. Label-driven and
- * total: an unknown label lands on a generic card keyed off the stage `kind` so
- * nothing is ever dropped from the view.
+ * The generic fallback card, keyed off the stage `kind` — where an unrecognized
+ * label lands so nothing is ever dropped from the view. This is also where a
+ * handful of KNOWN-DRIFT labels land today (see the switch below): the channel
+ * writes them, but no classifier case ever claimed them.
  */
-export function classifyStage(stage: TraceStageLike): StageClass {
+function genericFallback(stage: TraceStageLike): StageClass {
   const label = stage.label ?? "";
-  const id = attachmentId(label);
-
-  // ── the story's frame ──────────────────────────────────────────────────────
-  if (label === "client context") {
-    return norm("in", "context", "🌐", "client context");
-  }
-  if (label === "intent config") {
-    return norm("internal", "config", "⚙", "intent config");
-  }
-  if (label === "prompt preamble") {
-    return norm("internal", "context", "🧩", "prompt preamble");
-  }
-
-  // ── the client → server wire (input frames) ────────────────────────────────
-  if (/^frame \d+ events/.test(label)) {
-    // The raw wire receipt of an event batch — the stage holds only a blob
-    // pointer (input-N.bin); the decoded story lives in `merged events`. One
-    // slim coalesced card, hidden by default.
-    return { ...norm("in", "wire", "📦", "event frames"), coalesceKey: "wire-events" };
-  }
-  if (/^frame \d+ audio/.test(label)) {
-    return { ...norm("in", "audio", "🎙", "audio stream"), coalesceKey: "audio-in" };
-  }
-  if (/^frame \d+ video/.test(label)) {
-    // The realtime submode's ~1fps live-session video. Coalesced like audio
-    // into one card (its own `video-in` key, so an audio↔video interleave
-    // splits into distinct cards rather than merging), hidden behind the
-    // `video` chip; the card body shows the handful of saved keyframes.
-    return { ...norm("in", "video", "🎞", "video stream"), coalesceKey: "video-in" };
-  }
-  if (/^frame \d+ attachment shot_/.test(label)) {
-    return norm("in", "media", "🖼", `${id ?? "shot"} uploaded`);
-  }
-  if (/^frame \d+ attachment seg_/.test(label)) {
-    return norm("in", "audio", "🎙", `${id ?? "seg"} uploaded`);
-  }
-  if (/^frame \d+ context/.test(label)) {
-    return norm("in", "context", "🧭", "selection context");
-  }
-  if (/^frame \d+.*\(fin\)/.test(label)) {
-    return norm("in", "events", "🏁", "fin — commit");
-  }
-  if (/^frame \d+/.test(label)) {
-    return { ...norm("in", "wire", "📦", "frames"), coalesceKey: "wire-events" };
-  }
-
-  // ── server-side lowering (IRs) ─────────────────────────────────────────────
-  if (label.startsWith("composed (speculative)")) {
-    return { ...norm("internal", "compose", "🧮", "speculative compose"), coalesceKey: "spec" };
-  }
-  if (label === "lowered prompt spans") {
-    // The sent prompt's PromptSpan annotations — the hero's overlay data. Debug
-    // detail, grouped with the compose IRs so it's hidden by default.
-    return norm("internal", "compose", "📐", "prompt spans");
-  }
-  if (/^condition .*silenceTrim/.test(label)) {
-    return norm("internal", "audio", "⚙", `condition · silence-trim${id ? ` · ${id}` : ""}`);
-  }
-  if (/^condition .*imageDownscale/.test(label)) {
-    return norm("internal", "media", "⚙", `condition · downscale${id ? ` · ${id}` : ""}`);
-  }
-  if (/^attachment seg_/.test(label)) {
-    return norm("internal", "audio", "🔊", `${id ?? "seg"} · audio`);
-  }
-  if (/^attachment shot_/.test(label)) {
-    return norm("internal", "media", "🖼", `${id ?? "shot"} · screenshot`);
-  }
-  if (/^realtime commit/.test(label)) {
-    return norm("internal", "audio", "⚙", `realtime commit${id ? ` · ${id}` : ""}`);
-  }
-  if (label.startsWith("cost: ")) {
-    // A model call's spend (channel cost.ts): 💰, its own filter bucket, the
-    // internal lane — money is a server-side fact about the turn.
-    return norm("internal", "cost", "💰", label.slice("cost: ".length));
-  }
-  // The correction trio all crosses the wire: the request arrived FROM the
-  // browser, the patch (or the failure) was pushed BACK to it — real messages,
-  // not lowering work, so they ride the directional lanes.
-  if (label === "correction request") {
-    return norm("in", "corrections", "🩹", "correction request");
-  }
-  if (label === "correction patch") {
-    return norm("out", "corrections", "✅", "correction patch");
-  }
-  if (label === "correction failed") {
-    return fail("out", "❌", "correction failed");
-  }
-  // Selections are first-class stages ("did my selection make it in?"): both
-  // kinds arrive FROM the browser (in lane), on the always-shown context
-  // bucket. The drop stages are the chips' ✕ — same lane, same bucket. Old
-  // traces (markerless events, the retired single-selection form) classify
-  // identically; the card body degrades, never crashes.
-  if (label === "app selection") {
-    return norm("in", "context", "⌖", "app selection");
-  }
-  if (label === "app selection dropped") {
-    return norm("in", "context", "⌖", "app selection dropped");
-  }
-  if (label === "code selection") {
-    return norm("in", "context", "⧉", "code selection");
-  }
-  if (label === "code selection dropped") {
-    return norm("in", "context", "⧉", "code selection dropped");
-  }
-  // ── vendor-protocol diagnostics (the realtime sessions' onDiagnostic) ───────
-  if (/^stt vendor commit seg_/.test(label)) {
-    // The vendor closed an utterance we never asked it to close. Not an error —
-    // but the reason a segment's transcript is a concatenation, and the single
-    // most useful card when a long segment reads oddly.
-    return norm("out", "events", "✂", label.replace(/^stt /, ""));
-  }
-  if (label === "stt config-mismatch" || label === "stt orphan-result") {
-    // A param the server did not confirm, or a finished transcript that matched
-    // no segment. Both mean we are not running the protocol we think we are.
-    return fail("out", "⚠", label.replace(/^stt /, "stt "));
-  }
-  if (label === "stt config-echo") {
-    return norm("out", "config", "🔎", "stt config echo");
-  }
-  if (label === "stt unhandled") {
-    return norm("out", "events", "👽", "stt unhandled message");
-  }
-  if (isPartialLabel(label)) {
-    // One card per vendor revision, deliberately NOT coalesced: the sequence is
-    // the diagnostic. Each renders as a diff against the segment's previous
-    // partial, so a cumulative transcript that shrinks shows up as red.
-    return norm("internal", "events", "✍", label);
-  }
-  if (/^stt final seg_/.test(label)) {
-    // The per-final capability receipt: words / timestamps / logprob range at
-    // a glance (the heat-map debugging lesson — never dig merged-events JSON
-    // to learn whether the vendor sent confidence).
-    return norm("internal", "events", "📝", label);
-  }
-  if (label === "merged events") {
-    return norm("internal", "events", "📜", "merged events");
-  }
-  if (label === "fin compose") {
-    return norm("internal", "compose", "⚙", "fin compose");
-  }
-  if (label === "composed intent") {
-    return norm("internal", "compose", "🧮", "composed intent");
-  }
-  if (label === "conditioned") {
-    return norm("internal", "compose", "🧮", "conditioned");
-  }
-
-  // ── server → client / the agent ────────────────────────────────────────────
-  if (label === "lowered prompt") {
-    // The one message that leaves the pipeline entirely: purple, ← (away).
-    return norm("agent", "lowered", "🚀", "lowered prompt");
-  }
-  if (/^speech /.test(label)) {
-    return norm("out", "speech", "🔊", "speech");
-  }
-  if (label === "voice reply") {
-    return norm("out", "speech", "🗣", "voice reply");
-  }
-
-  // ── the prompt linter (the live sidecar) ───────────────────────────────────
-  // The vantage stays the browser↔server pipeline, one conversation further
-  // upstream: `in`/blue is what WE feed the linter (transcripts, labels,
-  // selections, tool results); `out`/green is what it answers (notes, tool
-  // calls). All on the 💡 bucket so "what did the linter see/say?" is one chip.
-  if (label === "linter open") {
-    return norm("internal", "config", "💡", "linter open");
-  }
-  if (label === "linter disabled") {
-    return fail("internal", "⚠", "linter disabled");
-  }
-  if (label === "linter note") {
-    return norm("out", "linter", "💡", "linter note");
-  }
-  if (/^linter tool call /.test(label)) {
-    return norm("out", "linter", "🛠", label.replace("linter tool call", "linter →"));
-  }
-  if (label === "linter tool result") {
-    return norm("in", "linter", "📄", "tool result → linter");
-  }
-  if (/^linter transcript seg_/.test(label)) {
-    return norm("in", "linter", "📝", label.replace("linter ", ""));
-  }
-  if (/^linter label shot_/.test(label)) {
-    return norm("in", "linter", "🏷", `${id ?? "shot"} shown to linter`);
-  }
-  if (label === "linter selection" || label === "linter selection retracted") {
-    return norm("in", "linter", "⌖", label);
-  }
-  if (
-    label === "linter turn end" ||
-    label === "linter turn merged" ||
-    label === "linter interrupted" ||
-    label === "linter go-away"
-  ) {
-    return { ...norm("internal", "linter", "💡", label), coalesceKey: "linter-flow" };
-  }
-  if (label === "linter transcript timeout") {
-    return fail("internal", "⚠", "linter transcript timeout");
-  }
-  if (label === "linter error") {
-    return fail("out", "❌", "linter error");
-  }
-  if (label === "linter close") {
-    return norm("internal", "linter", "💡", "linter close");
-  }
-  if (/^video vid_/.test(label)) {
-    // A persisted share frame (every frame is saved now); coalesces into one
-    // strip card per share, behind the `video` chip.
-    return { ...norm("in", "video", "🎞", "video frames"), coalesceKey: "video-in" };
-  }
-
-  // ── the retired realtime submode (HISTORICAL traces still render) ──────────
-  // A realtime turn's cards ride the same lanes, read one conversation further
-  // upstream — the vantage is still the browser, but "the server" is now the
-  // live model (Gemini/OpenAI). `in`/blue is what WE stream to it (video, a
-  // deliberate shot, the Enter nudge); `out`/green is what it answers back
-  // (the submit_intent tool call, its spoken reply); `agent`/purple is the
-  // resolved prompt leaving for Claude — the same arrow the transcription
-  // lowered prompt wears. See archive/transcription-and-realtime-submodes.md.
-  if (label === "live open") {
-    // Session opened: config-ish (vendor · model · video capability), always
-    // shown like `intent config`. 🛰 marks it as the *live* session's config.
-    return norm("internal", "config", "🛰", "live open");
-  }
-  if (/^live label shot_/.test(label)) {
-    // A deliberate shot injected into the live session, labeled so the model
-    // can reference it (RT0 finding #5). It flows TO the model → the in lane.
-    return norm("in", "media", "🏷", `${id ?? "shot"} shown to model`);
-  }
-  if (label === "live nudge") {
-    // Our text nudge ("call submit_intent now") — the fallback ladder's step 2.
-    return norm("in", "events", "🔔", "live nudge");
-  }
-  if (label === "live tool call") {
-    // The model's answer: the verbatim submit_intent segments. The realtime
-    // hero-adjacent — its body renders the interleave (prose + shot chips).
-    return norm("out", "events", "🧩", "live tool call");
-  }
-  if (label === "live resolved") {
-    // The channel resolved the tool call into the committed body + attachments:
-    // 🚀-adjacent, agent lane, sits beside the lowered-prompt hero.
-    return norm("agent", "lowered", "🚀", "live resolved");
-  }
-  if (label === "live reply") {
-    return norm("out", "speech", "🗣", "live reply");
-  }
-  if (label === "live fallback") {
-    // The ladder fell back to the chronicle compose — a degradation (the turn
-    // still sends), routed to the errors bucket so a "what went wrong?" pass
-    // catches it, but marked ⚠ (warning) rather than ❌ (hard failure).
-    return fail("internal", "⚠", "live fallback");
-  }
-
-  // ── failures & warnings ────────────────────────────────────────────────────
-  if (/^transcription failed/.test(label)) {
-    return fail("out", "❌", "transcription failed"); // pushed to the browser as an error
-  }
-  if (/out-of-order/.test(label)) {
-    return fail("internal", "⚠", "audio out of order");
-  }
-
-  // ── generic fallback, by kind ──────────────────────────────────────────────
   switch (stage.kind) {
     case "input":
       return norm("in", "events", "•", label || "input");
@@ -438,6 +178,249 @@ export function classifyStage(stage: TraceStageLike): StageClass {
       return norm("internal", "compose", "•", label || "ir");
     default:
       return norm("internal", "config", "•", label || "info");
+  }
+}
+
+/**
+ * Classify one stage into its lane, bucket, icon, and title. Parses the label
+ * once (the shared trace-stage vocabulary) and switches on the variant — total
+ * over unknown labels, which land on {@link genericFallback}. The switch is
+ * exhaustive by construction (a `never` check catches an unhandled variant at
+ * compile time).
+ */
+export function classifyStage(stage: TraceStageLike): StageClass {
+  return classifyParsed(parseStageLabel(stage.label ?? ""), stage);
+}
+
+function classifyParsed(parsed: ParsedStage, stage: TraceStageLike): StageClass {
+  switch (parsed.t) {
+    // ── the story's frame ────────────────────────────────────────────────────
+    case "client-context":
+      return norm("in", "context", "🌐", "client context");
+    case "intent-config":
+      return norm("internal", "config", "⚙", "intent config");
+    case "prompt-preamble":
+      return norm("internal", "context", "🧩", "prompt preamble");
+
+    // ── the client → server wire (input frames) ──────────────────────────────
+    // The chunk-kind precedence the old regex ladder encoded: kind wins over the
+    // fin flag (an events frame with a fin still reads as event frames), and fin
+    // wins over a bare frame.
+    case "input-frame": {
+      if (parsed.chunk === "events") {
+        // The raw wire receipt of an event batch — the stage holds only a blob
+        // pointer (input-N.bin); the decoded story lives in `merged events`.
+        return { ...norm("in", "wire", "📦", "event frames"), coalesceKey: "wire-events" };
+      }
+      if (parsed.chunk === "audio") {
+        return { ...norm("in", "audio", "🎙", "audio stream"), coalesceKey: "audio-in" };
+      }
+      if (parsed.chunk === "video") {
+        // The realtime submode's ~1fps live-session video. Coalesced like audio
+        // into one card (its own `video-in` key, so an audio↔video interleave
+        // splits into distinct cards), hidden behind the `video` chip.
+        return { ...norm("in", "video", "🎞", "video stream"), coalesceKey: "video-in" };
+      }
+      if (parsed.chunk === "attachment" && parsed.media === "shot") {
+        return norm("in", "media", "🖼", `${parsed.id ?? "shot"} uploaded`);
+      }
+      if (parsed.chunk === "attachment" && parsed.media === "seg") {
+        return norm("in", "audio", "🎙", `${parsed.id ?? "seg"} uploaded`);
+      }
+      if (parsed.chunk === "context") {
+        return norm("in", "context", "🧭", "selection context");
+      }
+      if (parsed.fin) {
+        return norm("in", "events", "🏁", "fin — commit");
+      }
+      return { ...norm("in", "wire", "📦", "frames"), coalesceKey: "wire-events" };
+    }
+
+    // ── server-side lowering (IRs) ───────────────────────────────────────────
+    case "composed-speculative":
+      return { ...norm("internal", "compose", "🧮", "speculative compose"), coalesceKey: "spec" };
+    case "lowered-prompt-spans":
+      // The sent prompt's PromptSpan annotations — the hero's overlay data.
+      return norm("internal", "compose", "📐", "prompt spans");
+    case "condition":
+      return parsed.kind === "silenceTrim"
+        ? norm("internal", "audio", "⚙", `condition · silence-trim · ${parsed.id}`)
+        : norm("internal", "media", "⚙", `condition · downscale · ${parsed.id}`);
+    case "attachment":
+      return parsed.media === "seg"
+        ? norm("internal", "audio", "🔊", `${parsed.id} · audio`)
+        : norm("internal", "media", "🖼", `${parsed.id} · screenshot`);
+    case "realtime-commit":
+      return norm("internal", "audio", "⚙", `realtime commit · seg_${parsed.segment}`);
+    case "cost":
+      // A model call's spend (channel cost.ts): 💰, its own filter bucket, the
+      // internal lane — money is a server-side fact about the turn.
+      return norm("internal", "cost", "💰", parsed.what);
+
+    // The correction trio all crosses the wire: the request arrived FROM the
+    // browser, the patch (or the failure) was pushed BACK to it — real messages,
+    // not lowering work, so they ride the directional lanes.
+    case "correction-request":
+      return norm("in", "corrections", "🩹", "correction request");
+    case "correction-patch":
+      return norm("out", "corrections", "✅", "correction patch");
+    case "correction-failed":
+      return fail("out", "❌", "correction failed");
+
+    // Selections are first-class stages ("did my selection make it in?"): both
+    // kinds arrive FROM the browser (in lane), on the always-shown context
+    // bucket. The drop stages are the chips' ✕ — same lane, same bucket.
+    case "app-selection":
+      return norm("in", "context", "⌖", "app selection");
+    case "app-selection-dropped":
+      return norm("in", "context", "⌖", "app selection dropped");
+    case "code-selection":
+      return norm("in", "context", "⧉", "code selection");
+    case "code-selection-dropped":
+      return norm("in", "context", "⧉", "code selection dropped");
+
+    // ── vendor-protocol diagnostics (the realtime sessions' onDiagnostic) ─────
+    case "stt-vendor-commit":
+      // The vendor closed an utterance we never asked it to close. Not an error —
+      // but the reason a segment's transcript is a concatenation.
+      return norm("out", "events", "✂", `vendor commit seg_${parsed.segment}`);
+    case "stt-config-mismatch":
+      // A param the server did not confirm — we are not running the protocol we
+      // think we are.
+      return fail("out", "⚠", "stt config-mismatch");
+    case "stt-orphan-result":
+      // A finished transcript that matched no segment at all.
+      return fail("out", "⚠", "stt orphan-result");
+    case "stt-config-echo":
+      return norm("out", "config", "🔎", "stt config echo");
+    case "stt-unhandled":
+      return norm("out", "events", "👽", "stt unhandled message");
+    case "stt-partial":
+      // One card per vendor revision, deliberately NOT coalesced: the sequence is
+      // the diagnostic. Each renders as a diff against the segment's previous
+      // partial, so a cumulative transcript that shrinks shows up as red.
+      return norm("internal", "events", "✍", `stt partial seg_${parsed.segment}`);
+    case "stt-final":
+      // The per-final capability receipt: words / timestamps / logprob range at
+      // a glance (the heat-map debugging lesson).
+      return norm("internal", "events", "📝", `stt final seg_${parsed.segment}`);
+
+    case "merged-events":
+      return norm("internal", "events", "📜", "merged events");
+    case "fin-compose":
+      return norm("internal", "compose", "⚙", "fin compose");
+    case "composed-intent":
+      return norm("internal", "compose", "🧮", "composed intent");
+    case "conditioned":
+      return norm("internal", "compose", "🧮", "conditioned");
+
+    // ── server → client / the agent ──────────────────────────────────────────
+    case "lowered-prompt":
+      // The one message that leaves the pipeline entirely: purple, ← (away).
+      return norm("agent", "lowered", "🚀", "lowered prompt");
+    case "speech":
+      return norm("out", "speech", "🔊", "speech");
+    case "voice-reply":
+      return norm("out", "speech", "🗣", "voice reply");
+
+    // ── the prompt linter (the live sidecar) ─────────────────────────────────
+    // The vantage stays the browser↔server pipeline, one conversation further
+    // upstream: `in`/blue is what WE feed the linter (transcripts, labels,
+    // selections, tool results); `out`/green is what it answers (notes, tool
+    // calls). All on the 💡 bucket so "what did the linter see/say?" is one chip.
+    case "linter-open":
+      return norm("internal", "config", "💡", "linter open");
+    case "linter-disabled":
+      return fail("internal", "⚠", "linter disabled");
+    case "linter-note":
+      return norm("out", "linter", "💡", "linter note");
+    case "linter-tool-call":
+      return norm("out", "linter", "🛠", `linter → ${parsed.tool}`);
+    case "linter-tool-result":
+      return norm("in", "linter", "📄", "tool result → linter");
+    case "linter-transcript":
+      return norm("in", "linter", "📝", `transcript seg_${parsed.segment}`);
+    case "linter-label":
+      return norm("in", "linter", "🏷", `${parsed.id} shown to linter`);
+    case "linter-selection":
+      return norm("in", "linter", "⌖", "linter selection");
+    case "linter-selection-retracted":
+      return norm("in", "linter", "⌖", "linter selection retracted");
+    case "linter-turn-end":
+      return { ...norm("internal", "linter", "💡", "linter turn end"), coalesceKey: "linter-flow" };
+    case "linter-turn-merged":
+      return {
+        ...norm("internal", "linter", "💡", "linter turn merged"),
+        coalesceKey: "linter-flow",
+      };
+    case "linter-interrupted":
+      return {
+        ...norm("internal", "linter", "💡", "linter interrupted"),
+        coalesceKey: "linter-flow",
+      };
+    case "linter-go-away":
+      return { ...norm("internal", "linter", "💡", "linter go-away"), coalesceKey: "linter-flow" };
+    case "linter-transcript-timeout":
+      return fail("internal", "⚠", "linter transcript timeout");
+    case "linter-error":
+      return fail("out", "❌", "linter error");
+    case "linter-close":
+      return norm("internal", "linter", "💡", "linter close");
+
+    case "video-legacy":
+      // A persisted share frame (every frame is saved now); coalesces into one
+      // strip card per share, behind the `video` chip.
+      return { ...norm("in", "video", "🎞", "video frames"), coalesceKey: "video-in" };
+
+    // ── the retired realtime submode (HISTORICAL traces still render) ─────────
+    // A realtime turn's cards ride the same lanes, read one conversation further
+    // upstream — the vantage is still the browser, but "the server" is now the
+    // live model (Gemini/OpenAI). See archive/transcription-and-realtime-submodes.md.
+    case "live-open":
+      // Session opened: config-ish, always shown like `intent config`. 🛰 marks
+      // it as the *live* session's config.
+      return norm("internal", "config", "🛰", "live open");
+    case "live-label":
+      // A deliberate shot injected into the live session (RT0 finding #5). It
+      // flows TO the model → the in lane.
+      return norm("in", "media", "🏷", `${parsed.id} shown to model`);
+    case "live-nudge":
+      return norm("in", "events", "🔔", "live nudge");
+    case "live-tool-call":
+      return norm("out", "events", "🧩", "live tool call");
+    case "live-resolved":
+      // The resolved prompt leaves for Claude → agent lane, beside the hero.
+      return norm("agent", "lowered", "🚀", "live resolved");
+    case "live-reply":
+      return norm("out", "speech", "🗣", "live reply");
+    case "live-fallback":
+      // A degradation (the turn still sends) — errors bucket, ⚠ not ❌.
+      return fail("internal", "⚠", "live fallback");
+
+    // ── failures & warnings ──────────────────────────────────────────────────
+    case "transcription-failed":
+      return fail("out", "❌", "transcription failed"); // pushed to the browser as an error
+    case "audio-out-of-order":
+      return fail("internal", "⚠", "audio out of order");
+
+    // ── KNOWN DRIFT: living writers with no classifier case, kept on the
+    //    generic fallback exactly as before (each is its own visible-behavior
+    //    decision, deferred). `realtime discard seg_N` (info → config card),
+    //    `linter control` (info → config card), `user text` (ir → compose card).
+    case "realtime-discard":
+    case "linter-control":
+    case "user-text":
+      return genericFallback(stage);
+
+    case "unknown":
+      return genericFallback(stage);
+    default: {
+      // Compile-time exhaustiveness: an unhandled variant makes this fail. At
+      // runtime we still degrade to the generic card (never break the view).
+      const _exhaustive: never = parsed;
+      void _exhaustive;
+      return genericFallback(stage);
+    }
   }
 }
 
@@ -455,14 +438,16 @@ export function buildCards(stages: TraceStageLike[] | undefined): TraceCard[] {
     return cards;
   }
   stages.forEach((stage, i) => {
-    const cls = classifyStage(stage);
+    const parsed = parseStageLabel(stage.label ?? "");
+    const cls = classifyParsed(parsed, stage);
     const prev = cards[cards.length - 1];
     if (prev && cls.coalesceKey !== null && prev.coalesceKey === cls.coalesceKey) {
       prev.indices.push(i);
       prev.stage = stage;
+      prev.parsed = parsed;
       prev.count += 1;
     } else {
-      cards.push({ ...cls, indices: [i], stage, count: 1 });
+      cards.push({ ...cls, parsed, indices: [i], stage, count: 1 });
     }
   });
   return cards;
@@ -498,14 +483,16 @@ export interface TraceOutcome {
 /** The direction-of-outcome at a glance, read off the recorded stages + status. */
 export function traceOutcome(trace: { status?: string; stages?: TraceStageLike[] }): TraceOutcome {
   const stages = trace.stages ?? [];
-  const hasPrompt = stages.some((s) => s.label === "lowered prompt");
+  const hasPrompt = stages.some((s) => parseStageLabel(s.label ?? "").t === "lowered-prompt");
   // A sent prompt is the strongest signal — even a socket that then dropped
   // (status "abandoned") sent its turn, so this wins over the status.
   if (hasPrompt) {
     return { state: "sent", glyph: "✓", label: "sent" };
   }
   const cancelled = stages.some(
-    (s) => s.label === "conditioned" && (s.data as { cancelled?: unknown })?.cancelled === true,
+    (s) =>
+      parseStageLabel(s.label ?? "").t === "conditioned" &&
+      (s.data as { cancelled?: unknown })?.cancelled === true,
   );
   if (cancelled) {
     return { state: "cancelled", glyph: "✕", label: "cancelled" };
@@ -568,7 +555,7 @@ export function speculativePromptText(stages: TraceStageLike[] | undefined): str
   }
   for (let i = stages.length - 1; i >= 0; i--) {
     const stage = stages[i];
-    if (!(stage.label ?? "").startsWith("composed (speculative)")) {
+    if (parseStageLabel(stage.label ?? "").t !== "composed-speculative") {
       continue;
     }
     // The NEWEST fold wins — including an empty one. Skipping empties (the
@@ -587,7 +574,7 @@ export function speculativePromptText(stages: TraceStageLike[] | undefined): str
 
 /** True for a `stt partial seg_N` stage label. */
 export function isPartialLabel(label: string): boolean {
-  return /^stt partial seg_/.test(label);
+  return parseStageLabel(label).t === "stt-partial";
 }
 
 /**
@@ -641,7 +628,7 @@ function readSpans(data: unknown): PromptSpan[] {
 /** The sent prompt's spans — the newest `lowered prompt spans` stage. */
 function loweredPromptSpans(stages: TraceStageLike[]): PromptSpan[] {
   for (let i = stages.length - 1; i >= 0; i--) {
-    if (stages[i].label === "lowered prompt spans") {
+    if (parseStageLabel(stages[i].label ?? "").t === "lowered-prompt-spans") {
       return readSpans(stages[i].data);
     }
   }
@@ -651,7 +638,7 @@ function loweredPromptSpans(stages: TraceStageLike[]): PromptSpan[] {
 /** The newest speculative fold's spans — the same stage speculativePromptText reads. */
 function speculativeSpans(stages: TraceStageLike[]): PromptSpan[] {
   for (let i = stages.length - 1; i >= 0; i--) {
-    if ((stages[i].label ?? "").startsWith("composed (speculative)")) {
+    if (parseStageLabel(stages[i].label ?? "").t === "composed-speculative") {
       return readSpans(stages[i].data);
     }
   }
@@ -663,7 +650,7 @@ export function heroPrompt(stages: TraceStageLike[] | undefined): HeroPrompt {
   // Newest-wins, matching the spans lookups below — one pairing policy, so a
   // hypothetical multi-send trace pairs the last prompt with the last spans.
   const sent = loweredPromptText(
-    [...list].reverse().find((stage) => stage.label === "lowered prompt"),
+    [...list].reverse().find((stage) => parseStageLabel(stage.label ?? "").t === "lowered-prompt"),
   );
   if (sent !== "") {
     return { text: sent, spans: loweredPromptSpans(list), speculative: false };

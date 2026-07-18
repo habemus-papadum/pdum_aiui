@@ -24,6 +24,7 @@
 
 import type { AiuiToolsRegistry } from "@habemus-papadum/aiui-viz";
 import { armJump, disarmJump } from "../page/jump-mode";
+import type { PageCapabilityMap } from "../transport";
 
 const registry = (): AiuiToolsRegistry | undefined =>
   (window as unknown as { __AIUI__?: { tools?: AiuiToolsRegistry } }).__AIUI__?.tools;
@@ -91,9 +92,8 @@ window.addEventListener("message", (event) => {
     }
     return;
   }
-  const call = (
-    event.data as { aiuiToolsCall?: { ns: string; name: string; args?: unknown; callId: string } }
-  )?.aiuiToolsCall;
+  const call = (event.data as { aiuiToolsCall?: PageCapabilityMap["toolsCall"]["payload"] })
+    ?.aiuiToolsCall;
   if (call === undefined) {
     return;
   }

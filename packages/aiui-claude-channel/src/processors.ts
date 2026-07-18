@@ -15,6 +15,7 @@
  * cycling) without the lowering pipeline behind it.
  */
 
+import { stageLabel } from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import type { ChannelFormat, StreamProcessorFactory } from "./channel";
 import { jsonCodec } from "./codec";
 import { intentV1Format } from "./intent-v1";
@@ -64,7 +65,7 @@ const textConcatProcessor: StreamProcessorFactory = (ctx) => {
           if (prompt !== userText) {
             // Expose the augmentation as a pipeline stage: user text in,
             // context-wrapped prompt out (the trace's `output` stage).
-            traceOf(ctx)?.record({ kind: "ir", label: "user text", data: userText });
+            traceOf(ctx)?.record({ kind: "ir", label: stageLabel.userText(), data: userText });
           }
           await ctx.sendPrompt(prompt);
         }

@@ -49,7 +49,6 @@ import {
   formatUsd,
   heroPrompt,
   isImageFile,
-  isPartialLabel,
   isPlayableAudioFile,
   type LiveSegment,
   liveOpenLine,
@@ -441,7 +440,7 @@ export class TraceView {
   /** The one-line key-info under the title, plus any rich rendering per card type. */
   private renderCardBody(trace: LiveTrace, card: TraceCard, box: HTMLElement): void {
     const data = card.stage.data as Record<string, unknown> | undefined;
-    const label = card.stage.label ?? "";
+    const parsed = card.parsed;
 
     const info = (text: string): void => {
       if (text) {
@@ -451,20 +450,19 @@ export class TraceView {
       }
     };
 
-    // The lowered prompt lives in the hero; the card is a pointer. (Its sibling
-    // in the `lowered` bucket, `live resolved`, renders its own body below.)
-    if (label === "lowered prompt") {
-      info("shown above ↑");
-      return;
-    }
-
-    switch (label) {
-      case "client context": {
+    switch (parsed.t) {
+      // The lowered prompt lives in the hero; the card is a pointer.
+      case "lowered-prompt":
+        info("shown above ↑");
+        return;
+      case "client-context": {
         const tab = (data?.tab as { url?: string; title?: string } | undefined) ?? {};
         info([tab.url, tab.title, data?.actor].filter(Boolean).join(" · "));
         return;
       }
-      case "intent config":
+      case "intent-config":
+        // KNOWN DRIFT: reads `corrector`, which the writer never sends — so this
+        // always renders "fix ?". Preserved (a separate visible-behavior fix).
         info(
           [
             `tier ${data?.tier ?? "?"}`,
@@ -473,17 +471,17 @@ export class TraceView {
           ].join(" · "),
         );
         return;
-      case "prompt preamble": {
+      case "prompt-preamble": {
         const n = Array.isArray(data) ? data.length : 0;
         info(`${n} context section${n === 1 ? "" : "s"}`);
         return;
       }
-      case "correction request": {
+      case "correction-request": {
         const selected = data?.selected ? `“${String(data.selected)}”` : "whole transcript";
         info(`${String(data?.instruction ?? "")} — on ${selected}`);
         return;
       }
-      case "correction patch": {
+      case "correction-patch": {
         const patchCost = data?.cost as Parameters<typeof costLine>[0] | undefined;
         info(
           [
@@ -498,37 +496,42 @@ export class TraceView {
         }
         return;
       }
-      case "correction failed":
+      case "correction-failed":
         info(String(data?.message ?? "correction failed"));
         return;
       // Selections: one line of substance — marker (when the stage has one;
       // old traces don't), text excerpt, locator. Every field is optional so
       // a pre-marker (or retired-shape) stage renders degraded, not broken.
-      case "app selection": {
+      case "app-selection": {
         const marker = typeof data?.marker === "string" ? `${data.marker} · ` : "";
         const loc = typeof data?.sourceLoc === "string" ? ` @ ${data.sourceLoc}` : "";
         const cell = typeof data?.cell === "string" ? ` · cell ${data.cell}` : "";
         info(`${marker}“${clip(String(data?.text ?? ""), 80)}”${loc}${cell}`);
         return;
       }
-      case "code selection": {
+      case "code-selection": {
         const marker = typeof data?.marker === "string" ? `${data.marker} · ` : "";
         const loc = typeof data?.sourceLoc === "string" ? `${data.sourceLoc} · ` : "";
         info(`${marker}${loc}“${clip(String(data?.text ?? ""), 80)}”`);
         return;
       }
-      case "app selection dropped":
-      case "code selection dropped":
+      case "app-selection-dropped":
+      case "code-selection-dropped":
         info(
           typeof data?.marker === "string"
             ? `${data.marker} retracted (✕ on the chip)`
             : "retracted (✕ on the chip)",
         );
         return;
-      case "transcription failed":
-        info(String(data?.message ?? "transcription failed"));
+      case "transcription-failed":
+        // KNOWN DRIFT: the old exact `case "transcription failed"` body only ever
+        // matched the bare label; the suffixed `transcription failed seg_N` form
+        // (the only shape a historical writer produced) rendered no body. Preserved.
+        if (card.stage.label === "transcription failed") {
+          info(String(data?.message ?? "transcription failed"));
+        }
         return;
-      case "merged events": {
+      case "merged-events": {
         const events = Array.isArray(card.stage.data) ? card.stage.data : [];
         info(`${events.length} event${events.length === 1 ? "" : "s"}`);
         if (events.length) {
@@ -543,7 +546,7 @@ export class TraceView {
         }
         return;
       }
-      case "composed intent":
+      case "composed-intent":
         info(clip(String(data?.transcript ?? ""), 100));
         return;
       case "conditioned":
@@ -553,28 +556,30 @@ export class TraceView {
             : clip(String(data?.body ?? ""), 100),
         );
         return;
-      case "fin compose":
+      case "fin-compose":
         info(data?.reused === true ? "reused speculative compose" : "recomputed at fin");
         return;
-      case "voice reply":
+      case "voice-reply":
         info(clip(String(data?.text ?? ""), 100));
         return;
-      case "realtime commit":
-        info(`${Number(data?.frames ?? 0)} frames · ${Number(data?.bytes ?? 0)} B`);
+      case "realtime-commit":
+        // KNOWN DRIFT: the old exact `case "realtime commit"` never matched the
+        // suffixed `realtime commit seg_N` label, so no body was ever rendered
+        // for it. Preserved (a separate visible-behavior fix).
         return;
 
       // ── the realtime submode ──────────────────────────────────────────────
-      case "live open":
+      case "live-open":
         info(liveOpenLine(data));
         return;
-      case "live nudge":
+      case "live-nudge":
         info(
           typeof data?.text === "string" && data.text
             ? `“${clip(String(data.text), 100)}”`
             : "Enter nudge sent to the live model",
         );
         return;
-      case "live tool call": {
+      case "live-tool-call": {
         // The verbatim submit_intent segments, rendered as the model wrote
         // them: prose interleaved with 🖼 shot chips.
         const segments = liveToolSegments(card.stage.data);
@@ -585,7 +590,7 @@ export class TraceView {
         }
         return;
       }
-      case "live resolved": {
+      case "live-resolved": {
         const summary = liveResolvedSummary(card.stage.data);
         info(clip(summary.body, 100) || "(resolved)");
         if (summary.resolved || summary.unresolved) {
@@ -597,79 +602,86 @@ export class TraceView {
         }
         return;
       }
-      case "live reply":
+      case "live-reply":
         info(clip(String(data?.text ?? ""), 100));
         return;
-      case "live fallback":
+      case "live-fallback":
         info(
           String(
             data?.reason ?? data?.why ?? data?.message ?? "fell back to the chronicle compose",
           ),
         );
         return;
+
+      // A model call's spend (💰): price + model + token shape, one line.
+      case "cost":
+        info(costLine((data ?? {}) as Parameters<typeof costLine>[0]));
+        return;
+
+      // Speech: `speech <id>` — the audio itself is pushed to the client, not
+      // saved as a trace blob, so there is nothing to play here; show the label.
+      case "speech": {
+        const bytes = Number(data?.bytes ?? 0);
+        info(
+          [
+            data?.text ? `“${String(data.text)}”` : undefined,
+            String(data?.mime ?? ""),
+            bytes ? `${bytes} B` : undefined,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        );
+        return;
+      }
+
+      // A streaming partial: the vendor's cumulative text for an uncommitted
+      // segment. Rendered as a word diff against the segment's previous partial —
+      // additions green, revisions red — the whole reason it is recorded.
+      case "stt-partial": {
+        const text = String(data?.text ?? "");
+        info(`${text.length} chars`);
+        box.append(this.renderWordDiff(previousPartialText(trace.stages, card.indices[0]), text));
+        return;
+      }
+
+      // Speculative compose (coalesced): the freshest transcript snippet, and how
+      // large a prompt the fold had rendered at that point (the hero shows it).
+      case "composed-speculative": {
+        const promptChars = typeof data?.prompt === "string" ? data.prompt.length : 0;
+        const transcript = clip(String(data?.transcript ?? ""), 100) || "(empty)";
+        info(promptChars > 0 ? `${transcript} · prompt ${promptChars} chars` : transcript);
+        return;
+      }
+
+      // Conditioning slots: engaged/off.
+      case "condition":
+        // KNOWN DRIFT: reads engaged/enabled, but the writer sends {identity:true},
+        // so this always renders "off". Preserved (a separate visible-behavior fix).
+        info(
+          data?.engaged === true ? "engaged" : data?.enabled === true ? "enabled · idle" : "off",
+        );
+        return;
+
+      // A deliberate shot shown to the live model (realtime submode).
+      case "live-label":
+        info("shown to the live model");
+        return;
+
+      // Coalesced ~1fps video frames: thumbnails of the few saved keyframes,
+      // gathered across the whole run (the card only holds the last stage). This
+      // must precede the generic blob branch, which would render only the last.
+      case "video-legacy":
+        this.renderVideoThumbs(trace, card, box);
+        return;
+      case "input-frame":
+        if (parsed.chunk === "video") {
+          this.renderVideoThumbs(trace, card, box);
+          return;
+        }
+        break; // other input frames fall to the generic blob tail
+
       default:
         break;
-    }
-
-    // A model call's spend (💰): price + model + token shape, one line.
-    if (label.startsWith("cost: ")) {
-      info(costLine((data ?? {}) as Parameters<typeof costLine>[0]));
-      return;
-    }
-
-    // Speech: `speech <id>` — the audio itself is pushed to the client, not
-    // saved as a trace blob, so there is nothing to play here; show the label.
-    if (/^speech /.test(label)) {
-      const bytes = Number(data?.bytes ?? 0);
-      info(
-        [
-          data?.text ? `“${String(data.text)}”` : undefined,
-          String(data?.mime ?? ""),
-          bytes ? `${bytes} B` : undefined,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      );
-      return;
-    }
-
-    // A streaming partial: the vendor's cumulative text for an uncommitted
-    // segment. Rendered as a word diff against the segment's previous partial —
-    // additions green, revisions red — which is the whole reason it is recorded.
-    if (isPartialLabel(label)) {
-      const text = String(data?.text ?? "");
-      info(`${text.length} chars`);
-      box.append(this.renderWordDiff(previousPartialText(trace.stages, card.indices[0]), text));
-      return;
-    }
-
-    // Speculative compose (coalesced): the freshest transcript snippet, and how
-    // large a prompt the fold had rendered at that point (the hero shows it).
-    if (label.startsWith("composed (speculative)")) {
-      const promptChars = typeof data?.prompt === "string" ? data.prompt.length : 0;
-      const transcript = clip(String(data?.transcript ?? ""), 100) || "(empty)";
-      info(promptChars > 0 ? `${transcript} · prompt ${promptChars} chars` : transcript);
-      return;
-    }
-
-    // Conditioning slots: engaged/off.
-    if (/^condition /.test(label)) {
-      info(data?.engaged === true ? "engaged" : data?.enabled === true ? "enabled · idle" : "off");
-      return;
-    }
-
-    // A deliberate shot shown to the live model (realtime submode).
-    if (/^live label shot_/.test(label)) {
-      info("shown to the live model");
-      return;
-    }
-
-    // Coalesced ~1fps video frames: thumbnails of the few saved keyframes,
-    // gathered across the whole run (the card only holds the last stage). This
-    // must precede the generic blob branch, which would render only the last.
-    if (card.category === "video") {
-      this.renderVideoThumbs(trace, card, box);
-      return;
     }
 
     // A saved attachment blob: render the pixels / an audio player inline.

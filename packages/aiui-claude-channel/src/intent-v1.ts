@@ -64,6 +64,17 @@ import {
   type PromptSpan,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
+  type AudioOutOfOrderData,
+  type ComposedSpeculativeData,
+  type ConditionData,
+  type IntentConfigData,
+  type RealtimeCommitData,
+  type RealtimeDiscardData,
+  type SpeechData,
+  type SttPartialData,
+  stageLabel,
+} from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
+import {
   type ChannelFormat,
   type MessageMeta,
   pushError,
@@ -596,7 +607,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
 
   trace?.record({
     kind: "info",
-    label: "intent config",
+    label: stageLabel.intentConfig(),
     data: {
       tier: intent.tier,
       transcriber: intent.transcriber,
@@ -612,7 +623,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       speakerReady: speaker !== undefined,
       summarizerReady: summarizer !== undefined,
       ...(intent.coerced.length > 0 ? { coerced: intent.coerced } : {}),
-    },
+    } satisfies IntentConfigData,
   });
 
   // The turn's single accumulated stream, in arrival order — client events
@@ -638,7 +649,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // the late-arriving selection (archive/streaming-turns.md §2). Empty for a bare client.
   const staticSections = promptContextSections(ctx.hello);
   if (staticSections.length > 0) {
-    trace?.record({ kind: "info", label: "prompt preamble", data: staticSections });
+    trace?.record({ kind: "info", label: stageLabel.promptPreamble(), data: staticSections });
   }
 
   // Speculative-compose cache. `mutationSeq` bumps on every change to `events`
@@ -688,7 +699,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     composedSeq = mutationSeq;
     trace?.record({
       kind: "ir",
-      label: "composed (speculative)",
+      label: stageLabel.composedSpeculative(),
       // The speculative prompt is the BODY only (no context preamble yet), so
       // its spans are composeIntent's body spans as-is — the hero renders them
       // over the body while the turn is still in flight.
@@ -696,7 +707,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         transcript: lastComposed.transcript,
         prompt: lastComposed.prompt,
         spans: lastComposed.spans,
-      },
+      } satisfies ComposedSpeculativeData,
     });
   };
 
@@ -726,7 +737,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     if (!cost) {
       return;
     }
-    trace?.record({ kind: "info", label: `cost: ${what}`, data: cost });
+    trace?.record({ kind: "info", label: stageLabel.cost(what), data: cost });
     if (cost.usd !== undefined) {
       trace?.addCost(cost.usd);
     }
@@ -744,8 +755,12 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     } satisfies SpeechMessage);
     trace?.record({
       kind: "info",
-      label: `speech ${id}`,
-      data: { mime, bytes: bytes.length, ...(label !== undefined ? { text: label } : {}) },
+      label: stageLabel.speech(id),
+      data: {
+        mime,
+        bytes: bytes.length,
+        ...(label !== undefined ? { text: label } : {}),
+      } satisfies SpeechData,
     });
   };
 
@@ -843,7 +858,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         message,
         detail: vendor === "gemini" ? GEMINI_KEY_HINT : OPENAI_KEY_HINT,
       });
-      trace?.record({ kind: "info", label: "linter disabled", data: { vendor, reason: "no key" } });
+      trace?.record({
+        kind: "info",
+        label: stageLabel.linterDisabled(),
+        data: { vendor, reason: "no key" },
+      });
     }
   };
   buildLinter(intent.linter);
@@ -869,8 +888,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         // Recorded only; the fold still composes from `transcript-final` alone.
         trace?.record({
           kind: "ir",
-          label: `stt partial seg_${segment}`,
-          data: { chars: text.length, text },
+          label: stageLabel.sttPartial(segment),
+          data: { chars: text.length, text } satisfies SttPartialData,
         });
       },
       onFinal: (segment, result) => {
@@ -897,7 +916,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           .filter((v): v is number => v !== undefined);
         trace?.record({
           kind: "info",
-          label: `stt final seg_${segment}`,
+          label: stageLabel.sttFinal(segment),
           data: {
             model: result.model,
             chars: result.text.length,
@@ -939,12 +958,12 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // a query param silently ignored, a message type we've never seen) leaves
       // a mark in the trace instead of vanishing into a `default: return`.
       onDiagnostic: (event) => {
+        // `sttDiagnostic` types its param as the shared SttDiagnosticKind — if
+        // realtime.ts's RealtimeDiagnostic gains a kind not in the vocabulary,
+        // this call stops compiling (the label contract can't be bypassed).
         trace?.record({
           kind: "info",
-          label:
-            event.kind === "vendor-commit"
-              ? `stt vendor commit seg_${event.segment}`
-              : `stt ${event.kind}`,
+          label: stageLabel.sttDiagnostic(event),
           data: event,
         });
         // A param we set that the vendor did not confirm means the behaviour we
@@ -995,15 +1014,18 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           offset += chunk.length;
         }
         trace?.recordBlob(
-          { kind: "ir", label: `attachment seg_${segment}` },
+          { kind: "ir", label: stageLabel.attachment(`seg_${segment}`) },
           merged,
           `seg_${segment}.pcm`,
         );
       }
       trace?.record({
         kind: "ir",
-        label: `realtime commit seg_${segment}`,
-        data: { frames: buffered.chunks.length, bytes: buffered.bytes },
+        label: stageLabel.realtimeCommit(segment),
+        data: {
+          frames: buffered.chunks.length,
+          bytes: buffered.bytes,
+        } satisfies RealtimeCommitData,
       });
     }
     // The Space-tap debounce: the upstream rejects a commit under 100 ms of
@@ -1035,12 +1057,12 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       push([empty]);
       trace?.record({
         kind: "info",
-        label: `realtime discard seg_${segment}`,
+        label: stageLabel.realtimeDiscard(segment),
         data: {
           bytes: pcmBytes,
           ms: Math.round(pcmBytes / REALTIME_PCM_BYTES_PER_MS),
           note: `under the ${commitFloorMs} ms upstream commit minimum — not transcribed`,
-        },
+        } satisfies RealtimeDiscardData,
       });
       return;
     }
@@ -1074,8 +1096,12 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     if (chunk.seq <= buffered.lastSeq) {
       trace?.record({
         kind: "info",
-        label: `audio ${chunk.id} out-of-order`,
-        data: { seq: chunk.seq, lastSeq: buffered.lastSeq, note: "tolerated (arrival order kept)" },
+        label: stageLabel.audioOutOfOrder(chunk.id),
+        data: {
+          seq: chunk.seq,
+          lastSeq: buffered.lastSeq,
+          note: "tolerated (arrival order kept)",
+        } satisfies AudioOutOfOrderData,
       });
     }
     buffered.lastSeq = Math.max(buffered.lastSeq, chunk.seq);
@@ -1104,7 +1130,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // lowered to.)
       if (event.type === "app-selection") {
         const { at: _at, type: _type, marker, ...data } = event;
-        trace?.record({ kind: "ir", label: "app selection", data: { ...data, marker } });
+        trace?.record({ kind: "ir", label: stageLabel.appSelection(), data: { ...data, marker } });
         const entry: SelectionEntry = { kind: "app", item: data };
         const updated = marker !== undefined && selectionRegistry.has(marker);
         if (marker !== undefined) {
@@ -1113,7 +1139,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         sidecar?.onSelection(marker, entry, updated);
       } else if (event.type === "code-selection") {
         const { at: _at, type: _type, marker, ...data } = event;
-        trace?.record({ kind: "ir", label: "code selection", data: { ...data, marker } });
+        trace?.record({ kind: "ir", label: stageLabel.codeSelection(), data: { ...data, marker } });
         const entry: SelectionEntry = { kind: "code", item: data };
         const updated = marker !== undefined && selectionRegistry.has(marker);
         if (marker !== undefined) {
@@ -1123,14 +1149,14 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       } else if (event.type === "app-selection-drop") {
         trace?.record({
           kind: "ir",
-          label: "app selection dropped",
+          label: stageLabel.appSelectionDropped(),
           data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
         });
         sidecar?.onSelectionDrop(event.marker);
       } else if (event.type === "code-selection-drop") {
         trace?.record({
           kind: "ir",
-          label: "code selection dropped",
+          label: stageLabel.codeSelectionDropped(),
           data: { marker: event.marker },
         });
         sidecar?.onSelectionDrop(event.marker);
@@ -1171,11 +1197,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       silenceTrim(bytes);
       trace?.record({
         kind: "ir",
-        label: `condition ${id} (silenceTrim)`,
-        data: { identity: true },
+        label: stageLabel.condition(id, "silenceTrim"),
+        data: { identity: true } satisfies ConditionData,
       });
       trace?.recordBlob(
-        { kind: "ir", label: `attachment ${id}` },
+        { kind: "ir", label: stageLabel.attachment(id) },
         bytes,
         `${id}.${audioExtensionForMime(mime)}`,
       );
@@ -1184,15 +1210,15 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       const conditioned = imageDownscale(bytes);
       trace?.record({
         kind: "ir",
-        label: `condition ${id} (imageDownscale)`,
-        data: { identity: true },
+        label: stageLabel.condition(id, "imageDownscale"),
+        data: { identity: true } satisfies ConditionData,
       });
       // Save the shot blob on arrival and wire its path into the (already
       // flushed) shot event. Deliberately no recompose here: the wiring bumps
       // `mutationSeq`, so fin recomputes once with the path present — the one
       // "late mutation between the last batch and fin" the fingerprint catches.
       const path = trace?.recordBlob(
-        { kind: "ir", label: `attachment ${id}` },
+        { kind: "ir", label: stageLabel.attachment(id) },
         conditioned,
         `${id}.${imageExtension(mime)}`,
       );
@@ -1228,7 +1254,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     }
     trace?.record({
       kind: "info",
-      label: "linter control",
+      label: stageLabel.linterControl(),
       data: { from: intent.linter, to: value },
     });
     intent.linter = value;
@@ -1318,7 +1344,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     // the defensive case of a shot event that trailed its bytes (usually a no-op).
     applyShotPaths();
 
-    trace?.record({ kind: "ir", label: "merged events", data: events });
+    trace?.record({ kind: "ir", label: stageLabel.mergedEvents(), data: events });
 
     const cancelled = endedInCancel(events);
     // Reuse the speculative compose when the log is unchanged since it last ran;
@@ -1332,10 +1358,10 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       composed = composeIntent(events, "replace", composeOptions);
       reused = false;
     }
-    trace?.record({ kind: "info", label: "fin compose", data: { reused } });
+    trace?.record({ kind: "info", label: stageLabel.finCompose(), data: { reused } });
     trace?.record({
       kind: "ir",
-      label: "composed intent",
+      label: stageLabel.composedIntent(),
       data: {
         transcript: composed.transcript,
         items: composed.items,
@@ -1345,7 +1371,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     });
     trace?.record({
       kind: "ir",
-      label: "conditioned",
+      label: stageLabel.conditioned(),
       data: { cancelled, body: composed.prompt },
     });
 
@@ -1380,7 +1406,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
               })),
             ]
           : composed.spans;
-      trace?.record({ kind: "ir", label: "lowered prompt spans", data: { spans } });
+      trace?.record({ kind: "ir", label: stageLabel.loweredPromptSpans(), data: { spans } });
       // Show the client what is about to be committed (pushed first, so the
       // widget's view of the prompt never lags the session notification).
       ctx.push?.({

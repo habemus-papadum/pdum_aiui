@@ -375,7 +375,6 @@ describe("isNarratedTraceStage (curated pipeline events)", () => {
       "linter tool call format_code",
       "linter tool result",
       "linter disabled",
-      "transcription failed abc",
       "cost: transcription",
       "composed intent",
       "fin compose",
@@ -385,7 +384,16 @@ describe("isNarratedTraceStage (curated pipeline events)", () => {
   });
 
   it("skips the many other IRs a lowering run records", () => {
-    for (const label of ["user text", "prompt preamble", "merged events", "app selection"]) {
+    // `transcription failed …` has no living writer on this live tap (its spend
+    // narrates as `cost: realtime transcription seg_N`), so it is NOT narrated —
+    // the old prefix branch was unreachable and was dropped.
+    for (const label of [
+      "user text",
+      "prompt preamble",
+      "merged events",
+      "app selection",
+      "transcription failed abc",
+    ]) {
       expect(isNarratedTraceStage(label)).toBe(false);
     }
   });
