@@ -44,6 +44,7 @@ import {
   type HeldStream,
   type IntentHost,
   type PageCapability,
+  type PageCapabilityOrRing,
   type PageEvent,
   type PageTransport,
   type PanelShot,
@@ -245,7 +246,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   };
 
   /** The capability call, as an expression evaluated in the page's own world. */
-  const invoke = (capability: PageCapability | "ring", payload?: unknown): string =>
+  const invoke = (capability: PageCapabilityOrRing, payload?: unknown): string =>
     `window.__aiuiIntentPage && window.__aiuiIntentPage.handle(${JSON.stringify(capability)}, ${JSON.stringify(payload ?? null)})`;
 
   /**
@@ -267,7 +268,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   /** Deliver one capability to one page — the single path everything takes. */
   const apply = async (
     page: AttachedPage,
-    capability: PageCapability | "ring",
+    capability: PageCapabilityOrRing,
     payload?: unknown,
   ): Promise<unknown> => {
     if (capability === "region" || capability === "jump" || capability === "pencil") {

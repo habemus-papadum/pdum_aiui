@@ -67,6 +67,7 @@
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@habemus-papadum/aiui-vscode": "workspace:^",
     "@types/chrome": "^0.0.287",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",

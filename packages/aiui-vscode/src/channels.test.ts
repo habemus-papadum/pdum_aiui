@@ -2,9 +2,57 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type {
+  PeersResponse as ChannelPeersResponse,
+  PublishResult as ChannelPublishResult,
+  SessionPeerInfo,
+} from "@habemus-papadum/aiui-claude-channel";
 import { afterEach, describe, expect, it } from "vitest";
-import { channelLabel, fetchPeers, listChannels, publishSelection } from "./channels";
+import {
+  channelLabel,
+  fetchPeers,
+  listChannels,
+  type PeersResponse,
+  type PublishResult,
+  publishSelection,
+  type SessionPeer,
+} from "./channels";
 import { selectionToContribution } from "./contribution";
+
+describe("session HTTP response shapes stay in lockstep with the channel", () => {
+  // The channel serves /session/peers and /session/publish; this package mirrors
+  // those response shapes so the VSIX bundle needn't drag in the channel. The
+  // cross-typed assignments below are the drift guard — type-only, erased before
+  // esbuild, so they add nothing to the bundle. The one deliberate asymmetry is a
+  // peer's `tab`: typed `TabInfo` on the channel, opaque `Record<string, unknown>`
+  // here — so `tab` is excluded from the peer-record checks and the response
+  // envelopes are compared past their peer lists.
+  it("peer records agree on every field but `tab`, both directions", () => {
+    const channelPeer: SessionPeerInfo = { clientId: "c1", role: "vscode", label: "L", url: "u" };
+    const asVscode: Omit<SessionPeer, "tab"> = channelPeer;
+    const vscodePeer: SessionPeer = { clientId: "c2", role: "app", tab: { any: 1 } };
+    const asChannel: Omit<SessionPeerInfo, "tab"> = vscodePeer;
+    expect(asVscode.clientId).toBe("c1");
+    expect(asChannel.clientId).toBe("c2");
+  });
+
+  it("response envelopes agree, both directions (past their peer lists)", () => {
+    const channelPeers: ChannelPeersResponse = { ok: true, peers: [], armed: true };
+    const vscodePeersEnv: Omit<PeersResponse, "peers"> = channelPeers;
+    const vscodePeers: PeersResponse = { ok: true, peers: [], armed: false };
+    const channelPeersEnv: Omit<ChannelPeersResponse, "peers"> = vscodePeers;
+
+    const channelPub: ChannelPublishResult = { ok: false, error: "x" };
+    const vscodePubEnv: Omit<PublishResult, "delivered"> = channelPub;
+    const vscodePub: PublishResult = { ok: true, armed: true };
+    const channelPubEnv: Omit<ChannelPublishResult, "delivered"> = vscodePub;
+
+    expect(vscodePeersEnv.armed).toBe(true);
+    expect(channelPeersEnv.armed).toBe(false);
+    expect(vscodePubEnv.error).toBe("x");
+    expect(channelPubEnv.ok).toBe(true);
+  });
+});
 
 function entry(overrides: Partial<Record<string, unknown>> = {}): string {
   return JSON.stringify({

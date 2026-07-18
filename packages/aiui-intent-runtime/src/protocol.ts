@@ -12,6 +12,7 @@
  * decoder.
  */
 
+import type { PromptSpan } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { ClientMeta } from "./instrumentation";
 
 /** Must match the channel package's PROTOCOL_VERSION. */
@@ -24,6 +25,14 @@ export interface Ack {
   closed?: boolean;
   error?: string;
   fatal?: boolean;
+  /**
+   * Set on the hello ack when the channel runs in debug mode (prompts go to
+   * stdout, not a session). The runtime never reads it — mirrored so the typed
+   * surface matches the channel's `ChannelResponse`; protocol.test.ts locks the
+   * pair, and its completeness half is what would have caught this field going
+   * missing.
+   */
+  debug?: boolean;
 }
 
 /**
@@ -41,6 +50,12 @@ export interface Ack {
 export type JsonChunk = { kind: "events" } | { kind: "control" };
 export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
 export type AudioChunk = { kind: "audio"; id: string; seq: number; mime: string };
+/**
+ * The whole chunk union — the runtime's mirror of the channel's
+ * {@link ChunkDescriptor}. protocol.test.ts asserts type-equality against it, so
+ * the two unions cannot drift apart.
+ */
+export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk;
 
 /**
  * A server→client push on the same socket, distinguished from an {@link Ack} by
@@ -67,6 +82,14 @@ export interface LoweredPromptMessage extends ServerMessage {
   kind: "lowered-prompt";
   threadId: string;
   prompt: string;
+  /**
+   * Offset-annotated structure over {@link prompt} — the channel's body spans
+   * shifted past the context preamble, with a leading `preamble` span (see the
+   * channel's `LoweredPromptMessage`). The wire deliberately ignores it (see
+   * wire.ts); a host observing the raw socket may render hover-previews from it.
+   * protocol.test.ts locks this pair with the channel's twin.
+   */
+  spans?: PromptSpan[];
   meta?: Record<string, string>;
 }
 

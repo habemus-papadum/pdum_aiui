@@ -1,80 +1,21 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  isProcessAlive,
-  readEntry,
-  registerServer,
-  registryDir,
-  removeEntryFile,
-} from "./registry";
+import { readEntry, registerServer, registryDir, removeEntryFile } from "./registry";
 
-// A PID that is guaranteed dead: spawn a trivial process and let it exit. Once
-// spawnSync returns, the child is gone, so its PID is safe to treat as stale.
-function deadPid(): number {
-  const result = spawnSync(process.execPath, ["-e", "0"]);
-  if (typeof result.pid !== "number") {
-    throw new Error("could not spawn a throwaway process");
-  }
-  return result.pid;
-}
+// The read side (isProcessAlive, readEntry validation) is single-sourced in
+// aiui-util and tested there (aiui-util/src/registry.test.ts). What stays here
+// exercises the write side and its use of the re-exported readEntry/registryDir.
 
 afterEach(() => {
   vi.unstubAllEnvs();
-});
-
-describe("isProcessAlive", () => {
-  it("is true for the current process", () => {
-    expect(isProcessAlive(process.pid)).toBe(true);
-  });
-
-  it("is false for a process that has exited", () => {
-    expect(isProcessAlive(deadPid())).toBe(false);
-  });
-
-  it("is false for nonsensical pids", () => {
-    expect(isProcessAlive(0)).toBe(false);
-    expect(isProcessAlive(-1)).toBe(false);
-    expect(isProcessAlive(1.5)).toBe(false);
-  });
 });
 
 describe("removeEntryFile", () => {
   it("does not throw when the file is already gone", () => {
     const dir = mkdtempSync(join(tmpdir(), "aiui-reg-"));
     expect(() => removeEntryFile(join(dir, "nope.json"))).not.toThrow();
-  });
-});
-
-describe("readEntry", () => {
-  it("returns null for malformed or non-conforming files", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aiui-reg-"));
-
-    const notJson = join(dir, "a.json");
-    writeFileSync(notJson, "{not json");
-    expect(readEntry(notJson)).toBeNull();
-
-    const wrongShape = join(dir, "b.json");
-    writeFileSync(wrongShape, JSON.stringify({ pid: "x" }));
-    expect(readEntry(wrongShape)).toBeNull();
-
-    // Valid but for a missing tag — still rejected.
-    const noTag = join(dir, "c.json");
-    writeFileSync(
-      noTag,
-      JSON.stringify({
-        pid: 1,
-        ppid: 2,
-        port: 3,
-        cwd: "/x",
-        startedAt: "2026-01-01T00:00:00.000Z",
-      }),
-    );
-    expect(readEntry(noTag)).toBeNull();
-
-    expect(readEntry(join(dir, "missing.json"))).toBeNull();
   });
 });
 

@@ -10,9 +10,10 @@
  * `PageEvent`s with the same vocabulary, and the client core cannot tell which
  * host it is running on. That is the seam doing its job.
  *
- * The capability surface is likewise the same command set the CDP page serves
- * (`ring · flash · keylayer · selection · viewport · pencil · jump · locate`) — here it
- * arrives over the relay instead of `Runtime.evaluate`.
+ * The capability surface is likewise the same command set the CDP page serves —
+ * the `PageCapability` set (transport.ts, the single inventory), plus `ring`
+ * (broadcast, not requested) and the MV3-only `driverGone` worker verdict — here
+ * it arrives over the relay instead of `Runtime.evaluate`.
  */
 
 import type { PageReport } from "../cdp/page-script";

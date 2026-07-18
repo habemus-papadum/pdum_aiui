@@ -30,6 +30,7 @@
  * `onTalkStart` also cancels any in-flight reply (client-side barge-in): a
  * human talking over the lint wants to keep briefing, not listen.
  */
+import { LINTER_TRANSCRIPT_WAIT_MS } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { CallCost } from "./cost";
 import { DEFAULT_GEMINI_LIVE_MODEL, openGeminiLiveSession } from "./gemini-live";
 import { executeReadFile, READ_FILE_TOOL_NAME } from "./linter-tools";
@@ -45,9 +46,12 @@ import type { RealtimeSocketFactory } from "./realtime";
 /**
  * How long a talk-end waits for its segment's transcript-final before the
  * linter's turn ends without it. STT finals normally land well inside this;
- * the ceiling keeps a wedged transcription from wedging the lint.
+ * the ceiling keeps a wedged transcription from wedging the lint. The value is
+ * the shared {@link LINTER_TRANSCRIPT_WAIT_MS} (its home is the lowering
+ * pipeline, beside the linter event vocabulary); re-exported under this
+ * historical name for this package's tests.
  */
-export const TRANSCRIPT_WAIT_MS = 2500;
+export const TRANSCRIPT_WAIT_MS = LINTER_TRANSCRIPT_WAIT_MS;
 
 /** An intent event the sidecar produces (kept loose to avoid a cycle). */
 type ProducedEvent = Record<string, unknown> & { at: number; type: string };

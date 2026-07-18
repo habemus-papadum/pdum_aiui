@@ -164,6 +164,18 @@ export interface TabRecord {
 }
 
 /**
+ * The browser-tab correlation-hint subset shared by the intent runtime's hello
+ * meta and the channel's wire envelope: {@link TabRecord} minus the fields only
+ * a full record carries (`aiui` / `sourceRoot` / `driverTab`). Every field is
+ * optional — producers fill what they know. The subset relationship to
+ * {@link TabRecord} is compiler-checked here rather than restated in prose; the
+ * ids are correlation hints (none is the Chrome DevTools MCP's own `pageId`).
+ */
+export type TabInfo = Partial<
+  Pick<TabRecord, "url" | "title" | "chromeTabId" | "windowId" | "tabIndex" | "targetId">
+>;
+
+/**
  * A shot's provenance when it came from the screen share's sampler rather than
  * a deliberate S / D-drag gesture. Its presence is what tells the compiler to
  * render the frame as part of a sequence.
@@ -485,6 +497,15 @@ export type IntentEvent =
    * lives in the trace stage's data). Compiler-skipped like its request.
    */
   | { at: number; type: "linter-tool-result"; tool: string; ok: boolean; summary: string };
+
+/**
+ * How long the linter's turn-end waits for a segment's transcript-final before
+ * proceeding without it — the one load-bearing timing constant shared by the
+ * channel's linter sidecar (the authority) and the intent client's mirrored
+ * pulse dot. Lives here, beside the `linter-*` event vocabulary, so both sides
+ * import one value instead of hand-copying it.
+ */
+export const LINTER_TRANSCRIPT_WAIT_MS = 2500;
 
 // ── the composed IR: composeIntent's output (folded from the stream above) ────
 //

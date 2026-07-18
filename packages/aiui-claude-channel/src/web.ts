@@ -29,7 +29,7 @@ import { ackEntry, createFrameLog, type FrameLogSink, inboundEntry, pushEntry } 
 import { defaultFormatLoader, type FormatLoader, isSourceRun } from "./hot";
 import type { LaunchInfo } from "./launch-info";
 import { PageToolDirectory } from "./page-tools";
-import { SessionHub } from "./session-hub";
+import { type PeersResponse, type PublishResult, SessionHub } from "./session-hub";
 import type { MountedSidecar, Sidecar } from "./sidecar";
 import { createTransportStats } from "./stats";
 import { createTraceStore, sessionLabel, type TraceStageSink, type TraceStore } from "./trace";
@@ -283,13 +283,19 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     // Readable cross-origin for the same reason as /health: harmless loopback
     // metadata a debug page may want to render.
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.json({ ok: true, peers: sessionHub.peers(), armed: sessionHub.get("armed") === true });
+    const body: PeersResponse = {
+      ok: true,
+      peers: sessionHub.peers(),
+      armed: sessionHub.get("armed") === true,
+    };
+    res.json(body);
   });
 
   app.post("/session/publish", express.json(), (req, res) => {
     const topic = typeof req.body?.topic === "string" ? req.body.topic : "";
     if (!topic) {
-      res.status(400).json({ ok: false, error: "expected a non-empty 'topic' field" });
+      const body: PublishResult = { ok: false, error: "expected a non-empty 'topic' field" };
+      res.status(400).json(body);
       return;
     }
     const clientId = typeof req.body?.clientId === "string" ? req.body.clientId : undefined;
@@ -305,10 +311,15 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
           : role !== undefined
             ? `a "${role}" view`
             : "any connected view";
-      res.status(404).json({ ok: false, error: `no connected session view matches ${wanted}` });
+      const body: PublishResult = {
+        ok: false,
+        error: `no connected session view matches ${wanted}`,
+      };
+      res.status(404).json(body);
       return;
     }
-    res.json({ ok: true, delivered, armed: sessionHub.get("armed") === true });
+    const body: PublishResult = { ok: true, delivered, armed: sessionHub.get("armed") === true };
+    res.json(body);
   });
 
   const httpServer = createServer(app);

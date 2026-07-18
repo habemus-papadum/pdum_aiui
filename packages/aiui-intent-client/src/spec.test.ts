@@ -3,8 +3,10 @@
  * The harness tests (client.test.ts) drive the full client; these pin the
  * pure reducer so a spec regression is caught without any wiring.
  */
+import type { PageInstrumentation } from "@habemus-papadum/aiui-intent-runtime";
+import type { AiuiGlobal } from "@habemus-papadum/aiui-viz";
 import { createModeEngine, type EngineState } from "@habemus-papadum/aiui-viz/modal";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { initialContext, intentSpec } from "./spec";
 
 /** The machine with a plausible world behind it: a channel to arm against (the
@@ -314,5 +316,16 @@ describe("spec-level properties", () => {
     expect(e.dispatch("escape")).toMatchObject({ phase: "turn", region: false });
     // Only now does esc step the phase rung.
     expect(e.dispatch("escape")).toMatchObject({ phase: "armed" });
+  });
+});
+
+// The `window.__AIUI__` global is declared twice: viz OWNS it (AiuiGlobal, with
+// tools + the index signature) and the runtime READS it (PageInstrumentation).
+// The client prod-deps both, the one point on the graph that sees each — so a
+// `v` bump or a `sourceRoot` retype on either side must break the build here.
+// See docs/proposals/code-review-pass2-s1-mirrors.md.
+describe("__AIUI__ global: viz's AiuiGlobal stays assignable to the runtime's reader view", () => {
+  it("AiuiGlobal satisfies PageInstrumentation (compile-time)", () => {
+    expectTypeOf<AiuiGlobal>().toMatchTypeOf<PageInstrumentation>();
   });
 });

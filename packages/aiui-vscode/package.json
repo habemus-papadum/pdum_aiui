@@ -81,7 +81,7 @@
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build && node build-extension.mjs",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "vsix": "node build-extension.mjs --vsix",
     "install:vsix": "node build-extension.mjs --vsix --install",
@@ -92,6 +92,7 @@
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@types/node": "^26.1.0",
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.0.0",

@@ -58,6 +58,9 @@ import {
   DEFAULT_INTENT_CONFIG,
   expandTier,
   type IntentEvent,
+  type IntentPipelineConfig,
+  LINTER_VENDORS,
+  type LinterVendor,
   type PromptSpan,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
@@ -163,8 +166,9 @@ const REALTIME_DRAIN_TIMEOUT_MS = 10_000;
  * that keeps a changed mind from erroring.
  */
 const MIN_REALTIME_COMMIT_MS = 100;
-/** PCM16 mono at the realtime session's 24 kHz: 48 bytes per millisecond. */
-const REALTIME_PCM_BYTES_PER_MS = 48;
+/** PCM16 mono at the realtime session's 24 kHz: 48 bytes per millisecond.
+ * Exported so a test ties it to the channel's `REALTIME_VOICE_RATE` (pcm.ts). */
+export const REALTIME_PCM_BYTES_PER_MS = 48;
 
 /**
  * The realtime submode's stale-key hint, the Gemini twin of {@link OPENAI_KEY_HINT}.
@@ -209,16 +213,20 @@ interface ResolvedIntent {
   liveVendor: "gemini" | "openai";
   /** Realtime model id (bare, e.g. `gemini-3.1-flash-live-preview`). */
   liveModel: string;
-  transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice" | "elevenlabs";
+  transcriber: IntentPipelineConfig["transcriber"];
   model: string;
   /** Domain-vocabulary bias (the keywords slot — see docs/guide/transcription.md). */
   keywords: string[] | undefined;
   /** Realtime transcription model (when transcriber = `openai-realtime`). */
   realtimeModel: string;
-  /** Realtime latency/accuracy knob (`minimal`…`xhigh`); undefined → model default. */
+  /**
+   * Realtime latency/accuracy knob (`minimal`…`xhigh`); undefined → model
+   * default. Deliberately WIDENED to `string` (not the config's literal union):
+   * resolveIntent passes vendor delay strings through untouched.
+   */
   realtimeDelay: string | undefined;
   /** Spoken audio back to the human: `off` | `acks` (premium TTS); `voice` is the retired veneer (treated as off). */
-  audioBack: "off" | "acks" | "voice";
+  audioBack: NonNullable<IntentPipelineConfig["audioBack"]>;
   /** REST TTS model for `audioBack:"acks"` (premium). */
   ttsModel: string;
   /** TTS voice id (acks); undefined → the model default. */
@@ -226,7 +234,7 @@ interface ResolvedIntent {
   /** The linter's spoken voice id; undefined → the model default. */
   realtimeVoice: string | undefined;
   /** The prompt linter: off, or which live vendor observes the composition. */
-  linter: "off" | "openai" | "gemini";
+  linter: LinterVendor;
   /** Linter model id; undefined → the vendor default. */
   linterModel: string | undefined;
   /** Linter persona override; undefined → LINTER_INSTRUCTIONS. */
@@ -444,6 +452,16 @@ function ordinalOf(id: string): number {
  * the share's sampled frames are JPEG. Default PNG for anything unexpected. */
 function imageExtension(mime: string): string {
   return mime === "image/jpeg" ? "jpg" : "png";
+}
+
+/**
+ * Revalidate an untrusted control value against the linter vocabulary — the
+ * runtime check is DERIVED from {@link LINTER_VENDORS} (adding a vendor is a
+ * one-site change in the shared leaf), and this narrows the wire value to
+ * {@link LinterVendor} for the callers.
+ */
+function isLinterVendor(value: unknown): value is LinterVendor {
+  return (LINTER_VENDORS as readonly string[]).includes(value as string);
 }
 
 /** True when the current thread (from its last open) ended in an explicit cancel. */
@@ -774,7 +792,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // select carries only the vendor, and those advanced fields default to the
   // vendor default when unset (the common case).
   let sidecar: LinterSidecar | undefined;
-  const buildLinter = (vendor: "off" | "openai" | "gemini"): void => {
+  const buildLinter = (vendor: LinterVendor): void => {
     sidecar?.close();
     sidecar = undefined;
     if (vendor === "off") {
@@ -1205,8 +1223,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       return;
     }
     const value = decoded.value;
-    const recognized = value === "off" || value === "openai" || value === "gemini";
-    if (!recognized || value === intent.linter) {
+    if (!isLinterVendor(value) || value === intent.linter) {
       return;
     }
     trace?.record({

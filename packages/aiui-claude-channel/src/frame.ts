@@ -21,6 +21,8 @@
  * format in ~20 lines. Big-endian u32 is network byte order.
  */
 
+import type { TabInfo } from "@habemus-papadum/aiui-lowering-pipeline";
+
 /** Bump when a change to the framing or envelope shape is not backward-compatible. */
 export const PROTOCOL_VERSION = 1;
 
@@ -28,29 +30,18 @@ export const PROTOCOL_VERSION = 1;
 export type EnvelopeKind = "hello" | "data";
 
 /**
- * The browser tab a client page lives in, as far as the page can know it.
- *
+ * The browser tab a client page lives in, as far as the page can know it — the
+ * shared {@link TabInfo} from the lowering pipeline (a {@link
+ * import("@habemus-papadum/aiui-lowering-pipeline").TabRecord} projection). Its
  * `url`/`title` the page reads live off itself; the numeric/string ids come
  * from the intent client's host — the MV3 extension's `chrome.tabs` layer, or
  * the CDP tier's tab hints. All ids are **correlation hints** for an agent:
  * the Chrome DevTools MCP accepts only its own `pageId` from `list_pages` —
  * match by URL/title and verify (the session-browser skill teaches the
  * workflow; background in archive/chrome-devtools-mcp-tab-routing-notes.md).
+ * Re-exported here so this module's consumers keep one import site.
  */
-export interface TabInfo {
-  /** The page's live `location.href` at send time. */
-  url?: string;
-  /** The page's live `document.title` at send time. */
-  title?: string;
-  /** `chrome.tabs.Tab.id` — extension-layer tab id. */
-  chromeTabId?: number;
-  /** `chrome.tabs.Tab.windowId`. */
-  windowId?: number;
-  /** The tab's index in its window (drifts as tabs move; a hint only). */
-  tabIndex?: number;
-  /** CDP `Target.TargetID` — for raw-CDP consumers, not the MCP tools. */
-  targetId?: string;
-}
+export type { TabInfo };
 
 /** Where the page's source code lives on disk (from the dev server). */
 export interface SourceInfo {

@@ -1,17 +1,33 @@
 import {
+  type ChannelErrorMessage,
+  type ChannelResponse,
+  type ChunkDescriptor,
   decodeFrame,
+  type HelloMeta,
   jsonCodec,
   PROTOCOL_VERSION as SERVER_PROTOCOL_VERSION,
 } from "@habemus-papadum/aiui-claude-channel";
-import { describe, expect, it } from "vitest";
 import {
+  type LoweredPromptMessage as ChannelLoweredPromptMessage,
+  REALTIME_VOICE_RATE,
+  type SpeechMessage,
+} from "@habemus-papadum/aiui-claude-channel/internal";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { REALTIME_PCM_MIME, REALTIME_PCM_RATE } from "./audio";
+import type { ClientMeta } from "./instrumentation";
+import {
+  type Ack,
+  type LoweredPromptMessage as ClientLoweredPromptMessage,
   connectIntentSocket,
+  type ErrorMessage,
   encodeFrame,
   encodeJsonPayload,
+  type FrameChunk,
   isErrorMessage,
   PROTOCOL_VERSION,
   type ServerMessage,
 } from "./protocol";
+import type { SpeechClip } from "./speech";
 import { fakeSocketFactory } from "./test-support/fake-socket";
 
 describe("frame encoding (cross-checked against the channel package)", () => {
@@ -190,5 +206,84 @@ describe("connection-loss detection (the client-detected half of the error surfa
     socket.close(); // the deliberate teardown after fin/cancel
 
     expect(pushes).toEqual([]);
+  });
+});
+
+// The wire mirrors this package deliberately reimplements (protocol.ts is a
+// dependency-free twin of the channel's frame/channel/intent-v1 types) can only
+// drift silently — a comment says "change both together", nothing enforces it.
+// These type-level assertions (checked at `tsc`, not runtime) turn every mirror
+// into a compile error the moment the two sides disagree. See docs/proposals/
+// code-review-pass2-s1-mirrors.md.
+describe("wire-mirror drift guards (compile-time; the channel is a devDependency)", () => {
+  it("ChunkDescriptor ≡ the runtime's FrameChunk union", () => {
+    expectTypeOf<FrameChunk>().toEqualTypeOf<ChunkDescriptor>();
+  });
+
+  it("ChannelErrorMessage ≡ ErrorMessage over the shared fields, with none unmirrored", () => {
+    expectTypeOf<
+      Pick<ErrorMessage, "kind" | "threadId" | "source" | "message" | "detail" | "data">
+    >().toEqualTypeOf<
+      Pick<ChannelErrorMessage, "kind" | "threadId" | "source" | "message" | "detail" | "data">
+    >();
+    // A new channel field would land here (Exclude ≠ never) and fail the build.
+    expectTypeOf<
+      Exclude<
+        keyof ChannelErrorMessage,
+        "kind" | "threadId" | "source" | "message" | "detail" | "data"
+      >
+    >().toEqualTypeOf<never>();
+  });
+
+  it("every hello ClientMeta satisfies the channel's HelloMeta envelope", () => {
+    // Assignability, NOT equality: the client narrows `intent` to an object
+    // where the server keeps it `unknown` (its trust boundary) — by design.
+    expectTypeOf<ClientMeta>().toMatchTypeOf<HelloMeta>();
+  });
+
+  it("a collectClientMeta()-shaped meta survives the channel encode/decode intact", () => {
+    // protocol.test.ts runs without jsdom, so build the shape by hand rather
+    // than calling collectClientMeta() (which needs a DOM). Typing it ClientMeta
+    // ties the literal to the producer's contract.
+    const meta: ClientMeta = {
+      tab: { url: "http://localhost:5199/", title: "spectra", chromeTabId: 7 },
+      source: { root: "/repo/app" },
+      actor: "agent",
+    };
+    const frame = encodeFrame({ v: PROTOCOL_VERSION, kind: "hello", format: "intent-v1", meta });
+    const { envelope } = decodeFrame(frame);
+    expect(envelope.meta).toEqual(meta);
+  });
+
+  it("LoweredPromptMessage twins agree over kind/threadId/prompt/spans/meta", () => {
+    expectTypeOf<
+      Pick<ClientLoweredPromptMessage, "kind" | "threadId" | "prompt" | "spans" | "meta">
+    >().toEqualTypeOf<
+      Pick<ChannelLoweredPromptMessage, "kind" | "threadId" | "prompt" | "spans" | "meta">
+    >();
+    // The next additive server field (this is how `spans` slipped) breaks here.
+    expectTypeOf<
+      Exclude<keyof ChannelLoweredPromptMessage, "kind" | "threadId" | "prompt" | "spans" | "meta">
+    >().toEqualTypeOf<never>();
+  });
+
+  it("Ack mirrors ChannelResponse with no unmirrored server field", () => {
+    expectTypeOf<
+      Pick<Ack, "ok" | "threadId" | "closed" | "error" | "fatal" | "debug">
+    >().toEqualTypeOf<
+      Pick<ChannelResponse, "ok" | "threadId" | "closed" | "error" | "fatal" | "debug">
+    >();
+    expectTypeOf<Exclude<keyof ChannelResponse, keyof Ack>>().toEqualTypeOf<never>();
+  });
+
+  it("SpeechClip is exactly the SpeechMessage payload subset", () => {
+    expectTypeOf<
+      Pick<SpeechMessage, "id" | "mime" | "data" | "label">
+    >().toEqualTypeOf<SpeechClip>();
+  });
+
+  it("the 24 kHz PCM contract matches the channel's realtime voice rate", () => {
+    expect(REALTIME_PCM_RATE).toBe(REALTIME_VOICE_RATE);
+    expect(REALTIME_PCM_MIME).toBe(`audio/pcm;rate=${REALTIME_VOICE_RATE}`);
   });
 });

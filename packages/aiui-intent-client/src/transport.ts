@@ -3,10 +3,11 @@
  *
  * Everything the client needs from "the pages it drives" fits behind three
  * small interfaces. The page-side contract is the one this package's own
- * content script serves (ext/content.ts `serveRelay` — selection, viewport,
- * pencil, keylayer, flash, …) — so the production `ExtensionBus` is the relay
- * verbatim; the `CdpBus` delivers the same capabilities over Runtime.evaluate;
- * and the `FakeBus` (./fake-bus.ts) is what every harness test drives.
+ * content script serves (ext/content.ts `serveRelay`) — the {@link PageCapability}
+ * set below is the single inventory — so the production `ExtensionBus` is the
+ * relay verbatim; the `CdpBus` delivers the same capabilities over
+ * Runtime.evaluate; and the `FakeBus` (./fake-bus.ts) is what every harness
+ * test drives.
  *
  * The client core never imports chrome.*, CDP, or a DOM: it talks to these
  * types only. That is the whole point — the brain is host-agnostic and
@@ -39,6 +40,12 @@ export type PageCapability =
    * beaten on a short cadence. The page's watchdog (page/driver-watch.ts)
    * self-cleans stranded assertions when the beats stop. */
   | "heartbeat";
+
+/** `ring` deliberately sits OUTSIDE {@link PageCapability}: it is asserted
+ * everywhere at once (broadcastRing), never a per-tab request. The two internal
+ * buses widen their apply/invoke seam to it — this is that one widening, named,
+ * so it is not restated at each site. Not part of the requestable set. */
+export type PageCapabilityOrRing = PageCapability | "ring";
 
 /** How often a live driver beats the pages it can reach. */
 export const HEARTBEAT_MS = 750;

@@ -3,45 +3,32 @@
  *
  * Discovery reads the same on-disk registry the channel writes: one
  * `<pid>.json` per live `aiui-claude-channel mcp` process under
- * `cacheDir("mcp")` (aiui-claude-channel's registry.ts is the source of truth
- * for the entry shape — mirrored here so the extension doesn't drag the whole
- * channel package into its bundle). Reading is strictly non-destructive:
- * entries whose process is gone are skipped, never pruned — the channel's own
- * tools own the pruning.
+ * `cacheDir("mcp")`. The registry read side — the {@link ChannelEntry} shape,
+ * {@link readEntry} validator, {@link isProcessAlive} probe, and
+ * {@link registryDir} — is single-sourced in `@habemus-papadum/aiui-util`, a
+ * prod dependency this extension already bundles, so importing it adds nothing
+ * new to the VSIX. Reading is strictly non-destructive: entries whose process
+ * is gone are skipped, never pruned — the channel's own tools own the pruning.
  *
  * The client half speaks the channel web backend's session HTTP surface
  * (web.ts): `GET /session/peers` to list the browser views of a session, and
  * `POST /session/publish` to hand one of them a contribution.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join, sep } from "node:path";
-import { cacheDir } from "@habemus-papadum/aiui-util";
+import {
+  isProcessAlive,
+  type RegistryEntry,
+  readEntry,
+  registryDir,
+} from "@habemus-papadum/aiui-util";
 import type { SelectionContribution } from "./contribution";
 import { SESSION_CONTRIBUTION_TOPIC } from "./contribution";
 
+export { isProcessAlive, registryDir };
+
 /** One running channel server, as advertised in its registry file. */
-export interface ChannelEntry {
-  /** Stable session identifier (a UUID, or launcher-chosen). */
-  tag: string;
-  /** PID of the channel server process. */
-  pid: number;
-  /** PID of the Claude Code session that spawned it. */
-  ppid: number;
-  /** Loopback TCP port of the server's web backend. */
-  port: number;
-  /** Absolute directory the server was launched in. */
-  cwd: string;
-  /** ISO-8601 start timestamp. */
-  startedAt: string;
-  /** Display name the server chose for itself (a debug server's `--name`). */
-  name?: string;
-  /**
-   * A standalone debug server (`aiui-claude-channel serve`, e.g. the
-   * a standalone `serve`): fully usable as a selection target, but marked in the
-   * picker and sorted after real sessions.
-   */
-  debug?: boolean;
-}
+export type ChannelEntry = RegistryEntry;
 
 /** A connected session view, as reported by `GET /session/peers`. */
 export interface SessionPeer {
@@ -75,58 +62,6 @@ export interface PublishResult {
   error?: string;
 }
 
-/** The registry directory (not created if missing — that means nothing runs). */
-export function registryDir(): string {
-  return cacheDir("mcp", { create: false });
-}
-
-/** Loose-validate one registry file; `null` for anything malformed. */
-function readEntry(file: string): ChannelEntry | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    return null;
-  }
-  const e = parsed as Record<string, unknown>;
-  if (
-    typeof e.tag !== "string" ||
-    typeof e.pid !== "number" ||
-    typeof e.ppid !== "number" ||
-    typeof e.port !== "number" ||
-    typeof e.cwd !== "string" ||
-    typeof e.startedAt !== "string"
-  ) {
-    return null;
-  }
-  return {
-    tag: e.tag,
-    pid: e.pid,
-    ppid: e.ppid,
-    port: e.port,
-    cwd: e.cwd,
-    startedAt: e.startedAt,
-    ...(typeof e.name === "string" ? { name: e.name } : {}),
-    ...(e.debug === true ? { debug: true } : {}),
-  };
-}
-
-/** Is a process with this PID alive? (`EPERM` still means "alive".) */
-export function isProcessAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) {
-    return false;
-  }
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
 export interface ListChannelsOptions {
   /** Registry directory override (tests). Defaults to {@link registryDir}. */
   dir?: string;
@@ -156,7 +91,7 @@ function affinity(cwd: string, workspaceDir: string | undefined): number {
  * then newest first.
  */
 export function listChannels(options: ListChannelsOptions = {}): ChannelEntry[] {
-  const dir = options.dir ?? registryDir();
+  const dir = options.dir ?? registryDir({ create: false });
   const isAlive = options.isAlive ?? isProcessAlive;
   let files: string[];
   try {

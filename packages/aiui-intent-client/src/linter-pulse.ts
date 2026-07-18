@@ -10,7 +10,7 @@
  *   onTalkStart / onTalkEnd       talk-start / talk-end engine events
  *   onTranscriptFinal             transcript-final (the server echo — the
  *                                 SAME signal the sidecar waits for)
- *   the 2.5s transcript wait      the same constant, mirrored below
+ *   the 2.5s transcript wait      the shared LINTER_TRANSCRIPT_WAIT_MS
  *   note / tool call / result     linter-note / linter-tool-call / -result
  *
  * The phases, in the order a normal lint passes through them:
@@ -26,11 +26,18 @@
  * dot being briefly wrong, never a behavior.
  */
 
-import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
+import {
+  type IntentEvent,
+  LINTER_TRANSCRIPT_WAIT_MS,
+} from "@habemus-papadum/aiui-lowering-pipeline";
 import { createSignal } from "solid-js";
 
-/** Mirrors the sidecar's TRANSCRIPT_WAIT_MS (linter-sidecar.ts) — keep aligned. */
-export const LINTER_TRANSCRIPT_WAIT_MS = 2500;
+/**
+ * The linter's transcript-wait — the shared {@link LINTER_TRANSCRIPT_WAIT_MS}
+ * (its home is the lowering pipeline; the channel sidecar reads the same value).
+ * Re-exported so this module's consumers and tests keep one import site.
+ */
+export { LINTER_TRANSCRIPT_WAIT_MS };
 /** No note this long after the lint turn ended → stale (owner: warn at 4s). */
 export const LINTER_STALE_MS = 4000;
 /** How long the 💡 "noted" flash lingers before settling back to idle. */

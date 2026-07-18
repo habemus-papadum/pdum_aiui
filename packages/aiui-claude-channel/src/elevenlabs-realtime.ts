@@ -163,7 +163,7 @@ export const ELEVENLABS_REALTIME_URL = "wss://api.elevenlabs.io/v1/speech-to-tex
 export const DEFAULT_ELEVENLABS_MODEL = "scribe_v2_realtime";
 
 /** The client capture rate; matches the URL's `audio_format=pcm_24000` and each chunk's `sample_rate`. */
-const ELEVENLABS_SAMPLE_RATE = 24000;
+export const ELEVENLABS_SAMPLE_RATE = 24000;
 
 /** PCM16 mono at 24 kHz: 24000 samples/s × 2 bytes ÷ 1000 = 48 bytes per ms — the meter's unit. */
 const BYTES_PER_MS = (ELEVENLABS_SAMPLE_RATE * 2) / 1000;

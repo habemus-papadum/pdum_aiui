@@ -1,5 +1,22 @@
+import type {
+  SessionClientMessage,
+  SessionPeerInfo,
+  SessionServerMessage,
+} from "@habemus-papadum/aiui-claude-channel";
+import {
+  selectionToContribution,
+  SESSION_CONTRIBUTION_TOPIC as VSCODE_CONTRIBUTION_TOPIC,
+} from "@habemus-papadum/aiui-vscode";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { asBusPublish, asContributedSelection, resolveChannelPort } from "./session";
+import {
+  asBusPublish,
+  asContributedSelection,
+  type BusPeer,
+  INITIAL_BUS_STATE,
+  reduceBusMessage,
+  resolveChannelPort,
+  SESSION_CONTRIBUTION_TOPIC,
+} from "./session";
 
 /** Stub `location` with just the fields resolveChannelPort reads. */
 const stubLocation = (fields: { search?: string; port?: string }): void => {
@@ -111,5 +128,106 @@ describe("asContributedSelection (the VS Code send-selection wire)", () => {
       asContributedSelection({ topic: "contribution", payload: { kind: "selection", text: "" } }),
     ).toBeUndefined();
     expect(asContributedSelection({ topic: "contribution" })).toBeUndefined();
+  });
+});
+
+describe("session-bus contribution contract (vscode ⇄ intent-client)", () => {
+  // The client restates the extension's contribution topic + payload shape so it
+  // takes no dependency on the extension package. This round-trip runs vscode's
+  // real builder through the client's real reader, so the two cannot drift.
+  it("round-trips a vscode selection contribution through the client reader", () => {
+    const editorSel = {
+      file: "src/a.ts",
+      text: "const x = 1;",
+      startLine: 4,
+      startCharacter: 0,
+      endLine: 4,
+      endCharacter: 12,
+    };
+    const url = "vscode://file/repo/src/a.ts:5:1";
+    const sel = asContributedSelection({
+      topic: VSCODE_CONTRIBUTION_TOPIC,
+      payload: selectionToContribution(editorSel, url),
+    });
+    expect(sel).toEqual({ text: "const x = 1;", sourceLoc: "src/a.ts:5:1", url, lines: 1 });
+  });
+
+  it("agrees with vscode on the contribution topic", () => {
+    expect(SESSION_CONTRIBUTION_TOPIC).toBe(VSCODE_CONTRIBUTION_TOPIC);
+  });
+});
+
+describe("session-bus frame shapes stay in lockstep with the hub", () => {
+  // BusPeer/reduceBusMessage/asBusPublish mirror the channel's session hub across
+  // a forced cycle break (the channel depends on this client, so this can only
+  // devDep the channel). Typing the hub's frames against the channel's own
+  // SessionServerMessage/SessionClientMessage — erased at runtime — makes a hub
+  // frame change fail the client's typecheck.
+  it("a hub peer is a BusPeer", () => {
+    const hubPeer: SessionPeerInfo = { clientId: "c1", role: "intent-client", label: "Demo" };
+    const busPeer: BusPeer = hubPeer;
+    expect(busPeer.clientId).toBe("c1");
+  });
+
+  it("reduces the hub's snapshot/set/peers frames", () => {
+    const peers: SessionPeerInfo[] = [{ clientId: "c1", role: "intent-client", label: "Demo" }];
+    const snapshot: SessionServerMessage = {
+      v: 1,
+      type: "snapshot",
+      clientId: "me",
+      state: { armed: true },
+      peers,
+    };
+    let state = reduceBusMessage(INITIAL_BUS_STATE, snapshot);
+    expect(state.phase).toBe("connected");
+    expect(state.clientId).toBe("me");
+    expect(state.peers).toEqual(peers);
+    expect(state.slots).toEqual({ armed: true });
+
+    const set: SessionServerMessage = {
+      v: 1,
+      type: "set",
+      slot: "preview",
+      value: "hi",
+      from: "c1",
+    };
+    state = reduceBusMessage(state, set);
+    expect(state.slots.preview).toBe("hi");
+
+    const peersFrame: SessionServerMessage = { v: 1, type: "peers", peers: [] };
+    state = reduceBusMessage(state, peersFrame);
+    expect(state.peers).toEqual([]);
+  });
+
+  it("narrows the hub's publish frame", () => {
+    const publish: SessionServerMessage = {
+      v: 1,
+      type: "publish",
+      topic: "contribution",
+      payload: { kind: "selection", text: "x" },
+      from: "server",
+    };
+    expect(asBusPublish(publish)).toEqual({
+      topic: "contribution",
+      payload: { kind: "selection", text: "x" },
+      from: "server",
+    });
+  });
+
+  it("the client's hello/set/publish sends satisfy the hub's client-message type", () => {
+    const hello: SessionClientMessage = {
+      v: 1,
+      type: "hello",
+      role: "intent-client",
+      label: "Demo",
+    };
+    const set: SessionClientMessage = { v: 1, type: "set", slot: "armed", value: true };
+    const publish: SessionClientMessage = {
+      v: 1,
+      type: "publish",
+      topic: "contribution",
+      payload: { kind: "selection", text: "x" },
+    };
+    expect([hello.type, set.type, publish.type]).toEqual(["hello", "set", "publish"]);
   });
 });

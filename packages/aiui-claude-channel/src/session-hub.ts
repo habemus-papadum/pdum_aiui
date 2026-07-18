@@ -50,6 +50,30 @@ export interface SessionPeerInfo {
   tab?: TabInfo;
 }
 
+/**
+ * `GET /session/peers` response — the connected views plus the cached `armed`
+ * slot. The names for the inline JSON web.ts serves; external same-host tools
+ * (the VS Code extension's `channels.ts`) mirror this shape and a drift test
+ * there checks the two stay assignable.
+ */
+export interface PeersResponse {
+  ok: boolean;
+  peers: SessionPeerInfo[];
+  /** The session's cached `armed` slot (informational). */
+  armed: boolean;
+}
+
+/** `POST /session/publish` outcome: the views delivered to, or a nack. */
+export interface PublishResult {
+  ok: boolean;
+  /** On success: the views the message was actually sent to. */
+  delivered?: SessionPeerInfo[];
+  /** The session's cached `armed` slot at send time (informational). */
+  armed?: boolean;
+  /** On a nack: why nothing was delivered. */
+  error?: string;
+}
+
 /** One cached shared-state slot. */
 interface Slot {
   value: unknown;

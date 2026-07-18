@@ -22,19 +22,11 @@
  * everything here is defensive and small.
  */
 
+import type { AiuiToolsRegistry } from "@habemus-papadum/aiui-viz";
 import { armJump, disarmJump } from "../page/jump-mode";
 
-interface ToolsRegistry {
-  list(): Array<{
-    ns: string;
-    tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
-  }>;
-  call(ns: string, name: string, args?: unknown): Promise<unknown>;
-  onChange(handler: () => void): () => void;
-}
-
-const registry = (): ToolsRegistry | undefined =>
-  (window as unknown as { __AIUI__?: { tools?: ToolsRegistry } }).__AIUI__?.tools;
+const registry = (): AiuiToolsRegistry | undefined =>
+  (window as unknown as { __AIUI__?: { tools?: AiuiToolsRegistry } }).__AIUI__?.tools;
 
 if ((window as unknown as { __AIUI__?: unknown }).__AIUI__ !== undefined) {
   window.postMessage({ aiuiInstrumented: true }, "*");

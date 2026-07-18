@@ -79,6 +79,8 @@ export {
 } from "./send-ws";
 export { type ChannelServerOptions, createChannelServer } from "./server";
 export {
+  type PeersResponse,
+  type PublishResult,
   type SessionClientMessage,
   SessionHub,
   type SessionHubOptions,

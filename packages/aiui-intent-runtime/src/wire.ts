@@ -20,6 +20,7 @@ import type {
   Engine,
   IntentEvent,
   IntentPipelineConfig,
+  LinterVendor,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import { REALTIME_PCM_MIME } from "./audio";
 import type { IntentErrorInput } from "./errors";
@@ -82,7 +83,7 @@ export interface Wire {
    * the one control is the prompt linter: start / stop / swap it live. A no-op
    * when no thread is open (the change rides the next hello instead).
    */
-  sendControl(control: "linter", value: string): Promise<void>;
+  sendControl(control: "linter", value: LinterVendor): Promise<void>;
   /** The send path: flush, consume the selection, `fin`, surface the ack. */
   finalizeThread(): Promise<void>;
   /** Close the socket without `fin` (a cancel) and reset the wire state. */
@@ -255,7 +256,7 @@ export function createWire(deps: WireDeps): Wire {
     }
   }
 
-  async function sendControl(control: "linter", value: string): Promise<void> {
+  async function sendControl(control: "linter", value: LinterVendor): Promise<void> {
     const thread = await getThread();
     if (!thread) {
       return; // no open thread — the change rides the next hello instead

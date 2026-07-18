@@ -388,6 +388,9 @@ importers:
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
+      '@habemus-papadum/aiui-vscode':
+        specifier: workspace:^
+        version: link:../aiui-vscode
       '@types/chrome':
         specifier: ^0.0.287
         version: 0.0.287
@@ -657,6 +660,9 @@ importers:
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
         version: link:../aiui-build-config
+      '@habemus-papadum/aiui-claude-channel':
+        specifier: workspace:^
+        version: link:../aiui-claude-channel
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.0

@@ -252,6 +252,31 @@ describe("CdpBus", () => {
     ]);
   });
 
+  it("replays cached page facts to a LATE subscriber (the unlit-aiui-pill lesson)", async () => {
+    // The twin of the extension bus's late-subscriber replay: the page says
+    // hello and reports its selection BEFORE the client registers its handler
+    // (the panel boots several awaits after the bus attached the pages). The
+    // cached facts must replay — and never synchronously inside the register.
+    const browser = scriptedBrowser();
+    const bus = await connectCdpBus({
+      cdpUrl: BRIDGE,
+      channelOrigin: ORIGIN,
+      socketFactory: browser.factory,
+    });
+    browser.attach("S1", "T1", "https://example.test/");
+    await settle();
+    browser.report("S1", { ...hello("https://example.test/"), aiui: true });
+    browser.report("S1", { kind: "selection", present: true });
+    await settle();
+
+    const events: PageEvent[] = [];
+    bus.transport.onPageEvent((event) => events.push(event));
+    expect(events).toEqual([]); // async replay: never inside the registration call
+    await settle();
+    expect(events).toContainEqual({ kind: "aiuiSupport", tab: 1, supported: true });
+    expect(events).toContainEqual({ kind: "selectionPresent", tab: 1, present: true });
+  });
+
   it("follows the tab you are LOOKING at, not the one with keyboard focus", async () => {
     const browser = scriptedBrowser();
     const bus = await connectCdpBus({

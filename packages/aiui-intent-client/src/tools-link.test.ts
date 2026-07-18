@@ -5,7 +5,9 @@
  * tab change. Driven through the FakeBus (page events in) and a fake socket
  * factory (the channel side observed).
  */
-import { describe, expect, it } from "vitest";
+import type { PageToolDescriptor } from "@habemus-papadum/aiui-claude-channel";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { PageToolDescriptorReport } from "./cdp/page-script";
 import { fakeBus } from "./fake-bus";
 import { createToolsLink, type ToolsSocket } from "./tools-link";
 
@@ -139,5 +141,14 @@ describe("createToolsLink", () => {
     expect(all[0].closed).toBe(true);
     bus.firePageEvent({ kind: "pageTools", tab: 9, registrations: REGS });
     expect(all).toHaveLength(1); // deaf after dispose
+  });
+
+  // The page→panel tool descriptor (page-script's PageToolDescriptorReport, the
+  // rows this link relays) IS the channel's PageToolDescriptor — the wire the
+  // link speaks to the channel devDep. Pinned at typecheck so a field drift on
+  // either side breaks the build instead of the socket. See docs/proposals/
+  // code-review-pass2-s1-mirrors.md.
+  it("the relayed tool descriptor is the channel's PageToolDescriptor (drift guard)", () => {
+    expectTypeOf<PageToolDescriptorReport>().toEqualTypeOf<PageToolDescriptor>();
   });
 });

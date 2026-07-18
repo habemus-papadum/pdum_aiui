@@ -3,6 +3,10 @@
   "compilerOptions": {
     "outDir": "dist",
     "declarationDir": "dist",
+    // jsx is never emitted here (node package) — set only so tsc can follow
+    // source-first imports through intent-client's sidecar into aiui-viz's .tsx.
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web",
     "types": ["node"]
   },
   "include": ["src"],

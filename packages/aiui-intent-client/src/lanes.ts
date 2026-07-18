@@ -38,6 +38,7 @@ import {
   expandTier,
   type IntentEvent,
   type IntentPipelineConfig,
+  type LinterVendor,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { ClaimLaneOptions } from "./claims";
@@ -608,7 +609,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
           }
           last = value;
           if (engine.threadOpen) {
-            void wire.sendControl("linter", value);
+            // The linter select only ever holds a LinterVendor; `value` is the
+            // effect's `string` view of it (config stores it widened).
+            void wire.sendControl("linter", value as LinterVendor);
           }
         },
       );

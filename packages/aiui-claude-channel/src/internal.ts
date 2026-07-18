@@ -7,7 +7,12 @@
  */
 
 export { agentsByPid, type ClaudeAgent, listClaudeAgents } from "./agents";
+// intent-v1 wire-contract symbols the intent-runtime's cross-package drift
+// guards (protocol.test.ts) assert against — not on the root barrel, so the
+// guards import them from this no-semver seam instead.
+export type { LoweredPromptMessage, SpeechMessage } from "./intent-v1";
 export { type ListOptions, listMcpServers } from "./list";
+export { REALTIME_VOICE_RATE } from "./pcm";
 export type { RegistryEntry, RunningServer } from "./registry";
 export { selectMcpServer } from "./select";
 export { projectCacheDir } from "./trace";

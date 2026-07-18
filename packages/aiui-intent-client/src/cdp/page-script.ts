@@ -8,8 +8,9 @@
  *    (url/visibility/aiui-instrumentation), focus changes (the ACTIVE-TAB
  *    signal — callback-based, no polling), selection presence, interaction
  *    pings (the smart-video gate), SPA navigations, captured keys;
- *  - serves the page capabilities under `window.__aiuiIntentPage.handle`:
- *    ring · flash · keylayer · selection · viewport · pencil · jump · locate.
+ *  - serves the page capabilities under `window.__aiuiIntentPage.handle` — the
+ *    `PageCapability` set (transport.ts, the single inventory), plus `ring`,
+ *    which rides beside the union as the broadcast-not-request path.
  *
  * **The page fetches nothing.** Not the bootstrap (it arrives as a string over
  * CDP), and not the heavy page bundle (the bus evaluates it into the page —
@@ -26,6 +27,25 @@ import {
   type PageTabRecord,
   pageTabRecord,
 } from "@habemus-papadum/aiui-intent-runtime/instrumentation";
+import type { AiuiToolsRegistry } from "@habemus-papadum/aiui-viz";
+import { createDriverWatch } from "../page/driver-watch";
+import type { PencilHandle } from "../page/pencil-mount";
+import {
+  createFlash,
+  createPencilOps,
+  createRegionSurface,
+  createRingSurface,
+} from "../page/surfaces";
+import { DRIVER_TIMEOUT_MS } from "../transport";
+
+/** One page tool as it travels page→panel: the MCP-shaped subset of viz's
+ * `AiuiPageTool` (no `run`). Structurally the channel's `PageToolDescriptor`,
+ * which the tools-link test pins. */
+export type PageToolDescriptorReport = {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+};
 
 /** What one instrumented document reports — the page→panel contract, shared by
  * BOTH hosts (the extension's content script speaks it too; see ext/protocol). */
@@ -60,22 +80,33 @@ export type PageReport =
   /** The page's `__AIUI__.tools` registry — full current set, descriptors only. */
   | {
       kind: "tools";
-      registrations: Array<{
-        ns: string;
-        tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
-      }>;
+      registrations: Array<{ ns: string; tools: PageToolDescriptorReport[] }>;
     }
   /** A `toolsCall` capability's answer, correlated by callId. */
   | { kind: "toolsResult"; callId: string; ok: boolean; value?: unknown; error?: string };
 
 const BINDING = "__aiuiIntentReport";
 
-/* The function below runs INSIDE arbitrary pages. Keep it dependency-free,
- * idempotent, and defensive — it must never break a host page. `tabRecord` is
- * the runtime's SELF-CONTAINED `pageTabRecord`, stringified in by
- * `buildPageScript` — the one shared builder for the canonical tab record,
- * not a second implementation. */
-function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefined): void {
+/** The self-contained pieces `buildPageScript` stringifies into the bootstrap:
+ * the shared page surfaces (surfaces.ts), the driver watchdog (driver-watch.ts),
+ * and the runtime's canonical tab-record builder (`pageTabRecord`). None of
+ * them is a page-script-only reimplementation — they are the same code the MV3
+ * content script imports, folded in as arguments so the page still fetches
+ * nothing. Each source also joins the version fingerprint. */
+interface PageBootstrapDeps {
+  makeRing: typeof createRingSurface;
+  makeFlash: typeof createFlash;
+  makeRegion: typeof createRegionSurface;
+  makePencilOps: typeof createPencilOps;
+  makeDriverWatch: typeof createDriverWatch;
+  driverTimeoutMs: number;
+  tabRecord?: () => PageTabRecord | undefined;
+}
+
+/* The function below runs INSIDE arbitrary pages. Keep it dependency-free
+ * (its only non-global references arrive through `deps`), idempotent, and
+ * defensive — it must never break a host page. */
+function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
   const w = window as unknown as Record<string, unknown>;
   const installed = w.__aiuiIntentPage as { v?: string; adopt?: () => void } | undefined;
   if (installed?.v === version && installed.adopt !== undefined) {
@@ -93,6 +124,8 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
   // something else under that name: install over it. `adopt` would keep the
   // stale code running — which, in dev, means testing the bootstrap you just
   // replaced. A few doubled reports beat that; the page's next load is clean.
+  const { makeRing, makeFlash, makeRegion, makePencilOps, makeDriverWatch, driverTimeoutMs } = deps;
+  const tabRecord = deps.tabRecord;
   const report = (payload: unknown): void => {
     try {
       (w.__aiuiIntentReport as (s: string) => void)?.(JSON.stringify(payload));
@@ -101,66 +134,11 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
     }
   };
 
-  // ── the ring: the page's ONLY evidence of the client's state ──────────────
-  // Four states: off · steady (armed) · breathing (turn) · HOLLOW — armed, but
-  // this tab's pixels need a grant. Hollow renders outline-only with the
-  // activation hint beside it; the hint TEXT is whatever the host handed down
-  // (the live shortcut binding) — this page never knows what the key is.
-  let ring: HTMLElement | undefined;
-  let ringHint: HTMLElement | undefined;
-  const assertRing = (on: boolean, turnTone: boolean, hollow: boolean, hint: string): void => {
-    if (!on) {
-      ring?.remove();
-      ringHint?.remove();
-      ring = undefined;
-      ringHint = undefined;
-      return;
-    }
-    if (ring === undefined || !ring.isConnected) {
-      ring = document.createElement("div");
-      ring.id = "__aiui-intent-ring";
-      ring.style.cssText =
-        "position:fixed;top:8px;right:8px;width:12px;height:12px;border-radius:50%;" +
-        "box-sizing:border-box;z-index:2147483646;pointer-events:none;transition:background 200ms;";
-      const style = document.createElement("style");
-      style.textContent =
-        "@keyframes __aiui-breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}";
-      ring.appendChild(style);
-      (document.body ?? document.documentElement).appendChild(ring);
-    }
-    const color = turnTone ? "#dc2626" : "#7c3aed";
-    ring.style.background = hollow ? "transparent" : color;
-    ring.style.border = hollow ? `2px solid ${color}` : "0";
-    ring.style.animation = turnTone ? "__aiui-breathe 1.6s ease-in-out infinite" : "none";
-    if (hollow && hint !== "") {
-      if (ringHint === undefined || !ringHint.isConnected) {
-        ringHint = document.createElement("div");
-        ringHint.id = "__aiui-intent-ring-hint";
-        ringHint.style.cssText =
-          "position:fixed;top:7px;right:24px;z-index:2147483646;pointer-events:none;" +
-          "font:11px/14px ui-monospace,SFMono-Regular,Menlo,monospace;padding:0 5px;" +
-          "border-radius:7px;background:rgba(0,0,0,.55);color:#fff;";
-        (document.body ?? document.documentElement).appendChild(ringHint);
-      }
-      ringHint.textContent = hint;
-    } else {
-      ringHint?.remove();
-      ringHint = undefined;
-    }
-  };
-
-  // ── flash: shot confirmation / miss feedback ───────────────────────────────
-  const flash = (kind: string): void => {
-    const wash = document.createElement("div");
-    wash.style.cssText =
-      "position:fixed;inset:0;z-index:2147483647;pointer-events:none;transition:opacity 220ms;" +
-      `background:${kind === "miss" ? "rgba(220,38,38,.25)" : "rgba(147,197,253,.35)"};`;
-    (document.body ?? document.documentElement).appendChild(wash);
-    requestAnimationFrame(() => {
-      wash.style.opacity = "0";
-      setTimeout(() => wash.remove(), 260);
-    });
-  };
+  // ── the ring + the flash wash: the page's evidence of the client's state ──
+  // Both are the shared surfaces (surfaces.ts), stringified in through `deps`
+  // — one implementation with the MV3 content script (same ids, colors, CSS).
+  const { assert: assertRing } = makeRing();
+  const flash = makeFlash();
 
   // ── keylayer: the in-turn wholesale key claim, forwarded to the panel ─────
   let keyHandlers: { down: (e: KeyboardEvent) => void; up: (e: KeyboardEvent) => void } | undefined;
@@ -200,77 +178,13 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
   // below just use the global it defines.
 
   // ── pencil: the same evaluated bundle, a second surface (local + remote) ────
-  // One `mountPencil()` handle, engaged for the turn; the panel drives it with
-  // `{op, …}` payloads (engage/fade/clear/undo and the forwarded iPad strokes).
-  type PencilHandle = {
-    engage: (fadeSec: number) => void;
-    disengage: () => void;
-    setFade: (fadeSec: number) => void;
-    clear: () => void;
-    undo: () => void;
-    size: () => { width: number; height: number };
-    remoteBegin: (id: string, init: unknown) => void;
-    remotePoint: (id: string, point: unknown) => void;
-    remoteEnd: (id: string, point?: unknown) => void;
-    remoteCancel: (id: string) => void;
-  };
-  let pencilHandle: PencilHandle | undefined;
-  const handlePencil = (payload: Record<string, unknown>): unknown => {
-    const mount = (w.__aiuiIntentPage as { mountPencil?: () => PencilHandle } | undefined)
-      ?.mountPencil;
-    const op = String(payload.op ?? "");
-    if (op === "size") {
-      // The remote plane is the FRAME's box (innerWidth×innerHeight — a tab
-      // capture/screencast frames the scrollbar too), a fact of the window,
-      // not of the mount. Answering only from a mounted handle left the
-      // panel's cache on a stale value or its 1280×720 default whenever size
-      // was asked before the first engage (found live, 2026-07-17: a ~1%
-      // rightward-growing skew on every remote stroke).
-      return { width: window.innerWidth, height: window.innerHeight };
-    }
-    if (op === "engage") {
-      if (mount === undefined) {
-        return { error: "the pencil surface was not injected" };
-      }
-      pencilHandle ??= mount();
-      pencilHandle.engage(Number(payload.fadeSec ?? 0));
-      return { ok: true };
-    }
-    if (pencilHandle === undefined) {
-      return { ok: true }; // nothing mounted yet — a stray op after disengage
-    }
-    switch (op) {
-      case "disengage":
-        // Keep the handle (and its strokes) — disengage only stops owning the
-        // pointer. Re-engage reuses the same surface, so markup survives
-        // across turns.
-        pencilHandle.disengage();
-        return { ok: true };
-      case "fade":
-        pencilHandle.setFade(Number(payload.fadeSec ?? 0));
-        return { ok: true };
-      case "clear":
-        pencilHandle.clear();
-        return { ok: true };
-      case "undo":
-        pencilHandle.undo();
-        return { ok: true };
-      case "rbegin":
-        pencilHandle.remoteBegin(String(payload.id), payload.init);
-        return { ok: true };
-      case "rpoint":
-        pencilHandle.remotePoint(String(payload.id), payload.point);
-        return { ok: true };
-      case "rend":
-        pencilHandle.remoteEnd(String(payload.id), payload.point);
-        return { ok: true };
-      case "rcancel":
-        pencilHandle.remoteCancel(String(payload.id));
-        return { ok: true };
-      default:
-        return { error: `unknown pencil op: ${op}` };
-    }
-  };
+  // The `{op, …}` dispatcher is shared with the MV3 content script (surfaces.ts).
+  // Here the mount arrives on the evaluated page bundle (`ensureBundle`) and is
+  // absent until then — so `getMount` reads it off the global each engage, and
+  // the factory answers when it is missing.
+  const pencilOps = makePencilOps(
+    () => (w.__aiuiIntentPage as { mountPencil?: () => PencilHandle } | undefined)?.mountPencil,
+  );
 
   // ── world facts, callback-based ────────────────────────────────────────────
   const facts = (): { visible: boolean; focused: boolean } => ({
@@ -297,16 +211,8 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
   // The registry installs whenever the app's agentToolkit first runs — which
   // may be AFTER this bootstrap. A light poll subscribes once it appears,
   // then stops; onChange carries every later update.
-  type ToolsRegistry = {
-    list(): Array<{
-      ns: string;
-      tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
-    }>;
-    call(ns: string, name: string, args?: unknown): Promise<unknown>;
-    onChange(handler: () => void): () => void;
-  };
-  const toolsRegistry = (): ToolsRegistry | undefined =>
-    (w.__AIUI__ as { tools?: ToolsRegistry } | undefined)?.tools;
+  const toolsRegistry = (): AiuiToolsRegistry | undefined =>
+    (w.__AIUI__ as { tools?: AiuiToolsRegistry } | undefined)?.tools;
   const reportTools = (): void => {
     const registry = toolsRegistry();
     if (registry?.list === undefined) {
@@ -352,131 +258,40 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
   }, 2000);
 
   // ── the region rubber band: a ONE-SHOT drag overlay (the `a` area shot) ───
-  let regionOverlay: HTMLElement | undefined;
-  const disarmRegion = (): void => {
-    regionOverlay?.remove();
-    regionOverlay = undefined;
-  };
-  const armRegion = (): void => {
-    disarmRegion(); // re-arm replaces
-    const overlay = document.createElement("div");
-    overlay.id = "__aiui-intent-region";
-    overlay.style.cssText =
-      "position:fixed;inset:0;z-index:2147483646;cursor:crosshair;background:rgba(124,58,237,.06);";
-    const band = document.createElement("div");
-    band.style.cssText =
-      "position:fixed;border:2px solid #7c3aed;background:rgba(124,58,237,.12);display:none;" +
-      "pointer-events:none;";
-    overlay.appendChild(band);
-    let start: { x: number; y: number } | undefined;
-    const rectNow = (e: PointerEvent) => {
-      const s0 = start ?? { x: e.clientX, y: e.clientY };
-      return {
-        x: Math.min(s0.x, e.clientX),
-        y: Math.min(s0.y, e.clientY),
-        w: Math.abs(e.clientX - s0.x),
-        h: Math.abs(e.clientY - s0.y),
-      };
-    };
-    overlay.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      start = { x: e.clientX, y: e.clientY };
-      overlay.setPointerCapture(e.pointerId);
-    });
-    overlay.addEventListener("pointermove", (e) => {
-      if (start === undefined) {
-        return;
-      }
-      const r = rectNow(e);
-      band.style.display = "block";
-      band.style.left = `${r.x}px`;
-      band.style.top = `${r.y}px`;
-      band.style.width = `${r.w}px`;
-      band.style.height = `${r.h}px`;
-    });
-    overlay.addEventListener("pointerup", (e) => {
-      const r = start !== undefined ? rectNow(e) : undefined;
-      disarmRegion();
-      if (r === undefined || r.w < 4 || r.h < 4) {
-        return; // a click, not a drag — cancelled
-      }
-      // Located components when this page is aiui-instrumented and the
-      // evaluated bundle is present (ensureBundle delivered it).
-      let components: unknown[] | undefined;
-      try {
-        const locate = (w.__aiuiIntentPage as { locateComponents?: (r: unknown) => unknown[] })
-          ?.locateComponents;
-        components = locate?.(r);
-      } catch {
-        components = undefined;
-      }
-      report({
-        kind: "region",
-        rect: r,
-        viewport: { w: window.innerWidth, h: window.innerHeight },
-        takenAt: Date.now(),
-        ...(components !== undefined && components.length > 0 ? { components } : {}),
-      });
-    });
-    // No private Escape listener (owner, 2026-07-16): area is a mode-engine
-    // TOGGLE now, and Escape unwinds it through the panel's escOrder — the in-turn
-    // key layer forwards Escape to the panel, which flips `region` off, and the
-    // regionSurface claim lowers this overlay. One Escape source, no split-brain.
-    (document.body ?? document.documentElement).appendChild(overlay);
-    regionOverlay = overlay;
-  };
+  // Shared with the MV3 content script (surfaces.ts). `locate` reads the
+  // evaluated bundle's component locator off the global, when the page has it.
+  const { arm: armRegion, disarm: disarmRegion } = makeRegion({
+    report,
+    locate: (rect) =>
+      (
+        w.__aiuiIntentPage as { locateComponents?: (r: unknown) => unknown[] } | undefined
+      )?.locateComponents?.(rect),
+  });
 
   // ── driver liveness: self-cleanup when the panel dies mid-assertion ───────
-  // INLINE TWIN of page/driver-watch.ts (this function may import nothing at
-  // runtime — keep the two aligned). Assertion-carrying requests note proof of
-  // life; the panel beats `heartbeat` with its per-boot session id. Silence
-  // past the timeout = the panel tab died mid-turn → HARD cleanup (the
-  // strokes belong to a dead session). A NEW session id = a reloaded panel →
-  // soft reset; strokes survive (the `adopt` rule — turn recovery must find
-  // its markup) and the new client re-asserts through the ordinary paths.
-  const DRIVER_TIMEOUT_MS = 2500; // transport.ts DRIVER_TIMEOUT_MS — aligned
-  const DRIVER_CHECK_MS = 833; // max(250, timeout/3) — driver-watch.ts, aligned
-  let driverSession: string | undefined;
-  let driverLast = 0;
-  let driverLastCheck = 0;
-  let driverTimer: number | undefined;
+  // The same watchdog the MV3 content script runs (page/driver-watch.ts),
+  // stringified in through `deps` with transport.ts's DRIVER_TIMEOUT_MS.
+  // Assertion-carrying requests note proof of life; the panel beats `heartbeat`
+  // with its per-boot session id. Silence past the timeout → HARD cleanup
+  // (strokes belong to a dead session); a NEW session id → soft reset (strokes
+  // survive — the `adopt` rule — and the new client re-asserts through the
+  // ordinary paths). An empty-string session counts as a session, so an
+  // unnamed first beat still seeds the change detector.
   const dropAssertions = (): void => {
     setKeyCapture(false);
     assertRing(false, false, false, "");
     disarmRegion();
     (w.__aiuiIntentPage as { disarmJump?: () => void } | undefined)?.disarmJump?.();
-    handlePencil({ op: "disengage" });
+    pencilOps({ op: "disengage" });
   };
-  const driverAlive = (session?: string): void => {
-    if (session !== undefined && session !== "") {
-      if (driverSession !== undefined && driverSession !== session) {
-        dropAssertions();
-      }
-      driverSession = session;
-    }
-    driverLast = Date.now();
-    if (driverTimer === undefined) {
-      driverLastCheck = Date.now();
-      driverTimer = window.setInterval(() => {
-        const now = Date.now();
-        const stalled = now - driverLastCheck > DRIVER_CHECK_MS * 2;
-        driverLastCheck = now;
-        if (stalled) {
-          // The page stalled (GC, debugger, heavy frame): beats froze WITH
-          // this check — give the queued ones a round before convicting
-          // (driver-watch.ts, aligned; matters at the tightened timeout).
-          return;
-        }
-        if (now - driverLast > DRIVER_TIMEOUT_MS) {
-          window.clearInterval(driverTimer);
-          driverTimer = undefined;
-          driverSession = undefined;
-          handlePencil({ op: "clear" });
-          dropAssertions();
-        }
-      }, DRIVER_CHECK_MS);
-    }
-  };
+  const driverWatch = makeDriverWatch({
+    timeoutMs: driverTimeoutMs,
+    onGone: () => {
+      pencilOps({ op: "clear" });
+      dropAssertions();
+    },
+    onChanged: dropAssertions,
+  });
 
   // ── the capability surface (the relay's command set, CDP-delivered) ───────
   // MERGED onto whatever already lives at the global, never assigned over it:
@@ -503,11 +318,11 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
     handle: (capability: string, payload: Record<string, unknown> | undefined): unknown => {
       switch (capability) {
         case "heartbeat": {
-          driverAlive(typeof payload?.session === "string" ? payload.session : "");
+          driverWatch.alive(typeof payload?.session === "string" ? payload.session : "");
           return { ok: true };
         }
         case "ring": {
-          driverAlive();
+          driverWatch.alive();
           assertRing(
             payload?.on === true,
             payload?.turnTone === true,
@@ -521,7 +336,7 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
           return { ok: true };
         }
         case "keylayer": {
-          driverAlive();
+          driverWatch.alive();
           setKeyCapture(payload?.capture === true);
           return { ok: true };
         }
@@ -536,11 +351,11 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
           return { ok: true }; // sampling rides CDP screenshots panel-side
         }
         case "pencil": {
-          driverAlive();
-          return handlePencil((payload ?? {}) as Record<string, unknown>);
+          driverWatch.alive();
+          return pencilOps((payload ?? {}) as Record<string, unknown>);
         }
         case "region": {
-          driverAlive();
+          driverWatch.alive();
           if ((payload as { arm?: boolean } | undefined)?.arm === true) {
             armRegion();
           } else {
@@ -659,14 +474,31 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
   sayHello();
 }
 
-/** The injectable source, with the channel origin baked in. The runtime's
- * self-contained `pageTabRecord` rides in as the second argument (stringified
- * — the page fetches nothing), and joins the fingerprint so editing the
- * builder busts the version like editing the bootstrap does. */
+/** The injectable source. Every self-contained dependency the bootstrap needs
+ * rides in as `deps`, stringified (the page fetches nothing): the shared page
+ * surfaces, the driver watchdog, and the runtime's `pageTabRecord`. Each source
+ * joins the fingerprint, so editing any of them busts the version exactly like
+ * editing the bootstrap does. */
 export function buildPageScript(): string {
-  const source = pageBootstrap.toString();
-  const tabSource = pageTabRecord.toString();
-  return `(${source})(${JSON.stringify(fingerprint(source + tabSource))}, (${tabSource}));`;
+  const bootstrap = pageBootstrap.toString();
+  const ring = createRingSurface.toString();
+  const flash = createFlash.toString();
+  const region = createRegionSurface.toString();
+  const pencilOps = createPencilOps.toString();
+  const driverWatch = createDriverWatch.toString();
+  const tabRecord = pageTabRecord.toString();
+  const version = fingerprint(
+    bootstrap + ring + flash + region + pencilOps + driverWatch + tabRecord,
+  );
+  return `(${bootstrap})(${JSON.stringify(version)}, {
+    makeRing: (${ring}),
+    makeFlash: (${flash}),
+    makeRegion: (${region}),
+    makePencilOps: (${pencilOps}),
+    makeDriverWatch: (${driverWatch}),
+    driverTimeoutMs: ${DRIVER_TIMEOUT_MS},
+    tabRecord: (${tabRecord}),
+  });`;
 }
 
 /** A cheap content hash: the bootstrap's identity, so a document carrying an

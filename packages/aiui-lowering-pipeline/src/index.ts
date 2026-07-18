@@ -14,8 +14,8 @@
  * @packageDocumentation
  */
 
-export type { IntentPipelineConfig } from "./config";
-export { DEFAULT_INTENT_CONFIG, expandTier } from "./config";
+export type { IntentPipelineConfig, LinterVendor } from "./config";
+export { DEFAULT_INTENT_CONFIG, expandTier, LINTER_VENDORS } from "./config";
 export type { EngineListener } from "./engine";
 export { composeIntent, Engine } from "./engine";
 export type { DiffRun } from "./patch";
@@ -34,7 +34,9 @@ export type {
   PromptSpan,
   Rect,
   ShotShare,
+  TabInfo,
   TabRecord,
   TranscriptWord,
   VideoCaptureMode,
 } from "./types";
+export { LINTER_TRANSCRIPT_WAIT_MS } from "./types";

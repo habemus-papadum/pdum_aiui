@@ -8,6 +8,8 @@
  * shape changes. Everything degrades to a no-op without a global scope.
  */
 
+import type { TabInfo, TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
+
 /** The shape of `window.__AIUI__`. */
 export interface PageInstrumentation {
   /** Bump when this shape changes incompatibly. */
@@ -23,22 +25,13 @@ declare global {
 }
 
 /**
- * The wire shape of a tab record — a structural mirror of the lowering
- * pipeline's `TabRecord` (kept import-free so {@link pageTabRecord} stays
- * standalone; the types are asserted compatible where the client hands the
- * record to the engine).
+ * The wire shape of a tab record — an alias of the lowering pipeline's
+ * {@link TabRecord}. The type-only import erases at compile time, so it does
+ * NOT endanger the stringification of {@link pageTabRecord} below: only that
+ * FUNCTION carries the self-contained-by-contract constraint, and its body
+ * references no types.
  */
-export interface PageTabRecord {
-  url: string;
-  title?: string;
-  aiui?: boolean;
-  sourceRoot?: string;
-  chromeTabId?: number;
-  windowId?: number;
-  tabIndex?: number;
-  targetId?: string;
-  driverTab?: number;
-}
+export type PageTabRecord = TabRecord;
 
 /**
  * The canonical tab record for the CURRENT page — the ONE builder both intent
@@ -92,20 +85,19 @@ export function getInstrumentation(): PageInstrumentation | undefined {
 }
 
 /**
- * The browser tab this page lives in — local mirror of the channel package's
- * `TabInfo` (this package stays dependency-free; protocol.test.ts cross-checks
- * the shape against the channel's decoder).
+ * The browser tab this page lives in — the shared {@link TabInfo} from the
+ * lowering pipeline (a {@link TabRecord} projection), which is also the
+ * channel's hello-meta `tab` shape. Re-exported so this module's consumers keep
+ * one import site; the type-only import erases at compile time.
  */
-export interface TabInfo {
-  url?: string;
-  title?: string;
-  chromeTabId?: number;
-  windowId?: number;
-  tabIndex?: number;
-  targetId?: string;
-}
+export type { TabInfo };
 
-/** The client context sent on a connection's hello (mirror of `HelloMeta`). */
+/**
+ * The client context sent on a connection's hello — a mirror of the channel's
+ * `HelloMeta`. Kept in step by protocol.test.ts, which asserts every ClientMeta
+ * is assignable to HelloMeta and round-trips a collectClientMeta()-shaped value
+ * through the channel's frame decoder.
+ */
 export interface ClientMeta {
   tab?: TabInfo;
   source?: { root?: string };

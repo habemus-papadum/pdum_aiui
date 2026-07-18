@@ -165,6 +165,25 @@ export interface IntentPipelineConfig {
 }
 
 /**
+ * The prompt-linter vendor vocabulary — `off`, or a live vendor. The single
+ * source the channel's control-chunk parse and the runtime's send site both
+ * derive from (the value rides the hello's `intent` meta as {@link
+ * IntentPipelineConfig.linter}).
+ */
+export type LinterVendor = NonNullable<IntentPipelineConfig["linter"]>;
+
+/**
+ * The linter vendors as a runtime list, tied to {@link LinterVendor} by
+ * `satisfies` so the channel's untrusted-wire revalidation and the union stay
+ * in lockstep — adding a vendor is a one-site change here.
+ */
+export const LINTER_VENDORS = [
+  "off",
+  "openai",
+  "gemini",
+] as const satisfies readonly LinterVendor[];
+
+/**
  * The shipped defaults. Transcription and correction default to the **real**
  * `openai` backends (channel-side), so an intent client launched through
  * `aiui claude` works against the channel out of the box. `mock` is never a
