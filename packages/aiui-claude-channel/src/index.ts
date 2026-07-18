@@ -227,16 +227,7 @@ export {
   traceBlobPath,
 } from "./trace";
 export { type TracingThreadContext, traceOf, withTracing } from "./tracing";
-export {
-  audioExtensionForMime,
-  type FetchLike,
-  mockTranscriber,
-  type OpenAiTranscriberOptions,
-  openaiTranscriber,
-  type TranscribeInput,
-  type Transcriber,
-  type TranscriptResult,
-} from "./transcribe";
+export { audioExtensionForMime, type FetchLike } from "./transcribe";
 export {
   type ChannelReload,
   type PromptHandler,

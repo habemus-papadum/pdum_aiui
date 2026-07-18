@@ -1,8 +1,8 @@
 /**
  * Cost accounting for the model calls the lowering pipeline makes.
  *
- * Every paid hop — REST transcription, the summarizer, TTS
- * acks, realtime STT/voice sessions — reports what it spent, the trace records
+ * Every paid hop — the summarizer, TTS
+ * acks, realtime STT/linter sessions — reports what it spent, the trace records
  * it per call, and the manifest keeps a running roll-up (see
  * {@link TraceHandle.addCost}). Claude Code session costs are deliberately out
  * of scope (that accounting belongs to the harness, reachable later via
@@ -122,10 +122,10 @@ export function usageFromChatCompletions(raw: unknown): Usage | undefined {
 }
 
 /**
- * `/v1/audio/transcriptions` usage → Usage. The REST STT reports
- * `{input_tokens, output_tokens, input_token_details: {text_tokens,
- * audio_tokens}}`; the realtime transcription session's `…completed` events
- * carry the same shape when they carry usage at all.
+ * Transcription usage → Usage: `{input_tokens, output_tokens,
+ * input_token_details: {text_tokens, audio_tokens}}` — the shape the realtime
+ * transcription session's `…completed` events carry when they carry usage at
+ * all (inherited from the retired REST endpoint, which reported the same).
  */
 export function usageFromTranscription(raw: unknown): Usage | undefined {
   const u = asRecord(raw);

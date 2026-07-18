@@ -274,7 +274,6 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     bargeIn: () => speech.bargeIn(),
     getThread: () => wire.getThread(),
     flushOutbox: (known) => wire.flushOutbox(known as never),
-    uploadAttachment: (id, mime, bytes) => wire.uploadAttachment(id, mime, bytes),
     uploadAudio: (segment, seq, bytes) => wire.uploadAudio(segment, seq, bytes),
   });
 

@@ -875,9 +875,17 @@ Comments:
 
 **Still open after this pass:** Part C smell selection (next agentic run); the docs/skills
 pass (`.md` vocabulary, README/guide updates, the session-browser skill's `__AIUI__` claims,
-channel README's removed `config` command example); the B10 intent-client `publish` wiring
-decision; the B5 REST-retirement flip; deleting the on-disk ghost dirs (then the biome.json
-ignore entry).
+channel README's removed `config` command example).
+
+**Follow-up commits closed the rest (2026-07-18):** B10's intent-client `publish` wiring
+shipped and was verified live against `pnpm test-app:channel`; the ghost dirs were deleted
+(with the biome.json ignore entry); and the B5 REST retirement was executed in full —
+transcription is STREAMING-ONLY now: the sparse-hello default tier flipped to `rapid`, a
+legacy `transcriber: "openai"` hello coerces to `openai-realtime` (recorded in `coerced`,
+like the voice veneer), `openaiTranscriber` and the channel's whole-segment transcription
+branch were deleted (an old client's `seg_N` blob is still acked and trace-saved, just never
+transcribed), and the client's talk lanes stream PCM for everything except the local `mock`
+tier (the whole-blob REST upload branch is gone).
 
 ---
 

@@ -1,48 +1,17 @@
 /**
- * The transcription seam — server-side, where the OpenAI key belongs.
+ * Audio-container plumbing shared by the transcription path.
  *
- * The retired workbench lab proved this seam page-side against a dev-server
- * `/api/transcribe` proxy; graduating the lowering into the
- * channel moves the real call here, keyed by the channel process's environment.
- * A segment's raw bytes + container MIME go in, a timed transcript comes out.
- *
- *  - {@link mockTranscriber} — no network, no key: returns a canned/derived
- *    string. The default for tests and the offline/degraded path.
- *  - {@link openaiTranscriber} — POSTs the segment to OpenAI's REST STT
- *    (`/v1/audio/transcriptions`). REST is segment-at-a-time (no partials), so
- *    the measured `latencyMs` is the design datum the audio-stack notes track.
- *
- * `fetch` is injected so tests exercise the real request shape without a
- * network (the reason that lab proxy existed is the same reason the key
- * lives here and not on the page).
+ * The per-segment REST transcriber that used to live here (POST to OpenAI's
+ * `/v1/audio/transcriptions`, one whole blob per segment) was retired
+ * 2026-07-18: transcription is streaming-only — PCM `audio` chunks into a
+ * per-thread realtime session (realtime.ts / elevenlabs-realtime.ts). Old
+ * hellos asking for the REST engine coerce onto the streaming one at resolve
+ * (intent-v1.ts). What survives is the container→extension mapping the trace
+ * store still names saved segment blobs with, and the shared FetchLike.
  */
-
-import { type CallCost, priceCall, usageFromTranscription } from "./cost";
 
 /** A cross-realm `fetch` — Node's global, or a test double with the same shape. */
 export type FetchLike = typeof fetch;
-
-/** One transcription result: the text plus how long and which model produced it. */
-export interface TranscriptResult {
-  text: string;
-  latencyMs: number;
-  model: string;
-  /** What the call cost (absent for the mock / when the API sent no usage). */
-  cost?: CallCost;
-}
-
-/** A pause-bounded audio segment to transcribe: its bytes and container MIME. */
-export interface TranscribeInput {
-  bytes: Uint8Array;
-  /** e.g. `audio/webm;codecs=opus`, `audio/wav` — drives the upload filename. */
-  mime: string;
-}
-
-/** Turns an audio segment into text. */
-export interface Transcriber {
-  readonly name: string;
-  transcribe(input: TranscribeInput): Promise<TranscriptResult>;
-}
 
 /**
  * OpenAI sniffs an uploaded audio file by its **filename extension**, not the
@@ -74,81 +43,4 @@ export function audioExtensionForMime(mime: string): string {
       // A sensible default: opus-in-webm is what MediaRecorder emits by default.
       return "webm";
   }
-}
-
-/** Local, deterministic transcriber: no key, no network. */
-export function mockTranscriber(
-  reply: (input: TranscribeInput) => string = () => "mock transcript",
-): Transcriber {
-  return {
-    name: "mock",
-    async transcribe(input) {
-      const started = performance.now();
-      return { text: reply(input), latencyMs: performance.now() - started, model: "mock" };
-    },
-  };
-}
-
-export interface OpenAiTranscriberOptions {
-  /** Resolves the model name at call time (e.g. `gpt-4o-mini-transcribe`). */
-  model: () => string;
-  /** The OpenAI API key. */
-  apiKey: string;
-  /** Injected fetch (defaults to the global). */
-  fetch?: FetchLike;
-  /** Override the endpoint (tests). */
-  baseUrl?: string;
-}
-
-/** Real transcription against OpenAI's REST STT endpoint. */
-export function openaiTranscriber(options: OpenAiTranscriberOptions): Transcriber {
-  const doFetch = options.fetch ?? fetch;
-  const baseUrl = options.baseUrl ?? "https://api.openai.com";
-  return {
-    name: "openai",
-    async transcribe({ bytes, mime }) {
-      const started = performance.now();
-      const model = options.model();
-      const form = new FormData();
-      // Copy the payload into a fresh, exactly-sized array. `bytes` is
-      // typically a Buffer *view* into the received ws frame (the payload
-      // sliced out of its envelope) — and Buffer.prototype.slice(), unlike
-      // Uint8Array's, returns another view, NOT a copy. The previous
-      // `bytes.slice().buffer` therefore handed the Blob the ENTIRE
-      // underlying frame allocation — envelope bytes, Buffer-pool neighbors
-      // and all — which OpenAI rejected as "corrupted or unsupported" audio
-      // while the very same segment saved to the trace store played fine.
-      // A Blob part built from a typed array respects the view's bounds.
-      const copy = new Uint8Array(bytes.byteLength);
-      copy.set(bytes);
-      // Filename extension must match the container (see audioExtensionForMime)
-      // or OpenAI 400s on the sniff.
-      const ext = audioExtensionForMime(mime);
-      const blob = new Blob([copy], { type: mime.split(";")[0] });
-      form.append("file", blob, `segment.${ext}`);
-      form.append("model", model);
-      const res = await doFetch(`${baseUrl}/v1/audio/transcriptions`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${options.apiKey}` },
-        body: form,
-      });
-      const payload = (await res.json()) as {
-        text?: string;
-        usage?: unknown;
-        error?: { message?: string };
-      };
-      if (!res.ok || payload.error) {
-        throw new Error(payload.error?.message ?? `transcription failed (${res.status})`);
-      }
-      // The endpoint reports multimodal usage (audio input tokens are the bulk
-      // of an STT call) — price it here, where the model name is authoritative.
-      const usage = usageFromTranscription(payload.usage);
-      return {
-        text: payload.text ?? "",
-        latencyMs: performance.now() - started,
-        model,
-        ...(usage ? { cost: priceCall("openai", model, usage) } : {}),
-      };
-    },
-  };
 }

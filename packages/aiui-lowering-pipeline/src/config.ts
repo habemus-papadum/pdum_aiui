@@ -53,14 +53,15 @@ export interface IntentPipelineConfig {
    * Which transcriber runs. `elevenlabs` (Scribe v2, the default when keyed)
    * and `openai-realtime` are the **streaming** engines: the client streams
    * PCM to a per-thread channel-held session and partial deltas fill the
-   * preview as you speak (archive/streaming-turns.md §3). `openai` is the
-   * channel-side REST transcriber (one round-trip per segment). `mock` is the
-   * explicit offline/developer choice: local, no key, no network, canned
-   * output. `openai-voice` is LEGACY — the retired flagship voice veneer; the
-   * channel coerces it to `openai-realtime` + an openai linter at hello time.
+   * preview as you speak (archive/streaming-turns.md §3). Transcription is
+   * STREAMING-ONLY. `mock` is the explicit offline/developer choice: local,
+   * no key, no network, canned output. Two LEGACY values are tolerated and
+   * coerced at hello time: `openai` (the retired per-segment REST engine →
+   * `openai-realtime`) and `openai-voice` (the retired flagship voice veneer
+   * → `openai-realtime` + an openai linter).
    */
   transcriber: "mock" | "openai" | "openai-realtime" | "openai-voice" | "elevenlabs";
-  /** OpenAI transcription model (when transcriber = openai). */
+  /** LEGACY: the retired REST engine's model; nothing reads it post-coercion. */
   model: string;
   /**
    * Domain vocabulary the transcriber is biased toward — product names,

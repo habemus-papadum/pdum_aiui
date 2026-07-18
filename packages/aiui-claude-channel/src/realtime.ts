@@ -1,13 +1,13 @@
 /**
- * The realtime transcription seam — server-side, the streaming sibling of
- * {@link ./transcribe}'s REST `openaiTranscriber`.
+ * The realtime transcription seam — server-side, and since the REST
+ * retirement (2026-07-18) the only OpenAI transcription path.
  *
- * Where the REST path is one blob in → one timed transcript out, this holds a
- * **per-thread WebSocket** to OpenAI's realtime transcription endpoint and
- * streams a segment's PCM *while you talk*: `input_audio_buffer.append` per
- * frame, `input_audio_buffer.commit` at talk-end, partial `…delta` events echoed
- * back as they arrive, a `…completed` event as the segment's final. REST stays
- * the default and the fallback; this is the L1 spike (archive/streaming-turns.md §3).
+ * Where the retired REST path was one blob in → one timed transcript out,
+ * this holds a **per-thread WebSocket** to OpenAI's realtime transcription
+ * endpoint and streams a segment's PCM *while you talk*:
+ * `input_audio_buffer.append` per frame, `input_audio_buffer.commit` at
+ * talk-end, partial `…delta` events echoed back as they arrive, a
+ * `…completed` event as the segment's final (archive/streaming-turns.md §3).
  *
  * ### Verified GA surface (developers.openai.com, re-verified live 2026-07-05)
  *

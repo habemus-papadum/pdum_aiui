@@ -9,10 +9,10 @@ import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format, type LoweredPromptMessage } from "./intent-v1";
 import { defaultFormats } from "./processors";
 import { TRANSCRIPTION_NOTE } from "./prompt-context";
+import type { Speaker } from "./speak";
 import type { Summarizer } from "./summarize";
 import { createTraceStore, listTraces } from "./trace";
 import { withTracing } from "./tracing";
-import { mockTranscriber, type Transcriber } from "./transcribe";
 
 const enc = new TextEncoder();
 
@@ -47,7 +47,8 @@ interface Driver {
 
 interface DriveOptions {
   hello?: HelloMeta;
-  transcriber?: Transcriber;
+  /** Test seam for the premium TTS-ack speaker (see speak.ts). */
+  speaker?: Speaker;
   /** Test seam for the post-send turn summarizer (see summarize.ts). */
   summarizer?: Summarizer;
   /** Force the env key (e.g. `""` to exercise the keyless/degraded seam). */
@@ -56,7 +57,10 @@ interface DriveOptions {
   cache?: string;
 }
 
-/** Drive an intent-v1 processor directly, as the channel connection would. */
+/** Drive an intent-v1 processor directly, as the channel connection would.
+ * The default hello declares the MOCK transcriber — the fixture streams carry
+ * client-side transcript-finals, exactly what the mock tier produces — so no
+ * channel-side transcription machinery wakes up under a fixture replay. */
 function drive(opts: DriveOptions = {}): Driver {
   const sent: SentPrompt[] = [];
   const pushed: unknown[] = [];
@@ -64,7 +68,7 @@ function drive(opts: DriveOptions = {}): Driver {
   let closed = false;
   const ctx: ThreadContext = {
     threadId: "t-1",
-    ...(opts.hello !== undefined ? { hello: opts.hello } : {}),
+    hello: opts.hello ?? { intent: { transcriber: "mock" } },
     sendPrompt: (text, meta) => {
       sent.push({ text, ...(meta !== undefined ? { meta } : {}) });
       timeline.push("sent");
@@ -79,7 +83,7 @@ function drive(opts: DriveOptions = {}): Driver {
   };
 
   let format: ChannelFormat = createIntentV1Format({
-    ...(opts.transcriber !== undefined ? { transcriber: opts.transcriber } : {}),
+    ...(opts.speaker !== undefined ? { speaker: opts.speaker } : {}),
     ...(opts.summarizer !== undefined ? { summarizer: opts.summarizer } : {}),
     ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
   });
@@ -200,37 +204,33 @@ describe("intent-v1 lowering — fixtures", () => {
 describe("intent-v1 cost accounting", () => {
   it("records a cost stage per priced call and rolls the manifest total up", async () => {
     const cache = mkdtempSync(join(tmpdir(), "aiui-cost-"));
+    // The premium TTS ack is the handy per-turn priced call (the streaming
+    // transcribers price per-segment through their sessions, which need a
+    // socket fixture; the speaker seam is a one-call injection).
     const d = drive({
       cache,
-      hello: openaiHello({ transcriber: "openai" }),
-      transcriber: {
+      hello: { intent: { transcriber: "mock", audioBack: "acks" } },
+      speaker: {
         name: "priced-mock",
-        transcribe: async () => ({
-          text: "make the plot wider",
-          latencyMs: 5,
-          model: "gpt-4o-mini-transcribe",
-          // The shape a real seam produces (see transcribe.ts + cost.ts).
+        speak: async () => ({
+          bytes: new Uint8Array([1, 2, 3]),
+          mime: "audio/mpeg",
+          // The shape a real seam produces (see speak.ts + cost.ts).
           cost: {
             usd: 0.000455,
             provider: "openai",
-            model: "gpt-4o-mini-transcribe",
-            usage: { input_tokens: 120, input_audio_tokens: 120, output_tokens: 19 },
+            model: "gpt-4o-mini-tts",
+            usage: { input_tokens: 120, output_tokens: 19 },
           },
         }),
       },
     });
-    await d.feedEvents([
-      { at: 1, type: "armed", on: true },
-      { at: 2, type: "thread-open", trigger: "talk" },
-      { at: 3, type: "talk-start", segment: 1 },
-      { at: 4, type: "talk-end", segment: 1, ms: 300 },
-    ]);
-    await d.feedAttachment("seg_1", "audio/webm;codecs=opus", new Uint8Array([1, 2, 3]));
+    await d.feedEvents(loadFixture("plain-dictation.json"));
     await d.fin();
 
     const [trace] = listTraces(cache);
     // The call got its 💰 stage…
-    const cost = trace.stages.find((st) => st.label === "cost: transcription seg_1");
+    const cost = trace.stages.find((st) => st.label === "cost: tts ack");
     expect(cost).toBeDefined();
     expect((cost?.data as { usd?: number }).usd).toBeCloseTo(0.000455, 6);
     // …and the manifest carries the roll-up (one priced call here).
@@ -375,59 +375,18 @@ describe("intent-v1 lowered-prompt push", () => {
   });
 });
 
-describe("intent-v1 server transcription", () => {
-  it("transcribes a seg_N attachment and pushes a lowered transcript-final", async () => {
-    const d = drive({
-      hello: openaiHello({ transcriber: "openai" }),
-      transcriber: mockTranscriber(() => "make the plot wider"),
-    });
-    await d.feedEvents([
-      { at: 1, type: "armed", on: true },
-      { at: 2, type: "thread-open", trigger: "talk" },
-      { at: 3, type: "talk-start", segment: 1 },
-      { at: 4, type: "talk-end", segment: 1, ms: 300 },
-    ]);
-    await d.feedAttachment("seg_1", "audio/webm;codecs=opus", new Uint8Array([1, 2, 3]));
-
-    expect(d.pushed).toHaveLength(1);
-    expect(d.pushed[0]).toMatchObject({
-      kind: "lowered",
-      threadId: "t-1",
-      events: [
-        { type: "transcript-final", segment: 1, text: "make the plot wider", model: "mock" },
-      ],
-    });
-    const pushedEvent = (d.pushed[0] as { events: IntentEvent[] }).events[0];
-    expect(typeof (pushedEvent as { latencyMs: number }).latencyMs).toBe("number");
-
-    // The server-produced transcript is merged into the stream and lowered.
-    await d.fin();
-    expect(d.sent[0].text).toBe(spoken("make the plot wider"));
-  });
-
-  it("skips transcription when the hello did not ask for the openai transcriber", async () => {
-    const d = drive({
-      hello: { intent: { transcriber: "mock" } },
-      transcriber: mockTranscriber(() => "should not run"),
-    });
-    await d.feedEvents([
-      { at: 1, type: "thread-open", trigger: "talk" },
-      { at: 2, type: "talk-start", segment: 1 },
-    ]);
-    await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1]));
-    expect(d.pushed).toEqual([]);
-  });
-
-  it("echoes a note (not silence) when openai transcription is asked for but the channel is keyless", async () => {
-    // openai requested, no override, forced-empty key → the transcriber seam is
-    // absent. The default is `openai`, so a keyless launch lands here.
+describe("intent-v1 transcription (streaming-only after the REST retirement)", () => {
+  it("coerces a legacy REST hello onto the streaming engine and degrades keylessly, loudly", async () => {
+    // transcriber "openai" (the retired per-segment REST engine) coerces to
+    // openai-realtime at resolve; keyless with no socket factory, the talk-end
+    // commit has no session — the segment resolves to an empty final plus a
+    // note naming the cause, never silence.
     const d = drive({ hello: openaiHello({ transcriber: "openai" }), apiKey: "" });
     await d.feedEvents([
       { at: 1, type: "thread-open", trigger: "talk" },
       { at: 2, type: "talk-start", segment: 1 },
       { at: 3, type: "talk-end", segment: 1, ms: 200 },
     ]);
-    await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1, 2, 3]));
 
     expect(d.pushed).toHaveLength(2);
     const events = (d.pushed[0] as { events: IntentEvent[] }).events;
@@ -446,36 +405,22 @@ describe("intent-v1 server transcription", () => {
     });
   });
 
-  it("echoes a note when server-side transcription throws (e.g. an invalid key)", async () => {
-    const throwing: Transcriber = {
-      name: "throwing",
-      async transcribe() {
-        throw new Error("transcription failed (401)");
-      },
-    };
-    const d = drive({ hello: openaiHello({ transcriber: "openai" }), transcriber: throwing });
+  it("accepts an old client's whole-segment attachment: blob saved, no transcript produced", async () => {
+    // The REST wire shape (one whole seg_N blob) is tolerated — the frame is
+    // acked and the blob lands in the trace for the debugger — but nothing
+    // transcribes it: transcription is streaming-only.
+    const cache = mkdtempSync(join(tmpdir(), "aiui-seg-"));
+    const d = drive({ cache });
     await d.feedEvents([
       { at: 1, type: "thread-open", trigger: "talk" },
       { at: 2, type: "talk-start", segment: 1 },
     ]);
-    // The throw is caught inside the processor — the frame is not rejected.
-    await d.feedAttachment("seg_1", "audio/webm", new Uint8Array([1, 2, 3]));
+    await d.feedAttachment("seg_1", "audio/webm;codecs=opus", new Uint8Array([1, 2, 3]));
+    expect(d.pushed).toEqual([]);
 
-    expect(d.pushed).toHaveLength(2);
-    const events = (d.pushed[0] as { events: IntentEvent[] }).events;
-    expect(events.map((e) => e.type)).toEqual(["transcript-final", "note"]);
-    expect((events[1] as Extract<IntentEvent, { type: "note" }>).text).toMatch(
-      /transcription failed.*401/,
-    );
-    // The stale/invalid-key scenario: the error push names the failure AND
-    // points at the fix (the key hint) — the toast the user actually sees.
-    expect(d.pushed[1]).toMatchObject({
-      kind: "error",
-      threadId: "t-1",
-      source: "transcription",
-      message: expect.stringMatching(/transcription failed.*401/),
-      detail: expect.stringMatching(/OPENAI_API_KEY/),
-    });
+    const [trace] = listTraces(cache);
+    const blob = trace.stages.find((st) => st.label === "attachment seg_1");
+    expect(blob?.file).toMatch(/seg_1\.webm$/);
   });
 });
 

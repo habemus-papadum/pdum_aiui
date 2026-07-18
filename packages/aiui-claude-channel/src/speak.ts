@@ -1,6 +1,6 @@
 /**
  * The text-to-speech seam — server-side, where the OpenAI key belongs. The
- * spoken sibling of {@link ./transcribe}'s `Transcriber`: text in, timed audio
+ * spoken counterpart of the transcription seams: text in, timed audio
  * bytes out.
  *
  * This backs the `premium` tier's **audio-back acks** (archive/streaming-turns.md §4,

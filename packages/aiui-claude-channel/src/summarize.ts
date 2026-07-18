@@ -12,7 +12,7 @@
  * This is deliberately **best-effort and off the hot path**: the fin commit
  * fires it and does not await it (a summary must never delay the send ack), a
  * keyless channel (no seam) skips it silently, and any failure is swallowed.
- * The seam mirrors {@link Transcriber}: a `summarizer` test
+ * The seam mirrors {@link Speaker}: a `summarizer` test
  * override in {@link IntentV1Options} stands in for the real REST call offline.
  */
 import { type CallCost, priceCall, usageFromChatCompletions } from "./cost";

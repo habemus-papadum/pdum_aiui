@@ -89,12 +89,7 @@ import { openaiSpeaker, type Speaker } from "./speak";
 import { openaiSummarizer, type Summarizer } from "./summarize";
 import type { TraceHandle } from "./trace";
 import { traceOf } from "./tracing";
-import {
-  audioExtensionForMime,
-  type FetchLike,
-  openaiTranscriber,
-  type Transcriber,
-} from "./transcribe";
+import { audioExtensionForMime, type FetchLike } from "./transcribe";
 
 /**
  * A server-produced batch of intent events, pushed to the client to merge into
@@ -274,11 +269,6 @@ export interface IntentV1Options {
   /** Injected fetch for the real seams (defaults to the global). */
   fetch?: FetchLike;
   /**
-   * Test seam override — used whenever the hello selects `transcriber: openai`,
-   * in place of the real REST transcriber.
-   */
-  transcriber?: Transcriber;
-  /**
    * Test seam override for the realtime upstream socket — used whenever the hello
    * selects `transcriber: openai-realtime`, in place of the real `ws` connection.
    * Present (even keyless) → the realtime path is exercised offline.
@@ -330,9 +320,9 @@ export interface IntentV1Options {
  * carries only `tier` (or a sparse partial), each field's default is the tier's
  * preset value — the shared `expandTier` from the pipeline package, so both sides
  * agree on what a tier means (archive/model-tiers.md, "Channel side"). Absent tier →
- * `standard` (the quiet REST legacy — a sparse hello without a key must not
- * degrade loudly; the REST retirement will flip this to `rapid`); legacy
- * names (standard, flagship, live-*) expand via the shared alias table.
+ * `rapid` (streaming Realtime Whisper — the REST retirement, 2026-07-18);
+ * legacy names (standard, flagship, live-*) expand via the shared alias table
+ * and their REST/voice choices coerce onto the streaming world below.
  */
 function resolveIntent(raw: unknown): ResolvedIntent {
   const cfg = (raw !== null && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -346,7 +336,7 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     typeof value === "string" && value !== "" ? value : undefined;
   // The tier's expansion supplies each field's default (below the explicit hello
   // fields), so a `tier`-only hello still resolves concrete seams.
-  const tier = str(cfg.tier, "standard");
+  const tier = str(cfg.tier, "rapid");
   const preset = expandTier(tier);
   const liveVendor = oneOf(
     cfg.liveVendor,
@@ -408,6 +398,14 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     resolved.coerced.push(
       "transcriber openai-voice → openai-realtime + linter openai (voice veneer retired)",
     );
+  }
+  if (resolved.transcriber === "openai") {
+    // REST transcription is retired (2026-07-18): transcription is
+    // streaming-only. A hello that asked for the per-segment REST engine (an
+    // old persisted config, or the legacy `standard` tier's expansion) gets
+    // the streaming engine instead.
+    resolved.transcriber = "openai-realtime";
+    resolved.coerced.push("transcriber openai → openai-realtime (REST transcription retired)");
   }
   if (resolved.submode === "realtime") {
     // The composer submode is retired: the compiler composes everywhere; the
@@ -513,17 +511,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   const promptCwd = process.env.AIUI_PROMPT_CWD || process.cwd();
   const composeOptions = { cwd: promptCwd };
 
-  // Resolve the pipe seams once. `openai` requested but keyless (and no test
-  // override) → the seam is absent and that stage degrades (no transcript /
-  // plain-replacement correction) rather than failing the turn.
-  const transcriber: Transcriber | undefined =
-    intent.transcriber === "openai"
-      ? (options.transcriber ??
-        (apiKey
-          ? openaiTranscriber({ model: () => intent.model, apiKey, fetch: options.fetch })
-          : undefined))
-      : undefined;
-
   // The realtime (streaming) transcriber is a *session*, not a per-blob seam:
   // one upstream WS per thread, opened at thread-open (below) so its handshake
   // overlaps the arm→talk gap. Keyless with no test factory → the session is
@@ -603,7 +590,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       realtimeVoice: intent.realtimeVoice,
       linter: intent.linter,
       linterModel: intent.linterModel,
-      transcriberReady: transcriber !== undefined,
       realtimeReady,
       speakerReady: speaker !== undefined,
       summarizerReady: summarizer !== undefined,
@@ -1160,79 +1146,21 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   ): Promise<void> => {
     const { id, mime } = chunk;
     if (id.startsWith("seg_")) {
-      const conditioned = silenceTrim(bytes);
+      // REST transcription is retired: transcription is streaming-only (PCM
+      // `audio` chunks into a per-thread session). A whole-segment blob from
+      // an old client is still saved for the debugger — its transcript stays
+      // empty, exactly like any other segment the stream never resolved.
+      silenceTrim(bytes);
       trace?.record({
         kind: "ir",
         label: `condition ${id} (silenceTrim)`,
         data: { identity: true },
       });
-      // Save the segment blob on arrival (the debugger reads it; fin does no I/O).
       trace?.recordBlob(
         { kind: "ir", label: `attachment ${id}` },
         bytes,
         `${id}.${audioExtensionForMime(mime)}`,
       );
-      if (transcriber !== undefined) {
-        try {
-          const result = await transcriber.transcribe({ bytes: conditioned, mime });
-          recordCost(`transcription ${id}`, result.cost);
-          const produced: IntentEvent = {
-            at: Date.now(),
-            type: "transcript-final",
-            segment: ordinalOf(id),
-            text: result.text,
-            latencyMs: result.latencyMs,
-            model: result.model,
-          };
-          appendEvent(produced);
-          push([produced]);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          // A too-short segment (an accidental tap — OpenAI: "Audio file is
-          // too short. Minimum audio length is 0.1 seconds.") is not a fault
-          // worth a toast: resolve it as an empty final QUIETLY (trace only),
-          // exactly like the streaming engines' commit-floor discard.
-          if (/too short|minimum audio/i.test(message)) {
-            const empty: IntentEvent = {
-              at: Date.now(),
-              type: "transcript-final",
-              segment: ordinalOf(id),
-              text: "",
-              latencyMs: 0,
-              model: intent.model,
-            };
-            appendEvent(empty);
-            push([empty]);
-            trace?.record({
-              kind: "info",
-              label: `transcription discard ${id}`,
-              data: { message, note: "segment under the vendor minimum — not an error" },
-            });
-            return;
-          }
-          // A live transcription failure (an invalid key, a REST error): don't
-          // reject the frame into silence — echo a note the widget surfaces,
-          // and an error push naming the likeliest fix (the stale-key hint).
-          // Also record it in the trace: the toast is ephemeral, and a trace
-          // whose transcript is silently empty is undebuggable after the fact.
-          trace?.record({ kind: "info", label: `transcription failed ${id}`, data: { message } });
-          finalizeSilentSegment(id, `transcription failed: ${message}`, {
-            source: "transcription",
-            detail: OPENAI_KEY_HINT,
-          });
-        }
-      } else if (intent.transcriber === "openai") {
-        // The hello asked for channel-side transcription but this channel has no
-        // OPENAI_API_KEY (the seam is absent). Since `openai` is the shipped
-        // default, a keyless launch lands here — say so rather than dropping the
-        // segment silently and leaving the preview waiting forever.
-        finalizeSilentSegment(
-          id,
-          "server-side transcription is unavailable — the channel process has no OPENAI_API_KEY. " +
-            'Set it and relaunch `aiui claude`, or use transcriber:"mock" for offline work.',
-        );
-      }
-      // A completed segment lands its transcript here — refresh the cache.
       recomposeIfStale();
     } else if (id.startsWith("shot_")) {
       const conditioned = imageDownscale(bytes);

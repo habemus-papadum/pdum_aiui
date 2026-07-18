@@ -4,12 +4,12 @@
  * overlay's modality in its B2.4 restructure).
  *
  * Two capture lanes behind one `talkStart`/`talkEnd` pair, chosen per talk
- * from the live config: the REST lane ({@link AudioCapture} — one
- * MediaRecorder run per segment, whole blob uploaded, or transcribed locally
- * by the mock) and the realtime lane (a {@link PcmSource} streaming Int16 PCM
- * frames while you talk). The mic-permission degraded paths live here too:
- * no mic / no AudioWorklet names the fix and never silently switches
- * backends.
+ * from the live config: the mock lane ({@link AudioCapture} — one
+ * MediaRecorder run per segment, transcribed locally, no channel) and the
+ * realtime lane (a {@link PcmSource} streaming Int16 PCM frames while you
+ * talk — every channel-side transcriber, since the REST retirement). The
+ * mic-permission degraded paths live here too: no mic / no AudioWorklet
+ * names the fix and never silently switches backends.
  *
  * A talk window is bounded ONLY by the explicit gestures (Space hold/toggle,
  * window blur). The ~900 ms silence endpointer that used to auto-split a
@@ -54,8 +54,6 @@ export interface TalkDeps {
   getThread: () => Promise<IntentThread | undefined>;
   /** wire.flushOutbox — talk-end must reach the server past the debounce. */
   flushOutbox: (known?: IntentThread) => Promise<void>;
-  /** wire.uploadAttachment — a whole REST audio segment (`seg_N`). */
-  uploadAttachment: (id: string, mime: string, bytes: Uint8Array) => Promise<void>;
   /** wire.uploadAudio — one streamed PCM frame of a talk segment. */
   uploadAudio: (segment: number, seq: number, bytes: Uint8Array) => Promise<void>;
 }
@@ -95,31 +93,22 @@ export interface Talk {
 }
 
 /**
- * Whether the config streams PCM during talk (the AudioWorklet path) rather than
- * recording a whole segment for REST upload. Three cases share the client
- * capture path (model-tiers.md: `openai-voice` wires audio exactly like
- * `openai-realtime`; only the channel-side session differs):
- *  - the realtime STT transcriber (`openai-realtime`, rapid/premium),
- *  - the flagship conversational voice session (`openai-voice`),
- *  - the **realtime submode** (any live tier): the Gemini/OpenAI live engines
- *    eat PCM as activity-window audio, so a live tier streams regardless of
- *    which `transcriber` its preset left in place.
+ * Whether the config streams PCM during talk (the AudioWorklet path) rather
+ * than recording a whole segment locally. Transcription is STREAMING-ONLY
+ * since the REST retirement (2026-07-18): every channel-side transcriber
+ * consumes live PCM frames — including a persisted `openai` (the retired REST
+ * engine; the channel coerces it to `openai-realtime` at hello) — so the sole
+ * whole-blob case left is `mock`, which transcribes locally and never uploads.
+ * Spelled as an exclusion so a NEW streaming engine can't silently fall into
+ * the blob path (the ElevenLabs zero-bytes bug: an include-list that didn't
+ * know the new engine — no PCM, no mic meter, 0-byte commits).
  */
 function usesPcmStream(config: IntentPipelineConfig): boolean {
-  // Every STREAMING transcriber consumes live PCM frames; only the
-  // request-response paths (REST `openai`, and `mock`) record a whole-segment
-  // blob. Spelled as an exclusion so a NEW streaming engine can't silently
-  // fall into the blob path again (the ElevenLabs zero-bytes bug: this was a
-  // hardcoded include-list that didn't know the new engine — no PCM, no mic
-  // meter, 0-byte commits).
-  return (
-    (config.transcriber !== "openai" && config.transcriber !== "mock") ||
-    config.submode === "realtime"
-  );
+  return config.transcriber !== "mock" || config.submode === "realtime";
 }
 
 export function createTalk(deps: TalkDeps): Talk {
-  const { engine, config, setStatus, reportError, getThread, flushOutbox, uploadAttachment } = deps;
+  const { engine, config, setStatus, reportError, getThread, flushOutbox } = deps;
 
   const audio = new AudioCapture();
   // The realtime (streaming) capture source, built lazily on the first
@@ -235,25 +224,13 @@ export function createTalk(deps: TalkDeps): Talk {
       await realtimeTalkEnd();
       return;
     }
+    // The mock tier: transcription is local — record the whole segment and
+    // derive a canned transcript, no channel involved (the only non-streaming
+    // path left after the REST retirement).
     const segment = currentSegment();
     engine.talkEnd();
     const blob = (await audio.stop()) ?? new Blob([], { type: "audio/webm" });
-    if (config().transcriber === "mock") {
-      await transcribeLocally(mockStt, segment, blob);
-      return;
-    }
-    // Channel transcriber: upload the segment; the transcript-final echoes back.
-    const thread = await getThread();
-    if (!thread) {
-      engine.transcriptFinal(segment, "", 0, "openai");
-      const message =
-        'transcription needs the channel — launch through `aiui claude`, or set transcriber:"mock" for offline work';
-      setStatus(message);
-      reportError({ source: "connection", message });
-      return;
-    }
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    await uploadAttachment(`seg_${segment}`, blob.type || "audio/webm", bytes);
+    await transcribeLocally(mockStt, segment, blob);
   }
 
   // ── realtime (streaming) talk: PCM frames stream during talk ──────────────
