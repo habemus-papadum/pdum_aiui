@@ -251,6 +251,38 @@ function main() {
     ],
   };
 
+  // The guide sidebar above is CURATED (sections, order, titles are editorial)
+  // — but curation drifts silently. Guard it both ways: every /guide/ link
+  // must have a page, and every page must have a link, or generation fails.
+  const linkedGuides = new Set();
+  const collectGuideLinks = (nodes) => {
+    for (const node of nodes) {
+      const m = /^\/guide\/([^/]*)$/.exec(node.link ?? "");
+      if (m) {
+        linkedGuides.add(m[1] === "" ? "index" : m[1]);
+      }
+      if (node.items) {
+        collectGuideLinks(node.items);
+      }
+    }
+  };
+  collectGuideLinks(sidebar["/"]);
+  const guidePages = new Set(
+    readdirSync(join(docsDir, "guide"))
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => f.replace(/\.md$/, "")),
+  );
+  const deadLinks = [...linkedGuides].filter((g) => !guidePages.has(g));
+  const unlisted = [...guidePages].filter((g) => !linkedGuides.has(g));
+  if (deadLinks.length > 0 || unlisted.length > 0) {
+    throw new Error(
+      "guide sidebar drift:" +
+        (deadLinks.length > 0 ? ` links without pages: ${deadLinks.join(", ")}.` : "") +
+        (unlisted.length > 0 ? ` pages without links: ${unlisted.join(", ")}.` : "") +
+        " Update the sidebar in scripts/docs-gen.mjs.",
+    );
+  }
+
   mkdirSync(dirname(sidebarFile), { recursive: true });
   writeFileSync(sidebarFile, `${JSON.stringify(sidebar, null, 2)}\n`);
 

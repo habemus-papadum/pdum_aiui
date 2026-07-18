@@ -78,11 +78,11 @@ function versionFiles() {
 // Chrome manifests carry their OWN `version`, and it must be plain dotted
 // integers (1–4 parts, no `-prerelease`/`+build`) — so they cannot hold the
 // `X.Y.Z+dev` the package.jsons carry between releases. They track the semver
-// CORE instead: `set 0.5.0+dev` and `set 0.5.0` both stamp them `0.5.0`. Listed
-// explicitly because manifests are not package.json files (the list is a
-// single TS source today) and the workspace globs never reach them — a new
-// extension's manifest belongs in this list.
-const MANIFEST_FILES = ["packages/aiui-intent-client/src/ext/manifest.ts"];
+// CORE instead: `set 0.5.0+dev` and `set 0.5.0` both stamp them `0.5.0`.
+// Discovered by convention rather than hand-listed (the convention every
+// extension package follows: its MV3 manifest is a TS source at
+// src/ext/manifest.ts), so a new extension package is versioned automatically.
+const MANIFEST_FILES = globSync("packages/*/src/ext/manifest.ts", { cwd: repoRoot });
 
 // The sole `version: "..."` / `"version": "..."` field (quoted or bare key),
 // captured so it can be read or rewritten while leaving the rest of the file

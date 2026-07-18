@@ -162,33 +162,43 @@ check("…with the PATH explanation", /not found on your PATH/.test(claude.stder
 const mcp = run(["mcp", "--help"]);
 check("aiui mcp --help (channel CLI from dist) exits 0", mcp.status === 0, mcp.stderr);
 
-// The installed sidecar path, end to end: import the three sidecar factories
-// the way the channel's standard-sidecars.ts does (a bare `/sidecar` subpath,
-// no descriptors), construct all three, and mount the lightweight one — under
-// plain node, from the packed tarballs. This is the dev/installed seam that
-// source-first masks: in the workspace these resolve to src/*.ts under tsx;
-// installed they must resolve to dist/*.js and import cleanly with no loader.
+// The installed sidecar path, end to end: import every published `/sidecar`
+// subpath the way the channel's standard-sidecars.ts does (bare subpath, no
+// descriptors), construct each factory, and mount one — under plain node,
+// from the packed tarballs. This is the dev/installed seam that source-first
+// masks: in the workspace these resolve to src/*.ts under tsx; installed they
+// must resolve to dist/*.js and import cleanly with no loader. The package
+// set is DERIVED from the publishConfig exports (any package publishing a
+// "./sidecar" subpath is in), so a new sidecar package is probed automatically.
+const sidecarPackages = publishable
+  .map((dir) => JSON.parse(readFileSync(join(dir, "package.json"), "utf8")))
+  .filter((pkg) => pkg.publishConfig?.exports?.["./sidecar"] !== undefined)
+  .map((pkg) => pkg.name)
+  .sort();
+if (sidecarPackages.length === 0) throw new Error("no packages publish a ./sidecar subpath");
 const sidecarProbe = join(scratch, "sidecar-probe.mjs");
 writeFileSync(
   sidecarProbe,
   `import { createRequire } from "node:module";
-import { intentSidecar } from "@habemus-papadum/aiui-intent-client/sidecar";
-import { pencilSidecar } from "@habemus-papadum/aiui-pencil/sidecar";
-import { barSidecar } from "@habemus-papadum/aiui-remote-bar/sidecar";
-const resolved = createRequire(import.meta.url).resolve(
-  "@habemus-papadum/aiui-remote-bar/sidecar",
-);
-if (!resolved.endsWith(".js")) throw new Error("expected a dist .js path, got: " + resolved);
-// Construct all three exactly as standardSidecars does — proves every /sidecar
-// subpath resolves to dist and its factory runs under plain node.
+const names = ${JSON.stringify(sidecarPackages)};
+const require = createRequire(import.meta.url);
 const root = process.cwd();
-const built = [intentSidecar({ root }), barSidecar({ root }), pencilSidecar({ root })];
-if (built.length !== 3) throw new Error("expected three sidecars, got " + built.length);
+const built = [];
+for (const name of names) {
+  const resolved = require.resolve(name + "/sidecar");
+  if (!resolved.endsWith(".js")) throw new Error(name + "/sidecar: expected a dist .js path, got: " + resolved);
+  const mod = await import(name + "/sidecar");
+  // Each module's one factory export, exactly what standardSidecars calls.
+  const factory = Object.values(mod).find((v) => typeof v === "function");
+  if (factory === undefined) throw new Error(name + "/sidecar exports no factory");
+  built.push({ name, sidecar: factory({ root }) });
+}
 // Mount the lightweight one (the remote bar) to exercise the mount/ctx/express seam.
+const bar = built.find((b) => b.name.includes("remote-bar")) ?? built[0];
 const express = (await import("express")).default;
-const mounted = await built[1].mount(express(), { mode: "prod", log: () => {}, port: () => undefined });
+const mounted = await bar.sidecar.mount(express(), { mode: "prod", log: () => {}, port: () => undefined });
 await mounted.dispose?.();
-console.log(resolved);
+console.log(names.join(" "));
 `,
 );
 const probe = spawnSync(process.execPath, [sidecarProbe], {
@@ -198,8 +208,8 @@ const probe = spawnSync(process.execPath, [sidecarProbe], {
   timeout: 60_000,
 });
 check(
-  "bar sidecar resolves to dist and mounts under plain node",
-  probe.status === 0 && /dist[\\/]sidecar\.js\s*$/.test(probe.stdout),
+  `every published /sidecar subpath (${sidecarPackages.length}) resolves to dist and one mounts under plain node`,
+  probe.status === 0 && sidecarPackages.every((name) => probe.stdout.includes(name)),
   probe.stderr || probe.stdout,
 );
 
