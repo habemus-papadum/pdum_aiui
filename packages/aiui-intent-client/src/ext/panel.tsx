@@ -25,7 +25,12 @@ import { createIntentClient, type IntentClient, type IntentLanes } from "../clie
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { createPencilHost } from "../pencil-host";
-import { asContributedSelection, connectSessionBus, probeChannel } from "../session";
+import {
+  asContributedSelection,
+  connectSessionBus,
+  probeChannel,
+  type SessionBusClient,
+} from "../session";
 import { createToolsLink } from "../tools-link";
 import { PanelLayout } from "../ui/panel-layout";
 import { installPanelKeys, type Narration } from "../ui/shell";
@@ -132,11 +137,23 @@ async function boot(): Promise<{
     onToast: narration.toast,
     onLoweredPrompt: (prompt) => setLoweredPrompt(prompt),
   });
+  // Assigned below; the dispatch hook closes over it (dispatches can only
+  // happen after boot completes, by which time the bus is dialing).
+  let sessionBus: SessionBusClient | undefined;
   const client = createIntentClient({
     host,
     lanes: lanes.lanes,
     claimOptions: lanes.claimOptions,
     onBlip: (key) => blipSink?.(key),
+    // Mirror armed-ness into the bus's cached `armed` slot: the hub echoes it
+    // on /session/peers and /session/publish so an external sender (the
+    // VS Code extension) can phrase its confirmation honestly.
+    onDispatch: (event) => {
+      const armed = event.after.phase !== "disarmed";
+      if (armed !== (event.before.phase !== "disarmed")) {
+        sessionBus?.set("armed", armed);
+      }
+    },
   });
   lanes.bind(client);
 
@@ -162,11 +179,16 @@ async function boot(): Promise<{
   // The remote bar: the same mode engine's remote-flagged caps (hands-free,
   // video), projected over /bar for the iPad pencil client's embedded RemoteBar.
   createBarHost({ client, port, label: `aiui intent — window ${windowId}` }).connect();
-  const sessionBus = connectSessionBus({ port, label: "intent client (side panel)" });
+  sessionBus = connectSessionBus({ port, label: "intent client (side panel)" });
+  const bus2 = sessionBus;
   let recovered = false;
   sessionBus.onChange((state) => {
     setBusPhase(state.phase);
     client.setContext({ connected: state.phase === "connected" });
+    if (state.phase === "connected") {
+      // (Re)sync the cached `armed` slot — a reconnect gets fresh truth.
+      bus2.set("armed", client.state().phase !== "disarmed");
+    }
     // See main.tsx: recovery waits for the channel, because re-arming is gated
     // on having one.
     if (!recovered && state.phase === "connected") {
@@ -178,12 +200,19 @@ async function boot(): Promise<{
   });
   // Editor-contributed selections (the VS Code extension's "Send Selection to
   // Browser Tab", relayed by the hub): straight into the wire engine as a
-  // code-selection event — armed-gated by the engine's own lifecycle.
+  // code-selection event — armed-gated by the engine's own lifecycle, and the
+  // gate's verdict is toasted so a drop is never silent.
   sessionBus.onPublish((msg) => {
     const sel = asContributedSelection(msg);
-    if (sel !== undefined) {
-      lanes.engine.codeSelection(sel);
+    if (sel === undefined) {
+      return;
     }
+    const marker = lanes.engine.codeSelection(sel);
+    narration.toast(
+      marker !== undefined
+        ? `selection from the editor added to the turn (${sel.sourceLoc ?? marker})`
+        : "selection from the editor ignored — arm the client first (⌘⇧B)",
+    );
   });
 
   (window as unknown as { __aiuiIntentClient?: unknown }).__aiuiIntentClient = {

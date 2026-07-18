@@ -30,6 +30,7 @@ import {
   connectSessionBus,
   probeChannel,
   resolveChannelPort,
+  type SessionBusClient,
 } from "../session";
 import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
@@ -126,11 +127,23 @@ async function boot(): Promise<{
       onToast: toast,
       onLoweredPrompt: (prompt) => setLoweredPrompt(prompt),
     });
+    // Assigned below; the dispatch hook closes over it (dispatches can only
+    // happen after boot completes, by which time the bus is dialing).
+    let sessionBus: SessionBusClient | undefined;
     const client = createIntentClient({
       host,
       lanes: channelLanes.lanes,
       claimOptions: channelLanes.claimOptions,
       onBlip: (key) => blipSink?.(key),
+      // Mirror armed-ness into the bus's cached `armed` slot: the hub echoes
+      // it on /session/peers and /session/publish so an external sender (the
+      // VS Code extension) can phrase its confirmation honestly.
+      onDispatch: (event) => {
+        const armed = event.after.phase !== "disarmed";
+        if (armed !== (event.before.phase !== "disarmed")) {
+          sessionBus?.set("armed", armed);
+        }
+      },
     });
     channelLanes.bind(client);
 
@@ -139,11 +152,16 @@ async function boot(): Promise<{
     // The page-tools bridge: pages populate __AIUI__.tools; this represents
     // them to the channel (CDP tab numbers ride as hints — the decided shape).
     createToolsLink({ host, port: () => port, log: (m) => console.info("[tools]", m) });
-    const sessionBus = connectSessionBus({ port, label: "intent client (detached page)" });
+    sessionBus = connectSessionBus({ port, label: "intent client (detached page)" });
+    const bus2 = sessionBus;
     let recovered = false;
     sessionBus.onChange((state) => {
       setBusPhase(state.phase);
       client.setContext({ connected: state.phase === "connected" });
+      if (state.phase === "connected") {
+        // (Re)sync the cached `armed` slot — a reconnect gets fresh truth.
+        bus2.set("armed", client.state().phase !== "disarmed");
+      }
       // Recover a mirrored turn once the channel is actually THERE: re-arming
       // is gated on it (and the gate is the machine's, not the bar's), and a
       // turn you cannot send is not a turn you have recovered.
@@ -156,12 +174,19 @@ async function boot(): Promise<{
     });
     // Editor-contributed selections (the VS Code extension's "Send Selection
     // to Browser Tab", relayed by the hub): straight into the wire engine as a
-    // code-selection event — armed-gated by the engine's own lifecycle.
+    // code-selection event — armed-gated by the engine's own lifecycle, and
+    // the gate's verdict is toasted so a drop is never silent.
     sessionBus.onPublish((msg) => {
       const sel = asContributedSelection(msg);
-      if (sel !== undefined) {
-        channelLanes.engine.codeSelection(sel);
+      if (sel === undefined) {
+        return;
       }
+      const marker = channelLanes.engine.codeSelection(sel);
+      toast(
+        marker !== undefined
+          ? `selection from the editor added to the turn (${sel.sourceLoc ?? marker})`
+          : "selection from the editor ignored — arm the client first (activate/⌘⇧B)",
+      );
     });
 
     (window as unknown as { __aiuiIntentClient?: unknown }).__aiuiIntentClient = {

@@ -297,7 +297,17 @@ export function activate(context: vscode.ExtensionContext): void {
     try {
       const result = await publishSelection(live.port, live.clientId, contribution);
       if (result.ok) {
-        void vscode.window.showInformationMessage(`aiui: selection sent to ${live.label}.`);
+        // The hub echoes the session's cached `armed` slot: the panel ingests
+        // a contribution only while armed, so an unarmed send is delivered
+        // but ignored — say so instead of celebrating.
+        if (result.armed === false) {
+          void vscode.window.showWarningMessage(
+            `aiui: sent to ${live.label}, but the intent client is not armed — ` +
+              "it ignored the selection. Arm it (activate/⌘⇧B) and resend.",
+          );
+        } else {
+          void vscode.window.showInformationMessage(`aiui: selection sent to ${live.label}.`);
+        }
       } else {
         // Revalidated a moment ago and still nacked — a genuine race; let the
         // server's reason through.
