@@ -12,6 +12,11 @@ to delete outright someday.
 - `extension-spikes/` — runnable measurement spikes (a scratch MV3 capture-probe extension, an
   MCP `tools/list_changed` probe, a CRXJS smoke build) behind
   `docs/proposals/browser-extension-intent-tool.md` §12; results in its `RESULTS.md`.
+- `code-review-pass1-stale-and-legacy.md` / `code-review-pass2-*.md` — the 2026-07 code-review
+  records: pass 1 (stale references + legacy code) and pass 2 (the S1–S10 smell sweep — the
+  `smells` index plus the five executed decision documents). All decisions are implemented on
+  main; the gitignored evidence (`docs/proposals/review-pass*.local/`) stays where the docs'
+  pointers name it.
 - Loose files — one-off design notes (attachment path encoding, tab routing, early desiderata
   and package plans); superseded by the guide pages and package docs, occasionally still cited
   as provenance.
