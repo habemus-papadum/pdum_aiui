@@ -28,18 +28,18 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import {
+  currentVersion,
+  deriveContext,
+  fail,
+  repoRoot,
+  scriptsDir,
+  slugify,
+} from "./lib/common.mjs";
 
-const scriptsDir = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(scriptsDir, "..");
 const skeletonDir = join(scriptsDir, "_skeleton");
 const packagesDir = join(repoRoot, "packages");
-
-function fail(message) {
-  process.stderr.write(`error: ${message}\n`);
-  process.exit(1);
-}
 
 const USAGE =
   'usage: pnpm new-package <name> (--public | --private | --no-publish) [--description "..."] [--no-reserve]';
@@ -84,28 +84,6 @@ function parseArgs(argv) {
   return { name, ...LEVELS[levelFlag], ...opts };
 }
 
-function slugify(name) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-/** Infer the npm scope and repo URL from the first existing package. */
-function deriveContext() {
-  const dirs = existsSync(packagesDir)
-    ? readdirSync(packagesDir).filter((d) => existsSync(join(packagesDir, d, "package.json")))
-    : [];
-  for (const dir of dirs) {
-    const pkg = JSON.parse(readFileSync(join(packagesDir, dir, "package.json"), "utf8"));
-    const scope = pkg.name?.startsWith("@") ? pkg.name.split("/")[0] : "";
-    if (scope) {
-      return { scope, repoUrl: pkg.repository?.url ?? "" };
-    }
-  }
-  return fail("no existing package to infer the npm scope from — create packages/* first");
-}
-
 function walk(dir) {
   const out = [];
   for (const entry of readdirSync(dir)) {
@@ -131,10 +109,7 @@ function main() {
   }
 
   const { scope, repoUrl } = deriveContext();
-  const version = execFileSync("node", [join(scriptsDir, "versioning.mjs"), "current"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
+  const version = currentVersion();
 
   cpSync(skeletonDir, dest, { recursive: true });
 

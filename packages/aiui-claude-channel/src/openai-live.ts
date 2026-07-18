@@ -45,13 +45,14 @@ import {
   type LiveSession,
   type LiveSessionCallbacks,
 } from "./live-session";
-import { OPENAI_REALTIME_VOICE_URL, pcm16ToWav, REALTIME_VOICE_RATE } from "./pcm";
+import { fromBase64, OPENAI_REALTIME_VOICE_URL, REALTIME_VOICE_RATE, toBase64 } from "./pcm";
 import {
   closeSuffix,
   openaiRealtimeSocketFactory,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
 } from "./realtime";
+import { createReadyGate, createReplyClip, makeOnceCall, type ReplyClip } from "./session-core";
 
 /** The flagship conversational model, running here as the degraded linter engine. */
 export const DEFAULT_OPENAI_LIVE_MODEL = "gpt-realtime-2";
@@ -90,23 +91,6 @@ export interface OpenAiLiveSessionOptions {
   socketFactory?: RealtimeSocketFactory;
 }
 
-const toBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
-const fromBase64 = (b64: string): Uint8Array => new Uint8Array(Buffer.from(b64, "base64"));
-
-function concatChunks(chunks: Uint8Array[]): Uint8Array {
-  let total = 0;
-  for (const c of chunks) {
-    total += c.length;
-  }
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    merged.set(c, offset);
-    offset += c.length;
-  }
-  return merged;
-}
-
 /**
  * Open an OpenAI realtime session under the {@link LiveSession} seam. Eagerly
  * connects (the handshake overlaps the arm→talk gap); audio queued before
@@ -126,45 +110,39 @@ export function openOpenAiLiveSession(
     ? `${baseUrl}&model=${encodeURIComponent(modelName)}`
     : `${baseUrl}?model=${encodeURIComponent(modelName)}`;
 
-  let ready = false;
-  let dead = false;
-  const outbox: string[] = [];
+  const gate = createReadyGate((text) => socket.send(text));
   /** Bytes appended since the last commit/clear — the commit-floor meter. */
   let windowBytes = 0;
 
-  // Reply state, keyed by the upstream response id.
-  const audioByResponse = new Map<string, Uint8Array[]>();
-  const transcriptByResponse = new Map<string, string>();
-
-  const sendReady = (message: object): void => {
-    const text = JSON.stringify(message);
-    if (ready && !dead) {
-      socket.send(text);
-    } else if (!dead) {
-      outbox.push(text);
+  // Reply clips keyed by the upstream response id (which may be the empty string).
+  const clips = new Map<string, ReplyClip>();
+  const clipFor = (id: string): ReplyClip => {
+    let clip = clips.get(id);
+    if (clip === undefined) {
+      clip = createReplyClip(
+        { onAudio: callbacks.onReplyAudio, onTranscript: callbacks.onReplyTranscript },
+        REALTIME_VOICE_RATE,
+      );
+      clips.set(id, clip);
     }
+    return clip;
   };
 
+  const sendReady = (message: object): void => gate.send(JSON.stringify(message));
+
   const fail = (message: string, data?: unknown): void => {
-    if (dead) {
+    if (gate.isDead()) {
       return;
     }
-    dead = true;
+    gate.markDead();
     callbacks.onError(message, data);
   };
 
   /** A finished response's buffered audio (WAV-wrapped) + its transcript. */
   const flushResponse = (responseId: string): void => {
-    const chunks = audioByResponse.get(responseId);
-    audioByResponse.delete(responseId);
-    if (chunks && chunks.length > 0) {
-      callbacks.onReplyAudio(pcm16ToWav(concatChunks(chunks), REALTIME_VOICE_RATE), "audio/wav");
-    }
-    const transcript = transcriptByResponse.get(responseId);
-    transcriptByResponse.delete(responseId);
-    if (transcript && transcript.trim() !== "") {
-      callbacks.onReplyTranscript(transcript.trim());
-    }
+    const clip = clips.get(responseId);
+    clips.delete(responseId);
+    clip?.flush();
   };
 
   /** A linter-mode function call: respond writes the output THEN resumes. */
@@ -181,15 +159,11 @@ export function openOpenAiLiveSession(
         parsed = {};
       }
     }
-    let responded = false;
-    return {
-      tool: item.name ?? "",
-      args: parsed,
-      respond: (result: string) => {
-        if (responded || dead) {
-          return;
-        }
-        responded = true;
+    return makeOnceCall(
+      item.name ?? "",
+      parsed,
+      () => gate.isDead(),
+      (result) => {
         sendReady({
           type: "conversation.item.create",
           item: {
@@ -203,7 +177,7 @@ export function openOpenAiLiveSession(
         // fresh response is created.
         sendReady({ type: "response.create" });
       },
-    };
+    );
   };
 
   const handleMessage = (text: string): void => {
@@ -222,30 +196,25 @@ export function openOpenAiLiveSession(
     }
     switch (message.type) {
       case "session.updated": {
-        ready = true;
-        for (const queued of outbox.splice(0)) {
-          socket.send(queued);
-        }
+        gate.markReady();
         return;
       }
       case "response.output_audio.delta": {
         const id = message.response_id ?? "";
-        const chunks = audioByResponse.get(id) ?? [];
         if (typeof message.delta === "string" && message.delta !== "") {
-          chunks.push(fromBase64(message.delta));
+          clipFor(id).pushAudio(fromBase64(message.delta));
         }
-        audioByResponse.set(id, chunks);
         return;
       }
       case "response.output_audio_transcript.delta": {
         const id = message.response_id ?? "";
-        transcriptByResponse.set(id, (transcriptByResponse.get(id) ?? "") + (message.delta ?? ""));
+        clipFor(id).appendTranscript(message.delta ?? "");
         return;
       }
       case "response.output_audio_transcript.done": {
         const id = message.response_id ?? "";
         if (typeof message.transcript === "string") {
-          transcriptByResponse.set(id, message.transcript);
+          clipFor(id).setTranscript(message.transcript);
         }
         return;
       }
@@ -331,7 +300,7 @@ export function openOpenAiLiveSession(
     onMessage: handleMessage,
     onError: (message: string, data?: unknown) => fail(message, data),
     onClose: (code?: number, reason?: string) => {
-      if (!dead) {
+      if (!gate.isDead()) {
         fail(
           `openai live session closed${closeSuffix(code, reason)}`,
           code !== undefined || (reason !== undefined && reason !== "")
@@ -348,14 +317,14 @@ export function openOpenAiLiveSession(
       // No-op: OpenAI opens the input buffer implicitly on the first append.
     },
     appendAudio(pcm24k) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       windowBytes += pcm24k.length;
       sendReady({ type: "input_audio_buffer.append", audio: toBase64(pcm24k) });
     },
     activityEnd() {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       // The commit floor: a tapped-and-released window under ~100 ms cannot
@@ -371,7 +340,7 @@ export function openOpenAiLiveSession(
       sendReady({ type: "response.create" });
     },
     injectLabeledImage(label, bytes, mime) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       // A turn-boundary item pairing the label with the image; no response.create
@@ -389,7 +358,7 @@ export function openOpenAiLiveSession(
       });
     },
     injectContextText(text) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       // SILENT context: a bare text item with NO `response.create` chasing it —
@@ -401,13 +370,13 @@ export function openOpenAiLiveSession(
       });
     },
     cancelActiveResponse() {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       sendReady({ type: "response.cancel" });
     },
     close() {
-      dead = true;
+      gate.markDead();
       try {
         socket.close();
       } catch {

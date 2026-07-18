@@ -145,9 +145,8 @@
  * pattern as `realtime.ts` and `gemini-live.ts`.
  */
 
-import WebSocket from "ws";
+import { toBase64 } from "./pcm";
 import {
-  captureUnexpectedResponse,
   closeSuffix,
   type RealtimeCallbacks,
   type RealtimeSession,
@@ -155,6 +154,12 @@ import {
   type RealtimeSocketHandlers,
   type TranscriptWord,
 } from "./realtime";
+import {
+  createDrainController,
+  createReadyGate,
+  makeWsSocketFactory,
+  reportSessionFailure,
+} from "./session-core";
 
 /** The Scribe v2 realtime transcription endpoint (session config rides the query string). */
 export const ELEVENLABS_REALTIME_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
@@ -242,26 +247,15 @@ export interface ElevenLabsRealtimeSessionOptions {
   now?: () => number;
 }
 
-const toBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
-
 /**
  * The real upstream factory: a `ws` WebSocket to ElevenLabs, authed with the
  * `xi-api-key` header (mirrors {@link ./realtime}.openaiRealtimeSocketFactory,
  * differing only in the header name). Server-side only; the channel always runs
  * under Node, where `ws` is a dependency.
  */
-export const elevenLabsSocketFactory: RealtimeSocketFactory = (url, apiKey, handlers) => {
-  const ws = new WebSocket(url, { headers: { "xi-api-key": apiKey } });
-  ws.on("open", () => handlers.onOpen());
-  ws.on("message", (data: unknown) => handlers.onMessage(String(data)));
-  ws.on("error", (err: Error) => handlers.onError(err.message));
-  ws.on("close", (code: number, reason: Buffer) => handlers.onClose(code, reason.toString()));
-  captureUnexpectedResponse(ws, handlers);
-  return {
-    send: (text) => ws.send(text),
-    close: () => ws.close(),
-  };
-};
+export const elevenLabsSocketFactory: RealtimeSocketFactory = makeWsSocketFactory(
+  (url, apiKey) => ({ url, headers: { "xi-api-key": apiKey } }),
+);
 
 /**
  * Build the connect URL: the base endpoint plus the full session config as query
@@ -416,9 +410,10 @@ export function openElevenLabsRealtimeSession(
     ...(noVerbatim ? { no_verbatim: true } : {}),
   };
 
-  let ready = false;
-  let dead = false;
-  const outbox: string[] = [];
+  // onSent arms the idle keepalive from every REAL outbound frame (never a
+  // pre-ready enqueue — see the {@link createReadyGate} trap); lazy because
+  // armKeepalive is defined below and closes over this gate.
+  const gate = createReadyGate((text) => socket.send(text), { onSent: () => armKeepalive() });
 
   // Committed segments awaiting their terminal event, in commit (FIFO) order —
   // the whole of segment↔result correlation on a wire with no item ids.
@@ -439,15 +434,9 @@ export function openElevenLabsRealtimeSession(
   // Utterances Scribe closed on its own, per segment, waiting to be concatenated
   // into that segment's final. Non-empty whenever a long segment is in progress.
   const pending = new Map<number, PendingUtterances>();
-  const drainWaiters: Array<() => void> = [];
-
-  const settleDrainIfIdle = (): void => {
-    if (committed.length === 0) {
-      for (const resolve of drainWaiters.splice(0)) {
-        resolve();
-      }
-    }
-  };
+  // Outstanding = the FIFO of committed-but-not-completed segments, snapshotted at
+  // drain resolution time.
+  const drainCtl = createDrainController(() => committed.map((c) => c.segment));
 
   /** The empty payload for a commit / discard / keepalive chunk (no audio bytes). */
   const EMPTY_AUDIO = new Uint8Array(0);
@@ -473,13 +462,16 @@ export function openElevenLabsRealtimeSession(
   // (Re)arm from the most recent outbound frame; each real send pushes it out, so
   // a keepalive fires only after ELEVENLABS_KEEPALIVE_MS of true silence. Only
   // while ready + alive.
+  // armKeepalive is only ever called at/after `session_started` (from the gate's
+  // onSent on a real send, from the session_started handler, and from the timer's
+  // own re-arm), so the dead check is the only guard it needs.
   const armKeepalive = (): void => {
     clearKeepalive();
-    if (!ready || dead) {
+    if (gate.isDead()) {
       return;
     }
     keepaliveTimer = setTimeout(() => {
-      if (!ready || dead) {
+      if (gate.isDead()) {
         return;
       }
       socket.send(JSON.stringify(audioChunk(EMPTY_AUDIO, false)));
@@ -491,16 +483,8 @@ export function openElevenLabsRealtimeSession(
 
   // Frames wait for `session_started`; there is no config handshake to bypass the
   // queue with (the URL is the config), so everything the caller sends is queued
-  // until ready. A dead session drops silently.
-  const sendFrame = (message: object): void => {
-    const text = JSON.stringify(message);
-    if (ready && !dead) {
-      socket.send(text);
-      armKeepalive(); // real activity resets the idle timer
-    } else if (!dead) {
-      outbox.push(text);
-    }
-  };
+  // until ready. The gate arms the keepalive (onSent) on every real send.
+  const sendFrame = (message: object): void => gate.send(JSON.stringify(message));
 
   /** The text Scribe already closed inside `segment`, joined for the preview. */
   const pendingText = (segment: number): string =>
@@ -573,7 +557,7 @@ export function openElevenLabsRealtimeSession(
       model: modelId,
       ...(words.length > 0 ? { words } : {}),
     });
-    settleDrainIfIdle();
+    drainCtl.settleIfIdle();
   };
 
   const handleError = (text: string): void => {
@@ -585,7 +569,7 @@ export function openElevenLabsRealtimeSession(
       return;
     }
     callbacks.onError(text, head.segment);
-    settleDrainIfIdle();
+    drainCtl.settleIfIdle();
   };
 
   const handleMessage = (raw: string): void => {
@@ -607,7 +591,6 @@ export function openElevenLabsRealtimeSession(
     }
     switch (type) {
       case "session_started": {
-        ready = true;
         // The config echo: the only proof our connect-URL params took effect.
         // Recorded verbatim, then diffed — a param this vendor does not know is
         // accepted silently, so silence is never evidence of success.
@@ -621,9 +604,7 @@ export function openElevenLabsRealtimeSession(
             callbacks.onDiagnostic?.({ kind: "config-mismatch", ...m });
           }
         }
-        for (const queued of outbox.splice(0)) {
-          socket.send(queued);
-        }
+        gate.markReady();
         armKeepalive(); // start the heartbeat so the arm→talk idle gap can't drop us
         return;
       }
@@ -666,20 +647,19 @@ export function openElevenLabsRealtimeSession(
 
   /** A transport-level fault (socket error / close): finalize the queue loudly, then idle. */
   const fail = (message: string): void => {
-    if (dead) {
+    if (gate.isDead()) {
       return;
     }
-    dead = true;
-    clearKeepalive();
+    gate.markDead();
+    clearKeepalive(); // per-twin teardown: stop the idle heartbeat
     const stuck = committed.splice(0);
-    pending.clear();
-    for (const entry of stuck) {
-      callbacks.onError(message, entry.segment);
-    }
-    if (stuck.length === 0) {
-      callbacks.onError(message);
-    }
-    settleDrainIfIdle();
+    pending.clear(); // per-twin teardown: drop vendor-committed text awaiting a final
+    reportSessionFailure(
+      callbacks.onError,
+      message,
+      stuck.map((entry) => entry.segment),
+    );
+    drainCtl.settleIfIdle();
   };
 
   const socket = factory(url, options.apiKey, {
@@ -693,7 +673,7 @@ export function openElevenLabsRealtimeSession(
       // mid-flight finalizes the outstanding segments loudly — with the vendor's
       // close reason, which is where the actual error text lives (e.g. a
       // `commit_throttled` teardown rides `reason="commit_throttled"`).
-      if (!dead) {
+      if (!gate.isDead()) {
         fail(`realtime session closed${closeSuffix(code, reason)}`);
       }
     },
@@ -701,7 +681,7 @@ export function openElevenLabsRealtimeSession(
 
   return {
     appendAudio(segment, bytes) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       // First append for this segment: pin its audio base (cumulative ms so far)
@@ -718,7 +698,7 @@ export function openElevenLabsRealtimeSession(
       sendFrame(audioChunk(bytes, false));
     },
     commit(segment) {
-      if (dead) {
+      if (gate.isDead()) {
         callbacks.onError("realtime session unavailable", segment);
         return;
       }
@@ -763,25 +743,10 @@ export function openElevenLabsRealtimeSession(
       pending.delete(segment); // a discarded segment's vendor-committed text goes with it
     },
     drain(timeoutMs) {
-      if (committed.length === 0) {
-        return Promise.resolve([]);
-      }
-      return new Promise<number[]>((resolve) => {
-        let settled = false;
-        const finish = (): void => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          clearTimeout(timer);
-          resolve(committed.map((c) => c.segment));
-        };
-        const timer = setTimeout(finish, timeoutMs);
-        drainWaiters.push(finish);
-      });
+      return drainCtl.drain(timeoutMs);
     },
     close() {
-      dead = true;
+      gate.markDead();
       clearKeepalive();
       try {
         socket.close();
@@ -789,9 +754,7 @@ export function openElevenLabsRealtimeSession(
         // best-effort — the socket may already be closing
       }
       // Release any drain still waiting so `fin` never hangs on a closed socket.
-      for (const resolve of drainWaiters.splice(0)) {
-        resolve();
-      }
+      drainCtl.releaseAll();
     },
   };
 }

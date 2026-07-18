@@ -18,7 +18,7 @@
  *    server that answers to nobody is always a human's deliberate choice.
  *
  * Everything else the real channel hosts is fair game — including the session
- * sidecars: like `mcp`, `serve` mounts the channel's {@link standardSidecars}
+ * sidecars: like `mcp`, `serve` mounts the channel's `standardSidecars`
  * (intent, bar, pencil, console) by default, because a client under development
  * against this server needs the sidecar's endpoints on the very channel port it
  * is pointed at. (Callers — the tests — may inject their own set instead.)
@@ -74,20 +74,20 @@ import {
 } from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import { createChannelLog } from "../channel-log";
 import type { FrameLogEntry } from "../frame-log";
-import { channelSourceDir, watchChannelSource } from "../hot";
 import { createJsonlRecorder, type JsonlRecorder } from "../recording";
 import { registerServer } from "../registry";
-import type { Sidecar } from "../sidecar";
-import { standardSidecars } from "../standard-sidecars";
 import { projectCacheDir, type TraceStageEvent } from "../trace";
 import { startWebServer } from "../web";
+import {
+  type CommonChannelOptions,
+  commonWebOptions,
+  createShutdown,
+  installExitBackstop,
+  resolveSidecars,
+  startStalenessWatch,
+} from "./lifecycle";
 
-export interface ServeOptions {
-  /**
-   * The registry address (defaults to a UUID, like `mcp`), doubling as the
-   * stderr-logging and trace-session label (see trace.ts's `sessionLabel`).
-   */
-  tag?: string;
+export interface ServeOptions extends CommonChannelOptions {
   /**
    * Display name for the registry entry (`--name`, e.g. "aiui debug") —
    * how selectors title this server, since a debug server has no owning
@@ -109,29 +109,6 @@ export interface ServeOptions {
    * hard, explained failure instead of a silent drift (see {@link runServe}).
    */
   port?: number;
-  /**
-   * The sidecars to host, as live {@link Sidecar} objects. Defaults to
-   * {@link standardSidecars} — a debug server hosts the same set the real one
-   * does, so a client under development finds the sidecar's endpoints on the
-   * channel port it is pointed at. Tests pass their own (often `[]`) to stay
-   * hermetic. A sidecar whose `mount` throws is isolated by `startWebServer`.
-   */
-  sidecars?: Sidecar[];
-  /**
-   * Where the web backend binds — the exact contract `mcp` accepts:
-   * `"loopback"` (127.0.0.1, the default) or `"host"` (0.0.0.0 — the
-   * trusted-LAN posture: every unauthenticated route, sidecars included,
-   * becomes network-reachable; a supervisor passes this only on the user's
-   * own `channel.bind` choice, the same knob a real `aiui claude` launch
-   * obeys). See docs/guide/warning.md.
-   */
-  bind?: "loopback" | "host";
-  /**
-   * Force the sidecars' dev/prod mode (`--mode`), same contract as `mcp` — omit
-   * to derive it from whether the channel runs off `src/`. The debug server is
-   * the natural place to exercise a built (`prod`) surface from a checkout.
-   */
-  mode?: "dev" | "prod";
 }
 
 /**
@@ -350,7 +327,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
   // does — unless the caller injects its own (the tests pass `[]` to stay
   // hermetic). A failing mount is logged to stderr by `startWebServer`; stdout
   // stays the ready-line + lowered-prompt protocol.
-  const sidecars = options.sidecars ?? standardSidecars(process.cwd());
+  const sidecars = resolveSidecars(options);
 
   // Wire-event narration lands on stderr, next to the lifecycle lines (stdout is
   // the parseable protocol). `narrateFrame` coalesces per-thread media; the
@@ -376,10 +353,6 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
       traceDir: cacheDir,
       debug: true,
       sidecars,
-      ...(options.mode !== undefined ? { mode: options.mode } : {}),
-      // Names this run's trace session ("channel·…" when untagged), so /debug's
-      // list separates a debug server's traces from a real session's.
-      ...(options.tag !== undefined ? { tag: options.tag } : {}),
       // The recorder (when on), the diagnostic log, and the wire narrator all
       // share the one frame seam.
       frameSink: (entry) => {
@@ -394,7 +367,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
           narrate(`${event.threadId} ${event.stage.label}`);
         }
       },
-      ...(options.bind === "host" ? { host: "0.0.0.0" } : {}),
+      ...commonWebOptions(options),
       ...(options.port !== undefined ? { port: options.port } : {}),
     });
   } catch (error) {
@@ -421,7 +394,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
     debug: true,
     ...(options.name !== undefined ? { name: options.name } : {}),
   });
-  process.once("exit", registration.remove);
+  installExitBackstop(registration);
 
   // Narrate page-tool transitions to stdout (see the header's stdout protocol).
   // The `/tools` websocket feeds `web.pageTools` here exactly as it would under
@@ -461,40 +434,25 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
   // Dev-only STALENESS watch (AIUI_CHANNEL_WATCH=1, source only). Like `mcp`, no
   // hot-reload — but a debug server has no agent to tell, so the notice goes to
   // stderr, next to the wire narration. Restart the debug channel to apply edits.
-  let stopWatch: (() => void) | undefined;
-  if (process.env.AIUI_CHANNEL_WATCH === "1") {
-    const srcDir = channelSourceDir();
-    if (srcDir) {
-      stopWatch = watchChannelSource({
-        dir: srcDir,
-        onChange: () => {
-          narrate("source changed — this debug channel is now STALE; restart it to apply edits");
-        },
-      });
-      process.stderr.write(
-        `[aiui-channel serve] watching ${srcDir} for staleness (AIUI_CHANNEL_WATCH=1)\n`,
-      );
-    } else {
-      process.stderr.write(
-        "[aiui-channel serve] AIUI_CHANNEL_WATCH=1 ignored — not running from source\n",
-      );
-    }
-  }
+  const stopWatch = startStalenessWatch({
+    logPrefix: "[aiui-channel serve]",
+    onStale: () => {
+      narrate("source changed — this debug channel is now STALE; restart it to apply edits");
+    },
+  });
 
-  let closed = false;
-  const close = async (): Promise<void> => {
-    if (closed) {
-      return;
-    }
-    closed = true;
-    channelLog.log("shutdown");
-    stopWatch?.();
-    unsubscribeTools();
-    registration.remove();
-    await web.close().catch(() => {});
-    await recorder?.close();
-    await channelLog.close();
-  };
+  // Only the web close is error-swallowed here (this twin lets a wedged recorder
+  // or log close surface); channelLog.close() stays last, owned by createShutdown.
+  const close = createShutdown({
+    channelLog,
+    registration,
+    closers: [
+      stopWatch,
+      unsubscribeTools,
+      () => web.close().catch(() => {}),
+      () => recorder?.close(),
+    ],
+  });
   // `once`, not `on`: after our graceful pass the default handler is back, so
   // a second Ctrl-C during a wedged shutdown still kills the process.
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

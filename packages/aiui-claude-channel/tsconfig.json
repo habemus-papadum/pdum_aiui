@@ -10,5 +10,7 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "exclude": ["dist", "node_modules", "src/**/*.test.ts"]
+  // fake-upstream.ts is a test-only fixture (not a *.test.ts file); keep it out of
+  // the declaration build since no production module imports it.
+  "exclude": ["dist", "node_modules", "src/**/*.test.ts", "src/fake-upstream.ts"]
 }

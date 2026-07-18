@@ -7,69 +7,8 @@ import {
   isErrorType,
   openElevenLabsRealtimeSession,
 } from "./elevenlabs-realtime";
-import type {
-  RealtimeCallbacks,
-  RealtimeDiagnostic,
-  RealtimeResult,
-  RealtimeSocketFactory,
-  RealtimeSocketHandlers,
-} from "./realtime";
-
-/**
- * A scripted fake of the Scribe realtime upstream: it captures the connect URL +
- * key and every message the session sends (parsed), and lets the test drive the
- * server side — `open()` fires the socket open (a no-op for Scribe, which sends
- * no setup frame), `emit()` delivers a server event, `serverClose()`/`error()`
- * drive the transport faults. The whole path runs offline and keyless through
- * this seam (the reason the factory is injectable — mirroring `realtime.ts`).
- */
-interface FakeUpstream {
-  factory: RealtimeSocketFactory;
-  /** The connect URL the factory was handed (config lives in its query string). */
-  url?: string;
-  /** The api key the factory was handed. */
-  apiKey?: string;
-  /** Parsed JSON of every message the session sent upstream. */
-  sent: Array<Record<string, unknown>>;
-  /** True once the session closed the socket. */
-  closed: boolean;
-  /** Fire the socket's open (Scribe sends nothing in response — config is the URL). */
-  open(): void;
-  /** Deliver a server event to the session. */
-  emit(message: Record<string, unknown>): void;
-  /** Deliver a raw (possibly malformed) upstream frame. */
-  raw(text: string): void;
-  /** Fire a transport-level error. */
-  error(message: string): void;
-  /** Fire a server-initiated close (code/reason ride the fail message). */
-  serverClose(code?: number, reason?: string): void;
-}
-
-function fakeUpstream(): FakeUpstream {
-  let handlers: RealtimeSocketHandlers | undefined;
-  const up: FakeUpstream = {
-    sent: [],
-    closed: false,
-    factory: (url, apiKey, h) => {
-      handlers = h;
-      up.url = url;
-      up.apiKey = apiKey;
-      return {
-        send: (text) => up.sent.push(JSON.parse(text)),
-        close: () => {
-          up.closed = true;
-          handlers?.onClose();
-        },
-      };
-    },
-    open: () => handlers?.onOpen(),
-    emit: (message) => handlers?.onMessage(JSON.stringify(message)),
-    raw: (text) => handlers?.onMessage(text),
-    error: (message) => handlers?.onError(message),
-    serverClose: (code, reason) => handlers?.onClose(code, reason),
-  };
-  return up;
-}
+import { type FakeUpstream, fakeUpstream } from "./fake-upstream";
+import type { RealtimeCallbacks, RealtimeDiagnostic, RealtimeResult } from "./realtime";
 
 const noopCallbacks = (): RealtimeCallbacks => ({
   onDelta: () => {},

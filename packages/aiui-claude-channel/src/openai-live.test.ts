@@ -1,39 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { type FakeUpstream, fakeUpstream } from "./fake-upstream";
 import { LINTER_INSTRUCTIONS, type LiveSessionCallbacks } from "./live-session";
 import { openOpenAiLiveSession } from "./openai-live";
-import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
-
-/** A scripted fake of the OpenAI realtime upstream (the house injectable-socket pattern). */
-interface FakeUpstream {
-  factory: RealtimeSocketFactory;
-  sent: Array<Record<string, unknown>>;
-  closed: boolean;
-  open(): void;
-  emit(message: Record<string, unknown>): void;
-  error(message: string): void;
-}
-
-function fakeUpstream(): FakeUpstream {
-  let handlers: RealtimeSocketHandlers | undefined;
-  const up: FakeUpstream = {
-    sent: [],
-    closed: false,
-    factory: (_url, _apiKey, h) => {
-      handlers = h;
-      return {
-        send: (text) => up.sent.push(JSON.parse(text)),
-        close: () => {
-          up.closed = true;
-          handlers?.onClose();
-        },
-      };
-    },
-    open: () => handlers?.onOpen(),
-    emit: (message) => handlers?.onMessage(JSON.stringify(message)),
-    error: (message) => handlers?.onError(message),
-  };
-  return up;
-}
 
 const b64 = (bytes: number[]): string => Buffer.from(bytes).toString("base64");
 

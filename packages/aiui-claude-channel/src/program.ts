@@ -24,6 +24,35 @@ function parseMode(value: string): "dev" | "prod" {
   return value;
 }
 
+/** `--bind` validator, shared by `mcp` and `serve` (loopback vs the trusted-LAN host). */
+function parseBind(value: string): "loopback" | "host" {
+  if (value !== "loopback" && value !== "host") {
+    throw new InvalidArgumentError("expected 'loopback' or 'host'");
+  }
+  return value;
+}
+
+/**
+ * Add the `--bind` and `--mode` options `mcp` and `serve` share verbatim.
+ * Applied at the point the two duplicated adjacent options sit in each command,
+ * so `--help` ordering is unchanged.
+ */
+function addChannelServerOptions(cmd: Command): Command {
+  return cmd
+    .option(
+      "--bind <mode>",
+      "bind the web backend to 'loopback' (127.0.0.1, default) or 'host' (0.0.0.0 — " +
+        "every unauthenticated route becomes LAN-reachable; trusted networks only)",
+      parseBind,
+    )
+    .option(
+      "--mode <mode>",
+      "force sidecar dev/prod mode: 'dev' (Vite dev servers, source) or 'prod' " +
+        "(prebuilt static bundles). Default: derived from whether the channel runs from source",
+      parseMode,
+    );
+}
+
 export function buildProgram(): Command {
   const program = new Command();
 
@@ -32,31 +61,15 @@ export function buildProgram(): Command {
     .description("Claude Code channel — an MCP server that pushes aiui events into a session")
     .version(VERSION);
 
-  program
+  const mcp = program
     .command("mcp")
     .description("launch the MCP channel server over stdio")
     .option("--tag <tag>", "session tag to advertise (defaults to a generated UUID)")
     .option(
       "--launch-info <json>",
       "launcher-provided session summary (browser/DevTools MCP wiring), surfaced at /debug/api/info",
-    )
-    .option(
-      "--bind <mode>",
-      "bind the web backend to 'loopback' (127.0.0.1, default) or 'host' (0.0.0.0 — " +
-        "every unauthenticated route becomes LAN-reachable; trusted networks only)",
-      (value) => {
-        if (value !== "loopback" && value !== "host") {
-          throw new InvalidArgumentError("expected 'loopback' or 'host'");
-        }
-        return value;
-      },
-    )
-    .option(
-      "--mode <mode>",
-      "force sidecar dev/prod mode: 'dev' (Vite dev servers, source) or 'prod' " +
-        "(prebuilt static bundles). Default: derived from whether the channel runs from source",
-      parseMode,
-    )
+    );
+  addChannelServerOptions(mcp)
     .option(
       "--no-page-tools-notify",
       "don't push 'page tools changed' notes into the session when the page-tool " +
@@ -72,31 +85,15 @@ export function buildProgram(): Command {
     .option("--ws", "send over the /ws websocket protocol instead of POST /prompt")
     .action(runQuick);
 
-  program
+  const serve = program
     .command("serve")
     .description(
       "run a standalone debug channel server (no MCP; registered as debug) that prints lowered prompts to stdout",
     )
     .option("--tag <tag>", "registry address + stderr/trace label (defaults to a UUID)")
     .option("--name <name>", 'display name selectors show for this server (e.g. "aiui debug")')
-    .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/")
-    .option(
-      "--bind <mode>",
-      "bind the web backend to 'loopback' (127.0.0.1, default) or 'host' (0.0.0.0 — " +
-        "every unauthenticated route becomes LAN-reachable; trusted networks only)",
-      (value) => {
-        if (value !== "loopback" && value !== "host") {
-          throw new InvalidArgumentError("expected 'loopback' or 'host'");
-        }
-        return value;
-      },
-    )
-    .option(
-      "--mode <mode>",
-      "force sidecar dev/prod mode: 'dev' (Vite dev servers) or 'prod' (prebuilt " +
-        "static bundles). Default: derived from whether the channel runs from source",
-      parseMode,
-    )
+    .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/");
+  addChannelServerOptions(serve)
     // The validator is the pure parsePort (tested in serve.test.ts); re-wrapped
     // here so commander renders a bad value as a usage error, not a crash.
     .option(

@@ -69,14 +69,15 @@
     "express": "^5.1.0",
     "jsdom": "^29.0.0",
     "vite": "^6.4.1",
-    "vite-plugin-solid": "3.0.0-next.5"
+    "vite-plugin-solid": "3.0.0-next.5",
+    "ws": "^8.18.0"
   },
   "dependencies": {
     "@habemus-papadum/aiui-remote-bar": "workspace:^",
+    "@habemus-papadum/aiui-room-relay": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",
-    "solid-js": "2.0.0-beta.15",
-    "ws": "^8.18.0"
+    "solid-js": "2.0.0-beta.15"
   }
 }

@@ -23,21 +23,12 @@
 //     of them — so a demo without the shared version fails `pnpm version:check`
 //     in CI. We stamp it at creation; the release pipeline rewrites it after.
 
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { scaffoldApp, templateRoot } from "../packages/create-aiui/src/scaffold";
-
-const scriptsDir = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(scriptsDir, "..");
+import { currentVersion, deriveContext, fail, repoRoot, slugify } from "./lib/common.mjs";
 
 const USAGE = 'usage: pnpm new-demo <name> [--description "..."]';
-
-function fail(message: string): never {
-  process.stderr.write(`error: ${message}\n`);
-  process.exit(1);
-}
 
 function parseArgs(argv: string[]): { name: string; description?: string } {
   let name: string | undefined;
@@ -59,30 +50,6 @@ function parseArgs(argv: string[]): { name: string; description?: string } {
     fail(USAGE);
   }
   return { name, description };
-}
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-/** The npm scope and repo URL, read off the CLI package rather than hardcoded. */
-function deriveContext(): { scope: string; repoUrl: string } {
-  const pkg = JSON.parse(
-    readFileSync(join(repoRoot, "packages", "aiui", "package.json"), "utf8"),
-  ) as { name: string; repository?: { url?: string } };
-  const scope = pkg.name.split("/")[0];
-  return { scope, repoUrl: pkg.repository?.url ?? "" };
-}
-
-/** The single lockstep version every workspace member must carry. */
-function currentVersion(): string {
-  return execFileSync("node", [join(scriptsDir, "versioning.mjs"), "current"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
 }
 
 /**

@@ -1,50 +1,29 @@
 import { randomUUID } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createChannelLog } from "../channel-log";
-import { channelSourceDir, STALE_NOTICE, watchChannelSource } from "../hot";
+import { STALE_NOTICE } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
 import { formatPageToolsChanged, PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
-import type { Sidecar } from "../sidecar";
-import { standardSidecars } from "../standard-sidecars";
 import { projectCacheDir } from "../trace";
 import { startWebServer, type WebServer } from "../web";
+import {
+  type CommonChannelOptions,
+  commonWebOptions,
+  createShutdown,
+  installExitBackstop,
+  resolveSidecars,
+  startStalenessWatch,
+} from "./lifecycle";
 
-export interface McpOptions {
-  /**
-   * Tag identifying this channel session. Defaults to a fresh UUID; pass one
-   * (e.g. from a test harness) to make the server addressable by a known value.
-   */
-  tag?: string;
+export interface McpOptions extends CommonChannelOptions {
   /**
    * JSON launch summary from the launcher (`aiui claude`) — how the session's
    * Chrome DevTools MCP was wired, etc. Parsed tolerantly (it's diagnostics,
    * not behavior) and surfaced at `GET /debug/api/info`. See launch-info.ts.
    */
   launchInfo?: string;
-  /**
-   * The sidecars to host, as live {@link Sidecar} objects. Defaults to
-   * {@link standardSidecars} (intent, bar, pencil, console — the channel imports
-   * and composes them itself now that they are published; see
-   * standard-sidecars.ts). Tests pass their own set (often `[]`) to stay
-   * hermetic. A sidecar whose `mount` throws is isolated by `startWebServer`.
-   */
-  sidecars?: Sidecar[];
-  /**
-   * Where the web backend binds: `"loopback"` (127.0.0.1, the default) or
-   * `"host"` (0.0.0.0 — the trusted-LAN posture: every unauthenticated channel
-   * route, sidecars included, becomes reachable from the network; the launcher
-   * only passes this on the user's explicit `channel.bind` / `--aiui-bind`
-   * choice). See docs/guide/warning.md.
-   */
-  bind?: "loopback" | "host";
-  /**
-   * Force the sidecars' dev/prod mode (`--mode`). Omitted, the channel derives
-   * it from whether it is running off `src/` (see `startWebServer`); pass it to
-   * exercise the prod static-serving path from a source checkout.
-   */
-  mode?: "dev" | "prod";
   /**
    * Push a terse "page tools changed: ns/name, …" note into the session when
    * the page-tool directory changes — rung 2 of the notification ladder
@@ -95,7 +74,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // launcher sets to the project root. Tests inject their own to stay hermetic.
   // Each mount is isolated by `startWebServer`: one that throws is logged and
   // skipped, never fatal.
-  const sidecars = options.sidecars ?? standardSidecars(process.cwd());
+  const sidecars = resolveSidecars(options);
   // The page-tool registry is shared by the MCP tools (which read and drive it)
   // and the `/tools` websocket in the web backend (which feeds it), so create it
   // once and hand the same instance to both.
@@ -174,12 +153,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     sidecars,
     pageTools,
     frameSink: channelLog.frameSink,
-    ...(options.mode !== undefined ? { mode: options.mode } : {}),
-    ...(options.bind === "host" ? { host: "0.0.0.0" } : {}),
-    // The *explicit* --tag only (not the UUID minted above): the UUID is an
-    // address for the registry, not a human label — an untagged server's
-    // trace session labels as "channel·<pid>·<HHMMSS>" (see sessionLabel).
-    ...(options.tag !== undefined ? { tag: options.tag } : {}),
+    ...commonWebOptions(options),
   });
   const registration = registerServer(web.port, tag);
 
@@ -191,57 +165,36 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // channel is now stale, so nobody trusts behavior that no longer matches disk.
   // (Manual reload — the `channel_reload` tool and POST /debug/api/reload —
   // stays for the deliberate case.)
-  let stopWatch: (() => void) | undefined;
-  if (process.env.AIUI_CHANNEL_WATCH === "1") {
-    const srcDir = channelSourceDir();
-    if (srcDir) {
-      let notified = false;
-      stopWatch = watchChannelSource({
-        dir: srcDir,
-        onChange: () => {
-          const notice = notified
-            ? "aiui channel source changed again — still running the OLD build; restart to apply."
-            : STALE_NOTICE;
-          notified = true;
-          channelLog.log("stale");
-          pushToSession(notice, "channel-stale").catch((err) => {
-            channelLog.log("stale push failed", {
-              error: err instanceof Error ? err.message : String(err),
-            });
-          });
-          process.stderr.write("[aiui-channel] source changed — told the session it is stale\n");
-        },
+  let notified = false;
+  const stopWatch = startStalenessWatch({
+    logPrefix: "[aiui-channel]",
+    onStale: () => {
+      const notice = notified
+        ? "aiui channel source changed again — still running the OLD build; restart to apply."
+        : STALE_NOTICE;
+      notified = true;
+      channelLog.log("stale");
+      pushToSession(notice, "channel-stale").catch((err) => {
+        channelLog.log("stale push failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
-      process.stderr.write(
-        `[aiui-channel] watching ${srcDir} for staleness (AIUI_CHANNEL_WATCH=1)\n`,
-      );
-    } else {
-      process.stderr.write(
-        "[aiui-channel] AIUI_CHANNEL_WATCH=1 ignored — not running from source\n",
-      );
-    }
-  }
+      process.stderr.write("[aiui-channel] source changed — told the session it is stale\n");
+    },
+  });
 
   // Reliable cleanup. `remove()` is race-safe and idempotent, so calling it from
   // several exit paths is fine. The synchronous `exit` handler is the last-resort
-  // backstop — it can't await, so it only unlinks the registry file.
-  let shuttingDown = false;
-  const shutdown = async (): Promise<void> => {
-    if (shuttingDown) {
-      return;
-    }
-    shuttingDown = true;
-    channelLog.log("shutdown");
-    stopWatch?.();
-    registration.remove();
-    await web?.close().catch(() => {});
-    await mcp.close().catch(() => {});
-    await channelLog.close();
-  };
-
-  process.on("exit", () => {
-    registration.remove();
+  // backstop — it can't await, so it only unlinks the registry file. Both closes
+  // are error-swallowed (this twin tolerates a wedged web or MCP close on the way
+  // out); channelLog.close() stays last (owned by createShutdown).
+  const shutdown = createShutdown({
+    channelLog,
+    registration,
+    closers: [stopWatch, () => web?.close().catch(() => {}), () => mcp.close().catch(() => {})],
   });
+
+  installExitBackstop(registration);
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(signal, () => {
       void shutdown().finally(() => process.exit(0));

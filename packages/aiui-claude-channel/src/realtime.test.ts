@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { composeIntent, type IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
+import { type FakeUpstream, fakeUpstream } from "./fake-upstream";
 import type { ChunkDescriptor, HelloMeta } from "./frame";
 import { createIntentV1Format } from "./intent-v1";
 import { TRANSCRIPTION_NOTE } from "./prompt-context";
@@ -22,52 +23,6 @@ import {
 } from "./realtime";
 import { createTraceStore, listTraces } from "./trace";
 import { withTracing } from "./tracing";
-
-/**
- * A scripted fake of the OpenAI realtime upstream: it captures the messages the
- * session sends (parsed) and lets the test drive the server side — `open()` to
- * fire the handshake, `emit()` to deliver a server event. The whole realtime
- * path runs offline and keyless through this seam (the reason the factory is
- * injectable, mirroring `transcribe.ts`'s injected `fetch`).
- */
-interface FakeUpstream {
-  factory: RealtimeSocketFactory;
-  /** Parsed JSON of every message the session sent upstream. */
-  sent: Array<Record<string, unknown>>;
-  /** True once the session closed the socket. */
-  closed: boolean;
-  /** Fire the socket's open (the session responds with session.update). */
-  open(): void;
-  /** Deliver a server event to the session. */
-  emit(message: Record<string, unknown>): void;
-  /** Deliver a raw (possibly malformed) upstream frame. */
-  raw(text: string): void;
-  /** Fire an upstream error. */
-  error(message: string): void;
-}
-
-function fakeUpstream(): FakeUpstream {
-  let handlers: RealtimeSocketHandlers | undefined;
-  const up: FakeUpstream = {
-    sent: [],
-    closed: false,
-    factory: (_url, _apiKey, h) => {
-      handlers = h;
-      return {
-        send: (text) => up.sent.push(JSON.parse(text)),
-        close: () => {
-          up.closed = true;
-          handlers?.onClose();
-        },
-      };
-    },
-    open: () => handlers?.onOpen(),
-    emit: (message) => handlers?.onMessage(JSON.stringify(message)),
-    raw: (text) => handlers?.onMessage(text),
-    error: (message) => handlers?.onError(message),
-  };
-  return up;
-}
 
 const delta = (itemId: string, text: string) => ({
   type: "conversation.item.input_audio_transcription.delta",

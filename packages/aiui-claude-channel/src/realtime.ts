@@ -40,8 +40,29 @@
  * tests drive a scripted fake session with no network and no key — the same seam
  * pattern as `transcribe.ts`'s injected `fetch`.
  */
-import WebSocket from "ws";
 import { type CallCost, priceCall, usageFromTranscription } from "./cost";
+import { toBase64 } from "./pcm";
+import {
+  closeSuffix,
+  createDrainController,
+  createReadyGate,
+  makeWsSocketFactory,
+  type RealtimeDiagnostic,
+  type RealtimeSocketFactory,
+  reportSessionFailure,
+} from "./session-core";
+
+// The socket primitives moved to session-core.ts, but three sibling sessions and
+// the root barrel still import them from here — re-export so those paths hold.
+export {
+  captureUnexpectedResponse,
+  closeSuffix,
+  type RealtimeDiagnostic,
+  type RealtimeSocket,
+  type RealtimeSocketFactory,
+  type RealtimeSocketHandlers,
+  type UnexpectedResponseSource,
+} from "./session-core";
 
 /** The verified GA endpoint for a transcription-intent realtime session. */
 export const OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?intent=transcription";
@@ -84,30 +105,6 @@ export interface RealtimeResult {
    */
   words?: TranscriptWord[];
 }
-
-/** What a realtime session reports back, keyed by our own segment ordinal. */
-/**
- * Something the vendor did that the session did not act on, or acted on in a way
- * worth recording. Purely observational — a diagnostic never changes control
- * flow, and a caller may ignore them all. They exist because every silent
- * `default: return` in a vendor message switch is a place transcript can vanish
- * without a trace: Scribe self-committed utterances for months and the channel
- * dropped every one of them, unseen, because the drop was a bare `return`.
- *
- *  - `config-echo` — the vendor's own report of the session config it applied.
- *    The ONLY proof a connect-URL param took effect (unknown params are accepted
- *    silently), so it is recorded verbatim and diffed against what we asked for.
- *  - `config-mismatch` — a param we set that the echo does not confirm.
- *  - `vendor-commit` — the vendor closed an utterance we never asked it to close.
- *  - `orphan-result` — a terminal frame that matched no segment at all.
- *  - `unhandled` — a message type this session does not understand.
- */
-export type RealtimeDiagnostic =
-  | { kind: "config-echo"; config: Record<string, unknown> }
-  | { kind: "config-mismatch"; param: string; requested: unknown; echoed: unknown }
-  | { kind: "vendor-commit"; segment: number; chars: number; words: number }
-  | { kind: "orphan-result"; messageType: string; chars: number }
-  | { kind: "unhandled"; messageType: string; raw: string };
 
 /**
  * Diff the `session.update` we sent against the `session.updated` the server
@@ -162,41 +159,6 @@ export interface RealtimeCallbacks {
   onDiagnostic?(event: RealtimeDiagnostic): void;
 }
 
-/**
- * The minimal upstream socket the session drives — a subset of `ws`'s surface,
- * so a test can supply a scripted fake with no network. The factory wires the
- * handlers; the returned object is what the session sends on / closes.
- */
-export interface RealtimeSocket {
-  send(text: string): void;
-  close(): void;
-}
-
-/** Handlers the session hands the factory to observe the upstream socket. */
-export interface RealtimeSocketHandlers {
-  onOpen(): void;
-  onMessage(text: string): void;
-  /**
-   * A transport fault. `data` optionally carries the structured upstream
-   * payload (e.g. a rejected handshake's HTTP status + response body) so the
-   * session can surface what the API actually said, not just a summary line.
-   */
-  onError(message: string, data?: unknown): void;
-  /**
-   * The socket closed. Vendors report *why* in the close frame — Gemini puts
-   * the real error text ("API key not valid …") in `reason` — so the factory
-   * forwards both when it has them; handlers that ignore them are unchanged.
-   */
-  onClose(code?: number, reason?: string): void;
-}
-
-/**
- * Render a close frame's code/reason as a parenthesized suffix for a
- * "session closed" fault message — `" (1007: API key not valid …)"` — or ""
- * when the factory had neither (a scripted test fake, an abrupt teardown).
- * The reason is where vendors state the actual error, so it leads the text
- * a human reads.
- */
 /**
  * Fold OpenAI's TOKEN-level transcription logprobs into WORD-level
  * {@link TranscriptWord}s (no timestamps on this wire — words carry only
@@ -254,86 +216,6 @@ export function wordsFromTokenLogprobs(text: string, raw: unknown): TranscriptWo
   return rebuilt === normalized ? words : undefined;
 }
 
-export function closeSuffix(code?: number, reason?: string): string {
-  const trimmed = reason?.trim() ?? "";
-  if (code === undefined && trimmed === "") {
-    return "";
-  }
-  if (code === undefined) {
-    return ` (${trimmed})`;
-  }
-  return trimmed === "" ? ` (${code})` : ` (${code}: ${trimmed})`;
-}
-
-/**
- * The slice of `ws`'s `unexpected-response` event this module reads — the
- * request (to abort) and a readable response with a status code. Structural,
- * so the unit test drives it with plain emitters instead of a real socket.
- */
-export interface UnexpectedResponseSource {
-  on(
-    event: "unexpected-response",
-    listener: (
-      request: { destroy(): void },
-      response: {
-        statusCode?: number | undefined;
-        on(event: "data", listener: (chunk: Buffer) => void): unknown;
-        on(event: "end", listener: () => void): unknown;
-      },
-    ) => void,
-  ): unknown;
-}
-
-/**
- * Attach a `ws` `unexpected-response` listener that reads the rejected
- * handshake's HTTP status and body and reports them through `onError`. Without
- * a listener, `ws` reduces a rejected upgrade to `"Unexpected server response:
- * 403"` — discarding the response body where the API states the actual problem.
- * The body is capped (these are small JSON error payloads) and parsed when it
- * is JSON so the structured form rides `onError`'s `data`.
- */
-export function captureUnexpectedResponse(
-  ws: UnexpectedResponseSource,
-  handlers: RealtimeSocketHandlers,
-): void {
-  ws.on("unexpected-response", (request, response) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    response.on("data", (chunk: Buffer) => {
-      if (size < 4096) {
-        chunks.push(chunk);
-        size += chunk.length;
-      }
-    });
-    response.on("end", () => {
-      const body = Buffer.concat(chunks).toString("utf8").slice(0, 4096).trim();
-      let data: unknown = body === "" ? undefined : body;
-      let summary = body;
-      try {
-        const parsed = JSON.parse(body) as { error?: { message?: unknown } };
-        data = parsed;
-        if (typeof parsed?.error?.message === "string") {
-          summary = parsed.error.message;
-        }
-      } catch {
-        // not JSON — the raw (capped) text is still better than nothing
-      }
-      handlers.onError(
-        `upstream rejected the connection (HTTP ${response.statusCode})${summary ? `: ${summary}` : ""}`,
-        data,
-      );
-      request.destroy();
-    });
-  });
-}
-
-/** Builds the upstream socket for one session (real `ws` in prod, a fake in tests). */
-export type RealtimeSocketFactory = (
-  url: string,
-  apiKey: string,
-  handlers: RealtimeSocketHandlers,
-) => RealtimeSocket;
-
 export interface RealtimeSessionOptions {
   apiKey: string;
   /** Resolves the transcription model at open time. */
@@ -375,25 +257,14 @@ export interface RealtimeSession {
   close(): void;
 }
 
-const textDecoderBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
-
 /**
  * The real upstream factory: a `ws` WebSocket to OpenAI, bearer-authed (GA shape
  * — no `OpenAI-Beta` header). Server-side only; the channel always runs under
  * Node, where `ws` is a dependency (same import as `client.ts`).
  */
-export const openaiRealtimeSocketFactory: RealtimeSocketFactory = (url, apiKey, handlers) => {
-  const ws = new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } });
-  ws.on("open", () => handlers.onOpen());
-  ws.on("message", (data: unknown) => handlers.onMessage(String(data)));
-  ws.on("error", (err: Error) => handlers.onError(err.message));
-  ws.on("close", (code: number, reason: Buffer) => handlers.onClose(code, reason.toString()));
-  captureUnexpectedResponse(ws, handlers);
-  return {
-    send: (text) => ws.send(text),
-    close: () => ws.close(),
-  };
-};
+export const openaiRealtimeSocketFactory: RealtimeSocketFactory = makeWsSocketFactory(
+  (url, apiKey) => ({ url, headers: { Authorization: `Bearer ${apiKey}` } }),
+);
 
 /**
  * Open a realtime transcription session. Eagerly connects (the caller opens it
@@ -408,9 +279,7 @@ export function openRealtimeSession(
   const factory = options.socketFactory ?? openaiRealtimeSocketFactory;
   const url = options.url ?? OPENAI_REALTIME_URL;
 
-  let ready = false;
-  let dead = false;
-  const outbox: string[] = [];
+  const gate = createReadyGate((text) => socket.send(text));
 
   // Committed segments awaiting a `…completed`, in commit order.
   const pending: number[] = [];
@@ -429,26 +298,13 @@ export function openRealtimeSession(
   // Items whose segment was discarded (a Space tap): late upstream events for
   // them must drop, never re-bind to whatever segment streams next.
   const discardedItems = new Set<string>();
-  const drainWaiters: Array<() => void> = [];
-
-  const settleDrainIfIdle = (): void => {
-    if (pending.length === 0) {
-      for (const resolve of drainWaiters.splice(0)) {
-        resolve();
-      }
-    }
-  };
+  // Outstanding = every committed-but-not-completed segment, snapshotted at drain
+  // resolution time.
+  const drainCtl = createDrainController(() => [...pending]);
 
   // Audio (append/commit) waits for `session.updated`; the config handshake that
   // *produces* that readiness must go out immediately, so it bypasses the queue.
-  const sendAudioMessage = (message: object): void => {
-    const text = JSON.stringify(message);
-    if (ready && !dead) {
-      socket.send(text);
-    } else if (!dead) {
-      outbox.push(text);
-    }
-  };
+  const sendAudioMessage = (message: object): void => gate.send(JSON.stringify(message));
 
   /**
    * Bind an unseen upstream item to its segment: the oldest still-unbound
@@ -471,7 +327,7 @@ export function openRealtimeSession(
     // that impossible — but Scribe's `commit_strategy=manual` was supposed to as
     // well, and it did not exist. Callers see this as an `orphan-result`, so if
     // it ever happens we learn from a trace instead of from a lost transcript.
-    const segment = awaitingItem.shift() ?? (dead ? undefined : streamingSegment);
+    const segment = awaitingItem.shift() ?? (gate.isDead() ? undefined : streamingSegment);
     if (segment === undefined || boundSegments.has(segment)) {
       return undefined;
     }
@@ -490,22 +346,19 @@ export function openRealtimeSession(
     cumulativeByItem.delete(itemId);
     boundSegments.delete(segment);
     callbacks.onFinal(segment, result);
-    settleDrainIfIdle();
+    drainCtl.settleIfIdle();
   };
 
   /** Session-wide fault: finalize every outstanding segment loudly, then idle. */
   const fail = (message: string): void => {
-    dead = true;
+    gate.markDead();
     const outstanding = pending.splice(0);
     awaitingItem.length = 0;
     for (const segment of outstanding) {
-      commitAt.delete(segment);
-      callbacks.onError(message, segment);
+      commitAt.delete(segment); // per-twin teardown: clear each segment's commit clock
     }
-    if (outstanding.length === 0) {
-      callbacks.onError(message);
-    }
-    settleDrainIfIdle();
+    reportSessionFailure(callbacks.onError, message, outstanding);
+    drainCtl.settleIfIdle();
   };
 
   const handleMessage = (text: string): void => {
@@ -519,7 +372,6 @@ export function openRealtimeSession(
     }
     switch (message.type) {
       case "session.updated": {
-        ready = true;
         // The server's own report of the config it applied. Absence of an error
         // is not proof a param took effect — read the echo (see the ElevenLabs
         // `commit_strategy` post-mortem in elevenlabs-realtime.ts).
@@ -537,9 +389,7 @@ export function openRealtimeSession(
             callbacks.onDiagnostic?.({ kind: "config-mismatch", ...m });
           }
         }
-        for (const queued of outbox.splice(0)) {
-          socket.send(queued);
-        }
+        gate.markReady();
         return;
       }
       case "conversation.item.input_audio_transcription.delta": {
@@ -604,7 +454,7 @@ export function openRealtimeSession(
         cumulativeByItem.delete(itemId);
         boundSegments.delete(segment);
         callbacks.onError(reason, segment);
-        settleDrainIfIdle();
+        drainCtl.settleIfIdle();
         return;
       }
       case "error": {
@@ -661,7 +511,7 @@ export function openRealtimeSession(
       // A clean close after a drain finds nothing pending (a no-op fail). A close
       // mid-flight finalizes the outstanding segments loudly — with the vendor's
       // close reason, which is where the actual error text lives.
-      if (!dead) {
+      if (!gate.isDead()) {
         fail(`realtime session closed${closeSuffix(code, reason)}`);
       }
     },
@@ -669,17 +519,17 @@ export function openRealtimeSession(
 
   return {
     appendAudio(segment, bytes) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       // Segment ordinal isn't carried upstream (the buffer is implicit) — it
       // marks this segment as the streaming one, where a pre-commit delta's
       // unseen item_id binds. Append forwards bytes as-is.
       streamingSegment = segment;
-      sendAudioMessage({ type: "input_audio_buffer.append", audio: textDecoderBase64(bytes) });
+      sendAudioMessage({ type: "input_audio_buffer.append", audio: toBase64(bytes) });
     },
     commit(segment) {
-      if (dead) {
+      if (gate.isDead()) {
         callbacks.onError("realtime session unavailable", segment);
         return;
       }
@@ -705,39 +555,22 @@ export function openRealtimeSession(
           discardedItems.add(itemId);
         }
       }
-      if (!dead) {
+      if (!gate.isDead()) {
         sendAudioMessage({ type: "input_audio_buffer.clear" });
       }
     },
     drain(timeoutMs) {
-      if (pending.length === 0) {
-        return Promise.resolve([]);
-      }
-      return new Promise<number[]>((resolve) => {
-        let settled = false;
-        const finish = (): void => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          clearTimeout(timer);
-          resolve([...pending]);
-        };
-        const timer = setTimeout(finish, timeoutMs);
-        drainWaiters.push(finish);
-      });
+      return drainCtl.drain(timeoutMs);
     },
     close() {
-      dead = true;
+      gate.markDead();
       try {
         socket.close();
       } catch {
         // best-effort — the socket may already be closing
       }
       // Release any drain still waiting so `fin` never hangs on a closed socket.
-      for (const resolve of drainWaiters.splice(0)) {
-        resolve();
-      }
+      drainCtl.releaseAll();
     },
   };
 }

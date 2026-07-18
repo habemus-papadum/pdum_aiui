@@ -10,6 +10,27 @@ export const OPENAI_REALTIME_VOICE_URL = "wss://api.openai.com/v1/realtime";
 /** The realtime session's PCM rate (in and out). */
 export const REALTIME_VOICE_RATE = 24000;
 
+/** Base64-encode raw bytes for a wire frame's `audio`/`audio_base_64` field. */
+export const toBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
+
+/** Decode a base64 audio payload back to bytes (reply-audio deltas). */
+export const fromBase64 = (b64: string): Uint8Array => new Uint8Array(Buffer.from(b64, "base64"));
+
+/** Concatenate buffered PCM chunks of one turn into a single buffer (WAV-wrapped by the caller). */
+export function concatChunks(chunks: Uint8Array[]): Uint8Array {
+  let total = 0;
+  for (const c of chunks) {
+    total += c.length;
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    merged.set(c, offset);
+    offset += c.length;
+  }
+  return merged;
+}
+
 /**
  * Wrap raw little-endian PCM16 mono samples in a minimal 44-byte WAV header so a
  * browser `<audio>` element can play the clip (raw PCM has no container). The

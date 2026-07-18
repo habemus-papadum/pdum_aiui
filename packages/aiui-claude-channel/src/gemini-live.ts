@@ -44,7 +44,6 @@
  *    `goAway`.
  */
 
-import WebSocket from "ws";
 import { priceCall, usageFromGeminiLive } from "./cost";
 import { READ_FILE_DECLARATION_GEMINI } from "./linter-tools";
 import {
@@ -54,13 +53,14 @@ import {
   type LiveSession,
   type LiveSessionCallbacks,
 } from "./live-session";
-import { pcm16ToWav } from "./pcm";
+import { fromBase64, toBase64 } from "./pcm";
+import { closeSuffix, type RealtimeSocketFactory, type RealtimeSocketHandlers } from "./realtime";
 import {
-  captureUnexpectedResponse,
-  closeSuffix,
-  type RealtimeSocketFactory,
-  type RealtimeSocketHandlers,
-} from "./realtime";
+  createReadyGate,
+  createReplyClip,
+  makeOnceCall,
+  makeWsSocketFactory,
+} from "./session-core";
 
 /** The v1beta bidirectional-generate endpoint (key rides the query string). */
 export const GEMINI_LIVE_URL =
@@ -146,45 +146,17 @@ export interface GeminiLiveSessionOptions {
   socketFactory?: RealtimeSocketFactory;
 }
 
-const toBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
-const fromBase64 = (b64: string): Uint8Array => new Uint8Array(Buffer.from(b64, "base64"));
-
-/** Concatenate buffered PCM chunks of one turn into one buffer (WAV-wrapped by the caller). */
-function concatChunks(chunks: Uint8Array[]): Uint8Array {
-  let total = 0;
-  for (const c of chunks) {
-    total += c.length;
-  }
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    merged.set(c, offset);
-    offset += c.length;
-  }
-  return merged;
-}
-
 /**
  * The real upstream factory: a `ws` WebSocket to the Gemini Live endpoint with
  * the API key on the query string (unlike OpenAI's bearer header). Server-side
- * only — the channel always runs under Node.
+ * only — the channel always runs under Node. (Gemini reports auth/quota faults
+ * in the close frame's reason, which the shared factory forwards to onClose.)
  */
-export const geminiLiveSocketFactory: RealtimeSocketFactory = (url, apiKey, handlers) => {
-  const full = url.includes("?") ? `${url}&key=${apiKey}` : `${url}?key=${apiKey}`;
-  const ws = new WebSocket(full);
-  ws.on("open", () => handlers.onOpen());
-  ws.on("message", (data: unknown) => handlers.onMessage(String(data)));
-  ws.on("error", (err: Error) => handlers.onError(err.message));
-  // Gemini reports auth/quota faults in the close frame's reason ("API key not
-  // valid. …"), so the code/reason must reach the session — a bare onClose()
-  // reduces every failure to "session closed" with the cause discarded.
-  ws.on("close", (code: number, reason: Buffer) => handlers.onClose(code, reason.toString()));
-  captureUnexpectedResponse(ws, handlers);
-  return {
-    send: (text) => ws.send(text),
-    close: () => ws.close(),
-  };
-};
+export const geminiLiveSocketFactory: RealtimeSocketFactory = makeWsSocketFactory(
+  (url, apiKey) => ({
+    url: url.includes("?") ? `${url}&key=${apiKey}` : `${url}?key=${apiKey}`,
+  }),
+);
 
 /** Gemini's capability grade: video-capable, images ride the realtime stream. */
 const GEMINI_CAPABILITIES: LiveCapabilities = { video: true, imageInjection: "stream" };
@@ -201,28 +173,21 @@ export function openGeminiLiveSession(
   const factory = options.socketFactory ?? geminiLiveSocketFactory;
   const url = options.url ?? GEMINI_LIVE_URL;
 
-  let ready = false;
-  let dead = false;
-  const outbox: string[] = [];
+  const gate = createReadyGate((text) => socket.send(text));
   const guard = new WindowOrderingGuard<OutboundFrame>();
 
   // Per-turn accumulation. Gemini has no response ids; a turn is bounded by
-  // `serverContent.turnComplete`, so we buffer until it and flush one clip /
-  // one reply transcript per turn. (No user-transcript lane: linter sessions
-  // run without vendor input transcription.)
-  let pendingReplyText = "";
-  let replyAudio: Uint8Array[] = [];
+  // `serverContent.turnComplete`, so ONE reply clip buffers until it and flushes
+  // one clip / one reply transcript per turn — reset on a barge-in `interrupted`.
+  // (No user-transcript lane: linter sessions run without vendor input transcription.)
+  const clip = createReplyClip(
+    { onAudio: callbacks.onReplyAudio, onTranscript: callbacks.onReplyTranscript },
+    GEMINI_OUTPUT_RATE,
+  );
 
   // Send once ready; the setup handshake that produces readiness bypasses the
   // queue (it goes out in `onOpen`). Everything the guard admits flows here.
-  const sendReady = (frame: OutboundFrame): void => {
-    const text = JSON.stringify(frame);
-    if (ready && !dead) {
-      socket.send(text);
-    } else if (!dead) {
-      outbox.push(text);
-    }
-  };
+  const sendReady = (frame: OutboundFrame): void => gate.send(JSON.stringify(frame));
 
   /** Route one classified frame through the window guard, then the ready queue. */
   const emit = (kind: LiveFrameKind, frame: OutboundFrame): void => {
@@ -231,38 +196,22 @@ export function openGeminiLiveSession(
     }
   };
 
-  const flushTurn = (): void => {
-    if (replyAudio.length > 0) {
-      callbacks.onReplyAudio(pcm16ToWav(concatChunks(replyAudio), GEMINI_OUTPUT_RATE), "audio/wav");
-      replyAudio = [];
-    }
-    const reply = pendingReplyText.trim();
-    pendingReplyText = "";
-    if (reply !== "") {
-      callbacks.onReplyTranscript(reply);
-    }
-  };
-
   /** A hard fault: surface it loudly, then idle. */
   const fail = (message: string, data?: unknown): void => {
-    if (dead) {
+    if (gate.isDead()) {
       return;
     }
-    dead = true;
+    gate.markDead();
     callbacks.onError(message, data);
   };
 
   /** A linter-mode function call: toolResponse carries the result string. */
-  const buildLinterCall = (fc: { id?: string; name?: string; args?: unknown }): LinterToolCall => {
-    let responded = false;
-    return {
-      tool: fc.name ?? "",
-      args: (fc.args ?? {}) as Record<string, unknown>,
-      respond: (result: string) => {
-        if (responded || dead) {
-          return;
-        }
-        responded = true;
+  const buildLinterCall = (fc: { id?: string; name?: string; args?: unknown }): LinterToolCall =>
+    makeOnceCall(
+      fc.name ?? "",
+      (fc.args ?? {}) as Record<string, unknown>,
+      () => gate.isDead(),
+      (result) => {
         // Gemini resumes on its own after the toolResponse — no extra frame.
         sendReady({
           toolResponse: {
@@ -270,8 +219,7 @@ export function openGeminiLiveSession(
           },
         });
       },
-    };
-  };
+    );
 
   const handleMessage = (text: string): void => {
     let message: Record<string, unknown>;
@@ -281,10 +229,7 @@ export function openGeminiLiveSession(
       return; // a malformed upstream frame — ignore rather than crash the thread
     }
     if (message.setupComplete !== undefined) {
-      ready = true;
-      for (const queued of outbox.splice(0)) {
-        socket.send(queued);
-      }
+      gate.markReady();
       return;
     }
     const serverContent = message.serverContent as
@@ -298,21 +243,20 @@ export function openGeminiLiveSession(
       | undefined;
     if (serverContent !== undefined) {
       if (typeof serverContent.outputTranscription?.text === "string") {
-        pendingReplyText += serverContent.outputTranscription.text;
+        clip.appendTranscript(serverContent.outputTranscription.text);
       }
       for (const part of serverContent.modelTurn?.parts ?? []) {
         if (typeof part.inlineData?.data === "string") {
-          replyAudio.push(fromBase64(part.inlineData.data));
+          clip.pushAudio(fromBase64(part.inlineData.data));
         }
       }
       if (serverContent.interrupted === true) {
         // Barge-in: discard the half-spoken reply so it is not replayed.
-        replyAudio = [];
-        pendingReplyText = "";
+        clip.reset();
         callbacks.onInterrupted();
       }
       if (serverContent.turnComplete === true) {
-        flushTurn();
+        clip.flush();
       }
     }
     const toolCall = message.toolCall as
@@ -373,7 +317,7 @@ export function openGeminiLiveSession(
       // The close frame is where Gemini states the actual fault ("API key not
       // valid …" rides `reason`) — surface it verbatim, plus the structured
       // form for the client's details expander.
-      if (!dead) {
+      if (!gate.isDead()) {
         fail(
           `gemini live session closed${closeSuffix(code, reason)}`,
           code !== undefined || (reason !== undefined && reason !== "")
@@ -387,13 +331,13 @@ export function openGeminiLiveSession(
   return {
     capabilities: GEMINI_CAPABILITIES,
     activityStart() {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       emit("activityStart", { realtimeInput: { activityStart: {} } });
     },
     appendAudio(pcm24k) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       emit("audio", {
@@ -401,13 +345,13 @@ export function openGeminiLiveSession(
       });
     },
     activityEnd() {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       emit("activityEnd", { realtimeInput: { activityEnd: {} } });
     },
     injectLabeledImage(label, bytes, mime) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       // The label MUST precede its frame (spike finding 5); both are "other"
@@ -416,7 +360,7 @@ export function openGeminiLiveSession(
       emit("other", { realtimeInput: { video: { data: toBase64(bytes), mimeType: mime } } });
     },
     injectContextText(text) {
-      if (dead) {
+      if (gate.isDead()) {
         return;
       }
       // SILENT context: `clientContent` with `turnComplete: false` appends to
@@ -436,7 +380,7 @@ export function openGeminiLiveSession(
       // server's own `interrupted` signal (new window audio triggers it).
     },
     close() {
-      dead = true;
+      gate.markDead();
       try {
         socket.close();
       } catch {
