@@ -365,7 +365,7 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   };
   connectLivenessPort();
 
-  const beatTimer = setInterval(() => {
+  const beatAll = (): void => {
     try {
       void chrome.tabs.query({ windowId: options.windowId }).then((tabs) => {
         for (const tab of tabs) {
@@ -378,7 +378,14 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
       // the extension context can die under a reload — the page watchdogs
       // handle exactly that; this timer just stops mattering
     }
-  }, HEARTBEAT_MS);
+  };
+  // Beat immediately, not just on the interval: the first beat carries this
+  // panel boot's session id, and a content script that outlived the previous
+  // panel re-announces its page facts on seeing a NEW session (content.ts) —
+  // that re-hello is how a page loaded before the panel opened gets its aiui/
+  // selection pills lit without a manual refresh.
+  beatAll();
+  const beatTimer = setInterval(beatAll, HEARTBEAT_MS);
 
   return {
     transport,

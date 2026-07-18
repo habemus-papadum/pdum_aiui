@@ -307,6 +307,8 @@ const dropAssertions = (): void => {
   pencil?.disengage();
   pencil = undefined;
 };
+/** The last driver (panel-boot) session that beat us — see heartbeat below. */
+let lastDriverSession: string | undefined;
 const driverWatch = createDriverWatch({
   timeoutMs: DRIVER_TIMEOUT_MS,
   onGone: () => {
@@ -324,7 +326,16 @@ const driverWatch = createDriverWatch({
 // ── the capability surface (the same command set the CDP page serves) ────────
 serveRelay(PAGE_ADDRESS, {
   heartbeat: (payload) => {
-    driverWatch.alive(String((payload as { session?: string } | null)?.session ?? ""));
+    const session = String((payload as { session?: string } | null)?.session ?? "");
+    // A session id this script has not seen means a NEW panel boot — one that
+    // never heard our load-time hello (the panel opened after this page
+    // loaded, or reloaded since). Re-announce the page facts so its pills
+    // (aiui, selection) light without a manual page refresh.
+    if (session !== "" && session !== lastDriverSession) {
+      lastDriverSession = session;
+      sayHello();
+    }
+    driverWatch.alive(session);
     return { ok: true };
   },
   /** The WORKER's affirmative panel-close verdict (sw.ts, owner 2026-07-17):

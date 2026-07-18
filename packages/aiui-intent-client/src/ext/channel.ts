@@ -30,6 +30,7 @@
 import { CDP_CHANNEL_TAG_KEY } from "./manifest";
 
 const RECENT_KEY = "aiui2.recentPorts";
+const PINNED_KEY = "aiui2.pinnedPort";
 const RECENT_MAX = 6;
 
 /** The native-messaging host (`aiui extension install-native-host`). */
@@ -94,6 +95,29 @@ export async function rememberPort(port: number): Promise<void> {
   await chrome.storage.local.set({ [RECENT_KEY]: updateRecent(await loadRecentPorts(), port) });
 }
 
+/** The user's explicit pick (the header switcher), if one is pinned. */
+export async function loadPinnedPort(): Promise<number | undefined> {
+  const got = await chrome.storage.local.get(PINNED_KEY);
+  const raw = got[PINNED_KEY];
+  return Number.isInteger(raw) ? (raw as number) : undefined;
+}
+
+/**
+ * Pin an explicit pick: {@link discoverChannel} honors it above everything —
+ * the CDP tag included — until it stops answering or the user picks again. In
+ * this tier the channel need not drive the browser (content scripts do the
+ * driving), so binding the wire to a debug channel is a legitimate choice the
+ * auto-discovery ladder would otherwise override on every panel boot.
+ */
+export async function pinPort(port: number): Promise<void> {
+  await chrome.storage.local.set({ [PINNED_KEY]: port });
+  await rememberPort(port);
+}
+
+export async function clearPinnedPort(): Promise<void> {
+  await chrome.storage.local.remove(PINNED_KEY);
+}
+
 /** Is a channel alive on this port? */
 async function alive(port: number): Promise<boolean> {
   try {
@@ -151,7 +175,17 @@ export async function listChannels(currentPort?: number): Promise<ChannelEntry[]
 
 /** Find a channel to bind, or `undefined` (see the module doc for the order). */
 export async function discoverChannel(): Promise<number | undefined> {
-  // The CDP tag first: the channel that PROVED it drives this browser beats
+  // An explicit pick outranks the whole ladder: the user chose (the header
+  // switcher), and reload must not un-choose for them. A pin that stopped
+  // answering clears, and discovery resumes below.
+  const pinned = await loadPinnedPort();
+  if (pinned !== undefined) {
+    if (await alive(pinned)) {
+      return pinned;
+    }
+    await clearPinnedPort();
+  }
+  // The CDP tag next: the channel that PROVED it drives this browser beats
   // any remembered or registry channel — those may belong to another browser.
   const tag = await readCdpTag();
   if (tag !== undefined && (await alive(tag.port))) {

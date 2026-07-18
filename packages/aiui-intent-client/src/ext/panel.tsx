@@ -39,6 +39,7 @@ import {
   discoverChannel,
   listChannels,
   onCdpTagChanged,
+  pinPort,
   readCdpTag,
   rememberPort,
 } from "./channel";
@@ -297,9 +298,10 @@ render(
         // Native host FIRST (the extension's one NM use), mirror fallback.
         listChannels={() => listChannels(port)}
         onSwitch={(next) => {
-          // The extension's rebind: remember the port (discovery tries recent
-          // ports first), then reboot the panel document onto it.
-          void rememberPort(next).then(() => location.reload());
+          // The extension's rebind: PIN the pick (an explicit choice outranks
+          // the discovery ladder — CDP tag included — until it dies or the
+          // user picks again), then reboot the panel document onto it.
+          void pinPort(next).then(() => location.reload());
         }}
         client={client}
         registerBlipSink={(sink) => (blipSink = sink)}
