@@ -65,6 +65,8 @@ export interface AttachedPage {
   visible: boolean;
   focused: boolean;
   aiui: boolean;
+  /** The page's latest selection-present verdict (replayed to late subscribers). */
+  selectionPresent: boolean;
   /** Whether THIS document already carries the page bundle (see `ensureBundle`). */
   bundleInjected: boolean;
 }
@@ -322,6 +324,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         relead(page);
         break;
       case "selection":
+        page.selectionPresent = report.present;
         emit({ kind: "selectionPresent", tab: page.tab, present: report.present });
         break;
       case "interaction":
@@ -419,6 +422,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       visible: false,
       focused: false,
       aiui: false,
+      selectionPresent: false,
       bundleInjected: false,
     };
     bySession.set(sessionId, page);
@@ -589,6 +593,22 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     },
     onPageEvent: (handler) => {
       pageHandlers.add(handler);
+      // Replay each attached page's cached facts to the late subscriber (the
+      // client registers its handler several awaits after the bus attached
+      // pages and their hellos arrived — same gap as the extension bus; the
+      // twin fix, applied to both). Async, so the register-then-receive
+      // contract holds.
+      queueMicrotask(() => {
+        if (!pageHandlers.has(handler)) {
+          return;
+        }
+        for (const page of bySession.values()) {
+          if (page.url !== "") {
+            handler({ kind: "aiuiSupport", tab: page.tab, supported: page.aiui });
+            handler({ kind: "selectionPresent", tab: page.tab, present: page.selectionPresent });
+          }
+        }
+      });
       return () => pageHandlers.delete(handler);
     },
   };

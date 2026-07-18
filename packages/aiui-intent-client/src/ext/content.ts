@@ -332,6 +332,11 @@ serveRelay(PAGE_ADDRESS, {
     // loaded, or reloaded since). Re-announce the page facts so its pills
     // (aiui, selection) light without a manual page refresh.
     if (session !== "" && session !== lastDriverSession) {
+      // Page-console breadcrumb for the pill-lighting flow (issue seen live
+      // 2026-07-18): pairs with the panel console's "[ext] hello ←" line.
+      console.info(
+        `[aiui-intent] new driver session ${session} — re-announcing (aiui=${aiuiPage})`,
+      );
       lastDriverSession = session;
       sayHello();
     }

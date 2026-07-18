@@ -67,6 +67,24 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   const tabHandlers = new Set<(tab: number | undefined) => void>();
   /** What we asserted per tab — a fresh document gets it back (see below). */
   const sticky = new Map<number, { keylayer?: unknown }>();
+  /**
+   * The latest PAGE FACTS per tab (hello's aiui verdict, selection presence),
+   * replayed to late subscribers. The panel's client registers its page-event
+   * handler several awaits after this bus connects, and a page's (re-)hello
+   * can land in that gap — seen live 2026-07-18: the immediate first beat's
+   * re-hello arrived before any subscriber existed, so the aiui pill stayed
+   * unlit until a manual page reload. Facts are cached at RECEIPT and
+   * replayed at SUBSCRIPTION, so the ordering can never matter again.
+   */
+  const pageFacts = new Map<number, { aiui?: boolean; selection?: boolean }>();
+  const pageFactsFor = (tab: number): { aiui?: boolean; selection?: boolean } => {
+    let facts = pageFacts.get(tab);
+    if (facts === undefined) {
+      facts = {};
+      pageFacts.set(tab, facts);
+    }
+    return facts;
+  };
   let ring: RingState = { on: false, turnTone: false };
   let activeTab: number | undefined;
 
@@ -118,10 +136,13 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   const onReport = (tab: number, report: PageReport): void => {
     switch (report.kind) {
       case "hello":
+        log(`hello ← tab ${tab}: aiui=${report.aiui} (${pageHandlers.size} subscriber(s))`);
+        pageFactsFor(tab).aiui = report.aiui;
         emit({ kind: "aiuiSupport", tab, supported: report.aiui });
         replay(tab); // a fresh document (load, navigation, extension reload)
         break;
       case "selection":
+        pageFactsFor(tab).selection = report.present;
         emit({ kind: "selectionPresent", tab, present: report.present });
         break;
       case "interaction":
@@ -255,6 +276,23 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     },
     onPageEvent: (handler) => {
       pageHandlers.add(handler);
+      // Replay the cached page facts to the late subscriber — async, so the
+      // register-then-receive contract holds (a handler never fires inside
+      // its own registration call).
+      queueMicrotask(() => {
+        if (!pageHandlers.has(handler)) {
+          return;
+        }
+        for (const [tab, facts] of pageFacts) {
+          log(`page-facts replay → subscriber: tab ${tab} aiui=${facts.aiui}`);
+          if (facts.aiui !== undefined) {
+            handler({ kind: "aiuiSupport", tab, supported: facts.aiui });
+          }
+          if (facts.selection !== undefined) {
+            handler({ kind: "selectionPresent", tab, present: facts.selection });
+          }
+        }
+      });
       return () => pageHandlers.delete(handler);
     },
   };

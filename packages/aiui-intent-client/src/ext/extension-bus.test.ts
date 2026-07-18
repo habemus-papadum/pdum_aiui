@@ -136,6 +136,35 @@ describe("ExtensionBus", () => {
     ]);
   });
 
+  it("replays cached page facts to a LATE subscriber (the unlit-aiui-pill lesson)", async () => {
+    const fake = fakeChrome({ windowTabs: [{ id: 7, active: true }] });
+    const bus = await connectExtensionBus({ windowId: 1 });
+
+    // The page announces itself BEFORE anyone subscribes — exactly the panel
+    // boot gap (the bus connects several awaits before the client registers
+    // its page-event handler; seen live 2026-07-18 as an aiui pill that only
+    // lit after a manual page reload).
+    fake.fireMessage(
+      report({
+        kind: "hello",
+        url: "http://x/",
+        title: "t",
+        visible: true,
+        focused: true,
+        aiui: true,
+      }),
+      { tab: { id: 7, windowId: 1 } },
+    );
+    fake.fireMessage(report({ kind: "selection", present: true }), { tab: { id: 7, windowId: 1 } });
+
+    const events: PageEvent[] = [];
+    bus.transport.onPageEvent((event) => events.push(event));
+    expect(events).toEqual([]); // async replay: never inside the registration call
+    await settle();
+    expect(events).toContainEqual({ kind: "aiuiSupport", tab: 7, supported: true });
+    expect(events).toContainEqual({ kind: "selectionPresent", tab: 7, present: true });
+  });
+
   it("re-asserts ring and key layer when a document says hello again (the reload lesson)", async () => {
     const fake = fakeChrome({ windowTabs: [{ id: 7, active: true }] });
     const bus = await connectExtensionBus({ windowId: 1 });
