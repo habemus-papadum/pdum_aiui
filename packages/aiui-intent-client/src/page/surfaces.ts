@@ -11,9 +11,9 @@
  * Type-only imports are fine; they erase before stringification.
  */
 
-import type { PageReport } from "../cdp/page-script";
 import type { PageCapabilityMap } from "../transport";
 import type { PencilHandle } from "./pencil-mount";
+import type { PageReport } from "./report";
 
 /** The region-drag report — the only PageReport a region surface emits. */
 type RegionReport = Extract<PageReport, { kind: "region" }>;

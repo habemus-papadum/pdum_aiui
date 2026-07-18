@@ -14,7 +14,7 @@
  *
  * **The page fetches nothing.** Not the bootstrap (it arrives as a string over
  * CDP), and not the heavy page bundle (the bus evaluates it into the page —
- * see cdp-bus's `ensureBundle`). An https page may not load a module from
+ * see page-rpc.ts's `ensureBundle`). An https page may not load a module from
  * the channel's `http://127.0.0.1:…` origin: that is mixed content, and it is
  * most of the web. Found live — the ring appeared on example.com and the
  * surfaces, quietly, did not.
@@ -38,54 +38,15 @@ import {
 } from "../page/surfaces";
 import { type CapError, DRIVER_TIMEOUT_MS, type PageCapabilityMap } from "../transport";
 
-/** One page tool as it travels page→panel: the MCP-shaped subset of viz's
- * `AiuiPageTool` (no `run`). Structurally the channel's `PageToolDescriptor`,
- * which the tools-link test pins. */
-export type PageToolDescriptorReport = {
-  name: string;
-  description: string;
-  inputSchema?: Record<string, unknown>;
-};
-
-/** What one instrumented document reports — the page→panel contract, shared by
- * BOTH hosts (the extension's content script speaks it too; see ext/protocol). */
-export type PageReport =
-  | { kind: "hello"; url: string; title: string; visible: boolean; focused: boolean; aiui: boolean }
-  | { kind: "focus"; visible: boolean; focused: boolean }
-  | { kind: "selection"; present: boolean }
-  | { kind: "interaction" }
-  | {
-      kind: "navigation";
-      from: string;
-      to: string;
-      navKind: "push" | "replace" | "traverse" | "hash";
-      /** The DESTINATION's canonical tab record (`pageTabRecord`), when built. */
-      tab?: PageTabRecord;
-    }
-  | { kind: "key"; key: string; phase: "down" | "up"; repeat: boolean }
-  /** A completed region drag (the armed `a` gesture): rect + viewport in CSS
-   * px, the pointerup wall-clock, and located components when the page is
-   * aiui-instrumented (the evaluated bundle's locator). */
-  | {
-      kind: "region";
-      rect: { x: number; y: number; w: number; h: number };
-      viewport: { w: number; h: number };
-      takenAt: number;
-      components?: unknown[];
-    }
-  | { kind: "stroke"; points: number }
-  /** A jump pick finished — committed (VS Code opens) or cancelled (Esc /
-   * click-away). Auto-exits jump mode (owner, 2026-07-16). */
-  | { kind: "jumpDone" }
-  /** The page's `__AIUI__.tools` registry — full current set, descriptors only. */
-  | {
-      kind: "tools";
-      registrations: Array<{ ns: string; tools: PageToolDescriptorReport[] }>;
-    }
-  /** A `toolsCall` capability's answer, correlated by callId. */
-  | { kind: "toolsResult"; callId: string; ok: boolean; value?: unknown; error?: string };
-
-const BINDING = "__aiuiIntentReport";
+// The page→panel report wire contract lives one level down, in the tier-shared
+// src/page/report.ts (so the MV3 tier stops importing its protocol from cdp/).
+// Re-exported here for the historical import path; the injected source never
+// referenced these names, so moving them leaves the fingerprint untouched.
+export {
+  PAGE_REPORT_BINDING,
+  type PageReport,
+  type PageToolDescriptorReport,
+} from "../page/report";
 
 /** The self-contained pieces `buildPageScript` stringifies into the bootstrap:
  * the shared page surfaces (surfaces.ts), the driver watchdog (driver-watch.ts),
@@ -523,5 +484,3 @@ function fingerprint(source: string): string {
   }
   return hash.toString(36);
 }
-
-export const PAGE_REPORT_BINDING = BINDING;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { composeIntent, Engine } from "./engine";
+import { composeIntent } from "./compose";
+import { Engine } from "./engine";
 
 function armedEngine(): Engine {
   let t = 0;

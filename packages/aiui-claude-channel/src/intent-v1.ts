@@ -44,34 +44,30 @@
  * notification). Concretely: attachment blobs are saved and shot paths wired on
  * arrival (zero fin-time disk I/O); the condition passes run on each attachment;
  * the prompt's tab/source preamble is pre-warmed at thread-open; and a
- * *speculative* {@link composeIntent} runs after each mutating batch, cached and
+ * *speculative* `composeIntent` runs after each mutating batch, cached and
  * reused at `fin` when the event log has not changed since (fingerprinted by a
  * mutation counter). The invariant that keeps this safe: speculation only ever
  * populates caches and the trace — never `sendPrompt`, never a push, never a
  * paid re-run — and `fin` alone (and only when not cancelled) commits. An
  * abandoned turn (socket dropped, no `fin`) drops this state via {@link
  * StreamProcessor.onClose} and lowers to nothing.
+ *
+ * The processor here is thin orchestration — hello-config resolution
+ * (`resolveIntent`, in `intent-resolve`), the shared mutable turn state and its
+ * helper surface (`createIntentTurn`, in `intent-turn`), the linter sidecar, and
+ * chunk dispatch. The wings live in siblings: `intent-stt` (the streaming
+ * transcription session, segment commit, and PCM buffering), `intent-fin`
+ * (`finishTurn`, the fin commit), `intent-stream-util` (pure helpers + protocol
+ * floors), and `intent-messages` (the server→client push shapes).
  */
 import {
-  type ComposedIntent,
-  composeIntent,
-  DEFAULT_INTENT_CONFIG,
-  expandTier,
   type IntentEvent,
-  type IntentPipelineConfig,
   LINTER_VENDORS,
   type LinterVendor,
-  type PromptSpan,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
-  type AudioOutOfOrderData,
-  type ComposedSpeculativeData,
   type ConditionData,
   type IntentConfigData,
-  type RealtimeCommitData,
-  type RealtimeDiscardData,
-  type SpeechData,
-  type SttPartialData,
   stageLabel,
 } from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import {
@@ -82,196 +78,34 @@ import {
   type ThreadContext,
 } from "./channel";
 import { rawCodec } from "./codec";
-import type { CallCost } from "./cost";
-import { ELEVENLABS_COMMIT_FLOOR_MS, openElevenLabsRealtimeSession } from "./elevenlabs-realtime";
 import type { ChunkDescriptor } from "./frame";
-import { DEFAULT_GEMINI_LIVE_MODEL } from "./gemini-live";
-import { createLinterSidecar, type LinterSidecar } from "./linter-sidecar";
+import { finishTurn } from "./intent-fin";
+import type { LoweredMessage } from "./intent-messages";
+import { GEMINI_KEY_HINT, OPENAI_KEY_HINT, resolveIntent } from "./intent-resolve";
+import {
+  decodeJson,
+  imageDownscale,
+  imageExtension,
+  readEventBatch,
+  silenceTrim,
+} from "./intent-stream-util";
+import { commitRealtimeSegment, onAudioChunk, openSttSession } from "./intent-stt";
+import { createIntentTurn } from "./intent-turn";
+import { createLinterSidecar } from "./linter-sidecar";
 import type { SelectionEntry } from "./live-resolve";
 import type { LiveSession, LiveSessionCallbacks } from "./live-session";
-import { DEFAULT_OPENAI_LIVE_MODEL } from "./openai-live";
-import { promptContextSections, TRANSCRIPTION_NOTE, wrapWithContextParts } from "./prompt-context";
-import {
-  DEFAULT_REALTIME_MODEL,
-  openRealtimeSession,
-  type RealtimeCallbacks,
-  type RealtimeSession,
-  type RealtimeSocketFactory,
-} from "./realtime";
+import { promptContextSections } from "./prompt-context";
+import type { RealtimeSocketFactory } from "./realtime";
 
 import { openaiSpeaker, type Speaker } from "./speak";
 import { openaiSummarizer, type Summarizer } from "./summarize";
-import type { TraceHandle } from "./trace";
 import { traceOf } from "./tracing";
 import { audioExtensionForMime, type FetchLike } from "./transcribe";
 
-/**
- * A server-produced batch of intent events, pushed to the client to merge into
- * its own stream (transcripts it did not compute).
- * Distinguished from a per-frame ack by its `kind` field.
- */
-export interface LoweredMessage {
-  kind: "lowered";
-  threadId: string;
-  events: IntentEvent[];
-}
-
-/**
- * The turn's final lowered prompt, pushed to the client just before it is sent
- * into the session — exactly what the fin commit hands `sendPrompt`, so a
- * client (a debug viewer, a widget's "what did I just send?" affordance) can
- * show the committed prompt without polling the trace API. Pushed to every
- * client, unconditionally: the push protocol is additive, and old clients
- * ignore unknown kinds by design. A cancelled or empty turn pushes nothing
- * (there is no prompt to show).
- */
-export interface LoweredPromptMessage {
-  kind: "lowered-prompt";
-  threadId: string;
-  /** The full composed prompt (context preamble + body), exactly as sent. */
-  prompt: string;
-  /**
-   * Offset-annotated structure over {@link prompt} — the body spans from
-   * {@link composeIntent}, shifted past the context preamble, with a leading
-   * `preamble` span. A client renders the raw prompt with hover-previews and a
-   * de-emphasized preamble from these instead of re-parsing. Additive.
-   */
-  spans?: PromptSpan[];
-  /** The Option-C attachment paths, when the prompt carries `{shot_N}` tokens. */
-  meta?: Record<string, string>;
-}
-
-/**
- * A base64 audio clip pushed to the client to play — the `premium` tier's spoken
- * TTS ack and the `flagship` tier's model reply share this one additive message
- * (archive/streaming-turns.md §4, archive/model-tiers.md T2/T3). Distinguished from a per-frame
- * ack and a {@link LoweredMessage} by its `kind`. `label` (when present) is the
- * spoken text, for the widget's speaker line and the trace.
- */
-export interface SpeechMessage {
-  kind: "speech";
-  threadId: string;
-  /** A per-thread clip id (`ack_N` / the model `responseId`), for the client player. */
-  id: string;
-  /** Container MIME of the clip (`audio/mpeg` for TTS acks, `audio/wav` for voice). */
-  mime: string;
-  /** Base64-encoded audio bytes. */
-  data: string;
-  /** The spoken text, when known (the widget shows it; the trace records it). */
-  label?: string;
-}
-
-/**
- * How long `fin` waits for a still-in-flight realtime `…completed` before it
- * finalizes the segment blank and composes anyway. Generous — a spoken segment's
- * final lands well inside a second (the bench measures ~0.8 s); this is the
- * ceiling that keeps a dropped upstream from hanging the send.
- */
-const REALTIME_DRAIN_TIMEOUT_MS = 10_000;
-
-/**
- * The upstream's commit minimum: OpenAI rejects `input_audio_buffer.commit`
- * under 100 ms of audio ("buffer too small"). A Space tap released before the
- * worklet delivers its first frames streams less than this (often zero), so
- * talk-end discards such a segment instead of committing it — the debounce
- * that keeps a changed mind from erroring.
- */
-const MIN_REALTIME_COMMIT_MS = 100;
-/** PCM16 mono at the realtime session's 24 kHz: 48 bytes per millisecond.
- * Exported so a test ties it to the channel's `REALTIME_VOICE_RATE` (pcm.ts). */
-export const REALTIME_PCM_BYTES_PER_MS = 48;
-
-/**
- * The realtime submode's stale-key hint, the Gemini twin of {@link OPENAI_KEY_HINT}.
- * The single most common cause of "the live tier stopped working" is a missing or
- * revoked GEMINI_API_KEY in the channel process's environment — a condition only
- * the server can see, so the server names it.
- */
-const ELEVENLABS_KEY_HINT =
-  "If this keeps happening, check the ELEVEN_LABS_API_KEY in the environment the channel " +
-  "process was launched from (a missing/stale key fails every Scribe call) — fix it and " +
-  "relaunch `aiui claude`, or pick another transcriber (K, then a digit).";
-
-const GEMINI_KEY_HINT =
-  "If this keeps happening, check the GEMINI_API_KEY in the environment the channel " +
-  "process was launched from (a missing/stale key fails every Gemini Live call) — fix it and " +
-  "relaunch `aiui claude`, or switch to a transcription tier for text-composed prompts.";
-
-/**
- * The premium tier's spoken-ack trigger table, keyed by lowering milestone → the
- * deterministic phrase the channel synthesizes (no LLM). Data-driven so acks are
- * tuneable; v1 ships the minimal recommended set — one send-received ack on a
- * successful `fin` (archive/streaming-turns.md §4). Add a milestone here (and a call site)
- * to speak at another point.
- */
-const ACK_PHRASES: Record<"sent", string> = {
-  sent: "sent",
-};
-
-/** The subset of `IntentPipelineConfig` the lowering reads off the hello. */
-interface ResolvedIntent {
-  /** The cost-sized preset, echoed to the trace (the fine fields below are already expanded). */
-  tier: string;
-  /**
-   * Which submode runs. `transcription` (the default) is document assembly —
-   * everything the classic processor does; `realtime` (retired) once held a
-   * live conversational session where the MODEL composed — a hello asking for
-   * it is coerced to `transcription` plus the prompt linter (see
-   * resolveIntent). History: archive/transcription-and-realtime-submodes.md.
-   */
-  submode: "transcription" | "realtime";
-  /** Realtime engine (submode=realtime): the reference `gemini` or degraded `openai`. */
-  liveVendor: "gemini" | "openai";
-  /** Realtime model id (bare, e.g. `gemini-3.1-flash-live-preview`). */
-  liveModel: string;
-  transcriber: IntentPipelineConfig["transcriber"];
-  model: string;
-  /** Domain-vocabulary bias (the keywords slot — see docs/guide/transcription.md). */
-  keywords: string[] | undefined;
-  /** Realtime transcription model (when transcriber = `openai-realtime`). */
-  realtimeModel: string;
-  /**
-   * Realtime latency/accuracy knob (`minimal`…`xhigh`); undefined → model
-   * default. Deliberately WIDENED to `string` (not the config's literal union):
-   * resolveIntent passes vendor delay strings through untouched.
-   */
-  realtimeDelay: string | undefined;
-  /** Spoken audio back to the human: `off` | `acks` (premium TTS); `voice` is the retired veneer (treated as off). */
-  audioBack: NonNullable<IntentPipelineConfig["audioBack"]>;
-  /** REST TTS model for `audioBack:"acks"` (premium). */
-  ttsModel: string;
-  /** TTS voice id (acks); undefined → the model default. */
-  ttsVoice: string | undefined;
-  /** The linter's spoken voice id; undefined → the model default. */
-  realtimeVoice: string | undefined;
-  /** The prompt linter: off, or which live vendor observes the composition. */
-  linter: LinterVendor;
-  /** Linter model id; undefined → the vendor default. */
-  linterModel: string | undefined;
-  /** Linter persona override; undefined → LINTER_INSTRUCTIONS. */
-  linterInstructions: string | undefined;
-  /** Ambient screen-frame cadence while sharing (ms per frame). */
-  videoFrameIntervalMs: number;
-  /** Legacy translations applied while resolving (each one human-readable). */
-  coerced: string[];
-}
-
-/** The premium TTS default model. */
-const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
-
-/**
- * The remediation line every OpenAI-backed failure carries on its error push.
- * The single most common cause of "the pipeline stopped working" is a stale or
- * revoked OPENAI_API_KEY in the channel process's environment — a condition
- * only the server can see, so the server names it. Attached unconditionally to
- * OpenAI-seam failures: when the real cause is something else (a network blip,
- * a malformed model reply) the message line already says so, and a hint that
- * doesn't apply costs one sentence.
- */
-const OPENAI_KEY_HINT =
-  "If this keeps happening, check the OPENAI_API_KEY in the environment the channel " +
-  "process was launched from (a stale key fails every OpenAI call) — fix it and relaunch " +
-  "`aiui claude`, or switch to the mock tier for offline work.";
+// The three server→client push wire shapes now live in intent-messages.ts;
+// re-exported here so `from "./intent-v1"` importers (internal.ts's no-semver
+// seam, the test suite) are unchanged.
+export type { LoweredMessage, LoweredPromptMessage, SpeechMessage } from "./intent-messages";
 
 /** Dependency injection + env for the format (real seams in prod, mocks in tests). */
 export interface IntentV1Options {
@@ -333,139 +167,6 @@ export interface IntentV1Options {
 }
 
 /**
- * Read the fields the lowering uses off the loosely-typed hello `intent`, with
- * defaults. The client sends the fully-expanded effective config, so the fine
- * fields are already concrete; but as a **defensive fallback** for a hello that
- * carries only `tier` (or a sparse partial), each field's default is the tier's
- * preset value — the shared `expandTier` from the pipeline package, so both sides
- * agree on what a tier means (archive/model-tiers.md, "Channel side"). Absent tier →
- * `rapid` (streaming Realtime Whisper — the REST retirement, 2026-07-18);
- * legacy names (standard, flagship, live-*) expand via the shared alias table
- * and their REST/voice choices coerce onto the streaming world below.
- */
-function resolveIntent(raw: unknown): ResolvedIntent {
-  const cfg = (raw !== null && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
-    typeof value === "string" && (allowed as readonly string[]).includes(value)
-      ? (value as T)
-      : fallback;
-  const str = (value: unknown, fallback: string): string =>
-    typeof value === "string" && value !== "" ? value : fallback;
-  const optStr = (value: unknown): string | undefined =>
-    typeof value === "string" && value !== "" ? value : undefined;
-  // The tier's expansion supplies each field's default (below the explicit hello
-  // fields), so a `tier`-only hello still resolves concrete seams.
-  const tier = str(cfg.tier, "rapid");
-  const preset = expandTier(tier);
-  const liveVendor = oneOf(
-    cfg.liveVendor,
-    ["gemini", "openai"] as const,
-    preset.liveVendor ?? "gemini",
-  );
-  const resolved: ResolvedIntent = {
-    tier,
-    submode: oneOf(
-      cfg.submode,
-      ["transcription", "realtime"] as const,
-      preset.submode ?? "transcription",
-    ),
-    liveVendor,
-    liveModel: str(
-      cfg.liveModel,
-      preset.liveModel ??
-        (liveVendor === "gemini" ? DEFAULT_GEMINI_LIVE_MODEL : DEFAULT_OPENAI_LIVE_MODEL),
-    ),
-    transcriber: oneOf(
-      cfg.transcriber,
-      ["mock", "openai", "openai-realtime", "openai-voice", "elevenlabs"] as const,
-      preset.transcriber,
-    ),
-    keywords:
-      Array.isArray(cfg.keywords) && cfg.keywords.every((k) => typeof k === "string")
-        ? (cfg.keywords as string[])
-        : undefined,
-    model: str(cfg.model, preset.model),
-    realtimeModel: str(cfg.realtimeModel, preset.realtimeModel ?? DEFAULT_REALTIME_MODEL),
-    realtimeDelay: optStr(cfg.realtimeDelay ?? preset.realtimeDelay),
-    audioBack: oneOf(
-      cfg.audioBack,
-      ["off", "acks", "voice"] as const,
-      preset.audioBack ?? DEFAULT_INTENT_CONFIG.audioBack ?? "off",
-    ),
-    ttsModel: str(cfg.ttsModel, preset.ttsModel ?? DEFAULT_TTS_MODEL),
-    ttsVoice: optStr(cfg.ttsVoice ?? preset.ttsVoice),
-    realtimeVoice: optStr(cfg.realtimeVoice ?? preset.realtimeVoice),
-    linter: oneOf(cfg.linter, ["off", "openai", "gemini"] as const, preset.linter ?? "off"),
-    linterModel: optStr(cfg.linterModel ?? preset.linterModel),
-    linterInstructions: optStr(cfg.linterInstructions ?? preset.linterInstructions),
-    videoFrameIntervalMs:
-      typeof cfg.videoFrameIntervalMs === "number" && cfg.videoFrameIntervalMs > 0
-        ? cfg.videoFrameIntervalMs
-        : (preset.videoFrameIntervalMs ?? 5000),
-    coerced: [],
-  };
-  // ── legacy coercions (the linter pivot) — every translation is recorded ──
-  // and lands on the `intent config` trace stage, so a hello that meant the
-  // old world shows exactly how it was read into the new one.
-  if (resolved.transcriber === "openai-voice") {
-    // The flagship voice veneer is retired: transcription is streaming STT,
-    // and the spoken companion is the LINTER (which keeps the chosen voice).
-    resolved.transcriber = "openai-realtime";
-    if (resolved.linter === "off") {
-      resolved.linter = "openai";
-    }
-    resolved.coerced.push(
-      "transcriber openai-voice → openai-realtime + linter openai (voice veneer retired)",
-    );
-  }
-  if (resolved.transcriber === "openai") {
-    // REST transcription is retired (2026-07-18): transcription is
-    // streaming-only. A hello that asked for the per-segment REST engine (an
-    // old persisted config, or the legacy `standard` tier's expansion) gets
-    // the streaming engine instead.
-    resolved.transcriber = "openai-realtime";
-    resolved.coerced.push("transcriber openai → openai-realtime (REST transcription retired)");
-  }
-  if (resolved.submode === "realtime") {
-    // The composer submode is retired: the compiler composes everywhere; the
-    // live vendor the hello picked becomes the prompt LINTER, keeping the
-    // model they chose.
-    if (resolved.linter === "off") {
-      resolved.linter = resolved.liveVendor;
-    }
-    if (resolved.linterModel === undefined) {
-      resolved.linterModel = resolved.liveModel;
-    }
-    resolved.submode = "transcription";
-    resolved.coerced.push(
-      `submode realtime → linter ${resolved.linter} (the model-composes path retired; the compiler composes everywhere)`,
-    );
-  }
-  return resolved;
-}
-
-// ── the cleanup passes (archive/workbench/openai-audio-stack.md) ─────────────
-// Condition passes shrink/clean an upload *before* the expensive hop. The
-// named slots keep the attachment path (and the trace's stage sequence) shaped
-// for real trimming/downscaling when it ships; identity today, with no config
-// knob until there is behavior to configure.
-
-const silenceTrim = (bytes: Uint8Array): Uint8Array => bytes;
-const imageDownscale = (bytes: Uint8Array): Uint8Array => bytes;
-
-/** Parse the trailing ordinal of an identifier-shaped attachment id (`seg_3` → 3). */
-function ordinalOf(id: string): number {
-  const match = /_(\d+)$/.exec(id);
-  return match ? Number(match[1]) : 0;
-}
-
-/** A shot blob's file extension from its declared mime: S-key shots are PNG,
- * the share's sampled frames are JPEG. Default PNG for anything unexpected. */
-function imageExtension(mime: string): string {
-  return mime === "image/jpeg" ? "jpg" : "png";
-}
-
-/**
  * Revalidate an untrusted control value against the linter vocabulary — the
  * runtime check is DERIVED from {@link LINTER_VENDORS} (adding a vendor is a
  * one-site change in the shared leaf), and this narrows the wire value to
@@ -473,47 +174,6 @@ function imageExtension(mime: string): string {
  */
 function isLinterVendor(value: unknown): value is LinterVendor {
   return (LINTER_VENDORS as readonly string[]).includes(value as string);
-}
-
-/** True when the current thread (from its last open) ended in an explicit cancel. */
-function endedInCancel(events: IntentEvent[]): boolean {
-  let start = -1;
-  for (let i = events.length - 1; i >= 0; i--) {
-    if (events[i].type === "thread-open") {
-      start = i;
-      break;
-    }
-  }
-  const scope = start === -1 ? events : events.slice(start);
-  for (let i = scope.length - 1; i >= 0; i--) {
-    const event = scope[i];
-    if (event.type === "thread-close") {
-      return event.reason === "cancel";
-    }
-  }
-  return false;
-}
-
-const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
-
-/** Decode a JSON chunk payload (events / context frames). */
-function decodeJson(bytes: Uint8Array): unknown {
-  if (bytes.length === 0) {
-    return undefined;
-  }
-  return JSON.parse(utf8Decoder.decode(bytes));
-}
-
-/** Narrow a decoded events chunk to `IntentEvent[]` (append-only batch). */
-function readEventBatch(decoded: unknown): IntentEvent[] {
-  if (decoded === null || typeof decoded !== "object") {
-    throw new Error('intent-v1 events chunk must be JSON { "events": IntentEvent[] }');
-  }
-  const { events } = decoded as { events?: unknown };
-  if (!Array.isArray(events)) {
-    throw new Error('intent-v1 events chunk is missing an "events" array');
-  }
-  return events as IntentEvent[];
 }
 
 /**
@@ -626,23 +286,15 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     } satisfies IntentConfigData,
   });
 
-  // The turn's single accumulated stream, in arrival order — client events
-  // interleaved with server-produced ones (transcripts, completed corrections)
-  // exactly where they were produced. This *is* the merge the fin lowering runs.
-  let events: IntentEvent[] = [];
-  // Absolute path of each shot's saved blob. Populated on the shot's arrival
-  // (its bytes are saved then, not at fin) and wired into the matching shot
-  // event so fin does no disk I/O.
-  const shotPaths = new Map<string, string>();
-
-  // The per-thread realtime session (assigned once the helpers it calls back into
-  // exist, below). Segments stream PCM into it during talk and commit at talk-end.
-  let realtime: RealtimeSession | undefined;
-  // Monotonic id for TTS-ack clips pushed to the client (`ack_0`, `ack_1`, …).
-  let ackSeq = 0;
-  // Accumulated PCM frames per streaming segment — saved as one blob at commit so
-  // the debugger has the audio (the realtime analogue of the REST seg blob).
-  const audioFrames = new Map<number, { chunks: Uint8Array[]; bytes: number; lastSeq: number }>();
+  // The turn context owns the single shared, mutable turn state (the merged
+  // event stream, the shot-path map, the per-segment audio buffers, the
+  // speculative-compose cache, the reassignable realtime/sidecar slots) and the
+  // helper surface over it. The methods close over the context, so calling them
+  // through these local aliases is identical to `turn.method`; the mutable state
+  // (turn.events, turn.realtime, turn.sidecar, …) is always read back through
+  // `turn`, never captured by value.
+  const turn = createIntentTurn(ctx, trace, intent, composeOptions);
+  const { appendEvent, applyShotPaths, recomposeIfStale, push, recordCost, pushSpeech } = turn;
 
   // Pre-warm the prompt skeleton: the tab/source preamble is fully known at
   // thread-open, so assemble it once here — fin only concatenates the body and
@@ -651,149 +303,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   if (staticSections.length > 0) {
     trace?.record({ kind: "info", label: stageLabel.promptPreamble(), data: staticSections });
   }
-
-  // Speculative-compose cache. `mutationSeq` bumps on every change to `events`
-  // (an append or a shot-path wiring); `recompose` snapshots it into
-  // `composedSeq`. fin reuses `lastComposed` when the log is unchanged since
-  // (composedSeq === mutationSeq) and otherwise recomputes — either way
-  // producing exactly what a fresh `composeIntent(events)` would. The cache is a
-  // latency shim, never a source of truth.
-  let mutationSeq = 0;
-  let composedSeq = -1;
-  let lastComposed: ComposedIntent | undefined;
-
-  const appendEvent = (event: IntentEvent): void => {
-    events.push(event);
-    mutationSeq += 1;
-  };
-
-  /** Wire every known shot path into the current events (idempotent). */
-  const applyShotPaths = (): void => {
-    if (shotPaths.size === 0) {
-      return;
-    }
-    let changed = false;
-    events = events.map((event) => {
-      if (
-        event.type === "shot" &&
-        shotPaths.has(event.marker) &&
-        event.path !== shotPaths.get(event.marker)
-      ) {
-        changed = true;
-        return { ...event, path: shotPaths.get(event.marker) };
-      }
-      return event;
-    });
-    if (changed) {
-      mutationSeq += 1;
-    }
-  };
-
-  /**
-   * Speculative fold of the merged stream so far. Pure and side-effect-free
-   * beyond the cache + a trace stage (the invariant: speculation never sends,
-   * pushes, or spends). fin reuses this when the log is unchanged since.
-   */
-  const recompose = (): void => {
-    lastComposed = composeIntent(events, "replace", composeOptions);
-    composedSeq = mutationSeq;
-    trace?.record({
-      kind: "ir",
-      label: stageLabel.composedSpeculative(),
-      // The speculative prompt is the BODY only (no context preamble yet), so
-      // its spans are composeIntent's body spans as-is — the hero renders them
-      // over the body while the turn is still in flight.
-      data: {
-        transcript: lastComposed.transcript,
-        prompt: lastComposed.prompt,
-        spans: lastComposed.spans,
-      } satisfies ComposedSpeculativeData,
-    });
-  };
-
-  /** Recompose only if the log changed since the last cache — the arrival seam. */
-  const recomposeIfStale = (): void => {
-    if (composedSeq !== mutationSeq) {
-      recompose();
-    }
-  };
-
-  const push = (produced: IntentEvent[]): void => {
-    ctx.push?.({
-      kind: "lowered",
-      threadId: ctx.threadId,
-      events: produced,
-    } satisfies LoweredMessage);
-  };
-
-  /**
-   * Account one model call: a `cost:` trace stage (what/usage/usd — the trace
-   * viewer renders these as 💰 cards) plus the manifest's running roll-up.
-   * Unpriced calls (a model missing from the catalog) still record usage; only
-   * a priced call moves the roll-up. Post-end callers (the summary gloss) get
-   * the roll-up but no stage — `record` is closed by then, by design.
-   */
-  const recordCost = (what: string, cost: CallCost | undefined): void => {
-    if (!cost) {
-      return;
-    }
-    trace?.record({ kind: "info", label: stageLabel.cost(what), data: cost });
-    if (cost.usd !== undefined) {
-      trace?.addCost(cost.usd);
-    }
-  };
-
-  /** Push a base64 audio clip for the client to play (TTS ack / model reply). */
-  const pushSpeech = (id: string, mime: string, bytes: Uint8Array, label?: string): void => {
-    ctx.push?.({
-      kind: "speech",
-      threadId: ctx.threadId,
-      id,
-      mime,
-      data: Buffer.from(bytes).toString("base64"),
-      ...(label !== undefined ? { label } : {}),
-    } satisfies SpeechMessage);
-    trace?.record({
-      kind: "info",
-      label: stageLabel.speech(id),
-      data: {
-        mime,
-        bytes: bytes.length,
-        ...(label !== undefined ? { text: label } : {}),
-      } satisfies SpeechData,
-    });
-  };
-
-  /**
-   * Finalize a segment we could not transcribe: echo an empty `transcript-final`
-   * (so the client's preview resolves instead of waiting for an echo that will
-   * never come) plus a `note` the widget shows in its status — and push the
-   * same text as a generic error (see {@link pushError}) so the failure is
-   * visible even with the panel closed (the note only reaches the footer
-   * status line). Degradation is loud and specific — never a silent drop,
-   * never a silent switch to mock.
-   */
-  const finalizeSilentSegment = (
-    id: string,
-    noteText: string,
-    error: { source: string; detail?: string } = { source: "transcription" },
-  ): void => {
-    const empty: IntentEvent = {
-      at: Date.now(),
-      type: "transcript-final",
-      segment: ordinalOf(id),
-      text: "",
-      latencyMs: 0,
-      model: intent.model,
-    };
-    appendEvent(empty);
-    push([empty, { at: Date.now(), type: "note", text: noteText }]);
-    pushError(ctx, {
-      source: error.source,
-      message: noteText,
-      ...(error.detail !== undefined ? { detail: error.detail } : {}),
-    });
-  };
 
   // ── the prompt-linter sidecar (linter != "off") ──────────────────────────────
   // Purely advisory: it observes the same turn through a live session in
@@ -806,10 +315,9 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // sidecar. The model/instructions/voice stay the hello's — the client's
   // select carries only the vendor, and those advanced fields default to the
   // vendor default when unset (the common case).
-  let sidecar: LinterSidecar | undefined;
   const buildLinter = (vendor: LinterVendor): void => {
-    sidecar?.close();
-    sidecar = undefined;
+    turn.sidecar?.close();
+    turn.sidecar = undefined;
     if (vendor === "off") {
       return;
     }
@@ -821,7 +329,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       linterSocketFactory !== undefined ||
       options.linterSessionFactory !== undefined
     ) {
-      sidecar = createLinterSidecar({
+      turn.sidecar = createLinterSidecar({
         vendor,
         apiKey: linterKey ?? "",
         ...(intent.linterModel !== undefined ? { model: intent.linterModel } : {}),
@@ -874,248 +382,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // REST path's `transcript-final`. Keyless/error take the same loud
   // finalizeSilentSegment posture — never a silent drop, never a silent switch.
   if (realtimeReady) {
-    // Both streaming engines implement the same RealtimeSession seam and share
-    // this ONE callbacks wiring — the vendor difference is confined to the open.
-    const sttCallbacks: RealtimeCallbacks = {
-      onDelta: (segment, text) => {
-        push([{ at: Date.now(), type: "transcript-delta", segment, text }]);
-        // The vendor's running text for the still-uncommitted segment, recorded
-        // verbatim. Every engine behind this seam re-sends the CUMULATIVE text
-        // (RealtimeCallbacks.onDelta's contract), so a partial that gets SHORTER
-        // is the vendor revising itself — not a dropped frame and not something
-        // this side patched. Without these stages that distinction is
-        // unfalsifiable after the fact, since deltas are pushed and discarded.
-        // Recorded only; the fold still composes from `transcript-final` alone.
-        trace?.record({
-          kind: "ir",
-          label: stageLabel.sttPartial(segment),
-          data: { chars: text.length, text } satisfies SttPartialData,
-        });
-      },
-      onFinal: (segment, result) => {
-        recordCost(`realtime transcription seg_${segment}`, result.cost);
-        const produced: IntentEvent = {
-          at: Date.now(),
-          type: "transcript-final",
-          segment,
-          text: result.text,
-          latencyMs: result.latencyMs,
-          model: result.model,
-          // Word timestamps + logprobs (Scribe v2 today): the compiler's
-          // exact media anchor and the preview's confidence heat map.
-          ...(result.words !== undefined && result.words.length > 0 ? { words: result.words } : {}),
-        };
-        appendEvent(produced);
-        push([produced]);
-        sidecar?.onTranscriptFinal(segment, result.text);
-        // A glanceable per-final stage: "did words/logprobs/timestamps come
-        // back?" must be answerable from the card list, not by digging the
-        // merged-events JSON (the debugging lesson of the heat-map chase).
-        const logprobs = (result.words ?? [])
-          .map((w) => w.logprob)
-          .filter((v): v is number => v !== undefined);
-        trace?.record({
-          kind: "info",
-          label: stageLabel.sttFinal(segment),
-          data: {
-            model: result.model,
-            chars: result.text.length,
-            words: result.words?.length,
-            withTimestamps: result.words?.some((w) => w.startMs !== undefined) === true,
-            ...(logprobs.length > 0
-              ? {
-                  logprobs: {
-                    n: logprobs.length,
-                    min: Math.min(...logprobs),
-                    max: Math.max(...logprobs),
-                  },
-                }
-              : { logprobs: "none" }),
-          },
-        });
-        recomposeIfStale();
-      },
-      onError: (message, segment) => {
-        const hint = intent.transcriber === "elevenlabs" ? ELEVENLABS_KEY_HINT : OPENAI_KEY_HINT;
-        if (segment !== undefined) {
-          finalizeSilentSegment(`seg_${segment}`, `realtime transcription failed: ${message}`, {
-            source: "transcription",
-            detail: hint,
-          });
-        } else {
-          // Session-wide fault before any commit (a refused upstream
-          // handshake is where a bad key shows up on this path).
-          push([{ at: Date.now(), type: "note", text: `realtime transcription: ${message}` }]);
-          pushError(ctx, {
-            source: "transcription",
-            message: `realtime transcription: ${message}`,
-            detail: hint,
-          });
-        }
-      },
-      // Vendor-protocol observability. None of these change the turn; they exist
-      // so a wire behaviour we didn't model (Scribe self-committing utterances,
-      // a query param silently ignored, a message type we've never seen) leaves
-      // a mark in the trace instead of vanishing into a `default: return`.
-      onDiagnostic: (event) => {
-        // `sttDiagnostic` types its param as the shared SttDiagnosticKind — if
-        // realtime.ts's RealtimeDiagnostic gains a kind not in the vocabulary,
-        // this call stops compiling (the label contract can't be bypassed).
-        trace?.record({
-          kind: "info",
-          label: stageLabel.sttDiagnostic(event),
-          data: event,
-        });
-        // A param we set that the vendor did not confirm means the behaviour we
-        // think we configured is not in force — loud, not just traced.
-        if (event.kind === "config-mismatch") {
-          console.warn(
-            `[aiui] ${intent.transcriber}: config param "${event.param}" not confirmed by the server ` +
-              `(requested ${JSON.stringify(event.requested)}, echoed ${JSON.stringify(event.echoed)})`,
-          );
-        }
-      },
-    };
-    realtime =
-      intent.transcriber === "elevenlabs"
-        ? openElevenLabsRealtimeSession(
-            {
-              apiKey: elevenLabsKey ?? "",
-              ...(intent.keywords !== undefined ? { keyterms: () => intent.keywords } : {}),
-              ...(options.elevenLabsSocketFactory !== undefined
-                ? { socketFactory: options.elevenLabsSocketFactory }
-                : {}),
-            },
-            sttCallbacks,
-          )
-        : openRealtimeSession(
-            {
-              apiKey: apiKey ?? "",
-              model: () => intent.realtimeModel,
-              delay: () => intent.realtimeDelay,
-              ...(options.realtimeSocketFactory !== undefined
-                ? { socketFactory: options.realtimeSocketFactory }
-                : {}),
-            },
-            sttCallbacks,
-          );
+    turn.realtime = openSttSession(turn, ctx, trace, intent, { apiKey, elevenLabsKey }, options);
   }
-
-  /** Commit a streaming segment at talk-end: save its accumulated PCM, then commit. */
-  const commitRealtimeSegment = (segment: number): void => {
-    const buffered = audioFrames.get(segment);
-    if (buffered !== undefined) {
-      audioFrames.delete(segment);
-      if (buffered.chunks.length > 0) {
-        const merged = new Uint8Array(buffered.bytes);
-        let offset = 0;
-        for (const chunk of buffered.chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-        trace?.recordBlob(
-          { kind: "ir", label: stageLabel.attachment(`seg_${segment}`) },
-          merged,
-          `seg_${segment}.pcm`,
-        );
-      }
-      trace?.record({
-        kind: "ir",
-        label: stageLabel.realtimeCommit(segment),
-        data: {
-          frames: buffered.chunks.length,
-          bytes: buffered.bytes,
-        } satisfies RealtimeCommitData,
-      });
-    }
-    // The Space-tap debounce: the upstream rejects a commit under 100 ms of
-    // audio ("buffer too small"), and a tapped-and-released key often streams
-    // zero frames. Discard instead of committing — clear the upstream buffer,
-    // resolve the segment as empty (the preview stops waiting), and record it
-    // in the trace. Quiet by design: an accidental tap is not an error.
-    const session = realtime;
-    const pcmBytes = buffered?.bytes ?? 0;
-    // The discard floor is ENGINE-specific: OpenAI rejects commits under
-    // ~100 ms ("buffer too small"); ElevenLabs FATALLY closes the session
-    // under 300 ms, so its session refuses commits below its own 500 ms
-    // safety floor. Discarding here at the same floor keeps a 100–500 ms
-    // tap on the consistent path (one traced discard) instead of a
-    // commit the session would refuse into a silent empty final.
-    const commitFloorMs =
-      intent.transcriber === "elevenlabs" ? ELEVENLABS_COMMIT_FLOOR_MS : MIN_REALTIME_COMMIT_MS;
-    if (session !== undefined && pcmBytes < commitFloorMs * REALTIME_PCM_BYTES_PER_MS) {
-      session.discard(segment);
-      const empty: IntentEvent = {
-        at: Date.now(),
-        type: "transcript-final",
-        segment,
-        text: "",
-        latencyMs: 0,
-        model: intent.model,
-      };
-      appendEvent(empty);
-      push([empty]);
-      trace?.record({
-        kind: "info",
-        label: stageLabel.realtimeDiscard(segment),
-        data: {
-          bytes: pcmBytes,
-          ms: Math.round(pcmBytes / REALTIME_PCM_BYTES_PER_MS),
-          note: `under the ${commitFloorMs} ms upstream commit minimum — not transcribed`,
-        } satisfies RealtimeDiscardData,
-      });
-      return;
-    }
-    if (realtime !== undefined) {
-      realtime.commit(segment);
-    } else if (realtimeEnabled) {
-      // Keyless realtime: no session to commit into. Same loud note as REST
-      // keyless — the preview resolves and the widget can say why.
-      finalizeSilentSegment(
-        `seg_${segment}`,
-        "server-side realtime transcription is unavailable — " +
-          "the channel process has no OPENAI_API_KEY. " +
-          'Set it and relaunch `aiui claude`, or use transcriber:"mock" for offline work.',
-      );
-    }
-  };
-
-  const onAudioChunk = (
-    chunk: Extract<ChunkDescriptor, { kind: "audio" }>,
-    bytes: Uint8Array,
-  ): void => {
-    const segment = ordinalOf(chunk.id);
-    let buffered = audioFrames.get(segment);
-    if (buffered === undefined) {
-      buffered = { chunks: [], bytes: 0, lastSeq: -1 };
-      audioFrames.set(segment, buffered);
-    }
-    // seq is a monotonic ordinal per segment; frames arrive in per-connection
-    // order, so this holds in practice. A gap/reorder is tolerated (forwarded in
-    // arrival order — the upstream buffer is append-only) but noted in the trace.
-    if (chunk.seq <= buffered.lastSeq) {
-      trace?.record({
-        kind: "info",
-        label: stageLabel.audioOutOfOrder(chunk.id),
-        data: {
-          seq: chunk.seq,
-          lastSeq: buffered.lastSeq,
-          note: "tolerated (arrival order kept)",
-        } satisfies AudioOutOfOrderData,
-      });
-    }
-    buffered.lastSeq = Math.max(buffered.lastSeq, chunk.seq);
-    // The payload is a view into the received frame; copy before retaining it.
-    // Explicitly: on a Buffer, `.slice()` is another view, not a copy (the
-    // trap that corrupted REST transcription uploads — see transcribe.ts), so
-    // retaining it would pin every frame's whole allocation in memory.
-    const copy = new Uint8Array(bytes.byteLength);
-    copy.set(bytes);
-    buffered.chunks.push(copy);
-    buffered.bytes += copy.length;
-    realtime?.appendAudio(segment, copy);
-    sidecar?.onAudioFrame(copy);
-  };
 
   // The linter's selection view: latest payload per marker, so a re-emit under
   // the same marker labels as "updated" (the grammar the persona describes).
@@ -1136,7 +404,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         if (marker !== undefined) {
           selectionRegistry.set(marker, entry);
         }
-        sidecar?.onSelection(marker, entry, updated);
+        turn.sidecar?.onSelection(marker, entry, updated);
       } else if (event.type === "code-selection") {
         const { at: _at, type: _type, marker, ...data } = event;
         trace?.record({ kind: "ir", label: stageLabel.codeSelection(), data: { ...data, marker } });
@@ -1145,37 +413,37 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         if (marker !== undefined) {
           selectionRegistry.set(marker, entry);
         }
-        sidecar?.onSelection(marker, entry, updated);
+        turn.sidecar?.onSelection(marker, entry, updated);
       } else if (event.type === "app-selection-drop") {
         trace?.record({
           kind: "ir",
           label: stageLabel.appSelectionDropped(),
           data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
         });
-        sidecar?.onSelectionDrop(event.marker);
+        turn.sidecar?.onSelectionDrop(event.marker);
       } else if (event.type === "code-selection-drop") {
         trace?.record({
           kind: "ir",
           label: stageLabel.codeSelectionDropped(),
           data: { marker: event.marker },
         });
-        sidecar?.onSelectionDrop(event.marker);
+        turn.sidecar?.onSelectionDrop(event.marker);
       }
       // talk-end is the segment-commit boundary for the streaming transcriber
       // (PTT stays the contract — no `last` flag on the audio frames). The
       // client flushes talk-end immediately past its 60 ms debounce so the
       // upstream buffer commits promptly.
       if (realtimeEnabled && event.type === "talk-end") {
-        commitRealtimeSegment(event.segment);
+        commitRealtimeSegment(turn, trace, intent, event.segment);
       }
       // The linter observes the same boundaries (and a client-produced final —
       // the mock transcriber — feeds its transcript wait like a server one).
       if (event.type === "talk-start") {
-        sidecar?.onTalkStart(event.segment);
+        turn.sidecar?.onTalkStart(event.segment);
       } else if (event.type === "talk-end") {
-        sidecar?.onTalkEnd(event.segment);
+        turn.sidecar?.onTalkEnd(event.segment);
       } else if (event.type === "transcript-final" && !event.correction) {
-        sidecar?.onTranscriptFinal(event.segment, event.text);
+        turn.sidecar?.onTranscriptFinal(event.segment, event.text);
       }
     }
     // A shot event may share its batch with (or arrive after) its bytes — wire
@@ -1223,7 +491,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         `${id}.${imageExtension(mime)}`,
       );
       if (path !== undefined) {
-        shotPaths.set(id, path);
+        turn.shotPaths.set(id, path);
         applyShotPaths();
         // Refresh the LIVE fold too (2026-07-12): the shot's event usually
         // outruns its bytes, so the fold that introduced `{shot_N}` rendered
@@ -1233,7 +501,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         // mutation seq); this makes the preview correct as well.
         recomposeIfStale();
       }
-      sidecar?.onShot(id, conditioned, mime);
+      turn.sidecar?.onShot(id, conditioned, mime);
     }
     // Any other attachment id has no place in the compose and no blob to save.
   };
@@ -1261,177 +529,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     buildLinter(value);
   };
 
-  /** Speak the premium tier's send-received ack, or say loudly why it can't. */
-  const speakAck = async (): Promise<void> => {
-    if (intent.audioBack !== "acks") {
-      return;
-    }
-    const phrase = ACK_PHRASES.sent;
-    if (speaker === undefined) {
-      // Keyless/degraded premium: the spoken ack is a promised feature of the
-      // tier, so its absence is loud (never a silent downgrade to `rapid`).
-      const text =
-        "spoken confirmation unavailable — the channel process has no OPENAI_API_KEY (premium tier)";
-      push([{ at: Date.now(), type: "note", text }]);
-      pushError(ctx, { source: "speech", message: text });
-      return;
-    }
-    try {
-      const clip = await speaker.speak({
-        text: phrase,
-        ...(intent.ttsVoice !== undefined ? { voice: intent.ttsVoice } : {}),
-      });
-      recordCost("tts ack", clip.cost);
-      pushSpeech(`ack_${ackSeq++}`, clip.mime, clip.bytes, phrase);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      push([{ at: Date.now(), type: "note", text: `spoken confirmation failed: ${message}` }]);
-      pushError(ctx, {
-        source: "speech",
-        message: `spoken confirmation failed: ${message}`,
-        detail: OPENAI_KEY_HINT,
-      });
-    }
-  };
-
-  /**
-   * Gloss the just-sent turn onto its trace, off the hot path. Fired
-   * fire-and-forget from {@link lower} *after* the send — the fin ack must never
-   * wait on a summary — so by the time this resolves the trace has usually ended
-   * already; {@link TraceHandle.setSummary} is designed to write post-end. Input
-   * is the composed body (no preamble; screenshots stripped inside the seam).
-   * Keyless (no seam) or any failure → skip silently: a missing row gloss falls
-   * back to the timestamp, never a broken turn. (A failure can't be traced here —
-   * `record` no-ops once the trace has ended — so the drop is genuinely silent.)
-   */
-  const summarize = async (body: string): Promise<void> => {
-    if (summarizer === undefined || body === "") {
-      return;
-    }
-    try {
-      const result = await summarizer.summarize(body);
-      trace?.setSummary(result.text);
-      // The trace has ended by now, so no `cost:` stage lands (record no-ops
-      // post-end) — but the roll-up still moves; addCost writes post-end.
-      if (result.cost?.usd !== undefined) {
-        trace?.addCost(result.cost.usd);
-      }
-    } catch {
-      // best-effort: the trace list just shows the timestamp for this turn
-    }
-  };
-
-  /** The fin commit: pick the composed intent (cached or fresh) and notify. */
-  const lower = async (): Promise<void> => {
-    // Realtime finals arrive off-band (over the upstream socket), not on the
-    // frame that carried the audio — so a fast Enter can outrun a `…completed`.
-    // Drain the committed-but-not-final segments before composing; any that miss
-    // the window are finalized loudly so the compose (and the preview) resolve.
-    // The STT and voice sessions are mutually exclusive; drain whichever is live.
-    const streamSession = realtime;
-    if (streamSession !== undefined) {
-      const timedOut = await streamSession.drain(REALTIME_DRAIN_TIMEOUT_MS);
-      for (const segment of timedOut) {
-        finalizeSilentSegment(
-          `seg_${segment}`,
-          "realtime transcription did not complete before send — the segment was left blank",
-        );
-      }
-      recomposeIfStale();
-    }
-
-    // Blobs were saved and shot paths wired on arrival; the only wiring left is
-    // the defensive case of a shot event that trailed its bytes (usually a no-op).
-    applyShotPaths();
-
-    trace?.record({ kind: "ir", label: stageLabel.mergedEvents(), data: events });
-
-    const cancelled = endedInCancel(events);
-    // Reuse the speculative compose when the log is unchanged since it last ran;
-    // otherwise recompute (e.g. a shot path was wired after the final batch).
-    let composed: ComposedIntent;
-    let reused: boolean;
-    if (lastComposed !== undefined && composedSeq === mutationSeq) {
-      composed = lastComposed;
-      reused = true;
-    } else {
-      composed = composeIntent(events, "replace", composeOptions);
-      reused = false;
-    }
-    trace?.record({ kind: "info", label: stageLabel.finCompose(), data: { reused } });
-    trace?.record({
-      kind: "ir",
-      label: stageLabel.composedIntent(),
-      data: {
-        transcript: composed.transcript,
-        items: composed.items,
-        corrections: composed.corrections,
-        prompt: composed.prompt,
-      },
-    });
-    trace?.record({
-      kind: "ir",
-      label: stageLabel.conditioned(),
-      data: { cancelled, body: composed.prompt },
-    });
-
-    // A cancelled turn (or one with nothing to say) lowers to no notification.
-    if (!cancelled && composed.prompt !== "") {
-      // The preamble: the hello-fixed sections (pre-warmed at thread-open)
-      // plus the TURN-dependent ones, decided here at fin — today that is the
-      // transcription warning, added only when the stream actually contains
-      // speech-transcribed text (typed contributions carry model
-      // "contribution" and never trigger it). This is the seam every future
-      // event-dependent preamble section rides through.
-      const hasSpeech = events.some(
-        (e) => e.type === "transcript-final" && e.model !== "contribution",
-      );
-      const { text: prompt, preambleLen } = wrapWithContextParts(
-        [...staticSections, ...(hasSpeech ? [TRANSCRIPTION_NOTE] : [])],
-        composed.prompt,
-      );
-      // The sent prompt's spans: composeIntent's body spans shifted past the
-      // context preamble, with the preamble itself as a leading span so the
-      // hero can grey it. Recorded as its own stage because the `lowered prompt`
-      // output stage is written by the generic sendPrompt tracer (which carries
-      // only the text) — the hero pairs the two by threadId/proximity.
-      const spans: PromptSpan[] =
-        preambleLen > 0
-          ? [
-              { kind: "preamble", start: 0, end: preambleLen },
-              ...composed.spans.map((s) => ({
-                ...s,
-                start: s.start + preambleLen,
-                end: s.end + preambleLen,
-              })),
-            ]
-          : composed.spans;
-      trace?.record({ kind: "ir", label: stageLabel.loweredPromptSpans(), data: { spans } });
-      // Show the client what is about to be committed (pushed first, so the
-      // widget's view of the prompt never lags the session notification).
-      ctx.push?.({
-        kind: "lowered-prompt",
-        threadId: ctx.threadId,
-        prompt,
-        // Omit when empty (a bare-client text-only prompt) — additive.
-        ...(spans.length > 0 ? { spans } : {}),
-      } satisfies LoweredPromptMessage);
-      await ctx.sendPrompt(prompt);
-      // Premium tier: a spoken "sent" once the notification landed (the send-
-      // received ack — the minimal recommended trigger set, archive/streaming-turns.md §4).
-      await speakAck();
-      // Gloss the turn for the trace list — detached, so the fin ack does not
-      // wait on a chat round-trip. `composed.prompt` is the body only (the
-      // preamble is context, not intent). Best-effort; never awaited.
-      void summarize(composed.prompt);
-    }
-    // The turn committed — the upstream socket(s) have no more segments to handle,
-    // so close (idempotent; onClose closes them for abandoned turns).
-    realtime?.close();
-    sidecar?.close();
-    ctx.close();
-  };
-
   return {
     async onMessage(payload: unknown, meta: MessageMeta) {
       const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(0);
@@ -1441,12 +538,21 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       } else if (chunk?.kind === "attachment") {
         await onAttachmentChunk(chunk, bytes);
       } else if (chunk?.kind === "audio") {
-        onAudioChunk(chunk, bytes);
+        onAudioChunk(turn, trace, chunk, bytes);
       } else if (chunk?.kind === "control") {
         onControlChunk(bytes);
       }
       if (meta.fin) {
-        await lower();
+        await finishTurn(
+          turn,
+          ctx,
+          trace,
+          intent,
+          staticSections,
+          speaker,
+          summarizer,
+          composeOptions,
+        );
       }
     },
     onClose() {
@@ -1457,12 +563,9 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // close the per-thread realtime session so its upstream OpenAI WebSocket
       // is not leaked. Blobs already written to the trace dir are left as the
       // record of the attempt (cheap; the design is silent on cleaning them).
-      events = [];
-      shotPaths.clear();
-      lastComposed = undefined;
-      audioFrames.clear();
-      realtime?.close();
-      sidecar?.close();
+      turn.reset();
+      turn.realtime?.close();
+      turn.sidecar?.close();
     },
   };
 }

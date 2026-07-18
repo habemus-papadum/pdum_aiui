@@ -16,8 +16,12 @@
  *
  * Reload depth is therefore exactly one level below this file: `processors.ts`
  * and `intent-v1.ts` (the two format entries) reload; anything *they* statically
- * import (codec, channel, tracing, prompt-context, realtime, transcribe,
- * correct, compose) stays cached and needs a full process restart. That's the
+ * import stays cached and needs a full process restart. For `intent-v1.ts` that
+ * boundary now falls between the orchestrator and its own extracted wings —
+ * `intent-turn`, `intent-stt`, `intent-fin`, `intent-resolve`,
+ * `intent-stream-util`, and `intent-messages` — as well as the shared leaves
+ * (codec, channel, tracing, prompt-context, realtime, transcribe, compose): the
+ * orchestrator re-executes, but editing a wing needs a restart. That's the
  * documented boundary — hot reload is a dev aid, not a general HMR.
  *
  * Keep {@link buildReloadableFormats} in sync with `defaultFormats` in

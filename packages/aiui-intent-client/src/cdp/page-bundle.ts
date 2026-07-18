@@ -2,7 +2,7 @@
  * page-bundle.ts — the REAL page-side surfaces for CDP-driven pages. The
  * sidecar builds this module into a self-contained IIFE (sidecar.ts
  * `pageBundle()`, served at `/intent/page-bundle.js`); the panel reads it from
- * its OWN origin and the bus `Runtime.evaluate`s it into the page (cdp-bus's
+ * its OWN origin and the bus `Runtime.evaluate`s it into the page (page-rpc.ts's
  * `ensureBundle`). The page fetches nothing — an https page may not import
  * from the channel's http origin (mixed content; see page-script.ts).
  *

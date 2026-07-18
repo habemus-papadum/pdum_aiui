@@ -56,368 +56,36 @@
  * an optimisation, it is the whole latency budget.
  */
 
-import { type Dab, planStroke } from "./dabs";
+import { planStroke } from "./dabs";
 import {
-  CHARGE_GLOW,
   crossfadeStyle,
   type FadeStyle,
   FULL_STYLE,
   fadeStyle,
-  heat,
   INK_HOLD,
   isFullStyle,
 } from "./fade";
 import type { Rect } from "./geom";
 import { GrainCache } from "./grain";
+import { clearLayer, growLayer, type Layer, makeLayer } from "./layer";
 import type { PencilParams } from "./pencil";
+import { applyGrain, boundsOfDabs, grainOf, stampDabs, styleKey, unstableTail } from "./stamp";
+import {
+  DEFAULT_RETENTION,
+  type InkEvent,
+  type InkState,
+  type InkStroke,
+  type LiveStroke,
+  type PencilSurfaceOptions,
+  type StrokeEnd,
+  type StrokeRecord,
+  type Tool,
+} from "./stroke-types";
 import { type PenSample, penSample } from "./telemetry";
 
-/** Draw graphite, or take it off. An eraser is a stroke like any other. */
-export type Tool = "draw" | "erase";
-
-/** How many completed strokes stay individually addressable. Undo depth == this. */
-const DEFAULT_RETENTION = 64;
-
-/** Warp-style quantisation: re-stamp only when the stretch/glow visibly moves. */
-const STYLE_STEP = 0.05;
-
-/**
- * How many dabs at the tail of a live stroke are NOT yet safe to bake.
- *
- * Cusp detection looks *forward* along the stroke, so the corner flags — and
- * therefore the spline, and therefore the dabs — near the leading end can still
- * change when the next sample lands. Baking those into the wet buffer would
- * freeze a decision the pipeline has not finished making. So the tail is redrawn
- * every frame into a scratch and only the stable prefix is baked. The size is
- * derived from the cusp window (in px) over the dab spacing (in px), plus slack.
- */
-function unstableTail(params: PencilParams): number {
-  const spacing = Math.max(0.05, params.size * params.spacing);
-  return Math.ceil((params.cuspWindow + 2 * params.maxStep) / spacing) + 8;
-}
-
-// ── layers: a raster anchored somewhere in canvas CSS-pixel space ────────────
-
-interface Layer {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  /** Canvas-space CSS px of this layer's own (0, 0). */
-  ox: number;
-  oy: number;
-  w: number;
-  h: number;
-}
-
-function makeLayer(rect: Rect, dpr: number): Layer {
-  const w = Math.max(1, Math.ceil(rect.w));
-  const h = Math.max(1, Math.ceil(rect.h));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(w * dpr));
-  canvas.height = Math.max(1, Math.round(h * dpr));
-  const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { canvas, ctx, ox: Math.floor(rect.x), oy: Math.floor(rect.y), w, h };
-}
-
-/** Grow a layer to contain `rect`, preserving what is already drawn on it. */
-function growLayer(layer: Layer, rect: Rect, dpr: number): Layer {
-  const x0 = Math.min(layer.ox, Math.floor(rect.x));
-  const y0 = Math.min(layer.oy, Math.floor(rect.y));
-  const x1 = Math.max(layer.ox + layer.w, Math.ceil(rect.x + rect.w));
-  const y1 = Math.max(layer.oy + layer.h, Math.ceil(rect.y + rect.h));
-  if (
-    x0 === layer.ox &&
-    y0 === layer.oy &&
-    x1 === layer.ox + layer.w &&
-    y1 === layer.oy + layer.h
-  ) {
-    return layer;
-  }
-  // Grow generously — a stroke that is growing will keep growing, and reallocating
-  // per frame would be the whole cost of the surface.
-  const pad = 64;
-  const grown = makeLayer(
-    { x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2 },
-    dpr,
-  );
-  grown.ctx.drawImage(layer.canvas, layer.ox - grown.ox, layer.oy - grown.oy, layer.w, layer.h);
-  return grown;
-}
-
-function clearLayer(layer: Layer): void {
-  layer.ctx.save();
-  layer.ctx.setTransform(1, 0, 0, 1, 0, 0);
-  layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
-  layer.ctx.restore();
-}
-
-// ── dabs → pixels ────────────────────────────────────────────────────────────
-
-/** The axis-aligned box a rotated ellipse actually covers. */
-function dabBounds(dab: Dab, widthScale: number): Rect {
-  const rx = dab.rx * widthScale;
-  const ry = dab.ry * widthScale;
-  const c = Math.cos(dab.angle);
-  const s = Math.sin(dab.angle);
-  const hx = Math.hypot(rx * c, ry * s);
-  const hy = Math.hypot(rx * s, ry * c);
-  return { x: dab.x - hx, y: dab.y - hy, w: hx * 2, h: hy * 2 };
-}
-
-function boundsOfDabs(dabs: readonly Dab[], widthScale = 1): Rect | undefined {
-  if (dabs.length === 0) {
-    return undefined;
-  }
-  let x0 = Number.POSITIVE_INFINITY;
-  let y0 = Number.POSITIVE_INFINITY;
-  let x1 = Number.NEGATIVE_INFINITY;
-  let y1 = Number.NEGATIVE_INFINITY;
-  for (const dab of dabs) {
-    const b = dabBounds(dab, widthScale);
-    if (b.x < x0) x0 = b.x;
-    if (b.y < y0) y0 = b.y;
-    if (b.x + b.w > x1) x1 = b.x + b.w;
-    if (b.y + b.h > y1) y1 = b.y + b.h;
-  }
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-}
-
-/**
- * How much harder an eraser bites than a pencil of the same dynamics.
- *
- * **Where the "one instrument" metaphor stops.** The eraser is the pencil turned
- * around: it keeps the instrument's *geometry* — pressure and tilt still set the
- * dab's radius and its ellipse, so you can erase with a fine point or scrub with
- * a laid-over edge. What it must not keep is the pencil's *density*. A stroke
- * lays graphite at `flow` (≈0.5), and the paper's tooth then eats holes in that;
- * mask with the result and a full-pressure pass over a line lifts about a third
- * of it and leaves the rest behind as speckle. Measured, the first time this was
- * driven in a browser: 38%.
- *
- * Two things fix it, and it is worth being precise about which does the work:
- *
- *  - **the tooth does not apply** (see {@link grainOf}) — that is the real fix,
- *    and it alone takes a firm pass from 38% to 97.7% of the ink under it;
- *  - **the bite** closes the last stubborn 2%, which is a visible ghost.
- *
- * The value is chosen so that the eraser is *definitive but still an instrument*:
- * at 1.6 a firm pass clears 99.9% of what is under it — at any speed, since the
- * dabs accumulate — while a feather-light pass clears only ~73%, along a path its
- * low pressure has already made narrower. So a light touch fades a stroke instead
- * of deleting it, which is a thing worth being able to do.
- */
-const ERASE_BITE = 1.6;
-
-/**
- * Stamp dabs onto a layer as **raw, ungrained** coverage.
- *
- * Grain is deliberately NOT applied here. It is applied once, at the end, over
- * the accumulated alpha — because that is the only way the wet stroke you are
- * watching and the baked tile it becomes are the *same pixels*. Grain the dabs
- * individually (or per frame-batch) and the two composite differently, and the
- * stroke visibly lightens the instant you lift the pen. It is a small pop, and it
- * is the kind of thing that makes a tool feel untrustworthy without anyone being
- * able to say why.
- */
-function stampDabs(
-  layer: Layer,
-  dabs: readonly Dab[],
-  from: number,
-  to: number,
-  color: string,
-  style: FadeStyle,
-  tool: Tool = "draw",
-): void {
-  const ctx = layer.ctx;
-  const paint = heat(color, CHARGE_GLOW * style.glow);
-  const bite = tool === "erase" ? ERASE_BITE : 1;
-  ctx.save();
-  ctx.translate(-layer.ox, -layer.oy);
-  ctx.fillStyle = paint;
-  for (let i = from; i < to; i++) {
-    const dab = dabs[i];
-    ctx.globalAlpha = Math.min(1, dab.alpha * bite);
-    ctx.beginPath();
-    ctx.ellipse(
-      dab.x,
-      dab.y,
-      Math.max(0.35, dab.rx * style.widthScale),
-      Math.max(0.35, dab.ry * style.widthScale),
-      dab.angle,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-/**
- * Multiply a layer's accumulated alpha by the paper's tooth.
- *
- * `destination-in` is the whole trick: it keeps the destination *scaled by the
- * source's alpha*, so a semi-transparent noise pattern eats coverage rather than
- * painting grey on top of it. And the fill is translated by the layer's canvas
- * origin, which is what pins the lattice to the PAGE rather than to the tile —
- * the difference between graphite catching on paper and a stroke wearing a
- * sticker of some noise.
- */
-function applyGrain(layer: Layer, cache: GrainCache, amount: number, scale: number): void {
-  const pattern = cache.patternFor(layer.ctx, amount, scale);
-  if (pattern === null) {
-    return; // grain off: no mask pass at all
-  }
-  const ctx = layer.ctx;
-  ctx.save();
-  ctx.globalCompositeOperation = "destination-in";
-  ctx.translate(-layer.ox, -layer.oy);
-  ctx.fillStyle = pattern;
-  ctx.fillRect(layer.ox, layer.oy, layer.w, layer.h);
-  ctx.restore();
-}
-
-/**
- * The paper's tooth belongs to LAYING graphite, not to lifting it.
- *
- * A grained eraser mask has tooth-shaped holes in it, so it leaves behind, as
- * speckle, precisely the ink it was asked to remove. An eraser meets the paper
- * flat — so it erases flat, and the only thing that feathers its edge is the
- * falloff of its own dabs.
- */
-function grainOf(tool: Tool, params: PencilParams): number {
-  return tool === "erase" ? 0 : params.grain;
-}
-
-// ── strokes ──────────────────────────────────────────────────────────────────
-
-interface StrokeRecord {
-  id: string;
-  tool: Tool;
-  params: PencilParams;
-  dabs: Dab[];
-  points: PenSample[];
-  bornAt: number;
-  /** The baked, grained raster. Rebuilt when the warp style moves. */
-  tile: Layer | undefined;
-  /** Which warp style `tile` was baked at — `"full"` for the un-warped bake. */
-  tileKey: string;
-}
-
-interface LiveStroke {
-  id: string;
-  tool: Tool;
-  params: PencilParams;
-  bornAt: number;
-  samples: PenSample[];
-  dabs: Dab[];
-  /** Accumulated RAW (ungrained) coverage of the stable prefix. */
-  wet: Layer | undefined;
-  /** How many dabs are already baked into `wet`. */
-  stamped: number;
-  pointerId: number | undefined;
-}
-
-export interface StrokeEnd {
-  id: string;
-  tool: Tool;
-  points: PenSample[];
-  bounds: Rect;
-}
-
-// ── the reactive face: the drawing, as data ──────────────────────────────────
-
-/**
- * One stroke of the drawing, as raw material. `points` are the samples exactly
- * as captured (canvas CSS px) — re-plan them with `planStroke(points, params)`
- * to get every pipeline stage (filtered, cusps, densified, dabs), with the
- * widget's own brush (`surface.params()`) or any other.
- */
-export interface InkStroke {
-  id: string;
-  tool: Tool;
-  /** Never mutated after commit — safe to hold. A LIVE stroke's is a snapshot. */
-  points: readonly PenSample[];
-  /** Pen-DOWN time for a live stroke; pen-UP (the fade clock) once committed. */
-  bornAt: number;
-}
-
-/**
- * The drawing, as data — what {@link PencilSurface.ink} returns.
- *
- * `strokes` is everything still part of the picture since the last clear:
- * retained strokes AND those flattened past the undo horizon (they lost their
- * *individual pixels*, not their identity as data). An eraser stroke is in
- * here too, `tool: "erase"` — it is part of the drawing. `live` is the strokes
- * in flight, each carrying every point captured so far: emissions may be
- * throttled, but a snapshot is cumulative, so no consumer ever misses a point.
- */
-export interface InkState {
-  strokes: readonly InkStroke[];
-  live: readonly InkStroke[];
-}
-
-/**
- * `"strokes"`: the committed list changed — a commit, an undo, a clear, or a
- * fade-out. `"live"`: a stroke in flight grew (or began, or was cancelled).
- * Discrete human-rate events versus a 60–120 Hz firehose: subscribers throttle
- * the second and never the first (see `reactive.ts`, which does exactly that).
- */
-export type InkEvent = "strokes" | "live";
-
-export interface PencilSurfaceOptions {
-  /** Where to append the canvas. Defaults to `document.body`. */
-  target?: HTMLElement;
-  /** The instrument, read per stroke-start (so a stroke keeps the brush it began with). */
-  params: () => PencilParams;
-  /** Draw or erase, read per stroke-start. */
-  tool?: () => Tool;
-  /** Vanishing-ink lifetime, seconds. `0` (default) persists until cleared. */
-  fadeSec?: () => number;
-  /**
-   * Which exit a fading stroke takes. `"warp"` (default) is the gesture curve —
-   * hold, charge, pop: a stroke ANNOUNCING its death. `"crossfade"` is the
-   * remote preview's handoff (D3): a gentle dissolve that hides the moment the
-   * video's copy takes over — width never stretches, so the preview never warps
-   * away from the truth beneath it, and the baked tile is reused throughout.
-   */
-  fadeCurve?: () => "warp" | "crossfade";
-  /** Capture local pointer input. Default true. */
-  localInput?: boolean;
-  /** Per-pointerdown veto (the overlay passes `!e.shiftKey` — shift is inspect). */
-  shouldCapture?: (e: PointerEvent) => boolean;
-  /** Minimum committed points. Default 1 (a tap is a dot). The overlay passes 2. */
-  minCommitPoints?: number;
-  /** How many strokes stay individually addressable: the undo depth. Read per commit. */
-  retention?: () => number;
-  /**
-   * Opaque paper behind the ink, painted `destination-over` after the replay —
-   * so erased areas read as PAPER, not as holes. Unset (the default) keeps the
-   * canvas transparent, which the overlay use case requires: its ink floats
-   * over a live page. Set it when the surface IS the page (the scratchpad), and
-   * especially when it is captured: `captureStream` drops alpha, so a
-   * transparent canvas streams as ink-on-black.
-   */
-  background?: () => string | undefined;
-  /**
-   * What happens to the ink when the canvas changes size (D4).
-   *
-   * `"keep"` (default): strokes stay at their absolute canvas coordinates — the
-   * overlay's posture, where a resize means the page reflowed and the app is
-   * expected to retire the ink anyway ({@link PencilSurface.clearAnimated}).
-   * `"rescale"`: the drawing re-bakes proportionally — the scratchpad's posture,
-   * where the plane is a component and nothing reflows inside a canvas. Stroke
-   * width scales by the geometric mean of the two axes, so the drawing reads as
-   * the same drawing, larger or smaller.
-   */
-  resize?: "keep" | "rescale";
-  onStrokeStart?: (id: string, tool: Tool) => void;
-  onStrokeEnd?: (stroke: StrokeEnd) => void;
-  /** A REMOTE stroke completed — the iPad's pen, fed through `remote*`. */
-  onRemoteStrokeEnd?: (stroke: StrokeEnd) => void;
-  /** Every stroke faded away on its own; nothing is left. */
-  onAutoClear?: () => void;
-  className?: string;
-}
+// Re-exported so every `from "./surface"` import site and the package barrel
+// keep resolving the public data-face types unchanged.
+export type { InkEvent, InkState, InkStroke, PencilSurfaceOptions, StrokeEnd, Tool };
 
 export class PencilSurface {
   readonly canvas: HTMLCanvasElement;
@@ -877,9 +545,7 @@ export class PencilSurface {
 
   /** The tile for a retained stroke under a warp style, re-baking when it moves. */
   private tileFor(record: StrokeRecord, style: FadeStyle): Layer | undefined {
-    const key = isFullStyle(style)
-      ? "full"
-      : `${quantize(style.widthScale)}:${quantize(style.glow)}`;
+    const key = isFullStyle(style) ? "full" : styleKey(style);
     if (record.tile !== undefined && record.tileKey === key) {
       return record.tile;
     }
@@ -1255,10 +921,6 @@ export class PencilSurface {
     this.canvas.addEventListener("pointerup", finish);
     this.canvas.addEventListener("pointercancel", finish);
   }
-}
-
-function quantize(value: number): string {
-  return (Math.round(value / STYLE_STEP) * STYLE_STEP).toFixed(2);
 }
 
 /**

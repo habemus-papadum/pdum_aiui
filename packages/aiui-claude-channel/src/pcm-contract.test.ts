@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { ELEVENLABS_SAMPLE_RATE } from "./elevenlabs-realtime";
-import { REALTIME_PCM_BYTES_PER_MS } from "./intent-v1";
+import { REALTIME_PCM_BYTES_PER_MS } from "./intent-stream-util";
 import { REALTIME_VOICE_RATE } from "./pcm";
 
 describe("the 24 kHz PCM contract (channel-side copies)", () => {

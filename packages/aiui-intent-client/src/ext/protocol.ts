@@ -17,7 +17,7 @@
  * instead of `Runtime.evaluate`.
  */
 
-import type { PageReport } from "../cdp/page-script";
+import type { PageReport } from "../page/report";
 
 /** The worker→page command that is NOT a panel capability, so it stays OUT of
  * {@link PageCapabilityMap} (the shared both-tiers contract): the MV3 service

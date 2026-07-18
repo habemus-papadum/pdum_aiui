@@ -22,18 +22,19 @@
  */
 import { createServer } from "node:http";
 import express from "express";
-import { type RawData, type WebSocket, WebSocketServer } from "ws";
-import { createChannelConnection, type FormatRegistry } from "./channel";
+import type { FormatRegistry } from "./channel";
 import { registerDebugRoutes } from "./debug";
-import { ackEntry, createFrameLog, type FrameLogSink, inboundEntry, pushEntry } from "./frame-log";
+import { createFrameLog, type FrameLogSink } from "./frame-log";
 import { defaultFormatLoader, type FormatLoader, isSourceRun } from "./hot";
 import type { LaunchInfo } from "./launch-info";
 import { PageToolDirectory } from "./page-tools";
-import { type PeersResponse, type PublishResult, SessionHub } from "./session-hub";
-import type { MountedSidecar, Sidecar } from "./sidecar";
+import { SessionHub } from "./session-hub";
+import type { Sidecar } from "./sidecar";
 import { createTransportStats } from "./stats";
 import { createTraceStore, sessionLabel, type TraceStageSink, type TraceStore } from "./trace";
-import { withTracing } from "./tracing";
+import { registerChannelRoutes } from "./web-routes";
+import { createChannelRuntime, errorMessage } from "./web-runtime";
+import { attachChannelSockets } from "./web-sockets";
 
 /**
  * Forward prompt text into the Claude Code session. The optional `meta` (from
@@ -159,17 +160,6 @@ export interface WebServerOptions {
   log?: (message: string) => void;
 }
 
-/** Normalize `ws`'s several binary shapes into a single Uint8Array frame. */
-const toFrame = (data: RawData): Uint8Array => {
-  if (Array.isArray(data)) {
-    return Buffer.concat(data);
-  }
-  if (data instanceof ArrayBuffer) {
-    return new Uint8Array(data);
-  }
-  return data;
-};
-
 /** The outcome of a {@link WebServer.reload}. */
 export interface ReloadSummary {
   reloaded: true;
@@ -208,8 +198,6 @@ export interface WebServer {
   close: () => Promise<void>;
 }
 
-const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
-
 /**
  * Start the web backend — on `127.0.0.1` unless {@link WebServerOptions.host}
  * widens it, an OS-assigned free port unless {@link WebServerOptions.port}
@@ -227,99 +215,41 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   const log =
     options.log ?? ((message: string) => process.stderr.write(`[aiui-channel] ${message}\n`));
-  // Sidecars are mounted just before `listen` (so the channel's own routes win);
-  // this list is populated by then and read by the upgrade handler below.
-  const mountedSidecars: MountedSidecar[] = [];
 
-  // Bumps on every successful reload; surfaced on /health and /debug/api/info so
-  // a page or panel can tell it's talking to freshly-reloaded code.
-  let generation = 0;
+  // The trace store is a long-lived singleton: created once, reused across every
+  // reload so on-disk trace history survives. The format registry, by contrast,
+  // is rebuilt on each reload (inside the runtime) — its lowering code is what
+  // changes. Creating the store is also where this process's session label is
+  // minted: reloads swap code, not identity, so every trace of the server's
+  // lifetime carries the same label.
+  const traceStore: TraceStore | undefined = options.traceDir
+    ? createTraceStore(options.traceDir, sessionLabel(options.tag), options.traceSink)
+    : undefined;
 
-  app.get("/health", (_req, res) => {
-    // Readable cross-origin: the intent client's tools-link probes this route
-    // from the app's dev-server origin before dialing `/tools` (the browser
-    // logs failed websocket handshakes unsuppressably, so it never dials
-    // blind). The payload is harmless loopback metadata, and the header's
-    // presence is part of the capability signal — it ships together with the
-    // `/tools` endpoint, so a CORS-refused probe means an older channel.
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.json({
-      ok: true,
-      pid: process.pid,
-      ppid: process.ppid,
-      generation,
-      // The bound address, so tools can tell a loopback-only server from a
-      // LAN-exposed one (`aiui pencil url` decides which URLs to print by it).
-      host: bindHost,
-      pageTools: pageTools.summary(),
-      session: sessionHub.summary(),
-      ...(options.debug === true ? { debug: true } : {}),
-    });
+  // How each (re)load produces the base format registry. An explicit `formats`
+  // registry is caller-owned in-memory state, so it can't be re-read from disk —
+  // reload keeps returning it (still cycling sockets). Otherwise the hot loader
+  // reloads the lowering layer from disk (source run) or the bundle (packaged).
+  const loadFormats: FormatLoader =
+    options.loadFormats ??
+    (options.formats ? () => options.formats as FormatRegistry : defaultFormatLoader());
+
+  // The shared-mutable-state cluster (generation, the live format registry, the
+  // live-socket set, the mounted sidecars held BY REFERENCE, and the post-listen
+  // bound port), plus reload. The initial format load happens inside, so a broken
+  // lowering layer fails fast at startup.
+  const runtime = await createChannelRuntime({
+    loadFormats,
+    ...(traceStore !== undefined ? { traceStore } : {}),
   });
 
-  app.post("/prompt", express.json(), async (req, res) => {
-    const text = typeof req.body?.text === "string" ? req.body.text : "";
-    if (!text) {
-      res.status(400).json({ ok: false, error: "expected a non-empty 'text' field" });
-      return;
-    }
-    try {
-      await options.onPrompt(text);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ ok: false, error: errorMessage(err) });
-    }
-  });
-
-  // The session bus's HTTP surface, for external same-host providers (the VS
-  // Code extension) that contribute to the turn without holding a `/session`
-  // socket of their own: `GET /session/peers` lists the connected views (so a
-  // tool can offer "which browser tab?"), and `POST /session/publish` injects a
-  // server-originated publish, targeted at one view (`clientId`), a role, or
-  // everyone. Both report the cached `armed` slot so callers can phrase their
-  // feedback; delivery is not gated on it — the intent client's contribution
-  // handler arms the turn itself when a contribution lands.
-  app.get("/session/peers", (_req, res) => {
-    // Readable cross-origin for the same reason as /health: harmless loopback
-    // metadata a debug page may want to render.
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    const body: PeersResponse = {
-      ok: true,
-      peers: sessionHub.peers(),
-      armed: sessionHub.get("armed") === true,
-    };
-    res.json(body);
-  });
-
-  app.post("/session/publish", express.json(), (req, res) => {
-    const topic = typeof req.body?.topic === "string" ? req.body.topic : "";
-    if (!topic) {
-      const body: PublishResult = { ok: false, error: "expected a non-empty 'topic' field" };
-      res.status(400).json(body);
-      return;
-    }
-    const clientId = typeof req.body?.clientId === "string" ? req.body.clientId : undefined;
-    const role = typeof req.body?.role === "string" ? req.body.role : undefined;
-    const delivered = sessionHub.publishFromServer(topic, req.body?.payload, {
-      ...(clientId !== undefined ? { clientId } : {}),
-      ...(role !== undefined ? { role } : {}),
-    });
-    if (delivered.length === 0) {
-      const wanted =
-        clientId !== undefined
-          ? `view "${clientId}"`
-          : role !== undefined
-            ? `a "${role}" view`
-            : "any connected view";
-      const body: PublishResult = {
-        ok: false,
-        error: `no connected session view matches ${wanted}`,
-      };
-      res.status(404).json(body);
-      return;
-    }
-    const body: PublishResult = { ok: true, delivered, armed: sessionHub.get("armed") === true };
-    res.json(body);
+  registerChannelRoutes(app, {
+    bindHost,
+    onPrompt: options.onPrompt,
+    pageTools,
+    sessionHub,
+    getGeneration: runtime.getGeneration,
+    ...(options.debug === true ? { debug: true } : {}),
   });
 
   const httpServer = createServer(app);
@@ -337,238 +267,29 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     options.frameSink !== undefined ? { sink: options.frameSink } : {},
   );
 
-  // The trace store is a long-lived singleton: created once, reused across every
-  // reload so on-disk trace history survives. The format registry, by contrast,
-  // is rebuilt on each reload (below) — its lowering code is what changes.
-  // Creating the store is also where this process's session label is minted:
-  // reloads swap code, not identity, so every trace of the server's lifetime
-  // carries the same label.
-  const traceStore: TraceStore | undefined = options.traceDir
-    ? createTraceStore(options.traceDir, sessionLabel(options.tag), options.traceSink)
-    : undefined;
-
-  // How each (re)load produces the base format registry. An explicit `formats`
-  // registry is caller-owned in-memory state, so it can't be re-read from disk —
-  // reload keeps returning it (still cycling sockets). Otherwise the hot loader
-  // reloads the lowering layer from disk (source run) or the bundle (packaged).
-  const loadFormats: FormatLoader =
-    options.loadFormats ??
-    (options.formats ? () => options.formats as FormatRegistry : defaultFormatLoader());
-
-  // Rebuild the live registry for a generation: load the base formats, then
-  // re-wrap tracing (a fresh wrap over the same singleton store).
-  const buildFormats = async (gen: number): Promise<FormatRegistry> => {
-    const base = await loadFormats(gen);
-    return traceStore ? withTracing(base, traceStore) : base;
-  };
-
-  // The registry new connections read. Reassigned on reload; existing (dropped)
-  // connections captured the old one.
-  let formats = await buildFormats(generation);
-
-  // Two websocket endpoints share one HTTP server: `/ws` (the binary
-  // stream-processor protocol) and `/tools` (the JSON page-tool protocol). When
-  // several `WebSocketServer`s attach via the `server` option they fight over
-  // the upgrade, so both run in `noServer` mode and one upgrade listener routes
-  // by path (anything else is dropped).
-  // Every live socket (both endpoints), so reload can drop them all. Tracked
-  // explicitly rather than via `wss.clients` because the `noServer` upgrade path
-  // makes that set's membership less obvious to reason about.
-  const liveSockets = new Set<WebSocket>();
-
-  const wss = new WebSocketServer({ noServer: true });
-  const toolsWss = new WebSocketServer({ noServer: true });
-  const sessionWss = new WebSocketServer({ noServer: true });
-  httpServer.on("upgrade", (req, socket, head) => {
-    // Nothing in here may throw: an exception in an 'upgrade' listener is an
-    // uncaughtException, which would take down the whole channel process.
-    let pathname: string;
-    try {
-      pathname = new URL(req.url ?? "/", "http://localhost").pathname;
-    } catch {
-      socket.destroy(); // malformed request-target
-      return;
-    }
-    if (pathname === "/ws") {
-      wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
-    } else if (pathname === "/tools") {
-      toolsWss.handleUpgrade(req, socket, head, (ws) => toolsWss.emit("connection", ws, req));
-    } else if (pathname === "/session") {
-      sessionWss.handleUpgrade(req, socket, head, (ws) => sessionWss.emit("connection", ws, req));
-    } else {
-      // Offer the upgrade to each sidecar (e.g. the pencil sidecar's stroke
-      // sockets); the first to claim it owns the socket. Nothing claims it →
-      // drop, as before. A sidecar
-      // that throws mid-handshake is contained (logged, socket dropped) — one bad
-      // sidecar must not sink the session.
-      for (const sidecar of mountedSidecars) {
-        try {
-          if (sidecar.handleUpgrade?.(req, socket, head)) {
-            return;
-          }
-        } catch (err) {
-          log(`a sidecar upgrade handler threw: ${errorMessage(err)}`);
-          socket.destroy();
-          return;
-        }
-      }
-      socket.destroy();
-    }
+  // The channel's websocket surface: `/ws` (binary stream-processor protocol)
+  // and the JSON `/tools` + `/session` hubs, behind one never-throw upgrade
+  // router that offers unclaimed upgrades to the mounted sidecars. `closeAll`
+  // preserves the sessionWss → toolsWss → wss teardown order.
+  const sockets = attachChannelSockets(httpServer, {
+    runtime,
+    onPrompt: options.onPrompt,
+    frameLog,
+    stats,
+    pageTools,
+    sessionHub,
+    log,
+    ...(options.debug === true ? { debug: true } : {}),
   });
-
-  wss.on("connection", (socket) => {
-    stats.connectionOpened();
-    liveSockets.add(socket);
-    // A processor may push server → client messages (the `intent-v1` lowering
-    // sends `lowered` events) out-of-band of the per-frame acks; the client
-    // tells them apart by their `kind` field. Reads `formats` at connect time,
-    // so a connection opened after a reload speaks the freshly loaded layer.
-    const connection = createChannelConnection({
-      formats,
-      sendPrompt: options.onPrompt,
-      push: (message) => {
-        // Logged even if the socket already dropped: the push *happened* (the
-        // frame log is the server's record, not the client's).
-        frameLog.record(pushEntry(message));
-        if (socket.readyState === socket.OPEN) {
-          socket.send(JSON.stringify(message));
-        }
-      },
-      ...(options.debug === true ? { debug: true } : {}),
-    });
-    socket.on("close", () => {
-      liveSockets.delete(socket);
-      stats.connectionClosed();
-      // Tear down any thread abandoned mid-turn (socket dropped before its
-      // `fin`) so processors release per-thread resources instead of leaking.
-      // A reload drops the socket the same way, so onClose teardown runs then too.
-      void connection.close();
-    });
-    socket.on("message", async (data, isBinary) => {
-      if (!isBinary) {
-        const rejection = { ok: false, fatal: true, error: "expected a binary frame" };
-        frameLog.record(ackEntry(rejection));
-        socket.send(JSON.stringify(rejection));
-        socket.close();
-        return;
-      }
-      // Acks stay small JSON text frames; the high-bandwidth direction (data
-      // in) is what the binary framing optimizes.
-      const frame = toFrame(data);
-      // Log the inbound frame before handling it, so a push produced *while*
-      // handling (a lowered-prompt, a transcript echo) sits after its cause.
-      frameLog.record(inboundEntry(frame));
-      const handledAt = performance.now();
-      const response = await connection.handleFrame(frame);
-      stats.recordFrame({
-        bytes: frame.length,
-        processMs: performance.now() - handledAt,
-        ok: response.ok,
-        ...(response.threadId ? { threadId: response.threadId } : {}),
-        ...(response.closed ? { closed: true } : {}),
-      });
-      frameLog.record(ackEntry(response));
-      socket.send(JSON.stringify(response));
-      if (response.fatal) {
-        socket.close();
-      }
-    });
-  });
-
-  // The `/tools` endpoint: a page declares its tool set as JSON text frames and
-  // answers the calls the directory routes to it. Unlike `/ws` this is a plain
-  // JSON protocol — the payloads are tiny schemas and results, not media.
-  toolsWss.on("connection", (socket) => {
-    liveSockets.add(socket);
-    const clientId = pageTools.addConnection((message) => {
-      if (socket.readyState === socket.OPEN) {
-        socket.send(JSON.stringify(message));
-      }
-    });
-    socket.on("message", (data, isBinary) => {
-      if (isBinary) {
-        return; // the tools protocol is JSON text only
-      }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(data.toString());
-      } catch {
-        return; // ignore garbage from a cooperative same-host client
-      }
-      pageTools.handleClientMessage(clientId, parsed);
-    });
-    socket.on("close", () => {
-      liveSockets.delete(socket);
-      // Reload closes this socket, which drops the page's namespaces from the
-      // directory; the bridge reconnects and re-registers them (invisibly, by hash).
-      pageTools.removeConnection(clientId);
-    });
-    // A socket error is followed by `close`; swallow it so it doesn't crash the
-    // process (Node treats an unhandled 'error' on the socket as fatal).
-    socket.on("error", () => {});
-  });
-
-  // The `/session` endpoint: the multi-view session bus. Every tab of the session
-  // (app, VS Code bridge, …) dials it; the hub relays shared arming + prompt preview
-  // + contributions between them (see session-hub.ts). Plain JSON text frames.
-  sessionWss.on("connection", (socket) => {
-    liveSockets.add(socket);
-    const clientId = sessionHub.addConnection((message) => {
-      if (socket.readyState === socket.OPEN) {
-        socket.send(JSON.stringify(message));
-      }
-    });
-    socket.on("message", (data, isBinary) => {
-      if (isBinary) {
-        return; // the session protocol is JSON text only
-      }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(data.toString());
-      } catch {
-        return; // ignore garbage from a cooperative same-host client
-      }
-      sessionHub.handleClientMessage(clientId, parsed);
-    });
-    socket.on("close", () => {
-      liveSockets.delete(socket);
-      sessionHub.removeConnection(clientId);
-    });
-    socket.on("error", () => {});
-  });
-
-  // Reload the lowering layer in place. Order matters for robustness: build the
-  // fresh registry FIRST — if the freshly edited code throws (a syntax error the
-  // agent just introduced), we reject here and leave the running server, its
-  // sockets, and the old registry untouched. Only once the rebuild succeeds do we
-  // swap the registry, bump the generation, and drop live sockets. Each dropped
-  // socket runs its normal close path (onClose thread teardown, directory entry
-  // removal); the clients reconnect and re-register on their own.
-  const reload: ChannelReload = async () => {
-    const next = await buildFormats(generation + 1);
-    generation += 1;
-    formats = next;
-    const dropping = [...liveSockets];
-    liveSockets.clear();
-    for (const socket of dropping) {
-      try {
-        // 1012 = "service restart": the standards-registered code for exactly this.
-        socket.close(1012, "channel reload");
-      } catch {
-        // A socket already closing/closed just gets skipped.
-      }
-    }
-    return { reloaded: true, generation, socketsDropped: dropping.length };
-  };
 
   if (options.traceDir) {
     // Debug tool + JSON API (traces, this server's info, transport stats, the
-    // frame log) plus the reload endpoint. Registered here, after `reload`
-    // exists, so the route can drive it; the generation getter keeps
-    // /debug/api/info's value live.
+    // frame log) plus the reload endpoint. The runtime's `reload` is build-first/
+    // swap-second (a broken fresh layer rejects and leaves the server untouched);
+    // the generation getter keeps /debug/api/info's value live.
     registerDebugRoutes(app, options.traceDir, stats, options.launchInfo, {
-      getGeneration: () => generation,
-      onReload: reload,
+      getGeneration: runtime.getGeneration,
+      onReload: runtime.reload,
       frameLog,
       // The store's session label rides along so the traces listing can say
       // which rows are this server's (a traceDir implies the store exists).
@@ -583,10 +304,11 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // `boundPort` is handed to them lazily: it resolves only after `listen`.
   // `mode` (dev/prod) defaults to whether the channel itself runs from source.
   const mode = options.mode ?? (isSourceRun() ? "dev" : "prod");
-  let boundPort: number | undefined;
   for (const sidecar of options.sidecars ?? []) {
     try {
-      mountedSidecars.push(await sidecar.mount(app, { mode, log, port: () => boundPort }));
+      runtime.mountedSidecars.push(
+        await sidecar.mount(app, { mode, log, port: () => runtime.getBoundPort() }),
+      );
       log(`sidecar "${sidecar.name}" mounted`);
     } catch (err) {
       log(`sidecar "${sidecar.name}" failed to mount: ${errorMessage(err)}`);
@@ -603,18 +325,23 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
 
   const address = httpServer.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
-  boundPort = port;
+  runtime.setBoundPort(port);
 
   const close = async (): Promise<void> => {
     // Dispose sidecars first — let them kill spawned language servers / close a
     // Vite server before we release the port.
-    await Promise.allSettled(mountedSidecars.map((s) => s.dispose?.()));
+    await Promise.allSettled(runtime.mountedSidecars.map((s) => s.dispose?.()));
     await new Promise<void>((resolveClose) => {
-      sessionWss.close(() =>
-        toolsWss.close(() => wss.close(() => httpServer.close(() => resolveClose()))),
-      );
+      sockets.closeAll(() => httpServer.close(() => resolveClose()));
     });
   };
 
-  return { port, pageTools, sessionHub, reload, getGeneration: () => generation, close };
+  return {
+    port,
+    pageTools,
+    sessionHub,
+    reload: runtime.reload,
+    getGeneration: runtime.getGeneration,
+    close,
+  };
 }

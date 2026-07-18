@@ -31,8 +31,8 @@ import { pageTabRecord } from "@habemus-papadum/aiui-intent-runtime/instrumentat
 import { locateComponents } from "@habemus-papadum/aiui-intent-runtime/locator";
 import { installSelectionWatcher } from "@habemus-papadum/aiui-intent-runtime/selection";
 import { mountPencil } from "../cdp/page-bundle";
-import type { PageReport } from "../cdp/page-script";
 import { createDriverWatch } from "../page/driver-watch";
+import type { PageReport } from "../page/report";
 import {
   createFlash,
   createPencilOps,

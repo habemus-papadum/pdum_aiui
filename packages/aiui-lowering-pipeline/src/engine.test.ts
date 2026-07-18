@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { composeIntent, Engine } from "./engine";
+import { composeIntent } from "./compose";
+import { Engine } from "./engine";
 import { renderAppSelection, renderCodeSelection } from "./render";
 import type { IntentEvent } from "./types";
 

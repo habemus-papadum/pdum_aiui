@@ -25,7 +25,7 @@
  * as a tab that has gone away.
  */
 
-import type { PageReport } from "../cdp/page-script";
+import type { PageReport } from "../page/report";
 import {
   type CaptureSource,
   HEARTBEAT_MS,

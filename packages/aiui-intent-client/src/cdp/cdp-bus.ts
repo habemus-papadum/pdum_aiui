@@ -14,9 +14,9 @@
  *  - **PageTransport.requestPage** → `Runtime.evaluate` of
  *    `__aiuiIntentPage.handle(cap, payload)` in that page's world;
  *    **broadcastRing** → the same call on every attached page. The heavy page
- *    bundle is evaluated INTO the page first (`ensureBundle`) — the page never
- *    fetches anything, because an https page cannot import from the channel's
- *    http origin.
+ *    bundle is evaluated INTO the page first (page-rpc.ts's `ensureBundle`) —
+ *    the page never fetches anything, because an https page cannot import from
+ *    the channel's http origin.
  *  - **SurfaceTargeting** → the tab you are LOOKING at (visibility, not focus —
  *    see `relead`): looking at the panel must not blank the target.
  *  - **CaptureSource** → `Page.captureScreenshot`: stills with NO grant and no
@@ -33,26 +33,32 @@
  *    what it asserted per tab and replays it when a document re-announces
  *    itself. Pencil STROKES are not replayed: they were the old document's.
  *
+ * This file is the composition root: the CDP event dispatcher, the page
+ * registry + leader election, and the host facades. The seams it composes live
+ * in siblings — page-rpc.ts (evaluate/apply/prepare + the sticky/ring replay
+ * state), cdp-reports.ts (PageReport → PageEvent mapping), cdp-capture.ts
+ * (the screenshot CaptureSource) — all panel-side only.
+ *
  * Security: the bus dials the channel's same-origin `/intent/cdp` bridge, never
  * the browser's debug port (Chrome rejects that from a page, by design). The
  * bridge is loopback-only server-side; this guard is the client-side echo of it.
  */
 
+import { PAGE_REPORT_BINDING, type PageReport } from "../page/report";
 import {
-  type CaptureSource,
   HEARTBEAT_MS,
-  type HeldStream,
   type IntentHost,
   type PageCapability,
   type PageCapabilityMap,
   type PageEvent,
   type PageTransport,
-  type PanelShot,
-  type RingState,
   ringForTab,
   type SurfaceTargeting,
 } from "../transport";
-import { buildPageScript, PAGE_REPORT_BINDING, type PageReport } from "./page-script";
+import { createCdpCapture } from "./cdp-capture";
+import { handleReport } from "./cdp-reports";
+import { createPageRpc } from "./page-rpc";
+import { buildPageScript } from "./page-script";
 import { type CdpSocket, connectCdp } from "./protocol";
 import { createScreencast, type Screencast } from "./screencast";
 
@@ -68,7 +74,8 @@ export interface AttachedPage {
   aiui: boolean;
   /** The page's latest selection-present verdict (replayed to late subscribers). */
   selectionPresent: boolean;
-  /** Whether THIS document already carries the page bundle (see `ensureBundle`). */
+  /** Whether THIS document already carries the page bundle (see page-rpc.ts's
+   * `ensureBundle`). */
   bundleInjected: boolean;
 }
 
@@ -101,22 +108,6 @@ export interface CdpBus extends IntentHost {
 
 const LOOPBACK = /^wss?:\/\/(127\.0\.0\.1|\[::1\]|localhost)(:\d+)?(\/|$)/;
 
-/** Capabilities whose effect lives in the DOCUMENT — replay them on reload. */
-const STICKY: ReadonlySet<PageCapability> = new Set(["keylayer"]);
-
-/** Width/height from a PNG's IHDR (8-byte signature, then a length+type header,
- * then two big-endian uint32s). Returns undefined if the bytes are not a PNG we
- * can read — the caller then falls back to its own estimate. */
-function pngSize(bytes: Uint8Array): { width: number; height: number } | undefined {
-  // 8 sig + 4 length + 4 "IHDR" = 16, then width@16, height@20.
-  if (bytes.length < 24 || bytes[0] !== 0x89 || bytes[1] !== 0x50) {
-    return undefined;
-  }
-  const u32 = (o: number) =>
-    ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
-  return { width: u32(16), height: u32(20) };
-}
-
 export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   if (!LOOPBACK.test(options.cdpUrl)) {
     throw new Error(
@@ -127,26 +118,20 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   const log = options.log ?? (() => {});
   const cdp = await connectCdp(options.cdpUrl, options.socketFactory);
   const script = buildPageScript();
-  /** The page bundle, read ONCE from our own origin and re-used for every page. */
-  const bundleSource =
-    options.bundleSource ??
-    (() =>
-      fetch(`${options.channelOrigin}/intent/page-bundle.js`).then((res) => {
-        if (!res.ok) {
-          throw new Error(`the channel could not build the page bundle (${res.status})`);
-        }
-        return res.text();
-      }));
-  let pageBundle: Promise<string> | undefined;
+  // The page-side delivery machinery (evaluate/apply/prepare) and the state it
+  // replays on reload (sticky assertions + the ring desire) live in page-rpc.ts.
+  const rpc = createPageRpc({
+    cdp,
+    script,
+    channelOrigin: options.channelOrigin,
+    ...(options.bundleSource ? { bundleSource: options.bundleSource } : {}),
+  });
 
   const bySession = new Map<string, AttachedPage>();
   const byTarget = new Map<string, AttachedPage>();
   const byTab = new Map<number, AttachedPage>();
   const pageHandlers = new Set<(event: PageEvent) => void>();
   const tabHandlers = new Set<(tab: number | undefined) => void>();
-  /** What we asserted per tab, so a fresh document gets it back. */
-  const sticky = new Map<number, Map<PageCapability, unknown>>();
-  let ring: RingState = { on: false, turnTone: false };
   let nextTab = 1;
   let activeTab: number | undefined;
   /** The page with keyboard focus, when the browser app itself has it. */
@@ -223,182 +208,6 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     setActive(focusedTab ?? visibleTab);
   };
 
-  const evaluate = async (sessionId: string, expression: string, awaitPromise = false) => {
-    const outcome = (await cdp.send(
-      "Runtime.evaluate",
-      { expression, returnByValue: true, awaitPromise },
-      sessionId,
-    )) as {
-      result?: { value?: unknown };
-      exceptionDetails?: { text?: string; exception?: { description?: string } };
-    };
-    // A page-side throw must FAIL the caller, not read as `undefined` — a
-    // swallowed TypeError is how the bundle-clobber bug hid behind "active"
-    // claims for a whole tier (found live, 2026-07-17).
-    if (outcome.exceptionDetails !== undefined) {
-      const detail =
-        outcome.exceptionDetails.exception?.description ??
-        outcome.exceptionDetails.text ??
-        "page evaluate threw";
-      throw new Error(detail.split("\n")[0]);
-    }
-    return outcome;
-  };
-
-  /** The capability call, as an expression evaluated in the page's own world. */
-  const invoke = (capability: PageCapability, payload?: unknown): string =>
-    `window.__aiuiIntentPage && window.__aiuiIntentPage.handle(${JSON.stringify(capability)}, ${JSON.stringify(payload ?? null)})`;
-
-  /**
-   * The page bundle (locator · jump · pencil), evaluated INTO the page (once
-   * per document). The page cannot fetch it: on an https page a module from
-   * the channel's http origin is mixed content, so the panel reads the bundle
-   * from its own origin and hands over the source. Any page can be marked up;
-   * that is the point.
-   */
-  const ensureBundle = async (page: AttachedPage): Promise<void> => {
-    if (page.bundleInjected) {
-      return;
-    }
-    pageBundle ??= bundleSource();
-    await evaluate(page.sessionId, await pageBundle);
-    page.bundleInjected = true;
-  };
-
-  /** Deliver one capability to one page — the single path everything takes. */
-  const apply = async (
-    page: AttachedPage,
-    capability: PageCapability,
-    payload?: unknown,
-  ): Promise<unknown> => {
-    if (capability === "region" || capability === "jump" || capability === "pencil") {
-      // The region drag's locator, the jump picker, and the pencil surface all
-      // ride the evaluated bundle — deliver it before the op so instrumented
-      // pages can name components / open the picker / draw.
-      await ensureBundle(page);
-    }
-    const result = await evaluate(page.sessionId, invoke(capability, payload));
-    return result.result?.value;
-  };
-
-  /** A document just announced itself: give it back what we had asserted. */
-  const replay = (page: AttachedPage): void => {
-    if (ring.on) {
-      void apply(page, "ring", ringForTab(ring, page.tab)).catch(() => {});
-    }
-    for (const [capability, payload] of sticky.get(page.tab) ?? []) {
-      void apply(page, capability, payload).catch(() => {});
-    }
-  };
-
-  const onReport = (sessionId: string, report: PageReport): void => {
-    const page = bySession.get(sessionId);
-    if (page === undefined) {
-      return;
-    }
-    switch (report.kind) {
-      case "hello": {
-        const reloaded = page.url !== "" && page.url !== report.url;
-        // A hello means a document that has just installed the bootstrap —
-        // and a fresh document carries none of the page bundle we evaluated
-        // into the last one.
-        page.bundleInjected = false;
-        page.url = report.url;
-        page.title = report.title;
-        page.visible = report.visible;
-        page.focused = report.focused;
-        page.aiui = report.aiui;
-        emit({ kind: "aiuiSupport", tab: page.tab, supported: report.aiui });
-        relead(page);
-        // A fresh document (reload or full navigation) lost everything the
-        // client had asserted — and the client's desire never changed, so no
-        // claim will re-apply. The bus does it.
-        replay(page);
-        if (reloaded) {
-          log(`page ${page.tab} loaded ${report.url}`);
-        }
-        break;
-      }
-      case "focus":
-        page.visible = report.visible;
-        page.focused = report.focused;
-        relead(page);
-        break;
-      case "selection":
-        page.selectionPresent = report.present;
-        emit({ kind: "selectionPresent", tab: page.tab, present: report.present });
-        break;
-      case "interaction":
-        emit({ kind: "interaction", tab: page.tab });
-        break;
-      case "navigation":
-        emit({
-          kind: "navigation",
-          tab: page.tab,
-          from: report.from,
-          to: report.to,
-          navKind: report.navKind,
-          // The page-built record, enriched with THIS host's id namespace
-          // (the CDP target and the driver's tab handle).
-          ...(report.tab !== undefined
-            ? { tabRecord: { ...report.tab, targetId: page.targetId, driverTab: page.tab } }
-            : {}),
-        });
-        page.url = report.to;
-        break;
-      case "key":
-        emit({
-          kind: "keyForward",
-          tab: page.tab,
-          key: report.key,
-          phase: report.phase,
-          repeat: report.repeat,
-        });
-        break;
-      case "tools":
-        emit({ kind: "pageTools", tab: page.tab, registrations: report.registrations });
-        break;
-      case "toolsResult":
-        emit({
-          kind: "toolsResult",
-          tab: page.tab,
-          callId: report.callId,
-          ok: report.ok,
-          ...(report.value !== undefined ? { value: report.value } : {}),
-          ...(report.error !== undefined ? { error: report.error } : {}),
-        });
-        break;
-      case "region":
-        emit({
-          kind: "regionDrag",
-          tab: page.tab,
-          rect: report.rect,
-          viewport: report.viewport,
-          takenAt: report.takenAt,
-          ...(report.components !== undefined ? { components: report.components } : {}),
-        });
-        break;
-      case "jumpDone":
-        emit({ kind: "jumpDone", tab: page.tab });
-        break;
-      case "stroke":
-        break; // stroke counts enrich the shot payload later (post-v1)
-    }
-  };
-
-  /** Everything one page session needs, in order (the binding BEFORE the code
-   * that calls it, so the bootstrap's hello lands). `Page.enable` is not
-   * decoration: without it there are no navigation events, and a page that
-   * reloads comes back bare — a live turn on a reloaded tab was silently
-   * deaf (found live, Phase 3; the re-injection below is the other half). */
-  const prepare = async (sessionId: string): Promise<void> => {
-    await cdp.send("Runtime.enable", {}, sessionId);
-    await cdp.send("Page.enable", {}, sessionId);
-    await cdp.send("Runtime.addBinding", { name: PAGE_REPORT_BINDING }, sessionId);
-    await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: script }, sessionId);
-    await evaluate(sessionId, script); // the document already loaded
-  };
-
   /**
    * Auto-attached but not (yet) driveable: a tab BORN as browser chrome — the
    * + button's chrome://newtab — parks here with its live session, and
@@ -432,7 +241,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     if (activeTab === undefined) {
       setActive(page.tab); // something must be the target before any focus report
     }
-    void prepare(sessionId).catch((err: unknown) => {
+    void rpc.prepare(sessionId).catch((err: unknown) => {
       log(`could not instrument ${info.url}: ${err instanceof Error ? err.message : String(err)}`);
     });
     log(`attached tab ${page.tab} → ${info.url}`);
@@ -502,7 +311,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       bySession.delete(page.sessionId);
       byTarget.delete(page.targetId);
       byTab.delete(page.tab);
-      sticky.delete(page.tab);
+      rpc.forgetTab(page.tab);
       if (focusedTab === page.tab) {
         focusedTab = undefined;
       }
@@ -527,7 +336,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       if (frame?.parentId === undefined && typeof event.sessionId === "string") {
         const page = bySession.get(event.sessionId);
         if (page !== undefined) {
-          void evaluate(page.sessionId, script).catch(() => {});
+          void rpc.reinject(page.sessionId).catch(() => {});
         }
       }
       return;
@@ -537,7 +346,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         return;
       }
       try {
-        onReport(event.sessionId, JSON.parse(String(event.params.payload)) as PageReport);
+        const report = JSON.parse(String(event.params.payload)) as PageReport;
+        const page = bySession.get(event.sessionId);
+        if (page !== undefined) {
+          handleReport(page, report, { emit, relead, replay: rpc.replay, log });
+        }
       } catch {
         // a malformed report never breaks the bus
       }
@@ -576,25 +389,21 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       if (page === undefined) {
         return undefined;
       }
-      if (STICKY.has(capability)) {
-        const perTab = sticky.get(tab) ?? new Map<PageCapability, unknown>();
-        perTab.set(capability, payload);
-        sticky.set(tab, perTab);
-      }
+      rpc.rememberSticky(tab, capability, payload);
       // CDP's evaluate returns `unknown`; the reply is asserted to the
       // capability's declared shape here — the one wire-boundary cast this
       // tier needs (a stale/foreign page could return anything).
-      return apply(page, capability, payload) as Promise<
+      return rpc.apply(page, capability, payload) as Promise<
         PageCapabilityMap[PageCapability]["reply"] | undefined
       >;
     },
     broadcastRing: (state) => {
-      ring = state;
+      rpc.setRing(state);
       // Projected per tab (ringForTab) for uniformity with the MV3 bus — this
       // host is grantless, so the client never sets `grant` and the projection
       // is the identity; the shared function is what KEEPS the two in step.
       for (const page of byTab.values()) {
-        void apply(page, "ring", ringForTab(state, page.tab)).catch(() => {});
+        void rpc.apply(page, "ring", ringForTab(state, page.tab)).catch(() => {});
       }
     },
     onPageEvent: (handler) => {
@@ -634,89 +443,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
     },
   };
 
-  const capture: CaptureSource = {
-    // `Page.captureScreenshot` asks nobody: any attached tab, no grant, no
-    // MediaStream. So the shot/selection acts light up as soon as a turn is
-    // open, and they follow the tab you are looking at.
-    grantless: true,
-    // Nothing to warm, either — the "held stream" is a handle the claim's
-    // lifecycle can still hold.
-    holdStream: (tab) => Promise.resolve<HeldStream>({ tab, release: () => {} }),
-    grabShot: async (tab): Promise<PanelShot> => {
-      const page = byTab.get(tab);
-      if (page === undefined) {
-        throw new Error(`no attached page for tab ${tab}`);
-      }
-      const shot = (await cdp.send(
-        "Page.captureScreenshot",
-        { format: "png", captureBeyondViewport: false },
-        page.sessionId,
-      )) as { data?: string };
-      if (typeof shot.data !== "string") {
-        throw new Error("Page.captureScreenshot returned no data");
-      }
-      const bytes = Uint8Array.from(atob(shot.data), (c) => c.charCodeAt(0));
-      const metrics = (await cdp.send("Page.getLayoutMetrics", {}, page.sessionId)) as {
-        cssVisualViewport?: { clientWidth?: number; clientHeight?: number };
-      };
-      return {
-        width: Math.round(metrics.cssVisualViewport?.clientWidth ?? 0),
-        height: Math.round(metrics.cssVisualViewport?.clientHeight ?? 0),
-        mime: "image/png",
-        bytes,
-        thumb: `data:image/png;base64,${shot.data}`,
-      };
-    },
-    grabRegion: async (tab, rect): Promise<PanelShot> => {
-      const page = byTab.get(tab);
-      if (page === undefined) {
-        throw new Error(`no attached page for tab ${tab}`);
-      }
-      // `Page.captureScreenshot`'s clip is NOT in the page's (zoomed) CSS pixels —
-      // it is in UNZOOMED device-independent pixels, so under a non-100% browser
-      // zoom it silently disagrees with the rubber band, which reports `clientX`/
-      // `innerWidth` (both zoomed). The old "no scale math to get wrong" assumption
-      // held only at zoom 1; at zoom Z the clip captured 1/Z of the region and put
-      // it in the wrong place (found live at zoom 1.5 — the crop was the top-left
-      // ⅔, offset). Multiply the rect by the live zoom to land the clip. `scale: 1`
-      // then already yields full device resolution (clip · deviceScaleFactor, and
-      // zoom · deviceScaleFactor === devicePixelRatio), so the pixels match a
-      // full-frame `grabShot`. At zoom 1 this is a no-op.
-      const metrics = (await cdp.send("Page.getLayoutMetrics", {}, page.sessionId)) as {
-        cssVisualViewport?: { zoom?: number };
-      };
-      const zoom = metrics.cssVisualViewport?.zoom ?? 1;
-      const shot = (await cdp.send(
-        "Page.captureScreenshot",
-        {
-          format: "png",
-          captureBeyondViewport: false,
-          clip: {
-            x: rect.x * zoom,
-            y: rect.y * zoom,
-            width: rect.w * zoom,
-            height: rect.h * zoom,
-            scale: 1,
-          },
-        },
-        page.sessionId,
-      )) as { data?: string };
-      if (typeof shot.data !== "string") {
-        throw new Error("Page.captureScreenshot returned no data");
-      }
-      const bytes = Uint8Array.from(atob(shot.data), (c) => c.charCodeAt(0));
-      // Report the shot's true pixel size (from the PNG's IHDR), not the CSS rect —
-      // the encoded image is device-resolution, so its dims are `rect · dpr`.
-      const size = pngSize(bytes);
-      return {
-        width: size?.width ?? Math.round(rect.w),
-        height: size?.height ?? Math.round(rect.h),
-        mime: "image/png",
-        bytes,
-        thumb: `data:image/png;base64,${shot.data}`,
-      };
-    },
-  };
+  // Stills off `Page.captureScreenshot` — no grant, no MediaStream (cdp-capture.ts).
+  const capture = createCdpCapture({
+    send: (method, params, sessionId) => cdp.send(method, params, sessionId),
+    pageFor: (tab) => byTab.get(tab),
+  });
 
   // ── driver liveness: beat every attached page (page/driver-watch.ts) ──────
   // Each page's watchdog arms on our assertions and hard-cleans them when the

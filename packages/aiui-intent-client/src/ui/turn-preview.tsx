@@ -26,17 +26,20 @@
  * after attach, then flip). Ported from the retired overlay's
  * multimodal/preview.tsx (git history), whose class-plus-render shape this
  * component replaced.
+ *
+ * This module is the facade: it keeps the stylesheet, the reactive shells
+ * (threadOpen/pieces/logprobRange/lints), and the JSX tree. The pieces come
+ * from `turn-preview-fold.ts` (the pure fold + keying), the six per-kind row
+ * renderers from `turn-preview-rows.tsx` (over an explicit RowContext), and
+ * the hover peek from `turn-preview-peek.ts`.
  */
 
-import {
-  type ComposedItem,
-  composeIntent,
-  type TranscriptWord,
-} from "@habemus-papadum/aiui-lowering-pipeline";
-import { LiveDiffText } from "@habemus-papadum/aiui-viz/modal";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { createMemo, createSignal, For, Show, untrack } from "solid-js";
 import type { ChannelLanes } from "../lanes";
 import { type EditorMode, SEGMENT_EDITOR_STYLES, SegmentEditor } from "./segment-editor";
+import { buildPieces, logprobRangeOf, type Piece } from "./turn-preview-fold";
+import { createPeek } from "./turn-preview-peek";
+import { type RowContext, renderRow } from "./turn-preview-rows";
 
 export const TURN_PREVIEW_STYLES = `
   .aiui-tp { margin: 8px 12px; font: 12px system-ui; max-width: 460px; }
@@ -105,122 +108,10 @@ export const TURN_PREVIEW_STYLES = `
   // The segment editor mounts from this pane; its styles travel with ours.
   .concat(SEGMENT_EDITOR_STYLES);
 
-/** A URL as path+query+hash — the origin is noise inside one tab's preview. */
-export function shortRoute(url: string | undefined): string {
-  if (url === undefined || url === "") {
-    return "?";
-  }
-  try {
-    const u = new URL(url);
-    return `${u.pathname}${u.search}${u.hash}` || url;
-  } catch {
-    return url;
-  }
-}
-
-/** A composed item's keyed-`<For>` identity (stable across re-folds). */
-function keyOf(item: ComposedItem, index: number): string {
-  switch (item.kind) {
-    case "text":
-      return item.segment !== undefined ? `text:${item.segment}` : `text:@${index}`;
-    case "shot":
-      return `shot:${item.marker ?? `@${index}`}`;
-    case "app-selection":
-      return `sel:${item.marker ?? `@${index}`}`;
-    case "code-selection":
-      return `code:${item.marker ?? `@${index}`}`;
-    case "navigation":
-      return `nav:@${index}`;
-    case "tab-switch":
-      return `tab:@${index}`;
-  }
-}
-
-/** One preview row: a composed item plus its stable key (and, for a final
- * with confidence, its words — the heat row's data). */
-interface Piece {
-  item: ComposedItem;
-  key: string;
-  words?: TranscriptWord[];
-}
-
-/**
- * The hover peek, one per component: genuinely imperative (attach, MEASURE,
- * then flip above/below whichever side has room — found live in the retired
- * extension side panel, where a hard-coded "above" clipped off-screen). Everything
- * else about a row is declarative; this owns the measurement.
- */
-function createPeek(): {
-  showImage: (anchor: HTMLElement, src: string) => void;
-  showText: (anchor: HTMLElement, loc: string | undefined, text: string) => void;
-  hide: () => void;
-} {
-  let peek: HTMLElement | undefined;
-  const hide = (): void => {
-    peek?.remove();
-    peek = undefined;
-  };
-  /** Measure the attached peek and flip it above/below (and clamp left) against
-   * the anchor. Re-runnable: an <img> reports 0×0 until it decodes, so the
-   * image path calls this again on load — the FIRST measurement placed a text
-   * card correctly (it has its size at once) but left a not-yet-decoded image
-   * pinned to 0×0. */
-  const position = (anchor: HTMLElement, el: HTMLElement): void => {
-    const rect = anchor.getBoundingClientRect();
-    const height = el.getBoundingClientRect().height;
-    const gap = 8;
-    const above = rect.top - gap;
-    const below = window.innerHeight - rect.bottom - gap;
-    if (height <= above || above >= below) {
-      el.style.top = "";
-      el.style.bottom = `${window.innerHeight - rect.top + gap}px`;
-    } else {
-      el.style.bottom = "";
-      el.style.top = `${rect.bottom + gap}px`;
-    }
-    const width = el.getBoundingClientRect().width;
-    const left = Math.min(Math.max(gap, rect.left), Math.max(gap, window.innerWidth - width - gap));
-    el.style.left = `${left}px`;
-  };
-  const place = (anchor: HTMLElement, el: HTMLElement): void => {
-    hide();
-    document.body.append(el);
-    peek = el;
-    position(anchor, el);
-  };
-  onCleanup(hide);
-  return {
-    showImage: (anchor, src) => {
-      const img = document.createElement("img");
-      img.className = "aiui-tp-peek-img";
-      // Re-measure once the pixels are known — until decode the img is 0×0, so
-      // the flip and left-clamp above would compute off a zero box.
-      img.onload = () => {
-        if (peek === img) {
-          position(anchor, img);
-        }
-      };
-      img.src = src;
-      place(anchor, img);
-    },
-    showText: (anchor, loc, text) => {
-      const card = document.createElement("div");
-      card.className = "aiui-tp-peek";
-      if (loc !== undefined) {
-        const locEl = document.createElement("div");
-        locEl.className = "aiui-tp-peek-loc";
-        locEl.textContent = loc;
-        card.append(locEl);
-      }
-      const textEl = document.createElement("div");
-      textEl.className = "aiui-tp-peek-text";
-      textEl.textContent = text;
-      card.append(textEl);
-      place(anchor, card);
-    },
-    hide,
-  };
-}
+// The fold, row keying, and the Piece type live in turn-preview-fold.ts;
+// shortRoute is re-exported so this module's historical surface is unchanged
+// (the nav/tab rows use it too).
+export { shortRoute } from "./turn-preview-fold";
 
 /**
  * The turn preview: what the open turn will lower to — composeIntent (the
@@ -249,50 +140,12 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
     if (!threadOpen()) {
       return [];
     }
-    const items = composeIntent(events, "replace", { streaming: true }).items;
-    const wordsBySegment = new Map<number, TranscriptWord[]>();
-    for (const event of events) {
-      if (event.type === "transcript-final" && event.words !== undefined) {
-        wordsBySegment.set(event.segment, event.words);
-      }
-    }
-    // Uniquify repeated keys (the compiler may split one segment's text
-    // around a timestamp-anchored shot); the `:w` suffix is LOAD-BEARING —
-    // words arriving must RE-KEY the row or the provisional run's plain
-    // shape survives the final and the heat branch is unreachable.
-    const seen = new Map<string, number>();
-    return items.map((item, index) => {
-      const base = keyOf(item, index);
-      const n = seen.get(base) ?? 0;
-      seen.set(base, n + 1);
-      const words =
-        item.kind === "text" && item.segment !== undefined
-          ? wordsBySegment.get(item.segment)
-          : undefined;
-      const heat =
-        words !== undefined &&
-        n === 0 &&
-        words.map((w) => w.text).join(" ").length >= (item.text ?? "").length;
-      const key = `${n === 0 ? base : `${base}#${n}`}${heat ? ":w" : ""}`;
-      return { item, key, ...(heat ? { words } : {}) };
-    });
+    return buildPieces(events);
   });
 
   /** The turn-wide logprob range: heat normalizes against the turn's own
    * confidence distribution (absolute scales wash out across vendors). */
-  const logprobRange = createMemo(() => {
-    let min = Number.POSITIVE_INFINITY;
-    let max = Number.NEGATIVE_INFINITY;
-    for (const piece of pieces()) {
-      for (const word of piece.words ?? []) {
-        if (word.logprob !== undefined) {
-          min = Math.min(min, word.logprob);
-          max = Math.max(max, word.logprob);
-        }
-      }
-    }
-    return min < max ? { min, max } : undefined;
-  });
+  const logprobRange = createMemo(() => logprobRangeOf(pieces()));
 
   /**
    * The linter's 💡 advice (the retired overlay's lint chips, ported): notes
@@ -325,222 +178,15 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
    * re-fold (a refinement, a late thumb) updates in place. */
   const byKey = (key: string) => createMemo(() => pieces().find((p) => p.key === key));
 
-  const heatRow = (key: string) => {
-    const current = byKey(key);
-    return (
-      <span class="aiui-tp-seg final" data-testid="heat-row">
-        <For each={current()?.words ?? []}>
-          {(word) => {
-            // Its own memo: a <For> child body runs once, untracked — a bare
-            // read here would freeze the tint at insert time.
-            const alpha = createMemo(() => {
-              const range = logprobRange();
-              if (range === undefined || word.logprob === undefined) {
-                return 0;
-              }
-              const normalized = (word.logprob - range.min) / (range.max - range.min);
-              return (1 - normalized) * 0.45;
-            });
-            return (
-              <>
-                <span
-                  class="aiui-tp-heat-word"
-                  style={
-                    alpha() > 0.04
-                      ? { background: `rgba(255, 92, 135, ${alpha().toFixed(3)})` }
-                      : {}
-                  }
-                  title={word.logprob !== undefined ? `logprob ${word.logprob.toFixed(2)}` : ""}
-                >
-                  {word.text}
-                </span>{" "}
-              </>
-            );
-          }}
-        </For>
-      </span>
-    );
-  };
-
-  /** A text run: an island around the kit's LiveDiffText — Solid renders
-   * structure; the island owns its settle clock. */
-  const textRow = (key: string) => {
-    const host = document.createElement("span");
-    const live = new LiveDiffText(host);
-    const current = byKey(key);
-    createEffect(
-      () => ({
-        text: current()?.item.text ?? "",
-        provisional:
-          (current()?.item as { provisional?: boolean } | undefined)?.provisional === true,
-      }),
-      ({ text, provisional }) => {
-        host.className = provisional ? "aiui-tp-seg" : "aiui-tp-seg final";
-        live.update(text);
-      },
-    );
-    return <>{host}</>;
-  };
-
-  /** A shot: the thumbnail (or the degraded 📷 chip while pixels are still
-   * uploading), hover peek, hover ✕ retracting it through the wire engine. */
-  const shotRow = (key: string) => {
-    const current = byKey(key);
-    let wrap: HTMLSpanElement | undefined;
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: hover peek is enhancement only — title + the inner <button> carry the content accessibly
-      <span
-        class="aiui-tp-wrap"
-        data-testid="shot-chip"
-        ref={(el: HTMLSpanElement) => {
-          wrap = el;
-        }}
-        onMouseEnter={() => {
-          const thumb = current()?.item.thumb;
-          if (thumb !== undefined && thumb !== "" && wrap !== undefined) {
-            peek.showImage(wrap, thumb);
-          }
-        }}
-        onMouseLeave={() => peek.hide()}
-      >
-        <Show
-          when={current()?.item.thumb}
-          fallback={<span class="aiui-tp-thumb-chip">📷 {current()?.item.marker}</span>}
-        >
-          {(src) => (
-            <img class="aiui-tp-thumb" src={src()} alt={current()?.item.marker ?? "shot"} />
-          )}
-        </Show>
-        <button
-          type="button"
-          class="aiui-tp-x"
-          title={`remove ${current()?.item.marker ?? "this shot"} from this turn`}
-          onClick={(event) => {
-            event.stopPropagation();
-            peek.hide();
-            const marker = current()?.item.marker;
-            if (marker !== undefined) {
-              engine().dropShot(marker);
-            }
-          }}
-        >
-          ✕
-        </button>
-      </span>
-    );
-  };
-
-  /** A selection — app (⌖) or code (⧉): a minimal pill; substance in the
-   * peek (loc + text, CSS-clamped); ✕ retracts exactly this selection. */
-  const selectionRow = (key: string, isCode: boolean) => {
-    const current = byKey(key);
-    let wrap: HTMLSpanElement | undefined;
-    const title = () => {
-      const item = current()?.item;
-      return item?.sourceLoc !== undefined
-        ? `${item.sourceLoc}\n${item.text ?? ""}`
-        : (item?.text ?? "");
-    };
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: hover peek is enhancement only — title + the inner <button> carry the content accessibly
-      <span
-        class="aiui-tp-wrap"
-        data-testid="selection-chip"
-        ref={(el: HTMLSpanElement) => {
-          wrap = el;
-        }}
-        onMouseEnter={() => {
-          const item = current()?.item;
-          if (item !== undefined && wrap !== undefined) {
-            peek.showText(wrap, item.sourceLoc, item.text ?? "");
-          }
-        }}
-        onMouseLeave={() => peek.hide()}
-      >
-        <span
-          class={`aiui-tp-chip ${isCode ? "aiui-tp-sel-code" : "aiui-tp-sel-app"}`}
-          title={title()}
-        >
-          {isCode ? "⧉" : "⌖"} {current()?.item.marker ?? (isCode ? "code" : "sel")}
-        </span>
-        <button
-          type="button"
-          class="aiui-tp-x"
-          title={`remove this ${isCode ? "code selection" : "selection"} from this turn`}
-          onClick={(event) => {
-            event.stopPropagation();
-            peek.hide();
-            const marker = current()?.item.marker;
-            if (isCode) {
-              if (marker !== undefined) {
-                engine().dropCodeSelection(marker);
-              }
-            } else {
-              engine().appSelectionDrop(marker);
-            }
-          }}
-        >
-          ✕
-        </button>
-      </span>
-    );
-  };
-
-  /** A navigation boundary: a bare ⇢ chip at its stream position — a marker,
-   * not content, never retractable (the page really did change). The chip
-   * carries NO data (owner, 2026-07-14: icon + color only); the from → to
-   * detail lives in the instant hover peek — the native title tooltip's
-   * built-in delay is exactly the slowness the peek exists to beat. */
-  const navRow = (key: string) => {
-    const current = byKey(key);
-    let chip: HTMLSpanElement | undefined;
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: hover peek is enhancement only — the title attribute carries the content accessibly
-      <span
-        class="aiui-tp-chip aiui-tp-nav"
-        data-testid="nav-chip"
-        ref={(el: HTMLSpanElement) => {
-          chip = el;
-        }}
-        title={`navigated ${shortRoute(current()?.item.from)} → ${shortRoute(current()?.item.to)}`}
-        onMouseEnter={() => {
-          const item = current()?.item;
-          if (item !== undefined && chip !== undefined) {
-            peek.showText(chip, "navigation", `${item.from ?? "?"}\n→ ${item.to ?? "?"}`);
-          }
-        }}
-        onMouseLeave={() => peek.hide()}
-      >
-        ⇢
-      </span>
-    );
-  };
-
-  /** The tab-switch sibling of {@link navRow}: the ⇥ chip — the user turned to
-   * a different tab (distinct from a same-tab navigation). Same discipline. */
-  const tabRow = (key: string) => {
-    const current = byKey(key);
-    let chip: HTMLSpanElement | undefined;
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: hover peek is enhancement only — the title attribute carries the content accessibly
-      <span
-        class="aiui-tp-chip aiui-tp-nav"
-        data-testid="tab-chip"
-        ref={(el: HTMLSpanElement) => {
-          chip = el;
-        }}
-        title={`switched tabs ${shortRoute(current()?.item.from)} → ${shortRoute(current()?.item.to)}`}
-        onMouseEnter={() => {
-          const item = current()?.item;
-          if (item !== undefined && chip !== undefined) {
-            peek.showText(chip, "tab switch", `${item.from ?? "?"}\n→ ${item.to ?? "?"}`);
-          }
-        }}
-        onMouseLeave={() => peek.hide()}
-      >
-        ⇥
-      </span>
-    );
+  // The rows share this context instead of the component closure; renderRow
+  // creates their reactive nodes at call time, so it is invoked INLINE in the
+  // <For> child body below (never stored and called later).
+  const rowCtx: RowContext = {
+    peek,
+    byKey,
+    engine,
+    logprobRange,
+    openEditor: (mode) => setEditing(mode),
   };
 
   return (
@@ -561,51 +207,10 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
             {(piece) => {
               // One-shot read (hence untrack): a key's KIND never changes,
               // so the row shape is decided once; content stays reactive
-              // through the key-scoped memos inside each row.
+              // through the key-scoped memos inside each row. renderRow runs
+              // INLINE here so its reactive nodes are owned by this child.
               const p = untrack(piece);
-              if (p.item.kind === "shot") {
-                return shotRow(p.key);
-              }
-              if (p.item.kind === "app-selection") {
-                return selectionRow(p.key, false);
-              }
-              if (p.item.kind === "code-selection") {
-                return selectionRow(p.key, true);
-              }
-              if (p.item.kind === "navigation") {
-                return navRow(p.key);
-              }
-              if (p.item.kind === "tab-switch") {
-                return tabRow(p.key);
-              }
-              const inner = p.words?.some((w) => w.logprob !== undefined)
-                ? heatRow(p.key)
-                : textRow(p.key);
-              const segment = p.item.segment;
-              if (segment === undefined) {
-                return inner;
-              }
-              // A text row is EDITABLE: the hover ✎ or a DOUBLE-CLICK opens
-              // the segment editor (one segment at a time — the owner's edit
-              // unit; the ✎ stays as the discoverable, accessible path).
-              return (
-                // biome-ignore lint/a11y/noStaticElementInteractions: dblclick is a shortcut — the ✎ button inside is the accessible control
-                <span
-                  class="aiui-tp-wrap aiui-tp-textwrap"
-                  title="double-click to edit"
-                  onDblClick={() => setEditing({ kind: "segment", segment })}
-                >
-                  {inner}
-                  <button
-                    type="button"
-                    class="aiui-tp-x aiui-tp-edit"
-                    title={`edit segment ${segment} (fix text, delete items, paste)`}
-                    onClick={() => setEditing({ kind: "segment", segment })}
-                  >
-                    ✎
-                  </button>
-                </span>
-              );
+              return renderRow(rowCtx, p);
             }}
           </For>
         </div>
