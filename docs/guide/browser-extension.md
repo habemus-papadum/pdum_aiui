@@ -24,9 +24,9 @@ shares one mode engine with the plain-page host.
 
 ## Activating a tab
 
-_TODO._ The `Cmd/Ctrl+B` chord both opens the panel and **invokes** the tab, which is what grants
-`tabCapture` standing — it is not merely a shortcut. What happens when the chord is already claimed
-by another extension.
+_TODO._ The `Cmd/Ctrl+Shift+B` chord both opens the panel and **invokes** the tab, which is what
+grants `tabCapture` standing — it is not merely a shortcut. What happens when the chord is already
+claimed by another extension.
 
 ## The modes
 
@@ -45,8 +45,8 @@ the panel), the mic worklet, and how frames and audio reach the
 ### It's already loaded in the session browser
 
 With the browser attached (the default), `aiui claude` loads the extension into the shared
-**session browser** for you, over CDP — there is nothing to install. Press `Cmd/Ctrl+B` on any tab
-to arm a turn and open the panel. This is the primary path; the download below is only for running
+**session browser** for you, over CDP — there is nothing to install. Press `Cmd/Ctrl+Shift+B` on any
+tab to arm a turn and open the panel. This is the primary path; the download below is only for running
 the panel in your **everyday** Chrome.
 
 ### Install a release build in your own Chrome
@@ -59,8 +59,9 @@ Web Store — so a release build is loaded **unpacked**:
 2. Unzip it — you get an `aiui-chrome-<version>/` folder with `manifest.json` at its root.
 3. Open `chrome://extensions`, turn on **Developer mode** (top-right), click **Load unpacked**, and
    select that folder.
-4. Press `Cmd/Ctrl+B` on a tab to open the panel. If the shortcut didn't bind — another extension
-   already claimed it — set it at `chrome://extensions/shortcuts`.
+4. Press `Cmd/Ctrl+Shift+B` on a tab to open the panel. If the shortcut didn't bind — another
+   extension already claimed it, or the browser kept it for its bookmarks-bar toggle — set it at
+   `chrome://extensions/shortcuts`.
 
 The extension id is fixed (`cdpbfpcelmifhagikjlfpgfipggcmdeg`), so it's stable across reloads and
 machines. Developer-mode extensions don't auto-update; reinstall from a newer release to upgrade.

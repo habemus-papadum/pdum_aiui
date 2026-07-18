@@ -145,7 +145,7 @@ async function boot(): Promise<{
       if (!recovered && state.phase === "connected") {
         recovered = true;
         if (channelLanes.recover(client)) {
-          setStatusLine("turn recovered from the mirror — re-grant with activate/⌘B");
+          setStatusLine("turn recovered from the mirror — re-grant with activate/⌘⇧B");
         }
       }
     });
@@ -251,7 +251,7 @@ function SimulateStrip() {
       <summary>{summary}</summary>
       <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px">
         <button type="button" data-testid="activate" onClick={activate}>
-          activate (the ⌘B stand-in): grant + open
+          activate (the ⌘⇧B stand-in): grant + open
         </button>
         <Show when={mode === "fake"}>
           <button

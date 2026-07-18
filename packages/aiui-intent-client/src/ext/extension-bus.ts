@@ -229,8 +229,9 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
 
   // The hollow ring's hint: the activation shortcut AS BOUND, read live —
   // users rebind at chrome://extensions/shortcuts, and Chrome silently drops a
-  // conflicted suggestion (the frozen client claims the same chord), so the
-  // manifest's suggestion is NOT the truth and no key name is hard-coded.
+  // suggested chord already claimed elsewhere (a browser shortcut, or another
+  // extension), so the manifest's suggestion is NOT the truth and no key name
+  // is hard-coded.
   const commands = (await chrome.commands?.getAll?.()) ?? [];
   const shortcut = commands.find((c) => c.name === ACTIVATE_COMMAND)?.shortcut ?? "";
   const grantHint = shortcut === "" ? "aiui toolbar button" : shortcut;

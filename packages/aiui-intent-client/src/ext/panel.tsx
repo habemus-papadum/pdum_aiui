@@ -152,7 +152,7 @@ async function boot(): Promise<{
     port,
     tab: () => host.activeTab(),
     stream: () => heldStreamFor(host.activeTab()),
-    streamHint: () => "grant this tab with ⌘B to start its video",
+    streamHint: () => "grant this tab with ⌘⇧B to start its video",
     label: `aiui intent — window ${windowId}`,
   }).connect();
 
@@ -169,7 +169,7 @@ async function boot(): Promise<{
     if (!recovered && state.phase === "connected") {
       recovered = true;
       if (lanes.recover(client)) {
-        setStatusLine("turn recovered from the mirror — re-grant with ⌘B");
+        setStatusLine("turn recovered from the mirror — re-grant with ⌘⇧B");
       }
     }
   });

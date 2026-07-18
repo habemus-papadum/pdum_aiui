@@ -68,7 +68,7 @@ pnpm -C packages/aiui-intent-client ext   # build:ext, then load into the sessio
 That is `build:ext` (Vite for the panel, esbuild for the content scripts and the worker — no
 CRXJS, ever) followed by `load:ext`, which is "Load unpacked" without the human: CDP's
 `Extensions.loadUnpacked` against the running session browser (a launch picks up whatever
-bundle exists — no build-on-launch). Then **⌘B** on the tab you want to drive — the chord and
+bundle exists — no build-on-launch). Then **⌘⇧B** on the tab you want to drive — the chord and
 the toolbar button are extension *invocations*, and an invocation is what mints the
 `tabCapture` grant, so they are what opens the panel and the turn together.
 

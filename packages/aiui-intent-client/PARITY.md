@@ -16,7 +16,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | Row | Status | Where / when |
 | --- | --- | --- |
 | phase ladder disarmed·armed·turn·tweak; turn recovery via mirror | ✅ spec.ts (`phase`); mirror = lanes.ts sessionStorageMirror + recover() (replay → wire re-dials → machine re-opens; grant re-asked via activation) — verified live across a reload |
-| Activation (⌘B in the extension): idempotent grant-and-open; resume from tweak; NEVER cancels | ✅ activation.ts `activationGesture` (an imperative-boundary helper, not a command) + tests |
+| Activation (⌘⇧B in the extension): idempotent grant-and-open; resume from tweak; NEVER cancels | ✅ activation.ts `activationGesture` (an imperative-boundary helper, not a command) + tests |
 | tweak: cap toggles out; page keys pass through in tweak | ✅ spec.ts `tweak` (toggle), keyRouting claim releases in tweak |
 | send keeps armed (divergence 2) | ✅ spec.ts `send` + tests |
 | Esc ladder: help → tweak → turn-cancel → armed → disarmed (CONSCIOUS DEVIATION: the old client's Esc never disarmed; owner 2026-07-13 — step out of armed IS disarm) | ✅ escOrder, floorless ladder + tests |
@@ -119,7 +119,7 @@ needs no ?channel=).
 | FakeBus | ✅ |
 | CdpBus (real tabs, extension-free; refuse non-loopback CDP) | ✅ cdp/{protocol,page-script,page-bundle,cdp-bus}.ts + the sidecar's `/intent/cdp` bridge (cdp-proxy.ts) — **verified live**: ring · page keys · markup · shots on real tabs, including an https page, with no extension installed |
 | ExtensionBus + SW broker (copied) + content glue + static build + new identity + `aiui2.*` prefixes + never-both-armed policy | ✅ ext/{extension-bus,sw,content,content-main,capture,panel,channel,protocol,manifest}.ts + scripts/build-ext.ts — **verified live** in the session browser: the extension loads at its pinned id, the worker registers, the content script serves every capability on a real tab, the panel boots with no console errors, discovers the channel through the native host and connects |
-| activation shortcut via `chrome.commands` (in-page listener until then) | ✅ real: `aiui-intent-activate` (⌘B) + the toolbar action, both landing in the WORKER (they are the invocations that mint the `tabCapture` grant), broadcast to the panel — with a parked press the panel pulls on boot, because a panel opened BY the gesture missed the broadcast |
+| activation shortcut via `chrome.commands` (in-page listener until then) | ✅ real: `aiui-intent-activate` (⌘⇧B) + the toolbar action, both landing in the WORKER (they are the invocations that mint the `tabCapture` grant), broadcast to the panel — with a parked press the panel pulls on boot, because a panel opened BY the gesture missed the broadcast |
 
 ### What Phase 3 taught us (each row is a test)
 

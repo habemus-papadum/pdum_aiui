@@ -64,13 +64,15 @@ export const manifest = {
   // The activation gesture. A `chrome.commands` press is ALSO an extension
   // INVOCATION, which is what grants the tab `tabCapture` standing — so this
   // chord is not merely a shortcut, it is how the capture grant comes to exist
-  // (BEHAVIOR.md). Chrome refuses a suggestion already taken by another
-  // extension, in which case the command starts unbound and the user binds it
-  // at chrome://extensions/shortcuts — which is exactly what happens if the
-  // FROZEN extension is also loaded, since it claims the same chord.
+  // (BEHAVIOR.md). Deliberately Shift+Command/Ctrl+B, NOT the frozen
+  // extension's plain Command/Ctrl+B, so the two no longer fight over one chord.
+  // Chrome refuses a suggestion already claimed elsewhere, leaving the command
+  // unbound for the user to bind at chrome://extensions/shortcuts — note
+  // Command/Ctrl+Shift+B is also the browser's bookmarks-bar toggle, so if it
+  // doesn't stick that is where to set it.
   commands: {
     [ACTIVATE_COMMAND]: {
-      suggested_key: { default: "Ctrl+B", mac: "Command+B" },
+      suggested_key: { default: "Ctrl+Shift+B", mac: "Command+Shift+B" },
       description: "aiui: arm and open a turn on this tab",
     },
   },

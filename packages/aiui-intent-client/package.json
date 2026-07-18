@@ -19,6 +19,7 @@
   "types": "./src/index.ts",
   "files": [
     "dist",
+    "dist-ext",
     "assets"
   ],
   "publishConfig": {
@@ -40,7 +41,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build && pnpm build:panel",
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build && pnpm build:panel && pnpm build:ext",
     "build:panel": "vite build --config vite.panel.config.ts",
     "build:ext": "tsx scripts/build-ext.ts",
     "ext:watch": "tsx scripts/build-ext.ts --watch",

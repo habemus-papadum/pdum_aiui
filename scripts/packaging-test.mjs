@@ -144,6 +144,16 @@ check(
 const status = run(["chrome", "status"]);
 check("aiui chrome status exits 0", status.status === 0, status.stderr);
 check("status reports the intent client", /intent client/.test(status.stdout));
+// The published intent-client tarball must carry its BUILT MV3 bundle
+// (dist-ext/), not just resolve the package: an installed `aiui claude` loads
+// the extension from there, so a missing bundle is the "no MV3 bundle yet"
+// regression. Guards both gaps at once — `dist-ext` in the package `files`, and
+// `build:ext` running as part of `build` (which `pnpm -r run build` invoked above).
+check(
+  "the intent client ships its built MV3 bundle (dist-ext)",
+  !/no MV3 bundle yet/.test(status.stdout) && /dist-ext/.test(status.stdout),
+  status.stdout,
+);
 
 const claude = run(["claude"]);
 check("aiui claude without claude on PATH fails politely", claude.status === 1);

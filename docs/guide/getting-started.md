@@ -123,7 +123,7 @@ never comes from the app: the **intent client** carries it.
 ## 4. Use it
 
 The intent client rides the session browser as a side panel (`aiui claude` auto-loads its
-extension; **⌘B** opens it), and the same client is served as a plain page at the channel's
+extension; **⌘⇧B** opens it), and the same client is served as a plain page at the channel's
 `/intent/` URL — either one drives the tab you're looking at. Arm it, then compose a turn: hold
 **Space** and say what you want, take a screenshot (**s**, or **a** to drag a region), draw on
 the page with the pencil, select text and add it — then **Enter** to send.

@@ -46,7 +46,7 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 
 ## Activation is not a key
 
-The browser-global activation shortcut (⌘B under `chrome.commands` in the extension; a plain
+The browser-global activation shortcut (⌘⇧B under `chrome.commands` in the extension; a plain
 listener on the detached page) is **not part of the modal keyboard system** and never appears
 as a cap's key hint. It is an imperative event from outside, handled by `activationGesture()`
 (src/activation.ts): mint the grant, then sequential idempotent dispatches — arm if disarmed
@@ -162,7 +162,7 @@ whether the grant is free (`CaptureSource.grantless`). MV3's `tabCapture` is inv
 its grant is a real fact the activation gesture mints, and the pixel acts stay dark until it
 does. The CDP tier's screenshots ask nobody, so there is nothing to mint: the grant simply *is*
 the tab in view. Consequence, and the bug it fixes (found live): arming from the BAR (`arm` →
-`turn`) must work exactly like ⌘B. It did not — the bar mints nothing, so the capture acts stayed
+`turn`) must work exactly like ⌘⇧B. It did not — the bar mints nothing, so the capture acts stayed
 disabled forever while the page acts, which follow the tab in view, worked fine.
 
 **The gate split (owner, 2026-07-14): the page transport follows the tab in view; pixels follow
@@ -175,13 +175,13 @@ tab, but shooting (or sampling) a tab you are not looking at would lie about wha
 the acts go dark until the gesture re-grants, while the warm stream stays held on the granted tab
 so returning to it costs nothing.
 
-**The ring has FOUR states, and the fourth is how the page says "⌘B here" (owner, 2026-07-14 —
+**The ring has FOUR states, and the fourth is how the page says "⌘⇧B here" (owner, 2026-07-14 —
 no toast; the ring carries it).** Off · steady (armed) · breathing (turn) · **hollow**: armed,
 but THIS tab's pixels need a grant. Hollow renders outline-only in the phase's tone, with the
 activation hint beside it. The hint text is discovered by the host — the MV3 bus reads the
-command's LIVE binding from `chrome.commands.getAll()` (users rebind it; Chrome silently drops a
-conflicted suggestion, and the frozen client claims the same chord) — and handed down as a
-string; **no key name is hard-coded anywhere below the host.** The client's ring desire names
+command's LIVE binding from `chrome.commands.getAll()` (users rebind it, and Chrome silently
+drops a suggested chord already claimed elsewhere — a browser shortcut, or another extension) —
+and handed down as a string; **no key name is hard-coded anywhere below the host.** The client's ring desire names
 the granted tab; each bus projects it per tab (`ringForTab`, one shared pure function): solid
 where the grant is, hollow everywhere else. Grantless hosts never produce a grant fact, so the
 hollow state simply cannot occur there.
