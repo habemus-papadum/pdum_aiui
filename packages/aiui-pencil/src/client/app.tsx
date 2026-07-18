@@ -8,8 +8,8 @@
  * pieces (`RemoteView`, `SessionPicker`, `PencilStrip`, `bindPenInput`,
  * `createPlaneTracker`) — the full-control escape hatch.
  *
- * What lives where (the split of the old lab client, kept verbatim in each
- * module):
+ * What lives where (a split carried over from the Lab's old client page, kept
+ * verbatim in each module):
  *
  *   plane.ts       the video CONTENT box (letterboxing!) tracked from the
  *                  video element's own resize events

@@ -2,8 +2,8 @@
  * The selection watcher: page-side machinery behind the "select something on
  * the page, then ask the intent tool about it" modality.
  *
- * Design decisions (see the frozen dev-overlay's `handoff/selection-intent.md`, whose
- * findings were verified empirically in the live demo):
+ * Design decisions (settled in the retired dev overlay and verified empirically
+ * in the live demo — git history: its `handoff/selection-intent.md`):
  *  - **The Selection API is enough — no extension, no app-side machinery.**
  *    Page code (this runtime, injected everywhere by the Vite plugin) reads the
  *    selected text, its geometry (`getClientRects`, for later screenshot
@@ -67,8 +67,7 @@ export interface SelectionWatcher {
   /**
    * Add a node whose selections to ignore, after the fact — for UI surfaces
    * created later than the watcher (the host's page-level layers: selecting
-   * in the transcript preview, e.g. the correct-mode lasso, must never become
-   * the "app selection").
+   * in the transcript preview must never become the "app selection").
    */
   addIgnored(node: Node): void;
   /** Stop listening and release everything. Idempotent. */

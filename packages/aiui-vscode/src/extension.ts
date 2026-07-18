@@ -88,7 +88,7 @@ function targetFor(channel: ChannelEntry, peer: SessionPeer, agents: Map<number,
   };
 }
 
-/** A channel's browser tabs that can ingest a selection (the overlay hosts). */
+/** A channel's browser tabs that can ingest a selection (role "app" peers). */
 async function appTabs(channel: Pick<ChannelEntry, "port">): Promise<SessionPeer[]> {
   const { peers } = await fetchPeers(channel.port);
   return peers.filter((p) => p.role === "app");
@@ -194,8 +194,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       if (tabs.length === 0) {
         items.push({
-          label: "$(circle-slash) no overlay tabs connected",
-          description: "open the app with the dev overlay mounted",
+          label: "$(circle-slash) no app tabs connected",
+          description: "open an aiui app page connected to this channel",
         });
         continue;
       }

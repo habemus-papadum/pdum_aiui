@@ -30,8 +30,8 @@ describe("encodeFrame / decodeFrame", () => {
     expect([...payload]).toEqual([...png]);
   });
 
-  it("round-trips events / context chunk kinds", () => {
-    for (const chunk of [{ kind: "events" }, { kind: "context" }] as const) {
+  it("round-trips events / control chunk kinds", () => {
+    for (const chunk of [{ kind: "events" }, { kind: "control" }] as const) {
       const { envelope: out } = decodeFrame(encodeFrame(envelope({ chunk })));
       expect(out.chunk).toEqual(chunk);
     }

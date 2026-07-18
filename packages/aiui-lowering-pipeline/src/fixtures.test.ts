@@ -9,8 +9,9 @@ import type { IntentEvent } from "./types";
  * ../fixtures/README.md) through the pipeline. This is the whole point of
  * capturing them: they are the regression
  * net that catches a contract drifting silently (segments-as-lines, event
- * shapes, Option-C assembly). Assertions target stable structure/content, not
- * brittle full snapshots — `at` timestamps vary run to run.
+ * shapes, inline-bracket assembly). Assertions target stable
+ * structure/content, not brittle full snapshots — `at` timestamps vary run to
+ * run.
  */
 
 const fixturesDir = fileURLToPath(new URL("../fixtures/", import.meta.url));
@@ -72,7 +73,6 @@ describe("plain-dictation.json", () => {
     );
     // No shots → the prompt is just the transcript (no marker tokens, no meta).
     expect(composed.prompt).toBe(composed.transcript);
-    expect(composed.meta).toEqual({});
   });
 });
 
@@ -104,7 +104,6 @@ describe("ink-and-region-shot.json", () => {
     expect(composed.components.length).toBeGreaterThan(0);
     // No saved file → degraded inline reference, element info kept in the text.
     expect(composed.prompt).toContain("[screenshot shot_1 located at MISSING]");
-    expect(composed.meta).toEqual({});
   });
 });
 

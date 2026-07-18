@@ -1,65 +1,11 @@
 /**
- * Data sources for the debug panes: two ways to get an {@link IntentEvent}
- * stream behind one small interface.
- *
- *  - {@link engineSource} wraps a live {@link Engine} — the lab's case, where
- *    the panes render the very stream the user is producing.
- *  - {@link traceLiveSource} polls a channel trace over HTTP — the extension's
- *    case, where the panes live-follow a thread the channel is lowering in
- *    another process. It pulls the event log out of whatever stage carries it
- *    (a trace records the log as a stage payload), so it works for any modality
- *    that records one and stays quiet for those that don't (text-concat).
+ * The channel trace poller behind the live-followed trace view.
  *
  * The channel exposes a cheap revision-poll (`/debug/api/traces/:id/live`,
  * `?since=<rev>` → `{unchanged:true}` when nothing moved), so following a live
  * thread is a fetch every second, not an open socket. See the channel's
  * debug.ts for the route.
  */
-import type { Engine, IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
-
-/** A subscribable source of the current thread's event stream. */
-export interface DebugSource {
-  /**
-   * Register a callback for the event stream; it fires once immediately with
-   * the current events and again whenever they change. Returns an unsubscribe.
-   */
-  subscribe(cb: (events: IntentEvent[]) => void): () => void;
-  /** A short human label for where these events come from. */
-  readonly label?: string;
-  /** Release any polling/listeners the source holds. */
-  dispose?(): void;
-}
-
-/** Wrap a live engine: replay its events on subscribe, forward each new one. */
-export function engineSource(engine: Engine): DebugSource {
-  return {
-    label: "engine",
-    subscribe(cb) {
-      // The engine's onEvent has no detach; a `live` flag makes unsubscribe
-      // real from the source's side (stop forwarding) without touching it.
-      let live = true;
-      cb(engine.events.slice());
-      engine.onEvent(() => {
-        if (live) {
-          cb(engine.events.slice());
-        }
-      });
-      return () => {
-        live = false;
-      };
-    },
-  };
-}
-
-/** A fixed, already-captured stream (fixtures, an embedded event-log stage). */
-export function staticSource(events: IntentEvent[]): DebugSource {
-  return {
-    subscribe(cb) {
-      cb(events);
-      return () => {};
-    },
-  };
-}
 
 // ── channel trace polling ─────────────────────────────────────────────────────
 
@@ -105,8 +51,6 @@ export interface TracePollResult {
   rev: number;
   /** The full trace, present only when `changed`. */
   trace?: LiveTrace;
-  /** The extracted event log, when a stage carried one. */
-  events?: IntentEvent[];
 }
 
 /**
@@ -153,94 +97,7 @@ export function createTracePoll(opts: TracePollOptions): {
       }
       const trace = body as LiveTrace;
       lastRev = trace.rev;
-      return { changed: true, rev: trace.rev, trace, events: extractIntentEvents(trace.stages) };
+      return { changed: true, rev: trace.rev, trace };
     },
   };
-}
-
-export interface TraceLiveOptions extends TracePollOptions {
-  /** Poll cadence in ms (default 1000). */
-  intervalMs?: number;
-}
-
-/**
- * A {@link DebugSource} that live-follows a channel trace, forwarding its event
- * log to subscribers as it grows. The timer runs only while subscribed.
- */
-export function traceLiveSource(opts: TraceLiveOptions): DebugSource {
-  const poll = createTracePoll(opts);
-  const callbacks = new Set<(events: IntentEvent[]) => void>();
-  let timer: ReturnType<typeof setInterval> | undefined;
-
-  const run = async (): Promise<void> => {
-    const result = await poll.poll();
-    if (result.changed && result.events) {
-      for (const cb of callbacks) {
-        cb(result.events);
-      }
-    }
-  };
-
-  const stop = (): void => {
-    if (timer) {
-      clearInterval(timer);
-      timer = undefined;
-    }
-  };
-
-  return {
-    label: `trace ${opts.traceId}`,
-    subscribe(cb) {
-      callbacks.add(cb);
-      if (!timer) {
-        void run();
-        timer = setInterval(() => void run(), opts.intervalMs ?? 1000);
-      }
-      return () => {
-        callbacks.delete(cb);
-        if (callbacks.size === 0) {
-          stop();
-        }
-      };
-    },
-    dispose() {
-      callbacks.clear();
-      stop();
-    },
-  };
-}
-
-/**
- * Feature-detect an {@link IntentEvent} log inside a trace's stages: the last
- * stage whose payload is a non-empty array of `{at:number, type:string}`
- * objects. Returns undefined for traces that carry no event log (e.g.
- * text-concat), which is how the panes know to fall back to a generic view.
- */
-export function extractIntentEvents(
-  stages: TraceStageLike[] | undefined,
-): IntentEvent[] | undefined {
-  if (!Array.isArray(stages)) {
-    return undefined;
-  }
-  let found: IntentEvent[] | undefined;
-  for (const stage of stages) {
-    if (isEventLog(stage?.data)) {
-      found = stage.data as IntentEvent[];
-    }
-  }
-  return found;
-}
-
-function isEventLog(data: unknown): data is IntentEvent[] {
-  return (
-    Array.isArray(data) &&
-    data.length > 0 &&
-    data.every(
-      (x) =>
-        typeof x === "object" &&
-        x !== null &&
-        typeof (x as { at?: unknown }).at === "number" &&
-        typeof (x as { type?: unknown }).type === "string",
-    )
-  );
 }

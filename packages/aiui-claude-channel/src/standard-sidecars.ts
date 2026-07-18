@@ -9,10 +9,10 @@
  * node_modules (pnpm's isolated layout). They are published now, so the channel
  * simply depends on them and imports their factories directly — no descriptors,
  * no argv JSON, no absolute-path resolution. The {@link Sidecar} contract stays
- * the mount seam; this module is the single place that names the three
+ * the mount seam; this module is the single place that names the four
  * implementations.
  *
- * All three are always on. Each rides the channel's one port (no extra process,
+ * All four are always on. Each rides the channel's one port (no extra process,
  * no extra listener), so hosting one costs nothing, and whether a remote device
  * can actually reach it is the channel *bind*'s decision (`channel.bind`) — the
  * security posture lives there, never in a per-sidecar toggle. A page that
@@ -30,7 +30,7 @@ import { barSidecar } from "@habemus-papadum/aiui-remote-bar/sidecar";
 import type { Sidecar } from "./sidecar";
 
 /**
- * The three sidecars every channel hosts, built for a project `root` (shown in
+ * The four sidecars every channel hosts, built for a project `root` (shown in
  * each remote surface's session list, and used by the intent sidecar to locate
  * the session browser's profile for its CDP bridge). Mount order follows the
  * array; each is path-scoped, and a mount that throws is isolated by

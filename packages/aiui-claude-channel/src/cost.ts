@@ -1,7 +1,7 @@
 /**
  * Cost accounting for the model calls the lowering pipeline makes.
  *
- * Every paid hop — REST transcription, the corrector, the summarizer, TTS
+ * Every paid hop — REST transcription, the summarizer, TTS
  * acks, realtime STT/voice sessions — reports what it spent, the trace records
  * it per call, and the manifest keeps a running roll-up (see
  * {@link TraceHandle.addCost}). Claude Code session costs are deliberately out
@@ -98,7 +98,7 @@ export function priceCall(
 // genai-prices shape. All are tolerant: garbage in → undefined out, and the
 // call simply goes unaccounted rather than unprocessed.
 
-/** `/v1/chat/completions` usage → Usage (corrector, summarizer). */
+/** `/v1/chat/completions` usage → Usage (the summarizer). */
 export function usageFromChatCompletions(raw: unknown): Usage | undefined {
   const u = asRecord(raw);
   if (!u || typeof u.prompt_tokens !== "number") {

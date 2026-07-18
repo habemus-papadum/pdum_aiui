@@ -16,7 +16,7 @@ export function App() {
         <h1>mixture of gaussians</h1>
         <p class="muted">
           A five-cell dataflow graph: <code>samples</code> → <code>histogram</code> /{" "}
-          <code>moments</code> → <code>fit</code> → <code>curves</code>. Arm the aiui overlay with{" "}
+          <code>moments</code> → <code>fit</code> → <code>curves</code>. Arm the intent client with{" "}
           <kbd>`</kbd> and talk about what you see.
         </p>
       </header>

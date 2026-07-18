@@ -26,7 +26,7 @@ import {
   resolveManagedFlavor,
   resolveManageMode,
 } from "../util/config";
-import { nudgeChannelAck } from "../util/enter-nudge";
+import { ENTER_NUDGE_ENABLED, nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
 import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-preflight";
 import { syncManagedBrowser } from "../util/managed-browser";
@@ -141,8 +141,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // Where the channel's web backend binds — resolved by the shared launcher
   // (util/channel-launch), so a standalone `aiui mcp serve` binds identically to
   // a session's channel. bind: loopback (the default) keeps every route
-  // this-machine-only; host puts the whole unauthenticated surface — iPad paint
-  // page, prompt injection, /debug — on the network (the trusted-LAN posture;
+  // this-machine-only; host puts the whole unauthenticated surface — iPad
+  // pencil page, prompt injection, /debug — on the network (the trusted-LAN posture;
   // asked at first run, see docs/guide/warning). The channel hosts its own
   // standard sidecar set regardless; the channel process inherits this session's
   // cwd, so the project root it roots them at is process.cwd().
@@ -218,13 +218,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // behalf is their saved first-run choice (claude.enterNudge; see
   // nudgeChannelAck for the mechanism). Never outside an interactive TTY — the
   // prompt only appears in the interactive TUI, and the e2e harness drives its
-  // own keypresses over tmux.
-  //
-  // DISABLED for now (owner, 2026-07-17): the whole mechanism stays — the
-  // config option, the first-run prompt, and nudgeChannelAck — but we hold off
-  // actually pressing Enter. Flip this one flag back to `true` to restore it;
-  // nothing else changes.
-  const ENTER_NUDGE_ENABLED = false;
+  // own keypresses over tmux. The master switch (currently off) lives with the
+  // mechanism — see ENTER_NUDGE_ENABLED in util/enter-nudge.ts.
   if (ENTER_NUDGE_ENABLED && interactive && (config.claude?.enterNudge ?? true)) {
     nudgeChannelAck();
   }
@@ -281,11 +276,11 @@ aiui's own flags (everything else forwards to claude verbatim):
   --aiui-bind <loopback|host>    where the channel's web server binds: loopback
                                  (this machine only, the default) or host (your
                                  whole network can reach the session's web
-                                 surface — the iPad paint page included;
+                                 surface — the iPad pencil page included;
                                  trusted networks only)
 
-Every channel hosts the same session sidecars — paint (iPad ink), the intent panel
-at /intent/, the remote bar, and the remote pencil — reachable per --aiui-bind.
+Every channel hosts the same session sidecars — the intent panel at /intent/,
+the remote bar, the remote pencil, and the console — reachable per --aiui-bind.
 Durable settings live in config.json (project .aiui-cache/ + user cache) — see the
 Configuration guide. What follows is claude's own --help:
 `);
@@ -300,8 +295,8 @@ Configuration guide. What follows is claude's own --help:
  *     nothing local is managed: no CfT sync, no profile, no extension.
  *  2. Attach mode with a session browser already running on this profile →
  *     attach to it (works non-interactively too; discovery is read-only).
- *  3. Attach mode, interactive → start the session browser now (CfT-preferred,
- *     devtools extension loaded, visible from t0) and attach. On failure, warn
+ *  3. Attach mode, interactive → start the session browser now (the managed
+ *     browser, intent client extension loaded, visible from t0) and attach. On failure, warn
  *     and fall through.
  *  4. Otherwise — `mode: "launch"`, a non-interactive session with nothing
  *     running, or a failed start — classic launch mode: chrome-devtools-mcp

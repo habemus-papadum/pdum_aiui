@@ -7,8 +7,8 @@
  * grid, and the dabs themselves as outlines — because phase 1's question is
  * "what is the pen telling us, and what is the math doing with it", and a
  * renderer that only showed the finished stroke could not answer either. The real
- * textured, grained, erasable `PencilSurface` is phase 3, and it will replace the
- * dab-drawing here while keeping this overlay as a debug layer.
+ * textured, grained, erasable `PencilSurface` has since taken over the drawing
+ * itself (the Lab's durable `paper`); this overlay survives as the debug layer.
  *
  * The two rules from the frontend guide that this file exists to obey:
  *

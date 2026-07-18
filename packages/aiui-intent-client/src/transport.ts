@@ -2,11 +2,11 @@
  * transport.ts — the page-transport seam (intent-client 02 §5 / 03 §4).
  *
  * Everything the client needs from "the pages it drives" fits behind three
- * small interfaces. The page-side contract is the one the old content script
- * already serves — `serveRelay("page", { selection, viewport, pencil, keylayer,
- * flash })` — so the production `ExtensionBus` is today's relay verbatim;
- * the `CdpBus` delivers the same capabilities over Runtime.evaluate; and the
- * `FakeBus` (./fake-bus.ts) is what every harness test drives.
+ * small interfaces. The page-side contract is the one this package's own
+ * content script serves (ext/content.ts `serveRelay` — selection, viewport,
+ * pencil, keylayer, flash, …) — so the production `ExtensionBus` is the relay
+ * verbatim; the `CdpBus` delivers the same capabilities over Runtime.evaluate;
+ * and the `FakeBus` (./fake-bus.ts) is what every harness test drives.
  *
  * The client core never imports chrome.*, CDP, or a DOM: it talks to these
  * types only. That is the whole point — the brain is host-agnostic and
@@ -14,16 +14,12 @@
  */
 import type { PageTabRecord } from "@habemus-papadum/aiui-intent-runtime";
 
-/** The page capabilities a transport must deliver (the relay's command set).
- * `locate` is the aiui-instrumented-page capability (screenshot rectangle →
- * components → source): declared now so the seam anticipates the overlay's
- * jump-to-VS-Code mode; only instrumented pages answer it. */
+/** The page capabilities a transport must deliver (the relay's command set). */
 export type PageCapability =
   | "keylayer"
   | "flash"
   | "selection"
   | "viewport"
-  | "locate"
   /** Arm a ONE-SHOT rubber-band drag on the page (the `a` area shot). */
   | "region"
   /** Arm the ONE-SHOT jump-to-editor pick (the `j` gesture, aiui pages):
@@ -93,7 +89,7 @@ export function ringForTab(state: RingState, tab: number): PageRing {
   };
 }
 
-/** Events pages push at the panel (the inbound half of the old relay). */
+/** Events pages push at the panel (the inbound half of the relay). */
 export type PageEvent =
   | { kind: "selectionPresent"; tab: number; present: boolean }
   | { kind: "interaction"; tab: number }
@@ -111,12 +107,8 @@ export type PageEvent =
       tabRecord?: PageTabRecord;
     }
   /** The page announced whether it is aiui-INSTRUMENTED (window.__AIUI__):
-   * instrumented pages answer `locate` and can host jump-to-editor. */
+   * instrumented pages can host jump-to-editor. */
   | { kind: "aiuiSupport"; tab: number; supported: boolean }
-  /** The FROZEN client holds this tab (its on-page ring says armed). The two
-   * clients share a DOM but no messaging, so this is how they see each other —
-   * and the new one stands down rather than draw over the old one's page. */
-  | { kind: "foreignClient"; tab: number; armed: boolean }
   /** The user completed a region drag (the armed `a` gesture): the rect in
    * CSS px (viewport coords), the viewport for crop scaling, the gesture's
    * wall-clock, and — on aiui-instrumented pages — the located components

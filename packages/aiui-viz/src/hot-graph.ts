@@ -24,8 +24,8 @@
  *      `dist/` library code never receives a hot context from the consumer's
  *      dev server, so `import.meta.hot` written *here* would be permanently
  *      undefined for every installed consumer. (Same failure class as
- *      `import.meta.env.*` in a published package — the reason the dev overlay
- *      integrates as a Vite plugin.)
+ *      `import.meta.env.*` in a published package — the reason the aiui()
+ *      source processor integrates as a Vite plugin.)
  *
  * But `hot` only has to be *named* by the caller, not *used* by them: it is a
  * plain object whose `accept` is bound to the caller's module URL. Passing it in
@@ -49,7 +49,7 @@ import { durable } from "./durable";
 /**
  * Structural stand-in for Vite's `import.meta.hot`. Declared locally rather
  * than imported from `vite/client` so aiui-viz stays free of a build-tool type
- * dependency (the same trick agent-tools.ts uses for the overlay bridge).
+ * dependency.
  */
 export interface HotContext {
   accept(callback?: (module: unknown) => void): void;

@@ -6,13 +6,12 @@
  * stage that lost it.
  *
  * **The channel renders no HTML.** It is a data server; every page belongs to
- * a frontend process. The viewer is ONE shared implementation — the overlay
- * package's debug-ui (`TracesPane`/`TraceView`) — with three frontends:
- * `aiui debug` (a standalone Vite server with a channel switcher, fed by
- * GET /debug/api/channels), the `aiuiDevOverlay()` Vite plugin's
- * `/__aiui/debug` page (where the intent tool's 🔍 points), and the DevTools
- * extension's embedded panes. All of them speak the routes below; CORS is
- * open on `/debug` (loopback-only server) precisely so any local page can.
+ * a frontend process. The viewer is ONE shared implementation —
+ * `aiui-trace-ui` (`TracesPane`/`TraceView`) — with two frontends: the
+ * console's `/__aiui/debug` page (where the intent tool's 🔍 points; `aiui
+ * debug` opens the console) and the intent panel's embedded trace pane. Both
+ * speak the routes below; CORS is open on `/debug` (loopback-only server)
+ * precisely so any local page can.
  *
  * Routes:
  *   GET /debug                      a JSON pointer at the viewers (no page)
@@ -163,8 +162,8 @@ export function registerDebugRoutes(
   launchInfo?: LaunchInfo,
   hooks: DebugHooks = {},
 ): void {
-  // Loopback diagnostics: let any local page (the DevTools panel opened as a
-  // plain tab, test fixtures) read these endpoints cross-origin. The server
+  // Loopback diagnostics: let any local page (the console app, the intent
+  // panel, test fixtures) read these endpoints cross-origin. The server
   // only listens on 127.0.0.1, so this widens nothing beyond the machine.
   app.use("/debug", (_req, res, next) => {
     res.setHeader("access-control-allow-origin", "*");
@@ -172,13 +171,13 @@ export function registerDebugRoutes(
   });
 
   // The channel renders no HTML — it is a JSON/data server (the rule; /health
-  // and friends are messages, not pages). The viewer is the shared debug-ui
-  // app: `aiui debug` serves it standalone, the aiuiDevOverlay() Vite plugin
-  // serves it at /__aiui/debug, and the DevTools panel embeds it. A GET here
+  // and friends are messages, not pages). The viewer is the shared
+  // aiui-trace-ui app: the console serves it at /__aiui/debug (`aiui debug`
+  // opens the console) and the intent panel embeds it. A GET here
   // (an old bookmark, a curious curl) gets a pointer, not a page.
   app.get("/debug", (_req, res) => {
     res.json({
-      ui: "the channel serves no HTML — run `aiui debug` (or open /__aiui/debug on your app's dev server)",
+      ui: "the channel serves no HTML — run `aiui debug` (or open /__aiui/debug on this channel's port)",
       api: [
         "/debug/api/info",
         "/debug/api/channels",
@@ -232,7 +231,7 @@ export function registerDebugRoutes(
     });
   });
 
-  // Reload the lowering layer in place — the DevTools panel's button and `curl`
+  // Reload the lowering layer in place — the console's reload button and `curl`
   // both POST here. CORS is already open on /debug above.
   app.post("/debug/api/reload", async (_req, res) => {
     if (!hooks.onReload) {
@@ -313,8 +312,8 @@ export function registerDebugRoutes(
     res.json(trace);
   });
 
-  // Live-follow one trace with a cheap revision poll (the DevTools panel's
-  // Intent pane, the lab). `rev` is the manifest file's mtime — trace.ts
+  // Live-follow one trace with a cheap revision poll (the intent panel's
+  // trace pane, the console). `rev` is the manifest file's mtime — trace.ts
   // rewrites the whole manifest on every recorded stage, so mtime advances
   // with the run. A client echoes the last `rev` as `?since=`; when it still
   // matches we answer `{unchanged:true}` (a handful of bytes) instead of

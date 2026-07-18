@@ -98,9 +98,6 @@ export interface LinterSidecar {
   onSelection(marker: string | undefined, entry: SelectionEntry, updated: boolean): void;
   /** A selection was retracted. */
   onSelectionDrop(marker: string | undefined): void;
-  /** One ambient screen frame from a LEGACY overlay's `video` chunk (the
-   * current overlay sends sampled frames through {@link onShot} instead). */
-  onVideoFrame(bytes: Uint8Array, mime: string): void;
   /** Close the live session (fin / connection teardown). Idempotent. */
   close(): void;
 }
@@ -119,7 +116,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
    * judged, not the one in progress. */
   let lintedSegment: number | undefined;
   let noteSeq = 0;
-  const stats = { segments: 0, merged: 0, timeouts: 0, notes: 0, toolCalls: 0, frames: 0 };
+  const stats = { segments: 0, merged: 0, timeouts: 0, notes: 0, toolCalls: 0 };
 
   const onToolCall = (call: LinterToolCall): void => {
     stats.toolCalls += 1;
@@ -340,13 +337,6 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       const text = selectionRetractionLabel(marker);
       session.injectContextText(text);
       record({ kind: "info", label: "linter selection retracted", data: { text } });
-    },
-    onVideoFrame(bytes, mime) {
-      if (closed) {
-        return;
-      }
-      stats.frames += 1;
-      session.appendVideoFrame(bytes, mime);
     },
     close() {
       if (closed) {

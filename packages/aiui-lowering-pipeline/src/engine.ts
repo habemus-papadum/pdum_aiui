@@ -30,7 +30,6 @@ import type {
   ShotShare,
   TabRecord,
   TranscriptWord,
-  VideoCaptureMode,
 } from "./types";
 
 export type EngineListener = (event: IntentEvent, engine: Engine) => void;
@@ -57,8 +56,8 @@ export class Engine {
   }
 
   /** Subscribe to every emitted event. Returns an unsubscribe (hosts whose
-   * panels outlive engines — the extension — must detach; the overlay's
-   * page-lifetime listeners may ignore it). */
+   * panels outlive engines — the side panel — must detach; a host whose
+   * listeners share the page's lifetime may ignore it). */
   onEvent(listener: EngineListener): () => void {
     this.listeners.push(listener);
     return () => {
@@ -120,9 +119,9 @@ export class Engine {
   }
 
   /**
-   * EXPLICITLY open a turn — the extension's ⌘B (§13.6: a host where nothing
-   * opens implicitly; the overlay never calls this — its turns open on the
-   * first contentful act, unchanged). No-op unless armed; no-op when a
+   * EXPLICITLY open a turn — the side panel's ⌘B (§13.6: a host where nothing
+   * opens implicitly; an implicit-turn host never calls this — its turns open
+   * on the first contentful act). No-op unless armed; no-op when a
    * thread is already open. Returns whether a thread is open after the call.
    */
   openTurn(): boolean {
@@ -141,7 +140,7 @@ export class Engine {
     this.emit(this.stamp({ type: "mode", mode }));
   }
 
-  /** Esc, one level at a time: tweak/vscode → ink, ink+thread → cancel, → disarm. */
+  /** Esc, one level at a time: tweak → ink, ink+thread → cancel, → disarm. */
   stepOut(): void {
     if (this.mode !== "ink") {
       this.setMode("ink");
@@ -307,7 +306,8 @@ export class Engine {
    * With no thread open: an *armed* engine opens one (the extension panel's
    * pull model — "add selection" is a deliberate act, as contentful as a
    * contribution). Ambient watcher updates must not open turns: those callers
-   * (the overlay modality) pre-filter on `threadOpen` themselves. Unarmed
+   * (the intent client's ambient watcher) pre-filter on `threadOpen`
+   * themselves. Unarmed
    * remains a no-op.
    */
   appSelection(selection: AppSelection): boolean {
@@ -392,13 +392,12 @@ export class Engine {
       clearTimeout(this.idleTimer);
       this.idleTimer = undefined;
     }
-    // SUSPENDED during tweak (§B.5) and vscode mode: the user handed the
-    // pointer/keyboard back to the app (or jumped off to their editor) on
-    // purpose — that excursion is not "idle silence", and the open turn must
-    // survive it. No special resume plumbing needed: leaving either mode emits
-    // a `mode` event, which re-runs this scheduler and re-arms the timer
-    // naturally.
-    const excursion = this.mode === "tweak" || this.mode === "vscode";
+    // SUSPENDED during tweak: the user handed the pointer/keyboard back to
+    // the app on purpose — that excursion is not "idle silence", and the open
+    // turn must survive it. No special resume plumbing needed: leaving the
+    // mode emits a `mode` event, which re-runs this scheduler and re-arms the
+    // timer naturally.
+    const excursion = this.mode === "tweak";
     if (this.settings.autoEndSec > 0 && this.threadOpen && !this.talking && !excursion) {
       this.idleTimer = setTimeout(() => {
         if (this.threadOpen && !this.talking) {
@@ -475,7 +474,8 @@ export class Engine {
   }
 
   /**
-   * Record a same-document navigation (the overlay's navigation watcher). A
+   * Record a same-document navigation (the intent client's navigation
+   * watcher). A
    * navigation is context riding a turn, never a turn opener — the
    * `app-selection` rule — so this is a no-op without an open thread. Returns
    * whether an event was recorded.
@@ -573,34 +573,8 @@ export class Engine {
   }
 
   /**
-   * Toggle the screen share (V). Turning it *on* opens a thread like any other
-   * contentful act — the share is a first act of the turn — and either edge
-   * records a `video-share` event, so the trace shows exactly when the screen
-   * was being sampled and under what terms. This verb only marks the
-   * boundaries; the client-side sampler (video.ts) takes the frames, and each
-   * one enters the stream as an ordinary `shot`.
-   */
-  videoShare(
-    on: boolean,
-    terms?: { ordinal: number; mode: VideoCaptureMode; cadenceMs: number },
-  ): void {
-    if (on) {
-      this.ensureThread("shot");
-    }
-    this.emit(
-      this.stamp({
-        type: "video-share",
-        on,
-        ...(terms !== undefined
-          ? { ordinal: terms.ordinal, mode: terms.mode, cadenceMs: terms.cadenceMs }
-          : {}),
-      }),
-    );
-  }
-
-  /**
-   * Rehydrate the stream from a recovered turn (HMR/reload turn recovery — see
-   * the overlay's turn-store.ts). Replays each event through the current
+   * Rehydrate the stream from a recovered turn (HMR/reload turn recovery —
+   * the intent client's reload path). Replays each event through the current
    * listeners so UI surfaces (preview, HUD) rebuild and the modality re-opens
    * its socket, but WITHOUT re-stamping timestamps or arming idle timers (these
    * events already happened). Restores the id counters from the log so new

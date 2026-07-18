@@ -3,11 +3,11 @@
  * that is the only place `window.__AIUI__` exists.
  *
  * A content script runs in an isolated world: it shares the DOM but not the
- * JavaScript realm, so the page's globals are invisible to it. Two jobs live
- * here, both relayed to `content.ts` over `postMessage`:
+ * JavaScript realm, so the page's globals are invisible to it. Three jobs live
+ * here, all relayed to `content.ts` over `postMessage`:
  *
  *  1. **The instrumented-page fact** — `__AIUI__` exists → shout it (the
- *     `aiui` pill, `locate`, one day jump-to-editor).
+ *     `aiui` pill, `locate`, jump-to-editor's arm gate).
  *  2. **The tools bridge's page half** (T2 of the plugin restructure): watch
  *     `__AIUI__.tools.onChange`, relay DESCRIPTORS ONLY (never functions);
  *     execute `toolsCall`s against the registry and relay the result by

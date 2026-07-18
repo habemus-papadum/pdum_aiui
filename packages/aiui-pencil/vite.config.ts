@@ -16,12 +16,13 @@ const external = [
 
 export default defineConfig({
   // The client kit's components are Solid `.tsx` — and ONLY `.tsx`: scoping
-  // the transform keeps it off the plain `.ts` cores (the dev-overlay lesson:
-  // an unscoped solid plugin rewrites import.meta in pure-Node code). And OFF
-  // under Vitest entirely: the plugin flips resolve conditions toward the
-  // browser, which hands the node-side relay tests a stub `ws` ("not a
-  // constructor"). This suite has no .tsx tests; if the kit grows some,
-  // adopt the dev-overlay recipe (inline solid + pinned conditions) instead.
+  // the transform keeps it off the plain `.ts` cores (an unscoped solid plugin
+  // rewrites import.meta in pure-Node code — a lesson learned the hard way).
+  // And OFF under Vitest entirely: the plugin flips resolve conditions toward
+  // the browser, which hands the node-side relay tests a stub `ws` ("not a
+  // constructor"). This suite has no .tsx tests; if the kit grows some, adopt
+  // the recipe aiui-viz/vite.config.ts records (inline solid + pinned
+  // conditions) instead.
   plugins: process.env.VITEST ? [] : [solid({ include: ["src/**/*.tsx"] })],
   build: {
     lib: {

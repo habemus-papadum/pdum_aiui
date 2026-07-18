@@ -1,12 +1,12 @@
 /**
- * The realtime submode's **reference engine** — a raw-WebSocket Gemini Live
+ * The prompt linter's **reference engine** — a raw-WebSocket Gemini Live
  * session behind the {@link ./live-session}.LiveSession seam.
  *
- * This is the engine the realtime submode is optimized for: the model hears the
+ * This is the engine the linter is optimized for: the model hears the
  * mic continuously, sees labeled shots (including the share's sampled frames),
- * answers aloud,
- * can be interrupted, and — the point — **composes the prompt itself** via a
- * `submit_intent` function call. The RT0 spike proved the whole path end-to-end
+ * answers aloud, and can be interrupted — but it never composes: the compiler
+ * assembles every prompt, and the session's one tool is `read_file` (the
+ * seam's invariant; see live-session.ts). The RT0 spike proved the path end-to-end
  * (archive/gemini-live-spike.mjs); this is that spike, refactored under the seam
  * with the house injectable-socket pattern so the tests drive a scripted fake.
  *
@@ -19,7 +19,7 @@
  *  - **Endpoint:** `wss://…/v1beta.GenerativeService.BidiGenerateContent?key=KEY`.
  *  - **Setup:** model, AUDIO modality, input+output transcription, **manual VAD**
  *    (`realtimeInputConfig.automaticActivityDetection.disabled: true`), the
- *    `submit_intent` tool, `sessionResumption: {}` + a sliding-window context
+ *    `read_file` tool, `sessionResumption: {}` + a sliding-window context
  *    compression so a long session doesn't blow the 15-min/2-min caps. Answered
  *    by `{setupComplete:{}}`.
  *  - **Audio in:** client PCM is 24 kHz; Gemini natively wants 16 kHz but accepts
@@ -32,10 +32,9 @@
  *    before any audio hard-closes with 1007. {@link WindowOrderingGuard} enforces
  *    the ordering; outside windows (and inside, after audio) everything is safe.
  *  - **Labeled images:** `{realtimeInput:{text:"[image shot_3]"}}` then
- *    `{realtimeInput:{video:{data,mimeType}}}`; a legacy overlay's ambient video
+ *    `{realtimeInput:{video:{data,mimeType}}}`; a legacy client's ambient video
  *    frames are the same `realtimeInput.video` unlabeled. Element/cell metadata
- *    is NEVER sent — the channel keeps it keyed by label and re-attaches it when
- *    resolving the call.
+ *    is NEVER sent — the compiler carries it into the committed prompt.
  *  - **Silent context (selections):** `{clientContent:{turns:[…],turnComplete:false}}`
  *    — the incremental-context append, which does not solicit a reply. A bare
  *    `realtimeInput.text` (the nudge's form) is answered immediately under manual
@@ -55,13 +54,13 @@ import {
   type LiveSession,
   type LiveSessionCallbacks,
 } from "./live-session";
+import { pcm16ToWav } from "./pcm";
 import {
   captureUnexpectedResponse,
   closeSuffix,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
 } from "./realtime";
-import { pcm16ToWav } from "./realtime-voice";
 
 /** The v1beta bidirectional-generate endpoint (key rides the query string). */
 export const GEMINI_LIVE_URL =
@@ -414,12 +413,6 @@ export function openGeminiLiveSession(
       // The label MUST precede its frame (spike finding 5); both are "other"
       // frames, so the guard queues them together inside an audio-less window.
       emit("other", { realtimeInput: { text: `[image ${label}]` } });
-      emit("other", { realtimeInput: { video: { data: toBase64(bytes), mimeType: mime } } });
-    },
-    appendVideoFrame(bytes, mime) {
-      if (dead) {
-        return;
-      }
       emit("other", { realtimeInput: { video: { data: toBase64(bytes), mimeType: mime } } });
     },
     injectContextText(text) {

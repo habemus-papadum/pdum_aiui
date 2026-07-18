@@ -25,7 +25,7 @@ export interface McpOptions {
   launchInfo?: string;
   /**
    * The sidecars to host, as live {@link Sidecar} objects. Defaults to
-   * {@link standardSidecars} (paint, intent, bar, pencil — the channel imports
+   * {@link standardSidecars} (intent, bar, pencil, console — the channel imports
    * and composes them itself now that they are published; see
    * standard-sidecars.ts). Tests pass their own set (often `[]`) to stay
    * hermetic. A sidecar whose `mount` throws is isolated by `startWebServer`.

@@ -3,7 +3,7 @@ import { LINTER_INSTRUCTIONS, type LiveSessionCallbacks } from "./live-session";
 import { openOpenAiLiveSession } from "./openai-live";
 import type { RealtimeSocketFactory, RealtimeSocketHandlers } from "./realtime";
 
-/** A scripted fake of the OpenAI realtime upstream (mirrors realtime-voice.test.ts). */
+/** A scripted fake of the OpenAI realtime upstream (the house injectable-socket pattern). */
 interface FakeUpstream {
   factory: RealtimeSocketFactory;
   sent: Array<Record<string, unknown>>;
@@ -228,23 +228,6 @@ describe("openOpenAiLiveSession (linter mode)", () => {
       item: { type: "function_call_output", call_id: "c9", output: "const a = 1;" },
     });
     expect(tail[1]).toEqual({ type: "response.create" });
-  });
-
-  it("accepts ambient video frames as unlabeled input_image items", () => {
-    const up = fakeUpstream();
-    const { session } = collectLinter(up);
-    up.open();
-    up.emit({ type: "session.updated" });
-    expect(session.capabilities.video).toBe(true);
-    session.appendVideoFrame(new Uint8Array([1, 2, 3]), "image/jpeg");
-    const item = up.sent.at(-1) as {
-      type: string;
-      item: { content: Array<{ type: string; image_url?: string }> };
-    };
-    expect(item.type).toBe("conversation.item.create");
-    expect(item.item.content).toHaveLength(1); // unlabeled — no text part
-    expect(item.item.content[0].type).toBe("input_image");
-    expect(item.item.content[0].image_url).toContain("data:image/jpeg;base64,");
   });
 
   it("clears (never commits) a window under the 100 ms floor; a real window commits", () => {

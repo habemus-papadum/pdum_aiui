@@ -18,7 +18,7 @@
  * the `toolsResult` event comes back correlated by callId; we answer
  * `{type:"result", …}`. Activation (which tab the user is looking at) rides
  * whichever socket is open — it is directory-global — sent on every active
- * tab change: the engage/disengage the old extension's tools-link carried.
+ * tab change: the engage/disengage the retired extension's tools-link carried.
  *
  * Tab identity: the extension passes real chrome ids (`windowId` option);
  * the CDP tier's tab numbers ride as correlation HINTS (accepted decide) —

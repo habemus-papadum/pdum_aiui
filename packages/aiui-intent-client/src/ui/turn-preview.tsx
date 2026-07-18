@@ -1,6 +1,6 @@
 /**
- * turn-preview.tsx — the turn preview, with the overlay's accumulator UX
- * (owner, 2026-07-14: same functionality, logic living in THIS repo, done
+ * turn-preview.tsx — the turn preview, with the retired overlay's accumulator
+ * UX (owner, 2026-07-14: same functionality, logic living in THIS repo, done
  * properly in Solid). The pieces:
  *
  *  - **text runs** are LiveDiffText islands (appends render clean, revisions
@@ -23,8 +23,9 @@
  * decided once (untrack) and its content stays reactive through key-scoped
  * memos; imperative islands only where something genuinely owns a clock or a
  * measurement — LiveDiffText (the kit's settle timer) and the peek (measure
- * after attach, then flip). Ported from the overlay's multimodal/preview.tsx,
- * whose class-plus-render shape this component retires.
+ * after attach, then flip). Ported from the retired overlay's
+ * multimodal/preview.tsx (git history), whose class-plus-render shape this
+ * component replaced.
  */
 
 import {
@@ -48,7 +49,7 @@ export const TURN_PREVIEW_STYLES = `
   .mm-diff-del { color: #ff5c87; background: #ff5c8722; text-decoration: line-through; border-radius: 3px; }
   .mm-diff-add { color: #7ee0a3; background: #7ee0a322; border-radius: 3px; }
   .aiui-tp-heat-word { border-radius: 3px; padding: 0 1px; }
-  /* Chips + thumbs — the overlay's visual language, verbatim: amber = pixels,
+  /* Chips + thumbs — the retired overlay's visual language, verbatim: amber = pixels,
      blue family = selections, gray = boundaries; substance rides the peek. */
   .aiui-tp-wrap { position: relative; display: inline-block; margin: 0 4px; vertical-align: middle; }
   /* Respect the capture's TRUE aspect ratio, just bounded: max-width/max-height
@@ -73,7 +74,7 @@ export const TURN_PREVIEW_STYLES = `
   .aiui-tp-sel-code { color: #a5c8ff; }
   .aiui-tp-nav { color: #7ee0a3; }
   /* Peeks: fixed-position and body-attached — the pane scrolls, so an
-     absolutely-positioned child would clip (the overlay's measured lesson). */
+     absolutely-positioned child would clip (the retired overlay's measured lesson). */
   /* The peek is the same capture at its NATURAL aspect within a bigger box — the
      same shape as the thumbnail (both just show the real image), so the hover is
      a faithful magnification, not a re-crop. Its box size is only known once the
@@ -145,8 +146,8 @@ interface Piece {
 
 /**
  * The hover peek, one per component: genuinely imperative (attach, MEASURE,
- * then flip above/below whichever side has room — found live in the old
- * side panel, where a hard-coded "above" clipped off-screen). Everything
+ * then flip above/below whichever side has room — found live in the retired
+ * extension side panel, where a hard-coded "above" clipped off-screen). Everything
  * else about a row is declarative; this owns the measurement.
  */
 function createPeek(): {
@@ -242,7 +243,7 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
 
   const pieces = createMemo<Piece[]>(() => {
     const events = props.lanes.threadEvents(); // subscribes to the cursor
-    // THE reset rule (the overlay's): the accumulator is per-turn — no open
+    // THE reset rule (the retired overlay's): the accumulator is per-turn — no open
     // thread, no pieces. Abandon/send empties the preview instead of letting
     // between-turn events (navigations above all) haunt a closed turn.
     if (!threadOpen()) {
@@ -294,7 +295,7 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
   });
 
   /**
-   * The linter's 💡 advice (the overlay preview's lint chips, ported): notes
+   * The linter's 💡 advice (the retired overlay's lint chips, ported): notes
    * ride the thread's raw events — the COMPILER ignores them, so they never
    * become composed items; the preview reads them directly. Dismissal is
    * LOCAL (owner): a dismissed note's `at` lands in a signal-held set that

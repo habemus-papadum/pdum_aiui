@@ -228,7 +228,7 @@ describe("web backend with traceDir", () => {
     const base = `http://127.0.0.1:${port}/debug/api/traces/${trace.id}/live`;
     const res1 = await fetch(base);
     expect(res1.status).toBe(200);
-    // The DevTools panel polls this cross-origin; the /debug CORS header applies.
+    // The trace viewers (console, intent panel) poll this cross-origin; the /debug CORS header applies.
     expect(res1.headers.get("access-control-allow-origin")).toBe("*");
     const body1 = (await res1.json()) as { rev: number; stages: unknown[] };
     expect(typeof body1.rev).toBe("number");

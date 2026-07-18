@@ -1,12 +1,11 @@
 /**
  * debug-page.ts — the bootstrap the served trace debugger page runs.
  *
- * The `traceViewer()` Vite plugin (`./vite`) serves this page at
- * `/__aiui/debug` — `aiui debug` is the standing frontend (the channel itself
- * serves no HTML). It is a full-page {@link TracesPane} — the same shared
- * list + live-followed TraceView the intent client's panel embeds — polling a
- * channel's `/debug/api/*` routes cross-origin (the channel opens CORS on
- * `/debug`; it only listens on loopback).
+ * The console (aiui-console) serves this page as its `/__aiui/debug` SPA
+ * route (the channel itself serves no HTML). It is a full-page
+ * {@link TracesPane} — the same shared list + live-followed TraceView the
+ * intent client's panel embeds — polling a channel's `/debug/api/*` routes
+ * (the channel opens CORS on `/debug`).
  *
  * **The channel switcher.** The channel serves no HTML, but it does serve
  * `GET /debug/api/channels` — the machine's whole registry — so one reachable
@@ -26,7 +25,7 @@ import { injectDebugUiStyles } from "./styles";
 import { TracesPane } from "./traces-pane";
 
 export interface MountDebugPageOptions {
-  /** Channel port; defaults to the plugin-injected window.__AIUI__.port. */
+  /** Channel port (the host page supplies it — the console passes its own). */
   port?: number;
 }
 
@@ -40,16 +39,13 @@ interface ChannelEntry {
 }
 
 /**
- * Boot the trace debugger page: resolve the initial channel port (option,
- * else the plugin-injected `window.__AIUI__.port`), read the `?session=` pin,
- * and mount a full-viewport {@link TracesPane} under a channel-switcher
- * header. Without a port there is no channel to poll — the page says so
- * instead of rendering an empty list.
+ * Boot the trace debugger page: read the `?session=` pin and mount a
+ * full-viewport {@link TracesPane} under a channel-switcher header. Without a
+ * port there is no channel to poll — the page says so instead of rendering an
+ * empty list.
  */
 export function mountDebugPage(opts: MountDebugPageOptions = {}): void {
-  const injected = (globalThis as { window?: { __AIUI__?: { port?: number } } }).window?.__AIUI__
-    ?.port;
-  const initialPort = opts.port ?? injected;
+  const initialPort = opts.port;
 
   injectDebugUiStyles(document);
   const host = document.createElement("div");
@@ -63,7 +59,7 @@ export function mountDebugPage(opts: MountDebugPageOptions = {}): void {
     note.style.cssText =
       "margin: auto; color: #9aa0aa; font: 13px/1.6 ui-sans-serif, system-ui, sans-serif;";
     note.textContent =
-      "no channel port — launch through `aiui debug` (or the app through `aiui vite`) so this page knows which channel to poll";
+      "no channel port — open this page through the console (`aiui debug`) so it knows which channel to poll";
     host.appendChild(note);
     return;
   }

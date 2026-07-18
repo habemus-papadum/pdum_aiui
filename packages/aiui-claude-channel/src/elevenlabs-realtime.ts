@@ -10,7 +10,7 @@
  * item ids at all** — committed utterances complete strictly in FIFO order. The
  * two facts drive most of this module's shape.
  *
- * ### Wire surface (Scribe v2 realtime; live-verified — `.aiui-cache/scribe-findings.md`)
+ * ### Wire surface (Scribe v2 realtime; live-verified against the real service)
  *
  *  - **Endpoint:** `wss://api.elevenlabs.io/v1/speech-to-text/realtime`, with the
  *    whole session config in the query string —

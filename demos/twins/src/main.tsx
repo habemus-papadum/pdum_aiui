@@ -7,7 +7,7 @@
  *   terminal 1:  npm run claude    Claude Code with the aiui channel + browser
  *   terminal 2:  npm run dev       this app, served by Vite via `aiui vite`
  *
- * On the page, press ` (backtick) or the floating ✳ aiui button, then SAY or
+ * On the page, activate the intent client (⌘B), then SAY or
  * type what you want — "make this golden", "turn this into a tide chart
  * for my harbor", anything. Your words (plus screenshots and the source
  * locations of what you pointed at) land in the Claude session as a prompt,

@@ -1,11 +1,10 @@
 /**
  * The shared trace-debugger UI: framework-free DOM panes for inspecting the
  * multimodal intent pipeline, live. Multiple homes, one implementation — the
- * intent client's panel (TracesPane as a Solid island), the `/__aiui/debug`
- * page this package's `./vite` plugin serves (`aiui debug`), and any pane
- * over a live {@link Engine}. Prototyped in the retired workbench lab;
- * graduated so all of them render intent debugging identically, off the same
- * fixtures.
+ * intent client's panel (TracesPane as a Solid island) and the console's
+ * `/__aiui/debug` page (`aiui debug`). Prototyped in the retired workbench
+ * lab; graduated so every home renders intent debugging identically, off the
+ * same fixtures.
  *
  * The pieces:
  *  - {@link TraceView} — a whole channel trace rendered as a reading surface: a
@@ -17,15 +16,12 @@
  *    (session-filtered, follow-newest) over a live-followed {@link TraceView}.
  *    The `/__aiui/debug` page mounts exactly this.
  *  - {@link mountDebugPage} — the `/__aiui/debug` bootstrap: a full-viewport
- *    {@link TracesPane} against the injected channel port, honoring the
+ *    {@link TracesPane} against the host-supplied channel port, honoring the
  *    `?session=` pin.
- *  - {@link EventPanes} — events / IR / timing / export over an {@link IntentEvent}
- *    stream. A standalone view of one event log (the lab's dock still mounts it).
  *  - {@link renderJsonTree} — the dependency-free collapsible JSON widget the
  *    trace view's raw disclosures render structured stage data with.
- *  - {@link DebugSource} + {@link engineSource} / {@link traceLiveSource} —
- *    the small interface behind the panes: a live engine, or an HTTP poll of the
- *    channel's `/debug/api/traces/:id/live` route.
+ *  - {@link createTracePoll} — the revision-poll behind the live follow
+ *    (the channel's `/debug/api/traces/:id/live` route).
  *
  * Dependency-free and browser-safe (DOM + the intent-pipeline core only).
  *
@@ -34,27 +30,12 @@
 
 export type { MountDebugPageOptions } from "./debug-page";
 export { mountDebugPage } from "./debug-page";
-export type { EventPanesConfig } from "./event-panes";
-export { EventPanes } from "./event-panes";
 export type { JsonTreeOptions } from "./json-tree";
 export { renderJsonTree } from "./json-tree";
 export type { PreviewUrl } from "./paths";
 export { defaultPreviewUrl } from "./paths";
-export type {
-  DebugSource,
-  LiveTrace,
-  TraceLiveOptions,
-  TracePollOptions,
-  TracePollResult,
-  TraceStageLike,
-} from "./sources";
-export {
-  createTracePoll,
-  engineSource,
-  extractIntentEvents,
-  staticSource,
-  traceLiveSource,
-} from "./sources";
+export type { LiveTrace, TracePollOptions, TracePollResult, TraceStageLike } from "./sources";
+export { createTracePoll } from "./sources";
 export { DEBUG_UI_CSS, injectDebugUiStyles } from "./styles";
 export type {
   CardCategory,

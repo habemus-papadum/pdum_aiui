@@ -1,26 +1,26 @@
 /**
- * The structured selection payload the aiui dev overlay ingests, and the pure
+ * The structured selection payload published on the session bus, and the pure
  * builder that produces it from editor coordinates.
  *
- * This mirrors the session bus's wire contract: `SelectionContribution` and
- * the `"contribution"` topic from aiui-dev-overlay's session-contrib.ts (the
- * source of truth), including its locator convention — 0-based editor/LSP
- * coordinates in, 1-based human-readable `file:line:col` / `file:start-end`
- * out. Per the project's rule, the payload is structured and verbatim — how a
- * selection reads in the final prompt is decided at lowering time by
- * `composeIntent`, never here.
+ * This file is the session bus's wire contract: `SelectionContribution` and
+ * the `"contribution"` topic (it began as a mirror of the retired dev
+ * overlay's session-contrib.ts; this is now the contract's only definition),
+ * including its locator convention — 0-based editor/LSP coordinates in,
+ * 1-based human-readable `file:line:col` / `file:start-end` out. Per the
+ * project's rule, the payload is structured and verbatim — how a selection
+ * reads in the final prompt is decided at lowering time by `composeIntent`,
+ * never here.
  *
  * Deliberately free of the `vscode` module so it unit-tests without an
  * extension host and ships in the npm library build.
  */
 
-/** The session-bus topic contributions ride on (session-contrib.ts). */
+/** The session-bus topic contributions ride on. */
 export const SESSION_CONTRIBUTION_TOPIC = "contribution";
 
 /**
  * A code selection contributed to the session's turn — the payload published
- * on {@link SESSION_CONTRIBUTION_TOPIC}. Field-for-field the overlay's
- * `SelectionContribution` (session-contrib.ts).
+ * on {@link SESSION_CONTRIBUTION_TOPIC}.
  */
 export interface SelectionContribution {
   kind: "selection";
@@ -32,7 +32,7 @@ export interface SelectionContribution {
   url?: string;
   /** The contributing view's role — this provider says `"vscode"`. */
   role?: string;
-  /** Inclusive line count; the overlay derives it from `text` if omitted. */
+  /** Inclusive line count; consumers derive it from `text` if omitted. */
   lines?: number;
 }
 

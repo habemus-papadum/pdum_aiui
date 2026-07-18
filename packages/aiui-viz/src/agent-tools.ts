@@ -22,14 +22,15 @@
  * archive/agentic_ui_workflow/agent_observable_web_workers.md: one bounded,
  * JSON-serializable call for the whole picture.
  *
- * When the aiui dev overlay is present it installs a tools bridge at
- * `window.__AIUI__.tools`; this module *forwards* its surface there after every
- * mutation, so the tools also appear to the Claude Code session as MCP tools
- * (`page_tools_list` / `page_tools_call`) and calls route back to the live page
- * functions. Forwarding sends the real, described tools plus one synthetic
- * `report` tool (remote `report()` — the single most useful agent call). It is
- * best-effort and dependency-free: with no overlay it does nothing, and any
- * failure is swallowed so it never disturbs the page.
+ * The page also carries a shared registry at `window.__AIUI__.tools`
+ * (AiuiToolsRegistry, installed unconditionally by this package's own
+ * aiui-global.ts); this module *forwards* its surface there after every
+ * mutation, the intent client relays registrations via `onChange`, and the
+ * tools appear to the Claude Code session as MCP tools (`page_tools_list` /
+ * `page_tools_call`) with calls routing back to the live page functions.
+ * Forwarding sends the real, described tools plus one synthetic `report` tool
+ * (remote `report()` — the single most useful agent call). It is best-effort:
+ * any failure is swallowed so it never disturbs the page.
  */
 
 import { ensureAiuiGlobal } from "./aiui-global";
@@ -41,10 +42,8 @@ export interface AgentTool {
   params?: Record<string, string>;
   /**
    * Optional real JSON Schema for the arguments (draft 2020-12 object
-   * schema). When present it is the source of truth an overlay/channel can
-   * forward as an MCP tool definition; `params` remains the cheap inline
-   * documentation. See the overlay handoff (frontend-tool-registry) for the
-   * pipeline this feeds.
+   * schema). When present it is the source of truth the channel forwards as
+   * an MCP tool definition; `params` remains the cheap inline documentation.
    */
   inputSchema?: Record<string, unknown>;
   run: (args?: Record<string, unknown>) => unknown;
@@ -68,39 +67,16 @@ export interface AgentToolkit {
 }
 
 /**
- * The shape the aiui dev overlay installs at `window.__AIUI__.tools` (kept as a
- * local structural type so this module stays dependency-free — it never imports
- * the overlay). `register` declares the full current tool set for a namespace.
+ * Push the toolkit's current surface to the page's tools registry
+ * (`window.__AIUI__.tools` — {@link AiuiToolsRegistry}, installed by
+ * aiui-global.ts). Sends only real, described tools, plus a synthetic
+ * `report` tool wrapping `report()`. Best-effort: any error is swallowed.
  */
-interface OverlayToolsBridge {
-  register(
-    ns: string,
-    tools: Array<{
-      name: string;
-      description: string;
-      inputSchema?: Record<string, unknown>;
-      run: (args?: unknown) => unknown;
-    }>,
-  ): void;
-}
-
-/** The document event the overlay fires once its tools bridge is installed. */
-const OVERLAY_READY_EVENT = "aiui:tools-ready";
-
-/** Namespaces that already have a one-time "bridge ready" listener wired. */
-const readyWired = new Set<string>();
-
-/**
- * Push the toolkit's current surface to the overlay bridge, if one is present.
- * Sends only real, described tools, plus a synthetic `report` tool wrapping
- * `report()`. Best-effort: no overlay → no-op; any error is swallowed.
- */
-function forwardToOverlay(ns: string, h: AgentToolkitHandle): void {
+function forwardToRegistry(ns: string, h: AgentToolkitHandle): void {
   try {
     // The global's registry ALWAYS exists (aiui-global.ts — production
-    // included, since the 2026-07-14 restructure); the old overlay's ws
-    // bridge, where still wired, satisfies the same structural contract.
-    const bridge = ensureAiuiGlobal()?.tools as OverlayToolsBridge | undefined;
+    // included, since the 2026-07-14 restructure).
+    const bridge = ensureAiuiGlobal()?.tools;
     if (!bridge?.register) {
       return;
     }
@@ -122,7 +98,7 @@ function forwardToOverlay(ns: string, h: AgentToolkitHandle): void {
     bridge.register(ns, tools);
   } catch {
     // Forwarding is a convenience layered on the local registry; never let it
-    // disturb the page (or a test that has no overlay).
+    // disturb the page (or a windowless test).
   }
 }
 
@@ -167,25 +143,18 @@ export function agentToolkit(ns: string): AgentToolkit {
     return w[key] as AgentToolkitHandle;
   };
 
-  // The overlay may install its bridge *after* this page has already registered
-  // its tools; forward once more when it announces itself. Wired once per ns.
-  if (typeof document !== "undefined" && !readyWired.has(ns)) {
-    readyWired.add(ns);
-    document.addEventListener(OVERLAY_READY_EVENT, () => forwardToOverlay(ns, handle()));
-  }
-
   return {
     registerTool(tool: AgentTool): void {
       const h = handle();
       const i = h.tools.findIndex((t) => t.name === tool.name);
       if (i >= 0) h.tools.splice(i, 1, tool);
       else h.tools.push(tool);
-      forwardToOverlay(ns, h);
+      forwardToRegistry(ns, h);
     },
     registerReporter(name: string, reporter: () => unknown): void {
       const h = handle();
       h.reporters.set(name, reporter);
-      forwardToOverlay(ns, h);
+      forwardToRegistry(ns, h);
     },
     handle,
   };

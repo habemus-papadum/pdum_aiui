@@ -100,29 +100,29 @@ describe("Engine thread lifecycle", () => {
     expect(engine.events.some((e) => e.type === "thread-close")).toBe(false);
   });
 
-  it("steps out of vscode mode back to ink with the thread still open", () => {
+  it("steps out of tweak mode back to ink with the thread still open", () => {
     const engine = armedEngine();
     engine.talkStart();
     engine.talkEnd();
-    engine.setMode("vscode");
-    expect(engine.events.at(-1)).toMatchObject({ type: "mode", mode: "vscode" });
+    engine.setMode("tweak");
+    expect(engine.events.at(-1)).toMatchObject({ type: "mode", mode: "tweak" });
     engine.stepOut();
-    // Like tweak: the jump excursion steps back to composing, never to cancel.
+    // The excursion steps back to composing, never to cancel.
     expect(engine.mode).toBe("ink");
     expect(engine.threadOpen).toBe(true);
     expect(engine.events.some((e) => e.type === "thread-close")).toBe(false);
   });
 
-  it("suspends the idle auto-end timer during vscode mode, like tweak", () => {
+  it("suspends the idle auto-end timer during tweak mode", () => {
     vi.useFakeTimers();
     try {
       const engine = new Engine({ autoEndSec: 1 });
       engine.setArmed(true);
       engine.talkStart();
       engine.talkEnd(); // idle now — the auto-end timer is armed
-      engine.setMode("vscode");
-      // The user jumped off to their editor — not "idle silence"; the open
-      // turn must survive the whole excursion.
+      engine.setMode("tweak");
+      // The user handed the pointer back to the app — not "idle silence"; the
+      // open turn must survive the whole excursion.
       vi.advanceTimersByTime(10_000);
       expect(engine.threadOpen).toBe(true);
       engine.setMode("ink");
@@ -154,25 +154,6 @@ describe("Engine thread lifecycle", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("videoShare opens a thread on the first ON and records both edges (with the share's terms)", () => {
-    const engine = armedEngine();
-    expect(engine.threadOpen).toBe(false);
-    engine.videoShare(true, { ordinal: 1, mode: "smart", cadenceMs: 5000 });
-    // Turning the share on is a contentful act — it opens the thread.
-    expect(engine.threadOpen).toBe(true);
-    expect(engine.events.some((e) => e.type === "thread-open" && e.trigger === "shot")).toBe(true);
-    expect(engine.events.at(-1)).toMatchObject({
-      type: "video-share",
-      on: true,
-      ordinal: 1,
-      mode: "smart",
-      cadenceMs: 5000,
-    });
-    engine.videoShare(false);
-    expect(engine.events.at(-1)).toMatchObject({ type: "video-share", on: false });
-    expect(engine.threadOpen).toBe(true); // off doesn't close the thread (send/cancel do)
   });
 });
 
@@ -227,7 +208,6 @@ describe("composeIntent", () => {
         '  <element name="Legend" source="scenery.ts:33"/>\n' +
         "</screenshot-metadata>",
     );
-    expect(composed.meta).toEqual({});
   });
 
   it("inlines a saved shot at its position: path, elements, and cell frontier in the text", () => {
@@ -265,7 +245,6 @@ describe("composeIntent", () => {
         "against the mock",
     );
     // Everything is in the text now: no meta block, no token↔meta hint line.
-    expect(composed.meta).toEqual({});
     expect(composed.prompt).not.toContain("{shot_");
   });
 
@@ -406,7 +385,6 @@ describe("composeIntent", () => {
     expect(composed.items[1].marker).toBe("shot_2");
     expect(composed.prompt).not.toContain("shot_1");
     expect(composed.prompt).toContain("[screenshot located at /tmp/aiui-lab/2-shot_2.png]");
-    expect(composed.meta).toEqual({});
     // ...but the shot event itself is still in the stream (append-only; traces keep it).
     expect(engine.events.some((e) => e.type === "shot" && e.marker === "shot_1")).toBe(true);
   });
@@ -659,8 +637,8 @@ describe("app selection (a positional stream event, interleaved like text and sh
   it("armed + no thread: an explicit selection OPENS the turn (panel pull model)", () => {
     // The 2026-07-11 contract change: "add selection" is a deliberate act, as
     // contentful as a contribution. Ambient watchers must still never open
-    // turns — but that guard lives in the CALLER (the overlay modality
-    // pre-filters on threadOpen), not here.
+    // turns — but that guard lives in the CALLER (the intent client's ambient
+    // watcher pre-filters on threadOpen), not here.
     const engine = armedEngine();
     expect(engine.appSelectionDrop()).toBe(false); // a retract still needs a thread
     expect(engine.appSelection({ text: "picked" })).toBe(true);
@@ -1487,7 +1465,7 @@ describe("the extension host's verbs (§13.6 — explicit turns, send keeps arme
     expect(engine.armed).toBe(true); // §13.6: the next ⌘B starts the next turn
     expect(engine.events.at(-1)).toMatchObject({ type: "thread-close", reason: "send" });
 
-    // The overlay's default is unchanged: a plain send() disarms.
+    // The default is unchanged: a plain send() disarms.
     engine.openTurn();
     engine.send();
     expect(engine.armed).toBe(false);

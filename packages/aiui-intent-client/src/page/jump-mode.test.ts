@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * jump-mode.test.ts — the in-repo jump-to-editor port: the chains read the
- * attribution contract, the plain-DOM picker walks the overlay's interaction
- * contract (click → picker → digit/Enter → `vscode://` open, Esc → gone).
+ * attribution contract, the plain-DOM picker walks the interaction contract
+ * (click → picker → digit/Enter → `vscode://` open, Esc → gone).
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { armJump, cellChain, disarmJump, elementChain, vscodeFileUrl } from "./jump-mode";

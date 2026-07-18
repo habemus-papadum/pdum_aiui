@@ -7,7 +7,7 @@
  * streams a segment's PCM *while you talk*: `input_audio_buffer.append` per
  * frame, `input_audio_buffer.commit` at talk-end, partial `…delta` events echoed
  * back as they arrive, a `…completed` event as the segment's final. REST stays
- * the default and the fallback; this is the L1 spike (streaming-turns.md §3).
+ * the default and the fallback; this is the L1 spike (archive/streaming-turns.md §3).
  *
  * ### Verified GA surface (developers.openai.com, re-verified live 2026-07-05)
  *

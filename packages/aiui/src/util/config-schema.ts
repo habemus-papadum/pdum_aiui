@@ -19,8 +19,8 @@
  * `ConfigSectionSchema` object here and a matching optional section on
  * `AiuiConfig`. Nothing else — validation, show/get/set, and the TUI pick it
  * up from the table. (The intent pipeline's current config is deliberately
- * *not* here: it is per-app, passed as `aiuiDevOverlay({ intent: { … } })` in
- * the app's Vite config — see docs/guide/intent-overlay.md.)
+ * *not* here: it is per-app, passed to the `aiui()` Vite plugin — from
+ * aiui-source-processor — in the app's Vite config.)
  */
 
 // The channel list lives with the launch code (aiui-util's browser module,
@@ -52,11 +52,6 @@ export const DEFAULT_MANAGED_FLAVOR: ManagedFlavor = "chromium";
  */
 export const MANAGE_MODES = ["prompt", "auto", "off"] as const;
 export type ManageMode = (typeof MANAGE_MODES)[number];
-
-/** @deprecated Use {@link MANAGE_MODES}. Kept for the `chrome.forTesting` alias. */
-export const FOR_TESTING_MODES = MANAGE_MODES;
-/** @deprecated Use {@link ManageMode}. */
-export type ForTestingMode = ManageMode;
 
 export const CHROME_MODES = ["attach", "launch"] as const;
 export type ChromeMode = (typeof CHROME_MODES)[number];
@@ -149,11 +144,11 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
           '"loopback" (unset: the first interactive launch asks, then persists the answer)',
         summary: "Which interface the channel web server binds: loopback, or host (LAN).",
         doc:
-          '"host" (0.0.0.0) makes the session\'s whole web surface — the iPad paint page, but ' +
+          '"host" (0.0.0.0) makes the session\'s whole web surface — the iPad pencil page, but ' +
           "also prompt injection, /debug, and every sidecar — reachable by anyone on your " +
           "network, UNAUTHENTICATED. That is the trusted-LAN posture (docs/guide/warning): " +
           'right on a network that is yours alone, wrong on shared Wi-Fi. "loopback" keeps ' +
-          "everything this-machine-only; reaching the paint page from an iPad is then up to " +
+          "everything this-machine-only; reaching the pencil page from an iPad is then up to " +
           "you — tunnel the channel port however you like (Tailscale, `ssh -L`). The first " +
           "interactive launch asks and persists the answer at the user level. Per-launch " +
           "flag: --aiui-bind.",

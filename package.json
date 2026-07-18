@@ -22,7 +22,6 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "aiui": "tsx packages/aiui/src/cli.ts",
-    "paint:demo": "tsx packages/aiui-paint/demo/serve.ts",
     "vscode:vsix": "pnpm --filter @habemus-papadum/aiui-vscode install:vsix",
     "vscode:install": "pnpm --filter @habemus-papadum/aiui-vscode install:vsix",
     "vscode:link": "pnpm --filter @habemus-papadum/aiui-vscode install:dir",

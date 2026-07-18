@@ -2,8 +2,9 @@
 /**
  * panel.test.tsx — the panel DOM as a projection: drive the client through
  * dispatch()/handleKey() and assert the rendered truth. This is the test the
- * old panel could never have (extension pages never commit in CDP tabs; the
- * side panel needs a user gesture) — here the panel is a normal page.
+ * retired extension panel could never have (extension pages never commit in
+ * CDP tabs; the side panel needs a user gesture) — here the panel is a normal
+ * page.
  */
 import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
@@ -154,7 +155,7 @@ describe("the panel is a projection", () => {
     const m = mount();
     const pill = (name: string) =>
       m.root.querySelector(`[data-pill="${name}"]`)?.getAttribute("data-state");
-    m.client.setContext({ connected: true, micGranted: true, paintClients: 1 });
+    m.client.setContext({ connected: true, micGranted: true, pencilClients: 1 });
     activationGesture(m.client, 7);
     await settle();
     expect(pill("stream")).toBe("on"); // warm capture held

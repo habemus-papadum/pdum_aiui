@@ -6,19 +6,22 @@
  * consequences: whether to auto-dismiss the development-channel acknowledgement
  * prompt by typing into the user's terminal, and whether the channel's web
  * server binds loopback-only or the host interface (the trusted-LAN posture
- * that makes the whole unauthenticated surface — iPad paint page included —
+ * that makes the whole unauthenticated surface — iPad pencil page included —
  * reachable from the network). Neither should be something the user "tagged
  * along" with because a default existed — so the first interactive launch asks
  * (definitively: the prompts have no Enter-through default), and the answers
  * persist to the **user-level** config, after which nothing asks again.
  * Non-interactive sessions never prompt; unset values fall back to the
- * documented defaults (nudge: true, bind: loopback).
+ * documented defaults (nudge: true, bind: loopback). While the nudge
+ * mechanism is disabled (ENTER_NUDGE_ENABLED), its question is skipped — an
+ * answer nothing acts on is worse than not asking.
  *
  * (Whether to pass `--dangerously-skip-permissions` is no longer a first-run
  * question: it lives in `claude.args`, opt-in via `aiui config set-dsp`, and is
  * never added by default — see docs/guide/warning.)
  */
 import { type AiuiConfig, type ChannelBind, updateUserConfig } from "./config";
+import { ENTER_NUDGE_ENABLED } from "./enter-nudge";
 import { type Choice, choose } from "./prompt";
 import { printNote } from "./ui";
 
@@ -28,7 +31,7 @@ type Ask = (question: string, choices: Choice[]) => Promise<string>;
 const CHANNEL_BIND_QUESTION =
   "One-time setup — where should the channel's web server bind?\n" +
   "Binding the HOST interface puts the session's whole web surface on your network,\n" +
-  "UNAUTHENTICATED — the iPad paint page (`aiui paint url` prints its URL), but also prompt\n" +
+  "UNAUTHENTICATED — the iPad pencil page (`aiui pencil url` prints its URL), but also prompt\n" +
   "injection, /debug, and every sidecar. That's the simple, single-port way to use the iPad —\n" +
   "on a network that is yours alone (a home LAN), not on café Wi-Fi. LOOPBACK keeps everything\n" +
   "this-machine-only; reaching it from an iPad is then up to you — tunnel the channel port\n" +
@@ -55,7 +58,7 @@ export async function ensureLaunchChoices(
 ): Promise<AiuiConfig> {
   let updated = config;
 
-  if (updated.claude?.enterNudge === undefined) {
+  if (ENTER_NUDGE_ENABLED && updated.claude?.enterNudge === undefined) {
     const answer = await ask(ENTER_NUDGE_QUESTION, [
       { key: "y", label: "yes — press Enter for me at startup" },
       { key: "n", label: "no — I'll press it myself each launch" },

@@ -1,7 +1,8 @@
 /**
  * capture.ts — the extension tier's pixels. **Salvaged, near-verbatim, from the
- * old panel** (`aiui-extension/src/panel/capture.ts`): it is measured code, and
- * the measurements are the reason it looks like this (RESULTS.md M10).
+ * retired extension panel** (git history: aiui-extension/src/panel/capture.ts):
+ * it is measured code, and the measurements are the reason it looks like this
+ * (archive/extension-spikes/RESULTS.md M10).
  *
  * The service worker mints a `tabCapture` stream id — it alone can, that API
  * being privileged and invocation-gated — and THIS document consumes it with
@@ -136,7 +137,8 @@ export function releaseTabStream(): void {
  * One frame off the warm stream: encoded bytes + a thumb. Pure draw + encode —
  * no acquisition, no messaging. Rejects when no stream is held.
  *
- * The thumb is FULL RESOLUTION by default (the dev-overlay's shot methodology):
+ * The thumb is FULL RESOLUTION by default (the shot methodology inherited from
+ * the retired dev-overlay):
  * the same pixels as the upload, so the preview's hover peek shows real detail
  * rather than an upscaled 360-px blur. `thumbMaxPx` downscales it — the video
  * sampler passes a cap, because a full-res thumb riding EVERY sampled frame would

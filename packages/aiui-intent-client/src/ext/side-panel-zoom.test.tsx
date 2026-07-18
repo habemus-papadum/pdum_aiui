@@ -2,8 +2,8 @@
 /**
  * side-panel-zoom.test.tsx — the side panel's zoom buttons. Both halves: the
  * buttons step/reset the uiScale control, and the apply effect lands the value
- * on the document's root font-size (the restore half — a scale set before mount
- * is applied the moment the component mounts).
+ * as CSS `zoom` on the panel-content root (the restore half — a scale set
+ * before mount is applied the moment the component mounts).
  */
 import { render } from "@solidjs/web";
 import { flush } from "solid-js";

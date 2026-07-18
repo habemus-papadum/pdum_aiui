@@ -2,7 +2,7 @@
  * router.ts — the gallery's client-side router: ~40 lines of pushState over a
  * flat route list, which is all a tab bar needs (the SPA-navigation proposal's
  * "router choice is almost immaterial" made concrete — every router bottoms
- * out in these primitives, and the aiui overlay's navigation watcher observes
+ * out in these primitives, and the intent client's navigation watcher observes
  * them all identically).
  *
  * Why an SPA at all: one document means the intent tool — its open turn, its

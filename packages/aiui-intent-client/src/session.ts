@@ -13,8 +13,8 @@
  *     the page's origin IS the channel and discovery disappears).
  *
  * The bus shapes mirror the channel's session hub (`aiui-claude-channel`
- * session-hub.ts); the reducer is pure and exported for tests — this is the
- * old panel's bus.ts (salvage list: "pure — copy"), chrome-free as promised.
+ * session-hub.ts); the reducer is pure and exported for tests — copied from
+ * the retired extension panel's bus.ts, chrome-free as promised.
  */
 
 export interface BusPeer {

@@ -14,7 +14,7 @@
  * machine (the VS Code extension) can see the connected views and hand them a
  * contribution. It listens on an OS-assigned port, on loopback by default; the
  * launcher can bind it to the host interface instead ({@link WebServerOptions.host}
- * — the trusted-LAN posture that lets an iPad reach the paint surface, and
+ * — the trusted-LAN posture that lets an iPad reach the pencil surface, and
  * everything else, without a tunnel; see docs/guide/warning.md).
  *
  * Nothing here may write to stdout: in the `mcp` command that stream carries the
@@ -98,7 +98,7 @@ export interface WebServerOptions {
    * unauthenticated, so loopback is the safe posture. `0.0.0.0` is the
    * deliberate trusted-LAN choice (`aiui claude --aiui-bind host` /
    * `channel.bind: "host"`): the whole surface — prompt injection, `/debug`,
-   * every sidecar (including the iPad paint page) — becomes reachable by
+   * every sidecar (including the iPad pencil page) — becomes reachable by
    * anyone on the network. See docs/guide/warning.md.
    */
   host?: string;
@@ -135,12 +135,13 @@ export interface WebServerOptions {
    */
   port?: number;
   /**
-   * Session sidecars to host alongside the channel's own endpoints — the code
-   * reader, a git viewer (see {@link Sidecar}). Each is mounted on the Express
-   * app under its own base path AFTER the channel's routes (so `/health`,
-   * `/prompt` and the websocket upgrades always win), offered unclaimed
-   * websocket upgrades, and disposed on {@link WebServer.close}. The launcher
-   * chooses and constructs these; the channel treats them opaquely.
+   * Session sidecars to host alongside the channel's own endpoints — the
+   * intent client, the pencil surface (see {@link Sidecar}). Each is mounted on
+   * the Express app under its own base path AFTER the channel's routes (so
+   * `/health`, `/prompt` and the websocket upgrades always win), offered
+   * unclaimed websocket upgrades, and disposed on {@link WebServer.close}.
+   * Callers default to the channel's own `standardSidecars` (see
+   * standard-sidecars.ts); the channel still treats each one opaquely.
    */
   sidecars?: Sidecar[];
   /**
@@ -218,7 +219,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   const app = express();
   const bindHost = options.host ?? "127.0.0.1";
   // Body parsing is scoped to the routes that need it (just `/prompt`), NOT
-  // global: a sidecar's raw request handler (the reader reads its own POST
+  // global: a sidecar's raw request handler (one that reads its own POST
   // bodies off the stream) must reach the socket unconsumed.
 
   const pageTools = options.pageTools ?? new PageToolDirectory();
@@ -235,7 +236,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   let generation = 0;
 
   app.get("/health", (_req, res) => {
-    // Readable cross-origin: the dev overlay's tools bridge probes this route
+    // Readable cross-origin: the intent client's tools-link probes this route
     // from the app's dev-server origin before dialing `/tools` (the browser
     // logs failed websocket handshakes unsuppressably, so it never dials
     // blind). The payload is harmless loopback metadata, and the header's
@@ -248,7 +249,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       ppid: process.ppid,
       generation,
       // The bound address, so tools can tell a loopback-only server from a
-      // LAN-exposed one (`aiui paint url` decides which URLs to print by it).
+      // LAN-exposed one (`aiui pencil url` decides which URLs to print by it).
       host: bindHost,
       pageTools: pageTools.summary(),
       session: sessionHub.summary(),
@@ -276,8 +277,8 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
   // tool can offer "which browser tab?"), and `POST /session/publish` injects a
   // server-originated publish, targeted at one view (`clientId`), a role, or
   // everyone. Both report the cached `armed` slot so callers can phrase their
-  // feedback; delivery is not gated on it — the overlay's contribution handler
-  // arms the turn itself when a contribution lands.
+  // feedback; delivery is not gated on it — the intent client's contribution
+  // handler arms the turn itself when a contribution lands.
   app.get("/session/peers", (_req, res) => {
     // Readable cross-origin for the same reason as /health: harmless loopback
     // metadata a debug page may want to render.
@@ -384,8 +385,9 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
     } else if (pathname === "/session") {
       sessionWss.handleUpgrade(req, socket, head, (ws) => sessionWss.emit("connection", ws, req));
     } else {
-      // Offer the upgrade to each sidecar (e.g. the reader's `/lsp`); the first to
-      // claim it owns the socket. Nothing claims it → drop, as before. A sidecar
+      // Offer the upgrade to each sidecar (e.g. the pencil sidecar's stroke
+      // sockets); the first to claim it owns the socket. Nothing claims it →
+      // drop, as before. A sidecar
       // that throws mid-handshake is contained (logged, socket dropped) — one bad
       // sidecar must not sink the session.
       for (const sidecar of mountedSidecars) {

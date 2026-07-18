@@ -66,7 +66,7 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   const pageHandlers = new Set<(event: PageEvent) => void>();
   const tabHandlers = new Set<(tab: number | undefined) => void>();
   /** What we asserted per tab — a fresh document gets it back (see below). */
-  const sticky = new Map<number, { keylayer?: unknown; ink?: unknown }>();
+  const sticky = new Map<number, { keylayer?: unknown }>();
   let ring: RingState = { on: false, turnTone: false };
   let activeTab: number | undefined;
 
@@ -113,9 +113,6 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     if (held?.keylayer !== undefined) {
       void request(tab, "keylayer", held.keylayer);
     }
-    if (held?.ink !== undefined) {
-      void request(tab, "ink", held.ink);
-    }
   };
 
   const onReport = (tab: number, report: PageReport): void => {
@@ -150,9 +147,6 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
           // destination's record in the page (DOM-probed aiui detection).
           ...(report.tab !== undefined ? { tabRecord: report.tab } : {}),
         });
-        break;
-      case "foreign":
-        emit({ kind: "foreignClient", tab, armed: report.armed });
         break;
       case "tools":
         emit({ kind: "pageTools", tab, registrations: report.registrations });

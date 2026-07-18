@@ -22,8 +22,9 @@
  *      reachable channel enumerates the rest.
  *
  * Extension pages may fetch loopback freely (`host_permissions`), which is what
- * makes 1 and 3 possible at all. Storage keys are `aiui2.*`: the frozen client
- * has its own, under its own extension id, and the two never meet.
+ * makes 1 and 3 possible at all. Storage keys are `aiui2.*`: the retired
+ * frozen extension (out of the tree; still installed in some profiles) has its
+ * own under its own extension id, and the two never meet.
  */
 
 import { CDP_CHANNEL_TAG_KEY } from "./manifest";

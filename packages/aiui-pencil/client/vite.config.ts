@@ -5,15 +5,14 @@ import solid from "vite-plugin-solid";
 /**
  * Builds the remote client (`client/` — the kit's paved-road composition)
  * into a servable artifact at `assets/client/` — what the pencil sidecar
- * hands an iPad at `GET /pencil/` (an iPad has no frontend process; paint's
- * precedent).
+ * hands an iPad at `GET /pencil/` (an iPad has no frontend process).
  *
  * `assets/` (not `dist/`) so the path from the sidecar is IDENTICAL in both
  * runtimes: `../assets/client` resolves the same from `src/sidecar.ts` (tsx,
  * source-first) and from `dist/sidecar.js` (installed). `base` is the mount
  * prefix, so the built asset URLs are absolute under `/pencil/`.
  *
- * No dev-overlay plugin here: the client uses no `control()`s (its state is
+ * No `aiui()` locator plugin here: the client uses no `control()`s (its state is
  * plain signals), and the served artifact should not carry the locator's
  * instrumentation. The LAB's dev server still serves the same sources live at
  * `/pencil/` for the iterate loop (or run `pnpm dev:client` standalone).

@@ -7,12 +7,14 @@
  * keeps stroke identity exactly as long as it needs to and not one frame longer.
  *
  * Design: `docs/proposals/aiui-pencil.md`. Plan and status:
- * `docs/proposals/aiui-pencil-plan.md`. Supersedes `aiui-ink` and `aiui-paint`.
+ * `docs/proposals/aiui-pencil-plan.md`. Supersedes the retired `aiui-ink` and
+ * `aiui-paint` (git history).
  *
- * **What exists today is layer 1: the pure stroke pipeline** — everything from a
- * `PointerEvent` to a list of dabs, with no DOM anywhere in it. The renderer
- * (`PencilSurface`), the remote protocol, and the command bus are phases 3, 5,
- * and 6 of the plan.
+ * **The core is layer 1: the pure stroke pipeline** — everything from a
+ * `PointerEvent` to a list of dabs, with no DOM anywhere in it. Layered on top,
+ * and exported below: the renderer (`PencilSurface`, surface.ts), the remote
+ * wire and its endpoint cores (protocol.ts, remote.ts, the sessions); the
+ * command bus ships as its own channel (`aiui-remote-bar`).
  *
  * The pipeline, end to end:
  *
@@ -106,7 +108,6 @@ export {
   type InkIntent,
   isInkIntent,
   type PointerKind,
-  PROTOCOL_VERSION,
   type RelayToClient,
   type RelayToHost,
   type RemotePresentation,
@@ -128,8 +129,8 @@ export {
   inkSignals,
 } from "./reactive";
 // remote.ts — the endpoint cores (no socket in them), and the preview fade
-// window: ~500 ms from pen-up (paint v1's proven policy, D3), sized from the
-// receiver's measured delays when stats are available.
+// window: ~500 ms from pen-up (the policy retired paint v1 proved, D3), sized
+// from the receiver's measured delays when stats are available.
 export {
   fadeWindowMs,
   type LinkStats,

@@ -3,27 +3,28 @@
  * channel inside the live session: one {@link createBarBackend}, mounted on the
  * channel's own Express app under `/bar`, on the channel's one port. No separate
  * process, no separate listener, no separate port — the D5 "one sidecar per
- * control surface" pattern paint proved.
+ * control surface" pattern (aiui-pencil's sidecar is its sibling).
  *
- *  - The host page connects locally: it already knows the channel port
- *    (`window.__AIUI__.port`), so its host binding dials
- *    `ws://127.0.0.1:<channelPort>/bar/host` with zero extra discovery.
+ *  - The host page connects locally: it already knows the channel port (the
+ *    intent client resolves it from its own config — `resolveChannelPort`), so
+ *    its host binding dials `ws://127.0.0.1:<channelPort>/bar/host` with zero
+ *    extra discovery.
  *  - A bar-only remote (or the pencil iPad app) opens
  *    `ws://<this-machine>:<channelPort>/bar/client` — reachable when the channel
  *    binds the host interface (`channel.bind: "host"`), or through a tunnel the
  *    user owns when it stays loopback-only. Reachability is the CHANNEL's bind
  *    decision, not this sidecar's; the sidecar is cheap and always mounted (see
- *    docs/guide/warning.md for the posture, same as paint).
+ *    docs/guide/warning.md for the posture, same as pencil).
  *
- * `GET /bar/info` is the discovery route (readiness + counts, CORS for the
- * overlay's cross-origin capability probe). It, `/health`, and `/sessions` are
- * served by the backend under the prefix — this sidecar is a thin wrapper around
- * the backend's two seams.
+ * `GET /bar/info` is the discovery route (readiness + counts, CORS so probes can
+ * read it cross-origin). It, `/health`, and `/sessions` are served by the
+ * backend under the prefix — this sidecar is a thin wrapper around the backend's
+ * two seams.
  *
- * Unlike paint, there is **no HTML route**: the channel serves no pages, and the
+ * Unlike pencil, there is **no HTML route**: the channel serves no pages, and the
  * bar's client is a frontend-process Solid component, not a page handed out by
- * the relay (paint's `/paint/` page is a documented exception for an iPad with no
- * frontend process; a bar remote is an ordinary app).
+ * the relay (pencil's `/pencil/` page is a documented exception for an iPad with
+ * no frontend process; a bar remote is an ordinary app).
  */
 
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";

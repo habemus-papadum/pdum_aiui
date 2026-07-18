@@ -1,7 +1,7 @@
 /**
  * channel-header.tsx — the channel chooser + status, at the top of every
- * panel entry. This is the old extension's connection chip on the SAME widget
- * it was born in: the viz `Dropdown` (its refresh hook is the contract —
+ * panel entry. This is the retired extension's connection chip on the SAME
+ * widget it was born in: the viz `Dropdown` (its refresh hook is the contract —
  * every open fires `onOpen`, so the list is repopulated on each click by
  * construction; outside-click and Escape dismiss). Dot + "name :port": green
  * = bus connected, amber = re-dialing, gray = unbound.
@@ -13,7 +13,7 @@
  * place native messaging is used) and falls back to the mirror. Switching is
  * likewise the entry's call: URL rebind vs remember-and-reboot.
  *
- * Explicit-port entry stays dropped (decided with the old chip, 2026-07-12;
+ * Explicit-port entry stays dropped (decided with the retired chip, 2026-07-12;
  * discovery covers the flows).
  */
 

@@ -31,8 +31,8 @@ export type EnvelopeKind = "hello" | "data";
  * The browser tab a client page lives in, as far as the page can know it.
  *
  * `url`/`title` the page reads live off itself; the numeric/string ids come
- * from the aiui DevTools extension, which stamps them onto dev pages (see the
- * extension's content script). All ids are **correlation hints** for an agent:
+ * from the intent client's host — the MV3 extension's `chrome.tabs` layer, or
+ * the CDP tier's tab hints. All ids are **correlation hints** for an agent:
  * the Chrome DevTools MCP accepts only its own `pageId` from `list_pages` —
  * match by URL/title and verify (the session-browser skill teaches the
  * workflow; background in archive/chrome-devtools-mcp-tab-routing-notes.md).
@@ -91,15 +91,13 @@ export interface HelloMeta {
  *  - `attachment` — payload is raw bytes (a shot PNG or a whole audio segment),
  *    identified by `id` (`shot_N` / `seg_N`) and `mime`;
  *  - `audio` — payload is raw bytes: **one streamed PCM frame** of segment
- *    `seg_N`, in `seq` order (the realtime-transcriber path, streaming-turns.md
+ *    `seg_N`, in `seq` order (the realtime-transcriber path, archive/streaming-turns.md
  *    §3). Where `attachment seg_N` is one whole segment in one frame (the REST
  *    path), `audio seg_N` is that same segment arriving as many frames *while
  *    you talk*; the segment's existing `talk-start`/`talk-end` events remain the
  *    boundaries (talk-end commits the upstream buffer). Additive, like every
  *    other member — its absence is the legacy behavior every non-`intent-v1`
  *    format relies on, so `PROTOCOL_VERSION` is unaffected;
- *  - `context` — payload is UTF-8 JSON `{ selection?: … }`, sent at most once,
- *    just before `fin`.
  *  - `control` — payload is UTF-8 JSON `{ control, value }`: a mid-thread
  *    reconfiguration the processor applies live, distinct from turn content
  *    (it never reaches the composed prompt). Today the one control is
@@ -108,12 +106,9 @@ export interface HelloMeta {
  */
 export type ChunkDescriptor =
   | { kind: "events" }
-  | { kind: "context" }
   | { kind: "control" }
   | { kind: "attachment"; id: string; mime: string }
-  | { kind: "audio"; id: string; seq: number; mime: string }
-  // One sampled video frame of the realtime submode's screen share (~1 fps).
-  | { kind: "video"; id: string; seq: number; mime: string };
+  | { kind: "audio"; id: string; seq: number; mime: string };
 
 /** The routing/lifecycle metadata carried in every frame's header. */
 export interface Envelope {

@@ -204,7 +204,7 @@ type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
  * Runs concurrently with Vite and must never interfere with it: everything is
  * caught, failures print a warning, and the dev server keeps the terminal and
  * keeps running either way. It is also deliberately non-interactive — Vite
- * owns stdin — so the Chrome for Testing sync never prompts here; it just
+ * owns stdin — so the managed-browser sync never prompts here; it just
  * uses whatever browser is already available.
  */
 export async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> {

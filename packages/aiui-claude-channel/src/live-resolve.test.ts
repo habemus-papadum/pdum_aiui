@@ -5,8 +5,6 @@ import {
   selectionRetractionLabel,
 } from "./live-resolve";
 
-const _cwd = "/repo";
-
 describe("selection injection labels (the [selection …] grammar)", () => {
   it("labels an app selection with its excerpt and authored-at locator", () => {
     expect(
@@ -32,7 +30,7 @@ describe("selection injection labels (the [selection …] grammar)", () => {
     ).toBe('[selection sel_2 updated: "gradient stops+" — on-screen selection]');
   });
 
-  it("clips a long selection and says so (the full text re-attaches at resolve)", () => {
+  it("clips a long selection and says so (the full text reaches the prompt via the compiler)", () => {
     const long = "x".repeat(SELECTION_EXCERPT_CHARS * 3);
     const label = selectionInjectionLabel("sel_1", { kind: "app", item: { text: long } }, false);
     expect(label).toContain(" (clipped)");

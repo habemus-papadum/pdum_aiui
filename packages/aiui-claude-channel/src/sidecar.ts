@@ -1,18 +1,20 @@
 /**
  * Session **sidecars** — extra HTTP (and optional websocket) surfaces the
  * channel hosts alongside its own endpoints, so one session process serves one
- * port. The iPad paint stream is the concrete sidecar today and a git viewer the
- * second; a git viewer or another tool would be the next.
+ * port. The concrete set today is the intent client, the remote bar, the iPad
+ * pencil surface, and the console (see standard-sidecars.ts); a git viewer or
+ * another tool would be the next.
  *
  * The channel stays generic: it mounts a sidecar's routes on its Express app,
  * offers it each websocket upgrade it doesn't handle itself, and disposes it on
- * shutdown — and never knows what the sidecar actually is. A sidecar is chosen
- * and constructed by the launcher (the `aiui` CLI decides which to run and hands
- * them to `startWebServer`); the channel package deliberately takes no
- * dependency on any concrete sidecar.
+ * shutdown — and never knows what the sidecar actually is. Callers hand live
+ * {@link Sidecar} objects to `startWebServer`; by default the channel mounts
+ * its own `standardSidecars` (the sidecar packages are published, so the
+ * channel simply depends on them — see standard-sidecars.ts), and tests inject
+ * their own set to stay hermetic.
  *
  * A sidecar must confine itself to its own base path (e.g. everything under
- * `/code`), since the channel's own routes (`/health`, `/prompt`, and the `/ws`
+ * `/pencil`), since the channel's own routes (`/health`, `/prompt`, and the `/ws`
  * `/tools` `/session` upgrades) are mounted first and must win. And like
  * everything in the web backend it must never write to stdout — use
  * {@link SidecarContext.log} (stderr).
@@ -59,7 +61,7 @@ export interface MountedSidecar {
 
 /** A mountable session sidecar (see the module doc). */
 export interface Sidecar {
-  /** Stable identifier for logging and CLI selection (e.g. `"code"`). */
+  /** Stable identifier for logging and CLI selection (e.g. `"pencil"`). */
   readonly name: string;
   /**
    * Mount the sidecar's routes on the channel's Express `app` (once, at startup)

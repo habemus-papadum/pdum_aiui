@@ -28,6 +28,15 @@
  */
 import { spawn } from "node:child_process";
 
+/**
+ * The master switch. DISABLED for now (owner, 2026-07-17): the whole
+ * mechanism stays — the config option and nudgeChannelAck — but we hold off
+ * actually pressing Enter, and first-run skips its one-time question while
+ * the answer would have no effect. Flip this one flag back to `true` to
+ * restore both; nothing else changes.
+ */
+export const ENTER_NUDGE_ENABLED = false;
+
 // TIOCSTI ioctl request number by platform ("push one byte into the tty input
 // queue as if typed"). darwin: _IOW('t',114,char) = 0x80017472; linux: 0x5412.
 const TIOCSTI_BY_PLATFORM: Partial<Record<NodeJS.Platform, number>> = {

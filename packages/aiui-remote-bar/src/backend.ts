@@ -3,14 +3,14 @@
  *
  * This is the relay's room logic — pair a browser **host** (the page that owns
  * the mode engine) with **remote** clients, relay the bar down and commands up —
- * packaged the way `aiui-paint`'s backend is: two seams, an HTTP handler and a
+ * packaged the way `aiui-pencil`'s backend is: two seams, an HTTP handler and a
  * websocket-upgrade handler, that a host process mounts wherever it likes. It
  * never listens on a port itself. The channel sidecar (`./sidecar`) mounts it at
  * `/bar` on the aiui channel's one server.
  *
- * It is the paint relay's room model **minus everything media** — no binary
- * frames, no video, no WebRTC signaling. The bar channel carries only JSON
- * control frames (`bar` down, `command` up). Two things it keeps from paint:
+ * The room model came from the retired paint relay, **minus everything media** —
+ * no binary frames, no video, no WebRTC signaling. The bar channel carries only
+ * JSON control frames (`bar` down, `command` up). Two things it kept:
  *
  *  - **heartbeat** — a slept remote that never sent a FIN is ping-terminated, so
  *    a zombie viewer can't hold a room `busy` for the TCP timeout;
@@ -19,13 +19,13 @@
  *    agent session each host belongs to.
  *
  * And one thing it adds, because the bar is **event-driven** where paint's video
- * is continuous: the relay caches each host's **last bar** and replays it to a
+ * was continuous: the relay caches each host's **last bar** and replays it to a
  * remote on join. Without it, a remote that joins an idle host (no dispatch since
  * it registered) would see a blank bar until the next commit — never, if the app
- * is quiet. Paint needs no such thing; its next frame is milliseconds away.
+ * is quiet. Paint needed no such thing; its next frame was milliseconds away.
  *
  * Routes (all under {@link BarBackendOptions.prefix}, default ``):
- *   GET  <prefix>/info      readiness + counts, JSON (CORS — the overlay probes it)
+ *   GET  <prefix>/info      readiness + counts, JSON (CORS — probes read it)
  *   GET  <prefix>/health    liveness + counts, JSON
  *   GET  <prefix>/sessions  the connectable hosts, JSON
  *   WS   <prefix>/host      a browser host (owns the mode engine)
@@ -33,8 +33,8 @@
  *
  * There is deliberately **no HTML route** — the channel serves no pages, and the
  * bar's client is a frontend-process Solid component (`./ui`), not a page the
- * relay hands out (that is paint's one documented exception, for an iPad with no
- * frontend process; a bar remote is an ordinary app).
+ * relay hands out (pencil's `/pencil/` page is the one documented exception, for
+ * an iPad with no frontend process; a bar remote is an ordinary app).
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -325,9 +325,9 @@ export function createBarBackend(options: BarBackendOptions = {}): BarBackend {
       return false;
     }
     const pathname = url.pathname;
-    // `/info` and `/health` both report readiness + counts; the overlay's
-    // capability probe reads `/info` cross-origin, hence the CORS on every JSON
-    // route (sendJson sets it).
+    // `/info` and `/health` both report readiness + counts; `/info` may be read
+    // cross-origin by capability probes, hence the CORS on every JSON route
+    // (sendJson sets it).
     if (pathname === `${prefix}/info` || pathname === `${prefix}/health`) {
       sendJson(res, { ok: true, ...counts() });
       return true;

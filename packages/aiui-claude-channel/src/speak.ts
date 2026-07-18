@@ -3,8 +3,8 @@
  * spoken sibling of {@link ./transcribe}'s `Transcriber`: text in, timed audio
  * bytes out.
  *
- * This backs the `premium` tier's **audio-back acks** (streaming-turns.md §4,
- * model-tiers.md T2): short spoken confirmations ("sent") the channel synthesizes
+ * This backs the `premium` tier's **audio-back acks** (archive/streaming-turns.md §4,
+ * archive/model-tiers.md T2): short spoken confirmations ("sent") the channel synthesizes
  * on a lowering milestone and pushes to the page as a base64 `speech` message.
  * Text stays the single source of truth for the agent; audio is a courtesy
  * channel for the human's ears so they can keep looking at the app.

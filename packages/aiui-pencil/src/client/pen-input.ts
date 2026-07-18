@@ -1,6 +1,6 @@
 /**
- * pen-input.ts — the iPad pen rules, ported from the paint client, which
- * earned them on a real iPad:
+ * pen-input.ts — the iPad pen rules, ported from retired `aiui-paint`'s client
+ * (git history), which earned them on a real iPad:
  *
  *   - a pencil ALWAYS draws, and supersedes a stray finger mid-stroke;
  *   - the first pen event latches pen mode: from then on fingers never ink;

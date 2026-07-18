@@ -68,10 +68,7 @@ function fakeLive(): FakeLive {
         appendAudio: (pcm) => fake.calls.push({ op: "appendAudio", arg: pcm.length }),
         activityEnd: () => fake.calls.push({ op: "activityEnd" }),
         injectLabeledImage: (label) => fake.calls.push({ op: "injectLabeledImage", arg: label }),
-        appendVideoFrame: (_bytes, mime) => fake.calls.push({ op: "appendVideoFrame", arg: mime }),
         injectContextText: (text) => fake.calls.push({ op: "injectContextText", arg: text }),
-        nudgeSubmit: () => fake.calls.push({ op: "nudgeSubmit" }),
-        drainToolCall: () => Promise.resolve(null),
         cancelActiveResponse: () => fake.calls.push({ op: "cancel" }),
         close: () => fake.calls.push({ op: "close" }),
       };
@@ -89,7 +86,6 @@ function fakeLive(): FakeLive {
 interface Driver {
   feedEvents(events: IntentEvent[], fin?: boolean): Promise<void>;
   feedAttachment(id: string, bytes: Uint8Array): Promise<void>;
-  feedVideo(id: string, seq: number, bytes: Uint8Array): Promise<void>;
   /** A mid-thread `control` chunk (the client's linter select moving). */
   feedControl(control: string, value: string): Promise<void>;
   fin(): Promise<void>;
@@ -121,8 +117,6 @@ function drive(intent: Record<string, unknown>, options: IntentV1Options = {}): 
       Promise.resolve(send(enc.encode(JSON.stringify({ events })), { kind: "events" }, fin)),
     feedAttachment: (id, bytes) =>
       Promise.resolve(send(bytes, { kind: "attachment", id, mime: "image/png" }, false)),
-    feedVideo: (id, seq, bytes) =>
-      Promise.resolve(send(bytes, { kind: "video", id, seq, mime: "image/jpeg" }, false)),
     feedControl: (control, value) =>
       Promise.resolve(
         send(enc.encode(JSON.stringify({ control, value })), { kind: "control" }, false),
@@ -352,7 +346,7 @@ describe("lint products (notes, audio, tools)", () => {
   });
 });
 
-describe("context forwarding (shots, selections, video)", () => {
+describe("context forwarding (shots, selections)", () => {
   it("a shot attachment injects a labeled image", async () => {
     const live = fakeLive();
     const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
@@ -383,15 +377,6 @@ describe("context forwarding (shots, selections, video)", () => {
     expect(labels[0]).toContain('[selection sel_1: "the histogram title"');
     expect(labels[1]).toContain("[selection sel_1 updated:");
     expect(labels[2]).toBe("[selection sel_1 retracted — disregard it]");
-  });
-
-  it("video chunks forward to the linter session", async () => {
-    const live = fakeLive();
-    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
-    await d.feedEvents([...opening()]);
-    await d.feedVideo("vid_1", 0, new Uint8Array([1]));
-    await d.feedVideo("vid_1", 1, new Uint8Array([2]));
-    expect(live.calls.filter((c) => c.op === "appendVideoFrame")).toHaveLength(2);
   });
 });
 

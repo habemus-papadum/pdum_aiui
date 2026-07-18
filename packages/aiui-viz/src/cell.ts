@@ -137,12 +137,12 @@ export interface Cell<T> {
 const registry = new Map<string, Cell<unknown>>();
 
 // Mirror a name→definition-site lookup on `window` for DOM-contract consumers
-// that must stay framework-agnostic: the dev overlay's shot locator and
-// selection watcher resolve a bare `data-cell="name"` stamp (the one manual
-// attribution attribute) to the cell's `cell(...)` definition site through
-// this, without importing aiui-viz (see docs/guide/attribution.md). Read-only
-// and deliberately tiny; guarded because the barrel is imported from workers
-// and node-side tests where `window` doesn't exist.
+// that must stay framework-agnostic: the intent client's jump mode and the
+// intent runtime's VS Code ladder resolve a bare `data-cell="name"` stamp (the
+// one manual attribution attribute) to the cell's `cell(...)` definition site
+// through this, without importing aiui-viz (see docs/guide/attribution.md).
+// Read-only and deliberately tiny; guarded because the barrel is imported
+// from workers and node-side tests where `window` doesn't exist.
 if (typeof window !== "undefined") {
   (window as unknown as { __aiuiCells?: { loc(name: string): string | undefined } }).__aiuiCells = {
     loc: (name) => registry.get(name)?.loc,

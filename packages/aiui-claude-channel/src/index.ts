@@ -39,7 +39,6 @@ export {
   connectChannelClient,
 } from "./client";
 export { jsonCodec, type PayloadCodec, rawCodec } from "./codec";
-export { CHANNEL_CONFIG } from "./commands/config";
 export {
   buildElevenLabsUrl,
   convertWords,
@@ -137,13 +136,8 @@ export {
   type PageToolSummary,
   type ServerToClientMessage,
 } from "./page-tools";
-export {
-  augmentTextPrompt,
-  defaultFormats,
-  type SelectionContext,
-  textConcatFormat,
-  textConcatProcessor,
-} from "./processors";
+export { OPENAI_REALTIME_VOICE_URL, pcm16ToWav, REALTIME_VOICE_RATE } from "./pcm";
+export { augmentTextPrompt, defaultFormats, textConcatFormat } from "./processors";
 export {
   DEFAULT_REALTIME_MODEL,
   OPENAI_REALTIME_URL,
@@ -158,21 +152,6 @@ export {
   type RealtimeSocketHandlers,
   type TranscriptWord,
 } from "./realtime";
-export {
-  DEFAULT_MAX_RESPONSES,
-  DEFAULT_REALTIME_VOICE_MODEL,
-  DEFAULT_VOICE_INSTRUCTIONS,
-  DEFAULT_VOICE_TRANSCRIPTION_MODEL,
-  OPENAI_REALTIME_VOICE_URL,
-  openRealtimeVoiceSession,
-  pcm16ToWav,
-  REALTIME_VOICE_RATE,
-  type RealtimeVoiceCallbacks,
-  type RealtimeVoiceSession,
-  type RealtimeVoiceSessionOptions,
-  type VoiceAudioClip,
-  type VoiceUserResult,
-} from "./realtime-voice";
 export { createJsonlRecorder, type JsonlRecorder } from "./recording";
 export {
   isProcessAlive,

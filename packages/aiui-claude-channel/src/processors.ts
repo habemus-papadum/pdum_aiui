@@ -7,25 +7,23 @@
  * (see channel.ts for the protocol). The registry built by
  * {@link defaultFormats} is what the web backend speaks unless the caller hands
  * {@link startWebServer} its own.
+ *
+ * `text-concat` is the protocol's REFERENCE/DIAGNOSTIC format, not a peer
+ * modality: the production client speaks `intent-v1`; text-concat is what
+ * `quick --ws`, the e2e suite, and the transport tests dial because it
+ * exercises the whole /ws lifecycle (hello, threads, fin, acks, reload
+ * cycling) without the lowering pipeline behind it.
  */
 
 import type { ChannelFormat, StreamProcessorFactory } from "./channel";
 import { jsonCodec } from "./codec";
 import { intentV1Format } from "./intent-v1";
-import { asSelection, augmentTextPrompt, type SelectionContext } from "./prompt-context";
+import { augmentTextPrompt } from "./prompt-context";
 import { traceOf } from "./tracing";
 
 // The connection-context preamble is shared with the `intent-v1` lowering, so
 // it lives in prompt-context.ts; re-exported here for the package's public API.
-export { augmentTextPrompt, type SelectionContext } from "./prompt-context";
-
-/** The message payload a `text-concat` thread accepts: an optional text chunk. */
-interface TextConcatPayload {
-  /** A chunk to append to the thread's accumulated text. */
-  text?: string;
-  /** An optional on-screen selection the user is asking about. */
-  selection?: unknown;
-}
+export { augmentTextPrompt } from "./prompt-context";
 
 /** Validate/narrow a decoded `text-concat` payload (may be empty on a bare fin). */
 const asTextChunk = (payload: unknown): string | undefined => {
@@ -51,24 +49,18 @@ const asTextChunk = (payload: unknown): string | undefined => {
  * `fin` may ride the same frame. A thread finished with nothing accumulated
  * closes without sending anything.
  */
-export const textConcatProcessor: StreamProcessorFactory = (ctx) => {
+const textConcatProcessor: StreamProcessorFactory = (ctx) => {
   const parts: string[] = [];
-  // A selection is per-submission: keep the last one any frame carried before fin.
-  let selection: SelectionContext | undefined;
   return {
     async onMessage(payload: unknown, meta) {
-      const text = asTextChunk(payload as TextConcatPayload);
+      const text = asTextChunk(payload);
       if (text !== undefined) {
         parts.push(text);
-      }
-      const seen = asSelection(payload);
-      if (seen !== undefined) {
-        selection = seen;
       }
       if (meta.fin) {
         const userText = parts.join("");
         if (userText !== "") {
-          const prompt = augmentTextPrompt(userText, ctx.hello, selection);
+          const prompt = augmentTextPrompt(userText, ctx.hello);
           if (prompt !== userText) {
             // Expose the augmentation as a pipeline stage: user text in,
             // context-wrapped prompt out (the trace's `output` stage).
@@ -82,7 +74,7 @@ export const textConcatProcessor: StreamProcessorFactory = (ctx) => {
   };
 };
 
-/** The built-in `text-concat` format. */
+/** The built-in `text-concat` format (the /ws reference format). */
 export const textConcatFormat: ChannelFormat = {
   codec: jsonCodec,
   createProcessor: textConcatProcessor,

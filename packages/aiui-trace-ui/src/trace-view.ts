@@ -22,8 +22,8 @@
  * The classification, coalescing, patch-parsing and prompt-splitting all live in
  * the pure {@link module:trace-cards} module; this file is the DOM renderer over
  * it. It is deliberately generic — an unknown stage still gets a sensible card —
- * and framework-free, so every debug home and the DevTools extension embed the
- * exact same surface.
+ * and framework-free, so every debug home — the intent client's panel and the
+ * console's `/__aiui/debug` page — embeds the exact same surface.
  *
  * Live-follow re-renders on every poll; two things must survive that: which raw
  * disclosures the user opened (keyed by the card's first stage index) and the
@@ -67,7 +67,7 @@ import {
 } from "./trace-cards";
 
 export interface TraceViewConfig {
-  /** Resolve a stage blob to a URL (cross-origin in the extension). */
+  /** Resolve a stage blob to a URL (cross-origin in the MV3 side panel). */
   blobUrl?: (traceId: string, file: string) => string;
   /** Resolve an absolute image path to a preview URL. */
   previewUrl?: PreviewUrl;
@@ -91,9 +91,9 @@ const DIRECTION_ARROW: Record<CardDirection, string> = {
 };
 
 /** Bounded thumbnail height for hero screenshots and inline shot blobs. */
-// Transcript-preview sized (the overlay's mm-thumb is 34px): the hero is a
-// PROMPT reading surface — a shot is an inline chip there, and hover-peek /
-// click-to-open give the pixels (shrunk from 140, 2026-07-12).
+// Transcript-preview sized: the hero is a PROMPT reading surface — a shot is
+// an inline chip there, and hover-peek / click-to-open give the pixels
+// (shrunk from 140, 2026-07-12).
 const THUMB_MAX = 40;
 
 export class TraceView {
@@ -781,8 +781,9 @@ export class TraceView {
   }
 
   /**
-   * Two texts as an inline word-level diff (the same `wordDiff` the overlay's
-   * correction flash uses, so every aiui surface diffs text identically).
+   * Two texts as an inline word-level diff (the same `wordDiff` the intent
+   * client's LiveDiffText correction flash uses, so every aiui surface diffs
+   * text identically).
    * Word-level, so it is only ever applied to single-line prose — `wordDiff`
    * splits on whitespace and rejoins with single spaces, which would flatten a
    * multi-line prompt body and its screenshot blocks.
@@ -865,7 +866,8 @@ export class TraceView {
  * Hover **peek** for a thumbnail: while the pointer rests on `el`, a
  * fixed-position enlargement of `src` floats above the viewport bottom-left
  * of the anchor (the card list scrolls, so an absolutely-positioned child
- * would clip — the overlay preview's mm-thumb-peek lesson). Click stays the
+ * would clip — the scroll-clip lesson the intent client's turn-preview peek
+ * also follows). Click stays the
  * "open full size" gesture; the peek is glanceable triage.
  */
 export function attachImagePeek(el: HTMLElement, src: string, doc: Document): void {

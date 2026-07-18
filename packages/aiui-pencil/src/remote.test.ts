@@ -30,7 +30,7 @@ const sample = (over: Partial<PenSample> = {}): PenSample => ({
 });
 
 describe("fadeWindowMs — D3's 'a little more scientific'", () => {
-  it("is exactly paint v1's constant when nothing was measured", () => {
+  it("is exactly the shipped default (PREVIEW_FADE_MS) when nothing was measured", () => {
     expect(fadeWindowMs()).toBe(PREVIEW_FADE_MS);
     expect(fadeWindowMs({})).toBe(PREVIEW_FADE_MS);
   });

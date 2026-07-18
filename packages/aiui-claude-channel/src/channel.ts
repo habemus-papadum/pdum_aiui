@@ -45,10 +45,10 @@ export type PushMessage = (message: unknown) => void;
  *
  * Format-agnostic on purpose: `intent-v1` pushes it today (transcription /
  * correction / speech failures), but any current or future processor — or the
- * transport itself — can reuse it via {@link pushError}. The dev overlay
+ * transport itself — can reuse it via {@link pushError}. The intent client
  * renders these as dismissible toasts, and merges its own client-detected
  * failures (socket refused, socket dropped) into the same surface; its
- * `ErrorMessage` in `aiui-dev-overlay/src/protocol.ts` mirrors this shape —
+ * `ErrorMessage` in `aiui-intent-runtime/src/protocol.ts` mirrors this shape —
  * change both together.
  */
 export interface ChannelErrorMessage {
@@ -68,9 +68,9 @@ export interface ChannelErrorMessage {
   detail?: string;
   /**
    * Optional structured payload — the raw upstream error (an API error body, a
-   * WebSocket close code + reason) exactly as the server saw it. The overlay
-   * renders it behind an expander so the human can read what the API actually
-   * said instead of only our gloss. JSON-serializable.
+   * WebSocket close code + reason) exactly as the server saw it. The intent
+   * client renders it behind an expander so the human can read what the API
+   * actually said instead of only our gloss. JSON-serializable.
    */
   data?: unknown;
 }

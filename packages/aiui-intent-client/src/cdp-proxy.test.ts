@@ -85,7 +85,7 @@ describe("the CDP bridge", () => {
 
   it("claims only its own upgrade path", async () => {
     const proxy = createCdpProxy({ discover: async () => undefined });
-    const fake = { url: "/paint/host", headers: {} } as never;
+    const fake = { url: "/pencil/host", headers: {} } as never;
     expect(proxy.handleUpgrade(fake, {} as never, Buffer.alloc(0))).toBe(false);
     proxy.dispose();
   });

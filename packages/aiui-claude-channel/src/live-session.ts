@@ -21,7 +21,7 @@
  * session only observes the turn and speaks short diagnostics. (The
  * composer-era `submit_intent` machinery — the nudge sentinel, the tool
  * drain — was deleted with the model-composes submode; see
- * docs/proposals/realtime_pivot_plan.md.)
+ * archive/realtime_pivot_plan.md.)
  */
 import type { CallCost } from "./cost";
 
@@ -116,9 +116,8 @@ export interface LiveSessionCallbacks {
   /**
    * A linter-mode tool call arrived (e.g. `read_file`). The receiver executes
    * the tool and calls {@link LinterToolCall.respond} with the result; the
-   * engine handles the vendor's resume rule. Optional — composer-mode
-   * sessions drain `submit_intent` through {@link LiveSession.drainToolCall}
-   * instead.
+   * engine handles the vendor's resume rule. Optional — a caller that wires
+   * no tools simply never hears from it.
    */
   onToolCall?(call: LinterToolCall): void;
 }
@@ -137,8 +136,6 @@ export interface LiveSession {
   activityEnd(): void;
   /** Inject a deliberate shot the model can reference by `label` (`shot_3`). */
   injectLabeledImage(label: string, bytes: Uint8Array, mime: string): void;
-  /** One ambient video frame (no-op where `!capabilities.video`). */
-  appendVideoFrame(bytes: Uint8Array, mime: string): void;
   /**
    * Add SILENT conversation context — a text item that does NOT solicit a
    * reply (selection arrivals, updates, retractions — see intent-v1's

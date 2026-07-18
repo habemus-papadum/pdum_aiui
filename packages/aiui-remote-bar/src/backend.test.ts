@@ -7,7 +7,7 @@ import type { RelayToHost } from "./protocol";
 /**
  * The kind of host a real deployment provides (the channel sidecar, a bespoke
  * Express server), reduced to its essentials: forward requests + upgrades to the
- * backend, destroy what nothing claims. Mirrors aiui-paint/backend.test.ts.
+ * backend, destroy what nothing claims. Mirrors aiui-pencil/src/backend.test.ts.
  */
 interface Harness {
   backend: BarBackend;

@@ -32,7 +32,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | bus phase connected/connecting/closed; outage never touches phase | ✅ session.ts bus client (reconnect loop) → `connected` fact; the channel pill is the chip |
 | `boundPort` + arm gate (arming requires bound) | P2 — gate becomes an `enabledWhen`/command guard on `connected` context |
 | `uiScale` control (⌘+/⌘−/⌘0) | ✅ shell.tsx keys + `installUiScaleRoot` (ONE shared apply effect, both entries — the restore half pinned in shell.test); persisted via the config base; keys verified live in the side-panel document |
-| paint host (iPad) re-pointing | **P5** — still open, and neither host supplies the fact: `paintClients` is a declared context field that nothing writes (spec.ts). The capture host it was waiting for now exists (P4), so this is a lane wiring job, not a blocked one |
+| pencil host (iPad) re-pointing | ✅ P5 closed (2026-07-18): `pencilClients` (renamed from `paintClients`) is fed live from the pencil relay's `HostSessionStatus.viewers` via `createPencilHost`'s `onStatus` in both entries; the 'ipad' pill reads it |
 | `inkTabId`/`leaderTabId`/`lastActiveTab` routing | ✅ context (`activeTab`/`grantedTab`) + claims re-point on tab switch |
 | navigation events into the turn (same-tab SPA/reload; prompt-rendered) | ✅ `navigation` PageEvent → engine.navigation (lanes.ts + tests); real SPA navs land from the injected bootstrap (history wraps + popstate/hashchange) and full loads re-announce — seen live in the turn preview |
 | tab-boundary events into the turn (switch names both sides) | ✅ onActiveTabChange + tabInfo → engine.navigation (lanes.ts + tests); the CdpBus's leader rule supplies it on real tabs |

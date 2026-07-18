@@ -66,10 +66,6 @@ function stubThread(): { thread: StubThread; openThread: never } {
         thread.chunks.push({ kind: "audio" });
         return ack;
       },
-      sendVideo: () => {
-        thread.chunks.push({ kind: "video" });
-        return ack;
-      },
       onServerMessage: () => {},
       close: () => {
         thread.closed = true;

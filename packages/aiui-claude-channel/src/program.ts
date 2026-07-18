@@ -1,5 +1,4 @@
 import { Command, InvalidArgumentError } from "commander";
-import { runConfig } from "./commands/config";
 import { runMcp } from "./commands/mcp";
 import { runQuick } from "./commands/quick";
 import { parsePort, runServe } from "./commands/serve";
@@ -115,8 +114,6 @@ export function buildProgram(): Command {
     .action(async (options) => {
       await runServe(options);
     });
-
-  program.command("config").description("print the channel config as JSON").action(runConfig);
 
   return program;
 }

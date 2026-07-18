@@ -11,10 +11,11 @@
  * optional peer — only `/site` consumers pay for it.
  *
  * The wrapper carries `data-tex` with the raw source: it joins
- * `data-source-loc` / `data-cell` in the DOM attribution contract, so a
- * dev-overlay text selection landing inside rendered math recovers the
- * original TeX from the stamp (KaTeX's own MathML `<annotation>` is the
- * fallback, but the explicit attribute is robust to output settings).
+ * `data-source-loc` / `data-cell` in the DOM attribution contract, so a text
+ * selection landing inside rendered math (the intent runtime's selection
+ * watcher) recovers the original TeX from the stamp (KaTeX's own MathML
+ * `<annotation>` is the fallback, but the explicit attribute is robust to
+ * output settings).
  *
  * (Named `TeX`, not `Math` — biome's noShadowRestrictedNames forbids shadowing
  * the `Math` global; see the hard-won ledger.)

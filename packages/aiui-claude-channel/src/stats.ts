@@ -2,12 +2,12 @@
  * Server-side transport statistics for the `/ws` channel.
  *
  * The web backend records one entry per websocket frame it handles — size,
- * processing time, outcome — plus connection counts, all in memory. The
- * DevTools panel (and anything else) reads a point-in-time snapshot over
+ * processing time, outcome — plus connection counts, all in memory. Any local
+ * diagnostic page (none in-tree today) can read a point-in-time snapshot over
  * `GET /debug/api/stats`. This is the *server's* half of transport
  * observability; the client's half (ack round-trip latency as the page saw
- * it) is recorded by `aiui-dev-overlay`'s instrumentation and read straight out
- * of the inspected page.
+ * it) is recorded by `aiui-intent-runtime`'s instrumentation and read straight
+ * out of the inspected page.
  */
 
 /** One handled frame, as the server saw it. */

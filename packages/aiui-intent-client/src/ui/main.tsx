@@ -179,6 +179,9 @@ async function boot(): Promise<{
         stream: () => screencast.stream(),
         streamHint: () => "open a turn on the tab to start its video",
         label: `aiui intent — ${location.host}`,
+        // The 'ipad' status pill: connected remote pencil clients, live from
+        // the relay session's status feed.
+        onStatus: (status) => client.setContext({ pencilClients: status.viewers }),
       });
       refreshPencil = () => pencilHost.refresh();
       pencilHost.connect();
@@ -270,7 +273,7 @@ function SimulateStrip() {
         <button
           type="button"
           onClick={() =>
-            client.setContext({ paintClients: client.context().paintClients > 0 ? 0 : 1 })
+            client.setContext({ pencilClients: client.context().pencilClients > 0 ? 0 : 1 })
           }
         >
           iPad connect/drop

@@ -8,17 +8,17 @@
     {
       "name": "aiui",
       "source": "./plugins/aiui",
-      "description": "aiui workflow commands and skill (placeholder — slash commands, a skill, and a helper script)."
+      "description": "aiui workflow skill — live introspection of the running aiui system (channel, session browser, config)."
     },
     {
       "name": "frontend-design",
       "source": "./plugins/frontend-design",
-      "description": "Frontend-for-agents design principles for scientific/technical UI code. Stub — content under review in drafts/."
+      "description": "Frontend-for-agents design principles for scientific/technical UI code — the four-layer playbook for aiui-viz frontends."
     },
     {
       "name": "session-browser",
       "source": "./plugins/session-browser",
-      "description": "Skill for the shared session browser (Chrome DevTools MCP). Stub — etiquette guidance under review in drafts/."
+      "description": "Skill for driving the shared session browser (Chrome DevTools MCP) — etiquette, page tools, and channel debug endpoints."
     }
   ]
 }

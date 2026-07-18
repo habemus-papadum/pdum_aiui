@@ -32,7 +32,6 @@ export { addError, dismissError, ERROR_TOAST_CAP, formatErrorData } from "./erro
 export type {
   ClientMeta,
   CollectClientMetaOptions,
-  FrameMetric,
   PageInstrumentation,
   PageTabRecord,
   TabInfo,
@@ -42,9 +41,6 @@ export {
   collectClientMeta,
   getInstrumentation,
   pageTabRecord,
-  recordFrameMetric,
-  setChannelPort,
-  TAB_DATASET_KEY,
 } from "./instrumentation";
 export type { IntentThread, OpenThreadOptions } from "./intent-types";
 export type {
@@ -57,7 +53,6 @@ export type {
   JsonChunk,
   LoweredPromptMessage,
   ServerMessage,
-  VideoChunk,
   WebSocketFactory,
   WebSocketLike,
 } from "./protocol";

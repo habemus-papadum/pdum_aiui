@@ -2,6 +2,7 @@ import { transformAsync } from "@babel/core";
 import type { Plugin } from "vite";
 import { describe, expect, it } from "vitest";
 import {
+  cellFactory,
   optionsFactory,
   type SourceLocatorOptions,
   sourceLocatorBabel,
@@ -90,18 +91,18 @@ describe("sourceLocatorBabel — cell() call-site identity", () => {
     expect(out).not.toContain("name:");
   });
 
-  it("cellFactories: [] disables the call-site half (JSX still stamped)", async () => {
+  it("factories: [] disables the call-site half (JSX still stamped)", async () => {
     const noCells = await run("const catalog = cell(a, b);", "src/model/graph.ts", {
-      cellFactories: [],
+      factories: [],
     });
     expect(noCells).not.toContain("name:");
-    const jsx = await run("const x = <div/>;", "src/a.tsx", { cellFactories: [] });
+    const jsx = await run("const x = <div/>;", "src/a.tsx", { factories: [] });
     expect(jsx).toContain("data-source-loc=");
   });
 
   it("honors configurable factory names", async () => {
     const out = await run("const s = signal(a, b);\nconst c = cell(x, y);", "src/m.ts", {
-      cellFactories: ["signal"],
+      factories: [cellFactory("signal")],
     });
     expect(out).toContain('name: "s"');
     expect(out).not.toContain('name: "c"');
@@ -225,13 +226,11 @@ action({ name: "re-seed", run: () => reseed() });`,
     expect(out).toContain('description: "The evolving profile."');
   });
 
-  it("back-compat: cellFactories narrows the table (control untouched), [] disables it", async () => {
+  it("a narrowed factories table leaves other call sites untouched", async () => {
     const src = `const kappa = control({ value: 1 });\nconst c = cell(d, f);`;
-    const narrowed = await run(src, "src/s.ts", { cellFactories: ["cell"] });
+    const narrowed = await run(src, "src/s.ts", { factories: [cellFactory()] });
     expect(narrowed).toContain("control({\n  value: 1\n})"); // untouched
     expect(narrowed).toContain('name: "c"');
-    const off = await run(src, "src/s.ts", { cellFactories: [] });
-    expect(off).not.toContain("name:");
   });
 
   it("a custom factories table is honored end to end", async () => {

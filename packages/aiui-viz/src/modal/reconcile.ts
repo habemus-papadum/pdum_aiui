@@ -4,7 +4,8 @@
  * Render is reconciliation: every mode-dependent surface (an overlay veil,
  * pointer-events routing, a cursor, a ring color) is asserted FROM state on
  * every event, never toggled imperatively at transitions. The durable fix for
- * the overlay's stranded-veil bug was not better transition bookkeeping but a
+ * the retired dev overlay's stranded-veil bug was not better transition
+ * bookkeeping but a
  * per-event assertion — "not armed+ink ⇒ veil hidden" — so a missed
  * transition costs one frame, not a wedged UI.
  *

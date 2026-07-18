@@ -91,7 +91,7 @@ then open it in the session browser (the window you share with the agent):
 
   npx aiui open http://localhost:5173
 
-The page explains itself from there: arm the ✳ aiui overlay and start talking
+The page explains itself from there: activate the intent client (⌘B) and start talking
 about the app you want — the starter is scenery to point at, built to be
 rebuilt. (Optional: \`direnv allow\` in ${rel} activates .envrc — PATH + .env.)`);
 }

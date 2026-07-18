@@ -19,11 +19,12 @@
  * too). A second engine on the remote would be a second source of truth for
  * state that is definitionally singular.
  *
- * ## Session plumbing mirrors the paint stream
+ * ## Session plumbing mirrors the pencil relay
  *
  * The relay's room model — register / join / leave / sessions / hostGone — is the
- * shape `aiui-paint` proved, minus everything media-related. It is restated here
- * (not imported) so this package takes no dependency on paint.
+ * shape the retired paint relay proved and `aiui-pencil` carries forward, minus
+ * everything media-related. It is restated here (not imported) so this package
+ * takes no dependency on pencil.
  *
  * Pure and dependency-free: shared verbatim by the relay (node), the host binding
  * (browser), the client component (browser), and the tests.
@@ -142,11 +143,12 @@ export type HostToRelay =
       project?: string;
       channelTag?: string;
       /**
-       * The aiui channel web-backend port the host's page was launched with
-       * (`window.__AIUI__.port`). The relay — same machine — resolves it against
-       * the on-disk server registry to fill in the project dir and channel tag,
-       * so the remote's session list shows which agent session each host belongs
-       * to without the browser needing registry access.
+       * The aiui channel web-backend port the host client runs against (the
+       * intent client's bar host announces its own). UNWIRED downstream today:
+       * the production `barSidecar` mount passes no `resolveChannel`, so the
+       * relay drops the port instead of resolving it against the registry —
+       * the enrichment fires only when a backend is constructed with a
+       * resolver (a multi-session deployment's affordance).
        */
       channelPort?: number;
     }

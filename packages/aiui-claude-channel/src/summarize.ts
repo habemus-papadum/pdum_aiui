@@ -6,13 +6,13 @@
  * turn is sent, the channel asks a cheap chat model to compress the composed
  * body into a ≤ 12-word line and writes it back onto the manifest (see
  * {@link TraceHandle.setSummary}) — the list route serves manifests, so the
- * gloss rides to every viewer for free and the debug-viewer/DevTools rows can title
+ * gloss rides to every viewer for free and the trace-viewer rows can title
  * themselves "18:52 · rewrite the beet essay to say vite".
  *
  * This is deliberately **best-effort and off the hot path**: the fin commit
  * fires it and does not await it (a summary must never delay the send ack), a
  * keyless channel (no seam) skips it silently, and any failure is swallowed.
- * The seam mirrors {@link Corrector}/{@link Transcriber}: a `summarizer` test
+ * The seam mirrors {@link Transcriber}: a `summarizer` test
  * override in {@link IntentV1Options} stands in for the real REST call offline.
  */
 import { type CallCost, priceCall, usageFromChatCompletions } from "./cost";
@@ -67,9 +67,9 @@ export interface OpenAiSummarizerOptions {
 
 /**
  * The real summarizer: one chat-completions call against OpenAI, temperature 0.
- * Structurally a shrunk {@link openaiCorrector} — same endpoint, same key, same
- * failure shape (throw so the caller can swallow) — because the summary is a
- * throwaway nicety and does not deserve its own transport.
+ * Deliberately minimal — plain fetch, throw-on-failure (so the caller can
+ * swallow) — because the summary is a throwaway nicety and does not deserve
+ * its own transport.
  */
 export function openaiSummarizer(options: OpenAiSummarizerOptions): Summarizer {
   const doFetch = options.fetch ?? fetch;

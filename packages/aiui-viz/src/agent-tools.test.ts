@@ -70,20 +70,6 @@ describe("agentToolkit → overlay forwarding", () => {
     expect(names).toContain("report");
   });
 
-  it("forwards the current set again when the bridge announces itself late", () => {
-    // Register before any overlay exists…
-    const kit = agentToolkit("late");
-    kit.registerTool({ name: "t", description: "d", run: () => 1 });
-
-    // …then the overlay installs and fires its ready event.
-    const bridge = installFakeBridge();
-    document.dispatchEvent(new CustomEvent("aiui:tools-ready"));
-
-    const forwarded = bridge.calls.find((c) => c.ns === "late");
-    expect(forwarded).toBeDefined();
-    expect(forwarded?.tools.map((t) => t.name)).toContain("t");
-  });
-
   it("forwards the newest run after a tool is re-registered (HMR swap)", () => {
     const bridge = installFakeBridge();
     const kit = agentToolkit("swap");

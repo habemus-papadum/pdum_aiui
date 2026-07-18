@@ -2,7 +2,7 @@
  * The remote pencil as a **channel sidecar** — one {@link createPencilBackend},
  * mounted on the channel's own Express app under `/pencil`, on the channel's one
  * port. No separate process, no separate listener, no separate port — the same
- * pattern as `/paint` (which this replaces) and `/bar` (D5's sibling channel).
+ * pattern as `/bar` (D5's sibling channel), and retired `/paint` before it.
  *
  *  - The host page connects locally: it already knows the channel port
  *    (`window.__AIUI__.port`), so it dials `ws://127.0.0.1:<port>/pencil/host`
@@ -15,9 +15,10 @@
  * **The relay carries no media** (D1): video is a peer-to-peer WebRTC track, and
  * this socket moves ink intent and signaling — a few JSON frames a second.
  *
- * One HTML route, deliberately: `GET /pencil/` serves the client app (paint's
- * iPad exception — an iPad has no frontend process). HOW it is served is a
- * {@link SidecarContext.mode} decision, delegated to the shared helper
+ * One HTML route, deliberately: `GET /pencil/` serves the client app (the iPad
+ * exception retired paint established — an iPad has no frontend process). HOW
+ * it is served is a {@link SidecarContext.mode} decision, delegated to the
+ * shared helper
  * (aiui-util's `serveClientSurface`): in DEV a Vite dev server in middleware
  * mode over the lab client sources (HMR riding the channel's one port); in PROD
  * the prebuilt `assets/client` bundle (built by `build:client`). Everything else

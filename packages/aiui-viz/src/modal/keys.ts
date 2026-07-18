@@ -5,7 +5,7 @@
  * A modal surface's keyboard behavior is a STACK of layers resolved top-down
  * by a pure function — table-testable across state × key × phase × repeat,
  * which is where every keymap redesign gets cheap. The structure encodes the
- * rules the overlay paid ~15 debugging rounds to learn:
+ * rules the retired dev overlay paid ~15 debugging rounds to learn:
  *
  *  - **Claim-or-pass is explicit, including repeats and keyups.** A binding
  *    answers with a command, `"swallow"` (claimed, do nothing — the inert
@@ -49,14 +49,6 @@ export interface KeyHint {
   label: string;
   /** Optional pictogram for the condensed cheat sheet (an emoji works). */
   icon?: string;
-  /**
-   * Optional SVG markup for the pictogram — wins over {@link icon} where the
-   * renderer supports it. For hosts whose visual language wants monochrome
-   * glyphs (the extension panel bundles Font Awesome SVGs) rather than color
-   * emoji. The string is injected as innerHTML: it must come from the app's
-   * own bundle, never from user input.
-   */
-  iconSvg?: string;
   /** Visual tone for the cap (renderers map it to a class, e.g. "danger"). */
   tone?: string;
   /**

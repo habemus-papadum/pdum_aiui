@@ -12,7 +12,7 @@
  * decoder.
  */
 
-import { type ClientMeta, recordFrameMetric } from "./instrumentation";
+import type { ClientMeta } from "./instrumentation";
 
 /** Must match the channel package's PROTOCOL_VERSION. */
 export const PROTOCOL_VERSION = 1;
@@ -28,25 +28,20 @@ export interface Ack {
 
 /**
  * A streaming modality (`intent-v1`) tags its data frames with a `chunk` so the
- * server can tell an event batch from a raw attachment from the end-of-turn
- * context. `events`/`context` carry a JSON payload; `attachment` carries **raw
- * bytes** (PNG / a whole audio segment) and an `id` (`shot_N` / `seg_N`)
- * correlating it with the `shot`/`talk` event already on the wire; `audio`
- * carries **one streamed PCM frame** of `seg_N` (the realtime transcriber path),
- * in `seq` order, while the segment's `talk-start`/`talk-end` events stay the
- * boundaries. See the `intent-v1` contract in the multimodal-intent-graduation
- * and streaming-turns handoffs. Mirrors `ChunkDescriptor` in the channel's
- * `frame.ts` — the source of truth; change both together.
+ * server can tell an event batch from a raw attachment. `events`/`control`
+ * carry a JSON payload; `attachment` carries **raw bytes** (PNG / a whole
+ * audio segment) and an `id` (`shot_N` / `seg_N`) correlating it with the
+ * `shot`/`talk` event already on the wire; `audio` carries **one streamed PCM
+ * frame** of `seg_N` (the realtime transcriber path), in `seq` order, while
+ * the segment's `talk-start`/`talk-end` events stay the boundaries. See the
+ * `intent-v1` contract (archive/streaming-turns.md). Mirrors
+ * `ChunkDescriptor` in the channel's `frame.ts` — the source of truth; change
+ * both together.
  */
-export type JsonChunk = { kind: "events" } | { kind: "context" } | { kind: "control" };
+export type JsonChunk = { kind: "events" } | { kind: "control" };
 export type AttachmentChunk = { kind: "attachment"; id: string; mime: string };
 export type AudioChunk = { kind: "audio"; id: string; seq: number; mime: string };
-/** LEGACY: one sampled screen-share frame as its own chunk kind. Clients
- * now upload sampled frames as `shot_N` {@link AttachmentChunk}s (frames are
- * first-class shots); the kind stays in the protocol so a channel can still
- * serve an older client. */
-export type VideoChunk = { kind: "video"; id: string; seq: number; mime: string };
-export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk | VideoChunk;
+export type FrameChunk = JsonChunk | AttachmentChunk | AudioChunk;
 
 /**
  * A server→client push on the same socket, distinguished from an {@link Ack} by
@@ -146,8 +141,8 @@ export interface IntentSocket {
   /** Send one JSON data frame for a thread; resolves with the server's ack. */
   send(threadId: string, payload: unknown, fin: boolean): Promise<Ack>;
   /**
-   * Send a tagged JSON chunk (an `events` batch or the end-of-turn `context`)
-   * for a streaming thread. `fin` marks the thread's final frame.
+   * Send a tagged JSON chunk (an `events` batch) for a streaming thread.
+   * `fin` marks the thread's final frame.
    */
   sendChunk(threadId: string, chunk: JsonChunk, payload: unknown, fin?: boolean): Promise<Ack>;
   /**
@@ -167,13 +162,6 @@ export interface IntentSocket {
    * is carried.
    */
   sendAudio(threadId: string, chunk: AudioChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
-  /**
-   * LEGACY (see {@link VideoChunk}): send one sampled screen-share frame — raw
-   * JPEG bytes on the payload, `seq`/`id` in the envelope chunk. Same wire shape
-   * as {@link sendAudio}. Current clients send sampled frames through
-   * {@link sendAttachment} instead, as ordinary shots.
-   */
-  sendVideo(threadId: string, chunk: VideoChunk, bytes: Uint8Array, fin?: boolean): Promise<Ack>;
   /**
    * Register a handler for server pushes (messages carrying a `kind`) — the
    * lowered echoes an `intent-v1` thread merges back in. Acks are never routed
@@ -201,32 +189,14 @@ export function connectIntentSocket(
   const socket = factory(url);
   socket.binaryType = "arraybuffer";
 
-  /** What we need to complete an ack and record its frame metric. */
+  /** What we need to complete an ack. */
   interface Pending {
     resolve: (ack: Ack) => void;
-    kind: "hello" | "data";
-    threadId?: string;
-    fin?: boolean;
-    bytes: number;
-    sentAt: number;
   }
 
-  // Acks arrive one per frame, in send order: a FIFO pairs them up. Settling an
-  // entry also records its frame metric (size + round-trip) for the DevTools
-  // panel — see instrumentation.ts.
+  // Acks arrive one per frame, in send order: a FIFO pairs them up.
   const pending: Pending[] = [];
   const settle = (entry: Pending, ack: Ack): void => {
-    recordFrameMetric({
-      at: entry.sentAt,
-      format,
-      kind: entry.kind,
-      ...(entry.threadId !== undefined ? { threadId: entry.threadId } : {}),
-      ...(entry.fin !== undefined ? { fin: entry.fin } : {}),
-      bytes: entry.bytes,
-      rttMs: Date.now() - entry.sentAt,
-      ok: ack.ok,
-      ...(ack.error !== undefined ? { error: ack.error } : {}),
-    });
     entry.resolve(ack);
   };
 
@@ -300,15 +270,12 @@ export function connectIntentSocket(
     }
   });
 
-  const sendFrame = (
-    frame: Uint8Array,
-    meta: Pick<Pending, "kind" | "threadId" | "fin">,
-  ): Promise<Ack> => {
+  const sendFrame = (frame: Uint8Array): Promise<Ack> => {
     if (failure) {
       return Promise.resolve({ ok: false, error: failure });
     }
     return new Promise((resolve) => {
-      pending.push({ resolve, ...meta, bytes: frame.length, sentAt: Date.now() });
+      pending.push({ resolve });
       socket.send(frame);
     });
   };
@@ -318,7 +285,6 @@ export function connectIntentSocket(
     socket.addEventListener("open", () => {
       sendFrame(
         encodeFrame({ v: PROTOCOL_VERSION, kind: "hello", format, ...(meta ? { meta } : {}) }),
-        { kind: "hello" },
       ).then((ack) => {
         if (!ack.ok) {
           closedByClient = true; // our own teardown of a refused hello — not a fault
@@ -334,7 +300,6 @@ export function connectIntentSocket(
                 { v: PROTOCOL_VERSION, kind: "data", threadId, fin },
                 payload === undefined ? undefined : encodeJsonPayload(payload),
               ),
-              { kind: "data", threadId, fin },
             ),
           sendChunk: (threadId, chunk, payload, fin = false) =>
             sendFrame(
@@ -342,24 +307,16 @@ export function connectIntentSocket(
                 { v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk },
                 payload === undefined ? undefined : encodeJsonPayload(payload),
               ),
-              { kind: "data", threadId, fin },
             ),
           sendAttachment: (threadId, chunk, bytes, fin = false) =>
             sendFrame(
               // Raw bytes ride the payload verbatim — the whole reason the frame
               // format keeps the payload opaque and un-base64'd.
               encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
-              { kind: "data", threadId, fin },
             ),
           sendAudio: (threadId, chunk, bytes, fin = false) =>
             sendFrame(
               encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
-              { kind: "data", threadId, fin },
-            ),
-          sendVideo: (threadId, chunk, bytes, fin = false) =>
-            sendFrame(
-              encodeFrame({ v: PROTOCOL_VERSION, kind: "data", threadId, fin, chunk }, bytes),
-              { kind: "data", threadId, fin },
             ),
           onServerMessage: (handler) => {
             serverMessageHandlers.push(handler);

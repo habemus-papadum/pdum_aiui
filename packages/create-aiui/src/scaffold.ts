@@ -2,14 +2,14 @@
  * The scaffolder behind `pnpm create @habemus-papadum/aiui` — a fresh SolidJS
  * app pre-wired for the aiui loop.
  *
- * Where `aiui demo` copies deliberately throwaway scenery (a plugin, a fake
- * plot, nothing else), this scaffold is a *starting point*: the
- * frontend-for-agents methodology in miniature — durable roots, a disposable
- * cell graph, the modal interaction kit, agent tools — plus a banner telling
- * the person what they're looking at and to start talking. See
- * templates/app/ for the app itself.
+ * This scaffold is a *starting point*, not throwaway scenery (the retired
+ * `aiui demo` command scaffolded that): the frontend-for-agents methodology
+ * in miniature — durable roots, a disposable cell graph, the modal
+ * interaction kit, agent tools — plus a banner telling the person what
+ * they're looking at and to start talking. See templates/app/ for the app
+ * itself.
  *
- * Same operational contract as the demo scaffold: a marked directory is
+ * The operational contract: a marked directory is
  * **continued**, never re-scaffolded (`"aiui": { "scaffold": true }` in the
  * app's package.json), anything unmarked is refused, and the sandbox becomes
  * its own git repo so agent churn is versioned there and nowhere upstream.

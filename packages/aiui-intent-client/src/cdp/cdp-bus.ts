@@ -13,7 +13,7 @@
  *    `Runtime.evaluate` (the document already loaded).
  *  - **PageTransport.requestPage** → `Runtime.evaluate` of
  *    `__aiuiIntentPage.handle(cap, payload)` in that page's world;
- *    **broadcastRing** → the same call on every attached page. The heavy ink
+ *    **broadcastRing** → the same call on every attached page. The heavy page
  *    bundle is evaluated INTO the page first (`ensureBundle`) — the page never
  *    fetches anything, because an https page cannot import from the channel's
  *    http origin.
@@ -25,13 +25,13 @@
  *
  * Two things the seam does not say, and this bus must:
  *  - **The panel is not a target.** Its own page (and devtools/chrome pages) are
- *    excluded from the registry, so the client never inks, rings, or keylayers
- *    itself — and focusing the panel leaves the leader tab standing.
- *  - **A reload is a new document.** Page-level assertions (ring, keylayer, ink
- *    mode) live in that document and die with it, while the client's *desire* is
- *    unchanged — so no claim re-applies. The bus therefore remembers what it
- *    asserted per tab and replays it when a document re-announces itself. Ink
- *    STROKES are not replayed: they were the old document's.
+ *    excluded from the registry, so the client never pencils, rings, or
+ *    keylayers itself — and focusing the panel leaves the leader tab standing.
+ *  - **A reload is a new document.** Page-level assertions (ring, keylayer,
+ *    pencil mode) live in that document and die with it, while the client's
+ *    *desire* is unchanged — so no claim re-applies. The bus therefore remembers
+ *    what it asserted per tab and replays it when a document re-announces
+ *    itself. Pencil STROKES are not replayed: they were the old document's.
  *
  * Security: the bus dials the channel's same-origin `/intent/cdp` bridge, never
  * the browser's debug port (Chrome rejects that from a page, by design). The
@@ -72,7 +72,7 @@ export interface AttachedPage {
 export interface CdpBusOptions {
   /** The bridge URL (same-origin `/intent/cdp`); must be loopback. */
   cdpUrl: string;
-  /** The channel origin: where the panel reads the ink bundle, and which pages
+  /** The channel origin: where the panel reads the page bundle, and which pages
    * are the panel's own (never driven). */
   channelOrigin: string;
   /** The origin THIS bus's document is served from (default: `location.origin`).
@@ -80,7 +80,7 @@ export interface CdpBusOptions {
   selfOrigin?: string;
   /** Socket factory (tests script the far end); defaults to `WebSocket`. */
   socketFactory?: (url: string) => CdpSocket;
-  /** The ink bundle's source (tests override; defaults to the channel route). */
+  /** The page bundle's source (tests override; defaults to the channel route). */
   bundleSource?: () => Promise<string>;
   log?: (message: string) => void;
 }
@@ -160,10 +160,10 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
    * the ROOT path (`localhost:<vite>/?channel=…`) — no URL shape says
    * "panel" there. The bus doesn't have to guess: it RUNS in the panel's
    * document, so everything on `location.origin` is its own furniture, not
-   * a markup target (found live: the panel armed, then ringed, inked and
-   * keylayered ITSELF, and the ink had no un-ink short of ending the turn).
-   * For the channel-served panel this widens to the whole channel origin —
-   * paint/debug pages — which are aiui furniture too. Self-driving is an
+   * a markup target (found live: the panel armed, then ringed, penciled and
+   * keylayered ITSELF, and the strokes had no un-draw short of ending the
+   * turn). For the channel-served panel this widens to the whole channel origin
+   * — pencil/console pages — which are aiui furniture too. Self-driving is an
    * explicit non-goal (owner, 2026-07-15). */
   const selfOrigin =
     options.selfOrigin ?? (typeof location !== "undefined" ? location.origin : undefined);
@@ -182,9 +182,10 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   };
 
   /**
-   * The leader tab: the last page the user actually LOOKED at — the old
-   * client's `lastActiveTab`, which it got from `chrome.tabs.query({active:
-   * true})`. The CDP equivalent is VISIBILITY, not focus: `document.hasFocus()`
+   * The leader tab: the last page the user actually LOOKED at — the rule the
+   * retired extension client's `lastActiveTab` derived from
+   * `chrome.tabs.query({active: true})`. The CDP equivalent is VISIBILITY, not
+   * focus: `document.hasFocus()`
    * is false for every page whenever the browser app isn't frontmost (you are
    * typing in your editor; an agent is driving the browser), so a focus-only
    * rule leaves the leader stuck wherever it first landed — found live, with
@@ -296,7 +297,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
       case "hello": {
         const reloaded = page.url !== "" && page.url !== report.url;
         // A hello means a document that has just installed the bootstrap —
-        // and a fresh document carries none of the ink bundle we evaluated
+        // and a fresh document carries none of the page bundle we evaluated
         // into the last one.
         page.bundleInjected = false;
         page.url = report.url;
@@ -349,9 +350,6 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
           phase: report.phase,
           repeat: report.repeat,
         });
-        break;
-      case "foreign":
-        emit({ kind: "foreignClient", tab: page.tab, armed: report.armed });
         break;
       case "tools":
         emit({ kind: "pageTools", tab: page.tab, registrations: report.registrations });

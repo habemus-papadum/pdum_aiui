@@ -7,7 +7,7 @@
  * command no longer stands up its own Vite server — it picks a running channel
  * (the same registry + selector the rest of the CLI uses; a lone channel is
  * taken directly, several prompt) and opens the channel URL in the **session
- * browser** (the Chrome-for-Testing window `aiui claude` and `aiui open` use).
+ * browser** (the managed browser window `aiui claude` and `aiui open` use).
  * The root redirects to the dashboard; the trace debugger is one click away.
  */
 import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-channel";
@@ -50,6 +50,6 @@ export async function runDebug(opts: DebugOptions = {}): Promise<void> {
   if (opts.open === false) {
     return;
   }
-  // The session browser (Chrome for Testing), non-interactive — no CfT prompt.
+  // The session browser (the managed browser), non-interactive — no sync prompt.
   await openAppInBrowser(url, splitAiuiArgs([]));
 }

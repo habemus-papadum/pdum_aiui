@@ -447,10 +447,11 @@ describe("progress", () => {
 
 describe("the named-cell registry", () => {
   it("mirrors name→loc on window for framework-agnostic consumers", () => {
-    // The dev overlay's attribution ladder (shot locator, selection watcher,
-    // jump picker) resolves a bare manual `data-cell="name"` stamp to the
-    // cell's definition site through window.__aiuiCells — without importing
-    // aiui-viz. This bridge is what retired the runtime-internals spike.
+    // The attribution ladder (the intent runtime's VS Code ladder, the intent
+    // client's jump mode) resolves a bare manual `data-cell="name"` stamp to
+    // the cell's definition site through window.__aiuiCells — without
+    // importing aiui-viz. This bridge is what retired the runtime-internals
+    // spike.
     const bridge = (
       window as unknown as { __aiuiCells?: { loc(name: string): string | undefined } }
     ).__aiuiCells;

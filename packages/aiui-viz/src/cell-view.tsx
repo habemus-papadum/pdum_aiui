@@ -2,7 +2,7 @@
  * cell-view.tsx — the notebook feel for every visualization, in one wrapper:
  * spinner + progress before the first value, an error box with retry, and
  * keep-the-last-render (dimmed, progress stripe) while a new run streams or
- * refreshes. From docs/reactive-flows/solid-cells-solidjs_v2.md.
+ * refreshes. From archive/reactive-flows/solid-cells-solidjs_v2.md.
  *
  * Styling is the consumer's: the markup emits stable class names
  * (`cell-body`, `cell-body-loading`, `cell-pending`, `cell-error`,
@@ -52,9 +52,9 @@ export function CellView<T>(props: {
       <Match when={showValue()}>
         {/* data-cell / data-cell-loc: the element → cell attribution stamp
             (see PRINCIPLES §7) — the name, plus the cell's *definition* site
-            ("file:line", babel-injected) so DOM-contract consumers (the dev
-            overlay's shot locator and VS Code jump mode) can open the
-            `cell(...)` call without a runtime registry lookup. */}
+            ("file:line", babel-injected) so DOM-contract consumers (the intent
+            client's jump mode, the intent runtime's VS Code ladder) can open
+            the `cell(...)` call without a runtime registry lookup. */}
         {/* data-cell-state mirrors state() so CSS can key off it (e.g.
             [data-cell-state="held"]) and agents/tests can read it off the DOM. */}
         <div

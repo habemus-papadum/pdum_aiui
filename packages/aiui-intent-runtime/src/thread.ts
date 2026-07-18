@@ -1,7 +1,7 @@
 /**
  * The intent-thread adapter, host-agnostic: connect an {@link IntentSocket}
  * and wrap it as one {@link IntentThread} — a fresh thread id, the per-thread
- * send/finish/chunk/attachment/audio/video verbs, and thread-filtered server
+ * finish/chunk/attachment/audio verbs, and thread-filtered server
  * pushes. Host-agnostic so every host of the same wire (`wire.ts`) — the CDP
  * tier, the MV3 side panel — opens threads through ONE implementation instead
  * of a hand-rolled twin. Everything host-specific stays with the host: meta
@@ -43,7 +43,6 @@ export async function openIntentThread(options: OpenIntentThreadOptions): Promis
       ? crypto.randomUUID()
       : `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return {
-    send: (payload) => socket.send(threadId, payload, false),
     finish: async (payload) => {
       const ack = await socket.send(threadId, payload, true);
       socket.close();
@@ -53,7 +52,6 @@ export async function openIntentThread(options: OpenIntentThreadOptions): Promis
     sendAttachment: (chunk, bytes, fin = false) =>
       socket.sendAttachment(threadId, chunk, bytes, fin),
     sendAudio: (chunk, bytes, fin = false) => socket.sendAudio(threadId, chunk, bytes, fin),
-    sendVideo: (chunk, bytes, fin = false) => socket.sendVideo(threadId, chunk, bytes, fin),
     onServerMessage: (handler) =>
       socket.onServerMessage((msg) => {
         // Route only this thread's pushes (the server may omit threadId for

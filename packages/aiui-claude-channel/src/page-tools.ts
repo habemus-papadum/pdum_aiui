@@ -2,14 +2,15 @@
  * The page-tool directory: the channel's registry of tools that live *in the
  * browser*.
  *
- * A dev page (via the aiui dev overlay's tools bridge) opens a websocket to the
- * channel's `/tools` endpoint and declares the tools it exposes — name,
- * description, JSON Schema — for the whole namespace at once. The channel keeps
- * that declaration here; the MCP layer surfaces it to the Claude Code session
- * (`page_tools_list`), and a call (`page_tools_call`) is routed back over the
- * same socket to the live page function, whose result returns the same way.
- * A browser-extension client may additionally report tab `activation` on the
- * same socket, which flags/pre-orders the active tab's entries and steers
+ * A dev page (via the intent client's tools-link, relaying the page's own
+ * `window.__AIUI__.tools`) opens a websocket to the channel's `/tools`
+ * endpoint and declares the tools it exposes — name, description, JSON Schema
+ * — for the whole namespace at once. The channel keeps that declaration here;
+ * the MCP layer surfaces it to the Claude Code session (`page_tools_list`),
+ * and a call (`page_tools_call`) is routed back over the same socket to the
+ * live page function, whose result returns the same way. The tools-link (in
+ * both intent-client hosts) additionally reports tab `activation` on the same
+ * socket, which flags/pre-orders the active tab's entries and steers
  * ambiguous calls; the directory's debounced change signal ({@link
  * PageToolDirectory.onChange}) is what drives the agent-facing notifications
  * (docs/proposals/browser-extension-intent-tool.md §7).
@@ -162,7 +163,7 @@ export class PageToolDirectory {
   /**
    * The browser's active tab per window (`windowId` → `chromeTabId`), fed by
    * `activation` messages. Directory-global, not per connection: whichever
-   * socket reports it (the extension service worker), there is one truth about
+   * socket reports it (the intent client's tools-link), there is one truth about
    * which tab a window shows. Empty until an activation arrives — every
    * active-tab behavior degrades to the flag simply being absent.
    */
@@ -246,8 +247,8 @@ export class PageToolDirectory {
   }
 
   /**
-   * Track the browser's active tab. The message (sent by the extension's
-   * service worker over `/tools`) carries which tab just became — or stopped
+   * Track the browser's active tab. The message (sent by the intent client's
+   * tools-link over `/tools`) carries which tab just became — or stopped
    * being — its window's active tab. Never receiving one is fine: the
    * directory simply reports no `activeTab` flags.
    */

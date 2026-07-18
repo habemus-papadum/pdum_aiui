@@ -3,13 +3,12 @@
  * messaging, shared by every surface of THIS extension (panel ↔ service worker
  * ↔ content scripts).
  *
- * Vendored from `@habemus-papadum/aiui-webext` (its `relay.ts`) so the intent
- * client carries no dependency on that package: the relay is the only thing the
- * extension shell used from webext, it is fully self-contained (only `chrome.*`
- * plus its own pure helpers), and webext is a `--private` package that can't
- * ship alongside this public one. The frozen `aiui-extension` keeps webext's
- * copy; the wire format (`aiui: 1` envelope) is stable, so the two don't need to
- * evolve together.
+ * Vendored from the retired `aiui-webext` package (its `relay.ts` — git
+ * history) so the intent client carries no dependency on it: the relay was the
+ * only thing the extension shell used from webext, and it is fully
+ * self-contained (only `chrome.*` plus its own pure helpers). The wire format
+ * (`aiui: 1` envelope) is stable, so the retired frozen extension's copy —
+ * where one is still installed — needs no coordinated evolution.
  *
  * `chrome.runtime.sendMessage` broadcasts to every listening context, so each
  * envelope is addressed (`to`) and named (`cmd`); a context serves a set of

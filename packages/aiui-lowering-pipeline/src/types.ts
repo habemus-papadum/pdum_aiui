@@ -51,17 +51,19 @@ export interface LocatedComponent {
 
 /**
  * The engine's interaction modes. (Historical note: a `"correct"` mode — the
- * two-box transcript editor — existed until the append-only pivot removed it;
- * `correction` EVENTS remain in the stream vocabulary below so historical
- * traces still fold, but nothing emits them anymore.)
+ * two-box transcript editor — existed until the append-only pivot removed it,
+ * and a `"vscode"` jump-handover mode until the jump capability replaced it;
+ * `correction` and `mode` EVENTS remain in the stream vocabulary below so
+ * historical traces still fold.)
  */
-export type Mode = "ink" | "tweak" | "vscode";
+export type Mode = "ink" | "tweak";
 
 /**
  * The payload of an `app-selection` event: what the user had highlighted on
- * the page when the turn opened (the overlay's selection watcher snapshots it
- * — see the overlay's selection.ts). The raw text plus the same DOM-contract
- * attribution the screenshot locator reads (`data-source-loc` / `data-cell`).
+ * the page when the turn opened (the selection watcher snapshots it — see
+ * `aiui-intent-runtime/src/selection.ts`). The raw text plus the same
+ * DOM-contract attribution the screenshot locator reads (`data-source-loc` /
+ * `data-cell`).
  */
 export interface AppSelection {
   /** The selected text, trimmed and capped by the watcher. */
@@ -234,7 +236,7 @@ export type IntentEvent =
       /**
        * The page navigated **within the same document** mid-turn — an SPA
        * router push, a hash jump to a section, a back/forward traversal (the
-       * overlay's navigation watcher, navigation.ts). Context riding a turn,
+       * intent client's navigation watcher). Context riding a turn,
        * never a turn opener (the `app-selection` rule): emitted only while a
        * thread is open. Ordering in the log is the attribution: strokes,
        * shots, and selections before this event belong to `from`, after it to
@@ -284,11 +286,12 @@ export type IntentEvent =
       at: number;
       type: "shot";
       /**
-       * Ordinal token, e.g. "shot_1" — identifier-shaped on purpose: the
-       * lowered prompt places `{shot_1}` in the body and the path in a
-       * same-named meta key (Option C in
-       * archive/channel-attachment-path-encoding.md; meta keys allow no
-       * hyphens).
+       * Ordinal token, e.g. "shot_1" — identifier-shaped on purpose: it names
+       * the shot across the stream (the key a `shot-drop` retracts by) and
+       * surfaces in the `[screenshot shot_1 located at MISSING]` fallback
+       * when the pixels were never captured. (The retired Option-C rendering
+       * also used it as a `{shot_n}` body token + meta key — see
+       * {@link ComposedIntent.prompt}.)
        */
       marker: string;
       /**
@@ -358,8 +361,8 @@ export type IntentEvent =
        */
       scope?: { fromLine: number; toLine: number };
       /**
-       * The V4A patch the correction micro-pipeline produced (see patch.ts /
-       * correct.ts). Absent when the pipeline failed — appliers then fall
+       * The V4A patch the correction micro-pipeline produced (see patch.ts).
+       * Absent when the pipeline failed — appliers then fall
        * back to replacing `original` with `instruction`.
        */
       patch?: string;
@@ -630,11 +633,6 @@ export interface ComposedIntent {
    * `prompt` text is byte-identical whether or not anyone reads `spans`.
    */
   spans: PromptSpan[];
-  /**
-   * Retained for wire/API compatibility; shots no longer populate it (their
-   * paths and element info are inlined in {@link prompt}).
-   */
-  meta: Record<string, string>;
 }
 
 /** Options for {@link composeIntent}. */

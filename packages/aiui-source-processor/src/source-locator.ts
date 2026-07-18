@@ -1,8 +1,9 @@
 /**
  * The aiui compiler — compile-time identity, description, and source-location
- * injection, absorbed into the dev overlay from the demo's
- * `babel-source-locator.mjs` and promoted from a one-off stamper to a
- * table-driven pass (docs/proposals/front_end_controls_guide_and_more.md §2a).
+ * injection. It began as a one-off stamper in the gallery demo
+ * (`babel-source-locator.mjs`, git history), passed through the retired dev
+ * overlay, and grew into a table-driven pass
+ * (docs/proposals/front_end_controls_guide_and_more.md §2a).
  * Node-side only (behind the `./vite` subpath): the browser bundle never
  * imports this.
  *
@@ -10,8 +11,9 @@
  *
  *  1. **JSX stamping** (dev-only) — every *host* JSX element gets
  *     `data-source-loc="src/ui/Controls.tsx:42:7"` (path relative to the app
- *     root, 1-based line:column). Paired with the overlay's injected
- *     `window.__AIUI__.sourceRoot`, `sourceRoot + "/" + el.dataset.sourceLoc`
+ *     root, 1-based line:column). Paired with the injected
+ *     `window.__AIUI__.sourceRoot` (this package's own seed script — see
+ *     index.ts), `sourceRoot + "/" + el.dataset.sourceLoc`
  *     is an absolute, clickable `file:line:col`. Only host elements (lowercase
  *     tags) are stamped — stamping a component would just pass a mystery prop.
  *
@@ -60,7 +62,7 @@ type BabelModule = typeof import("@babel/core");
 const ATTR = "data-source-loc";
 
 /** The friendly error when the optional `@babel/core` peer is not installed. */
-const LOAD_ERROR = "aiuiDevOverlay locator needs @babel/core — install it as a devDependency";
+const LOAD_ERROR = "the aiui() source locator needs @babel/core — install it as a devDependency";
 
 /** One factory the compiler injects identity into. */
 export interface FactorySpec {
@@ -145,12 +147,6 @@ export interface SourceLocatorOptions {
    */
   factories?: FactorySpec[];
   /**
-   * Back-compat sugar: names treated as cell-shaped factories. Ignored when
-   * `factories` is given. `[]` disables call-site injection (the historical
-   * "keep JSX stamping only" contract).
-   */
-  cellFactories?: string[];
-  /**
    * Stamp `data-source-loc` on host JSX elements (default true). The Vite
    * plugin turns this off for production builds — instrumentation is dev-only;
    * identity injection is not.
@@ -158,11 +154,9 @@ export interface SourceLocatorOptions {
   stampJsx?: boolean;
 }
 
-/** Resolve the effective factory table from the options (back-compat aware). */
+/** Resolve the effective factory table from the options. */
 function resolveFactories(options: SourceLocatorOptions): FactorySpec[] {
-  if (options.factories) return options.factories;
-  if (options.cellFactories) return options.cellFactories.map((name) => cellFactory(name));
-  return defaultFactories();
+  return options.factories ?? defaultFactories();
 }
 
 /**

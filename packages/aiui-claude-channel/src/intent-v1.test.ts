@@ -37,7 +37,6 @@ interface SentPrompt {
 interface Driver {
   feedEvents(events: IntentEvent[], fin?: boolean): Promise<void>;
   feedAttachment(id: string, mime: string, bytes: Uint8Array, fin?: boolean): Promise<void>;
-  feedContext(selection: unknown, fin?: boolean): Promise<void>;
   fin(): Promise<void>;
   sent: SentPrompt[];
   pushed: unknown[];
@@ -99,8 +98,6 @@ function drive(opts: DriveOptions = {}): Driver {
       send(enc.encode(JSON.stringify({ events })), { kind: "events" }, fin),
     feedAttachment: (id, mime, bytes, fin = false) =>
       send(bytes, { kind: "attachment", id, mime }, fin),
-    feedContext: (selection, fin = false) =>
-      send(enc.encode(JSON.stringify({ selection })), { kind: "context" }, fin),
     fin: () => send(new Uint8Array(0), undefined, true),
     sent,
     pushed,
@@ -642,30 +639,6 @@ describe("intent-v1 lowering — selections", () => {
     expect(d.sent[0].text).toBe(
       spoken('make this wider and match this [selected text: "the legend caption"]'),
     );
-  });
-
-  it("ignores the legacy context chunk entirely (selections ride the stream now)", async () => {
-    const d = drive();
-    await d.feedContext({ text: "stale send-time selection" });
-    await d.feedEvents([
-      open(),
-      { at: 2, type: "app-selection", marker: "sel_1", text: "the fresh selection" },
-      seg(3, "explain this"),
-    ]);
-    await d.fin();
-    // The stream's selection rides the body inline; the legacy chunk is
-    // accepted (old clients still get their frame acked) and ignored.
-    expect(d.sent[0].text).toContain('[selected text: "the fresh selection"]');
-    expect(d.sent[0].text).not.toContain("stale send-time selection");
-
-    // Even a turn with ONLY the legacy chunk lowers without it — the
-    // preamble selection path was retired in the render audit.
-    const legacy = drive();
-    await legacy.feedEvents([open(), seg(2, "explain this")]);
-    await legacy.feedContext({ text: "context-chunk selection", cell: "flow" });
-    await legacy.fin();
-    expect(legacy.sent[0].text).toBe(spoken("explain this"));
-    expect(legacy.sent[0].text).not.toContain("context-chunk selection");
   });
 
   it("tolerates pre-marker streams: a markerless drop retracts the latest selection", async () => {

@@ -169,16 +169,6 @@ describe("ExtensionBus", () => {
     );
   });
 
-  it("reports the FROZEN client holding a tab — the never-both-armed policy", async () => {
-    const fake = fakeChrome({ windowTabs: [{ id: 7, active: true }] });
-    const bus = await connectExtensionBus({ windowId: 1 });
-    const events: PageEvent[] = [];
-    bus.transport.onPageEvent((event) => events.push(event));
-
-    fake.fireMessage(report({ kind: "foreign", armed: true }), { tab: { id: 7, windowId: 1 } });
-    expect(events).toEqual([{ kind: "foreignClient", tab: 7, armed: true }]);
-  });
-
   it("says the capture grant is REAL here — tabCapture is invocation-gated", async () => {
     fakeChrome({ windowTabs: [{ id: 7, active: true }] });
     const bus = await connectExtensionBus({ windowId: 1 });
@@ -190,7 +180,8 @@ describe("ExtensionBus", () => {
 
   it("reads the activation shortcut AS BOUND for the hollow ring's hint — never hard-coded", async () => {
     // Users rebind at chrome://extensions/shortcuts, and Chrome silently drops
-    // a conflicted suggestion (the frozen client claims the same chord) — so
+    // a conflicted suggestion (the retired frozen extension, where still
+    // installed, claims the same chord) — so
     // the manifest's suggestion is not the truth; chrome.commands.getAll is.
     fakeChrome({ windowTabs: [{ id: 7, active: true }], shortcut: "⌥⇧A" });
     const bound = await connectExtensionBus({ windowId: 1 });

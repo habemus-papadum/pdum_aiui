@@ -11,8 +11,7 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts",
-    "./vite": "./src/vite.ts"
+    ".": "./src/index.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -30,11 +29,6 @@
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js",
         "default": "./dist/index.js"
-      },
-      "./vite": {
-        "types": "./dist/vite.d.ts",
-        "import": "./dist/vite.js",
-        "default": "./dist/vite.js"
       }
     }
   },
@@ -42,14 +36,6 @@
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
-  },
-  "peerDependencies": {
-    "vite": ">=6"
-  },
-  "peerDependenciesMeta": {
-    "vite": {
-      "optional": true
-    }
   },
   "dependencies": {
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^"

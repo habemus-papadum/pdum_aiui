@@ -158,9 +158,9 @@ export function subscribeControlSurface(listener: () => void): () => void {
 }
 
 const MISSING_NAME =
-  "needs a name — either the aiui compiler plugin (aiuiDevOverlay({ locator: true }), which " +
-  'infers it from the assignment binding) or an explicit { name: "…" }. The name is the ' +
-  "durable key and the agent-tool identity; it cannot be anonymous.";
+  "needs a name — either the aiui() Vite plugin (@habemus-papadum/aiui-source-processor, " +
+  'whose locator pass infers it from the assignment binding) or an explicit { name: "…" }. ' +
+  "The name is the durable key and the agent-tool identity; it cannot be anonymous.";
 
 function requireName(kind: "control" | "action", name: string | undefined): string {
   if (!name) {

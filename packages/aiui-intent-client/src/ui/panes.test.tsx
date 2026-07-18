@@ -4,13 +4,13 @@
  *  - the trace count that sat at zero on a live turn (reads must go through
  *    the cursor);
  *  - the preview's revision flash (appends never animate, rewrites diff);
- *  - the heat row (a final carrying logprobs re-keys its row — the overlay's
- *    live lesson: without the `:w` key suffix the plain row survives the
- *    final and the heat branch is unreachable);
+ *  - the heat row (a final carrying logprobs re-keys its row — the retired
+ *    overlay's live lesson: without the `:w` key suffix the plain row survives
+ *    the final and the heat branch is unreachable);
  *  - the RESET rule (the accumulator is per-turn: closing the thread empties
  *    the preview — found live as navigations haunting a closed turn);
  *  - the chips: shots as thumbnails, selections as pills, navigations as ⇢
- *    route markers (the overlay's visual language, now living here).
+ *    route markers (the retired overlay's visual language, now living here).
  */
 import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { render } from "@solidjs/web";
@@ -153,7 +153,7 @@ describe("TurnPreview — the accumulator's live behaviors", () => {
     expect(root.textContent).toContain("empty turn (send would cancel)");
   });
 
-  it("renders the overlay's chips: shot thumbnail, selection pill, ⇢ navigation", () => {
+  it("renders the accumulator chips: shot thumbnail, selection pill, ⇢ navigation", () => {
     const { lanes, push, dropped } = fakeThread();
     const root = document.createElement("div");
     document.body.append(root);
@@ -187,7 +187,7 @@ describe("TurnPreview — the accumulator's live behaviors", () => {
     expect(nav?.getAttribute("title")).toContain("/from"); // the data rides the hover
 
     // The hover ✕ retracts through the WIRE engine — the same drop verbs the
-    // overlay used, now living behind this repo's component.
+    // retired overlay used, now living behind this repo's component.
     (root.querySelector("[data-testid=shot-chip] .aiui-tp-x") as HTMLButtonElement)?.click();
     (root.querySelector("[data-testid=selection-chip] .aiui-tp-x") as HTMLButtonElement)?.click();
     expect(dropped).toEqual(["shot:shot_1", "sel:sel_1"]);

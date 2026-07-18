@@ -3,17 +3,18 @@
  * the local host input and a remote iPad draw on (owner, 2026-07-15; clean
  * reintegration 2026-07-16).
  *
- * This is the pencil's markup surface for driven pages, and it mirrors the
- * old ink surface exactly —
+ * This is the pencil's markup surface for driven pages, and it keeps the
+ * retired ink surface's contract exactly (aiui-pencil's `PencilSurface`
+ * maintains that parity as its public shape — see aiui-pencil/src/surface.ts) —
  * because the two are the same shape: a floating markup surface mounted in the
- * target page, delivered the same way (bundled into the evaluated ink bundle for
- * the CDP tier; imported by the content script for MV3), driven by the same
- * mode-engine claim (`pencilSurface` ↔ `inkPointer`).
+ * target page, delivered the same way (bundled into the evaluated page bundle
+ * for the CDP tier; imported by the content script for MV3), driven by the same
+ * mode-engine claim (`pencilSurface`, née `inkPointer`).
  *
  * The first integration passed `localInput: false` and hand-rolled a *pen-only*
  * capture shim that fed strokes through the `remote*` API, and it tore the
  * surface DOWN on every turn end. Both were wrong. `PencilSurface` was built to
- * be used like `InkSurface`:
+ * be used like its retired predecessor, aiui-ink's `InkSurface`:
  *
  *   - **native input, all devices.** `localInput: true` lets the surface own the
  *     pointer for mouse, pen, AND touch (surface.ts `bindLocalInput`). On the

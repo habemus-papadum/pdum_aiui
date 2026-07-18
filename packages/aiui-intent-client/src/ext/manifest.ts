@@ -11,10 +11,11 @@
 
 import { ACTIVATE_COMMAND } from "./protocol";
 
-/** A NEW identity — deliberately not the frozen extension's key.
+/** A NEW identity — deliberately not the retired frozen extension's key (out
+ * of the tree, but still installed in some profiles as a safety net).
  *
  * Same key = same id = Chrome treats the new extension as an UPDATE of the old
- * one, which would silently retire the safety net we are keeping. This is a
+ * one, which would silently retire that safety net. This is a
  * fresh RSA public key (a public key is not a secret; there is no private-key
  * use for an unpacked extension), and it pins the id to
  * `cdpbfpcelmifhagikjlfpgfipggcmdeg` on every machine — which is what a native
@@ -64,8 +65,8 @@ export const manifest = {
   // The activation gesture. A `chrome.commands` press is ALSO an extension
   // INVOCATION, which is what grants the tab `tabCapture` standing — so this
   // chord is not merely a shortcut, it is how the capture grant comes to exist
-  // (BEHAVIOR.md). Deliberately Shift+Command/Ctrl+B, NOT the frozen
-  // extension's plain Command/Ctrl+B, so the two no longer fight over one chord.
+  // (BEHAVIOR.md). Deliberately Shift+Command/Ctrl+B, NOT the retired frozen
+  // extension's plain Command/Ctrl+B, so the two never fight over one chord.
   // Chrome refuses a suggestion already claimed elsewhere, leaving the command
   // unbound for the user to bind at chrome://extensions/shortcuts — note
   // Command/Ctrl+Shift+B is also the browser's bookmarks-bar toggle, so if it
@@ -87,7 +88,7 @@ export const manifest = {
   // "tabCapture": the shot path — the worker mints an invocation-gated stream
   //   id and the PANEL consumes it (measured, M10; see ext/capture.ts).
   // "scripting": re-inject content scripts after an extension reload, which
-  //   orphans the copies in open tabs (ring/ink/keys die silently otherwise).
+  //   orphans the copies in open tabs (ring/pencil/keys die silently otherwise).
   // "webNavigation": SPA route changes — an isolated-world content script
   //   cannot see the page's own `history` calls, so the browser tells us.
   // "nativeMessaging": OPTIONAL cold-start channel discovery (ext/channel.ts);
@@ -112,9 +113,9 @@ export const manifest = {
       run_at: "document_idle",
     },
     {
-      // The MAIN world, for the one fact that only lives there: whether the
-      // page is aiui-instrumented (`window.__AIUI__`). Five lines; see
-      // ext/content-main.ts.
+      // The MAIN world, for what only lives there: the aiui-instrumented
+      // fact (`window.__AIUI__`), the tools bridge, and jump-to-editor's
+      // arm; see ext/content-main.ts.
       matches: ["<all_urls>"],
       js: ["content-main.js"],
       run_at: "document_idle",

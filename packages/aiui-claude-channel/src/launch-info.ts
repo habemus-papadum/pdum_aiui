@@ -8,8 +8,8 @@
  * was attached and how it reaches its browser. `aiui claude` knows, because
  * it assembled the `--mcp-config` — so it passes a JSON summary via
  * `aiui-claude-channel mcp --launch-info <json>`, and the server surfaces it
- * verbatim at `GET /debug/api/info` (under `launch`). The DevTools panel's
- * Server tab renders it, which is where you look first when the agent's
+ * verbatim at `GET /debug/api/info` (under `launch`). The console dashboard
+ * renders it, which is where you look first when the agent's
  * browser tooling is misbehaving: was the MCP even on, attach or launch,
  * which endpoint, which profile.
  *
@@ -41,7 +41,7 @@ export interface ChromeDevtoolsInfo {
 /**
  * The status of the `OPENAI_API_KEY` the intent pipeline needs, as the launcher
  * found it at startup. A *status*, never the key itself (or any prefix of it) —
- * the DevTools panel uses this to explain a degraded pipeline without ever
+ * the console dashboard uses this to explain a degraded pipeline without ever
  * seeing the secret. See `aiui`'s openai-preflight for how it's determined.
  *
  *  - "valid"      — present and accepted by OpenAI (authenticated check passed).
@@ -62,8 +62,8 @@ export interface LaunchInfo {
   chromeDevtools?: ChromeDevtoolsInfo;
   /**
    * How the launcher's OpenAI key preflight came out (status only, never the
-   * key). Absent when no launcher recorded it. Lets the DevTools panel explain
-   * why transcription/correction are unavailable.
+   * key). Absent when no launcher recorded it. Lets the console dashboard
+   * explain why transcription is unavailable.
    */
   openaiKey?: OpenAiKeyStatus;
   /**

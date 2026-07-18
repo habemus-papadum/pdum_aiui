@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { greet, name } from "./index";
+import { name } from "./index";
 
 describe(name, () => {
-  it("greets", () => {
-    expect(greet("world")).toBe("Hello, world!");
+  it("names the published package", () => {
+    expect(name).toBe("@habemus-papadum/aiui");
   });
 });

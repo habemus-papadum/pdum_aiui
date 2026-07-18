@@ -1,25 +1,22 @@
 /**
- * The realtime submode's **degraded engine** — an OpenAI `gpt-realtime-2` session
+ * The prompt linter's **degraded engine** — an OpenAI `gpt-realtime-2` session
  * behind the {@link ./live-session}.LiveSession seam.
  *
  * Where {@link ./gemini-live} is the reference (video, one streaming image path,
- * session resumption), OpenAI realtime runs the same submode without video and
+ * session resumption), OpenAI realtime runs the same linter without video and
  * with images injected as **turn-boundary items**, not a stream (§2/§8 of
- * transcription-and-realtime-submodes.md). It is structurally the flagship voice
- * session ({@link ./realtime-voice}) — same PCM-append / manual-commit shape, same
- * WAV-wrapped reply clips — with three additions the submode needs and flagship
- * lacks: the `submit_intent` tool (so the *model* composes), `input_image`
- * injection, and the tool-call drain. It is a **separate** engine, not an edit to
- * realtime-voice.ts: flagship (voice veneer over transcription mode) must keep
- * working untouched.
+ * archive/transcription-and-realtime-submodes.md). It is structurally the retired
+ * flagship voice session (git history: realtime-voice.ts) — same PCM-append /
+ * manual-commit shape, same WAV-wrapped reply clips — plus the two additions
+ * the linter needs: the `read_file` tool and `input_image` injection.
  *
- * ### Wire surface (GA realtime; verified shape mirrors realtime-voice.ts)
+ * ### Wire surface (GA realtime; shape live-verified in the retired realtime-voice.ts)
  *
  *  - **Endpoint:** `wss://api.openai.com/v1/realtime?model=…` (bearer auth).
- *  - **Configure:** one `session.update` — `type: "realtime"`, model, the composer
+ *  - **Configure:** one `session.update` — `type: "realtime"`, model, the linter
  *    persona, `output_modalities: ["audio"]`, `audio.input` = pcm/24k +
  *    transcription + `turn_detection: null` (manual, PTT is the boundary),
- *    `audio.output` = pcm/24k + voice, and `tools: [submit_intent]`.
+ *    `audio.output` = pcm/24k + voice, and `tools: [read_file]`.
  *  - **A talk window:** {@link activityStart} is a no-op (OpenAI opens the buffer on
  *    the first append); {@link activityEnd} = `input_audio_buffer.commit` +
  *    `response.create`.
@@ -27,10 +24,10 @@
  *    `input_image` data-URL part (finding 8) — items never auto-trigger a response.
  *  - **Silent context (selections):** an `input_text` item alone — no
  *    `response.create`, so nothing is spoken back.
- *  - **The nudge:** an `input_text` item + `response.create`.
- *  - **The call:** a `function_call` item in `response.done.response.output`; its
- *    `arguments` (a JSON string) parse to `{ segments }`. `respond` writes a
- *    `function_call_output` item — terminal for our flow (we close right after).
+ *  - **The call:** a `function_call` item in `response.done.response.output`,
+ *    routed through `onToolCall`; `respond` writes a `function_call_output`
+ *    item then `response.create` (the resume rule — a written tool result
+ *    never re-triggers the response on its own).
  *  - **Back:** `conversation.item.input_audio_transcription.completed` (the user
  *    transcript), `response.output_audio.delta`/`.done` (reply audio),
  *    `response.output_audio_transcript.done` (reply transcript), `response.done`
@@ -48,15 +45,15 @@ import {
   type LiveSession,
   type LiveSessionCallbacks,
 } from "./live-session";
+import { OPENAI_REALTIME_VOICE_URL, pcm16ToWav, REALTIME_VOICE_RATE } from "./pcm";
 import {
   closeSuffix,
   openaiRealtimeSocketFactory,
   type RealtimeSocketFactory,
   type RealtimeSocketHandlers,
 } from "./realtime";
-import { OPENAI_REALTIME_VOICE_URL, pcm16ToWav, REALTIME_VOICE_RATE } from "./realtime-voice";
 
-/** The flagship conversational model, degraded to the realtime submode's composer. */
+/** The flagship conversational model, running here as the degraded linter engine. */
 export const DEFAULT_OPENAI_LIVE_MODEL = "gpt-realtime-2";
 
 /**
@@ -114,7 +111,7 @@ function concatChunks(chunks: Uint8Array[]): Uint8Array {
  * Open an OpenAI realtime session under the {@link LiveSession} seam. Eagerly
  * connects (the handshake overlaps the arm→talk gap); audio queued before
  * `session.updated` is flushed once ready. Structurally mirrors
- * {@link ./realtime-voice}.openRealtimeVoiceSession's lifecycle.
+ * the retired flagship voice session's lifecycle (git history: realtime-voice.ts).
  */
 export function openOpenAiLiveSession(
   options: OpenAiLiveSessionOptions,
@@ -258,7 +255,7 @@ export function openOpenAiLiveSession(
         if (usage) {
           callbacks.onUsage(priceCall("openai", options.model(), usage));
         }
-        // The model's composition arrives as a function_call item in the output.
+        // A tool call arrives as a function_call item in the output.
         const output = Array.isArray(message.response?.output) ? message.response?.output : [];
         for (const raw of output) {
           const item = (raw ?? {}) as {
@@ -388,21 +385,6 @@ export function openOpenAiLiveSession(
             { type: "input_text", text: `[image ${label}]` },
             { type: "input_image", image_url: `data:${mime};base64,${toBase64(bytes)}` },
           ],
-        },
-      });
-    },
-    appendVideoFrame(bytes, mime) {
-      if (dead) {
-        return;
-      }
-      // An unlabeled turn-boundary item — the ambient-context grade of the
-      // labeled-shot injection (items never auto-trigger a response).
-      sendReady({
-        type: "conversation.item.create",
-        item: {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_image", image_url: `data:${mime};base64,${toBase64(bytes)}` }],
         },
       });
     },

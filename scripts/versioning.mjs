@@ -79,9 +79,9 @@ function versionFiles() {
 // integers (1–4 parts, no `-prerelease`/`+build`) — so they cannot hold the
 // `X.Y.Z+dev` the package.jsons carry between releases. They track the semver
 // CORE instead: `set 0.5.0+dev` and `set 0.5.0` both stamp them `0.5.0`. Listed
-// explicitly because none are package.json files (two are TS source, one is
-// static JSON) and the workspace globs never reach them — a new extension's
-// manifest belongs in this list.
+// explicitly because manifests are not package.json files (the list is a
+// single TS source today) and the workspace globs never reach them — a new
+// extension's manifest belongs in this list.
 const MANIFEST_FILES = ["packages/aiui-intent-client/src/ext/manifest.ts"];
 
 // The sole `version: "..."` / `"version": "..."` field (quoted or bare key),

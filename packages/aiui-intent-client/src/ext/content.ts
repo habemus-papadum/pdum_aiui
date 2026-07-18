@@ -34,7 +34,7 @@ import { mountPencil, type PencilHandle } from "../cdp/page-bundle";
 import type { PageReport } from "../cdp/page-script";
 import { createDriverWatch } from "../page/driver-watch";
 import { DRIVER_TIMEOUT_MS } from "../transport";
-import { LEGACY_RING_HOST_ID, PAGE_ADDRESS, type ReportMessage } from "./protocol";
+import { PAGE_ADDRESS, type ReportMessage } from "./protocol";
 import { serveRelay } from "./relay";
 
 /** Set once this script learns it is an ORPHAN (the extension was reloaded
@@ -233,37 +233,10 @@ const armRegion = (): void => {
 // ── pencil: the markup surface, imported (no injection, no CSP fight) ────────
 let pencil: PencilHandle | undefined;
 
-// ── selection: structured, via the overlay's watcher ─────────────────────────
+// ── selection: structured, via the runtime's watcher ─────────────────────────
 const watcher = installSelectionWatcher({
   onChange: (snap) => report({ kind: "selection", present: snap !== undefined }),
 });
-
-// ── the coexistence detector (see protocol.ts) ───────────────────────────────
-// The frozen client injects into the same page. We cannot talk to it — runtime
-// messages never cross extension ids — but we share a DOM, and its ring wears
-// an `armed` class while it holds the tab. Watch that, report it, and let the
-// panel refuse to arm on top of it (README: never both armed).
-const legacyArmed = (): boolean => {
-  const host = document.getElementById(LEGACY_RING_HOST_ID);
-  const root = host?.shadowRoot?.firstElementChild?.nextElementSibling ?? undefined;
-  return root instanceof HTMLElement ? root.classList.contains("armed") : false;
-};
-let foreignWas = false;
-const checkForeign = (): void => {
-  const armed = legacyArmed();
-  if (armed !== foreignWas) {
-    foreignWas = armed;
-    report({ kind: "foreign", armed });
-  }
-};
-const legacyHost = document.getElementById(LEGACY_RING_HOST_ID);
-if (legacyHost?.shadowRoot != null) {
-  new MutationObserver(checkForeign).observe(legacyHost.shadowRoot, {
-    attributes: true,
-    subtree: true,
-    attributeFilter: ["class"],
-  });
-}
 
 // ── the interaction ping (the smart-video gate) ──────────────────────────────
 let lastInteraction = 0;
@@ -319,7 +292,6 @@ const sayHello = (): void => {
     focused: document.hasFocus(),
     aiui: aiuiPage,
   });
-  checkForeign();
 };
 
 // ── driver liveness: self-cleanup when the panel dies mid-assertion ──────────
@@ -493,7 +465,6 @@ serveRelay(PAGE_ADDRESS, {
     );
     return { ok: true };
   },
-  locate: () => null, // instrumented-page jump: anticipated, post-parity
 });
 
 // The boot hello: a fresh document knows nothing, and the panel may hold state

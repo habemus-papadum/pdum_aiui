@@ -5,7 +5,7 @@
  * and which cells feed which" without an agent reading source. The
  * cell-attribution spike proved the price of deriving such facts from Solid's
  * private reactive graph (pinned internals, prototype patches — retired; see
- * docs/proposals/solid-cell-attribution.md). This module is the cheap, exact
+ * archive/solid-cell-attribution.md). This module is the cheap, exact
  * alternative that falls out of owning both primitives:
  *
  *   - `cell()` evaluates its deps function at exactly two known call sites; it

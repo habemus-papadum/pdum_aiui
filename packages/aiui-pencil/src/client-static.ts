@@ -3,8 +3,8 @@
  *
  * The iPad has no frontend process, so it gets the client app at `GET <prefix>/`
  * — the one page-serving exception the channel's "JSON routes only" posture
- * allows, inherited from paint. The app itself is a real built Solid bundle
- * (`lab/vite.client.config.ts` → `assets/client/`), not a hand-written HTML
+ * allows. The app itself is a real built Solid bundle
+ * (`client/vite.config.ts` → `assets/client/`), not a hand-written HTML
  * string.
  *
  * The channel sidecar no longer routes through `clientStatic` — it serves the

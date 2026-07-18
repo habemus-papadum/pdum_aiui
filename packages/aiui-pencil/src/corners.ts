@@ -6,10 +6,10 @@
  * Any smoothing scheme worth using rounds corners — that is what smoothing *is*.
  * For a lasso around a chart that is exactly right. For handwriting it is
  * destruction: the sharp reversals in `k`, `x`, `v`, `z`, and every capital `A`
- * are not noise to be filtered out, they are the letter. The existing ink
- * surface has no notion of this at all (its midpoint-quadratic scheme rounds
- * every corner by construction), which is the single clearest reason handwriting
- * looks wrong in it today.
+ * are not noise to be filtered out, they are the letter. The retired ink
+ * surface (`aiui-ink`) had no notion of this at all (its midpoint-quadratic
+ * scheme rounded every corner by construction), which was the single clearest
+ * reason handwriting looked wrong in it.
  *
  * So before we spline anything, we find the corners and mark them, and the
  * spline is then told to *break* there rather than smooth through. The two-line

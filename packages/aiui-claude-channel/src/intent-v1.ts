@@ -11,7 +11,7 @@
  * The pipeline core — `composeIntent`, the V4A applier, the config shape — is
  * imported from `@habemus-papadum/aiui-lowering-pipeline`, the same module the
  * browser modality runs, so one implementation and one set of captured fixtures
- * cover both sides (see the graduation handoff, P2).
+ * cover both sides.
  *
  * Frames are tagged in the envelope ({@link ChunkDescriptor}); the codec is the
  * identity codec ({@link rawCodec}) because a payload's meaning depends on its
@@ -25,7 +25,8 @@
  *    arrival, and — when the hello asked for server-side transcription —
  *    transcribed here; the produced `transcript-final` event is both merged
  *    into the stream and pushed back to the client as a `lowered` message.
- *  - `context`  → LEGACY (pre-greenfield clients): a submit-time `{ selection }`.
+ *  - `context`  → LEGACY (pre-greenfield clients, since deleted): a submit-time
+ *    `{ selection }`.
  *    Accepted and ignored — current clients ride selections on the stream as
  *    positional `app-selection` events (marker `sel_N`, retractable via
  *    `app-selection-drop`), which `composeIntent` renders INLINE in the body
@@ -37,7 +38,7 @@
  * diffs — was retired with correct mode in the append-only pivot; legacy
  * correction events in old traces still fold at compose time.)
  *
- * **Incremental lowering (streaming-turns.md §2).** The cheap, pure, and
+ * **Incremental lowering (archive/streaming-turns.md §2).** The cheap, pure, and
  * pre-warmable work happens as events arrive, not at `fin`, so `fin` is a
  * near-empty commit of the one observable side effect (the session
  * notification). Concretely: attachment blobs are saved and shot paths wired on
@@ -134,7 +135,7 @@ export interface LoweredPromptMessage {
 /**
  * A base64 audio clip pushed to the client to play — the `premium` tier's spoken
  * TTS ack and the `flagship` tier's model reply share this one additive message
- * (streaming-turns.md §4, model-tiers.md T2/T3). Distinguished from a per-frame
+ * (archive/streaming-turns.md §4, archive/model-tiers.md T2/T3). Distinguished from a per-frame
  * ack and a {@link LoweredMessage} by its `kind`. `label` (when present) is the
  * spoken text, for the widget's speaker line and the trace.
  */
@@ -190,7 +191,7 @@ const GEMINI_KEY_HINT =
  * The premium tier's spoken-ack trigger table, keyed by lowering milestone → the
  * deterministic phrase the channel synthesizes (no LLM). Data-driven so acks are
  * tuneable; v1 ships the minimal recommended set — one send-received ack on a
- * successful `fin` (streaming-turns.md §4). Add a milestone here (and a call site)
+ * successful `fin` (archive/streaming-turns.md §4). Add a milestone here (and a call site)
  * to speak at another point.
  */
 const ACK_PHRASES: Record<"sent", string> = {
@@ -203,9 +204,10 @@ interface ResolvedIntent {
   tier: string;
   /**
    * Which submode runs. `transcription` (the default) is document assembly —
-   * everything the classic processor does; `realtime` holds a live
-   * conversational session where the MODEL composes (submit_intent). See
-   * transcription-and-realtime-submodes.md.
+   * everything the classic processor does; `realtime` (retired) once held a
+   * live conversational session where the MODEL composed — a hello asking for
+   * it is coerced to `transcription` plus the prompt linter (see
+   * resolveIntent). History: archive/transcription-and-realtime-submodes.md.
    */
   submode: "transcription" | "realtime";
   /** Realtime engine (submode=realtime): the reference `gemini` or degraded `openai`. */
@@ -220,21 +222,14 @@ interface ResolvedIntent {
   realtimeModel: string;
   /** Realtime latency/accuracy knob (`minimal`…`xhigh`); undefined → model default. */
   realtimeDelay: string | undefined;
-  passes: { silenceTrim: boolean; imageDownscale: boolean };
-  /** Spoken audio back to the human: `off` | `acks` (premium TTS) | `voice` (flagship). */
+  /** Spoken audio back to the human: `off` | `acks` (premium TTS); `voice` is the retired veneer (treated as off). */
   audioBack: "off" | "acks" | "voice";
   /** REST TTS model for `audioBack:"acks"` (premium). */
   ttsModel: string;
   /** TTS voice id (acks); undefined → the model default. */
   ttsVoice: string | undefined;
-  /** Conversational realtime model for `audioBack:"voice"` (flagship). */
-  realtimeVoiceModel: string;
-  /** Conversational voice id (flagship); undefined → the model default. */
+  /** The linter's spoken voice id; undefined → the model default. */
   realtimeVoice: string | undefined;
-  /** Function-calling scope for flagship (`none` in v1). */
-  realtimeTools: "none" | "submit_intent" | "page";
-  /** Reasoning effort for the flagship model (`minimal`…`high`); undefined → model default. */
-  realtimeReasoning: string | undefined;
   /** The prompt linter: off, or which live vendor observes the composition. */
   linter: "off" | "openai" | "gemini";
   /** Linter model id; undefined → the vendor default. */
@@ -247,9 +242,8 @@ interface ResolvedIntent {
   coerced: string[];
 }
 
-/** The premium TTS default model, and the flagship conversational default. */
+/** The premium TTS default model. */
 const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
-const DEFAULT_REALTIME_VOICE_MODEL = "gpt-realtime-2";
 
 /**
  * The remediation line every OpenAI-backed failure carries on its error push.
@@ -335,7 +329,7 @@ export interface IntentV1Options {
  * fields are already concrete; but as a **defensive fallback** for a hello that
  * carries only `tier` (or a sparse partial), each field's default is the tier's
  * preset value — the shared `expandTier` from the pipeline package, so both sides
- * agree on what a tier means (model-tiers.md, "Channel side"). Absent tier →
+ * agree on what a tier means (archive/model-tiers.md, "Channel side"). Absent tier →
  * `standard` (the quiet REST legacy — a sparse hello without a key must not
  * degrade loudly; the REST retirement will flip this to `rapid`); legacy
  * names (standard, flagship, live-*) expand via the shared alias table.
@@ -350,9 +344,6 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     typeof value === "string" && value !== "" ? value : fallback;
   const optStr = (value: unknown): string | undefined =>
     typeof value === "string" && value !== "" ? value : undefined;
-  const passes = (
-    cfg.passes !== null && typeof cfg.passes === "object" ? cfg.passes : {}
-  ) as Record<string, unknown>;
   // The tier's expansion supplies each field's default (below the explicit hello
   // fields), so a `tier`-only hello still resolves concrete seams.
   const tier = str(cfg.tier, "standard");
@@ -387,10 +378,6 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     model: str(cfg.model, preset.model),
     realtimeModel: str(cfg.realtimeModel, preset.realtimeModel ?? DEFAULT_REALTIME_MODEL),
     realtimeDelay: optStr(cfg.realtimeDelay ?? preset.realtimeDelay),
-    passes: {
-      silenceTrim: passes.silenceTrim === true,
-      imageDownscale: passes.imageDownscale === true,
-    },
     audioBack: oneOf(
       cfg.audioBack,
       ["off", "acks", "voice"] as const,
@@ -398,17 +385,7 @@ function resolveIntent(raw: unknown): ResolvedIntent {
     ),
     ttsModel: str(cfg.ttsModel, preset.ttsModel ?? DEFAULT_TTS_MODEL),
     ttsVoice: optStr(cfg.ttsVoice ?? preset.ttsVoice),
-    realtimeVoiceModel: str(
-      cfg.realtimeVoiceModel,
-      preset.realtimeVoiceModel ?? DEFAULT_REALTIME_VOICE_MODEL,
-    ),
     realtimeVoice: optStr(cfg.realtimeVoice ?? preset.realtimeVoice),
-    realtimeTools: oneOf(
-      cfg.realtimeTools,
-      ["none", "submit_intent", "page"] as const,
-      preset.realtimeTools ?? "none",
-    ),
-    realtimeReasoning: optStr(cfg.realtimeReasoning ?? preset.realtimeReasoning),
     linter: oneOf(cfg.linter, ["off", "openai", "gemini"] as const, preset.linter ?? "off"),
     linterModel: optStr(cfg.linterModel ?? preset.linterModel),
     linterInstructions: optStr(cfg.linterInstructions ?? preset.linterInstructions),
@@ -450,26 +427,14 @@ function resolveIntent(raw: unknown): ResolvedIntent {
   return resolved;
 }
 
-// ── the cleanup passes (openai-audio-stack.md) ───────────────────────────────
-// Condition passes shrink/clean an upload *before* the expensive hop. Real
-// trimming/downscaling is a lab measurement that ships later; the structure —
-// a named slot on each side of the pipe, gated by config — is what P2 commits
-// to, so the pipeline is already shaped for the real behavior. Identity today.
+// ── the cleanup passes (archive/workbench/openai-audio-stack.md) ─────────────
+// Condition passes shrink/clean an upload *before* the expensive hop. The
+// named slots keep the attachment path (and the trace's stage sequence) shaped
+// for real trimming/downscaling when it ships; identity today, with no config
+// knob until there is behavior to configure.
 
-interface PassResult {
-  bytes: Uint8Array;
-  /** Whether the slot was engaged (config on) — recorded in the trace. */
-  engaged: boolean;
-}
-
-const silenceTrim = (bytes: Uint8Array, enabled: boolean): PassResult => ({
-  bytes,
-  engaged: enabled,
-});
-const imageDownscale = (bytes: Uint8Array, enabled: boolean): PassResult => ({
-  bytes,
-  engaged: enabled,
-});
+const silenceTrim = (bytes: Uint8Array): Uint8Array => bytes;
+const imageDownscale = (bytes: Uint8Array): Uint8Array => bytes;
 
 /** Parse the trailing ordinal of an identifier-shaped attachment id (`seg_3` → 3). */
 function ordinalOf(id: string): number {
@@ -633,12 +598,9 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       model: intent.model,
       realtimeModel: intent.realtimeModel,
       realtimeDelay: intent.realtimeDelay,
-      passes: intent.passes,
       audioBack: intent.audioBack,
       ttsModel: intent.ttsModel,
-      realtimeVoiceModel: intent.realtimeVoiceModel,
       realtimeVoice: intent.realtimeVoice,
-      realtimeTools: intent.realtimeTools,
       linter: intent.linter,
       linterModel: intent.linterModel,
       transcriberReady: transcriber !== undefined,
@@ -657,8 +619,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // (its bytes are saved then, not at fin) and wired into the matching shot
   // event so fin does no disk I/O.
   const shotPaths = new Map<string, string>();
-  let engagedSilenceTrim = false;
-  let engagedImageDownscale = false;
 
   // The per-thread realtime session (assigned once the helpers it calls back into
   // exist, below). Segments stream PCM into it during talk and commit at talk-end.
@@ -671,7 +631,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
 
   // Pre-warm the prompt skeleton: the tab/source preamble is fully known at
   // thread-open, so assemble it once here — fin only concatenates the body and
-  // the late-arriving selection (streaming-turns.md §2). Empty for a bare client.
+  // the late-arriving selection (archive/streaming-turns.md §2). Empty for a bare client.
   const staticSections = promptContextSections(ctx.hello);
   if (staticSections.length > 0) {
     trace?.record({ kind: "info", label: "prompt preamble", data: staticSections });
@@ -1200,12 +1160,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   ): Promise<void> => {
     const { id, mime } = chunk;
     if (id.startsWith("seg_")) {
-      const conditioned = silenceTrim(bytes, intent.passes.silenceTrim);
-      engagedSilenceTrim = engagedSilenceTrim || conditioned.engaged;
+      const conditioned = silenceTrim(bytes);
       trace?.record({
         kind: "ir",
         label: `condition ${id} (silenceTrim)`,
-        data: { enabled: intent.passes.silenceTrim, engaged: conditioned.engaged },
+        data: { identity: true },
       });
       // Save the segment blob on arrival (the debugger reads it; fin does no I/O).
       trace?.recordBlob(
@@ -1215,7 +1174,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       );
       if (transcriber !== undefined) {
         try {
-          const result = await transcriber.transcribe({ bytes: conditioned.bytes, mime });
+          const result = await transcriber.transcribe({ bytes: conditioned, mime });
           recordCost(`transcription ${id}`, result.cost);
           const produced: IntentEvent = {
             at: Date.now(),
@@ -1276,12 +1235,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // A completed segment lands its transcript here — refresh the cache.
       recomposeIfStale();
     } else if (id.startsWith("shot_")) {
-      const conditioned = imageDownscale(bytes, intent.passes.imageDownscale);
-      engagedImageDownscale = engagedImageDownscale || conditioned.engaged;
+      const conditioned = imageDownscale(bytes);
       trace?.record({
         kind: "ir",
         label: `condition ${id} (imageDownscale)`,
-        data: { enabled: intent.passes.imageDownscale, engaged: conditioned.engaged },
+        data: { identity: true },
       });
       // Save the shot blob on arrival and wire its path into the (already
       // flushed) shot event. Deliberately no recompose here: the wiring bumps
@@ -1289,7 +1247,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // "late mutation between the last batch and fin" the fingerprint catches.
       const path = trace?.recordBlob(
         { kind: "ir", label: `attachment ${id}` },
-        conditioned.bytes,
+        conditioned,
         `${id}.${imageExtension(mime)}`,
       );
       if (path !== undefined) {
@@ -1303,39 +1261,9 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         // mutation seq); this makes the preview correct as well.
         recomposeIfStale();
       }
-      sidecar?.onShot(id, conditioned.bytes, mime);
+      sidecar?.onShot(id, conditioned, mime);
     }
     // Any other attachment id has no place in the compose and no blob to save.
-  };
-
-  /**
-   * One sampled screen frame riding a `video` chunk — the pre-frames-are-shots
-   * wire shape, kept for compatibility with older overlays. The current
-   * overlay uploads each sampled frame as a `shot_N` ATTACHMENT instead (so it
-   * composes into the prompt and reaches the linter labeled, like any other
-   * shot); a client still streaming `video` chunks gets the old behavior:
-   * every frame persists to the trace, and the linter sees it as ambient,
-   * unlabeled sight.
-   */
-  const onVideoChunk = (
-    chunk: Extract<ChunkDescriptor, { kind: "video" }>,
-    bytes: Uint8Array,
-  ): void => {
-    trace?.recordBlob(
-      { kind: "ir", label: `video ${chunk.id} #${chunk.seq}` },
-      bytes,
-      `${chunk.id}_${chunk.seq}.jpg`,
-    );
-    sidecar?.onVideoFrame(bytes, chunk.mime);
-  };
-
-  const onContextChunk = (bytes: Uint8Array): void => {
-    // LEGACY: pre-greenfield clients rode a submit-time selection on this
-    // chunk. Current clients send positional `app-selection` events instead
-    // (rendered inline by composeIntent), and the preamble path was retired
-    // in the 2026-07 render audit. Accepted and ignored so an old client
-    // still gets its frame acked instead of an error.
-    decodeJson(bytes);
   };
 
   // A mid-thread `control` chunk — reconfiguration, never turn content. Today's
@@ -1468,21 +1396,12 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         items: composed.items,
         corrections: composed.corrections,
         prompt: composed.prompt,
-        meta: composed.meta,
       },
     });
     trace?.record({
       kind: "ir",
       label: "conditioned",
-      data: {
-        cancelled,
-        passes: {
-          silenceTrim: { enabled: intent.passes.silenceTrim, engaged: engagedSilenceTrim },
-          imageDownscale: { enabled: intent.passes.imageDownscale, engaged: engagedImageDownscale },
-        },
-        body: composed.prompt,
-        meta: composed.meta,
-      },
+      data: { cancelled, body: composed.prompt },
     });
 
     // A cancelled turn (or one with nothing to say) lowers to no notification.
@@ -1517,20 +1436,18 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
             ]
           : composed.spans;
       trace?.record({ kind: "ir", label: "lowered prompt spans", data: { spans } });
-      const meta = Object.keys(composed.meta).length > 0 ? composed.meta : undefined;
       // Show the client what is about to be committed (pushed first, so the
       // widget's view of the prompt never lags the session notification).
       ctx.push?.({
         kind: "lowered-prompt",
         threadId: ctx.threadId,
         prompt,
-        // Omit when empty (a bare-client text-only prompt) — additive, like meta.
+        // Omit when empty (a bare-client text-only prompt) — additive.
         ...(spans.length > 0 ? { spans } : {}),
-        ...(meta !== undefined ? { meta } : {}),
       } satisfies LoweredPromptMessage);
-      await ctx.sendPrompt(prompt, meta);
+      await ctx.sendPrompt(prompt);
       // Premium tier: a spoken "sent" once the notification landed (the send-
-      // received ack — the minimal recommended trigger set, streaming-turns.md §4).
+      // received ack — the minimal recommended trigger set, archive/streaming-turns.md §4).
       await speakAck();
       // Gloss the turn for the trace list — detached, so the fin ack does not
       // wait on a chat round-trip. `composed.prompt` is the body only (the
@@ -1554,10 +1471,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         await onAttachmentChunk(chunk, bytes);
       } else if (chunk?.kind === "audio") {
         onAudioChunk(chunk, bytes);
-      } else if (chunk?.kind === "video") {
-        onVideoChunk(chunk, bytes);
-      } else if (chunk?.kind === "context") {
-        onContextChunk(bytes);
       } else if (chunk?.kind === "control") {
         onControlChunk(bytes);
       }

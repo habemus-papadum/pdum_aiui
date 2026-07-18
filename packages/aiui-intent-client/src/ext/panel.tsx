@@ -117,7 +117,7 @@ async function boot(): Promise<{
     // The mic worklet ships as a FILE here. An extension page's CSP is
     // `script-src 'self'`, which rejects the blob: worklet module the plain
     // page loads happily ("AbortError: Unable to load a worklet's module" —
-    // measured by the old client, 2026-07-13). The build emits the module from
+    // measured in the retired extension client). The build emits the module from
     // the same constant the source uses, so the two cannot drift.
     pcmSource: () => new WorkletPcmSource({ workletUrl: chrome.runtime.getURL("pcm-worklet.js") }),
     tabMeta: async () => {
@@ -154,6 +154,9 @@ async function boot(): Promise<{
     stream: () => heldStreamFor(host.activeTab()),
     streamHint: () => "grant this tab with ⌘⇧B to start its video",
     label: `aiui intent — window ${windowId}`,
+    // The 'ipad' status pill: connected remote pencil clients, live from the
+    // relay session's status feed.
+    onStatus: (status) => client.setContext({ pencilClients: status.viewers }),
   }).connect();
 
   // The remote bar: the same mode engine's remote-flagged caps (hands-free,

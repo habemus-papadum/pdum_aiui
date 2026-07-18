@@ -1,9 +1,10 @@
 /**
- * page-bundle.ts — the REAL page-side surfaces for CDP-driven pages, served
- * from the channel origin and dynamic-imported by the injected bootstrap (the
- * tiny bootstrap stays dependency-free; the heavy module arrives as an ES
- * module over the same Vite middleware that serves the panel — source-first,
- * CORS comes with Vite dev).
+ * page-bundle.ts — the REAL page-side surfaces for CDP-driven pages. The
+ * sidecar builds this module into a self-contained IIFE (sidecar.ts
+ * `pageBundle()`, served at `/intent/page-bundle.js`); the panel reads it from
+ * its OWN origin and the bus `Runtime.evaluate`s it into the page (cdp-bus's
+ * `ensureBundle`). The page fetches nothing — an https page may not import
+ * from the channel's http origin (mixed content; see page-script.ts).
  *
  * What rides the bundle: the component locator (region drags → components →
  * source), jump-to-editor, and the pencil markup surface. The bootstrap calls

@@ -4,7 +4,7 @@
  * registered surface the widgets and the agent use (`actionByName` for verbs,
  * the control boxes for values). The hint bar the UI shows is derived from
  * these bindings, so the displayed keymap can never drift from the working
- * one. (The backtick belongs to the aiui intent overlay — leave it unclaimed.)
+ * one. (The backtick belongs to the aiui intent client — leave it unclaimed.)
  */
 import { actionByName, durable } from "@habemus-papadum/aiui-viz";
 import { installKeys, type KeyLayer, keyHints, resolveKey } from "@habemus-papadum/aiui-viz/modal";

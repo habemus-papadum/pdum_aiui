@@ -4,9 +4,9 @@
  * live-follow for the selection.
  *
  * Graduated from the retired workbench lab so every home of the trace
- * debugger — the `/__aiui/debug` page this package's Vite plugin serves
- * (`aiui debug`), and the intent client's embedded panel pane — renders
- * traces off one implementation. Only page chrome stays host-local.
+ * debugger — the console's `/__aiui/debug` page (`aiui debug` opens the
+ * console), and the intent client's embedded panel pane — renders traces
+ * off one implementation. Only page chrome stays host-local.
  *
  * Follow-newest is on by default: the debugger's whole point is watching the
  * turn you just spoke arrive, stage by stage. The list default-filters to the

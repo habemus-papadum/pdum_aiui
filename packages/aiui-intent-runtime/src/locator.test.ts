@@ -42,7 +42,7 @@ function annotated(
 
 describe("locateComponents (enclosure locator: data-source-loc / data-cell)", () => {
   it("keeps only the highest fully-enclosed elements, with their direct-cell frontier", () => {
-    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/repo/app" };
+    window.__AIUI__ = { v: 1, sourceRoot: "/repo/app" };
     // The app shell overlaps every rect — the old grid locator reported it on
     // every shot; enclosure must not.
     const shell = annotated(document.body, { cell: "AppShell" }, { x: 0, y: 0, w: 1000, h: 800 });
@@ -102,7 +102,7 @@ describe("locateComponents (enclosure locator: data-source-loc / data-cell)", ()
   });
 
   it("a cell's source is its DEFINITION site (data-cell-loc) when stamped, else the JSX approximation", () => {
-    window.__AIUI__ = { v: 1, frames: [], sourceRoot: "/repo/app" };
+    window.__AIUI__ = { v: 1, sourceRoot: "/repo/app" };
     const host = annotated(
       document.body,
       { loc: "src/ui/Panel.tsx:4:1" },

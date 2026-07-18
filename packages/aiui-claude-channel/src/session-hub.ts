@@ -22,9 +22,9 @@
  *    view can show "app tab connected".
  *
  * Deliberately dumb: the hub relays and caches opaque JSON; it does not interpret
- * `armed` or a contribution. The *meaning* lives in the tabs (the overlay's turn
- * host, the reader's session panel). That keeps this one relay reusable for any
- * new view — the general pattern the design calls for.
+ * `armed` or a contribution. The *meaning* lives in the views (the intent
+ * client's turn host, the VS Code bridge). That keeps this one relay reusable
+ * for any new view — the general pattern the design calls for.
  *
  * Transport-agnostic like {@link PageToolDirectory}: a connection is an id + a
  * `send` function, so it is unit-testable without a real socket (see
@@ -40,7 +40,7 @@ import type { TabInfo } from "./frame";
 export interface SessionPeerInfo {
   /** Server-assigned connection id. */
   clientId: string;
-  /** What kind of view this is: `app`, `code`, `git`, `ipad`, … (free-form). */
+  /** What kind of view this is: `intent-client`, `vscode`, … (free-form). */
   role?: string;
   /** A short human label for the peer list (e.g. the page title). */
   label?: string;
@@ -85,7 +85,7 @@ export interface SessionSummary {
   clients: number;
   /** Cached shared-state slots. */
   slots: number;
-  /** The distinct roles currently connected (e.g. `["app","code"]`). */
+  /** The distinct roles currently connected (e.g. `["intent-client","vscode"]`). */
   roles: string[];
 }
 

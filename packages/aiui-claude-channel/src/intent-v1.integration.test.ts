@@ -20,8 +20,8 @@ import { withTracing } from "./tracing";
  * `encodeFrame`/`decodeFrame` end to end. One test replaying the whole client
  * turn — an `events` batch carrying a **patchless** correction request (the
  * server diffs + echoes it; the reconciled client applies our echo locally and
- * never re-sends, so no patched twin is ever on the wire), a separate `context`
- * frame, and the **bare chunkless fin** terminator — asserting the correction
+ * never re-sends, so no patched twin is ever on the wire) and the **bare
+ * chunkless fin** terminator — asserting the correction
  * lands exactly once. (Segment-ordinal echo and the mock-transcriber path are
  * covered by the unit tests in intent-v1.test.ts.)
  */
@@ -32,7 +32,6 @@ const TID = "thread-1";
 interface Harness {
   hello(intent: unknown): Promise<ChannelResponse>;
   events(batch: IntentEvent[]): Promise<ChannelResponse>;
-  context(selection: unknown): Promise<ChannelResponse>;
   bareFin(): Promise<ChannelResponse>;
   /** Drop the transport connection (tears down any thread still mid-turn). */
   close(): Promise<void>;
@@ -63,7 +62,6 @@ function harness(format: ChannelFormat): Harness {
         encodeFrame({ v: PROTOCOL_VERSION, kind: "hello", format: "intent-v1", meta: { intent } }),
       ),
     events: (batch) => data({ kind: "events" }, enc.encode(JSON.stringify({ events: batch }))),
-    context: (selection) => data({ kind: "context" }, enc.encode(JSON.stringify({ selection }))),
     // The client's terminator: a data frame with fin, an EMPTY payload, and NO
     // chunk descriptor.
     bareFin: () =>

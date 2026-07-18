@@ -1,8 +1,9 @@
 /**
  * index.ts — THE aiui Vite plugin (`@habemus-papadum/aiui-source-processor`),
  * home of the whole build-time integration. Extracted into its own package
- * (from `aiui-viz/vite`, itself moved from the dev overlay in the 2026-07-14
- * restructure) so the source transform is a standalone, testable library. One
+ * (from `aiui-viz/vite`, itself moved from the retired dev overlay in the
+ * 2026-07-14 restructure) so the source transform is a standalone, testable
+ * library. One
  * plugin, two jobs — and deliberately nothing else:
  *
  *  1. **The source-locator compiler pass** (./source-locator). It applies to
@@ -22,14 +23,13 @@
  * What this plugin deliberately does NOT do (the old overlay plugin's magic,
  * retired): no channel-port injection, no page-side `/tools` dialing, no
  * session bus, no overlay UI mounting. The `window.__AIUI__` global itself is
- * the RUNTIME's job now (see ./aiui-global — it exists in production too),
- * and channel connectivity arrives from OUTSIDE, via the intent client (the
- * Chrome extension or the CDP tier), never from the app.
+ * the RUNTIME's job now (see `aiui-viz/src/aiui-global.ts` — it exists in
+ * production too), and channel connectivity arrives from OUTSIDE, via the
+ * intent client (the Chrome extension or the CDP tier), never from the app.
  */
 
 import type { Plugin } from "vite";
 import {
-  cellFactory,
   defaultFactories,
   type FactorySpec,
   type SourceLocatorViteOptions,
@@ -52,10 +52,9 @@ export interface AiuiPluginOptions {
   /**
    * The locator pass's options (factories, stampJsx, include/exclude).
    * `true`/omitted = defaults; `false` disables the pass entirely (rare —
-   * durable factory identity dies with it); `{ cellFactories: ["cell"] }` is
-   * back-compat sugar — names treated as cell-shaped factories.
+   * durable factory identity dies with it).
    */
-  locator?: boolean | (SourceLocatorViteOptions & { cellFactories?: string[] });
+  locator?: boolean | SourceLocatorViteOptions;
   /**
    * The app's source root for absolutizing stamps (dev-only injection);
    * defaults to the Vite root at config-resolve time.
@@ -80,7 +79,7 @@ function sourceRootSeed(explicit: string | undefined): Plugin {
         {
           tag: "script",
           injectTo: "head-prepend" as const,
-          children: `(window.__AIUI__ ??= { v: 1, frames: [] }).sourceRoot = ${JSON.stringify(root)};`,
+          children: `(window.__AIUI__ ??= { v: 1 }).sourceRoot = ${JSON.stringify(root)};`,
         },
       ];
     },
@@ -105,14 +104,9 @@ export function aiui(options: AiuiPluginOptions = {}): Plugin[] {
     if (options.locator === undefined || options.locator === true) {
       locatorOptions = { factories: defaultFactories() as FactorySpec[] };
     } else {
-      const { cellFactories, ...rest } = options.locator;
       locatorOptions = {
-        ...rest,
-        factories:
-          rest.factories ??
-          (cellFactories !== undefined
-            ? cellFactories.map((name) => cellFactory(name))
-            : (defaultFactories() as FactorySpec[])),
+        ...options.locator,
+        factories: options.locator.factories ?? (defaultFactories() as FactorySpec[]),
       };
     }
     plugins.push(sourceLocatorVite(locatorOptions));

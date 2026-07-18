@@ -3,8 +3,8 @@
  * agent.
  *
  * In the aiui CLI's default "attach" mode, `aiui claude` launches the browser
- * itself — with a DevTools debug port, the project profile, and the aiui
- * extensions (DevTools panel, intent tool) — and chrome-devtools-mcp
+ * itself — with a DevTools debug port, the project profile, and the intent
+ * client's extension — and chrome-devtools-mcp
  * *attaches* to it
  * (`--browser-url`) instead of launching a private one. That's what makes the
  * agent's browser the same window the human is looking at: shared tabs,
@@ -15,7 +15,7 @@
  * (`aiui vite`) puts its page in the same
  * shared window instead of re-deriving the mechanics. The aiui CLI layers its
  * own affordances on top (config resolution, Chrome for Testing sync, the
- * devtools-extension autoload); nothing here reads config or prompts.
+ * intent-client extension autoload); nothing here reads config or prompts.
  *
  * There is deliberately no registry file for browsers. Chrome itself writes
  * `DevToolsActivePort` into the user data dir of any instance started with a
@@ -154,7 +154,8 @@ export async function launchSessionBrowser(opts: {
     //    needs macOS Screen Recording permission the CfT binary doesn't have —
     //    every capture then dies with NotReadableError ("Could not start
     //    video source"), silently defeating the tab-capture flag below (this
-    //    broke the paint host's screen share; verified against CfT 150).
+    //    broke screen share in the retired paint sidecar; verified against
+    //    CfT 150).
     "--auto-accept-camera-and-microphone-capture",
     //  - auto-accept a current-tab share (getDisplayMedia({ preferCurrentTab:
     //    true })) — no picker, no gesture, no OS-level screen-recording grant.
@@ -173,8 +174,9 @@ export async function launchSessionBrowser(opts: {
     //    target tab the panel document may never receive the gesture Chrome's
     //    autoplay policy wants — the clip would be refused with
     //    NotAllowedError. The SpeechPlayer parks blocked clips and resumes on
-    //    a gesture (dev-overlay speech.ts), so outside this browser nothing is
-    //    lost — but in the session browser the linter should simply be HEARD.
+    //    a gesture (aiui-intent-runtime/src/speech.ts), so outside this
+    //    browser nothing is lost — but in the session browser the linter
+    //    should simply be HEARD.
     "--autoplay-policy=no-user-gesture-required",
   ];
   if (opts.extensionDirs?.length) {

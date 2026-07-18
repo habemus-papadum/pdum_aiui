@@ -9,8 +9,8 @@
  *
  * This was extracted from the Lab's host wiring so that INTEGRATORS never
  * touch WebRTC: the whole paint-era `paint-host.ts` (capture → JPEG pump →
- * websocket) is replaced by constructing one of these with a surface and a
- * stream. The Lab remains the living reference consumer.
+ * websocket; git history) was replaced by constructing one of these with a
+ * surface and a stream. The Lab remains the living reference consumer.
  *
  * The one contract that carries all the coordinate correctness (D2): the
  * plane reported by {@link HostSessionOptions.size} must be **the captured

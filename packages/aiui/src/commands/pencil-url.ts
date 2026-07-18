@@ -46,8 +46,7 @@ interface SurfaceTarget {
   clients: number;
 }
 
-/** Non-internal IPv4 addresses — the URLs an iPad on the LAN can open. (The
- * demo server keeps its own copy; the sidecar itself no longer needs one.) */
+/** Non-internal IPv4 addresses — the URLs an iPad on the LAN can open. */
 function lanAddresses(): string[] {
   const out: string[] = [];
   for (const addrs of Object.values(networkInterfaces())) {
@@ -154,7 +153,7 @@ function channelLabel(server: RunningServer, agents: Map<number, ClaudeAgent>): 
 }
 
 export function runPencilUrl(opts: { json?: boolean } = {}): Promise<void> {
-  return opts.json ? dumpSurfaceTargets("/pencil", "pencil") : pickSurfaceUrl("/pencil", "pencil");
+  return opts.json ? dumpSurfaceTargets("/pencil") : pickSurfaceUrl("/pencil", "pencil");
 }
 
 /**
@@ -233,7 +232,7 @@ function noChannel(name: string): void {
 }
 
 /** `--json`: every hosting channel's URLs at once, for scripts (no prompts). */
-async function dumpSurfaceTargets(prefix: string, _name: string): Promise<void> {
+async function dumpSurfaceTargets(prefix: string): Promise<void> {
   const servers = listMcpServers();
   const agents =
     servers.length > 0 ? agentsByPid(listClaudeAgents()) : new Map<number, ClaudeAgent>();

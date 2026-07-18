@@ -140,8 +140,8 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
   },
 ];
 
-/** The standing config strip (the old panel's bottom bar): read at
- * thread-open by the Phase-2 lanes; visible and settable now. */
+/** The standing config strip: read at thread-open by the lanes
+ * (lanes.ts binds stt/linter/shotFlash); visible and settable here. */
 export const configBar: readonly BarNode<IntentContext>[] = [
   { kind: "widget", control: "stt", widget: "select", label: "stt" },
   { kind: "widget", control: "linter", widget: "select", label: "linter" },

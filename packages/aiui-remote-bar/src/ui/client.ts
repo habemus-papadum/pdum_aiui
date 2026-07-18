@@ -46,8 +46,8 @@ export interface BarTransportHandlers {
 export type BarTransportFactory = (url: string, handlers: BarTransportHandlers) => BarTransport;
 
 /**
- * Derive the relay's client URL from the page's own location — the way paint's
- * client page does. Defaults to `/bar/client` on the same host, `wss:` under
+ * Derive the relay's client URL from the page's own location — the way pencil's
+ * iPad client does. Defaults to `/bar/client` on the same host, `wss:` under
  * https. A consumer served off a *different* origin than the channel (a Vite dev
  * server on another port) passes an explicit `url` instead.
  */

@@ -3,10 +3,10 @@
  *
  * The panes were prototyped in the retired workbench lab, where the lab's own stylesheet
  * dressed them (`wb-insp-*`). Graduated here, the debug UI must look right in
- * two homes that share no CSS — the lab dock and the DevTools extension panel —
- * so it ships its own styles under an `aiui-dbg-` prefix and injects them once
- * per document. The palette matches the channel's `/debug` viewer so an
- * embedded pane is visually of a piece with the standalone trace debugger.
+ * two homes that share no CSS — the intent client's panel and the console's
+ * `/__aiui/debug` page — so it ships its own styles under an `aiui-dbg-` prefix
+ * and injects them once per document. One palette in both, so an embedded pane
+ * is visually of a piece with the standalone trace debugger.
  */
 
 const STYLE_ID = "aiui-dbg-styles";
@@ -40,7 +40,7 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-peek img { display: block; max-width: 380px; max-height: 280px; border-radius: 5px; }
 .aiui-dbg-peek .aiui-dbg-peek-err { color: #9aa0aa; font-size: 11px; padding: 4px 6px; }
 
-/* ── trace view: the card-based reading surface (dock + DevTools) ───────────── */
+/* ── trace view: the card-based reading surface (panel + console) ───────────── */
 /* The ROOT no longer scrolls: its two sections each own a scroll (below), so
    the prompt stays readable however many stages a trace has. */
 .aiui-dbg-trace { flex: 1; overflow: hidden;
@@ -181,7 +181,7 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbg-hero-preview { margin-bottom: 6px; color: #ffd166; font-size: 11px;
   text-transform: uppercase; letter-spacing: .05em; }
 
-/* correction patch → a real diff (mirrors the overlay's mm-diff palette) */
+/* correction patch → a real diff (mirrors the intent client's mm-diff palette) */
 .aiui-dbg-patch { margin: 6px 0 0; padding: 6px 8px; background: #14171f; border-radius: 6px;
   font: 11px/1.5 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
 .aiui-dbg-patch-line { padding: 0 2px; border-radius: 3px; }
@@ -220,8 +220,8 @@ export const DEBUG_UI_CSS = /* css */ `
 .aiui-dbgt-bar { display: flex; align-items: center; gap: 4px; padding: 6px 10px;
   color: #9aa0aa; border-bottom: 1px solid #262c3a; flex: none; }
 .aiui-dbgt-bar label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
-/* The picker shows ~3 rows and scrolls — it is a chooser, not the content
-   (reworked 2026-07-12; it used to eat a third of every host). */
+/* The picker — a chooser, not the content: since the 2026-07-12 rework it is
+   a one-line dropdown (trigger + popup menu; see traces-pane.ts). */
 .aiui-dbgt-list { max-height: 5.5rem; overflow-y: auto;
   border-bottom: 1px solid #262c3a; flex: none; }
 .aiui-dbgt-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;

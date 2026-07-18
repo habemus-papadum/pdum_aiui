@@ -257,7 +257,8 @@ export type IntentClientExtension =
 /** Absolute paths for the intent client's bundle, in a checkout. */
 export function intentClientExtensionPaths(): { root: string; outDir: string } | undefined {
   try {
-    // realpath for the same reason as above: the canonical load-unpacked path.
+    // realpath, not the pnpm symlink — the same canonical path a manual
+    // "Load unpacked" would register in the profile.
     const root = realpathSync(packageRoot(INTENT_CLIENT_PKG));
     return { root, outDir: join(root, INTENT_CLIENT_OUT_DIR) };
   } catch {
@@ -278,8 +279,8 @@ export function resolveIntentClientExtension(
 }
 
 /** The intent client extension, as this checkout can load it. No build-on-
- * launch (the same rule as the frozen extension's ladder): the bundle is a
- * deliberate act — `pnpm -C packages/aiui-intent-client build:ext`. */
+ * launch: the bundle is a deliberate act —
+ * `pnpm -C packages/aiui-intent-client build:ext`. */
 export function findIntentClientExtension(): IntentClientExtension {
   return resolveIntentClientExtension(intentClientExtensionPaths());
 }

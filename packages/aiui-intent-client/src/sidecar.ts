@@ -5,7 +5,7 @@
  * `?channel=` needed, no port probing, no native host — ever).
  *
  * Mounted under `/intent/` on the channel's one port, exactly like the iPad
- * paint page under `/paint/` (the standing exception to "the channel serves
+ * pencil page under `/pencil/` (the standing exception to "the channel serves
  * no HTML": a page whose frontend process IS the channel). HOW it is served is
  * a {@link SidecarContext.mode} decision, delegated to the shared helper
  * (aiui-util's `serveClientSurface`): in DEV a Vite dev server in middleware
@@ -16,7 +16,7 @@
  * page is the always-there one, and in dev it hot-reloads too.
  *
  * Reachability follows the channel's bind decision (`channel.bind`), same
- * as paint — the sidecar adds no listener and no new posture.
+ * as pencil — the sidecar adds no listener and no new posture.
  */
 
 import { fileURLToPath } from "node:url";
@@ -155,7 +155,7 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
         }
         if (req.path === `${INTENT_PREFIX}/cdp/info`) {
           // The standalone `pnpm dev` page probes this from ITS origin (the
-          // Vite dev server), like the paint sidecar's /info — hence the CORS.
+          // Vite dev server), like the pencil sidecar's /info — hence the CORS.
           res.setHeader("Access-Control-Allow-Origin", "*");
           const port = Number(req.socket.localPort);
           void cdp

@@ -18,7 +18,7 @@ import { CONSOLE_DEBUG_PATH } from "./routes";
 const here = location.pathname.replace(/\/+$/, "");
 
 if (here === CONSOLE_DEBUG_PATH.replace(/\/+$/, "")) {
-  // Same-origin: the channel opens CORS on `/debug/api/*`, so the loopback port
+  // Same-origin: the page is served from the channel itself, so its own port
   // is all the debugger needs to poll this channel.
   mountDebugPage({ port: Number(location.port) || undefined });
 } else {

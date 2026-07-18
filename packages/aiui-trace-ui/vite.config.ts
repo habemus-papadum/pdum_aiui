@@ -21,12 +21,7 @@ export default defineConfig({
   },
   build: {
     lib: {
-      // Two entries: the browser panes, and the dev-server plugin behind
-      // `./vite` (Node code — kept out of the browser bundle).
-      entry: {
-        index: "src/index.ts",
-        vite: "src/vite.ts",
-      },
+      entry: { index: "src/index.ts" },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },

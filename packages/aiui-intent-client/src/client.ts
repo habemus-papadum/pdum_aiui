@@ -233,14 +233,14 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
   // Page facts are PER-TAB facts (owner, 2026-07-16). They used to be written
   // straight into the global context by WHICHEVER tab reported last — and a
   // tab switch fires visibilitychange hellos on BOTH sides, so two hellos
-  // raced and the loser's facts (aiui pill, the jump gate, the selection dot,
-  // the foreign-client refusal) could describe a tab you are not looking at.
+  // raced and the loser's facts (aiui pill, the jump gate, the selection dot)
+  // could describe a tab you are not looking at.
   // Facts now live in a by-tab map; the context carries the ACTIVE tab's,
   // re-derived on every switch and on every event for the tab in view.
-  // (Entries for closed tabs linger — three booleans a tab; nothing reads a
+  // (Entries for closed tabs linger — two booleans a tab; nothing reads a
   // dead tab's entry, since derivation only ever follows the active id.)
-  const tabFacts = new Map<number, { aiui?: boolean; selection?: boolean; foreign?: boolean }>();
-  const factsFor = (tab: number): { aiui?: boolean; selection?: boolean; foreign?: boolean } => {
+  const tabFacts = new Map<number, { aiui?: boolean; selection?: boolean }>();
+  const factsFor = (tab: number): { aiui?: boolean; selection?: boolean } => {
     let facts = tabFacts.get(tab);
     if (facts === undefined) {
       facts = {};
@@ -253,7 +253,6 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     engine.setContext({
       selectionPresent: facts?.selection === true,
       aiuiPage: facts?.aiui === true,
-      foreignArmed: facts?.foreign === true,
     });
   };
 
@@ -271,8 +270,6 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       return;
     } else if (event.kind === "aiuiSupport") {
       factsFor(event.tab).aiui = event.supported;
-    } else if (event.kind === "foreignClient") {
-      factsFor(event.tab).foreign = event.armed;
     } else if (event.kind === "regionDrag") {
       // Area mode auto-exits after a drag (owner, 2026-07-16): the lanes crop +
       // upload the shot on this same event; here we flip the mode off so the cap

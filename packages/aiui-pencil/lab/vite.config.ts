@@ -83,8 +83,8 @@ function pencilRelay(): Plugin {
  * vite-plugin-solid (also `pre`) compiles each element into an opaque template.
  * Same-enforce plugins run in array order.
  *
- * `root` is this directory: the Lab is an app living inside the library package
- * (the same shape `aiui-paint/demo` uses), not a workspace member of its own. It
+ * `root` is this directory: the Lab is an app living inside the library package,
+ * not a workspace member of its own. It
  * imports the library through `@habemus-papadum/aiui-pencil`, which resolves to
  * SOURCE via the package's own `exports` — so editing the pipeline hot-reloads
  * the Lab with no build step.

@@ -2,12 +2,12 @@
  * Absolute-path affordances shared by the debug panes.
  *
  * The lowering convention hands the session attachments as **absolute paths**
- * (archive/channel-attachment-path-encoding.md), so wherever a path shows up in
- * a rendered stage — the Option-C meta of the IR pane, a lowered-prompt string —
- * the debug UI makes it tangible: highlighted, and for images under a
- * previewable root, hover to peek, click to open. Which URL serves the preview
- * differs by host (the lab's dev server vs. the channel's `/debug/api/preview`
- * cross-origin), so the resolver is injected.
+ * (archive/channel-attachment-path-encoding.md), so wherever a path shows up
+ * in a rendered stage — a lowered-prompt string, a stage payload — the debug
+ * UI makes it tangible: highlighted, and for images under a previewable root,
+ * hover to peek, click to open. Hosts that poll a channel cross-origin inject
+ * a resolver carrying the channel origin (see traces-pane.ts); the default
+ * assumes same-origin service of the channel's `/debug/api/preview` route.
  */
 
 const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i;
@@ -18,9 +18,10 @@ const ABS_PATH = /(^|[\s"'({[=:,])(\/(?:[\w.@%+~-]+\/)+[\w.@%+~-]+)/g;
 /** Resolves an absolute image path to a servable preview URL. */
 export type PreviewUrl = (path: string) => string;
 
-/** Default: a host that serves image previews at `/api/preview?path=…`. */
+/** Default: the channel's preview route, same-origin. Cross-origin hosts
+ * inject `${baseUrl}/debug/api/preview?path=…` instead. */
 export const defaultPreviewUrl: PreviewUrl = (path) =>
-  `/api/preview?path=${encodeURIComponent(path)}`;
+  `/debug/api/preview?path=${encodeURIComponent(path)}`;
 
 let peekEl: HTMLDivElement | undefined;
 

@@ -4,7 +4,7 @@
  * A channel server's parent process *is* the Claude Code session that spawned
  * it, so a registry entry's `ppid` matches a Claude agent's `pid`. That lets us
  * label a server with its session's human name (e.g. "pdum-aiui-97") and id
- * instead of a bare pid, both in the selector and in the `list_channels` tool.
+ * instead of a bare pid, both in the selector and in the `channel_info` tool.
  */
 import { execFileSync } from "node:child_process";
 import type { RegistryEntry } from "./registry";

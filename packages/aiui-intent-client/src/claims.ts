@@ -1,17 +1,13 @@
 /**
- * claims.ts — the client's operations, derived (parity inventory §2B, every
- * hand-called `sync*` of the old panel re-expressed as a claim nobody calls).
+ * claims.ts — the client's operations, derived (parity inventory §2B: every
+ * hand-called `sync*` the retired extension panel carried, re-expressed as a
+ * claim nobody calls — git history: aiui-extension's panel).
  *
  * Each claim is a pure derivation from (state, ctx) plus an async applier
  * over the host seam. The reconciler (aiui-viz/modal claims.ts) drives them
  * after every commit: a forgotten sync is structurally impossible, a tab
  * switch re-points everything that names a tab, and per-claim status is the
  * UI's "warming / live / failed" truth.
- *
- * The old panel's five sync functions map:
- *   syncPencilSurface → pencilSurface   syncTabStream → tabStream
- *   syncVideo      → videoSample      key routing   → keyRouting
- *   broadcastRing  → ring
  */
 
 import type { ClaimSpecs, EngineState } from "@habemus-papadum/aiui-viz/modal";

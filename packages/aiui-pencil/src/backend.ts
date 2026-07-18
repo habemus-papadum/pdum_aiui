@@ -3,7 +3,7 @@
  *
  * The room logic that pairs a browser **host** (the page that owns the real
  * `PencilSurface`) with remote **clients** (the iPad), packaged as the two seams
- * the repo's relays share (`aiui-remote-bar`, and `aiui-paint` before it): an
+ * the repo's relays share (`aiui-remote-bar`, and retired `aiui-paint` before it): an
  * HTTP handler and a websocket-upgrade handler that a host process mounts
  * wherever it likes. It never listens on a port itself. The channel sidecar
  * (`./sidecar`) mounts it at `/pencil`; the Lab's Vite plugin mounts the same
@@ -19,7 +19,7 @@
  *
  * **No media.** Video is a `MediaStreamTrack` on an `RTCPeerConnection` between
  * the host and the client directly (D1); the relay carries only its signaling.
- * That is the deliberate difference from the paint relay this replaces, whose
+ * That is the deliberate difference from the paint relay this replaced, whose
  * whole job was pumping JPEG frames — this one moves a few JSON frames a second
  * and then gets out of the way.
  *

@@ -11,7 +11,7 @@
  * host it is running on. That is the seam doing its job.
  *
  * The capability surface is likewise the same command set the CDP page serves
- * (`ring · flash · keylayer · selection · viewport · ink · locate`) — here it
+ * (`ring · flash · keylayer · selection · viewport · pencil · jump · locate`) — here it
  * arrives over the relay instead of `Runtime.evaluate`.
  */
 
@@ -77,15 +77,3 @@ export function isNavigationMessage(msg: unknown): msg is NavigationMessage {
 export interface StreamIdResult {
   streamId: string;
 }
-
-/**
- * The old extension's on-page ring, as a DOM fact — the coexistence detector.
- *
- * Both clients inject into the same page, and two rings + two ink surfaces on
- * one tab is nonsense. They cannot talk (`chrome.runtime` never crosses
- * extension ids), but they share a DOM: the frozen client's indicator lives at
- * this id, and its shadow root carries an `armed` class while it holds a tab.
- * That is enough for the policy in the README — the new client refuses to arm a
- * tab the old one has armed, and says so, rather than fighting it for the page.
- */
-export const LEGACY_RING_HOST_ID = "aiui-webext-indicator-host";

@@ -330,9 +330,13 @@ export function Panel(props: PanelProps) {
       {
         label: "aiui",
         state: ctx.aiuiPage ? "on" : "off",
-        detail: ctx.aiuiPage ? "aiui-instrumented (locate/jump capable)" : "not instrumented",
+        detail: ctx.aiuiPage ? "aiui-instrumented (jump capable)" : "not instrumented",
       },
-      { label: "ipad", state: ctx.paintClients > 0 ? "on" : "off", detail: `${ctx.paintClients}` },
+      {
+        label: "ipad",
+        state: ctx.pencilClients > 0 ? "on" : "off",
+        detail: `${ctx.pencilClients}`,
+      },
     ];
   });
 

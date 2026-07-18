@@ -12,7 +12,7 @@
  * immediate otherwise — while the same stroke streams to the host and comes
  * back inside the WebRTC video. So, for the transit window, two copies of a
  * translucent stroke are on screen at once. The handoff policy is deliberately
- * the one the paint stream shipped and proved:
+ * the one the retired paint stream shipped and proved:
  *
  *   **from pen-up, the preview cross-fades out over a fixed window** —
  *   {@link PREVIEW_FADE_MS} by default — long enough that the video's copy has
@@ -20,7 +20,7 @@
  *
  * There is no frame correlation, no ack, and no per-frame metadata (D3 records
  * why, including what the abandoned exact version would have cost). The one
- * refinement over paint v1 is that the window need not be a guess:
+ * refinement over that shipped policy is that the window need not be a guess:
  * {@link fadeWindowMs} sizes it from the connection's *measured* delays when
  * `RTCRtpReceiver.getStats()` offers them, and falls back to the shipped
  * constant when it doesn't.
@@ -46,8 +46,9 @@ import type { PenSample } from "./telemetry";
 // ── the fade window ─────────────────────────────────────────────────────────
 
 /**
- * Paint v1's shipped constant (`FADE_MS = 500` in its iPad client), kept as the
- * default because it is the one value with field evidence behind it.
+ * Retired paint v1's shipped constant (`FADE_MS = 500` in its iPad client; git
+ * history), kept as the default because it is the one value with field evidence
+ * behind it.
  */
 export const PREVIEW_FADE_MS = 500;
 
@@ -126,7 +127,7 @@ export interface RemoteClientOptions {
  *
  * It holds no fade clock either: the *app's* preview surface owns the pixels, so
  * it owns their retirement too (alpha from `1 − (now − doneAt) / fadeWindowMs()`,
- * per frame, exactly as paint v1 did). This core's job ends at the wire.
+ * per frame, exactly as retired paint v1 did). This core's job ends at the wire.
  */
 export class RemoteClient {
   constructor(private readonly opts: RemoteClientOptions) {}

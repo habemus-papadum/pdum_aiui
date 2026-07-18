@@ -1,7 +1,7 @@
 /**
- * fade.ts — the vanishing curve. Salvaged from `aiui-ink` essentially verbatim,
- * because it was already right: it is pure, it is tested, and the taste in it is
- * hard-won. Layer 1.
+ * fade.ts — the vanishing curve. Salvaged essentially verbatim from retired
+ * `aiui-ink`, because it was already right: it is pure, it is tested, and the
+ * taste in it is hard-won. Layer 1.
  *
  * A linear fade is the wrong shape for gesture ink: the stroke spends its whole
  * life visibly dying, so it looks *sick* from the moment it is drawn, and the

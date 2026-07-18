@@ -45,7 +45,7 @@ describe("startWebServer", () => {
     const health = await fetch(`${base}/health`);
     expect(health.status).toBe(200);
     // host reports the bound address (loopback unless the launcher widens it) —
-    // `aiui paint url` reads it to decide which URLs an iPad could open.
+    // `aiui pencil url` reads it to decide which URLs an iPad could open.
     expect(await health.json()).toMatchObject({
       ok: true,
       pid: process.pid,
@@ -345,7 +345,7 @@ describe("startWebServer page tools (/tools websocket end to end)", () => {
 });
 
 /**
- * A tools client that behaves like the dev-overlay bridge across a drop:
+ * A tools client that behaves like the intent client's tools-link across a drop:
  * re-dials after a short delay and re-registers its namespace on every (re)open.
  * We keep the delay tiny so the reconnect test never sleeps for the real 3s.
  */

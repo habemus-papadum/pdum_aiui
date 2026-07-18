@@ -28,7 +28,7 @@ describe("ensureAiuiGlobal", () => {
 
   it("respects an EXISTING tools surface (the old overlay's ws bridge)", () => {
     const bridge = { register: () => {} };
-    (window as unknown as { __AIUI__?: unknown }).__AIUI__ = { v: 1, frames: [], tools: bridge };
+    (window as unknown as { __AIUI__?: unknown }).__AIUI__ = { v: 1, tools: bridge };
     expect(ensureAiuiGlobal()?.tools).toBe(bridge);
   });
 });

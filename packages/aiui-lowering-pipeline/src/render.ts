@@ -163,7 +163,6 @@ export function renderPrompt(
     components,
     prompt,
     spans,
-    meta: {},
   };
 }
 
@@ -277,9 +276,10 @@ function selectionMetadata(
  * {@link MAX_SELECTION_LINES} lines. The only metadata block a code selection
  * carries is the contributing view's `<tab>` record, when known.
  *
- * Exported (P3/RT4): the channel's realtime resolver re-attaches a selection
- * the live model referenced by bare id (`code_1`) with THIS exact rendering —
- * one implementation, per the defer-rendering rule. The parameter is the
+ * Exported so any re-attacher shares THIS exact rendering — one
+ * implementation, per the defer-rendering rule (the channel's composer-era
+ * realtime resolver, which re-attached a selection the live model referenced
+ * by bare id like `code_1`, was the original consumer). The parameter is the
  * `ComposedItem` subset the rendering reads.
  */
 export function renderCodeSelection(
@@ -325,9 +325,10 @@ export function renderCodeSelection(
  * in the channel's prompt-context — remains only for the text modality's
  * send-time `context` chunk.)
  *
- * Exported (P3/RT4): the channel's realtime resolver re-attaches a selection
- * the live model referenced by bare id (`sel_2`) with THIS exact rendering —
- * one implementation, per the defer-rendering rule.
+ * Exported so any re-attacher shares THIS exact rendering — one
+ * implementation, per the defer-rendering rule (the channel's composer-era
+ * realtime resolver, re-attaching by bare id like `sel_2`, was the original
+ * consumer).
  */
 /** A URL as the short label a prompt should carry: path+query+hash (or the
  * full string when it doesn't parse — tests, exotic schemes). */

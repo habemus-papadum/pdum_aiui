@@ -23,8 +23,9 @@ export default defineConfig({
   test: {
     server: {
       deps: {
-        // Solid must be INLINED under Vitest, not node-resolved — the same
-        // finding aiui-dev-overlay's config records. Node's export conditions
+        // Solid must be INLINED under Vitest, not node-resolved — this file is
+        // the canonical record of the finding (sibling package and demo
+        // configs cite it). Node's export conditions
         // hand @solidjs/web a SERVER build of solid-js, so `_$effect` calls a
         // DIFFERENT instance of `createRenderEffect` than a test's
         // `import { getObserver } from "solid-js"` observes. The DOM is still
@@ -57,8 +58,8 @@ export default defineConfig({
       // @uwdata/mosaic-plot, @duckdb/duckdb-wasm, and katex stay optional
       // peers that core consumers never import; the page-chrome porcelain
       // (`./site`); and the modal interaction kit (`./modal`: framework-free,
-      // no Solid import, so node-side consumers can reach it through the
-      // overlay's intent pipeline).
+      // no Solid import, so node-side consumers can reach it —
+      // aiui-lowering-pipeline re-exports `wordDiff` from it).
       entry: {
         index: "src/index.ts",
         plot: "src/plot.tsx",

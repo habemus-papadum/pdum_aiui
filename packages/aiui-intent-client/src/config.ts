@@ -1,9 +1,9 @@
 /**
- * config.ts — the standing config surface, pulled forward from Phase 2 so
- * the bar is feature-complete NOW and nothing gets lost (PARITY.md "kept
- * getting lost" list). Values, bounds, and options mirror the old panel's
- * store (aiui-extension panel/model/store.ts) verbatim; the lanes that READ
- * them (hello expansion, sampler cadence, pencil relay) bind in Phase 2.
+ * config.ts — the standing config surface (PARITY.md "kept getting lost"
+ * list). Values, bounds, and options carried over verbatim from the retired
+ * extension panel's store (git history: aiui-extension); the lanes READ them
+ * live — lanes.ts binds the hello expansion, the sampler cadence, and the
+ * pencil relay.
  *
  * Every entry is a `control()` — durable, agent-visible through the standard
  * tools, and rendered in the bar/config strip as widget nodes bound by name.
@@ -85,5 +85,5 @@ export const uiScale = control({
   min: 0.6,
   max: 2,
   step: 0.1,
-  description: "panel zoom (keyboard only)",
+  description: "panel zoom (side panel's −/%/+ buttons)",
 });

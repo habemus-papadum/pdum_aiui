@@ -1,7 +1,7 @@
 /**
  * jump-mode.ts — jump-to-editor for instrumented pages, IN-REPO (ported from
- * the overlay's `multimodal/vscode.ts` + `jump-picker.tsx`, owner 2026-07-15;
- * the overlay stays frozen).
+ * the retired dev-overlay's `multimodal/vscode.ts` + `jump-picker.tsx`, owner
+ * 2026-07-15; the overlay is deleted — git history only).
  *
  * The gesture: the panel's `j` (turn phase, aiui pages only) arms a ONE-SHOT
  * pick on the page — move highlights the nearest stamped element, click opens
@@ -11,10 +11,10 @@
  * Esc cancels; commit or cancel, the mode disarms (one-shot, like the region
  * drag).
  *
- * Unlike the overlay's picker this one is PLAIN DOM: it runs inside victim
- * pages via the evaluated ink bundle (CDP tier) or the content script (MV3),
- * where Solid's compile-time JSX is not available. The interaction contract
- * is the overlay's, kept exactly:
+ * Unlike the overlay's Solid picker this one is PLAIN DOM: it runs inside
+ * victim pages via the evaluated page bundle (CDP tier) or the content script
+ * (MV3), where Solid's compile-time JSX is not available. The interaction
+ * contract is the overlay's, kept exactly:
  *
  *   move   highlight the nearest stamped element under the pointer
  *   click  open the picker (chains at the click target)
@@ -219,7 +219,7 @@ export function armJump(
   host.append(style, highlight, picker);
   (document.body ?? document.documentElement).appendChild(host);
 
-  // The picker's tiny selection model (the overlay's, minus Solid).
+  // The picker's tiny selection model (the retired overlay's, minus Solid).
   let rows: JumpTarget[] = [];
   let openable: number[] = [];
   let selected = -1;

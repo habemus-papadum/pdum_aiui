@@ -42,7 +42,7 @@ describe("selectionLineCount", () => {
 });
 
 describe("selectionToContribution", () => {
-  it("builds the overlay's structured payload, verbatim text, role vscode", () => {
+  it("builds the structured payload, verbatim text, role vscode", () => {
     expect(selectionToContribution(multi, "vscode://file/proj/src/foo.ts:5:1")).toEqual({
       kind: "selection",
       text: "a\nb\nc",

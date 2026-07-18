@@ -12,8 +12,10 @@ export interface AiuiArgs {
   /** The `--aiui-tag <tag>` value, if provided (the channel/MCP session tag). */
   tag?: string;
   /**
-   * The `--aiui-mcp <tag>` value, if provided — the tag of the running channel
-   * MCP server to target (e.g. so `aiui vite` connects to a specific session).
+   * The `--aiui-mcp <tag>` value, if provided. RETIRED: no command consumes it
+   * anymore (`aiui vite` stopped wiring a channel, 2026-07-17); the flag is
+   * still parsed so old scripts get a loud "ignored" warning instead of an
+   * unknown-option error. Drop it once the migration window closes.
    */
   mcp?: string;
   /**
@@ -60,7 +62,7 @@ export interface AiuiArgs {
    * The `--aiui-bind <loopback|host>` value, if provided — where the channel's
    * web backend binds for this launch, overriding `channel.bind` in config.
    * `host` is the trusted-LAN posture: the whole (unauthenticated) channel
-   * surface, iPad paint page included, becomes reachable from the network.
+   * surface, iPad pencil page included, becomes reachable from the network.
    */
   bind?: ChannelBind;
   /** Everything else, to forward verbatim to the wrapped tool. */
@@ -94,8 +96,8 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
  * Recognised aiui options:
  *  - `--aiui-tag <tag>` / `--aiui-tag=<tag>` — the channel/MCP session tag,
  *    forwarded to the channel server (and usable with `quick --tag`).
- *  - `--aiui-mcp <tag>` / `--aiui-mcp=<tag>` — the tag of the running channel
- *    MCP server to target (e.g. which session `aiui vite` should connect to).
+ *  - `--aiui-mcp <tag>` / `--aiui-mcp=<tag>` — RETIRED (parsed only to warn;
+ *    see the field doc).
  *  - `--aiui-chrome` / `--aiui-no-chrome` — force the Chrome DevTools MCP on
  *    (even under CI) / leave it off. Passing both is an error.
  *  - `--aiui-browser` / `--aiui-no-browser` — force opening the page in the

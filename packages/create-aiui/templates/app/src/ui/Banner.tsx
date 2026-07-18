@@ -11,10 +11,10 @@ export function Banner() {
         <span class="accent">this page is alive</span> — talk to it
       </h1>
       <p>
-        You're looking at a running web app wired to a Claude Code session. Press <kbd>`</kbd>{" "}
-        (backtick) or the floating <b>✳ aiui</b> button, then <em>say or type</em> what you want.
-        Hold <kbd>space</kbd> to speak; drag to circle the thing you mean. Your intent lands in the
-        session, and the agent edits this app's source while you watch it hot-reload.
+        You're looking at a running web app wired to a Claude Code session. Press <kbd>⌘B</kbd> to
+        activate the intent client, then <em>say or type</em> what you want. Hold <kbd>space</kbd>{" "}
+        to speak; drag to circle the thing you mean. Your intent lands in the session, and the agent
+        edits this app's source while you watch it hot-reload.
       </p>
       <p>
         The rose below is placeholder scenery. Play with it — drag the sliders — then describe the

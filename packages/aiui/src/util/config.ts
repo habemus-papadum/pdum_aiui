@@ -47,8 +47,6 @@ export {
   type ChromeChannel,
   type ChromeMode,
   DEFAULT_MANAGED_FLAVOR,
-  FOR_TESTING_MODES,
-  type ForTestingMode,
   MANAGE_MODES,
   MANAGED_FLAVORS,
   type ManagedFlavor,
@@ -109,9 +107,9 @@ type SectionValues = Record<string, ConfigValue>;
  * still carries one must not hard-fail — that would break every existing
  * config on upgrade — so it is accepted and ignored, distinct from a
  * genuinely-unknown key (a typo), which still throws. `sidecars.*` retired when
- * the channel began hosting its whole standard set unconditionally (paint,
- * intent, bar, pencil): there is nothing left to toggle, so the key is inert and
- * safe to delete.
+ * the channel began hosting its whole standard set unconditionally (today:
+ * intent, bar, pencil, console): there is nothing left to toggle, so the key is
+ * inert and safe to delete.
  */
 const DEPRECATED_SECTIONS = new Set(["sidecars"]);
 

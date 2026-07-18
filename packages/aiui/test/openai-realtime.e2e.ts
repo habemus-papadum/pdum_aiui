@@ -1,6 +1,6 @@
 /**
  * Micro-e2e for the intent pipeline's REAL realtime (streaming) transcription
- * path (streaming-turns.md §3, L1). The sibling `openai-pipeline.e2e.ts` smokes
+ * path (archive/streaming-turns.md §3, L1). The sibling `openai-pipeline.e2e.ts` smokes
  * the REST wire; this one smokes the realtime wire — a single ~2 s WebSocket
  * session against the live GA endpoint, asserting round-trip **shape**, never
  * output quality:

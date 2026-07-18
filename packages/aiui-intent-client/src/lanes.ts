@@ -3,8 +3,8 @@
  * composeIntent), the wire (createWire/openIntentThread), the talk shell
  * (createTalk), the speech player, and the video frame pump — bound as
  * `IntentLanes` + claim hooks over the host seam. Every module here is an
- * unchanged import from the overlay's shared shell (the salvage list);
- * what's new is only the binding.
+ * import from aiui-intent-runtime / aiui-lowering-pipeline (the retired
+ * overlay's shared shell, extracted); what's new is only the binding.
  *
  * Division of truth (parity ledger "engine dual-truth: designed out"): the
  * MODE engine owns armed/turn as the single machine; the WIRE engine is
@@ -14,7 +14,7 @@
  *
  * Config consumers (the "kept getting lost" list, now consuming):
  *  - stt / linter → the engine's IntentPipelineConfig, declared on every
- *    hello (panelIntentConfig, salvaged from the old panel's turn.ts);
+ *    hello (panelIntentConfig, salvaged from the retired panel's turn.ts);
  *  - videoPeriodSec → the sampler's constant-mode cadence, read per tick;
  *  - pencilFade/pencilVanish → the pencilSurface claim's fadeSec + a live
  *    re-relay effect;
@@ -48,8 +48,8 @@ import type { IntentHost } from "./transport";
 
 /**
  * The effective intent config, declared on every hello (salvaged verbatim
- * from the old panel's turn.ts — model names on the surface, shared tiers
- * underneath).
+ * from the retired extension panel's turn.ts — model names on the surface,
+ * shared tiers underneath).
  */
 export function panelIntentConfig(sttName: string, linterName?: string): IntentPipelineConfig {
   const base =
@@ -91,7 +91,7 @@ export type OpenThread = (options: {
   onServerMessage: (msg: unknown) => void;
 }) => Promise<unknown>;
 
-/** Turn persistence across page reloads (the old panel's storage.session
+/** Turn persistence across page reloads (the retired panel's storage.session
  * mirror, plain-page grade). Default: sessionStorage under `aiui2.turn`. */
 export interface TurnMirror {
   persist(events: IntentEvent[], threadOpen: boolean): void;
@@ -196,10 +196,10 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   const engine = new Engine(panelIntentConfig(stt.get() as string, linter.get() as string));
 
   // ── speech playback (server-pushed clips; talking barges in) ───────────────
-  // The overlay's composition, adapted to the panel: the speaker line rides the
-  // status line (🔊 — the overlay renders a dedicated label), and BLOCKED
-  // playback gets a visible remedy. The panels need that where the overlay
-  // never did: with keys forwarded from the target tab, this document may hold
+  // The retired overlay's composition, adapted to the panel: the speaker line
+  // rides the status line (🔊 — the overlay rendered a dedicated label), and
+  // BLOCKED playback gets a visible remedy. The panels need that where the
+  // overlay never did: with keys forwarded from the target tab, this document may hold
   // no user gesture when the first linter clip arrives — the player parks the
   // clip and resumes on the first click/keypress HERE (speech.ts).
   //
@@ -325,7 +325,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   // ── tab boundaries: switching WHICH tab you look at mid-turn is its own
   // boundary — a `tab-switch` event, distinct from a same-tab navigation, so
   // the prompt says "you switched tabs" and carries both tab identities (the
-  // old panel conflated the two into one navigation; the split is owner,
+  // retired panel conflated the two into one navigation; the split is owner,
   // 2026-07-16). Identity via tabInfo, not chrome.tabs.
   let lastActiveTab: { id: number; url?: string } | undefined;
   const seedTab = host.targeting.activeTab();
@@ -372,7 +372,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
               // Sampled frames keep a CAPPED thumb (owner, 2026-07-16): a full-res
               // thumb rides every frame, so it would bloat the events + the trace.
               // Manual/area shots (infrequent) leave it full-res for a crisp peek.
-              // 1024 matches the dev-overlay's sampled-frame cap.
+              // 1024 carries over the retired dev-overlay's sampled-frame cap.
               return await host.capture.grabShot(desire.tab, { thumbMaxPx: 1024 });
             } catch {
               return undefined; // no warm stream right now — the tick owes nothing
@@ -515,7 +515,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   });
 
   // ── the engine → wire feed: every event, then the close verbs (the
-  // overlay modality's exact composition; the wire does not self-subscribe).
+  // retired overlay's exact composition; the wire does not self-subscribe).
   // Plus: the reactive event cursor for panes, and the turn mirror.
   const [eventsRev, setEventsRev] = createSignal(0);
   const mirror = config.mirror === null ? undefined : (config.mirror ?? sessionStorageMirror());
@@ -571,9 +571,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     });
 
     // Live config: the stt/linter selects moving mid-session re-apply the
-    // engine's IntentPipelineConfig IN PLACE — the overlay's `applyEffective`,
-    // distilled (modality.ts: delete-then-assign on the live object, which
-    // every consumer reads through a thunk). Without this the selects were
+    // engine's IntentPipelineConfig IN PLACE — the retired overlay's
+    // `applyEffective`, distilled (delete-then-assign on the live object,
+    // which every consumer reads through a thunk). Without this the selects were
     // boot-frozen: the next hello still declared the OLD linter, and the
     // wire's linter-clip gate (`config().linter !== "off"`, shell/wire.ts)
     // silently dropped the clips a mid-session switch-on should have played.

@@ -127,7 +127,7 @@ export function inboundEntry(frame: Uint8Array): Omit<FrameLogEntry, "seq" | "at
       ? { dir: "in", label: "fin", ...threadId }
       : { dir: "in", label: `data${fin}`, bytes: payload.length, ...threadId };
   }
-  if (chunk.kind === "events" || chunk.kind === "context" || chunk.kind === "control") {
+  if (chunk.kind === "events" || chunk.kind === "control") {
     try {
       return {
         dir: "in",

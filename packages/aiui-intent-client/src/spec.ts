@@ -2,7 +2,8 @@
  * spec.ts — the intent client's machine, as data.
  *
  * This file IS the conductor: the ~1,500 lines of hand-rolled orchestration
- * the old panel grew (`main.tsx`'s §13.6 machine) reduce to this spec plus
+ * the retired extension panel grew (its `main.tsx` §13.6 machine — git
+ * history) reduce to this spec plus
  * the claims (./claims.ts) and the verb effects (./client.ts). Every row
  * traces to docs/proposals/intent-client/04-parity-inventory.md; every
  * decided semantic from the salvage list is a reduction or an exclude here,
@@ -48,16 +49,12 @@ export interface IntentContext {
   /** Mic permission: undefined = never asked, then granted or denied.
    * A status-pill fact today; the talk lane supplies it in Phase 2. */
   micGranted: boolean | undefined;
-  /** Connected iPad paint clients (0 = none). Phase 2 wires the real count. */
-  paintClients: number;
-  /** The active tab is aiui-INSTRUMENTED (window.__AIUI__): it answers the
-   * `locate` capability and can host jump-to-editor (the overlay's vscode
-   * mode — anticipated here, built post-parity). */
+  /** Connected remote pencil (iPad) clients (0 = none), fed live from the
+   * pencil relay's HostSession status. */
+  pencilClients: number;
+  /** The active tab is aiui-INSTRUMENTED (window.__AIUI__): it can host
+   * jump-to-editor. */
   aiuiPage: boolean;
-  /** The FROZEN client has this tab armed. Two clients inking one page is
-   * nonsense and they cannot negotiate (no messaging across extension ids), so
-   * the new one refuses to arm and says why — the coexistence policy. */
-  foreignArmed: boolean;
 }
 
 export const initialContext: IntentContext = {
@@ -66,9 +63,8 @@ export const initialContext: IntentContext = {
   selectionPresent: false,
   connected: false,
   micGranted: undefined,
-  paintClients: 0,
+  pencilClients: 0,
   aiuiPage: false,
-  foreignArmed: false,
 };
 
 /**
@@ -233,7 +229,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // ONE disarmed, and it is HARD (owner, 2026-07-13): however you get
     // there — the d key, the arm toggle, Esc unwinding the last rung — pencil
     // markup mode clears. Declared once as an invariant, not remembered per
-    // route. (Standing video/videoMode survive disarm, as in the old client.)
+    // route. (Standing video/videoMode survive disarm, as in the retired client.)
     {
       name: "disarmed-is-hard",
       when: (s) => s.phase === "disarmed",
@@ -289,10 +285,9 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
    * disabled while disarmed, escape at the floor — derives from the dry-run.
    */
   available: {
-    // Arming needs a channel — and a tab the frozen client is not already
-    // holding (the coexistence policy: never both armed on one page). Note the
-    // shape: you can always arm DOWN (disarm), whatever the world says.
-    arm: (s, ctx) => s.phase !== "disarmed" || (ctx.connected && !ctx.foreignArmed),
+    // Arming needs a channel. Note the shape: you can always arm DOWN
+    // (disarm), whatever the world says.
+    arm: (s, ctx) => s.phase !== "disarmed" || ctx.connected,
     // NOTE deliberately NO `turn` gate: a turn is a WIRE concept — talk and
     // text work grantless — so armed → turn derives from the reducer. The
     // capture GRANT gates the capture-dependent acts individually (below);

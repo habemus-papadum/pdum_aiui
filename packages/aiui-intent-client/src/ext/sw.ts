@@ -1,8 +1,9 @@
 /**
  * sw.ts — the service worker: the broker. Plumbing only, no precious state
- * (MV3 kills and restarts it freely — the old extension measured exactly that:
- * an in-memory ledger died while Chrome's own grants survived). Salvaged from
- * `aiui-extension/src/sw.ts`, which earned every line of its comments.
+ * (MV3 kills and restarts it freely — the retired extension measured exactly
+ * that: an in-memory ledger died while Chrome's own grants survived). Salvaged
+ * from that extension's sw.ts (git history: aiui-extension), which earned
+ * every line of its comments.
  *
  * It does the three things only it can do:
  *
@@ -13,7 +14,7 @@
  *     possible: the gesture is the grant (BEHAVIOR.md).
  *  2. **Carry the activation.** A `chrome.commands` press lands here, not in
  *     the panel; the worker opens the side panel (synchronously — the gesture
- *     token does not survive an `await`, verified live in the old client) and
+ *     token does not survive an `await`, verified live in the retired client) and
  *     tells the panel which tab was granted.
  *  3. **Watch navigations.** `chrome.webNavigation` sees SPA route changes that
  *     an isolated-world content script structurally cannot (the page's
@@ -21,7 +22,7 @@
  *
  * Plus the reload chore: an extension reload ORPHANS the content scripts in
  * already-open tabs — their runtime context dies and only a navigation would
- * re-inject — which silently kills the ring, the ink, and the key layer in
+ * re-inject — which silently kills the ring, the pencil, and the key layer in
  * every open tab. In development, reloads are constant. So: re-inject.
  */
 
@@ -70,7 +71,7 @@ const invoke = (windowId: number | undefined, tabId: number | undefined): void =
     return;
   }
   // MUST be synchronous in the listener: the user-gesture token does not
-  // survive an await (the old client verified this the hard way — a
+  // survive an await (the retired client verified this the hard way — a
   // `getContexts` check before `open()` made the chord a silent no-op with the
   // panel closed).
   void chrome.sidePanel.open({ windowId }).catch(() => {});

@@ -1,8 +1,8 @@
 /**
  * keys.ts — the in-turn grammar, on the modal kit's layered resolver. The
- * rows are the old panel's hard-won `leader.ts` grammar (salvage list:
- * "grammar rows and tests — regenerate the plumbing from the engine spec");
- * the plumbing is new: every binding resolves to an ENGINE COMMAND, so keys,
+ * rows carry over the retired extension panel's hard-won `leader.ts` grammar
+ * (git history: aiui-extension); the plumbing is new: every binding resolves
+ * to an ENGINE COMMAND, so keys,
  * caps, agent writes, and tests are one vocabulary with one writer.
  *
  * The layer's `fallback: "swallow"` is the in-turn claim: while composing,

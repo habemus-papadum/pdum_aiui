@@ -1,8 +1,8 @@
 /**
  * `@habemus-papadum/aiui-viz/modal` — the modal interaction kit.
  *
- * The distilled shape of the dev overlay's modal system (armed modes, layered
- * keymaps, mode-dependent surfaces, guarded async effects), extracted per
+ * The distilled shape of the retired dev overlay's modal system (armed modes,
+ * layered keymaps, mode-dependent surfaces, guarded async effects), extracted per
  * `handoff/modal-interaction-lessons.md` so viz apps get the bug classes
  * designed out instead of re-learned: modes as data with a mechanical Esc
  * ladder, keymap layers whose claim-or-pass is exhaustive by construction, a
@@ -25,8 +25,8 @@
  *
  * Realm rules: no Solid import, no DOM access at module scope (DOM only
  * inside install/render functions), so this subpath is safe to import from
- * node (the channel reaches `wordDiff` through the overlay's intent
- * pipeline) and from workers.
+ * node (aiui-lowering-pipeline re-exports `wordDiff` to the channel) and
+ * from workers.
  */
 
 export {

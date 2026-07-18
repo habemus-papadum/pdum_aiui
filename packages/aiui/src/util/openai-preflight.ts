@@ -1,13 +1,12 @@
 /**
  * OpenAI key preflight for `aiui claude`.
  *
- * Once the multimodal intent modality is the overlay's default, its speech
- * transcription and correction-diff calls need an OpenAI key — and they run in
- * the *channel* process, which inherits the environment `aiui claude` launches
- * in. The adopted key story (see the multimodal-intent-graduation handoff) is
- * deliberately narrow: the key comes from **`OPENAI_API_KEY` in the
- * environment**, never from `config.json` (a shareable, eventually-committed
- * file must not hold secrets) and never from an `aiui claude` flag.
+ * The intent client's speech transcription and correction-diff calls need an
+ * OpenAI key — and they run in the *channel* process, which inherits the
+ * environment `aiui claude` launches in. The adopted key story is deliberately
+ * narrow: the key comes from **`OPENAI_API_KEY` in the environment**, never
+ * from `config.json` (a shareable, eventually-committed file must not hold
+ * secrets) and never from an `aiui claude` flag.
  *
  * So the launcher's whole job is to *preflight* that env var and tell the user
  * what it found — degradation, not refusal. A missing or rejected key never
@@ -19,7 +18,7 @@
  * in the pipeline rather than a clear message up front.
  *
  * We record only a {@link OpenAiKeyStatus} — never the key or any prefix of it —
- * so the launch-info summary (and the DevTools panel that renders it) can
+ * so the launch-info summary (and the console that renders it) can
  * explain a degraded pipeline without ever seeing the secret.
  */
 import type { OpenAiKeyStatus } from "@habemus-papadum/aiui-claude-channel";
@@ -119,11 +118,11 @@ export function openAiPreflightMessage(status: OpenAiKeyStatus): PreflightMessag
         level: "warn",
         title: "OPENAI_API_KEY is not set — the intent pipeline will run degraded",
         detail:
-          "Speech transcription and dictation correction are unavailable — the overlay says so when " +
-          "you try to dictate. To enable them, export the key in the shell you run `aiui claude` from:\n" +
+          "Speech transcription and dictation correction are unavailable — the intent client says so " +
+          "when you try to dictate. To enable them, export the key in the shell you run `aiui claude` from:\n" +
           "  export OPENAI_API_KEY=sk-…\n" +
           "It flows through to the channel process, which is where those calls happen. (For offline " +
-          "work, switch the overlay to the mock backends — see the intent-overlay guide.)",
+          "work, switch the intent client to the mock backends.)",
       };
     case "invalid":
       return {

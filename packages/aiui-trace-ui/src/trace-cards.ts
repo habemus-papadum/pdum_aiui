@@ -385,7 +385,7 @@ export function classifyStage(stage: TraceStageLike): StageClass {
   // deliberate shot, the Enter nudge); `out`/green is what it answers back
   // (the submit_intent tool call, its spoken reply); `agent`/purple is the
   // resolved prompt leaving for Claude — the same arrow the transcription
-  // lowered prompt wears. See handoff/transcription-and-realtime-submodes.md.
+  // lowered prompt wears. See archive/transcription-and-realtime-submodes.md.
   if (label === "live open") {
     // Session opened: config-ish (vendor · model · video capability), always
     // shown like `intent config`. 🛰 marks it as the *live* session's config.

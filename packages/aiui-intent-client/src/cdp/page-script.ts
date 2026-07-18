@@ -1,8 +1,8 @@
 /**
  * page-script.ts — the bootstrap the CdpBus injects into EVERY document
  * (Page.addScriptToEvaluateOnNewDocument + a catch-up Runtime.evaluate — the
- * installCaptureMarker pattern). It is the CDP tier's stand-in for the old
- * extension's content script:
+ * installCaptureMarker pattern). It is the CDP tier's twin of the MV3
+ * client's content script (ext/content.ts):
  *
  *  - reports world facts through the `__aiuiIntentReport` binding: hello
  *    (url/visibility/aiui-instrumentation), focus changes (the ACTIVE-TAB
@@ -66,11 +66,7 @@ export type PageReport =
       }>;
     }
   /** A `toolsCall` capability's answer, correlated by callId. */
-  | { kind: "toolsResult"; callId: string; ok: boolean; value?: unknown; error?: string }
-  /** The FROZEN client has this tab armed (its ring says so). Two clients
-   * inking one page is nonsense, so the new one stands down — see the
-   * coexistence policy in the client's README. */
-  | { kind: "foreign"; armed: boolean };
+  | { kind: "toolsResult"; callId: string; ok: boolean; value?: unknown; error?: string };
 
 const BINDING = "__aiuiIntentReport";
 
@@ -601,9 +597,6 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
           }
           return { ok: true };
         }
-        case "locate": {
-          return null; // instrumented-page jump: anticipated, post-parity
-        }
         default:
           return { error: `unknown capability: ${capability}` };
       }
@@ -626,30 +619,6 @@ function pageBootstrap(version: string, tabRecord?: () => PageTabRecord | undefi
       report({ kind: "selection", present });
     }
   });
-
-  // The FROZEN client injects into this same page. We cannot talk to it, but we
-  // share a DOM: its indicator's shadow root wears an `armed` class while it
-  // holds the tab. Watch it, report it, and let the panel stand down rather
-  // than fight for the page (the coexistence policy — README).
-  let foreignWas = false;
-  const checkForeign = (): void => {
-    const host = document.getElementById("aiui-webext-indicator-host");
-    const root = host?.shadowRoot?.querySelector("div");
-    const armed = root instanceof HTMLElement && root.classList.contains("armed");
-    if (armed !== foreignWas) {
-      foreignWas = armed;
-      report({ kind: "foreign", armed });
-    }
-  };
-  const legacyRoot = document.getElementById("aiui-webext-indicator-host")?.shadowRoot;
-  if (legacyRoot != null) {
-    new MutationObserver(checkForeign).observe(legacyRoot, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ["class"],
-    });
-    checkForeign();
-  }
 
   let lastInteraction = 0;
   const interaction = (): void => {

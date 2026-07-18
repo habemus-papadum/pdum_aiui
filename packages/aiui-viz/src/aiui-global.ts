@@ -34,11 +34,10 @@ export interface AiuiToolsRegistry {
   onChange(handler: () => void): () => void;
 }
 
-/** The global's shape. `frames` and `sourceRoot` predate this module: frames
- * belong to subframe instrumentation, sourceRoot is the dev-only plugin seed. */
+/** The global's shape. `sourceRoot` predates this module: it is the dev-only
+ * plugin seed (@habemus-papadum/aiui-source-processor). */
 export interface AiuiGlobal {
   v: 1;
-  frames: unknown[];
   sourceRoot?: string;
   tools?: AiuiToolsRegistry;
   [key: string]: unknown;
@@ -77,16 +76,17 @@ function createRegistry(): AiuiToolsRegistry {
 
 /**
  * Install (or adopt) the global. Idempotent; safe anywhere including SSR
- * (no window → undefined). An EXISTING `tools` surface is respected — the
- * old overlay's ws bridge keeps working wherever it is still wired — but a
- * missing one gets the registry, so production pages carry it by default.
+ * (no window → undefined). An EXISTING `tools` surface is respected — adopt,
+ * don't clobber (the contract that once let the retired overlay's ws bridge
+ * coexist) — but a missing one gets the registry, so production pages carry
+ * it by default.
  */
 export function ensureAiuiGlobal(): AiuiGlobal | undefined {
   if (typeof window === "undefined") {
     return undefined;
   }
   const w = window as unknown as { __AIUI__?: AiuiGlobal };
-  w.__AIUI__ ??= { v: 1, frames: [] };
+  w.__AIUI__ ??= { v: 1 };
   w.__AIUI__.tools ??= createRegistry();
   return w.__AIUI__;
 }

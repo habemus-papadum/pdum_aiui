@@ -8,8 +8,8 @@
  * (channel down, socket dropped mid-turn) often surfaced nowhere at all. The
  * fix is one generic error surface: server-side failures ride a `kind:"error"`
  * push (see `ErrorMessage` in protocol.ts), client-detected failures call the
- * same `IntentToolContext.reportError`, and both render as dismissible toasts
- * next to the tool's fab.
+ * host's deps-injected `reportError` (`WireDeps`, the talk lanes' deps), and
+ * both render as dismissible toasts next to the tool's fab.
  *
  * This module is the toast *state*, kept pure (list in → list out) so the
  * dedupe/cap/dismiss rules are unit-testable without a DOM:
@@ -19,8 +19,8 @@
  *    This is what keeps a streaming failure (one bad ack per PCM frame) at one
  *    toast with a climbing ×N instead of a wall of identical boxes.
  *  - **Cap.** The list never exceeds {@link ERROR_TOAST_CAP} entries; the
- *    oldest falls off. Errors are hints, not a log — the lowering trace and the
- *    DevTools panel are the archival surfaces.
+ *    oldest falls off. Errors are hints, not a log — the lowering trace is the
+ *    archival surface.
  *  - **Dismiss.** Removal by id; there is no auto-expiry. A toast the user has
  *    not acknowledged describes a condition that is probably still true (the
  *    channel is still down, the key is still stale), so it stays until

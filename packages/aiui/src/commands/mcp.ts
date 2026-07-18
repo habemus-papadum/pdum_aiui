@@ -24,8 +24,8 @@ const CHANNEL_PKG = "@habemus-papadum/aiui-claude-channel";
  * same config-derived `--bind` that `aiui claude` computes when it tells Claude
  * Code how to spawn the channel (see util/channel-launch), so both ways of
  * starting a channel honor `channel.bind` identically. (Sidecars need no such
- * plumbing: the channel imports and mounts its own standard set — paint, intent,
- * bar, pencil — so every channel hosts all four.) Flags you pass explicitly
+ * plumbing: the channel imports and mounts its own standard set — intent, bar,
+ * pencil, console — so every channel hosts all four.) Flags you pass explicitly
  * always win. Every other subcommand (`quick`, `config`) talks to a channel
  * someone *else* is running and forwards untouched.
  *

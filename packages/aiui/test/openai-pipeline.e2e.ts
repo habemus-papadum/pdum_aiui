@@ -9,9 +9,9 @@
  *      `say` + `afconvert`; CI runners are Linux, so the fixture is committed,
  *      never generated in CI) POSTed to `/v1/audio/transcriptions`. Asserts a
  *      200 and non-empty text; records the latency.
- *  (b) correction diff — the overlay's V4A correction prompt sent to
+ *  (b) correction diff — the channel's V4A correction prompt sent to
  *      `/v1/chat/completions`, asserting the returned patch **parses and
- *      applies** via the overlay's patch applier. Not that it's the *right*
+ *      applies** via the lowering pipeline's patch applier. Not that it's the *right*
  *      edit — only that the round trip yields an applicable V4A patch.
  *
  * Marker: `*.e2e.ts`, so `pnpm test` never collects it; it runs via
@@ -23,10 +23,10 @@
  */
 import { readFileSync } from "node:fs";
 import { openaiSpeaker, SYSTEM_PROMPT } from "@habemus-papadum/aiui-claude-channel";
-// The correction prompt + V4A applier graduated from the retired workbench lab into the
-// shared packages (multimodal-intent-graduation.md P1): the SYSTEM_PROMPT is
-// re-exported by the channel's corrector seam (a dependency here); `applyPatch`
-// comes from the lowering pipeline's own package (a devDependency here).
+// The correction prompt + V4A applier graduated from the retired workbench lab
+// into the shared packages: the SYSTEM_PROMPT is re-exported by the channel's
+// corrector seam (a dependency here); `applyPatch` comes from the lowering
+// pipeline's own package (a devDependency here).
 import { applyPatch } from "@habemus-papadum/aiui-lowering-pipeline";
 import { describe, expect, it } from "vitest";
 
@@ -37,7 +37,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // correction diff. Cheapest tokens that still exercise the real request shape.
 const TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const CORRECT_MODEL = "gpt-4o-mini";
-// The premium tier's TTS-ack model (model-tiers.md T2). A one-word ack is a few KB.
+// The premium tier's TTS-ack model (archive/model-tiers.md T2). A one-word ack is a few KB.
 const TTS_MODEL = "gpt-4o-mini-tts";
 
 const wavPath = new URL("./fixtures/segment.wav", import.meta.url);

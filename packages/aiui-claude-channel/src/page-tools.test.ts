@@ -19,7 +19,7 @@ function makeDirectory(options: Partial<PageToolDirectoryOptions> = {}) {
   return { dir, log };
 }
 
-/** The `activation` message the extension's service worker would send. */
+/** The `activation` message the intent client's tools-link would send. */
 const activation = (
   dir: PageToolDirectory,
   clientId: string,

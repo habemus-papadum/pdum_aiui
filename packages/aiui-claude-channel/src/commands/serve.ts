@@ -19,7 +19,7 @@
  *
  * Everything else the real channel hosts is fair game — including the session
  * sidecars: like `mcp`, `serve` mounts the channel's {@link standardSidecars}
- * (paint, intent, bar, pencil) by default, because a client under development
+ * (intent, bar, pencil, console) by default, because a client under development
  * against this server needs the sidecar's endpoints on the very channel port it
  * is pointed at. (Callers — the tests — may inject their own set instead.)
  *

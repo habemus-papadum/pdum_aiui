@@ -35,16 +35,18 @@ describe("classifyTarget", () => {
     expect(classifyTarget(app)).toBe("existing-scaffold");
   });
 
-  it("refuses anything else — plain files, unmarked projects, aiui demos", () => {
+  it("refuses anything else — plain files, unmarked projects, other aiui markers", () => {
     const project = join(dir, "project");
     mkdirSync(project);
     writeFileSync(join(project, "package.json"), JSON.stringify({ name: "not-ours" }));
     expect(classifyTarget(project)).toBe("occupied");
 
-    const demo = join(dir, "demo");
-    mkdirSync(demo);
-    writeFileSync(join(demo, "package.json"), JSON.stringify({ aiui: { demo: true } }));
-    expect(classifyTarget(demo)).toBe("occupied");
+    // An `aiui` key WITHOUT `scaffold: true` is still occupied — only our own
+    // marker counts, not the key's mere presence.
+    const marked = join(dir, "marked");
+    mkdirSync(marked);
+    writeFileSync(join(marked, "package.json"), JSON.stringify({ aiui: { other: true } }));
+    expect(classifyTarget(marked)).toBe("occupied");
 
     writeFileSync(join(dir, "file"), "x");
     expect(classifyTarget(join(dir, "file"))).toBe("occupied");

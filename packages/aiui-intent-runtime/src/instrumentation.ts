@@ -1,49 +1,19 @@
 /**
- * Page-side instrumentation: the `window.__AIUI__` global the aiui DevTools
- * panel reads out of the inspected page (via `chrome.devtools.inspectedWindow`).
+ * Page-side instrumentation: the `window.__AIUI__` global — the page-realm
+ * mark that a page is an aiui app, and the carrier of the dev server's source
+ * root (seeded by the `aiui()` source-processor plugin) that attribution
+ * consumers resolve stamped paths against.
  *
- * Two things live here:
- *  - the **channel port** the page is using — recorded by whichever intent
- *    host wires the page up. It is how both the tool and the panel discover
- *    which local server to talk to; and
- *  - a bounded ring of **frame metrics** — for every websocket frame the
- *    protocol client sends, its size and the ack round-trip time as *the page*
- *    experienced it. This is the client's half of transport observability; the
- *    server's half is `/debug/api/stats`.
- *
- * The global is a plain JSON-able object (the panel serializes it across the
- * eval boundary), versioned so the panel can detect shape changes. Everything
- * degrades to a no-op without a global scope, and the ring is bounded so an
- * idle tab never grows.
+ * The global is a plain JSON-able object, versioned so readers can detect
+ * shape changes. Everything degrades to a no-op without a global scope.
  */
-
-/** One sent frame, as measured by the page. */
-export interface FrameMetric {
-  /** Epoch ms when the frame was sent. */
-  at: number;
-  /** The stream format the connection speaks. */
-  format: string;
-  kind: "hello" | "data";
-  threadId?: string;
-  fin?: boolean;
-  /** Size of the encoded frame in bytes. */
-  bytes: number;
-  /** Ack round-trip time in milliseconds. */
-  rttMs: number;
-  ok: boolean;
-  error?: string;
-}
 
 /** The shape of `window.__AIUI__`. */
 export interface PageInstrumentation {
   /** Bump when this shape changes incompatibly. */
   v: 1;
-  /** The channel server port the page is wired to, once known. */
-  port?: number;
   /** The dev server's source root (seeded by the `aiui()` source-processor plugin). */
   sourceRoot?: string;
-  /** Recent frame metrics, oldest first (bounded ring). */
-  frames: FrameMetric[];
 }
 
 declare global {
@@ -95,28 +65,6 @@ export function pageTabRecord(): PageTabRecord | undefined {
   if (document.title !== "") {
     record.title = document.title;
   }
-  // The extension-stamped tab identity (data-aiui-tab; the literal dataset key
-  // is TAB_DATASET_KEY — inlined here per the self-containment contract).
-  const stamped = document.documentElement.dataset.aiuiTab;
-  if (stamped !== undefined) {
-    try {
-      const ids = JSON.parse(stamped) as Record<string, unknown>;
-      if (typeof ids.chromeTabId === "number") {
-        record.chromeTabId = ids.chromeTabId;
-      }
-      if (typeof ids.windowId === "number") {
-        record.windowId = ids.windowId;
-      }
-      if (typeof ids.tabIndex === "number") {
-        record.tabIndex = ids.tabIndex;
-      }
-      if (typeof ids.targetId === "string") {
-        record.targetId = ids.targetId;
-      }
-    } catch {
-      // A malformed stamp never blocks the record.
-    }
-  }
   const inst =
     typeof window === "undefined"
       ? undefined
@@ -132,9 +80,6 @@ export function pageTabRecord(): PageTabRecord | undefined {
   return record;
 }
 
-/** How many frame metrics the ring keeps. */
-const FRAME_LIMIT = 256;
-
 /** Get (creating if needed) the page's instrumentation global. */
 export function getInstrumentation(): PageInstrumentation | undefined {
   if (typeof window === "undefined") {
@@ -142,34 +87,14 @@ export function getInstrumentation(): PageInstrumentation | undefined {
   }
   // Keep this initializer in sync with the inline seed the `aiui()` plugin
   // injects (@habemus-papadum/aiui-source-processor).
-  window.__AIUI__ ??= { v: 1, frames: [] };
+  window.__AIUI__ ??= { v: 1 };
   return window.__AIUI__;
-}
-
-/** Record the channel port the page is using (the panel's discovery hook). */
-export function setChannelPort(port: number): void {
-  const inst = getInstrumentation();
-  if (inst) {
-    inst.port = port;
-  }
-}
-
-/** Append one frame metric to the ring. */
-export function recordFrameMetric(metric: FrameMetric): void {
-  const inst = getInstrumentation();
-  if (!inst) {
-    return;
-  }
-  inst.frames.push(metric);
-  if (inst.frames.length > FRAME_LIMIT) {
-    inst.frames.splice(0, inst.frames.length - FRAME_LIMIT);
-  }
 }
 
 /**
  * The browser tab this page lives in — local mirror of the channel package's
- * `TabInfo` (this package stays dependency-free; web.test.ts cross-checks the
- * shape against the real server).
+ * `TabInfo` (this package stays dependency-free; protocol.test.ts cross-checks
+ * the shape against the channel's decoder).
  */
 export interface TabInfo {
   url?: string;
@@ -199,15 +124,6 @@ export interface ClientMeta {
    */
   actor?: string;
 }
-
-/**
- * The `document.documentElement` dataset key (as a data attribute:
- * `data-aiui-tab`) where the aiui DevTools extension stamps this tab's
- * identity — `{ chromeTabId, windowId, tabIndex, targetId }` as JSON. The
- * extension writes it from its background worker (only it can know tab ids);
- * we read it lazily at send time.
- */
-export const TAB_DATASET_KEY = "aiuiTab";
 
 /** Options for {@link collectClientMeta}. */
 export interface CollectClientMetaOptions {
@@ -242,36 +158,17 @@ export const ACTOR_STORAGE_KEY = "aiui-actor";
 
 /**
  * Collect what this page knows about itself for a connection's hello: live
- * URL/title, the extension-stamped tab identity (if the aiui DevTools
- * extension is installed), the plugin-seeded source root, and the actor label
- * (who is driving the page). Degrades to whatever subset exists — returns
- * undefined outside a DOM.
+ * URL/title, the plugin-seeded source root, and the actor label (who is
+ * driving the page). Degrades to whatever subset exists — returns undefined
+ * outside a DOM. (Tab identity — chromeTabId and friends — is supplied by the
+ * HOST when it has one: the MV3 extension asks `chrome.tabs`, the CDP tier
+ * asks the browser; a bare page cannot know it.)
  */
 export function collectClientMeta(options: CollectClientMetaOptions = {}): ClientMeta | undefined {
   if (typeof document === "undefined" || typeof location === "undefined") {
     return undefined;
   }
   const tab: TabInfo = { url: location.href, title: document.title };
-  const stamped = document.documentElement.dataset[TAB_DATASET_KEY];
-  if (stamped !== undefined) {
-    try {
-      const ids = JSON.parse(stamped) as Record<string, unknown>;
-      if (typeof ids.chromeTabId === "number") {
-        tab.chromeTabId = ids.chromeTabId;
-      }
-      if (typeof ids.windowId === "number") {
-        tab.windowId = ids.windowId;
-      }
-      if (typeof ids.tabIndex === "number") {
-        tab.tabIndex = ids.tabIndex;
-      }
-      if (typeof ids.targetId === "string") {
-        tab.targetId = ids.targetId;
-      }
-    } catch {
-      // A malformed stamp never blocks sending — the live url/title suffice.
-    }
-  }
   const sourceRoot = getInstrumentation()?.sourceRoot;
   return {
     tab,

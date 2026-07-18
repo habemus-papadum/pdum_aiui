@@ -5,7 +5,8 @@
  * because a wire is cheap to design once and expensive to design twice:
  *
  *   ink      iPad → host    strokes, as intent — never synthetic pointer events
- *   view     host → iPad    JPEG frames (binary) + the ack that retires previews
+ *   view     host → iPad    the picture — a WebRTC track OFF the wire (D1);
+ *                           only its signaling and `videoStatus` ride here
  *   control  both ways      the mode engine's bar down, a command back up
  *
  * ## No frame identity, on purpose (plan decision D3)
@@ -13,8 +14,8 @@
  * The iPad draws a **local preview** so the pen feels immediate — nothing over a
  * network can — while the truth, the host's screen, arrives as WebRTC video (D1)
  * a beat later. From pen-up the preview cross-fades out over a fixed window
- * (`fadeWindowMs` in remote.ts; ~500 ms, the constant the paint stream shipped
- * and proved), by which time the video's copy has almost certainly arrived
+ * (`fadeWindowMs` in remote.ts; ~500 ms, the constant the retired paint stream
+ * shipped and proved), by which time the video's copy has almost certainly arrived
  * underneath. We deliberately do NOT correlate strokes with the specific frame
  * that contains them: the host renders strokes progressively, so a translucent
  * stroke is briefly rendered by both sides *regardless* of any ack, and exact
@@ -49,9 +50,6 @@
 import type { PencilMode } from "./pencil";
 import type { Tool } from "./surface";
 import type { PenSample } from "./telemetry";
-
-/** Wire protocol version. Bumped when a change is not backward compatible. */
-export const PROTOCOL_VERSION = 2;
 
 /** The pointing device a stroke came from. */
 export type PointerKind = "pen" | "touch" | "mouse";
@@ -99,8 +97,8 @@ export type InkIntent =
   | { type: "undo" }
   | { type: "clear" }
   /**
-   * Navigation gestures against the plane — paint v1's proven shapes (D5 keeps
-   * them HERE, not on the bar: they are continuous gestures, not commands, and
+   * Navigation gestures against the plane — the shapes retired paint v1 proved
+   * (D5 keeps them HERE, not on the bar: they are continuous gestures, not commands, and
    * routing 60 of them a second through a mode-engine reducer would be wrong).
    * Scroll is a fraction of the plane per step; zoom multiplies about a
    * normalized center.
@@ -138,8 +136,8 @@ export function isInkIntent(value: unknown): value is InkIntent {
  * `peer` addresses a specific viewer, because WebRTC is point-to-point while a
  * host can have several: the host sends `{ peer: <clientId>, … }` and the relay
  * routes it to that one client; a client sends no `peer`, and the relay stamps
- * the sender's id as `peer` before handing it to the host. (The same shape the
- * paint stream proved.)
+ * the sender's id as `peer` before handing it to the host. (The shape the
+ * retired paint stream proved.)
  */
 export interface Signal {
   type: "signal";

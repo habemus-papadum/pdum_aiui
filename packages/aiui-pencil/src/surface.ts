@@ -46,10 +46,10 @@
  * warp, they pop, they are discarded, and the surface costs nothing over time.
  * That is the overlay's gesture ink, exactly as it behaves today.
  *
- * ## Why it is also FASTER than the vector surface it replaces
+ * ## Why it is also FASTER than the vector surface it replaced
  *
- * `aiui-ink` cleared the canvas and re-stroked every stroke, every frame: cost
- * grew with the drawing, forever. Here the live stroke stamps only the dabs that
+ * Retired `aiui-ink` cleared the canvas and re-stroked every stroke, every
+ * frame: cost grew with the drawing, forever. Here the live stroke stamps only the dabs that
  * arrived since the last frame, and everything else is a `drawImage`. Going to
  * pixels is what buys that — and with `getCoalescedEvents` and
  * `getPredictedEvents` both absent in iPadOS Safari, incremental stamping is not
@@ -504,7 +504,7 @@ export class PencilSurface {
     }
   }
 
-  // ── public surface (parity with aiui-ink's InkSurface) ──────────────────────
+  // ── public surface (shape kept from retired aiui-ink's InkSurface) ──────────
 
   setActive(on: boolean): void {
     // A surface with no local input never owns the pointer: its canvas exists to
@@ -686,7 +686,7 @@ export class PencilSurface {
     this.dirty = true;
   }
 
-  // ── the remote pen (an iPad, over the paint stream) ─────────────────────────
+  // ── the remote pen (an iPad, over the pencil wire) ──────────────────────────
 
   remoteBegin(id: string, init: { tool: Tool; params: PencilParams; point: PenSample }): void {
     this.beginStroke(id, init.tool, init.params, init.point, undefined);

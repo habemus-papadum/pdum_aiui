@@ -1,7 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
-import { CHANNEL_CONFIG } from "./commands/config";
 import { createChannelServer } from "./server";
 
 describe("createChannelServer", () => {
@@ -28,15 +27,5 @@ describe("createChannelServer", () => {
     await expect(createChannelServer("1.2.3").sendToolListChanged()).rejects.toThrow(
       /Not connected/,
     );
-  });
-});
-
-describe("CHANNEL_CONFIG", () => {
-  it("describes a one-way aiui channel", () => {
-    expect(CHANNEL_CONFIG).toEqual({
-      name: "aiui-claude-channel",
-      channel: { source: "aiui", mode: "one-way" },
-      server: {},
-    });
   });
 });

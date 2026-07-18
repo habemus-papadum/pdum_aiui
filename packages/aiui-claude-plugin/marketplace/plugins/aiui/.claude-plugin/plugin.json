@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "description": "Placeholder aiui plugin \u2014 slash commands, a skill, and a helper script for aiui workflows.",
+  "description": "aiui workflow skill \u2014 live introspection of the running aiui system (channel, session browser, config).",
   "version": "0.0.0",
   "author": {
     "name": "Nehal Patel",
