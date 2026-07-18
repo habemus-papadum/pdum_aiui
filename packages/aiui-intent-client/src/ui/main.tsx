@@ -25,7 +25,12 @@ import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { createPencilHost } from "../pencil-host";
-import { connectSessionBus, probeChannel, resolveChannelPort } from "../session";
+import {
+  asContributedSelection,
+  connectSessionBus,
+  probeChannel,
+  resolveChannelPort,
+} from "../session";
 import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
 import type { ChannelEntry } from "./channel-header";
@@ -147,6 +152,15 @@ async function boot(): Promise<{
         if (channelLanes.recover(client)) {
           setStatusLine("turn recovered from the mirror — re-grant with activate/⌘⇧B");
         }
+      }
+    });
+    // Editor-contributed selections (the VS Code extension's "Send Selection
+    // to Browser Tab", relayed by the hub): straight into the wire engine as a
+    // code-selection event — armed-gated by the engine's own lifecycle.
+    sessionBus.onPublish((msg) => {
+      const sel = asContributedSelection(msg);
+      if (sel !== undefined) {
+        channelLanes.engine.codeSelection(sel);
       }
     });
 

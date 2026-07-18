@@ -26,6 +26,14 @@ export interface BusPeer {
 
 export type BusPhase = "connecting" | "connected" | "closed";
 
+/** A transient publish forwarded by the hub (from another peer or the server). */
+export interface BusPublish {
+  topic: string;
+  payload?: unknown;
+  /** The publishing peer's clientId, or `"server"` for `POST /session/publish`. */
+  from?: string;
+}
+
 /** The client's renderable state. Immutable — the reducer returns fresh objects. */
 export interface BusState {
   phase: BusPhase;
@@ -56,7 +64,67 @@ export function reduceBusMessage(state: BusState, msg: unknown): BusState {
   if (m.type === "set" && typeof m.slot === "string") {
     return { ...state, slots: { ...state.slots, [m.slot]: m.value } };
   }
+  // `publish` frames are transient events, not state — they ride the
+  // onPublish callback, never the reducer.
   return state;
+}
+
+/**
+ * The session-bus topic contributed selections ride on. Mirrors aiui-vscode's
+ * contribution.ts (`SESSION_CONTRIBUTION_TOPIC` / `SelectionContribution`) —
+ * the contract's source of truth; change both together. Restated rather than
+ * imported so the client takes no dependency on the extension package.
+ */
+export const SESSION_CONTRIBUTION_TOPIC = "contribution";
+
+/** An editor-contributed code selection, in the wire engine's vocabulary. */
+export interface ContributedSelection {
+  text: string;
+  sourceLoc?: string;
+  url?: string;
+  lines?: number;
+}
+
+/**
+ * Narrow a `"contribution"` publish (the VS Code extension's "Send Selection
+ * to Browser Tab") to the code selection the wire engine ingests. Loose by
+ * design: enrichment fields are kept only when well-typed, and anything that
+ * isn't a non-empty selection yields undefined — a publish is never a reason
+ * to throw.
+ */
+export function asContributedSelection(msg: BusPublish): ContributedSelection | undefined {
+  if (msg.topic !== SESSION_CONTRIBUTION_TOPIC) {
+    return undefined;
+  }
+  if (msg.payload === null || typeof msg.payload !== "object") {
+    return undefined;
+  }
+  const p = msg.payload as Record<string, unknown>;
+  if (p.kind !== "selection" || typeof p.text !== "string" || p.text === "") {
+    return undefined;
+  }
+  return {
+    text: p.text,
+    ...(typeof p.sourceLoc === "string" ? { sourceLoc: p.sourceLoc } : {}),
+    ...(typeof p.url === "string" ? { url: p.url } : {}),
+    ...(typeof p.lines === "number" ? { lines: p.lines } : {}),
+  };
+}
+
+/** Narrow a raw bus frame to a {@link BusPublish}, or undefined. */
+export function asBusPublish(msg: unknown): BusPublish | undefined {
+  if (msg === null || typeof msg !== "object") {
+    return undefined;
+  }
+  const m = msg as Record<string, unknown>;
+  if (m.type !== "publish" || typeof m.topic !== "string") {
+    return undefined;
+  }
+  return {
+    topic: m.topic,
+    payload: m.payload,
+    ...(typeof m.from === "string" ? { from: m.from } : {}),
+  };
 }
 
 /** Resolve the channel port for this page (see the module doc for the order). */
@@ -130,6 +198,9 @@ export interface SessionBusClient {
   state(): BusState;
   /** Fires after every state change (and once on connect). Returns unsubscribe. */
   onChange(handler: (state: BusState) => void): () => void;
+  /** Fires for every transient `publish` frame (peer or server originated —
+   * e.g. the VS Code extension's contributed selection). Returns unsubscribe. */
+  onPublish(handler: (msg: BusPublish) => void): () => void;
   set(slot: string, value: unknown): void;
   publish(topic: string, payload?: unknown): void;
   close(): void;
@@ -148,6 +219,7 @@ export function connectSessionBus(opts: {
   let closed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   const handlers = new Set<(state: BusState) => void>();
+  const publishHandlers = new Set<(msg: BusPublish) => void>();
 
   const emit = (next: BusState): void => {
     state = next;
@@ -173,11 +245,20 @@ export function connectSessionBus(opts: {
       send({ v: 1, type: "hello", role: opts.role ?? "intent-client", label: opts.label });
     });
     ws.addEventListener("message", (event) => {
+      let parsed: unknown;
       try {
-        emit(reduceBusMessage(state, JSON.parse(String(event.data))));
+        parsed = JSON.parse(String(event.data));
       } catch {
-        // unparseable frame: ignore
+        return; // unparseable frame: ignore
       }
+      const published = asBusPublish(parsed);
+      if (published !== undefined) {
+        for (const handler of publishHandlers) {
+          handler(published);
+        }
+        return;
+      }
+      emit(reduceBusMessage(state, parsed));
     });
     ws.addEventListener("close", () => {
       socket = undefined;
@@ -198,6 +279,10 @@ export function connectSessionBus(opts: {
     onChange(handler) {
       handlers.add(handler);
       return () => handlers.delete(handler);
+    },
+    onPublish(handler) {
+      publishHandlers.add(handler);
+      return () => publishHandlers.delete(handler);
     },
     set(slot, value) {
       send({ v: 1, type: "set", slot, value });

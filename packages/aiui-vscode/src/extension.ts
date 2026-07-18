@@ -88,10 +88,15 @@ function targetFor(channel: ChannelEntry, peer: SessionPeer, agents: Map<number,
   };
 }
 
-/** A channel's browser tabs that can ingest a selection (role "app" peers). */
-async function appTabs(channel: Pick<ChannelEntry, "port">): Promise<SessionPeer[]> {
+/**
+ * A channel's session views that can ingest a selection: the intent client's
+ * panels (role "intent-client" — the greeting in the client's session.ts).
+ * The panel forwards the published selection into its wire engine as a
+ * `code-selection` event on the open turn.
+ */
+async function selectionTargets(channel: Pick<ChannelEntry, "port">): Promise<SessionPeer[]> {
   const { peers } = await fetchPeers(channel.port);
-  return peers.filter((p) => p.role === "app");
+  return peers.filter((p) => p.role === "intent-client");
 }
 
 /** Why a remembered target no longer resolves. */
@@ -101,12 +106,12 @@ type Stale = { reason: "channel-gone" | "tab-gone" };
  * Re-resolve a remembered target against the channel's LIVE peers: same
  * clientId → still good; otherwise re-bind by URL, or — the common
  * single-tab case after a channel reload handed the tab a fresh clientId —
- * to the only app tab left. Anything else is honestly stale.
+ * to the only view left. Anything else is honestly stale.
  */
 async function revalidateTarget(target: Target): Promise<Target | Stale> {
   let tabs: SessionPeer[];
   try {
-    tabs = await appTabs({ port: target.port });
+    tabs = await selectionTargets({ port: target.port });
   } catch {
     return { reason: "channel-gone" };
   }
@@ -161,7 +166,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const workspaceDir = (): string | undefined => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
   /**
-   * One QuickPick over every channel's app tabs, grouped per channel — always
+   * One QuickPick over every channel's intent panels, grouped per channel — always
    * built from a fresh registry read + live peer queries at the moment it
    * opens (nothing to refresh by hand; `aiui: Refresh Browser Tabs` exists
    * for the status bar's sake, not the picker's).
@@ -184,7 +189,7 @@ export function activate(context: vscode.ExtensionContext): void {
       });
       let tabs: SessionPeer[];
       try {
-        tabs = await appTabs(channel);
+        tabs = await selectionTargets(channel);
       } catch {
         items.push({
           label: "$(warning) channel unreachable",
@@ -194,7 +199,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       if (tabs.length === 0) {
         items.push({
-          label: "$(circle-slash) no app tabs connected",
+          label: "$(circle-slash) no intent panels connected",
           description: "open an aiui app page connected to this channel",
         });
         continue;
@@ -233,7 +238,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const agents = await claudeSessionNames();
     const found: Target[] = [];
     for (const channel of channels) {
-      const tabs = await appTabs(channel).catch(() => []);
+      const tabs = await selectionTargets(channel).catch(() => []);
       found.push(...tabs.map((peer) => targetFor(channel, peer, agents)));
     }
     if (found.length === 1 && found[0] && found[0].debug !== true) {
@@ -324,7 +329,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     const tabCount = (
       await Promise.all(
-        listChannels({ workspaceDir: workspaceDir() }).map((c) => appTabs(c).catch(() => [])),
+        listChannels({ workspaceDir: workspaceDir() }).map((c) =>
+          selectionTargets(c).catch(() => []),
+        ),
       )
     ).flat().length;
     vscode.window.setStatusBarMessage(`aiui: ${tabCount} browser tab(s) connected`, 3000);

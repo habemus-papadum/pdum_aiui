@@ -556,10 +556,14 @@ QuickPick help text, the npm description, the "no app tabs connected" message), 
 mirror comments now name the live contracts instead of a deleted file. Everything else is
 untouched, matching your UNSURE.
 
-**Left open (a future decision):** wire the intent client to receive published selections
-(closes the loop, ~a day), or retire the send-selection command and keep only the channel
-picker/status-bar half. The channel's `/session` HTTP surface is useful to external tools
-either way.
+**UPDATE (2026-07-18, follow-up commit): the loop is wired.** The session bus client now
+surfaces transient `publish` frames (`onPublish` + the pure `asBusPublish` /
+`asContributedSelection` narrows in session.ts), both panel entries forward a `"contribution"`
+selection into the wire engine's `codeSelection()` (armed-gated by the engine's own
+lifecycle, exactly like a reader contribution), and the extension's picker now targets role
+`"intent-client"` peers (renamed `selectionTargets`; "no intent panels connected" wording).
+End to end: select in VS Code → `POST /session/publish` → hub → panel → `code-selection`
+event → composeIntent renders it inline in the lowered prompt.
 
 Original verified evidence, for reference: `appTabs()` filters `role === "app"` (no live
 client greets with it); `reduceBusMessage` in the intent client handles only

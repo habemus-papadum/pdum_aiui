@@ -25,7 +25,7 @@ import { createIntentClient, type IntentClient, type IntentLanes } from "../clie
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { createPencilHost } from "../pencil-host";
-import { connectSessionBus, probeChannel } from "../session";
+import { asContributedSelection, connectSessionBus, probeChannel } from "../session";
 import { createToolsLink } from "../tools-link";
 import { PanelLayout } from "../ui/panel-layout";
 import { installPanelKeys, type Narration } from "../ui/shell";
@@ -174,6 +174,15 @@ async function boot(): Promise<{
       if (lanes.recover(client)) {
         setStatusLine("turn recovered from the mirror — re-grant with ⌘⇧B");
       }
+    }
+  });
+  // Editor-contributed selections (the VS Code extension's "Send Selection to
+  // Browser Tab", relayed by the hub): straight into the wire engine as a
+  // code-selection event — armed-gated by the engine's own lifecycle.
+  sessionBus.onPublish((msg) => {
+    const sel = asContributedSelection(msg);
+    if (sel !== undefined) {
+      lanes.engine.codeSelection(sel);
     }
   });
 

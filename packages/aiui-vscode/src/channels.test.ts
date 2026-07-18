@@ -137,13 +137,13 @@ describe("session HTTP client", () => {
   }
 
   it("fetchPeers parses the peer list", async () => {
-    const peers = [{ clientId: "c1", role: "app", label: "Demo" }];
+    const peers = [{ clientId: "c1", role: "intent-client", label: "Demo" }];
     const { port } = await listen(() => ({ status: 200, body: { ok: true, peers, armed: true } }));
     expect(await fetchPeers(port)).toEqual({ ok: true, peers, armed: true });
   });
 
   it("publishSelection posts the contribution on the contribution topic", async () => {
-    const delivered = [{ clientId: "c1", role: "app" }];
+    const delivered = [{ clientId: "c1", role: "intent-client" }];
     const { port, requests } = await listen(() => ({
       status: 200,
       body: { ok: true, delivered, armed: false },
