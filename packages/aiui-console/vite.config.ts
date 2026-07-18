@@ -1,19 +1,8 @@
 import { readFileSync } from "node:fs";
-import { builtinModules } from "node:module";
+import { externalizeDeps } from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-
-// Externalize Node builtins + every declared runtime/peer dependency, so the
-// library bundle (the sidecar, Node code) never inlines a consumer-provided
-// module. The browser app is a SEPARATE build (app/vite.config.ts → assets/app);
-// nothing here touches it.
-const external = [
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.peerDependencies ?? {}),
-];
 
 export default defineConfig({
   build: {
@@ -30,7 +19,7 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
-      external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
+      external: externalizeDeps(pkg),
     },
   },
 });

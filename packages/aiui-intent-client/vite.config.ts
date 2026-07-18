@@ -1,27 +1,15 @@
 import { readFileSync } from "node:fs";
-import { builtinModules, createRequire } from "node:module";
+import { createRequire } from "node:module";
+import {
+  externalizeDeps,
+  SOLID_TEST_CONDITIONS,
+  solidTestDeps,
+} from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const require = createRequire(import.meta.url);
-
-// Externalize Node builtins + everything this package declares as a runtime/peer
-// dependency, so the library bundle never inlines a consumer-provided module —
-// plus `vite` and `esbuild`, which the sidecar imports LAZILY (only at mount,
-// for the /intent/ dev server and the page bundle). Bundling them would
-// pull all of Vite/esbuild into dist/sidecar.js; kept external, the dynamic
-// import resolves at runtime (and, absent in a published install, fails at mount
-// and is skipped — the Phase-4 static-dist replacement is what makes it work
-// installed).
-const external = [
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.peerDependencies ?? {}),
-  "vite",
-  "esbuild",
-];
 
 // The browser conditions + ws pin are ONLY for Vitest — node conditions hand the
 // .tsx tests a SERVER build of solid, and the browser conditions then need `ws`
@@ -31,7 +19,7 @@ const external = [
 // so gate the whole `resolve` block to test runs.
 const testResolve = process.env.VITEST
   ? {
-      conditions: ["browser", "development", "import", "module", "default"],
+      conditions: SOLID_TEST_CONDITIONS,
       alias: { ws: require.resolve("ws") },
     }
   : {};
@@ -41,16 +29,9 @@ export default defineConfig({
   plugins: [solid()],
   test: {
     server: {
-      deps: {
-        // Solid must be INLINED under Vitest, not node-resolved (the finding
-        // aiui-viz/vite.config.ts records in full): node's export conditions
-        // hand tests a SERVER build of solid-js whose flush()/effects belong
-        // to a different instance than the one the library runs — writes
-        // "commit" into a graph nobody reads. The never-matching external
-        // defeats vite-plugin-solid's force-externalization so `inline` wins.
-        external: [/^never-external-solid-js$/],
-        inline: [/solid-js/, /@solidjs\//],
-      },
+      // Solid must be INLINED under Vitest, not node-resolved — the full
+      // finding lives with solidTestDeps (@habemus-papadum/aiui-build-config).
+      deps: solidTestDeps,
     },
   },
   resolve: testResolve,
@@ -68,7 +49,10 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
-      external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
+      // vite + esbuild: the sidecar imports them LAZILY (only at mount, for
+      // the /intent/ dev server and the page bundle) — external keeps all of
+      // Vite/esbuild out of dist/sidecar.js.
+      external: externalizeDeps(pkg, ["vite", "esbuild"]),
     },
   },
 });

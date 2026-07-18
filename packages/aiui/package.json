@@ -53,6 +53,7 @@
     "vite": "^6.4.3"
   },
   "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^"
   }
 }

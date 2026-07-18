@@ -56,6 +56,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",

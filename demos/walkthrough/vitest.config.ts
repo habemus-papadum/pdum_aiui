@@ -10,8 +10,8 @@ import { defineConfig } from "vitest/config";
 //    graphs need a window even without rendering.
 //  - resolve.conditions + inline: Solid must resolve as ONE shared browser/dev
 //    build under Vitest, or effects silently observe a different reactive
-//    instance than the one your cells write to (the full story is in
-//    aiui-viz's vite.config.ts).
+//    instance than the one your cells write to (the full story lives with
+//    solidTestDeps in @habemus-papadum/aiui-build-config).
 //  - passWithNoTests: a freshly reset blank app has no tests yet; `npm test`
 //    should still be green until your first cell brings its first test.
 export default defineConfig({

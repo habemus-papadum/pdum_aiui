@@ -1,17 +1,8 @@
 import { readFileSync } from "node:fs";
-import { builtinModules } from "node:module";
+import { externalizeDeps } from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-
-// Externalize Node builtins + everything this package declares as a runtime/peer
-// dependency, so the library bundle never inlines a consumer-provided module.
-const external = [
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.peerDependencies ?? {}),
-];
 
 export default defineConfig({
   define: {
@@ -31,7 +22,7 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
-      external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
+      external: externalizeDeps(pkg),
       output: {
         // Make only the CLI chunk directly executable; the library stays clean.
         banner: (chunk: { name: string }) => (chunk.name === "cli" ? "#!/usr/bin/env node" : ""),

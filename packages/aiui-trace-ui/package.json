@@ -41,6 +41,7 @@
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^"
   },
   "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^",
     "jsdom": "^29.0.0",
     "vite": "^6.4.1"
   }

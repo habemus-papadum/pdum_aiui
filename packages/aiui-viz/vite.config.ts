@@ -1,19 +1,13 @@
 import { readFileSync } from "node:fs";
-import { builtinModules } from "node:module";
+import {
+  externalizeDeps,
+  SOLID_TEST_CONDITIONS,
+  solidTestDeps,
+} from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-
-// Externalize Node builtins + everything this package declares as a runtime/peer
-// dependency, so the library bundle never inlines a consumer-provided module
-// (solid-js, @solidjs/web, @observablehq/plot all stay external).
-const external = [
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.peerDependencies ?? {}),
-];
 
 export default defineConfig({
   // vite-plugin-solid compiles the JSX (cell-view, plot) to @solidjs/web
@@ -26,33 +20,16 @@ export default defineConfig({
     // any test module, so no test has to remember to import the stub first.
     setupFiles: ["./src/test-support/worker-stub.ts"],
     server: {
-      deps: {
-        // Solid must be INLINED under Vitest, not node-resolved — this file is
-        // the canonical record of the finding (sibling package and demo
-        // configs cite it). Node's export conditions
-        // hand @solidjs/web a SERVER build of solid-js, so `_$effect` calls a
-        // DIFFERENT instance of `createRenderEffect` than a test's
-        // `import { getObserver } from "solid-js"` observes. The DOM is still
-        // written once (so most tests pass), but there is no observer during
-        // the compute and no reactivity on update — which is precisely what
-        // cell-attribution.ts reaches for. Probe: inside `effect()` from
-        // @solidjs/web, `getObserver()` is null, while inside
-        // `createRenderEffect` from solid-js it is the effect node.
-        //
-        // vite-plugin-solid force-externalizes /solid-js/ unless the user
-        // config already lists a matching external — the never-matching regex
-        // below (its SOURCE matches the plugin's /solid-js/ gate) exists purely
-        // to defeat that, so `inline` wins and the browser/development
-        // conditions below resolve one shared dev build.
-        external: [/^never-external-solid-js$/],
-        inline: [/solid-js/, /@solidjs\//],
-      },
+      // Solid must be INLINED under Vitest, not node-resolved. The full
+      // finding — first recorded here — now lives with solidTestDeps
+      // (@habemus-papadum/aiui-build-config).
+      deps: solidTestDeps,
     },
   },
   resolve: {
     // Only meaningful under Vitest (the lib build's resolution is unaffected:
     // externals never resolve, and app consumers bring their own config).
-    conditions: ["browser", "development", "import", "module", "default"],
+    conditions: SOLID_TEST_CONDITIONS,
   },
   build: {
     lib: {
@@ -80,7 +57,7 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
-      external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
+      external: externalizeDeps(pkg),
     },
   },
 });

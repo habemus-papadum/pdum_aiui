@@ -61,6 +61,7 @@
     "solid-js": "2.0.0-beta.15"
   },
   "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@types/express": "^5.0.0",
     "express": "^5.1.0",

@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",

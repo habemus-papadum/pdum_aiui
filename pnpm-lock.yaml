@@ -244,9 +244,14 @@ importers:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-lowering-pipeline':
         specifier: workspace:^
         version: link:../aiui-lowering-pipeline
+
+  packages/aiui-build-config: {}
 
   packages/aiui-claude-channel:
     dependencies:
@@ -287,6 +292,9 @@ importers:
         specifier: ^8.18.0
         version: 8.21.0
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
@@ -299,6 +307,10 @@ importers:
       commander:
         specifier: ^15.0.0
         version: 15.0.0
+    devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
 
   packages/aiui-console:
     dependencies:
@@ -315,6 +327,9 @@ importers:
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
@@ -367,6 +382,9 @@ importers:
         specifier: ^8.18.0
         version: 8.21.0
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
@@ -404,6 +422,9 @@ importers:
         specifier: workspace:^
         version: link:../aiui-lowering-pipeline
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
@@ -419,6 +440,10 @@ importers:
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
+    devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
 
   packages/aiui-pencil:
     dependencies:
@@ -444,6 +469,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.7
         version: 7.29.7
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
@@ -484,6 +512,9 @@ importers:
         specifier: ^8.18.0
         version: 8.21.0
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
@@ -511,6 +542,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.0
         version: 7.29.7
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@types/babel__core':
         specifier: ^7.20.5
         version: 7.20.5
@@ -552,6 +586,9 @@ importers:
         specifier: workspace:^
         version: link:../aiui-lowering-pipeline
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       jsdom:
         specifier: ^29.0.0
         version: 29.1.1
@@ -568,6 +605,9 @@ importers:
         specifier: ^9.6.1
         version: 9.6.1
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
@@ -583,6 +623,9 @@ importers:
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev45.0
         version: 1.33.1-dev45.0
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@observablehq/plot':
         specifier: ^0.6.17
         version: 0.6.17
@@ -611,6 +654,9 @@ importers:
         specifier: workspace:^
         version: link:../aiui-util
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.0
@@ -629,6 +675,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.7
         version: 7.29.7
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../aiui-source-processor

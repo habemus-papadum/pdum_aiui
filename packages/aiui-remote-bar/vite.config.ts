@@ -31,22 +31,17 @@
  */
 
 import { readFileSync } from "node:fs";
-import { builtinModules, createRequire } from "node:module";
+import { createRequire } from "node:module";
+import {
+  externalizeDeps,
+  SOLID_TEST_CONDITIONS,
+  solidTestDeps,
+} from "@habemus-papadum/aiui-build-config";
 import solid from "vite-plugin-solid";
 import { defineConfig } from "vitest/config";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const require = createRequire(import.meta.url);
-
-// Externalize Node builtins + everything declared as a runtime/peer dependency,
-// so the lib bundle never inlines a consumer-provided module (its Node half's
-// `ws`, its browser half's solid).
-const external = [
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.peerDependencies ?? {}),
-];
 
 // The browser conditions + ws pin are ONLY for Vitest — node conditions hand the
 // .tsx tests a SERVER build of solid, and browser conditions then need `ws`
@@ -56,7 +51,7 @@ const external = [
 // so gate the whole `resolve` block to test runs.
 const testResolve = process.env.VITEST
   ? {
-      conditions: ["browser", "development", "import", "module", "default"],
+      conditions: SOLID_TEST_CONDITIONS,
       alias: { ws: require.resolve("ws") },
     }
   : {};
@@ -66,13 +61,9 @@ export default defineConfig({
   resolve: testResolve,
   test: {
     server: {
-      deps: {
-        // Inline Solid so tests share the library's ONE dev build. The
-        // never-matching external defeats vite-plugin-solid's
-        // force-externalization so `inline` wins.
-        external: [/^never-external-solid-js$/],
-        inline: [/solid-js/, /@solidjs\//],
-      },
+      // Solid must be INLINED under Vitest, not node-resolved — the full
+      // finding lives with solidTestDeps (@habemus-papadum/aiui-build-config).
+      deps: solidTestDeps,
     },
   },
   build: {
@@ -89,7 +80,7 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
-      external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
+      external: externalizeDeps(pkg),
     },
   },
 });

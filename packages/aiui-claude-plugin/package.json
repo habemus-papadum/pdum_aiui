@@ -45,5 +45,8 @@
   },
   "dependencies": {
     "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^"
   }
 }

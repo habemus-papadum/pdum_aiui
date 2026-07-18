@@ -9,7 +9,7 @@ import { defineConfig } from "vitest/config";
 //  - resolve.conditions + inline: Solid must resolve as ONE shared browser/dev
 //    build under Vitest, or effects silently observe a different reactive
 //    instance than the one the controls write to — cells then never recompute
-//    (the full story is in aiui-viz's vite.config.ts; it bit this package
+//    (the full story lives with solidTestDeps in @habemus-papadum/aiui-build-config; it bit this package
 //    first).
 //  - the aiui compiler with `locPrefix`: the slice's identity (names,
 //    descriptions, package-qualified locs) is injected by THIS package's own

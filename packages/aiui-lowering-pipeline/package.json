@@ -39,5 +39,8 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-viz": "workspace:^"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^"
   }
 }

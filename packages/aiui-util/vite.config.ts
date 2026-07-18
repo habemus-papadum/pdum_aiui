@@ -1,20 +1,8 @@
 import { readFileSync } from "node:fs";
-import { builtinModules } from "node:module";
+import { externalizeDeps } from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-
-// Externalize Node builtins + everything this package declares as a runtime/peer
-// dependency, plus `vite` — which `web-surface` imports LAZILY (dev only, for
-// the Vite dev server), so it must never be inlined into the bundle; the dynamic
-// import resolves at runtime in a source checkout and is unreached in prod.
-const external = [
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.peerDependencies ?? {}),
-  "vite",
-];
 
 export default defineConfig({
   build: {
@@ -29,7 +17,10 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
     rollupOptions: {
-      external: (id) => external.some((mod) => id === mod || id.startsWith(`${mod}/`)),
+      // "vite": web-surface imports it LAZILY (dev only, for the Vite dev
+      // server) — it must never be inlined into the bundle; the dynamic
+      // import resolves at runtime in a source checkout, unreached in prod.
+      external: externalizeDeps(pkg, ["vite"]),
     },
   },
 });
