@@ -1,10 +1,21 @@
 # Code review, pass 2 — the code-smell sweep
 
-**Status: proposal — awaiting review.** Nothing here changes code. Mark each dimension's
-response block; the approved-for-catalog dimensions become one team-of-agents run that
-enumerates every instance (file:line, verified), the approved-direct dimensions go straight
-to serial implementation, and the resulting catalog comes back as a decisions document before
-any refactor lands.
+**Status: marked up 2026-07-18; direct dimensions IMPLEMENTED, catalog dimensions
+CATALOGED the same day.** The direct fixes landed as four commits (S9 `cefb0c2`, S8
+`4dfbbe8`, S6 `58808a8`, S7 `504987a` — all gates green), and the S1–S5 catalog run
+(35 agents; 773 exports audited, 41 mirrors classified, 9 split plans, 3 consolidation
+designs, 2 wire inventories; every delete/unexport and importable claim adversarially
+verified) produced five decision documents awaiting markup:
+
+- [S1 — mirror & twin contracts](./code-review-pass2-s1-mirrors.md)
+- [S2 — copy-descended subsystems](./code-review-pass2-s2-subsystems.md)
+- [S3 — oversized-module split plans](./code-review-pass2-s3-splits.md)
+- [S4 — published-API surface pruning](./code-review-pass2-s4-api.md)
+- [S5 — stringly-typed wire dispatch](./code-review-pass2-s5-dispatch.md)
+
+S10 (comment-style policy) was adopted, sharpened per the markup: even one-sentence
+history must be very selective — most war stories just go; the written rule lands in
+CLAUDE.md with the docs pass. Original proposal text follows unchanged.
 
 - **Date:** 2026-07-18
 - **Scope:** the 16 tracked packages + demos + `scripts/`. Source only — the docs/skills pass
