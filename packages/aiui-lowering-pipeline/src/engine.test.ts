@@ -1076,6 +1076,101 @@ describe("the timestamp interleave (takenAt anchoring)", () => {
   });
 });
 
+describe("the timestamp interleave — the committed realtime path (word timestamps, no deltas)", () => {
+  /**
+   * The channel's committed fold composes from finals ALONE — deltas are pushed
+   * to the preview and the trace but never appended to the event log (intent-stt's
+   * `onDelta`). So on this path a word-timestamped realtime final (Scribe v2) is
+   * the ONLY interleave anchor a segment carries; there is no delta timeline.
+   *
+   * Regression (2026-07-19): the interleave's entry gate required a delta timeline,
+   * so it skipped every shot on this path and stacked them all ahead of the text —
+   * exactly what a committed prompt showed with the exact `wordOffsetAt` anchor sitting
+   * unused. These fixtures carry NO `transcript-delta` events on purpose.
+   *
+   * Word layout of the final (startMs relative to the T0 talk-start): make 0–400,
+   * the 400–700, legend 700–1200, wider 1600–2000, now 2000–2400.
+   */
+  const T0 = 1000;
+  const WORDS = [
+    { text: "make", startMs: 0, endMs: 400 },
+    { text: "the", startMs: 400, endMs: 700 },
+    { text: "legend", startMs: 700, endMs: 1200 },
+    { text: "wider", startMs: 1600, endMs: 2000 },
+    { text: "now", startMs: 2000, endMs: 2400 },
+  ] as const;
+  /** A word-timestamped final with NO deltas; shots arrive before it (arrival
+   * order would stack them at the front — the bug). `words` toggles the final's
+   * word timestamps, the segment's only anchor here. */
+  function realtimeStream(shots: IntentEvent[], withWords = true): IntentEvent[] {
+    return [
+      { at: T0 - 10, type: "armed", on: true },
+      { at: T0 - 5, type: "thread-open", trigger: "talk" },
+      { at: T0, type: "talk-start", segment: 1 },
+      ...shots,
+      { at: T0 + 3000, type: "talk-end", segment: 1, ms: 3000 },
+      {
+        at: T0 + 3600,
+        type: "transcript-final",
+        segment: 1,
+        text: "make the legend wider now",
+        latencyMs: 600,
+        model: "scribe_v2_realtime",
+        ...(withWords ? { words: [...WORDS] } : {}),
+      },
+    ];
+  }
+  const shot = (marker: string, takenAt: number): IntentEvent => ({
+    at: takenAt + 70, // the event trails the gesture into the stream
+    type: "shot",
+    marker,
+    rect: { x: 0, y: 0, w: 10, h: 10 },
+    components: [],
+    takenAt,
+  });
+
+  it("anchors a shot mid-text on the final's word timestamps, with no delta timeline", () => {
+    // Taken between "legend" (ends 1200) and "wider" (starts 1600) → the split
+    // falls after "make the legend". Arrival order alone would stack the shot
+    // at the front (its event precedes the final).
+    const events = realtimeStream([shot("shot_1", T0 + 1400)]);
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot", "text"]);
+    expect(composed.items[0].text).toBe("make the legend");
+    expect(composed.items[2].text).toBe("wider now");
+    expect(composed.transcript).toBe("make the legend wider now");
+    // And the rendered prompt carries the screenshot INLINE, not bunched ahead
+    // of the prose — the exact symptom the committed prompt showed. (No path on
+    // this fixture's shot, so it renders with its marker at MISSING.)
+    expect(composed.prompt).toBe(
+      "make the legend [screenshot shot_1 located at MISSING] wider now",
+    );
+  });
+
+  it("interleaves MULTIPLE shots each at its own spoken offset (the multi-shot committed case)", () => {
+    // shot_1 between "legend"(→1200) and "wider"(1600→) → after "make the legend";
+    // shot_2 between "wider"(→2000) and "now"(2000→) at +1800 → after "…wider".
+    // Both events precede the final: arrival order would be [shot, shot, text].
+    const events = realtimeStream([shot("shot_1", T0 + 1400), shot("shot_2", T0 + 1800)]);
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "shot", "text", "shot", "text"]);
+    expect(composed.items[0].text).toBe("make the legend");
+    expect(composed.items[1]).toMatchObject({ kind: "shot", marker: "shot_1" });
+    expect(composed.items[2].text).toBe("wider");
+    expect(composed.items[3]).toMatchObject({ kind: "shot", marker: "shot_2" });
+    expect(composed.items[4].text).toBe("now");
+  });
+
+  it("keeps arrival order when the final has NEITHER anchor — no words and no deltas", () => {
+    // The documented fallback: a segment with no word timestamps and no delta
+    // timeline can't be split, so a takenAt shot keeps its arrival position.
+    const events = realtimeStream([shot("shot_1", T0 + 1400)], /* withWords */ false);
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["shot", "text"]);
+    expect(composed.items[1].text).toBe("make the legend wider now");
+  });
+});
+
 describe("segment-replace (the panel's segment editor)", () => {
   /** A spoken segment with word timestamps and a shot anchored mid-text. */
   const T0 = 1000;

@@ -23,12 +23,14 @@ export interface InterleaveFacts {
  * Pass 4 — the timestamp interleave: place anchored shots INSIDE their
  * segment's text. A shot taken mid-window used to compose BEFORE that
  * segment's entire text (finals arrive late; position was arrival order).
- * With `takenAt` (the gesture's wall-clock) and the segment's delta
- * timeline, the compiler — the ONLY place allowed to reorder the
- * accumulator — splits the segment's text at the offset the deltas had
- * reached when the shot was taken, nudged to a word boundary. Fallbacks are
- * byte-identical to the old behavior: no takenAt (legacy streams), no
- * matching talk window (an idle shot), or no deltas for the segment → the
+ * With `takenAt` (the gesture's wall-clock) and either anchor the segment
+ * carries — word timestamps on its final (the exact anchor, `wordOffsetAt`)
+ * or its delta timeline (`deltaOffsetAt`) — the compiler, the ONLY place
+ * allowed to reorder the accumulator, splits the segment's text at the offset
+ * that anchor had reached when the shot was taken, nudged to a word boundary.
+ * Fallbacks are byte-identical to the old behavior: no takenAt (legacy
+ * streams), no matching talk window (an idle shot), or a segment with NEITHER
+ * anchor (a REST/silent final with no word timestamps and no deltas) → the
  * shot keeps its arrival position.
  *
  * Under `streaming` this runs against the PROVISIONAL run too, so a shot
@@ -55,7 +57,13 @@ export function interleavePass(items: ComposedItem[], facts: InterleaveFacts): v
       continue;
     }
     const segment = segmentContaining(windows, item.takenAt);
-    if (segment === undefined || !deltaTimelines.has(segment)) {
+    // Admit a segment that carries EITHER anchor the body can split on: a delta
+    // timeline (the streaming preview's provisional runs) OR word timestamps on
+    // its final. The committed fold composes from finals alone (deltas are never
+    // appended to the event log — see intent-stt's onDelta), so a word-timestamped
+    // realtime final has no delta timeline; gating on deltas alone left the exact
+    // `wordOffsetAt` anchor unreachable and stacked every shot ahead of the text.
+    if (segment === undefined || (!deltaTimelines.has(segment) && !wordsBySegment.has(segment))) {
       continue;
     }
     if (!items.some((t) => t.kind === "text" && t.segment === segment)) {
