@@ -49,7 +49,7 @@ export const brushSize = control({ value: 3.2, min: 1, max: 8, step: 0.2, unit: 
  *  - `blind`: no guide at all until you lift, then the fit is revealed.
  */
 export const guideMode = control<"guide" | "zen" | "blind">({
-  value: "guide",
+  value: "zen",
   options: ["guide", "zen", "blind"],
 });
 
