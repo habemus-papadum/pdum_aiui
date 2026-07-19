@@ -195,6 +195,49 @@ jobs:
             packages/aiui-vscode/dist/aiui-vscode.vsix
             packages/aiui-intent-client/aiui-chrome-*.zip
 
+  # Publish the demos/gallery static site to S3 + invalidate CloudFront, the same
+  # way npm-publish talks to npm: over OIDC, with NO stored secret. The job's
+  # id-token lets aws-actions/configure-aws-credentials assume the IAM role
+  # `pdum-aiui-gallery-publish`, whose trust policy allows ONLY this repo's
+  # release.yml on refs/heads/main (sub claim) and whose permission policy is
+  # least-privilege: write under s3://habemus-papadum.net/aiui/* and
+  # CreateInvalidation on one distribution — nothing else. The role ARN is not a
+  # secret (it is only assumable via the OIDC trust above), so it lives here in
+  # plaintext. Provisioned out-of-band in AWS account 789030644255; the resources
+  # and the recreate commands are recorded in demos/gallery/PUBLISHING.md.
+  publish-site:
+    needs: [prepare, npm-publish]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC: assume the AWS publish role — no stored secret
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      # Source-first: the gallery builds from linked workspace source, so a plain
+      # install is all the prep the vite build needs.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Assume the AWS publish role (GitHub OIDC — no secret)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::789030644255:role/pdum-aiui-gallery-publish
+          aws-region: us-east-1
+
+      - name: Build demos/gallery and publish to S3 + invalidate CloudFront
+        env:
+          PUBLISH: "1" # real upload, not the script's default dry run
+          CF_ID: E2OPILUJ3WDTIB # skip ListDistributions (role isn't allowed it)
+        run: bash demos/gallery/publish.sh --publish
+
   # ---------------------------------------------------------------------------
   # Chrome Web Store publish — STUB, intentionally disabled ("zip now, store
   # later"). The release above ships a load-unpacked zip, which needs no account

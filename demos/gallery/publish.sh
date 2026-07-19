@@ -14,8 +14,15 @@
 #     pnpm run publish                # dry run: shows what would change
 #     pnpm run publish -- --publish   # actually upload (or: PUBLISH=1 pnpm run publish)
 #
-# Credentials: uses AWS_PROFILE if set, else the "personal" profile
-# (the account that owns the habemus-papadum.net bucket).
+# Credentials, two ways:
+#   - Locally: uses AWS_PROFILE if set, else the "personal" profile (the account
+#     that owns the habemus-papadum.net bucket).
+#   - In CI (release.yml): aws-actions/configure-aws-credentials assumes the
+#     pdum-aiui-gallery-publish IAM role over GitHub OIDC and exports ambient
+#     credentials (AWS_ACCESS_KEY_ID et al) — no profile, no stored secret. We
+#     detect those and DON'T force a profile (which would shadow them and not
+#     exist on the runner). CI also sets CF_ID (the least-privilege role can
+#     CreateInvalidation but not ListDistributions).
 #
 # (Invoke via `pnpm run publish` — bare `pnpm publish` is the npm registry
 # command, which this private package refuses anyway.)
@@ -25,7 +32,13 @@ S3_BUCKET="s3://habemus-papadum.net"
 PREFIX="aiui"
 S3_DEST="$S3_BUCKET/$PREFIX"
 CF_DOMAIN="${S3_BUCKET#s3://}"
-export AWS_PROFILE="${AWS_PROFILE:-personal}"
+
+# Only default to a named profile when NO ambient credentials are present.
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -z "${AWS_PROFILE:-}" ]; then
+  export AWS_PROFILE="personal"
+fi
+CRED_DESC="${AWS_PROFILE:+profile $AWS_PROFILE}"
+CRED_DESC="${CRED_DESC:-ambient env credentials}"
 
 DO_DRYRUN=1
 [ "${PUBLISH:-}" = "1" ] && DO_DRYRUN=0
@@ -46,7 +59,7 @@ for tool in aws npx; do
   command -v "$tool" >/dev/null 2>&1 || { echo "error: '$tool' not found on PATH" >&2; exit 1; }
 done
 aws sts get-caller-identity >/dev/null 2>&1 || {
-  echo "error: no usable AWS credentials for profile '$AWS_PROFILE'." >&2
+  echo "error: no usable AWS credentials ($CRED_DESC)." >&2
   echo "       set AWS_PROFILE or refresh credentials, then retry." >&2
   exit 1
 }
@@ -73,7 +86,7 @@ for route in $ROUTES; do
 done
 
 if [ "$DO_DRYRUN" = "1" ]; then
-  echo "==> DRY RUN — showing what 'aws s3 sync --delete' would do (profile: $AWS_PROFILE):"
+  echo "==> DRY RUN — showing what 'aws s3 sync --delete' would do ($CRED_DESC):"
   echo "    (re-run with --publish, or PUBLISH=1, to upload for real)"
   aws s3 sync dist "$S3_DEST" --delete --dryrun
   for route in $ROUTES; do
@@ -81,7 +94,7 @@ if [ "$DO_DRYRUN" = "1" ]; then
   done
   echo "==> DRY RUN — would then invalidate CloudFront '/$PREFIX/*' for $CF_DOMAIN."
 else
-  echo "==> PUBLISHING to $S3_DEST (with --delete, profile: $AWS_PROFILE)…"
+  echo "==> PUBLISHING to $S3_DEST (with --delete, $CRED_DESC)…"
   aws s3 sync dist "$S3_DEST" --delete
   # The clean deep-link objects (see the ROUTES note above). After the sync so
   # --delete cannot remove them (they exist in dist/ only as .html twins).
@@ -89,9 +102,11 @@ else
     aws s3 cp dist/index.html "$S3_DEST/$route" --content-type "text/html"
   done
   echo "==> Invalidating CloudFront cache for /$PREFIX/* …"
-  cf_id="$(aws cloudfront list-distributions \
+  # CI passes CF_ID directly — its least-privilege role can CreateInvalidation on
+  # the one distribution but NOT ListDistributions. Locally, auto-discover by alias.
+  cf_id="${CF_ID:-$(aws cloudfront list-distributions \
     --query "DistributionList.Items[?contains(Aliases.Items, '$CF_DOMAIN')].Id | [0]" \
-    --output text 2>/dev/null || true)"
+    --output text 2>/dev/null || true)}"
   if [ -z "$cf_id" ] || [ "$cf_id" = "None" ]; then
     echo "warning: no CloudFront distribution found for alias '$CF_DOMAIN' — edge caches may stay stale up to a day." >&2
   else
