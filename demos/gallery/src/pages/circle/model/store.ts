@@ -35,7 +35,7 @@ import { summarize, type Vec } from "./circle";
 
 /** How long the ink lingers before it fades and pops, in seconds. The measured
  * statistics stay after the ink is gone; only a new stroke resets them. */
-export const fadeSeconds = control({ value: 6, min: 1, max: 15, step: 0.5, unit: " s" });
+export const fadeSeconds = control({ value: 2.5, min: 1, max: 15, step: 0.5, unit: " s" });
 
 /** Nominal pencil radius, px — the thickness of the line you draw with. */
 export const brushSize = control({ value: 3.2, min: 1, max: 8, step: 0.2, unit: "px" });
@@ -115,12 +115,14 @@ export const paper = durable(
       // Transparent: the page's dark ground shows through, ink floats on it.
       background: () => undefined,
       onStrokeStart: () => {
-        // One mark at a time: the previous stroke clears the instant a new one
-        // begins. `clearCompleted` drops the finished/fading strokes but leaves
-        // THIS just-begun stroke (already in the live set) untouched — a plain
-        // clear() here would wipe it. (Idle strokes still fade on their own via
-        // fadeSec; this only makes a *new* stroke replace the last at once.)
-        paper.clearCompleted();
+        // One mark at a time: starting a new stroke sends the previous one into
+        // the tail of the vanishing curve so it POPS OUT (rather than snapping
+        // away). `popCompleted` re-times the finished strokes onto the pop but
+        // leaves THIS just-begun stroke (already in the live set) untouched — a
+        // plain clearAnimated() here would wipe it. Idle strokes still pop on
+        // their own fadeSec clock; this only brings a new stroke's arrival
+        // forward as the trigger.
+        paper.popCompleted();
         // A new stroke IS a new turn: bump the counter, drop the last turn's
         // frozen stats, and enter the live phase.
         turnCount.set((n) => n + 1);

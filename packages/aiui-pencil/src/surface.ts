@@ -309,32 +309,48 @@ export class PencilSurface {
   }
 
   /**
-   * Drop every COMPLETED stroke — the retained tiles (addressable / still
-   * fading), the flattened raw points past the undo horizon, and the settled
-   * bitmap — while leaving strokes STILL UNDER THE PEN untouched.
+   * Send every COMPLETED stroke into the TAIL of the vanishing curve — the
+   * charge-and-pop — so previous marks animate OUT rather than snapping off,
+   * while leaving the stroke still under the pen untouched.
    *
-   * This is the "one mark at a time" primitive. {@link onStrokeStart} fires
-   * from inside `beginStroke`, *after* the new stroke has already joined the
-   * `live` set, so a plain {@link clear} (or {@link clearAnimated}) there would
-   * wipe the mark you just began. This clears only what came *before* it, so a
-   * consumer that wants each new stroke to replace the last calls it from
-   * `onStrokeStart`. `live` is never touched and `onAutoClear` never fires — the
-   * surface is not going empty, a stroke is in flight.
+   * This is the "one mark at a time" primitive. {@link PencilSurfaceOptions.onStrokeStart}
+   * fires from inside `beginStroke`, *after* the new stroke has joined the
+   * `live` set, so — like a plain {@link clearAnimated} — touching `live` here
+   * would wipe the mark just begun; this re-times only the *completed* strokes.
+   * Each is advanced to the hold→pop boundary of the AMBIENT fade window
+   * (`fadeSec`) and left to pop on the normal per-frame fade, so starting a new
+   * stroke triggers the previous one's dissolve exactly as if its clock had run
+   * out. A stroke already in its tail is not re-charged (min keeps the earlier
+   * clock). With no fade window (`fadeSec` 0) there is nothing to animate
+   * against, so the completed strokes are dropped at once.
    */
-  clearCompleted(): void {
-    const had =
-      this.retained.length > 0 ||
-      this.flattened.length > 0 ||
-      this.settled !== undefined ||
-      this.clearing !== undefined;
-    this.retained = [];
+  popCompleted(): void {
+    const fadeMs = this.fadeMs();
+    if (fadeMs <= 0) {
+      const had =
+        this.retained.length > 0 || this.flattened.length > 0 || this.settled !== undefined;
+      this.retained = [];
+      this.flattened = [];
+      this.settled = undefined;
+      if (had) {
+        this.dirty = true;
+        this.emit("strokes");
+      }
+      return;
+    }
+    const now = this.now();
+    // The bornAt whose age is exactly the hold→pop boundary. Advancing a
+    // younger stroke to it drops it into the charge-and-pop; a stroke already
+    // past it keeps its (earlier) clock, so it is never re-charged mid-pop.
+    const boundary = now - INK_HOLD * fadeMs;
+    for (const record of this.retained) {
+      record.bornAt = Math.min(record.bornAt, boundary);
+    }
+    // Flattened points and the settled bitmap have no dabs to warp (and with
+    // fade active are always empty) — drop them so nothing outlives the pop.
     this.flattened = [];
     this.settled = undefined;
-    this.clearing = undefined;
-    if (had) {
-      this.dirty = true;
-      this.emit("strokes");
-    }
+    this.dirty = true;
   }
 
   /**
