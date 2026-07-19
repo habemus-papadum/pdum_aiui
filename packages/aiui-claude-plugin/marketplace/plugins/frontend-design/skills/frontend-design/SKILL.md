@@ -229,6 +229,21 @@ mode against each mode's surface; sim canvases stay self-contained dark figures 
 and note figure colors (canvas + its legend chips) are cross-mode *constants* while panel-chart
 colors are *per-mode*: same hex in dark, they diverge in light.
 
+**Phones and desktops** (full section in the style-guide doc): one component tree reflowed with
+CSS — never a mobile fork or a JS `isMobile` branch (a media query IS the device-conditional
+logic and can't drift from the viewport). Desktop rules are the base; phone changes layer inside
+`@media (max-width:…)` so the wide layout stays byte-identical (verify at ~1440px). Fluid-first —
+`minmax(0, Npx) minmax(0, 1fr)`, `clamp`, `auto-fit`, `max-width` caps over fixed px — and put
+each breakpoint where THIS content breaks, not at device names (TocRail <1280, seismos 860,
+circle 600); target the CSS-px band 360–414. Imperative islands (sim canvases, `PencilSurface`)
+re-fit to their box via ResizeObserver, so a CSS reflow is enough — no device JS; give a stacked
+drawing surface an explicit height. Absolute overlays that float beside a wide figure must rejoin
+the flow and stack on phone (circle's readout/dock buries a narrow board otherwise); a drawing
+surface keeps `touch-action:none` while its stacked container allows `pan-y`. Preview by driving a
+real browser at a phone viewport (DevTools device mode, or the session browser's `emulate`/
+`resize_page` + screenshot loop) sweeping 360/390/414, then re-shoot ~1440px to prove desktop is
+untouched.
+
 ## Charts
 
 Follow the dataviz skill (validate palettes against the actual surface; fixed categorical

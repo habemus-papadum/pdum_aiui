@@ -6,7 +6,7 @@ silently accumulates your briefing and gives one advisory read when you press **
 the oracle is the *addressee*: while it is on, you are talking **to** the model, not past it.
 
 The two are the same machinery (a live vendor session fed from the capture bus —
-`docs/proposals/capture-bus-and-consumers.md`), differing only in persona, tools, and **how the
+`archive/capture-bus-and-consumers.md`), differing only in persona, tools, and **how the
 converse turn ends**:
 
 | | linter | oracle |

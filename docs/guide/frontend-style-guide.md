@@ -121,6 +121,49 @@ connected Plot out, marks disconnected on dispose), and `aiui-viz/duckdb` export
 that make the wasm/worker bundles its own same-origin files (a library cannot own those; see
 the module docblock). Both are optional-peer subpaths, like `aiui-viz/plot`.
 
+## Phones and desktops
+
+A notebook is **one component tree, reflowed** — never a separate mobile build, and never a
+JavaScript `isMobile` branch. A CSS media query *is* the device-conditional logic, and unlike a
+runtime check it cannot drift from the viewport it reasons about. The reference notebooks all
+render on a phone from the same markup the desktop uses.
+
+- **Desktop is the base; narrow screens are overrides.** Keep the wide-screen rules as the
+  unqualified declarations and layer phone changes inside `@media (max-width: …)` blocks, so the
+  desktop layout stays byte-identical — the same "never an automatic flip" discipline as theming.
+  Prove it: screenshot the page at ~1440px before and after and confirm it is unchanged.
+- **Fluid first; breakpoints only for structural switches.** Prefer intrinsic sizing —
+  `minmax()`, `clamp()`, `auto-fit`, `fr`, `%`, `max-width` caps — over fixed pixel widths, so a
+  layout degrades instead of overflowing. A fixed two-column track (`540px 1fr`) becomes
+  `minmax(0, 540px) minmax(0, 1fr)`: identical when there's room, shrinking when there isn't. Add
+  a breakpoint only where the *structure* must change — the overview's figure/data split stacking
+  to one column, a paired chart going from side-by-side to stacked.
+- **Breakpoints belong to content, not device names.** Put each one where *this page's* content
+  stops fitting, not at a named phone width. The existing ones are content-derived: the `TocRail`
+  hides below ~1280px, seismos collapses its dashboard at 860px, circle stacks its board at 600px.
+  Target the CSS-pixel band **360–414** as the phone floor (the viewport meta maps device pixels
+  to CSS pixels; device-pixel-ratio governs sharpness, not layout) — read cleanly across that band
+  and it works on essentially every phone.
+- **Imperative islands re-fit themselves — let them.** The simulation canvases and the pencil
+  `PencilSurface` size to their container through a `ResizeObserver`, so a CSS reflow that changes
+  an island's box is enough; the resize path is the same one a desktop window-resize already
+  exercises. Give a stacked drawing surface an **explicit height** so its canvas has a box to
+  observe. Reach for JavaScript only when an island genuinely cannot re-measure, or the
+  *interaction itself* must differ — not merely because the layout changed.
+- **Overlays that float beside a wide figure must rejoin the flow on a phone.** Circle's readout
+  and dock are `position: absolute` over a wide board on desktop; on a ~360px board that same panel
+  buries the canvas, so below the breakpoint they become `position: static` and stack vertically
+  (toggle, square stage, score, dock). An overlay that's fine over a wide plate swallows a narrow
+  one.
+- **`touch-action`.** A drawing surface keeps `touch-action: none` (or the browser eats pen/finger
+  drags as scroll); once it shares a stacked board with normal panels, the *container* must allow
+  `touch-action: pan-y` so the page still scrolls when a touch lands off the canvas.
+- **Preview on the real thing.** Drive an actual browser at a phone viewport — Chrome DevTools
+  device/responsive mode, or the session browser via the Chrome DevTools MCP (`emulate` /
+  `resize_page` + a screenshot loop) — and sweep 360/390/414, then re-shoot at ~1440px to prove
+  desktop is untouched. A real phone over the LAN (`vite --host`, then the machine's LAN IP on the
+  same Wi-Fi) is the gold standard.
+
 ## Theming
 
 Covered in depth in [design choices §8](./frontend-design-choices); the style-guide rules:

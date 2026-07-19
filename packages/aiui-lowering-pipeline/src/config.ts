@@ -201,7 +201,7 @@ export const LINTER_VENDORS = [
 
 /**
  * The `lint` control-chunk vocabulary — the CONVERSE turn strategy's two
- * control-driven entry points (docs/proposals/capture-bus-and-consumers.md §6
+ * control-driven entry points (archive/capture-bus-and-consumers.md §6
  * Phase 1): `"now"` ends the linter's turn at the button (and arms the
  * after-reply auto-off), `"stop"` cancels the in-flight reply (the button
  * barge-in) and disarms the auto-off. Lives beside {@link LinterVendor} for

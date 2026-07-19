@@ -135,7 +135,7 @@ export interface LiveSessionCallbacks {
    * after the tool result fires its own `response.done`). Gemini:
    * `serverContent.turnComplete` — for parity. The concrete "the model is
    * done" signal the CONVERSE turn strategy's after-reply policy keys on
-   * (docs/proposals/capture-bus-and-consumers.md §3); overhear callers may
+   * (archive/capture-bus-and-consumers.md §3); overhear callers may
    * ignore it. Optional.
    */
   onTurnComplete?(): void;
