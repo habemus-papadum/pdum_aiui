@@ -48,7 +48,7 @@ function mount(extra: Partial<PanelLayoutProps>): HTMLElement {
       <PanelLayout
         port={undefined}
         phase={() => "closed"}
-        listChannels={async () => []}
+        listChannels={async () => ({ channels: [] })}
         onSwitch={() => {}}
         client={client}
         narration={makeNarration()}

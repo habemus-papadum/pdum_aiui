@@ -20,7 +20,7 @@ import type { JSX } from "@solidjs/web";
 import { Show } from "solid-js";
 import type { IntentClient } from "../client";
 import type { ChannelLanes } from "../lanes";
-import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./channel-header";
+import { CHANNEL_HEADER_STYLES, ChannelHeader, type ChannelListing } from "./channel-header";
 import { Panel } from "./panel";
 import { PANES_STYLES } from "./panes";
 import { type Narration, WirePane } from "./shell";
@@ -42,7 +42,7 @@ export interface PanelLayoutProps {
   /** The session-bus phase — the header dot's color (a reactive read). */
   phase: () => "connected" | "connecting" | "closed";
   /** How the header lists channels (URL registry vs the extension's native host). */
-  listChannels: () => Promise<ChannelEntry[]>;
+  listChannels: () => Promise<ChannelListing>;
   /** How the header rebinds to another channel (URL assign vs storage + reload). */
   onSwitch: (port: number) => void;
   /** The intent client this panel drives. */

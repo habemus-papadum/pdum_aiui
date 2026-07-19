@@ -146,16 +146,44 @@ async function channelsVia(port: number): Promise<ChannelEntry[]> {
   }
 }
 
-/** The on-disk registry, via the native host. `undefined` = not installed. */
-async function channelsViaNativeHost(): Promise<ChannelEntry[] | undefined> {
+/** The native host's answer, with FAILURE kept distinct from "no channels":
+ * an empty list from a working host means nothing is running (`aiui claude`
+ * is the remedy); an error means native messaging itself is broken — not
+ * installed, or the host died — and the remedy is
+ * `aiui extension install-native-host`. Conflating the two hid which hint to
+ * give (owner, 2026-07-19). */
+export type NativeHostResult =
+  | { ok: true; channels: ChannelEntry[] }
+  | { ok: false; error: string };
+
+/** The on-disk registry, via the native host — error kept, not swallowed. */
+async function channelsViaNativeHost(): Promise<NativeHostResult> {
   try {
     const res = (await chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, {
       cmd: "listChannels",
     })) as { ok?: boolean; channels?: ChannelEntry[] };
-    return res?.ok === true && Array.isArray(res.channels) ? res.channels : undefined;
-  } catch {
-    return undefined; // no host installed — port probing carries us
+    return res?.ok === true && Array.isArray(res.channels)
+      ? { ok: true, channels: res.channels }
+      : { ok: false, error: "the host answered, but not with a channel list" };
+  } catch (err) {
+    // Chrome's text names the cause: "Specified native messaging host not
+    // found." (never installed) vs "Native host has exited." (it broke).
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/** Is native messaging itself working? (The boot-time diagnosis: one probe,
+ * same `listChannels` command the discovery ladder uses.) */
+export async function probeNativeHost(): Promise<NativeHostResult> {
+  return channelsViaNativeHost();
+}
+
+/** What `listChannels` hands the chooser: the list, plus HOW it was obtained
+ * — `nativeHostError` present means the list came from the mirror fallback
+ * (or nowhere) because native messaging is broken. */
+export interface ChannelListing {
+  channels: ChannelEntry[];
+  nativeHostError?: string;
 }
 
 /**
@@ -165,12 +193,15 @@ async function channelsViaNativeHost(): Promise<ChannelEntry[] | undefined> {
  * channel's mirror is the fallback. Boot discovery below shares the same
  * helpers — native messaging stays confined to this module.
  */
-export async function listChannels(currentPort?: number): Promise<ChannelEntry[]> {
+export async function listChannels(currentPort?: number): Promise<ChannelListing> {
   const native = await channelsViaNativeHost();
-  if (native !== undefined) {
-    return native;
+  if (native.ok) {
+    return { channels: native.channels };
   }
-  return currentPort !== undefined ? await channelsVia(currentPort) : [];
+  return {
+    channels: currentPort !== undefined ? await channelsVia(currentPort) : [],
+    nativeHostError: native.error,
+  };
 }
 
 /** Find a channel to bind, or `undefined` (see the module doc for the order). */
@@ -202,7 +233,7 @@ export async function discoverChannel(): Promise<number | undefined> {
     }
   }
   const native = await channelsViaNativeHost();
-  const picked = pickChannel(native ?? []);
+  const picked = pickChannel(native.ok ? native.channels : []);
   if (picked !== undefined && (await alive(picked.port))) {
     await rememberPort(picked.port);
     return picked.port;

@@ -76,3 +76,67 @@ describe("discoverChannel: the pin outranks the ladder", () => {
     expect(store["aiui2.recentPorts"]).toEqual([49317]);
   });
 });
+
+describe("listChannels tells 'nothing running' apart from 'native messaging broken'", () => {
+  /** chrome with storage AND a scriptable native host. */
+  function fakeChromeWithNative(
+    sendNativeMessage: (host: string, msg: unknown) => Promise<unknown>,
+  ): void {
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: async () => ({}),
+          set: async () => {},
+          remove: async () => {},
+        },
+        onChanged: { addListener: () => {} },
+      },
+      runtime: { sendNativeMessage },
+    });
+  }
+
+  it("a working host with an empty registry is a CLEAN empty listing (run `aiui claude`)", async () => {
+    fakeChromeWithNative(async () => ({ ok: true, channels: [] }));
+    const { listChannels } = await load();
+    const listing = await listChannels();
+    expect(listing.channels).toEqual([]);
+    expect(listing.nativeHostError).toBeUndefined();
+  });
+
+  it("a missing host carries Chrome's error (install-native-host is the remedy)", async () => {
+    fakeChromeWithNative(async () => {
+      throw new Error("Specified native messaging host not found.");
+    });
+    const { listChannels } = await load();
+    const listing = await listChannels();
+    expect(listing.channels).toEqual([]);
+    expect(listing.nativeHostError).toBe("Specified native messaging host not found.");
+  });
+
+  it("a broken host still lists via the mirror fallback — but keeps the error", async () => {
+    fakeChromeWithNative(async () => {
+      throw new Error("Native host has exited.");
+    });
+    fakeHealth([4100]);
+    const { listChannels } = await load();
+    const listing = await listChannels(4100);
+    expect(listing.channels.map((c) => c.port)).toEqual([4100]);
+    expect(listing.nativeHostError).toBe("Native host has exited.");
+  });
+
+  it("probeNativeHost reports ok / error for the boot-time diagnosis", async () => {
+    fakeChromeWithNative(async () => ({ ok: true, channels: [{ port: 4200 }] }));
+    const one = await load();
+    expect(await one.probeNativeHost()).toEqual({ ok: true, channels: [{ port: 4200 }] });
+
+    vi.resetModules();
+    fakeChromeWithNative(async () => {
+      throw new Error("Specified native messaging host not found.");
+    });
+    const two = await load();
+    expect(await two.probeNativeHost()).toEqual({
+      ok: false,
+      error: "Specified native messaging host not found.",
+    });
+  });
+});

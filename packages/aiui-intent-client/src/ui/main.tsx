@@ -394,11 +394,12 @@ render(
       phase={busPhase}
       listChannels={async () => {
         // The channel-served page's discovery IS its origin: the registry
-        // mirror answers on the port we are bound to (or same-origin).
+        // mirror answers on the port we are bound to (or same-origin). No
+        // native host in this tier, so the listing never carries its error.
         const base = port !== undefined ? `http://127.0.0.1:${port}` : "";
         const res = await fetch(`${base}/debug/api/channels`);
         const body = (await res.json()) as { channels?: ChannelEntry[] };
-        return body.channels ?? [];
+        return { channels: body.channels ?? [] };
       }}
       onSwitch={(next) => {
         const url = new URL(location.href);

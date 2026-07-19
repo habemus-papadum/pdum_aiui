@@ -41,6 +41,7 @@ import {
   listChannels,
   onCdpTagChanged,
   pinPort,
+  probeNativeHost,
   readCdpTag,
   rememberPort,
 } from "./channel";
@@ -110,7 +111,21 @@ async function boot(): Promise<{
   const port = await discoverChannel();
   const health = port !== undefined ? await probeChannel(port) : undefined;
   if (port === undefined || health === undefined) {
-    setStatusLine("no channel found — run `aiui claude`, then reopen this panel");
+    // No channel — but WHICH "no channel"? A working native host answering
+    // with an empty registry means nothing is running (`aiui claude` is the
+    // remedy, the calm hint). A native-messaging failure means discovery
+    // itself is broken — not installed, or the host died — and deserves the
+    // LOUD hint with the real remedy (owner, 2026-07-19).
+    const native = await probeNativeHost();
+    if (native.ok) {
+      console.info("[channel]", "native host ok, registry empty — no channel is running");
+      setStatusLine("no channel running — run `aiui claude`, then reopen this panel");
+    } else {
+      const message = `native messaging host unreachable — run \`aiui extension install-native-host\`, then reload the extension (${native.error})`;
+      console.warn("[channel]", message);
+      setStatusLine(message);
+      narration.toast(message);
+    }
     const client = createIntentClient({
       host,
       lanes: consoleLanes,

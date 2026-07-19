@@ -35,10 +35,17 @@ export const CHANNEL_HEADER_STYLES = `
   .aiui-chan-list { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
   .aiui-chan-list button { font: 12px system-ui; text-align: left; padding: 3px 8px;
     border-radius: 6px; border: none; background: transparent; color: inherit; cursor: pointer; }
-  .aiui-chan-list button:hover:not([disabled]) {
+  .aiui-chan-list button:hover {
     background: color-mix(in srgb, currentColor 12%, transparent); }
-  .aiui-chan-list button[disabled] { opacity: 0.55; cursor: default; font-weight: 600; }
+  /* The bound channel: full-strength and clickable (picking it again is an
+     idempotent no-op — owner, 2026-07-19, replacing the confusing grayed
+     row), named by the ✓ tail instead. */
+  .aiui-chan-list button[data-current] { font-weight: 600; }
+  .aiui-chan-current { font-size: 10px; color: #16a34a; margin-left: 8px; }
   .aiui-chan-note { font-size: 11px; opacity: 0.6; padding: 2px 4px; }
+  /* Native messaging itself is broken — the LOUD tone (not "nothing running"). */
+  .aiui-chan-note[data-tone="alarm"] { opacity: 1; color: #dc2626; font-weight: 600;
+    max-width: 280px; }
 `;
 
 /** One channel, as the registry lists them (mirror route or native host). */
@@ -49,6 +56,16 @@ export interface ChannelEntry {
   pid?: number;
   /** A standalone `aiui serve`: reachable, but with no session behind it. */
   debug?: boolean;
+}
+
+/** What the list seam answers: the channels, plus whether the extension's
+ * native host failed to answer (absent on the page tier, which has no host).
+ * The distinction picks the hint: an empty list from a WORKING host means
+ * "nothing running" (`aiui claude`); a host error means native messaging is
+ * broken and the remedy is `aiui extension install-native-host`. */
+export interface ChannelListing {
+  channels: ChannelEntry[];
+  nativeHostError?: string;
 }
 
 /** "project :port" — the cwd tail names the session (ports are noise alone). */
@@ -63,19 +80,32 @@ export function ChannelHeader(props: {
   /** The session bus phase — the dot's color (a reactive read). */
   phase: () => "connected" | "connecting" | "closed";
   /** THE seam: how a list of channels is obtained is the entry's business. */
-  listChannels: () => Promise<ChannelEntry[]>;
+  listChannels: () => Promise<ChannelListing>;
   /** Rebind this panel to another channel (URL vs storage — the entry's call). */
   onSwitch: (port: number) => void;
 }) {
   const [channels, setChannels] = createSignal<ChannelEntry[]>([], { ownedWrite: true });
   const [note, setNote] = createSignal("scanning…", { ownedWrite: true });
+  const [tone, setTone] = createSignal<"info" | "alarm">("info", { ownedWrite: true });
   const refresh = async (): Promise<void> => {
     try {
-      const list = await props.listChannels();
-      setChannels(list);
-      setNote(list.length === 0 ? "no channels found — run `aiui claude`" : "");
+      const listing = await props.listChannels();
+      setChannels(listing.channels);
+      if (listing.nativeHostError !== undefined) {
+        // Native messaging is broken — say THAT, loudly, whether or not the
+        // mirror fallback still found channels (cold-start discovery is dead
+        // either way).
+        setTone("alarm");
+        setNote(
+          `native messaging host unreachable — run \`aiui extension install-native-host\`, then reload the extension (${listing.nativeHostError})`,
+        );
+      } else {
+        setTone("info");
+        setNote(listing.channels.length === 0 ? "no channels running — run `aiui claude`" : "");
+      }
     } catch {
       setChannels([]);
+      setTone("info");
       setNote("discovery failed — is a channel running?");
     }
   };
@@ -107,18 +137,27 @@ export function ChannelHeader(props: {
               {(entry) => (
                 <button
                   type="button"
-                  disabled={entry.port === props.port}
+                  data-current={entry.port === props.port ? "" : undefined}
                   onClick={() => {
-                    props.onSwitch(entry.port);
+                    // Idempotent: re-picking the bound channel just closes —
+                    // no rebind, no reload.
+                    if (entry.port !== props.port) {
+                      props.onSwitch(entry.port);
+                    }
                     close();
                   }}
                 >
                   {channelLabel(entry)}
+                  <Show when={entry.port === props.port}>
+                    <span class="aiui-chan-current">✓ connected</span>
+                  </Show>
                 </button>
               )}
             </For>
             <Show when={note() !== ""}>
-              <div class="aiui-chan-note">{note()}</div>
+              <div class="aiui-chan-note" data-tone={tone()}>
+                {note()}
+              </div>
             </Show>
           </div>
         )}
