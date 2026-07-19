@@ -18,7 +18,7 @@
  */
 import { createSignal } from "solid-js";
 
-export type Route = "morphogen" | "aztec" | "seismos";
+export type Route = "morphogen" | "aztec" | "seismos" | "circle";
 
 const BASE = import.meta.env.BASE_URL; // "/" in dev, "/aiui/" in the build
 
@@ -31,7 +31,7 @@ export function hrefOf(route: Route): string {
 export function routeOf(pathname: string): Route {
   const rel = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname.slice(1);
   const slug = rel.replace(/\/$/, "").replace(/\.html$/, "");
-  return slug === "aztec" || slug === "seismos" ? slug : "morphogen";
+  return slug === "aztec" || slug === "seismos" || slug === "circle" ? slug : "morphogen";
 }
 
 const [route, setRoute] = createSignal<Route>(

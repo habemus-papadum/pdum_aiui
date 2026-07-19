@@ -32,6 +32,7 @@ const LOADERS: Record<Route, () => Promise<{ page: GalleryPage }>> = {
   morphogen: () => import("../pages/morphogen/page"),
   aztec: () => import("../pages/aztec/page"),
   seismos: () => import("../pages/seismos/page"),
+  circle: () => import("../pages/circle/page"),
 };
 
 const loaded = new Map<Route, GalleryPage>();

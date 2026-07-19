@@ -37,4 +37,10 @@ export const TABS: SiteTab[] = [
     name: "seismos",
     desc: "earthquakes & the Gutenberg–Richter law",
   },
+  {
+    id: "circle",
+    href: hrefOf("circle"),
+    name: "circle",
+    desc: "how round can you draw a circle?",
+  },
 ];

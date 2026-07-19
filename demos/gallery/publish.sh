@@ -67,7 +67,7 @@ npx vite build
 # content-type text/html below, since an extensionless key would sniff as
 # octet-stream) and `aztec.html`/`seismos.html` (the old multi-entry URLs;
 # inbound links keep working — the router maps the .html slugs to routes).
-ROUTES="aztec seismos"
+ROUTES="aztec seismos circle"
 for route in $ROUTES; do
   cp dist/index.html "dist/$route.html"
 done

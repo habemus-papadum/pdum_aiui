@@ -1,0 +1,374 @@
+/* page.css — the circle notebook. The interactive DRAWING BOARD is a
+ * self-contained dark figure (the "journal plate" convention the sim canvases
+ * use), so its own dark palette is scoped to `.circle-board` and never leaks to
+ * the light notebook surface around it. Every panel that was `fixed` in the
+ * standalone demo is `absolute` within the board here. The scoring maths below
+ * the board is a normal notebook section and uses the gallery's own tokens. */
+
+/* --- the drawing board: a constant dark plate ------------------------------- */
+
+.circle-board {
+  /* dark palette, scoped — resolves the ported components' color vars */
+  --line: #2a3143;
+  --text: #eceef3;
+  --muted: #8b93a4;
+  --faint: #5a6274;
+  --accent: #8ab4f8;
+  --ink: #ff6b6b;
+  --panel: rgba(22, 27, 40, 0.72);
+
+  position: relative;
+  height: min(74vh, 720px);
+  min-height: 460px;
+  margin-top: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--text);
+  background: radial-gradient(900px 600px at 32% 0%, #141826 0%, #0d0f16 62%), #0d0f16;
+  touch-action: none;
+}
+
+/* --- the stage (the pencil surface fills it) -------------------------------- */
+
+.circle-board .stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.circle-board .circle-paper {
+  z-index: 1;
+}
+
+.circle-board .ghost-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.circle-board .fit-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.circle-board .fit-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(138, 180, 248, 0.55);
+  transform: translate(-50%, -50%);
+}
+
+.circle-board .fit-ellipse {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(70, 211, 154, 0.5);
+}
+
+.circle-board .fit-center {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(138, 180, 248, 0.8);
+}
+
+/* --- the guidance-mode switch (top centre of the board) --------------------- */
+
+.circle-board .guide-toggle {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+}
+
+.circle-board .gt-seg {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.circle-board .gt-btn {
+  padding: 5px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+
+.circle-board .gt-btn:hover {
+  color: var(--text);
+}
+
+.circle-board .gt-btn.active {
+  background: rgba(138, 180, 248, 0.16);
+  color: var(--accent);
+}
+
+.circle-board .gt-blurb {
+  max-width: 340px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* --- the readout panel (right, inside the board) ---------------------------- */
+
+.circle-board .readout {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 262px;
+  padding: 16px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.circle-board .readout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.circle-board .turn-pill {
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.circle-board .turn-pill.live {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.circle-board .gauge {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.circle-board .gauge svg {
+  flex: none;
+}
+
+.circle-board .gauge-num {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.circle-board .gauge-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.circle-board .stat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+}
+
+.circle-board .stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-top: 1px solid rgba(42, 49, 67, 0.6);
+}
+
+.circle-board .stat-row .k {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.circle-board .stat-row .v {
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+}
+
+.circle-board .stat-row .v small {
+  color: var(--faint);
+  font-weight: 400;
+  margin-left: 3px;
+}
+
+.circle-board .readout-empty {
+  padding: 26px 6px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.circle-board .readout-empty .big {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+/* --- the score sparkline (inside the readout) ------------------------------- */
+
+.circle-board .spark {
+  margin: 2px 0 12px;
+}
+
+.circle-board .spark-caption {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+.circle-board .spark-best {
+  font-variant-numeric: tabular-nums;
+}
+
+.circle-board .spark svg {
+  display: block;
+  width: 100%;
+  height: 38px;
+}
+
+.circle-board .spark-empty {
+  margin: 2px 0 12px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+/* --- the control dock (bottom-left, inside the board) ----------------------- */
+
+.circle-board .dock {
+  position: absolute;
+  left: 18px;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.circle-board .dock .slider {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 128px;
+}
+
+.circle-board .dock .slider-label {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.circle-board .dock .slider-label b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.circle-board .dock input[type="range"] {
+  width: 100%;
+  accent-color: var(--ink);
+}
+
+.circle-board .btn {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.circle-board .btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* CellView chrome inside the dark board (the cell resolves synchronously; this
+ * just keeps the keep-latest fade + any error state legible on dark). */
+.circle-board .cell-body-loading {
+  opacity: 0.6;
+  transition: opacity 120ms;
+}
+
+.circle-board .cell-pending {
+  color: var(--muted);
+  padding: 8px 0;
+}
+
+/* --- the scoring maths (a normal notebook section, gallery tokens) ---------- */
+
+.circle-math {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px 22px;
+  margin-top: 6px;
+}
+
+.circle-math-item.wide {
+  grid-column: 1 / -1;
+}
+
+.circle-math-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.circle-math .math-display {
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  color: var(--text);
+  font-size: 0.9em;
+}
