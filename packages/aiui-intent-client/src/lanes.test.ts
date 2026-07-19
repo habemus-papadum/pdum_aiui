@@ -11,7 +11,7 @@ import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { activationGesture } from "./activation";
 import { createIntentClient, type IntentClient } from "./client";
-import { linter, stt } from "./config";
+import { linter, oracle, stt } from "./config";
 import { type FakeBus, fakeBus } from "./fake-bus";
 import {
   type ChannelLanes,
@@ -44,7 +44,16 @@ function stubThread(): { thread: StubThread; openThread: never } {
     onServerMessage: (msg: unknown) => void;
   }) => {
     thread.dials.push(options.meta);
-    thread.serverPush = options.onServerMessage;
+    // TWO server-message subscribers exist in production: the lanes-level
+    // handler (dial options — error toasts, lowered-prompt) and the wire's
+    // own thread.onServerMessage subscription (lowered-events ingest,
+    // speech). serverPush fans out to both, like the real socket.
+    const subscribers: Array<(msg: unknown) => void> = [options.onServerMessage];
+    thread.serverPush = (msg) => {
+      for (const subscriber of subscribers) {
+        subscriber(msg);
+      }
+    };
     return {
       send: (payload: unknown) => {
         thread.chunks.push({ kind: "send", payload });
@@ -66,7 +75,9 @@ function stubThread(): { thread: StubThread; openThread: never } {
         thread.chunks.push({ kind: "audio" });
         return ack;
       },
-      onServerMessage: () => {},
+      onServerMessage: (handler: (msg: unknown) => void) => {
+        subscribers.push(handler);
+      },
       close: () => {
         thread.closed = true;
       },
@@ -567,6 +578,98 @@ describe("config consumers", () => {
       linter.set("gemini");
       await settle(30);
       expect(r.thread.chunks.some((c) => c.kind === "chunk:control")).toBe(false);
+    } finally {
+      linter.set("off");
+    }
+  });
+});
+
+describe("the oracle — the journeys' XOR, the control rail, the hello", () => {
+  it("oracle-on flips the linter off, and vice versa (the XOR is unrepresentable)", async () => {
+    const r = makeRig();
+    try {
+      linter.set("gemini");
+      await settle();
+      oracle.set("openai");
+      await settle();
+      expect(linter.get()).toBe("off"); // oracle-on flipped it
+      expect(oracle.get()).toBe("openai");
+
+      linter.set("openai");
+      await settle();
+      expect(oracle.get()).toBe("off"); // linter-on flipped it back
+      expect(r.lanes.engine.settings.linter).toBe("openai");
+      expect(r.lanes.engine.settings.oracle).toBeUndefined();
+    } finally {
+      linter.set("off");
+      oracle.set("off");
+    }
+  });
+
+  it("the oracle select rides the hello, and moving it mid-thread sends an `oracle` control", async () => {
+    const r = makeRig();
+    try {
+      oracle.set("openai");
+      await settle();
+      activationGesture(r.client, 7);
+      r.client.dispatch("pencil"); // contentful → the wire dials
+      await settle(30);
+      expect((r.thread.dials[0]?.intent as { oracle?: string }).oracle).toBe("openai");
+
+      const before = r.thread.chunks.length;
+      oracle.set("off");
+      await settle(30);
+      const control = r.thread.chunks.slice(before).find((c) => c.kind === "chunk:control");
+      expect(control?.payload).toEqual({ control: "oracle", value: "off" });
+    } finally {
+      oracle.set("off");
+    }
+  });
+});
+
+describe("the converse (debug) lint buttons — the control rail + auto-off", () => {
+  it("lintNow / lintStop ride the open thread as `lint` control chunks", async () => {
+    const r = makeRig();
+    try {
+      linter.set("openai");
+      activationGesture(r.client, 7);
+      await settle(30);
+      const before = r.thread.chunks.length;
+      r.lanes.lintNow();
+      r.lanes.lintStop();
+      await settle(30);
+      const controls = r.thread.chunks.slice(before).filter((c) => c.kind === "chunk:control");
+      expect(controls.map((c) => c.payload)).toEqual([
+        { control: "lint", value: "now" },
+        { control: "lint", value: "stop" },
+      ]);
+      expect(controls.every((c) => c.fin === false)).toBe(true); // never fins the thread
+    } finally {
+      linter.set("off");
+    }
+  });
+
+  it("a pushed linter-turn-complete leaves the select alone — STAY-ON (the select is the only off switch)", async () => {
+    const r = makeRig();
+    try {
+      linter.set("openai");
+      activationGesture(r.client, 7);
+      r.client.dispatch("pencil"); // contentful → the wire dials (serverPush exists)
+      await settle(30);
+      const before = r.thread.chunks.length;
+      r.thread.serverPush?.({
+        kind: "lowered",
+        events: [{ at: Date.now(), type: "linter-turn-complete", segment: 1 }],
+      });
+      await settle(30);
+      // No auto-off (overhear retirement, 2026-07-19): the linter stays on…
+      expect(linter.get()).toBe("openai");
+      // …so no control chunk goes out either — nothing changed to relay.
+      expect(r.thread.chunks.slice(before).some((c) => c.kind === "chunk:control")).toBe(false);
+      // The event still reached the chronicle (the pulse settles off it).
+      expect(r.lanes.engine.events.some((event) => event.type === "linter-turn-complete")).toBe(
+        true,
+      );
     } finally {
       linter.set("off");
     }

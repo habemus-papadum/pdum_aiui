@@ -750,7 +750,7 @@ describe("the bar: a tree presented linearly", () => {
       .configStrip()
       .flatMap((row) => row.items)
       .map((i) => (i.kind === "widget" ? i.control : ""));
-    expect(widgets).toEqual(["stt", "linter", "logLevel", "shotFlash"]);
+    expect(widgets).toEqual(["stt", "linter", "oracle", "logLevel", "shotFlash"]);
   });
 });
 

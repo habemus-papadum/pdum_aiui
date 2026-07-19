@@ -1,11 +1,15 @@
 /**
  * The prompt-linter sidecar, driven through the UNIFIED intent processor —
- * the wire-order contracts the linter pivot rests on:
+ * the wire-order contracts of the CONVERSE-ONLY linter (overhear retired
+ * 2026-07-19):
  *
- *  - the `[transcript seg_N: …]` item precedes `activityEnd` (the lint judges
- *    the compiler's transcription, not just its own hearing);
- *  - the transcript wait times out rather than wedging the lint;
- *  - resumed talk MERGES into the open window (no turn boundary);
+ *  - the linter ACCUMULATES: one vendor window across talk segments, finals
+ *    injected as silent context as they land, and NO activityEnd until the
+ *    `lint now` control (the lint judges the compiler's transcription, not
+ *    just its own hearing);
+ *  - every completed lint pushes `linter-turn-complete`, and the linter
+ *    STAYS ON (the select is the only off switch);
+ *  - `lint stop` cancels the in-flight reply and nothing else;
  *  - lint replies become `linter-note` events (pushed + chronicled) that the
  *    compiler IGNORES (the committed prompt is unchanged by them);
  *  - `read_file` round-trips through `linter-tool-call`/`-result` events;
@@ -23,7 +27,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
 import type { ChunkDescriptor } from "./frame";
 import { createIntentV1Format, type IntentV1Options } from "./intent-v1";
-import { TRANSCRIPT_WAIT_MS } from "./linter-sidecar";
 import type { LiveSession, LiveSessionCallbacks } from "./live-session";
 
 const enc = new TextEncoder();
@@ -161,73 +164,33 @@ const eventsOf = (pushed: unknown[], type: string): IntentEvent[] =>
     ),
   );
 
-describe("the turn-end lint sequence (wire order)", () => {
-  it("injects [transcript seg_N] BEFORE activityEnd once the final lands", async () => {
+describe("accumulation (converse-only wire order)", () => {
+  it("injects [transcript seg_N] silently and does NOT end the turn at talk-end", async () => {
     const live = fakeLive();
     const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
     await d.feedEvents([...opening(), ...talkSegment(1, "make the plot wider")]);
 
     const ops = live.calls.map((c) => c.op);
-    expect(ops).toEqual(["cancel", "activityStart", "injectContextText", "activityEnd"]);
+    expect(ops).toEqual(["cancel", "activityStart", "injectContextText"]);
     expect(live.calls[2].arg).toBe('[transcript seg_1: "make the plot wider"]');
   });
 
-  it("times out the transcript wait rather than wedging; a late final still injects", async () => {
-    vi.useFakeTimers();
-    try {
-      const live = fakeLive();
-      const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
-      await d.feedEvents([
-        ...opening(),
-        { at: 10, type: "talk-start", segment: 1 },
-        { at: 15, type: "talk-end", segment: 1, ms: 400 },
-      ]);
-      expect(live.calls.map((c) => c.op)).not.toContain("activityEnd");
-
-      vi.advanceTimersByTime(TRANSCRIPT_WAIT_MS + 1);
-      expect(live.calls.at(-1)?.op).toBe("activityEnd"); // ended WITHOUT the transcript
-
-      // The late final still injects (silently) — the next lint sees it.
-      await d.feedEvents([
-        {
-          at: 99,
-          type: "transcript-final",
-          segment: 1,
-          text: "late words",
-          latencyMs: 9,
-          model: "mock",
-        },
-      ]);
-      expect(live.calls.at(-1)).toEqual({
-        op: "injectContextText",
-        arg: '[transcript seg_1: "late words"]',
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("merges a resumed talk into the open window — no turn boundary fires", async () => {
-    vi.useFakeTimers();
-    try {
-      const live = fakeLive();
-      const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
-      await d.feedEvents([
-        ...opening(),
-        { at: 10, type: "talk-start", segment: 1 },
-        { at: 15, type: "talk-end", segment: 1, ms: 400 },
-        // …the human resumes before the transcript (or the timeout) lands:
-        { at: 16, type: "talk-start", segment: 2 },
-      ]);
-      vi.advanceTimersByTime(TRANSCRIPT_WAIT_MS + 1);
-      const ops = live.calls.map((c) => c.op);
-      // ONE window: a single activityStart, and no activityEnd from the
-      // merged boundary (the cancelled wait never fires).
-      expect(ops.filter((op) => op === "activityStart")).toHaveLength(1);
-      expect(ops).not.toContain("activityEnd");
-    } finally {
-      vi.useRealTimers();
-    }
+  it("accumulates ACROSS talk segments: one window, every final injected, no boundary", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    await d.feedEvents([
+      ...opening(),
+      ...talkSegment(1, "first thought"),
+      ...talkSegment(2, "second thought"),
+    ]);
+    const ops = live.calls.map((c) => c.op);
+    expect(ops.filter((op) => op === "activityStart")).toHaveLength(1); // ONE window
+    expect(ops).not.toContain("activityEnd"); // nothing but the button ends it
+    const injected = live.calls.filter((c) => c.op === "injectContextText").map((c) => c.arg);
+    expect(injected).toEqual([
+      '[transcript seg_1: "first thought"]',
+      '[transcript seg_2: "second thought"]',
+    ]);
   });
 });
 
@@ -241,10 +204,9 @@ describe("mid-thread linter control (start / stop / swap live, no turn boundary)
 
     await d.feedControl("linter", "openai");
     await d.feedEvents(talkSegment(2, "second utterance"));
-    // Now the sidecar exists and lints the SECOND segment.
+    // Now the sidecar exists and ACCUMULATES the second segment.
     const ops = live.calls.map((c) => c.op);
     expect(ops).toContain("activityStart");
-    expect(ops).toContain("activityEnd");
     expect(live.calls.find((c) => c.op === "injectContextText")?.arg).toBe(
       '[transcript seg_2: "second utterance"]',
     );
@@ -254,7 +216,7 @@ describe("mid-thread linter control (start / stop / swap live, no turn boundary)
     const live = fakeLive();
     const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
     await d.feedEvents([...opening(), ...talkSegment(1, "first")]);
-    expect(live.calls.map((c) => c.op)).toContain("activityEnd");
+    expect(live.calls.map((c) => c.op)).toContain("injectContextText"); // it was live
 
     await d.feedControl("linter", "off");
     expect(live.calls.at(-1)?.op).toBe("close"); // the sidecar closed
@@ -271,7 +233,11 @@ describe("mid-thread linter control (start / stop / swap live, no turn boundary)
     await d.feedControl("linter", "gemini");
     expect(live.calls.filter((c) => c.op === "close").length).toBe(closesBefore + 1);
     await d.feedEvents(talkSegment(2, "second"));
-    expect(live.calls.at(-1)?.op).toBe("activityEnd"); // the fresh sidecar lints seg 2
+    // The fresh sidecar accumulates seg 2 (it does not inherit seg 1).
+    expect(live.calls.at(-1)).toEqual({
+      op: "injectContextText",
+      arg: '[transcript seg_2: "second"]',
+    });
   });
 
   it("ignores an unchanged / unrecognized / non-linter control (no churn)", async () => {
@@ -286,11 +252,92 @@ describe("mid-thread linter control (start / stop / swap live, no turn boundary)
   });
 });
 
+describe("the lint buttons — control 'lint' now/stop (the only turn trigger)", () => {
+  it("'now' ends the turn AT THE BUTTON — never waiting for a pending final (the accepted race)", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    // Talk ended but the STT final never landed: the button does not care.
+    await d.feedEvents([
+      ...opening(),
+      { at: 10, type: "talk-start", segment: 1 },
+      { at: 15, type: "talk-end", segment: 1, ms: 400 },
+    ]);
+    expect(live.calls.filter((c) => c.op === "activityEnd")).toHaveLength(0);
+    await d.feedControl("lint", "now");
+    expect(live.calls.filter((c) => c.op === "activityEnd")).toHaveLength(1);
+    // The vendor signals the reply is done → linter-turn-complete, anchored
+    // to the turn the button ended.
+    live.callbacks().onTurnComplete?.();
+    expect(eventsOf(d.pushed, "linter-turn-complete")).toEqual([
+      expect.objectContaining({ type: "linter-turn-complete", segment: 1 }),
+    ]);
+  });
+
+  it("STAY-ON: after a completed lint, talk reopens the window and the button lints again", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    await d.feedEvents([...opening(), ...talkSegment(1, "first")]);
+    await d.feedControl("lint", "now");
+    live.callbacks().onTurnComplete?.();
+    expect(eventsOf(d.pushed, "linter-turn-complete")).toHaveLength(1);
+    expect(live.calls.some((c) => c.op === "close")).toBe(false); // still on
+
+    // Round two: the window reopens on talk, the button ends it again.
+    await d.feedEvents(talkSegment(2, "second"));
+    await d.feedControl("lint", "now");
+    expect(live.calls.filter((c) => c.op === "activityEnd")).toHaveLength(2);
+    expect(live.calls.filter((c) => c.op === "activityStart")).toHaveLength(2);
+    live.callbacks().onTurnComplete?.();
+    expect(eventsOf(d.pushed, "linter-turn-complete")).toHaveLength(2);
+  });
+
+  it("'stop' cancels the in-flight reply and nothing else (the linter keeps accumulating)", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    await d.feedEvents([
+      ...opening(),
+      { at: 10, type: "talk-start", segment: 1 },
+      { at: 15, type: "talk-end", segment: 1, ms: 400 },
+    ]);
+    await d.feedControl("lint", "now"); // reply soliciting
+    const cancelsBefore = live.calls.filter((c) => c.op === "cancel").length;
+    await d.feedControl("lint", "stop");
+    expect(live.calls.filter((c) => c.op === "cancel").length).toBe(cancelsBefore + 1);
+    expect(live.calls.some((c) => c.op === "close")).toBe(false); // still on
+    // OpenAI answers a cancel with the cancelled response's done: the floor is
+    // free — reported as turn-complete like any other (stay-on; harmless).
+    live.callbacks().onTurnComplete?.();
+    expect(eventsOf(d.pushed, "linter-turn-complete")).toHaveLength(1);
+  });
+
+  it("'now' with no open window is a no-op (nothing was said to lint)", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    await d.feedEvents(opening()); // armed, thread open — but no talk yet
+    await d.feedControl("lint", "now");
+    expect(live.calls.filter((c) => c.op === "activityEnd")).toHaveLength(0);
+  });
+
+  it("ignores an unrecognized lint value, and 'lint' without a sidecar", async () => {
+    const live = fakeLive();
+    const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
+    await d.feedEvents([...opening(), { at: 10, type: "talk-start", segment: 1 }]);
+    const n = live.calls.length;
+    await d.feedControl("lint", "banana");
+    expect(live.calls.length).toBe(n);
+    // No sidecar at all (linter off): the control is a clean no-op.
+    const d2 = drive({ transcriber: "mock", linter: "off" });
+    await d2.feedEvents(opening());
+    await d2.feedControl("lint", "now"); // must not throw
+  });
+});
+
 describe("lint products (notes, audio, tools)", () => {
   it("a reply transcript becomes a linter-note (pushed + chronicled), and the compiler ignores it", async () => {
     const live = fakeLive();
     const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
     await d.feedEvents([...opening(), ...talkSegment(1, "make the plot wider")]);
+    await d.feedControl("lint", "now"); // notes follow a buttoned turn
 
     live.callbacks().onReplyTranscript("ambiguous: which plot?");
     const notes = eventsOf(d.pushed, "linter-note");
@@ -304,16 +351,25 @@ describe("lint products (notes, audio, tools)", () => {
     expect(d.sent[0].text).not.toContain("ambiguous: which plot?");
   });
 
-  it("reply audio pushes a speech clip", async () => {
+  it("reply audio STREAMS as seq-ordered chunks; the stream id rotates per completed turn", async () => {
     const live = fakeLive();
     const d = drive(LINT_HELLO, { linterSessionFactory: live.factory });
     await d.feedEvents([...opening(), ...talkSegment(1, "hello")]);
-    live.callbacks().onReplyAudio(new Uint8Array([1, 2]), "audio/wav");
-    const speech = d.pushed.find((m) => (m as { kind?: string }).kind === "speech") as {
+    live.callbacks().onReplyAudio(new Uint8Array([1, 2]), "audio/pcm;rate=24000");
+    live.callbacks().onReplyAudio(new Uint8Array([3, 4]), "audio/pcm;rate=24000");
+    live.callbacks().onTurnComplete?.(); // the reply finished — rotate
+    live.callbacks().onReplyAudio(new Uint8Array([5, 6]), "audio/pcm;rate=24000");
+    const chunks = d.pushed.filter((m) => (m as { kind?: string }).kind === "speech") as Array<{
       id: string;
+      seq: number;
       mime: string;
-    };
-    expect(speech).toMatchObject({ id: "lint_0", mime: "audio/wav" });
+    }>;
+    expect(chunks.map((c) => ({ id: c.id, seq: c.seq }))).toEqual([
+      { id: "lint_0", seq: 0 },
+      { id: "lint_0", seq: 1 },
+      { id: "lint_1", seq: 0 }, // the NEXT reply is a fresh stream
+    ]);
+    expect(chunks[0].mime).toBe("audio/pcm;rate=24000");
   });
 
   it("read_file round-trips: tool-call + tool-result events, respond carries the content", async () => {

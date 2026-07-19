@@ -1,43 +1,29 @@
 /**
  * linter-pulse.ts — a client-side MIRROR of the linter sidecar's state
- * machine (channel linter-sidecar.ts), driven purely from the engine's event
- * stream, so the panel can show where a lint is in its lifecycle without any
- * new wire traffic. Every input the sidecar keys on has a client-visible
- * counterpart:
+ * machine (channel linter-sidecar.ts), driven from the engine's event stream
+ * plus the one client-side input the sidecar cannot echo: the `lint now`
+ * button ({@link LinterPulse.lintNow}, called by the lanes verb that sends
+ * the control chunk). No new wire traffic.
  *
- *   sidecar                       here
- *   ───────────────────────────   ──────────────────────────────────────────
- *   onTalkStart / onTalkEnd       talk-start / talk-end engine events
- *   onTranscriptFinal             transcript-final (the server echo — the
- *                                 SAME signal the sidecar waits for)
- *   the 2.5s transcript wait      the shared LINTER_TRANSCRIPT_WAIT_MS
- *   note / tool call / result     linter-note / linter-tool-call / -result
+ * Converse-only (overhear retired 2026-07-19): the linter ACCUMULATES
+ * silently — talk segments open one long window; nothing ends it but the
+ * button — so the mirrored lifecycle is:
  *
- * The phases, in the order a normal lint passes through them:
- *
- *   off → idle → listening → transcript-wait → thinking → noted → idle
- *                     ↑ merge (talk resumes) ──┘      │
- *                     └── barge-in (talk over the reply) ──┘
+ *   off → idle → listening ──(lint now)→ thinking → noted → idle
+ *                    ↑  └─ stays listening across talk-ends (accumulation)
+ *                    └── barge-in (talk over the reply) ──┘
  *
  * `tool` overlays thinking while a linter tool call is in flight; `stale`
  * replaces thinking when no note lands inside {@link LINTER_STALE_MS} (and
- * fires `onStale` once — the warning toast). This is advisory UI over an
- * advisory feature: clock skew against the channel is fine, drift costs a
- * dot being briefly wrong, never a behavior.
+ * fires `onStale` once — the warning toast); `linter-turn-complete` settles
+ * everything back to idle (the linter STAYS ON — press again to lint again).
+ * This is advisory UI over an advisory feature: drift costs a dot being
+ * briefly wrong, never a behavior.
  */
 
-import {
-  type IntentEvent,
-  LINTER_TRANSCRIPT_WAIT_MS,
-} from "@habemus-papadum/aiui-lowering-pipeline";
+import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createSignal } from "solid-js";
 
-/**
- * The linter's transcript-wait — the shared {@link LINTER_TRANSCRIPT_WAIT_MS}
- * (its home is the lowering pipeline; the channel sidecar reads the same value).
- * Re-exported so this module's consumers and tests keep one import site.
- */
-export { LINTER_TRANSCRIPT_WAIT_MS };
 /** No note this long after the lint turn ended → stale (owner: warn at 4s). */
 export const LINTER_STALE_MS = 4000;
 /** How long the 💡 "noted" flash lingers before settling back to idle. */
@@ -45,10 +31,9 @@ export const LINTER_NOTED_FLASH_MS = 2500;
 
 export type LinterPulsePhase =
   | "off" // the linter select is off
-  | "idle" // on, nothing in flight
-  | "listening" // a talk window is open — the linter hears the mic
-  | "transcript-wait" // talk ended; the sidecar waits for the STT final (≤2.5s)
-  | "thinking" // the lint turn ended — a note should be composing
+  | "idle" // on, nothing accumulated or in flight
+  | "listening" // a talk window opened — the linter is accumulating
+  | "thinking" // the button fired — a note should be composing
   | "tool" // …and a linter tool call is in flight
   | "noted" // a note landed (brief flash)
   | "stale"; // no note within the deadline (warned once)
@@ -69,6 +54,12 @@ export interface LinterPulseOptions {
 export interface LinterPulse {
   /** Feed every engine event (wire the existing engine.onEvent tap here). */
   feed(event: IntentEvent): void;
+  /**
+   * The `lint now` button fired (the lanes verb calls this beside sending the
+   * control chunk): the accumulated window is being judged — start the note
+   * wait. A press with nothing accumulated mirrors the sidecar's no-op.
+   */
+  lintNow(): void;
   /** The current phase, reactively (off whenever the select says off). */
   view(): LinterPulseView;
   dispose(): void;
@@ -81,19 +72,14 @@ export function createLinterPulse(options: LinterPulseOptions): LinterPulse {
   let current: LinterPulseView = { phase: "idle", detail: "linter idle" };
   const [rev, setRev] = createSignal(0, { ownedWrite: true });
 
-  let transcriptTimer: ReturnType<typeof setTimeout> | undefined;
   let staleTimer: ReturnType<typeof setTimeout> | undefined;
   let notedTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The segment whose transcript the (mirrored) wait is armed for. */
-  let armedSegment: number | undefined;
   /** The tool in flight while thinking, if any. */
   let toolInFlight: string | undefined;
 
   const clearTimers = (): void => {
-    clearTimeout(transcriptTimer);
     clearTimeout(staleTimer);
     clearTimeout(notedTimer);
-    transcriptTimer = undefined;
     staleTimer = undefined;
     notedTimer = undefined;
   };
@@ -103,13 +89,9 @@ export function createLinterPulse(options: LinterPulseOptions): LinterPulse {
     setRev((n) => n + 1);
   };
 
-  /** The lint turn ended (transcript in, or the wait timed out): a note is
-   * due — start the stale deadline. */
-  const think = (why: string): void => {
-    armedSegment = undefined;
-    clearTimeout(transcriptTimer);
-    transcriptTimer = undefined;
-    to("thinking", `waiting for the linter's note (${why})`);
+  /** The button fired: a note is due — start the stale deadline. */
+  const think = (): void => {
+    to("thinking", "waiting for the linter's note (lint now)");
     clearTimeout(staleTimer);
     staleTimer = setTimeout(() => {
       to("stale", `no lint within ${LINTER_STALE_MS / 1000}s`);
@@ -123,33 +105,12 @@ export function createLinterPulse(options: LinterPulseOptions): LinterPulse {
     }
     switch (event.type) {
       case "talk-start": {
-        // Mirrors the sidecar exactly: a resume during the transcript wait
-        // MERGES (no turn boundary), and talking over a composing reply is
-        // the barge-in — either way, the linter is listening again.
+        // Accumulation (and the barge-in): whatever was in flight, the human
+        // is talking again — the linter is listening. Talk-ENDS deliberately
+        // change nothing: the window stays open until the button.
         clearTimers();
-        armedSegment = undefined;
         toolInFlight = undefined;
-        to("listening", "the linter hears the mic");
-        break;
-      }
-      case "talk-end": {
-        armedSegment = event.segment;
-        to(
-          "transcript-wait",
-          `waiting for seg_${event.segment}'s transcript (≤${LINTER_TRANSCRIPT_WAIT_MS / 1000}s)`,
-        );
-        clearTimeout(transcriptTimer);
-        transcriptTimer = setTimeout(() => {
-          if (armedSegment === event.segment) {
-            think("transcript timed out");
-          }
-        }, LINTER_TRANSCRIPT_WAIT_MS);
-        break;
-      }
-      case "transcript-final": {
-        if (armedSegment !== undefined && event.segment === armedSegment) {
-          think("transcript in");
-        }
+        to("listening", "the linter is accumulating (lint now to judge it)");
         break;
       }
       case "linter-tool-call": {
@@ -167,7 +128,6 @@ export function createLinterPulse(options: LinterPulseOptions): LinterPulse {
       }
       case "linter-note": {
         clearTimers();
-        armedSegment = undefined;
         toolInFlight = undefined;
         to("noted", event.text);
         notedTimer = setTimeout(() => {
@@ -175,10 +135,17 @@ export function createLinterPulse(options: LinterPulseOptions): LinterPulse {
         }, LINTER_NOTED_FLASH_MS);
         break;
       }
+      case "linter-turn-complete": {
+        // The lint finished (stay-on): settle to idle so no timer outlives
+        // the exchange — the next talk-start starts accumulating again.
+        clearTimers();
+        toolInFlight = undefined;
+        to("idle", "lint turn complete");
+        break;
+      }
       case "thread-close": {
         // fin closes the linter session server-side — nothing more can come.
         clearTimers();
-        armedSegment = undefined;
         toolInFlight = undefined;
         to("idle", "linter idle");
         break;
@@ -190,6 +157,13 @@ export function createLinterPulse(options: LinterPulseOptions): LinterPulse {
 
   return {
     feed,
+    lintNow: () => {
+      // Mirrors the sidecar's guard: only an open (accumulating) window
+      // lints; an idle press is the same no-op the channel makes it.
+      if (options.enabled() && current.phase === "listening") {
+        think();
+      }
+    },
     view: () => {
       void rev(); // subscribe: in-graph readers re-run per transition
       return options.enabled() ? current : { phase: "off", detail: "linter off (the select)" };

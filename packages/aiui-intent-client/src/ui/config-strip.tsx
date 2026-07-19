@@ -22,8 +22,6 @@ export const CONFIG_STRIP_STYLES = `
     font-size: 12px; line-height: 1; align-self: center; opacity: 0.35;
     margin-left: -6px; user-select: none; }
   .aiui-linter-pulse[data-phase="listening"] { opacity: 1; color: #16a34a; }
-  .aiui-linter-pulse[data-phase="transcript-wait"] { opacity: 1; color: #d97706;
-    animation: aiui-pulse-breathe 0.9s ease-in-out infinite; }
   .aiui-linter-pulse[data-phase="thinking"] { opacity: 1; color: #7c3aed;
     animation: aiui-pulse-breathe 0.9s ease-in-out infinite; }
   .aiui-linter-pulse[data-phase="tool"] { opacity: 1; color: #7c3aed;
@@ -31,6 +29,13 @@ export const CONFIG_STRIP_STYLES = `
   .aiui-linter-pulse[data-phase="noted"] { opacity: 1; }
   .aiui-linter-pulse[data-phase="stale"] { opacity: 1; color: #dc2626; }
   @keyframes aiui-pulse-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  /* The converse (debug) button pair beside the pulse dot: lint now / stop.
+     Same 12px voice as the strip; disabled = the phase can't use it. */
+  .aiui-lint-btn { font-size: 11px; line-height: 1.4; align-self: center;
+    padding: 0 6px; border-radius: 4px; cursor: pointer;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    background: transparent; color: inherit; }
+  .aiui-lint-btn:disabled { opacity: 0.35; cursor: default; }
 `;
 
 /** The pulse dot's glyph per phase — every glyph fits the same fixed box. */
@@ -38,18 +43,35 @@ const PULSE_GLYPHS: Record<LinterPulseView["phase"], string> = {
   off: "·",
   idle: "·",
   listening: "●",
-  "transcript-wait": "◔",
   thinking: "◍",
   tool: "⚒",
   noted: "💡",
   stale: "⚠",
 };
 
+/** The converse (debug) button pair's handlers (lanes.lintNow / lanes.lintStop). */
+export interface LintControlHandlers {
+  now(): void;
+  stop(): void;
+}
+
+/** Which pulse phases each lint button is live in: `now` needs an open
+ *  (accumulating) window to judge; `stop` needs a reply in flight (or
+ *  overdue) to cancel. */
+const LINT_NOW_PHASES: ReadonlySet<LinterPulseView["phase"]> = new Set(["listening"]);
+const LINT_STOP_PHASES: ReadonlySet<LinterPulseView["phase"]> = new Set([
+  "thinking",
+  "tool",
+  "stale",
+]);
+
 /** The config strip: control-bound widgets, always visible, with the pulse dot. */
 export function ConfigStrip(props: {
   client: IntentClient;
   runtime: CapRuntime;
   linterPulse?: () => LinterPulseView;
+  /** The converse (debug) pair — absent hosts (no lanes) render no buttons. */
+  lintControl?: LintControlHandlers;
 }) {
   const { client } = props;
   return (
@@ -81,6 +103,32 @@ export function ConfigStrip(props: {
                       >
                         {PULSE_GLYPHS[props.linterPulse?.().phase ?? "off"]}
                       </span>
+                      {/* The converse (debug) pair: end the lint turn at the
+                          BUTTON / cancel the in-flight reply. Enabled off the
+                          pulse phase — the mirror of what the sidecar would
+                          accept (capture-bus-and-consumers.md §6 Phase 1). */}
+                      <Show when={props.lintControl !== undefined}>
+                        <button
+                          type="button"
+                          class="aiui-lint-btn"
+                          data-testid="lint-now"
+                          title="end the lint turn now (then the linter turns off)"
+                          disabled={!LINT_NOW_PHASES.has(props.linterPulse?.().phase ?? "off")}
+                          onClick={() => props.lintControl?.now()}
+                        >
+                          lint now
+                        </button>
+                        <button
+                          type="button"
+                          class="aiui-lint-btn"
+                          data-testid="lint-stop"
+                          title="cancel the in-flight lint reply"
+                          disabled={!LINT_STOP_PHASES.has(props.linterPulse?.().phase ?? "off")}
+                          onClick={() => props.lintControl?.stop()}
+                        >
+                          stop
+                        </button>
+                      </Show>
                     </Show>
                   </>
                 );

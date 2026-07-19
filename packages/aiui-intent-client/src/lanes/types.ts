@@ -76,6 +76,16 @@ export interface ChannelLanes {
    * the tiny pulse dot beside the linter select reads this. */
   linterPulse: () => LinterPulseView;
   /**
+   * CONVERSE (debug) turn control — the button pair beside the linter select
+   * (capture-bus-and-consumers.md §6 Phase 1). `lintNow` ends the lint turn
+   * at the button (the sidecar arms auto-off: its reply's completion pushes
+   * `linter-turn-complete`, and the tap below flips the select off);
+   * `lintStop` cancels the in-flight reply and disarms the auto-off. Both
+   * ride the mid-thread `control` rail — no open thread, no-op.
+   */
+  lintNow(): void;
+  lintStop(): void;
+  /**
    * Reactive event cursor: reading it inside the graph subscribes to every
    * engine event, so panes over `engine.events` re-render per event.
    */

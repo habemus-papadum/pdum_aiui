@@ -205,6 +205,7 @@ function main() {
           { text: "Getting Started", link: "/guide/getting-started" },
           { text: "Installation", link: "/guide/installation" },
           { text: "Prompt Linting", link: "/guide/prompt-linting" },
+          { text: "The Oracle", link: "/guide/oracle" },
           { text: "VS Code Integration", link: "/guide/vscode" },
           { text: "The Browser Extension", link: "/guide/browser-extension" },
           { text: "Configuration", link: "/guide/config" },

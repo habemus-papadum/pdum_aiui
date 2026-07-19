@@ -12,32 +12,38 @@
  * and trace stages. Nothing here touches the chronicle's content or the
  * committed prompt.
  *
- * ### The turn-end lint sequence (the state machine)
+ * ### The converse turn contract (capture-bus-and-consumers.md; overhear retired 2026-07-19)
  *
- * The linter must judge the transcription the compiler will actually use —
- * not its own hearing — so a talk window does NOT end the linter's turn by
- * itself:
+ * The linter is ON-DEMAND: it accumulates silently and lints only when asked.
+ * There is deliberately no automatic pause-lint anymore — the OVERHEAR
+ * strategy (turn ends at each talk-end, with a transcript wait, a timeout,
+ * and merge-on-resume) was retired by the owner; converse is the only mode:
  *
- *  1. `onTalkEnd(seg)` arms `pendingEnd` (the STT commit races us).
- *  2. `onTranscriptFinal(seg, text)` inside {@link TRANSCRIPT_WAIT_MS} injects
- *     `[transcript seg_N: "…"]` as SILENT context, then ends the vendor turn
- *     (`activityEnd`) — the model now lints hearing + transcript together.
- *  3. The timeout ends the turn without the transcript (traced); a LATE final
- *     still injects silently, so the next lint sees it.
- *  4. `onTalkStart` while `pendingEnd` is armed MERGES: the human resumed
- *     before the lint fired — one longer window, no turn boundary (traced).
- *
- * `onTalkStart` also cancels any in-flight reply (client-side barge-in): a
- * human talking over the lint wants to keep briefing, not listen.
+ *  1. `onTalkStart` opens the vendor window (once) and cancels any in-flight
+ *     reply (client-side barge-in: a human talking wants to keep briefing).
+ *     The window then stays open across talk segments — accumulation, not
+ *     turn-taking; there is no `onTalkEnd`.
+ *  2. `onTranscriptFinal` always injects `[transcript seg_N: "…"]` as SILENT
+ *     context — the model judges the compiler's transcription, not just its
+ *     own hearing. A final landing after a lint simply informs the next one
+ *     (the accepted race: `lintNow` never waits for a pending final).
+ *  3. {@link LinterSidecar.lintNow} — the button — ends the vendor turn; the
+ *     model speaks ONE comprehensive lint over everything accumulated. When
+ *     the reply completes ({@link LiveSessionCallbacks.onTurnComplete}) a
+ *     `linter-turn-complete` event is pushed (the client's pulse settles).
+ *  4. **Stay-on** (the after-reply policy): the linter remains on after each
+ *     lint — talk again and the window reopens; press again and it lints
+ *     again. The select is the only off switch.
+ *  5. {@link LinterSidecar.lintStop} cancels an in-flight reply (the button
+ *     barge-in) — abort this lint, keep accumulating.
  */
-import { LINTER_TRANSCRIPT_WAIT_MS } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   type LinterStageLabel,
   stageLabel,
 } from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import type { CallCost } from "./cost";
 import { DEFAULT_GEMINI_LIVE_MODEL, openGeminiLiveSession } from "./gemini-live";
-import { executeReadFile, READ_FILE_TOOL_NAME } from "./linter-tools";
+import { runConsumerToolCall } from "./linter-tools";
 import {
   type SelectionEntry,
   selectionInjectionLabel,
@@ -46,16 +52,6 @@ import {
 import type { LinterToolCall, LiveSession, LiveSessionCallbacks } from "./live-session";
 import { DEFAULT_OPENAI_LIVE_MODEL, openOpenAiLiveSession } from "./openai-live";
 import type { RealtimeSocketFactory } from "./realtime";
-
-/**
- * How long a talk-end waits for its segment's transcript-final before the
- * linter's turn ends without it. STT finals normally land well inside this;
- * the ceiling keeps a wedged transcription from wedging the lint. The value is
- * the shared {@link LINTER_TRANSCRIPT_WAIT_MS} (its home is the lowering
- * pipeline, beside the linter event vocabulary); re-exported under this
- * historical name for this package's tests.
- */
-export const TRANSCRIPT_WAIT_MS = LINTER_TRANSCRIPT_WAIT_MS;
 
 /** An intent event the sidecar produces (kept loose to avoid a cycle). */
 type ProducedEvent = Record<string, unknown> & { at: number; type: string };
@@ -76,8 +72,10 @@ export interface LinterSidecarOptions {
   appendEvent(event: ProducedEvent): void;
   /** Push produced events to the client (the processor's push). */
   push(events: ProducedEvent[]): void;
-  /** Push a spoken clip (the processor's pushSpeech). */
-  pushSpeech(id: string, mime: string, bytes: Uint8Array, label?: string): void;
+  /** Push one streamed reply chunk (the processor's pushSpeechChunk). */
+  pushSpeechChunk(id: string, seq: number, mime: string, bytes: Uint8Array): void;
+  /** Stop the client playing stream `id` (the processor's pushSpeechCancel). */
+  pushSpeechCancel(id: string): void;
   /** Account a model call (the processor's recordCost). */
   recordCost(what: string, cost: CallCost | undefined): void;
   /** Surface a failure loudly (the processor wraps pushError). */
@@ -94,13 +92,13 @@ export interface LinterSidecarOptions {
 
 /** The hooks the unified processor calls at its existing seams. */
 export interface LinterSidecar {
-  /** A talk window opened: barge-in cancel + window open (or merge). */
+  /** A talk window opened: barge-in cancel + vendor window open (idempotent —
+   * the window stays open across talk segments; accumulation, not turns). */
   onTalkStart(segment: number): void;
   /** One PCM16/24k frame from the mic (the same copy the STT session gets). */
   onAudioFrame(pcm: Uint8Array): void;
-  /** The talk window closed: arm the transcript wait. */
-  onTalkEnd(segment: number): void;
-  /** A segment's final transcript landed (any transcriber). */
+  /** A segment's final transcript landed (any transcriber) — always injected
+   * as silent context; it informs the next lint. */
   onTranscriptFinal(segment: number, text: string): void;
   /** A deliberate shot's bytes arrived — inject labeled. */
   onShot(label: string, bytes: Uint8Array, mime: string): void;
@@ -108,6 +106,16 @@ export interface LinterSidecar {
   onSelection(marker: string | undefined, entry: SelectionEntry, updated: boolean): void;
   /** A selection was retracted. */
   onSelectionDrop(marker: string | undefined): void;
+  /**
+   * THE lint trigger — the button. Ends the vendor turn over everything
+   * accumulated; the reply's completion pushes `linter-turn-complete`, and
+   * the linter STAYS ON (talk reopens the window; press again to lint
+   * again). A no-op when no window is open (nothing was said to lint).
+   */
+  lintNow(): void;
+  /** Cancel the in-flight reply (the button barge-in) — abort this lint,
+   * keep accumulating. */
+  lintStop(): void;
   /** Close the live session (fin / connection teardown). Idempotent. */
   close(): void;
 }
@@ -116,62 +124,68 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
   const record = options.record ?? (() => {});
   let closed = false;
   let windowOpen = false;
-  /** The segment whose transcript the armed wait is for. */
-  let pendingEnd: { segment: number; timer: ReturnType<typeof setTimeout> } | undefined;
-  /** The most recent segment (barge-in bookkeeping). */
+  /** The most recent segment (the lint anchor when the button fires). */
   let lastSegment: number | undefined;
   /** The segment whose turn most recently ENDED — the one a lint is ABOUT.
    * Distinct from lastSegment: a reply can land after the user already
    * resumed (a new segment), and the note must anchor to the turn it
    * judged, not the one in progress. */
   let lintedSegment: number | undefined;
+  /** The current reply STREAM: chunks share `lint_${noteSeq}` until the reply
+   * completes (or is interrupted), then the ordinal bumps for the next one. */
   let noteSeq = 0;
-  const stats = { segments: 0, merged: 0, timeouts: 0, notes: 0, toolCalls: 0 };
+  let chunkSeq = 0;
+  let streamOpen = false;
+  const stats = { segments: 0, notes: 0, toolCalls: 0, lintNows: 0 };
+
+  /** The reply stream ended (turn complete / vendor barge-in): rotate the id. */
+  const closeReplyStream = (cancelled: boolean): void => {
+    if (!streamOpen) {
+      return;
+    }
+    if (cancelled) {
+      options.pushSpeechCancel(`lint_${noteSeq}`);
+    }
+    streamOpen = false;
+    noteSeq += 1;
+    chunkSeq = 0;
+  };
 
   const onToolCall = (call: LinterToolCall): void => {
     stats.toolCalls += 1;
-    const at = Date.now();
-    const callEvent: ProducedEvent = {
-      at,
-      type: "linter-tool-call",
-      tool: call.tool,
-      args: call.args,
-    };
-    options.appendEvent(callEvent);
-    record({ kind: "ir", label: stageLabel.linterToolCall(call.tool), data: call.args });
-    if (call.tool !== READ_FILE_TOOL_NAME) {
-      const summary = `unknown tool "${call.tool}"`;
-      const resultEvent: ProducedEvent = {
-        at: Date.now(),
-        type: "linter-tool-result",
-        tool: call.tool,
-        ok: false,
-        summary,
-      };
-      options.appendEvent(resultEvent);
-      options.push([callEvent, resultEvent]);
-      record({ kind: "info", label: stageLabel.linterToolResult(), data: { ok: false, summary } });
-      call.respond(`error: ${summary}`);
-      return;
-    }
-    const result = executeReadFile(call.args, options.promptCwd);
-    const resultEvent: ProducedEvent = {
-      at: Date.now(),
-      type: "linter-tool-result",
-      tool: call.tool,
-      ok: result.ok,
-      summary: result.summary,
-    };
-    options.appendEvent(resultEvent);
-    options.push([callEvent, resultEvent]);
-    // The FULL content the model read rides the trace — "anything readable"
-    // is only honest because everything read is recorded.
-    record({
-      kind: "ir",
-      label: stageLabel.linterToolResult(),
-      data: { ok: result.ok, summary: result.summary, content: result.content },
+    // The shared execution policy (runConsumerToolCall) with the LINTER's
+    // event/label vocabulary. The call event is held until the result half so
+    // both push in one batch (the client sees the round-trip whole).
+    let callEvent: ProducedEvent | undefined;
+    runConsumerToolCall(call, options.promptCwd, {
+      onCall: (tool, args) => {
+        callEvent = { at: Date.now(), type: "linter-tool-call", tool, args };
+        options.appendEvent(callEvent);
+        record({ kind: "ir", label: stageLabel.linterToolCall(tool), data: args });
+      },
+      onResult: (ok, summary, content) => {
+        const resultEvent: ProducedEvent = {
+          at: Date.now(),
+          type: "linter-tool-result",
+          tool: call.tool,
+          ok,
+          summary,
+        };
+        options.appendEvent(resultEvent);
+        options.push(callEvent !== undefined ? [callEvent, resultEvent] : [resultEvent]);
+        // The FULL content the model read rides the trace — "anything
+        // readable" is only honest because everything read is recorded.
+        record(
+          ok || content !== ""
+            ? {
+                kind: "ir",
+                label: stageLabel.linterToolResult(),
+                data: { ok, summary, content },
+              }
+            : { kind: "info", label: stageLabel.linterToolResult(), data: { ok, summary } },
+        );
+      },
     });
-    call.respond(result.content);
   };
 
   const callbacks: LiveSessionCallbacks = {
@@ -192,9 +206,16 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       });
     },
     onReplyAudio: (bytes, mime) => {
-      options.pushSpeech(`lint_${noteSeq++}`, mime, bytes);
+      // STREAMED: each PCM chunk goes to the client the moment the vendor
+      // produced it — the first audible byte no longer waits for the reply
+      // to finish generating (whole-clip buffering retired 2026-07-19).
+      streamOpen = true;
+      options.pushSpeechChunk(`lint_${noteSeq}`, chunkSeq++, mime, bytes);
     },
     onInterrupted: () => {
+      // The vendor's own barge-in (Gemini VAD): chunks already forwarded
+      // cannot be un-sent — tell the client to stop playing them.
+      closeReplyStream(true);
       record({ kind: "info", label: stageLabel.linterInterrupted(), data: {} });
     },
     onUsage: (cost) => {
@@ -208,6 +229,24 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       record({ kind: "info", label: stageLabel.linterGoAway(), data: { msLeft } });
     },
     onToolCall,
+    onTurnComplete: () => {
+      // Every lint turn is button-driven now, so every completion is worth
+      // reporting: the client's pulse settles on it. STAY-ON is the policy —
+      // nothing closes here; talk reopens the window, the button lints again.
+      closeReplyStream(false); // the reply finished — the next one is a new stream
+      const event: ProducedEvent = {
+        at: Date.now(),
+        type: "linter-turn-complete",
+        ...(lintedSegment !== undefined ? { segment: lintedSegment } : {}),
+      };
+      options.appendEvent(event);
+      options.push([event]);
+      record({
+        kind: "info",
+        label: stageLabel.linterTurnComplete(),
+        data: { segment: lintedSegment },
+      });
+    },
   };
 
   const session: LiveSession = options.openSession
@@ -261,21 +300,16 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       }
       lastSegment = segment;
       stats.segments += 1;
-      // Client-side barge-in: a human talking over the lint wants to keep
-      // briefing, not listen to the rest of it.
+      // Client-boundary barge-in: a human talking over the lint wants to keep
+      // briefing, not listen to the rest of it. The LINTER runs manual VAD
+      // (turn_detection: null) so the vendor cannot detect this itself — the
+      // talk boundary is the one signal there is (the oracle, under server
+      // VAD, deliberately has none of this: its vendor owns barge-in).
       session.cancelActiveResponse();
-      if (pendingEnd !== undefined) {
-        // The human resumed before the lint fired — MERGE into one window.
-        clearTimeout(pendingEnd.timer);
-        record({
-          kind: "info",
-          label: stageLabel.linterTurnMerged(),
-          data: { pending: pendingEnd.segment, resumed: segment },
-        });
-        stats.merged += 1;
-        pendingEnd = undefined;
-        return; // the vendor window never closed — keep talking into it
-      }
+      closeReplyStream(true); // stop the client playing the stale reply
+      // Accumulation, not turn-taking: the window opens once and stays open
+      // across talk segments until the BUTTON ends it (there is no talk-end
+      // hook — overhear retired 2026-07-19).
       if (!windowOpen) {
         windowOpen = true;
         session.activityStart();
@@ -287,46 +321,20 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       }
       session.appendAudio(pcm);
     },
-    onTalkEnd(segment) {
-      if (closed || !windowOpen) {
-        return;
-      }
-      if (pendingEnd !== undefined) {
-        clearTimeout(pendingEnd.timer);
-      }
-      pendingEnd = {
-        segment,
-        timer: setTimeout(() => {
-          pendingEnd = undefined;
-          stats.timeouts += 1;
-          record({ kind: "info", label: stageLabel.linterTranscriptTimeout(), data: { segment } });
-          endTurn(segment);
-        }, TRANSCRIPT_WAIT_MS),
-      };
-    },
     onTranscriptFinal(segment, text) {
       if (closed) {
         return;
       }
-      const awaited = pendingEnd !== undefined && pendingEnd.segment === segment;
-      if (awaited && pendingEnd !== undefined) {
-        clearTimeout(pendingEnd.timer);
-        pendingEnd = undefined;
-      }
       if (text.trim() !== "") {
-        // SILENT context — the exact transcription the compiler will use,
-        // injected just before the turn ends so the lint reconciles it
-        // against what the model heard. A late final (after the timeout)
-        // still injects: the next lint sees it.
+        // SILENT context — the exact transcription the compiler will use, so
+        // a lint reconciles it against what the model heard. A final landing
+        // after a lint informs the next one (the accepted lintNow race).
         session.injectContextText(`[transcript seg_${segment}: "${text}"]`);
         record({
           kind: "ir",
           label: stageLabel.linterTranscript(segment),
-          data: { text, late: !awaited },
+          data: { text },
         });
-      }
-      if (awaited) {
-        endTurn(segment);
       }
     },
     onShot(label, bytes, mime) {
@@ -352,15 +360,27 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       session.injectContextText(text);
       record({ kind: "info", label: stageLabel.linterSelectionRetracted(), data: { text } });
     },
+    lintNow() {
+      if (closed || !windowOpen) {
+        return; // nothing was said into this window — nothing to lint
+      }
+      // Ends NOW — never waits for a pending STT final (the accepted race:
+      // a final landing after this injects silently and informs the NEXT lint).
+      stats.lintNows += 1;
+      endTurn();
+    },
+    lintStop() {
+      if (closed) {
+        return;
+      }
+      session.cancelActiveResponse();
+      closeReplyStream(true); // one mechanism: the server tells the client to stop
+    },
     close() {
       if (closed) {
         return;
       }
       closed = true;
-      if (pendingEnd !== undefined) {
-        clearTimeout(pendingEnd.timer);
-        pendingEnd = undefined;
-      }
       session.close();
       record({ kind: "info", label: stageLabel.linterClose(), data: stats });
     },

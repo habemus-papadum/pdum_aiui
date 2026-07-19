@@ -145,6 +145,7 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
 export const configBar: readonly BarNode<IntentContext>[] = [
   { kind: "widget", control: "stt", widget: "select", label: "stt" },
   { kind: "widget", control: "linter", widget: "select", label: "linter" },
+  { kind: "widget", control: "oracle", widget: "select", label: "oracle" },
   { kind: "widget", control: "logLevel", widget: "select", label: "log" },
   { kind: "widget", control: "shotFlash", widget: "toggle", label: "shot flash" },
 ];

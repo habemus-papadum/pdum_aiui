@@ -188,7 +188,7 @@ describe("openGeminiLiveSession", () => {
     expect(audio.mimeType).toBe("audio/pcm;rate=24000");
   });
 
-  it("accumulates the reply (transcript + audio) per turn and flushes at turnComplete", () => {
+  it("STREAMS reply audio the moment a part arrives; the transcript flushes at turnComplete", () => {
     const up = fakeUpstream();
     const { session, replyTranscripts, replyAudio } = collect(up);
     up.open();
@@ -205,28 +205,62 @@ describe("openGeminiLiveSession", () => {
         },
       },
     });
-    // Nothing flushed until turnComplete.
+    // Audio streamed IMMEDIATELY — raw PCM, no WAV wrap, no waiting for the
+    // turn (whole-clip buffering retired 2026-07-19)…
+    expect(replyAudio).toHaveLength(1);
+    expect(replyAudio[0].mime).toBe("audio/pcm;rate=24000");
+    expect(Array.from(replyAudio[0].bytes)).toEqual([1, 2, 3, 4]);
+    // …while the transcript still flushes whole at turnComplete.
     expect(replyTranscripts).toEqual([]);
     up.emit({ serverContent: { turnComplete: true } });
     expect(replyTranscripts).toEqual(["clear so far"]);
-    expect(replyAudio).toHaveLength(1);
-    expect(replyAudio[0].mime).toBe("audio/wav");
-    expect(String.fromCharCode(...replyAudio[0].bytes.subarray(0, 4))).toBe("RIFF");
   });
 
-  it("drops the half-spoken reply on interrupted (barge-in)", () => {
+  it("fires onTurnComplete at serverContent.turnComplete (converse parity with OpenAI)", () => {
     const up = fakeUpstream();
-    const { session, replyAudio } = collect(up);
+    let turnsComplete = 0;
+    const cb: LiveSessionCallbacks = {
+      onReplyTranscript: () => {},
+      onReplyAudio: () => {},
+      onInterrupted: () => {},
+      onUsage: () => {},
+      onError: () => {},
+      onTurnComplete: () => {
+        turnsComplete += 1;
+      },
+    };
+    openGeminiLiveSession(
+      { apiKey: "k", model: () => "gemini-3.1-flash-live-preview", socketFactory: up.factory },
+      cb,
+    );
     up.open();
     up.emit({ setupComplete: {} });
+    up.emit({ serverContent: { outputTranscription: { text: "clear" } } });
+    expect(turnsComplete).toBe(0); // still speaking
+    up.emit({ serverContent: { turnComplete: true } });
+    expect(turnsComplete).toBe(1);
+  });
+
+  it("interrupted (the vendor's own barge-in) surfaces onInterrupted; the half transcript drops", () => {
+    const up = fakeUpstream();
+    const c = collect(up);
+    const { session, replyAudio, replyTranscripts } = c;
+    up.open();
+    up.emit({ setupComplete: {} });
+    up.emit({ serverContent: { outputTranscription: { text: "half a tho" } } });
     up.emit({
       serverContent: {
         modelTurn: { parts: [{ inlineData: { data: Buffer.from([7, 7]).toString("base64") } }] },
       },
     });
+    // The chunk already STREAMED (it cannot be un-sent — the sidecar's
+    // speech-cancel stops the client playing it)…
+    expect(replyAudio).toHaveLength(1);
     up.emit({ serverContent: { interrupted: true } });
     up.emit({ serverContent: { turnComplete: true } });
-    expect(replyAudio).toEqual([]);
+    // …the interruption surfaced, and the half-composed transcript is gone.
+    expect(c.interrupted).toBe(1);
+    expect(replyTranscripts).toEqual([]);
     expect(session).toBeTruthy();
   });
 

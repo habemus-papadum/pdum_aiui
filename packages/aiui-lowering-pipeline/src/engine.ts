@@ -64,16 +64,28 @@ export class Engine {
   }
 
   /**
-   * Merge a server-produced LINTER event (a note / tool call / result) into
-   * the stream. Advisory only: `composeIntent` skips every `linter-*` kind,
-   * so ingestion changes the preview's chips and the trace — never the
-   * prompt. A lint that arrives after its thread closed is dropped (nothing
-   * to advise on anymore).
+   * Merge a server-produced ADVISORY event — the linter's (a note / tool call
+   * / result / turn-complete) or the oracle's (heard / said / tool round-trip)
+   * — into the stream. Advisory only: `composeIntent` skips every `linter-*`
+   * and `oracle-*` kind, so ingestion changes the preview's chips and the
+   * trace — never the prompt. One that arrives after its thread closed is
+   * dropped (nothing to advise on anymore). (Named for its first consumer;
+   * the oracle rides the same seam.)
    */
   ingestLinter(
     event: Extract<
       IntentEvent,
-      { type: "linter-note" | "linter-tool-call" | "linter-tool-result" }
+      {
+        type:
+          | "linter-note"
+          | "linter-tool-call"
+          | "linter-tool-result"
+          | "linter-turn-complete"
+          | "oracle-heard"
+          | "oracle-said"
+          | "oracle-tool-call"
+          | "oracle-tool-result";
+      }
     >,
   ): void {
     if (!this.threadOpen) {

@@ -37,19 +37,20 @@ export const LINTER_INSTRUCTIONS =
   "You are a realtime prompt linter. You are observing a person compose a task briefing for a " +
   "coding agent, out loud: you hear their voice, you see their screen, and you receive labeled " +
   "screenshots ([image shot_3]) and on-screen selections ([selection sel_2: …]; an updated " +
-  "selection reuses its id, a retracted one must be disregarded). Just before each of your " +
-  'turns, a bracketed [transcript seg_N: "…"] message shows the exact transcription the ' +
-  "compiler will use — reconcile it against what you heard. You never write or rewrite the " +
-  "briefing — a separate compiler assembles it verbatim from what they said and attached. " +
-  "Each time they pause, respond with AT MOST one or two short spoken sentences, choosing the " +
-  "single most useful observation: a transcription that contradicts what they plainly meant " +
-  "(say what was transcribed vs. meant — the human can only fix it by saying it again more " +
-  'clearly); an ambiguous reference an agent could not resolve ("this slider" — two sliders ' +
-  "were discussed); something described but never shown (suggest a screenshot) or shown but " +
-  "never explained; a missing constraint an agent would need. If nothing needs attention, say " +
-  'only "clear so far". Never summarize, never repeat the briefing back, never answer the ' +
-  "task yourself. You may call read_file to check a file or selection against the actual " +
-  "source before flagging it — verify suspicions, don't browse.";
+  "selection reuses its id, a retracted one must be disregarded). Bracketed " +
+  '[transcript seg_N: "…"] messages show the exact transcription the compiler will use — ' +
+  "reconcile each against what you heard. You never write or rewrite the briefing — a separate " +
+  "compiler assembles it verbatim from what they said and attached. You speak ONLY when asked: " +
+  "the human explicitly requests your read, and your turn covers everything accumulated since " +
+  "your last one. Respond with a few short spoken sentences carrying the most useful " +
+  "observations: a transcription that contradicts what they plainly meant (say what was " +
+  "transcribed vs. meant — the human can only fix it by saying it again more clearly); an " +
+  'ambiguous reference an agent could not resolve ("this slider" — two sliders were ' +
+  "discussed); something described but never shown (suggest a screenshot) or shown but never " +
+  "explained; a missing constraint an agent would need. If nothing needs attention, say only " +
+  '"clear so far". Never summarize, never repeat the briefing back, never answer the task ' +
+  "yourself. You may call read_file to check a file or selection against the actual source " +
+  "before flagging it — verify suspicions, don't browse.";
 
 /**
  * What one vendor's realtime engine can do, read by the processor (and, later,
@@ -95,7 +96,14 @@ export interface LiveSessionCallbacks {
    * user-transcript callback: linter sessions run without vendor input
    * transcription — the STT session owns the chronicle.) */
   onReplyTranscript(text: string): void;
-  /** One buffered clip of the model's spoken reply (WAV-wrapped, ready to push as `speech`). */
+  /**
+   * One PCM chunk of the model's spoken reply, forwarded the MOMENT the
+   * vendor streams it (raw PCM16 mono — `mime` is `audio/pcm;rate=24000`,
+   * both vendors). Streaming playback is the contract: the receiver pushes
+   * chunked `speech` frames and the client plays as they arrive — the
+   * whole-clip WAV buffering (which delayed the first audible byte by the
+   * entire reply's generation) was retired 2026-07-19.
+   */
   onReplyAudio(bytes: Uint8Array, mime: string): void;
   /** Barge-in: the model's in-flight reply was interrupted (drop any local playback). */
   onInterrupted(): void;
@@ -120,6 +128,24 @@ export interface LiveSessionCallbacks {
    * no tools simply never hears from it.
    */
   onToolCall?(call: LinterToolCall): void;
+  /**
+   * The model's turn finished — the reply is complete (or was cancelled) and
+   * the floor is free. OpenAI: `response.done` whose output holds no
+   * `function_call` (a tool-call turn is NOT complete — the resumed response
+   * after the tool result fires its own `response.done`). Gemini:
+   * `serverContent.turnComplete` — for parity. The concrete "the model is
+   * done" signal the CONVERSE turn strategy's after-reply policy keys on
+   * (docs/proposals/capture-bus-and-consumers.md §3); overhear callers may
+   * ignore it. Optional.
+   */
+  onTurnComplete?(): void;
+  /**
+   * The vendor's own transcription of the HUMAN's input audio — the
+   * `oracle-heard` record (capture-bus §8 decision 6). Only fires when the
+   * session enabled input transcription (the oracle does; the linter and STT
+   * deliberately do not — the STT session owns the chronicle there). Optional.
+   */
+  onInputTranscript?(text: string): void;
 }
 
 /**

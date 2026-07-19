@@ -27,6 +27,20 @@ export const linter = control({
   description: "realtime prompt linter",
 });
 
+/**
+ * The ORACLE — a direct voice conversation the mic is addressed to (prompt
+ * building pauses while on; capture-bus Phase 2). Mutually exclusive with the
+ * linter: the XOR effect in lanes/config-effects.ts flips the other select
+ * off, so the illegal combination is unrepresentable in practice, and the
+ * channel's resolve coercion backstops a hand-written hello. OpenAI-only v1.
+ */
+export const oracle = control({
+  name: "oracle",
+  value: "off",
+  options: ["off", "openai"],
+  description: "oracle — direct voice conversation (pauses prompt building)",
+});
+
 /** Constant mode's cadence, SECONDS PER FRAME (the slider under video). */
 export const videoPeriodSec = control({
   name: "videoPeriodSec",

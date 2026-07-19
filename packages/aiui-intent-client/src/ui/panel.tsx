@@ -29,7 +29,7 @@ import type { IntentClient } from "../client";
 import { hintsFor } from "../keys";
 import type { LinterPulseView } from "../linter-pulse";
 import { BAR_STYLES, CommandBar, createCapRuntime } from "./bar";
-import { CONFIG_STRIP_STYLES, ConfigStrip } from "./config-strip";
+import { CONFIG_STRIP_STYLES, ConfigStrip, type LintControlHandlers } from "./config-strip";
 import { PILLS_STYLES, StatusPills } from "./pills";
 
 export const PANEL_STYLES = `
@@ -56,6 +56,8 @@ export interface PanelProps {
   micLevel?: () => number;
   /** The lint lifecycle (lanes.linterPulse) — the pulse dot by the linter select. */
   linterPulse?: () => LinterPulseView;
+  /** The converse (debug) button pair (lanes.lintNow / lanes.lintStop). */
+  lintControl?: LintControlHandlers;
 }
 
 /** The whole panel: pill · bar rows · status pills · help · blip · config. */
@@ -136,7 +138,12 @@ export function Panel(props: PanelProps) {
         )}
       </Show>
 
-      <ConfigStrip client={client} runtime={capRuntime} linterPulse={props.linterPulse} />
+      <ConfigStrip
+        client={client}
+        runtime={capRuntime}
+        linterPulse={props.linterPulse}
+        lintControl={props.lintControl}
+      />
 
       {/* Pills BELOW the config strip (owner, 2026-07-14: bar → config → pills). */}
       <StatusPills client={client} micLevel={props.micLevel} />

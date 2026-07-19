@@ -106,7 +106,17 @@ while engaged, exactly like pencil.
   lapses (the tab de-instruments, the grant moves) — `available` gates the turn-*on*, not the
   turn-*off*, and Esc bypasses `available` entirely.
 
-## Talk
+## Talk — the audio source
+
+Talk is the capture bus's **audio source** (capture-bus-and-consumers.md §1): what is being
+*sensed*, independent of who consumes it. The consumers — transcriber, linter, oracle — are
+routes onto it ("Sources, routes, and turns" below). Two source-level invariants:
+
+- **Mute is a property of the source, never of a route.** "Muted" means *nothing in the system
+  is listening* — there is deliberately no "audio to the linter but not the transcriber" and no
+  per-consumer mute. A route is subscribed or not; the source is live or muted.
+- **One exclusive talk region, whoever consumes it.** The talk machinery below is identical in
+  every journey; only the route set changes.
 
 **One exclusive talk region (`off | hold | handsFree`), two engagement affordances.** A second
 simultaneous talk window is unrepresentable by construction. Push-to-talk is a *gesture*:
@@ -124,7 +134,38 @@ entry. A *hands-free* window instead **pauses**: the mic goes quiet (the effecti
 open, so its server-side linter window is not triggered, and stepping back to the turn resumes
 the mic where it left off. Leaving the turn scope entirely (armed/disarmed) still ends it.
 
-## The prompt linter, reconfigurable mid-turn
+## Sources, routes, and turns (the capture bus)
+
+The audio source above fans out to **routes** — who is listening (capture-bus-and-consumers.md,
+Phase 2 implemented 2026-07-18):
+
+- **transcriber** — audio → transcript → builds the prompt. The default; always on in the BRIEF
+  journey.
+- **linter** (converse, on-demand) — accumulates silently and speaks one comprehensive
+  advisory read when the **lint now** button asks; never touches the prompt. (Overhear — the
+  automatic pause-lints — retired 2026-07-19.)
+- **oracle** (converse) — a *direct* conversation: vendor auto-VAD turns, replies loop, and the
+  mic is ADDRESSED to it — **prompt building pauses** while it is on (like tweak pauses talk):
+  talk segments resolve empty, and building resumes when it turns off. Send still sends the
+  prompt as built so far, and the oracle select survives the send (the next turn re-opens it).
+  OpenAI-only in v1; its own transcripts of both directions ride `oracle-heard`/`oracle-said`
+  record events (chronicled + traced, never composed), replies also render as 🔮 chips.
+
+**Reply audio STREAMS (owner, 2026-07-19: "we don't want whole playback anything").** Every
+live consumer's spoken reply reaches the client as `seq`-ordered PCM chunks the moment the
+vendor generates them, scheduled gaplessly — the first audible byte does not wait for the reply
+to finish. Barge-in is layered on the model's own capability: the ORACLE's vendor (server VAD)
+detects the human and interrupts itself — the system only LISTENS and relays a `speech-cancel`;
+the LINTER runs manual VAD (the vendor cannot detect it), so its talk-start/`stop`-button
+cancel is client-boundary-driven. TTS acks — whole little files — keep the clip path.
+
+**The journeys' XOR (owner, 2026-07-18): oracle ⊕ linter.** Turning either select on flips the
+other off — enforced in the client config layer (the illegal pair is unrepresentable), backstopped
+by a server-side resolve coercion (oracle wins) and by the mid-thread control handler. Shots and
+selections are journey-independent: they land in the prompt AND forward to whichever live
+consumer is on; only the *voice* switches addressee.
+
+### The prompt linter, reconfigurable mid-turn
 
 The linter select (`off | openai | gemini`) rides the hello on every thread-open, but it also
 takes effect **live** (owner, 2026-07-16): flipping it while a turn is open sends a `control`
@@ -133,6 +174,24 @@ without closing the turn. With no open thread the change simply rides the next h
 three — start, stop, and vendor swap — work mid-turn; a swap gets a *fresh* sidecar (it lints
 from that point on, it does not inherit the prior session's audio/selections). The model,
 instructions, and voice stay the hello's — the select carries only the vendor.
+
+**The linter is on-demand — converse is its only turn strategy (owner, 2026-07-19; overhear
+retired).** There is no automatic pause-lint: while the linter is on it ACCUMULATES — your
+voice, shots, selections, and each segment's transcript (injected as silent context as it
+lands) ride one open vendor window across talk segments. The **"lint now"** / **"stop"**
+buttons beside the select (`{ control: "lint", value: "now" | "stop" }` on the mid-thread rail)
+are the whole turn interface:
+
+- **lint now** ends the vendor turn over everything accumulated — one comprehensive lint. It
+  never waits for a pending STT final (the accepted race: a final landing moments later informs
+  the *next* lint). When the reply completes, the channel pushes `linter-turn-complete` and the
+  pulse settles to idle. **Stay-on**: the linter remains on — talk again and the window
+  reopens; press again and it lints again. The select is the only off switch. Enabled while
+  the pulse shows `listening`; a press with nothing accumulated is a no-op end to end.
+- **stop** cancels the in-flight reply (the button-shaped barge-in) — abort this lint, keep
+  accumulating. Enabled while the pulse shows `thinking`/`tool`/`stale`.
+- Voice barge-in (talking over a reply) also cancels it — a human talking wants to keep
+  briefing, not listen.
 
 ## Continuity: navigations and tab switches
 

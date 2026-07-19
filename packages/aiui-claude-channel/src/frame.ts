@@ -92,9 +92,15 @@ export interface HelloMeta {
  *    so `PROTOCOL_VERSION` is unaffected;
  *  - `control` — payload is UTF-8 JSON `{ control, value }`: a mid-thread
  *    reconfiguration the processor applies live, distinct from turn content
- *    (it never reaches the composed prompt). Today the one control is
+ *    (it never reaches the composed prompt). Three controls today:
  *    `{ control: "linter", value: "off" | "openai" | "gemini" }` — the client
- *    switching the prompt-linter on/off/vendor without closing the turn.
+ *    switching the prompt-linter on/off/vendor without closing the turn;
+ *    `{ control: "lint", value: "now" | "stop" }` — the converse turn
+ *    strategy's button pair (`now` ends the lint turn at the button, `stop`
+ *    cancels the in-flight reply; capture-bus-and-consumers.md §6 Phase 1);
+ *    and `{ control: "oracle", value: "off" | "openai" }` — the oracle
+ *    starting/stopping on the current thread (Phase 2; XOR with the linter,
+ *    enforced by the handler in both directions).
  */
 export type ChunkDescriptor =
   | { kind: "events" }

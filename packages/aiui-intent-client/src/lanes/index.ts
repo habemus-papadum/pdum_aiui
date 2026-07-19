@@ -31,7 +31,7 @@ import { createWire } from "@habemus-papadum/aiui-intent-runtime/wire";
 import { Engine } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createSignal } from "solid-js";
 import type { IntentClient } from "../client";
-import { linter, stt } from "../config";
+import { linter, oracle, stt } from "../config";
 import { createLinterPulse } from "../linter-pulse";
 import { createCaptureLanes } from "./capture-lanes";
 import { createConfigEffects } from "./config-effects";
@@ -53,7 +53,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   const toast = config.onToast ?? ((m: string) => console.warn("[intent-client]", m));
 
   // ── the shared intent pipeline: one engine per page ────────────────────────
-  const engine = new Engine(panelIntentConfig(stt.get() as string, linter.get() as string));
+  const engine = new Engine(
+    panelIntentConfig(stt.get() as string, linter.get() as string, oracle.get() as string),
+  );
 
   // ── speech playback (server-pushed clips; talking barges in) ───────────────
   // The retired overlay's composition, adapted to the panel: the speaker line
@@ -122,6 +124,8 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     reportError: (error) => toast(`${error.source ?? "channel"}: ${error.message}`),
     clearSelection: () => {}, // pull model: selections are engine events
     enqueueSpeech: (clip) => speech.enqueue(clip),
+    feedSpeechChunk: (chunk) => speech.feedChunk(chunk),
+    cancelSpeech: (id) => speech.cancelStream(id),
   });
 
   // ── talk: the shell lanes, panel-document mic (M9) ─────────────────────────
@@ -178,6 +182,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   engine.onEvent((event) => {
     pulse.feed(event);
     wire.onEngineEvent(event);
+    // (No auto-off on linter-turn-complete: STAY-ON is the policy since the
+    // overhear retirement, 2026-07-19 — the pulse fed above settles to idle,
+    // and the select is the only off switch.)
     if (event.type === "thread-close") {
       if ((event as { reason?: string }).reason === "send") {
         void wire.finalizeThread();
@@ -244,6 +251,16 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     talk,
     speech,
     linterPulse: pulse.view,
+    // The lint button pair: fire-and-forget onto the control rail.
+    // sendControl itself no-ops without an open thread, so an idle press
+    // costs nothing (the buttons are also disabled then — belt+braces). The
+    // pulse is poked directly — the button is the ONE input the sidecar
+    // cannot echo back through engine events.
+    lintNow: () => {
+      pulse.lintNow();
+      void wire.sendControl("lint", "now");
+    },
+    lintStop: () => void wire.sendControl("lint", "stop"),
     eventsRev,
     threadEvents: () => {
       void eventsRev(); // subscribe (in-graph readers re-run per event)

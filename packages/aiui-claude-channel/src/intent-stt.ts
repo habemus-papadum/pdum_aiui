@@ -258,6 +258,56 @@ export function commitRealtimeSegment(
   }
 }
 
+/**
+ * Resolve a talk segment that was ADDRESSED TO THE ORACLE (capture-bus
+ * Phase 2): prompt building is paused, so the segment commits to no
+ * transcriber — it resolves EMPTY (the preview stops waiting; the compiler
+ * composes nothing from it) and the buffered PCM is still saved to the trace
+ * (the record of the audio; the oracle's own `oracle-heard` transcript is the
+ * record of the words). Never an error: talking to the oracle is deliberate.
+ */
+export function resolveOracleAddressedSegment(
+  turn: IntentTurn,
+  trace: TraceHandle | undefined,
+  segment: number,
+): void {
+  const buffered = turn.audioFrames.get(segment);
+  if (buffered !== undefined) {
+    turn.audioFrames.delete(segment);
+    if (buffered.chunks.length > 0) {
+      const merged = new Uint8Array(buffered.bytes);
+      let offset = 0;
+      for (const chunk of buffered.chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      trace?.recordBlob(
+        { kind: "ir", label: stageLabel.attachment(`seg_${segment}`) },
+        merged,
+        `seg_${segment}.pcm`,
+      );
+    }
+  }
+  const empty: IntentEvent = {
+    at: Date.now(),
+    type: "transcript-final",
+    segment,
+    text: "",
+    latencyMs: 0,
+    model: "oracle",
+  };
+  turn.appendEvent(empty);
+  turn.push([empty]);
+  trace?.record({
+    kind: "info",
+    label: stageLabel.oracleAddressed(segment),
+    data: {
+      bytes: buffered?.bytes ?? 0,
+      note: "mic addressed to the oracle — prompt building paused for this segment",
+    },
+  });
+}
+
 /** Buffer one PCM frame into its segment (the realtime analogue of the REST seg blob). */
 export function onAudioChunk(
   turn: IntentTurn,
@@ -294,6 +344,15 @@ export function onAudioChunk(
   copy.set(bytes);
   buffered.chunks.push(copy);
   buffered.bytes += copy.length;
+  // The route switch (capture-bus §1): while the ORACLE holds the mic, audio
+  // goes to it ALONE — not to the STT session (prompt building is paused; the
+  // segment resolves empty at talk-end) and not to the linter (the journeys'
+  // XOR means none is running). Otherwise the BRIEF journey's fan-out:
+  // transcriber always, linter when subscribed.
+  if (turn.oracle !== undefined) {
+    turn.oracle.onAudioFrame(copy);
+    return;
+  }
   turn.realtime?.appendAudio(segment, copy);
   turn.sidecar?.onAudioFrame(copy);
 }

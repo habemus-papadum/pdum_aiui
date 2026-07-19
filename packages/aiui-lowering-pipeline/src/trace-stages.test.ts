@@ -62,10 +62,8 @@ describe("stageLabel builders (golden — the persisted strings)", () => {
     expect(stageLabel.linterSelection()).toBe("linter selection");
     expect(stageLabel.linterSelectionRetracted()).toBe("linter selection retracted");
     expect(stageLabel.linterTurnEnd()).toBe("linter turn end");
-    expect(stageLabel.linterTurnMerged()).toBe("linter turn merged");
     expect(stageLabel.linterInterrupted()).toBe("linter interrupted");
     expect(stageLabel.linterGoAway()).toBe("linter go-away");
-    expect(stageLabel.linterTranscriptTimeout()).toBe("linter transcript timeout");
     expect(stageLabel.linterError()).toBe("linter error");
     expect(stageLabel.linterClose()).toBe("linter close");
     expect(stageLabel.linterControl()).toBe("linter control");
@@ -160,10 +158,10 @@ describe("parseStageLabel ∘ stageLabel round-trip", () => {
     [stageLabel.linterSelection(), { t: "linter-selection" }],
     [stageLabel.linterSelectionRetracted(), { t: "linter-selection-retracted" }],
     [stageLabel.linterTurnEnd(), { t: "linter-turn-end" }],
-    [stageLabel.linterTurnMerged(), { t: "linter-turn-merged" }],
+    ["linter turn merged", { t: "linter-turn-merged" }], // legacy reader-only (overhear retired)
     [stageLabel.linterInterrupted(), { t: "linter-interrupted" }],
     [stageLabel.linterGoAway(), { t: "linter-go-away" }],
-    [stageLabel.linterTranscriptTimeout(), { t: "linter-transcript-timeout" }],
+    ["linter transcript timeout", { t: "linter-transcript-timeout" }], // legacy reader-only
     [stageLabel.linterError(), { t: "linter-error" }],
     [stageLabel.linterClose(), { t: "linter-close" }],
     [stageLabel.linterControl(), { t: "linter-control" }],

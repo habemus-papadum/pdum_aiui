@@ -8,10 +8,10 @@
  * created.
  */
 
-import type { LinterVendor } from "@habemus-papadum/aiui-lowering-pipeline";
+import type { LinterVendor, OracleVendor } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createEffect, createRoot } from "solid-js";
 import type { IntentClient } from "../client";
-import { linter, pencilFade, pencilVanish, stt } from "../config";
+import { linter, oracle, pencilFade, pencilVanish, stt } from "../config";
 import { panelIntentConfig } from "./turn-config";
 import type { LaneContext } from "./types";
 
@@ -53,7 +53,7 @@ export function createConfigEffects(ctx: LaneContext, client: IntentClient): () 
   // silently dropped the clips a mid-session switch-on should have played.
   const disposeConfig = createRoot((dispose) => {
     createEffect(
-      () => panelIntentConfig(stt.get() as string, linter.get() as string),
+      () => panelIntentConfig(stt.get() as string, linter.get() as string, oracle.get() as string),
       (effective) => {
         const live = engine.settings as unknown as Record<string, unknown>;
         for (const key of Object.keys(live)) {
@@ -92,9 +92,56 @@ export function createConfigEffects(ctx: LaneContext, client: IntentClient): () 
     return dispose;
   });
 
+  // Mid-thread ORACLE control — the oracle select moving while a turn is open
+  // starts/stops the oracle on the CURRENT thread, same rail as the linter's.
+  const disposeOracleControl = createRoot((dispose) => {
+    let last = oracle.get() as string;
+    createEffect(
+      () => oracle.get() as string,
+      (value) => {
+        if (value === last) {
+          return;
+        }
+        last = value;
+        if (engine.threadOpen) {
+          void wire.sendControl("oracle", value as OracleVendor);
+        }
+      },
+    );
+    return dispose;
+  });
+
+  // The journeys' XOR (capture-bus §4), enforced where the selects LIVE:
+  // turning either of oracle/linter on flips the other off, so the illegal
+  // combination is unrepresentable in the config layer. Flipping to "off"
+  // never recurses (the guards fire only on non-off), so the two effects
+  // settle in one bounce. The channel backstops a hand-written hello with a
+  // resolve coercion (oracle wins there too).
+  const disposeXor = createRoot((dispose) => {
+    createEffect(
+      () => oracle.get() as string,
+      (value) => {
+        if (value !== "off" && (linter.get() as string) !== "off") {
+          linter.set("off");
+        }
+      },
+    );
+    createEffect(
+      () => linter.get() as string,
+      (value) => {
+        if (value !== "off" && (oracle.get() as string) !== "off") {
+          oracle.set("off");
+        }
+      },
+    );
+    return dispose;
+  });
+
   return () => {
     disposePencilFade();
     disposeConfig();
     disposeLinterControl();
+    disposeOracleControl();
+    disposeXor();
   };
 }

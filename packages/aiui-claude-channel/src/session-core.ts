@@ -18,7 +18,6 @@
  */
 import WebSocket from "ws";
 import type { LinterToolCall } from "./live-session";
-import { concatChunks, pcm16ToWav } from "./pcm";
 
 /**
  * Something the vendor did that the session did not act on, or acted on in a way
@@ -330,32 +329,35 @@ export function reportSessionFailure(
 }
 
 /**
- * The reply-clip accumulator the two live linter engines share: buffer a turn's
- * PCM chunks and its transcript (streamed via {@link appendTranscript} or set
- * absolute via {@link setTranscript}), then {@link flush} emits the WAV-wrapped
- * clip and the trimmed transcript through the callbacks and clears the buffers.
- * Gemini holds ONE instance and {@link reset}s it on a barge-in `interrupted`;
- * OpenAI holds a Map keyed by response id (which may be the empty string) and
- * flushes per `response.done`.
+ * The MIME every live engine's streamed reply chunk carries: raw PCM16 mono at
+ * 24 kHz — both vendors emit exactly this, so the client player decodes one
+ * format. (The whole-clip WAV wrap died with the buffering: replies STREAM —
+ * the house rule, like the REST-transcription retirement. TTS acks, which are
+ * genuinely whole little files, still ride `audio/mpeg` clips.)
  */
-export interface ReplyClip {
-  pushAudio(bytes: Uint8Array): void;
+export const REPLY_PCM_MIME = "audio/pcm;rate=24000";
+
+/**
+ * The reply-TRANSCRIPT accumulator the live engines share (streamed via
+ * {@link appendTranscript} or set absolute via {@link setTranscript});
+ * {@link flush} emits the trimmed text and clears. Audio is deliberately NOT
+ * accumulated here anymore — each PCM delta is forwarded to the callbacks the
+ * moment it arrives (streaming playback; whole-clip buffering retired
+ * 2026-07-19: it delayed the first audible byte by the entire reply's
+ * generation time). Gemini holds ONE instance and {@link reset}s it on a
+ * barge-in `interrupted`; OpenAI holds a Map keyed by response id (which may
+ * be the empty string) and flushes per `response.done`.
+ */
+export interface ReplyTranscript {
   appendTranscript(t: string): void;
   setTranscript(t: string): void;
   flush(): void;
   reset(): void;
 }
 
-export function createReplyClip(
-  cb: { onAudio(wav: Uint8Array, mime: string): void; onTranscript(text: string): void },
-  rate: number,
-): ReplyClip {
-  let audio: Uint8Array[] = [];
+export function createReplyTranscript(cb: { onTranscript(text: string): void }): ReplyTranscript {
   let transcript = "";
   return {
-    pushAudio(bytes) {
-      audio.push(bytes);
-    },
     appendTranscript(t) {
       transcript += t;
     },
@@ -363,18 +365,13 @@ export function createReplyClip(
       transcript = t;
     },
     flush() {
-      if (audio.length > 0) {
-        cb.onAudio(pcm16ToWav(concatChunks(audio), rate), "audio/wav");
-      }
       const text = transcript.trim();
       if (text !== "") {
         cb.onTranscript(text);
       }
-      audio = [];
       transcript = "";
     },
     reset() {
-      audio = [];
       transcript = "";
     },
   };

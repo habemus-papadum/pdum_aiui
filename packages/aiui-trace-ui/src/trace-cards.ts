@@ -348,6 +348,12 @@ function classifyParsed(parsed: ParsedStage, stage: TraceStageLike): StageClass 
       return norm("in", "linter", "⌖", "linter selection retracted");
     case "linter-turn-end":
       return { ...norm("internal", "linter", "💡", "linter turn end"), coalesceKey: "linter-flow" };
+    case "linter-turn-complete":
+      // The button-driven (converse debug) lint finished — the auto-off fires.
+      return {
+        ...norm("internal", "linter", "💡", "linter turn complete"),
+        coalesceKey: "linter-flow",
+      };
     case "linter-turn-merged":
       return {
         ...norm("internal", "linter", "💡", "linter turn merged"),
@@ -366,6 +372,42 @@ function classifyParsed(parsed: ParsedStage, stage: TraceStageLike): StageClass 
       return fail("out", "❌", "linter error");
     case "linter-close":
       return norm("internal", "linter", "💡", "linter close");
+
+    // ── the oracle consumer (converse: auto-VAD + loop) ──────────────────────
+    case "oracle-open":
+      return norm("internal", "config", "🔮", "oracle open");
+    case "oracle-disabled":
+      return fail("internal", "⚠", "oracle disabled");
+    case "oracle-heard":
+      // The model's own record of the human's speech — in lane (it flowed TO it).
+      return { ...norm("in", "linter", "🔮", "oracle heard"), coalesceKey: "oracle-flow" };
+    case "oracle-said":
+      return { ...norm("out", "speech", "🔮", "oracle said"), coalesceKey: "oracle-flow" };
+    case "oracle-tool-call":
+      return norm("out", "events", "🧩", `oracle tool call ${parsed.tool}`);
+    case "oracle-tool-result":
+      return norm("in", "events", "🧩", "oracle tool result");
+    case "oracle-label":
+      return norm("in", "media", "🏷", `${parsed.id} shown to oracle`);
+    case "oracle-selection":
+      return norm("in", "linter", "⌖", "oracle selection");
+    case "oracle-selection-retracted":
+      return norm("in", "linter", "⌖", "oracle selection retracted");
+    case "oracle-interrupted":
+      return {
+        ...norm("internal", "linter", "🔮", "oracle interrupted"),
+        coalesceKey: "oracle-flow",
+      };
+    case "oracle-error":
+      return fail("out", "❌", "oracle error");
+    case "oracle-close":
+      return norm("internal", "linter", "🔮", "oracle close");
+    case "oracle-addressed":
+      // A talk segment routed to the oracle instead of STT (prompt paused).
+      return {
+        ...norm("internal", "linter", "🔮", `seg addressed to oracle`),
+        coalesceKey: "oracle-flow",
+      };
 
     case "video-legacy":
       // A persisted share frame (every frame is saved now); coalesces into one
@@ -409,6 +451,7 @@ function classifyParsed(parsed: ParsedStage, stage: TraceStageLike): StageClass 
     //    `linter control` (info → config card), `user text` (ir → compose card).
     case "realtime-discard":
     case "linter-control":
+    case "oracle-control":
     case "user-text":
       return genericFallback(stage);
 

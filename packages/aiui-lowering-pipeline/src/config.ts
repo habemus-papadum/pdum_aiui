@@ -139,6 +139,22 @@ export interface IntentPipelineConfig {
   /** The linter persona override. Absent → the channel's LINTER_INSTRUCTIONS. */
   linterInstructions?: string;
   /**
+   * The **oracle** — a direct real-time voice conversation with the model
+   * (capture-bus-and-consumers.md §3, converse strategy: vendor auto-VAD turn
+   * detection, after-reply `loop`). While on, the mic is ADDRESSED TO the
+   * oracle: prompt building pauses (talk segments resolve empty, like tweak
+   * pauses talk) and resumes when the oracle turns off. Mutually exclusive
+   * with {@link linter} — the journeys' XOR (proposal §4); a hello carrying
+   * both is coerced (oracle wins, recorded). The oracle's transcripts of what
+   * it heard and said ride `oracle-heard`/`oracle-said` record events — never
+   * the prompt (§8 decision 6). OpenAI-only in Phase 2 v1. Absent → `off`.
+   */
+  oracle?: "off" | "openai";
+  /** Oracle model id. Absent → the vendor default (gpt-realtime-2). */
+  oracleModel?: string;
+  /** The oracle persona override. Absent → the channel's ORACLE_INSTRUCTIONS. */
+  oracleInstructions?: string;
+  /**
    * Screen-frame cadence while sharing, in ms per frame. Absent → 5000 (one
    * frame every five seconds); the share's slider adjusts it live. Under
    * `videoMode: "smart"` this is a CEILING, not a metronome.
@@ -182,6 +198,31 @@ export const LINTER_VENDORS = [
   "openai",
   "gemini",
 ] as const satisfies readonly LinterVendor[];
+
+/**
+ * The `lint` control-chunk vocabulary — the CONVERSE turn strategy's two
+ * control-driven entry points (docs/proposals/capture-bus-and-consumers.md §6
+ * Phase 1): `"now"` ends the linter's turn at the button (and arms the
+ * after-reply auto-off), `"stop"` cancels the in-flight reply (the button
+ * barge-in) and disarms the auto-off. Lives beside {@link LinterVendor} for
+ * the same reason it does: the channel's untrusted-wire revalidation and the
+ * runtime's send site derive from one source.
+ */
+export type LintTurnAction = (typeof LINT_TURN_ACTIONS)[number];
+
+/** The lint actions as a runtime list — the wire-revalidation source. */
+export const LINT_TURN_ACTIONS = ["now", "stop"] as const;
+
+/**
+ * The oracle vendor vocabulary — `off`, or the live vendor addressed. Same
+ * one-source rule as {@link LinterVendor}: the channel's control-chunk parse
+ * and the runtime's send site both derive from here. OpenAI-only in Phase 2
+ * v1 (the reference vendor for converse semantics); Gemini follows.
+ */
+export type OracleVendor = NonNullable<IntentPipelineConfig["oracle"]>;
+
+/** The oracle vendors as a runtime list — the wire-revalidation source. */
+export const ORACLE_VENDORS = ["off", "openai"] as const satisfies readonly OracleVendor[];
 
 /**
  * The shipped defaults. Transcription and correction default to the **real**

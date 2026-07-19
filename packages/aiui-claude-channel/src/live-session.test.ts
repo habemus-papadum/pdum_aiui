@@ -26,8 +26,9 @@ describe("LINTER_INSTRUCTIONS", () => {
     expect(LINTER_INSTRUCTIONS).toMatch(/never answer the task/i);
   });
 
-  it("caps the lint at one or two short sentences, with a quiet default", () => {
-    expect(LINTER_INSTRUCTIONS).toMatch(/AT MOST one or two short spoken sentences/);
+  it("speaks only when asked, keeps it short, with a quiet default", () => {
+    expect(LINTER_INSTRUCTIONS).toMatch(/speak ONLY when asked/);
+    expect(LINTER_INSTRUCTIONS).toMatch(/few short spoken sentences/);
     expect(LINTER_INSTRUCTIONS).toContain('"clear so far"');
   });
 

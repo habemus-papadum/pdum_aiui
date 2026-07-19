@@ -8,10 +8,12 @@
  */
 import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
+import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
 import { activationGesture } from "../activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { fakeBus } from "../fake-bus";
+import type { LinterPulseView } from "../linter-pulse";
 import { intentSpec } from "../spec";
 import { Panel } from "./panel";
 
@@ -228,5 +230,60 @@ describe("the panel is a projection", () => {
     await settle();
     expect(m.client.state()).toBe(before);
     expect(text(m.root, "blip")).toContain("q");
+  });
+});
+
+describe("the converse (debug) lint buttons", () => {
+  it("render beside the pulse dot, enable off the phase, and fire their handlers", async () => {
+    const bus = fakeBus({ activeTab: 7 });
+    const client = createIntentClient({ host: bus, lanes: noopLanes });
+    client.setContext({ grantedTab: 7, connected: true });
+    const [pulse, setPulse] = createSignal<LinterPulseView>({
+      phase: "listening",
+      detail: "the linter hears the mic",
+    });
+    const calls: string[] = [];
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const dispose = render(
+      () => (
+        <Panel
+          client={client}
+          linterPulse={pulse}
+          lintControl={{ now: () => calls.push("now"), stop: () => calls.push("stop") }}
+        />
+      ),
+      root,
+    );
+    try {
+      await settle();
+      const now = root.querySelector<HTMLButtonElement>('[data-testid="lint-now"]');
+      const stop = root.querySelector<HTMLButtonElement>('[data-testid="lint-stop"]');
+      expect(now).not.toBeNull();
+      expect(stop).not.toBeNull();
+      // Listening: a window is open to end; nothing in flight to cancel.
+      expect(now?.disabled).toBe(false);
+      expect(stop?.disabled).toBe(true);
+      now?.click();
+      expect(calls).toEqual(["now"]);
+
+      // Thinking (a reply composing): the pair flips.
+      setPulse({ phase: "thinking", detail: "waiting for the linter's note" });
+      await settle();
+      expect(now?.disabled).toBe(true);
+      expect(stop?.disabled).toBe(false);
+      stop?.click();
+      expect(calls).toEqual(["now", "stop"]);
+
+      // Off (the auto-off landed): both dead.
+      setPulse({ phase: "off", detail: "linter off (the select)" });
+      await settle();
+      expect(now?.disabled).toBe(true);
+      expect(stop?.disabled).toBe(true);
+    } finally {
+      dispose();
+      root.remove();
+      await client.dispose();
+    }
   });
 });

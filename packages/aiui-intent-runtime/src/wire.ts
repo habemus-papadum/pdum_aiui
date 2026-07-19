@@ -21,13 +21,15 @@ import type {
   IntentEvent,
   IntentPipelineConfig,
   LinterVendor,
+  LintTurnAction,
+  OracleVendor,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import { REALTIME_PCM_MIME } from "./audio";
 import type { IntentErrorInput } from "./errors";
 import { invalidateOnHotUpdate } from "./hmr";
 import type { IntentThread, OpenThreadOptions } from "./intent-types";
 import type { Ack } from "./protocol";
-import type { SpeechClip } from "./speech";
+import type { SpeechChunk, SpeechClip } from "./speech";
 
 /** The thread socket's lifecycle, as the host's report/status surfaces read it. */
 export type ThreadSocketState = "none" | "connecting" | "open" | "failed";
@@ -58,6 +60,10 @@ export interface WireDeps {
    * post-mount, so a deferred thunk is safe.
    */
   enqueueSpeech: (clip: SpeechClip) => void;
+  /** Schedule one streamed reply chunk (the SpeechPlayer's feedChunk). */
+  feedSpeechChunk: (chunk: SpeechChunk) => void;
+  /** Stop playing stream `id` (a server-relayed `speech-cancel`). */
+  cancelSpeech: (id: string) => void;
 }
 
 /** The wire surface the host (and, through it, the talk lanes) drives. */
@@ -79,11 +85,16 @@ export interface Wire {
   /** One captured PCM frame → an `audio` chunk on `seg_N`, in seq order. */
   uploadAudio(segment: number, seq: number, bytes: Uint8Array): Promise<void>;
   /**
-   * A mid-thread `control` chunk — reconfiguration, never turn content. Today
-   * the one control is the prompt linter: start / stop / swap it live. A no-op
-   * when no thread is open (the change rides the next hello instead).
+   * A mid-thread `control` chunk — reconfiguration, never turn content. Two
+   * controls: `linter` starts / stops / swaps the prompt linter live, and
+   * `lint` drives the converse turn strategy's button pair (`now` ends the
+   * lint turn at the button, `stop` cancels the in-flight reply). A no-op
+   * when no thread is open (a `linter` change rides the next hello instead;
+   * a `lint` press has nothing to end).
    */
   sendControl(control: "linter", value: LinterVendor): Promise<void>;
+  sendControl(control: "lint", value: LintTurnAction): Promise<void>;
+  sendControl(control: "oracle", value: OracleVendor): Promise<void>;
   /** The send path: flush, consume the selection, `fin`, surface the ack. */
   finalizeThread(): Promise<void>;
   /** Close the socket without `fin` (a cancel) and reset the wire state. */
@@ -94,6 +105,7 @@ export interface Wire {
 
 export function createWire(deps: WireDeps): Wire {
   const { engine, config, setStatus, reportError, clearSelection, enqueueSpeech } = deps;
+  const { feedSpeechChunk, cancelSpeech } = deps;
 
   // ── the wire: one socket per thread, opened on thread-open ───────────────
   let threadPromise: Promise<IntentThread> | undefined;
@@ -256,7 +268,10 @@ export function createWire(deps: WireDeps): Wire {
     }
   }
 
-  async function sendControl(control: "linter", value: LinterVendor): Promise<void> {
+  async function sendControl(
+    control: "linter" | "lint" | "oracle",
+    value: LinterVendor | LintTurnAction | OracleVendor,
+  ): Promise<void> {
     const thread = await getThread();
     if (!thread) {
       return; // no open thread — the change rides the next hello instead
@@ -336,20 +351,35 @@ export function createWire(deps: WireDeps): Wire {
       typeof msg.mime === "string" &&
       typeof msg.data === "string"
     ) {
-      // A spoken clip. The gate depends on WHOSE voice it is: a linter note
-      // (`lint_N`) is the linter's product and plays whenever the linter is
-      // on — `audioBack` is the TTS-ack knob and must not mute it (the
-      // silent-linter bug). Everything else (acks) honors audioBack. Read
-      // live so a config switch takes effect immediately.
-      const isLinterClip = typeof msg.id === "string" && msg.id.startsWith("lint_");
-      if (isLinterClip ? (config().linter ?? "off") !== "off" : config().audioBack !== "off") {
-        enqueueSpeech({
-          id: typeof msg.id === "string" ? msg.id : "speech",
-          mime: msg.mime,
-          data: msg.data,
-          ...(typeof msg.label === "string" ? { label: msg.label } : {}),
-        });
+      // Spoken audio. The gate depends on WHOSE voice it is: a linter reply
+      // (`lint_N`) plays whenever the linter is on, an oracle reply
+      // (`oracle_N`) whenever the oracle is on — `audioBack` is the TTS-ack
+      // knob and must not mute either (the silent-linter bug). Everything
+      // else (acks) honors audioBack. Read live so a config switch takes
+      // effect immediately.
+      const id = typeof msg.id === "string" ? msg.id : "";
+      const gateOpen = id.startsWith("lint_")
+        ? (config().linter ?? "off") !== "off"
+        : id.startsWith("oracle_")
+          ? (config().oracle ?? "off") !== "off"
+          : config().audioBack !== "off";
+      if (gateOpen) {
+        if (typeof msg.seq === "number") {
+          // A streamed reply chunk: scheduled for gapless playback the
+          // moment it lands (whole-clip buffering retired 2026-07-19).
+          feedSpeechChunk({ id: id || "speech", mime: msg.mime, data: msg.data, seq: msg.seq });
+        } else {
+          enqueueSpeech({
+            id: id || "speech",
+            mime: msg.mime,
+            data: msg.data,
+            ...(typeof msg.label === "string" ? { label: msg.label } : {}),
+          });
+        }
       }
+    } else if (msg.kind === "speech-cancel" && typeof msg.id === "string") {
+      // The vendor's own barge-in, relayed: stop playing that stream NOW.
+      cancelSpeech(msg.id);
     } else if (msg.kind === "lowered-prompt") {
       // Deliberately ignored HERE: a host that wants the final lowered prompt
       // observes it on the raw socket (openIntentThread's onSocket hook). See
@@ -383,6 +413,23 @@ export function createWire(deps: WireDeps): Wire {
         } else if (event.type === "linter-tool-call" || event.type === "linter-tool-result") {
           // Trace/debug material — chronicled so the turn store and the
           // debugger see it; no chip renders (the trace viewer is its surface).
+          engine.ingestLinter(event);
+        } else if (event.type === "linter-turn-complete") {
+          // The button-driven (converse debug) lint finished — chronicled so
+          // the client's auto-off tap and the pulse both see it.
+          engine.ingestLinter(event);
+        } else if (event.type === "oracle-said") {
+          // The oracle's reply transcript: a 🔮 chip + the status line (the
+          // spoken clip rides `speech`). Record, never prompt.
+          engine.ingestLinter(event);
+          setStatus(`🔮 ${event.text}`);
+        } else if (
+          event.type === "oracle-heard" ||
+          event.type === "oracle-tool-call" ||
+          event.type === "oracle-tool-result"
+        ) {
+          // The other-direction record + tool round-trips — chronicled for
+          // the turn store and the trace; no status noise.
           engine.ingestLinter(event);
         }
       }

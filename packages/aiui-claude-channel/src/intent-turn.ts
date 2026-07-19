@@ -33,10 +33,11 @@ import {
 } from "@habemus-papadum/aiui-lowering-pipeline/trace-stages";
 import { pushError, type ThreadContext } from "./channel";
 import type { CallCost } from "./cost";
-import type { LoweredMessage, SpeechMessage } from "./intent-messages";
+import type { LoweredMessage, SpeechCancelMessage, SpeechMessage } from "./intent-messages";
 import type { ResolvedIntent } from "./intent-resolve";
 import { ordinalOf } from "./intent-stream-util";
 import type { LinterSidecar } from "./linter-sidecar";
+import type { OracleSidecar } from "./oracle-sidecar";
 import type { RealtimeSession } from "./realtime";
 import type { TraceHandle } from "./trace";
 
@@ -78,6 +79,14 @@ export interface IntentTurn {
    * start / stop / swap it live.
    */
   sidecar: LinterSidecar | undefined;
+  /**
+   * The ORACLE sidecar (capture-bus Phase 2). Reassignable slot like the
+   * linter's; mutually exclusive with it (the journeys' XOR — the resolve
+   * coercion and the control handler both enforce it). While set, the mic is
+   * addressed HERE: audio routes to it instead of the STT session, and the
+   * talk segments resolve empty (prompt building paused).
+   */
+  oracle: OracleSidecar | undefined;
 
   /** Append one event to the stream and bump the mutation counter. */
   appendEvent(event: IntentEvent): void;
@@ -103,6 +112,19 @@ export interface IntentTurn {
   recordCost(what: string, cost: CallCost | undefined): void;
   /** Push a base64 audio clip for the client to play (TTS ack / model reply). */
   pushSpeech(id: string, mime: string, bytes: Uint8Array, label?: string): void;
+  /**
+   * Push one CHUNK of a streamed reply (`seq`-ordered under one id) — the
+   * client schedules it for gapless playback the moment it lands. The chunks
+   * are also accumulated server-side PER ID for the trace's audio record
+   * (flushed as one blob when the stream ends: the next stream starting, a
+   * cancel, or {@link flushSpeechTrace}). Streaming is the contract for model
+   * replies — whole-clip buffering retired 2026-07-19.
+   */
+  pushSpeechChunk(id: string, seq: number, mime: string, bytes: Uint8Array): void;
+  /** Tell the client to stop playing stream `id` NOW (vendor-side barge-in). */
+  pushSpeechCancel(id: string): void;
+  /** Flush any open speech-stream blobs to the trace (fin/teardown). */
+  flushSpeechTrace(): void;
   /**
    * Finalize a segment we could not transcribe: echo an empty `transcript-final`
    * (so the client's preview resolves instead of waiting for an echo that will
@@ -136,6 +158,29 @@ export function createIntentTurn(
   intent: ResolvedIntent,
   composeOptions: ComposeOptions,
 ): IntentTurn {
+  /** Open streamed-reply accumulations, per stream id — the TRACE's audio
+   * record only (playback already streamed chunk-by-chunk to the client). */
+  const speechStreams = new Map<string, { chunks: Uint8Array[]; bytes: number; mime: string }>();
+
+  /** Stream `id` ended (next stream / cancel / fin): write its one blob. */
+  const flushSpeechStream = (id: string): void => {
+    const stream = speechStreams.get(id);
+    if (stream === undefined) {
+      return;
+    }
+    speechStreams.delete(id);
+    if (stream.chunks.length === 0) {
+      return;
+    }
+    const merged = new Uint8Array(stream.bytes);
+    let offset = 0;
+    for (const chunk of stream.chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    trace?.recordBlob({ kind: "ir", label: stageLabel.speech(id) }, merged, `${id}.pcm`);
+  };
+
   const turn: IntentTurn = {
     events: [],
     shotPaths: new Map<string, string>(),
@@ -146,6 +191,7 @@ export function createIntentTurn(
     ackSeq: 0,
     realtime: undefined,
     sidecar: undefined,
+    oracle: undefined,
 
     appendEvent: (event) => {
       turn.events.push(event);
@@ -232,6 +278,53 @@ export function createIntentTurn(
           ...(label !== undefined ? { text: label } : {}),
         } satisfies SpeechData,
       });
+    },
+
+    pushSpeechChunk: (id, seq, mime, bytes) => {
+      ctx.push?.({
+        kind: "speech",
+        threadId: ctx.threadId,
+        id,
+        mime,
+        data: Buffer.from(bytes).toString("base64"),
+        seq,
+      } satisfies SpeechMessage);
+      // The trace record: per-chunk stages would flood the card list, so the
+      // stream traces as ONE stage (at seq 0) and ONE blob (at stream end —
+      // see flushSpeechStream). A stream is "open" until a different id
+      // starts, a cancel lands, or the turn ends.
+      let stream = speechStreams.get(id);
+      if (stream === undefined) {
+        for (const openId of speechStreams.keys()) {
+          flushSpeechStream(openId); // the previous reply's stream ended
+        }
+        stream = { chunks: [], bytes: 0, mime };
+        speechStreams.set(id, stream);
+        trace?.record({
+          kind: "info",
+          label: stageLabel.speech(id),
+          data: { mime, bytes: 0, text: "(streamed)" } satisfies SpeechData,
+        });
+      }
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      stream.chunks.push(copy);
+      stream.bytes += copy.length;
+    },
+
+    pushSpeechCancel: (id) => {
+      ctx.push?.({
+        kind: "speech-cancel",
+        threadId: ctx.threadId,
+        id,
+      } satisfies SpeechCancelMessage);
+      flushSpeechStream(id);
+    },
+
+    flushSpeechTrace: () => {
+      for (const id of speechStreams.keys()) {
+        flushSpeechStream(id);
+      }
     },
 
     finalizeSilentSegment: (id, noteText, error = { source: "transcription" }) => {

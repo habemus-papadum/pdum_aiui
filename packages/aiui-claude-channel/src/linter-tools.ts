@@ -119,3 +119,39 @@ export function executeReadFile(args: Record<string, unknown>, cwd?: string): Re
     summary: `${rawPath} — ${kb} KB${truncated ? " (truncated)" : ""}`,
   };
 }
+
+/**
+ * How a live consumer observes a tool round-trip — the consumer supplies its
+ * OWN event/label vocabulary (`linter-tool-*` vs `oracle-tool-*`); the
+ * execution policy above stays in one place. Part of the shared live-consumer
+ * core (capture-bus-and-consumers.md §6 Phase 2): the linter and the oracle
+ * run the same tools, differing only in how the round-trip is recorded.
+ */
+export interface ToolRunObserver {
+  /** The request half arrived — chronicle + trace it (before execution). */
+  onCall(tool: string, args: Record<string, unknown>): void;
+  /** The result half — `content` is the full text the model will read (trace-only). */
+  onResult(ok: boolean, summary: string, content: string): void;
+}
+
+/**
+ * Execute one live-consumer tool call end to end: validate the tool name,
+ * run `read_file`, report both halves through the observer, and respond to
+ * the model (the engine handles the vendor resume rule).
+ */
+export function runConsumerToolCall(
+  call: { tool: string; args: Record<string, unknown>; respond(result: string): void },
+  promptCwd: string,
+  observer: ToolRunObserver,
+): void {
+  observer.onCall(call.tool, call.args);
+  if (call.tool !== READ_FILE_TOOL_NAME) {
+    const summary = `unknown tool "${call.tool}"`;
+    observer.onResult(false, summary, "");
+    call.respond(`error: ${summary}`);
+    return;
+  }
+  const result = executeReadFile(call.args, promptCwd);
+  observer.onResult(result.ok, result.summary, result.content);
+  call.respond(result.content);
+}

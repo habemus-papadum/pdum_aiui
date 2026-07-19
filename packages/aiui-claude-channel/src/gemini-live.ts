@@ -57,9 +57,10 @@ import { fromBase64, toBase64 } from "./pcm";
 import { closeSuffix, type RealtimeSocketFactory, type RealtimeSocketHandlers } from "./realtime";
 import {
   createReadyGate,
-  createReplyClip,
+  createReplyTranscript,
   makeOnceCall,
   makeWsSocketFactory,
+  REPLY_PCM_MIME,
 } from "./session-core";
 
 /** The v1beta bidirectional-generate endpoint (key rides the query string). */
@@ -69,8 +70,8 @@ export const GEMINI_LIVE_URL =
 /** The reference model — video-capable, manual-VAD verified (spike). */
 export const DEFAULT_GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
 
-/** Gemini emits 24 kHz PCM16; the same rate the client captures — one WAV wrap. */
-const GEMINI_OUTPUT_RATE = 24000;
+// (Gemini emits 24 kHz PCM16 — the rate REPLY_PCM_MIME declares; chunks
+// stream raw, no WAV wrap since the whole-clip retirement.)
 
 /**
  * The declared input-audio MIME. Client capture is 24 kHz; Gemini accepts any
@@ -176,14 +177,13 @@ export function openGeminiLiveSession(
   const gate = createReadyGate((text) => socket.send(text));
   const guard = new WindowOrderingGuard<OutboundFrame>();
 
-  // Per-turn accumulation. Gemini has no response ids; a turn is bounded by
-  // `serverContent.turnComplete`, so ONE reply clip buffers until it and flushes
-  // one clip / one reply transcript per turn — reset on a barge-in `interrupted`.
+  // Per-turn TRANSCRIPT accumulation. Gemini has no response ids; a turn is
+  // bounded by `serverContent.turnComplete`, so ONE accumulator flushes one
+  // reply transcript per turn — reset on a barge-in `interrupted`. Audio is
+  // NOT accumulated: each inlineData part streams out the moment it arrives
+  // (whole-clip buffering retired 2026-07-19).
   // (No user-transcript lane: linter sessions run without vendor input transcription.)
-  const clip = createReplyClip(
-    { onAudio: callbacks.onReplyAudio, onTranscript: callbacks.onReplyTranscript },
-    GEMINI_OUTPUT_RATE,
-  );
+  const clip = createReplyTranscript({ onTranscript: callbacks.onReplyTranscript });
 
   // Send once ready; the setup handshake that produces readiness bypasses the
   // queue (it goes out in `onOpen`). Everything the guard admits flows here.
@@ -247,16 +247,22 @@ export function openGeminiLiveSession(
       }
       for (const part of serverContent.modelTurn?.parts ?? []) {
         if (typeof part.inlineData?.data === "string") {
-          clip.pushAudio(fromBase64(part.inlineData.data));
+          // STREAMED the moment it arrives (whole-clip buffering retired).
+          callbacks.onReplyAudio(fromBase64(part.inlineData.data), REPLY_PCM_MIME);
         }
       }
       if (serverContent.interrupted === true) {
-        // Barge-in: discard the half-spoken reply so it is not replayed.
+        // Barge-in: drop the half-composed transcript; the sidecar's
+        // onInterrupted cancels the client-side stream (already-forwarded
+        // chunks are stopped there — they cannot be un-sent).
         clip.reset();
         callbacks.onInterrupted();
       }
       if (serverContent.turnComplete === true) {
         clip.flush();
+        // The vendor's own "the model is done" — parity with OpenAI's
+        // no-function_call response.done (the converse after-reply signal).
+        callbacks.onTurnComplete?.();
       }
     }
     const toolCall = message.toolCall as

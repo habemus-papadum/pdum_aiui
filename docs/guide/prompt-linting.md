@@ -6,11 +6,14 @@ mistranscribed word ("beat" for "Vite"), a deictic reference no agent can resolv
 slider wider" — you discussed two sliders), and a feature you described at length but never
 showed. You find out after the agent has spent five minutes going the wrong way.
 
-The **prompt linter** is a realtime model that watches you compose and speaks up at each pause —
-one or two short sentences, choosing the single most useful observation. It hears your voice
-live, sees your screen (while you share), receives every labeled screenshot and selection, and —
-crucially — is shown the **exact transcription the compiler will use**, so it can flag where the
-text contradicts what you plainly said.
+The **prompt linter** is a realtime model that watches you compose and speaks **when you ask**:
+it accumulates silently — your voice live, your screen (while you share), every labeled
+screenshot and selection, and — crucially — the **exact transcription the compiler will use** —
+and the **lint now** button beside the linter select triggers one comprehensive read over
+everything since its last turn. It stays on after each lint (talk more, press again); **stop**
+cancels a reply mid-sentence; the select is the only off switch. (The original design linted
+automatically at every pause — that *overhear* mode was retired 2026-07-19: the interruptions
+outweighed the ambience, and on-demand keeps one legible turn model.)
 
 The linter never writes the prompt. The compiler (`composeIntent`) assembles the briefing
 verbatim from what you said and attached, in every configuration; the linter is purely advisory.
@@ -55,9 +58,11 @@ Everything the linter receives is bracketed, labeled, and recorded:
 - **Selections** — `[selection sel_2: "gradient stops" — on-screen selection authored at
   src/Legend.tsx:41:8]`; an update reuses the id (`[selection sel_2 updated: …]`), a retraction
   says `[selection sel_2 retracted — disregard it]`.
-- **The compiler's transcription** — when you pause, the channel waits (up to 2.5 s) for that
-  segment's transcript, injects `[transcript seg_4: "make the curb wider"]`, and only then lets
-  the linter speak. The lint judges what the *agent* will read, not just what the model heard.
+- **The compiler's transcription** — each segment's transcript is injected as silent context
+  (`[transcript seg_4: "make the curb wider"]`) as it lands, so a lint judges what the *agent*
+  will read, not just what the model heard. Pressing **lint now** never waits for a pending
+  transcript — a final that lands moments later simply informs the next lint (the accepted
+  race).
 
 The linter may also call one tool, **`read_file`**: any readable path, resolved against the
 project root, capped at 32 KB, binary-sniffed — meant for verifying a suspicion ("that function
@@ -77,19 +82,20 @@ verbatim (`LINTER_INSTRUCTIONS` in `packages/aiui-claude-channel/src/live-sessio
 > You are a realtime prompt linter. You are observing a person compose a task briefing for a
 > coding agent, out loud: you hear their voice, you see their screen, and you receive labeled
 > screenshots ([image shot_3]) and on-screen selections ([selection sel_2: …]; an updated
-> selection reuses its id, a retracted one must be disregarded). Just before each of your
-> turns, a bracketed [transcript seg_N: "…"] message shows the exact transcription the
-> compiler will use — reconcile it against what you heard. You never write or rewrite the
-> briefing — a separate compiler assembles it verbatim from what they said and attached.
-> Each time they pause, respond with AT MOST one or two short spoken sentences, choosing the
-> single most useful observation: a transcription that contradicts what they plainly meant
-> (say what was transcribed vs. meant — the human can only fix it by saying it again more
-> clearly); an ambiguous reference an agent could not resolve ("this slider" — two sliders
-> were discussed); something described but never shown (suggest a screenshot) or shown but
-> never explained; a missing constraint an agent would need. If nothing needs attention, say
-> only "clear so far". Never summarize, never repeat the briefing back, never answer the
-> task yourself. You may call read_file to check a file or selection against the actual
-> source before flagging it — verify suspicions, don't browse.
+> selection reuses its id, a retracted one must be disregarded). Bracketed
+> [transcript seg_N: "…"] messages show the exact transcription the compiler will use —
+> reconcile each against what you heard. You never write or rewrite the briefing — a separate
+> compiler assembles it verbatim from what they said and attached. You speak ONLY when asked:
+> the human explicitly requests your read, and your turn covers everything accumulated since
+> your last one. Respond with a few short spoken sentences carrying the most useful
+> observations: a transcription that contradicts what they plainly meant (say what was
+> transcribed vs. meant — the human can only fix it by saying it again more clearly); an
+> ambiguous reference an agent could not resolve ("this slider" — two sliders were
+> discussed); something described but never shown (suggest a screenshot) or shown but never
+> explained; a missing constraint an agent would need. If nothing needs attention, say only
+> "clear so far". Never summarize, never repeat the briefing back, never answer the task
+> yourself. You may call read_file to check a file or selection against the actual source
+> before flagging it — verify suspicions, don't browse.
 
 ## Corrections are spoken (the append-only model)
 
@@ -102,11 +108,11 @@ its interaction with the linter is deliberately not designed yet.)
 
 ## Cost notes
 
-Realtime conversational models re-read the session context on **every** response — a lint after
-each pause costs proportionally to everything the session has heard and seen so far. The
-defaults are chosen accordingly: smart-mode sampling (an untouched screen adds **no** frames at
-all), one frame per five seconds at most, a terse persona, one short observation per pause, and
-`read_file` capped at 32 KB. The trace's 💰 cards show the per-response spend; the turn's
+Realtime conversational models re-read the session context on **every** response — each lint
+costs proportionally to everything the session has heard and seen so far. On-demand linting is
+itself the biggest saver (you decide when a response is worth paying for); the other defaults
+compound it: smart-mode sampling (an untouched screen adds **no** frames at all), one frame per
+five seconds at most, a terse persona, and `read_file` capped at 32 KB. The trace's 💰 cards show the per-response spend; the turn's
 roll-up appears in the trace list.
 
 Gemini-side note: Gemini Live cannot currently power the *transcription* half (no streaming

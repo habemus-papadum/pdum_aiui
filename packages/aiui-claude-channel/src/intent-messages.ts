@@ -55,12 +55,36 @@ export interface LoweredPromptMessage {
 export interface SpeechMessage {
   kind: "speech";
   threadId: string;
-  /** A per-thread clip id (`ack_N` / the model `responseId`), for the client player. */
+  /** A per-thread clip/stream id (`ack_N` / `lint_N` / `oracle_N`), for the client player. */
   id: string;
-  /** Container MIME of the clip (`audio/mpeg` for TTS acks, `audio/wav` for voice). */
+  /**
+   * MIME of the payload. Whole clips (TTS acks): a container (`audio/mpeg`).
+   * Streamed reply chunks: raw `audio/pcm;rate=24000` — `seq` is present and
+   * the client schedules each chunk for gapless playback as it arrives.
+   */
   mime: string;
   /** Base64-encoded audio bytes. */
   data: string;
+  /**
+   * Present ⇒ this is one CHUNK of a streamed reply (0-based, in order,
+   * sharing `id` with its siblings). Absent ⇒ a whole clip, played as before.
+   * Streaming playback is the contract for model replies (whole-clip
+   * buffering retired 2026-07-19 — it delayed the first audible byte by the
+   * entire reply's generation time).
+   */
+  seq?: number;
   /** The spoken text, when known (the widget shows it; the trace records it). */
   label?: string;
+}
+
+/**
+ * Stop playing a streamed reply NOW — the server-side barge-in echo (Gemini's
+ * own VAD interruption; anything the client did not itself initiate). Chunks
+ * already forwarded cannot be un-sent; this tells the player to drop what it
+ * has scheduled for `id` and play nothing further of it.
+ */
+export interface SpeechCancelMessage {
+  kind: "speech-cancel";
+  threadId: string;
+  id: string;
 }

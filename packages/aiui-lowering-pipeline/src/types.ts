@@ -496,16 +496,37 @@ export type IntentEvent =
    * gloss (`"src/x.ts — 4.1KB"` / an error string), never the content (which
    * lives in the trace stage's data). Compiler-skipped like its request.
    */
-  | { at: number; type: "linter-tool-result"; tool: string; ok: boolean; summary: string };
+  | { at: number; type: "linter-tool-result"; tool: string; ok: boolean; summary: string }
+  /**
+   * A lint turn completed: the model finished replying to a `lint now` (the
+   * linter's one turn trigger since the overhear retirement, 2026-07-19) and
+   * the floor is free. Purely informational — the client's pulse settles on
+   * it; the linter STAYS ON (talk reopens the window, the button lints
+   * again). Compiler-skipped like every `linter-*` kind. `segment` anchors
+   * the turn it completed, when known.
+   */
+  | { at: number; type: "linter-turn-complete"; segment?: number }
+  /**
+   * The ORACLE's record of what it heard — the vendor's own transcription of
+   * the human's speech while the oracle journey is on (§8 decision 6:
+   * model-emitted, model-dependent, a RECORD artifact). NEVER prompt text —
+   * the compiler skips it like every advisory kind; while the oracle is on,
+   * prompt building is paused and the matching talk segments resolve empty.
+   */
+  | { at: number; type: "oracle-heard"; text: string }
+  /**
+   * The ORACLE's reply transcript — what it spoke back (the other direction
+   * of the §8-6 record). Rendered as a chip; never composed.
+   */
+  | { at: number; type: "oracle-said"; text: string }
+  /** The oracle asked to use a tool — the request half (mirrors `linter-tool-call`). */
+  | { at: number; type: "oracle-tool-call"; tool: string; args: Record<string, unknown> }
+  /** The tool's answer to an `oracle-tool-call` (mirrors `linter-tool-result`). */
+  | { at: number; type: "oracle-tool-result"; tool: string; ok: boolean; summary: string };
 
-/**
- * How long the linter's turn-end waits for a segment's transcript-final before
- * proceeding without it — the one load-bearing timing constant shared by the
- * channel's linter sidecar (the authority) and the intent client's mirrored
- * pulse dot. Lives here, beside the `linter-*` event vocabulary, so both sides
- * import one value instead of hand-copying it.
- */
-export const LINTER_TRANSCRIPT_WAIT_MS = 2500;
+// (LINTER_TRANSCRIPT_WAIT_MS lived here until the overhear retirement,
+// 2026-07-19: the linter is converse-only — no automatic turn-end, so no
+// transcript wait on either side of the wire.)
 
 // ── the composed IR: composeIntent's output (folded from the stream above) ────
 //

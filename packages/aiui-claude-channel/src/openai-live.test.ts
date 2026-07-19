@@ -103,7 +103,7 @@ describe("openOpenAiLiveSession", () => {
     expect(up.sent.filter((m) => m.type === "response.create").length).toBe(before);
   });
 
-  it("surfaces the reply audio, reply transcript, and usage", () => {
+  it("STREAMS reply audio per delta; the transcript and usage land at response.done", () => {
     const up = fakeUpstream();
     const { replyTranscripts, replyAudio, usages } = collect(up);
     up.open();
@@ -113,6 +113,10 @@ describe("openOpenAiLiveSession", () => {
       response_id: "resp_1",
       delta: b64([1, 2, 3, 4]),
     });
+    // The delta streamed IMMEDIATELY — raw PCM, no WAV, no response.done wait
+    // (whole-clip buffering retired 2026-07-19).
+    expect(replyAudio).toEqual([{ mime: "audio/pcm;rate=24000" }]);
+    expect(replyTranscripts).toEqual([]);
     up.emit({
       type: "response.output_audio_transcript.done",
       response_id: "resp_1",
@@ -125,7 +129,6 @@ describe("openOpenAiLiveSession", () => {
         usage: { input_tokens: 100, output_tokens: 40, input_token_details: { audio_tokens: 50 } },
       },
     });
-    expect(replyAudio).toEqual([{ mime: "audio/wav" }]);
     expect(replyTranscripts).toEqual(["clear so far"]);
     expect(usages).toEqual([{ provider: "openai" }]);
   });
@@ -224,6 +227,140 @@ describe("openOpenAiLiveSession (linter mode)", () => {
     up.emit({ type: "session.updated" });
     session.cancelActiveResponse();
     expect(up.sent.at(-1)).toEqual({ type: "response.cancel" });
+  });
+});
+
+// ── turn-complete: the converse after-reply signal ───────────────────────────
+
+function collectTurns(up: FakeUpstream) {
+  let turnsComplete = 0;
+  let lastRespond: ((result: string) => void) | undefined;
+  const cb: LiveSessionCallbacks = {
+    onReplyTranscript: () => {},
+    onReplyAudio: () => {},
+    onInterrupted: () => {},
+    onUsage: () => {},
+    onError: () => {},
+    onToolCall: (call) => {
+      lastRespond = call.respond;
+    },
+    onTurnComplete: () => {
+      turnsComplete += 1;
+    },
+  };
+  openOpenAiLiveSession(
+    { apiKey: "k", model: () => "gpt-realtime-2", socketFactory: up.factory },
+    cb,
+  );
+  return { turns: () => turnsComplete, respond: (r: string) => lastRespond?.(r) };
+}
+
+describe("onTurnComplete (the converse after-reply signal)", () => {
+  it("fires at response.done with no function_call in the output", () => {
+    const up = fakeUpstream();
+    const { turns } = collectTurns(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    up.emit({ type: "response.done", response: { id: "r1" } });
+    expect(turns()).toBe(1);
+  });
+
+  it("a tool-call turn is NOT complete — only the resumed response's done fires it", () => {
+    const up = fakeUpstream();
+    const { turns, respond } = collectTurns(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    up.emit({
+      type: "response.done",
+      response: {
+        id: "r1",
+        output: [
+          {
+            type: "function_call",
+            name: "read_file",
+            call_id: "c1",
+            arguments: JSON.stringify({ path: "src/a.ts" }),
+          },
+        ],
+      },
+    });
+    expect(turns()).toBe(0); // the model is about to resume — floor not free
+    respond("const a = 1;");
+    up.emit({ type: "response.done", response: { id: "r2" } });
+    expect(turns()).toBe(1);
+  });
+});
+
+// ── oracle mode: server VAD + vendor input transcription ─────────────────────
+
+describe("oracle mode (serverVad + inputTranscriptionModel)", () => {
+  function openOracle(up: FakeUpstream) {
+    const heard: string[] = [];
+    const cb: LiveSessionCallbacks = {
+      onReplyTranscript: () => {},
+      onReplyAudio: () => {},
+      onInterrupted: () => {},
+      onUsage: () => {},
+      onError: () => {},
+      onInputTranscript: (text) => heard.push(text),
+    };
+    const session = openOpenAiLiveSession(
+      {
+        apiKey: "k",
+        model: () => "gpt-realtime-2",
+        serverVad: true,
+        inputTranscriptionModel: "gpt-4o-mini-transcribe",
+        instructions: "oracle persona",
+        socketFactory: up.factory,
+      },
+      cb,
+    );
+    return { session, heard };
+  }
+
+  it("configures server_vad turn detection AND vendor input transcription", () => {
+    const up = fakeUpstream();
+    openOracle(up);
+    up.open();
+    expect(up.sent[0]).toMatchObject({
+      type: "session.update",
+      session: {
+        instructions: "oracle persona",
+        audio: {
+          input: {
+            turn_detection: { type: "server_vad" },
+            transcription: { model: "gpt-4o-mini-transcribe" },
+          },
+        },
+      },
+    });
+  });
+
+  it("activityEnd never manual-commits under server VAD (the vendor owns the turn)", () => {
+    const up = fakeUpstream();
+    const { session } = openOracle(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    session.activityStart();
+    session.appendAudio(new Uint8Array(200 * 48)); // well over the manual floor
+    session.activityEnd();
+    expect(types(up)).toContain("input_audio_buffer.append");
+    expect(types(up)).not.toContain("input_audio_buffer.commit");
+    expect(types(up)).not.toContain("input_audio_buffer.clear");
+    expect(types(up)).not.toContain("response.create");
+  });
+
+  it("routes the vendor's input transcription to onInputTranscript", () => {
+    const up = fakeUpstream();
+    const { heard } = openOracle(up);
+    up.open();
+    up.emit({ type: "session.updated" });
+    up.emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "what does the fold do",
+    });
+    up.emit({ type: "conversation.item.input_audio_transcription.completed", transcript: "" });
+    expect(heard).toEqual(["what does the fold do"]); // empties dropped
   });
 });
 

@@ -16,7 +16,11 @@ import {
  * from the retired extension panel's turn.ts — model names on the surface,
  * shared tiers underneath).
  */
-export function panelIntentConfig(sttName: string, linterName?: string): IntentPipelineConfig {
+export function panelIntentConfig(
+  sttName: string,
+  linterName?: string,
+  oracleName?: string,
+): IntentPipelineConfig {
   const base =
     sttName === "scribe-v2"
       ? { ...expandTier("premium"), transcriber: "elevenlabs" as const }
@@ -36,6 +40,10 @@ export function panelIntentConfig(sttName: string, linterName?: string): IntentP
     // (the silent-linter rule, shell/wire.ts).
     audioBack: "off" as const,
     ...(linterName !== undefined && linterName !== "off" ? { linter: linterName as never } : {}),
+    // The oracle rides the hello like the linter; the XOR with the linter is
+    // enforced upstream (the config-effects flip + the channel's resolve
+    // coercion), so both being non-off here cannot happen in practice.
+    ...(oracleName !== undefined && oracleName !== "off" ? { oracle: oracleName as never } : {}),
   };
 }
 

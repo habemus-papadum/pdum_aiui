@@ -62,8 +62,12 @@
  */
 import {
   type IntentEvent,
+  LINT_TURN_ACTIONS,
   LINTER_VENDORS,
   type LinterVendor,
+  type LintTurnAction,
+  ORACLE_VENDORS,
+  type OracleVendor,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   type ConditionData,
@@ -89,11 +93,17 @@ import {
   readEventBatch,
   silenceTrim,
 } from "./intent-stream-util";
-import { commitRealtimeSegment, onAudioChunk, openSttSession } from "./intent-stt";
+import {
+  commitRealtimeSegment,
+  onAudioChunk,
+  openSttSession,
+  resolveOracleAddressedSegment,
+} from "./intent-stt";
 import { createIntentTurn } from "./intent-turn";
 import { createLinterSidecar } from "./linter-sidecar";
 import type { SelectionEntry } from "./live-resolve";
 import type { LiveSession, LiveSessionCallbacks } from "./live-session";
+import { createOracleSidecar } from "./oracle-sidecar";
 import { promptContextSections } from "./prompt-context";
 import type { RealtimeSocketFactory } from "./realtime";
 
@@ -158,6 +168,11 @@ export interface IntentV1Options {
    */
   linterSessionFactory?: (callbacks: LiveSessionCallbacks) => LiveSession;
   /**
+   * Test seam override replacing the ORACLE's whole engine with a scripted
+   * {@link LiveSession} — same pattern as {@link linterSessionFactory}.
+   */
+  oracleSessionFactory?: (callbacks: LiveSessionCallbacks) => LiveSession;
+  /**
    * Test seam override for the post-send turn summarizer (see summarize.ts). Its
    * mere presence enables summaries even with no key; absent + keyless → no
    * summary (the gloss is a convenience, never load-bearing). Real seam is the
@@ -174,6 +189,19 @@ export interface IntentV1Options {
  */
 function isLinterVendor(value: unknown): value is LinterVendor {
   return (LINTER_VENDORS as readonly string[]).includes(value as string);
+}
+
+/**
+ * Revalidate an untrusted `lint` control value the same way — derived from
+ * {@link LINT_TURN_ACTIONS} (the converse strategy's button vocabulary).
+ */
+function isLintTurnAction(value: unknown): value is LintTurnAction {
+  return (LINT_TURN_ACTIONS as readonly string[]).includes(value as string);
+}
+
+/** Revalidate an untrusted `oracle` control value — derived from {@link ORACLE_VENDORS}. */
+function isOracleVendor(value: unknown): value is OracleVendor {
+  return (ORACLE_VENDORS as readonly string[]).includes(value as string);
 }
 
 /**
@@ -294,7 +322,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // (turn.events, turn.realtime, turn.sidecar, …) is always read back through
   // `turn`, never captured by value.
   const turn = createIntentTurn(ctx, trace, intent, composeOptions);
-  const { appendEvent, applyShotPaths, recomposeIfStale, push, recordCost, pushSpeech } = turn;
+  const { appendEvent, applyShotPaths, recomposeIfStale, push, recordCost } = turn;
+  const { pushSpeechChunk, pushSpeechCancel } = turn;
 
   // Pre-warm the prompt skeleton: the tab/source preamble is fully known at
   // thread-open, so assemble it once here — fin only concatenates the body and
@@ -340,7 +369,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         promptCwd,
         appendEvent: (event) => appendEvent(event as unknown as IntentEvent),
         push: (produced) => push(produced as unknown as IntentEvent[]),
-        pushSpeech,
+        pushSpeechChunk,
+        pushSpeechCancel,
         recordCost,
         onError: (message, data) =>
           pushError(ctx, {
@@ -375,6 +405,65 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   };
   buildLinter(intent.linter);
 
+  // ── the ORACLE sidecar (oracle != "off") — capture-bus Phase 2 ───────────────
+  // The second live consumer: a direct conversation the mic is ADDRESSED to.
+  // While it exists, audio routes here instead of the STT session (prompt
+  // building paused — the talk segments resolve empty) and the linter is
+  // structurally off (the journeys' XOR; resolve coerced it, the control
+  // handler enforces it live). Keyless → disabled LOUDLY, once.
+  const buildOracle = (vendor: OracleVendor): void => {
+    turn.oracle?.close();
+    turn.oracle = undefined;
+    if (vendor === "off") {
+      return;
+    }
+    if (
+      (apiKey !== undefined && apiKey !== "") ||
+      options.openaiLiveSocketFactory !== undefined ||
+      options.oracleSessionFactory !== undefined
+    ) {
+      turn.oracle = createOracleSidecar({
+        apiKey: apiKey ?? "",
+        ...(intent.oracleModel !== undefined ? { model: intent.oracleModel } : {}),
+        ...(intent.oracleInstructions !== undefined
+          ? { instructions: intent.oracleInstructions }
+          : {}),
+        ...(intent.realtimeVoice !== undefined ? { voice: intent.realtimeVoice } : {}),
+        promptCwd,
+        appendEvent: (event) => appendEvent(event as unknown as IntentEvent),
+        push: (produced) => push(produced as unknown as IntentEvent[]),
+        pushSpeechChunk,
+        pushSpeechCancel,
+        recordCost,
+        onError: (message, data) =>
+          pushError(ctx, {
+            source: "oracle",
+            message,
+            detail: OPENAI_KEY_HINT,
+            ...(data !== undefined ? { data } : {}),
+          }),
+        ...(trace !== undefined ? { record: (stage) => trace.record(stage) } : {}),
+        ...(options.openaiLiveSocketFactory !== undefined
+          ? { socketFactory: options.openaiLiveSocketFactory }
+          : {}),
+        ...(options.oracleSessionFactory !== undefined
+          ? { openSession: options.oracleSessionFactory }
+          : {}),
+      });
+    } else {
+      const message =
+        "oracle disabled — the channel process has no OPENAI_API_KEY; briefing capture still works";
+      push([{ at: Date.now(), type: "note", text: message }]);
+      pushError(ctx, { source: "oracle", message, detail: OPENAI_KEY_HINT });
+      trace?.record({
+        kind: "info",
+        label: stageLabel.oracleDisabled(),
+        data: { vendor, reason: "no key" },
+      });
+    }
+  };
+  buildOracle(intent.oracle);
+
   // ── realtime (streaming) transcription session ───────────────────────────────
   // Opened here, at processor construction (≈ thread-open), so the handshake +
   // session.update overlap the arm→talk gap. Deltas echo the preview as you
@@ -405,6 +494,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           selectionRegistry.set(marker, entry);
         }
         turn.sidecar?.onSelection(marker, entry, updated);
+        turn.oracle?.onSelection(marker, entry, updated);
       } else if (event.type === "code-selection") {
         const { at: _at, type: _type, marker, ...data } = event;
         trace?.record({ kind: "ir", label: stageLabel.codeSelection(), data: { ...data, marker } });
@@ -414,6 +504,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           selectionRegistry.set(marker, entry);
         }
         turn.sidecar?.onSelection(marker, entry, updated);
+        turn.oracle?.onSelection(marker, entry, updated);
       } else if (event.type === "app-selection-drop") {
         trace?.record({
           kind: "ir",
@@ -421,6 +512,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
         });
         turn.sidecar?.onSelectionDrop(event.marker);
+        turn.oracle?.onSelectionDrop(event.marker);
       } else if (event.type === "code-selection-drop") {
         trace?.record({
           kind: "ir",
@@ -428,20 +520,29 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           data: { marker: event.marker },
         });
         turn.sidecar?.onSelectionDrop(event.marker);
+        turn.oracle?.onSelectionDrop(event.marker);
       }
       // talk-end is the segment-commit boundary for the streaming transcriber
       // (PTT stays the contract — no `last` flag on the audio frames). The
       // client flushes talk-end immediately past its 60 ms debounce so the
       // upstream buffer commits promptly.
-      if (realtimeEnabled && event.type === "talk-end") {
+      if (event.type === "talk-end" && turn.oracle !== undefined) {
+        // The mic was ADDRESSED TO THE ORACLE for this segment: prompt
+        // building is paused. Resolve the segment EMPTY (the preview stops
+        // waiting; the compiler composes nothing) — the record of what was
+        // said rides the oracle's own transcripts (`oracle-heard`).
+        resolveOracleAddressedSegment(turn, trace, event.segment);
+      } else if (realtimeEnabled && event.type === "talk-end") {
         commitRealtimeSegment(turn, trace, intent, event.segment);
       }
-      // The linter observes the same boundaries (and a client-produced final —
-      // the mock transcriber — feeds its transcript wait like a server one).
+      // The live consumers observe talk boundaries and finals. The linter has
+      // no talk-end hook (converse-only, 2026-07-19: the window accumulates
+      // until the lint-now button); finals inject as silent context whenever
+      // they land (a client-produced final — the mock transcriber — rides the
+      // same path as a server one).
       if (event.type === "talk-start") {
         turn.sidecar?.onTalkStart(event.segment);
-      } else if (event.type === "talk-end") {
-        turn.sidecar?.onTalkEnd(event.segment);
+        // (no oracle hook: under server VAD the vendor owns barge-in itself)
       } else if (event.type === "transcript-final" && !event.correction) {
         turn.sidecar?.onTranscriptFinal(event.segment, event.text);
       }
@@ -502,18 +603,63 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         recomposeIfStale();
       }
       turn.sidecar?.onShot(id, conditioned, mime);
+      turn.oracle?.onShot(id, conditioned, mime);
     }
     // Any other attachment id has no place in the compose and no blob to save.
   };
 
-  // A mid-thread `control` chunk — reconfiguration, never turn content. Today's
-  // one control is the prompt linter: start / stop / swap the sidecar live
-  // (the client's linter select moving mid-turn). A no-op when the value is
-  // unchanged or unrecognized. `intent.linter` is updated too so a later
+  // A mid-thread `control` chunk — reconfiguration, never turn content. Two
+  // controls today: `linter` starts / stops / swaps the sidecar live (the
+  // client's linter select moving mid-turn), and `lint` drives the CONVERSE
+  // turn strategy's button pair — `now` ends the lint turn at the button (and
+  // arms the after-reply auto-off), `stop` cancels the in-flight reply. A
+  // no-op when the value is unchanged/unrecognized or (for `lint`) no sidecar
+  // is running. `intent.linter` is updated on a vendor swap so a later
   // `control` sees the current mode (and the trace reads honestly).
   const onControlChunk = (bytes: Uint8Array): void => {
     const decoded = decodeJson(bytes) as { control?: unknown; value?: unknown } | undefined;
-    if (decoded === undefined || decoded.control !== "linter") {
+    if (decoded === undefined) {
+      return;
+    }
+    if (decoded.control === "lint") {
+      const action = decoded.value;
+      if (!isLintTurnAction(action) || turn.sidecar === undefined) {
+        return;
+      }
+      trace?.record({
+        kind: "info",
+        label: stageLabel.linterControl(),
+        data: { control: "lint", value: action },
+      });
+      if (action === "now") {
+        turn.sidecar.lintNow();
+      } else {
+        turn.sidecar.lintStop();
+      }
+      return;
+    }
+    if (decoded.control === "oracle") {
+      const value = decoded.value;
+      if (!isOracleVendor(value) || value === intent.oracle) {
+        return;
+      }
+      trace?.record({
+        kind: "info",
+        label: stageLabel.oracleControl(),
+        data: { from: intent.oracle, to: value },
+      });
+      // The journeys' XOR, enforced live: turning the oracle on closes any
+      // running linter (the client's config layer already flipped its select;
+      // this is the server-side backstop).
+      if (value !== "off" && intent.linter !== "off") {
+        intent.linter = "off";
+        buildLinter("off");
+      }
+      intent.oracle = value;
+      buildOracle(value);
+      return;
+    }
+    if (decoded.control !== "linter") {
       return;
     }
     const value = decoded.value;
@@ -525,6 +671,11 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       label: stageLabel.linterControl(),
       data: { from: intent.linter, to: value },
     });
+    // The XOR's other direction: turning the linter on closes a running oracle.
+    if (value !== "off" && intent.oracle !== "off") {
+      intent.oracle = "off";
+      buildOracle("off");
+    }
     intent.linter = value;
     buildLinter(value);
   };
@@ -566,6 +717,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       turn.reset();
       turn.realtime?.close();
       turn.sidecar?.close();
+      turn.oracle?.close();
+      turn.flushSpeechTrace();
     },
   };
 }
