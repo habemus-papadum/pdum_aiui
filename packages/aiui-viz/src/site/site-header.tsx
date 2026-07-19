@@ -12,7 +12,7 @@
  * and behavior. Styling is the consumer's, via the .site-* class names — same
  * CSS-ownership seam as CellView.
  */
-import { For, Show } from "solid-js";
+import { createEffect, For, Show } from "solid-js";
 
 export interface SiteTab {
   /** Stable id, matched against the `active` prop. */
@@ -35,6 +35,19 @@ export interface SiteHeaderProps {
 }
 
 export function SiteHeader(props: SiteHeaderProps) {
+  // When the tab strip has to scroll horizontally (narrow screens), the active
+  // tab can sit off-screen — e.g. landing on the last notebook shows only the
+  // first tab. Nudge it into view on mount and whenever `active` changes. The
+  // lookup keys off the stable data-tab-id, not aria-current, so it's immune to
+  // attribute-flush ordering; on a wide screen where all tabs fit it's a no-op.
+  let tabsRef: HTMLElement | undefined;
+  createEffect(
+    () => props.active,
+    (id) => {
+      const el = tabsRef?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(id)}"]`);
+      el?.scrollIntoView({ inline: "center", block: "nearest" });
+    },
+  );
   return (
     <header class="site-header">
       <div class="site-header-inner">
@@ -46,12 +59,13 @@ export function SiteHeader(props: SiteHeaderProps) {
           <b>{props.brand.name}</b>
           {props.brand.suffix !== undefined ? <> · {props.brand.suffix}</> : null}
         </a>
-        <nav class="site-tabs" aria-label="Notebooks">
+        <nav class="site-tabs" aria-label="Notebooks" ref={tabsRef}>
           <For each={props.tabs}>
             {(t) => (
               <a
                 class={t.id === props.active ? "site-tab site-tab-active" : "site-tab"}
                 href={t.href}
+                data-tab-id={t.id}
                 aria-current={t.id === props.active ? "page" : undefined}
               >
                 <span class="site-tab-name">{t.name}</span>

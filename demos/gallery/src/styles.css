@@ -337,7 +337,11 @@ body {
 /* --- layout ----------------------------------------------------------------- */
 .layout {
   display: grid;
-  grid-template-columns: 540px 1fr;
+  /* Fluid, not `540px 1fr`: on a wide screen the sim track still resolves to
+   * 540px (identical to before), but on a narrow one it shrinks instead of
+   * forcing the whole page wider than the viewport. The phone breakpoint below
+   * drops it to one column outright. */
+  grid-template-columns: minmax(0, 540px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -647,4 +651,62 @@ body {
 }
 .dim {
   color: var(--text-dim);
+}
+
+/* ===========================================================================
+ * Phone layout — narrow-screen overrides only.
+ *
+ * The desktop rules above are the base and stay untouched; everything here is
+ * additive, inside max-width queries, so the wide-screen journal is unchanged
+ * (verified against a 1440px capture). Two buckets:
+ *   ≤860px — structural: the two-column figure/data split (`.layout`, shared by
+ *            morphogen + aztec) stacks. Matches seismos's own 860 breakpoint.
+ *   ≤680px — phone polish: declutter the header, stop packing charts two-up,
+ *            reclaim side padding, let the wide catalog table scroll.
+ * Target range is 360–414 CSS px (covers essentially every current phone).
+ * ======================================================================== */
+
+@media (max-width: 860px) {
+  /* Figure on top, data panels below — one column, full width. */
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  /* Header: drop the per-tab descriptor line and tighten spacing so the tab
+   * names stop wrapping to two dense rows and more of them stay in view. */
+  .site-tab-desc {
+    display: none;
+  }
+  .site-header-inner {
+    padding: 0 14px;
+    gap: 10px;
+  }
+  .site-tab {
+    padding: 6px 9px;
+  }
+  .site-tabs {
+    margin-left: 0;
+  }
+
+  /* Charts: side-by-side pairs are ~160px each on a phone — stack them so axis
+   * ticks and labels stop colliding. */
+  .chart-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Reclaim the generous desktop gutter on a ~390px screen. */
+  .app {
+    padding: 8px 14px 56px;
+  }
+
+  /* The regime catalog is genuinely wide; let it scroll rather than crush its
+   * columns. `.panel` clips otherwise. */
+  .regime-table {
+    min-width: 460px;
+  }
+  .regime-table-scroll {
+    overflow-x: auto;
+  }
 }

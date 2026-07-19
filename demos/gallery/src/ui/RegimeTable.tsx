@@ -31,30 +31,32 @@ export function RegimeTable() {
       </div>
       <CellView of={g().catalog} label="downloading regime catalog">
         {(regimes) => (
-          <table class="regime-table">
-            <thead>
-              <tr>
-                <th>regime</th>
-                <th>class</th>
-                <th>F</th>
-                <th>k</th>
-                <th>character</th>
-              </tr>
-            </thead>
-            <tbody>
-              <For each={regimes()}>
-                {(r) => (
-                  <tr class={active(r) ? "active" : undefined} onClick={() => jump(r)}>
-                    <td>{r.name}</td>
-                    <td class="mono">{r.pearson ?? "—"}</td>
-                    <td class="mono">{r.F.toFixed(4)}</td>
-                    <td class="mono">{r.k.toFixed(4)}</td>
-                    <td class="dim">{r.character}</td>
-                  </tr>
-                )}
-              </For>
-            </tbody>
-          </table>
+          <div class="regime-table-scroll">
+            <table class="regime-table">
+              <thead>
+                <tr>
+                  <th>regime</th>
+                  <th>class</th>
+                  <th>F</th>
+                  <th>k</th>
+                  <th>character</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={regimes()}>
+                  {(r) => (
+                    <tr class={active(r) ? "active" : undefined} onClick={() => jump(r)}>
+                      <td>{r.name}</td>
+                      <td class="mono">{r.pearson ?? "—"}</td>
+                      <td class="mono">{r.F.toFixed(4)}</td>
+                      <td class="mono">{r.k.toFixed(4)}</td>
+                      <td class="dim">{r.character}</td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
+          </div>
         )}
       </CellView>
     </div>

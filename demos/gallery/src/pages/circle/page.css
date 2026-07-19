@@ -390,3 +390,63 @@
   margin: 0;
   text-align: left;
 }
+
+/* --- phone: reflow the board instead of overlaying it ----------------------- */
+
+/* On a wide plate the readout floats over the right third and you draw in the
+ * space left of it — the intended desktop design. On a ~360px-wide phone that
+ * 262px panel buries the canvas. Below 600px the board stops being an overlay
+ * and becomes a vertical stack: guidance toggle, a square drawing stage, then
+ * the score and dock as normal blocks. No device JS is needed — the pencil
+ * surface re-fits to the stage's new size through its own ResizeObserver, the
+ * same reflow path a desktop window-resize already takes. */
+@media (max-width: 600px) {
+  .circle-board {
+    height: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    /* The board no longer fills one interactive screen — let the page scroll
+     * when a touch lands on the readout/dock; only the stage swallows drags. */
+    touch-action: pan-y;
+  }
+
+  /* Every panel that was absolutely positioned rejoins the normal flow. */
+  .circle-board .guide-toggle,
+  .circle-board .readout,
+  .circle-board .dock {
+    position: static;
+    inset: auto;
+    transform: none;
+    z-index: auto;
+  }
+
+  /* The drawing stage becomes a square figure with a real height, so the canvas
+   * that fills it (absolute inset:0) has a box to observe and draw into. */
+  .circle-board .stage {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: min(80vw, 360px);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  /* Toggle: full width, its segmented control stays centred. */
+  .circle-board .guide-toggle {
+    width: 100%;
+  }
+
+  /* Readout: a full-width card below the stage, not a fixed 262px overlay. */
+  .circle-board .readout {
+    width: auto;
+  }
+
+  /* Dock: let the two sliders + Clear wrap rather than overflow the row. */
+  .circle-board .dock {
+    flex-wrap: wrap;
+  }
+}
