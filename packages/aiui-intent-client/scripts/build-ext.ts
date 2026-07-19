@@ -84,7 +84,9 @@ function panelConfig(): InlineConfig {
     build: {
       outDir,
       emptyOutDir: false,
-      rollupOptions: { input: join(extRoot, "index.html") },
+      // Two HTML entries: the panel, and the one-time mic-grant page it opens
+      // in a real tab when a stock Chrome can't prompt (ext/mic-grant.ts).
+      rollupOptions: { input: [join(extRoot, "index.html"), join(extRoot, "mic.html")] },
       target: "chrome120",
       sourcemap: true,
       ...(watch ? { watch: {} } : {}),
@@ -192,8 +194,8 @@ if (!watch) {
       void (async () => {
         // A complete dist-ext or no reload: at startup the three builders
         // land at different times, and Chrome rejects a half-written dir.
-        const complete = ["index.html", "content.js", "sw.js", "manifest.json"].every((f) =>
-          existsSync(join(outDir, f)),
+        const complete = ["index.html", "mic.html", "content.js", "sw.js", "manifest.json"].every(
+          (f) => existsSync(join(outDir, f)),
         );
         if (!complete) {
           return;

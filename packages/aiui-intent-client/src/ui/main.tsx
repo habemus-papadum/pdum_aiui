@@ -40,9 +40,6 @@ import { installPanelKeys, type Narration } from "./shell";
 import { TargetTab } from "./target-tab";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
-const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined, {
-  ownedWrite: true,
-});
 const [toastLine, setToastLine] = createSignal<string | undefined>(undefined, {
   ownedWrite: true,
 });
@@ -58,8 +55,6 @@ const narration: Narration = {
   setStatusLine,
   toastLine,
   toast,
-  loweredPrompt,
-  setLoweredPrompt,
 };
 
 // The saved config base applies BEFORE the lanes read stt/linter.
@@ -125,7 +120,6 @@ async function boot(): Promise<{
         console.info("[intent-client]", line);
       },
       onToast: toast,
-      onLoweredPrompt: (prompt) => setLoweredPrompt(prompt),
     });
     // Assigned below; the dispatch hook closes over it (dispatches can only
     // happen after boot completes, by which time the bus is dialing).
@@ -168,7 +162,7 @@ async function boot(): Promise<{
       if (!recovered && state.phase === "connected") {
         recovered = true;
         if (channelLanes.recover(client)) {
-          setStatusLine("turn recovered from the mirror — re-grant with activate/⌘⇧B");
+          setStatusLine("turn recovered from the mirror — re-grant with activate/⌘B");
         }
       }
     });
@@ -185,7 +179,7 @@ async function boot(): Promise<{
       toast(
         marker !== undefined
           ? `selection from the editor added to the turn (${sel.sourceLoc ?? marker})`
-          : "selection from the editor ignored — arm the client first (activate/⌘⇧B)",
+          : "selection from the editor ignored — arm the client first (activate/⌘B)",
       );
     });
 
@@ -224,7 +218,13 @@ async function boot(): Promise<{
       });
       refreshPencil = () => pencilHost.refresh();
       pencilHost.connect();
-      setStatusLine(`driving ${cdp.pages().length} real tab(s) over CDP — no extension installed`);
+      // No baseline status (owner, 2026-07-19): the simulate strip's summary
+      // already names the tier and tab count; the status line stays empty
+      // until something worth saying happens (shell.tsx's Narration contract).
+      console.info(
+        "[intent-client]",
+        `driving ${cdp.pages().length} real tab(s) over CDP — no extension installed`,
+      );
       return { client, mode: "cdp", lanes: channelLanes, cdp, port };
     }
     return { client, mode: "channel", lanes: channelLanes, fake: bus, port };
@@ -293,7 +293,7 @@ function SimulateStrip() {
       <summary>{summary}</summary>
       <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px">
         <button type="button" data-testid="activate" onClick={activate}>
-          activate (the ⌘⇧B stand-in): grant + open
+          activate (the ⌘B stand-in): grant + open
         </button>
         <Show when={mode === "fake"}>
           <button
@@ -415,7 +415,7 @@ render(
       // drives real tabs; every other tier has none to identify.
       targetTab={
         cdp !== undefined && targeting !== undefined ? (
-          <TargetTab targeting={targeting} />
+          <TargetTab targeting={targeting} onPageEvent={(h) => cdp.transport.onPageEvent(h)} />
         ) : undefined
       }
       debug={{ open: mode === "fake", content: <SimulateStrip /> }}

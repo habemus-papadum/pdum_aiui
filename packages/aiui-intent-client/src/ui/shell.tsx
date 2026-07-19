@@ -1,7 +1,7 @@
 /**
  * shell.tsx — what every panel document shares, whatever is hosting it: the
- * narration signals (status · toast · the lowered-prompt echo), the panel's own
- * keyboard grammar, and the wire pane that renders the narration.
+ * narration signals (status · toast), the panel's own keyboard grammar, and
+ * the wire pane that renders the narration.
  *
  * Two entries use this: the plain page the channel serves (`ui/main.tsx`) and
  * the MV3 side panel (`ext/panel.tsx`). The keyboard grammar in particular MUST
@@ -18,14 +18,26 @@ import { keyVerdict } from "../keys";
 // concern — the plain page has real browser zoom — so the whole of it (buttons +
 // the uiScale→font-size apply effect) is now ext/side-panel-zoom.tsx.
 
-/** The panel's running commentary — one set of signals, shared by the panes. */
+/**
+ * The panel's running commentary — one set of signals, shared by the panes.
+ * Two surfaces with a contract (owner, 2026-07-19):
+ *
+ *  - the **toast** — red, bordered, self-dismissing: errors and misuse only.
+ *  - the **status line** — quiet, persistent, last-writer-wins: actionable
+ *    degradations ("no channel found — run `aiui claude`"), send feedback
+ *    ("wire: sent ✓"), and the live streams (💡 linter, 🔮 oracle, 🔊 speech).
+ *    EMPTY when there is nothing to say — the channel identity lives in the
+ *    header, not here (the "driving this window's tabs" baseline is gone).
+ *
+ * (The lowered-prompt echo pane is DELETED — the embedded trace viewer shows
+ * the sent turn with images and stages; a text-only duplicate below it earned
+ * nothing.)
+ */
 export interface Narration {
   statusLine: () => string;
   setStatusLine: (line: string) => void;
   toastLine: () => string | undefined;
   toast: (message: string) => void;
-  loweredPrompt: () => string | undefined;
-  setLoweredPrompt: (prompt: string | undefined) => void;
 }
 
 /**
@@ -99,7 +111,7 @@ export function installPanelKeys(config: {
   };
 }
 
-/** The wire's narration: status line · toast · the lowered-prompt echo. */
+/** The wire's narration: the red error toast, then the quiet status line. */
 export function WirePane(props: { narration: Narration }) {
   return (
     <div style="margin: 8px 12px; font: 12px system-ui; opacity: 0.85; max-width: 460px">
@@ -112,14 +124,6 @@ export function WirePane(props: { narration: Narration }) {
       </Show>
       <Show when={props.narration.statusLine() !== ""}>
         <div style="opacity: 0.7">{props.narration.statusLine()}</div>
-      </Show>
-      <Show when={props.narration.loweredPrompt()}>
-        {(prompt) => (
-          <details style="margin-top: 6px" open>
-            <summary>lowered prompt (the channel's echo of the sent turn)</summary>
-            <pre style="white-space: pre-wrap; font: 11px ui-monospace, monospace">{prompt()}</pre>
-          </details>
-        )}
       </Show>
     </div>
   );

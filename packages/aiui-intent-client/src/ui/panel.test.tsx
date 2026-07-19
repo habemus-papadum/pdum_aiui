@@ -233,8 +233,8 @@ describe("the panel is a projection", () => {
   });
 });
 
-describe("the converse (debug) lint buttons", () => {
-  it("render beside the pulse dot, enable off the phase, and fire their handlers", async () => {
+describe("the converse (debug) lint button", () => {
+  it("renders beside the pulse dot, enables off the phase, and fires its handler", async () => {
     const bus = fakeBus({ activeTab: 7 });
     const client = createIntentClient({ host: bus, lanes: noopLanes });
     client.setContext({ grantedTab: 7, connected: true });
@@ -247,39 +247,30 @@ describe("the converse (debug) lint buttons", () => {
     document.body.appendChild(root);
     const dispose = render(
       () => (
-        <Panel
-          client={client}
-          linterPulse={pulse}
-          lintControl={{ now: () => calls.push("now"), stop: () => calls.push("stop") }}
-        />
+        <Panel client={client} linterPulse={pulse} lintControl={{ now: () => calls.push("now") }} />
       ),
       root,
     );
     try {
       await settle();
       const now = root.querySelector<HTMLButtonElement>('[data-testid="lint-now"]');
-      const stop = root.querySelector<HTMLButtonElement>('[data-testid="lint-stop"]');
       expect(now).not.toBeNull();
-      expect(stop).not.toBeNull();
-      // Listening: a window is open to end; nothing in flight to cancel.
+      // No stop button (removed 2026-07-19): voice barge-in cancels a reply.
+      expect(root.querySelector('[data-testid="lint-stop"]')).toBeNull();
+      // Listening: a window is open to end.
       expect(now?.disabled).toBe(false);
-      expect(stop?.disabled).toBe(true);
       now?.click();
       expect(calls).toEqual(["now"]);
 
-      // Thinking (a reply composing): the pair flips.
+      // Thinking (a reply composing): nothing to end.
       setPulse({ phase: "thinking", detail: "waiting for the linter's note" });
       await settle();
       expect(now?.disabled).toBe(true);
-      expect(stop?.disabled).toBe(false);
-      stop?.click();
-      expect(calls).toEqual(["now", "stop"]);
 
-      // Off (the auto-off landed): both dead.
+      // Off (the auto-off landed): dead.
       setPulse({ phase: "off", detail: "linter off (the select)" });
       await settle();
       expect(now?.disabled).toBe(true);
-      expect(stop?.disabled).toBe(true);
     } finally {
       dispose();
       root.remove();

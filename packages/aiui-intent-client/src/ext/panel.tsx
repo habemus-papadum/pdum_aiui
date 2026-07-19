@@ -34,6 +34,7 @@ import {
 import { createToolsLink } from "../tools-link";
 import { PanelLayout } from "../ui/panel-layout";
 import { installPanelKeys, type Narration } from "../ui/shell";
+import { TargetTab } from "../ui/target-tab";
 import { heldStreamFor } from "./capture";
 import {
   discoverChannel,
@@ -44,15 +45,13 @@ import {
   rememberPort,
 } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
+import { superviseMicGrant } from "./mic-grant";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
 import { relayRequest } from "./relay";
 import { SidePanelZoom } from "./side-panel-zoom";
 
 const [statusLine, setStatusLine] = createSignal("", { ownedWrite: true });
 const [toastLine, setToastLine] = createSignal<string | undefined>(undefined, { ownedWrite: true });
-const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined, {
-  ownedWrite: true,
-});
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 /** The bus phase, for the channel header's dot (written by onChange in boot). */
 const [busPhase, setBusPhase] = createSignal<"connected" | "connecting" | "closed">("closed", {
@@ -62,8 +61,6 @@ const narration: Narration = {
   statusLine,
   setStatusLine,
   toastLine,
-  loweredPrompt,
-  setLoweredPrompt,
   toast: (message) => {
     setToastLine(message);
     clearTimeout(toastTimer);
@@ -93,6 +90,8 @@ async function boot(): Promise<{
   windowId: number;
   /** The discovered channel - also where the lowering traces live. */
   port?: number;
+  /** The bus, for the render tree (the target-tab chip reads its targeting). */
+  host: Awaited<ReturnType<typeof connectExtensionBus>>;
 }> {
   const { id: windowId } = await chrome.windows.getCurrent();
   if (windowId === undefined) {
@@ -102,6 +101,11 @@ async function boot(): Promise<{
     windowId,
     log: (message) => console.info("[ext]", message),
   });
+
+  // The activation gesture AS BOUND, for every human-facing hint — the bus
+  // reads it live from chrome.commands (users rebind; Chrome silently drops a
+  // claimed suggestion), so no chord name is ever hard-coded here.
+  const hint = host.capture.grantHint ?? "the aiui toolbar button";
 
   const port = await discoverChannel();
   const health = port !== undefined ? await probeChannel(port) : undefined;
@@ -113,7 +117,7 @@ async function boot(): Promise<{
       onBlip: (key) => blipSink?.(key),
     });
     (window as unknown as { __aiuiIntentClient?: unknown }).__aiuiIntentClient = { client, host };
-    return { client, windowId };
+    return { client, windowId, host };
   }
   await rememberPort(port);
 
@@ -136,7 +140,6 @@ async function boot(): Promise<{
       console.info("[intent-client]", line);
     },
     onToast: narration.toast,
-    onLoweredPrompt: (prompt) => setLoweredPrompt(prompt),
   });
   // Assigned below; the dispatch hook closes over it (dispatches can only
   // happen after boot completes, by which time the bus is dialing).
@@ -170,7 +173,7 @@ async function boot(): Promise<{
     port,
     tab: () => host.activeTab(),
     stream: () => heldStreamFor(host.activeTab()),
-    streamHint: () => "grant this tab with ⌘⇧B to start its video",
+    streamHint: () => `grant this tab with ${hint} to start its video`,
     label: `aiui intent — window ${windowId}`,
     // The 'ipad' status pill: connected remote pencil clients, live from the
     // relay session's status feed.
@@ -195,7 +198,7 @@ async function boot(): Promise<{
     if (!recovered && state.phase === "connected") {
       recovered = true;
       if (lanes.recover(client)) {
-        setStatusLine("turn recovered from the mirror — re-grant with ⌘⇧B");
+        setStatusLine(`turn recovered from the mirror — re-grant with ${hint}`);
       }
     }
   });
@@ -212,7 +215,7 @@ async function boot(): Promise<{
     narration.toast(
       marker !== undefined
         ? `selection from the editor added to the turn (${sel.sourceLoc ?? marker})`
-        : "selection from the editor ignored — arm the client first (⌘⇧B)",
+        : `selection from the editor ignored — arm the client first (${hint})`,
     );
   });
 
@@ -222,32 +225,59 @@ async function boot(): Promise<{
     lanes,
     sessionBus,
   };
-  setStatusLine(`channel :${port} — driving this window's tabs`);
-  return { client, lanes, windowId, port };
+  // No baseline status here (owner, 2026-07-19): the channel header already
+  // shows the port and the connection dot, so the status line stays EMPTY
+  // until something worth saying happens (shell.tsx's Narration contract).
+  console.info(
+    "[intent-client]",
+    `channel :${port} — this panel targets window ${windowId}'s tabs`,
+  );
+  return { client, lanes, windowId, port, host };
 }
 
 let blipSink: ((key: string) => void) | undefined;
 
-const { client, lanes, windowId, port } = await boot();
+const { client, lanes, windowId, port, host } = await boot();
+
+// The microphone, probed at every panel open (M9's deferred grant flow — see
+// mic-grant.ts). Silent where the mic works (flagged session browser; stock
+// Chrome after the one-time dance); where it doesn't, the status line says so
+// and the grant page auto-opens. Feeds the mic pill its first real supplier.
+void superviseMicGrant({
+  setGranted: (granted) => client.setContext({ micGranted: granted }),
+  onBlocked: (message) => {
+    setStatusLine(message);
+    narration.toast(message);
+  },
+});
 
 /**
- * The CDP tag's verdict, for the debugging pane: the tag arrives through this
- * browser's own debug endpoint (src/cdp/tagger.ts), so its presence PROVES
- * which channel drives this browser — and a mismatch with the bound port is
- * exactly the cross-browser confusion the tagger exists to expose.
+ * The CDP tag's verdict: the tag arrives through this browser's own debug
+ * endpoint (src/cdp/tagger.ts), so its presence PROVES which channel drives
+ * this browser. Console-only now (owner, 2026-07-19) — "no tag" is the
+ * PERMANENT normal state in an everyday Chrome (it is not the session
+ * browser), so a visible line read like an error. The one verdict worth
+ * surfacing is a MISMATCH — proof another channel drives this browser than
+ * the one the panel is bound to — and that goes to the red toast.
  */
-const [cdpVerdict, setCdpVerdict] = createSignal("CDP: no tag — no channel drives this browser", {
-  ownedWrite: true,
-});
 const applyTagVerdict = (tag: Awaited<ReturnType<typeof readCdpTag>>): void => {
   if (tag === undefined) {
+    console.info(
+      "[cdp]",
+      "no tag — no channel drives this browser over CDP (normal outside the session browser)",
+    );
     return;
   }
-  setCdpVerdict(
-    tag.port === port
-      ? `CDP: this browser ✓ (:${tag.port}, via ${tag.browserUrl})`
-      : `CDP: this browser is driven by :${tag.port} (panel bound to :${port ?? "none"})`,
-  );
+  if (tag.port === port) {
+    console.info(
+      "[cdp]",
+      `this browser ✓ — driven by the bound channel :${tag.port} (via ${tag.browserUrl})`,
+    );
+    return;
+  }
+  const message = `this browser is driven by channel :${tag.port}, but the panel is bound to :${port ?? "none"}`;
+  console.warn("[cdp]", message);
+  narration.toast(`CDP mismatch: ${message}`);
 };
 void readCdpTag().then(applyTagVerdict);
 onCdpTagChanged(applyTagVerdict); // the tagger may land after boot — track it
@@ -308,14 +338,20 @@ render(
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
         lanes={lanes}
         narration={narration}
-        // The extension drives its own tab; there is no separate CDP target to name.
-        debug={{
-          content: (
-            <div style="font: 11px ui-monospace, monospace; opacity: 0.8; padding: 2px 0 4px">
-              {cdpVerdict()}
-            </div>
-          ),
-        }}
+        // Which tab this panel is aimed at (reintroduced for this tier, owner
+        // 2026-07-19): the extension drives its own window's ACTIVE tab, and
+        // naming it here confirms the plumbing (targeting + navigation
+        // events) is live. Same chip as the standalone panel — pure display
+        // over the SurfaceTargeting seam, refreshed by the transport's
+        // navigation events.
+        targetTab={
+          <TargetTab
+            targeting={host.targeting}
+            onPageEvent={(h) => host.transport.onPageEvent(h)}
+          />
+        }
+        // No debug pane in this tier (the CDP verdict lives in the console;
+        // a mismatch toasts).
       />
     </>
   ),

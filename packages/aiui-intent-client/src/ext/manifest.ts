@@ -65,15 +65,16 @@ export const manifest = {
   // The activation gesture. A `chrome.commands` press is ALSO an extension
   // INVOCATION, which is what grants the tab `tabCapture` standing — so this
   // chord is not merely a shortcut, it is how the capture grant comes to exist
-  // (BEHAVIOR.md). Deliberately Shift+Command/Ctrl+B, NOT the retired frozen
-  // extension's plain Command/Ctrl+B, so the two never fight over one chord.
-  // Chrome refuses a suggestion already claimed elsewhere, leaving the command
-  // unbound for the user to bind at chrome://extensions/shortcuts — note
-  // Command/Ctrl+Shift+B is also the browser's bookmarks-bar toggle, so if it
-  // doesn't stick that is where to set it.
+  // (BEHAVIOR.md). Deliberately Command/Ctrl+Period ("."), chosen to dodge
+  // three collisions: the retired frozen extension's plain Command/Ctrl+B (so
+  // the two never fight over one chord), Gmail's Command/Ctrl+B bold, and the
+  // browser's own Command/Ctrl+Shift+B bookmarks-bar toggle (which Chrome
+  // reserves and won't hand out). Chrome names the period key "Period", not
+  // ".". If the suggestion still doesn't bind — another extension claimed it —
+  // set it by hand at chrome://extensions/shortcuts.
   commands: {
     [ACTIVATE_COMMAND]: {
-      suggested_key: { default: "Ctrl+Shift+B", mac: "Command+Shift+B" },
+      suggested_key: { default: "Ctrl+Period", mac: "Command+Period" },
       description: "aiui: arm and open a turn on this tab",
     },
   },

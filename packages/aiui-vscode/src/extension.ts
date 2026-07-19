@@ -303,7 +303,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (result.armed === false) {
           void vscode.window.showWarningMessage(
             `aiui: sent to ${live.label}, but the intent client is not armed — ` +
-              "it ignored the selection. Arm it (activate/⌘⇧B) and resend.",
+              "it ignored the selection. Arm it (activate/⌘.) and resend.",
           );
         } else {
           void vscode.window.showInformationMessage(`aiui: selection sent to ${live.label}.`);

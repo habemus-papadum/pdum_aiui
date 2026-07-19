@@ -139,7 +139,7 @@ Two things the plan did not anticipate, both structural:
   therefore re-injects on navigation and replays what it had asserted (ring, keys, ink mode).
 
 The live findings are pinned as tests, one row each, in the client's
-[PARITY.md](../../../packages/aiui-intent-client/PARITY.md) ("What Phase 3 taught us").
+[PARITY.md](./PARITY.md) ("What Phase 3 taught us").
 
 **Phase 4 — the MV3 shell (a week).** ✅ **Done.** `ExtensionBus`, the SW broker and the warm-shot
 capture path (both salvaged), content glue, a **static Vite build** (no CRXJS), a new extension
@@ -165,7 +165,7 @@ Three things the plan did not anticipate:
   channel-served page, cannot read its channel port off its own URL.
 
 The live findings are pinned, one row each, under "What Phase 4 taught us" in
-[PARITY.md](../../../packages/aiui-intent-client/PARITY.md).
+[PARITY.md](./PARITY.md).
 
 **Phase 5 — parity gate.** Walk [04](./04-parity-inventory.md) row by row: every row
 implemented, consciously diverged (extend the §13.6 ledger), or consciously dropped (say so).

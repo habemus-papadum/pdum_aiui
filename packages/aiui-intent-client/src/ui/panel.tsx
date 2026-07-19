@@ -56,7 +56,7 @@ export interface PanelProps {
   micLevel?: () => number;
   /** The lint lifecycle (lanes.linterPulse) — the pulse dot by the linter select. */
   linterPulse?: () => LinterPulseView;
-  /** The converse (debug) button pair (lanes.lintNow / lanes.lintStop). */
+  /** The converse (debug) lint-now button (lanes.lintNow). */
   lintControl?: LintControlHandlers;
 }
 

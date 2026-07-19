@@ -22,7 +22,7 @@ import type { IntentClient } from "../client";
 import type { ChannelLanes } from "../lanes";
 import { CHANNEL_HEADER_STYLES, type ChannelEntry, ChannelHeader } from "./channel-header";
 import { Panel } from "./panel";
-import { PANES_STYLES, TracePane } from "./panes";
+import { PANES_STYLES } from "./panes";
 import { type Narration, WirePane } from "./shell";
 import { TARGET_TAB_STYLES } from "./target-tab";
 import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
@@ -57,7 +57,10 @@ export interface PanelLayoutProps {
   narration: Narration;
   /** The CDP tier's target-tab strip; absent in every other tier. */
   targetTab?: JSX.Element;
-  /** The debugging pane's shell-specific content and whether it starts open. */
+  /** The debugging pane's shell-specific content and whether it starts open.
+   * No content, no pane (owner, 2026-07-19): the extension passes none now —
+   * its CDP verdict moved to the console (toast on mismatch) — so only the
+   * plain page's simulate strip still renders here. */
   debug?: { open?: boolean; content?: JSX.Element };
 }
 
@@ -65,7 +68,11 @@ export interface PanelLayoutProps {
  * The panel's render tree. Emits its own `<style>`, so an entry renders exactly
  * `<PanelLayout … />` and nothing else. The decided order (owner, 2026-07-14):
  * channel first, then the target tab (CDP only), the panel (bar + pills), the
- * turn preview, the traces, and last the debugging surfaces that will go.
+ * turn preview, the traces, and last the narration. (The debugging surfaces
+ * this order clause promised would go ARE mostly gone, 2026-07-19: the raw
+ * event list and the lowered-prompt echo are deleted — the rich trace pane
+ * carries both jobs — and the debug pane renders only when a shell still has
+ * content for it, i.e. the plain page's simulate strip.)
  */
 export function PanelLayout(props: PanelLayoutProps): JSX.Element {
   return (
@@ -83,11 +90,7 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
         registerBlipSink={props.registerBlipSink}
         micLevel={props.micLevel}
         linterPulse={props.lanes !== undefined ? props.lanes.linterPulse : undefined}
-        lintControl={
-          props.lanes !== undefined
-            ? { now: props.lanes.lintNow, stop: props.lanes.lintStop }
-            : undefined
-        }
+        lintControl={props.lanes !== undefined ? { now: props.lanes.lintNow } : undefined}
       />
       <Show when={props.lanes} keyed>
         {(lanes) => <TurnPreview lanes={lanes} />}
@@ -95,18 +98,17 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
       <Show when={props.lanes !== undefined && props.port !== undefined}>
         <RichTracePane baseUrl={`http://127.0.0.1:${props.port}`} />
       </Show>
-      <details
-        class="aiui-pane"
-        data-testid="extension-debugging"
-        open={props.debug?.open}
-        style="opacity: 0.85"
-      >
-        <summary>extension debugging</summary>
-        {props.debug?.content}
-        <Show when={props.lanes} keyed>
-          {(lanes) => <TracePane lanes={lanes} />}
-        </Show>
-      </details>
+      <Show when={props.debug?.content !== undefined}>
+        <details
+          class="aiui-pane"
+          data-testid="extension-debugging"
+          open={props.debug?.open}
+          style="opacity: 0.85"
+        >
+          <summary>debugging</summary>
+          {props.debug?.content}
+        </details>
+      </Show>
       <WirePane narration={props.narration} />
     </>
   );

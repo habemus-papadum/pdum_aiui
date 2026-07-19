@@ -12,7 +12,7 @@ and the capture/transport runtime that backs both, see the package overview:
 ::: warning 🚧 This page is a stub
 The browser extension deserves a real guide and does not have one yet. The sections below are
 placeholders: the behavior they name is real — it's the decided contract in the package's
-`BEHAVIOR.md` and `PARITY.md` — but the prose here still needs to be written.
+`BEHAVIOR.md` (the parity ledger is retired to `archive/intent-client/PARITY.md`) — but the prose here still needs to be written.
 **[Installing](#installing) at the bottom is complete and current** — that part you can rely on
 today.
 :::
@@ -24,7 +24,7 @@ shares one mode engine with the plain-page host.
 
 ## Activating a tab
 
-_TODO._ The `Cmd/Ctrl+Shift+B` chord both opens the panel and **invokes** the tab, which is what
+_TODO._ The `Cmd/Ctrl+.` chord both opens the panel and **invokes** the tab, which is what
 grants `tabCapture` standing — it is not merely a shortcut. What happens when the chord is already
 claimed by another extension.
 
@@ -45,7 +45,7 @@ the panel), the mic worklet, and how frames and audio reach the
 ### It's already loaded in the session browser
 
 With the browser attached (the default), `aiui claude` loads the extension into the shared
-**session browser** for you, over CDP — there is nothing to install. Press `Cmd/Ctrl+Shift+B` on any
+**session browser** for you, over CDP — there is nothing to install. Press `Cmd/Ctrl+.` on any
 tab to arm a turn and open the panel. This is the primary path; the download below is only for running
 the panel in your **everyday** Chrome.
 
@@ -59,9 +59,15 @@ Web Store — so a release build is loaded **unpacked**:
 2. Unzip it — you get an `aiui-chrome-<version>/` folder with `manifest.json` at its root.
 3. Open `chrome://extensions`, turn on **Developer mode** (top-right), click **Load unpacked**, and
    select that folder.
-4. Press `Cmd/Ctrl+Shift+B` on a tab to open the panel. If the shortcut didn't bind — another
-   extension already claimed it, or the browser kept it for its bookmarks-bar toggle — set it at
-   `chrome://extensions/shortcuts`.
+4. Press `Cmd/Ctrl+.` on a tab to open the panel. If the shortcut didn't bind — another
+   extension already claimed it — set it at `chrome://extensions/shortcuts`.
+
+**The microphone needs a one-time grant in your own Chrome.** A side panel cannot show Chrome's
+mic permission prompt, so on first open the panel probes the mic and — when it's blocked — opens
+a small extension page that asks in its place. Click **Enable microphone**, answer the prompt,
+and the grant sticks to the extension for good; the open panel picks it up live. (The session
+browser never needs this: it is launched with a media auto-accept flag. Screenshots need no grant
+in either browser — tab capture rides the `Cmd/Ctrl+.` invocation itself.)
 
 The extension id is fixed (`cdpbfpcelmifhagikjlfpgfipggcmdeg`), so it's stable across reloads and
 machines. Developer-mode extensions don't auto-update; reinstall from a newer release to upgrade.

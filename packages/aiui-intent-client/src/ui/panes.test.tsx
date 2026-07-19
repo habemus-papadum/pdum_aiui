@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 /**
- * panes.test.tsx — the preview's and trace's live behaviors, each a bug shape:
- *  - the trace count that sat at zero on a live turn (reads must go through
- *    the cursor);
+ * panes.test.tsx — the turn preview's live behaviors, each a bug shape:
  *  - the preview's revision flash (appends never animate, rewrites diff);
  *  - the heat row (a final carrying logprobs re-keys its row — the retired
  *    overlay's live lesson: without the `:w` key suffix the plain row survives
@@ -17,7 +15,6 @@ import { render } from "@solidjs/web";
 import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ChannelLanes } from "../lanes";
-import { TracePane } from "./panes";
 import { TurnPreview } from "./turn-preview";
 
 let dispose: (() => void) | undefined;
@@ -191,33 +188,5 @@ describe("TurnPreview — the accumulator's live behaviors", () => {
     (root.querySelector("[data-testid=shot-chip] .aiui-tp-x") as HTMLButtonElement)?.click();
     (root.querySelector("[data-testid=selection-chip] .aiui-tp-x") as HTMLButtonElement)?.click();
     expect(dropped).toEqual(["shot:shot_1", "sel:sel_1"]);
-  });
-});
-
-describe("TracePane", () => {
-  it("counts events as they arrive (every read goes through the cursor)", () => {
-    const events: Array<{ type: string; at: number }> = [];
-    const [rev, setRev] = createSignal(0);
-    const lanes = {
-      eventsRev: rev,
-      engine: { events },
-    } as unknown as ChannelLanes;
-
-    const root = document.createElement("div");
-    document.body.append(root);
-    dispose = render(() => <TracePane lanes={lanes} />, root);
-
-    expect(root.textContent).toContain("trace — 0 events");
-
-    // The wire pushes an event and bumps the cursor — exactly what lanes.ts does.
-    events.push({ type: "thread-open", at: 0 });
-    setRev((n) => n + 1);
-    flush();
-    expect(root.textContent).toContain("trace — 1 event");
-
-    events.push({ type: "shot", at: 1 });
-    setRev((n) => n + 1);
-    flush();
-    expect(root.textContent).toContain("trace — 2 events");
   });
 });

@@ -1,5 +1,5 @@
 /**
- * config.ts — the standing config surface (PARITY.md "kept getting lost"
+ * config.ts — the standing config surface (the parity ledger's "kept getting lost"
  * list). Values, bounds, and options carried over verbatim from the retired
  * extension panel's store (git history: aiui-extension); the lanes READ them
  * live — lanes.ts binds the hello expansion, the sampler cadence, and the

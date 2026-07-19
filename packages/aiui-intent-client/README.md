@@ -68,7 +68,7 @@ pnpm -C packages/aiui-intent-client ext   # build:ext, then load into the sessio
 That is `build:ext` (Vite for the panel, esbuild for the content scripts and the worker — no
 CRXJS, ever) followed by `load:ext`, which is "Load unpacked" without the human: CDP's
 `Extensions.loadUnpacked` against the running session browser (a launch picks up whatever
-bundle exists — no build-on-launch). Then **⌘⇧B** on the tab you want to drive — the chord and
+bundle exists — no build-on-launch). Then **⌘.** on the tab you want to drive — the chord and
 the toolbar button are extension *invocations*, and an invocation is what mints the
 `tabCapture` grant, so they are what opens the panel and the turn together.
 
@@ -80,9 +80,26 @@ the salvaged SW broker and warm-shot capture path, a static build, a new extensi
 `aiui2.*` storage). All three hosts are verified live.
 
 The launcher is flipped (2026-07-14): `aiui claude` / `aiui browser` auto-load this client and
-nothing else; the frozen extension is retired to safety-net status. Left: the **parity gate** —
-walk the [inventory](../../docs/proposals/intent-client/04-parity-inventory.md) row by row
-against [PARITY.md](./PARITY.md) and settle the open `DECIDE`s.
+nothing else; the frozen extension is retired to safety-net status. The **parity gate is
+closed** (2026-07-19): the ledger that walked the port row by row is retired to
+[archive/intent-client/PARITY.md](../../archive/intent-client/PARITY.md); the living
+interaction contract is [BEHAVIOR.md](./BEHAVIOR.md).
+
+## Open items (carried from the parity ledger at its retirement, 2026-07-19)
+
+- **engine choice + `pendingEngine`** — control + deferred binding at thread-close.
+- **`rescanTick`** — internal, lands with discovery.
+- **advanced raw-JSON config panel** — DECIDE (default: defer; the agent's `set_config` covers it).
+- **capture pre-warm on arm** — DECIDE (default: keep the turn-scoped warm; moot in the CDP tier).
+- **page-tools activation on tab change, CDP tier** — needs a tab-identity mapping DECIDE
+  (the extension side landed).
+- **cross-TIER coexistence** — the CDP page client and the extension can drive the SAME tab at
+  once (seen live: stacked rings). Never-both-armed covers only the frozen client. DECIDE + wire.
+- **lane-shaped tests still open**: PCM chase, ElevenLabs include-list, double-shot on fast
+  S-drag, reconnect check, stale-ring boot broadcast, replayed-armed GC.
+- **carried old-client gaps**: `c` hint gated on mode not has-strokes; tweak-ring appearance
+  unconfirmed live; stt tier mappings unverified live.
+- **`logLevel` consumer** — pending with the console channel.
 
 Coexistence policy (decided, and now enforced): the two clients are separate extensions with
 separate ids and separate storage (`aiui2.*`), and **never both armed** — the content script

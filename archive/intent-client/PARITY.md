@@ -1,5 +1,12 @@
 # Parity ledger — nothing gets lost silently
 
+> **RETIRED 2026-07-19.** This ledger tracked the port from the retired overlay/extension
+> against [04-parity-inventory.md](./04-parity-inventory.md) row by row. The transition is
+> complete and the ledger is frozen here as history — statuses are as of retirement day and
+> are no longer maintained. The handful of rows still open then are carried in the package
+> README's "Open items" section; the living interaction contract is the package's
+> [BEHAVIOR.md](../../packages/aiui-intent-client/BEHAVIOR.md).
+
 Working checklist against
 [docs/proposals/intent-client/04-parity-inventory.md](../../docs/proposals/intent-client/04-parity-inventory.md)
 (the spec; it exists nowhere else). **Every row here ends in exactly one state: `done` (with
@@ -16,7 +23,7 @@ The interaction contract itself (how these features behave) is [BEHAVIOR.md](./B
 | Row | Status | Where / when |
 | --- | --- | --- |
 | phase ladder disarmed·armed·turn·tweak; turn recovery via mirror | ✅ spec.ts (`phase`); mirror = lanes.ts sessionStorageMirror + recover() (replay → wire re-dials → machine re-opens; grant re-asked via activation) — verified live across a reload |
-| Activation (⌘⇧B in the extension): idempotent grant-and-open; resume from tweak; NEVER cancels | ✅ activation.ts `activationGesture` (an imperative-boundary helper, not a command) + tests |
+| Activation (⌘. in the extension): idempotent grant-and-open; resume from tweak; NEVER cancels | ✅ activation.ts `activationGesture` (an imperative-boundary helper, not a command) + tests |
 | tweak: cap toggles out; page keys pass through in tweak | ✅ spec.ts `tweak` (toggle), keyRouting claim releases in tweak |
 | send keeps armed (divergence 2) | ✅ spec.ts `send` + tests |
 | Esc ladder: help → tweak → turn-cancel → armed → disarmed (CONSCIOUS DEVIATION: the old client's Esc never disarmed; owner 2026-07-13 — step out of armed IS disarm) | ✅ escOrder, floorless ladder + tests |
@@ -78,7 +85,7 @@ them bind in P2:
 | Enabled DERIVED (engine canDispatch dry-run; spec.available for verbs/gates) | ✅ modal/engine.ts |
 | Stable cap labels (lit carries engagement; no relayout) | ✅ caps.ts + keys.ts hints |
 | Arm cap = armed status + toggle (gated on channel; mid-turn press = full abandon, no confirm) | ✅ spec.ts `arm` |
-| Status pills: channel · mic grant · REC (talk/muted) · stream · video · pencil · keys · iPad | ✅ panel.tsx — mic/iPad facts are context now, **real suppliers P2 (talk lane) / P2-paint** |
+| Status pills: channel · mic grant · REC (talk/muted) · stream · video · pencil · keys · iPad | ✅ panel.tsx — mic fact's real supplier is the MV3 startup probe (ext/mic-grant.ts, 2026-07-19); iPad fact **P2-paint** |
 
 ## Operations (inventory §2 — claims)
 
@@ -90,7 +97,7 @@ them bind in P2:
 | region drag ('a' — owner 2026-07-14; the old client's D-drag, D now means disarm): one-shot rubber band on the page → host-native crop (CDP `clip` / MV3 warm-stream canvas) → shot with the drag's rect + LOCATED COMPONENTS (the overlay's `locateComponents` — data-source-loc stamps; direct import in the content script, the evaluated page bundle in the CDP tier) | ✅ page overlays in both tiers + `grabRegion` on both hosts + lanes.test "arms the page, then a regionDrag event crops, composes, and uploads". Selection's key moved a → **p** (pull) |
 | page-tools ACTIVATION on tab change (the old tools-link: registration is the PAGE's own job — instrumented pages dial `/tools` directly; the client only contributes which tab is active, so the directory can re-route and disengage) | **P5 wiring** — the old `tools-link.ts` ports near-verbatim into the extension panel (real chrome tab ids); the CDP tier needs a tab-identity mapping DECIDE |
 | M10 warm-shot pixel path (36–48 ms) | ✅ ext/capture.ts — the old panel's measured code, salvaged near-verbatim behind `CaptureSource`: SW mints the stream id, the panel document consumes it, JPEG 0.85, one warm stream per turn, `firstFrame` guards the black first paint. The CDP tier gets its pixels straight from the protocol instead |
-| M9 panel-document mic (grant persistence) | P2 (plain page = stable origin, same property) |
+| M9 panel-document mic (grant persistence) | ✅ ext/mic-grant.ts (2026-07-19) — M9's deferred "options-page dance", built when the first non-flagged Chrome arrived: startup probe (query, then getUserMedia) is silent where the mic works; where the panel can't prompt it auto-opens mic.html, a real tab whose one-time grant persists for the origin, `PermissionStatus.onchange` flipping the open panel live. (Plain page = stable origin, same property, no dance needed) |
 | manual shots flash; sampled frames never | ✅ lanes.ts takeShot (flash AFTER grab) + pump sendFrame (never) — lanes.test rows |
 | standing mic/share between turns send NOTHING | ✅ structurally (talk per-turn exclude; sampling gated on turn) + P2 lane tests |
 
@@ -99,7 +106,7 @@ them bind in P2:
 **Done in the first P2 tranche** (lanes.ts, session.ts; harness rows in lanes.test.ts; verified
 live against a running channel — thread dialed, events flushed, cancel clean): Engine +
 composeIntent bound; createWire + openIntentThread (finalize on send, cancel otherwise;
-lowered-prompt echo + channel-error toasts); createTalk + SpeechPlayer composed (mic lives in
+lowered-prompt receipt narrated to the status line + channel-error toasts; the echo pane itself was deleted 2026-07-19 — the embedded trace viewer owns the sent turn); createTalk + SpeechPlayer composed (mic lives in
 the panel document — M9); the VideoSampler frame pump as the real videoSample applier; session
 bus + /health probe + port resolution (explicit → ?channel= → same-origin). **Remaining:**
 
@@ -119,7 +126,7 @@ needs no ?channel=).
 | FakeBus | ✅ |
 | CdpBus (real tabs, extension-free; refuse non-loopback CDP) | ✅ cdp/{protocol,page-script,page-bundle,cdp-bus}.ts + the sidecar's `/intent/cdp` bridge (cdp-proxy.ts) — **verified live**: ring · page keys · markup · shots on real tabs, including an https page, with no extension installed |
 | ExtensionBus + SW broker (copied) + content glue + static build + new identity + `aiui2.*` prefixes + never-both-armed policy | ✅ ext/{extension-bus,sw,content,content-main,capture,panel,channel,protocol,manifest}.ts + scripts/build-ext.ts — **verified live** in the session browser: the extension loads at its pinned id, the worker registers, the content script serves every capability on a real tab, the panel boots with no console errors, discovers the channel through the native host and connects |
-| activation shortcut via `chrome.commands` (in-page listener until then) | ✅ real: `aiui-intent-activate` (⌘⇧B) + the toolbar action, both landing in the WORKER (they are the invocations that mint the `tabCapture` grant), broadcast to the panel — with a parked press the panel pulls on boot, because a panel opened BY the gesture missed the broadcast |
+| activation shortcut via `chrome.commands` (in-page listener until then) | ✅ real: `aiui-intent-activate` (⌘., suggested; hints read the LIVE binding) + the toolbar action, both landing in the WORKER (they are the invocations that mint the `tabCapture` grant), broadcast to the panel — with a parked press the panel pulls on boot, because a panel opened BY the gesture missed the broadcast |
 
 ### What Phase 3 taught us (each row is a test)
 

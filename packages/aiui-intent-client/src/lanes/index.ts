@@ -114,8 +114,10 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
           if (m.kind === "error" && typeof m.message === "string") {
             toast(`${m.source ?? "channel"}: ${m.message}`);
           } else if (m.kind === "lowered-prompt" && typeof m.prompt === "string") {
-            config.onLoweredPrompt?.(m.prompt);
-            status("turn sent — lowered prompt received");
+            // The prompt itself is not surfaced here — the embedded trace
+            // viewer shows the sent turn with images and stages (the echo
+            // pane it used to feed is deleted, owner 2026-07-19).
+            status("turn sent — lowered prompt received (🔍 traces)");
           }
         },
       })) as never;
@@ -260,7 +262,6 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       pulse.lintNow();
       void wire.sendControl("lint", "now");
     },
-    lintStop: () => void wire.sendControl("lint", "stop"),
     eventsRev,
     threadEvents: () => {
       void eventsRev(); // subscribe (in-graph readers re-run per event)

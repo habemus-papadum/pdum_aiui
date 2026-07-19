@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>aiui — enable the microphone</title>
+    <style>
+      :root { color-scheme: dark light; }
+      body { margin: 0; font: 15px system-ui; display: grid; place-items: center;
+        min-height: 100vh; }
+      main { max-width: 34rem; padding: 2rem; text-align: center; }
+      h1 { font-size: 1.1rem; }
+      p { opacity: 0.75; line-height: 1.5; }
+      button { font: inherit; padding: 0.5rem 1.25rem; border-radius: 8px; cursor: pointer; }
+      #status { min-height: 1.5em; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Enable the microphone for aiui</h1>
+      <p>
+        The side panel can't show Chrome's microphone prompt, so this page asks in its place —
+        <strong>once</strong>. The grant sticks to the extension, and dictation works from then on.
+      </p>
+      <p id="status"></p>
+      <button id="enable" type="button">Enable microphone</button>
+      <button id="settings" type="button" hidden>Open microphone settings</button>
+    </main>
+    <script type="module" src="./mic-grant-page.ts"></script>
+  </body>
+</html>

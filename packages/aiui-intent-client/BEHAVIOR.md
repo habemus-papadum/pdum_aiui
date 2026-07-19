@@ -2,7 +2,9 @@
 
 The interaction contract, as decided with the owner (2026-07-13 review rounds on the detached
 page). Where this deviates from the old extension/overlay, the deviation is deliberate and
-noted. PARITY.md tracks feature coverage; this file records *how it behaves*. Every rule here
+noted. This file records *how it behaves* — the living interaction contract (the parity
+ledger that tracked feature coverage during the port is retired to
+`archive/intent-client/PARITY.md`). Every rule here
 is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 
 ## The machine
@@ -46,7 +48,7 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 
 ## Activation is not a key
 
-The browser-global activation shortcut (⌘⇧B under `chrome.commands` in the extension; a plain
+The browser-global activation shortcut (⌘. under `chrome.commands` in the extension; a plain
 listener on the detached page) is **not part of the modal keyboard system** and never appears
 as a cap's key hint. It is an imperative event from outside, handled by `activationGesture()`
 (src/activation.ts): mint the grant, then sequential idempotent dispatches — arm if disarmed
@@ -178,9 +180,9 @@ instructions, and voice stay the hello's — the select carries only the vendor.
 **The linter is on-demand — converse is its only turn strategy (owner, 2026-07-19; overhear
 retired).** There is no automatic pause-lint: while the linter is on it ACCUMULATES — your
 voice, shots, selections, and each segment's transcript (injected as silent context as it
-lands) ride one open vendor window across talk segments. The **"lint now"** / **"stop"**
-buttons beside the select (`{ control: "lint", value: "now" | "stop" }` on the mid-thread rail)
-are the whole turn interface:
+lands) ride one open vendor window across talk segments. The **"lint now"** button
+beside the select (`{ control: "lint", value: "now" }` on the mid-thread rail) is the whole
+turn interface:
 
 - **lint now** ends the vendor turn over everything accumulated — one comprehensive lint. It
   never waits for a pending STT final (the accepted race: a final landing moments later informs
@@ -188,10 +190,10 @@ are the whole turn interface:
   pulse settles to idle. **Stay-on**: the linter remains on — talk again and the window
   reopens; press again and it lints again. The select is the only off switch. Enabled while
   the pulse shows `listening`; a press with nothing accumulated is a no-op end to end.
-- **stop** cancels the in-flight reply (the button-shaped barge-in) — abort this lint, keep
-  accumulating. Enabled while the pulse shows `thinking`/`tool`/`stale`.
-- Voice barge-in (talking over a reply) also cancels it — a human talking wants to keep
-  briefing, not listen.
+- Voice barge-in (talking over a reply) cancels it — a human talking wants to keep
+  briefing, not listen. (The "stop" button that duplicated this was removed 2026-07-19:
+  barge-in covers the abort, and the select's `off` is the off switch. The channel still
+  honors `lint`/`stop` on the rail.)
 
 ## Continuity: navigations and tab switches
 
@@ -221,7 +223,7 @@ whether the grant is free (`CaptureSource.grantless`). MV3's `tabCapture` is inv
 its grant is a real fact the activation gesture mints, and the pixel acts stay dark until it
 does. The CDP tier's screenshots ask nobody, so there is nothing to mint: the grant simply *is*
 the tab in view. Consequence, and the bug it fixes (found live): arming from the BAR (`arm` →
-`turn`) must work exactly like ⌘⇧B. It did not — the bar mints nothing, so the capture acts stayed
+`turn`) must work exactly like the activation chord. It did not — the bar mints nothing, so the capture acts stayed
 disabled forever while the page acts, which follow the tab in view, worked fine.
 
 **The gate split (owner, 2026-07-14): the page transport follows the tab in view; pixels follow
@@ -234,8 +236,8 @@ tab, but shooting (or sampling) a tab you are not looking at would lie about wha
 the acts go dark until the gesture re-grants, while the warm stream stays held on the granted tab
 so returning to it costs nothing.
 
-**The ring has FOUR states, and the fourth is how the page says "⌘⇧B here" (owner, 2026-07-14 —
-no toast; the ring carries it).** Off · steady (armed) · breathing (turn) · **hollow**: armed,
+**The ring has FOUR states, and the fourth is how the page says "activate here" (owner,
+2026-07-14 — no toast; the ring carries it).** Off · steady (armed) · breathing (turn) · **hollow**: armed,
 but THIS tab's pixels need a grant. Hollow renders outline-only in the phase's tone, with the
 activation hint beside it. The hint text is discovered by the host — the MV3 bus reads the
 command's LIVE binding from `chrome.commands.getAll()` (users rebind it, and Chrome silently
@@ -318,7 +320,7 @@ detection: no `__AIUI__`, gray cap (and once on, always toggleable off).
 
 ## Status pills (permanent expert strip)
 
-`channel · mic · rec · stream · video · ink · keys · ring · page · ipad` — claim statuses (stream/video/
+`channel · mic · rec · stream · video · ink · keys · ring · sel · aiui · ipad` — claim statuses (stream/video/
 ink/keys: idle → pending → active → error) and world facts (channel connection, mic
 permission, iPad paint clients), stable labels, color = state. Internal detail deliberately
 kept visible.

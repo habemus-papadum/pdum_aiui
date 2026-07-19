@@ -157,6 +157,17 @@ export async function grabTabShot(opts?: {
   if (el === undefined || stream === undefined) {
     throw new Error("no capture stream held for this tab");
   }
+  // A REGION crop waits for fresh frames first: the page reports the drag only
+  // after its overlay's removal painted (page/surfaces.ts), but the warm
+  // stream can still be presenting an older frame that carries the area
+  // mode's purple wash — draw that and the tint is baked into the shot (found
+  // live 2026-07-19). Two presented frames outrun the capture pipeline's lag;
+  // timeout-guarded like firstFrame, so a stalled stream degrades to whatever
+  // pixels are there. Manual full shots skip this — no overlay to outwait, and
+  // the 36–48 ms budget (M10) stays intact.
+  if (region !== undefined) {
+    await freshFrame(el);
+  }
   // CSS px → stream px, through the LETTERBOX. The frame should be tab-sized
   // (holdTabStream constrains it), but when it is not — an unconstrained hold,
   // a zoom/resize since acquisition — Chrome aspect-fits the tab into the
@@ -230,6 +241,28 @@ function makeThumb(canvas: HTMLCanvasElement, maxPx?: number): string {
   thumbCanvas.height = Math.max(1, Math.round(canvas.height * scale));
   thumbCanvas.getContext("2d")?.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
   return thumbCanvas.toDataURL("image/jpeg", 0.6);
+}
+
+/** Resolve after the NEXT TWO presented frames — the "give me pixels newer
+ * than what the page just changed" wait (the region crop's overlay-wash
+ * guard above). Two, not one: the first frame presented after the report can
+ * still have been captured before the page's repaint. Timeout-guarded. */
+function freshFrame(el: HTMLVideoElement): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (): void => {
+      if (!done) {
+        done = true;
+        resolve();
+      }
+    };
+    if (typeof el.requestVideoFrameCallback === "function") {
+      el.requestVideoFrameCallback(() => el.requestVideoFrameCallback(() => finish()));
+      setTimeout(finish, 400);
+    } else {
+      setTimeout(finish, 100);
+    }
+  });
 }
 
 /** Resolve once a frame has actually been PRESENTED — `play()` alone can race a

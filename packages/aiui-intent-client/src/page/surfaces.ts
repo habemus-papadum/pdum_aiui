@@ -148,13 +148,19 @@ export function createRegionSurface(deps: {
       } catch {
         components = undefined;
       }
-      deps.report({
-        kind: "region",
+      // `takenAt` is the drag's moment; the report is deferred until the
+      // overlay's REMOVAL has painted (double rAF — the second callback runs
+      // after the frame without it). The capture crops a live frame, and a
+      // report racing the repaint bakes the purple wash + band into the shot
+      // (found live 2026-07-19). ext/capture.ts adds the stream-side half.
+      const report = {
+        kind: "region" as const,
         rect: r,
         viewport: { w: window.innerWidth, h: window.innerHeight },
         takenAt: Date.now(),
         ...(components !== undefined && components.length > 0 ? { components } : {}),
-      });
+      };
+      requestAnimationFrame(() => requestAnimationFrame(() => deps.report(report)));
     });
     // No private Escape listener (owner, 2026-07-16): area is a mode-engine
     // TOGGLE, and Escape unwinds it through the panel's escOrder — the in-turn

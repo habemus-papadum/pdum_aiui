@@ -312,7 +312,7 @@ export function createWire(deps: WireDeps): Wire {
     try {
       const ack = await thread.finish();
       if (ack.ok) {
-        setStatus("sent ✓ — check the session (🔍 shows the lowering trace)");
+        setStatus("sent ✓");
       } else {
         setStatus(`send failed: ${ack.error ?? "unknown error"}`);
         reportBadAck("send (fin)", ack);

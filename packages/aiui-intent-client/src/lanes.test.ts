@@ -92,7 +92,7 @@ interface Rig {
   lanes: ChannelLanes;
   thread: StubThread;
   toasts: string[];
-  lowered: string[];
+  statuses: string[];
   unbind: () => void;
 }
 
@@ -102,14 +102,14 @@ function makeRig(): Rig {
   const bus = fakeBus({ activeTab: 7 });
   const { thread, openThread } = stubThread();
   const toasts: string[] = [];
-  const lowered: string[] = [];
+  const statuses: string[] = [];
   const lanes = createChannelLanes({
     host: bus,
     port: () => 55555,
     tabMeta: async () => ({ url: "http://page.example/", title: "page" }),
     openThread,
     onToast: (m) => toasts.push(m),
-    onLoweredPrompt: (p) => lowered.push(p),
+    onStatus: (line) => statuses.push(line),
   });
   const client = createIntentClient({
     host: bus,
@@ -118,7 +118,7 @@ function makeRig(): Rig {
   });
   const unbind = lanes.bind(client);
   client.setContext({ connected: true });
-  rig = { client, bus, lanes, thread, toasts, lowered, unbind };
+  rig = { client, bus, lanes, thread, toasts, statuses, unbind };
   return rig;
 }
 
@@ -252,14 +252,16 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
     expect(r.client.state().phase).toBe("armed"); // turnClosed binding fired
   });
 
-  it("a lowered-prompt push reaches the page; channel errors reach the toast line", async () => {
+  it("a lowered-prompt push narrates to the status line (the echo pane is gone); channel errors reach the toast line", async () => {
     const r = makeRig();
     activationGesture(r.client, 7);
     r.client.dispatch("pencil");
     await settle(30);
     r.thread.serverPush?.({ kind: "lowered-prompt", prompt: "LOWERED" });
     r.thread.serverPush?.({ kind: "error", message: "no such model", source: "channel" });
-    expect(r.lowered).toEqual(["LOWERED"]);
+    // The prompt itself is not resurfaced — the trace viewer owns it; the
+    // status line just confirms the round trip.
+    expect(r.statuses).toContain("turn sent — lowered prompt received (🔍 traces)");
     expect(r.toasts).toContain("channel: no such model");
   });
 });
@@ -627,8 +629,8 @@ describe("the oracle — the journeys' XOR, the control rail, the hello", () => 
   });
 });
 
-describe("the converse (debug) lint buttons — the control rail + auto-off", () => {
-  it("lintNow / lintStop ride the open thread as `lint` control chunks", async () => {
+describe("the converse (debug) lint button — the control rail + auto-off", () => {
+  it("lintNow rides the open thread as a `lint` control chunk", async () => {
     const r = makeRig();
     try {
       linter.set("openai");
@@ -636,13 +638,9 @@ describe("the converse (debug) lint buttons — the control rail + auto-off", ()
       await settle(30);
       const before = r.thread.chunks.length;
       r.lanes.lintNow();
-      r.lanes.lintStop();
       await settle(30);
       const controls = r.thread.chunks.slice(before).filter((c) => c.kind === "chunk:control");
-      expect(controls.map((c) => c.payload)).toEqual([
-        { control: "lint", value: "now" },
-        { control: "lint", value: "stop" },
-      ]);
+      expect(controls.map((c) => c.payload)).toEqual([{ control: "lint", value: "now" }]);
       expect(controls.every((c) => c.fin === false)).toBe(true); // never fins the thread
     } finally {
       linter.set("off");

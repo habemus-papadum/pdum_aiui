@@ -29,8 +29,10 @@ export const CONFIG_STRIP_STYLES = `
   .aiui-linter-pulse[data-phase="noted"] { opacity: 1; }
   .aiui-linter-pulse[data-phase="stale"] { opacity: 1; color: #dc2626; }
   @keyframes aiui-pulse-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-  /* The converse (debug) button pair beside the pulse dot: lint now / stop.
-     Same 12px voice as the strip; disabled = the phase can't use it. */
+  /* The converse (debug) lint-now button beside the pulse dot. Same 12px
+     voice as the strip; disabled = the phase can't use it. (The stop button
+     was removed 2026-07-19: voice barge-in cancels an in-flight reply, and
+     the select's off value is the off switch.) */
   .aiui-lint-btn { font-size: 11px; line-height: 1.4; align-self: center;
     padding: 0 6px; border-radius: 4px; cursor: pointer;
     border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
@@ -49,21 +51,14 @@ const PULSE_GLYPHS: Record<LinterPulseView["phase"], string> = {
   stale: "⚠",
 };
 
-/** The converse (debug) button pair's handlers (lanes.lintNow / lanes.lintStop). */
+/** The converse (debug) lint-now handler (lanes.lintNow). */
 export interface LintControlHandlers {
   now(): void;
-  stop(): void;
 }
 
-/** Which pulse phases each lint button is live in: `now` needs an open
- *  (accumulating) window to judge; `stop` needs a reply in flight (or
- *  overdue) to cancel. */
+/** Which pulse phases the lint-now button is live in: it needs an open
+ *  (accumulating) window to judge. */
 const LINT_NOW_PHASES: ReadonlySet<LinterPulseView["phase"]> = new Set(["listening"]);
-const LINT_STOP_PHASES: ReadonlySet<LinterPulseView["phase"]> = new Set([
-  "thinking",
-  "tool",
-  "stale",
-]);
 
 /** The config strip: control-bound widgets, always visible, with the pulse dot. */
 export function ConfigStrip(props: {
@@ -103,10 +98,11 @@ export function ConfigStrip(props: {
                       >
                         {PULSE_GLYPHS[props.linterPulse?.().phase ?? "off"]}
                       </span>
-                      {/* The converse (debug) pair: end the lint turn at the
-                          BUTTON / cancel the in-flight reply. Enabled off the
-                          pulse phase — the mirror of what the sidecar would
-                          accept (capture-bus-and-consumers.md §6 Phase 1). */}
+                      {/* The converse (debug) lint-now: end the lint turn
+                          at the BUTTON. Enabled off the pulse phase — the
+                          mirror of what the sidecar would accept
+                          (capture-bus-and-consumers.md §6 Phase 1). To abort
+                          a reply instead, talk over it (barge-in). */}
                       <Show when={props.lintControl !== undefined}>
                         <button
                           type="button"
@@ -117,16 +113,6 @@ export function ConfigStrip(props: {
                           onClick={() => props.lintControl?.now()}
                         >
                           lint now
-                        </button>
-                        <button
-                          type="button"
-                          class="aiui-lint-btn"
-                          data-testid="lint-stop"
-                          title="cancel the in-flight lint reply"
-                          disabled={!LINT_STOP_PHASES.has(props.linterPulse?.().phase ?? "off")}
-                          onClick={() => props.lintControl?.stop()}
-                        >
-                          stop
                         </button>
                       </Show>
                     </Show>

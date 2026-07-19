@@ -15,7 +15,7 @@
  */
 
 import { createSignal, onCleanup, Show } from "solid-js";
-import type { SurfaceTargeting } from "../transport";
+import type { PageEvent, SurfaceTargeting } from "../transport";
 
 export const TARGET_TAB_STYLES = `
   .aiui-target { margin: 6px 12px 0; font: 12px system-ui; display: flex; }
@@ -58,7 +58,13 @@ function faviconOf(url: string | undefined): string | undefined {
   }
 }
 
-export function TargetTab(props: { targeting: SurfaceTargeting }) {
+export function TargetTab(props: {
+  targeting: SurfaceTargeting;
+  /** The transport's page-event feed (optional): a same-tab `navigation` on
+   * the leader refreshes the chip, so an SPA route change or reload shows up
+   * without a tab switch — the same signal the turn's navigation events ride. */
+  onPageEvent?: (handler: (event: PageEvent) => void) => () => void;
+}) {
   const [tab, setTab] = createSignal<number | undefined>(props.targeting.activeTab(), {
     ownedWrite: true,
   });
@@ -92,6 +98,14 @@ export function TargetTab(props: { targeting: SurfaceTargeting }) {
     load(next);
   });
   onCleanup(off);
+  if (props.onPageEvent !== undefined) {
+    const offNav = props.onPageEvent((event) => {
+      if (event.kind === "navigation" && event.tab === want) {
+        load(want); // the leader navigated in place — re-read its identity
+      }
+    });
+    onCleanup(offNav);
+  }
 
   const host = () => shortHost(info()?.url);
   const favicon = () => (favBroken() ? undefined : faviconOf(info()?.url));

@@ -59,8 +59,6 @@ export interface ChannelLanesConfig {
   onStatus?: (line: string) => void;
   /** The misuse/error channel (toasts in the page). */
   onToast?: (message: string) => void;
-  /** The channel echoed the lowered prompt for the sent turn. */
-  onLoweredPrompt?: (prompt: string) => void;
 }
 
 export interface ChannelLanes {
@@ -76,15 +74,14 @@ export interface ChannelLanes {
    * the tiny pulse dot beside the linter select reads this. */
   linterPulse: () => LinterPulseView;
   /**
-   * CONVERSE (debug) turn control — the button pair beside the linter select
-   * (capture-bus-and-consumers.md §6 Phase 1). `lintNow` ends the lint turn
-   * at the button (the sidecar arms auto-off: its reply's completion pushes
-   * `linter-turn-complete`, and the tap below flips the select off);
-   * `lintStop` cancels the in-flight reply and disarms the auto-off. Both
-   * ride the mid-thread `control` rail — no open thread, no-op.
+   * CONVERSE (debug) turn control — the lint-now button beside the linter
+   * select (capture-bus-and-consumers.md §6 Phase 1): ends the lint turn at
+   * the button. Rides the mid-thread `control` rail — no open thread, no-op.
+   * (The stop verb was removed client-side 2026-07-19 — voice barge-in
+   * cancels an in-flight reply; the channel still honors `lint`/`stop` on
+   * the rail.)
    */
   lintNow(): void;
-  lintStop(): void;
   /**
    * Reactive event cursor: reading it inside the graph subscribes to every
    * engine event, so panes over `engine.events` re-render per event.

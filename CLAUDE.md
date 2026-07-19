@@ -20,7 +20,7 @@ transcript) at the center. Three layers:
    (`aiui-intent-client`): one client, three hosts — the channel-served plain page at
    `/intent/` (drives real tabs over CDP, no extension) and the MV3 side panel (`dist-ext`,
    the ONE extension `aiui claude` auto-loads; warm `tabCapture` video), both over the same
-   mode-engine core; `PARITY.md`/`BEHAVIOR.md` in that package are the decided contract. Its
+   mode-engine core; `BEHAVIOR.md` in that package is the decided contract (the parity ledger is retired to `archive/intent-client/`). Its
    host-agnostic capture/transport runtime lives in `aiui-intent-runtime` (mic capture, frame
    sampler, selection watcher, channel wire). The historical surfaces — `aiui-dev-overlay` (the
    original web intent tool), `aiui-extension` (the first browser extension), and the

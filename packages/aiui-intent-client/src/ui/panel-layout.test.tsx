@@ -29,14 +29,11 @@ const noopLanes: IntentLanes = {
 function makeNarration(): Narration {
   const [statusLine, setStatusLine] = createSignal("");
   const [toastLine, setToastLine] = createSignal<string | undefined>(undefined);
-  const [loweredPrompt, setLoweredPrompt] = createSignal<string | undefined>(undefined);
   return {
     statusLine,
     setStatusLine,
     toastLine,
     toast: (message) => setToastLine(message),
-    loweredPrompt,
-    setLoweredPrompt,
   };
 }
 
@@ -87,11 +84,10 @@ describe("PanelLayout", () => {
     expect(root.querySelector("[data-testid=tt-marker]")).not.toBeNull();
     expect(root.querySelector("[data-testid=dbg-marker]")).not.toBeNull();
 
-    // Without lanes, the turn preview and both trace panes are gone — the exact
+    // Without lanes, the turn preview and the trace pane are gone — the exact
     // "missing turn preview and traces" state of the un-discovered dev page.
     expect(root.querySelector("[data-testid=turn-pane]")).toBeNull();
     expect(root.querySelector("[data-testid=rich-trace-pane]")).toBeNull();
-    expect(root.querySelector("[data-testid=trace-pane]")).toBeNull();
   });
 
   it("omits the target-tab slot and closes the debug pane by default", () => {
@@ -102,7 +98,12 @@ describe("PanelLayout", () => {
 
     expect(root.querySelector("[data-testid=tt-marker]")).toBeNull();
     const debug = root.querySelector<HTMLDetailsElement>("[data-testid=extension-debugging]");
-    expect(debug?.open).toBe(false); // no debug.open → closed (the extension's default)
+    expect(debug?.open).toBe(false); // no debug.open → closed (the page's channel tier)
     expect(root.querySelector("[data-testid=dbg-marker]")).not.toBeNull();
+  });
+
+  it("renders NO debug pane when a shell passes no content (the extension since 2026-07-19)", () => {
+    const root = mount({ lanes: undefined });
+    expect(root.querySelector("[data-testid=extension-debugging]")).toBeNull();
   });
 });

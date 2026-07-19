@@ -11,8 +11,8 @@
  *
  * Why this is a separate act rather than something `aiui claude` does for you:
  * the frozen client is still auto-loaded, and installing this one is a decision
- * to drive with it (see PARITY.md's switchover row), so it stays a command you
- * run. (This client's ⌘⇧B no longer collides with the frozen extension's ⌘B,
+ * to drive with it (see the retired parity ledger's switchover row, archive/intent-client/PARITY.md), so it stays a command you
+ * run. (This client's ⌘. no longer collides with the frozen extension's ⌘B,
  * so the two can coexist without fighting over the chord.)
  */
 
@@ -41,4 +41,4 @@ if (!loaded.ok) {
 }
 
 console.info(`intent client loaded: ${loaded.extensionId}`);
-console.info("open the panel with ⌘⇧B (or the toolbar button) on the tab you want to drive.");
+console.info("open the panel with ⌘. (or the toolbar button) on the tab you want to drive.");
