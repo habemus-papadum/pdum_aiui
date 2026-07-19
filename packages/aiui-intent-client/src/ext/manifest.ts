@@ -28,14 +28,28 @@ const PUBLIC_KEY =
 export const EXTENSION_ID = "cdpbfpcelmifhagikjlfpgfipggcmdeg";
 
 /**
- * The `chrome.storage.local` key the channel's CDP tagger writes into THIS
- * extension (src/cdp/tagger.ts) — `{port, browserUrl, taggedAt}`. Both halves
- * of the contract import it from here: the tagger composes the write, the
- * extension's channel discovery (ext/channel.ts) reads it first. The write
- * arrives through the browser's own debug endpoint, so its presence is
- * same-browser PROOF, not just a hint.
+ * The `chrome.storage.local` key PREFIX for the CDP driver roster (owner,
+ * 2026-07-19; superseding the single `aiui2.cdpChannel` slot, whose
+ * last-writer-wins shape made two channels sharing one browser FLAP the tag).
+ * Each channel's tagger (src/cdp/tagger.ts) writes ONLY its own entry —
+ * `aiui2.cdpDriver:<port>` → `{port, browserUrl, taggedAt}` — so co-driving
+ * channels never collide, and the set of fresh entries IS "who drives this
+ * browser", plural (multi-agent co-driving is a supported workflow). Both
+ * halves of the contract import from here: the tagger composes the write,
+ * the extension's discovery + alignment read the roster. A write arrives
+ * through the browser's own debug endpoint, so its presence is same-browser
+ * PROOF, not just a hint.
  */
-export const CDP_CHANNEL_TAG_KEY = "aiui2.cdpChannel";
+export const CDP_DRIVER_TAG_PREFIX = "aiui2.cdpDriver:";
+
+/**
+ * How stale a roster entry may be before readers drop it. The tagger
+ * reaffirms every 60s (cdp/tagger.ts REAFFIRM_MS); 3 beats + slack tolerates
+ * a slow beat while aging out entries from crashed channels (a clean stop
+ * removes its entry; a crash cannot). Readers ALSO liveness-probe `/health`,
+ * so this is the belt, not the verdict.
+ */
+export const CDP_DRIVER_TAG_FRESH_MS = 200_000;
 
 export const manifest = {
   manifest_version: 3,

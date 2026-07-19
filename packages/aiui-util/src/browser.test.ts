@@ -1,8 +1,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { decideBrowserAction, discoverSessionBrowser, sessionBrowserBinary } from "./browser";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  decideBrowserAction,
+  discoverSessionBrowser,
+  discoverSessionBrowserUnder,
+  sessionBrowserBinary,
+} from "./browser";
 
 let dir: string;
 
@@ -30,6 +35,45 @@ describe("discoverSessionBrowser", () => {
     // fails, and discovery treats the profile as browserless.
     writeFileSync(join(dir, "DevToolsActivePort"), "54321\n/devtools/browser/dead");
     expect(await discoverSessionBrowser(dir)).toBeUndefined();
+  });
+});
+
+describe("discoverSessionBrowserUnder", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("nothing under a project that never launched", async () => {
+    expect(await discoverSessionBrowserUnder(dir)).toBeUndefined();
+  });
+
+  it("a live VARIANT profile wins over a stale flat-layout leftover (found live 2026-07-19)", async () => {
+    // The exact confusion this exists to fix: a dead port file in the legacy
+    // flat layout, a living browser under the per-variant layout.
+    const flat = join(dir, ".aiui-cache", "chrome", "default");
+    const variant = join(dir, ".aiui-cache", "chrome", "chromium", "default");
+    mkdirSync(flat, { recursive: true });
+    mkdirSync(variant, { recursive: true });
+    writeFileSync(join(flat, "DevToolsActivePort"), "50018\n/devtools/browser/dead");
+    writeFileSync(join(variant, "DevToolsActivePort"), "62952\n/devtools/browser/live");
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input).includes(":62952/")) {
+        return { ok: true } as Response;
+      }
+      throw new Error("ECONNREFUSED");
+    });
+    expect(await discoverSessionBrowserUnder(dir)).toEqual({
+      browserUrl: "http://127.0.0.1:62952",
+      port: 62952,
+    });
+  });
+
+  it("every profile stale -> undefined (never a dead endpoint)", async () => {
+    const flat = join(dir, ".aiui-cache", "chrome", "default");
+    mkdirSync(flat, { recursive: true });
+    writeFileSync(join(flat, "DevToolsActivePort"), "50018\n/devtools/browser/dead");
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("ECONNREFUSED");
+    });
+    expect(await discoverSessionBrowserUnder(dir)).toBeUndefined();
   });
 });
 

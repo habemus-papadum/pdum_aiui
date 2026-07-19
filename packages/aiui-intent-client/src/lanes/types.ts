@@ -8,6 +8,7 @@ import type { PcmSource, SpeechPlayer, Talk } from "@habemus-papadum/aiui-intent
 import type { Wire } from "@habemus-papadum/aiui-intent-runtime/wire";
 import type { Engine, IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { Accessor } from "solid-js";
+import type { CdpAlignment } from "../cdp-align";
 import type { ClaimLaneOptions } from "../claims";
 import type { IntentClient, IntentLanes } from "../client";
 import type { LinterPulseView } from "../linter-pulse";
@@ -59,6 +60,13 @@ export interface ChannelLanesConfig {
   onStatus?: (line: string) => void;
   /** The misuse/error channel (toasts in the page). */
   onToast?: (message: string) => void;
+  /**
+   * The CDP-alignment snapshot (src/cdp-align.ts), read at each thread-open
+   * and sent as `meta.cdp` on the hello — the channel renders it into the
+   * prompt prelude so the agent knows whether its DevTools MCP sees the same
+   * browser the user does. Absent/undefined = nothing to declare.
+   */
+  cdpAlignment?: () => CdpAlignment | undefined;
 }
 
 export interface ChannelLanes {

@@ -110,6 +110,13 @@ function makeRig(): Rig {
     openThread,
     onToast: (m) => toasts.push(m),
     onStatus: (line) => statuses.push(line),
+    // The alignment snapshot the hello should carry (meta.cdp — the prompt
+    // prelude's warn/affirm renders from it channel-side).
+    cdpAlignment: () => ({
+      state: "aligned" as const,
+      boundPort: 55555,
+      coDrivers: [{ port: 60001, label: "other :60001" }],
+    }),
   });
   const client = createIntentClient({
     host: bus,
@@ -219,6 +226,12 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
     expect((meta.tab as { url: string }).url).toBe("http://page.example/");
     // stt/linter reached the engine's declared config (read at construction)
     expect((meta.intent as { transcriber: string }).transcriber).toBe("elevenlabs"); // scribe-v2 default
+    // the CDP-alignment snapshot rides the hello (the prelude renders it)
+    expect(meta.cdp).toEqual({
+      state: "aligned",
+      boundPort: 55555,
+      coDrivers: [{ port: 60001, label: "other :60001" }],
+    });
   });
 
   it("send with content lowers and closes; the seat stays armed", async () => {

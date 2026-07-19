@@ -21,6 +21,7 @@ import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { activationGesture } from "../activation";
 import { createBarHost } from "../bar-host";
+import { type CdpAlignment, describeCdpAlignment } from "../cdp-align";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
@@ -35,16 +36,9 @@ import { createToolsLink } from "../tools-link";
 import { PanelLayout } from "../ui/panel-layout";
 import { installPanelKeys, type Narration } from "../ui/shell";
 import { TargetTab } from "../ui/target-tab";
+import { superviseCdpAlignment } from "./align";
 import { heldStreamFor } from "./capture";
-import {
-  discoverChannel,
-  listChannels,
-  onCdpTagChanged,
-  pinPort,
-  probeNativeHost,
-  readCdpTag,
-  rememberPort,
-} from "./channel";
+import { discoverChannel, listChannels, pinPort, probeNativeHost, rememberPort } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { superviseMicGrant } from "./mic-grant";
 import { type ActivateMessage, BROKER_ADDRESS, isActivateMessage } from "./protocol";
@@ -71,6 +65,11 @@ const narration: Narration = {
 
 loadConfigBase();
 installConfigAutoSave(); // every change persists — no save/reset verbs (owner)
+
+/** The alignment supervisor's latest verdict, held module-level so the lanes'
+ * hello thunk (created inside boot, BEFORE the supervisor) can read it
+ * TDZ-safely. One writer: the supervisor's onChange below. */
+let latestAlignment: CdpAlignment | undefined;
 
 /** Lanes that only narrate — the panel is fully usable with no channel found. */
 const consoleLanes: IntentLanes = {
@@ -155,6 +154,10 @@ async function boot(): Promise<{
       console.info("[intent-client]", line);
     },
     onToast: narration.toast,
+    // The CDP-alignment snapshot, read at each thread-open — the channel
+    // renders it into the prompt prelude (warn/affirm the agent about its
+    // DevTools MCP). The supervisor below keeps the holder fresh.
+    cdpAlignment: () => latestAlignment,
   });
   // Assigned below; the dispatch hook closes over it (dispatches can only
   // happen after boot completes, by which time the bus is dialing).
@@ -267,35 +270,25 @@ void superviseMicGrant({
 });
 
 /**
- * The CDP tag's verdict: the tag arrives through this browser's own debug
- * endpoint (src/cdp/tagger.ts), so its presence PROVES which channel drives
- * this browser. Console-only now (owner, 2026-07-19) — "no tag" is the
- * PERMANENT normal state in an everyday Chrome (it is not the session
- * browser), so a visible line read like an error. The one verdict worth
- * surfacing is a MISMATCH — proof another channel drives this browser than
- * the one the panel is bound to — and that goes to the red toast.
+ * The CDP-ALIGNMENT signal (owner, 2026-07-19; superseding the raw
+ * tag-verdict logging): does the browser this panel runs in match the
+ * browser the bound channel drives? The supervisor (ext/align.ts) combines
+ * the local tag with the channel's own report and keeps re-deriving; the
+ * verdict feeds `ctx.cdpAlignment` — the `cdp` pill, the hello meta the
+ * lanes dial with (the prompt prelude's warning to the agent), and future
+ * feature gates all read that one fact. The hard mismatch — proof a
+ * DIFFERENT channel drives this browser — additionally toasts red.
  */
-const applyTagVerdict = (tag: Awaited<ReturnType<typeof readCdpTag>>): void => {
-  if (tag === undefined) {
-    console.info(
-      "[cdp]",
-      "no tag — no channel drives this browser over CDP (normal outside the session browser)",
-    );
-    return;
-  }
-  if (tag.port === port) {
-    console.info(
-      "[cdp]",
-      `this browser ✓ — driven by the bound channel :${tag.port} (via ${tag.browserUrl})`,
-    );
-    return;
-  }
-  const message = `this browser is driven by channel :${tag.port}, but the panel is bound to :${port ?? "none"}`;
-  console.warn("[cdp]", message);
-  narration.toast(`CDP mismatch: ${message}`);
-};
-void readCdpTag().then(applyTagVerdict);
-onCdpTagChanged(applyTagVerdict); // the tagger may land after boot — track it
+superviseCdpAlignment({
+  boundPort: port,
+  onChange: (next) => {
+    latestAlignment = next;
+    client.setContext({ cdpAlignment: next });
+    if (next.state === "driven-by-other") {
+      narration.toast(`CDP mismatch: ${describeCdpAlignment(next)}`);
+    }
+  },
+});
 
 /**
  * The activation gesture, arriving from OUTSIDE (the worker). The toolbar click

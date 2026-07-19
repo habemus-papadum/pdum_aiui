@@ -112,7 +112,7 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
           // The session may be gone; the log line above still tells the story.
         }
       };
-      const stopTagger = startCdpTagger({
+      const tagger = startCdpTagger({
         channelPort: () => ctx.port(),
         endpoint: async () => {
           const info = await cdp.info(ctx.port());
@@ -160,7 +160,20 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
           const port = Number(req.socket.localPort);
           void cdp
             .info(Number.isInteger(port) ? port : undefined)
-            .then((info) => res.json(info))
+            // The tagger's landed status rides along — the client's
+            // CDP-ALIGNMENT verdict needs the channel's side of the evidence
+            // ("did my tag land anywhere?"; src/cdp-align.ts). Distinct field
+            // names: `browserUrl` is the live endpoint, `taggedBrowserUrl`
+            // where the tag last landed (they differ after an endpoint move).
+            .then((info) => {
+              const st = tagger.status();
+              res.json({
+                ...info,
+                tagged: st.tagged,
+                ...(st.browserUrl !== undefined ? { taggedBrowserUrl: st.browserUrl } : {}),
+                ...(st.taggedAt !== undefined ? { taggedAt: st.taggedAt } : {}),
+              });
+            })
             .catch(() => res.json({ ok: true, available: false, reason: "discovery failed" }));
           return;
         }
@@ -190,7 +203,7 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
           surface.handleUpgrade?.(req, socket, head) === true ||
           cdp.handleUpgrade(req, socket, head),
         dispose: async () => {
-          stopTagger();
+          tagger.stop();
           cdp.dispose();
           await surface.dispose?.();
         },

@@ -318,9 +318,47 @@ page-side (src/page/jump-mode.ts; the CDP tier evaluates it with the page bundle
 the MAIN world — the source root and cell registry live there). The gate IS the feature
 detection: no `__AIUI__`, gray cap (and once on, always toggleable off).
 
+## The CDP-alignment signal (owner, 2026-07-19)
+
+**One first-class fact — `ctx.cdpAlignment` — answers: does the browser this client runs in
+match the browser the bound channel drives over CDP?** The agent behind the channel may hold a
+Chrome DevTools MCP pointed at the channel's session browser while the client runs in a
+completely different Chrome; nothing else makes that visible. Evidence comes from both sides:
+the local **driver ROSTER** (`aiui2.cdpDriver:<port>` entries, one per channel, each written
+into the extension through the browser's own debug endpoint — self-verifying; cdp/tagger.ts.
+The single-slot tag this replaced flapped last-writer-wins under two channels) and the
+channel's own report (`/intent/cdp/info`, which carries whether its tagger landed). Five
+states (src/cdp-align.ts, pure + tested): `aligned` (bound ∈ roster; `coDrivers` = the others)
+· `driven-by-other` (a nonempty roster without the bound channel; entries are staleness- and
+liveness-filtered first) · `channel-drives-other` (the agent's browser is elsewhere) ·
+`channel-no-cdp` (the agent has no browser — normal, calm) · `unknown`. Honesty bound: a
+browser cannot name its own debug port from inside, so "this browser has a port but nobody
+tags it" is invisible by construction.
+
+**Multi-agent co-driving of one browser is a SUPPORTED workflow.** Several channels may tag
+the same browser (each owns its roster slot); `coDrivers` is how sharing surfaces — never a
+conflict to prevent. **Debug-ness is deliberately not part of this signal**: a debug channel
+is treated as just another parallel agent; "(debug)" surfaces to the user in the channel
+dropdown alone.
+
+Three consumers, one writer (the extension's supervisor, ext/align.ts, which also decorates
+drivers with registry labels; the page tier fixes the verdict at boot — the CDP bridge
+attaching IS alignment by construction):
+
+- **the `cdp` pill** — green aligned (solo) · **PURPLE aligned-and-shared** (other channels
+  co-drive this browser) · red driven-by-other (also toasts) · amber channel-drives-other ·
+  gray no-cdp/unknown;
+- **the hello's `meta.cdp`** — the prompt prelude renders an agent-addressed sentence from it
+  (channel prompt-context.ts): affirm alignment so the agent uses its DevTools MCP without
+  fear — plus, when shared, the parallel-agents heads-up ("tabs you did not open may change
+  underneath you") — or warn that DevTools reads will NOT match what the user sees; unknown
+  stays SILENT (no false comfort). It rides the traced hello (the `clientContext` stage) for
+  free;
+- **feature gates to come** (e.g. which tools the oracle is granted) read the same fact.
+
 ## Status pills (permanent expert strip)
 
-`channel · mic · rec · stream · video · ink · keys · ring · sel · aiui · ipad` — claim statuses (stream/video/
+`channel · cdp · mic · rec · stream · video · ink · keys · ring · sel · aiui · ipad` — claim statuses (stream/video/
 ink/keys: idle → pending → active → error) and world facts (channel connection, mic
 permission, iPad paint clients), stable labels, color = state. Internal detail deliberately
 kept visible.

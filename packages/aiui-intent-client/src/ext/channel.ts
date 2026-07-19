@@ -7,11 +7,12 @@
  * `chrome-extension://…` and must go looking.
  *
  * The order, strongest evidence first:
- *   1. the CDP tag (`aiui2.cdpChannel`) — written INTO our storage by the
- *      channel itself, through this browser's own debug endpoint
- *      (src/cdp/tagger.ts). Only the channel actually driving THIS browser
- *      can plant it, so it is same-browser proof, not a guess — it wins
- *      whenever the tagged channel is alive;
+ *   1. the CDP driver roster (`aiui2.cdpDriver:<port>` entries) — written
+ *      INTO our storage by each channel itself, through this browser's own
+ *      debug endpoint (src/cdp/tagger.ts). Only a channel actually driving
+ *      THIS browser can plant one, so it is same-browser proof, not a guess
+ *      — a live driver wins; with several (co-driving is supported) prefer
+ *      the one carrying a real session;
  *   2. the port we used last (`chrome.storage.local`) — the common case, and it
  *      is verified before use, so a channel that has since died just falls
  *      through;
@@ -27,7 +28,7 @@
  * own under its own extension id, and the two never meet.
  */
 
-import { CDP_CHANNEL_TAG_KEY } from "./manifest";
+import { CDP_DRIVER_TAG_FRESH_MS, CDP_DRIVER_TAG_PREFIX } from "./manifest";
 
 const RECENT_KEY = "aiui2.recentPorts";
 const PINNED_KEY = "aiui2.pinnedPort";
@@ -47,30 +48,58 @@ export interface ChannelEntry {
   debug?: boolean;
 }
 
-/** The channel's CDP tag, as the tagger wrote it (same-browser proof). */
-export interface CdpChannelTag {
+/** One CDP driver-roster entry, as a channel's tagger wrote it (same-browser
+ * proof; `aiui2.cdpDriver:<port>`). Several may coexist — multi-agent
+ * co-driving of one browser is a supported workflow. */
+export interface CdpDriverTag {
   port: number;
   browserUrl: string;
   taggedAt: string;
 }
 
-/** Read the CDP tag, if a channel has tagged this browser. */
-export async function readCdpTag(): Promise<CdpChannelTag | undefined> {
-  const got = await chrome.storage.local.get(CDP_CHANNEL_TAG_KEY);
-  const raw = got[CDP_CHANNEL_TAG_KEY] as Partial<CdpChannelTag> | undefined;
-  return raw !== undefined && Number.isInteger(raw.port) && typeof raw.browserUrl === "string"
-    ? (raw as CdpChannelTag)
-    : undefined;
+/**
+ * Read the driver roster: every fresh, well-formed entry, newest landing
+ * first. Staleness-filtered here (CDP_DRIVER_TAG_FRESH_MS) so a crashed
+ * channel's entry ages out; callers still liveness-probe before TRUSTING an
+ * entry (a fresh entry only proves a recent write, not a live channel).
+ */
+export async function readCdpDrivers(): Promise<CdpDriverTag[]> {
+  const all = (await chrome.storage.local.get(null)) as Record<string, unknown>;
+  const now = Date.now();
+  const drivers: CdpDriverTag[] = [];
+  for (const [key, raw] of Object.entries(all)) {
+    if (!key.startsWith(CDP_DRIVER_TAG_PREFIX)) {
+      continue;
+    }
+    const tag = raw as Partial<CdpDriverTag>;
+    if (
+      !Number.isInteger(tag.port) ||
+      typeof tag.browserUrl !== "string" ||
+      typeof tag.taggedAt !== "string"
+    ) {
+      continue;
+    }
+    const at = Date.parse(tag.taggedAt);
+    if (!Number.isFinite(at) || now - at > CDP_DRIVER_TAG_FRESH_MS) {
+      continue; // stale — a crashed channel's leftover
+    }
+    drivers.push(tag as CdpDriverTag);
+  }
+  return drivers.sort((a, b) => Date.parse(b.taggedAt) - Date.parse(a.taggedAt));
 }
 
 /**
- * Watch the tag: the tagger retries until the worker is awake, so it may land
- * (or move) AFTER a panel booted. Fires with the fresh tag on every write.
+ * Watch the roster: taggers retry until the worker is awake, so entries land
+ * (move, or vanish) AFTER a panel booted. Fires with the fresh roster on
+ * every write under the prefix.
  */
-export function onCdpTagChanged(handler: (tag: CdpChannelTag | undefined) => void): void {
+export function onCdpDriversChanged(handler: (drivers: CdpDriverTag[]) => void): void {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && CDP_CHANNEL_TAG_KEY in changes) {
-      void readCdpTag().then(handler);
+    if (
+      area === "local" &&
+      Object.keys(changes).some((key) => key.startsWith(CDP_DRIVER_TAG_PREFIX))
+    ) {
+      void readCdpDrivers().then(handler);
     }
   });
 }
@@ -130,8 +159,9 @@ async function alive(port: number): Promise<boolean> {
   }
 }
 
-/** The registry, as one live channel mirrors it. */
-async function channelsVia(port: number): Promise<ChannelEntry[]> {
+/** The registry, as one live channel mirrors it. (Exported for the
+ * alignment supervisor's driver labels — ext/align.ts.) */
+export async function channelsVia(port: number): Promise<ChannelEntry[]> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/debug/api/channels`, {
       signal: AbortSignal.timeout(1200),
@@ -216,12 +246,25 @@ export async function discoverChannel(): Promise<number | undefined> {
     }
     await clearPinnedPort();
   }
-  // The CDP tag next: the channel that PROVED it drives this browser beats
-  // any remembered or registry channel — those may belong to another browser.
-  const tag = await readCdpTag();
-  if (tag !== undefined && (await alive(tag.port))) {
-    await rememberPort(tag.port);
-    return tag.port;
+  // The driver roster next: a channel that PROVED it drives this browser
+  // beats any remembered or registry channel — those may belong to another
+  // browser. Several channels may co-drive (supported): bind to a DRIVER,
+  // preferring one that carries a real session over a debug server (the
+  // roster itself is deliberately debug-blind; the registry keeps that
+  // distinction, and the dropdown is where it surfaces to the user).
+  const live: CdpDriverTag[] = [];
+  for (const driver of await readCdpDrivers()) {
+    if (await alive(driver.port)) {
+      live.push(driver);
+    }
+  }
+  const first = live[0];
+  if (first !== undefined) {
+    const mirror = await channelsVia(first.port);
+    const isDebug = (p: number) => mirror.find((entry) => entry.port === p)?.debug === true;
+    const chosen = live.find((driver) => !isDebug(driver.port)) ?? first;
+    await rememberPort(chosen.port);
+    return chosen.port;
   }
   for (const port of await loadRecentPorts()) {
     if (await alive(port)) {

@@ -49,6 +49,29 @@ export interface SourceInfo {
   root?: string;
 }
 
+/**
+ * The client's CDP-ALIGNMENT verdict (intent client's `cdp-align.ts`): does
+ * the browser the CLIENT runs in match the browser THIS channel drives over
+ * CDP? Snapshot at thread-open; the prompt prelude renders a warn/affirm from
+ * it (prompt-context.ts) so the agent knows whether its Chrome DevTools MCP
+ * sees the pages the user is looking at. Fields validated where used — an
+ * older client simply omits it.
+ */
+export interface CdpAlignmentInfo {
+  /** aligned | driven-by-other | channel-drives-other | channel-no-cdp | unknown */
+  state?: string;
+  /** The channel the client is bound to (this one, normally). */
+  boundPort?: number;
+  /** This channel's CDP endpoint, as the client learned it. */
+  channelBrowserUrl?: string;
+  /** Every live channel driving the client's browser (the roster — multiple
+   * agents co-driving one browser is a supported workflow). */
+  drivers?: Array<{ port?: number; label?: string }>;
+  /** Drivers other than the bound channel: aligned + nonempty = the shared
+   * case (the prelude adds a heads-up about parallel agents). */
+  coDrivers?: Array<{ port?: number; label?: string }>;
+}
+
 /** Optional client context sent once, on the `hello` frame. */
 export interface HelloMeta {
   /** The browser tab the connection was opened from. */
@@ -69,6 +92,8 @@ export interface HelloMeta {
    * pipeline package; the processor validates the fields it uses.
    */
   intent?: unknown;
+  /** The client's CDP-alignment verdict (see {@link CdpAlignmentInfo}). */
+  cdp?: CdpAlignmentInfo;
 }
 
 /**

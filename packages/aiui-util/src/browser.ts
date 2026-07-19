@@ -27,7 +27,7 @@
  * unauthenticated — any local process can drive the browser through it. It
  * binds to loopback only.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Browser, ChromeReleaseChannel, computeSystemExecutablePath } from "@puppeteer/browsers";
 import { execa } from "execa";
@@ -64,6 +64,58 @@ export async function discoverSessionBrowser(
     return undefined;
   }
   return { browserUrl: `http://127.0.0.1:${port}`, port };
+}
+
+/**
+ * Find a LIVE session browser under a project's `.aiui-cache/chrome/`,
+ * whatever profile layout it uses: the legacy flat `chrome/default`, or the
+ * per-variant `chrome/<variant>/<profile>` partitioning (distinct browser
+ * builds never share a profile). Scans every directory holding a
+ * `DevToolsActivePort` — one level of nesting covers both layouts — probing
+ * the newest-written port file first, and returns the first endpoint that
+ * actually ANSWERS. A stale port file (the browser died; an old flat-layout
+ * leftover) is skipped: found live 2026-07-19, where a debug channel's
+ * discovery read the stale flat profile and declared "no session browser"
+ * while the variant profile held a living one.
+ */
+export async function discoverSessionBrowserUnder(
+  projectRoot: string,
+): Promise<SessionBrowser | undefined> {
+  const base = join(projectRoot, ".aiui-cache", "chrome");
+  const candidates: Array<{ dir: string; mtimeMs: number }> = [];
+  const consider = (dir: string): void => {
+    const portFile = join(dir, ACTIVE_PORT_FILE);
+    try {
+      candidates.push({ dir, mtimeMs: statSync(portFile).mtimeMs });
+    } catch {
+      // no port file here — not a profile dir
+    }
+  };
+  let entries: string[];
+  try {
+    entries = readdirSync(base);
+  } catch {
+    return undefined; // no cache dir at all — nothing ever launched here
+  }
+  for (const entry of entries) {
+    const level1 = join(base, entry);
+    consider(level1); // legacy flat layout: chrome/<profile>
+    try {
+      for (const sub of readdirSync(level1)) {
+        consider(join(level1, sub)); // variant layout: chrome/<variant>/<profile>
+      }
+    } catch {
+      // a file, or unreadable — skip
+    }
+  }
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const candidate of candidates) {
+    const found = await discoverSessionBrowser(candidate.dir);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
 }
 
 function readActivePort(userDataDir: string): number | undefined {

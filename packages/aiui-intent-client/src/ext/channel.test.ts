@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CDP_CHANNEL_TAG_KEY } from "./manifest";
+import { CDP_DRIVER_TAG_PREFIX } from "./manifest";
+
+/** A fresh roster entry for `port` (fresh = inside the staleness window). */
+const driverEntry = (port: number) => ({
+  [`${CDP_DRIVER_TAG_PREFIX}${port}`]: {
+    port,
+    browserUrl: "http://127.0.0.1:9",
+    taggedAt: new Date().toISOString(),
+  },
+});
 
 /** A minimal chrome.storage.local over one plain object. */
 function fakeStorage(initial: Record<string, unknown> = {}): Record<string, unknown> {
@@ -7,7 +16,8 @@ function fakeStorage(initial: Record<string, unknown> = {}): Record<string, unkn
   vi.stubGlobal("chrome", {
     storage: {
       local: {
-        get: async (key: string) => ({ [key]: store[key] }),
+        // `get(null)` = the whole store (the roster read uses it).
+        get: async (key: string | null) => (key === null ? { ...store } : { [key]: store[key] }),
         set: async (values: Record<string, unknown>) => {
           Object.assign(store, values);
         },
@@ -50,7 +60,7 @@ describe("discoverChannel: the pin outranks the ladder", () => {
   it("returns a live pinned port even when the CDP tag names another channel", async () => {
     fakeStorage({
       "aiui2.pinnedPort": 49317,
-      [CDP_CHANNEL_TAG_KEY]: { port: 50660, browserUrl: "http://127.0.0.1:9", taggedAt: "t" },
+      ...driverEntry(50660),
     });
     fakeHealth([49317, 50660]);
     const { discoverChannel } = await load();
@@ -60,7 +70,7 @@ describe("discoverChannel: the pin outranks the ladder", () => {
   it("clears a dead pin and falls through to the CDP tag", async () => {
     const store = fakeStorage({
       "aiui2.pinnedPort": 49317,
-      [CDP_CHANNEL_TAG_KEY]: { port: 50660, browserUrl: "http://127.0.0.1:9", taggedAt: "t" },
+      ...driverEntry(50660),
     });
     fakeHealth([50660]);
     const { discoverChannel } = await load();

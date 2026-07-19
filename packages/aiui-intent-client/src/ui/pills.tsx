@@ -11,6 +11,7 @@
 
 import type { ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { type CdpAlignment, describeCdpAlignment, isSharedAlignment } from "../cdp-align";
 import type { IntentClient } from "../client";
 import { type RingState, ringForTab } from "../transport";
 
@@ -39,6 +40,11 @@ export const PILLS_STYLES = `
   .aiui-pill[data-pill="ring"][data-state="live"][data-hollow] { color: #dc2626;
     background: transparent; border: 1px dashed #dc2626; font-weight: 400; }
   @keyframes aiui-ring-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  /* The cdp pill's SHARED face: aligned, and other channels co-drive this
+     browser (a supported multi-agent workflow) — purple, like the ring's
+     armed tone, distinct from the solo green. */
+  .aiui-pill[data-pill="cdp"][data-shared] { color: #fff; background: #7c3aed;
+    border-color: #7c3aed; opacity: 1; font-weight: 600; }
   /* The REC meter rides with the pills (it renders inside the strip). */
   .aiui-meter { display: inline-block; width: 64px; height: 8px; border-radius: 4px;
     border: 1px solid color-mix(in srgb, currentColor 25%, transparent); overflow: hidden;
@@ -54,6 +60,9 @@ interface Pill {
   /** The ring pill's fourth axis: armed/turn but the tab IN VIEW lacks the
    * grant — rendered outline-only, like the on-page hollow dot. */
   hollow?: boolean;
+  /** The cdp pill's co-driving axis: aligned AND other channels drive the
+   * same browser — rendered purple. */
+  shared?: boolean;
 }
 
 const claimPillState = (status: ClaimStatus | undefined): Pill["state"] => {
@@ -67,6 +76,23 @@ const claimPillState = (status: ClaimStatus | undefined): Pill["state"] => {
       return "err";
     default:
       return "off";
+  }
+};
+
+/** The cdp pill's face per alignment state: green = the agent's DevTools see
+ * THIS browser; red = this browser is driven by a DIFFERENT channel; amber =
+ * the agent's browser is elsewhere; gray = no CDP / unknown (normal in an
+ * everyday Chrome with no session browser). */
+const cdpPillState = (alignment: CdpAlignment | undefined): Pill["state"] => {
+  switch (alignment?.state) {
+    case "aligned":
+      return "on";
+    case "driven-by-other":
+      return "err";
+    case "channel-drives-other":
+      return "busy";
+    default:
+      return "off"; // channel-no-cdp / unknown / not yet derived
   }
 };
 
@@ -98,6 +124,12 @@ export function StatusPills(props: { client: IntentClient; micLevel?: () => numb
     const talk = state.talk as string;
     return [
       { label: "channel", state: ctx.connected ? "on" : "off" },
+      {
+        label: "cdp",
+        state: cdpPillState(ctx.cdpAlignment),
+        detail: describeCdpAlignment(ctx.cdpAlignment),
+        ...(isSharedAlignment(ctx.cdpAlignment) ? { shared: true } : {}),
+      },
       {
         label: "mic",
         state: ctx.micGranted === undefined ? "off" : ctx.micGranted ? "on" : "err",
@@ -162,6 +194,7 @@ export function StatusPills(props: { client: IntentClient; micLevel?: () => numb
             data-pill={pill.label}
             data-state={pill.state}
             data-hollow={pill.hollow === true ? "" : undefined}
+            data-shared={pill.shared === true ? "" : undefined}
             title={pill.detail}
           >
             {pill.label}

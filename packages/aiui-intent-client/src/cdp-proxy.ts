@@ -14,8 +14,11 @@
  *   1. the channel's own launch info (`GET /debug/api/info` →
  *      `launch.chromeDevtools.browserUrl`) — authoritative: it is what
  *      `aiui claude` handed the chrome-devtools MCP, whatever the profile;
- *   2. the project's session-browser profile (`.aiui-cache/chrome/default`) via
- *      `discoverSessionBrowser` — the same DevToolsActivePort read the CLI does.
+ *   2. the project's session-browser profiles (`.aiui-cache/chrome/**`) via
+ *      `discoverSessionBrowserUnder` — every profile layout (legacy flat +
+ *      per-variant), first LIVE DevToolsActivePort wins. A debug channel has
+ *      no launch info, so this rung is its whole discovery — a stale flat
+ *      profile must never shadow a live variant one (found live 2026-07-19).
  *
  * **Loopback only.** The CDP port is root of the browser (docs/guide/chrome.md),
  * so this proxy refuses to bridge to anything but 127.0.0.1/::1 — a tunneled or
@@ -28,9 +31,12 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import { join } from "node:path";
 import type { Duplex } from "node:stream";
-import { discoverSessionBrowser, rehostSocketUrl } from "@habemus-papadum/aiui-util";
+import {
+  discoverSessionBrowser,
+  discoverSessionBrowserUnder,
+  rehostSocketUrl,
+} from "@habemus-papadum/aiui-util";
 import { WebSocket, WebSocketServer } from "ws";
 
 /** How the panel asks whether this tier is even available. */
@@ -127,8 +133,7 @@ export function createCdpProxy(options: CdpProxyOptions = {}): CdpProxy {
       if (options.root === undefined) {
         return undefined;
       }
-      const profile = join(options.root, ".aiui-cache", "chrome", "default");
-      return (await discoverSessionBrowser(profile))?.browserUrl;
+      return (await discoverSessionBrowserUnder(options.root))?.browserUrl;
     });
 
   /** Resolve an endpoint we are willing to bridge to, or say why not. */

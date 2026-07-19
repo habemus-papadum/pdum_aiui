@@ -102,12 +102,16 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
         throw new Error("no channel bound");
       }
       const tab = await config.tabMeta?.();
+      const cdp = config.cdpAlignment?.();
       return (await dialThread({
         url: `ws://127.0.0.1:${port}/ws`,
         meta: {
           ...(tab !== undefined ? { tab } : {}),
           actor: "human",
           ...(options.intent !== undefined ? { intent: options.intent } : {}),
+          // The CDP-alignment snapshot: the prelude's warn/affirm about the
+          // agent's DevTools MCP renders from this (channel prompt-context.ts).
+          ...(cdp !== undefined ? { cdp } : {}),
         },
         onServerMessage: (msg) => {
           const m = msg as { kind?: string; message?: string; source?: string; prompt?: unknown };

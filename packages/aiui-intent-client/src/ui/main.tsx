@@ -20,6 +20,7 @@ import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
 import { createBarHost } from "../bar-host";
 import { type CdpBus, connectCdpBus } from "../cdp/cdp-bus";
+import type { CdpAlignment } from "../cdp-align";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
@@ -64,6 +65,13 @@ installConfigAutoSave(); // every change persists — no save/reset verbs (owner
 // NOTE: no panel zoom on the plain page (owner, 2026-07-16) — it has real browser
 // zoom. Zoom is a side-panel-only concern; see ext/side-panel-zoom.ts.
 
+/** This tier's CDP-alignment verdict (src/cdp-align.ts), set by tryCdpHost:
+ * when the CDP bridge attaches, the pages this panel drives ARE the bound
+ * channel's browser — aligned by construction. No supervisor needed; the
+ * verdict is fixed at boot. Feeds ctx.cdpAlignment (the pill) and the hello's
+ * `meta.cdp` (the prompt prelude's warn/affirm to the agent). */
+let pageAlignment: CdpAlignment | undefined;
+
 /**
  * The CdpBus, when this machine's session browser is up: the channel tells us
  * (`/intent/cdp/info`) rather than us probing Chrome — the page CANNOT reach
@@ -76,17 +84,29 @@ async function tryCdpHost(port: number): Promise<CdpBus | undefined> {
     const res = await fetch(`http://127.0.0.1:${port}/intent/cdp/info`, {
       signal: AbortSignal.timeout(2000),
     });
-    const info = (await res.json()) as { available?: boolean; reason?: string };
+    const info = (await res.json()) as {
+      available?: boolean;
+      browserUrl?: string;
+      reason?: string;
+    };
     if (info.available !== true) {
+      pageAlignment = { state: "channel-no-cdp", boundPort: port };
       setStatusLine(`page hosting: simulated — ${info.reason ?? "no session browser"}`);
       return undefined;
     }
-    return await connectCdpBus({
+    const bus = await connectCdpBus({
       cdpUrl: `ws://127.0.0.1:${port}/intent/cdp`,
       channelOrigin: `http://127.0.0.1:${port}`,
       log: (message) => console.info("[cdp]", message),
     });
+    pageAlignment = {
+      state: "aligned",
+      boundPort: port,
+      ...(info.browserUrl !== undefined ? { channelBrowserUrl: info.browserUrl } : {}),
+    };
+    return bus;
   } catch (err) {
+    pageAlignment = { state: "unknown", boundPort: port };
     setStatusLine(`page hosting: simulated — the CDP bridge failed (${String(err)})`);
     return undefined;
   }
@@ -115,6 +135,7 @@ async function boot(): Promise<{
       host,
       port: () => port,
       tabMeta: async () => ({ url: location.href, title: document.title, kind: "detached-page" }),
+      cdpAlignment: () => pageAlignment,
       onStatus: (line) => {
         setStatusLine(line);
         console.info("[intent-client]", line);
@@ -140,6 +161,9 @@ async function boot(): Promise<{
       },
     });
     channelLanes.bind(client);
+    // The alignment verdict is fixed at boot in this tier (tryCdpHost above);
+    // feed the `cdp` pill the same fact the hello meta carries.
+    client.setContext({ cdpAlignment: pageAlignment });
 
     // The session bus is the `connected` fact (and, later, peers/slots —
     // the iPad paint presence). Outages never disarm; they just gray the pill.

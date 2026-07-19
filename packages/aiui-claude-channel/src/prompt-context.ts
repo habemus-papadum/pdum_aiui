@@ -15,7 +15,7 @@
  * in the body.)
  */
 import { renderTabRecord, type TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
-import type { HelloMeta } from "./frame";
+import type { CdpAlignmentInfo, HelloMeta } from "./frame";
 
 /**
  * The note appended to the preamble when the turn contains SPEECH-transcribed
@@ -24,6 +24,66 @@ import type { HelloMeta } from "./frame";
  */
 export const TRANSCRIPTION_NOTE =
   "Portions of the prompt were transcribed and might have transcription errors.";
+
+/**
+ * The CDP-alignment notes (hello `meta.cdp` — the client's verdict on
+ * whether ITS browser is the one this channel drives; intent client
+ * `cdp-align.ts`). One sentence, agent-addressed: affirm alignment so the
+ * agent uses its Chrome DevTools MCP without fear, or warn that DevTools
+ * reads will NOT match what the user sees. Exported so the tests and the
+ * section builder share one string.
+ */
+export const CDP_ALIGNED_NOTE =
+  "Browser tooling: the Chrome DevTools MCP attached to this session sees the SAME browser " +
+  "the user is viewing — its page list, screenshots, and evaluations reflect what they see.";
+export const CDP_MISALIGNED_NOTE =
+  "Browser tooling WARNING: the Chrome DevTools MCP attached to this session points at a " +
+  "DIFFERENT browser than the one the user is viewing — page state read through it will NOT " +
+  "match what they see. Trust the shots and selections in this prompt instead.";
+export const CDP_NO_BROWSER_NOTE =
+  "Browser tooling: this session drives no browser over CDP — rely on the shots and " +
+  "selections in this prompt rather than browser-devtools tools.";
+
+/** The co-driving heads-up appended to the aligned note when other channels
+ * share the browser (a supported multi-agent workflow — each session should
+ * keep to its own tabs, but honesty beats surprise). */
+export function cdpSharedNote(coDrivers: Array<{ port?: number; label?: string }>): string {
+  const names = coDrivers
+    .map((d) => d.label ?? (d.port !== undefined ? `:${d.port}` : "unknown"))
+    .join(", ");
+  const plural = coDrivers.length === 1 ? "channel is" : "channels are";
+  return (
+    `Be aware: ${coDrivers.length} other aiui ${plural} driving this same browser (${names}). ` +
+    "Each session should keep to its own tabs, but tabs you did not open may change " +
+    "underneath you — do not assume every tab belongs to this session."
+  );
+}
+
+/** The alignment sentence for a hello's `meta.cdp` (undefined = say nothing —
+ * an older client, or an unknown verdict, must not produce false comfort). */
+export function cdpAlignmentNote(cdp: CdpAlignmentInfo | undefined): string | undefined {
+  const coDrivers = cdp?.coDrivers ?? [];
+  switch (cdp?.state) {
+    case "aligned":
+      return coDrivers.length > 0
+        ? `${CDP_ALIGNED_NOTE} ${cdpSharedNote(coDrivers)}`
+        : CDP_ALIGNED_NOTE;
+    case "driven-by-other": {
+      const names = coDrivers
+        .map((d) => d.label ?? (d.port !== undefined ? `:${d.port}` : "unknown"))
+        .join(", ");
+      return `${CDP_MISALIGNED_NOTE}${
+        names !== "" ? ` (The user's browser is driven by: ${names}.)` : ""
+      }`;
+    }
+    case "channel-drives-other":
+      return CDP_MISALIGNED_NOTE;
+    case "channel-no-cdp":
+      return CDP_NO_BROWSER_NOTE;
+    default:
+      return undefined;
+  }
+}
 
 /**
  * The tab + source context sections — everything the hello fixes at connect
@@ -75,6 +135,13 @@ export function promptContextSections(meta: HelloMeta | undefined): string[] {
 
   if (aiui && source?.root !== undefined) {
     sections.push(`Relative paths in this prompt are relative to: ${source.root}`);
+  }
+
+  // The CDP-alignment sentence (hello-fixed, like everything here): warn or
+  // affirm the agent about its DevTools MCP. Unknown/absent stays silent.
+  const cdpNote = cdpAlignmentNote(meta?.cdp);
+  if (cdpNote !== undefined) {
+    sections.push(cdpNote);
   }
 
   return sections;

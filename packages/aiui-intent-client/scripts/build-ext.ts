@@ -38,7 +38,7 @@ import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PCM_WORKLET_SOURCE } from "@habemus-papadum/aiui-intent-runtime/talk";
-import { discoverSessionBrowser, loadUnpackedExtension } from "@habemus-papadum/aiui-util";
+import { discoverSessionBrowserUnder, loadUnpackedExtension } from "@habemus-papadum/aiui-util";
 import {
   type BuildOptions,
   build as esbuild,
@@ -53,8 +53,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(here, "..");
 const extRoot = join(packageRoot, "src/ext");
 const outDir = join(packageRoot, "dist-ext");
-/** The session browser's profile — where its DevToolsActivePort lives. */
-const profileDir = join(packageRoot, "..", "..", ".aiui-cache", "chrome", "default");
+/** The workspace root — the session browser's profiles live under its
+ * `.aiui-cache/chrome/` (any layout; discoverSessionBrowserUnder scans). */
+const workspaceRoot = join(packageRoot, "..", "..");
 
 const watch = process.argv.includes("--watch");
 
@@ -200,7 +201,7 @@ if (!watch) {
         if (!complete) {
           return;
         }
-        const session = await discoverSessionBrowser(profileDir);
+        const session = await discoverSessionBrowserUnder(workspaceRoot);
         if (session === undefined) {
           return;
         }

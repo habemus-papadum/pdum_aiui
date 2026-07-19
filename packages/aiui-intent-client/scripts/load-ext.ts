@@ -18,14 +18,15 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { discoverSessionBrowser, loadUnpackedExtension } from "@habemus-papadum/aiui-util";
+import { discoverSessionBrowserUnder, loadUnpackedExtension } from "@habemus-papadum/aiui-util";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const extDir = join(here, "..", "dist-ext");
-// The project-local profile the session browser runs on (packages/aiui/src/util).
-const profile = join(here, "..", "..", "..", ".aiui-cache", "chrome", "default");
+// The workspace root — the session browser's profiles live under its
+// `.aiui-cache/chrome/` (any layout; discoverSessionBrowserUnder scans).
+const workspaceRoot = join(here, "..", "..", "..");
 
-const session = await discoverSessionBrowser(profile);
+const session = await discoverSessionBrowserUnder(workspaceRoot);
 if (session === undefined) {
   console.error(
     "no session browser running — start one (`aiui claude`, or `aiui browser`) and re-run.",

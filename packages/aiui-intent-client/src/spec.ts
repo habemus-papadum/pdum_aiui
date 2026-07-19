@@ -35,6 +35,7 @@ import {
   type StatePatch,
   toggle,
 } from "@habemus-papadum/aiui-viz/modal";
+import type { CdpAlignment } from "./cdp-align";
 
 /** The world's facts (inputs, not choices — no command sets these). */
 export interface IntentContext {
@@ -55,6 +56,11 @@ export interface IntentContext {
   /** The active tab is aiui-INSTRUMENTED (window.__AIUI__): it can host
    * jump-to-editor. */
   aiuiPage: boolean;
+  /** CDP alignment: does the browser this client runs in match the browser
+   * the bound channel drives (src/cdp-align.ts)? Undefined until the
+   * supervisor's first verdict. Drives the `cdp` pill, rides the hello meta
+   * into the prompt prelude, and gates browser-tooling features. */
+  cdpAlignment: CdpAlignment | undefined;
 }
 
 export const initialContext: IntentContext = {
@@ -65,6 +71,7 @@ export const initialContext: IntentContext = {
   micGranted: undefined,
   pencilClients: 0,
   aiuiPage: false,
+  cdpAlignment: undefined,
 };
 
 /**

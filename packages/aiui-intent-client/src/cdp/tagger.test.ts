@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EXTENSION_ID } from "../ext/manifest";
 import type { CdpSocket } from "./protocol";
-import { CDP_CHANNEL_TAG_KEY, tagOnce } from "./tagger";
+import { CDP_DRIVER_TAG_PREFIX, tagOnce } from "./tagger";
 
 const BROWSER_URL = "http://127.0.0.1:9222";
 
@@ -99,7 +99,7 @@ describe("tagOnce", () => {
     expect(evaluate?.sessionId).toBe("S1"); // the WORKER's session, not the browser's
     const expression = String(evaluate?.params.expression);
     expect(expression).toContain("chrome.storage.local.set");
-    expect(expression).toContain(CDP_CHANNEL_TAG_KEY);
+    expect(expression).toContain(`${CDP_DRIVER_TAG_PREFIX}5050`); // its OWN roster slot
     expect(expression).toContain('"port":5050');
     expect(expression).toContain(BROWSER_URL);
 
