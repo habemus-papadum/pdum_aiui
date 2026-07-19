@@ -1,65 +1,22 @@
-/* morphogen + aztec + seismos — a scientific-notebook theme. This demo opts out
- * of the library's system-following mode: it **defaults to light** and offers an
- * explicit toggle (site/theme.ts + ThemeToggle), because the notebooks — the
- * seismos epicenter map especially — read best on a light surface. Every color
- * is a design token on :root; **light is the default**, and dark is opt-in via
- * `:root[data-theme="dark"]` (the attribute the toggle stamps on <html>). The
- * per-mode chart palettes and the literal SVG/Plot colors live in
- * src/site/theme.ts (validated with the dataviz procedure against each mode's
- * panel surface). The simulation canvases are the deliberate exception: they
- * render as self-contained dark figures (--figure-bg, never overridden) in both
- * modes, framed by the panel border like a journal plate. */
+/* morphogen + aztec + seismos + circle — a scientific-notebook theme, **dark
+ * only**. The gallery is one dark journal: there is no light mode and no toggle
+ * (owner, 2026-07-19 — a single consistent surface reads better than two, even
+ * if a light reader would have preferred the epicenter map on white). Every
+ * color is a design token on :root; the head stamps `data-theme="dark"` before
+ * first paint purely so `site/theme.ts`'s `mode()` reads dark for the literal
+ * SVG/Plot colors. The per-mode chart palettes live in src/site/theme.ts
+ * (dark validated with the dataviz procedure against the panel surface). The
+ * simulation canvases and the circle board are self-contained dark figures
+ * (--figure-bg), framed by the panel border like a journal plate. */
 
 :root {
   /* surfaces */
-  --bg: #f4f5f7;
-  --panel: #ffffff;
-  --panel-border: #e3e6ec;
-  --figure-bg: #0e1119; /* constant across modes — the dark canvas plate */
-
-  /* text ramp (primary → faint) */
-  --text: #1a1d24;
-  --text-heading: #2c313b;
-  --text-secondary: #566072;
-  --text-dim: #6b7385;
-  --text-muted: #7b8494;
-  --text-faint: #868fa0;
-
-  /* accents */
-  --accent: #2f6fce;
-  --accent-strong: #2f6fce; /* slider thumb, progress fill */
-
-  /* buttons */
-  --btn-bg: #eef1f6;
-  --btn-text: #2c313b;
-  --btn-hover: #e2e7f0;
-  --btn-border: #d3d9e4;
-
-  /* lines & rows */
-  --grid-line: #e7eaf0;
-  --row-border: #eceef3;
-  --row-hover: #f2f5fa;
-  --row-active: #e2ecfb;
-  --surface-hover: #f2f5fa;
-
-  --progress-track: rgba(0, 0, 0, 0.06);
-
-  /* status */
-  --ok: #1f9068;
-  --error-bg: #fdf1f1;
-  --error-border: #e6b3b3;
-  --error-text: #b0344a;
-
-  /* site header */
-  --header-bg: rgba(255, 255, 255, 0.78);
-}
-
-:root[data-theme="dark"] {
   --bg: #0e1119;
   --panel: #171b25;
   --panel-border: #262c3a;
-  /* --figure-bg stays #0e1119 — the canvas is a figure, not a page surface */
+  --figure-bg: #0e1119; /* the dark canvas/board plate */
 
+  /* text ramp (primary → faint) */
   --text: #e8e8ea;
   --text-heading: #c3c9d4;
   --text-secondary: #9aa0aa;
@@ -67,14 +24,17 @@
   --text-muted: #6b7280;
   --text-faint: #5b6270;
 
+  /* accents */
   --accent: #8ab4f8;
-  --accent-strong: #4a86dd;
+  --accent-strong: #4a86dd; /* slider thumb, progress fill */
 
+  /* buttons */
   --btn-bg: #263048;
   --btn-text: #cdd6e4;
   --btn-hover: #2f3c58;
   --btn-border: #364157;
 
+  /* lines & rows */
   --grid-line: #232937;
   --row-border: #1d2330;
   --row-hover: #1d2432;
@@ -83,11 +43,13 @@
 
   --progress-track: rgba(255, 255, 255, 0.06);
 
+  /* status */
   --ok: #2fa876;
   --error-bg: #241418;
   --error-border: #6b3a3a;
   --error-text: #f0a5a5;
 
+  /* site header */
   --header-bg: rgba(14, 17, 25, 0.72);
 }
 
@@ -685,36 +647,4 @@ body {
 }
 .dim {
   color: var(--text-dim);
-}
-
-/* --- theme toggle (light default, opt-in dark) ------------------------------ */
-.theme-toggle {
-  position: fixed;
-  left: 16px;
-  bottom: 16px;
-  z-index: 60;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 12px 7px 11px;
-  border-radius: 999px;
-  border: 1px solid var(--btn-border);
-  background: var(--panel);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.16);
-}
-.theme-toggle:hover {
-  background: var(--btn-hover);
-  color: var(--text);
-}
-.theme-toggle svg {
-  display: block;
-}
-.theme-toggle-label {
-  font-weight: 550;
-  letter-spacing: 0.01em;
 }

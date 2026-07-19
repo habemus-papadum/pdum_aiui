@@ -11,10 +11,12 @@ import type { JSX } from "@solidjs/web";
 interface Item {
   label: string;
   tex: string;
-  wide?: boolean;
 }
 
-const ITEMS: Item[] = [
+// Two hand-authored columns (the layout the user asked for): the circle-fit
+// chain on the left, the ellipse/turning/score chain on the right. Each column
+// flows top-to-bottom, left-aligned — no centered full-width equations.
+const LEFT: Item[] = [
   {
     label: "Best-fit circle (Kåsa)",
     tex: "\\min_{D,E,F}\\sum_i\\left(x_i^2+y_i^2+Dx_i+Ey_i+F\\right)^2",
@@ -31,20 +33,20 @@ const ITEMS: Item[] = [
     label: "Roundness",
     tex: "R=\\max\\!\\left(0,\\;1-2.9\\,\\mathrm{CV}\\right)",
   },
+];
+
+const RIGHT: Item[] = [
   {
     label: "Moment ellipse (eigenvalues)",
     tex: "\\lambda_{1,2}=\\tfrac{S_{xx}+S_{yy}}{2}\\pm\\sqrt{\\left(\\tfrac{S_{xx}-S_{yy}}{2}\\right)^2+S_{xy}^2}",
-    wide: true,
   },
   {
     label: "Eccentricity & tilt",
     tex: "e=\\sqrt{1-\\tfrac{\\lambda_2}{\\lambda_1}},\\quad \\theta=\\tfrac12\\operatorname{atan2}(2S_{xy},\\,S_{xx}-S_{yy})",
-    wide: true,
   },
   {
     label: "Sweep & completeness",
     tex: "\\Theta=\\Big|\\textstyle\\sum_i\\Delta\\varphi_i\\Big|,\\quad C=\\max\\!\\left(0,\\,1-\\tfrac{|\\Theta-360^\\circ|}{360^\\circ}\\right)",
-    wide: true,
   },
   {
     label: "Score",
@@ -56,15 +58,24 @@ const ITEMS: Item[] = [
   },
 ];
 
-export function MathSection(): JSX.Element {
+function Column(props: { items: Item[] }): JSX.Element {
   return (
-    <div class="circle-math">
-      {ITEMS.map((it) => (
-        <div class={it.wide ? "circle-math-item wide" : "circle-math-item"}>
+    <div class="circle-math-col">
+      {props.items.map((it) => (
+        <div class="circle-math-item">
           <div class="circle-math-label">{it.label}</div>
           <TeX tex={it.tex} display />
         </div>
       ))}
+    </div>
+  );
+}
+
+export function MathSection(): JSX.Element {
+  return (
+    <div class="circle-math">
+      <Column items={LEFT} />
+      <Column items={RIGHT} />
     </div>
   );
 }

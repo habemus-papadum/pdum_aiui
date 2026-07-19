@@ -247,13 +247,13 @@ signal inside their own options memo.
   is mostly the *detection network* growing, not seismicity — so completeness itself
   improves over time; and Mc set below the roll-off biases b.
 
-## Why THIS page defaults to light (a deliberate one-off)
+## Theming: the gallery is dark-only (2026-07-19)
 
-seismos deviates from the style guide's default theming convention (follow
-`prefers-color-scheme`, no toggle): the epicenter-density map reads far better on a light
-surface, so **this page only** defaults to light with an explicit ThemeToggle (persisted in
-localStorage, reflected onto `<html data-theme>` by its head's no-flash script). The other
-notebooks (morphogen, aztec) follow the system mode with no toggle, per the convention —
-their heads stamp the system preference and `initSystemTheme()` keeps it live. The policy
-anchor is each page's <head> script; see `src/site/theme.ts` for the mechanism. New pages
-should follow the system unless they have a reason like this one.
+The gallery is now a single **dark journal** — no light mode, no toggle. seismos
+once defaulted to light (the epicenter-density map reads better on white) with a
+per-page ThemeToggle, but two surfaces across the notebooks read as inconsistent,
+so the whole site committed to dark. `index.html`'s head stamps
+`data-theme="dark"` before first paint and `src/site/theme.ts` (`mode()`, a
+constant `"dark"`) is the source of truth for the literal chart/Plot colors; CSS
+goes through the `:root` tokens. The epicenter map keeps working on dark — it was
+always a supported mode — it just no longer gets the light surface it preferred.

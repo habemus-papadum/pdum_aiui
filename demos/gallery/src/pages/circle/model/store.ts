@@ -115,6 +115,12 @@ export const paper = durable(
       // Transparent: the page's dark ground shows through, ink floats on it.
       background: () => undefined,
       onStrokeStart: () => {
+        // One mark at a time: the previous stroke clears the instant a new one
+        // begins. `clearCompleted` drops the finished/fading strokes but leaves
+        // THIS just-begun stroke (already in the live set) untouched — a plain
+        // clear() here would wipe it. (Idle strokes still fade on their own via
+        // fadeSec; this only makes a *new* stroke replace the last at once.)
+        paper.clearCompleted();
         // A new stroke IS a new turn: bump the counter, drop the last turn's
         // frozen stats, and enter the live phase.
         turnCount.set((n) => n + 1);

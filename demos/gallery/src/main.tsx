@@ -24,9 +24,9 @@ import { createEffect, createSignal, Show, untrack } from "solid-js";
 import { BRAND, LINKS, TABS } from "./site/nav";
 import { type GalleryPage, loadPage } from "./site/pages";
 import { interceptLocalLinks, type Route, route } from "./site/router";
-import { initSystemTheme } from "./site/theme";
+import { initTheme } from "./site/theme";
 
-initSystemTheme(); // the shell follows prefers-color-scheme (style-guide default)
+initTheme(); // dark-only journal — re-assert the head's data-theme="dark"
 interceptLocalLinks();
 
 interface View {

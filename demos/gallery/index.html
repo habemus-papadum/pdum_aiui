@@ -3,18 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Stamp the system color mode before first paint (no flash); the app
-         keeps it live via initSystemTheme(). -->
+    <!-- The gallery is a dark-only journal: stamp dark before first paint (no
+         flash). site/theme.ts re-asserts it and reads it for literal colors. -->
     <script>
-      try {
-        document.documentElement.dataset.theme = window.matchMedia(
-          "(prefers-color-scheme: dark)",
-        ).matches
-          ? "dark"
-          : "light";
-      } catch {
-        document.documentElement.dataset.theme = "light";
-      }
+      document.documentElement.dataset.theme = "dark";
     </script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon.png" sizes="512x512" type="image/png" />

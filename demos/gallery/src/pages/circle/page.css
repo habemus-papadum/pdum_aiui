@@ -350,13 +350,24 @@
 
 .circle-math {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px 22px;
+  grid-template-columns: 1fr 1fr;
+  gap: 36px;
   margin-top: 6px;
+  align-items: start;
 }
 
-.circle-math-item.wide {
-  grid-column: 1 / -1;
+@media (max-width: 720px) {
+  .circle-math {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.circle-math-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
 .circle-math-label {
@@ -371,4 +382,11 @@
   overflow-y: hidden;
   color: var(--text);
   font-size: 0.9em;
+  text-align: left;
+}
+
+/* KaTeX display mode centers by default — left-align it in the column */
+.circle-math .katex-display {
+  margin: 0;
+  text-align: left;
 }

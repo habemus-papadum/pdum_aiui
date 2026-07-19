@@ -309,6 +309,35 @@ export class PencilSurface {
   }
 
   /**
+   * Drop every COMPLETED stroke — the retained tiles (addressable / still
+   * fading), the flattened raw points past the undo horizon, and the settled
+   * bitmap — while leaving strokes STILL UNDER THE PEN untouched.
+   *
+   * This is the "one mark at a time" primitive. {@link onStrokeStart} fires
+   * from inside `beginStroke`, *after* the new stroke has already joined the
+   * `live` set, so a plain {@link clear} (or {@link clearAnimated}) there would
+   * wipe the mark you just began. This clears only what came *before* it, so a
+   * consumer that wants each new stroke to replace the last calls it from
+   * `onStrokeStart`. `live` is never touched and `onAutoClear` never fires — the
+   * surface is not going empty, a stroke is in flight.
+   */
+  clearCompleted(): void {
+    const had =
+      this.retained.length > 0 ||
+      this.flattened.length > 0 ||
+      this.settled !== undefined ||
+      this.clearing !== undefined;
+    this.retained = [];
+    this.flattened = [];
+    this.settled = undefined;
+    this.clearing = undefined;
+    if (had) {
+      this.dirty = true;
+      this.emit("strokes");
+    }
+  }
+
+  /**
    * Clear, but let the ink go the way vanishing ink goes: every stroke jumps to
    * the **charge-and-pop tail** of the fade curve — it thickens, heats, and pops,
    * over `durationSec` — and then the surface is really cleared. The same curve a

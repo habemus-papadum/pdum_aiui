@@ -1,90 +1,35 @@
 /**
- * theme.ts — this app's palettes and Plot cosmetics, plus the mode signal.
+ * theme.ts — this app's palettes and Plot cosmetics.
  *
- * Theming policy is **per page**, anchored in each page's <head> no-flash
- * script (which stamps `<html data-theme>` before first paint) and finished
- * here at module load by reading that attribute back into the signal:
- *
- * - **morphogen + aztec** follow `prefers-color-scheme` (the style-guide
- *   default): their heads stamp the system mode, and `initSystemTheme()`
- *   (called from their entries) keeps signal + attribute live on OS changes.
- *   No toggle is rendered.
- * - **seismos** is the sanctioned one-off (see its NOTES.md): light by
- *   default — the epicenter map reads best on a light surface — with an
- *   explicit ThemeToggle persisted in localStorage. Only its head reads
- *   storage; only it calls `setMode`/`toggleMode`.
- *
- * Either way `mode()` is the single source of truth for the *literal* colors
- * below (chart series, Plot cosmetics, SVG strokes); CSS goes through the
- * `:root[data-theme]` tokens.
+ * The gallery is a **dark-only journal** (owner, 2026-07-19): there is no light
+ * mode and no toggle. `mode()` is a constant `"dark"`, kept as a function so the
+ * chart/Plot option memos that read it don't change shape. The head stamps
+ * `data-theme="dark"` before first paint; `initTheme()` re-asserts it
+ * defensively at module load. `mode()` remains the single source of truth for
+ * the *literal* colors below (chart series, Plot cosmetics, SVG strokes); CSS
+ * goes through the `:root` tokens (styles.css).
  */
-import { createSignal } from "solid-js";
 
 export type ColorMode = "light" | "dark";
 export type Mode = ColorMode;
 
-const STORAGE_KEY = "aiui-theme";
+/** The color mode. Constant `"dark"` — the gallery has one surface. */
+export const mode = (): Mode => "dark";
+export const isDark = (): boolean => true;
 
-/** The head script already stamped the page's policy onto <html>. */
-function initialMode(): Mode {
-  if (typeof document !== "undefined" && document.documentElement.dataset.theme === "dark") {
-    return "dark";
-  }
-  return "light";
-}
-
-const [mode, setModeSignal] = createSignal<Mode>(initialMode());
-
-function reflect(m: Mode): void {
+/** Re-assert the dark attribute at module load (the head already stamped it
+ * pre-paint; this covers any environment where the head script didn't run). */
+export function initTheme(): void {
   if (typeof document !== "undefined") {
-    document.documentElement.dataset.theme = m;
+    document.documentElement.dataset.theme = "dark";
   }
 }
 
-/** The live color mode. Reading it in a chart's options memo re-renders that
- *  chart on a mode change (toggle or OS, per the page's policy). */
-export { mode };
-export const isDark = (): boolean => mode() === "dark";
-
 /**
- * System-following pages (morphogen, aztec) call this once from their entry:
- * signal + attribute track `prefers-color-scheme` live. Entry modules run once
- * per page load, so the listener never stacks under HMR.
- */
-export function initSystemTheme(): void {
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  const apply = (dark: boolean) => {
-    const m: Mode = dark ? "dark" : "light";
-    setModeSignal(m);
-    reflect(m);
-  };
-  apply(mql.matches);
-  mql.addEventListener("change", (e) => apply(e.matches));
-}
-
-/** Set the mode explicitly and persist it (seismos's toggle only). */
-export function setMode(m: Mode): void {
-  setModeSignal(m);
-  reflect(m);
-  try {
-    localStorage.setItem(STORAGE_KEY, m);
-  } catch {
-    /* ignore persistence failures */
-  }
-}
-
-/** Flip between light and dark (the ThemeToggle handler). */
-export function toggleMode(): void {
-  setMode(mode() === "dark" ? "light" : "dark");
-}
-
-/**
- * The canonical categorical chart palette, one validated set per mode (same
- * hues, mode-tuned lightness). Dark validated against the panel surface
- * #171b25; light against #ffffff — both pass the dataviz six checks (band,
- * chroma floor, adjacent CVD ΔE, 3:1 contrast). Fixed assignment: color follows
- * the series, never its rank. morphogen reads all three; aztec's frozen-fraction
- * line borrows `blue`.
+ * The canonical categorical chart palette, validated against the dark panel
+ * surface #171b25 (the dataviz six checks: band, chroma floor, adjacent CVD ΔE,
+ * 3:1 contrast). Fixed assignment: color follows the series, never its rank.
+ * morphogen reads all three; aztec's frozen-fraction line borrows `blue`.
  */
 export interface ChartPalette {
   blue: string;
@@ -92,15 +37,14 @@ export interface ChartPalette {
   purple: string;
 }
 
-const CHART: Record<Mode, ChartPalette> = {
-  dark: { blue: "#4a86dd", green: "#2fa876", purple: "#9b6fdb" },
-  light: { blue: "#2f6fce", green: "#1f9068", purple: "#7a52c8" },
-};
-
-export const chart = (): ChartPalette => CHART[mode()];
+export const chart = (): ChartPalette => ({
+  blue: "#4a86dd",
+  green: "#2fa876",
+  purple: "#9b6fdb",
+});
 
 /**
- * Observable Plot cosmetics that need literal values per mode: `text` is the
+ * Observable Plot cosmetics that need literal values: `text` is the
  * axis/label/tick ink (Plot also derives its grid stroke from it), `rule` is a
  * baseline/reference-line gray, `strong` is an emphasized annotation ink.
  */
@@ -110,16 +54,14 @@ export interface PlotCosmetics {
   strong: string;
 }
 
-const PLOT: Record<Mode, PlotCosmetics> = {
-  dark: { text: "#9aa0aa", rule: "#3a4152", strong: "#c3c9d4" },
-  light: { text: "#5a616e", rule: "#d3d7de", strong: "#3a414c" },
-};
-
-export const plot = (): PlotCosmetics => PLOT[mode()];
+export const plot = (): PlotCosmetics => ({
+  text: "#9aa0aa",
+  rule: "#3a4152",
+  strong: "#c3c9d4",
+});
 
 /** The `style` object for a Plot figure on a panel surface — transparent
- * background, mode-appropriate ink. Replaces the library's static PLOT_STYLE
- * (which only knew the dark surface). */
+ * background, dark-surface ink. */
 export const plotStyle = (): { background: string; color: string; fontSize: string } => ({
   background: "transparent",
   color: plot().text,
