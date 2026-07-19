@@ -146,8 +146,9 @@ working session depends on. Default name: `default`. Selected per launch with a 
 Setup is **interactive and deliberate**, not a silent auto-materialization. `aiui claude` runs it
 **only when the current (project, config-name) has not been set up** and the session is
 interactive; otherwise launch proceeds straight through (and non-interactive/CI never prompts —
-it uses today's argv path, unchanged). It is also directly invokable: `aiui setup [--aiui-config
-<name>]`, and re-runnable to edit an existing config or stand up a new named one.
+it uses today's argv path, unchanged). It is also directly invokable:
+`aiui setup [--aiui-config <name>]`, and re-runnable to edit an existing config or stand up a new
+named one.
 
 It absorbs and extends today's first-run questions (`first-run.ts` — bind, enterNudge), which
 become sections here rather than a separate prompt.
@@ -303,5 +304,3 @@ channel's argv fallback (§The mechanism, piece 3) is what preserves this.
 3. The interview: scope detection, then §1–§6, reusing the preflight/browser/config pieces above.
 4. Migrate `first-run.ts` into the interview; update `docs/guide/` (getting-started, config,
    chrome, remote) and `CLAUDE.md`'s security-posture paragraph.
-</content>
-</invoke>
