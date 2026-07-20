@@ -1,0 +1,21 @@
+{
+  "name": "aiui-proxy-jwt-exploration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone exploration: a stateless JWT-gated proxy in front of the channel's vendor APIs, plus a local mock OIDC-style issuer. Demonstrates 'bring-your-own-key' vs 'log-in-and-proxy' modes. Not wired into anything.",
+  "scripts": {
+    "issuer": "tsx issuer.ts",
+    "proxy": "tsx proxy.ts",
+    "demo": "tsx client-demo.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

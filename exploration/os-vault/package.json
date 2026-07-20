@@ -1,0 +1,19 @@
+{
+  "name": "aiui-os-vault-exploration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone exploration: store the channel's three vendor API keys in the OS secret vault (macOS Keychain / Linux Secret Service), plus an env-then-vault resolver. Not wired into anything.",
+  "scripts": {
+    "store": "tsx store.ts",
+    "resolve": "tsx resolve.ts",
+    "delete": "tsx delete.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
