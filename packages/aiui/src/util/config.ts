@@ -1,19 +1,18 @@
 /**
- * aiui's two-level configuration file.
+ * aiui's configuration file — ONE flat, user-level `config.json`
+ * (`<user cache>/config.json`, e.g. `~/.cache/aiui/config.json`, respecting
+ * AIUI_CACHE / XDG_CACHE_HOME). The former project-level layer
+ * (`.aiui-cache/config.json`) and the per-key merge are retired with the
+ * browser-profiles redesign (docs/proposals/browser-profiles.md): browser
+ * identity lives in the profile marker now, and what remains in config are
+ * per-user machine facts.
  *
- * Settings live in `config.json` at up to two places, merged per-key with the
- * more specific one winning:
- *
- *   <user cache>/config.json          e.g. ~/.cache/aiui/config.json (respects
- *                                     AIUI_CACHE / XDG_CACHE_HOME)
- *   <project>/.aiui-cache/config.json  next to the traces and Chrome profiles
- *
- * CLI flags override both. Everything is optional; a missing file is an empty
- * config. A *malformed* file is a hard error, not a warning — these settings
- * gate security-relevant behavior (`claude.args`, e.g. whether
+ * CLI flags override config. Everything is optional; a missing file is an
+ * empty config. A *malformed* file is a hard error, not a warning — these
+ * settings gate security-relevant behavior (`claude.args`, e.g. whether
  * `--dangerously-skip-permissions` is passed), and a typo that silently drops
- * such a flag is worse than a failed launch. The same reasoning rejects unknown
- * keys.
+ * such a flag is worse than a failed launch. The same reasoning rejects
+ * unknown keys.
  *
  * What the keys are — types, enums, defaults, and documentation — lives in one
  * declarative table, `config-schema.ts`. Validation here walks that schema, and
@@ -22,30 +21,23 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel/internal";
 import { cacheDir } from "@habemus-papadum/aiui-util";
 import {
   type ChannelBind,
-  type ChromeChannel,
-  type ChromeMode,
   CONFIG_SECTIONS,
   type ConfigValue,
-  DEFAULT_MANAGED_FLAVOR,
   fieldRuntimeType,
   formatConfigValue,
   invalidReason,
   isArrayField,
-  type ManagedFlavor,
   type ManageMode,
 } from "./config-schema";
 
 export {
   CHANNEL_BINDS,
   CHROME_CHANNELS,
-  CHROME_MODES,
   type ChannelBind,
   type ChromeChannel,
-  type ChromeMode,
   DEFAULT_MANAGED_FLAVOR,
   MANAGE_MODES,
   MANAGED_FLAVORS,
@@ -56,7 +48,7 @@ export {
 export const CONFIG_FILENAME = "config.json";
 
 /**
- * The typed shape of a config file. Must mirror `CONFIG_SECTIONS` in
+ * The typed shape of the config file. Must mirror `CONFIG_SECTIONS` in
  * config-schema.ts — the schema rows carry the full per-key documentation and
  * defaults; the comments here are just orientation.
  */
@@ -72,44 +64,21 @@ export interface AiuiConfig {
     bind?: ChannelBind;
   };
   chrome?: {
-    /** Attach the Chrome DevTools MCP (default: true). */
-    enabled?: boolean;
-    /** How the MCP reaches a browser: shared session browser, or its own. */
-    mode?: ChromeMode;
-    /** Attach to this DevTools endpoint instead of managing a browser at all. */
-    browserUrl?: string;
-    /** Fixed DevTools debug port for session browsers aiui launches (0 = OS-assigned). */
-    debugPort?: number;
-    /** Named profile under `.aiui-cache/chrome/` (default: "default"). */
-    profile?: string;
-    /** Explicit Chrome user data dir; takes precedence over `profile`. */
-    dataDir?: string;
-    /** Explicit browser binary to launch. Mutually exclusive with `channel`. */
-    executablePath?: string;
-    /** Installed Chrome release channel to launch. */
-    channel?: ChromeChannel;
-    /** Which browser aiui downloads and manages (default: chromium). */
-    managed?: ManagedFlavor;
-    /** How `aiui claude` keeps the managed browser installed/current. */
+    /** How `aiui claude` keeps the managed browser binaries installed/current. */
     manage?: ManageMode;
-    /** @deprecated Old name for `manage`; still honored when `manage` is unset. */
-    forTesting?: ManageMode;
     /** Launch Chrome headless (default: false). */
     headless?: boolean;
   };
 }
 
-/** The untyped view validation and merging work in: section → leaf values. */
+/** The untyped view validation works in: section → leaf values. */
 type SectionValues = Record<string, ConfigValue>;
 
 /**
  * Top-level sections that USED to be valid and are now gone. A config file that
  * still carries one must not hard-fail — that would break every existing
  * config on upgrade — so it is accepted and ignored, distinct from a
- * genuinely-unknown key (a typo), which still throws. `sidecars.*` retired when
- * the channel began hosting its whole standard set unconditionally (today:
- * intent, bar, pencil, console): there is nothing left to toggle, so the key is
- * inert and safe to delete.
+ * genuinely-unknown key (a typo), which still throws.
  */
 const DEPRECATED_SECTIONS = new Set(["sidecars"]);
 
@@ -117,44 +86,41 @@ const DEPRECATED_SECTIONS = new Set(["sidecars"]);
  * Leaf keys that USED to be valid within a section and are now GONE — the
  * field-level twin of {@link DEPRECATED_SECTIONS}. A config still carrying one
  * is accepted and dropped (never copied into the loaded config), not a hard
- * error on upgrade. `chrome.buildExtension` / `chrome.autoCapture` retired with
- * the DevTools extension and page-side getDisplayMedia capture — both were long
- * parsed-and-ignored, and nothing reads them (owner, 2026-07-17).
+ * error on upgrade.
  *
- * `claude.skipPermissions` retired when `--dangerously-skip-permissions` moved
- * into the general `claude.args` list (owner, 2026-07-17): a config still
- * carrying the old boolean is tolerated and dropped — it no longer adds the
- * flag, so run `aiui config set-dsp` to opt back in (docs/guide/warning).
+ * The big chrome batch retired with the browser-profiles redesign
+ * (2026-07-20): browser identity — enabled/mode/browserUrl/debugPort/profile/
+ * dataDir/executablePath/channel/managed/forTesting — moved into the profile
+ * marker or became flag-only. `claude.skipPermissions` retired earlier when
+ * `--dangerously-skip-permissions` moved into `claude.args` (run
+ * `aiui config set-dsp` to opt back in).
  */
 const DEPRECATED_FIELDS: Record<string, readonly string[]> = {
   claude: ["skipPermissions"],
-  chrome: ["buildExtension", "autoCapture"],
+  chrome: [
+    "buildExtension",
+    "autoCapture",
+    "enabled",
+    "mode",
+    "browserUrl",
+    "debugPort",
+    "profile",
+    "dataDir",
+    "executablePath",
+    "channel",
+    "managed",
+    "forTesting",
+  ],
 };
 
-/** The `config.json` paths consulted, user-level first (base: the project dir). */
-export function configPaths(base: string = process.cwd()): { user: string; project: string } {
-  return {
-    user: join(cacheDir(undefined, { create: false }), CONFIG_FILENAME),
-    project: join(projectCacheDir(base), CONFIG_FILENAME),
-  };
+/** The one `config.json` path (user-level). */
+export function configPath(): string {
+  return join(cacheDir(undefined, { create: false }), CONFIG_FILENAME);
 }
 
-/** Load and merge the user- and project-level configs (project wins per key). */
-export function loadAiuiConfig(base: string = process.cwd()): AiuiConfig {
-  const paths = configPaths(base);
-  return mergeAiuiConfig(readConfigFile(paths.user) ?? {}, readConfigFile(paths.project) ?? {});
-}
-
-/** Merge two configs section-by-section; `override`'s keys win within a section. */
-export function mergeAiuiConfig(base: AiuiConfig, override: AiuiConfig): AiuiConfig {
-  const merged: Record<string, SectionValues> = {};
-  for (const section of CONFIG_SECTIONS) {
-    merged[section.name] = {
-      ...(base as Record<string, SectionValues | undefined>)[section.name],
-      ...(override as Record<string, SectionValues | undefined>)[section.name],
-    };
-  }
-  return merged as AiuiConfig;
+/** Load the user-level config (missing file → empty config). */
+export function loadAiuiConfig(): AiuiConfig {
+  return readConfigFile(configPath()) ?? {};
 }
 
 /**
@@ -209,8 +175,6 @@ function validateConfig(raw: unknown, file: string): AiuiConfig {
       file,
       `"${section.name}"`,
     );
-    // Absent keys stay absent (never `undefined`), or merging would let them
-    // clobber a value from the other config level.
     const out: SectionValues = {};
     for (const field of section.fields) {
       const value = values[field.key];
@@ -242,21 +206,14 @@ function validateConfig(raw: unknown, file: string): AiuiConfig {
 }
 
 /**
- * Persist a change to the **user-level** config (creating the file if needed).
- *
- * This is how interactive prompt answers like "never ask again" become
- * durable: they are per-user decisions, so they land in the user cache — never
- * in the project file, which may be shared/committed by a team.
+ * Persist a change to the config (creating the file if needed). This is how
+ * interactive prompt answers like "never ask again" become durable.
  */
 export function updateUserConfig(mutate: (config: AiuiConfig) => void): string {
-  return updateConfigFile(configPaths().user, mutate);
+  return updateConfigFile(configPath(), mutate);
 }
 
-/**
- * Persist a change to a specific config file — the general form behind
- * {@link updateUserConfig}, and how `aiui config set --project` writes the
- * project level deliberately.
- */
+/** The general form behind {@link updateUserConfig} (tests use other paths). */
 export function updateConfigFile(file: string, mutate: (config: AiuiConfig) => void): string {
   const config = readConfigFile(file) ?? {};
   mutate(config);
@@ -265,22 +222,9 @@ export function updateConfigFile(file: string, mutate: (config: AiuiConfig) => v
   return file;
 }
 
-/**
- * The managed browser this config prefers when nothing names a browser
- * explicitly — {@link DEFAULT_MANAGED_FLAVOR} (chromium) unless `chrome.managed`
- * overrides it. Flip the global default with
- * `aiui config set chrome.managed chrome-for-testing`.
- */
-export function resolveManagedFlavor(chrome: AiuiConfig["chrome"] = {}): ManagedFlavor {
-  return chrome.managed ?? DEFAULT_MANAGED_FLAVOR;
-}
-
-/**
- * The manage mode, honoring the deprecated `chrome.forTesting` alias: an
- * explicit `chrome.manage` wins, else the old key, else "prompt".
- */
+/** The manage mode: `chrome.manage`, defaulting to "prompt". */
 export function resolveManageMode(chrome: AiuiConfig["chrome"] = {}): ManageMode {
-  return chrome.manage ?? chrome.forTesting ?? "prompt";
+  return chrome.manage ?? "prompt";
 }
 
 function asSection(value: unknown, file: string, where: string): Record<string, unknown> {

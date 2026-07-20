@@ -6,9 +6,9 @@ describe("startRefusal (the start half of `aiui open`'s decision)", () => {
     expect(startRefusal({ kind: "open" }, "http://x")).toBeUndefined();
   });
 
-  it("refuses when the project opted out (chrome.enabled: false)", () => {
+  it("refuses when opening is suppressed for the run", () => {
     const refusal = startRefusal({ kind: "skip" }, "http://x");
-    expect(refusal?.title).toContain("chrome.enabled");
+    expect(refusal?.title).toContain("suppressed");
     expect(refusal?.detail).toContain("http://x");
   });
 

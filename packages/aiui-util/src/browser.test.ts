@@ -109,18 +109,9 @@ describe("decideBrowserAction", () => {
     ).toEqual({ kind: "skip" });
   });
 
-  it("forces open with the force flag, even under CI/headless or enabled: false", () => {
+  it("forces open with the force flag, even under CI/headless", () => {
     expect(decideBrowserAction({ browser: true, noBrowser: false }, {}, ci, "linux")).toEqual({
       kind: "open",
-    });
-    expect(
-      decideBrowserAction({ browser: true, noBrowser: false }, { enabled: false }, gui, "darwin"),
-    ).toEqual({ kind: "open" });
-  });
-
-  it("skips when config disables the browser wholesale", () => {
-    expect(decideBrowserAction(noFlags, { enabled: false }, gui, "darwin")).toEqual({
-      kind: "skip",
     });
   });
 

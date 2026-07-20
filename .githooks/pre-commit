@@ -9,3 +9,13 @@ pnpm exec biome check --staged --no-errors-on-unmatched || {
   echo "  Fix: pnpm format   (then re-stage)   ·   bypass: git commit --no-verify"
   exit 1
 }
+
+# Docs gate — Biome can't lint markdown, so a bare `<path>` placeholder in prose
+# sails through and only blows up the ~1-minute VitePress build on push (Vue: "Element
+# is missing end tag"). This sub-second check catches that class up front. Whole-tree
+# scan (it's fast, and main should never carry a broken doc); bypass with --no-verify.
+node scripts/docs-lint.mjs || {
+  echo ""
+  echo "  Wrap literal placeholders in \`backticks\`   ·   bypass: git commit --no-verify"
+  exit 1
+}

@@ -1,198 +1,99 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  type ChromeSettings,
   chromeDevtoolsEnabled,
   chromeMcpAttachServer,
   chromeMcpServer,
-  chromeUserDataDir,
-  chromeVariant,
   findIntentClientExtension,
   resolveChromeSettings,
   resolveIntentClientExtension,
 } from "./chrome";
+import { writeProfileMarker } from "./profile";
 
-describe("chromeDevtoolsEnabled", () => {
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("chromeDevtoolsEnabled (flag-only since the browser-profiles redesign)", () => {
   const off = { chrome: false, noChrome: false };
 
   it("is on by default outside CI", () => {
-    expect(chromeDevtoolsEnabled(off, {}, {})).toBe(true);
+    expect(chromeDevtoolsEnabled(off, {})).toBe(true);
   });
 
   it("is off under CI", () => {
-    expect(chromeDevtoolsEnabled(off, {}, { CI: "true" })).toBe(false);
-    expect(chromeDevtoolsEnabled(off, {}, { CI: "1" })).toBe(false);
+    expect(chromeDevtoolsEnabled(off, { CI: "true" })).toBe(false);
+    expect(chromeDevtoolsEnabled(off, { CI: "1" })).toBe(false);
   });
 
   it("treats an explicitly falsy CI var as not-CI", () => {
-    expect(chromeDevtoolsEnabled(off, {}, { CI: "" })).toBe(true);
-    expect(chromeDevtoolsEnabled(off, {}, { CI: "0" })).toBe(true);
-    expect(chromeDevtoolsEnabled(off, {}, { CI: "false" })).toBe(true);
+    expect(chromeDevtoolsEnabled(off, { CI: "" })).toBe(true);
+    expect(chromeDevtoolsEnabled(off, { CI: "0" })).toBe(true);
+    expect(chromeDevtoolsEnabled(off, { CI: "false" })).toBe(true);
   });
 
-  it("is off with --aiui-no-chrome regardless of environment or config", () => {
-    expect(chromeDevtoolsEnabled({ chrome: false, noChrome: true }, {}, {})).toBe(false);
-    expect(chromeDevtoolsEnabled({ chrome: false, noChrome: true }, { enabled: true }, {})).toBe(
-      false,
-    );
+  it("is off with --aiui-no-chrome regardless of environment", () => {
+    expect(chromeDevtoolsEnabled({ chrome: false, noChrome: true }, {})).toBe(false);
   });
 
-  it("is off with chrome.enabled: false in config", () => {
-    expect(chromeDevtoolsEnabled(off, { enabled: false }, {})).toBe(false);
-  });
-
-  it("is forced on with --aiui-chrome even under CI or enabled: false", () => {
-    expect(chromeDevtoolsEnabled({ chrome: true, noChrome: false }, {}, { CI: "true" })).toBe(true);
-    expect(chromeDevtoolsEnabled({ chrome: true, noChrome: false }, { enabled: false }, {})).toBe(
-      true,
-    );
-  });
-
-  it("does not let chrome.enabled: true override the CI default-off", () => {
-    expect(chromeDevtoolsEnabled(off, { enabled: true }, { CI: "true" })).toBe(false);
+  it("is forced on with --aiui-chrome even under CI", () => {
+    expect(chromeDevtoolsEnabled({ chrome: true, noChrome: false }, { CI: "true" })).toBe(true);
   });
 });
 
-describe("chromeVariant", () => {
-  it("defaults to the managed flavor (chromium), and follows chrome.managed", () => {
-    expect(chromeVariant({})).toBe("chromium");
-    expect(chromeVariant({ managed: "chrome-for-testing" })).toBe("chrome-for-testing");
+describe("resolveChromeSettings (the profile picks the browser)", () => {
+  function freshCache(): string {
+    const cache = mkdtempSync(join(tmpdir(), "aiui-cache-"));
+    vi.stubEnv("AIUI_CACHE", cache);
+    return cache;
+  }
+
+  it("defaults to the user-level default profile", () => {
+    const cache = freshCache();
+    const settings = resolveChromeSettings({}, {});
+    expect(settings.userDataDir).toBe(join(cache, "userdata", "default"));
+    expect(settings.browser).toBeUndefined(); // no marker yet
+    expect(settings.headless).toBe(false);
   });
 
-  it("tags a branded channel by name and an explicit binary by a stable hash", () => {
-    expect(chromeVariant({ channel: "beta" })).toBe("chrome-beta");
-    const a = chromeVariant({ executablePath: "/opt/chrome" });
-    expect(a).toMatch(/^custom-[0-9a-z]+$/);
-    expect(chromeVariant({ executablePath: "/opt/chrome" })).toBe(a); // stable
-    expect(chromeVariant({ executablePath: "/opt/other" })).not.toBe(a); // path-specific
-  });
-});
-
-describe("chromeUserDataDir", () => {
-  const base = "/proj";
-
-  it("defaults to .aiui-cache/chrome/<chromium>/default under the base dir", () => {
-    expect(chromeUserDataDir({}, base)).toBe(
-      join(base, ".aiui-cache", "chrome", "chromium", "default"),
-    );
-  });
-
-  it("partitions by variant, then profile", () => {
-    expect(chromeUserDataDir({ variant: "chrome-for-testing", profile: "scratch" }, base)).toBe(
-      join(base, ".aiui-cache", "chrome", "chrome-for-testing", "scratch"),
-    );
-  });
-
-  it("rejects profile names that aren't plain directory names", () => {
-    expect(() => chromeUserDataDir({ profile: "a/b" }, base)).toThrow(/invalid/);
-    expect(() => chromeUserDataDir({ profile: "../up" }, base)).toThrow(/invalid/);
-    expect(() => chromeUserDataDir({ profile: ".hidden" }, base)).toThrow(/invalid/);
-  });
-
-  it("uses an explicit data dir verbatim (no variant partition)", () => {
-    expect(chromeUserDataDir({ dataDir: "/elsewhere/profile" }, base)).toBe("/elsewhere/profile");
-    expect(chromeUserDataDir({ dataDir: "rel/profile" }, base)).toBe(resolve(base, "rel/profile"));
-  });
-});
-
-describe("resolveChromeSettings", () => {
-  const base = "/proj";
-  const defaultDir = join(base, ".aiui-cache", "chrome", "chromium", "default");
-
-  it("uses plain defaults when neither flags nor config say anything", () => {
-    expect(resolveChromeSettings({}, {}, base)).toEqual({
-      userDataDir: defaultDir,
-      variant: "chromium",
-      mode: "attach",
-      browserUrl: undefined,
-      debugPort: 0,
-      executablePath: undefined,
-      channel: undefined,
-      headless: false,
-    });
-  });
-
-  it("partitions the managed CfT profile separately from Chromium", () => {
-    const settings = resolveChromeSettings({}, { managed: "chrome-for-testing" }, base);
-    expect(settings.variant).toBe("chrome-for-testing");
-    expect(settings.userDataDir).toBe(
-      join(base, ".aiui-cache", "chrome", "chrome-for-testing", "default"),
-    );
-  });
-
-  it("carries mode and debugPort from config, and browserUrl forces attach", () => {
-    expect(resolveChromeSettings({}, { mode: "launch", debugPort: 9222 }, base)).toMatchObject({
-      mode: "launch",
-      debugPort: 9222,
-    });
-    expect(
-      resolveChromeSettings({}, { mode: "launch", browserUrl: "http://127.0.0.1:9222" }, base),
-    ).toMatchObject({ mode: "attach", browserUrl: "http://127.0.0.1:9222" });
-  });
-
-  it("takes profile/dataDir and browser choices from config", () => {
-    const settings = resolveChromeSettings(
-      {},
-      { profile: "research", channel: "beta", headless: true },
-      base,
-    );
-    expect(settings.userDataDir).toBe(
-      join(base, ".aiui-cache", "chrome", "chrome-beta", "research"),
-    );
-    expect(settings.variant).toBe("chrome-beta");
-    expect(settings.channel).toBe("beta");
+  it("reads the browser from the profile marker when present", () => {
+    const cache = freshCache();
+    writeProfileMarker(join(cache, "userdata", "work"), { managed: "chrome-for-testing" });
+    const settings = resolveChromeSettings({ chromeProfile: "work" }, { headless: true });
+    expect(settings.browser).toEqual({ managed: "chrome-for-testing" });
     expect(settings.headless).toBe(true);
   });
 
-  it("lets a profile flag beat both config identities", () => {
-    const settings = resolveChromeSettings(
-      { chromeProfile: "cli" },
-      { profile: "cfg", dataDir: "/cfg/dir" },
-      base,
+  it("uses an explicit data dir verbatim, and reads ITS marker", () => {
+    freshCache();
+    const dir = mkdtempSync(join(tmpdir(), "aiui-datadir-"));
+    writeProfileMarker(dir, { channel: "beta" });
+    const settings = resolveChromeSettings({ chromeDataDir: dir }, {});
+    expect(settings.userDataDir).toBe(dir);
+    expect(settings.browser).toEqual({ channel: "beta" });
+  });
+
+  it("resolves a relative data dir against base", () => {
+    freshCache();
+    expect(resolveChromeSettings({ chromeDataDir: "rel/dir" }, {}, "/proj").userDataDir).toBe(
+      resolve("/proj", "rel/dir"),
     );
-    expect(settings.userDataDir).toBe(join(base, ".aiui-cache", "chrome", "chromium", "cli"));
   });
 
-  it("lets a data-dir flag beat both config identities", () => {
-    const settings = resolveChromeSettings(
-      { chromeDataDir: "/cli/dir" },
-      { profile: "cfg", dataDir: "/cfg/dir" },
-      base,
-    );
-    expect(settings.userDataDir).toBe("/cli/dir");
-  });
-
-  it("prefers dataDir over profile within config alone", () => {
-    const settings = resolveChromeSettings({}, { profile: "cfg", dataDir: "/cfg/dir" }, base);
-    expect(settings.userDataDir).toBe("/cfg/dir");
-  });
-
-  it("resolves a relative executablePath against base", () => {
-    const settings = resolveChromeSettings({}, { executablePath: "bin/chrome" }, base);
-    expect(settings.executablePath).toBe(resolve(base, "bin/chrome"));
-  });
-
-  it("rejects executablePath and channel together", () => {
-    expect(() =>
-      resolveChromeSettings({}, { executablePath: "/x/chrome", channel: "dev" }, base),
-    ).toThrow(/exactly one/);
+  it("rejects invalid profile names", () => {
+    freshCache();
+    expect(() => resolveChromeSettings({ chromeProfile: "a/b" }, {})).toThrow(/invalid/);
+    expect(() => resolveChromeSettings({ chromeProfile: "UPPER" }, {})).toThrow(/invalid/);
   });
 });
 
 describe("chromeMcpServer", () => {
-  const settings = (over: Partial<ChromeSettings> = {}): ChromeSettings => ({
-    userDataDir: "/data/dir",
-    variant: "chromium",
-    mode: "launch",
-    debugPort: 0,
-    headless: false,
-    ...over,
-  });
+  const launch = { userDataDir: "/data/dir" };
 
   it("builds the documented npx invocation with the pinned data dir", () => {
-    expect(chromeMcpServer(settings())).toEqual({
+    expect(chromeMcpServer(launch)).toEqual({
       command: "npx",
       args: [
         "-y",
@@ -205,30 +106,34 @@ describe("chromeMcpServer", () => {
   });
 
   it("passes through the browser choice and headless", () => {
-    const { args } = chromeMcpServer(settings({ executablePath: "/cft/chrome", headless: true }));
+    const { args } = chromeMcpServer({
+      ...launch,
+      executablePath: "/cft/chrome",
+      headless: true,
+    });
     expect(args).toContain("--executablePath");
     expect(args).toContain("/cft/chrome");
     expect(args).toContain("--headless");
 
-    const channel = chromeMcpServer(settings({ channel: "canary" })).args;
+    const channel = chromeMcpServer({ ...launch, channel: "canary" }).args;
     expect(channel).toContain("--channel");
     expect(channel).toContain("canary");
   });
 
   it("asks Chrome to load the extensions when dirs are given", () => {
-    const { args } = chromeMcpServer(settings(), ["/ext/dir"]);
+    const { args } = chromeMcpServer(launch, ["/ext/dir"]);
     expect(args).toContain("--chromeArg=--load-extension=/ext/dir");
     expect(args).toContain("--ignoreDefaultChromeArg=--disable-extensions");
   });
 
   it("comma-joins multiple extension dirs into one --load-extension", () => {
-    const { args } = chromeMcpServer(settings(), ["/ext/devtools", "/ext/intent"]);
+    const { args } = chromeMcpServer(launch, ["/ext/devtools", "/ext/intent"]);
     expect(args).toContain("--chromeArg=--load-extension=/ext/devtools,/ext/intent");
   });
 
   it("passes no --load-extension when there are no dirs", () => {
     for (const dirs of [[], undefined]) {
-      const { args } = chromeMcpServer(settings(), dirs);
+      const { args } = chromeMcpServer(launch, dirs);
       expect(args.some((a) => a.includes("--load-extension"))).toBe(false);
     }
   });

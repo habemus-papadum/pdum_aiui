@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadAiuiConfig, mergeAiuiConfig, readConfigFile, updateUserConfig } from "./config";
+import { loadAiuiConfig, readConfigFile, updateUserConfig } from "./config";
 
 let dir: string;
 let prevCache: string | undefined;
@@ -36,18 +36,13 @@ describe("readConfigFile", () => {
   it("parses a full config", () => {
     const path = write("config.json", {
       claude: { args: ["--dangerously-skip-permissions"] },
-      chrome: { enabled: true, profile: "p", headless: true, channel: "beta" },
+      chrome: { manage: "auto", headless: true },
+      channel: { bind: "host" },
     });
     expect(readConfigFile(path)).toEqual({
       claude: { args: ["--dangerously-skip-permissions"] },
-      chrome: {
-        enabled: true,
-        profile: "p",
-        dataDir: undefined,
-        executablePath: undefined,
-        channel: "beta",
-        headless: true,
-      },
+      chrome: { manage: "auto", headless: true },
+      channel: { bind: "host" },
     });
   });
 
@@ -64,34 +59,47 @@ describe("readConfigFile", () => {
   });
 
   it("tolerates a retired section (sidecars) instead of hard-failing on upgrade", () => {
-    // A config written before the channel hosted its whole standard set still
-    // carries `sidecars` — accept and ignore it (a typo would still throw).
     const config = readConfigFile(
       write("legacy.json", { sidecars: { paint: false }, channel: { bind: "host" } }),
     );
     expect(config).toEqual({ channel: { bind: "host" } });
   });
 
-  it("tolerates retired chrome fields (buildExtension/autoCapture), dropping them", () => {
-    // Both were removed after a long parsed-and-ignored life; an old config that
-    // still carries them loads fine and drops them (a real typo still throws).
+  it("tolerates the retired chrome browser-identity keys, dropping them", () => {
+    // The browser-profiles redesign moved identity into the profile marker; a
+    // config still carrying the old keys loads fine and drops them (a real
+    // typo still throws).
     const config = readConfigFile(
       write("legacy-chrome.json", {
-        chrome: { enabled: false, buildExtension: true, autoCapture: false },
+        chrome: {
+          enabled: false,
+          mode: "launch",
+          browserUrl: "http://127.0.0.1:9222",
+          debugPort: 9222,
+          profile: "p",
+          dataDir: "/x",
+          executablePath: "/y",
+          channel: "beta",
+          managed: "chromium",
+          forTesting: "auto",
+          buildExtension: true,
+          autoCapture: false,
+          manage: "off",
+        },
       }),
     );
-    expect(config).toEqual({ chrome: { enabled: false } });
+    expect(config).toEqual({ chrome: { manage: "off" } });
     expect(() => readConfigFile(write("typo.json", { chrome: { autocapture: true } }))).toThrow(
       /unknown key "autocapture"/,
     );
   });
 
-  it("rejects wrong value types and bad channels", () => {
+  it("rejects wrong value types and bad enum values", () => {
     expect(() => readConfigFile(write("a.json", { chrome: { headless: "yes" } }))).toThrow(
       /expected a boolean for chrome.headless/,
     );
-    expect(() => readConfigFile(write("b.json", { chrome: { channel: "nightly" } }))).toThrow(
-      /invalid chrome.channel "nightly"/,
+    expect(() => readConfigFile(write("b.json", { chrome: { manage: "maybe" } }))).toThrow(
+      /invalid chrome.manage "maybe"/,
     );
   });
 
@@ -108,20 +116,10 @@ describe("readConfigFile", () => {
   });
 
   it("tolerates the retired claude.skipPermissions, dropping it", () => {
-    // The old boolean moved into claude.args; a config still carrying it loads
-    // fine and drops it (it no longer adds the flag — run `aiui config set-dsp`).
     const config = readConfigFile(
       write("legacy-claude.json", { claude: { skipPermissions: true, enterNudge: false } }),
     );
     expect(config).toEqual({ claude: { enterNudge: false } });
-  });
-
-  it("accepts and validates chrome.forTesting", () => {
-    const path = write("ft.json", { chrome: { forTesting: "auto" } });
-    expect(readConfigFile(path)?.chrome?.forTesting).toBe("auto");
-    expect(() => readConfigFile(write("bad.json", { chrome: { forTesting: "maybe" } }))).toThrow(
-      /invalid chrome.forTesting "maybe"/,
-    );
   });
 
   it("accepts and validates channel.bind", () => {
@@ -139,82 +137,30 @@ describe("readConfigFile", () => {
       /expected a boolean for claude.enterNudge/,
     );
   });
-
-  it("accepts and validates chrome.mode", () => {
-    const path = write("mode.json", { chrome: { mode: "launch" } });
-    expect(readConfigFile(path)?.chrome?.mode).toBe("launch");
-    expect(() => readConfigFile(write("bad.json", { chrome: { mode: "detach" } }))).toThrow(
-      /invalid chrome.mode "detach"/,
-    );
-  });
-
-  it("accepts and validates chrome.browserUrl", () => {
-    const path = write("url.json", { chrome: { browserUrl: "http://127.0.0.1:9222" } });
-    expect(readConfigFile(path)?.chrome?.browserUrl).toBe("http://127.0.0.1:9222");
-    expect(() =>
-      readConfigFile(write("bad.json", { chrome: { browserUrl: "127.0.0.1:9222" } })),
-    ).toThrow(/invalid chrome.browserUrl/);
-  });
-
-  it("accepts and validates chrome.debugPort", () => {
-    const path = write("port.json", { chrome: { debugPort: 9222 } });
-    expect(readConfigFile(path)?.chrome?.debugPort).toBe(9222);
-    expect(() => readConfigFile(write("bad1.json", { chrome: { debugPort: "9222" } }))).toThrow(
-      /expected a number for chrome.debugPort/,
-    );
-    expect(() => readConfigFile(write("bad2.json", { chrome: { debugPort: 70000 } }))).toThrow(
-      /invalid chrome.debugPort/,
-    );
-  });
 });
 
 describe("updateUserConfig", () => {
   it("creates, mutates, and preserves the user-level file", () => {
     const file = updateUserConfig((c) => {
-      c.chrome = { ...c.chrome, forTesting: "off" };
+      c.chrome = { ...c.chrome, manage: "off" };
     });
     expect(file).toBe(join(dir, "user-cache", "config.json"));
     updateUserConfig((c) => {
       c.claude = { args: ["--dangerously-skip-permissions"] };
     });
     const config = readConfigFile(file);
-    expect(config?.chrome?.forTesting).toBe("off");
+    expect(config?.chrome?.manage).toBe("off");
     expect(config?.claude?.args).toEqual(["--dangerously-skip-permissions"]);
   });
 });
 
-describe("mergeAiuiConfig", () => {
-  it("merges section-by-section with the override winning per key", () => {
-    const merged = mergeAiuiConfig(
-      { claude: { enterNudge: false }, chrome: { profile: "user", headless: true } },
-      { chrome: { profile: "project" } },
-    );
-    expect(merged.claude?.enterNudge).toBe(false);
-    expect(merged.chrome?.profile).toBe("project");
-    expect(merged.chrome?.headless).toBe(true);
-  });
-});
-
 describe("loadAiuiConfig", () => {
-  it("merges the user cache config with the project config, project winning", () => {
-    write("user-cache/config.json", { chrome: { profile: "user", headless: true } });
-    const project = join(dir, "project");
-    mkdirSync(join(project, ".aiui-cache"), { recursive: true });
-    writeFileSync(
-      join(project, ".aiui-cache", "config.json"),
-      JSON.stringify({ chrome: { profile: "project" } }),
-    );
-
-    const config = loadAiuiConfig(project);
-    expect(config.chrome?.profile).toBe("project");
-    expect(config.chrome?.headless).toBe(true);
+  it("loads the ONE user-level file (the project layer is retired)", () => {
+    write("user-cache/config.json", { chrome: { headless: true } });
+    expect(loadAiuiConfig()).toEqual({ chrome: { headless: true } });
   });
 
-  it("is empty when neither file exists", () => {
-    expect(loadAiuiConfig(join(dir, "empty-project"))).toEqual({
-      claude: {},
-      channel: {},
-      chrome: {},
-    });
+  it("is empty when the file doesn't exist", () => {
+    expect(loadAiuiConfig()).toEqual({});
   });
 });

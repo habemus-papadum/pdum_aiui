@@ -126,13 +126,13 @@ describe("splitAiuiArgs", () => {
     });
   });
 
-  it("consumes --aiui-chrome-profile in both forms", () => {
-    expect(splitAiuiArgs(["--aiui-chrome-profile", "scratch", "--resume"])).toEqual({
+  it("consumes --aiui-profile in both forms", () => {
+    expect(splitAiuiArgs(["--aiui-profile", "scratch", "--resume"])).toEqual({
       ...none,
       chromeProfile: "scratch",
       passthrough: ["--resume"],
     });
-    expect(splitAiuiArgs(["--aiui-chrome-profile=scratch"])).toEqual({
+    expect(splitAiuiArgs(["--aiui-profile=scratch"])).toEqual({
       ...none,
       chromeProfile: "scratch",
     });
@@ -151,13 +151,13 @@ describe("splitAiuiArgs", () => {
   });
 
   it("throws when a chrome value flag has no value", () => {
-    expect(() => splitAiuiArgs(["--aiui-chrome-profile"])).toThrow(/requires a non-empty value/);
+    expect(() => splitAiuiArgs(["--aiui-profile"])).toThrow(/requires a non-empty value/);
     expect(() => splitAiuiArgs(["--aiui-chrome-data-dir="])).toThrow(/requires a non-empty value/);
   });
 
   it("throws when a profile and an explicit data dir are combined", () => {
     expect(() =>
-      splitAiuiArgs(["--aiui-chrome-profile", "a", "--aiui-chrome-data-dir", "/tmp/b"]),
+      splitAiuiArgs(["--aiui-profile", "a", "--aiui-chrome-data-dir", "/tmp/b"]),
     ).toThrow(/mutually exclusive/);
   });
 
@@ -175,7 +175,7 @@ describe("splitAiuiArgs", () => {
 
   it("rejects --aiui-browser-url combined with local-browser identity flags", () => {
     expect(() =>
-      splitAiuiArgs(["--aiui-browser-url", "http://x:1", "--aiui-chrome-profile", "p"]),
+      splitAiuiArgs(["--aiui-browser-url", "http://x:1", "--aiui-profile", "p"]),
     ).toThrow(/managed elsewhere/);
     expect(() =>
       splitAiuiArgs(["--aiui-browser-url", "http://x:1", "--aiui-chrome-data-dir", "/d"]),

@@ -46,12 +46,8 @@ import { cacheDir } from "@habemus-papadum/aiui-util";
 import { select } from "@inquirer/prompts";
 import { execa } from "execa";
 import { loadAiuiConfig } from "../util/config";
-import {
-  findOrStartSessionBrowser,
-  remoteProfileDir,
-  sanitizeHostKey,
-} from "../util/session-browser";
-import { printError, printNote } from "../util/ui";
+import { findOrStartSessionBrowser, sanitizeHostKey } from "../util/session-browser";
+import { printError } from "../util/ui";
 
 /** Preferred REMOTE port for the browser reverse forward (walked on collision). */
 export const DEFAULT_REMOTE_BROWSER_PORT = 9222;
@@ -75,7 +71,7 @@ export interface RemoteOptions {
   browserPort?: string;
   /** Display name for the registry entry + history record. */
   name?: string;
-  /** Profile key in the user cache (default: derived from the host). */
+  /** Browser profile (default: the shared "default" profile). */
   profile?: string;
   /** Explicit browser user-data dir (escapes the convention). */
   dataDir?: string;
@@ -363,13 +359,6 @@ async function healthOk(localPort: number): Promise<boolean> {
 export async function runRemote(target: string, opts: RemoteOptions): Promise<void> {
   const config = loadAiuiConfig();
   const chromeCfg = { ...config.chrome };
-  if (chromeCfg.browserUrl) {
-    printNote(
-      `config pins chrome.browserUrl to ${chromeCfg.browserUrl} — the browser is managed elsewhere`,
-      "aiui remote hosts the browser locally; drop chrome.browserUrl on this machine first.",
-    );
-    return;
-  }
 
   let preferredChannelPort: number | undefined;
   let preferredBrowserPort: number | undefined;
@@ -413,11 +402,10 @@ export async function runRemote(target: string, opts: RemoteOptions): Promise<vo
   const interactive = !!process.stdin.isTTY && !!process.stdout.isTTY;
   let browser: Awaited<ReturnType<typeof findOrStartSessionBrowser>>;
   try {
+    // Not special: joins the shared "default" profile like every other
+    // session (docs/proposals/browser-profiles.md) — --profile to differ.
     browser = await findOrStartSessionBrowser({
-      flags: {
-        chromeProfile: undefined,
-        chromeDataDir: opts.dataDir ?? remoteProfileDir(target, opts.profile),
-      },
+      flags: { chromeProfile: opts.profile, chromeDataDir: opts.dataDir },
       config: chromeCfg,
       interactive,
       headless: opts.headless,

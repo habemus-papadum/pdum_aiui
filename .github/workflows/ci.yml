@@ -68,6 +68,13 @@ jobs:
       - name: Lint & format check (Biome)
         run: pnpm run lint
 
+      - name: Docs prose lint (bare <tag> placeholders that break the VitePress build)
+        # Biome doesn't lint markdown, so a placeholder like `<path>` written without
+        # backticks slips through and only surfaces as a cryptic Vue "missing end tag"
+        # in the full docs build (docs.yml, push-to-main only). This sub-second check
+        # catches it here — on PRs too — with a precise source location.
+        run: pnpm run docs:lint
+
       - name: Test
         run: pnpm run test
 

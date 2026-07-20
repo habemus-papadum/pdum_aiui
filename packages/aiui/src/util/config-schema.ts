@@ -26,7 +26,6 @@
 // The channel list lives with the launch code (aiui-util's browser module,
 // whose RELEASE_CHANNELS map must stay exhaustive over it); re-exported here
 // so the config table keeps being the one import surface for config shapes.
-import { CHROME_CHANNELS } from "@habemus-papadum/aiui-util";
 
 export { CHROME_CHANNELS, type ChromeChannel } from "@habemus-papadum/aiui-util";
 
@@ -52,9 +51,6 @@ export const DEFAULT_MANAGED_FLAVOR: ManagedFlavor = "chromium";
  */
 export const MANAGE_MODES = ["prompt", "auto", "off"] as const;
 export type ManageMode = (typeof MANAGE_MODES)[number];
-
-export const CHROME_MODES = ["attach", "launch"] as const;
-export type ChromeMode = (typeof CHROME_MODES)[number];
 
 export const CHANNEL_BINDS = ["loopback", "host"] as const;
 export type ChannelBind = (typeof CHANNEL_BINDS)[number];
@@ -157,127 +153,19 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
   },
   {
     name: "chrome",
-    summary: "the agent's browser and the Chrome DevTools MCP",
+    summary: "the managed browser binaries (profiles pick which browser — see `aiui profile`)",
     fields: [
-      {
-        key: "enabled",
-        type: "boolean",
-        default: true,
-        summary: "Attach the Chrome DevTools MCP.",
-        doc:
-          "false turns it off everywhere; true restates the default and does NOT override the " +
-          "CI default-off — only the --aiui-chrome flag forces it on under CI.",
-      },
-      {
-        key: "mode",
-        type: "enum",
-        values: CHROME_MODES,
-        default: "attach",
-        summary: "How the MCP reaches a browser: shared session browser, or its own.",
-        doc:
-          '"attach" shares a user-visible session browser: an already-running one is ' +
-          'discovered by profile, or an interactive launch starts one eagerly. "launch" is ' +
-          "the hands-off mode: chrome-devtools-mcp launches its own private browser lazily, on " +
-          "the agent's first browser tool call.",
-      },
-      {
-        key: "browserUrl",
-        type: "string",
-        defaultText: "unset (manage a browser locally)",
-        summary: "Attach to this DevTools endpoint instead of managing a browser at all.",
-        doc:
-          "The remote-development key (docs/guide/remote): the browser runs on another machine " +
-          "(started there with `aiui browser`) and its debug port is tunneled over. Setting it " +
-          'implies mode: "attach" and makes every local-browser setting (profile, ' +
-          "executablePath, channel, forTesting…) irrelevant. Per-launch flag: --aiui-browser-url.",
-        validate: (value) =>
-          isHttpUrl(String(value))
-            ? undefined
-            : 'expected an http(s) URL like "http://127.0.0.1:9222"',
-      },
-      {
-        key: "debugPort",
-        type: "number",
-        default: 0,
-        defaultText: "0 (an OS-assigned free port)",
-        summary: "Fixed DevTools debug port for session browsers aiui launches.",
-        doc:
-          "Pin it (e.g. 9222) when something external must find the port — an ssh tunnel, a " +
-          "VS Code attach-to-Chrome launch config. 0 means an OS-assigned free port.",
-        validate: (value) =>
-          Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 65535
-            ? undefined
-            : "expected 0..65535",
-      },
-      {
-        key: "profile",
-        type: "string",
-        default: "default",
-        summary: "Named profile under .aiui-cache/chrome/.",
-        doc: "Per-launch flag: --aiui-chrome-profile.",
-      },
-      {
-        key: "dataDir",
-        type: "string",
-        defaultText: "unset (derived from chrome.profile)",
-        summary: "Explicit Chrome user data dir; takes precedence over chrome.profile.",
-        doc: "Per-launch flag: --aiui-chrome-data-dir.",
-      },
-      {
-        key: "executablePath",
-        type: "string",
-        defaultText: "unset (the managed browser — see chrome.managed — else installed Chrome)",
-        summary: "Explicit browser binary to launch — e.g. a Chrome for Testing install.",
-        doc:
-          "Overrides chrome.managed. Chrome for Testing and Chromium both honor " +
-          "--load-extension, so the intent client auto-loads. Mutually exclusive with " +
-          "chrome.channel.",
-      },
-      {
-        key: "channel",
-        type: "enum",
-        values: CHROME_CHANNELS,
-        defaultText: 'unset ("stable" when launching an installed Chrome)',
-        summary: "Installed Chrome release channel to launch.",
-        doc: "Overrides chrome.managed. Mutually exclusive with chrome.executablePath.",
-      },
-      {
-        key: "managed",
-        type: "enum",
-        values: MANAGED_FLAVORS,
-        default: DEFAULT_MANAGED_FLAVOR,
-        summary: "Which browser aiui downloads and manages: Chromium, or Chrome for Testing.",
-        doc:
-          '"chromium" (default) is the open-source build — it dodges the "verify you\'re ' +
-          'human" reCAPTCHA that Google serves to the Chrome-for-Testing automation build, ' +
-          "at the cost of Widevine DRM, some proprietary codecs, and Google account sign-in. " +
-          '"chrome-for-testing" is Google\'s branded automation build. Both auto-load the ' +
-          "intent client and take the media auto-accept flags. Ignored when executablePath or " +
-          "channel names a browser explicitly. Each flavor keeps its own project profile " +
-          "under .aiui-cache/chrome/<flavor>/.",
-      },
       {
         key: "manage",
         type: "enum",
         values: MANAGE_MODES,
         default: "prompt",
-        summary: "How `aiui claude` keeps the managed browser (chrome.managed) installed/current.",
+        summary: "How `aiui claude` keeps the managed browser binaries installed/current.",
         doc:
-          '"prompt" asks before installing or updating it — interactive sessions only, never ' +
-          'under CI; "auto" installs/updates without asking; "off" never checks. Prompt ' +
-          'answers ("automatically", "never ask again") persist here at the user level. ' +
-          "Skipped entirely when executablePath or channel picks a browser explicitly. " +
-          "(Was chrome.forTesting.)",
-      },
-      {
-        key: "forTesting",
-        type: "enum",
-        values: MANAGE_MODES,
-        defaultText: "unset (deprecated alias for chrome.manage)",
-        summary: "DEPRECATED — old name for chrome.manage; still honored when manage is unset.",
-        doc:
-          "Renamed to chrome.manage now that Chromium is also a managed flavor. Old configs " +
-          "keep working: when chrome.manage is unset, this value is used.",
+          '"prompt" asks before installing or updating a managed browser — interactive ' +
+          'sessions only, never under CI; "auto" installs/updates without asking; "off" never ' +
+          'checks. Prompt answers ("automatically", "never ask again") persist here. Skipped ' +
+          "when the profile's marker names a branded channel or explicit binary.",
       },
       {
         key: "headless",
@@ -285,11 +173,13 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         default: false,
         summary: "Launch Chrome with no UI.",
       },
-      // NOTE: `chrome.buildExtension` and `chrome.autoCapture` were removed here
-      // (owner, 2026-07-17) — both had long been parsed-and-ignored (the DevTools
-      // extension is deleted; page-side getDisplayMedia capture is gone). A config
-      // still carrying either is tolerated and dropped by validation, not a hard
-      // error — see DEPRECATED_FIELDS in util/config.ts.
+      // NOTE (browser-profiles migration, 2026-07-20): browser IDENTITY moved
+      // out of config into the profile marker (~/.cache/aiui/userdata/<name>/
+      // aiui-profile.json — docs/proposals/browser-profiles.md). The retired
+      // keys — enabled, mode, browserUrl, debugPort, profile, dataDir,
+      // executablePath, channel, managed, forTesting (plus the older
+      // buildExtension/autoCapture) — are tolerated-and-dropped, not hard
+      // errors; see DEPRECATED_FIELDS in util/config.ts.
     ],
   },
 ];
@@ -400,13 +290,4 @@ export function describeDefault(field: ConfigFieldSchema): string {
     return field.defaultText;
   }
   return field.default === undefined ? "unset" : formatConfigValue(field.default);
-}
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
 }

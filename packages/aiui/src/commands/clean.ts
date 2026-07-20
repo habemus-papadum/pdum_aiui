@@ -1,15 +1,15 @@
 /**
  * `aiui clean` — reset aiui's on-disk state for a clean-slate demo.
  *
- * aiui keeps all of its state in two cache roots — never in `node_modules`, so a
- * plain reinstall of the package leaves everything below behind:
+ * aiui keeps ALL of its state under the user cache (`~/.cache/aiui`) since the
+ * browser-profiles redesign — never in `node_modules` or the project dir:
  *
- *   <repo>/.aiui-cache/     traces, recordings, the session-browser profile(s),
- *                           and the project-level config.json (see projectCacheDir)
- *   <user cache>/           ~/.cache/aiui — the user config.json (incl. the
- *                           persisted first-run answers: channel.bind, enterNudge),
- *                           the running-server registry (mcp/), remote-tunnel
- *                           browser-profiles/, and the ~150-160 MB managed
+ *   projects/<slug>/        this project's traces, recordings, and logs
+ *                           (projectCacheDir — keyed by the project's full path)
+ *   everything else         the config.json (incl. the persisted first-run
+ *                           answers), the running-server registry (mcp/), the
+ *                           agents cache, browser profiles (userdata/), the
+ *                           native-host artifacts, and the ~150-160 MB managed
  *                           browser installs (chromium/, chrome/)
  *
  * `clean` removes both so the next `aiui claude` behaves like a fresh install:
@@ -30,9 +30,9 @@ import { choose } from "../util/prompt";
 import { printError, printNote, printWarning } from "../util/ui";
 
 export interface CleanOptions {
-  /** Limit the reset to this repo's `.aiui-cache/`. */
+  /** Limit the reset to this project's cache (`~/.cache/aiui/projects/<slug>`). */
   projectOnly?: boolean;
-  /** Limit the reset to the user cache (`~/.cache/aiui`). */
+  /** Limit the reset to the whole user cache (`~/.cache/aiui`). */
   userOnly?: boolean;
   /** Keep the managed browser installs (skip the ~150-160 MB re-download). */
   keepBrowser?: boolean;
@@ -44,7 +44,7 @@ export interface CleanOptions {
 
 /** The three cache roots `clean` reasons about (resolved, never created). */
 export interface CleanRoots {
-  /** `<base>/.aiui-cache`. */
+  /** `~/.cache/aiui/projects/<slug>` for this project (a child of `user`). */
   project: string;
   /** `~/.cache/aiui` (respects `$AIUI_CACHE` / `$XDG_CACHE_HOME`). */
   user: string;

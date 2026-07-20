@@ -15,19 +15,14 @@ import {
   resolveChromeSettings,
   warnIntentClientState,
 } from "../util/chrome";
-import {
-  type AiuiConfig,
-  loadAiuiConfig,
-  resolveManagedFlavor,
-  resolveManageMode,
-} from "../util/config";
+import { type AiuiConfig, type ChromeChannel, loadAiuiConfig } from "../util/config";
 import { ENTER_NUDGE_ENABLED, nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
 import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-preflight";
-import { syncManagedBrowser } from "../util/managed-browser";
 import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
+import { ensureProfileMarker } from "../util/profile";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
-import { startSessionBrowser } from "../util/session-browser";
+import { resolveProfileBinary, startSessionBrowser } from "../util/session-browser";
 import { printError, printWarning } from "../util/ui";
 import { VERSION } from "../util/version";
 import { commandExists } from "../util/which";
@@ -154,14 +149,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // browser module);
   // "launch" mode keeps the browser private to the MCP and lazily started.
   let chromeInfo: ChromeDevtoolsInfo = { enabled: false };
-  if (chromeDevtoolsEnabled(aiuiArgs, config.chrome)) {
-    // `--aiui-browser-url` (printed by `aiui remote` for the remote side)
-    // beats a configured chrome.browserUrl for this launch.
-    const chromeCfg = {
-      ...config.chrome,
-      ...(aiuiArgs.browserUrl ? { browserUrl: aiuiArgs.browserUrl } : {}),
-    };
-    const chrome = await chromeServerEntry(aiuiArgs, chromeCfg, interactive);
+  if (chromeDevtoolsEnabled(aiuiArgs)) {
+    const chrome = await chromeServerEntry(aiuiArgs, { ...config.chrome }, interactive);
     mcpServers[CHROME_SERVER_ID] = chrome.entry;
     chromeInfo = chrome.info;
   }
@@ -265,7 +254,7 @@ aiui's own flags (everything else forwards to claude verbatim):
   --aiui-tag <tag>               tag the channel session (e.g. for \`quick --tag\`)
   --aiui-chrome                  force the Chrome DevTools MCP on (even under CI)
   --aiui-no-chrome               launch without the Chrome DevTools MCP
-  --aiui-chrome-profile <name>   browser profile at .aiui-cache/chrome/<name>
+  --aiui-profile <name>          browser profile (~/.cache/aiui/userdata/<name>)
   --aiui-chrome-data-dir <path>  explicit browser user data dir
   --aiui-browser-url <url>       attach to a browser at this DevTools endpoint
                                  (e.g. the tunnel from \`aiui remote\`)
@@ -286,102 +275,97 @@ Configuration guide. What follows is claude's own --help:
  * Assemble the chrome-devtools MCP entry for this launch.
  *
  * The decision ladder:
- *  1. `chrome.browserUrl` configured → attach verbatim. The browser lives
- *     elsewhere (typically another machine, tunneled — see docs/guide/remote);
- *     nothing local is managed: no CfT sync, no profile, no extension.
- *  2. Attach mode with a session browser already running on this profile →
- *     attach to it (works non-interactively too; discovery is read-only).
- *  3. Attach mode, interactive → start the session browser now (the managed
- *     browser, intent client extension loaded, visible from t0) and attach. On failure, warn
- *     and fall through.
- *  4. Otherwise — `mode: "launch"`, a non-interactive session with nothing
- *     running, or a failed start — classic launch mode: chrome-devtools-mcp
- *     starts its own private browser lazily, on the agent's first tool call.
+ *  1. `--aiui-browser-url` → attach verbatim. The browser lives elsewhere
+ *     (typically another machine — `aiui remote` prints this flag); nothing
+ *     local is managed: no sync, no profile, no extension.
+ *  2. A session browser already running on this profile → attach to it (works
+ *     non-interactively too; discovery is read-only).
+ *  3. Interactive → start the session browser now (the shared pipeline:
+ *     profile marker, managed sync, intent extension) and attach. On failure,
+ *     warn and fall through.
+ *  4. Otherwise — a non-interactive session with nothing running, or a failed
+ *     start — launch mode: chrome-devtools-mcp starts its own private browser
+ *     lazily, on the agent's first tool call, with this profile's settings.
  */
 async function chromeServerEntry(
   aiuiArgs: AiuiArgs,
   chromeCfg: NonNullable<AiuiConfig["chrome"]>,
   interactive: boolean,
 ): Promise<{ entry: { command: string; args: string[] }; info: ChromeDevtoolsInfo }> {
-  if (chromeCfg.browserUrl) {
+  if (aiuiArgs.browserUrl) {
     return {
-      entry: chromeMcpAttachServer(chromeCfg.browserUrl),
-      info: { enabled: true, connection: "attach", browserUrl: chromeCfg.browserUrl },
+      entry: chromeMcpAttachServer(aiuiArgs.browserUrl),
+      info: { enabled: true, connection: "attach", browserUrl: aiuiArgs.browserUrl },
     };
   }
 
   const cfg = chromeCfg;
-
-  if (resolveChromeSettings(aiuiArgs, cfg).mode === "attach") {
-    const probe = resolveChromeSettings(aiuiArgs, cfg);
-    const running = await discoverSessionBrowser(probe.userDataDir);
-    if (running) {
-      // The running browser may predate this checkout's native host (or the
-      // feature): keep the profile's NM manifest current even when attaching.
-      ensureProfileNativeHost(
-        probe.userDataDir,
-        findIntentClientExtension().state === "ready",
-        printWarning,
-      );
+  const probe = resolveChromeSettings(aiuiArgs, cfg);
+  const running = await discoverSessionBrowser(probe.userDataDir);
+  if (running) {
+    // The running browser may predate this checkout's native host (or the
+    // feature): keep the profile's NM manifest current even when attaching.
+    ensureProfileNativeHost(
+      probe.userDataDir,
+      findIntentClientExtension().state === "ready",
+      printWarning,
+    );
+    return {
+      entry: chromeMcpAttachServer(running.browserUrl),
+      info: {
+        enabled: true,
+        connection: "attach",
+        browserUrl: running.browserUrl,
+        userDataDir: probe.userDataDir,
+      },
+    };
+  }
+  if (interactive) {
+    // Start the session browser now — the SHARED pipeline (profile marker,
+    // managed-browser sync, intent extension, profile NM host) that
+    // `open`/`remote` use; only the MCP-entry shaping is ours.
+    try {
+      const { session, settings } = await startSessionBrowser({
+        flags: aiuiArgs,
+        config: cfg,
+        interactive: true,
+      });
       return {
-        entry: chromeMcpAttachServer(running.browserUrl),
+        entry: chromeMcpAttachServer(session.browserUrl),
         info: {
           enabled: true,
           connection: "attach",
-          browserUrl: running.browserUrl,
-          userDataDir: probe.userDataDir,
+          browserUrl: session.browserUrl,
+          userDataDir: settings.userDataDir,
+          headless: settings.headless,
         },
       };
-    }
-    if (interactive) {
-      // Start the session browser now — the SHARED find-or-start pipeline
-      // (managed-browser sync, intent extension, profile NM host) that
-      // `browser`/`remote`/`open` use; only the MCP-entry shaping is ours.
-      try {
-        const { session, settings } = await startSessionBrowser({
-          flags: aiuiArgs,
-          config: cfg,
-          interactive: true,
-        });
-        return {
-          entry: chromeMcpAttachServer(session.browserUrl),
-          info: {
-            enabled: true,
-            connection: "attach",
-            browserUrl: session.browserUrl,
-            userDataDir: settings.userDataDir,
-            executablePath: settings.executablePath,
-            channel: settings.channel,
-            headless: settings.headless,
-          },
-        };
-      } catch (error) {
-        printWarning(
-          "couldn't start the session browser — falling back to a browser private to the MCP",
-          error instanceof Error ? error.message : String(error),
-        );
-      }
+    } catch (error) {
+      printWarning(
+        "couldn't start the session browser — falling back to a browser private to the MCP",
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
-  // Classic launch mode (or the fallback): chrome-devtools-mcp starts its own
-  // private browser lazily, on the agent's first tool call — prep the settings
-  // it will launch with. Unless config names a browser explicitly, prefer the
-  // managed browser (offered interactively — syncManagedBrowser). Patch the
-  // resolved executable onto `settings` WITHOUT re-deriving userDataDir: the
-  // profile is partitioned by the managed *flavor*, not this path, and
-  // re-resolving would misread the injected binary as an explicit
-  // executablePath (a `custom-*` variant) and move the profile.
-  let settings = resolveChromeSettings(aiuiArgs, cfg);
-  if (!cfg.executablePath && !cfg.channel) {
-    const exe = await syncManagedBrowser({
-      flavor: resolveManagedFlavor(cfg),
-      mode: resolveManageMode(cfg),
-      interactive,
-    });
-    if (exe) {
-      settings = { ...settings, executablePath: exe };
-    }
+  // Launch mode (the fallback): chrome-devtools-mcp starts its own private
+  // browser lazily, on the agent's first tool call — prep the launch inputs
+  // from the profile's marker (silently created with the defaults when the
+  // profile is new; non-interactive, so no interview).
+  const settings = resolveChromeSettings(aiuiArgs, cfg);
+  const marker =
+    settings.browser ??
+    (await ensureProfileMarker(settings.userDataDir, { interactive: false })).browser;
+  let launch: { executablePath?: string; channel?: ChromeChannel } = {};
+  try {
+    launch = await resolveProfileBinary(marker, cfg, interactive);
+  } catch (error) {
+    // Managed browser not installed and nobody to ask — let the MCP fall back
+    // to whatever Chrome it can find, but say why.
+    printWarning(
+      "the profile's managed browser is not installed — the MCP will use a system Chrome",
+      error instanceof Error ? error.message : String(error),
+    );
   }
   mkdirSync(settings.userDataDir, { recursive: true });
   // Launches auto-load ONLY the intent client's extension.
@@ -392,17 +376,14 @@ async function chromeServerEntry(
     maybeExtensionAutoloadHint(settings, extensionDirs);
     warnIntentClientState(intent);
   }
+  const mcpLaunch = {
+    userDataDir: settings.userDataDir,
+    ...launch,
+    headless: settings.headless,
+  };
   return {
-    entry: chromeMcpServer(settings, extensionDirs),
-    info: {
-      enabled: true,
-      connection: "launch",
-      userDataDir: settings.userDataDir,
-      executablePath: settings.executablePath,
-      channel: settings.channel,
-      headless: settings.headless,
-      extensionDirs,
-    },
+    entry: chromeMcpServer(mcpLaunch, extensionDirs),
+    info: { enabled: true, connection: "launch", ...mcpLaunch, extensionDirs },
   };
 }
 

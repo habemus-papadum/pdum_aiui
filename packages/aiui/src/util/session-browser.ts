@@ -1,17 +1,17 @@
 /**
  * The command-agnostic session-browser pipeline — settings → find-or-start →
  * a running browser with the intent client loaded and the profile's
- * native-messaging manifest planted. Hoisted out of `commands/browser.ts`
- * (docs/proposals/aiui-registry.md §5) so `aiui browser`, `aiui remote`, and
- * `aiui vite`'s sidecar all launch identically instead of re-deriving the
- * sequence; `aiui open` and `aiui claude`'s chromeServerEntry follow in M6.
+ * native-messaging manifest planted. Shared by `aiui open`, `aiui remote`,
+ * `aiui debug`, and `aiui claude`'s chromeServerEntry, so every command
+ * launches identically instead of re-deriving the sequence.
  *
- * Identity is the profile's user data dir, discovered via Chrome's own
- * `DevToolsActivePort` file — the same way `aiui claude` attaches.
+ * Identity is the PROFILE (util/profile.ts): its user-data dir names the
+ * browser via the immutable marker, and Chrome's own `DevToolsActivePort`
+ * file inside it is how a running instance is discovered — the same way
+ * `aiui claude` attaches. All sessions share the "default" profile unless a
+ * `--profile` says otherwise (docs/proposals/browser-profiles.md).
  */
-import { join } from "node:path";
 import {
-  cacheDir,
   decideBrowserAction,
   discoverSessionBrowser,
   launchSessionBrowser,
@@ -29,8 +29,9 @@ import {
   resolveChromeSettings,
   warnIntentClientState,
 } from "./chrome";
-import { type AiuiConfig, loadAiuiConfig, resolveManagedFlavor, resolveManageMode } from "./config";
+import { type AiuiConfig, type ChromeChannel, loadAiuiConfig, resolveManageMode } from "./config";
 import { syncManagedBrowser } from "./managed-browser";
+import { ensureProfileMarker, type ProfileBrowser } from "./profile";
 import { printNote, printWarning } from "./ui";
 
 type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
@@ -42,38 +43,66 @@ export interface StartSessionBrowserOptions {
   /** The `chrome` section of the loaded config. */
   config?: ChromeConfig;
   /**
-   * Whether prompting is allowed. Interactive launches may offer to
-   * install/update the managed browser and print the extension autoload hint;
-   * non-interactive ones (CI, or a sidecar whose terminal belongs to another
-   * process — `aiui vite`'s browser open) degrade to whatever browser is
-   * already installed, silently.
+   * Whether prompting is allowed. Interactive launches may run the
+   * profile-creation interview and offer to install/update the managed
+   * browser; non-interactive ones (CI, or a sidecar whose terminal belongs to
+   * another process) take the silent defaults.
    */
   interactive: boolean;
-  /** Override the resolved DevTools debug port (`aiui browser --port`). */
-  debugPort?: number;
-  /** Launch headless regardless of config (`aiui browser --headless`). */
+  /** Launch headless regardless of config. */
   headless?: boolean;
   /** Open this URL as the first tab instead of about:blank. */
   startUrl?: string;
 }
 
 /**
+ * The launch inputs a profile's marker names. A managed flavor goes through
+ * {@link syncManagedBrowser} (which may prompt to install/update when
+ * `interactive`, and reports the installed binary otherwise); a branded
+ * channel or explicit path is used as-is. A managed flavor with nothing
+ * installed and no way to ask throws with the remediation.
+ */
+export async function resolveProfileBinary(
+  browser: ProfileBrowser,
+  cfg: ChromeConfig,
+  interactive: boolean,
+): Promise<{ executablePath?: string; channel?: ChromeChannel }> {
+  if ("executablePath" in browser) {
+    return { executablePath: browser.executablePath };
+  }
+  if ("channel" in browser) {
+    return { channel: browser.channel };
+  }
+  const exe = await syncManagedBrowser({
+    flavor: browser.managed,
+    mode: resolveManageMode(cfg),
+    interactive,
+  });
+  if (!exe) {
+    throw new Error(
+      `this profile uses the managed ${browser.managed}, which is not installed.\n` +
+        `Install it with \`aiui chrome install ${browser.managed}\` (or relaunch interactively).`,
+    );
+  }
+  return { executablePath: exe };
+}
+
+/**
  * Launch the session browser — the shared "everything before the window
  * exists" sequence:
  *
- *  1. Resolve settings from flags + config.
- *  2. Prefer the managed browser (Chromium by default, or Chrome for Testing
- *     per chrome.managed) unless config names a browser explicitly (the sync
- *     may prompt to install/update — only when `interactive`; otherwise it just
- *     reports what's installed).
- *  3. Load the intent client's MV3 bundle if it has been built (dev checkouts
- *     only).
+ *  1. Resolve the profile (flags + config); ensure its marker exists (the
+ *     profile-creation interview on an interactive first run, the silent
+ *     Chromium default otherwise).
+ *  2. Resolve the marker's browser to a binary (managed flavors may
+ *     install/update via prompt — only when `interactive`).
+ *  3. Load the intent client's MV3 bundle if it has been built, and plant the
+ *     profile's native-messaging manifest.
  *  4. Launch on the profile's user data dir and wait for the debug endpoint.
  *
  * Throws with a remediation-bearing message when no browser can be found or
- * the launch fails; callers decide whether that's fatal (`aiui browser`,
- * `aiui remote`) or merely a warning (`aiui vite`, where the dev server must
- * keep running).
+ * the launch fails; callers decide whether that's fatal (`aiui open`,
+ * `aiui remote`) or merely a warning (a sidecar that must keep running).
  */
 export async function startSessionBrowser(
   opts: StartSessionBrowserOptions,
@@ -81,48 +110,33 @@ export async function startSessionBrowser(
   const cfg = opts.config ?? {};
   const flags = opts.flags ?? {};
   let settings = resolveChromeSettings(flags, cfg);
-  if (opts.debugPort !== undefined) {
-    settings = { ...settings, debugPort: opts.debugPort };
-  }
 
-  if (!cfg.executablePath && !cfg.channel) {
-    // Patch the resolved managed binary onto settings without re-deriving the
-    // data dir — the profile is partitioned by the managed flavor, not this
-    // path (twin of the comment in claude.ts).
-    const exe = await syncManagedBrowser({
-      flavor: resolveManagedFlavor(cfg),
-      mode: resolveManageMode(cfg),
-      interactive: opts.interactive,
-    });
-    if (exe) {
-      settings = { ...settings, executablePath: exe };
-    }
-  }
-  // Launches auto-load ONLY the intent client's extension — see the twin
-  // comment in claude.ts.
+  const marker =
+    settings.browser ??
+    (
+      await ensureProfileMarker(settings.userDataDir, {
+        interactive: opts.interactive,
+        profileName: flags.chromeProfile ?? (flags.chromeDataDir ? undefined : "default"),
+      })
+    ).browser;
+  settings = { ...settings, browser: marker };
+  const binary = await resolveProfileBinary(marker, cfg, opts.interactive);
+
+  // Launches auto-load ONLY the intent client's extension.
   const intent = findIntentClientExtension();
   const extensionDirs = intent.state === "ready" ? [intent.dir] : [];
-  // The extension's channel discovery runs over native messaging, and CfT
-  // looks the manifest up in the profile itself — keep it planted there.
+  // The extension's channel discovery runs over native messaging, and the
+  // managed browsers look the manifest up in the profile itself — keep it
+  // planted there.
   ensureProfileNativeHost(settings.userDataDir, intent.state === "ready", printNote);
   if (opts.interactive) {
     maybeExtensionAutoloadHint(settings, extensionDirs);
     warnIntentClientState(intent);
   }
 
-  let binary: string;
-  try {
-    binary = sessionBrowserBinary(settings);
-  } catch (error) {
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)}\n` +
-        "Install the managed browser with `aiui chrome install`, or set chrome.executablePath.",
-    );
-  }
   const session = await launchSessionBrowser({
-    binary,
+    binary: sessionBrowserBinary(binary),
     userDataDir: settings.userDataDir,
-    debugPort: settings.debugPort,
     extensionDirs,
     headless: settings.headless || opts.headless,
     startUrl: opts.startUrl,
@@ -140,10 +154,7 @@ export async function startSessionBrowser(
 export async function findOrStartSessionBrowser(
   opts: StartSessionBrowserOptions,
 ): Promise<{ session: SessionBrowser; settings: ChromeSettings; started: boolean }> {
-  let settings = resolveChromeSettings(opts.flags ?? {}, opts.config ?? {});
-  if (opts.debugPort !== undefined) {
-    settings = { ...settings, debugPort: opts.debugPort };
-  }
+  const settings = resolveChromeSettings(opts.flags ?? {}, opts.config ?? {});
   const existing = await discoverSessionBrowser(settings.userDataDir);
   if (existing) {
     ensureProfileNativeHost(
@@ -157,19 +168,8 @@ export async function findOrStartSessionBrowser(
   return { ...started, started: true };
 }
 
-/**
- * `~/.cache/aiui/browser-profiles/<key>` for a remote-anchored session browser
- * (`aiui remote`): usually no local checkout to be project-local to, so the
- * profile keys off the remote host in the user cache — reconnecting to the
- * same box reuses the same browser state. Path-only (no mkdir): the browser
- * launch creates it on first use.
- */
-export function remoteProfileDir(target: string, profile?: string): string {
-  const key = profile ?? sanitizeHostKey(target);
-  return join(cacheDir("browser-profiles", { create: false }), key);
-}
-
-/** "user@dev.example.com" → "dev.example.com", made filesystem-safe. */
+/** "user@dev.example.com" → "dev.example.com", made filesystem-safe (the
+ * remote command's history files key off it). */
 export function sanitizeHostKey(target: string): string {
   const host = target.includes("@") ? target.slice(target.indexOf("@") + 1) : target;
   const key = host.replace(/[^A-Za-z0-9._-]/g, "-");
@@ -184,18 +184,15 @@ export function sanitizeHostKey(target: string): string {
  *
  * Sidecar-safe: everything is caught, failures print a warning, and the
  * caller keeps running either way. Deliberately non-interactive — a sidecar's
- * terminal belongs to another process, so the managed-browser sync never
- * prompts here; it uses whatever browser is already available.
+ * terminal belongs to another process, so neither the profile interview nor
+ * the managed-browser sync prompts here.
  */
 export async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> {
   try {
-    // `--aiui-browser-url` beats a configured chrome.browserUrl for this run,
-    // the same precedence `aiui claude` gives it.
-    const chromeCfg: ChromeConfig = {
-      ...loadAiuiConfig().chrome,
-      ...(aiuiArgs.browserUrl ? { browserUrl: aiuiArgs.browserUrl } : {}),
-    };
-    const action = decideBrowserAction(aiuiArgs, chromeCfg);
+    const chromeCfg: ChromeConfig = { ...loadAiuiConfig().chrome };
+    // `--aiui-browser-url` (flag-only since the browser-profiles redesign)
+    // means the browser is managed elsewhere — open there, launch nothing.
+    const action = decideBrowserAction(aiuiArgs, { browserUrl: aiuiArgs.browserUrl });
     if (action.kind === "skip") {
       return;
     }
@@ -208,9 +205,9 @@ export async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise
       return;
     }
 
-    if (chromeCfg.browserUrl) {
-      await openInSessionBrowser(chromeCfg.browserUrl, url);
-      console.error(chalk.dim(`aiui: opened ${url} in the browser at ${chromeCfg.browserUrl}`));
+    if (aiuiArgs.browserUrl) {
+      await openInSessionBrowser(aiuiArgs.browserUrl, url);
+      console.error(chalk.dim(`aiui: opened ${url} in the browser at ${aiuiArgs.browserUrl}`));
       return;
     }
     const settings = resolveChromeSettings(aiuiArgs, chromeCfg);

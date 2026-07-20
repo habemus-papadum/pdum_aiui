@@ -300,10 +300,8 @@ export interface BrowserAutoOpenFlags {
   noBrowser?: boolean;
 }
 
-/** The config a sidecar's project may have voted with (aiui's `chrome` section). */
+/** The launch facts a sidecar's browser decision consults. */
 export interface BrowserAutoOpenConfig {
-  /** `false` opts the project out of browser integration wholesale. */
-  enabled?: boolean;
   /** A browser managed elsewhere (usually reverse-tunneled) — attach there. */
   browserUrl?: string;
 }
@@ -317,20 +315,20 @@ export type BrowserAction = { kind: "open" } | { kind: "skip" } | { kind: "hint"
  * the aiui CLI's flag-beats-config ordering:
  *
  *  1. Suppress flag → skip, silently. The user said no for this run.
- *  2. Force flag → open, even under CI, over SSH, or with
- *     `chrome.enabled: false` — the force flag exists precisely to overrule
- *     the defaults (e.g. the dev box is "headless" but its display is a
- *     forwarded port away).
- *  3. `chrome.enabled: false` → skip: the config opted this project out of
- *     browser integration wholesale, same as it disables the DevTools MCP.
- *  4. A configured `chrome.browserUrl` → open. The browser deliberately lives
- *     elsewhere (typically the user's local machine, reverse-tunneled — see
- *     docs/guide/remote), so *this* machine being headless is irrelevant:
- *     opening a tab there is exactly the point of the setup.
- *  5. CI or headless (see ./environment) → don't launch a browser nobody
+ *  2. Force flag → open, even under CI or over SSH — the force flag exists
+ *     precisely to overrule the defaults (e.g. the dev box is "headless" but
+ *     its display is a forwarded port away).
+ *  3. A `browserUrl` (the `--aiui-browser-url` flag) → open. The browser
+ *     deliberately lives elsewhere (typically the user's local machine,
+ *     reverse-tunneled — `aiui remote`), so *this* machine being headless is
+ *     irrelevant: opening a tab there is exactly the point of the setup.
+ *  4. CI or headless (see ./environment) → don't launch a browser nobody
  *     can see; hand back the reason so the caller can print the
  *     port-forwarding hint instead.
- *  6. Otherwise → open.
+ *  5. Otherwise → open.
+ *
+ * (The old `chrome.enabled: false` config rung retired with the
+ * browser-profiles redesign — opting out is flag-only now.)
  */
 export function decideBrowserAction(
   args: BrowserAutoOpenFlags,
@@ -343,9 +341,6 @@ export function decideBrowserAction(
   }
   if (args.browser) {
     return { kind: "open" };
-  }
-  if (config.enabled === false) {
-    return { kind: "skip" };
   }
   if (config.browserUrl) {
     return { kind: "open" };

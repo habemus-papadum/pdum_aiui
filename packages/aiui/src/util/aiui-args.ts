@@ -42,8 +42,8 @@ export interface AiuiArgs {
    */
   noBrowser: boolean;
   /**
-   * The `--aiui-chrome-profile <name>` value, if provided — which named Chrome
-   * profile (user data dir under `.aiui-cache/chrome/`) to launch with.
+   * The `--aiui-profile <name>` value, if provided — which browser profile
+   * (user data dir under `~/.cache/aiui/userdata/`) to launch with.
    */
   chromeProfile?: string;
   /**
@@ -103,8 +103,8 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
  *  - `--aiui-browser` / `--aiui-no-browser` — force opening the page in the
  *    session browser (even in CI/headless environments) / never open one.
  *    Passing both is an error.
- *  - `--aiui-chrome-profile <name>` — launch Chrome with the named profile
- *    (created on first use under `.aiui-cache/chrome/<name>`).
+ *  - `--aiui-profile <name>` — launch with the named browser profile
+ *    (created on first use under `~/.cache/aiui/userdata/<name>`).
  *  - `--aiui-chrome-data-dir <path>` — launch Chrome with an explicit user data
  *    dir instead of a named profile. Mutually exclusive with the above.
  *  - `--aiui-browser-url <url>` — attach the Chrome DevTools MCP to this
@@ -189,12 +189,12 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         noBrowser = true;
         break;
       }
-      case "--aiui-chrome-profile": {
+      case "--aiui-profile": {
         if (value === undefined) {
           value = args[++i];
         }
         if (!value) {
-          throw new Error("--aiui-chrome-profile requires a non-empty value");
+          throw new Error("--aiui-profile requires a non-empty value");
         }
         chromeProfile = value;
         break;
@@ -241,12 +241,12 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
     throw new Error("--aiui-browser and --aiui-no-browser are mutually exclusive");
   }
   if (chromeProfile !== undefined && chromeDataDir !== undefined) {
-    throw new Error("--aiui-chrome-profile and --aiui-chrome-data-dir are mutually exclusive");
+    throw new Error("--aiui-profile and --aiui-chrome-data-dir are mutually exclusive");
   }
   if (browserUrl !== undefined && (chromeProfile !== undefined || chromeDataDir !== undefined)) {
     throw new Error(
       "--aiui-browser-url means the browser is managed elsewhere — it can't be combined " +
-        "with --aiui-chrome-profile or --aiui-chrome-data-dir",
+        "with --aiui-profile or --aiui-chrome-data-dir",
     );
   }
 

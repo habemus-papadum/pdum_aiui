@@ -1,19 +1,18 @@
 /**
- * `aiui chrome <action>` — manage the agent's browser.
+ * `aiui chrome <action>` — manage the managed browser BINARIES.
  *
  *   install | update [flavor]   bring a managed browser to latest
- *   status                      what would launch here, and is the intent
- *                               client loadable
+ *   status                      what's installed, and what the default
+ *                               profile would launch
  *
  * `install` and `update` are the same operation (idempotent "ensure latest");
  * both names exist because both questions get asked. Without a flavor they act
- * on the configured `chrome.managed` (Chromium by default); pass `chromium` or
- * `chrome-for-testing` to target the other explicitly. `status` is the
- * diagnostic: it reports per the *current directory's* merged config, so run it
- * from the project you're wondering about.
+ * on the default (Chromium); pass `chromium` or `chrome-for-testing` to target
+ * the other explicitly. Which browser a LAUNCH uses is the profile's business
+ * (`aiui profile`, docs/proposals/browser-profiles.md) — profiles reference
+ * the binaries this command manages.
  */
 import { existsSync, readdirSync } from "node:fs";
-import { dirname } from "node:path";
 import { discoverSessionBrowser } from "@habemus-papadum/aiui-util";
 import {
   chromeDevtoolsEnabled,
@@ -21,10 +20,10 @@ import {
   resolveChromeSettings,
 } from "../util/chrome";
 import {
+  DEFAULT_MANAGED_FLAVOR,
   loadAiuiConfig,
   MANAGED_FLAVORS,
   type ManagedFlavor,
-  resolveManagedFlavor,
   resolveManageMode,
 } from "../util/config";
 import {
@@ -33,6 +32,7 @@ import {
   installedManaged,
   latestManaged,
 } from "../util/managed-browser";
+import { profileBrowserLabel, profilesRoot } from "../util/profile";
 import { printError } from "../util/ui";
 
 export async function runChrome(args: string[]): Promise<void> {
@@ -62,13 +62,11 @@ export async function runChrome(args: string[]): Promise<void> {
   }
 }
 
-/**
- * Which flavor an `install`/`update` targets: the argument if given (with `cft`
- * as a shorthand), else the configured `chrome.managed`.
- */
+/** Which flavor an `install`/`update` targets: the argument (with `cft` as a
+ * shorthand), else the default (Chromium). */
 function resolveFlavorArg(arg: string | undefined): { flavor: ManagedFlavor } | { error: string } {
   if (arg === undefined) {
-    return { flavor: resolveManagedFlavor(loadAiuiConfig().chrome) };
+    return { flavor: DEFAULT_MANAGED_FLAVOR };
   }
   const aliases: Record<string, ManagedFlavor> = {
     chromium: "chromium",
@@ -81,18 +79,16 @@ function resolveFlavorArg(arg: string | undefined): { flavor: ManagedFlavor } | 
     : { error: `unknown browser "${arg}" — use chromium or chrome-for-testing` };
 }
 
-/** The human-facing dump of every browser decision this directory would get. */
+/** The human-facing dump: installed binaries + what the default profile does. */
 async function printStatus(): Promise<void> {
   const config = loadAiuiConfig();
   const chromeCfg = config.chrome ?? {};
   const flags = { chrome: false, noChrome: false };
-  const preferred = resolveManagedFlavor(chromeCfg);
 
   console.log("Managed browsers:");
-  console.log(`  preferred (chrome.managed): ${flavorSpec(preferred).displayName}`);
   for (const flavor of MANAGED_FLAVORS) {
     const spec = flavorSpec(flavor);
-    const tag = flavor === preferred ? " *preferred*" : "";
+    const tag = flavor === DEFAULT_MANAGED_FLAVOR ? " *default*" : "";
     const install = await installedManaged(flavor);
     if (install) {
       const latest = await latestManaged(flavor);
@@ -105,56 +101,38 @@ async function printStatus(): Promise<void> {
       console.log(`  ${spec.displayName}${tag}: ${install.buildId} ${freshness}`);
       console.log(`    ${install.executablePath}`);
     } else {
-      const cmd = flavor === preferred ? "aiui chrome install" : `aiui chrome install ${flavor}`;
+      const cmd =
+        flavor === DEFAULT_MANAGED_FLAVOR ? "aiui chrome install" : `aiui chrome install ${flavor}`;
       console.log(`  ${spec.displayName}${tag}: not installed — \`${cmd}\``);
     }
   }
   console.log(`  startup checks (chrome.manage): ${resolveManageMode(chromeCfg)}`);
 
-  console.log("\nThis directory would launch:");
-  if (!chromeDevtoolsEnabled(flags, chromeCfg)) {
-    console.log("  nothing — the Chrome DevTools MCP is disabled here");
-    return;
+  console.log("\nThe default profile:");
+  if (!chromeDevtoolsEnabled(flags)) {
+    console.log("  the Chrome DevTools MCP is disabled here (CI, or --aiui-no-chrome)");
   }
-  if (chromeCfg.browserUrl) {
-    console.log(`  connection: attach to ${chromeCfg.browserUrl} (chrome.browserUrl)`);
-    console.log("  the browser is managed elsewhere — nothing launches on this machine");
-    return;
-  }
-  // Settings come from the config as written, so the profile variant reflects
-  // the *declared* browser intent — never a managed binary path we'd inject
-  // (that would misread as a `custom-*` variant; see chromeVariant).
   const settings = resolveChromeSettings({}, chromeCfg);
-  const preferredInstall =
-    settings.executablePath || settings.channel ? undefined : await installedManaged(preferred);
-  const running = await discoverSessionBrowser(settings.userDataDir);
-  const connection =
-    settings.mode === "attach"
-      ? running
-        ? `attach to the running session browser at ${running.browserUrl}`
-        : "attach — a session browser starts with the next interactive launch (or `aiui browser`)"
-      : "launch — chrome-devtools-mcp starts a private browser on the agent's first tool use";
-  console.log(`  connection: ${connection}`);
-  const browser = settings.executablePath
-    ? settings.executablePath
-    : settings.channel
-      ? `installed Chrome (${settings.channel} channel)`
-      : preferredInstall
-        ? `${flavorSpec(preferred).displayName} ${preferredInstall.buildId} (managed)`
-        : `${flavorSpec(preferred).displayName} (managed — not yet installed)`;
-  console.log(`  browser: ${browser}${settings.headless ? " — headless" : ""}`);
-  console.log(`  profile variant: ${settings.variant}`);
   console.log(`  user data dir: ${settings.userDataDir}`);
-  // Only a branded `channel` launch fails to honor --load-extension; the
-  // managed flavors and an explicit executablePath all honor it.
-  const honorsLoadExtension = !settings.channel;
-  const variantDir = dirname(settings.userDataDir);
-  if (existsSync(variantDir)) {
-    const profiles = readdirSync(variantDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name);
+  if (settings.browser) {
+    console.log(`  browser (from the profile marker): ${profileBrowserLabel(settings.browser)}`);
+  } else {
+    console.log("  no profile marker yet — created on the first launch (or `aiui profile new`)");
+  }
+  const running = await discoverSessionBrowser(settings.userDataDir);
+  console.log(
+    running
+      ? `  running: yes — ${running.browserUrl}`
+      : "  running: no — starts with the next interactive launch (or `aiui open <url>`)",
+  );
+
+  const root = profilesRoot({ create: false });
+  if (existsSync(root)) {
+    const profiles = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
     if (profiles.length) {
-      console.log(`  profiles here (${settings.variant}): ${profiles.join(", ")}`);
+      console.log(`  profiles: ${profiles.join(", ")} (\`aiui profile list\` for detail)`);
     }
   }
 
@@ -171,21 +149,20 @@ async function printStatus(): Promise<void> {
           "  build + load into the running browser:  pnpm -C packages/aiui-intent-client ext",
       );
       break;
-    case "ready":
+    case "ready": {
       console.log(`  ${client.dir}`);
-      printAutoloadability(honorsLoadExtension);
+      // Only a branded `channel` marker fails to honor --load-extension; the
+      // managed flavors and explicit binaries all honor it.
+      const honors = !(settings.browser && "channel" in settings.browser);
+      if (honors) {
+        console.log("  auto-loads via --load-extension (honored by Chromium/Chrome for Testing)");
+      } else {
+        console.log("  can NOT auto-load into branded Chrome ≥ 137 — load it unpacked once");
+        console.log(
+          "  (chrome://extensions → Developer mode → Load unpacked), or `aiui chrome install`",
+        );
+      }
       break;
-  }
-}
-
-/** Whether the chosen browser will honor `--load-extension` for this dir. */
-function printAutoloadability(honorsLoadExtension: boolean): void {
-  if (honorsLoadExtension) {
-    console.log("  auto-loads via --load-extension (honored by Chromium/Chrome for Testing)");
-  } else {
-    console.log("  can NOT auto-load into branded Chrome ≥ 137 — load it unpacked once");
-    console.log(
-      "  (chrome://extensions → Developer mode → Load unpacked), or `aiui chrome install`",
-    );
+    }
   }
 }

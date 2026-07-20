@@ -16,14 +16,12 @@
  *
  * The deliberate choices common to both:
  *
- * - **A persistent, project-local profile.** Chrome's user data dir defaults to
- *   `.aiui-cache/chrome/default` under the launch directory — the same
- *   gitignored cache the lowering traces live in — so browser state (logins,
- *   devtools settings, manually installed extensions) survives across sessions
- *   and stays out of both git and the user's real browser profile. Named
- *   profiles (`--aiui-chrome-profile <name>`) live as siblings and are created
- *   on first use; `--aiui-chrome-data-dir <path>` escapes the convention
- *   entirely.
+ * - **A persistent, user-level profile — shared across projects.** Chrome's
+ *   user data dir is a PROFILE under `~/.cache/aiui/userdata/<name>` (default
+ *   "default"; util/profile.ts), so browser state — logins, devtools settings,
+ *   manually installed extensions — survives across sessions AND projects,
+ *   never touching the user's real browser profile. `--aiui-profile <name>`
+ *   picks another; `--aiui-chrome-data-dir <path>` escapes the convention.
  *
  * - **Best-effort auto-load of ONE extension: the intent client.** Launches
  *   pass exactly the intent client's MV3 bundle via `--load-extension` (never
@@ -33,18 +31,19 @@
  *   the extension unpacked once at `chrome://extensions`, which the persistent
  *   profile then remembers.
  *
- * - **Config picks the browser.** `chrome.executablePath` (e.g. a Chrome for
- *   Testing binary) or `chrome.channel` choose what to launch;
- *   `chrome.browserUrl` says "don't launch anything, attach here" (the remote
- *   key); flags choose per-invocation things (profile, on/off).
+ * - **The PROFILE picks the browser.** The profile's immutable marker
+ *   (aiui-profile.json) names a managed flavor, a branded channel, or an
+ *   explicit binary; there is no other browser-selection input
+ *   (docs/proposals/browser-profiles.md). `--aiui-browser-url` says "don't
+ *   launch anything, attach here" (how `aiui remote`'s printed invocation
+ *   works).
  */
 import { existsSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { projectCacheDir } from "@habemus-papadum/aiui-claude-channel/internal";
 import { isCi } from "@habemus-papadum/aiui-util";
 import type { AiuiArgs } from "./aiui-args";
-import type { AiuiConfig, ChromeChannel, ChromeMode } from "./config";
-import { DEFAULT_MANAGED_FLAVOR, resolveManagedFlavor } from "./config";
+import type { AiuiConfig, ChromeChannel } from "./config";
+import { type ProfileBrowser, profileDir, readProfileMarker } from "./profile";
 import { packageRoot } from "./resolve-cli";
 import { printNote } from "./ui";
 
@@ -61,12 +60,6 @@ export const CHROME_SERVER_ID = "chrome-devtools";
  * build (`pnpm -C packages/aiui-intent-client build:ext`). */
 const INTENT_CLIENT_PKG = "@habemus-papadum/aiui-intent-client";
 
-/** The profile used when neither flags nor config name one. */
-export const DEFAULT_CHROME_PROFILE = "default";
-
-/** Profile names must stay plain directory names — no separators, no leading dot. */
-const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
 type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
 type ChromeFlags = Pick<AiuiArgs, "chrome" | "noChrome" | "chromeProfile" | "chromeDataDir">;
 
@@ -74,9 +67,9 @@ type ChromeFlags = Pick<AiuiArgs, "chrome" | "noChrome" | "chromeProfile" | "chr
  * Whether this launch should attach the Chrome DevTools MCP.
  *
  * On by default; off under CI (no display, and e2e sessions must not trigger an
- * npx download + Chrome launch), with `--aiui-no-chrome`, or with
- * `chrome.enabled: false` in config. `--aiui-chrome` forces it on even under
- * CI; `chrome.enabled: true` merely restates the default and does not.
+ * npx download + Chrome launch) or with `--aiui-no-chrome`. `--aiui-chrome`
+ * forces it on even under CI. Flag-only since the browser-profiles redesign —
+ * the old `chrome.enabled` config key is retired.
  *
  * Deliberately gated on CI alone, not the wider `isHeadless` check from
  * aiui-util: on a headless-but-interactive box (SSH into a dev machine)
@@ -86,7 +79,6 @@ type ChromeFlags = Pick<AiuiArgs, "chrome" | "noChrome" | "chromeProfile" | "chr
  */
 export function chromeDevtoolsEnabled(
   args: Pick<ChromeFlags, "chrome" | "noChrome">,
-  config: ChromeConfig = {},
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   if (args.noChrome) {
@@ -95,145 +87,46 @@ export function chromeDevtoolsEnabled(
   if (args.chrome) {
     return true;
   }
-  if (config.enabled === false) {
-    return false;
-  }
   return !isCi(env);
 }
 
-/** The launch-relevant Chrome settings after flags and config are reconciled. */
+/**
+ * The launch-relevant Chrome settings after flags and config are reconciled.
+ * The PROFILE picks the browser (docs/proposals/browser-profiles.md): identity
+ * comes from the user-data dir's marker, headless from config; there is no
+ * other browser-selection input.
+ */
 export interface ChromeSettings {
   /** Absolute user data dir for this launch. */
   userDataDir: string;
   /**
-   * The browser-variant tag the profile is partitioned under (see
-   * {@link chromeVariant}) — `chromium`, `chrome-for-testing`, `chrome-<channel>`,
-   * or `custom-<hash>`. Informational; `custom-*` when an explicit `dataDir`
-   * escapes the convention.
+   * Browser identity from the profile's marker — absent when the profile
+   * doesn't exist yet (the launch paths ensure it via
+   * `ensureProfileMarker` before picking a binary).
    */
-  variant: string;
-  /**
-   * "attach" (default): share a session browser — discover or eagerly launch
-   * one and point the MCP at its debug endpoint. "launch": chrome-devtools-mcp
-   * owns a private browser, started lazily on first tool use.
-   */
-  mode: ChromeMode;
-  /** Explicit attach endpoint from config; forces attach, disables management. */
-  browserUrl?: string;
-  /** Debug port for session browsers aiui launches (0 = OS-assigned). */
-  debugPort: number;
-  /** Chrome binary to launch instead of an installed channel, if configured. */
-  executablePath?: string;
-  /** Installed Chrome release channel to launch, if configured. */
-  channel?: ChromeChannel;
+  browser?: ProfileBrowser;
   headless: boolean;
 }
 
 /**
- * Reconcile CLI flags with config into the settings for this launch.
- *
- * Flags beat config. The profile/data-dir pair is reconciled as a unit: a
- * `--aiui-chrome-profile` flag also suppresses a configured `dataDir` (and
- * vice versa), because whichever identity the user named at the prompt is the
- * one they mean. Within config alone, `dataDir` beats `profile`.
+ * Reconcile CLI flags with config into the settings for this launch: the
+ * profile name (default "default") or an explicit data dir picks the
+ * user-data dir; the dir's marker (when present) names the browser.
  */
 export function resolveChromeSettings(
   args: Pick<ChromeFlags, "chromeProfile" | "chromeDataDir">,
   config: ChromeConfig = {},
   base: string = process.cwd(),
 ): ChromeSettings {
-  if (config.executablePath && config.channel) {
-    throw new Error(
-      "config sets both chrome.executablePath and chrome.channel — they pick the browser " +
-        "two different ways; keep exactly one",
-    );
-  }
-  const flagged = args.chromeProfile !== undefined || args.chromeDataDir !== undefined;
-  const dataDir = args.chromeDataDir ?? (flagged ? undefined : config.dataDir);
-  const profile = args.chromeProfile ?? (flagged ? undefined : config.profile);
-  // The variant is derived from the config's *declared* browser intent (channel
-  // / explicit executablePath / managed flavor), NOT from an executablePath the
-  // launch path later injects for the managed flavor — so a managed Chromium
-  // and a managed CfT keep distinct profiles, and injecting the resolved binary
-  // never moves the profile out from under a running session. Callers patch
-  // `executablePath` post-sync; they must not re-derive the data dir.
-  const variant = chromeVariant(config);
+  const userDataDir = args.chromeDataDir
+    ? resolve(base, args.chromeDataDir)
+    : profileDir(args.chromeProfile);
+  const marker = readProfileMarker(userDataDir);
   return {
-    userDataDir: chromeUserDataDir({ dataDir, profile, variant }, base),
-    variant,
-    // A configured endpoint means the browser is managed elsewhere (usually
-    // another machine) — that's always attach, whatever `mode` says.
-    mode: config.browserUrl ? "attach" : (config.mode ?? "attach"),
-    browserUrl: config.browserUrl,
-    debugPort: config.debugPort ?? 0,
-    executablePath: config.executablePath && resolve(base, config.executablePath),
-    channel: config.channel,
+    userDataDir,
+    ...(marker !== undefined ? { browser: marker.browser } : {}),
     headless: config.headless ?? false,
   };
-}
-
-/**
- * The variant tag a launch's profile is partitioned under. Distinct browser
- * builds must not share a Chrome user data dir — a downgrade or a
- * different-channel launch on the same profile can refuse to start ("profile
- * was created by a newer version") or silently migrate state — so each variant
- * gets its own directory:
- *
- *  - an explicit `channel` → `chrome-<channel>` (e.g. `chrome-beta`)
- *  - an explicit `executablePath` → `custom-<hash>` (stable per binary path, so
- *    two hand-picked binaries don't collide)
- *  - otherwise the managed flavor → `chromium` or `chrome-for-testing`
- *
- * `channel` and `executablePath` are mutually exclusive (validated in
- * {@link resolveChromeSettings}); channel is checked first only for definiteness.
- */
-export function chromeVariant(
-  config: Pick<ChromeConfig, "channel" | "executablePath" | "managed">,
-): string {
-  if (config.channel) {
-    return `chrome-${config.channel}`;
-  }
-  if (config.executablePath) {
-    return `custom-${executablePathHash(config.executablePath)}`;
-  }
-  return resolveManagedFlavor(config);
-}
-
-/** A short, stable, filesystem-safe hash of a binary path (djb2, base36). */
-function executablePathHash(path: string): string {
-  let hash = 5381;
-  for (let i = 0; i < path.length; i++) {
-    hash = ((hash * 33) ^ path.charCodeAt(i)) >>> 0;
-  }
-  return hash.toString(36);
-}
-
-/**
- * The Chrome user data dir to use (absolute).
- *
- * An explicit `dataDir` wins, resolved against `base`. Otherwise the named
- * profile (default: {@link DEFAULT_CHROME_PROFILE}) maps to
- * `.aiui-cache/chrome/<variant>/<name>` under `base`, partitioned by browser
- * variant (see {@link chromeVariant}) so distinct builds never share a profile.
- * Alternate profiles are just other names, created on first use by the caller's
- * mkdir; `variant` defaults to {@link DEFAULT_MANAGED_FLAVOR}.
- */
-export function chromeUserDataDir(
-  ids: { dataDir?: string; profile?: string; variant?: string },
-  base: string = process.cwd(),
-): string {
-  if (ids.dataDir) {
-    return resolve(base, ids.dataDir);
-  }
-  const profile = ids.profile ?? DEFAULT_CHROME_PROFILE;
-  if (!PROFILE_NAME.test(profile)) {
-    throw new Error(
-      `invalid chrome profile name "${profile}" — use letters, digits, ".", "_", "-" ` +
-        "(or --aiui-chrome-data-dir for an arbitrary path)",
-    );
-  }
-  const variant = ids.variant ?? DEFAULT_MANAGED_FLAVOR;
-  return join(projectCacheDir(base), "chrome", variant, profile);
 }
 
 /** The intent client's MV3 bundle directory name (see its build-ext.ts: a
@@ -310,7 +203,9 @@ export function maybeExtensionAutoloadHint(
   settings: ChromeSettings,
   extensionDirs: string[],
 ): void {
-  if (!extensionDirs.length || settings.executablePath) {
+  // Only a branded Chrome (a `channel` marker) ignores --load-extension; the
+  // managed flavors and explicit binaries honor it.
+  if (!extensionDirs.length || settings.browser === undefined || !("channel" in settings.browser)) {
     return;
   }
   const marker = join(settings.userDataDir, "aiui-extension-autoload-hint");
@@ -354,23 +249,28 @@ export function chromeMcpAttachServer(browserUrl: string): { command: string; ar
 }
 
 export function chromeMcpServer(
-  settings: ChromeSettings,
+  launch: {
+    userDataDir: string;
+    executablePath?: string;
+    channel?: ChromeChannel;
+    headless?: boolean;
+  },
   extensionDirs: string[] = [],
 ): { command: string; args: string[] } {
   const args = [
     "-y",
     "chrome-devtools-mcp@latest",
     "--userDataDir",
-    settings.userDataDir,
+    launch.userDataDir,
     "--ignoreDefaultChromeArg=--disable-extensions",
   ];
-  if (settings.executablePath) {
-    args.push("--executablePath", settings.executablePath);
+  if (launch.executablePath) {
+    args.push("--executablePath", launch.executablePath);
   }
-  if (settings.channel) {
-    args.push("--channel", settings.channel);
+  if (launch.channel) {
+    args.push("--channel", launch.channel);
   }
-  if (settings.headless) {
+  if (launch.headless) {
     args.push("--headless");
   }
   if (extensionDirs.length) {

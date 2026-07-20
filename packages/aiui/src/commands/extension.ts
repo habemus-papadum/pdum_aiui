@@ -44,6 +44,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { HOST_BINARY_NAME, resolveHostBinary } from "@habemus-papadum/aiui-registry";
 import { cacheDir } from "@habemus-papadum/aiui-util";
+import { profilesRoot } from "../util/profile";
 import { printError } from "../util/ui";
 
 /** The NM host name (lowercase alphanumerics, dots, underscores only). */
@@ -349,8 +350,9 @@ function statusNativeHost(): void {
   for (const dir of nativeHostManifestDirs(process.platform, homedir())) {
     reportManifest(join(dir, `${NATIVE_HOST_NAME}.json`));
   }
-  // The profiles aiui launches here (project-local; where CfT actually looks).
-  const profiles = join(process.cwd(), ".aiui-cache", "chrome");
+  // The user-level browser profiles (their user-data dirs are where the
+  // managed browsers actually look the manifest up).
+  const profiles = profilesRoot({ create: false });
   let names: string[] = [];
   try {
     names = readdirSync(profiles, { withFileTypes: true })

@@ -41,8 +41,8 @@ export function startRefusal(
 ): { title: string; detail: string } | undefined {
   if (action.kind === "skip") {
     return {
-      title: "chrome.enabled is false — not starting a browser",
-      detail: `This project opted out of browser integration; open ${url} yourself, or drop chrome.enabled.`,
+      title: "browser opening is suppressed for this run — not starting one",
+      detail: `Open ${url} yourself, or rerun without the suppress flag.`,
     };
   }
   if (action.kind === "hint") {
@@ -61,15 +61,6 @@ export async function runOpen(url: string, opts: OpenOptions = {}): Promise<void
   const config = loadAiuiConfig();
   const chromeCfg = { ...config.chrome };
   try {
-    // An explicitly configured endpoint (a browser managed elsewhere — e.g.
-    // the remote-development split) is also openable, and nothing local is
-    // started for it.
-    if (chromeCfg.browserUrl) {
-      await openInSessionBrowser(chromeCfg.browserUrl, url);
-      console.log(`opened ${url} (browser at ${chromeCfg.browserUrl})`);
-      return;
-    }
-
     const settings = resolveChromeSettings(
       { chromeProfile: opts.profile, chromeDataDir: opts.dataDir },
       chromeCfg,
@@ -84,7 +75,7 @@ export async function runOpen(url: string, opts: OpenOptions = {}): Promise<void
     // None running — starting one is the consequential act, so it goes
     // through the ladder. (No force/suppress flags here: `aiui open` under CI
     // with a browser deliberately running still opens above.)
-    const refusal = startRefusal(decideBrowserAction({}, chromeCfg), url);
+    const refusal = startRefusal(decideBrowserAction({}), url);
     if (refusal) {
       printNote(refusal.title, refusal.detail);
       return;

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { configPaths, readConfigFile } from "./config";
+import { configPath, readConfigFile } from "./config";
 import { ensureLaunchChoices } from "./first-run";
 
 let dir: string;
@@ -36,7 +36,7 @@ describe("ensureLaunchChoices", () => {
     expect(config.claude?.enterNudge).toBeUndefined();
     expect(config.channel).toEqual({ bind: "host" });
 
-    const persisted = readConfigFile(configPaths().user);
+    const persisted = readConfigFile(configPath());
     expect(persisted?.channel).toEqual({ bind: "host" });
   });
 
@@ -64,6 +64,6 @@ describe("ensureLaunchChoices", () => {
   it("choosing loopback persists it, so it never asks again", async () => {
     const config = await ensureLaunchChoices({ claude: { enterNudge: true } }, async () => "l");
     expect(config.channel).toEqual({ bind: "loopback" });
-    expect(readConfigFile(configPaths().user)?.channel).toEqual({ bind: "loopback" });
+    expect(readConfigFile(configPath())?.channel).toEqual({ bind: "loopback" });
   });
 });

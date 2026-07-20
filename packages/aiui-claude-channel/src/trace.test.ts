@@ -15,9 +15,14 @@ import {
 const freshCache = () => mkdtempSync(join(tmpdir(), "aiui-trace-"));
 
 describe("projectCacheDir", () => {
-  it("is .aiui-cache under the given base (default cwd)", () => {
-    expect(projectCacheDir("/some/project")).toBe("/some/project/.aiui-cache");
-    expect(projectCacheDir()).toBe(join(process.cwd(), ".aiui-cache"));
+  it("lives in the USER cache, keyed by the project's full path", () => {
+    const dir = projectCacheDir("/some/project");
+    expect(dir).toMatch(/[/\\]projects[/\\]project-[0-9a-f]{8}$/);
+    // Same basename, different path → different slug (the hash keeps them apart).
+    expect(projectCacheDir("/other/project")).not.toBe(dir);
+    // Stable per path, and the default base is cwd.
+    expect(projectCacheDir("/some/project")).toBe(dir);
+    expect(projectCacheDir()).toBe(projectCacheDir(process.cwd()));
   });
 });
 

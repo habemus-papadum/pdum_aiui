@@ -10,12 +10,12 @@ import {
   runConfigShow,
   runConfigUnset,
   type ShowOptions,
-  type WriteOptions,
 } from "./commands/config";
 import { runConfigTui } from "./commands/config-tui";
 import { type DebugOptions, runDebug } from "./commands/debug";
 import { type ExtensionOptions, runExtension } from "./commands/extension";
 import { runMcp } from "./commands/mcp";
+import { type ProfileBrowserFlags, runProfile } from "./commands/profile";
 import { type RemoteOptions, runRemote } from "./commands/remote";
 
 import { VERSION } from "./util/version";
@@ -90,7 +90,7 @@ export function buildProgram(): Command {
       "preferred REMOTE port for the browser debug forward, walked when taken (default: 9222)",
     )
     .option("--name <name>", "display name for the registered remote channel")
-    .option("--profile <name>", "profile key in the user cache (default: derived from the host)")
+    .option("--profile <name>", 'browser profile (default: the shared "default" profile)')
     .option("--data-dir <path>", "explicit Chrome user data dir")
     .option("--headless", "launch the browser with no UI")
     .option(
@@ -98,6 +98,23 @@ export function buildProgram(): Command {
       "replay a recorded connection (same tag/ports) after an ssh drop — the remote session must still be running",
     )
     .action((host: string, opts: RemoteOptions) => runRemote(host, opts));
+
+  // Browser profiles: user-data dirs under ~/.cache/aiui/userdata/<name>,
+  // each carrying an immutable marker that names its browser — the ONLY
+  // browser-selection input (docs/proposals/browser-profiles.md). `chrome`
+  // manages binaries; `profile` manages the dirs that reference them.
+  program
+    .command("profile")
+    .description("manage browser profiles: list | new <name> | rm <name> | adopt <name>")
+    .argument("<action>", "list | new | rm | adopt")
+    .argument("[name]", "the profile name (lowercase slug)")
+    .option("--chromium", "new/adopt: the managed Chromium (the default browser)")
+    .option("--cft", "new/adopt: the managed Chrome for Testing")
+    .option("--channel <channel>", "new/adopt: a branded Chrome release channel")
+    .option("--executable <path>", "new/adopt: an explicit browser binary")
+    .action((action: string, name: string | undefined, opts: ProfileBrowserFlags) =>
+      runProfile(action, name, opts),
+    );
 
   // The intent client extension's native side: the Chrome native-messaging
   // host that gives it channel discovery a browser can't get from the on-disk
@@ -117,16 +134,16 @@ export function buildProgram(): Command {
   // `npm create @habemus-papadum/aiui@latest my-app` — so there is exactly one
   // starter template in the repo, and it is the one people actually build on.)
 
-  // Reset aiui's on-disk state to a fresh-install slate — the two cache roots
-  // (this repo's .aiui-cache/ and the user cache, including the managed Chrome
-  // for Testing). For clean demos of the install/first-run flow.
+  // Reset aiui's on-disk state to a fresh-install slate — everything lives
+  // under the user cache now (projects/<slug> for per-project state). For
+  // clean demos of the install/first-run flow.
   program
     .command("clean")
     .description(
-      "reset aiui state (project + user cache, incl. the managed browser) for a clean-slate demo",
+      "reset aiui state (the user cache, incl. profiles + managed browsers) for a clean-slate demo",
     )
-    .option("--project-only", "only this repo's .aiui-cache/")
-    .option("--user-only", "only the user cache (~/.cache/aiui)")
+    .option("--project-only", "only this project's cache (~/.cache/aiui/projects/<slug>)")
+    .option("--user-only", "only the whole user cache (~/.cache/aiui)")
     .option("--keep-browser", "keep the managed browser (skip the ~150-160 MB re-download)")
     .option("-n, --dry-run", "print what would be deleted, then stop")
     .option("-y, --yes", "delete without the confirmation prompt")
@@ -136,7 +153,7 @@ export function buildProgram(): Command {
     .command("open")
     .description("open a URL in the session browser, e.g. `aiui open http://localhost:5173`")
     .argument("<url>", "the URL to open")
-    .option("--profile <name>", "named profile under .aiui-cache/chrome/")
+    .option("--profile <name>", 'browser profile (default: the shared "default" profile)')
     .option("--data-dir <path>", "explicit Chrome user data dir")
     .action((url: string, opts: OpenOptions) => runOpen(url, opts));
 
@@ -153,35 +170,32 @@ export function buildProgram(): Command {
     .action(() => runConfigTui());
   config
     .command("show")
-    .description("every key with its effective value and which file set it")
-    .option("--json", "machine-readable: file paths, per-level values, effective merge")
+    .description("every key with its value (or default)")
+    .option("--json", "machine-readable: the file path and its parsed contents")
     .action((opts: ShowOptions) => runConfigShow(opts));
   config
     .command("get")
     .description("print a key's effective value (provenance goes to stderr)")
-    .argument("<key>", 'dotted key, e.g. "chrome.mode"')
+    .argument("<key>", 'dotted key, e.g. "channel.bind"')
     .action((key: string) => runConfigGet(key));
   config
     .command("set")
-    .description("set a key in the user config (or the project's with --project)")
-    .argument("<key>", 'dotted key, e.g. "chrome.mode"')
+    .description("set a key in the config")
+    .argument("<key>", 'dotted key, e.g. "channel.bind"')
     .argument(
       "<value>",
       "the new value, validated against the schema (arrays as JSON, e.g. '[\"--foo\"]')",
     )
-    .option("--project", "write .aiui-cache/config.json here instead of the user config")
-    .action((key: string, value: string, opts: WriteOptions) => runConfigSet(key, value, opts));
+    .action((key: string, value: string) => runConfigSet(key, value));
   config
     .command("set-dsp")
     .description("opt in to --dangerously-skip-permissions: add it to claude.args (idempotent)")
-    .option("--project", "write .aiui-cache/config.json here instead of the user config")
-    .action((opts: WriteOptions) => runConfigSetDsp(opts));
+    .action(() => runConfigSetDsp());
   config
     .command("unset")
-    .description("remove a key from the user config (or the project's with --project)")
+    .description("remove a key from the config")
     .argument("<key>", 'dotted key, e.g. "claude.args"')
-    .option("--project", "remove from .aiui-cache/config.json here instead of the user config")
-    .action((key: string, opts: WriteOptions) => runConfigUnset(key, opts));
+    .action((key: string) => runConfigUnset(key));
 
   // `aiui mcp <args...>` forwards to the aiui-claude-channel CLI, so the
   // user-facing channel commands live under `aiui` (e.g. `aiui mcp quick`)

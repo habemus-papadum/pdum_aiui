@@ -19,6 +19,7 @@ describe("aiui cli", () => {
       "extension",
       "mcp",
       "open",
+      "profile",
       "remote",
     ]);
   });

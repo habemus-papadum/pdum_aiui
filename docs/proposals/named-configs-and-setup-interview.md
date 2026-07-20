@@ -1,5 +1,10 @@
 # Named configurations and the setup interview
 
+> **SUPERSEDED** (2026-07-20) by [browser-profiles.md](./browser-profiles.md): the profile model
+> absorbs what a named configuration would have bundled, and the `server:aiui` warning fix this
+> proposal grew from is abandoned (cosmetic banner, high effort). Kept for the experimental
+> record — the warning root-cause analysis below remains valid.
+
 Status: **PROPOSED** (2026-07-18). No code yet. This proposal grew out of a concrete, cosmetic
 bug — a startup warning — but the fix for it forces a larger, overdue question: how does a user
 *set up* an aiui project, given how many system-specific, vendor-specific, and taste-specific

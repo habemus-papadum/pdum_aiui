@@ -8,30 +8,50 @@
  * prompt-lowering research: inspectable IRs between pipeline stages, like
  * dumping a compiler's passes.
  *
- * Traces live in a **project-local** cache — `.aiui-cache/` under the MCP
- * server's working directory, *not* the per-user cache — because they belong
- * to the project/session being worked on (and because prompts reference blob
- * files by path, which Claude Code — running in the same cwd — can read).
- * The directory is gitignored.
+ * Since the browser-profiles redesign (docs/proposals/browser-profiles.md §4)
+ * the per-project cache lives in the USER cache, keyed by the project's full
+ * absolute path — `~/.cache/aiui/projects/<slug>-<hash8>/` — so the project
+ * directory itself stays pristine (no `.aiui-cache/`, nothing to gitignore).
+ * The slug keeps the path readable; the hash keeps `~/a/app` and `~/b/app`
+ * apart. Blob paths remain absolute, so prompts referencing them stay
+ * readable by the Claude Code session regardless of where they live.
  *
- * Layout:
+ * Layout (under the project's cache dir):
  *
- *   .aiui-cache/traces/<traceId>/trace.json    the manifest (TraceManifest)
- *   .aiui-cache/traces/<traceId>/<blob>        binary/large stage files
+ *   traces/<traceId>/trace.json    the manifest (TraceManifest)
+ *   traces/<traceId>/<blob>        binary/large stage files
  *
  * Everything here is **best-effort**: a full disk or unwritable directory must
  * never break the prompt path, so all fs failures are swallowed and the trace
  * is simply incomplete.
  */
+import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
+import { cacheDir } from "@habemus-papadum/aiui-util";
 
-/** The directory name of the project-local cache, relative to the server cwd. */
-export const PROJECT_CACHE_DIRNAME = ".aiui-cache";
+/** The user-cache namespace holding every project's cache dir. */
+const PROJECTS_NAMESPACE = "projects";
 
-/** The project-local cache directory for a given base dir (default: cwd). */
+/**
+ * The stable, readable key a project's cache lives under: a lowercase slug of
+ * the directory's basename plus an 8-hex-char hash of its FULL absolute path.
+ */
+export function projectSlug(base: string): string {
+  const abs = resolve(base);
+  const hash = createHash("sha256").update(abs).digest("hex").slice(0, 8);
+  const tail =
+    basename(abs)
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^[-.]+|[-.]+$/g, "")
+      .slice(0, 40) || "project";
+  return `${tail}-${hash}`;
+}
+
+/** The per-project cache directory for a given base dir (default: cwd). */
 export function projectCacheDir(base: string = process.cwd()): string {
-  return join(base, PROJECT_CACHE_DIRNAME);
+  return join(cacheDir(PROJECTS_NAMESPACE, { create: false }), projectSlug(base));
 }
 
 /** What part of the lowering pipeline a stage records. */

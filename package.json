@@ -20,6 +20,7 @@
     "test:packaging": "node scripts/packaging-test.mjs",
     "test:template": "tsx scripts/template-e2e.ts",
     "lint": "biome check .",
+    "docs:lint": "node scripts/docs-lint.mjs",
     "format": "biome check --write .",
     "aiui": "tsx packages/aiui/src/cli.ts",
     "vscode:vsix": "pnpm --filter @habemus-papadum/aiui-vscode install:vsix",

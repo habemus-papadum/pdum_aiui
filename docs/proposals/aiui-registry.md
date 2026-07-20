@@ -127,7 +127,7 @@ worthless there. Design:
 - **Failure is loud but partial.** If the claude binary is missing/broken, listing responses
   still carry the raw channels, plus an explicit status the UI must surface:
   `agents: { status: "ok" | "claude-missing" | "error", claudePath?, fetchedAt }`. The
-  extension shows a visible warning ("aiui can't find Claude Code at <path> — session names
+  extension shows a visible warning ("aiui can't find Claude Code at `<path>` — session names
   unavailable; re-run aiui to repair"), never a silent fallback to unnamed channels. Discovery
   itself must not fail because naming did.
 
