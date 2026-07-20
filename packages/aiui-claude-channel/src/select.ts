@@ -1,30 +1,24 @@
 /**
  * Interactive selection of a running channel server — the "which one?" widget
- * shared by CLI subcommands like `quick`.
+ * shared by CLI subcommands like `quick`. Servers arrive ENRICHED (the listing
+ * already joined live session names), so labelling is just `resolvedName`.
  */
-// TODO(aiui-registry): serverLabel's ad-hoc naming becomes the enriched listing's
-// resolvedName in M4 (docs/proposals/aiui-registry.md §3).
 import { select } from "@inquirer/prompts";
-import { agentsByPid, type ClaudeAgent, listClaudeAgents } from "./agents";
 import type { RunningServer } from "./registry";
 
 /**
- * Render a server as a selector row. Prefers the entry's own display name
- * (debug servers name themselves via `--name`), then the owning Claude
- * Code session's name (matched by `ppid`, how a user recognises which session
- * a channel belongs to), then the raw pid. Debug entries are always marked:
- * picking one means prompts print to that server's stdout, not a session.
+ * Render a server as a selector row: its resolved name (assigned name → live
+ * Claude session name → host → pid), working directory, and port. Debug
+ * entries are always marked: picking one means prompts print to that server's
+ * stdout, not a session.
  */
-export function serverLabel(server: RunningServer, agents: Map<number, ClaudeAgent>): string {
-  const agent = agents.get(server.ppid);
-  const who = server.name ?? (agent ? agent.name : `pid ${server.ppid}`);
-  const mark = server.debug === true ? "  ·  debug" : "";
-  return `${who}  ·  ${server.cwd}  ·  port ${server.port}${mark}`;
+export function serverLabel(server: RunningServer): string {
+  const mark = server.kind === "debug" ? "  ·  debug" : "";
+  return `${server.resolvedName}  ·  ${server.cwd}  ·  port ${server.port}${mark}`;
 }
 
 /**
- * Prompt the user to pick one of the given running servers, labelling each with
- * its name (or Claude Code session), working directory, and port. With a single
+ * Prompt the user to pick one of the given running servers. With a single
  * *real* server there's nothing to choose, so it's returned directly — but a
  * lone **debug** server still prompts: connecting to a server that answers to
  * nobody must be a deliberate choice, never a silent default.
@@ -36,14 +30,13 @@ export async function selectMcpServer(servers: RunningServer[]): Promise<Running
   if (servers.length === 0) {
     throw new Error("no running aiui MCP servers to choose from");
   }
-  if (servers.length === 1 && servers[0].debug !== true) {
+  if (servers.length === 1 && servers[0].kind !== "debug") {
     return servers[0];
   }
-  const agents = agentsByPid(listClaudeAgents());
   return select({
     message: "Select a running aiui MCP server",
     choices: servers.map((server) => ({
-      name: serverLabel(server, agents),
+      name: serverLabel(server),
       value: server,
     })),
   });

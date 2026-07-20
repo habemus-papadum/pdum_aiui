@@ -4,14 +4,13 @@
  * There's one — `channel_info` — and it reports *this* server's own info: its
  * tag, pid, port, cwd, and the Claude Code session it's attached to. A server
  * describes itself, not its siblings. (Enumerating every running channel is a
- * separate concern — see {@link collectChannelInfo} / `listMcpServers`, the
- * library utilities the CLI uses.)
+ * separate concern — `listMcpServers` / `listChannels`, the library utilities
+ * the CLI uses.)
  */
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { type ClaudeAgent, enrichServers, listClaudeAgents, type SessionInfo } from "./agents";
 import type { PageToolDirectory } from "./page-tools";
-import { type RegistryEntry, readEntry, registryFileFor } from "./registry";
+import { type EnrichedChannel, listChannels } from "./registry";
 import type { ChannelReload } from "./web";
 
 const CHANNEL_INFO_TOOL = "channel_info";
@@ -19,34 +18,12 @@ const PAGE_TOOLS_LIST_TOOL = "page_tools_list";
 const PAGE_TOOLS_CALL_TOOL = "page_tools_call";
 const CHANNEL_RELOAD_TOOL = "channel_reload";
 
-/** A channel server plus the Claude Code session that owns it. */
-export interface ChannelInfo {
-  tag: string;
-  pid: number;
-  ppid: number;
-  port: number;
-  cwd: string;
-  startedAt: string;
-  session?: SessionInfo;
-}
-
 /**
- * Pair registry entries with the Claude sessions that own them (matched by
- * `ppid`), dropping the on-disk `file` path. Pure given its inputs, so it's
- * testable without a live registry or `claude`. Used to describe one channel
- * (the `channel_info` tool) or many (a "list all" utility).
+ * A channel server plus the Claude Code session that owns it — since the
+ * enriched-listing migration this IS the registry package's enriched channel
+ * (session nested, `resolvedName` top-level).
  */
-export function collectChannelInfo(entries: RegistryEntry[], agents: ClaudeAgent[]): ChannelInfo[] {
-  return enrichServers(entries, agents).map((s) => ({
-    tag: s.tag,
-    pid: s.pid,
-    ppid: s.ppid,
-    port: s.port,
-    cwd: s.cwd,
-    startedAt: s.startedAt,
-    ...(s.session ? { session: s.session } : {}),
-  }));
-}
+export type ChannelInfo = EnrichedChannel;
 
 /** What {@link selfChannelInfo} returns before the server has registered. */
 export interface UnregisteredInfo {
@@ -55,18 +32,13 @@ export interface UnregisteredInfo {
 }
 
 /**
- * This process's own channel info: its registry entry enriched with the Claude
- * session that owns it. Shared by the `channel_info` MCP tool and the debug
- * API's `/debug/api/info`.
+ * This process's own channel info: its registry entry, enriched (live session
+ * join through the shared 4 s agents cache). Shared by the `channel_info` MCP
+ * tool and the debug API's `/debug/api/info`.
  */
 export function selfChannelInfo(): ChannelInfo | UnregisteredInfo {
-  const self = readEntry(registryFileFor(process.pid));
-  if (!self) {
-    return { registered: false, pid: process.pid };
-  }
-  return (
-    collectChannelInfo([self], listClaudeAgents())[0] ?? { registered: false, pid: process.pid }
-  );
+  const self = listChannels({ client: "channel" }).channels.find((c) => c.pid === process.pid);
+  return self ?? { registered: false, pid: process.pid };
 }
 
 const PAGE_TOOLS_LIST_DESCRIPTION =

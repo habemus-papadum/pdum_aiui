@@ -1,16 +1,30 @@
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readEntry as readEntryV2 } from "@habemus-papadum/aiui-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readEntry, registerServer, registryDir, removeEntryFile } from "./registry";
+import {
+  listMcpServers,
+  readEntry,
+  registerServer,
+  registryDir,
+  removeEntryFile,
+} from "./registry";
 
-// The write side is single-sourced in @habemus-papadum/aiui-registry (schema
-// v2) and tested there. What stays here exercises the façade: the re-exported
-// registerServer writes entries that (a) the registry package round-trips and
-// (b) the v1 reader still ACCEPTS during the M3→M4 transition — v2's required
-// fields are a superset, so old readers keep listing new servers (only the
-// display extras `name`/`debug` are gone until M4's enriched listing).
+// The registry lives in @habemus-papadum/aiui-registry and is tested there.
+// What stays here exercises the façade: registerServer round-trips through the
+// package, and listMcpServers returns the ENRICHED shape the selectors and
+// CLI consume.
+
+/** Isolated cache root with a warm, empty agents cache (no `claude` spawn). */
+function freshCacheRoot(): string {
+  const cache = mkdtempSync(join(tmpdir(), "aiui-cache-"));
+  mkdirSync(join(cache, "agents"), { recursive: true });
+  writeFileSync(
+    join(cache, "agents", "cache.json"),
+    JSON.stringify({ schema: 1, fetchedAt: new Date().toISOString(), status: "ok", agents: [] }),
+  );
+  return cache;
+}
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -24,44 +38,32 @@ describe("removeEntryFile", () => {
 });
 
 describe("registerServer (via the registry package)", () => {
-  it("writes a schema-2 channel entry and removes it (idempotently) on demand", () => {
-    const cache = mkdtempSync(join(tmpdir(), "aiui-cache-"));
-    vi.stubEnv("AIUI_CACHE", cache);
+  it("writes a schema-2 entry that round-trips, and removes it on demand", () => {
+    vi.stubEnv("AIUI_CACHE", freshCacheRoot());
 
     const reg = registerServer({ port: 54321, tag: "abc-123", kind: "channel" });
-    expect(reg.entry).toMatchObject({
-      schema: 2,
-      tag: "abc-123",
-      pid: process.pid,
-      ppid: process.ppid,
-      port: 54321,
-      cwd: process.cwd(),
-      kind: "channel",
-    });
+    expect(reg.entry).toMatchObject({ schema: 2, tag: "abc-123", kind: "channel" });
     expect(reg.file.startsWith(registryDir())).toBe(true);
-    expect(readEntryV2(reg.file)).toEqual(reg.entry);
+    expect(readEntry(reg.file)).toEqual(reg.entry);
 
     reg.remove();
     expect(existsSync(reg.file)).toBe(false);
     expect(() => reg.remove()).not.toThrow();
   });
+});
 
-  it("v2 entries stay readable by the v1 reader (transition guarantee)", () => {
-    const cache = mkdtempSync(join(tmpdir(), "aiui-cache-"));
-    vi.stubEnv("AIUI_CACHE", cache);
+describe("listMcpServers (the enriched façade)", () => {
+  it("returns enriched channels — resolvedName present, debug marked via kind", () => {
+    vi.stubEnv("AIUI_CACHE", freshCacheRoot());
 
-    const dbg = registerServer({
-      port: 2222,
-      tag: "wb",
-      kind: "debug",
-      assignedName: "aiui debug",
-      browserUrl: "http://127.0.0.1:9222",
+    const real = registerServer({ port: 1111, tag: "real", kind: "channel" });
+    const servers = listMcpServers();
+    expect(servers).toHaveLength(1);
+    expect(servers[0]).toMatchObject({
+      tag: "real",
+      kind: "channel",
+      resolvedName: `pid ${process.ppid}`,
+      file: real.file,
     });
-    const v1 = readEntry(dbg.file);
-    expect(v1).toMatchObject({ tag: "wb", port: 2222, pid: process.pid });
-    // The v1 reader drops what it doesn't know — display degrades, listing works.
-    expect(v1?.name).toBeUndefined();
-    expect(v1?.debug).toBeUndefined();
-    dbg.remove();
   });
 });

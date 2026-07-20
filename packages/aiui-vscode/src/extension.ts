@@ -18,9 +18,9 @@
  * `vscode` import.
  */
 import * as vscode from "vscode";
-import { claudeSessionNames } from "./agents";
 import {
   type ChannelEntry,
+  channelLabel,
   fetchPeers,
   listChannels,
   publishSelection,
@@ -63,28 +63,19 @@ function selectionUrl(uri: vscode.Uri, line: number, character: number): string 
   return `vscode://file/${uri.fsPath}:${line}:${character}`;
 }
 
-/**
- * How the picker titles a channel: its own display name (a debug server's `--name`),
- * else the owning Claude Code session's name (the channel's `ppid` is that
- * session — matched via `claude agents --json`, exactly like the CLI
- * selector), else the tag. Debug servers are always marked.
- */
-function channelTitle(channel: ChannelEntry, agents: Map<number, string>): string {
-  const who = channel.name ?? agents.get(channel.ppid) ?? channel.tag;
-  return `${who}${channel.debug === true ? " · debug" : ""}`;
-}
-
-/** The persisted pick for one of a channel's tabs. */
-function targetFor(channel: ChannelEntry, peer: SessionPeer, agents: Map<number, string>): Target {
+/** The persisted pick for one of a channel's tabs. The channel title is the
+ * enriched listing's resolved name (assigned → live Claude session → pid),
+ * marked when debug — no private `claude agents` join here any more. */
+function targetFor(channel: ChannelEntry, peer: SessionPeer): Target {
   return {
     port: channel.port,
     tag: channel.tag,
     cwd: channel.cwd,
     clientId: peer.clientId,
     label: peerLabel(peer),
-    channel: channelTitle(channel, agents),
+    channel: channelLabel(channel),
     ...(peer.url !== undefined ? { url: peer.url } : {}),
-    ...(channel.debug === true ? { debug: true } : {}),
+    ...(channel.kind === "debug" ? { debug: true } : {}),
   };
 }
 
@@ -179,12 +170,11 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       return undefined;
     }
-    const agents = await claudeSessionNames();
     type TabItem = vscode.QuickPickItem & { target?: Target };
     const items: TabItem[] = [];
     for (const channel of channels) {
       items.push({
-        label: `${channelTitle(channel, agents)} — ${channel.cwd}`,
+        label: `${channelLabel(channel)} — ${channel.cwd}`,
         kind: vscode.QuickPickItemKind.Separator,
       });
       let tabs: SessionPeer[];
@@ -208,7 +198,7 @@ export function activate(context: vscode.ExtensionContext): void {
         items.push({
           label: `$(browser) ${peerLabel(peer)}`,
           description: peer.url,
-          target: targetFor(channel, peer, agents),
+          target: targetFor(channel, peer),
         });
       }
     }
@@ -235,11 +225,10 @@ export function activate(context: vscode.ExtensionContext): void {
       return remembered;
     }
     const channels = listChannels({ workspaceDir: workspaceDir() });
-    const agents = await claudeSessionNames();
     const found: Target[] = [];
     for (const channel of channels) {
       const tabs = await selectionTargets(channel).catch(() => []);
-      found.push(...tabs.map((peer) => targetFor(channel, peer, agents)));
+      found.push(...tabs.map((peer) => targetFor(channel, peer)));
     }
     if (found.length === 1 && found[0] && found[0].debug !== true) {
       await setTarget(found[0]);

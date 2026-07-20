@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,95 +54,109 @@ describe("session HTTP response shapes stay in lockstep with the channel", () =>
   });
 });
 
+/** Schema-v2 entry JSON; `pid` defaults to this (live) process. */
 function entry(overrides: Partial<Record<string, unknown>> = {}): string {
   return JSON.stringify({
+    schema: 2,
     tag: "alpha",
-    pid: 1234,
+    pid: process.pid,
     ppid: 1,
     port: 4321,
     cwd: "/w/app",
-    startedAt: "2026-07-07T10:00:00.000Z",
+    startedAt: new Date().toISOString(),
+    kind: "channel",
     ...overrides,
   });
 }
 
-describe("listChannels", () => {
-  it("returns live, well-formed entries and skips the rest (never pruning)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aiui-vscode-registry-"));
-    writeFileSync(join(dir, "1.json"), entry({ pid: 1, tag: "live" }));
-    writeFileSync(join(dir, "2.json"), entry({ pid: 2, tag: "dead" }));
-    writeFileSync(join(dir, "3.json"), "not json");
-    writeFileSync(join(dir, "4.json"), JSON.stringify({ tag: "incomplete" }));
+/** A warm, empty agents cache — no real `claude` spawn during tests. */
+function freshAgentsDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), "aiui-vscode-agents-"));
+  writeFileSync(
+    join(dir, "cache.json"),
+    JSON.stringify({ schema: 1, fetchedAt: new Date().toISOString(), status: "ok", agents: [] }),
+  );
+  return dir;
+}
 
-    const channels = listChannels({ dir, isAlive: (pid) => pid === 1 });
+/** ISO timestamp `secondsAgo` back — recent enough to pass the recycled-pid check. */
+const ago = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1000).toISOString();
+
+describe("listChannels", () => {
+  it("returns live, well-formed v2 entries and skips the rest — never pruning", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aiui-vscode-registry-"));
+    writeFileSync(join(dir, "1.json"), entry({ tag: "live" }));
+    writeFileSync(join(dir, "2.json"), entry({ pid: 9_999_992, tag: "dead" }));
+    writeFileSync(join(dir, "3.json"), "not json");
+    writeFileSync(join(dir, "4.json"), JSON.stringify({ tag: "v1-no-schema", pid: 1 }));
+
+    const channels = listChannels({ dir, agentsDir: freshAgentsDir() });
     expect(channels.map((c) => c.tag)).toEqual(["live"]);
+    // Non-destructive: the dead entry's file is skipped, not deleted.
+    expect(existsSync(join(dir, "2.json"))).toBe(true);
   });
 
   it("sorts workspace-affine channels first, then newest", () => {
     const dir = mkdtempSync(join(tmpdir(), "aiui-vscode-registry-"));
     writeFileSync(
       join(dir, "1.json"),
-      entry({ pid: 1, tag: "elsewhere", cwd: "/elsewhere", startedAt: "2026-07-07T12:00:00Z" }),
+      entry({ tag: "elsewhere", cwd: "/elsewhere", startedAt: ago(0) }),
     );
-    writeFileSync(
-      join(dir, "2.json"),
-      entry({ pid: 2, tag: "ancestor", cwd: "/w", startedAt: "2026-07-07T12:00:00Z" }),
-    );
-    writeFileSync(
-      join(dir, "3.json"),
-      entry({ pid: 3, tag: "exact", cwd: "/w/app", startedAt: "2026-07-07T09:00:00Z" }),
-    );
+    writeFileSync(join(dir, "2.json"), entry({ tag: "ancestor", cwd: "/w", startedAt: ago(0) }));
+    writeFileSync(join(dir, "3.json"), entry({ tag: "exact", cwd: "/w/app", startedAt: ago(3) }));
     writeFileSync(
       join(dir, "4.json"),
-      entry({ pid: 4, tag: "exact-newer", cwd: "/w/app", startedAt: "2026-07-07T11:00:00Z" }),
+      entry({ tag: "exact-newer", cwd: "/w/app", startedAt: ago(1) }),
     );
 
-    const channels = listChannels({ dir, isAlive: () => true, workspaceDir: "/w/app" });
+    const channels = listChannels({
+      dir,
+      agentsDir: freshAgentsDir(),
+      workspaceDir: "/w/app",
+    });
     expect(channels.map((c) => c.tag)).toEqual(["exact-newer", "exact", "ancestor", "elsewhere"]);
   });
 
-  it("carries the debug marker + name through, sorting debug after real sessions", () => {
+  it("resolves debug names and sorts debug after real sessions", () => {
     const dir = mkdtempSync(join(tmpdir(), "aiui-vscode-registry-"));
     writeFileSync(
       join(dir, "1.json"),
-      entry({
-        pid: 1,
-        tag: "wb",
-        name: "aiui debug",
-        debug: true,
-        startedAt: "2026-07-07T12:00:00Z",
-      }),
+      entry({ tag: "wb", kind: "debug", assignedName: "aiui debug", startedAt: ago(0) }),
     );
-    writeFileSync(
-      join(dir, "2.json"),
-      entry({ pid: 2, tag: "real", startedAt: "2026-07-07T09:00:00Z" }),
-    );
+    writeFileSync(join(dir, "2.json"), entry({ tag: "real", startedAt: ago(3) }));
 
-    const channels = listChannels({ dir, isAlive: () => true, workspaceDir: "/w/app" });
+    const channels = listChannels({
+      dir,
+      agentsDir: freshAgentsDir(),
+      workspaceDir: "/w/app",
+    });
     // Same affinity; the older REAL session still outranks the newer debug one.
     expect(channels.map((c) => c.tag)).toEqual(["real", "wb"]);
-    expect(channels[1]).toMatchObject({ name: "aiui debug", debug: true });
+    expect(channels[1]).toMatchObject({ kind: "debug", resolvedName: "aiui debug" });
   });
 
   it("treats a missing registry directory as nothing running", () => {
     const dir = join(mkdtempSync(join(tmpdir(), "aiui-vscode-registry-")), "absent");
-    expect(listChannels({ dir })).toEqual([]);
+    expect(listChannels({ dir, agentsDir: freshAgentsDir() })).toEqual([]);
     // And reading never creates it.
     expect(() => mkdirSync(dir)).not.toThrow();
   });
 });
 
 describe("channelLabel", () => {
-  it("prefers the display name and marks debug", () => {
+  it("shows the resolved name and marks debug", () => {
     const base = {
+      schema: 2 as const,
+      tag: "t",
       pid: 1,
       ppid: 1,
       port: 1,
       cwd: "/w",
       startedAt: "2026-07-07T00:00:00Z",
+      file: "/x.json",
     };
-    expect(channelLabel({ ...base, tag: "abc-123" })).toBe("abc-123");
-    expect(channelLabel({ ...base, tag: "wb", name: "aiui debug", debug: true })).toBe(
+    expect(channelLabel({ ...base, kind: "channel", resolvedName: "abc-123" })).toBe("abc-123");
+    expect(channelLabel({ ...base, kind: "debug", resolvedName: "aiui debug" })).toBe(
       "aiui debug · debug",
     );
   });

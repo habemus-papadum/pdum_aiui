@@ -4,8 +4,8 @@
  * the selector widget, and the web backend.
  */
 import { input } from "@inquirer/prompts";
-import { listMcpServers } from "../list";
 import type { RunningServer } from "../registry";
+import { listMcpServers } from "../registry";
 import { selectMcpServer } from "../select";
 import { sendPrompt } from "../send";
 import { sendPromptWs } from "../send-ws";

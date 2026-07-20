@@ -88,6 +88,7 @@
     "install:dir": "node build-extension.mjs --link"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-registry": "catalog:",
     "@habemus-papadum/aiui-util": "workspace:^"
   },
   "devDependencies": {

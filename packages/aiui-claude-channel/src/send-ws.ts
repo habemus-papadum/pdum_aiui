@@ -9,8 +9,8 @@
  * way `sendPrompt` exercises the HTTP one.
  */
 import { connectChannelClient } from "./client";
-import { listMcpServers } from "./list";
 import type { RunningServer } from "./registry";
+import { listMcpServers } from "./registry";
 
 /** Outcome of a websocket send: the whole connect → send → close round-trip. */
 export interface WsSendResult {

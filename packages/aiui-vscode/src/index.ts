@@ -11,6 +11,5 @@
  * @packageDocumentation
  */
 
-export * from "./agents";
 export * from "./channels";
 export * from "./contribution";

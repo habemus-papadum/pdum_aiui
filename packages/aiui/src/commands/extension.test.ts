@@ -1,12 +1,14 @@
-import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { basename, join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ensureHostArtifacts,
   INTENT_CLIENT_EXTENSION_ID,
   installProfileNativeHost,
   NATIVE_HOST_NAME,
   nativeHostManifestDirs,
+  resolveClaudeBinary,
   wrapperScript,
 } from "./extension";
 
@@ -38,53 +40,78 @@ describe("nativeHostManifestDirs", () => {
   });
 });
 
-describe("wrapperScript", () => {
-  it("cds to an absolute dir and execs absolute paths (Chrome gives NM hosts cwd /)", () => {
-    const script = wrapperScript("/repo/packages/aiui", "/usr/bin/node", [
-      "--import",
-      "tsx",
-      "/repo/packages/aiui/src/cli.ts",
-    ]);
-    expect(script.startsWith("#!/bin/sh\n")).toBe(true);
-    expect(script).toContain('cd "/repo/packages/aiui" || exit 1');
-    expect(script).toContain(
-      'exec "/usr/bin/node" "--import" "tsx" "/repo/packages/aiui/src/cli.ts" native-host',
+describe("resolveClaudeBinary", () => {
+  it("returns the first PATH dir holding an executable claude", () => {
+    const hits = new Set(["/opt/tools/claude"]);
+    expect(resolveClaudeBinary("/bin:/opt/tools:/usr/bin", (p) => hits.has(p))).toBe(
+      "/opt/tools/claude",
     );
   });
-
-  it("escapes shell metacharacters in paths", () => {
-    const script = wrapperScript('/od d/$x/"q"', "/usr/bin/node", []);
-    expect(script).toContain('cd "/od d/\\$x/\\"q\\"" || exit 1');
+  it("returns undefined when nothing matches (empty segments skipped)", () => {
+    expect(resolveClaudeBinary("::/bin", () => false)).toBeUndefined();
   });
 });
 
-describe("installProfileNativeHost", () => {
+describe("wrapperScript", () => {
+  it("bakes the claude path as env and execs the binary (absolute paths only)", () => {
+    const script = wrapperScript("/cache/native-host/aiui-registry-host-0.1.0", "/opt/claude");
+    expect(script.startsWith("#!/bin/sh\n")).toBe(true);
+    expect(script).toContain('AIUI_CLAUDE_BIN="/opt/claude"');
+    expect(script).toContain("export AIUI_CLAUDE_BIN");
+    expect(script).toContain('exec "/cache/native-host/aiui-registry-host-0.1.0"');
+  });
+
+  it("omits the env baking when no claude was found — the host reports claude-missing", () => {
+    const script = wrapperScript("/cache/host", undefined);
+    expect(script).not.toContain("AIUI_CLAUDE_BIN");
+    expect(script).toContain('exec "/cache/host"');
+  });
+
+  it("escapes shell metacharacters in paths", () => {
+    const script = wrapperScript('/od d/$x/"q"', "/c$d/claude");
+    expect(script).toContain('exec "/od d/\\$x/\\"q\\""');
+    expect(script).toContain('AIUI_CLAUDE_BIN="/c\\$d/claude"');
+  });
+});
+
+describe("host install (real platform binary from the registry package)", () => {
   let cache: string;
   let profile: string;
-  const savedCache = process.env.AIUI_CACHE;
+  let fakePathDir: string;
 
   beforeEach(() => {
     cache = mkdtempSync(join(tmpdir(), "aiui-cache-"));
     profile = mkdtempSync(join(tmpdir(), "aiui-profile-"));
-    process.env.AIUI_CACHE = cache;
+    // A deterministic claude on PATH, so the wrapper's baking is assertable
+    // regardless of what the machine has installed.
+    fakePathDir = mkdtempSync(join(tmpdir(), "aiui-path-"));
+    writeFileSync(join(fakePathDir, "claude"), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(fakePathDir, "claude"), 0o755);
+    vi.stubEnv("AIUI_CACHE", cache);
+    vi.stubEnv("PATH", fakePathDir);
   });
   afterEach(() => {
-    if (savedCache === undefined) {
-      delete process.env.AIUI_CACHE;
-    } else {
-      process.env.AIUI_CACHE = savedCache;
-    }
+    vi.unstubAllEnvs();
   });
 
   const manifestPath = () => join(profile, "NativeMessagingHosts", `${NATIVE_HOST_NAME}.json`);
 
-  it("writes an executable wrapper and a manifest pinned to the extension id", () => {
+  it("copies the version-suffixed binary, bakes claude, and writes the manifest", () => {
+    const artifacts = ensureHostArtifacts();
+    expect(artifacts).toBeDefined();
+    if (!artifacts) {
+      return;
+    }
+    expect(basename(artifacts.binary)).toMatch(/^aiui-registry-host-\d+\.\d+\.\d+$/);
+    expect(existsSync(artifacts.binary)).toBe(true);
+    expect(statSync(artifacts.binary).mode & 0o111).not.toBe(0);
+    expect(artifacts.claude).toBe(join(fakePathDir, "claude"));
+
+    const wrapper = readFileSync(artifacts.wrapper, "utf8");
+    expect(wrapper).toContain(`AIUI_CLAUDE_BIN="${join(fakePathDir, "claude")}"`);
+    expect(wrapper).toContain(`exec "${artifacts.binary}"`);
+
     installProfileNativeHost(profile);
-
-    const wrapper = join(cache, "native-host", "aiui-native-host.sh");
-    expect(existsSync(wrapper)).toBe(true);
-    expect(statSync(wrapper).mode & 0o111).not.toBe(0);
-
     const manifest = JSON.parse(readFileSync(manifestPath(), "utf8")) as {
       name: string;
       path: string;
@@ -92,7 +119,7 @@ describe("installProfileNativeHost", () => {
       allowed_origins: string[];
     };
     expect(manifest.name).toBe(NATIVE_HOST_NAME);
-    expect(manifest.path).toBe(wrapper);
+    expect(manifest.path).toBe(artifacts.wrapper);
     expect(manifest.type).toBe("stdio");
     expect(manifest.allowed_origins).toEqual([`chrome-extension://${INTENT_CLIENT_EXTENSION_ID}/`]);
   });

@@ -21,9 +21,6 @@
  */
 import { networkInterfaces } from "node:os";
 import {
-  agentsByPid,
-  type ClaudeAgent,
-  listClaudeAgents,
   listMcpServers,
   type RunningServer,
   selectMcpServer,
@@ -146,10 +143,10 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-/** The display name a running channel goes by (its own, else the owning Claude
- * session's, matched by ppid). */
-function channelLabel(server: RunningServer, agents: Map<number, ClaudeAgent>): string {
-  return server.name ?? agents.get(server.ppid)?.name ?? server.cwd;
+/** The display name a running channel goes by — the enriched listing already
+ * resolved it (assigned name → live session name → host → pid). */
+function channelLabel(server: RunningServer): string {
+  return server.resolvedName;
 }
 
 export function runPencilUrl(opts: { json?: boolean } = {}): Promise<void> {
@@ -174,9 +171,7 @@ async function pickSurfaceUrl(prefix: string, name: string): Promise<void> {
   // stale registry entry or an old build might not) and read its bind.
   const info = await getJson<{ ok?: boolean }>(server.port, `${prefix}/info`);
   if (!info?.ok) {
-    console.log(
-      `${chalk.bold(channelLabel(server, agentsByPid(listClaudeAgents())))} is not hosting the ${name} surface.`,
-    );
+    console.log(`${chalk.bold(channelLabel(server))} is not hosting the ${name} surface.`);
     process.exitCode = 1;
     return;
   }
@@ -234,13 +229,12 @@ function noChannel(name: string): void {
 /** `--json`: every hosting channel's URLs at once, for scripts (no prompts). */
 async function dumpSurfaceTargets(prefix: string): Promise<void> {
   const servers = listMcpServers();
-  const agents =
-    servers.length > 0 ? agentsByPid(listClaudeAgents()) : new Map<number, ClaudeAgent>();
   const targets: SurfaceTarget[] = [];
   for (const server of servers) {
     const surface = await queryChannel(server.port, prefix);
     if (surface) {
-      const session = server.name ?? agents.get(server.ppid)?.name;
+      // The enriched listing already resolved a display name for every entry.
+      const session = server.assignedName ?? server.session?.name;
       targets.push({
         cwd: server.cwd,
         pid: server.pid,

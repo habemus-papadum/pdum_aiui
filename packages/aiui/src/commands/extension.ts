@@ -6,42 +6,44 @@
  * `chrome-extension://…`, so unlike the channel-served page it cannot read
  * its port off its own URL).
  *
- * `install-native-host` writes two things, both idempotent:
- *  1. A wrapper script under the user cache that execs this CLI's
- *     `native-host` subcommand with absolute paths (Chrome spawns NM hosts
- *     with a minimal environment and cwd `/` — nothing here may rely on PATH
- *     or working directory; `--import tsx` resolves from cwd, hence the `cd`).
- *  2. The NM manifest into each installed browser's user-level
- *     `NativeMessagingHosts/` directory (macOS + Linux paths; Chrome,
- *     Chromium, Edge). `allowed_origins` pins the extension id — the default
- *     is the stable id derived from the key checked into
- *     `packages/aiui-intent-client/src/ext/manifest.ts`.
+ * Since the aiui-registry migration (docs/proposals/aiui-registry.md §9) the
+ * host is a COMPILED binary shipped by `@habemus-papadum/aiui-registry`'s
+ * platform packages — not a Node subcommand. Installation, idempotent on
+ * every launch:
  *
- * That global install covers browsers aiui does NOT manage. The session
- * browsers aiui launches are handled without it: {@link
- * installProfileNativeHost} drops the same manifest into the launch profile's
- * own `<user-data-dir>/NativeMessagingHosts/`, which is where Chrome for
- * Testing actually looks (measured live on macOS, CfT 150: it reads the user
- * data dir, NOT `~/Library/Application Support/Google/ChromeForTesting` or
- * any other Application Support spelling — those were never read). Launchers
- * call it automatically whenever they load the intent client's extension, so
- * an aiui-launched browser needs no global install at all.
+ *  1. Copy the platform binary into the user cache under a VERSION-SUFFIXED
+ *     name (`native-host/aiui-registry-host-<version>`). Never overwrite a
+ *     fixed path: a running `connectNative` host may be executing it; a new
+ *     version gets a new file, the wrapper repoints. (Old versions accumulate
+ *     — GC deliberately deferred.)
+ *  2. Write the wrapper script: Chrome spawns NM hosts with a minimal env and
+ *     cwd `/`, so the machine-specific facts are baked as env — notably
+ *     `AIUI_CLAUDE_BIN`, the absolute Claude Code path the host needs for the
+ *     live session-name join (Chrome's PATH can't resolve `claude`).
+ *     Re-resolved and rewritten via writeIfChanged on EVERY launch, so a moved
+ *     Claude install self-heals on the next `aiui claude`.
+ *  3. Write the NM manifest pointing at the wrapper — into each browser's
+ *     user-level `NativeMessagingHosts/` for the explicit global install, or
+ *     into a session-browser profile's own `<user-data-dir>/NativeMessagingHosts/`
+ *     (where Chrome for Testing actually looks — measured; see
+ *     {@link installProfileNativeHost}) for the automatic per-launch install.
  */
-// TODO(aiui-registry): installers rewritten in M4 to the §9 flow — version-suffixed
-// compiled-host copy into the user cache, env-baking wrapper (AIUI_CLAUDE_BIN)
-// rewritten every launch, same profile/global scoping split (docs/proposals/aiui-registry.md §9).
 import {
+  accessSync,
   chmodSync,
+  copyFileSync,
   existsSync,
+  constants as fsConstants,
   mkdirSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { cacheDir, packageRoot } from "@habemus-papadum/aiui-util";
-import { resolvePackageCli } from "../util/resolve-cli";
+import { dirname, join } from "node:path";
+import { HOST_BINARY_NAME, resolveHostBinary } from "@habemus-papadum/aiui-registry";
+import { cacheDir } from "@habemus-papadum/aiui-util";
 import { printError } from "../util/ui";
 
 /** The NM host name (lowercase alphanumerics, dots, underscores only). */
@@ -88,15 +90,48 @@ export function nativeHostManifestDirs(platform: NodeJS.Platform, home: string):
   throw new Error(`aiui extension: unsupported platform ${platform} (macOS/Linux only for now)`);
 }
 
+function isExecutableFile(path: string): boolean {
+  try {
+    accessSync(path, fsConstants.X_OK);
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Absolute path to the `claude` binary, resolved from PATH — done by the
+ * INSTALLER (which has the user's PATH) and baked into the wrapper, because
+ * the host itself runs under Chrome's minimal env where `claude` can't
+ * resolve by name. Undefined when not found: the host then reports
+ * "claude-missing" loudly instead of silently losing session names.
+ */
+export function resolveClaudeBinary(
+  pathEnv: string = process.env.PATH ?? "",
+  isExecutable: (path: string) => boolean = isExecutableFile,
+): string | undefined {
+  for (const dir of pathEnv.split(":")) {
+    if (!dir) {
+      continue;
+    }
+    const candidate = join(dir, "claude");
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 /** The wrapper script body. Exported for tests. */
-export function wrapperScript(cwd: string, command: string, args: string[]): string {
+export function wrapperScript(binary: string, claude: string | undefined): string {
   const q = (s: string): string => `"${s.replace(/(["\\$`])/g, "\\$1")}"`;
   return [
     "#!/bin/sh",
-    "# aiui native-messaging host wrapper — generated by `aiui extension install-native-host`.",
-    "# Chrome spawns this with a minimal env and cwd /; everything below is absolute.",
-    `cd ${q(cwd)} || exit 1`,
-    `exec ${[command, ...args].map(q).join(" ")} native-host`,
+    "# aiui native-messaging host wrapper — generated by aiui; rewritten every launch.",
+    "# Chrome spawns NM hosts with a minimal env and cwd /: the machine-specific",
+    "# facts (compiled host binary, Claude Code path) are baked here as absolutes.",
+    ...(claude ? [`AIUI_CLAUDE_BIN=${q(claude)}`, "export AIUI_CLAUDE_BIN"] : []),
+    `exec ${q(binary)}`,
     "",
   ].join("\n");
 }
@@ -125,23 +160,58 @@ export async function runExtension(action: string, options: ExtensionOptions = {
   }
 }
 
+/** The installed host artifacts (per-machine facts, resolved fresh). */
+export interface HostArtifacts {
+  /** Version-suffixed copy of the compiled host in the user cache. */
+  binary: string;
+  /** The env-baking wrapper the NM manifests point at. */
+  wrapper: string;
+  /** The registry package's version (the binary suffix). */
+  version: string;
+  /** The baked Claude Code path, when PATH resolution found one. */
+  claude?: string;
+}
+
 function wrapperPath(): string {
   return join(cacheDir("native-host", { create: true }), "aiui-native-host.sh");
 }
 
 /**
- * Write the wrapper script (shared, user-cache) and return the NM manifest
- * body pointing at it. The wrapper embeds THIS checkout's CLI invocation, so
- * re-writing it on every install keeps it current after moves/reinstalls.
+ * Ensure the compiled host + wrapper exist in the user cache (§9 steps 1–2).
+ * Returns undefined when no platform binary is installed (unsupported
+ * platform, or a checkout without the registry package's platform dep) —
+ * callers degrade loudly.
  */
-function ensureWrapperAndManifest(extensionId: string): { wrapper: string; body: string } {
-  const cli = resolvePackageCli("@habemus-papadum/aiui");
-  const root = packageRoot("@habemus-papadum/aiui");
+export function ensureHostArtifacts(): HostArtifacts | undefined {
+  const source = resolveHostBinary();
+  if (!source || !existsSync(source)) {
+    return undefined;
+  }
+  let version = "0";
+  try {
+    const pkg = JSON.parse(readFileSync(join(dirname(source), "package.json"), "utf8")) as {
+      version?: string;
+    };
+    version = pkg.version ?? version;
+  } catch {
+    // Version stays "0" — still functional, just an odd suffix.
+  }
+  const dir = cacheDir("native-host", { create: true });
+  const binary = join(dir, `${HOST_BINARY_NAME}-${version}`);
+  if (!existsSync(binary)) {
+    copyFileSync(source, binary);
+  }
+  chmodSync(binary, 0o755);
 
+  const claude = resolveClaudeBinary();
   const wrapper = wrapperPath();
-  writeIfChanged(wrapper, wrapperScript(root, cli.command, cli.args));
+  writeIfChanged(wrapper, wrapperScript(binary, claude));
   chmodSync(wrapper, 0o755);
+  return { binary, wrapper, version, ...(claude !== undefined ? { claude } : {}) };
+}
 
+/** The NM manifest body for a wrapper + extension id. */
+function manifestBody(wrapper: string, extensionId: string): string {
   const manifest = {
     name: NATIVE_HOST_NAME,
     description: "aiui native-messaging host: channel discovery for the aiui intent client",
@@ -157,7 +227,7 @@ function ensureWrapperAndManifest(extensionId: string): { wrapper: string; body:
       ]),
     ],
   };
-  return { wrapper, body: `${JSON.stringify(manifest, null, 2)}\n` };
+  return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
 /** Write only when the content differs — these run on every launch. */
@@ -180,15 +250,26 @@ function writeIfChanged(file: string, content: string): boolean {
  * needs no user decision — it is the same class of write as creating the
  * profile. Quiet and idempotent; no browser restart needed (NM manifests are
  * read per `connectNative`/`sendNativeMessage` call).
+ *
+ * @throws when no compiled host binary is available for this platform.
  */
 export function installProfileNativeHost(
   userDataDir: string,
   options: ExtensionOptions = {},
 ): void {
-  const { body } = ensureWrapperAndManifest(options.extensionId ?? INTENT_CLIENT_EXTENSION_ID);
+  const artifacts = ensureHostArtifacts();
+  if (!artifacts) {
+    throw new Error(
+      `no compiled native-messaging host for ${process.platform}-${process.arch} — ` +
+        "is @habemus-papadum/aiui-registry's platform package installed?",
+    );
+  }
   const dir = join(userDataDir, "NativeMessagingHosts");
   mkdirSync(dir, { recursive: true });
-  writeIfChanged(join(dir, `${NATIVE_HOST_NAME}.json`), body);
+  writeIfChanged(
+    join(dir, `${NATIVE_HOST_NAME}.json`),
+    manifestBody(artifacts.wrapper, options.extensionId ?? INTENT_CLIENT_EXTENSION_ID),
+  );
 }
 
 /**
@@ -219,10 +300,27 @@ export function ensureProfileNativeHost(
 }
 
 function installNativeHost(options: ExtensionOptions): void {
+  const artifacts = ensureHostArtifacts();
+  if (!artifacts) {
+    printError(
+      `no compiled native-messaging host for ${process.platform}-${process.arch}`,
+      "The host ships with @habemus-papadum/aiui-registry's platform packages — " +
+        "reinstall aiui (or check `npm ls @habemus-papadum/aiui-registry`).",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const extensionId = options.extensionId ?? INTENT_CLIENT_EXTENSION_ID;
-  const { wrapper, body } = ensureWrapperAndManifest(extensionId);
-  process.stdout.write(`wrote ${wrapper}\n`);
+  process.stdout.write(`host binary: ${artifacts.binary}\n`);
+  process.stdout.write(`wrote ${artifacts.wrapper}\n`);
+  if (artifacts.claude === undefined) {
+    process.stdout.write(
+      "WARNING: no `claude` on PATH — session names will report claude-missing " +
+        "until aiui runs again with Claude Code installed.\n",
+    );
+  }
 
+  const body = manifestBody(artifacts.wrapper, extensionId);
   for (const dir of nativeHostManifestDirs(process.platform, homedir())) {
     mkdirSync(dir, { recursive: true });
     const file = join(dir, `${NATIVE_HOST_NAME}.json`);
@@ -238,8 +336,16 @@ function installNativeHost(options: ExtensionOptions): void {
 }
 
 function statusNativeHost(): void {
-  const wrapper = wrapperPath();
-  process.stdout.write(`wrapper: ${wrapper} ${existsSync(wrapper) ? "(present)" : "(MISSING)"}\n`);
+  const artifacts = ensureHostArtifacts();
+  if (artifacts) {
+    process.stdout.write(`binary:  ${artifacts.binary} (v${artifacts.version})\n`);
+    process.stdout.write(`wrapper: ${artifacts.wrapper}\n`);
+    process.stdout.write(`claude:  ${artifacts.claude ?? "(NOT FOUND on PATH — names degrade)"}\n`);
+  } else {
+    process.stdout.write(
+      `binary:  MISSING — no compiled host for ${process.platform}-${process.arch}\n`,
+    );
+  }
   for (const dir of nativeHostManifestDirs(process.platform, homedir())) {
     reportManifest(join(dir, `${NATIVE_HOST_NAME}.json`));
   }

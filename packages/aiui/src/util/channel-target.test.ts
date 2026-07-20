@@ -5,12 +5,15 @@ import { resolveChannelTarget } from "./channel-target";
 /** Build a `RunningServer` with all required fields, overriding as needed. */
 function server(overrides: Partial<RunningServer> = {}): RunningServer {
   return {
+    schema: 2,
     tag: "tag-1",
     pid: 1000,
     ppid: 900,
     port: 5173,
     cwd: "/tmp/project",
     startedAt: "2026-07-04T00:00:00.000Z",
+    kind: "channel",
+    resolvedName: "pid 900",
     file: "/tmp/registry/1000.json",
     ...overrides,
   };

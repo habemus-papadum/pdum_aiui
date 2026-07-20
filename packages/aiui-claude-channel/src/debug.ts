@@ -58,7 +58,7 @@ import { cacheDir as userCacheDir } from "@habemus-papadum/aiui-util";
 import type { Express } from "express";
 import type { FrameLog } from "./frame-log";
 import type { LaunchInfo } from "./launch-info";
-import { listMcpServers } from "./list";
+import { listChannels } from "./registry";
 import type { TransportStats } from "./stats";
 import { selfChannelInfo } from "./tools";
 import { listTraces, readTrace, traceBlobPath } from "./trace";
@@ -74,9 +74,6 @@ const BLOB_TYPES: Record<string, string> = {
   ".txt": "text/plain; charset=utf-8",
   ".json": "application/json; charset=utf-8",
 };
-
-/** How long a `/debug/api/info` result is reused before re-resolving. */
-const INFO_CACHE_MS = 10_000;
 
 /** Only images are previewable — anything else is never served. */
 const PREVIEW_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
@@ -191,43 +188,34 @@ export function registerDebugRoutes(
     });
   });
 
-  // Every channel this machine is running (the on-disk registry, pruned of
-  // dead processes) — how a connected debug viewer offers "switch channel":
-  // one reachable channel is enough to enumerate and hop to all the others.
-  // TODO(aiui-registry): return the ENRICHED listing (session names, resolvedName,
-  // loud agents status) from @habemus-papadum/aiui-registry in M4.
+  // Every channel this machine is running — how a connected debug viewer
+  // offers "switch channel": one reachable channel is enough to enumerate and
+  // hop to all the others. ENRICHED (session names, resolvedName) with the
+  // loud agents status riding along, plus a `self` mark on this server.
   app.get("/debug/api/channels", (_req, res) => {
+    const listing = listChannels({ client: "channel" });
     res.json({
-      channels: listMcpServers().map((server) => ({
-        tag: server.tag,
-        port: server.port,
-        pid: server.pid,
-        ppid: server.ppid,
-        cwd: server.cwd,
-        startedAt: server.startedAt,
-        ...(server.name !== undefined ? { name: server.name } : {}),
-        ...(server.debug === true ? { debug: true } : {}),
-        ...(server.pid === process.pid ? { self: true } : {}),
-      })),
+      ...listing,
+      channels: listing.channels.map((channel) =>
+        channel.pid === process.pid ? { ...channel, self: true } : channel,
+      ),
     });
   });
 
-  // selfChannelInfo shells out to `claude agents --json`; cache it so a
-  // polling panel doesn't spawn a subprocess per tick. The launch info rides
-  // along verbatim — it's static for the server's lifetime.
-  let infoCache: { at: number; value: ReturnType<typeof selfChannelInfo> } | undefined;
+  // No response cache here any more: the expensive part (the `claude agents`
+  // spawn) sits behind the registry package's shared 4 s on-disk cache, so a
+  // polling panel costs a registry scan, not a subprocess per tick. The launch
+  // info rides along verbatim — it's static for the server's lifetime.
   app.get("/debug/api/info", (_req, res) => {
-    if (!infoCache || Date.now() - infoCache.at > INFO_CACHE_MS) {
-      infoCache = { at: Date.now(), value: selfChannelInfo() };
-    }
-    // The generation is read fresh each request (it's outside the info cache) so
-    // a panel polling /debug/api/info sees a reload the moment it lands.
     res.json({
-      ...infoCache.value,
+      ...selfChannelInfo(),
       ...(launchInfo ? { launch: launchInfo } : {}),
       ...(hooks.getGeneration ? { generation: hooks.getGeneration() } : {}),
       // This server's trace session label — how the intent tool's 🔍 builds
       // its `?session=` deep link without pulling the whole traces listing.
+      // (Deliberately AFTER the enriched self info: `session` here keeps its
+      // historical string meaning for consumers; the Claude-session join is
+      // visible via /debug/api/channels.)
       ...(hooks.session !== undefined ? { session: hooks.session } : {}),
       ...(hooks.debug === true ? { debug: true } : {}),
     });

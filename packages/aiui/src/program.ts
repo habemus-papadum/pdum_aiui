@@ -17,7 +17,6 @@ import { type DebugOptions, runDebug } from "./commands/debug";
 import { runEnv } from "./commands/env";
 import { type ExtensionOptions, runExtension } from "./commands/extension";
 import { runMcp } from "./commands/mcp";
-import { runNativeHost } from "./commands/native-host";
 import { runPencilUrl } from "./commands/pencil-url";
 import { type RemoteOptions, runRemote } from "./commands/remote";
 import { runVite } from "./commands/vite";
@@ -128,12 +127,9 @@ export function buildProgram(): Command {
     .option("--extension-id <id>", "extension id for allowed_origins (default: the pinned id)")
     .action((action: string, opts: ExtensionOptions) => runExtension(action, opts));
 
-  // The Chrome native-messaging host itself — spawned BY the browser, never by
-  // hand: speaks length-prefixed JSON on stdio (stdout is frames-only).
-  program
-    .command("native-host", { hidden: true })
-    .description("(internal) Chrome native-messaging host — spawned by the browser")
-    .action(() => runNativeHost());
+  // (The Chrome native-messaging host is no longer a subcommand: it ships as
+  // a COMPILED binary with @habemus-papadum/aiui-registry, installed by the
+  // launchers / `aiui extension install-native-host`.)
 
   // (There is no `aiui demo`. Scaffolding a playground is `create-aiui`'s job —
   // `npm create @habemus-papadum/aiui@latest my-app` — so there is exactly one

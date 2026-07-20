@@ -5,65 +5,23 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseClaudeAgents } from "./agents";
 import { PageToolDirectory } from "./page-tools";
-import type { RunningServer } from "./registry";
 import { createChannelServer } from "./server";
-import { collectChannelInfo } from "./tools";
 
-function server(overrides: Partial<RunningServer>): RunningServer {
-  return {
-    tag: "t",
-    pid: 1,
-    ppid: 100,
-    port: 4000,
-    cwd: "/repo",
-    startedAt: "2026-01-01T00:00:00.000Z",
-    file: "/x.json",
-    ...overrides,
-  };
+/**
+ * Isolated cache root with a warm, EMPTY agents cache — selfChannelInfo goes
+ * through the registry package's shared cache, and a pre-seeded fresh file
+ * keeps the test from shelling out to a real `claude`.
+ */
+function freshCacheRoot(): string {
+  const cache = mkdtempSync(join(tmpdir(), "aiui-tool-"));
+  mkdirSync(join(cache, "agents"), { recursive: true });
+  writeFileSync(
+    join(cache, "agents", "cache.json"),
+    JSON.stringify({ schema: 1, fetchedAt: new Date().toISOString(), status: "ok", agents: [] }),
+  );
+  return cache;
 }
-
-describe("collectChannelInfo (list utility)", () => {
-  it("merges each entry with its session and drops the on-disk file path", () => {
-    const agents = parseClaudeAgents(
-      JSON.stringify([
-        {
-          pid: 100,
-          cwd: "/repo",
-          kind: "interactive",
-          startedAt: 1,
-          sessionId: "s-1",
-          name: "sess-a",
-          status: "idle",
-        },
-      ]),
-    );
-    const info = collectChannelInfo(
-      [server({ tag: "t1", ppid: 100 }), server({ tag: "t2", ppid: 999 })],
-      agents,
-    );
-
-    expect(info[0]).toEqual({
-      tag: "t1",
-      pid: 1,
-      ppid: 100,
-      port: 4000,
-      cwd: "/repo",
-      startedAt: "2026-01-01T00:00:00.000Z",
-      session: {
-        sessionId: "s-1",
-        name: "sess-a",
-        status: "idle",
-        kind: "interactive",
-        cwd: "/repo",
-        startedAt: 1,
-      },
-    });
-    expect(info[1]).not.toHaveProperty("session");
-    expect(info[0]).not.toHaveProperty("file");
-  });
-});
 
 describe("channel_info tool (wired through a real client/server pair)", () => {
   afterEach(() => {
@@ -78,22 +36,25 @@ describe("channel_info tool (wired through a real client/server pair)", () => {
     return { mcp, client };
   }
 
-  it("advertises only channel_info and returns this server's own entry", async () => {
-    // Write our own registry entry into an isolated cache, as registerServer would.
-    // ppid is deliberately absent from any real `claude agents` output, so there's
-    // no session to attach and the result is deterministic.
-    const cache = mkdtempSync(join(tmpdir(), "aiui-tool-"));
+  it("advertises only channel_info and returns this server's own enriched entry", async () => {
+    // Write our own registry entry into an isolated cache, as registerServer
+    // would. ppid is deliberately absent from the (empty) agents cache, so no
+    // session attaches and the result is deterministic.
+    const cache = freshCacheRoot();
     vi.stubEnv("AIUI_CACHE", cache);
     mkdirSync(join(cache, "mcp"), { recursive: true });
     const entry = {
+      schema: 2,
       tag: "self-tag",
       pid: process.pid,
       ppid: 999_999,
       port: 4321,
       cwd: "/repo",
-      startedAt: "2026-01-01T00:00:00.000Z",
+      startedAt: new Date().toISOString(),
+      kind: "channel",
     };
-    writeFileSync(join(cache, "mcp", `${process.pid}.json`), JSON.stringify(entry));
+    const file = join(cache, "mcp", `${process.pid}.json`);
+    writeFileSync(file, JSON.stringify(entry));
 
     const { mcp, client } = await connect();
     try {
@@ -102,7 +63,13 @@ describe("channel_info tool (wired through a real client/server pair)", () => {
 
       const result = await client.callTool({ name: "channel_info" });
       const content = result.content as Array<{ type: string; text: string }>;
-      expect(JSON.parse(content[0].text)).toEqual(entry);
+      // Enriched: the entry plus its file and the resolved name (pid fallback —
+      // no session matched).
+      expect(JSON.parse(content[0].text)).toEqual({
+        ...entry,
+        file,
+        resolvedName: "pid 999999",
+      });
     } finally {
       await client.close();
       await mcp.close();
@@ -110,7 +77,7 @@ describe("channel_info tool (wired through a real client/server pair)", () => {
   });
 
   it("reports unregistered when this process has no registry entry", async () => {
-    vi.stubEnv("AIUI_CACHE", mkdtempSync(join(tmpdir(), "aiui-tool-")));
+    vi.stubEnv("AIUI_CACHE", freshCacheRoot());
     const { mcp, client } = await connect();
     try {
       const result = await client.callTool({ name: "channel_info" });

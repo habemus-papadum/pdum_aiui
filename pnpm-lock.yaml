@@ -687,6 +687,9 @@ importers:
 
   packages/aiui-vscode:
     dependencies:
+      '@habemus-papadum/aiui-registry':
+        specifier: 'catalog:'
+        version: 0.1.0
       '@habemus-papadum/aiui-util':
         specifier: workspace:^
         version: link:../aiui-util

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } fr
 import WebSocket from "ws";
 import { connectChannelClient } from "../client";
 import type { FrameLogEntry } from "../frame-log";
-import { listMcpServers } from "../list";
+import { listMcpServers } from "../registry";
 import type { Sidecar } from "../sidecar";
 import {
   isNarratedTraceStage,

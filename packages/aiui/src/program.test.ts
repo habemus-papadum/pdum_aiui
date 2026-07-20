@@ -6,7 +6,7 @@ describe("aiui cli", () => {
     expect(buildProgram().name()).toBe("aiui");
   });
 
-  it("registers the browser, chrome, claude, clean, config, debug, env, extension, mcp, native-host, open, pencil, remote, and vite subcommands", () => {
+  it("registers the browser, chrome, claude, clean, config, debug, env, extension, mcp, open, pencil, remote, and vite subcommands", () => {
     const names = buildProgram()
       .commands.map((cmd) => cmd.name())
       .sort();
@@ -20,7 +20,6 @@ describe("aiui cli", () => {
       "env",
       "extension",
       "mcp",
-      "native-host",
       "open",
       "pencil",
       "remote",

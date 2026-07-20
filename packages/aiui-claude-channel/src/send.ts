@@ -2,8 +2,9 @@
  * The library form of "send a prompt to a running channel server" — the
  * non-interactive core that the `quick` CLI and test harnesses both build on.
  */
-import { listMcpServers } from "./list";
+
 import type { RunningServer } from "./registry";
+import { listMcpServers } from "./registry";
 
 export interface SendResult {
   /** True when the server accepted the prompt (HTTP 2xx and `{ ok: true }`). */

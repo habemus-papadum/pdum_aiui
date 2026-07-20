@@ -1,37 +1,32 @@
 /**
  * Discovery of, and the HTTP client for, running aiui channel servers.
  *
- * Discovery reads the same on-disk registry the channel writes: one
- * `<pid>.json` per live `aiui-claude-channel mcp` process under
- * `cacheDir("mcp")`. The registry read side — the {@link ChannelEntry} shape,
- * {@link readEntry} validator, {@link isProcessAlive} probe, and
- * {@link registryDir} — is single-sourced in `@habemus-papadum/aiui-util`, a
- * prod dependency this extension already bundles, so importing it adds nothing
- * new to the VSIX. Reading is strictly non-destructive: entries whose process
- * is gone are skipped, never pruned — the channel's own tools own the pruning.
+ * Discovery is `@habemus-papadum/aiui-registry`'s ENRICHED listing (the
+ * npm-pinned package that single-sources the registry protocol): entries
+ * arrive with the live Claude session joined and a `resolvedName` computed,
+ * through the shared 4 s agents cache — no private `claude agents` mirror in
+ * this extension any more. Reading here is deliberately NON-destructive
+ * (`prune: false`): an editor extension only looks; the channel's own tools
+ * own the pruning.
  *
  * The client half speaks the channel web backend's session HTTP surface
  * (web.ts): `GET /session/peers` to list the browser views of a session, and
  * `POST /session/publish` to hand one of them a contribution.
- *
- * TODO(aiui-registry): the discovery half moves to @habemus-papadum/aiui-registry's
- * enriched listChannels in M4 (docs/proposals/aiui-registry.md §4, §7).
  */
-import { readdirSync } from "node:fs";
-import { join, sep } from "node:path";
+import { sep } from "node:path";
 import {
+  type EnrichedChannel,
   isProcessAlive,
-  type RegistryEntry,
-  readEntry,
+  listChannels as listRegistryChannels,
   registryDir,
-} from "@habemus-papadum/aiui-util";
+} from "@habemus-papadum/aiui-registry";
 import type { SelectionContribution } from "./contribution";
 import { SESSION_CONTRIBUTION_TOPIC } from "./contribution";
 
 export { isProcessAlive, registryDir };
 
-/** One running channel server, as advertised in its registry file. */
-export type ChannelEntry = RegistryEntry;
+/** One running channel server — the registry package's enriched shape. */
+export type ChannelEntry = EnrichedChannel;
 
 /** A connected session view, as reported by `GET /session/peers`. */
 export interface SessionPeer {
@@ -66,10 +61,10 @@ export interface PublishResult {
 }
 
 export interface ListChannelsOptions {
-  /** Registry directory override (tests). Defaults to {@link registryDir}. */
+  /** Registry directory override (tests). */
   dir?: string;
-  /** Liveness probe override (tests). Defaults to {@link isProcessAlive}. */
-  isAlive?: (pid: number) => boolean;
+  /** Agents-cache dir override (tests — avoids a real `claude` spawn). */
+  agentsDir?: string;
   /**
    * When set, channels launched in (an ancestor of) this directory sort first —
    * the channel for *this* workspace is almost always the one meant.
@@ -89,33 +84,29 @@ function affinity(cwd: string, workspaceDir: string | undefined): number {
 }
 
 /**
- * The currently running channel servers: every registry entry whose process is
- * still alive — workspace-affine first, real sessions before debug servers,
- * then newest first.
+ * The currently running channel servers, ENRICHED — workspace-affine first,
+ * real sessions before debug servers, then newest first.
  */
 export function listChannels(options: ListChannelsOptions = {}): ChannelEntry[] {
-  const dir = options.dir ?? registryDir({ create: false });
-  const isAlive = options.isAlive ?? isProcessAlive;
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".json"));
-  } catch {
-    return []; // no registry directory → nothing is running
-  }
-  const entries = files
-    .map((f) => readEntry(join(dir, f)))
-    .filter((e): e is ChannelEntry => e !== null && isAlive(e.pid));
-  return entries.sort(
+  const channels = listRegistryChannels({
+    client: "vscode",
+    // Non-destructive on purpose — see the module doc.
+    prune: false,
+    ...(options.dir !== undefined ? { registryDir: options.dir } : {}),
+    ...(options.agentsDir !== undefined ? { agentsDir: options.agentsDir } : {}),
+    ...(options.workspaceDir !== undefined ? { baseDir: options.workspaceDir } : {}),
+  }).channels;
+  return channels.sort(
     (a, b) =>
       affinity(b.cwd, options.workspaceDir) - affinity(a.cwd, options.workspaceDir) ||
-      Number(a.debug === true) - Number(b.debug === true) ||
+      Number(a.kind === "debug") - Number(b.kind === "debug") ||
       b.startedAt.localeCompare(a.startedAt),
   );
 }
 
-/** How a picker titles a channel: its own name, else its tag, marked if debug. */
+/** How a picker titles a channel: its resolved name, marked if debug. */
 export function channelLabel(channel: ChannelEntry): string {
-  return `${channel.name ?? channel.tag}${channel.debug === true ? " · debug" : ""}`;
+  return `${channel.resolvedName}${channel.kind === "debug" ? " · debug" : ""}`;
 }
 
 /** List a channel's connected session views. Throws on an unreachable server. */
