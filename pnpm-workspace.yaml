@@ -13,6 +13,14 @@ packages:
   # cost of scratch status; the maintained copy is demos/gallery/src/pages/circle.
   - "!demos/circle"
 
+# The ONE npm-pinned in-repo package (bootstrap/aiui-registry — outside the
+# workspace, published manually; see CLAUDE.md → "The bootstrap/ directory").
+# A catalog entry so every workspace consumer resolves the SAME version: its
+# on-disk formats are a cross-process protocol, and two compiled-in versions
+# could disagree. Bump it here, once, after publishing a new registry version.
+catalog:
+  "@habemus-papadum/aiui-registry": 0.1.0
+
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)
 allowBuilds:
@@ -23,3 +31,10 @@ allowBuilds:
   "@vscode/vsce-sign": false
   esbuild: true
   keytar: false
+
+minimumReleaseAgeExclude:
+  - '@habemus-papadum/aiui-registry-host-darwin-arm64@0.1.0'
+  - '@habemus-papadum/aiui-registry-host-darwin-x64@0.1.0'
+  - '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0'
+  - '@habemus-papadum/aiui-registry-host-linux-x64@0.1.0'
+  - '@habemus-papadum/aiui-registry@0.1.0'

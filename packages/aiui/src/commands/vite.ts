@@ -9,9 +9,9 @@ import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { resolveChromeSettings } from "../util/chrome";
 import { type AiuiConfig, loadAiuiConfig } from "../util/config";
 import { type CliInvocation, resolvePackageCli } from "../util/resolve-cli";
+import { startSessionBrowser } from "../util/session-browser";
 import { printError, printNote, printWarning } from "../util/ui";
 import { VERSION } from "../util/version";
-import { startSessionBrowser } from "./browser";
 
 const VITE_PKG = "vite";
 

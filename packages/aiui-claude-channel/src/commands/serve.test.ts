@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readEntry as readEntryV2 } from "@habemus-papadum/aiui-registry";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import WebSocket from "ws";
 import { connectChannelClient } from "../client";
@@ -217,17 +218,18 @@ describe("runServe (standalone debug channel server)", () => {
     expect(list.session).toMatch(/^wb·\d+·\d{6}$/);
   });
 
-  it("registers as a debug server (name + tag) and removes its entry on close", async () => {
+  it("registers as a debug server (assignedName + kind) and removes its entry on close", async () => {
     handle = await runServe({ cacheDir: freshCache(), tag: "wb", name: "aiui debug" });
 
+    // The v1 listing still shows the entry (transition guarantee, M3→M4)…
     const [server, ...rest] = listMcpServers();
     expect(rest).toEqual([]);
-    expect(server).toMatchObject({
-      tag: "wb",
-      name: "aiui debug",
-      debug: true,
-      pid: process.pid,
-      port: handle.port,
+    expect(server).toMatchObject({ tag: "wb", pid: process.pid, port: handle.port });
+    // …and the schema-v2 semantics live in the file itself.
+    expect(readEntryV2(server.file)).toMatchObject({
+      schema: 2,
+      kind: "debug",
+      assignedName: "aiui debug",
     });
 
     await handle.close();
@@ -239,8 +241,8 @@ describe("runServe (standalone debug channel server)", () => {
     handle = await runServe({ cacheDir: freshCache() });
     const [server] = listMcpServers();
     expect(server?.tag).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/);
-    expect(server?.debug).toBe(true);
-    expect(server?.name).toBeUndefined();
+    expect(readEntryV2(server.file)).toMatchObject({ kind: "debug" });
+    expect(readEntryV2(server.file)?.assignedName).toBeUndefined();
   });
 
   it("does not create a recording without --record", async () => {

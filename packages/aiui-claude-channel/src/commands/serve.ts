@@ -390,9 +390,11 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
   // Join the shared registry, marked as debug (see the header: selectors show
   // the mark, and never auto-pick a debug entry). Same lifecycle as `mcp`:
   // remove on close, with an exit backstop for paths that skip close().
-  const registration = registerServer(web.port, options.tag ?? randomUUID(), {
-    debug: true,
-    ...(options.name !== undefined ? { name: options.name } : {}),
+  const registration = registerServer({
+    port: web.port,
+    tag: options.tag ?? randomUUID(),
+    kind: "debug",
+    assignedName: options.name,
   });
   installExitBackstop(registration);
 

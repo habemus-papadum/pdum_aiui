@@ -159,8 +159,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // "launch" mode keeps the browser private to the MCP and lazily started.
   let chromeInfo: ChromeDevtoolsInfo = { enabled: false };
   if (chromeDevtoolsEnabled(aiuiArgs, config.chrome)) {
-    // `--aiui-browser-url` (printed by `aiui browser --tunnel` for the remote
-    // side) beats a configured chrome.browserUrl for this launch.
+    // `--aiui-browser-url` (printed by `aiui remote` for the remote side)
+    // beats a configured chrome.browserUrl for this launch.
     const chromeCfg = {
       ...config.chrome,
       ...(aiuiArgs.browserUrl ? { browserUrl: aiuiArgs.browserUrl } : {}),
@@ -272,7 +272,7 @@ aiui's own flags (everything else forwards to claude verbatim):
   --aiui-chrome-profile <name>   browser profile at .aiui-cache/chrome/<name>
   --aiui-chrome-data-dir <path>  explicit browser user data dir
   --aiui-browser-url <url>       attach to a browser at this DevTools endpoint
-                                 (e.g. a tunnel from \`aiui browser --tunnel\`)
+                                 (e.g. the tunnel from \`aiui remote\`)
   --aiui-bind <loopback|host>    where the channel's web server binds: loopback
                                  (this machine only, the default) or host (your
                                  whole network can reach the session's web
@@ -302,6 +302,9 @@ Configuration guide. What follows is claude's own --help:
  *     running, or a failed start — classic launch mode: chrome-devtools-mcp
  *     starts its own private browser lazily, on the agent's first tool call.
  */
+// TODO(aiui-registry): collapse this onto util/session-browser's find-or-start
+// pipeline in M6 (it needs the MCP-entry shaping + launch-mode fallback the
+// pipeline doesn't model; `browser`/`remote`/`vite` already share it).
 async function chromeServerEntry(
   aiuiArgs: AiuiArgs,
   chromeCfg: NonNullable<AiuiConfig["chrome"]>,

@@ -19,6 +19,7 @@ import { type ExtensionOptions, runExtension } from "./commands/extension";
 import { runMcp } from "./commands/mcp";
 import { runNativeHost } from "./commands/native-host";
 import { runPencilUrl } from "./commands/pencil-url";
+import { type RemoteOptions, runRemote } from "./commands/remote";
 import { runVite } from "./commands/vite";
 
 import { VERSION } from "./util/version";
@@ -85,27 +86,37 @@ export function buildProgram(): Command {
     );
 
   // The shared session browser (human + agent in one window). `browser` starts
-  // or finds it — locally before/without a session, or on your local machine
-  // for remote development (tunnel its debug port to the remote box).
+  // or finds it — locally, before or without a session. The remote-development
+  // local half is `aiui remote` (below).
   program
     .command("browser")
-    .description(
-      "start (or find) the shared session browser; --tunnel does the whole remote-dev local half",
-    )
-    .option(
-      "--profile <name>",
-      "named profile (project .aiui-cache/chrome/, or the user cache with --tunnel)",
-    )
+    .description("start (or find) the shared session browser")
+    .option("--profile <name>", "named profile (project .aiui-cache/chrome/)")
     .option("--data-dir <path>", "explicit Chrome user data dir")
     .option("--port <port>", "fixed local DevTools debug port (default: OS-assigned)")
     .option("--headless", "launch with no UI")
     .option("--open <url>", "also open this URL in it")
-    .option(
-      "--tunnel <[user@]host>",
-      "reverse-tunnel the debug port to this host (Ctrl-C closes it)",
-    )
-    .option("--remote-port <port>", "fixed port on the tunnel's remote side (default: 9222)")
     .action((opts: BrowserOptions) => runBrowser(opts));
+
+  // The whole local half of remote development: local browser + one ssh
+  // connection carrying both forwards + a kind:"remote" registry entry that
+  // lives as long as this command (docs/proposals/aiui-registry.md §5).
+  program
+    .command("remote")
+    .description(
+      "connect this machine's browser + intent client to an `aiui claude` on another host",
+    )
+    .argument("<host>", "[user@]host of the remote box (an ssh target)")
+    .option("--port <port>", "channel proxy port, BOTH ends of the forward (default: 49300)")
+    .option(
+      "--browser-port <port>",
+      "remote-side port for the browser debug forward (default: 9222)",
+    )
+    .option("--name <name>", "display name for the registered remote channel")
+    .option("--profile <name>", "profile key in the user cache (default: derived from the host)")
+    .option("--data-dir <path>", "explicit Chrome user data dir")
+    .option("--headless", "launch the browser with no UI")
+    .action((host: string, opts: RemoteOptions) => runRemote(host, opts));
 
   // The intent client extension's native side: the Chrome native-messaging
   // host that gives it channel discovery a browser can't get from the on-disk

@@ -155,7 +155,15 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     frameSink: channelLog.frameSink,
     ...commonWebOptions(options),
   });
-  const registration = registerServer(web.port, tag);
+  // A real session channel: kind "channel" (the ppid → `claude agents` join
+  // names it live); the DevTools endpoint rides along so cold discoverers can
+  // find the session browser without the launcher (schema v2, §3).
+  const registration = registerServer({
+    port: web.port,
+    tag,
+    kind: "channel",
+    browserUrl: launchInfo?.chromeDevtools?.browserUrl,
+  });
 
   // Dev-only STALENESS watch, opt-in via AIUI_CHANNEL_WATCH=1 and only
   // meaningful in a source checkout (a packaged install has nothing on disk to

@@ -4,6 +4,12 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@habemus-papadum/aiui-registry':
+      specifier: 0.1.0
+      version: 0.1.0
+
 importers:
 
   .:
@@ -225,6 +231,9 @@ importers:
       '@habemus-papadum/aiui-claude-plugin':
         specifier: workspace:^
         version: link:../aiui-claude-plugin
+      '@habemus-papadum/aiui-registry':
+        specifier: 'catalog:'
+        version: 0.1.0
       '@habemus-papadum/aiui-util':
         specifier: workspace:^
         version: link:../aiui-util
@@ -270,6 +279,9 @@ importers:
       '@habemus-papadum/aiui-pencil':
         specifier: workspace:^
         version: link:../aiui-pencil
+      '@habemus-papadum/aiui-registry':
+        specifier: 'catalog:'
+        version: 0.1.0
       '@habemus-papadum/aiui-remote-bar':
         specifier: workspace:^
         version: link:../aiui-remote-bar
@@ -1582,6 +1594,30 @@ packages:
 
   '@gerrit0/mini-shiki@3.23.0':
     resolution: {integrity: sha512-bEMORlG0cqdjVyCEuU0cDQbORWX+kYCeo0kV1lbxF5bt4r7SID2l9bqsxJEM0zndaxpOUT7riCyIVEuqq/Ynxg==}
+
+  '@habemus-papadum/aiui-registry-host-darwin-arm64@0.1.0':
+    resolution: {integrity: sha512-1ryU2rCdNHQTHTjhl1vCmIfDWUnIfjBa5HBVwJ8lwtYyraZzFfQ6f9x4oUKAsbY4r1lW3fO0vDMaADVD9ZPQgA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@habemus-papadum/aiui-registry-host-darwin-x64@0.1.0':
+    resolution: {integrity: sha512-3XiH4Gdgnp0+KHe+Ta/qvc0zMFjuHKRV0gs26/IUJaD/bDEWRG8a7qNCMvIwbfwLKoMxQEIi/vZ+dWx8D7F+pA==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0':
+    resolution: {integrity: sha512-tr76LsPCJwO7SUSISnjpYyfoLTQQOM+nXq+SSCtxniz310yodv8bJ/Ii6pFjaAl9w6fNoFe9kEDcUYy5WH8xrQ==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@habemus-papadum/aiui-registry-host-linux-x64@0.1.0':
+    resolution: {integrity: sha512-5XQCHx7tCkiLH1K1gfiqPjXMY5YLZECww+nwamyCq1hKysj0d5jHh+5181Pu/lvb0cISMLC6XFJJp/+h3ZDxBw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@habemus-papadum/aiui-registry@0.1.0':
+    resolution: {integrity: sha512-WoGgxnZaAhm6QWv647COf5+5/YHYx6F77sJ+cYNH0x/sx/1OtIwr2/RM/E1spmvmhpw9GUES60eELtX/3ucsrQ==}
+    engines: {node: '>=20'}
 
   '@hono/node-server@1.19.14':
     resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
@@ -5622,6 +5658,25 @@ snapshots:
       '@shikijs/themes': 3.23.0
       '@shikijs/types': 3.23.0
       '@shikijs/vscode-textmate': 10.0.2
+
+  '@habemus-papadum/aiui-registry-host-darwin-arm64@0.1.0':
+    optional: true
+
+  '@habemus-papadum/aiui-registry-host-darwin-x64@0.1.0':
+    optional: true
+
+  '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0':
+    optional: true
+
+  '@habemus-papadum/aiui-registry-host-linux-x64@0.1.0':
+    optional: true
+
+  '@habemus-papadum/aiui-registry@0.1.0':
+    optionalDependencies:
+      '@habemus-papadum/aiui-registry-host-darwin-arm64': 0.1.0
+      '@habemus-papadum/aiui-registry-host-darwin-x64': 0.1.0
+      '@habemus-papadum/aiui-registry-host-linux-arm64': 0.1.0
+      '@habemus-papadum/aiui-registry-host-linux-x64': 0.1.0
 
   '@hono/node-server@1.19.14(hono@4.12.27)':
     dependencies:

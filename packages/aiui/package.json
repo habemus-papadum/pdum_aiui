@@ -44,6 +44,7 @@
   "dependencies": {
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-claude-plugin": "workspace:^",
+    "@habemus-papadum/aiui-registry": "catalog:",
     "@habemus-papadum/aiui-util": "workspace:^",
     "@inquirer/prompts": "^7.2.0",
     "@puppeteer/browsers": "^2.10.5",
