@@ -44,8 +44,8 @@ Ground rules (the same ones the starter ships with):
   rare genuinely-bespoke case.
 - **Test the surface with the cells.** `resetControlSurface()` in afterEach, build cells inside
   `cellHarness`, probe each input.
-- Run the dev server with `pnpm dev` from this directory (`bin/aiui vite dev` — it injects the
-  channel port as `VITE_AIUI_PORT`). Plain `vite` also serves the app, but the intent tool won't
-  find the channel.
+- Run the dev server with `pnpm dev` from this directory (plain `vite`); the intent client
+  reaches the channel through the channel-served `/intent/` page or the side panel, so the dev
+  server needs no channel wiring of its own.
 
 Methodology: [docs/guide/frontend-for-agents.md](../../docs/guide/frontend-for-agents.md).

@@ -29,7 +29,7 @@ the `aiui()` plugin in `vite.config.ts` provides the source-location stamps attr
 # terminal 1 — a Claude Code session with the channel attached
 ./aiui claude
 
-# terminal 2 — this app, served by aiui vite (injects VITE_AIUI_PORT)
+# terminal 2 — this app, served by plain vite (the intent client finds the channel itself)
 pnpm demo
 ```
 
@@ -38,8 +38,9 @@ click around the regime atlas (mitosis is a good show), watch the analysis strea
 The **✳ aiui** button sends intent into the session; the **🔍** button opens the
 lowering-trace debugger.
 
-Also works without a channel (`pnpm -C demos/gallery dev`): the app
-runs fully; only the intent widget reports it has no port.
+The dev server doesn't care whether a channel is running — `pnpm demo` and
+`pnpm -C demos/gallery dev` are the same command. Skip terminal 1 and the page loads fine;
+there's just no session for the intent client to drive it through.
 
 ## Things worth trying
 
