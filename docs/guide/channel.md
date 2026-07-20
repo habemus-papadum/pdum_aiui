@@ -84,8 +84,9 @@ bytes land, and a speculative compose keeps the final prompt one cheap step away
 composed prompt — body text with `{shot_N}` tokens, file paths in metadata — is pushed into the
 session as a notification.
 
-Every stage is recorded by the tracing layer into the project-local cache
-(`.aiui-cache/traces/<id>/`), which is what the trace debugger renders — the shared `debug-ui`
+Every stage is recorded by the tracing layer into the project's user-level cache
+(`~/.cache/aiui/projects/<slug>-<hash>/traces/<id>/`, keyed by the project's absolute path — the
+project tree itself stays pristine), which is what the trace debugger renders — the shared `debug-ui`
 viewer, whether opened via `aiui debug`, the `/__aiui/debug` page, or the DevTools panel's
 Intent pane — including mid-turn, since stages land as they happen. An abandoned thread (page
 closed mid-turn) is torn down and its trace marked `abandoned`.

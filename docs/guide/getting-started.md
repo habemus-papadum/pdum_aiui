@@ -161,9 +161,10 @@ its `{shot_N}` tokens, the correction diffs — while the plain-text escape hatc
 input → output. Either way this view is where you look when you disagree with how your intent was
 rendered.
 
-Traces live in `.aiui-cache/` under the directory where `aiui claude` runs (project-local,
-gitignored) — screenshots and other blobs are stored there too, so lowered prompts can reference
-them by path and the session can read them.
+Traces live in the project's user-level cache — `~/.cache/aiui/projects/<slug>-<hash>/`, keyed
+by the absolute path of the directory where `aiui claude` runs, so the project tree itself stays
+pristine — and screenshots and other blobs are stored there too. Lowered prompts reference them
+by absolute path, so the session can read them from anywhere.
 
 ## Scripted sends (no browser)
 

@@ -25,8 +25,10 @@ transcript) at the center. Three layers:
    sampler, selection watcher, channel wire). The historical surfaces — `aiui-dev-overlay` (the
    original web intent tool), `aiui-extension` (the first browser extension), and the
    `aiui-devtools-extension` panel — are DELETED (`docs/proposals/dev-overlay-retirement.md`;
-   read them in git history). Lowering runs are traced to the project-local `.aiui-cache/`
-   (gitignored); the trace debugger (`aiui-trace-ui`) is EMBEDDED in the intent panel and also
+   read them in git history). Lowering runs are traced to the project's user-level cache
+   (`~/.cache/aiui/projects/<slug>-<hash8>/traces/`, keyed by the project's absolute path —
+   the browser-profiles redesign moved the whole per-project cache out of the project tree);
+   the trace debugger (`aiui-trace-ui`) is EMBEDDED in the intent panel and also
    reachable at `/__aiui/debug` — a client route of the **console** (`aiui-console`), the channel's
    own dashboard served at its root (`/` redirects there). `aiui debug` opens that console in the
    session browser. The channel serves **no HTML of its own** — JSON/data routes only

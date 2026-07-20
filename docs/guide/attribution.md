@@ -126,8 +126,8 @@ lowering time, never at capture time (the repo's defer-rendering rule). The comp
 inlines each shot at its position in the prose:
 
 ```xml
-[screenshot located at .aiui-cache/traces/…/shot_1.png]
-<screenshot-metadata path=".aiui-cache/traces/…/shot_1.png">
+[screenshot located at ~/.cache/aiui/projects/app-1a2b3c4d/traces/…/shot_1.png]
+<screenshot-metadata path="~/.cache/aiui/projects/app-1a2b3c4d/traces/…/shot_1.png">
   <element name="SimCanvas" source="src/ui/SimCanvas.tsx:64:10"/>
   <element name="AnalysisPanel" source="src/ui/AnalysisPanel.tsx:99:5">
     <cell name="analysis" source="src/model/graph.ts:31"/>

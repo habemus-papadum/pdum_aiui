@@ -111,13 +111,14 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   const transport = new StdioServerTransport();
   await mcp.connect(transport);
 
-  // Lowering traces + the /debug viewer live in the project-local cache
-  // (.aiui-cache/ under this server's cwd — gitignored, readable by the
-  // Claude Code session running in the same directory).
+  // Lowering traces + the /debug viewer live in the project's USER-LEVEL
+  // cache (~/.cache/aiui/projects/<slug>-<hash>/, keyed by this server's cwd —
+  // trace.ts; blob paths stay absolute so the Claude Code session can read
+  // them from anywhere, and the project tree stays pristine).
   const cacheDir = projectCacheDir();
   // The diagnostic log: as an MCP subprocess this process's stderr is
-  // effectively invisible, so lifecycle + every error push also land in
-  // .aiui-cache/logs/ where a human (or the agent) can read them post-mortem.
+  // effectively invisible, so lifecycle + every error push also land in that
+  // cache's logs/ where a human (or the agent) can read them post-mortem.
   const channelLog = createChannelLog(cacheDir);
 
   // One debounced directory change drives both notification rungs of the

@@ -92,7 +92,10 @@ export function buildProgram(): Command {
     )
     .option("--tag <tag>", "registry address + stderr/trace label (defaults to a UUID)")
     .option("--name <name>", 'display name selectors show for this server (e.g. "aiui debug")')
-    .option("--record", "append every frame-log entry as JSONL under .aiui-cache/recordings/");
+    .option(
+      "--record",
+      "append every frame-log entry as JSONL under the project's user-level cache (…/recordings/)",
+    );
   addChannelServerOptions(serve)
     // The validator is the pure parsePort (tested in serve.test.ts); re-wrapped
     // here so commander renders a bad value as a usage error, not a crash.

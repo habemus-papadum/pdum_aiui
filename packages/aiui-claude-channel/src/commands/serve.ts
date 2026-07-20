@@ -25,8 +25,9 @@
  *
  * The server runs with `debug: true` (surfaced on `/health`,
  * `/debug/api/info`, and every hello ack, so clients can tell), traces to the
- * project-local cache as usual, and — with `--record` — appends every
- * frame-log entry as JSONL under `.aiui-cache/recordings/` (see recording.ts).
+ * project's user-level cache as usual (`~/.cache/aiui/projects/<slug>-<hash>/`
+ * — trace.ts), and — with `--record` — appends every frame-log entry as JSONL
+ * under that cache's `recordings/` (see recording.ts).
  * It binds an OS-assigned loopback port unless `--port` pins one (the
  * debug harness pins its channel to a fixed port so a human always knows where it
  * is); either way the ready line below carries the actual port, and a pinned
