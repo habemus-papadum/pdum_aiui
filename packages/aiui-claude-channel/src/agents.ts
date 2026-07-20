@@ -6,6 +6,8 @@
  * label a server with its session's human name (e.g. "pdum-aiui-97") and id
  * instead of a bare pid, both in the selector and in the `channel_info` tool.
  */
+// TODO(aiui-registry): replaced in M4 by @habemus-papadum/aiui-registry's cached
+// agents join (4 s shared cache + per-client locks; docs/proposals/aiui-registry.md §4).
 import { execFileSync } from "node:child_process";
 import type { RegistryEntry } from "./registry";
 

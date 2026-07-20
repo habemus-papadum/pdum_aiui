@@ -2,6 +2,8 @@
  * Interactive selection of a running channel server — the "which one?" widget
  * shared by CLI subcommands like `quick`.
  */
+// TODO(aiui-registry): serverLabel's ad-hoc naming becomes the enriched listing's
+// resolvedName in M4 (docs/proposals/aiui-registry.md §3).
 import { select } from "@inquirer/prompts";
 import { agentsByPid, type ClaudeAgent, listClaudeAgents } from "./agents";
 import type { RunningServer } from "./registry";

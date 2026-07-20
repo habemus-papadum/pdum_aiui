@@ -194,6 +194,8 @@ export function registerDebugRoutes(
   // Every channel this machine is running (the on-disk registry, pruned of
   // dead processes) — how a connected debug viewer offers "switch channel":
   // one reachable channel is enough to enumerate and hop to all the others.
+  // TODO(aiui-registry): return the ENRICHED listing (session names, resolvedName,
+  // loud agents status) from @habemus-papadum/aiui-registry in M4.
   app.get("/debug/api/channels", (_req, res) => {
     res.json({
       channels: listMcpServers().map((server) => ({

@@ -22,6 +22,15 @@ a trusted publisher can be attached) and `pnpm npm:trust <slug>` (attach it) are
 setup steps run with the human's npm login — see CLAUDE.md → *Trusted publishing*. Do not run them on
 your own initiative; only when the user explicitly asks to provision a package for publishing.
 
+**The one exception: `bootstrap/` packages.** `bootstrap/aiui-registry` (and any future
+`bootstrap/*`) sits OUTSIDE the workspace, carries its own semver, and is published **manually** via
+its own `scripts/publish.mjs` — run locally by the human (npm login + 2FA), never from CI and never
+via bare `npm publish` (a `prepublishOnly` guard blocks that; the script stages
+`optionalDependencies` the source manifest deliberately omits). Everything else in this section —
+CI-only releasing, versioning.mjs lockstep — simply does not apply to `bootstrap/`, and conversely:
+never fold a bootstrap package into `release.yml` or the lockstep. See CLAUDE.md → *The `bootstrap/`
+directory* and docs/proposals/aiui-registry.md §10. Do not run its publish script unasked.
+
 ## Development
 
 ```sh

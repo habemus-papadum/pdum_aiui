@@ -1,0 +1,49 @@
+{
+  "name": "@habemus-papadum/aiui-registry",
+  "version": "0.1.0",
+  "description": "The aiui channel registry: on-disk entry schema, enriched channel listing, and the native-messaging host. Standalone, npm-pinned — the one aiui package that does not run from source (docs/proposals/aiui-registry.md).",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "bootstrap/aiui-registry"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "binaries": "node scripts/build-binaries.mjs",
+    "smoke": "node scripts/smoke-host.mjs",
+    "test:install": "node scripts/install-test.mjs",
+    "release": "node scripts/publish.mjs",
+    "prepublishOnly": "node -e \"console.error('publish via scripts/publish.mjs — it stages the optionalDependencies this manifest deliberately omits');process.exit(1)\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "bun": "^1.3.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

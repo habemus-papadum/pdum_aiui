@@ -15,6 +15,8 @@
  * extension) so both discoverers share one copy; it is re-exported here so this
  * package's callers keep importing it from `./registry`.
  */
+// TODO(aiui-registry): the write side moves to @habemus-papadum/aiui-registry in M3
+// (schema-v2 entries, atomic rename; docs/proposals/aiui-registry.md §1, §3).
 import { unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {

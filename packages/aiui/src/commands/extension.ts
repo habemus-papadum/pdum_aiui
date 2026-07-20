@@ -27,6 +27,9 @@
  * call it automatically whenever they load the intent client's extension, so
  * an aiui-launched browser needs no global install at all.
  */
+// TODO(aiui-registry): installers rewritten in M4 to the §9 flow — version-suffixed
+// compiled-host copy into the user cache, env-baking wrapper (AIUI_CLAUDE_BIN)
+// rewritten every launch, same profile/global scoping split (docs/proposals/aiui-registry.md §9).
 import {
   chmodSync,
   existsSync,

@@ -13,6 +13,9 @@
  * The client half speaks the channel web backend's session HTTP surface
  * (web.ts): `GET /session/peers` to list the browser views of a session, and
  * `POST /session/publish` to hand one of them a contribution.
+ *
+ * TODO(aiui-registry): the discovery half moves to @habemus-papadum/aiui-registry's
+ * enriched listChannels in M4 (docs/proposals/aiui-registry.md §4, §7).
  */
 import { readdirSync } from "node:fs";
 import { join, sep } from "node:path";

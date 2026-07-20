@@ -171,6 +171,23 @@ Unlike a scaffolded sandbox, a demo is not its own git repo and ships no `.gitig
 `"aiui": { "scaffold": true }` marker — which makes `create-aiui` classify it as `occupied` and
 refuse to touch it. Exactly right.
 
+## The `bootstrap/` directory — standalone, npm-pinned packages
+
+`bootstrap/*` packages (today: `bootstrap/aiui-registry`) deliberately invert every workspace
+convention: they live **outside the pnpm workspace globs** (own lockfile; a local
+`pnpm-workspace.yaml` boundary marker plus a local `vitest.config.ts` stop pnpm/vitest walking up
+to the repo root), carry their **own semver** (never the lockstep `X.Y.Z+dev`), are published
+**manually** via their own `scripts/publish.mjs` (never `release.yml` — see AGENTS.md), and the
+workspace consumes them **via npm at a pinned version** — the one place this repo does not run on
+source. Why: aiui-registry's on-disk formats (registry entries, agents cache, native-messaging
+frames) are a wire protocol between independently-installed aiui versions, and pinning one
+published implementation is what keeps them coherent (docs/proposals/aiui-registry.md). Its own CI
+is `.github/workflows/registry.yml` (path-filtered; includes a compiled-host smoke test and an
+installed-shape pack→install test). The compiled host binaries ship as per-platform packages
+(`…-host-<platform>-<arch>`, esbuild-style `optionalDependencies`, injected at stage time). The
+one accepted duplication: `cacheDir` path resolution exists in both `aiui-util` and
+`bootstrap/aiui-registry/src/paths.ts` and the two must stay byte-identical.
+
 ## Publication convention
 
 > **Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC) —

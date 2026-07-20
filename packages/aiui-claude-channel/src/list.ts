@@ -5,6 +5,8 @@
  * {@link sortServers} are the pure ranking primitives it's built from (exported
  * so the ordering rules can be tested without touching the filesystem).
  */
+// TODO(aiui-registry): collapses onto @habemus-papadum/aiui-registry's enriched
+// listChannels in M4 (docs/proposals/aiui-registry.md §4).
 import { readdirSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {

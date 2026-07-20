@@ -1,24 +1,23 @@
 /**
- * `aiui native-host` — the Chrome native-messaging host (browser-extension
- * proposal §4): a thin stdio shim the browser spawns to answer what an
- * extension cannot learn on its own — the on-disk channel registry
- * (`~/.cache/aiui/mcp/<pid>.json`), read through the same `listMcpServers()`
- * the CLI's own selectors use.
+ * The Chrome native-messaging host: a thin stdio shim over the enriched
+ * listing, answering what an extension cannot learn on its own (an extension
+ * page's origin is `chrome-extension://…`, so it can't read the on-disk
+ * registry). Framing is Chrome's, exactly: each message is a 32-bit
+ * **native-endian** length followed by UTF-8 JSON, both directions, over
+ * stdin/stdout. Chrome's `sendNativeMessage` spawns one process per request;
+ * `connectNative` keeps it for a session — this host serves both by answering
+ * every frame until stdin closes. stdout is sacred (frames only); diagnostics
+ * go to stderr, which Chrome folds into its own log.
  *
- * Wire format (Chrome's, exactly): each message is a 32-bit **native-endian**
- * length followed by UTF-8 JSON, both directions, over stdin/stdout. Chrome's
- * `sendNativeMessage` spawns one process per request and reads one reply;
- * `connectNative` keeps the process for a session — this host serves both by
- * simply answering every frame until stdin closes. stdout is sacred (frames
- * only); diagnostics go to stderr, which Chrome folds into its own log.
+ * Every response carries `protocol` (docs/proposals/aiui-registry.md §8) so
+ * the extension can detect a too-old host and tell the user, instead of
+ * misbehaving.
  *
  * Requests:  { cmd: "listChannels" } | { cmd: "version" } | { cmd: "ping" }
- * Responses: { ok: true, ... } | { ok: false, error }
+ * Responses: { ok: true, protocol, ... } | { ok: false, protocol, error }
  */
-// TODO(aiui-registry): retired in M4 — the host ships as a COMPILED binary from
-// @habemus-papadum/aiui-registry (docs/proposals/aiui-registry.md §8); the framing
-// here was ported to that package's host.ts.
-import { listMcpServers } from "@habemus-papadum/aiui-claude-channel/internal";
+import type { ChannelListing } from "./types.ts";
+import { PROTOCOL } from "./types.ts";
 
 /** Encode one native-messaging frame (native-endian u32 length + JSON). Pure. */
 export function encodeNativeFrame(message: unknown): Buffer {
@@ -65,51 +64,59 @@ function isLittleEndian(): boolean {
 }
 
 /** Answer one request. Exported for tests. */
-export function handleNativeRequest(message: unknown): Record<string, unknown> {
+export function handleNativeRequest(
+  message: unknown,
+  list: () => ChannelListing,
+): Record<string, unknown> {
   const cmd =
     message !== null && typeof message === "object"
       ? (message as { cmd?: unknown }).cmd
       : undefined;
   if (cmd === "ping") {
-    return { ok: true, at: new Date().toISOString() };
+    return { ok: true, protocol: PROTOCOL, at: new Date().toISOString() };
   }
   if (cmd === "version") {
-    return { ok: true, version: 1 };
+    return { ok: true, protocol: PROTOCOL };
   }
   if (cmd === "listChannels") {
-    const channels = listMcpServers().map((server) => ({
-      tag: server.tag,
-      port: server.port,
-      pid: server.pid,
-      cwd: server.cwd,
-      startedAt: server.startedAt,
-      ...(server.name !== undefined ? { name: server.name } : {}),
-      ...(server.debug === true ? { debug: true } : {}),
-    }));
-    return { ok: true, channels };
+    // The listing already carries `protocol` — spread keeps one source of truth.
+    return { ok: true, ...list() };
   }
-  return { ok: false, error: `unknown cmd ${JSON.stringify(cmd)}` };
+  return { ok: false, protocol: PROTOCOL, error: `unknown cmd ${JSON.stringify(cmd)}` };
+}
+
+/** What {@link runNativeHost} needs; streams are injectable for tests. */
+export interface HostOptions {
+  list: () => ChannelListing;
+  input?: NodeJS.ReadableStream;
+  output?: { write(chunk: Buffer): unknown };
 }
 
 /** The stdio loop. Never resolves until stdin ends (Chrome closes it). */
-export async function runNativeHost(): Promise<void> {
-  let pending: Buffer<ArrayBufferLike> = Buffer.alloc(0);
-  process.stdin.on("data", (chunk: Buffer) => {
+export async function runNativeHost(options: HostOptions): Promise<void> {
+  const input: NodeJS.ReadableStream = options.input ?? process.stdin;
+  const output = options.output ?? process.stdout;
+  let pending: Buffer = Buffer.alloc(0);
+  input.on("data", (chunk: Buffer) => {
     pending = Buffer.concat([pending, chunk]);
     const { messages, rest } = decodeNativeFrames(pending);
     pending = rest;
     for (const message of messages) {
       let response: Record<string, unknown>;
       try {
-        response = handleNativeRequest(message);
+        response = handleNativeRequest(message, options.list);
       } catch (err) {
-        response = { ok: false, error: err instanceof Error ? err.message : String(err) };
+        response = {
+          ok: false,
+          protocol: PROTOCOL,
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
-      process.stdout.write(encodeNativeFrame(response));
+      output.write(encodeNativeFrame(response));
     }
   });
   await new Promise<void>((resolve) => {
-    process.stdin.on("end", resolve);
-    process.stdin.on("close", resolve);
+    input.on("end", resolve);
+    input.on("close", resolve);
   });
 }

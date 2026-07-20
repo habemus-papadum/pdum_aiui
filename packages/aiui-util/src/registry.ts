@@ -10,6 +10,8 @@
  * both discoverers — so neither the extension's VSIX bundle nor the channel
  * has to mirror the other's copy.
  */
+// TODO(aiui-registry): this whole read side moves to @habemus-papadum/aiui-registry
+// (docs/proposals/aiui-registry.md §7); delete this module in M4.
 import { readFileSync } from "node:fs";
 import { cacheDir } from "./index";
 

@@ -146,6 +146,11 @@ export async function runBrowser(opts: BrowserOptions): Promise<void> {
   }
 
   if (opts.tunnel) {
+    // TODO(aiui-registry): `--tunnel` is retired in M3, subsumed by `aiui remote`
+    // (registers a kind:"remote" entry + owns both tunnel directions); the
+    // find-or-start orchestration in this module hoists into util/ as the
+    // command-agnostic pipeline `claude`/`remote`/`open` share
+    // (docs/proposals/aiui-registry.md §5, plan M3/M6).
     await runTunnel(opts.tunnel, remotePort, session.port);
   } else {
     printNextSteps(session, remotePort);

@@ -8,6 +8,10 @@
  * way the CLI selector does ("pdum-aiui-97" instead of a pid). Best-effort by
  * design: `claude` missing from the extension host's PATH, a timeout, or junk
  * output all yield an empty map — the picker then falls back to tags.
+ *
+ * TODO(aiui-registry): deleted in M4 — the enriched listing from
+ * @habemus-papadum/aiui-registry carries resolvedName/session, so this private
+ * mirror goes away (docs/proposals/aiui-registry.md §7).
  */
 import { execFile } from "node:child_process";
 

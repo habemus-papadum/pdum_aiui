@@ -1,0 +1,61 @@
+name: registry
+
+# The bootstrap/aiui-registry package's own CI (docs/proposals/aiui-registry-plan.md M1):
+# it is standalone — outside the pnpm workspace, own lockfile, own versioning —
+# so the main CI never sees it. This job installs, tests, compiles the linux
+# host binary, and smoke-tests the COMPILED artifact over framed stdio.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bootstrap/**"
+      - ".github/workflows/registry.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "bootstrap/**"
+      - ".github/workflows/registry.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: bootstrap/aiui-registry
+
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: bootstrap/aiui-registry/pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build (dist)
+        run: pnpm build
+
+      - name: Compile the host binary (linux-x64)
+        run: pnpm binaries --target linux-x64
+
+      - name: Smoke-test the compiled host (framed stdio)
+        run: pnpm smoke dist-bin/aiui-registry-host-linux-x64
+
+      - name: Installed-shape test (stage → pack → scratch npm install → resolve → smoke)
+        run: pnpm test:install

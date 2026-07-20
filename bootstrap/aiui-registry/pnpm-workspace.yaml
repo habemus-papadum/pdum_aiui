@@ -1,0 +1,10 @@
+# Workspace BOUNDARY marker, not a workspace: this file stops pnpm from walking
+# up to the repo root and treating this package as part of the pdum_aiui
+# workspace. bootstrap/ packages are deliberately standalone — own lockfile,
+# own versioning, consumed by the workspace via npm at a pinned version
+# (docs/proposals/aiui-registry.md §6).
+packages: []
+# Both ship prebuilt binaries; their postinstalls just link the right one.
+allowBuilds:
+  bun: true
+  esbuild: true

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# Compiled native-messaging host binaries (scripts/build-binaries.mjs).
+dist-bin/
+# Publish staging (scripts/stage.mjs): platform packages + the main package
+# with optionalDependencies injected.
+dist-publish/
