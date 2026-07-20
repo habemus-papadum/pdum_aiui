@@ -81,15 +81,22 @@ export function buildProgram(): Command {
       "connect this machine's browser + intent client to an `aiui claude` on another host",
     )
     .argument("<host>", "[user@]host of the remote box (an ssh target)")
-    .option("--port <port>", "channel proxy port, BOTH ends of the forward (default: 49300)")
+    .option(
+      "--port <port>",
+      "preferred LOCAL channel-proxy port, walked when taken (default: 49300)",
+    )
     .option(
       "--browser-port <port>",
-      "remote-side port for the browser debug forward (default: 9222)",
+      "preferred REMOTE port for the browser debug forward, walked when taken (default: 9222)",
     )
     .option("--name <name>", "display name for the registered remote channel")
     .option("--profile <name>", "profile key in the user cache (default: derived from the host)")
     .option("--data-dir <path>", "explicit Chrome user data dir")
     .option("--headless", "launch the browser with no UI")
+    .option(
+      "--reconnect",
+      "replay a recorded connection (same tag/ports) after an ssh drop — the remote session must still be running",
+    )
     .action((host: string, opts: RemoteOptions) => runRemote(host, opts));
 
   // The intent client extension's native side: the Chrome native-messaging
