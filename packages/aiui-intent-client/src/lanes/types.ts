@@ -98,6 +98,14 @@ export interface ChannelLanes {
   /** The current thread's events, reactively (empty when no thread ever). */
   threadEvents(): IntentEvent[];
   /**
+   * Does the OPEN thread hold anything worth lowering — the same predicate
+   * `sendTurn` uses to distinguish a real turn from an empty one. Read
+   * imperatively by the UI's abandon-confirm gate (a live snapshot, not a
+   * reactive subscription), so a turn-cap tap only prompts when something
+   * would actually be lost.
+   */
+  turnHasContent(): boolean;
+  /**
    * Bind the wire-engine's world back into the mode engine and start the
    * outbound config effects. Call once, right after createIntentClient.
    * Returns the unbind.

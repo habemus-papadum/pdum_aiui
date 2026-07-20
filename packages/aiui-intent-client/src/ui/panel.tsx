@@ -24,7 +24,7 @@
  * PILLS_STYLES.
  */
 
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import type { IntentClient } from "../client";
 import { hintsFor } from "../keys";
 import type { LinterPulseView } from "../linter-pulse";
@@ -34,7 +34,8 @@ import { PILLS_STYLES, StatusPills } from "./pills";
 
 export const PANEL_STYLES = `
   :root { color-scheme: light dark; }
-  .aiui-panel { font: 13px/1.45 system-ui, sans-serif; padding: 12px; max-width: 460px; }
+  .aiui-panel { font: 13px/1.45 system-ui, sans-serif; padding: 12px; max-width: 460px;
+    position: relative; /* the abandon-confirm scrim covers the panel, not the page */ }
   .aiui-help { margin-top: 10px; border-collapse: collapse; }
   .aiui-help td { padding: 1px 8px 1px 0; }
   /* Preview mode (no open turn): the same rows, dimmed — these keys aren't
@@ -43,6 +44,23 @@ export const PANEL_STYLES = `
   .aiui-help kbd { border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
     border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
   .aiui-blip { margin-top: 6px; color: #dc2626; font-size: 12px; }
+  /* Abandon-confirm: a panel-local scrim + card. Covers the panel (not the
+     page); the turn stays open behind it until the user chooses. */
+  .aiui-confirm-scrim { position: absolute; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: color-mix(in srgb, currentColor 32%, transparent); }
+  .aiui-confirm { max-width: 340px; border-radius: 10px; padding: 14px 16px;
+    background: Canvas; color: CanvasText; border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); font-size: 13px; line-height: 1.5; }
+  .aiui-confirm h2 { margin: 0 0 6px; font-size: 14px; }
+  .aiui-confirm p { margin: 0 0 6px; }
+  .aiui-confirm .aiui-confirm-keys { opacity: 0.7; font-size: 12px; }
+  .aiui-confirm kbd { border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
+  .aiui-confirm-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .aiui-confirm-row button { font: inherit; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent); background: transparent; color: inherit; }
+  .aiui-confirm-row button.danger { border-color: #dc2626; color: #dc2626; }
 `
   .concat(BAR_STYLES)
   .concat(PILLS_STYLES)
@@ -58,6 +76,12 @@ export interface PanelProps {
   linterPulse?: () => LinterPulseView;
   /** The converse (debug) lint-now button (lanes.lintNow). */
   lintControl?: LintControlHandlers;
+  /**
+   * Live check (lanes.turnHasContent) for the abandon-confirm gate: does the
+   * open turn hold anything worth lowering? Undefined without a channel — no
+   * lanes means no accumulated content, so the gate is simply inert.
+   */
+  turnHasContent?: () => boolean;
 }
 
 /** The whole panel: pill · bar rows · status pills · help · blip · config. */
@@ -73,9 +97,72 @@ export function Panel(props: PanelProps) {
   });
   onCleanup(() => clearTimeout(blipTimer));
 
+  // The abandon-confirm gate (owner, 2026-07-20). The turn cap is a lit toggle
+  // that abandons an open turn in ONE click; a stray tap (meant for Enter)
+  // silently discards whatever you'd built. So when the turn holds content,
+  // that one tap raises a confirm instead of abandoning. Only the CAP is gated:
+  // Esc and `d` stay immediate (the dialog itself teaches Esc as the deliberate
+  // exit), and programmatic routes — agent control() writes, the activation
+  // gesture, tests — never tap the cap, so they never see the dialog.
+  const [confirming, setConfirming] = createSignal(false, { ownedWrite: true });
+  const inOpenTurn = (): boolean => {
+    const phase = client.state().phase;
+    return phase === "turn" || phase === "tweak";
+  };
+  const closeConfirm = (): void => {
+    setConfirming(false);
+  };
+  const abandonTurn = (): void => {
+    setConfirming(false);
+    // Re-check: the turn may have closed while the dialog sat open (a send on
+    // the control rail). Dispatching "turn" from armed would OPEN one — guard.
+    if (inOpenTurn()) {
+      client.dispatch("turn");
+    }
+  };
+
   // The tap-flash runtime, created ONCE and shared by the command bar and the
-  // config strip (one flash closure, not one per strip).
-  const capRuntime = createCapRuntime(client.dispatch);
+  // config strip (one flash closure, not one per strip). Its intercept guard is
+  // the gate: claim the turn-cap tap that would abandon a content-ful turn.
+  const capRuntime = createCapRuntime(client.dispatch, (command) => {
+    if (command === "turn" && inOpenTurn() && props.turnHasContent?.() === true) {
+      setConfirming(true);
+      return true;
+    }
+    return false;
+  });
+
+  // While the dialog is open it OWNS the keyboard. This fires in window-capture
+  // — BEFORE the panel document's own capture grammar (shell.tsx), which would
+  // otherwise read Esc as "step out" and cancel the very turn we're protecting.
+  // Esc and Enter both take the SAFE exit (keep the turn); only a click on the
+  // danger button abandons. Every other key is swallowed so nothing leaks to
+  // the machine behind the scrim.
+  const onConfirmKey = (event: KeyboardEvent): void => {
+    if (!confirming()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.key === "Escape" || event.key === "Enter") {
+      closeConfirm();
+    }
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("keydown", onConfirmKey, true);
+    onCleanup(() => window.removeEventListener("keydown", onConfirmKey, true));
+  }
+
+  // Defensive: if the turn closes underneath an open dialog (an external send),
+  // the prompt is gone anyway — drop the now-meaningless confirm.
+  createEffect(
+    () => confirming() && !inOpenTurn(),
+    (stale) => {
+      if (stale) {
+        setConfirming(false);
+      }
+    },
+  );
 
   /** Help ALWAYS shows the real keymap. Outside a turn the layer is inactive
    * (its keys genuinely do nothing yet), so the rows come from a PREVIEW of
@@ -145,6 +232,40 @@ export function Panel(props: PanelProps) {
 
       {/* Pills BELOW the config strip (owner, 2026-07-14: bar → config → pills). */}
       <StatusPills client={client} micLevel={props.micLevel} />
+
+      {/* Abandon-confirm: raised only when a turn-cap tap would discard a
+          content-ful turn. Keys are trapped in window-capture above (Esc/Enter
+          keep the turn); the scrim covers the panel so only a deliberate click
+          on the danger button abandons. */}
+      <Show when={confirming()}>
+        <div class="aiui-confirm-scrim" data-testid="abandon-confirm" role="presentation">
+          <div
+            class="aiui-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="aiui-confirm-title"
+          >
+            <h2 id="aiui-confirm-title">Abandon this turn?</h2>
+            <p>You'll lose everything you've built up in it.</p>
+            <p class="aiui-confirm-keys">
+              <kbd>Enter</kbd> sends the turn · <kbd>Esc</kbd> exits it · or keep editing.
+            </p>
+            <div class="aiui-confirm-row">
+              <button type="button" data-testid="abandon-keep" onClick={closeConfirm}>
+                Keep editing
+              </button>
+              <button
+                type="button"
+                class="danger"
+                data-testid="abandon-confirm-btn"
+                onClick={abandonTurn}
+              >
+                Abandon turn
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

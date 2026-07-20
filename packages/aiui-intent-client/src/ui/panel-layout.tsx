@@ -128,6 +128,7 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
         micLevel={props.micLevel}
         linterPulse={props.lanes !== undefined ? props.lanes.linterPulse : undefined}
         lintControl={props.lanes !== undefined ? { now: props.lanes.lintNow } : undefined}
+        turnHasContent={props.lanes !== undefined ? props.lanes.turnHasContent : undefined}
       />
       <Show when={props.lanes} keyed>
         {(lanes) => <TurnPreview lanes={lanes} />}

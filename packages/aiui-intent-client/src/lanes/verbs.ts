@@ -7,19 +7,13 @@
  * pins them.
  */
 
-import { composeIntent } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { IntentLanes } from "../client";
 import { shotFlash } from "../config";
-import { currentThreadEvents } from "./turn-config";
+import { turnHasContent } from "./turn-config";
 import type { LaneContext } from "./types";
 
 export function createVerbs(ctx: LaneContext): IntentLanes {
   const { host, engine, wire, talk, status, toast, pencilTabs } = ctx;
-
-  /** The open turn holds something worth lowering (explicit turns can be empty). */
-  const turnHasContent = (): boolean =>
-    composeIntent(currentThreadEvents(engine.events), "replace", { streaming: true }).items.length >
-    0;
 
   return {
     setArmed: (on) => {
@@ -36,7 +30,7 @@ export function createVerbs(ctx: LaneContext): IntentLanes {
       if (!engine.threadOpen) {
         return;
       }
-      if (turnHasContent()) {
+      if (turnHasContent(engine.events)) {
         engine.send({ keepArmed: true }); // §13.6: the seat stays armed
       } else {
         engine.stepOut(); // an empty explicit turn: nothing to lower — cancel

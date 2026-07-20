@@ -5,6 +5,7 @@
  */
 
 import {
+  composeIntent,
   DEFAULT_INTENT_CONFIG,
   expandTier,
   type IntentEvent,
@@ -55,4 +56,16 @@ export function currentThreadEvents(events: readonly IntentEvent[]): IntentEvent
     }
   }
   return [];
+}
+
+/**
+ * Does the current (open) thread hold anything worth lowering? The exact
+ * predicate `sendTurn` uses to tell a real turn from an empty one — the first
+ * IR pass (composeIntent) over the thread's events, non-empty. Shared so the
+ * UI's abandon-confirm gate asks precisely the same question the machine does.
+ */
+export function turnHasContent(events: readonly IntentEvent[]): boolean {
+  return (
+    composeIntent(currentThreadEvents(events), "replace", { streaming: true }).items.length > 0
+  );
 }
