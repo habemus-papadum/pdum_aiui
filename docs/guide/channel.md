@@ -57,7 +57,7 @@ flowchart TB
 Each running server advertises itself in a small on-disk registry
 (`~/.cache/aiui/mcp/<pid>.json`): a stable `tag`, its `pid`, the `ppid` of the Claude Code
 session that owns it, the web backend `port`, and the launch `cwd`. Entries are removed on exit
-and pruned when stale. This is how the standalone intent panel's dev launcher and `aiui debug`
+and pruned when stale. This is how the standalone intent panel's dev launcher and `aiui dashboard`
 pick a channel to attach to (exporting its port to Vite as `VITE_AIUI_PORT`), how the `aiui()`
 plugin seeds the source root into pages (`window.__AIUI__.sourceRoot`), and how CLI helpers like
 `aiui-claude-channel quick` pick a server to push a test prompt into.
@@ -72,7 +72,7 @@ plugin seeds the source root into pages (`window.__AIUI__.sourceRoot`), and how 
 | `POST /prompt` | JSON | Push plain text into the session — the simplest integration and the end-to-end smoke test. |
 | `GET /health` | JSON | Liveness, plus page-tools and session summaries; served with a permissive CORS header so pages can probe capability before dialing a websocket. |
 | `/debug/api/*` | JSON + blobs | The lowering-trace **API**. `/debug/api/channels` lists the machine's registry so a viewer can switch channels; `/debug/api/info` also reports launch info (how the session browser is wired, whether an OpenAI key passed preflight). |
-| `GET /` → `/__aiui` | HTML | The **console** — the channel's own dashboard (channel + launch + connected-Chrome info, and links to the pencil client, the standalone panel, and the trace debugger at `/__aiui/debug`). Served by the `aiui-console` sidecar; the channel serves no HTML of its own. `aiui debug` opens it in the session browser. |
+| `GET /` → `/__aiui` | HTML | The **console** — the channel's own dashboard (channel + launch + connected-Chrome info, and links to the pencil client, the standalone panel, and the trace debugger at `/__aiui/debug`). Served by the `aiui-console` sidecar; the channel serves no HTML of its own. `aiui dashboard` opens it in the session browser. |
 
 ## Lowering, traces, and what reaches the session
 
@@ -87,7 +87,7 @@ session as a notification.
 Every stage is recorded by the tracing layer into the project's user-level cache
 (`~/.cache/aiui/projects/<slug>-<hash>/traces/<id>/`, keyed by the project's absolute path — the
 project tree itself stays pristine), which is what the trace debugger renders — the shared `debug-ui`
-viewer, whether opened via `aiui debug`, the `/__aiui/debug` page, or the DevTools panel's
+viewer, whether opened via `aiui dashboard`, the `/__aiui/debug` page, or the DevTools panel's
 Intent pane — including mid-turn, since stages land as they happen. An abandoned thread (page
 closed mid-turn) is torn down and its trace marked `abandoned`.
 

@@ -2,8 +2,8 @@
  * channel-target.ts — resolve which running channel a channel-CONNECTING
  * command should talk to.
  *
- * Used by the commands that genuinely reach into a channel: `aiui debug` (the
- * trace viewer, bound to one channel's port) and, in spirit, the intent
+ * Used by the commands that genuinely reach into a channel: `aiui dashboard`
+ * (the trace viewer, bound to one channel's port) and, in spirit, the intent
  * client's standalone `pnpm dev` launcher. Deliberately NOT used by `aiui
  * vite` any more: an app it serves reaches the channel through the intent
  * client at `/intent/`, not a build-time port, so there is nothing to resolve.

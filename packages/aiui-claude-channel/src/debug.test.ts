@@ -143,7 +143,7 @@ describe("web backend with traceDir", () => {
     expect(page.status).toBe(200);
     expect(page.headers.get("content-type")).toContain("application/json");
     const pointer = (await page.json()) as { ui?: string; api?: string[] };
-    expect(pointer.ui).toContain("aiui debug");
+    expect(pointer.ui).toContain("aiui dashboard");
     expect(pointer.api).toContain("/debug/api/traces");
 
     const missing = await fetch(`http://127.0.0.1:${port}/debug/api/traces/nope`);

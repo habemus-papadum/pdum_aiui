@@ -12,7 +12,7 @@ import {
   type ShowOptions,
 } from "./commands/config";
 import { runConfigTui } from "./commands/config-tui";
-import { type DebugOptions, runDebug } from "./commands/debug";
+import { type DashboardOptions, runDashboard } from "./commands/dashboard";
 import { type ExtensionOptions, runExtension } from "./commands/extension";
 import { runKeysInterviewCommand, runKeysSet, runKeysStatus, runKeysUnset } from "./commands/keys";
 import { runMcp } from "./commands/mcp";
@@ -55,11 +55,11 @@ export function buildProgram(): Command {
   // Open the channel console (its dashboard + the trace debugger) in the
   // session browser, for a picked running channel.
   program
-    .command("debug")
+    .command("dashboard")
     .description("open the channel console (dashboard + trace debugger) in the session browser")
     .option("--mcp <tag>", "target a channel by registry tag (skips the selector)")
     .option("--no-open", "print the URL but don't open the browser")
-    .action((opts: DebugOptions) => runDebug(opts));
+    .action((opts: DashboardOptions) => runDashboard(opts));
 
   // Unlike its siblings, `aiui chrome` is a real subcommand (not a forwarding
   // wrapper): it manages the agent's browser — the managed-browser install
@@ -243,7 +243,7 @@ export function buildProgram(): Command {
 
   // (The `vite`, `env`, `pencil`, and `browser` commands are retired: apps run
   // plain `vite`; direnv replaced shell activation; the pencil URL lives on
-  // the console dashboard (`aiui debug`); and `aiui open` subsumes `browser`
+  // the console dashboard (`aiui dashboard`); and `aiui open` subsumes `browser`
   // via the shared find-or-start pipeline.)
 
   return program;

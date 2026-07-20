@@ -9,7 +9,7 @@ The framework-free lowering-trace debugger UI: `TraceView`/`TracesPane` and the 
 `/__aiui/debug` page. See the README for the piece map; the everyday entry point is simply:
 
 ```sh
-aiui debug
+aiui dashboard
 ```
 
 which picks a running channel and serves the viewer against it.

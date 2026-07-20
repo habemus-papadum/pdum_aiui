@@ -45,7 +45,7 @@ describe("startWebServer", () => {
     const health = await fetch(`${base}/health`);
     expect(health.status).toBe(200);
     // host reports the bound address (loopback unless the launcher widens it) —
-    // `aiui pencil url` reads it to decide which URLs an iPad could open.
+    // the console dashboard reads it to decide which URLs an iPad could open.
     expect(await health.json()).toMatchObject({
       ok: true,
       pid: process.pid,

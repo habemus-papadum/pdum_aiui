@@ -5,7 +5,7 @@
  */
 
 import type { JSX } from "@solidjs/web";
-import { createSignal, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import {
   type ChannelInfo,
   type ChromeInfo,
@@ -105,6 +105,40 @@ export function Dashboard(): JSX.Element {
     return host === "127.0.0.1" ? "loopback (this machine only)" : `host (${host}) — LAN-reachable`;
   };
 
+  // The pencil client's reachable URLs — one row per address the channel
+  // answers on, each with its own copy button, so an iPad on the same Wi-Fi can
+  // grab the interface it shares (no guessing which one is "the" LAN address).
+  // The console and pencil share the one channel port, so the current port is
+  // right. localhost is always listed; the LAN interfaces (from /health) join
+  // only when the channel is host-bound — a loopback bind won't answer on them.
+  // (Replaces the retired `aiui pencil url`.)
+  const pencilPort = () => info()?.port ?? window.location.port;
+  const pencilEndpoints = (): Array<{ label: string; url: string }> => {
+    const url = (host: string) =>
+      `${window.location.protocol}//${host}:${pencilPort()}${PENCIL_PATH}`;
+    const rows = [{ label: "localhost", url: url("127.0.0.1") }];
+    if (health()?.host !== undefined && health()?.host !== "127.0.0.1") {
+      for (const iface of health()?.interfaces ?? []) {
+        rows.push({ label: iface.name, url: url(iface.address) });
+      }
+    }
+    return rows;
+  };
+  const loopbackOnly = () => health()?.host === "127.0.0.1";
+  const [copiedUrl, setCopiedUrl] = createSignal<string | undefined>();
+  let copyTimer: ReturnType<typeof setTimeout> | undefined;
+  const copyUrl = async (url: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => setCopiedUrl(undefined), 1500);
+    } catch {
+      // Clipboard blocked (permissions, or a non-secure origin) — the URL is
+      // shown right beside the button, so a manual copy still works.
+    }
+  };
+
   return (
     <main class="console">
       <header class="masthead">
@@ -115,6 +149,35 @@ export function Dashboard(): JSX.Element {
           </p>
         </Show>
       </header>
+
+      <section class="section setup">
+        <h2>Extension setup</h2>
+        <div class="setup-items">
+          <div class="setup-item">
+            <span class="setup-num">1</span>
+            <div>
+              <strong>Pin the extension to the toolbar.</strong>
+              <p>
+                Click the Extensions button (the puzzle-piece icon) in Chrome's toolbar, find{" "}
+                <em>aiui intent client</em>, and click the pin icon next to it so its button stays
+                on the toolbar.
+              </p>
+            </div>
+          </div>
+          <div class="setup-item">
+            <span class="setup-num">2</span>
+            <div>
+              <strong>Grant the extension on each new tab.</strong>
+              <p>
+                The extension works one tab at a time. With the side panel open, when you open a{" "}
+                <em>new tab</em> you have to grant it there before it can work — either click the
+                aiui toolbar icon, or right-click the page and choose{" "}
+                <em>“aiui: grant capture on this tab.”</em>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div class="columns">
         <div class="column">
@@ -149,11 +212,36 @@ export function Dashboard(): JSX.Element {
 
           <Section title="Surfaces">
             <div class="links">
-              <LinkCard href={PENCIL_PATH} title="Pencil client">
-                The remote pencil surface — open it on an iPad (same Wi-Fi) to draw on the page over
-                the channel. <code>aiui pencil url</code> prints the LAN address and copies it to
-                your clipboard.
-              </LinkCard>
+              <div class="pencil-card">
+                <span class="link-title">Pencil client</span>
+                <span class="link-desc">
+                  The remote pencil surface — open it on an iPad on the same Wi-Fi to draw on the
+                  page over the channel. Copy the address on the iPad's network and open it there.
+                </span>
+                <Show when={loopbackOnly()}>
+                  <p class="pencil-note">
+                    Bound to <strong>loopback</strong> — reachable only on this machine. Relaunch
+                    with <code>--aiui-bind host</code> (or pick “host” at first-run setup) to reach
+                    it from an iPad.
+                  </p>
+                </Show>
+                <div class="copy-list">
+                  <For each={pencilEndpoints()}>
+                    {(ep) => (
+                      <div class="copy-row">
+                        <span class="copy-iface">{ep.label}</span>
+                        <code class="copy-url">{ep.url}</code>
+                        <button type="button" class="copy-btn" onClick={() => copyUrl(ep.url)}>
+                          {copiedUrl() === ep.url ? "Copied ✓" : "Copy"}
+                        </button>
+                      </div>
+                    )}
+                  </For>
+                </div>
+                <a class="card-open" href={PENCIL_PATH}>
+                  Open here →
+                </a>
+              </div>
 
               <LinkCard href={INTENT_PATH} title="Standalone panel" newWindow>
                 The intent client as a plain page, for <strong>advanced debugging</strong>. Prefer

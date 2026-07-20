@@ -2,7 +2,7 @@
 
 The **lowering-trace debugger UI** — deliberately framework-free imperative DOM, so the same
 panes mount anywhere: the intent client's panel embeds `TracesPane` as a Solid island, and the
-`./vite` plugin serves the full page at `/__aiui/debug` (what `aiui debug` runs).
+`./vite` plugin serves the full page at `/__aiui/debug` (what `aiui dashboard` runs).
 
 Lineage: this is the `debug-ui` third of the retired `aiui-dev-overlay`, copied out in the
 overlay retirement (`docs/proposals/dev-overlay-retirement.md`). The original is deleted; read
@@ -40,5 +40,5 @@ const server = await createServer({
 });
 ```
 
-`aiui debug` does exactly this — it picks a running channel from the registry and serves the
+`aiui dashboard` does exactly this — it picks a running channel from the registry and serves the
 viewer against it; the page's header can then hop to any other channel on the machine.

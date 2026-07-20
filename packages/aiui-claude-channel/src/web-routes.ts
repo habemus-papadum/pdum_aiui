@@ -10,6 +10,7 @@
  * reach the socket unconsumed.
  */
 import express, { type Express } from "express";
+import { listLanInterfaces } from "./lan";
 import type { PageToolDirectory } from "./page-tools";
 import type { PeersResponse, PublishResult, SessionHub } from "./session-hub";
 import type { PromptHandler } from "./web";
@@ -48,8 +49,13 @@ export function registerChannelRoutes(app: Express, deps: ChannelRouteDeps): voi
       ppid: process.ppid,
       generation: getGeneration(),
       // The bound address, so tools can tell a loopback-only server from a
-      // LAN-exposed one (`aiui pencil url` decides which URLs to print by it).
+      // LAN-exposed one (the console dashboard reads it to know whether the LAN
+      // interfaces below are reachable).
       host: bindHost,
+      // The machine's non-internal IPv4 interfaces — the addresses a host-bound
+      // channel is reachable on from another device. The dashboard offers a copy
+      // button per interface (an iPad on the same Wi-Fi picks the matching one).
+      interfaces: listLanInterfaces(),
       pageTools: pageTools.summary(),
       session: sessionHub.summary(),
       ...(deps.debug === true ? { debug: true } : {}),
