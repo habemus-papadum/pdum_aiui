@@ -6,31 +6,32 @@ describe("aiui cli", () => {
     expect(buildProgram().name()).toBe("aiui");
   });
 
-  it("registers the browser, chrome, claude, clean, config, debug, env, extension, mcp, open, pencil, remote, and vite subcommands", () => {
+  it("registers exactly the consolidated command surface", () => {
     const names = buildProgram()
       .commands.map((cmd) => cmd.name())
       .sort();
     expect(names).toEqual([
-      "browser",
       "chrome",
       "claude",
       "clean",
       "config",
       "debug",
-      "env",
       "extension",
       "mcp",
       "open",
-      "pencil",
       "remote",
-      "vite",
     ]);
   });
 
   // Scaffolding lives in create-aiui (`npm create @habemus-papadum/aiui`), not
-  // here — one starter template, not two.
-  it("no longer registers a demo scaffolder", () => {
-    expect(buildProgram().commands.map((cmd) => cmd.name())).not.toContain("demo");
+  // here — one starter template, not two. And the retired commands stay gone:
+  // vite (apps run plain `vite`), env (direnv), pencil (the console shows the
+  // URL), browser (`aiui open` finds-or-starts).
+  it("registers none of the retired commands", () => {
+    const names = buildProgram().commands.map((cmd) => cmd.name());
+    for (const retired of ["demo", "vite", "env", "pencil", "browser", "native-host"]) {
+      expect(names).not.toContain(retired);
+    }
   });
 
   it("gives aiui config its tui, show, get, set, set-dsp, and unset subcommands", () => {

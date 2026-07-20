@@ -7,7 +7,7 @@
   },
   "scripts": {
     "claude": "aiui claude",
-    "dev": "aiui vite dev",
+    "dev": "vite",
     "open": "aiui open",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"

@@ -12,7 +12,7 @@
   },
   "scripts": {
     "claude": "../../bin/aiui claude",
-    "dev": "../../bin/aiui vite dev",
+    "dev": "vite",
     "open": "../../bin/aiui open",
     "gen:favicon": "bash ./scripts/gen-favicon.sh",
     "publish": "bash ./publish.sh",

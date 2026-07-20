@@ -14,8 +14,8 @@ import { listMcpServers, selectMcpServer } from "@habemus-papadum/aiui-claude-ch
 import chalk from "chalk";
 import { splitAiuiArgs } from "../util/aiui-args";
 import { resolveChannelTarget } from "../util/channel-target";
+import { openAppInBrowser } from "../util/session-browser";
 import { printError } from "../util/ui";
-import { openAppInBrowser } from "./vite";
 
 export interface DebugOptions {
   /** Target a channel by its registry tag instead of the interactive selector. */

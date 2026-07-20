@@ -1,12 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ChromeDevtoolsInfo, LaunchInfo } from "@habemus-papadum/aiui-claude-channel";
-import {
-  discoverSessionBrowser,
-  isCi,
-  launchSessionBrowser,
-  sessionBrowserBinary,
-} from "@habemus-papadum/aiui-util";
+import { discoverSessionBrowser, isCi } from "@habemus-papadum/aiui-util";
 import { execa } from "execa";
 import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { channelLaunchFlags, resolveChannelLaunch } from "../util/channel-launch";
@@ -32,6 +27,7 @@ import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-prefli
 import { syncManagedBrowser } from "../util/managed-browser";
 import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
+import { startSessionBrowser } from "../util/session-browser";
 import { printError, printWarning } from "../util/ui";
 import { VERSION } from "../util/version";
 import { commandExists } from "../util/which";
@@ -302,9 +298,6 @@ Configuration guide. What follows is claude's own --help:
  *     running, or a failed start — classic launch mode: chrome-devtools-mcp
  *     starts its own private browser lazily, on the agent's first tool call.
  */
-// TODO(aiui-registry): collapse this onto util/session-browser's find-or-start
-// pipeline in M6 (it needs the MCP-entry shaping + launch-mode fallback the
-// pipeline doesn't model; `browser`/`remote`/`vite` already share it).
 async function chromeServerEntry(
   aiuiArgs: AiuiArgs,
   chromeCfg: NonNullable<AiuiConfig["chrome"]>,
@@ -318,15 +311,15 @@ async function chromeServerEntry(
   }
 
   const cfg = chromeCfg;
-  let settings = resolveChromeSettings(aiuiArgs, cfg);
 
-  if (settings.mode === "attach") {
-    const running = await discoverSessionBrowser(settings.userDataDir);
+  if (resolveChromeSettings(aiuiArgs, cfg).mode === "attach") {
+    const probe = resolveChromeSettings(aiuiArgs, cfg);
+    const running = await discoverSessionBrowser(probe.userDataDir);
     if (running) {
       // The running browser may predate this checkout's native host (or the
       // feature): keep the profile's NM manifest current even when attaching.
       ensureProfileNativeHost(
-        settings.userDataDir,
+        probe.userDataDir,
         findIntentClientExtension().state === "ready",
         printWarning,
       );
@@ -336,20 +329,50 @@ async function chromeServerEntry(
           enabled: true,
           connection: "attach",
           browserUrl: running.browserUrl,
-          userDataDir: settings.userDataDir,
+          userDataDir: probe.userDataDir,
         },
       };
     }
+    if (interactive) {
+      // Start the session browser now — the SHARED find-or-start pipeline
+      // (managed-browser sync, intent extension, profile NM host) that
+      // `browser`/`remote`/`open` use; only the MCP-entry shaping is ours.
+      try {
+        const { session, settings } = await startSessionBrowser({
+          flags: aiuiArgs,
+          config: cfg,
+          interactive: true,
+        });
+        return {
+          entry: chromeMcpAttachServer(session.browserUrl),
+          info: {
+            enabled: true,
+            connection: "attach",
+            browserUrl: session.browserUrl,
+            userDataDir: settings.userDataDir,
+            executablePath: settings.executablePath,
+            channel: settings.channel,
+            headless: settings.headless,
+          },
+        };
+      } catch (error) {
+        printWarning(
+          "couldn't start the session browser — falling back to a browser private to the MCP",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
   }
 
-  // From here a browser will be launched one way or the other — pick the
-  // binary. Unless config names a browser explicitly, prefer the managed
-  // browser (Chromium by default, or Chrome for Testing per chrome.managed;
-  // offer to install/update it interactively — see syncManagedBrowser). Patch
-  // the resolved executable onto `settings` WITHOUT re-deriving userDataDir:
-  // the profile is partitioned by the managed *flavor*, not by this path, and
+  // Classic launch mode (or the fallback): chrome-devtools-mcp starts its own
+  // private browser lazily, on the agent's first tool call — prep the settings
+  // it will launch with. Unless config names a browser explicitly, prefer the
+  // managed browser (offered interactively — syncManagedBrowser). Patch the
+  // resolved executable onto `settings` WITHOUT re-deriving userDataDir: the
+  // profile is partitioned by the managed *flavor*, not this path, and
   // re-resolving would misread the injected binary as an explicit
   // executablePath (a `custom-*` variant) and move the profile.
+  let settings = resolveChromeSettings(aiuiArgs, cfg);
   if (!cfg.executablePath && !cfg.channel) {
     const exe = await syncManagedBrowser({
       flavor: resolveManagedFlavor(cfg),
@@ -361,54 +384,25 @@ async function chromeServerEntry(
     }
   }
   mkdirSync(settings.userDataDir, { recursive: true });
-  // Launches auto-load ONLY the intent client's extension (the historical
-  // overlay/extension surfaces are deleted; the trace debugger lives INSIDE
-  // the intent panel).
+  // Launches auto-load ONLY the intent client's extension.
   const intent = findIntentClientExtension();
   const extensionDirs = intent.state === "ready" ? [intent.dir] : [];
-  // The extension's channel discovery runs over native messaging, and CfT
-  // looks the manifest up in the profile itself — keep it planted there.
   ensureProfileNativeHost(settings.userDataDir, intent.state === "ready", printWarning);
   if (interactive) {
     maybeExtensionAutoloadHint(settings, extensionDirs);
     warnIntentClientState(intent);
   }
-  const browserInfo = {
-    userDataDir: settings.userDataDir,
-    executablePath: settings.executablePath,
-    channel: settings.channel,
-    headless: settings.headless,
-    extensionDirs,
-  };
-
-  if (settings.mode === "attach" && interactive) {
-    try {
-      const session = await launchSessionBrowser({
-        binary: sessionBrowserBinary(settings),
-        userDataDir: settings.userDataDir,
-        debugPort: settings.debugPort,
-        extensionDirs,
-        headless: settings.headless,
-      });
-      return {
-        entry: chromeMcpAttachServer(session.browserUrl),
-        info: {
-          enabled: true,
-          connection: "attach",
-          browserUrl: session.browserUrl,
-          ...browserInfo,
-        },
-      };
-    } catch (error) {
-      printWarning(
-        "couldn't start the session browser — falling back to a browser private to the MCP",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  }
   return {
     entry: chromeMcpServer(settings, extensionDirs),
-    info: { enabled: true, connection: "launch", ...browserInfo },
+    info: {
+      enabled: true,
+      connection: "launch",
+      userDataDir: settings.userDataDir,
+      executablePath: settings.executablePath,
+      channel: settings.channel,
+      headless: settings.headless,
+      extensionDirs,
+    },
   };
 }
 

@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { type BrowserOptions, runBrowser, runOpen } from "./commands/browser";
+import { type OpenOptions, runOpen } from "./commands/browser";
 import { runChrome } from "./commands/chrome";
 import { runClaude } from "./commands/claude";
 import { type CleanOptions, runClean } from "./commands/clean";
@@ -14,12 +14,9 @@ import {
 } from "./commands/config";
 import { runConfigTui } from "./commands/config-tui";
 import { type DebugOptions, runDebug } from "./commands/debug";
-import { runEnv } from "./commands/env";
 import { type ExtensionOptions, runExtension } from "./commands/extension";
 import { runMcp } from "./commands/mcp";
-import { runPencilUrl } from "./commands/pencil-url";
 import { type RemoteOptions, runRemote } from "./commands/remote";
-import { runVite } from "./commands/vite";
 
 import { VERSION } from "./util/version";
 
@@ -54,15 +51,6 @@ export function buildProgram(): Command {
     .argument("[args...]", "arguments forwarded to claude")
     .action((args: string[]) => runClaude(args));
 
-  program
-    .command("vite")
-    .description("launch Vite (extra args are forwarded, e.g. `aiui vite dev`)")
-    .allowUnknownOption()
-    .allowExcessArguments()
-    .helpOption(false)
-    .argument("[args...]", "arguments forwarded to vite")
-    .action((args: string[]) => runVite(args));
-
   // Open the channel console (its dashboard + the trace debugger) in the
   // session browser, for a picked running channel.
   program
@@ -83,19 +71,6 @@ export function buildProgram(): Command {
     .action((action: string, flavor: string | undefined) =>
       runChrome(flavor === undefined ? [action] : [action, flavor]),
     );
-
-  // The shared session browser (human + agent in one window). `browser` starts
-  // or finds it — locally, before or without a session. The remote-development
-  // local half is `aiui remote` (below).
-  program
-    .command("browser")
-    .description("start (or find) the shared session browser")
-    .option("--profile <name>", "named profile (project .aiui-cache/chrome/)")
-    .option("--data-dir <path>", "explicit Chrome user data dir")
-    .option("--port <port>", "fixed local DevTools debug port (default: OS-assigned)")
-    .option("--headless", "launch with no UI")
-    .option("--open <url>", "also open this URL in it")
-    .action((opts: BrowserOptions) => runBrowser(opts));
 
   // The whole local half of remote development: local browser + one ssh
   // connection carrying both forwards + a kind:"remote" registry entry that
@@ -156,15 +131,7 @@ export function buildProgram(): Command {
     .argument("<url>", "the URL to open")
     .option("--profile <name>", "named profile under .aiui-cache/chrome/")
     .option("--data-dir <path>", "explicit Chrome user data dir")
-    .action((url: string, opts: Pick<BrowserOptions, "profile" | "dataDir">) => runOpen(url, opts));
-
-  // Shell activation, venv-style: `eval "$(aiui env)"` puts the project's
-  // executable dirs on PATH and exports the root .env/.env.dev files into the
-  // current shell (shell code on stdout, human summary on stderr).
-  program
-    .command("env")
-    .description('print shell code to activate this checkout — use as: eval "$(aiui env)"')
-    .action(() => runEnv());
+    .action((url: string, opts: OpenOptions) => runOpen(url, opts));
 
   // The two-level config.json, self-documenting: every subcommand renders from
   // the same schema table validation uses (util/config-schema.ts). Bare
@@ -226,19 +193,10 @@ export function buildProgram(): Command {
     .argument("[args...]", "arguments forwarded to the aiui-claude-channel CLI")
     .action((args: string[]) => runMcp(args));
 
-  // `aiui pencil …` — the remote pencil. `url` prints where the iPad should
-  // point its browser: the pencil surface rides each channel's one web server
-  // (`/pencil/` on the channel port), so this resolves every running channel
-  // that answers `/pencil/info` — plus whether its bind makes it LAN-reachable —
-  // so you can copy-paste the URL.
-  const pencil = program
-    .command("pencil")
-    .description("the remote pencil — url (where the iPad should connect)");
-  pencil
-    .command("url")
-    .description("pick a channel + interface, print the iPad URL and copy it to the clipboard")
-    .option("--json", "machine-readable targets (every hosting channel, no prompts)")
-    .action((opts: { json?: boolean }) => runPencilUrl(opts));
+  // (The `vite`, `env`, `pencil`, and `browser` commands are retired: apps run
+  // plain `vite`; direnv replaced shell activation; the pencil URL lives on
+  // the console dashboard (`aiui debug`); and `aiui open` subsumes `browser`
+  // via the shared find-or-start pipeline.)
 
   return program;
 }

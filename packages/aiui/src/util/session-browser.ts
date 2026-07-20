@@ -12,11 +12,14 @@
 import { join } from "node:path";
 import {
   cacheDir,
+  decideBrowserAction,
   discoverSessionBrowser,
   launchSessionBrowser,
+  openInSessionBrowser,
   type SessionBrowser,
   sessionBrowserBinary,
 } from "@habemus-papadum/aiui-util";
+import chalk from "chalk";
 import { ensureProfileNativeHost } from "../commands/extension";
 import type { AiuiArgs } from "./aiui-args";
 import {
@@ -26,9 +29,9 @@ import {
   resolveChromeSettings,
   warnIntentClientState,
 } from "./chrome";
-import { type AiuiConfig, resolveManagedFlavor, resolveManageMode } from "./config";
+import { type AiuiConfig, loadAiuiConfig, resolveManagedFlavor, resolveManageMode } from "./config";
 import { syncManagedBrowser } from "./managed-browser";
-import { printNote } from "./ui";
+import { printNote, printWarning } from "./ui";
 
 type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
 
@@ -171,4 +174,63 @@ export function sanitizeHostKey(target: string): string {
   const host = target.includes("@") ? target.slice(target.indexOf("@") + 1) : target;
   const key = host.replace(/[^A-Za-z0-9._-]/g, "-");
   return key || "remote";
+}
+
+/**
+ * Put a URL in front of the user in the *session browser* (the shared window
+ * `aiui claude` attaches the agent to), never their default browser. A running
+ * session browser gets a new tab; none running means launching one with the
+ * URL as its first tab.
+ *
+ * Sidecar-safe: everything is caught, failures print a warning, and the
+ * caller keeps running either way. Deliberately non-interactive — a sidecar's
+ * terminal belongs to another process, so the managed-browser sync never
+ * prompts here; it uses whatever browser is already available.
+ */
+export async function openAppInBrowser(url: string, aiuiArgs: AiuiArgs): Promise<void> {
+  try {
+    // `--aiui-browser-url` beats a configured chrome.browserUrl for this run,
+    // the same precedence `aiui claude` gives it.
+    const chromeCfg: ChromeConfig = {
+      ...loadAiuiConfig().chrome,
+      ...(aiuiArgs.browserUrl ? { browserUrl: aiuiArgs.browserUrl } : {}),
+    };
+    const action = decideBrowserAction(aiuiArgs, chromeCfg);
+    if (action.kind === "skip") {
+      return;
+    }
+    if (action.kind === "hint") {
+      printNote(
+        `detected a headless environment (${action.reason}) — not opening a browser`,
+        `Assuming the server's port is already forwarded, open ${url} in the browser\n` +
+          "on your local machine. (Pass --aiui-browser to open one here anyway.)",
+      );
+      return;
+    }
+
+    if (chromeCfg.browserUrl) {
+      await openInSessionBrowser(chromeCfg.browserUrl, url);
+      console.error(chalk.dim(`aiui: opened ${url} in the browser at ${chromeCfg.browserUrl}`));
+      return;
+    }
+    const settings = resolveChromeSettings(aiuiArgs, chromeCfg);
+    const running = await discoverSessionBrowser(settings.userDataDir);
+    if (running) {
+      await openInSessionBrowser(running.browserUrl, url);
+      console.error(chalk.dim(`aiui: opened ${url} in the session browser`));
+    } else {
+      await startSessionBrowser({
+        flags: aiuiArgs,
+        config: chromeCfg,
+        interactive: false,
+        startUrl: url,
+      });
+      console.error(chalk.dim(`aiui: opened ${url} in a new session browser`));
+    }
+  } catch (error) {
+    printWarning(
+      "couldn't open the app in the session browser — the caller is unaffected",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }

@@ -90,7 +90,7 @@ function rewirePackageJson(
     repository: { type: "git", url: repoUrl, directory: `demos/${slug}` },
     scripts: {
       claude: "../../bin/aiui claude",
-      dev: "../../bin/aiui vite dev",
+      dev: "vite",
       open: "../../bin/aiui open",
       test: "vitest run",
       typecheck: "tsc --noEmit -p tsconfig.json",
@@ -155,8 +155,9 @@ It differs from a scaffolded sandbox in exactly two ways, both deliberate:
   next door, live, with no build step. A change to \`packages/aiui-viz\` shows up here on save.
 - It lives in this repo's git history. Commits here are commits to pdum_aiui.
 
-Run the dev server with \`pnpm dev\` from this directory (\`bin/aiui vite dev\`). Plain \`vite\`
-also serves the app, but the intent tool won't find the channel.
+Run the dev server with \`pnpm dev\` from this directory (plain \`vite\`); the intent client
+reaches the channel through the channel-served \`/intent/\` page or the side panel, so the dev
+server needs no channel wiring of its own.
 
 ${shared}`;
 }

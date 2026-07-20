@@ -1,132 +1,47 @@
 /**
- * `aiui browser` — start (or find) the session browser; `aiui open <url>` —
- * open a page in it.
+ * `aiui open <url>` — the human-facing browser entry: open a page in the
+ * shared session browser (the window `aiui claude` attaches the agent to),
+ * starting one if none is running (the find-or-start pipeline in
+ * util/session-browser.ts, shared with `aiui remote` and `aiui claude`).
  *
- * `aiui browser` is how the session browser exists *independently* of a
- * Claude session — the window up before (or without) `aiui claude`. The
- * remote-development flow (browser here, session on another box) is
- * `aiui remote <host>`, which owns the tunnels AND registers the remote
- * channel locally; the `--tunnel` flag that used to live here is retired
- * (docs/proposals/aiui-registry.md §5).
- *
- * Both commands identify the browser the same way `aiui claude` does: by the
- * profile's user data dir, via Chrome's own `DevToolsActivePort` file. The
- * find-or-start pipeline itself lives in util/session-browser.ts, shared with
- * `aiui remote` and `aiui vite`'s sidecar.
+ * The standalone `aiui browser` command is retired: `open` subsumes its only
+ * everyday use (get the window up, put a page in it), and the remote-dev flow
+ * is `aiui remote <host>`.
  */
-import {
-  discoverSessionBrowser,
-  isCi,
-  openInSessionBrowser,
-  type SessionBrowser,
-} from "@habemus-papadum/aiui-util";
-import { type ChromeSettings, resolveChromeSettings } from "../util/chrome";
+import { isCi, openInSessionBrowser } from "@habemus-papadum/aiui-util";
 import { loadAiuiConfig } from "../util/config";
 import { findOrStartSessionBrowser } from "../util/session-browser";
-import { printError, printNote } from "../util/ui";
+import { printError } from "../util/ui";
 
-export interface BrowserOptions {
+export interface OpenOptions {
   profile?: string;
   dataDir?: string;
-  port?: string;
-  headless?: boolean;
-  open?: string;
 }
 
-export async function runBrowser(opts: BrowserOptions): Promise<void> {
+/** `aiui open <url>` — open a page in the session browser, starting it if needed. */
+export async function runOpen(url: string, opts: OpenOptions = {}): Promise<void> {
   const config = loadAiuiConfig();
   const chromeCfg = { ...config.chrome };
-  if (chromeCfg.browserUrl) {
-    printNote(
-      `config pins chrome.browserUrl to ${chromeCfg.browserUrl} — the browser is managed elsewhere`,
-      "Run `aiui browser` on the machine that should host it (and drop browserUrl there).",
-    );
-    return;
-  }
-
-  let debugPort: number | undefined;
   try {
-    debugPort = parsePort(opts.port, "--port");
-  } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-    return;
-  }
-
-  const interactive = !!process.stdin.isTTY && !!process.stdout.isTTY && !isCi();
-  try {
-    const { session, settings, started } = await findOrStartSessionBrowser({
+    // An explicitly configured endpoint (a browser managed elsewhere — e.g.
+    // the remote-development split) is also openable, and nothing local is
+    // started for it.
+    if (chromeCfg.browserUrl) {
+      await openInSessionBrowser(chromeCfg.browserUrl, url);
+      console.log(`opened ${url} (browser at ${chromeCfg.browserUrl})`);
+      return;
+    }
+    const interactive = !!process.stdin.isTTY && !!process.stdout.isTTY && !isCi();
+    const { session, started } = await findOrStartSessionBrowser({
       flags: { chromeProfile: opts.profile, chromeDataDir: opts.dataDir },
       config: chromeCfg,
       interactive,
-      debugPort,
-      headless: opts.headless,
-      startUrl: opts.open,
+      startUrl: url, // the start path opens the URL as the first tab
     });
-    report(
-      started ? "session browser started" : "session browser already running",
-      settings,
-      session,
-    );
-    if (!started && opts.open) {
-      await openInSessionBrowser(session.browserUrl, opts.open);
-      console.log(`opened ${opts.open}`);
+    if (!started) {
+      await openInSessionBrowser(session.browserUrl, url);
     }
-  } catch (error) {
-    printError(
-      "the session browser failed to start",
-      error instanceof Error ? error.message : String(error),
-    );
-    process.exitCode = 1;
-    return;
-  }
-}
-
-function parsePort(raw: string | undefined, flag: string): number | undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-  const port = Number(raw);
-  if (!(Number.isInteger(port) && port >= 0 && port <= 65535)) {
-    throw new Error(`invalid ${flag} ${raw} — expected 0..65535`);
-  }
-  return port;
-}
-
-function report(title: string, settings: ChromeSettings, session: SessionBrowser): void {
-  console.log(title);
-  console.log(`  profile:        ${settings.userDataDir}`);
-  console.log(`  debug endpoint: ${session.browserUrl}`);
-  console.log(
-    "\nAn `aiui claude` in this profile's project attaches automatically. " +
-      "For a session on another box, use `aiui remote <[user@]host>`.",
-  );
-}
-
-/** `aiui open <url>` — open a page in the running session browser. */
-export async function runOpen(
-  url: string,
-  opts: Pick<BrowserOptions, "profile" | "dataDir">,
-): Promise<void> {
-  const config = loadAiuiConfig();
-  const settings = resolveChromeSettings(
-    { chromeProfile: opts.profile, chromeDataDir: opts.dataDir },
-    config.chrome ?? {},
-  );
-  // An explicitly configured endpoint (remote browser) is also openable.
-  const browserUrl =
-    config.chrome?.browserUrl ?? (await discoverSessionBrowser(settings.userDataDir))?.browserUrl;
-  if (!browserUrl) {
-    printError(
-      "no session browser is running for this profile",
-      `Start one with \`aiui browser\` (profile: ${settings.userDataDir}).`,
-    );
-    process.exitCode = 1;
-    return;
-  }
-  try {
-    await openInSessionBrowser(browserUrl, url);
-    console.log(`opened ${url}`);
+    console.log(`opened ${url}${started ? " (started the session browser)" : ""}`);
   } catch (error) {
     printError(`couldn't open ${url}`, error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

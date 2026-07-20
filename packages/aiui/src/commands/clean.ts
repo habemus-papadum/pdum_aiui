@@ -170,7 +170,7 @@ export async function runClean(opts: CleanOptions = {}): Promise<void> {
   if (running.length) {
     printWarning(
       `${running.length} aiui session${running.length === 1 ? "" : "s"} still running`,
-      "stop them first — a live session rewrites its registry entry as it exits, and an open browser can lock files being deleted",
+      "stop them first — a live session re-plants cache artifacts (registry entry, native-host wrapper) as it runs, and an open browser can lock files being deleted",
     );
   }
 

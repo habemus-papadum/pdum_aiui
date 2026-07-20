@@ -63,10 +63,10 @@ Ground rules:
 - **Test the surface with the cells.** `resetControlSurface()` in afterEach (controls are
   module-and-window state), build cells inside `cellHarness`, probe each input — see
   `scenery.test.ts`.
-- The dev server runs via `npm run dev` (which is `aiui vite dev` — it starts Vite, then opens
-  the app in the shared session browser). Plain `vite` serves the app just the same; the aiui
-  wrapper only adds the browser step. The intent client reaches the channel on its own (it is
-  served by the channel at `/intent/`), so the app itself needs no channel wiring.
+- The dev server runs via `npm run dev` (plain `vite`). Put the app in the shared session
+  browser with `aiui open http://localhost:5173` (it starts the browser if needed). The intent
+  client reaches the channel on its own (it is served by the channel at `/intent/`), so the app
+  itself needs no channel wiring.
 - This is a standalone git repo scaffolded for the user; commit freely — history here belongs to
   their sandbox and goes nowhere else.
 

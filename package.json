@@ -36,8 +36,8 @@
     "docs:dev": "pnpm docs:gen && vitepress dev docs",
     "docs:build": "pnpm docs:gen && vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "demo": "tsx packages/aiui/src/cli.ts vite demos/gallery",
-    "test-app": "tsx packages/aiui/src/cli.ts vite packages/aiui-test-app",
+    "demo": "pnpm -C demos/gallery dev",
+    "test-app": "pnpm -C packages/aiui-test-app dev",
     "test-app:channel": "tsx packages/aiui/src/cli.ts mcp serve --name \"aiui test app\" --tag aiui-test-app --port 49317"
   },
   "devDependencies": {
