@@ -21,6 +21,16 @@ import { type Cell, cell, cellByName, cellRegistry, settledOnly } from "./cell";
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Wait for a condition instead of a fixed duration — a fixed sleep races the
+ * scheduler and flakes on loaded CI runners (seen 2026-07-19: a 30ms sleep vs
+ * three setTimeout(0) yields). Bounded so a genuine hang still fails fast. */
+const until = async (cond: () => boolean, ms = 2000): Promise<void> => {
+  const t0 = Date.now();
+  while (!cond()) {
+    if (Date.now() - t0 > ms) throw new Error("until: condition not met in time");
+    await tick();
+  }
+};
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -324,7 +334,9 @@ describe("generator computes (streaming)", () => {
       return { up };
     });
     setGo(1);
-    await sleep(30);
+    await until(() => commits.length > 0);
+    await tick(); // a settle beat: would a second (wrong) commit follow?
+    await tick();
     expect(commits).toEqual([[1, 2, 3]]); // exactly one downstream run
     expect(partials.length).toBeGreaterThan(1); // but the stream was watchable
   });
