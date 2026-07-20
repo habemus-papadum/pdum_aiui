@@ -59,11 +59,22 @@ export interface CapRuntime {
   tapCap: (command: string, payload?: unknown) => void;
 }
 
-export function createCapRuntime(dispatch: IntentClient["dispatch"]): CapRuntime {
+export function createCapRuntime(
+  dispatch: IntentClient["dispatch"],
+  // A tap GUARD: return true to claim the tap (the runtime then does NOT
+  // dispatch or flash — the interceptor owns what happens, e.g. raising a
+  // confirm dialog). Keeping this here — not in each cap — leaves the bar
+  // generic; the policy (which command, when) lives with whoever wires the
+  // runtime (the Panel's abandon-confirm gate).
+  intercept?: (command: string, payload?: unknown) => boolean,
+): CapRuntime {
   // Verb caps move no region — acknowledge the tap itself with a brief flash.
   const [flashed, setFlashed] = createSignal<string | undefined>(undefined, { ownedWrite: true });
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
   const tapCap = (command: string, payload?: unknown): void => {
+    if (intercept?.(command, payload) === true) {
+      return;
+    }
     dispatch(command, payload);
     setFlashed(command);
     clearTimeout(flashTimer);

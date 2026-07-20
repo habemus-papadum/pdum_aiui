@@ -15,6 +15,7 @@ import { fakeBus } from "../fake-bus";
 import type { LinterPulseView } from "../linter-pulse";
 import { intentSpec } from "../spec";
 import { Panel } from "./panel";
+import { installPanelKeys } from "./shell";
 
 const settle = async (rounds = 12): Promise<void> => {
   for (let i = 0; i < rounds; i++) {
@@ -280,5 +281,126 @@ describe("the converse (debug) lint button", () => {
       root.remove();
       await client.dispose();
     }
+  });
+});
+
+describe("the abandon-confirm gate (turn cap)", () => {
+  // A Panel wired with a controllable content signal, so we can drive the exact
+  // predicate the gate reads without standing up real lanes.
+  const mountGated = (hasContent: () => boolean): Mounted => {
+    const bus = fakeBus({ activeTab: 7 });
+    let blipSink: ((key: string) => void) | undefined;
+    const client = createIntentClient({
+      host: bus,
+      lanes: noopLanes,
+      onBlip: (key) => blipSink?.(key),
+    });
+    client.setContext({ grantedTab: 7, connected: true });
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const dispose = render(
+      () => (
+        <Panel
+          client={client}
+          registerBlipSink={(sink) => (blipSink = sink)}
+          turnHasContent={hasContent}
+        />
+      ),
+      root,
+    );
+    mounted = {
+      client,
+      root,
+      blip: (key) => blipSink?.(key),
+      dispose: () => {
+        dispose();
+        root.remove();
+      },
+    };
+    return mounted;
+  };
+
+  const turnCap = (root: HTMLElement) =>
+    root.querySelector<HTMLButtonElement>('[data-command="turn"]');
+  const dialog = (root: HTMLElement) => root.querySelector('[data-testid="abandon-confirm"]');
+
+  it("a content-ful turn: the cap raises a confirm instead of abandoning; the turn survives", async () => {
+    const m = mountGated(() => true);
+    m.client.dispatch("turn"); // armed by the connect edge at mount → open the turn
+    await settle();
+    expect(m.client.state().phase).toBe("turn");
+
+    turnCap(m.root)?.click();
+    await settle();
+    // The dialog is up and the turn is UNTOUCHED — nothing was lowered away.
+    expect(dialog(m.root)).not.toBeNull();
+    expect(m.client.state().phase).toBe("turn");
+  });
+
+  it("Keep editing dismisses; Abandon turn commits the abandon", async () => {
+    const m = mountGated(() => true);
+    m.client.dispatch("turn"); // armed by the connect edge at mount → open the turn
+    await settle();
+
+    turnCap(m.root)?.click();
+    await settle();
+    m.root.querySelector<HTMLButtonElement>('[data-testid="abandon-keep"]')?.click();
+    await settle();
+    expect(dialog(m.root)).toBeNull();
+    expect(m.client.state().phase).toBe("turn"); // kept
+
+    turnCap(m.root)?.click();
+    await settle();
+    m.root.querySelector<HTMLButtonElement>('[data-testid="abandon-confirm-btn"]')?.click();
+    await settle();
+    expect(dialog(m.root)).toBeNull();
+    expect(m.client.state().phase).toBe("armed"); // abandoned back to armed
+  });
+
+  it("Esc dismisses the dialog and does NOT step out — window-capture beats the panel grammar", async () => {
+    const m = mountGated(() => true);
+    // Install the REAL panel-doc grammar so Esc's two candidate meanings both
+    // exist: dismiss-the-dialog (ours, window-capture) vs step-out (shell's,
+    // document-capture). Ours must win, or the gate would cancel the very turn
+    // it is protecting.
+    const uninstall = installPanelKeys({ client: m.client });
+    try {
+      m.client.dispatch("turn"); // armed by the connect edge at mount → open the turn
+      await settle();
+      turnCap(m.root)?.click();
+      await settle();
+      expect(dialog(m.root)).not.toBeNull();
+
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+      await settle();
+      expect(dialog(m.root)).toBeNull(); // dialog gone…
+      expect(m.client.state().phase).toBe("turn"); // …turn intact
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("an EMPTY turn keeps the instant one-click abandon — no dialog", async () => {
+    const m = mountGated(() => false);
+    m.client.dispatch("turn"); // armed by the connect edge at mount → open the turn
+    await settle();
+
+    turnCap(m.root)?.click();
+    await settle();
+    expect(dialog(m.root)).toBeNull();
+    expect(m.client.state().phase).toBe("armed"); // abandoned immediately
+  });
+
+  it("OPENING a turn is never gated — only leaving one is", async () => {
+    const m = mountGated(() => true);
+    await settle();
+    expect(m.client.state().phase).toBe("armed"); // armed by the connect edge, no turn yet
+
+    turnCap(m.root)?.click(); // armed → turn: opening, not leaving
+    await settle();
+    expect(dialog(m.root)).toBeNull();
+    expect(m.client.state().phase).toBe("turn");
   });
 });

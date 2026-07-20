@@ -36,7 +36,7 @@ import { createLinterPulse } from "../linter-pulse";
 import { createCaptureLanes } from "./capture-lanes";
 import { createConfigEffects } from "./config-effects";
 import { sessionStorageMirror } from "./mirror";
-import { currentThreadEvents, panelIntentConfig } from "./turn-config";
+import { currentThreadEvents, panelIntentConfig, turnHasContent } from "./turn-config";
 import type { ChannelLanes, ChannelLanesConfig, LaneContext, OpenThread } from "./types";
 import { createVerbs } from "./verbs";
 
@@ -279,6 +279,9 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       void eventsRev(); // subscribe (in-graph readers re-run per event)
       return currentThreadEvents(engine.events);
     },
+    // A LIVE snapshot for the abandon-confirm gate — no eventsRev subscribe, so
+    // it is read at tap time, not tracked. Same predicate as sendTurn's.
+    turnHasContent: () => turnHasContent(engine.events),
     bind,
     recover,
   };

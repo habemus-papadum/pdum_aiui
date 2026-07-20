@@ -28,6 +28,16 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
   turn is open** (owner, 2026-07-14, superseding lit-but-disabled): pressing it again abandons
   the turn back to armed — the escape-from-turn rung as one click. Leaving via the cap cancels
   the thread exactly like Esc.
+- **A content-ful abandon via the cap asks first** (owner, 2026-07-20, narrowing the line
+  above). When the cap would abandon a turn that *holds content* (the same `turnHasContent`
+  predicate `send` uses to tell a real turn from an empty one), it raises a confirm dialog
+  instead of abandoning outright — a stray cap tap meant for Enter should not silently discard
+  what you built. The dialog teaches the two deliberate exits (**Enter** sends · **Esc**
+  exits); **Esc and Enter both dismiss it and keep the turn** — only a click on its danger
+  button abandons. An **empty** turn keeps the instant one-click abandon (nothing to lose), and
+  the gate is the **cap's alone**: the Esc key, `d`, and the arm cap still abandon immediately,
+  and programmatic routes (agent `control()`, the activation gesture, tests) never see it. The
+  gate lives entirely in the panel UI — the machine's `turn` toggle is unchanged.
 - **The selection cap is enabled only when the page HAS a selection** (owner, 2026-07-14): a
   pull with nothing selected is a guaranteed miss. Disabled, its tooltip points at the remedy —
   tweak mode (`t`), select something, come back. The `sel` pill mirrors the same fact.
