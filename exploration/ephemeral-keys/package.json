@@ -1,0 +1,20 @@
+{
+  "name": "aiui-ephemeral-keys-exploration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone exploration: mint + test 20-minute ephemeral keys for the channel's three vendors (OpenAI, Gemini, ElevenLabs). Not wired into anything.",
+  "scripts": {
+    "mint": "tsx mint.ts",
+    "test-keys": "tsx test-keys.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
