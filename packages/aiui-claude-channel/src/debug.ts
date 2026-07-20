@@ -169,12 +169,12 @@ export function registerDebugRoutes(
 
   // The channel renders no HTML — it is a JSON/data server (the rule; /health
   // and friends are messages, not pages). The viewer is the shared
-  // aiui-trace-ui app: the console serves it at /__aiui/debug (`aiui debug`
+  // aiui-trace-ui app: the console serves it at /__aiui/debug (`aiui dashboard`
   // opens the console) and the intent panel embeds it. A GET here
   // (an old bookmark, a curious curl) gets a pointer, not a page.
   app.get("/debug", (_req, res) => {
     res.json({
-      ui: "the channel serves no HTML — run `aiui debug` (or open /__aiui/debug on this channel's port)",
+      ui: "the channel serves no HTML — run `aiui dashboard` (or open /__aiui/debug on this channel's port)",
       api: [
         "/debug/api/info",
         "/debug/api/channels",

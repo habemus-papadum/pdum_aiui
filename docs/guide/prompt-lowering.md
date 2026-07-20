@@ -90,7 +90,7 @@ The pipeline is live end to end: the **intent client** (`@habemus-papadum/aiui-i
 the session browser's side panel and the channel-served `/intent/` page, over one mode-engine
 core) streams voice, screenshots, ink, and selections through lowering into the session, with
 server-side lowering **traces** and a debug viewer over them (embedded in the panel, and
-standalone via `aiui debug`). Custom per-modality debug views and dynamically shaped tool
+standalone via `aiui dashboard`). Custom per-modality debug views and dynamically shaped tool
 surfaces are still open — see [Questions](/questions).
 :::
 

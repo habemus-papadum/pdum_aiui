@@ -1,5 +1,5 @@
 /**
- * `aiui debug` — open the channel **console** for a running channel.
+ * `aiui dashboard` — open the channel **console** for a running channel.
  *
  * The console is the channel's own dashboard, served at its root (the
  * `aiui-console` sidecar): channel + launch + connected-Chrome info, and links
@@ -17,14 +17,14 @@ import { resolveChannelTarget } from "../util/channel-target";
 import { openAppInBrowser } from "../util/session-browser";
 import { printError } from "../util/ui";
 
-export interface DebugOptions {
+export interface DashboardOptions {
   /** Target a channel by its registry tag instead of the interactive selector. */
   mcp?: string;
   /** Open the browser at the console (default true; `--no-open` skips). */
   open?: boolean;
 }
 
-export async function runDebug(opts: DebugOptions = {}): Promise<void> {
+export async function runDashboard(opts: DashboardOptions = {}): Promise<void> {
   const target = resolveChannelTarget(listMcpServers(), opts.mcp);
   if (target.error) {
     printError("Could not resolve an aiui channel", target.error);
@@ -40,7 +40,7 @@ export async function runDebug(opts: DebugOptions = {}): Promise<void> {
 
   // The channel root redirects to the console dashboard (the console sidecar).
   const url = `http://127.0.0.1:${server.port}/`;
-  console.log(`${chalk.cyan("aiui debug")} — the channel console`);
+  console.log(`${chalk.cyan("aiui dashboard")} — the channel console`);
   console.log(`  ${chalk.bold(url)}`);
   console.log(
     chalk.dim(`  channel "${server.tag}" (${server.cwd}) on port ${server.port}`) +

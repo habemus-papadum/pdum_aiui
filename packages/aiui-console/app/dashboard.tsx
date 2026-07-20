@@ -105,6 +105,24 @@ export function Dashboard(): JSX.Element {
     return host === "127.0.0.1" ? "loopback (this machine only)" : `host (${host}) — LAN-reachable`;
   };
 
+  // The pencil client's URL, at the address this page is being viewed from —
+  // the console and the pencil client share the one channel port, so the
+  // current origin is exactly right. (Replaces the retired `aiui pencil url`.)
+  const pencilUrl = `${window.location.origin}${PENCIL_PATH}`;
+  const [copied, setCopied] = createSignal(false);
+  let copyTimer: ReturnType<typeof setTimeout> | undefined;
+  const copyPencilUrl = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(pencilUrl);
+      setCopied(true);
+      clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked (permissions, or a non-secure origin) — the URL is
+      // shown right beside the button, so a manual copy still works.
+    }
+  };
+
   return (
     <main class="console">
       <header class="masthead">
@@ -115,6 +133,35 @@ export function Dashboard(): JSX.Element {
           </p>
         </Show>
       </header>
+
+      <section class="section setup">
+        <h2>Extension setup</h2>
+        <div class="setup-items">
+          <div class="setup-item">
+            <span class="setup-num">1</span>
+            <div>
+              <strong>Pin the extension to the toolbar.</strong>
+              <p>
+                Click the Extensions button (the puzzle-piece icon) in Chrome's toolbar, find{" "}
+                <em>aiui intent client</em>, and click the pin icon next to it so its button stays
+                on the toolbar.
+              </p>
+            </div>
+          </div>
+          <div class="setup-item">
+            <span class="setup-num">2</span>
+            <div>
+              <strong>Grant the extension on each new tab.</strong>
+              <p>
+                The extension works one tab at a time. With the side panel open, when you open a{" "}
+                <em>new tab</em> you have to grant it there before it can work — either click the
+                aiui toolbar icon, or right-click the page and choose{" "}
+                <em>“aiui: grant capture on this tab.”</em>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div class="columns">
         <div class="column">
@@ -149,11 +196,22 @@ export function Dashboard(): JSX.Element {
 
           <Section title="Surfaces">
             <div class="links">
-              <LinkCard href={PENCIL_PATH} title="Pencil client">
-                The remote pencil surface — open it on an iPad (same Wi-Fi) to draw on the page over
-                the channel. <code>aiui pencil url</code> prints the LAN address and copies it to
-                your clipboard.
-              </LinkCard>
+              <div class="pencil-card">
+                <span class="link-title">Pencil client</span>
+                <span class="link-desc">
+                  The remote pencil surface — open it on an iPad on the same Wi-Fi to draw on the
+                  page over the channel. Copy its URL and open it in the iPad's browser.
+                </span>
+                <div class="copy-row">
+                  <code class="copy-url">{pencilUrl}</code>
+                  <button type="button" class="copy-btn" onClick={copyPencilUrl}>
+                    {copied() ? "Copied ✓" : "Copy URL"}
+                  </button>
+                </div>
+                <a class="card-open" href={PENCIL_PATH}>
+                  Open here →
+                </a>
+              </div>
 
               <LinkCard href={INTENT_PATH} title="Standalone panel" newWindow>
                 The intent client as a plain page, for <strong>advanced debugging</strong>. Prefer

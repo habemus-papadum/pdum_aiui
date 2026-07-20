@@ -3,7 +3,7 @@
  * 2026-07-14: embedded, not linked out — the side panel has the space now).
  *
  * This is the shared debug-ui `TracesPane` — the same surface `/__aiui/debug`
- * and `aiui debug` mount: the session-filtered trace list, follow-newest, and
+ * and `aiui dashboard` mount: the session-filtered trace list, follow-newest, and
  * the TraceView reading surface (status header, prompt hero with real shot
  * thumbnails, filter chips, coalesced stage cards). One implementation,
  * another home; nothing is forked.

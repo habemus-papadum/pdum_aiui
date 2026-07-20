@@ -30,7 +30,7 @@ transcript) at the center. Three layers:
    the browser-profiles redesign moved the whole per-project cache out of the project tree);
    the trace debugger (`aiui-trace-ui`) is EMBEDDED in the intent panel and also
    reachable at `/__aiui/debug` — a client route of the **console** (`aiui-console`), the channel's
-   own dashboard served at its root (`/` redirects there). `aiui debug` opens that console in the
+   own dashboard served at its root (`/` redirects there). `aiui dashboard` opens that console in the
    session browser. The channel serves **no HTML of its own** — JSON/data routes only
    (`/debug/api/*`, `/health`); every page belongs to a sidecar frontend. (The page-serving
    sidecars: the console at `/` + `/__aiui`; the paint sidecar's self-contained iPad client at

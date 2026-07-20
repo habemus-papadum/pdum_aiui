@@ -150,7 +150,7 @@ renders it.
 
 Every submission records a **lowering trace** — the inputs as they arrived, any intermediate
 representations, and the final prompt. The intent panel embeds the trace debugger (the *traces*
-disclosure); `aiui debug` opens the channel **console** in the session browser — its dashboard
+disclosure); `aiui dashboard` opens the channel **console** in the session browser — its dashboard
 links to the same viewer at `/__aiui/debug`, which carries an in-page switcher across every
 running channel:
 

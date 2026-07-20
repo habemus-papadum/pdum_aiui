@@ -2,7 +2,7 @@
  * The command-agnostic session-browser pipeline — settings → find-or-start →
  * a running browser with the intent client loaded and the profile's
  * native-messaging manifest planted. Shared by `aiui open`, `aiui remote`,
- * `aiui debug`, and `aiui claude`'s chromeServerEntry, so every command
+ * `aiui dashboard`, and `aiui claude`'s chromeServerEntry, so every command
  * launches identically instead of re-deriving the sequence.
  *
  * Identity is the PROFILE (util/profile.ts): its user-data dir names the
