@@ -14,6 +14,7 @@ import {
 import { runConfigTui } from "./commands/config-tui";
 import { type DebugOptions, runDebug } from "./commands/debug";
 import { type ExtensionOptions, runExtension } from "./commands/extension";
+import { runKeysInterviewCommand, runKeysSet, runKeysStatus, runKeysUnset } from "./commands/keys";
 import { runMcp } from "./commands/mcp";
 import { type ProfileBrowserFlags, runProfile } from "./commands/profile";
 import { type RemoteOptions, runRemote } from "./commands/remote";
@@ -196,6 +197,32 @@ export function buildProgram(): Command {
     .description("remove a key from the config")
     .argument("<key>", 'dotted key, e.g. "claude.args"')
     .action((key: string) => runConfigUnset(key));
+
+  // Vendor API keys: secrets in the OS vault, decisions in the user config
+  // (`keys.*`), one resolver everywhere (aiui-util/vendor-keys.ts). `set`
+  // reads the value masked at a TTY or from one stdin line — never argv.
+  const keys = program
+    .command("keys")
+    .description("manage vendor API keys (OS vault) — status | interview | set | unset")
+    .action(() => runKeysStatus());
+  keys
+    .command("status")
+    .description("per-provider decision + effective source (env/vault/skip/missing); never values")
+    .action(() => runKeysStatus());
+  keys
+    .command("interview")
+    .description("walk all providers: keep the stored key, replace it, or skip the provider")
+    .action(() => runKeysInterviewCommand());
+  keys
+    .command("set")
+    .description("store one provider's key in the OS vault (masked prompt, or piped stdin)")
+    .argument("<provider>", "openai | gemini | elevenlabs")
+    .action((provider: string) => runKeysSet(provider));
+  keys
+    .command("unset")
+    .description("remove a provider's key from the OS vault and mark it skipped")
+    .argument("<provider>", "openai | gemini | elevenlabs")
+    .action((provider: string) => runKeysUnset(provider));
 
   // `aiui mcp <args...>` forwards to the aiui-claude-channel CLI, so the
   // user-facing channel commands live under `aiui` (e.g. `aiui mcp quick`)

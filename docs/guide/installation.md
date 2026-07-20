@@ -17,10 +17,12 @@ and can launch Claude Code with permissions skipped.
   default (under `~/.cache/aiui/chromium/`), or Chrome for Testing if you prefer — so say yes;
   branded Chrome ≥ 137 won't auto-load the intent-client extension and newer versions restrict the
   debug port setup aiui relies on.
-- **`OPENAI_API_KEY`** in your shell if you want real voice transcription and corrections —
-  the intent pipeline's model calls run in the channel process and read only this environment
-  variable ([why env-only](./config#the-intent-pipeline-openai-key)). Without it everything
-  still runs; the voice paths say plainly that they're unavailable.
+- **An OpenAI key** if you want real voice transcription and corrections — the first
+  interactive `aiui claude` asks for it once and stores it in your
+  [OS vault](./config#vendor-api-keys-openai--gemini--elevenlabs) (keychain / Secret Service;
+  `aiui keys` manages it later). A source checkout reads `OPENAI_API_KEY` from the environment
+  instead. Without a key everything still runs; the voice paths say plainly that they're
+  unavailable.
 
 ## Starting a fresh app (the SolidJS starter)
 

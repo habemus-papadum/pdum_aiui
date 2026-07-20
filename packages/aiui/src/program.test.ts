@@ -17,6 +17,7 @@ describe("aiui cli", () => {
       "config",
       "debug",
       "extension",
+      "keys",
       "mcp",
       "open",
       "profile",

@@ -111,6 +111,7 @@ are asked on the first interactive launch and persisted.
 | `chrome.managed`        | Which browser aiui downloads and manages: [`"chromium"`](./chrome#the-managed-browser-chromium-default-or-chrome-for-testing) (default — dodges the CfT reCAPTCHA fingerprint) or `"chrome-for-testing"`. Each flavor keeps its own install and its own project profiles. Ignored when `executablePath`/`channel` picks a browser explicitly. |
 | `chrome.manage`         | How launches keep the managed browser installed/current: `"prompt"` (offer installs/updates — interactive sessions only, never CI), `"auto"` (keep current without asking), `"off"` (never check). Prompt answers ("automatically", "never ask again") are written **here, at the user level**, by the launcher itself. Skipped when `executablePath`/`channel` picks a browser explicitly. *(The old name `chrome.forTesting` still works as a deprecated alias when `chrome.manage` is unset.)* |
 | `chrome.headless`       | Launch Chrome with no UI.                                                                                                                          |
+| `keys.openai` / `keys.gemini` / `keys.elevenlabs` | The per-provider vendor-key **decision**: `"vault"` (in use — the secret rests in the OS vault, never in this file) or `"skip"` (deliberately unused; nothing asks again). Unset means "never interviewed" — the next interactive `aiui claude` asks once. Managed by [`aiui keys`](#vendor-api-keys-openai--gemini--elevenlabs); `aiui config set` works too but doesn't touch the vault. |
 
 ## Environment variables
 
@@ -119,34 +120,55 @@ are asked on the first interactive launch and persisted.
 | `AIUI_CACHE`          | Overrides the **user cache root** entirely. Everything user-level lives under it: the channel server registry (`<cache>/mcp/`), the user `config.json`, managed browser installs and their update bookkeeping (`<cache>/chromium/`, `<cache>/chrome/`). Tests and the e2e harness use this to sandbox a whole aiui world. |
 | `XDG_CACHE_HOME`      | Standard cache-home: when set (and absolute), the user cache root is `$XDG_CACHE_HOME/aiui`; otherwise `~/.cache/aiui`. `AIUI_CACHE` beats it. |
 | `CI`                  | Truthy values (anything but unset, empty, `"0"`, `"false"`) mean: Chrome DevTools MCP off by default, and **no interactive behavior at all** — no CfT install/update prompts or downloads, no one-time hints. `aiui claude --aiui-chrome` opts the MCP back in. |
-| `OPENAI_API_KEY`      | The intent pipeline's speech transcription and dictation correction call OpenAI, from the channel process aiui spawns — so the key is read from **this environment** and nowhere else (never `config.json`; a shared/committed file must not hold secrets). `aiui claude` [preflights it](#the-intent-pipeline-openai-key) at launch; unset or invalid leaves those features **unavailable** (the widget says so; `mock` is the explicit offline choice), never blocking the launch. |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ELEVEN_LABS_API_KEY` | The three vendor keys the channel can use — honored from the environment **only when aiui runs from a source checkout** (where `.env`/direnv are the dev workflow, and the environment wins over everything). An **installed** aiui ignores these entirely and reads the [OS vault](#vendor-api-keys-openai--gemini--elevenlabs) instead — a stray shell export can't silently override the vault, and keys stay out of the agent's environment. Never read from `config.json` in either mode (a shared/committed file must not hold secrets). |
 | `VITE_AIUI_PORT`      | **The standalone intent panel's build-time channel port.** The intent client's own `pnpm dev` launcher (or a manual `VITE_AIUI_PORT=… pnpm dev`) sets it so the plain-page panel — served on Vite's own origin, not the channel's — knows which channel to drive; it is read via `import.meta.env.VITE_AIUI_PORT`. Apps served by `aiui vite` do **not** use it: they reach the channel through the intent client at `/intent/`. (Prebuilt dist code cannot read it — the substitution happens when a bundler compiles the file.) |
 
 (Repo CI additionally uses `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_MODEL`, and `IS_SANDBOX` when it
 shells out to Claude Code itself — those configure Claude Code, not aiui; see
 `.github/workflows/ci.yml`.)
 
-## The intent pipeline (OpenAI key)
+## Vendor API keys (OpenAI · Gemini · ElevenLabs)
 
-The intent pipeline's speech transcription and dictation
-correction run against OpenAI, in the **channel process** `aiui claude` spawns. That process
-inherits the launcher's environment, so the key comes from `OPENAI_API_KEY` in the shell you run
-`aiui claude` from — deliberately the *only* source. It is never read from `config.json` (a
-project file is shareable and will eventually be committed — a key must not live there) and there
-is no `aiui claude` flag for it.
+The intent pipeline's model-backed features (transcription, correction, the linter/oracle,
+Scribe) run in the **channel process** `aiui claude` spawns, against three vendors. Where their
+keys come from depends on how aiui itself is running:
+
+- **Source checkout (dev):** the environment wins — `.env`/direnv keep working exactly as
+  before. A key absent from the environment falls back to the OS vault.
+- **Installed:** the environment is ignored for keys. The **OS vault** — the macOS login
+  keychain, or the freedesktop Secret Service on Linux — is the only store, and the channel
+  reads it in its own process at boot, so vendor keys never travel through the agent's
+  environment (where a shell `env` would print them).
+
+What the vault holds is the secret; what `config.json` holds is the per-provider **decision**
+(`keys.openai` etc.): `"vault"` (in use) or `"skip"` (deliberately unused). A provider with no
+decision gets **one question** at the next interactive `aiui claude` — paste the key (masked,
+stored straight into the vault), import it from the environment if one is set, or skip. Skipping
+prints how to revisit. The `aiui keys` command manages all of it:
+
+```sh
+aiui keys status            # per-provider decision + effective source — never values
+aiui keys interview         # all providers: keep the stored key, replace it, or skip
+aiui keys set openai        # store one key (masked prompt; or pipe it on stdin)
+aiui keys unset openai      # remove the vault entry and mark the provider skipped
+```
+
+Every store is verified by an immediate read-back — both platform CLIs' observed failure modes
+were *silent* corruption. Secrets never appear in argv, shell history, logs, or this file.
 
 **Preflight.** On an interactive launch (a real TTY, not CI — the same gate as the Chrome for
-Testing prompts), `aiui claude` checks the key before handing off, so a missing or stale key is a
-clear message up front rather than a confusing failure mid-session. It makes one cheap
-authenticated call (`GET https://api.openai.com/v1/models`, read for HTTP status only, ~3 s
-timeout) and reports one of four outcomes — **the key itself is never printed, logged, or sent
-anywhere but OpenAI**:
+Testing prompts), `aiui claude` checks the **resolved** OpenAI key (env or vault, per the mode
+above) before handing off, so a missing or stale key is a clear message up front rather than a
+confusing failure mid-session. It makes one cheap authenticated call
+(`GET https://api.openai.com/v1/models`, read for HTTP status only, ~3 s timeout) and reports one
+of four outcomes — **the key itself is never printed, logged, or sent anywhere but OpenAI**. A
+*skipped* provider is a chosen absence and gets no degradation note at all.
 
 | Status       | What it means                                                     | What you see |
 | ------------ | ----------------------------------------------------------------- | ------------ |
 | `valid`      | Present and accepted.                                              | Nothing — the launcher stays quiet. |
-| `missing`    | `OPENAI_API_KEY` is not set.                                      | Where to set it, and that transcription/correction are unavailable until it is (the mock backends are the offline alternative). |
-| `invalid`    | Present but rejected (401/403).                                   | The likely cause — a **stale shell export** shadowing your real key — and how to check: `echo $OPENAI_API_KEY \| head -c 12` against the start of your real key. |
+| `missing`    | No OpenAI key resolved (not in the vault; nor, in a source checkout, the environment). | Where to set it (`aiui keys set openai`, or the env in a dev checkout), and that transcription/correction are unavailable until it is (the mock backends are the offline alternative). |
+| `invalid`    | Present but rejected (401/403).                                   | The likely cause — a stale value (a shell export in dev; an outdated vault entry otherwise) — and the remedy (`aiui keys set openai` replaces it). |
 | `unverified` | Present but not checked (CI/non-interactive) or the check couldn't complete (offline, timeout). | A note that it's unverified, not known-bad; launch continues. |
 
 **Degradation, not refusal.** A bad or missing key never blocks the launch — the intent modality
@@ -165,9 +187,9 @@ flags.
 Transcription is streaming (`transcriber: "openai-realtime"` — partial transcripts as you
 speak, using the same channel key; `"mock"` is the offline choice). The easy way to pick a
 rung is the `tier` field — `rapid` (the default) or `premium`. The linter is orthogonal
-(`linter: "off" | "openai" | "gemini"`; a Gemini linter needs `GEMINI_API_KEY` in the same
-environment). The launcher's whole job is preflighting the OpenAI key and passing the
-environment through.
+(`linter: "off" | "openai" | "gemini"`; a Gemini linter needs the Gemini key resolved the same
+way). The launcher's whole job is the gap-fill question and the preflight — the channel resolves
+its own keys at boot.
 
 ## State aiui keeps (and how it affects behavior)
 

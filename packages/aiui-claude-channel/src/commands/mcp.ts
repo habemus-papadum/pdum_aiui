@@ -7,6 +7,7 @@ import { formatPageToolsChanged, PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
 import { projectCacheDir } from "../trace";
+import { resolveAndStashVendorKeys } from "../vendor-key-stash";
 import { startWebServer, type WebServer } from "../web";
 import {
   type CommonChannelOptions,
@@ -120,6 +121,13 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // effectively invisible, so lifecycle + every error push also land in that
   // cache's logs/ where a human (or the agent) can read them post-mortem.
   const channelLog = createChannelLog(cacheDir);
+
+  // Resolve the three vendor keys ONCE, before any thread can need them
+  // (vendor-key-stash.ts): source mode honors the environment, an installed
+  // channel reads the OS vault only — so installed users' keys never ride
+  // through claude's env. Never throws, never hangs (timeouts degrade to
+  // keyless); the log line records each key's SOURCE, never a value.
+  await resolveAndStashVendorKeys((message) => channelLog.log(message));
 
   // One debounced directory change drives both notification rungs of the
   // browser-extension proposal (§7): `tools/list_changed` makes the client

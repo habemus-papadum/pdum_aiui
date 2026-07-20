@@ -131,10 +131,12 @@ the page with the pencil, select text and add it — then **Enter** to send.
 
 ::: tip Dictation and correction use OpenAI by default
 Speech transcription and the dictation-correction step run for real against OpenAI in the channel
-process, which reads `OPENAI_API_KEY` from the environment you launched `aiui claude` in — the
-launcher [preflights it](./config#the-intent-pipeline-openai-key) and warns up front if it's
-missing. Without a key the panel's status says transcription is *unavailable*; it never silently
-degrades. Working offline? Switch the stt select to the mock transcriber.
+process. Keys come from the [OS vault](./config#vendor-api-keys-openai--gemini--elevenlabs)
+(`aiui keys`; a source checkout honors `OPENAI_API_KEY` in the environment first) — the first
+interactive launch asks once per provider, and the launcher preflights the resolved key and
+warns up front if it's missing. Without a key the panel's status says transcription is
+*unavailable*; it never silently degrades. Working offline? Switch the stt select to the mock
+transcriber.
 :::
 
 The turn streams over the channel's websocket to the MCP server, gets **lowered** into a prompt,

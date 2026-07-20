@@ -30,6 +30,7 @@ import {
   formatConfigValue,
   invalidReason,
   isArrayField,
+  type KeyDecisionValue,
   type ManageMode,
 } from "./config-schema";
 
@@ -39,6 +40,8 @@ export {
   type ChannelBind,
   type ChromeChannel,
   DEFAULT_MANAGED_FLAVOR,
+  KEY_DECISIONS,
+  type KeyDecisionValue,
   MANAGE_MODES,
   MANAGED_FLAVORS,
   type ManagedFlavor,
@@ -68,6 +71,12 @@ export interface AiuiConfig {
     manage?: ManageMode;
     /** Launch Chrome headless (default: false). */
     headless?: boolean;
+  };
+  keys?: {
+    /** Per-provider decision: "vault" (in use, secret in the OS vault) or "skip". */
+    openai?: KeyDecisionValue;
+    gemini?: KeyDecisionValue;
+    elevenlabs?: KeyDecisionValue;
   };
 }
 

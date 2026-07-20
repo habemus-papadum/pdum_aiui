@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ChromeDevtoolsInfo, LaunchInfo } from "@habemus-papadum/aiui-claude-channel";
-import { discoverSessionBrowser, isCi } from "@habemus-papadum/aiui-util";
+import { discoverSessionBrowser, isCi, resolveVendorKeys } from "@habemus-papadum/aiui-util";
 import { execa } from "execa";
 import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { channelLaunchFlags, resolveChannelLaunch } from "../util/channel-launch";
@@ -19,6 +19,7 @@ import { type AiuiConfig, type ChromeChannel, loadAiuiConfig } from "../util/con
 import { ENTER_NUDGE_ENABLED, nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
 import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-preflight";
+import { ensureKeyDecisions, keysMode } from "../util/keys-interview";
 import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
 import { ensureProfileMarker } from "../util/profile";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
@@ -87,26 +88,48 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     // nudge, and the channel bind — are asked once, definitively, and persisted
     // to the user config; every later launch reads the choice silently.
     config = await ensureLaunchChoices(config);
+    // The vendor-key gap-fill (util/keys-interview.ts): any provider with NO
+    // recorded decision gets one question — paste the key (into the OS vault),
+    // import it from the environment, or skip the provider. Decided providers
+    // are never re-asked; `aiui keys interview` is the full revisit.
+    config = await ensureKeyDecisions(config);
   }
 
+  // Resolve the three vendor keys the way the channel itself will at boot
+  // (aiui-util/vendor-keys.ts): a source checkout honors the environment/.env
+  // first, an installed aiui reads the OS vault only, a skip stays keyless by
+  // choice. Values are used ONLY to preflight; the channel re-resolves
+  // vault-side in its own process — keys never ride through claude's env.
+  const resolvedKeys = await resolveVendorKeys({
+    mode: keysMode(),
+    onWarn: (message) => printWarning(message),
+  });
+
   // Preflight the OpenAI key the intent pipeline needs (transcription +
-  // correction, which run in the spawned channel process — the key reaches
-  // them through this environment). Interactive launches verify it against the
-  // API and report any degradation once; CI/non-interactive only note presence
-  // without touching the network. Either way the launch proceeds — a bad or
-  // missing key leaves transcription/correction unavailable (the widget says
-  // so; mock is the explicit offline choice), never a refusal. We keep only the
-  // status (never the key) to thread into launch-info below.
-  const openaiKey = await preflightOpenAiKey({ verify: interactive });
-  if (interactive) {
+  // correction, which run in the spawned channel process). Interactive
+  // launches verify the RESOLVED key against the API and report any
+  // degradation once; CI/non-interactive only note presence without touching
+  // the network. Either way the launch proceeds — a bad or missing key leaves
+  // transcription/correction unavailable (the widget says so; mock is the
+  // explicit offline choice), never a refusal. We keep only the status (never
+  // the key) to thread into launch-info below.
+  const openaiKey = await preflightOpenAiKey({
+    verify: interactive,
+    env: { OPENAI_API_KEY: resolvedKeys.openai.value ?? "" },
+  });
+  if (interactive && resolvedKeys.openai.source !== "skip") {
     reportOpenAiPreflight(openaiKey);
   }
   // Same preflight for the Gemini key (the realtime submode's Gemini Live
   // engine, also channel-side). A bad key would otherwise surface as an opaque
   // closed WebSocket deep in a live session; a missing one is only a note —
-  // the default transcription tiers don't need it.
-  const geminiKey = await preflightGeminiKey({ verify: interactive });
-  if (interactive) {
+  // the default transcription tiers don't need it. A SKIPPED provider is a
+  // chosen absence: no degradation note for it.
+  const geminiKey = await preflightGeminiKey({
+    verify: interactive,
+    env: { GEMINI_API_KEY: resolvedKeys.gemini.value ?? "" },
+  });
+  if (interactive && resolvedKeys.gemini.source !== "skip") {
     reportGeminiPreflight(geminiKey);
   }
 

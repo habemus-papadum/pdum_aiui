@@ -56,6 +56,9 @@ describe("fieldStates", () => {
       "channel.bind",
       "chrome.manage",
       "chrome.headless",
+      "keys.openai",
+      "keys.gemini",
+      "keys.elevenlabs",
     ]);
   });
 });

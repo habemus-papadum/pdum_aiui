@@ -55,6 +55,10 @@ export type ManageMode = (typeof MANAGE_MODES)[number];
 export const CHANNEL_BINDS = ["loopback", "host"] as const;
 export type ChannelBind = (typeof CHANNEL_BINDS)[number];
 
+/** The two per-provider key decisions (the `keys` section below). */
+export const KEY_DECISIONS = ["vault", "skip"] as const;
+export type KeyDecisionValue = (typeof KEY_DECISIONS)[number];
+
 /**
  * A config leaf is a JSON scalar, or — for list-valued keys like `claude.args`
  * — an array of strings. Sections never nest further.
@@ -181,6 +185,31 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
       // buildExtension/autoCapture) — are tolerated-and-dropped, not hard
       // errors; see DEPRECATED_FIELDS in util/config.ts.
     ],
+  },
+  {
+    name: "keys",
+    summary: "per-provider vendor API key decisions (the secrets live in the OS vault)",
+    fields: (
+      [
+        ["openai", "OpenAI (OPENAI_API_KEY)"],
+        ["gemini", "Gemini (GEMINI_API_KEY)"],
+        ["elevenlabs", "ElevenLabs (ELEVEN_LABS_API_KEY)"],
+      ] as const
+    ).map(([provider, label]) => ({
+      key: provider,
+      type: "enum" as const,
+      values: KEY_DECISIONS,
+      defaultText: "unset (the first interactive `aiui claude` asks; `aiui keys` manages)",
+      summary: `Whether the ${label} key is in use.`,
+      doc:
+        `"vault": the ${label} key is in use and rests in the OS vault (macOS keychain / ` +
+        'Secret Service) — never in this file. "skip": the provider is deliberately unused; ' +
+        "nothing asks for it again. Unset: never interviewed — the next interactive " +
+        "`aiui claude` (or `aiui keys interview`) asks. The DECISION lives here; the secret " +
+        "itself is stored and read with `aiui keys set/unset`. In a source checkout the " +
+        "environment (.env/direnv) still wins over all of this; an installed aiui reads the " +
+        "vault only.",
+    })),
   },
 ];
 

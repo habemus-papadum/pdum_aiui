@@ -9,8 +9,11 @@
 export * from "./browser";
 export * from "./environment";
 export * from "./extension";
-export { packageRoot, runningFromSource } from "./provenance";
+export { packageFromSource, packageRoot, runningFromSource } from "./provenance";
+export * from "./secret-input";
 export * from "./socket-url";
+export * from "./vault";
+export * from "./vendor-keys";
 
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";

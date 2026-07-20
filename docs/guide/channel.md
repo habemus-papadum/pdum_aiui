@@ -78,7 +78,7 @@ plugin seeds the source root into pages (`window.__AIUI__.sourceRoot`), and how 
 
 Each `/ws` thread is fed to its format's **stream processor** — the lowering pipeline. For the
 multimodal `intent-v1` format the processor works *incrementally*: transcription and correction
-diffs run as events arrive (server-side, because `OPENAI_API_KEY` lives with the channel
+diffs run as events arrive (server-side, because the vendor keys live with the channel
 process, never in the page), screenshots are saved to the trace blob store the moment their
 bytes land, and a speculative compose keeps the final prompt one cheap step away. On `fin` the
 composed prompt — body text with `{shot_N}` tokens, file paths in metadata — is pushed into the
@@ -145,9 +145,10 @@ and skipped** — the channel starts anyway. (The `Sidecar` interface lives in
 
 ## Keys and degradation
 
-Model-backed lowering (transcription, correction, speech) uses `OPENAI_API_KEY` from the
-environment `aiui claude` ran in. The launcher preflights it (a status-only check; see
-[Configuration](./config#the-intent-pipeline-openai-key)) and the result travels to
+Model-backed lowering (transcription, correction, speech) resolves its vendor keys **at boot,
+in the channel's own process**: the OS vault when installed, the environment first in a source
+checkout (see [Configuration](./config#vendor-api-keys-openai--gemini--elevenlabs)). The
+launcher preflights the resolved OpenAI key (a status-only check) and the result travels to
 `/debug/api/info` — the key itself never leaves the process. Without a valid key the channel
 still runs everything else and every model-backed path fails *loudly* with what to do about it;
 nothing silently degrades.

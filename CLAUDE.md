@@ -56,8 +56,13 @@ channel's web server binds and persists that (`channel.bind`: `loopback` keeps t
 unauthenticated surface this-machine-only, non-interactive default; `host` binds `0.0.0.0` so a
 LAN iPad can reach the always-on paint sidecar — and everything else on the port; the trusted-LAN
 posture), loads
-the custom channel via `--dangerously-load-development-channels`, and by default attaches the
-Chrome DevTools MCP — by default **attached** to a shared, user-visible session browser (launched
+the custom channel via `--dangerously-load-development-channels`, resolves the vendor API keys
+(OpenAI/Gemini/ElevenLabs) at channel boot — env-first in a source checkout (`.env`/direnv),
+**OS-vault-only when installed** (macOS keychain / Secret Service; `aiui keys` manages the
+secrets plus the per-provider `keys.*` decisions in the user config; `aiui-util`'s
+vault/vendor-keys modules, promoted from `exploration/os-vault`), so installed users' keys never
+enter the agent's environment — and by default attaches the Chrome DevTools
+MCP — by default **attached** to a shared, user-visible session browser (launched
 eagerly with an unauthenticated loopback debug port, project-local profile under
 `.aiui-cache/chrome/`; discovery via the profile's `DevToolsActivePort`; see
 `packages/aiui/src/util/browser.ts`, `chrome.ts`, and `docs/guide/chrome.md` + `remote.md`). Off

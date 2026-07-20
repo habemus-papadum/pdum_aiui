@@ -78,6 +78,7 @@ import type { FrameLogEntry } from "../frame-log";
 import { createJsonlRecorder, type JsonlRecorder } from "../recording";
 import { registerServer } from "../registry";
 import { projectCacheDir, type TraceStageEvent } from "../trace";
+import { resolveAndStashVendorKeys } from "../vendor-key-stash";
 import { startWebServer } from "../web";
 import {
   type CommonChannelOptions,
@@ -317,6 +318,13 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
   // The always-on diagnostic log (lifecycle + error pushes → <cache>/logs/),
   // same as `mcp` — a debug server's failures deserve a durable copy too.
   const channelLog = createChannelLog(cacheDir);
+
+  // Boot-time vendor-key resolution, same as `mcp` (vendor-key-stash.ts):
+  // env in a source checkout, OS vault otherwise; sources logged, never values.
+  await resolveAndStashVendorKeys((message) => {
+    channelLog.log(message);
+    process.stderr.write(`[aiui-channel serve] ${message}\n`);
+  });
 
   let recorder: JsonlRecorder | undefined;
   if (options.record === true) {

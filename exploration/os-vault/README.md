@@ -1,5 +1,13 @@
 # OS vault — exploration
 
+> **PROMOTED (2026-07-20).** This spike shipped: the vault backends (with both
+> live-discovered `security` quirks), the masked/piped secret input, and the
+> resolver now live in `packages/aiui-util` (`vault.ts`, `secret-input.ts`,
+> `vendor-keys.ts`), managed by `aiui keys` and resolved by the channel at
+> boot — see `docs/guide/config.md` "Vendor API keys". This folder stays as
+> the research record (RESEARCH.md is cited from the shipped code) and as a
+> standalone harness for the still-pending live Linux verification below.
+
 Standalone spike (not wired into anything) that answers: **can the channel's
 three vendor API keys live in the OS's own secret store instead of (or in
 addition to) the environment, with a resolver that prefers the environment

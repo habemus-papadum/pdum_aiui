@@ -111,6 +111,7 @@ import { openaiSpeaker, type Speaker } from "./speak";
 import { openaiSummarizer, type Summarizer } from "./summarize";
 import { traceOf } from "./tracing";
 import { audioExtensionForMime, type FetchLike } from "./transcribe";
+import { absentKeyPhrase, vendorKey } from "./vendor-key-stash";
 
 // The three server→client push wire shapes now live in intent-messages.ts;
 // re-exported here so `from "./intent-v1"` importers (internal.ts's no-semver
@@ -217,8 +218,11 @@ export function createIntentV1Format(options: IntentV1Options = {}): ChannelForm
 
 function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamProcessor {
   const intent = resolveIntent(ctx.hello?.intent);
-  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
-  const geminiApiKey = options.geminiApiKey ?? process.env.GEMINI_API_KEY;
+  // Keys come through the boot-time stash (vendor-key-stash.ts): the mcp/serve
+  // commands resolve env/OS-vault/skip once at startup. With no stash set
+  // (tests, embedders) the stash reads process.env — the historical default.
+  const apiKey = options.apiKey ?? vendorKey("OPENAI_API_KEY");
+  const geminiApiKey = options.geminiApiKey ?? vendorKey("GEMINI_API_KEY");
   const trace = traceOf(ctx);
   // The base every prompt path (screenshots AND source locations) relativizes
   // against — the agent's working directory. Defaults to this process's cwd
@@ -233,7 +237,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   // overlaps the arm→talk gap. Keyless with no test factory → the session is
   // absent and the segment degrades loudly (the REST-keyless posture), never a
   // silent switch to mock. A test factory forces the path on with no key.
-  const elevenLabsKey = options.elevenLabsApiKey ?? process.env.ELEVEN_LABS_API_KEY;
+  const elevenLabsKey = options.elevenLabsApiKey ?? vendorKey("ELEVEN_LABS_API_KEY");
   // Scribe is the shipped DEFAULT — so its keyless posture is a graceful,
   // VISIBLE fallback to Realtime Whisper (a note, not an error storm), not
   // the loud per-segment degradation an explicit choice gets. An explicit
@@ -248,7 +252,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   ) {
     intent.transcriber = "openai-realtime";
     intent.coerced.push(
-      "transcriber elevenlabs → openai-realtime (no ELEVEN_LABS_API_KEY; Scribe is the default, whisper is the fallback)",
+      `transcriber elevenlabs → openai-realtime (${absentKeyPhrase("ELEVEN_LABS_API_KEY")}; ` +
+        "Scribe is the default, whisper is the fallback)",
     );
     ctx.push?.({
       kind: "lowered",
@@ -257,7 +262,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         {
           at: Date.now(),
           type: "note",
-          text: "🎬 Scribe unavailable (no ELEVEN_LABS_API_KEY) — transcribing with ⚡ Realtime Whisper",
+          text: `🎬 Scribe unavailable (${absentKeyPhrase("ELEVEN_LABS_API_KEY")}) — transcribing with ⚡ Realtime Whisper`,
         },
       ],
     } satisfies LoweredMessage);
@@ -388,8 +393,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
     } else {
       const message =
         vendor === "gemini"
-          ? "prompt linter disabled — the channel process has no GEMINI_API_KEY; dictation still works"
-          : "prompt linter disabled — the channel process has no OPENAI_API_KEY; dictation still works";
+          ? `prompt linter disabled — ${absentKeyPhrase("GEMINI_API_KEY")}; dictation still works`
+          : `prompt linter disabled — ${absentKeyPhrase("OPENAI_API_KEY")}; dictation still works`;
       push([{ at: Date.now(), type: "note", text: message }]);
       pushError(ctx, {
         source: "linter",
@@ -451,8 +456,7 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           : {}),
       });
     } else {
-      const message =
-        "oracle disabled — the channel process has no OPENAI_API_KEY; briefing capture still works";
+      const message = `oracle disabled — ${absentKeyPhrase("OPENAI_API_KEY")}; briefing capture still works`;
       push([{ at: Date.now(), type: "note", text: message }]);
       pushError(ctx, { source: "oracle", message, detail: OPENAI_KEY_HINT });
       trace?.record({

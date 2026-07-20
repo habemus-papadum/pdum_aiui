@@ -22,7 +22,9 @@ This is the repo's `. .venv/bin/activate`: it prepends `bin/` (the source-run `a
 no build needed) and the workspace `node_modules/.bin` (`tsx`, `vite`, `vitest`, `biome`) to
 your PATH, and exports the root `.env` / `.env.dev` files (`OPENAI_API_KEY`,
 `GEMINI_API_KEY`) into the current shell — so `aiui claude` picks the keys up without a
-manual `export`. Undo with `aiui_deactivate`. The script is idempotent and prints what it did
+manual `export`. (A source checkout is exactly where the environment still wins for vendor
+keys; installed aiui reads the [OS vault](./config#vendor-api-keys-openai--gemini--elevenlabs)
+instead.) Undo with `aiui_deactivate`. The script is idempotent and prints what it did
 (key *names* only) to stderr.
 
 There's no pnpm-native equivalent (`pnpm exec` scopes one command, `pnpm bin` just prints the
