@@ -28,6 +28,7 @@
  * own under its own extension id, and the two never meet.
  */
 
+import { type AgentsStatusLike, agentsWarning } from "../ui/channel-header";
 import { CDP_DRIVER_TAG_FRESH_MS, CDP_DRIVER_TAG_PREFIX } from "./manifest";
 
 const RECENT_KEY = "aiui2.recentPorts";
@@ -37,15 +38,23 @@ const RECENT_MAX = 6;
 /** The native-messaging host (`aiui extension install-native-host`). */
 export const NATIVE_HOST_NAME = "com.habemus_papadum.aiui";
 
-/** One channel, as `/debug/api/channels` lists them (the registry mirror). */
+/** The minimum wire protocol this client understands (stamped on every host
+ * response by the registry package). An older host gets a LOUD outdated
+ * verdict instead of silently misbehaving. */
+export const MIN_HOST_PROTOCOL = 2;
+
+/** One channel, as the ENRICHED listings carry them (`/debug/api/channels`
+ * and the native host serve the registry package's enriched shape). */
 export interface ChannelEntry {
   port: number;
-  name?: string;
   cwd?: string;
   pid?: number;
-  /** A standalone `aiui serve`: reachable, but with no Claude session behind
-   * it — structurally unable to carry a turn, so never auto-picked. */
-  debug?: boolean;
+  /** "channel" | "debug" | "remote". A `"debug"` server (standalone `aiui
+   * serve`) has no Claude session behind it — structurally unable to carry a
+   * turn, so never auto-picked. */
+  kind?: string;
+  /** Assigned name → live Claude session name → host → pid (listing-computed). */
+  resolvedName?: string;
 }
 
 /** One CDP driver-roster entry, as a channel's tagger wrote it (same-browser
@@ -111,7 +120,7 @@ export function updateRecent(recent: number[], port: number, max = RECENT_MAX): 
 
 /** Pick the channel to bind: a real session, newest registry entry first. Pure. */
 export function pickChannel(entries: ChannelEntry[]): ChannelEntry | undefined {
-  return entries.find((entry) => entry.debug !== true);
+  return entries.find((entry) => entry.kind !== "debug");
 }
 
 export async function loadRecentPorts(): Promise<number[]> {
@@ -159,31 +168,42 @@ async function alive(port: number): Promise<boolean> {
   }
 }
 
-/** The registry, as one live channel mirrors it. (Exported for the
- * alignment supervisor's driver labels — ext/align.ts.) */
-export async function channelsVia(port: number): Promise<ChannelEntry[]> {
+/** The registry as one live channel mirrors it — the enriched listing plus
+ * its loud agents status. */
+export async function mirrorListingVia(
+  port: number,
+): Promise<{ channels: ChannelEntry[]; agents?: AgentsStatusLike }> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/debug/api/channels`, {
       signal: AbortSignal.timeout(1200),
     });
     if (!res.ok) {
-      return [];
+      return { channels: [] };
     }
-    const body = (await res.json()) as { channels?: ChannelEntry[] };
-    return Array.isArray(body.channels) ? body.channels : [];
+    const body = (await res.json()) as { channels?: ChannelEntry[]; agents?: AgentsStatusLike };
+    return {
+      channels: Array.isArray(body.channels) ? body.channels : [],
+      ...(body.agents !== undefined ? { agents: body.agents } : {}),
+    };
   } catch {
-    return [];
+    return { channels: [] };
   }
+}
+
+/** The mirror's channel list alone. (Exported for the alignment supervisor's
+ * driver labels — ext/align.ts.) */
+export async function channelsVia(port: number): Promise<ChannelEntry[]> {
+  return (await mirrorListingVia(port)).channels;
 }
 
 /** The native host's answer, with FAILURE kept distinct from "no channels":
  * an empty list from a working host means nothing is running (`aiui claude`
  * is the remedy); an error means native messaging itself is broken — not
- * installed, or the host died — and the remedy is
- * `aiui extension install-native-host`. Conflating the two hid which hint to
- * give (owner, 2026-07-19). */
+ * installed, the host died, or it predates the current protocol — and the
+ * remedy is re-running aiui / `aiui extension install-native-host`.
+ * Conflating the two hid which hint to give (owner, 2026-07-19). */
 export type NativeHostResult =
-  | { ok: true; channels: ChannelEntry[] }
+  | { ok: true; channels: ChannelEntry[]; agents?: AgentsStatusLike }
   | { ok: false; error: string };
 
 /** The on-disk registry, via the native host — error kept, not swallowed. */
@@ -191,10 +211,29 @@ async function channelsViaNativeHost(): Promise<NativeHostResult> {
   try {
     const res = (await chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, {
       cmd: "listChannels",
-    })) as { ok?: boolean; channels?: ChannelEntry[] };
-    return res?.ok === true && Array.isArray(res.channels)
-      ? { ok: true, channels: res.channels }
-      : { ok: false, error: "the host answered, but not with a channel list" };
+    })) as {
+      ok?: boolean;
+      protocol?: number;
+      channels?: ChannelEntry[];
+      agents?: AgentsStatusLike;
+    };
+    if (res?.ok !== true || !Array.isArray(res.channels)) {
+      return { ok: false, error: "the host answered, but not with a channel list" };
+    }
+    const protocol = typeof res.protocol === "number" ? res.protocol : 1;
+    if (protocol < MIN_HOST_PROTOCOL) {
+      return {
+        ok: false,
+        error:
+          `the installed native host is outdated (protocol ${protocol} < ${MIN_HOST_PROTOCOL}) — ` +
+          "re-run aiui (or `aiui extension install-native-host`)",
+      };
+    }
+    return {
+      ok: true,
+      channels: res.channels,
+      ...(res.agents !== undefined ? { agents: res.agents } : {}),
+    };
   } catch (err) {
     // Chrome's text names the cause: "Specified native messaging host not
     // found." (never installed) vs "Native host has exited." (it broke).
@@ -210,10 +249,12 @@ export async function probeNativeHost(): Promise<NativeHostResult> {
 
 /** What `listChannels` hands the chooser: the list, plus HOW it was obtained
  * — `nativeHostError` present means the list came from the mirror fallback
- * (or nowhere) because native messaging is broken. */
+ * (or nowhere) because native messaging is broken — plus the loud
+ * session-name degradation warning when the agents join is unhealthy. */
 export interface ChannelListing {
   channels: ChannelEntry[];
   nativeHostError?: string;
+  agentsWarning?: string;
 }
 
 /**
@@ -226,11 +267,18 @@ export interface ChannelListing {
 export async function listChannels(currentPort?: number): Promise<ChannelListing> {
   const native = await channelsViaNativeHost();
   if (native.ok) {
-    return { channels: native.channels };
+    const warning = agentsWarning(native.agents);
+    return {
+      channels: native.channels,
+      ...(warning !== undefined ? { agentsWarning: warning } : {}),
+    };
   }
+  const mirror = currentPort !== undefined ? await mirrorListingVia(currentPort) : { channels: [] };
+  const warning = agentsWarning(mirror.agents);
   return {
-    channels: currentPort !== undefined ? await channelsVia(currentPort) : [],
+    channels: mirror.channels,
     nativeHostError: native.error,
+    ...(warning !== undefined ? { agentsWarning: warning } : {}),
   };
 }
 
@@ -261,7 +309,7 @@ export async function discoverChannel(): Promise<number | undefined> {
   const first = live[0];
   if (first !== undefined) {
     const mirror = await channelsVia(first.port);
-    const isDebug = (p: number) => mirror.find((entry) => entry.port === p)?.debug === true;
+    const isDebug = (p: number) => mirror.find((entry) => entry.port === p)?.kind === "debug";
     const chosen = live.find((driver) => !isDebug(driver.port)) ?? first;
     await rememberPort(chosen.port);
     return chosen.port;

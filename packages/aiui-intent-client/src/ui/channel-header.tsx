@@ -48,30 +48,57 @@ export const CHANNEL_HEADER_STYLES = `
     max-width: 280px; }
 `;
 
-/** One channel, as the registry lists them (mirror route or native host). */
+/** One channel, as the ENRICHED listings carry them (mirror route or native
+ * host — both serve the registry package's enriched shape; only `port` is
+ * load-bearing here, the rest is display). */
 export interface ChannelEntry {
   port: number;
   tag?: string;
   cwd?: string;
   pid?: number;
-  /** A standalone `aiui serve`: reachable, but with no session behind it. */
-  debug?: boolean;
+  /** "channel" | "debug" | "remote" — a debug server carries no session. */
+  kind?: string;
+  /** Assigned name → live Claude session name → host → pid (listing-computed). */
+  resolvedName?: string;
+}
+
+/** The enrichment source's health, as listings report it (loud, per design). */
+export interface AgentsStatusLike {
+  status: string;
+  claudePath?: string;
+  error?: string;
 }
 
 /** What the list seam answers: the channels, plus whether the extension's
- * native host failed to answer (absent on the page tier, which has no host).
- * The distinction picks the hint: an empty list from a WORKING host means
- * "nothing running" (`aiui claude`); a host error means native messaging is
- * broken and the remedy is `aiui extension install-native-host`. */
+ * native host failed to answer (absent on the page tier, which has no host),
+ * plus a session-name degradation warning. The distinction picks the hint: an
+ * empty list from a WORKING host means "nothing running" (`aiui claude`); a
+ * host error means native messaging is broken and the remedy is
+ * `aiui extension install-native-host`; an agents warning means channels work
+ * but their live names don't (claude missing/broken). */
 export interface ChannelListing {
   channels: ChannelEntry[];
   nativeHostError?: string;
+  agentsWarning?: string;
 }
 
-/** "project :port" — the cwd tail names the session (ports are noise alone). */
+/** The loud-but-partial message for a degraded agents join, or undefined. */
+export const agentsWarning = (agents: AgentsStatusLike | undefined): string | undefined => {
+  if (agents === undefined || agents.status === "ok") {
+    return undefined;
+  }
+  return agents.status === "claude-missing"
+    ? `Claude Code not found${agents.claudePath !== undefined ? ` at ${agents.claudePath}` : ""} — ` +
+        "session names unavailable; re-run aiui to repair the native host"
+    : `session names unavailable — \`claude agents\` failed${
+        agents.error !== undefined ? ` (${agents.error})` : ""
+      }`;
+};
+
+/** "name :port" — the resolved name (else the cwd tail) names the session. */
 export const channelLabel = (entry: ChannelEntry): string => {
-  const name = entry.cwd?.split("/").filter(Boolean).at(-1) ?? "channel";
-  return `${name} :${entry.port}${entry.debug ? " (debug)" : ""}`;
+  const name = entry.resolvedName ?? entry.cwd?.split("/").filter(Boolean).at(-1) ?? "channel";
+  return `${name} :${entry.port}${entry.kind === "debug" ? " (debug)" : ""}`;
 };
 
 export function ChannelHeader(props: {
@@ -99,6 +126,11 @@ export function ChannelHeader(props: {
         setNote(
           `native messaging host unreachable — run \`aiui extension install-native-host\`, then reload the extension (${listing.nativeHostError})`,
         );
+      } else if (listing.agentsWarning !== undefined) {
+        // Channels work; their live session names don't. Loud but partial —
+        // never a silent fallback to unnamed channels.
+        setTone("alarm");
+        setNote(listing.agentsWarning);
       } else {
         setTone("info");
         setNote(listing.channels.length === 0 ? "no channels running — run `aiui claude`" : "");

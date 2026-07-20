@@ -74,10 +74,13 @@ async function driverAlive(port: number): Promise<boolean> {
   }
 }
 
-/** "cwd-tail :port" labels from the registry mirror, best-effort. */
-function labelFor(port: number, mirror: Array<{ port: number; name?: string; cwd?: string }>) {
+/** "resolved-name :port" labels from the registry mirror, best-effort. */
+function labelFor(
+  port: number,
+  mirror: Array<{ port: number; resolvedName?: string; cwd?: string }>,
+) {
   const entry = mirror.find((e) => e.port === port);
-  const name = entry?.name ?? entry?.cwd?.split("/").filter(Boolean).at(-1);
+  const name = entry?.resolvedName ?? entry?.cwd?.split("/").filter(Boolean).at(-1);
   return name !== undefined ? `${name} :${port}` : undefined;
 }
 

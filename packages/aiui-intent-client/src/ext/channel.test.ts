@@ -106,11 +106,18 @@ describe("listChannels tells 'nothing running' apart from 'native messaging brok
   }
 
   it("a working host with an empty registry is a CLEAN empty listing (run `aiui claude`)", async () => {
-    fakeChromeWithNative(async () => ({ ok: true, channels: [] }));
+    fakeChromeWithNative(async () => ({ ok: true, protocol: 2, channels: [] }));
     const { listChannels } = await load();
     const listing = await listChannels();
     expect(listing.channels).toEqual([]);
     expect(listing.nativeHostError).toBeUndefined();
+  });
+
+  it("an OUTDATED host (old/absent protocol) is an error, not a silent list", async () => {
+    fakeChromeWithNative(async () => ({ ok: true, channels: [{ port: 4200 }] }));
+    const { listChannels } = await load();
+    const listing = await listChannels();
+    expect(listing.nativeHostError).toMatch(/outdated .*protocol 1 < 2/);
   });
 
   it("a missing host carries Chrome's error (install-native-host is the remedy)", async () => {
@@ -135,7 +142,7 @@ describe("listChannels tells 'nothing running' apart from 'native messaging brok
   });
 
   it("probeNativeHost reports ok / error for the boot-time diagnosis", async () => {
-    fakeChromeWithNative(async () => ({ ok: true, channels: [{ port: 4200 }] }));
+    fakeChromeWithNative(async () => ({ ok: true, protocol: 2, channels: [{ port: 4200 }] }));
     const one = await load();
     expect(await one.probeNativeHost()).toEqual({ ok: true, channels: [{ port: 4200 }] });
 

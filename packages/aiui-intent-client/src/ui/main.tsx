@@ -35,7 +35,7 @@ import {
 } from "../session";
 import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
-import type { ChannelEntry } from "./channel-header";
+import { agentsWarning, type ChannelEntry } from "./channel-header";
 import { PanelLayout } from "./panel-layout";
 import { installPanelKeys, type Narration } from "./shell";
 import { TargetTab } from "./target-tab";
@@ -419,11 +419,19 @@ render(
       listChannels={async () => {
         // The channel-served page's discovery IS its origin: the registry
         // mirror answers on the port we are bound to (or same-origin). No
-        // native host in this tier, so the listing never carries its error.
+        // native host in this tier, so the listing never carries its error —
+        // but the session-name health still surfaces loudly.
         const base = port !== undefined ? `http://127.0.0.1:${port}` : "";
         const res = await fetch(`${base}/debug/api/channels`);
-        const body = (await res.json()) as { channels?: ChannelEntry[] };
-        return { channels: body.channels ?? [] };
+        const body = (await res.json()) as {
+          channels?: ChannelEntry[];
+          agents?: Parameters<typeof agentsWarning>[0];
+        };
+        const warning = agentsWarning(body.agents);
+        return {
+          channels: body.channels ?? [],
+          ...(warning !== undefined ? { agentsWarning: warning } : {}),
+        };
       }}
       onSwitch={(next) => {
         const url = new URL(location.href);

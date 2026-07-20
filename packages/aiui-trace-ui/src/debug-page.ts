@@ -29,12 +29,14 @@ export interface MountDebugPageOptions {
   port?: number;
 }
 
-/** One row of a channel's `GET /debug/api/channels` answer. */
+/** One row of a channel's `GET /debug/api/channels` answer (enriched). */
 interface ChannelEntry {
   tag: string;
   port: number;
   pid: number;
   cwd: string;
+  /** The listing-computed display name (assigned → live session → pid). */
+  resolvedName?: string;
   self?: boolean;
 }
 
@@ -128,7 +130,7 @@ export function mountDebugPage(opts: MountDebugPageOptions = {}): void {
         const option = document.createElement("option");
         option.value = String(entry.port);
         const dir = entry.cwd === "" ? "" : ` · ${entry.cwd.split("/").slice(-2).join("/")}`;
-        option.textContent = `${entry.tag}${dir} · :${entry.port}`;
+        option.textContent = `${entry.resolvedName ?? entry.tag}${dir} · :${entry.port}`;
         option.selected = entry.port === currentPort;
         return option;
       }),
