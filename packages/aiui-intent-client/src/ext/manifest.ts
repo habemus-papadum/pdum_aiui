@@ -9,8 +9,6 @@
  * extension is a release shell, built and loaded unpacked.
  */
 
-import { ACTIVATE_COMMAND } from "./protocol";
-
 /** A NEW identity — deliberately not the retired frozen extension's key (out
  * of the tree, but still installed in some profiles as a safety net).
  *
@@ -76,22 +74,11 @@ export const manifest = {
       32: "icons/icon32.png",
     },
   },
-  // The activation gesture. A `chrome.commands` press is ALSO an extension
-  // INVOCATION, which is what grants the tab `tabCapture` standing — so this
-  // chord is not merely a shortcut, it is how the capture grant comes to exist
-  // (BEHAVIOR.md). Deliberately Command/Ctrl+Period ("."), chosen to dodge
-  // three collisions: the retired frozen extension's plain Command/Ctrl+B (so
-  // the two never fight over one chord), Gmail's Command/Ctrl+B bold, and the
-  // browser's own Command/Ctrl+Shift+B bookmarks-bar toggle (which Chrome
-  // reserves and won't hand out). Chrome names the period key "Period", not
-  // ".". If the suggestion still doesn't bind — another extension claimed it —
-  // set it by hand at chrome://extensions/shortcuts.
-  commands: {
-    [ACTIVATE_COMMAND]: {
-      suggested_key: { default: "Ctrl+Period", mac: "Command+Period" },
-      description: "aiui: arm and open a turn on this tab",
-    },
-  },
+  // NOTE deliberately NO `commands` block (owner, 2026-07-20). The activation
+  // chord (Command/Ctrl+Period) is retired: arming rides the channel-connected
+  // edge now, and the capture grant's invocation gestures are the toolbar
+  // click and the context-menu item (sw.ts) — both real invocations, which is
+  // what `tabCapture` standing requires (BEHAVIOR.md).
   background: {
     service_worker: "sw.js",
     type: "module",
@@ -108,6 +95,8 @@ export const manifest = {
   //   cannot see the page's own `history` calls, so the browser tells us.
   // "nativeMessaging": OPTIONAL cold-start channel discovery (ext/channel.ts);
   //   absent a host, port probing carries us.
+  // "contextMenus": the right-click grant item — an extension INVOCATION that
+  //   works even with the toolbar icon unpinned (sw.ts, GRANT_MENU_ID).
   permissions: [
     "sidePanel",
     "storage",
@@ -116,6 +105,7 @@ export const manifest = {
     "scripting",
     "webNavigation",
     "nativeMessaging",
+    "contextMenus",
   ],
   // <all_urls>: the content scripts' reach, and `executeScript`'s (a declared
   // content_scripts match does not grant host access for injection).

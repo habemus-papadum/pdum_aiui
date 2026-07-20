@@ -39,8 +39,14 @@ function makeNarration(): Narration {
 
 let dispose: (() => void) | undefined;
 
-function mount(extra: Partial<PanelLayoutProps>): HTMLElement {
-  const client = createIntentClient({ host: fakeBus({ activeTab: 1 }), lanes: noopLanes });
+function mount(
+  extra: Partial<PanelLayoutProps>,
+  options: { grantless?: boolean } = {},
+): { root: HTMLElement; client: ReturnType<typeof createIntentClient> } {
+  const client = createIntentClient({
+    host: fakeBus({ activeTab: 1, grantless: options.grantless }),
+    lanes: noopLanes,
+  });
   const root = document.createElement("div");
   document.body.appendChild(root);
   dispose = render(
@@ -57,7 +63,7 @@ function mount(extra: Partial<PanelLayoutProps>): HTMLElement {
     ),
     root,
   );
-  return root;
+  return { root, client };
 }
 
 describe("PanelLayout", () => {
@@ -68,7 +74,7 @@ describe("PanelLayout", () => {
   });
 
   it("renders the shared shell and gates the lanes-only panes (the fake tier)", () => {
-    const root = mount({
+    const { root } = mount({
       lanes: undefined,
       targetTab: <div data-testid="tt-marker" />,
       debug: { open: true, content: <div data-testid="dbg-marker" /> },
@@ -91,7 +97,7 @@ describe("PanelLayout", () => {
   });
 
   it("omits the target-tab slot and closes the debug pane by default", () => {
-    const root = mount({
+    const { root } = mount({
       lanes: undefined,
       debug: { content: <div data-testid="dbg-marker" /> },
     });
@@ -103,7 +109,31 @@ describe("PanelLayout", () => {
   });
 
   it("renders NO debug pane when a shell passes no content (the extension since 2026-07-19)", () => {
-    const root = mount({ lanes: undefined });
+    const { root } = mount({ lanes: undefined });
     expect(root.querySelector("[data-testid=extension-debugging]")).toBeNull();
+  });
+
+  it("shows the grant banner while the tab in view lacks the grant; the grant dismisses it", async () => {
+    // The GRANTFUL host (MV3): no grant at boot → the banner stands, naming
+    // both invocation remedies; it disappears the moment the grant lands and
+    // returns on a switch to an ungranted tab (owner, 2026-07-20).
+    const { root, client } = mount({ lanes: undefined });
+    const banner = () => root.querySelector("[data-testid=grant-banner]");
+    expect(banner()).not.toBeNull();
+    expect(banner()?.textContent).toContain("right-click");
+    expect(banner()?.textContent).toContain("toolbar");
+
+    client.setContext({ grantedTab: 1 }); // the invocation granted the tab in view
+    expect(banner()).toBeNull();
+
+    client.setContext({ activeTab: 2 }); // a switch to an ungranted tab
+    expect(banner()).not.toBeNull();
+  });
+
+  it("never shows the grant banner on a grantless host — the grant IS the tab in view", () => {
+    // CDP / the fake grantless tier keep grantedTab in lockstep with activeTab
+    // (client.ts), so the banner's condition is structurally false there.
+    const { root } = mount({ lanes: undefined }, { grantless: true });
+    expect(root.querySelector("[data-testid=grant-banner]")).toBeNull();
   });
 });

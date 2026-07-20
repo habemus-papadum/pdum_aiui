@@ -98,6 +98,15 @@ interface Rig {
 
 let rig: Rig | undefined;
 
+/** The retired one-gesture ritual, recomposed for the grant-only contract
+ * (owner, 2026-07-20): the rig's `connected: true` already ARMED the client
+ * (arm-on-connect, client.ts), the invocation gesture now only records the
+ * grant, and the turn cap opens the turn. */
+function grantAndOpen(client: IntentClient, tab: number): void {
+  activationGesture(client, tab);
+  client.dispatch("turn");
+}
+
 function makeRig(): Rig {
   const bus = fakeBus({ activeTab: 7 });
   const { thread, openThread } = stubThread();
@@ -147,7 +156,7 @@ afterEach(async () => {
 describe("the region drag (the `a` area shot)", () => {
   it("arms the page, then a regionDrag event crops, composes, and uploads", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.client.dispatch("region");
     await settle();
     // The page was armed for ONE drag.
@@ -186,7 +195,7 @@ describe("the region drag (the `a` area shot)", () => {
 describe("the jump-to-editor toggle", () => {
   it("arms the picker on an instrumented page; a jumpDone auto-exits and lowers it", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
     r.client.dispatch("jump");
     await settle();
@@ -203,7 +212,7 @@ describe("the jump-to-editor toggle", () => {
 
   it("turning a page-pointer tool on turns the others off (mutual exclusion, real gate)", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
     r.client.dispatch("pencil");
     expect(r.client.state().pencil).toBe(true);
@@ -216,7 +225,7 @@ describe("the jump-to-editor toggle", () => {
 describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
   it("activation opens a real thread; the hello meta carries tab + actor + config", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     expect(r.lanes.engine.threadOpen).toBe(true); // the wire engine followed
     r.client.dispatch("pencil"); // a contentful event so the wire dials
     await settle(30);
@@ -236,7 +245,7 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
 
   it("send with content lowers and closes; the seat stays armed", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.lanes.engine.contribute("hello from the harness"); // turn content
     await settle(30);
     r.client.dispatch("send");
@@ -248,7 +257,7 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
 
   it("send on an EMPTY explicit turn cancels instead (nothing to lower)", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.client.dispatch("send");
     await settle();
     expect(r.client.state().phase).toBe("armed");
@@ -257,7 +266,7 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
 
   it("the wire closing the thread flows BACK: engine timeout → mode engine armed", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     expect(r.client.state().phase).toBe("turn");
     // The server/timeout side: the wire engine closes its thread itself.
     r.lanes.engine.stepOut();
@@ -267,7 +276,7 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
 
   it("a lowered-prompt push narrates to the status line (the echo pane is gone); channel errors reach the toast line", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.client.dispatch("pencil");
     await settle(30);
     r.thread.serverPush?.({ kind: "lowered-prompt", prompt: "LOWERED" });
@@ -282,7 +291,7 @@ describe("the wire engine is DRIVEN — one machine, no dual truth", () => {
 describe("shots and selections ride the wire", () => {
   it("a manual shot grabs, flashes (shotFlash gate), and uploads the attachment", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     await settle();
     r.client.dispatch("shot");
     await settle(30);
@@ -296,7 +305,7 @@ describe("shots and selections ride the wire", () => {
     vi.useFakeTimers();
     try {
       const r = makeRig();
-      activationGesture(r.client, 7);
+      grantAndOpen(r.client, 7);
       r.client.dispatch("video"); // constant-cadence would wait videoPeriodSec;
       r.client.dispatch("fpsMode"); // smart mode ticks at 1 s with the gate
       await vi.advanceTimersByTimeAsync(50); // claims settle
@@ -315,7 +324,7 @@ describe("shots and selections ride the wire", () => {
     vi.useFakeTimers();
     try {
       const r = makeRig();
-      activationGesture(r.client, 7);
+      grantAndOpen(r.client, 7);
       r.client.dispatch("video");
       await vi.advanceTimersByTimeAsync(50);
       r.client.dispatch("video"); // off — release stops the sampler
@@ -330,7 +339,7 @@ describe("shots and selections ride the wire", () => {
 
   it("add selection pulls from the page and feeds the engine (pull model)", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     await settle();
     r.client.dispatch("selection");
     await settle(30);
@@ -342,7 +351,7 @@ describe("shots and selections ride the wire", () => {
 describe("navigation continuity — context riding the turn", () => {
   it("a same-tab navigation event lands in the engine stream (prompt-rendered)", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.bus.firePageEvent({
       kind: "navigation",
       tab: 7,
@@ -363,7 +372,7 @@ describe("navigation continuity — context riding the turn", () => {
     const r = makeRig();
     r.bus.setTabUrl(7, "fake://tab/7/docs");
     r.bus.setTabUrl(9, "fake://tab/9/app");
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     await settle(); // seed lastActiveTab
     r.bus.switchTab(9);
     await settle(20);
@@ -396,7 +405,7 @@ describe("navigation continuity — context riding the turn", () => {
 describe("the pencilSurface claim (mode-gated, tab-following)", () => {
   it("engages only when markup is ON, re-relays fade live, re-points on tab switch, releases on disarm", async () => {
     const r = makeRig();
-    activationGesture(r.client, 7); // grant + arm + turn on tab 7
+    grantAndOpen(r.client, 7); // grant + arm + turn on tab 7
     await settle(30);
     // Pencil mode is OFF by default (ink's twin — not auto-on), so nothing engages.
     expect(r.bus.log.some((l) => l.startsWith("page:pencil@"))).toBe(false);
@@ -462,7 +471,7 @@ describe("turn recovery — the mirror", () => {
     });
     lanes1.bind(client1);
     client1.setContext({ connected: true });
-    activationGesture(client1, 7);
+    grantAndOpen(client1, 7);
     lanes1.engine.contribute("half-composed thought");
     await settle(20);
     expect(saved?.threadOpen).toBe(true);
@@ -508,7 +517,8 @@ describe("turn recovery — the mirror", () => {
     const r = makeRig(); // makeRig's lanes use the DEFAULT sessionStorage mirror
     sessionStorage.removeItem("aiui2.turn");
     expect(r.lanes.recover(r.client)).toBe(false);
-    expect(r.client.state().phase).toBe("disarmed");
+    // Armed (the connect edge, not recover — recover moved nothing) and no turn.
+    expect(r.client.state().phase).toBe("armed");
   });
 });
 
@@ -529,7 +539,7 @@ describe("config consumers", () => {
 
   it("currentThreadEvents slices from the last thread-open", () => {
     const r = makeRig();
-    activationGesture(r.client, 7);
+    grantAndOpen(r.client, 7);
     r.lanes.engine.contribute("one");
     const events = currentThreadEvents(r.lanes.engine.events);
     expect(events[0]?.type).toBe("thread-open");
@@ -558,7 +568,7 @@ describe("config consumers", () => {
       expect(r.lanes.engine.settings.ttsModel).toBeUndefined();
 
       // The next thread's hello declares the new config (openThread reads it fresh).
-      activationGesture(r.client, 7);
+      grantAndOpen(r.client, 7);
       r.client.dispatch("pencil");
       await settle(30);
       expect((r.thread.dials[0]?.intent as { linter?: string }).linter).toBe("gemini");
@@ -571,7 +581,7 @@ describe("config consumers", () => {
   it("changing the linter WHILE a turn is open sends a mid-thread control chunk (live start/stop/swap)", async () => {
     const r = makeRig();
     try {
-      activationGesture(r.client, 7); // opens a turn → thread-open → socket dialed
+      grantAndOpen(r.client, 7); // opens a turn → thread-open → socket dialed
       await settle(30);
       expect(r.lanes.engine.threadOpen).toBe(true);
       const before = r.thread.chunks.length;
@@ -626,7 +636,7 @@ describe("the oracle — the journeys' XOR, the control rail, the hello", () => 
     try {
       oracle.set("openai");
       await settle();
-      activationGesture(r.client, 7);
+      grantAndOpen(r.client, 7);
       r.client.dispatch("pencil"); // contentful → the wire dials
       await settle(30);
       expect((r.thread.dials[0]?.intent as { oracle?: string }).oracle).toBe("openai");
@@ -647,7 +657,7 @@ describe("the converse (debug) lint button — the control rail + auto-off", () 
     const r = makeRig();
     try {
       linter.set("openai");
-      activationGesture(r.client, 7);
+      grantAndOpen(r.client, 7);
       await settle(30);
       const before = r.thread.chunks.length;
       r.lanes.lintNow();
@@ -664,7 +674,7 @@ describe("the converse (debug) lint button — the control rail + auto-off", () 
     const r = makeRig();
     try {
       linter.set("openai");
-      activationGesture(r.client, 7);
+      grantAndOpen(r.client, 7);
       r.client.dispatch("pencil"); // contentful → the wire dials (serverPush exists)
       await settle(30);
       const before = r.thread.chunks.length;

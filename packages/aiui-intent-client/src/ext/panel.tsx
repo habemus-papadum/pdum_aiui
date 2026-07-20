@@ -291,10 +291,12 @@ superviseCdpAlignment({
 });
 
 /**
- * The activation gesture, arriving from OUTSIDE (the worker). The toolbar click
- * and the command chord are extension invocations — they are what grant
- * `tabCapture` standing on a tab — so the worker is where they land, and this is
- * the imperative → Solid boundary crossing (activation.ts is the reference).
+ * The invocation gesture, arriving from OUTSIDE (the worker). The toolbar
+ * click and the context-menu grant item are extension invocations — they are
+ * what grant `tabCapture` standing on a tab — so the worker is where they
+ * land, and this crossing is GRANT-ONLY (owner, 2026-07-20): it records the
+ * granted tab and moves no phase. Arming rides the channel-connected edge
+ * (client.ts); turns are the turn cap's business.
  */
 const activate = (tabId: number | undefined): void => {
   activationGesture(client, tabId ?? client.context().activeTab);

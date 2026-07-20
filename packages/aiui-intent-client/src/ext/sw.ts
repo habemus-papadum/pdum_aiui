@@ -9,13 +9,17 @@
  *
  *  1. **Mint the capture grant.** `tabCapture.getMediaStreamId` is privileged
  *     and invocation-gated — the panel cannot call it, and it works only on a
- *     tab the user invoked the extension on. The toolbar click and the command
- *     chord ARE those invocations, which is why activation is what makes shots
- *     possible: the gesture is the grant (BEHAVIOR.md).
- *  2. **Carry the activation.** A `chrome.commands` press lands here, not in
- *     the panel; the worker opens the side panel (synchronously — the gesture
- *     token does not survive an `await`, verified live in the retired client) and
- *     tells the panel which tab was granted.
+ *     tab the user invoked the extension on. The toolbar click and the
+ *     context-menu grant item ARE those invocations (the command chord is
+ *     retired — owner, 2026-07-20), which is why activation is what makes
+ *     shots possible: the gesture is the grant (BEHAVIOR.md). A page button
+ *     cannot substitute: a DOM click is a user GESTURE, not an extension
+ *     INVOCATION, and Chrome confers standing only for the latter.
+ *  2. **Carry the activation.** The invocation lands here, not in the panel;
+ *     the worker opens the side panel (synchronously — the gesture token does
+ *     not survive an `await`, verified live in the retired client) and tells
+ *     the panel which tab was granted. The panel treats it as GRANT-ONLY —
+ *     arming rides the channel-connected edge, and no gesture opens a turn.
  *  3. **Watch navigations.** `chrome.webNavigation` sees SPA route changes that
  *     an isolated-world content script structurally cannot (the page's
  *     `history` lives in the page's realm).
@@ -27,9 +31,9 @@
  */
 
 import {
-  ACTIVATE_COMMAND,
   type ActivateMessage,
   type ExtOnlyCommand,
+  GRANT_MENU_ID,
   type NavigationMessage,
   PAGE_ADDRESS,
   PANEL_PORT_PREFIX,
@@ -64,7 +68,22 @@ const reinjectContentScripts = async (): Promise<void> => {
     ),
   );
 };
-chrome.runtime.onInstalled.addListener(() => void reinjectContentScripts());
+chrome.runtime.onInstalled.addListener(() => {
+  void reinjectContentScripts();
+  // The right-click grant path (owner, 2026-07-20): a context-menu click is a
+  // real extension INVOCATION — it mints `tabCapture` standing exactly like
+  // the toolbar click — and it works with the toolbar icon unpinned. Created
+  // on install/update; menus outlive worker restarts. The no-op callback
+  // reads lastError so a duplicate-id complaint stays off the console.
+  chrome.contextMenus.create(
+    {
+      id: GRANT_MENU_ID,
+      title: "aiui: grant capture on this tab",
+      contexts: ["all"],
+    },
+    () => void chrome.runtime.lastError,
+  );
+});
 
 /** The invocation: grant this tab, open the panel, tell the panel. */
 const invoke = (windowId: number | undefined, tabId: number | undefined): void => {
@@ -95,8 +114,8 @@ const invoke = (windowId: number | undefined, tabId: number | undefined): void =
 const pending = new Map<number, ActivateMessage>();
 
 chrome.action.onClicked.addListener((tab) => invoke(tab.windowId, tab.id));
-chrome.commands.onCommand.addListener((command, tab) => {
-  if (command === ACTIVATE_COMMAND) {
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === GRANT_MENU_ID) {
     invoke(tab?.windowId, tab?.id);
   }
 });

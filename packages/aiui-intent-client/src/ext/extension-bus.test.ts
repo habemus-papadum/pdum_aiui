@@ -19,11 +19,7 @@ interface FakeChrome {
   sent: string[];
 }
 
-function fakeChrome(options: {
-  windowTabs: Array<{ id: number; active?: boolean }>;
-  /** The activation command's live binding (absent = unbound/dropped). */
-  shortcut?: string;
-}): FakeChrome {
+function fakeChrome(options: { windowTabs: Array<{ id: number; active?: boolean }> }): FakeChrome {
   const messageHandlers: Array<(msg: unknown, sender: unknown) => void> = [];
   const activatedHandlers: Array<(info: unknown) => void> = [];
   const removedHandlers: Array<(tabId: number) => void> = [];
@@ -37,15 +33,6 @@ function fakeChrome(options: {
       },
       sendMessage: () => Promise.resolve(),
       lastError: undefined,
-    },
-    commands: {
-      // The activation shortcut AS BOUND — what the hollow ring's hint shows.
-      getAll: () =>
-        Promise.resolve(
-          options.shortcut !== undefined
-            ? [{ name: "aiui-intent-activate", shortcut: options.shortcut }]
-            : [],
-        ),
     },
     tabs: {
       query: (q: { active?: boolean }) =>
@@ -207,29 +194,23 @@ describe("ExtensionBus", () => {
     expect(bus.capture.grantless).toBe(false);
   });
 
-  it("reads the activation shortcut AS BOUND for the hollow ring's hint — never hard-coded", async () => {
-    // Users rebind at chrome://extensions/shortcuts, and Chrome silently drops
-    // a conflicted suggestion (the retired frozen extension, where still
-    // installed, claims the same chord) — so
-    // the manifest's suggestion is not the truth; chrome.commands.getAll is.
-    fakeChrome({ windowTabs: [{ id: 7, active: true }], shortcut: "⌥⇧A" });
-    const bound = await connectExtensionBus({ windowId: 1 });
-    expect(bound.capture.grantHint).toBe("⌥⇧A");
-    bound.dispose();
-
-    fakeChrome({ windowTabs: [{ id: 7, active: true }] }); // unbound/dropped
-    const unbound = await connectExtensionBus({ windowId: 1 });
-    expect(unbound.capture.grantHint).toBe("aiui toolbar button");
+  it("names the invocation surfaces in the hollow ring's hint (the chord is retired)", async () => {
+    // The activation chord is gone (owner, 2026-07-20) — the remaining
+    // invocation surfaces are the context-menu grant item and the toolbar
+    // click, and the hint leads with the one that works unpinned.
+    fakeChrome({ windowTabs: [{ id: 7, active: true }] });
+    const bus = await connectExtensionBus({ windowId: 1 });
+    expect(bus.capture.grantHint).toBe("right-click → aiui: grant capture");
   });
 
   it("projects the ring per tab: solid where the grant is, hollow + hint everywhere else", async () => {
-    const fake = fakeChrome({ windowTabs: [{ id: 7, active: true }, { id: 9 }], shortcut: "⌘B" });
+    const fake = fakeChrome({ windowTabs: [{ id: 7, active: true }, { id: 9 }] });
     const bus = await connectExtensionBus({ windowId: 1 });
 
     bus.transport.broadcastRing({
       on: true,
       turnTone: true,
-      grant: { tab: 7, hint: "⌘B" },
+      grant: { tab: 7, hint: "right-click → aiui: grant capture" },
     });
     await settle();
 
@@ -240,7 +221,7 @@ describe("ExtensionBus", () => {
     // Tab 9 does not: HOLLOW, carrying how to mint the grant right there.
     const to9 = fake.sent.find((s) => s.startsWith("9:ring:"));
     expect(to9).toContain('"hollow":true');
-    expect(to9).toContain('"hint":"⌘B"');
+    expect(to9).toContain('"hint":"right-click → aiui: grant capture"');
   });
 
   it("treats a tab with no content script as a tab with no capabilities, not an error", async () => {

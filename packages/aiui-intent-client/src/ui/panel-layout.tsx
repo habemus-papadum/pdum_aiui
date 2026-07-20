@@ -65,6 +65,42 @@ export interface PanelLayoutProps {
 }
 
 /**
+ * The capture-grant banner (owner, 2026-07-20): standing, quiet, and shown
+ * exactly while the tab in view lacks the invocation-gated `tabCapture` grant
+ * — it disappears the moment the grant lands (and reappears on a switch to an
+ * ungranted tab). It names BOTH remedies, context menu first (the toolbar
+ * icon may be unpinned). Derived from context alone, so it needs no host
+ * knowledge: grantless hosts (CDP, the fake tier) keep `grantedTab` in
+ * lockstep with `activeTab` (client.ts), so the condition is only ever true
+ * on the extension host — structurally, not by a prop each shell must wire.
+ * Text/talk/page acts never needed the grant, and the second line says so —
+ * the banner is a signpost, not an error (that is why it is not a toast).
+ */
+function GrantBanner(props: { client: IntentClient }) {
+  const needsGrant = (): boolean => {
+    const ctx = props.client.context();
+    return ctx.activeTab !== undefined && ctx.grantedTab !== ctx.activeTab;
+  };
+  return (
+    <Show when={needsGrant()}>
+      <div
+        data-testid="grant-banner"
+        style="margin: 8px 12px; font: 12px system-ui; border: 1px solid #d97706; border-radius: 6px; padding: 6px 8px; max-width: 460px"
+      >
+        <div>
+          <strong>capture not granted for this tab</strong> — right-click the page →{" "}
+          <em>aiui: grant capture on this tab</em>, or click the aiui toolbar button (pin it for
+          one-click grants).
+        </div>
+        <div style="opacity: 0.7; margin-top: 2px">
+          talk, text, selection, and pencil work without it; shots and video need it.
+        </div>
+      </div>
+    </Show>
+  );
+}
+
+/**
  * The panel's render tree. Emits its own `<style>`, so an entry renders exactly
  * `<PanelLayout … />` and nothing else. The decided order (owner, 2026-07-14):
  * channel first, then the target tab (CDP only), the panel (bar + pills), the
@@ -85,6 +121,7 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
         onSwitch={props.onSwitch}
       />
       {props.targetTab}
+      <GrantBanner client={props.client} />
       <Panel
         client={props.client}
         registerBlipSink={props.registerBlipSink}

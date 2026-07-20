@@ -26,9 +26,9 @@ const rows: Array<{
   command: string;
   expected: Partial<Record<string, string | boolean>>;
 }> = [
-  // (The activation shortcut has NO command row here on purpose: it is an
-  // imperative event outside the modal system — activationGesture composes
-  // arm/turn/tweak; its semantics are pinned in client.test.ts.)
+  // (The invocation gesture has NO command row here on purpose: it is an
+  // imperative event outside the modal system — activationGesture records the
+  // capture grant only; its semantics are pinned in client.test.ts.)
   // arm column: one cap, status + toggle (gated on `connected` via available)
   {
     name: "arm from disarmed arms",

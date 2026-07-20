@@ -20,8 +20,9 @@ type RegionReport = Extract<PageReport, { kind: "region" }>;
 
 /** The on-page indicator ring: off · steady (armed) · breathing (turn) ·
  * HOLLOW (armed, but this tab's pixels need a grant). The hint text is handed
- * down by the host (the live activation shortcut) — the page never knows the
- * key. Ids/colors/CSS are the page's public footprint; keep them stable. */
+ * down by the host (how to mint the grant — the invocation surfaces) — the
+ * page never hard-codes it. Ids/colors/CSS are the page's public footprint;
+ * keep them stable. */
 export function createRingSurface(): {
   assert(on: boolean, turnTone: boolean, hollow: boolean, hint: string): void;
 } {

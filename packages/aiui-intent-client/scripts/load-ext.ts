@@ -12,8 +12,9 @@
  * Why this is a separate act rather than something `aiui claude` does for you:
  * the frozen client is still auto-loaded, and installing this one is a decision
  * to drive with it (see the retired parity ledger's switchover row, archive/intent-client/PARITY.md), so it stays a command you
- * run. (This client's ⌘. no longer collides with the frozen extension's ⌘B,
- * so the two can coexist without fighting over the chord.)
+ * run. (No chord collision to worry about anymore: this client's activation
+ * chord is retired — owner, 2026-07-20 — so the frozen extension's ⌘B has the
+ * keyboard to itself.)
  */
 
 import { dirname, join } from "node:path";
@@ -42,4 +43,6 @@ if (!loaded.ok) {
 }
 
 console.info(`intent client loaded: ${loaded.extensionId}`);
-console.info("open the panel with ⌘. (or the toolbar button) on the tab you want to drive.");
+console.info(
+  "open the panel with the aiui toolbar button (or right-click → aiui: grant capture) on the tab you want to drive.",
+);

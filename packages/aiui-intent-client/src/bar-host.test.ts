@@ -36,10 +36,10 @@ function makeClient(): IntentClient {
   return createIntentClient({ host: fakeBus({ activeTab: 7 }), lanes: noopLanes });
 }
 
-/** disarmed → armed → turn, the phase that reveals the turn-tier caps. */
+/** connect (the edge arms — client.ts) → turn, the phase that reveals the
+ * turn-tier caps. */
 function enterTurn(client: IntentClient): void {
   client.setContext({ connected: true });
-  client.dispatch("arm");
   client.dispatch("turn");
 }
 
@@ -101,8 +101,7 @@ describe("intentBarSource — the remote subset", () => {
 
   it("projects nothing remote outside a turn — the tier is not even revealed", () => {
     const client = makeClient();
-    client.setContext({ connected: true });
-    client.dispatch("arm"); // armed, not in a turn
+    client.setContext({ connected: true }); // the edge arms — not in a turn
     expect(remoteCommands(client)).toEqual([]);
   });
 });

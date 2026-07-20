@@ -186,7 +186,7 @@ async function boot(): Promise<{
       if (!recovered && state.phase === "connected") {
         recovered = true;
         if (channelLanes.recover(client)) {
-          setStatusLine("turn recovered from the mirror — re-grant with activate/⌘B");
+          setStatusLine("turn recovered from the mirror");
         }
       }
     });
@@ -203,7 +203,7 @@ async function boot(): Promise<{
       toast(
         marker !== undefined
           ? `selection from the editor added to the turn (${sel.sourceLoc ?? marker})`
-          : "selection from the editor ignored — arm the client first (activate/⌘B)",
+          : "selection from the editor ignored — the client is disarmed",
       );
     });
 
@@ -286,17 +286,15 @@ const { client, mode, lanes, fake, cdp, port } = await boot();
 /** Whichever host is targeting pages — the CdpBus's real tabs, or the fake's. */
 const targeting = cdp?.targeting ?? fake?.targeting;
 
-// The activation shortcut — an IMPERATIVE event outside the modal keyboard
-// system (chrome.commands in the extension, where the WORKER receives it; a
-// plain window listener here). See ../activation.ts, the reference
-// imperative-boundary example.
-const activate = (): void => {
-  activationGesture(client, targeting?.activeTab());
-};
+// NOTE: no activation shortcut here anymore (owner, 2026-07-20). Arming rides
+// the channel-connected edge (client.ts), and the invocation gesture is
+// GRANT-ONLY — in this page's real tier (CDP) the host is grantless, so there
+// is nothing to invoke; the fake tier's grant stand-in is a simulate-strip
+// button below (it models the MV3 invocation gate).
 
 // The panel document's keys — shared with the side panel (ui/shell.tsx), so the
 // grammar has exactly one home.
-installPanelKeys({ client, activate });
+installPanelKeys({ client });
 
 /** The world facts a real host supplies — as buttons, for the tiers that lack one.
  * In the CDP tier every one of these is REAL (open a tab, select text, click,
@@ -316,9 +314,18 @@ function SimulateStrip() {
     >
       <summary>{summary}</summary>
       <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px">
-        <button type="button" data-testid="activate" onClick={activate}>
-          activate (the ⌘B stand-in): grant + open
-        </button>
+        <Show when={mode !== "cdp"}>
+          {/* The fake bus models the MV3 invocation gate (grantless: false), so
+              the grant needs a stand-in for the real invocation surfaces
+              (toolbar click / context menu). Grant-only — no phase moves. */}
+          <button
+            type="button"
+            data-testid="activate"
+            onClick={() => activationGesture(client, targeting?.activeTab())}
+          >
+            grant capture (the invocation stand-in)
+          </button>
+        </Show>
         <Show when={mode === "fake"}>
           <button
             type="button"

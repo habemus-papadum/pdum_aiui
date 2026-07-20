@@ -37,11 +37,14 @@ export const BROKER_ADDRESS = "intent-sw";
  * reloading panel reconnects well inside the grace. The content-script silence
  * watchdog stays as the BACKUP verdict (a dying worker can't speak). */
 export const PANEL_PORT_PREFIX = "aiui-intent-panel:";
-/** The `chrome.commands` name of the activation gesture. One constant, three
- * readers: the manifest declares it, the worker matches it, and the bus looks
- * up its LIVE binding (`chrome.commands.getAll`) for the hollow ring's hint —
- * which is why no key name is ever hard-coded anywhere. */
-export const ACTIVATE_COMMAND = "aiui-intent-activate";
+/** The context-menu item that grants capture on the right-clicked tab — a real
+ * extension INVOCATION (like the toolbar click), which is what mints
+ * `tabCapture` standing. It exists because the toolbar icon may be unpinned
+ * (buried in the puzzle menu) while the right-click is always at hand.
+ * (The `chrome.commands` activation chord is GONE — owner, 2026-07-20: arming
+ * rides the channel-connected edge now, so the chord's only remaining job was
+ * the grant, and the two invocation surfaces above carry that.) */
+export const GRANT_MENU_ID = "aiui-intent-grant";
 
 /** A page fact, on its way to the panel (`chrome.runtime.sendMessage`). */
 export interface ReportMessage {
@@ -49,9 +52,10 @@ export interface ReportMessage {
   report: PageReport;
 }
 
-/** The activation invocation: an action click or the command chord. Carries the
- * tab it granted, which is the whole point — `tabCapture` is invocation-gated,
- * so THIS message is the capture grant becoming a fact (BEHAVIOR.md). */
+/** The activation invocation: an action click or the context-menu grant.
+ * Carries the tab it granted, which is the whole point — `tabCapture` is
+ * invocation-gated, so THIS message is the capture grant becoming a fact
+ * (BEHAVIOR.md). The panel treats it as grant-only: no phase moves. */
 export interface ActivateMessage {
   aiuiIntentActivate: 1;
   windowId: number;

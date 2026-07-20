@@ -298,13 +298,27 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     }
   };
 
+  // Arm follows the connection (owner, 2026-07-20): a channel session coming
+  // up IS the arm. Hosts write the `connected` fact through THIS setContext,
+  // so the false→true edge is observable in exactly one place — and both
+  // entries plus the fake tier inherit the rule. A reconnect re-arms even
+  // after a deliberate disarm (decided: the simplicity is worth the rare
+  // surprise). Disarm still exists and still sticks while the session holds.
+  const setContext: typeof engine.setContext = (patch) => {
+    const wasConnected = engine.context().connected;
+    engine.setContext(patch);
+    if (!wasConnected && engine.context().connected && engine.state().phase === "disarmed") {
+      engine.dispatch("arm");
+    }
+  };
+
   return {
     state: engine.state,
     region: engine.region,
     context: engine.context,
     dispatch: engine.dispatch,
     emit: engine.emit,
-    setContext: engine.setContext,
+    setContext,
     claimStatuses: engine.claimStatuses,
     dispose: engine.dispose,
     handleKey,

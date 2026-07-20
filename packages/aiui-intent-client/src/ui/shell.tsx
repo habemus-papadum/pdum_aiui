@@ -43,20 +43,20 @@ export interface Narration {
 /**
  * The panel document's keys. NOT the modal grammar — that is `keys.ts`, and it
  * belongs to the machine. These are the document's own affordances, layered
- * around it:
+ * around it — today just **Esc**, which steps out even when the grammar claims
+ * nothing: on the TARGET page keys belong to the page, but in the panel's own
+ * document Esc may still disarm.
  *
- *  - the **activation gesture** (⌘B on the plain page; the extension's command
- *    chord arrives from the service worker instead — an imperative event from
- *    outside, never a key in the grammar. See activation.ts);
- *  - **Esc**, which steps out even when the grammar claims nothing: on the
- *    TARGET page keys belong to the page, but in the panel's own document Esc
- *    may still disarm.
+ * (The ⌘B activation hook is GONE — owner, 2026-07-20: arming rides the
+ * channel-connected edge now, and the capture grant is minted by real
+ * extension invocations only — the toolbar click and the context-menu item,
+ * which land in the service worker, never in a document listener. See
+ * ../activation.ts.)
  *
  * Returns the uninstaller.
  */
 export function installPanelKeys(config: {
   client: IntentClient;
-  activate?: () => void;
   onBlip?: (key: string) => void;
 }): () => void {
   const { client } = config;
@@ -74,11 +74,6 @@ export function installPanelKeys(config: {
           'input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]',
         ) !== null)
     ) {
-      return;
-    }
-    if (config.activate !== undefined && event.metaKey && event.key === "b") {
-      event.preventDefault();
-      config.activate();
       return;
     }
     // NOTE: panel zoom is NOT here anymore (owner, 2026-07-16). It is a side-panel

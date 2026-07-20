@@ -107,12 +107,10 @@ export function Panel(props: PanelProps) {
             <Show when={!helpView().live}>
               <tr class="aiui-help-note" data-testid="keymap-help-note">
                 <td>
-                  <kbd>activate</kbd>
+                  <kbd>turn</kbd>
                 </td>
                 <td />
-                <td>
-                  these keys live in-turn — the activation shortcut (or the caps above) opens one
-                </td>
+                <td>these keys live in-turn — the turn cap above opens one</td>
               </tr>
             </Show>
             <For each={helpView().rows}>

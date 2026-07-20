@@ -19,15 +19,16 @@ const inTurn = (phase: unknown): boolean => phase === "turn" || phase === "tweak
 /** The main bar: the mode tree. */
 export const intentBar: readonly BarNode<IntentContext>[] = [
   {
-    // No key: arming is a cap (or the activation gesture) — not a modal key.
+    // No key: arming is a cap (or the channel-connected edge — the client
+    // arms itself on connect, client.ts) — not a modal key.
     command: "arm",
     hint: { key: "", label: "armed", icon: "⏻" },
     litWhen: ({ state }) => state.phase !== "disarmed",
     children: [
       {
-        // No key either: the activation shortcut is an imperative event
-        // outside the modal keyboard system (see activation.ts) — it must
-        // not masquerade as this cap's binding.
+        // No key either: the turn opens from this cap alone — the invocation
+        // gesture is grant-only now (see activation.ts) and must not
+        // masquerade as this cap's binding.
         command: "turn",
         hint: { key: "", label: "turn", icon: "💬" },
         litWhen: ({ state }) => inTurn(state.phase),

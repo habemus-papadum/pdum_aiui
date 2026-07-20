@@ -61,10 +61,17 @@ function makeRig(options: { grantless?: boolean; grantHint?: string } = {}): Rig
   return rig;
 }
 
-/** The activation shortcut with the grant minted (the SW gate, faked). */
+/** The retired one-gesture ritual, recomposed for the new contract (owner,
+ * 2026-07-20): connecting ARMS (the edge in client.ts — a re-set while
+ * connected is no edge, so re-arm by hand where a test disarmed), the
+ * invocation gesture only records the grant, and the turn cap opens. */
 function grantAndOpen(r: Rig, tab = 7): void {
   r.client.setContext({ connected: true });
+  if (r.client.state().phase === "disarmed") {
+    r.client.dispatch("arm");
+  }
   activationGesture(r.client, tab);
+  r.client.dispatch("turn");
 }
 
 /** All bar items, flattened across depth rows. */
@@ -97,28 +104,67 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe("the activation gesture — imperative boundary, idempotent grant-and-open", () => {
-  it("opens from disarmed, is a no-op in an open turn, resumes from tweak", async () => {
+describe("the invocation gesture — grant-only (owner, 2026-07-20)", () => {
+  it("records the granted tab and moves NO phase — turns belong to the turn cap", () => {
     const r = makeRig();
-    grantAndOpen(r);
-    expect(r.client.state().phase).toBe("turn"); // armed AND opened, one gesture
-    expect(r.lanes).toEqual(["openTurn"]);
-
-    grantAndOpen(r); // ledger: "⌘B-as-escape silently abandoned turns"
-    expect(r.client.state().phase).toBe("turn");
-    expect(r.lanes).toEqual(["openTurn"]); // no second open, no cancel
-
-    r.client.dispatch("tweak");
-    grantAndOpen(r);
-    expect(r.client.state().phase).toBe("turn"); // resumed, same turn
-    expect(r.lanes).toEqual(["openTurn"]);
+    r.client.setContext({ connected: true }); // the edge arms (arm-on-connect)
+    expect(r.client.state().phase).toBe("armed");
+    activationGesture(r.client, 7);
+    expect(r.client.state().phase).toBe("armed"); // no escalation to a turn
+    expect(r.client.context().grantedTab).toBe(7);
+    expect(r.lanes).toEqual([]); // no openTurn
   });
 
-  it("respects the arm gate: no channel, no arming — the gesture fizzles safely", () => {
+  it("mid-turn it re-grants and never cancels (the one salvage kept)", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    activationGesture(r.client, 9); // e.g. re-granting after a tab switch
+    expect(r.client.state().phase).toBe("turn"); // untouched
+    expect(r.client.context().grantedTab).toBe(9);
+    expect(r.lanes).toEqual(["openTurn"]); // no second open, no cancel
+  });
+
+  it("with no channel the grant still records — arming is the connection's job now", () => {
     const r = makeRig(); // never connected
     activationGesture(r.client, 7);
     expect(r.client.state().phase).toBe("disarmed");
+    expect(r.client.context().grantedTab).toBe(7);
     expect(r.lanes).toEqual([]);
+  });
+});
+
+describe("arm follows the connection (owner, 2026-07-20)", () => {
+  it("the connected edge arms a disarmed client", () => {
+    const r = makeRig();
+    expect(r.client.state().phase).toBe("disarmed");
+    r.client.setContext({ connected: true });
+    expect(r.client.state().phase).toBe("armed");
+  });
+
+  it("a re-set while connected is NO edge — a deliberate disarm sticks", () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    r.client.dispatch("disarm");
+    r.client.setContext({ connected: true }); // a repeated status write
+    expect(r.client.state().phase).toBe("disarmed");
+  });
+
+  it("a reconnect RE-ARMS even after a deliberate disarm (decided: simplicity wins)", () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    r.client.dispatch("disarm");
+    r.client.setContext({ connected: false }); // an outage never disarms; this one found us disarmed
+    r.client.setContext({ connected: true }); // the edge again
+    expect(r.client.state().phase).toBe("armed");
+  });
+
+  it("a connection blip mid-turn disturbs nothing — the edge only arms from disarmed", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.setContext({ connected: false });
+    r.client.setContext({ connected: true });
+    expect(r.client.state().phase).toBe("turn");
+    expect(r.lanes).toEqual(["openTurn"]);
   });
 });
 
@@ -129,8 +175,7 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     // exactly like the ⌘B gesture. It did not: shot/selection stayed
     // disabled forever, and only the page acts (which follow the tab in view) worked.
     const r = makeRig({ grantless: true });
-    r.client.setContext({ connected: true });
-    r.client.dispatch("arm");
+    r.client.setContext({ connected: true }); // the edge arms
     r.client.dispatch("turn");
     await settle();
 
@@ -151,8 +196,7 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
 
   it("a granted host (MV3 tabCapture) still needs the gesture — the PIXEL acts stay dark until it runs", async () => {
     const r = makeRig(); // grantless: false — the invocation-gated tier
-    r.client.setContext({ connected: true });
-    r.client.dispatch("arm");
+    r.client.setContext({ connected: true }); // the edge arms
     r.client.dispatch("turn");
     await settle();
 
@@ -255,8 +299,8 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     // exactly like ink: a durable `pencil` toggle, and a clear enabled only while
     // that mode is on in an open turn (owner, 2026-07-16).
     const r = makeRig();
-    r.client.setContext({ connected: true });
-    expect(r.client.canDispatch("pencilClear")).toBe(false); // disarmed
+    r.client.setContext({ connected: true }); // the edge arms
+    expect(r.client.canDispatch("pencilClear")).toBe(false); // armed, but no open turn
 
     grantAndOpen(r);
     // Mode off by default (like ink); its clear is dark until you turn it on.
@@ -328,8 +372,7 @@ describe("the ring — a claim, committed with the dispatch", () => {
     await settle();
     expect(r.bus.lastRing).toEqual({ on: false, turnTone: false }); // off (boot broadcast)
 
-    r.client.setContext({ connected: true });
-    r.client.dispatch("arm"); // armed, NOTHING granted yet (armed from the bar)
+    r.client.setContext({ connected: true }); // armed by the edge, NOTHING granted yet
     await settle();
     // The desire says so: a grant block with no tab — so EVERY page projects
     // hollow, each telling the user how to mint the grant right there.
@@ -370,8 +413,7 @@ describe("the ring — a claim, committed with the dispatch", () => {
 
   it("a GRANTLESS host's ring never carries a grant block — there is nothing to hint at", async () => {
     const r = makeRig({ grantless: true });
-    r.client.setContext({ connected: true });
-    r.client.dispatch("arm");
+    r.client.setContext({ connected: true }); // the edge arms
     r.client.dispatch("turn");
     await settle();
     // CDP shots ask nobody: no grant fact, no hollow state, no hint — the
@@ -650,7 +692,8 @@ describe("system events", () => {
 describe("the bar: a tree presented linearly", () => {
   it("blank system: arm · step out (disabled) · help — nothing else", () => {
     const r = makeRig();
-    r.client.setContext({ connected: true });
+    r.client.setContext({ connected: true }); // the edge arms…
+    r.client.dispatch("disarm"); // …step back down to the blank system
     const roots = r.client.bar();
     // Depth-first forest: the blank system's roots ARE the whole bar (no lit
     // parent, so nothing is revealed beneath them).
@@ -668,18 +711,18 @@ describe("the bar: a tree presented linearly", () => {
   it("arming requires the channel; the arm cap is the armed STATUS", () => {
     const r = makeRig();
     expect(findCap(r, "arm")?.enabled).toBe(false); // disconnected
-    r.client.setContext({ connected: true });
-    expect(findCap(r, "arm")?.enabled).toBe(true);
-    r.client.dispatch("arm");
+    r.client.setContext({ connected: true }); // the edge arms on its own
     expect(findCap(r, "arm")?.lit).toBe(true); // status indicator
-    r.client.dispatch("arm"); // …and the same cap disarms
+    r.client.dispatch("arm"); // the same cap disarms…
     expect(r.client.state().phase).toBe("disarmed");
+    expect(findCap(r, "arm")?.enabled).toBe(true); // …and can re-arm by hand
+    r.client.dispatch("arm");
+    expect(findCap(r, "arm")?.lit).toBe(true);
   });
 
   it("each tier reveals as its parent engages; enabled derives from the machine", () => {
     const r = makeRig();
-    r.client.setContext({ connected: true });
-    r.client.dispatch("arm");
+    r.client.setContext({ connected: true }); // the edge arms
     expect(findCap(r, "turn")).toBeDefined(); // the armed tier
     // A turn is a WIRE concept — no grant needed (found live: the grant gate
     // dead-ended the bar for anyone who armed via the cap). The capture acts

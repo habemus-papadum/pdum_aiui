@@ -31,14 +31,15 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 - **The selection cap is enabled only when the page HAS a selection** (owner, 2026-07-14): a
   pull with nothing selected is a guaranteed miss. Disabled, its tooltip points at the remedy —
   tweak mode (`t`), select something, come back. The `sel` pill mirrors the same fact.
-- **Tweak is a toggle**: `t` or the cap enters; the cap (or the activation gesture) releases.
-  In tweak the page owns every ordinary key — pressing `t` on the page must reach the page.
+- **Tweak is a toggle**: `t` or the cap enters; the cap releases. In tweak the page owns
+  every ordinary key — pressing `t` on the page must reach the page — so the cap is the one
+  way back.
 - **Help is a standing root-level toggle** (blank system: arm · step out · help). Esc
   dismisses it before anything else; it SURVIVES window blur (owner, 2026-07-15) — a
   reference card must be readable while the target page has focus. Its table always shows
   the full in-turn keymap from the one working source (`hintsFor`): live in a turn, and
   outside one the same rows dimmed as a PREVIEW under a single "these keys live in-turn —
-  activate opens one" note, so pre-turn help is a real reference card, not a one-line shrug.
+  the turn cap opens one" note, so pre-turn help is a real reference card, not a one-line shrug.
 - **Unknown in-turn keys swallow + blip** — never exit, never leak to the page.
 - **A dimmed cap is a REFUSED command, not a discouraged one.** Availability is a gate the
   machine enforces (`dispatch` consults `spec.available`), so every route in — a cap tap, a key,
@@ -46,15 +47,34 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
   the bar a suggestion: found live, where arming was gated on the channel in the bar and *not*
   in the machine, so a keypress could arm a client with nothing to talk to.
 
-## Activation is not a key
+## Arming rides the connection; the invocation gesture is grant-only
 
-The browser-global activation shortcut (⌘. under `chrome.commands` in the extension; a plain
-listener on the detached page) is **not part of the modal keyboard system** and never appears
-as a cap's key hint. It is an imperative event from outside, handled by `activationGesture()`
-(src/activation.ts): mint the grant, then sequential idempotent dispatches — arm if disarmed
-(respecting the channel gate), open a turn if armed, resume if tweaking, and **never cancel**
-an open turn. That function is the repo's reference example of a correct imperative → Solid
-boundary: it re-reads committed state between dispatches, which the engine makes safe.
+(Owner, 2026-07-20 — superseding the ⌘./⌘B activation ladder, which is retired along with
+the `chrome.commands` chord itself.)
+
+**Arm-on-connect.** The client arms itself on the channel-connected EDGE (client.ts wraps
+`setContext`; one home, every host and tier inherits it). A repeated `connected: true` write
+is no edge, so a deliberate disarm sticks while the session holds — but a RECONNECT re-arms
+even after a deliberate disarm (decided: the simplicity is worth the rare surprise). An
+outage never disarms (it just grays the pill), and the edge only arms from disarmed, so a
+connection blip never disturbs an open turn. The arm cap keeps working by hand in both
+directions.
+
+**The invocation gesture** (the extension's toolbar click or context-menu grant item; the
+plain page's simulate-strip stand-in) is an imperative event from outside the modal system —
+never a cap's key hint — and it now does exactly one thing: **record the capture grant**
+(`activationGesture()`, src/activation.ts). It moves no phase: arming belongs to the
+connection, turns belong to the turn cap, and nothing ever auto-cancels. In the MV3 tier the
+gesture IS the grant: `tabCapture` standing is invocation-gated, and Chrome confers it only
+for its own surfaces (toolbar action, context menu) — a DOM button's click is a user gesture
+but not an extension invocation, which is why no in-page button can mint it.
+
+**The grant banner** (panel-layout.tsx, both entries structurally): while the tab in view
+lacks the grant (`grantedTab !== activeTab` — only ever true on a grantful host), a standing
+quiet banner names both remedies — right-click → *aiui: grant capture on this tab* first
+(it works with the toolbar icon unpinned), then the toolbar click (pin it for one-click
+grants) — and states that only pixels need the grant. It disappears the moment the grant
+lands and returns on a switch to an ungranted tab. A signpost, not an error: never a toast.
 
 ## The bar
 
@@ -220,11 +240,12 @@ frames follow the active tab freely — only true continuous video inherits the 
 
 **Whether a capture GRANT exists is the host's business, not the user's.** A host declares
 whether the grant is free (`CaptureSource.grantless`). MV3's `tabCapture` is invocation-gated, so
-its grant is a real fact the activation gesture mints, and the pixel acts stay dark until it
+its grant is a real fact the invocation gesture mints, and the pixel acts stay dark until it
 does. The CDP tier's screenshots ask nobody, so there is nothing to mint: the grant simply *is*
-the tab in view. Consequence, and the bug it fixes (found live): arming from the BAR (`arm` →
-`turn`) must work exactly like the activation chord. It did not — the bar mints nothing, so the capture acts stayed
-disabled forever while the page acts, which follow the tab in view, worked fine.
+the tab in view. Consequence, and the bug it fixes (found live): arming without a grant (the
+connect edge, the arm cap) must open turns exactly like an invoked client — a grantless armed
+seat mints nothing, so gating turns on the grant would dead-end the bar; only the capture acts
+gate on it, individually.
 
 **The gate split (owner, 2026-07-14): the page transport follows the tab in view; pixels follow
 the grant.** Only the pixel acts — shot, the warm stream, video sampling — gate on the grant.
@@ -236,16 +257,16 @@ tab, but shooting (or sampling) a tab you are not looking at would lie about wha
 the acts go dark until the gesture re-grants, while the warm stream stays held on the granted tab
 so returning to it costs nothing.
 
-**The ring has FOUR states, and the fourth is how the page says "activate here" (owner,
+**The ring has FOUR states, and the fourth is how the page says "grant here" (owner,
 2026-07-14 — no toast; the ring carries it).** Off · steady (armed) · breathing (turn) · **hollow**: armed,
 but THIS tab's pixels need a grant. Hollow renders outline-only in the phase's tone, with the
-activation hint beside it. The hint text is discovered by the host — the MV3 bus reads the
-command's LIVE binding from `chrome.commands.getAll()` (users rebind it, and Chrome silently
-drops a suggested chord already claimed elsewhere — a browser shortcut, or another extension) —
-and handed down as a string; **no key name is hard-coded anywhere below the host.** The client's ring desire names
-the granted tab; each bus projects it per tab (`ringForTab`, one shared pure function): solid
-where the grant is, hollow everywhere else. Grantless hosts never produce a grant fact, so the
-hollow state simply cannot occur there.
+grant hint beside it. The hint text is supplied by the host (the MV3 bus names the invocation
+surfaces, context menu first — the chord and its `chrome.commands.getAll()` lookup are gone,
+2026-07-20) and handed down as a string; **nothing below the host hard-codes it.** The client's
+ring desire names the granted tab; each bus projects it per tab (`ringForTab`, one shared pure
+function): solid where the grant is, hollow everywhere else. Grantless hosts never produce a
+grant fact, so the hollow state simply cannot occur there. The panel-side twin of the hollow
+ring is the grant banner (above), which spells out the long-form remedies.
 
 ## Which tab the client is aimed at (the leader)
 

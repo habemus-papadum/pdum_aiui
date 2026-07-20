@@ -11,9 +11,9 @@
  *    about ITS window — a panel never drives a tab you cannot see from it.
  *  - **A real capture grant.** `tabCapture` is invocation-gated per tab: it
  *    works only on a tab the user invoked the extension on (toolbar click or
- *    the command chord). So `grantless` is FALSE here, the activation gesture's
- *    grant is a genuine world fact, and the capture acts stay dark until it
- *    exists. Same machine, same gates — the host supplies the fact.
+ *    the context-menu grant item). So `grantless` is FALSE here, the invocation
+ *    gesture's grant is a genuine world fact, and the capture acts stay dark
+ *    until it exists. Same machine, same gates — the host supplies the fact.
  *  - **Continuous video.** The warm `tabCapture` MediaStream is a real video
  *    source; CDP screenshots are stills. This is why the extension still earns
  *    its keep now that the CdpBus drives real tabs.
@@ -41,7 +41,6 @@ import {
 } from "../transport";
 import { grabTabShot, holdTabStream, releaseTabStream } from "./capture";
 import {
-  ACTIVATE_COMMAND,
   BROKER_ADDRESS,
   isNavigationMessage,
   isReportMessage,
@@ -248,14 +247,12 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   chrome.tabs.onRemoved.addListener(onRemoved);
   await readActiveTab();
 
-  // The hollow ring's hint: the activation shortcut AS BOUND, read live —
-  // users rebind at chrome://extensions/shortcuts, and Chrome silently drops a
-  // suggested chord already claimed elsewhere (a browser shortcut, or another
-  // extension), so the manifest's suggestion is NOT the truth and no key name
-  // is hard-coded.
-  const commands = (await chrome.commands?.getAll?.()) ?? [];
-  const shortcut = commands.find((c) => c.name === ACTIVATE_COMMAND)?.shortcut ?? "";
-  const grantHint = shortcut === "" ? "aiui toolbar button" : shortcut;
+  // The hollow ring's hint — how the user mints the grant. The activation
+  // chord is retired (owner, 2026-07-20; nothing to read from
+  // `chrome.commands.getAll` anymore), so the hint names the two remaining
+  // invocation surfaces; the context menu leads because it works even with the
+  // toolbar icon unpinned. The panel's grant banner spells out the long form.
+  const grantHint = "right-click → aiui: grant capture";
 
   const transport: PageTransport = {
     requestPage: (tab, capability, payload) => {

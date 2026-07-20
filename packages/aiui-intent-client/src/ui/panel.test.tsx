@@ -10,7 +10,6 @@ import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
-import { activationGesture } from "../activation";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { fakeBus } from "../fake-bus";
 import type { LinterPulseView } from "../linter-pulse";
@@ -90,15 +89,20 @@ const text = (root: HTMLElement, testid: string): string =>
 
 describe("the panel is a projection", () => {
   it("pill and caps follow a dispatch in the same breath — no repaint to forget", async () => {
-    const m = mount();
+    const m = mount(); // mount connects → the edge ARMS (arm-on-connect)
     await settle();
     // No phase pill (owner, 2026-07-14): the ARM CAP carries the state — its
     // lit attribute is the disarmed/armed indicator.
     const armCap = () => m.root.querySelector('[data-command="arm"]');
-    expect(armCap()?.getAttribute("data-lit")).toBe("false"); // disarmed
+    expect(armCap()?.getAttribute("data-lit")).toBe("true"); // armed by the edge
 
-    activationGesture(m.client, 7);
+    m.client.dispatch("disarm");
     await settle(); // effects paint on the flush inside dispatch; settle for jsdom
+    expect(armCap()?.getAttribute("data-lit")).toBe("false"); // the cap followed
+
+    m.client.dispatch("arm");
+    m.client.dispatch("turn");
+    await settle();
     expect(armCap()?.getAttribute("data-lit")).toBe("true"); // armed-or-deeper
     expect(m.client.state().phase).toBe("turn");
 
@@ -110,7 +114,7 @@ describe("the panel is a projection", () => {
 
   it("cap clicks dispatch the same command as the key", async () => {
     const m = mount();
-    activationGesture(m.client, 7);
+    m.client.dispatch("turn");
     await settle();
     const sendCap = m.root.querySelector<HTMLButtonElement>('[data-command="send"]');
     expect(sendCap).not.toBeNull();
@@ -122,7 +126,7 @@ describe("the panel is a projection", () => {
 
   it("the help table renders the working keymap and dies on Esc first", async () => {
     const m = mount();
-    activationGesture(m.client, 7);
+    m.client.dispatch("turn");
     m.client.handleKey("?", "down", false);
     await settle();
     expect(m.root.querySelector('[data-testid="keymap-help"]')).not.toBeNull();
@@ -141,7 +145,7 @@ describe("the panel is a projection", () => {
 
   it("help OUTSIDE a turn previews the full keymap, dimmed, under the activation note", async () => {
     const m = mount();
-    m.client.dispatch("help"); // disarmed — no turn anywhere near
+    m.client.dispatch("help"); // armed (the connect edge), but no turn anywhere near
     await settle();
     const table = m.root.querySelector('[data-testid="keymap-help"]');
     expect(table).not.toBeNull();
@@ -158,7 +162,7 @@ describe("the panel is a projection", () => {
     const pill = (name: string) =>
       m.root.querySelector(`[data-pill="${name}"]`)?.getAttribute("data-state");
     m.client.setContext({ connected: true, micGranted: true, pencilClients: 1 });
-    activationGesture(m.client, 7);
+    m.client.dispatch("turn");
     await settle();
     expect(pill("stream")).toBe("on"); // warm capture held
     expect(pill("keys")).toBe("on");
@@ -179,7 +183,7 @@ describe("the panel is a projection", () => {
   it("the ring pill goes HOLLOW when the tab in view lacks the grant — like the on-page dot", async () => {
     const m = mount();
     const ring = () => m.root.querySelector('[data-pill="ring"]');
-    activationGesture(m.client, 7); // grant minted on tab 7, turn open
+    m.client.dispatch("turn"); // granted at mount, armed by the edge — open the turn
     await settle();
     expect(ring()?.getAttribute("data-state")).toBe("live"); // in-turn: breathing red
     expect(ring()?.hasAttribute("data-hollow")).toBe(false); // view IS the granted tab
@@ -205,7 +209,7 @@ describe("the panel is a projection", () => {
     // in place. (Also: the hold cap must stay ENABLED mid-hold — a disabled
     // button swallows the pointerup.)
     const m = mount();
-    activationGesture(m.client, 7);
+    m.client.dispatch("turn");
     await settle();
     const ptt = m.root.querySelector<HTMLButtonElement>('[data-command="talkPress"]');
     expect(ptt).not.toBeNull();
@@ -224,7 +228,7 @@ describe("the panel is a projection", () => {
 
   it("a swallowed typo blips without touching the machine", async () => {
     const m = mount();
-    activationGesture(m.client, 7);
+    m.client.dispatch("turn");
     const before = m.client.state();
     m.client.handleKey("q", "down", false);
     await settle();

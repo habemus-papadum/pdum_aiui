@@ -10,7 +10,9 @@
  * and a test in spec.test.ts.
  *
  * Decided semantics carried (each was paid for live — README "salvage"):
- *  - ⌘B is idempotent grant-and-open, never cancels
+ *  - the invocation gesture is GRANT-ONLY (owner, 2026-07-20): arming belongs
+ *    to the connection (client.ts arms on the connected edge), turns to the
+ *    turn cap — no gesture escalates, and nothing ever auto-cancels
  *  - Esc steps out one level (help before turn-cancel), never destructive
  *    beyond scope, and never disarms (the ladder's escFloor)
  *  - send keeps you armed; disarm is its own deliberate command
@@ -127,12 +129,12 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
   },
 
   commands: {
-    // NOTE deliberately absent: a "cmdB" command. The browser-global
-    // activation shortcut is NOT a key in this modal system — it is an
-    // imperative event from outside (chrome.commands in the extension, a
-    // window listener in the plain page) handled by activationGesture(),
-    // which crosses the boundary as sequential idempotent dispatches of the
-    // commands below. See ./activation.ts.
+    // NOTE deliberately absent: an "activate" command. The extension's
+    // invocation gesture (toolbar click, context-menu grant) is NOT a key in
+    // this modal system — it is an imperative event from outside, handled by
+    // activationGesture(), and it only records the capture grant (a context
+    // fact, not a region). Arming rides the channel-connected edge instead
+    // (client.ts). See ./activation.ts.
     /**
      * The bar's arm cap — a status indicator you can press: arms from
      * disarmed, disarms from anywhere else (the disarmed-is-hard exclude
@@ -298,7 +300,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // NOTE deliberately NO `turn` gate: a turn is a WIRE concept — talk and
     // text work grantless — so armed → turn derives from the reducer. The
     // capture GRANT gates the capture-dependent acts individually (below);
-    // the activation shortcut mints it (found live: gating the turn cap on
+    // the invocation gesture mints it (found live: gating the turn cap on
     // the grant dead-ended the bar for anyone who armed via the cap).
     // …and only while the tab in view IS the granted tab: after a tab switch
     // the grant persists on the old tab, and shooting a tab you are not

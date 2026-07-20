@@ -199,7 +199,15 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
       }
     }
     setEventsRev((n) => n + 1);
-    mirror?.persist(currentThreadEvents(engine.events), engine.threadOpen);
+    // The mirror follows turn CONTENT; `armed` edges are excluded (owner,
+    // 2026-07-20). They carry no turn truth — and the boot-time arm (the
+    // client arms on the connected edge, which lands BEFORE the entries call
+    // recover()) would otherwise persist an empty no-thread state over the
+    // mirrored turn, so a reload could never recover it. Everything that does
+    // change turn truth (thread-open/close, contentful events) still persists.
+    if (event.type !== "armed") {
+      mirror?.persist(currentThreadEvents(engine.events), engine.threadOpen);
+    }
   });
 
   // ── the world flows back: wire-engine events → mode-engine bindings ───────
