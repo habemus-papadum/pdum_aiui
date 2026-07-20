@@ -42,6 +42,9 @@ export interface ChannelInfo {
 /** `GET /health` — the bind and the live client summaries. */
 export interface HealthInfo {
   host?: string;
+  /** Non-internal IPv4 interfaces — the LAN addresses a host-bound channel is
+   *  reachable on. The dashboard renders a copy button per entry. */
+  interfaces?: Array<{ name: string; address: string }>;
   pageTools?: { clients?: number; namespaces?: number; tools?: number };
   session?: { clients?: number; slots?: number; roles?: string[] };
 }
