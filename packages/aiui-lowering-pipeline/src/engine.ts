@@ -169,26 +169,18 @@ export class Engine {
 
   // ── thread ─────────────────────────────────────────────────────────────────
 
-  /**
-   * The turn's app selection, read once at thread-open (set by the modality —
-   * it returns the selection watcher's current snapshot). Whatever was
-   * highlighted on the page when the turn's first contentful act happened
-   * becomes the turn's opening `app-selection` event, so the transcript
-   * *begins* with the selection chip and pre-arm selections can never be lost
-   * to a send-time read.
-   */
-  selectionProvider?: () => AppSelection | undefined;
-
+  // NOTE deliberately absent: a `selectionProvider` read at thread-open
+  // (owner, 2026-07-20). The engine used to open every turn with the page's
+  // current selection as an automatic `app-selection` event. The rule was
+  // decided OUT: no host ever wired the provider after the dev-overlay
+  // retired, and selections are deliberate adds now — the panel's pull, the
+  // reader's contribution — never an ambient snapshot.
   private ensureThread(trigger: "talk" | "ink" | "shot" | "contribution" | "explicit"): void {
     if (this.threadOpen || !this.armed) {
       return;
     }
     this.threadOpen = true;
     this.emit(this.stamp({ type: "thread-open", trigger }));
-    const selection = this.selectionProvider?.();
-    if (selection !== undefined && selection.text !== "") {
-      this.emitAppSelection(selection);
-    }
   }
 
   /**
@@ -258,64 +250,19 @@ export class Engine {
   }
 
   /**
-   * Events that give the next app selection its own stream position: once one
-   * of these lands after the turn's last `app-selection`, a new snapshot is a
-   * NEW selection (fresh marker, its own chip) rather than a refinement of
-   * the last (same marker, the fold keeps the latest payload) — the rule that
-   * lets the watcher track a drag without spamming chips.
-   */
-  private static isContentful(event: IntentEvent): boolean {
-    return (
-      event.type === "talk-start" ||
-      event.type === "transcript-delta" ||
-      (event.type === "transcript-final" && !event.correction) ||
-      event.type === "stroke" ||
-      event.type === "shot" ||
-      event.type === "code-selection"
-    );
-  }
-
-  /** The marker for the next app-selection: reuse the last one while nothing
-   * contentful (or a drop) has intervened — see {@link Engine.isContentful}. */
-  private nextSelectionMarker(): string {
-    for (let i = this.events.length - 1; i >= 0; i--) {
-      const event = this.events[i];
-      if (event.type === "thread-open") {
-        break;
-      }
-      if (event.type === "app-selection") {
-        if (event.marker !== undefined) {
-          return event.marker; // a refinement of the same selection
-        }
-        break; // markerless (replayed pre-marker stream): start fresh
-      }
-      if (event.type === "app-selection-drop" || Engine.isContentful(event)) {
-        break;
-      }
-    }
-    return `sel_${++this.selCounter}`;
-  }
-
-  private emitAppSelection(selection: AppSelection): void {
-    this.emit(
-      this.stamp({ type: "app-selection", marker: this.nextSelectionMarker(), ...selection }),
-    );
-  }
-
-  /**
-   * Record an app selection mid-thread (the page selection changed while the
-   * thread was open — tweak mode, correct mode, any live watcher update). A
-   * positional stream event like text and shots: a NEW selection appends its
-   * own chip; successive refinements with nothing contentful in between ride
-   * the SAME marker (the fold keeps the latest — one chip tracking the drag).
-   * The thread-open capture itself goes through {@link selectionProvider}.
+   * Record an app selection — a positional stream event like text and shots.
+   * EVERY add mints a fresh `sel_N` marker: its own chip, its own item
+   * (owner, 2026-07-20). The old refinement rule — reuse the last marker
+   * while nothing contentful intervened, so an ambient watcher could track a
+   * drag on one chip — is retired: no watcher ever shipped, and its only
+   * observable effect was squashing consecutive DELIBERATE adds (select A,
+   * add; select B, add — nothing spoken between) into one latest-wins chip.
+   * Should a live watcher return, refinement wants an explicit flag on the
+   * call, not a stream-shape heuristic.
    *
    * With no thread open: an *armed* engine opens one (the extension panel's
    * pull model — "add selection" is a deliberate act, as contentful as a
-   * contribution). Ambient watcher updates must not open turns: those callers
-   * (the intent client's ambient watcher) pre-filter on `threadOpen`
-   * themselves. Unarmed
-   * remains a no-op.
+   * contribution). Unarmed remains a no-op.
    */
   appSelection(selection: AppSelection): boolean {
     if (selection.text === "") {
@@ -327,7 +274,9 @@ export class Engine {
       }
       this.ensureThread("contribution");
     }
-    this.emitAppSelection(selection);
+    this.emit(
+      this.stamp({ type: "app-selection", marker: `sel_${++this.selCounter}`, ...selection }),
+    );
     return true;
   }
 

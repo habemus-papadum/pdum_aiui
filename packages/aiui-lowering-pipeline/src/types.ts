@@ -414,22 +414,23 @@ export type IntentEvent =
     }
   | ({
       /**
-       * An on-screen selection riding this turn: text highlighted in the app
-       * *before* arming (while armed, drags ink — so the watcher's snapshot is
-       * the record of it), or re-selected mid-turn (tweak mode, correct mode).
-       * A first-class stream event, interleaved like text and shots: it
-       * composes into the prompt AT ITS POSITION and shows as a chip there in
-       * the preview. Emitted right after `thread-open` for the pre-arm
-       * snapshot, and again on each mid-turn selection.
+       * An on-screen selection riding this turn — a DELIBERATE add (the
+       * panel's selection cap pulling the page's highlight; tweak mode,
+       * correct mode). A first-class stream event, interleaved like text and
+       * shots: it composes into the prompt at the words spoken by its `at`
+       * (the timestamp interleave, 2026-07-20) and shows as a chip there in
+       * the preview.
        *
        * `marker` (`sel_1`, `sel_2`, … — the engine assigns, mirroring
-       * `shot_N`) is the selection's identity: a refinement of the SAME
-       * selection (nothing contentful in between — the watcher tracking a
-       * drag) re-emits under the same marker and the fold keeps the latest
-       * payload at the first position (one chip that tracks the drag); once
-       * anything else lands, a new selection gets a fresh marker and its own
-       * position. Absent only in pre-marker traces (consumers fold those
-       * latest-wins, the legacy behavior).
+       * `shot_N`) is the selection's identity: every add mints a fresh one —
+       * its own chip, its own position. (The retired refinement rule — reuse
+       * the marker while nothing contentful intervened, for an ambient
+       * watcher tracking a drag — squashed consecutive deliberate adds and
+       * died with the watcher idea, 2026-07-20; replayed old traces that
+       * share a marker still fold latest-wins at the first position. The
+       * automatic thread-open snapshot is likewise retired.) Absent only in
+       * pre-marker traces (consumers fold those latest-wins, the legacy
+       * behavior).
        */
       at: number;
       type: "app-selection";
@@ -553,7 +554,9 @@ export interface ComposedItem {
   components?: LocatedComponent[];
   /** True for a whole-viewport shot (renders with no element metadata). */
   viewport?: boolean;
-  /** A shot item's capture-gesture wall-clock (see the shot event's doc). */
+  /** An anchored item's wall-clock — what the timestamp interleave places by:
+   * a shot's capture GESTURE (see the shot event's doc), or the instant a
+   * selection was added (the `app-selection`/`code-selection` event's `at`). */
   takenAt?: number;
   /** Set when this shot is a frame sampled by a video share (see {@link ShotShare}). */
   share?: ShotShare;

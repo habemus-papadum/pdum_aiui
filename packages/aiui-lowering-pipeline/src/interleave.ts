@@ -1,10 +1,12 @@
 /**
  * Pass 4 of the compiler — the timestamp interleave and its pure helpers.
- * Splits each segment's text around shots taken mid-utterance, anchoring every
- * shot at the character offset the deltas (or word timestamps) had reached when
- * the gesture happened. A leaf: it depends only on ./types and declares its own
- * narrow input type so compose.ts's StreamFacts satisfies it structurally,
- * keeping the dependency edge one-way (compose → interleave).
+ * Splits each segment's text around the ANCHORED items that landed
+ * mid-utterance — shots (anchored at their capture gesture) and app/code
+ * selections (anchored at their add instant, 2026-07-20) — placing each at
+ * the character offset the deltas (or word timestamps) had reached at its
+ * anchor. A leaf: it depends only on ./types and declares its own narrow
+ * input type so compose.ts's StreamFacts satisfies it structurally, keeping
+ * the dependency edge one-way (compose → interleave).
  */
 import type { ComposedItem, TranscriptWord } from "./types";
 
@@ -20,18 +22,19 @@ export interface InterleaveFacts {
 }
 
 /**
- * Pass 4 — the timestamp interleave: place anchored shots INSIDE their
- * segment's text. A shot taken mid-window used to compose BEFORE that
+ * Pass 4 — the timestamp interleave: place anchored items INSIDE their
+ * segment's text. An item that landed mid-window used to compose BEFORE that
  * segment's entire text (finals arrive late; position was arrival order).
- * With `takenAt` (the gesture's wall-clock) and either anchor the segment
- * carries — word timestamps on its final (the exact anchor, `wordOffsetAt`)
- * or its delta timeline (`deltaOffsetAt`) — the compiler, the ONLY place
- * allowed to reorder the accumulator, splits the segment's text at the offset
- * that anchor had reached when the shot was taken, nudged to a word boundary.
- * Fallbacks are byte-identical to the old behavior: no takenAt (legacy
- * streams), no matching talk window (an idle shot), or a segment with NEITHER
- * anchor (a REST/silent final with no word timestamps and no deltas) → the
- * shot keeps its arrival position.
+ * With `takenAt` (a shot's capture-gesture wall-clock; a selection's add
+ * instant) and either anchor the segment carries — word timestamps on its
+ * final (the exact anchor, `wordOffsetAt`) or its delta timeline
+ * (`deltaOffsetAt`) — the compiler, the ONLY place allowed to reorder the
+ * accumulator, splits the segment's text at the offset that anchor had
+ * reached at the item's moment, nudged to a word boundary. Fallbacks are
+ * byte-identical to the old behavior: no takenAt (legacy streams), no
+ * matching talk window (an idle shot, a between-utterances selection), or a
+ * segment with NEITHER anchor (a REST/silent final with no word timestamps
+ * and no deltas) → the item keeps its arrival position.
  *
  * Under `streaming` this runs against the PROVISIONAL run too, so a shot
  * lands in the live transcript as it is taken. The offset is stable as the
@@ -48,12 +51,15 @@ export interface InterleaveFacts {
  * problem — the estimate is coarse (see the helper's doc), and the right
  * long-term anchor is probably audio-time-aligned transcription.
  */
+/** The item kinds the interleave may move: each carries a `takenAt` anchor. */
+const ANCHORED_KINDS = new Set<ComposedItem["kind"]>(["shot", "app-selection", "code-selection"]);
+
 export function interleavePass(items: ComposedItem[], facts: InterleaveFacts): void {
   const { windows, deltaTimelines, wordsBySegment } = facts;
-  const anchoredShots = new Map<number, ComposedItem[]>();
+  const anchored = new Map<number, ComposedItem[]>();
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
-    if (item.kind !== "shot" || item.takenAt === undefined) {
+    if (!ANCHORED_KINDS.has(item.kind) || item.takenAt === undefined) {
       continue;
     }
     const segment = segmentContaining(windows, item.takenAt);
@@ -70,9 +76,9 @@ export function interleavePass(items: ComposedItem[], facts: InterleaveFacts): v
       continue; // the segment never produced text — nothing to split
     }
     items.splice(i, 1);
-    anchoredShots.set(segment, [item, ...(anchoredShots.get(segment) ?? [])]);
+    anchored.set(segment, [item, ...(anchored.get(segment) ?? [])]);
   }
-  if (anchoredShots.size === 0) {
+  if (anchored.size === 0) {
     return;
   }
   for (let i = items.length - 1; i >= 0; i--) {
@@ -80,8 +86,8 @@ export function interleavePass(items: ComposedItem[], facts: InterleaveFacts): v
     if (target.kind !== "text" || target.segment === undefined) {
       continue;
     }
-    const shots = anchoredShots.get(target.segment);
-    if (shots === undefined) {
+    const anchors = anchored.get(target.segment);
+    if (anchors === undefined) {
       continue;
     }
     const text = target.text ?? "";
@@ -89,15 +95,15 @@ export function interleavePass(items: ComposedItem[], facts: InterleaveFacts): v
     const lag = deltaLagEstimate(windows.get(target.segment), timeline);
     const words = wordsBySegment.get(target.segment);
     const windowStart = windows.get(target.segment)?.start;
-    // Oldest shot first; each split offset is nudged to the end of the word
-    // it lands in (and past a sentence end just ahead), so a screenshot
-    // never interrupts a word — and rarely a sentence. Word timestamps,
-    // when present, anchor exactly; the delta-timeline lag estimate is the
+    // Oldest anchor first; each split offset is nudged to the end of the word
+    // it lands in (and past a sentence end just ahead), so an item never
+    // interrupts a word — and rarely a sentence. Word timestamps, when
+    // present, anchor exactly; the delta-timeline lag estimate is the
     // fallback.
     const placed: ComposedItem[] = [];
     // A provisional run stays provisional on both sides of the split — the
     // preview renders every run of a still-streaming segment dim, whether or
-    // not a screenshot cut it in two.
+    // not an anchored item cut it in two.
     const run = (text: string): ComposedItem => ({
       kind: "text",
       text,
@@ -105,20 +111,20 @@ export function interleavePass(items: ComposedItem[], facts: InterleaveFacts): v
       ...(target.provisional ? { provisional: true } : {}),
     });
     let consumed = 0;
-    for (const shot of shots.sort((a, b) => (a.takenAt ?? 0) - (b.takenAt ?? 0))) {
+    for (const anchor of anchors.sort((a, b) => (a.takenAt ?? 0) - (b.takenAt ?? 0))) {
       const exact =
         words !== undefined && windowStart !== undefined
-          ? wordOffsetAt(text, words, windowStart, shot.takenAt ?? 0)
+          ? wordOffsetAt(text, words, windowStart, anchor.takenAt ?? 0)
           : undefined;
       const offset = nudgeToBoundary(
         text,
-        exact ?? deltaOffsetAt(timeline, (shot.takenAt ?? 0) + lag),
+        exact ?? deltaOffsetAt(timeline, (anchor.takenAt ?? 0) + lag),
       );
       const head = text.slice(consumed, Math.max(consumed, offset)).trim();
       if (head !== "") {
         placed.push(run(head));
       }
-      placed.push(shot);
+      placed.push(anchor);
       consumed = Math.max(consumed, offset);
     }
     const tail = text.slice(consumed).trim();

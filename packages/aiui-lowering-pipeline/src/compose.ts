@@ -33,8 +33,9 @@ import type {
  *     (its final, normally) sits, carrying the replacement text.
  *  3. **corrections** — the spoken-correction patches against the
  *     transcript-as-lines (unchanged semantics; `replace` policy only).
- *  4. **interleave** — the timestamp reflow: anchored shots move INSIDE
- *     their segment's text, split at word-timestamp offsets. Replacements
+ *  4. **interleave** — the timestamp reflow: anchored items (shots by their
+ *     capture gesture, selections by their add instant) move INSIDE their
+ *     segment's text, split at word-timestamp offsets. Replacements
  *     reflow here for free: their re-timestamped words landed in
  *     {@link StreamFacts.wordsBySegment} during the scan.
  *  5. **render** — transcript + the lowered prompt body.
@@ -163,11 +164,12 @@ function placeItems(
 ): { items: ComposedItem[]; corrections: ComposedIntent["corrections"] } {
   const items: ComposedItem[] = [];
   const corrections: ComposedIntent["corrections"] = [];
-  // App selections are POSITIONAL items, marker-keyed latest-wins: the first
-  // event under a marker claims the stream position, and every re-emit under
-  // the same marker (a refinement — the watcher tracking a drag) replaces the
-  // payload in place. Markerless events (pre-marker traces) share one legacy
-  // slot, reproducing the old single-selection latest-wins behavior.
+  // App selections are POSITIONAL items, marker-keyed latest-wins. The engine
+  // mints a fresh marker per add now (owner, 2026-07-20 — the refinement rule
+  // is retired), so live streams never share a marker; the fold is kept for
+  // REPLAYED refinement-era traces (same marker twice → the first event's
+  // position, the latest payload). Markerless events (pre-marker traces)
+  // share one legacy slot, reproducing the old single-selection latest-wins.
   const LEGACY_SELECTION_KEY = "";
   const selectionByKey = new Map<string, ComposedItem>();
   /** Streaming mode: segments whose provisional run is already in `items`. */
@@ -228,6 +230,10 @@ function placeItems(
       const next: ComposedItem = {
         kind: "app-selection",
         text: event.text,
+        // The add instant — the timestamp interleave's anchor (like a shot's
+        // capture gesture): a selection made mid-utterance splits the
+        // segment's text at the words spoken by that moment.
+        takenAt: event.at,
         ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
         ...(event.cell !== undefined ? { cell: event.cell } : {}),
         ...(event.cellLoc !== undefined ? { cellLoc: event.cellLoc } : {}),
@@ -262,6 +268,9 @@ function placeItems(
       items.push({
         kind: "code-selection",
         text: event.text,
+        // The add instant (client ingest of the reader's contribution) — the
+        // interleave anchor, same as an app selection's.
+        takenAt: event.at,
         ...(event.sourceLoc !== undefined ? { sourceLoc: event.sourceLoc } : {}),
         ...(event.url !== undefined ? { url: event.url } : {}),
         ...(event.tab !== undefined ? { tab: event.tab } : {}),

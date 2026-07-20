@@ -464,29 +464,13 @@ describe("composeIntent", () => {
 });
 
 describe("app selection (a positional stream event, interleaved like text and shots)", () => {
-  it("opens the turn with a marked app-selection event from the selection provider", () => {
+  it("thread-open emits NO automatic selection (the provider rule is decided out, 2026-07-20)", () => {
+    // The engine used to open every turn with the page's current selection
+    // via a `selectionProvider` hook. Retired: no host ever wired it after
+    // the dev-overlay died, and selections are deliberate adds now.
     const engine = armedEngine();
-    engine.selectionProvider = () => ({
-      text: "reaction-diffusion on the GPU",
-      sourceLoc: "src/App.tsx:35:13",
-      cell: "catalog",
-    });
     engine.talkStart();
-    // Right after thread-open, before any transcript: the transcript BEGINS
-    // with the selection — and the engine assigned its marker (house style).
-    const types = engine.events.map((e) => e.type);
-    expect(types.indexOf("app-selection")).toBe(types.indexOf("thread-open") + 1);
-    expect(engine.events.find((e) => e.type === "app-selection")).toMatchObject({
-      marker: "sel_1",
-    });
-    const composed = composeIntent(engine.events);
-    expect(composed.items[0]).toMatchObject({
-      kind: "app-selection",
-      marker: "sel_1",
-      text: "reaction-diffusion on the GPU",
-      sourceLoc: "src/App.tsx:35:13",
-      cell: "catalog",
-    });
+    expect(engine.events.some((e) => e.type === "app-selection")).toBe(false);
   });
 
   it("composes multiple interleaved selections at their stream positions", () => {
@@ -546,35 +530,35 @@ describe("app selection (a positional stream event, interleaved like text and sh
     );
   });
 
-  it("supersedes per marker: a refinement with nothing contentful between re-uses the marker", () => {
+  it("EVERY add is a new selection: back-to-back adds keep BOTH (the squash fix, 2026-07-20)", () => {
+    // The bug this pins: two deliberate adds with nothing spoken between used
+    // to ride ONE marker (the refinement-reuse heuristic, built for an
+    // ambient watcher that never shipped) and fold latest-wins — the second
+    // selection silently replaced the first in the prompt.
     const engine = armedEngine();
     engine.talkStart();
     engine.talkEnd();
-    engine.appSelection({ text: "the histo" });
-    engine.appSelection({ text: "the histogram title", cell: "hist" }); // the drag widened
+    engine.appSelection({ text: "the histogram title", sourceLoc: "src/Hist.tsx:10:2" });
+    engine.appSelection({ text: "the legend caption", cell: "legend" });
     const selections = engine.events.filter((e) => e.type === "app-selection");
-    expect(selections.map((e) => (e as { marker?: string }).marker)).toEqual(["sel_1", "sel_1"]);
-    // One item, at the FIRST event's position, carrying the LATEST payload.
-    const composed = composeIntent(engine.events);
+    expect(selections.map((e) => (e as { marker?: string }).marker)).toEqual(["sel_1", "sel_2"]);
+    const items = composeIntent(engine.events).items.filter((i) => i.kind === "app-selection");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ marker: "sel_1", text: "the histogram title" });
+    expect(items[1]).toMatchObject({ marker: "sel_2", text: "the legend caption", cell: "legend" });
+  });
+
+  it("still folds refinement-era traces (same marker twice) latest-wins in place", () => {
+    // Replayed old streams carry the retired marker-reuse shape; the fold
+    // keeps composing them: the first event's position, the latest payload.
+    const composed = composeIntent([
+      { at: 1, type: "thread-open", trigger: "talk" },
+      { at: 2, type: "app-selection", marker: "sel_1", text: "the histo" },
+      { at: 3, type: "app-selection", marker: "sel_1", text: "the histogram title", cell: "hist" },
+    ]);
     const items = composed.items.filter((i) => i.kind === "app-selection");
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ marker: "sel_1", text: "the histogram title", cell: "hist" });
-  });
-
-  it("a contentful event in between mints a fresh marker (a NEW selection)", () => {
-    const engine = armedEngine();
-    const s1 = engine.talkStart();
-    engine.talkEnd();
-    engine.appSelection({ text: "first" });
-    engine.transcriptFinal(s1 ?? 1, "spoken words", 10, "mock");
-    engine.appSelection({ text: "second" });
-    const selections = engine.events.filter((e) => e.type === "app-selection");
-    expect(selections.map((e) => (e as { marker?: string }).marker)).toEqual(["sel_1", "sel_2"]);
-    expect(
-      composeIntent(engine.events)
-        .items.filter((i) => i.kind === "app-selection")
-        .map((i) => i.text),
-    ).toEqual(["first", "second"]);
   });
 
   it("drops retract exactly one selection, by marker", () => {
@@ -978,6 +962,82 @@ describe("the timestamp interleave (takenAt anchoring)", () => {
     expect(composed.items[0].text).toBe("make the legend wider and");
     expect(composed.items[2].text).toBe("move it below");
     expect(composed.transcript).toBe("make the legend wider and move it below");
+  });
+
+  it("anchors a mid-utterance APP SELECTION inside the segment's text (hands-free, 2026-07-20)", () => {
+    // Selections are anchored items now, exactly like shots: the event's `at`
+    // (the add instant) is the anchor. Before this, a selection added while
+    // talking hands-free composed BEFORE the whole utterance — the final
+    // arrives at window close and claimed a later stream position.
+    const events = longWindowStream(
+      "make the legend wider and move it below",
+      [
+        [T0 + 1500 + LAG, "make the legend"],
+        [T0 + 2600 + LAG, "make the legend wider and"],
+        [T0 + 4000 + LAG, "make the legend wider and move it below"],
+      ],
+      T0 + 4000,
+    );
+    // The user highlights the legend title just after saying "…wider and".
+    events.splice(6, 0, {
+      at: T0 + 2600 + 50,
+      type: "app-selection",
+      marker: "sel_1",
+      text: "Legend",
+      sourceLoc: "src/Legend.tsx:12:3",
+    });
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "app-selection", "text"]);
+    expect(composed.items[0].text).toBe("make the legend wider and");
+    expect(composed.items[1]).toMatchObject({ marker: "sel_1", text: "Legend" });
+    expect(composed.items[2].text).toBe("move it below");
+    expect(composed.transcript).toBe("make the legend wider and move it below");
+  });
+
+  it("anchors a mid-utterance CODE SELECTION the same way (the VS Code contribution)", () => {
+    // Both selection kinds ride the same anchor — parity between the browser's
+    // pull and the editor's contribution is structural, not per-kind code.
+    const events = longWindowStream(
+      "make the legend wider and move it below",
+      [
+        [T0 + 1500 + LAG, "make the legend"],
+        [T0 + 2600 + LAG, "make the legend wider and"],
+        [T0 + 4000 + LAG, "make the legend wider and move it below"],
+      ],
+      T0 + 4000,
+    );
+    events.splice(6, 0, {
+      at: T0 + 2600 + 50,
+      type: "code-selection",
+      marker: "code_1",
+      text: "const legend = buildLegend()",
+      sourceLoc: "src/plot.ts:40-40",
+      lines: 1,
+    });
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "code-selection", "text"]);
+    expect(composed.items[0].text).toBe("make the legend wider and");
+    expect(composed.items[1]).toMatchObject({ marker: "code_1" });
+    expect(composed.items[2].text).toBe("move it below");
+  });
+
+  it("a selection added OUTSIDE any talk window keeps its arrival position", () => {
+    // No matching window (idle add, long after release) → same fallback as an
+    // idle shot: the item composes where it arrived.
+    const events = longWindowStream(
+      "make the legend wider",
+      [[T0 + 1000 + LAG, "make the legend wider"]],
+      T0 + 1500,
+    );
+    events.push({
+      at: T0 + 60_000, // a minute later — far past the post-window grace
+      type: "app-selection",
+      marker: "sel_1",
+      text: "Legend",
+    });
+    const composed = composeIntent(events);
+    expect(composed.items.map((i) => i.kind)).toEqual(["text", "app-selection"]);
+    expect(composed.items[0].text).toBe("make the legend wider");
   });
 
   it("nudges a mid-word offset to the word's end — a shot never splits a word", () => {
@@ -1520,20 +1580,6 @@ describe("linter events (observations, never content)", () => {
     expect(withLinter.prompt).toBe(without.prompt);
     expect(withLinter.transcript).toBe(without.transcript);
     expect(withLinter.items).toEqual(without.items);
-  });
-
-  it("linter events are not contentful: a selection refinement keeps its marker across them", () => {
-    const engine = armedEngine();
-    engine.talkStart();
-    engine.appSelection({ text: "the histogram title" });
-    // A lint lands between the selection and its refinement — the refinement
-    // must still supersede under the SAME marker (one chip tracking a drag).
-    engine.events.push({ at: 50, type: "linter-note", text: "clear so far" });
-    engine.appSelection({ text: "the histogram title and axis" });
-    const markers = engine.events
-      .filter((e) => e.type === "app-selection")
-      .map((e) => (e as { marker?: string }).marker);
-    expect(markers).toEqual(["sel_1", "sel_1"]);
   });
 });
 
