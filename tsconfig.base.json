@@ -23,6 +23,11 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,
+    // .d.ts.map back-references into src/, which every published package ships
+    // alongside dist/ — so "go to definition" from an installed package (human
+    // or agent) lands in the real TypeScript, not the .d.ts surface. The .js
+    // side already gets this via Vite's sourcemap+sourcesContent.
+    "declarationMap": true,
     "emitDeclarationOnly": true
   }
 }

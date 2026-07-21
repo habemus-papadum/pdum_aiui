@@ -21,7 +21,8 @@
     "aiui-claude-channel": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "publishConfig": {
     "access": "public",

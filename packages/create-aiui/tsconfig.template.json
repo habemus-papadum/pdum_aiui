@@ -4,6 +4,7 @@
   "compilerOptions": {
     "noEmit": true,
     "declaration": false,
+    "declarationMap": false,
     "emitDeclarationOnly": false,
     "jsx": "preserve",
     "jsxImportSource": "@solidjs/web",

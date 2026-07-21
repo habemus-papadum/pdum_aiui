@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,15 +17,31 @@ afterEach(() => {
 });
 
 describe("runningFromSource", () => {
-  it("is true when the package dir carries a src/ folder (dev checkout)", () => {
+  it("is true when the manifest's main points into src/ (dev checkout)", () => {
     const dir = tempDir();
-    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ main: "./src/index.ts" }));
     expect(runningFromSource(dir)).toBe(true);
   });
 
-  it("is false when only dist/ is present (installed tarball)", () => {
+  it("is false when the manifest's main points at dist/ (installed tarball)", () => {
     const dir = tempDir();
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ main: "./dist/index.js" }));
+    expect(runningFromSource(dir)).toBe(false);
+  });
+
+  it("is false for an installed tarball even when src/ ships alongside dist/", () => {
+    // Published packages ship src/ for sourcemap back-references; the swap of
+    // publishConfig's dist mapping into `main` is what marks them installed.
+    const dir = tempDir();
+    mkdirSync(join(dir, "src"));
     mkdirSync(join(dir, "dist"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ main: "./dist/index.js" }));
+    expect(runningFromSource(dir)).toBe(false);
+  });
+
+  it("is false for a directory without a package.json", () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "src"));
     expect(runningFromSource(dir)).toBe(false);
   });
 });

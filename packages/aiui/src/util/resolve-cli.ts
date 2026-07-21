@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { packageRoot, runningFromSource } from "@habemus-papadum/aiui-util";
 
-// `packageRoot` (and the "still carries src/ → dev checkout" heuristic below)
+// `packageRoot` (and the "`main` still points into src/ → dev checkout" heuristic below)
 // moved to aiui-util as shared provenance logic; re-exported here so existing
 // importers keep resolving it from this module.
 export { packageRoot } from "@habemus-papadum/aiui-util";
@@ -17,9 +17,10 @@ export interface CliInvocation {
  * Resolve how to run a dependency package's CLI, without ever needing it built
  * in a dev checkout.
  *
- * A package is considered "in dev" when it still carries its `src/` directory
- * (published tarballs ship only `dist/`). In that case we run the TypeScript
- * source directly through `tsx`, so edits take effect with no build step. Once
+ * A package is considered "in dev" when its manifest's `main` still points into
+ * `src/` (published tarballs get the publishConfig `dist/` mapping swapped in at
+ * pack time). In that case we run the TypeScript source directly through `tsx`,
+ * so edits take effect with no build step. Once
  * installed from npm, we run the built `dist` entry instead. Either way it is
  * spawned via the current Node with an absolute path, so it relies on neither
  * the PATH nor an executable bit.

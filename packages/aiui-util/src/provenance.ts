@@ -4,13 +4,16 @@
  * uses this to decide how to spawn a workspace CLI: through tsx straight from
  * `src/` in a dev checkout, or plain `node` on `dist/` once installed.
  *
- * The signal is a filesystem fact, not an env var: a published tarball ships
- * only its `dist/` (the `files` allowlist excludes `src/`), so a package directory
- * that still carries a `src/` folder is a dev checkout. Locate a package's root
- * with {@link packageRoot}, then ask {@link runningFromSource} about it — or use
- * {@link packageFromSource} for both in one call.
+ * The signal is a filesystem fact, not an env var: a dev manifest points `main`
+ * at `./src/index.ts`, and `pnpm pack`/`publish` swap in the `publishConfig`
+ * overrides (`./dist/index.js`) at pack time — so whether `main` reaches into
+ * `src/` tells checkout from tarball exactly. (The old signal — "still carries
+ * a `src/` folder" — died when published packages started shipping `src/`
+ * alongside `dist/` for sourcemap/declarationMap back-references.) Locate a
+ * package's root with {@link packageRoot}, then ask {@link runningFromSource}
+ * about it — or use {@link packageFromSource} for both in one call.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
@@ -39,12 +42,23 @@ export function packageRoot(packageName: string): string {
 }
 
 /**
- * Whether a package directory is an editable source checkout (it still carries
- * a `src/` folder) rather than an installed tarball (which ships only `dist/`).
- * Pass the package's own root, e.g. from {@link packageRoot}.
+ * Whether a package directory is an editable source checkout (its manifest's
+ * `main` still points into `src/`, i.e. the publishConfig swap never ran)
+ * rather than an installed tarball (whose `main` points at `dist/`). Pass the
+ * package's own root, e.g. from {@link packageRoot}.
  */
 export function runningFromSource(packageDir: string): boolean {
-  return existsSync(join(packageDir, "src"));
+  const manifestPath = join(packageDir, "package.json");
+  if (!existsSync(manifestPath)) {
+    return false;
+  }
+  const pkg = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    main?: string;
+    module?: string;
+    types?: string;
+  };
+  const entry = pkg.main ?? pkg.module ?? pkg.types;
+  return typeof entry === "string" && (/(^|\/)src\//.test(entry) || /\.tsx?$/.test(entry));
 }
 
 /**

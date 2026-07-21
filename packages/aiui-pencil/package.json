@@ -21,6 +21,7 @@
   "types": "./src/index.ts",
   "files": [
     "dist",
+    "src",
     "assets"
   ],
   "publishConfig": {

@@ -19,6 +19,7 @@
   "types": "./src/index.ts",
   "files": [
     "dist",
+    "src",
     "dist-ext",
     "assets"
   ],
