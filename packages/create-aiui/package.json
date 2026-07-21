@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/create-aiui",
-  "version": "0.8.0+dev",
+  "version": "0.8.1",
   "description": "Scaffold a SolidJS + aiui starter app: pnpm create @habemus-papadum/aiui",
   "type": "module",
   "license": "MIT",

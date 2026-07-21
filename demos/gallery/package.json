@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gallery",
-  "version": "0.8.0+dev",
+  "version": "0.8.1",
   "description": "The reference notebooks: morphogen (reaction-diffusion), aztec (domino tilings), seismos (Mosaic/DuckDB).",
   "private": true,
   "type": "module",
