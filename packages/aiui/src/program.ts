@@ -18,6 +18,7 @@ import { runKeysInterviewCommand, runKeysSet, runKeysStatus, runKeysUnset } from
 import { runMcp } from "./commands/mcp";
 import { type ProfileBrowserFlags, runProfile } from "./commands/profile";
 import { type RemoteOptions, runRemote } from "./commands/remote";
+import { runVscode, type VscodeOptions } from "./commands/vscode";
 
 import { VERSION } from "./util/version";
 
@@ -126,6 +127,17 @@ export function buildProgram(): Command {
     .argument("<action>", "install-native-host | status")
     .option("--extension-id <id>", "extension id for allowed_origins (default: the pinned id)")
     .action((action: string, opts: ExtensionOptions) => runExtension(action, opts));
+
+  // The aiui VS Code extension, installed from this repo's GitHub release page
+  // (a fixed-name .vsix asset per release). Not on the Marketplace and not
+  // bundled into npm — see commands/vscode.ts.
+  program
+    .command("vscode")
+    .description("install the aiui VS Code extension from the GitHub release page")
+    .argument("<action>", "install")
+    .option("--editor <bin>", "the editor CLI to install into (default: code)")
+    .option("--tag <tag>", "release to pull from: latest | vX.Y.Z (default: this build's version)")
+    .action((action: string, opts: VscodeOptions) => runVscode(action, opts));
 
   // (The Chrome native-messaging host is no longer a subcommand: it ships as
   // a COMPILED binary with @habemus-papadum/aiui-registry, installed by the

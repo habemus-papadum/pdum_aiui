@@ -4,10 +4,19 @@ The VS Code selection provider for the aiui dev overlay: a status bar item that 
 picks) the browser tab this window talks to, and a command that sends the current editor
 selection into that tab's session turn.
 
-## Build and install the extension
+## Install the extension
 
-The extension is installed locally from this repo (it may reach the marketplace one day; the
-npm package already ships the underlying library):
+If you have `aiui` installed, the one-liner pulls the `.vsix` from this repo's matching GitHub
+release and installs it (it is not on the marketplace):
+
+```sh
+aiui vscode install                 # this aiui build's release
+aiui vscode install --tag latest    # the newest release, whatever your aiui version
+aiui vscode install --editor cursor # install into a different editor CLI
+```
+
+Or build and install it locally from a source checkout (also what you want for an unreleased
+working tree):
 
 ```sh
 pnpm --filter @habemus-papadum/aiui-vscode build

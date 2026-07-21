@@ -22,6 +22,7 @@ describe("aiui cli", () => {
       "open",
       "profile",
       "remote",
+      "vscode",
     ]);
   });
 
