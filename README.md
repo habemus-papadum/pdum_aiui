@@ -54,6 +54,7 @@ pnpm lint        # Biome (lint + format check)
 pnpm format      # Biome autofix
 ```
 
+
 ## Add a package
 
 Every package picks a publication level at creation time — pass exactly one of `--public`,
