@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-claude-plugin",
-  "version": "0.10.0+dev",
+  "version": "0.11.0",
   "description": "A Claude plugin (skills, commands, scripts) with a CLI for configuration info.",
   "type": "module",
   "license": "MIT",
