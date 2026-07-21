@@ -42,7 +42,7 @@ export interface ChromeDevtoolsInfo {
  * The status of the `OPENAI_API_KEY` the intent pipeline needs, as the launcher
  * found it at startup. A *status*, never the key itself (or any prefix of it) —
  * the console dashboard uses this to explain a degraded pipeline without ever
- * seeing the secret. See `aiui`'s openai-preflight for how it's determined.
+ * seeing the secret. See `aiui`'s vendor-key-preflight for how it's determined.
  *
  *  - "valid"      — present and accepted by OpenAI (authenticated check passed).
  *  - "invalid"    — present but rejected (401/403) — usually a stale shell export.
@@ -72,6 +72,12 @@ export interface LaunchInfo {
    * launcher recorded it.
    */
   geminiKey?: OpenAiKeyStatus;
+  /**
+   * The ELEVEN_LABS_API_KEY preflight's outcome (same vocabulary, status
+   * only) — the key the default Scribe transcriber needs. Absent when no
+   * launcher recorded it.
+   */
+  elevenlabsKey?: OpenAiKeyStatus;
 }
 
 /**

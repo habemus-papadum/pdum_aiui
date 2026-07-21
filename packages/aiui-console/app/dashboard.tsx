@@ -197,6 +197,7 @@ export function Dashboard(): JSX.Element {
             <Field label="launcher" value={info()?.launch?.launcher ?? "(standalone)"} />
             <Field label="OpenAI key" value={info()?.launch?.openaiKey} />
             <Field label="Gemini key" value={info()?.launch?.geminiKey} />
+            <Field label="ElevenLabs key" value={info()?.launch?.elevenlabsKey} />
           </Section>
 
           <Section title="Live">

@@ -6,6 +6,7 @@ import {
   chromeMcpAttachServer,
   chromeMcpServer,
   findIntentClientExtension,
+  probeIntentClientBundle,
   resolveChromeSettings,
   resolveIntentClientExtension,
   sessionBrowserEnabled,
@@ -157,7 +158,7 @@ describe("resolveIntentClientExtension — the extension launches auto-load", ()
     expect(resolveIntentClientExtension(undefined)).toEqual({ state: "absent" });
   });
 
-  it("unbuilt until the MV3 bundle exists; ready once manifest.json does", () => {
+  it("unbuilt until the MV3 bundle exists; ready only once the bundle passes the probe", () => {
     const root = mkdtempSync(join(tmpdir(), "aiui-intent-client-"));
     const paths = { root, outDir: join(root, "dist-ext") };
     expect(resolveIntentClientExtension(paths)).toEqual({ state: "unbuilt", root });
@@ -165,7 +166,21 @@ describe("resolveIntentClientExtension — the extension launches auto-load", ()
     mkdirSync(paths.outDir, { recursive: true });
     expect(resolveIntentClientExtension(paths)).toEqual({ state: "unbuilt", root }); // dir alone ≠ loadable
 
+    // manifest.json alone is a half-built bundle now, not a loadable one.
     writeFileSync(join(paths.outDir, "manifest.json"), "{}\n");
+    expect(resolveIntentClientExtension(paths)).toMatchObject({
+      state: "corrupt",
+      root,
+      dir: paths.outDir,
+    });
+
+    mkdirSync(join(paths.outDir, "assets"), { recursive: true });
+    writeFileSync(join(paths.outDir, "assets", "index-Abc123.js"), "export {};\n");
+    writeFileSync(
+      join(paths.outDir, "index.html"),
+      '<!doctype html><html><body><div id="root"></div>' +
+        '<script type="module" crossorigin src="./assets/index-Abc123.js"></script></body></html>\n',
+    );
     expect(resolveIntentClientExtension(paths)).toEqual({ state: "ready", dir: paths.outDir });
   });
 
@@ -176,5 +191,51 @@ describe("resolveIntentClientExtension — the extension launches auto-load", ()
       expect(intent.dir.endsWith(join("aiui-intent-client", "dist-ext"))).toBe(true);
       expect(existsSync(join(intent.dir, "manifest.json"))).toBe(true);
     }
+  });
+});
+
+describe("probeIntentClientBundle — integrity beyond existence", () => {
+  function bundleDir(): string {
+    const outDir = mkdtempSync(join(tmpdir(), "aiui-dist-ext-"));
+    mkdirSync(join(outDir, "assets"), { recursive: true });
+    return outDir;
+  }
+
+  it("flags a missing index.html", () => {
+    expect(probeIntentClientBundle(bundleDir())).toMatch(/index\.html is missing/);
+  });
+
+  it("flags the empty-chunk build: polyfill tag present, entry tag gone", () => {
+    const outDir = bundleDir();
+    // The measured 2026-07-21 artifact: a complete-looking index.html whose
+    // only script is the modulepreload polyfill — the panel entry chunk was
+    // emitted empty and Vite dropped its tag.
+    writeFileSync(
+      join(outDir, "index.html"),
+      '<!doctype html><html><head><script type="module" crossorigin ' +
+        'src="./assets/modulepreload-polyfill-B5Qt9EMX.js"></script></head>' +
+        '<body><div id="root"></div></body></html>\n',
+    );
+    writeFileSync(join(outDir, "assets", "modulepreload-polyfill-B5Qt9EMX.js"), "//\n");
+    expect(probeIntentClientBundle(outDir)).toMatch(/no panel entry script tag/);
+  });
+
+  it("flags an entry tag whose chunk file is missing", () => {
+    const outDir = bundleDir();
+    writeFileSync(
+      join(outDir, "index.html"),
+      '<script type="module" crossorigin src="./assets/index-Gone1234.js"></script>\n',
+    );
+    expect(probeIntentClientBundle(outDir)).toMatch(/index-Gone1234\.js, which does not exist/);
+  });
+
+  it("passes a bundle whose entry tag and chunk agree", () => {
+    const outDir = bundleDir();
+    writeFileSync(join(outDir, "assets", "index-Ok999.js"), "export {};\n");
+    writeFileSync(
+      join(outDir, "index.html"),
+      '<script type="module" crossorigin src="./assets/index-Ok999.js"></script>\n',
+    );
+    expect(probeIntentClientBundle(outDir)).toBeUndefined();
   });
 });

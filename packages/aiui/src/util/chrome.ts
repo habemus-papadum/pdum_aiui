@@ -38,14 +38,14 @@
  *   launch anything, attach here" (how `aiui remote`'s printed invocation
  *   works).
  */
-import { existsSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { isCi } from "@habemus-papadum/aiui-util";
 import type { AiuiArgs } from "./aiui-args";
 import type { AiuiConfig, ChromeChannel } from "./config";
 import { type ProfileBrowser, profileDir, readProfileMarker } from "./profile";
 import { packageRoot } from "./resolve-cli";
-import { printNote } from "./ui";
+import { printNote, printWarning } from "./ui";
 
 /**
  * The id of the Chrome DevTools entry under `mcpServers`. Deliberately the
@@ -151,7 +151,40 @@ export const INTENT_CLIENT_OUT_DIR = "dist-ext";
 export type IntentClientExtension =
   | { state: "absent" }
   | { state: "unbuilt"; root: string }
+  | { state: "corrupt"; root: string; dir: string; detail: string }
   | { state: "ready"; dir: string };
+
+/**
+ * Integrity probe over a built `dist-ext`: the defect as a sentence, or
+ * `undefined` for a loadable bundle.
+ *
+ * Presence of `manifest.json` is NOT enough: a watch-mode rebuild that fires
+ * while the panel's module graph is transiently broken (mid-`git checkout`)
+ * can emit an EMPTY entry chunk — Vite then drops the chunk and injects no
+ * script tag, leaving a complete-looking directory whose panel renders a
+ * silent blank page (measured 2026-07-21). The one invariant that failure
+ * breaks is checked here: `index.html` references its `assets/index-*.js`
+ * entry chunk, and that file exists. The hash changes every build; the
+ * pattern doesn't.
+ */
+export function probeIntentClientBundle(outDir: string): string | undefined {
+  let html: string;
+  try {
+    html = readFileSync(join(outDir, "index.html"), "utf8");
+  } catch {
+    return "index.html is missing";
+  }
+  // The panel entry specifically — the modulepreload polyfill also appears as
+  // an assets/ script tag in a broken build, so match the entry chunk's name.
+  const entry = html.match(/<script[^>]*\bsrc="(?:\.\/)?(assets\/index-[^"]+\.js)"/)?.[1];
+  if (entry === undefined) {
+    return "index.html has no panel entry script tag (the empty-chunk build failure)";
+  }
+  if (!existsSync(join(outDir, entry))) {
+    return `index.html references ${entry}, which does not exist`;
+  }
+  return undefined;
+}
 
 /** Absolute paths for the intent client's bundle, in a checkout. */
 export function intentClientExtensionPaths(): { root: string; outDir: string } | undefined {
@@ -172,9 +205,14 @@ export function resolveIntentClientExtension(
   if (paths === undefined) {
     return { state: "absent" };
   }
-  return existsSync(join(paths.outDir, "manifest.json"))
-    ? { state: "ready", dir: paths.outDir }
-    : { state: "unbuilt", root: paths.root };
+  if (!existsSync(join(paths.outDir, "manifest.json"))) {
+    return { state: "unbuilt", root: paths.root };
+  }
+  const defect = probeIntentClientBundle(paths.outDir);
+  if (defect !== undefined) {
+    return { state: "corrupt", root: paths.root, dir: paths.outDir, detail: defect };
+  }
+  return { state: "ready", dir: paths.outDir };
 }
 
 /** The intent client extension, as this checkout can load it. No build-on-
@@ -184,8 +222,11 @@ export function findIntentClientExtension(): IntentClientExtension {
   return resolveIntentClientExtension(intentClientExtensionPaths());
 }
 
-/** One launch-time note when the client is resolvable but unbuilt — printed
- * every launch while true (actionable; it disappears once fixed). */
+/** One launch-time note when the client is resolvable but unbuilt or corrupt —
+ * printed every launch while true (actionable; it disappears once fixed).
+ * `aiui claude` refuses to launch on `corrupt` before ever reaching this; the
+ * warning branch serves the other session-browser starters (`aiui open`,
+ * `aiui remote`), which keep going without the extension. */
 export function warnIntentClientState(intent: IntentClientExtension): void {
   if (intent.state === "unbuilt") {
     printNote(
@@ -193,6 +234,12 @@ export function warnIntentClientState(intent: IntentClientExtension): void {
       "Build it once:  pnpm -C packages/aiui-intent-client build:ext\n" +
         "then relaunch — or load it into the RUNNING browser:\n" +
         "  pnpm -C packages/aiui-intent-client ext",
+    );
+  } else if (intent.state === "corrupt") {
+    printWarning(
+      "the aiui intent client's MV3 bundle is corrupt, so this launch won't load it",
+      `${intent.dir}\n  ${intent.detail}\n` +
+        "Rebuild it:  pnpm -C packages/aiui-intent-client build:ext",
     );
   }
 }

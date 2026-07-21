@@ -18,13 +18,12 @@ import {
 import { type AiuiConfig, type ChromeChannel, loadAiuiConfig } from "../util/config";
 import { ENTER_NUDGE_ENABLED, nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
-import { preflightGeminiKey, reportGeminiPreflight } from "../util/gemini-preflight";
 import { ensureKeyDecisions, keysMode } from "../util/keys-interview";
-import { preflightOpenAiKey, reportOpenAiPreflight } from "../util/openai-preflight";
 import { ensureProfileMarker } from "../util/profile";
 import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
 import { resolveProfileBinary, startSessionBrowser } from "../util/session-browser";
 import { printError, printWarning } from "../util/ui";
+import { preflightVendorKeys, reportVendorKeyPreflight } from "../util/vendor-key-preflight";
 import { VERSION } from "../util/version";
 import { commandExists } from "../util/which";
 import { ensureProfileNativeHost } from "./extension";
@@ -76,6 +75,22 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     await forwardToClaude(passthrough);
     return;
   }
+  // A corrupt intent-client bundle fails the launch outright. `unbuilt` (the
+  // fresh-checkout state) stays a warning further down — there's nothing wrong,
+  // just a step not taken yet — but corrupt means a build half-happened (the
+  // empty-chunk watch rebuild; see chrome.ts's probeIntentClientBundle) and
+  // every session started over it gets a silently blank side panel.
+  const intentPreflight = findIntentClientExtension();
+  if (intentPreflight.state === "corrupt") {
+    printError(
+      "the aiui intent client's MV3 bundle is corrupt — refusing to launch",
+      `${intentPreflight.dir}\n  ${intentPreflight.detail}\n` +
+        "Rebuild it and relaunch:  pnpm -C packages/aiui-intent-client build:ext",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   // Settings from ~/.cache/aiui/config.json + .aiui-cache/config.json (project
   // wins per key; flags win over both) — see util/config and docs/guide/config.
   let config = loadAiuiConfig();
@@ -108,32 +123,22 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     onWarn: (message) => printWarning(message),
   });
 
-  // Preflight the OpenAI key the intent pipeline needs (transcription +
-  // correction, which run in the spawned channel process). Interactive
-  // launches verify the RESOLVED key against the API and report any
-  // degradation once; CI/non-interactive only note presence without touching
-  // the network. Either way the launch proceeds — a bad or missing key leaves
-  // transcription/correction unavailable (the widget says so; mock is the
-  // explicit offline choice), never a refusal. We keep only the status (never
-  // the key) to thread into launch-info below.
-  const openaiKey = await preflightOpenAiKey({
-    verify: interactive,
-    env: { OPENAI_API_KEY: resolvedKeys.openai.value ?? "" },
-  });
-  if (interactive && resolvedKeys.openai.source !== "skip") {
-    reportOpenAiPreflight(openaiKey);
-  }
-  // Same preflight for the Gemini key (the realtime submode's Gemini Live
-  // engine, also channel-side). A bad key would otherwise surface as an opaque
-  // closed WebSocket deep in a live session; a missing one is only a note —
-  // the default transcription tiers don't need it. A SKIPPED provider is a
-  // chosen absence: no degradation note for it.
-  const geminiKey = await preflightGeminiKey({
-    verify: interactive,
-    env: { GEMINI_API_KEY: resolvedKeys.gemini.value ?? "" },
-  });
-  if (interactive && resolvedKeys.gemini.source !== "skip") {
-    reportGeminiPreflight(geminiKey);
+  // Round two of the key story: VALIDITY only (util/vendor-key-preflight).
+  // Discovery — mode, skips, values — was round one's job above; here each
+  // FOUND key is checked against its vendor (interactive launches only;
+  // CI/non-interactive never touch the network and report "unverified"). A
+  // definitively rejected key fails the launch — it was placed on purpose, so
+  // rejection means the session would boot quietly broken (transcription
+  // 401s, a Gemini Live socket that closes on open) with the fix known NOW.
+  // Missing keys stay degradation warnings, and an unconfirmable check never
+  // condemns. Only statuses (never keys) thread into launch-info below.
+  const keyStatuses = await preflightVendorKeys(resolvedKeys, { verify: interactive });
+  if (interactive) {
+    const { fatal } = reportVendorKeyPreflight(resolvedKeys, keyStatuses);
+    if (fatal) {
+      process.exitCode = 1;
+      return;
+    }
   }
 
   if (!ensureClaudeOnPath()) {
@@ -186,8 +191,9 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   const launchInfo: LaunchInfo = {
     launcher: "aiui claude",
     chromeDevtools: chromeInfo,
-    openaiKey,
-    geminiKey,
+    openaiKey: keyStatuses.openai,
+    geminiKey: keyStatuses.gemini,
+    elevenlabsKey: keyStatuses.elevenlabs,
   };
   mcpArgs.push("--launch-info", JSON.stringify(launchInfo));
 

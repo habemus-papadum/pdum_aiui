@@ -23,6 +23,7 @@ export interface LaunchInfo {
   chromeDevtools?: ChromeInfo;
   openaiKey?: string;
   geminiKey?: string;
+  elevenlabsKey?: string;
 }
 
 /** `GET /debug/api/info` — this channel's own identity, plus the launch garnish. */
