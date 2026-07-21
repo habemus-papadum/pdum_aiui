@@ -82,13 +82,30 @@ describe("ensureKeyDecisions — the launch gap-fill", () => {
     expect(updated.keys?.openai).toBe("vault");
   });
 
-  it("import-from-env stores the env value into the vault", async () => {
+  it("source mode + env set: uses it silently — no prompt, no vault write, no decision", async () => {
     const r = rig();
-    await ensureKeyDecisions({ keys: { gemini: "skip", elevenlabs: "skip" } }, r.seams(["e"]), {
-      OPENAI_API_KEY: "sk-from-env",
-    });
-    expect(r.stored.get("OPENAI_API_KEY")).toBe("sk-from-env");
-    expect(r.persisted).toEqual([["openai", "vault"]]);
+    const seams = { ...r.seams([]), mode: "source" as const }; // zero questions scripted
+    const updated = await ensureKeyDecisions(
+      { keys: { gemini: "skip", elevenlabs: "skip" } },
+      seams,
+      { OPENAI_API_KEY: "sk-from-env" },
+    );
+    expect(r.stored.has("OPENAI_API_KEY")).toBe(false); // env never migrated to vault
+    expect(r.persisted).toEqual([]); // provider left undecided
+    expect(updated.keys?.openai).toBeUndefined();
+    expect(r.notes.some((n) => n.includes("aiui keys set openai"))).toBe(true);
+  });
+
+  it("installed mode ignores the env: an undecided provider is still asked", async () => {
+    const r = rig();
+    const seams = { ...r.seams(["p"], ["sk-pasted"]), mode: "installed" as const };
+    const updated = await ensureKeyDecisions(
+      { keys: { gemini: "skip", elevenlabs: "skip" } },
+      seams,
+      { OPENAI_API_KEY: "sk-from-env" }, // present, but installed mode does not consult it
+    );
+    expect(r.stored.get("OPENAI_API_KEY")).toBe("sk-pasted");
+    expect(updated.keys?.openai).toBe("vault");
   });
 
   it("an empty paste re-asks (skip stays the deliberate exit); a failed verify leaves it undecided", async () => {

@@ -15,9 +15,9 @@
 import { existsSync, readdirSync } from "node:fs";
 import { discoverSessionBrowser } from "@habemus-papadum/aiui-util";
 import {
-  chromeDevtoolsEnabled,
   findIntentClientExtension,
   resolveChromeSettings,
+  sessionBrowserEnabled,
 } from "../util/chrome";
 import {
   DEFAULT_MANAGED_FLAVOR,
@@ -83,7 +83,7 @@ function resolveFlavorArg(arg: string | undefined): { flavor: ManagedFlavor } | 
 async function printStatus(): Promise<void> {
   const config = loadAiuiConfig();
   const chromeCfg = config.chrome ?? {};
-  const flags = { chrome: false, noChrome: false };
+  const flags = { sessionBrowser: false, noSessionBrowser: false };
 
   console.log("Managed browsers:");
   for (const flavor of MANAGED_FLAVORS) {
@@ -109,8 +109,8 @@ async function printStatus(): Promise<void> {
   console.log(`  startup checks (chrome.manage): ${resolveManageMode(chromeCfg)}`);
 
   console.log("\nThe default profile:");
-  if (!chromeDevtoolsEnabled(flags)) {
-    console.log("  the Chrome DevTools MCP is disabled here (CI, or --aiui-no-chrome)");
+  if (!sessionBrowserEnabled(flags)) {
+    console.log("  the Chrome DevTools MCP is disabled here (CI, or --aiui-no-session-browser)");
   }
   const settings = resolveChromeSettings({}, chromeCfg);
   console.log(`  user data dir: ${settings.userDataDir}`);

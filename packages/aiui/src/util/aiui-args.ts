@@ -19,16 +19,19 @@ export interface AiuiArgs {
    */
   mcp?: string;
   /**
-   * `--aiui-chrome` was passed: force the Chrome DevTools MCP on even where it
-   * would default off (i.e. under CI).
+   * `--aiui-session-browser` was passed: force the shared session browser (and
+   * the Chrome DevTools MCP that drives it) ON even where it would default off
+   * (i.e. under CI).
    */
-  chrome: boolean;
+  sessionBrowser: boolean;
   /**
-   * `--aiui-no-chrome` was passed: don't attach the Chrome DevTools MCP to the
-   * session. (Distinct from claude's own `--no-chrome`, which disables Claude
-   * Code's built-in browser integration and forwards via passthrough.)
+   * `--aiui-no-session-browser` was passed: launch WITHOUT the shared session
+   * browser — no browser is started and the Chrome DevTools MCP is not attached
+   * (the two are one integration; this governs both). Distinct from claude's
+   * own `--no-chrome`, which disables Claude Code's built-in browser
+   * integration and forwards via passthrough.
    */
-  noChrome: boolean;
+  noSessionBrowser: boolean;
   /**
    * `--aiui-browser` was passed: open the wrapped tool's page in the session
    * browser even where it would default off (CI / headless environments —
@@ -98,8 +101,9 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
  *    forwarded to the channel server (and usable with `quick --tag`).
  *  - `--aiui-mcp <tag>` / `--aiui-mcp=<tag>` — RETIRED (parsed only to warn;
  *    see the field doc).
- *  - `--aiui-chrome` / `--aiui-no-chrome` — force the Chrome DevTools MCP on
- *    (even under CI) / leave it off. Passing both is an error.
+ *  - `--aiui-session-browser` / `--aiui-no-session-browser` — force the shared
+ *    session browser + its Chrome DevTools MCP on (even under CI) / launch
+ *    without either (no browser started). Passing both is an error.
  *  - `--aiui-browser` / `--aiui-no-browser` — force opening the page in the
  *    session browser (even in CI/headless environments) / never open one.
  *    Passing both is an error.
@@ -119,8 +123,8 @@ export function infoFlag(passthrough: string[]): "help" | "version" | undefined 
 export function splitAiuiArgs(args: string[]): AiuiArgs {
   let tag: string | undefined;
   let mcp: string | undefined;
-  let chrome = false;
-  let noChrome = false;
+  let sessionBrowser = false;
+  let noSessionBrowser = false;
   let browser = false;
   let noBrowser = false;
   let chromeProfile: string | undefined;
@@ -161,18 +165,18 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
         mcp = value;
         break;
       }
-      case "--aiui-chrome": {
+      case "--aiui-session-browser": {
         if (value !== undefined) {
-          throw new Error("--aiui-chrome takes no value");
+          throw new Error("--aiui-session-browser takes no value");
         }
-        chrome = true;
+        sessionBrowser = true;
         break;
       }
-      case "--aiui-no-chrome": {
+      case "--aiui-no-session-browser": {
         if (value !== undefined) {
-          throw new Error("--aiui-no-chrome takes no value");
+          throw new Error("--aiui-no-session-browser takes no value");
         }
-        noChrome = true;
+        noSessionBrowser = true;
         break;
       }
       case "--aiui-browser": {
@@ -234,8 +238,8 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
     }
   }
 
-  if (chrome && noChrome) {
-    throw new Error("--aiui-chrome and --aiui-no-chrome are mutually exclusive");
+  if (sessionBrowser && noSessionBrowser) {
+    throw new Error("--aiui-session-browser and --aiui-no-session-browser are mutually exclusive");
   }
   if (browser && noBrowser) {
     throw new Error("--aiui-browser and --aiui-no-browser are mutually exclusive");
@@ -253,8 +257,8 @@ export function splitAiuiArgs(args: string[]): AiuiArgs {
   return {
     tag,
     mcp,
-    chrome,
-    noChrome,
+    sessionBrowser,
+    noSessionBrowser,
     browser,
     noBrowser,
     chromeProfile,

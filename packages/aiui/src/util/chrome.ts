@@ -61,15 +61,21 @@ export const CHROME_SERVER_ID = "chrome-devtools";
 const INTENT_CLIENT_PKG = "@habemus-papadum/aiui-intent-client";
 
 type ChromeConfig = NonNullable<AiuiConfig["chrome"]>;
-type ChromeFlags = Pick<AiuiArgs, "chrome" | "noChrome" | "chromeProfile" | "chromeDataDir">;
+type ChromeFlags = Pick<
+  AiuiArgs,
+  "sessionBrowser" | "noSessionBrowser" | "chromeProfile" | "chromeDataDir"
+>;
 
 /**
- * Whether this launch should attach the Chrome DevTools MCP.
+ * Whether this launch brings up the shared session browser and attaches the
+ * Chrome DevTools MCP to it. The two are one integration — the browser exists
+ * so the MCP has something to drive — so this single gate governs both: `false`
+ * means no browser is launched AND no MCP is attached.
  *
  * On by default; off under CI (no display, and e2e sessions must not trigger an
- * npx download + Chrome launch) or with `--aiui-no-chrome`. `--aiui-chrome`
- * forces it on even under CI. Flag-only since the browser-profiles redesign —
- * the old `chrome.enabled` config key is retired.
+ * npx download + Chrome launch) or with `--aiui-no-session-browser`.
+ * `--aiui-session-browser` forces it on even under CI. Flag-only since the
+ * browser-profiles redesign — the old `chrome.enabled` config key is retired.
  *
  * Deliberately gated on CI alone, not the wider `isHeadless` check from
  * aiui-util: on a headless-but-interactive box (SSH into a dev machine)
@@ -77,14 +83,14 @@ type ChromeFlags = Pick<AiuiArgs, "chrome" | "noChrome" | "chromeProfile" | "chr
  * whereas *opening a page for the user* would be pointless. Only commands that
  * put a window in front of someone consult the broader signals.
  */
-export function chromeDevtoolsEnabled(
-  args: Pick<ChromeFlags, "chrome" | "noChrome">,
+export function sessionBrowserEnabled(
+  args: Pick<ChromeFlags, "sessionBrowser" | "noSessionBrowser">,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (args.noChrome) {
+  if (args.noSessionBrowser) {
     return false;
   }
-  if (args.chrome) {
+  if (args.sessionBrowser) {
     return true;
   }
   return !isCi(env);

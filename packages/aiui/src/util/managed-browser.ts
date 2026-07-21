@@ -103,8 +103,6 @@ export interface ManagedState {
   latestBuildId?: string;
   /** Update prompt answered "skip" for this build id — don't re-ask for it. */
   skippedBuildId?: string;
-  /** Epoch ms when an install offer was declined — snooze re-asking for a day. */
-  installDeclinedAt?: number;
 }
 
 /** Where a flavor's managed builds (and its state file) live. */
@@ -294,7 +292,7 @@ export async function syncManagedBrowser(opts: {
   }
 
   if (!current) {
-    return offerInstall(flavor, mode, now);
+    return installMissing(flavor, now);
   }
 
   const latest = await latestManaged(flavor, { now });
@@ -304,49 +302,24 @@ export async function syncManagedBrowser(opts: {
   return offerUpdate(flavor, mode, current, latest);
 }
 
-/** No managed build: install silently (auto) or ask (prompt). */
-async function offerInstall(
-  flavor: ManagedFlavor,
-  mode: "prompt" | "auto",
-  now: number,
-): Promise<string | undefined> {
+/**
+ * A committed managed flavor with nothing installed yet: download it. The
+ * choice was already made — the profile marker names this flavor (from the
+ * profile interview, `aiui profile new`, or `chrome.manage: "auto"`), and
+ * picking the browser IS the consent to fetch it — so there is NO second
+ * prompt. Offline or an undetectable platform yields no build and no nag; the
+ * launch falls back to the system browser. (To avoid managed browsers
+ * entirely, a profile points at your own Chrome — an advanced choice made once
+ * at `aiui profile new`, not re-litigated on every launch.)
+ */
+async function installMissing(flavor: ManagedFlavor, now: number): Promise<string | undefined> {
   const spec = flavorSpec(flavor);
   const latest = await latestManaged(flavor, { now });
   if (!latest) {
-    return undefined; // offline / undetectable platform — don't nag, don't block
+    return undefined; // offline / undetectable platform — don't block the launch
   }
-  if (mode === "auto") {
-    printNote(`installing ${spec.displayName} ${latest} (chrome.manage: "auto")…`);
-    return (await installManaged(flavor, latest)).executablePath;
-  }
-  const state = readManagedState(flavor);
-  if (state.installDeclinedAt && now - state.installDeclinedAt < CHECK_TTL_MS) {
-    return undefined; // declined recently — don't re-ask every launch
-  }
-  const answer = await choose(
-    `${spec.displayName} isn't installed. It's the recommended browser for aiui — ` +
-      "version-pinned, separate from your real Chrome, and it auto-loads the aiui intent " +
-      `client (branded Chrome can't). Download ${latest} (~${spec.approxSizeMb} MB) to ` +
-      `${managedCacheDir(flavor, false)}?`,
-    [
-      { key: "y", label: "yes, install it" },
-      { key: "n", label: "not now — use the regular Chrome (asks again tomorrow)" },
-      { key: "never", label: 'never — stop offering (writes chrome.manage: "off")' },
-    ],
-    "y",
-  );
-  if (answer === "y") {
-    return (await installManaged(flavor, latest)).executablePath;
-  }
-  if (answer === "never") {
-    const file = updateUserConfig((c) => {
-      c.chrome = { ...c.chrome, manage: "off" };
-    });
-    printNote(`wrote chrome.manage: "off" to ${file}`);
-  } else {
-    writeManagedState(flavor, { installDeclinedAt: now });
-  }
-  return undefined;
+  printNote(`installing ${spec.displayName} ${latest} (~${spec.approxSizeMb} MB)…`);
+  return (await installManaged(flavor, latest)).executablePath;
 }
 
 /** Managed build is stale: update silently (auto) or ask (prompt). */
@@ -367,7 +340,10 @@ async function offerUpdate(
     return current.executablePath;
   }
   const answer = await choose(
-    `Your ${spec.displayName} (${current.buildId}) is out of date — latest is ${latest}. Update?`,
+    {
+      title: `Update ${spec.displayName} to ${latest}?`,
+      detail: `You have ${current.buildId}; ${latest} is the latest. The managed dir keeps exactly one build.`,
+    },
     [
       { key: "y", label: "yes, just this once" },
       { key: "a", label: 'automatically, now and from here on (writes chrome.manage: "auto")' },

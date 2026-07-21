@@ -32,9 +32,18 @@ import { join } from "node:path";
 import { Browser, ChromeReleaseChannel, computeSystemExecutablePath } from "@puppeteer/browsers";
 import { execa } from "execa";
 import { headlessReason } from "./environment";
+import { cacheDir } from "./index";
 
 /** Chrome writes this into the user data dir when debugging is enabled. */
 const ACTIVE_PORT_FILE = "DevToolsActivePort";
+
+/**
+ * The cache namespace session-browser profiles live under
+ * (`~/.cache/aiui/userdata/<profile>`). This is the ONE place aiui launches
+ * session browsers since the browser-profiles redesign. The aiui CLI's profile
+ * module imports this constant so the two never drift.
+ */
+export const USERDATA_NAMESPACE = "userdata";
 
 /** How long a fresh Chrome gets to bring up its debug endpoint. */
 const LAUNCH_TIMEOUT_MS = 20_000;
@@ -67,45 +76,37 @@ export async function discoverSessionBrowser(
 }
 
 /**
- * Find a LIVE session browser under a project's `.aiui-cache/chrome/`,
- * whatever profile layout it uses: the legacy flat `chrome/default`, or the
- * per-variant `chrome/<variant>/<profile>` partitioning (distinct browser
- * builds never share a profile). Scans every directory holding a
- * `DevToolsActivePort` — one level of nesting covers both layouts — probing
- * the newest-written port file first, and returns the first endpoint that
- * actually ANSWERS. A stale port file (the browser died; an old flat-layout
- * leftover) is skipped: found live 2026-07-19, where a debug channel's
- * discovery read the stale flat profile and declared "no session browser"
- * while the variant profile held a living one.
+ * Find a LIVE session browser among the user-level profiles
+ * (`~/.cache/aiui/userdata/<profile>`) — the ONLY location aiui launches
+ * session browsers into since the browser-profiles redesign. Scans each
+ * profile dir for a `DevToolsActivePort`, probes the newest-written first, and
+ * returns the first endpoint that actually ANSWERS; a stale port file (the
+ * browser died) is skipped by the liveness check.
+ *
+ * The legacy project-local `.aiui-cache/chrome/**` layout is deliberately NOT
+ * scanned. A session browser left running there by an OLD checkout is an orphan
+ * this session never launched, and surfacing it here made discovery latch onto
+ * the wrong browser — the source of a phantom "CDP endpoint moved" warning
+ * (2026-07-20). Discovery must only ever find browsers under the current
+ * profiles root.
  */
-export async function discoverSessionBrowserUnder(
-  projectRoot: string,
+export async function discoverSessionBrowserInProfiles(
+  profilesRoot: string = cacheDir(USERDATA_NAMESPACE, { create: false }),
 ): Promise<SessionBrowser | undefined> {
-  const base = join(projectRoot, ".aiui-cache", "chrome");
   const candidates: Array<{ dir: string; mtimeMs: number }> = [];
-  const consider = (dir: string): void => {
+  let entries: string[];
+  try {
+    entries = readdirSync(profilesRoot);
+  } catch {
+    return undefined; // no profiles root — nothing ever launched here
+  }
+  for (const entry of entries) {
+    const dir = join(profilesRoot, entry);
     const portFile = join(dir, ACTIVE_PORT_FILE);
     try {
       candidates.push({ dir, mtimeMs: statSync(portFile).mtimeMs });
     } catch {
       // no port file here — not a profile dir
-    }
-  };
-  let entries: string[];
-  try {
-    entries = readdirSync(base);
-  } catch {
-    return undefined; // no cache dir at all — nothing ever launched here
-  }
-  for (const entry of entries) {
-    const level1 = join(base, entry);
-    consider(level1); // legacy flat layout: chrome/<profile>
-    try {
-      for (const sub of readdirSync(level1)) {
-        consider(join(level1, sub)); // variant layout: chrome/<variant>/<profile>
-      }
-    } catch {
-      // a file, or unreadable — skip
     }
   }
   candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);

@@ -7,9 +7,9 @@ import {
   readLoadedConfig,
   runConfigGet,
   runConfigSet,
-  runConfigSetDsp,
   runConfigShow,
   runConfigUnset,
+  runConfigYolo,
 } from "./config";
 
 let dir: string;
@@ -93,12 +93,39 @@ describe("runConfigSet / runConfigGet / runConfigUnset", () => {
   });
 });
 
-describe("runConfigSetDsp", () => {
-  it("appends the flag once, idempotently", () => {
-    runConfigSetDsp();
-    runConfigSetDsp();
+describe("runConfigYolo", () => {
+  const yes = () => Promise.resolve("y");
+  const no = () => Promise.resolve("n");
+
+  it("on yes: adds the DSP flag AND sets channel.bind host", async () => {
+    await runConfigYolo(yes);
     expect(readWritten()).toEqual({
       claude: { args: ["--dangerously-skip-permissions"] },
+      channel: { bind: "host" },
+    });
+  });
+
+  it("is idempotent on the DSP flag across repeat runs", async () => {
+    await runConfigYolo(yes);
+    await runConfigYolo(yes);
+    expect(readWritten()).toEqual({
+      claude: { args: ["--dangerously-skip-permissions"] },
+      channel: { bind: "host" },
+    });
+  });
+
+  it("on no: changes nothing", async () => {
+    writeConfig({}); // so there is a file to (not) change
+    await runConfigYolo(no);
+    expect(readWritten()).toEqual({});
+  });
+
+  it("preserves existing claude.args when enabling", async () => {
+    writeConfig({ claude: { args: ["--foo"] } });
+    await runConfigYolo(yes);
+    expect(readWritten()).toEqual({
+      claude: { args: ["--foo", "--dangerously-skip-permissions"] },
+      channel: { bind: "host" },
     });
   });
 });

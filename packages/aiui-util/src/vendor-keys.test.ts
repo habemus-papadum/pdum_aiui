@@ -7,9 +7,36 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readKeyDecisions, resolveVendorKeys } from "./vendor-keys";
+import {
+  FORCE_INSTALLED_ENV,
+  readKeyDecisions,
+  resolveVendorKeys,
+  vendorKeysMode,
+} from "./vendor-keys";
 
 const emptyVault = () => Promise.resolve(null);
+
+describe("vendorKeysMode — the AIUI_NO_SOURCE_MODE override", () => {
+  // aiui-util is a source checkout in this test run, so its provenance is
+  // "source" — the baseline the override flips.
+  const pkg = "@habemus-papadum/aiui-util";
+
+  it("without the override, follows the package's provenance (source here)", () => {
+    expect(vendorKeysMode(pkg, {})).toBe("source");
+  });
+
+  it("forces installed for any meaningful value", () => {
+    for (const v of ["1", "true", "yes", "on", "installed"]) {
+      expect(vendorKeysMode(pkg, { [FORCE_INSTALLED_ENV]: v })).toBe("installed");
+    }
+  });
+
+  it("treats empty / 0 / false as unset (stays source)", () => {
+    for (const v of ["", "0", "false", "FALSE"]) {
+      expect(vendorKeysMode(pkg, { [FORCE_INSTALLED_ENV]: v })).toBe("source");
+    }
+  });
+});
 
 describe("resolveVendorKeys — the mode table", () => {
   it("source mode: env wins, vault fills gaps, nothing throws when both are empty", async () => {

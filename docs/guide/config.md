@@ -143,8 +143,12 @@ keys come from depends on how aiui itself is running:
 What the vault holds is the secret; what `config.json` holds is the per-provider **decision**
 (`keys.openai` etc.): `"vault"` (in use) or `"skip"` (deliberately unused). A provider with no
 decision gets **one question** at the next interactive `aiui claude` — paste the key (masked,
-stored straight into the vault), import it from the environment if one is set, or skip. Skipping
-prints how to revisit. The `aiui keys` command manages all of it:
+stored straight into the vault) or skip; skipping prints how to revisit. **In a source checkout,
+a provider whose key is already in the environment is used silently — no question, and nothing is
+written to the vault.** The launch never migrates an env key into the vault or records a decision
+on your behalf; that is deliberately an explicit act (`aiui keys set <provider>`). If the env var
+later disappears, the next launch falls through to the question. The `aiui keys` command manages
+all of it:
 
 ```sh
 aiui keys status            # per-provider decision + effective source — never values

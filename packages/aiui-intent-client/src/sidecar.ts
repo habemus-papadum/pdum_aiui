@@ -21,12 +21,13 @@
 
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
+import { discoverSessionBrowserInProfiles } from "@habemus-papadum/aiui-util";
 import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
 import type { Express } from "express";
 import { WebSocket } from "ws";
 import type { CdpSocket } from "./cdp/protocol";
 import { startCdpTagger } from "./cdp/tagger";
-import { createCdpProxy } from "./cdp-proxy";
+import { browserUrlFromLaunchInfo, createCdpProxy } from "./cdp-proxy";
 
 /** The path prefix the panel lives under on the channel's server. */
 const INTENT_PREFIX = "/intent";
@@ -82,13 +83,19 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
       // The CDP tagger + endpoint watcher (see cdp/tagger.ts). The tagger
       // writes this channel's port into the extension THROUGH the browser's
       // own debug endpoint — same-browser proof the extension's discovery
-      // reads first. The watcher rides the same discovery beat: if the
-      // endpoint MOVES after startup (browser relaunched → new ephemeral
-      // port), everything pinned at launch — the Chrome DevTools MCP above
-      // all — still points at the dead browser, invisibly. That is exactly
-      // when the agent should ask the user to restart, so we push the fact
-      // into the session via the channel's own `/prompt` route.
-      let bootUrl: string | undefined; // the endpoint at startup
+      // reads first. The watcher rides the same discovery beat: if the LIVE
+      // session browser drifts away from the endpoint pinned at launch (browser
+      // relaunched → new ephemeral port), everything pinned then — the Chrome
+      // DevTools MCP above all — still points at the dead browser, invisibly.
+      // That is exactly when the agent should ask the user to restart, so we
+      // push the fact into the session via the channel's own `/prompt` route.
+      //
+      // The anchor is the AUTHORITATIVE launch info — what `aiui claude` handed
+      // the MCP — never a profile scan. Seeding the baseline from a scan let a
+      // startup-race read of a DIFFERENT live browser masquerade as a move (the
+      // phantom-warning bug, 2026-07-20); the "now" side is a scan of the LIVE
+      // session profile, which is what a real relaunch actually moves.
+      let pinnedUrl: string | undefined; // the MCP's pin (launch info), the anchor
       let warnedUrl: string | undefined; // the move we already reported
       const warnEndpointMoved = async (was: string, now: string): Promise<void> => {
         const port = ctx.port();
@@ -115,17 +122,28 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
       const tagger = startCdpTagger({
         channelPort: () => ctx.port(),
         endpoint: async () => {
-          const info = await cdp.info(ctx.port());
-          const url = info.available ? info.browserUrl : undefined;
-          if (url !== undefined) {
-            if (bootUrl === undefined) {
-              bootUrl = url;
-            } else if (url !== bootUrl && url !== warnedUrl) {
-              warnedUrl = url;
-              void warnEndpointMoved(bootUrl, url);
-            }
+          const channelPort = ctx.port();
+          // Anchor once on the launch info — the endpoint the MCP was pinned to.
+          if (pinnedUrl === undefined && channelPort !== undefined) {
+            pinnedUrl = await browserUrlFromLaunchInfo(channelPort);
           }
-          return url;
+          // The session browser running NOW, probed independently of the
+          // (frozen) launch info: a real relaunch moves the live profile's
+          // DevToolsActivePort, and only that divergence from the pin warrants
+          // the warning.
+          const live = (await discoverSessionBrowserInProfiles())?.browserUrl;
+          if (
+            pinnedUrl !== undefined &&
+            live !== undefined &&
+            live !== pinnedUrl &&
+            live !== warnedUrl
+          ) {
+            warnedUrl = live;
+            void warnEndpointMoved(pinnedUrl, live);
+          }
+          // Tag through the endpoint the panel bridges to (launch-info-first).
+          const info = await cdp.info(channelPort);
+          return info.available ? info.browserUrl : undefined;
         },
         log: ctx.log,
         // The node `ws` client speaks the CdpSocket surface the tagger needs.

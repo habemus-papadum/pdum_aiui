@@ -14,11 +14,13 @@
  *   1. the channel's own launch info (`GET /debug/api/info` →
  *      `launch.chromeDevtools.browserUrl`) — authoritative: it is what
  *      `aiui claude` handed the chrome-devtools MCP, whatever the profile;
- *   2. the project's session-browser profiles (`.aiui-cache/chrome/**`) via
- *      `discoverSessionBrowserUnder` — every profile layout (legacy flat +
- *      per-variant), first LIVE DevToolsActivePort wins. A debug channel has
- *      no launch info, so this rung is its whole discovery — a stale flat
- *      profile must never shadow a live variant one (found live 2026-07-19).
+ *   2. the user-level session-browser profiles (`~/.cache/aiui/userdata/**`)
+ *      via `discoverSessionBrowserInProfiles`, first LIVE DevToolsActivePort
+ *      wins. A debug channel has no launch info, so this rung is its whole
+ *      discovery. The legacy project-local `.aiui-cache/chrome/**` is NOT
+ *      scanned: an orphan browser an old checkout left there is not this
+ *      session's, and mistaking it for one produced a phantom "endpoint moved"
+ *      warning (2026-07-20).
  *
  * **Loopback only.** The CDP port is root of the browser (docs/guide/chrome.md),
  * so this proxy refuses to bridge to anything but 127.0.0.1/::1 — a tunneled or
@@ -34,7 +36,7 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import {
   discoverSessionBrowser,
-  discoverSessionBrowserUnder,
+  discoverSessionBrowserInProfiles,
   rehostSocketUrl,
 } from "@habemus-papadum/aiui-util";
 import { WebSocket, WebSocketServer } from "ws";
@@ -51,7 +53,11 @@ export interface CdpProxyInfo {
 }
 
 export interface CdpProxyOptions {
-  /** Project root — locates `.aiui-cache/chrome/` for profile discovery. */
+  /**
+   * Project root — carried for the sidecar family's shared shape. Discovery no
+   * longer reads it: session-browser profiles are user-level
+   * (`~/.cache/aiui/userdata/**`), scanned globally, not under the project.
+   */
   root?: string;
   log?: (message: string) => void;
   /** Test seam: resolve the browser endpoint (bypasses discovery). */
@@ -77,8 +83,12 @@ export function isLoopbackEndpoint(url: string): boolean {
   }
 }
 
-/** The channel's launch info — what `aiui claude` told the server it wired. */
-async function browserUrlFromLaunchInfo(channelPort: number): Promise<string | undefined> {
+/**
+ * The channel's launch info — what `aiui claude` told the server it wired,
+ * i.e. the endpoint the chrome-devtools MCP was pinned to at launch. The
+ * endpoint watcher (sidecar.ts) anchors on THIS, never on a profile scan.
+ */
+export async function browserUrlFromLaunchInfo(channelPort: number): Promise<string | undefined> {
   try {
     const res = await fetch(`http://127.0.0.1:${channelPort}/debug/api/info`, {
       signal: AbortSignal.timeout(1000),
@@ -130,10 +140,7 @@ export function createCdpProxy(options: CdpProxyOptions = {}): CdpProxy {
           return fromLaunch;
         }
       }
-      if (options.root === undefined) {
-        return undefined;
-      }
-      return (await discoverSessionBrowserUnder(options.root))?.browserUrl;
+      return (await discoverSessionBrowserInProfiles())?.browserUrl;
     });
 
   /** Resolve an endpoint we are willing to bridge to, or say why not. */

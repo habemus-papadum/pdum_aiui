@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { openInSessionBrowser } from "@habemus-papadum/aiui-util";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createChannelLog } from "../channel-log";
+import { dashboardTabTarget } from "../dashboard-tab";
 import { STALE_NOTICE } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
 import { formatPageToolsChanged, PageToolDirectory } from "../page-tools";
@@ -164,6 +166,25 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     frameSink: channelLog.frameSink,
     ...commonWebOptions(options),
   });
+
+  // Now that the web server has a port, open THIS channel's dashboard (the
+  // console served at /) as a tab in the session browser the launcher opened —
+  // the "browser open mode". The launcher already launched the browser and
+  // pointed the Chrome DevTools MCP at it; only WE know the port to reach the
+  // dashboard, so the tab is opened here. Gated on a LOCAL loopback session
+  // browser (a userDataDir we manage, not a remote `--aiui-browser-url`).
+  // Best-effort: a failure just means no dashboard tab, never a dead channel.
+  const dashboardTab = dashboardTabTarget(launchInfo?.chromeDevtools, web.port);
+  if (dashboardTab) {
+    try {
+      await openInSessionBrowser(dashboardTab.browserUrl, dashboardTab.dashboardUrl);
+      channelLog.log(`opened the dashboard tab (${dashboardTab.dashboardUrl})`);
+    } catch (err) {
+      channelLog.log("dashboard tab open failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   // A real session channel: kind "channel" (the ppid → `claude agents` join
   // names it live); the DevTools endpoint rides along so cold discoverers can
   // find the session browser without the launcher (schema v2, §3).

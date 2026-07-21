@@ -111,8 +111,9 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         doc:
           "An argv list prepended to the `claude` invocation on every `aiui claude`, ahead of " +
           "any per-launch passthrough. This is how --dangerously-skip-permissions is applied " +
-          "now — there is no separate skipPermissions flag. Add that flag with `aiui config " +
-          "set-dsp`, or replace the whole list with `aiui config set claude.args` (a JSON " +
+          "now — there is no separate skipPermissions flag. Add that flag (with channel.bind " +
+          "host) via `aiui config yolo`, or replace the whole list with `aiui config set " +
+          "claude.args` (a JSON " +
           "array). With --dangerously-skip-permissions every agent action — shell commands, " +
           "file writes, network, the browser — runs without asking first (docs/guide/warning); " +
           "it is opt-in and never added by default.",

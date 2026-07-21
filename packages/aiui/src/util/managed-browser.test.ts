@@ -111,17 +111,8 @@ describe("syncManagedBrowser", () => {
     ).toBeUndefined();
   });
 
-  it("respects a recent install decline instead of re-asking", async () => {
-    const now = 2_000_000_000;
-    // A fresh "latest" is cached so the offer path needs no network; the
-    // recent decline must short-circuit before any prompt.
-    writeManagedState("chromium", {
-      checkedAt: now - 1000,
-      latestBuildId: "1358901",
-      installDeclinedAt: now - 60_000,
-    });
-    expect(
-      await syncManagedBrowser({ flavor: "chromium", mode: "prompt", interactive: true, now }),
-    ).toBeUndefined();
-  });
+  // A committed managed flavor with nothing installed now downloads with no
+  // second prompt (the profile choice was the consent) — an integration path
+  // that hits the network, so it is exercised by manual/e2e runs, not here.
+  // The unit tests cover only the short-circuits that must never download.
 });

@@ -8,9 +8,12 @@
  *    `"vault"` (in use) or `"skip"` (deliberately unused); absence means
  *    "never interviewed";
  *  - the gap-fill (every interactive `aiui claude`) asks ONLY about undecided
- *    providers: paste a key, import it from the environment when one is set,
- *    or skip — and a skip prints how to revisit. The full interview
- *    (`aiui keys interview`) walks every provider with keep / replace / skip.
+ *    providers: paste a key or skip — and a skip prints how to revisit. In a
+ *    source checkout a provider whose key is already in the environment is used
+ *    silently (no question, nothing written to the vault); env → vault
+ *    migration is exclusively the explicit `aiui keys set` / `aiui keys
+ *    interview`. The full interview walks every provider with keep / replace /
+ *    skip, and there offers import-from-env because it is user-initiated.
  *
  * Secrets never ride argv here: pastes go through aiui-util's `readSecret`
  * (masked at a TTY, piped otherwise), and every store is verified by an
@@ -18,7 +21,6 @@
  * SILENT corruption, so a write that isn't read back isn't a write.
  */
 import {
-  packageFromSource,
   readKeyDecisions,
   readSecret,
   resolveVendorKeys,
@@ -27,13 +29,14 @@ import {
   type VendorProvider,
   vaultLookup,
   vaultStore,
+  vendorKeysMode,
 } from "@habemus-papadum/aiui-util";
 import { type AiuiConfig, type KeyDecisionValue, updateUserConfig } from "./config";
-import { type Choice, choose } from "./prompt";
-import { printNote, printWarning } from "./ui";
+import { type Choice, choose, type Prompt } from "./prompt";
+import { printNote, printWarning, theme } from "./ui";
 
 /** Injectable for tests; matches {@link choose} without a default key. */
-type Ask = (question: string, choices: Choice[]) => Promise<string>;
+type Ask = (prompt: Prompt, choices: Choice[]) => Promise<string>;
 
 /** Injectable seams so the interview is testable without a real keychain. */
 export interface KeysInterviewSeams {
@@ -44,12 +47,20 @@ export interface KeysInterviewSeams {
   persist?: (provider: VendorProvider, decision: KeyDecisionValue) => void;
   note?: (message: string) => void;
   warn?: (message: string) => void;
+  /** Override the source/installed provenance (defaults to {@link keysMode});
+   * lets tests exercise the source-mode env short-circuit deterministically. */
+  mode?: "source" | "installed";
 }
 
-/** Whether THIS aiui runs from the monorepo checkout (env honored) or an
- * install (vault only) — the same provenance signal the channel uses. */
+/** The seams the conversation actually calls, all defaulted. `mode` is a
+ * provenance override read directly, not one of these normalized callbacks. */
+type NormalizedSeams = Required<Omit<KeysInterviewSeams, "mode">>;
+
+/** Whether THIS aiui resolves keys as the monorepo checkout (env honored) or an
+ * install (vault only) — the same signal the channel uses, and the same
+ * AIUI_NO_SOURCE_MODE override, so both agree across processes. */
 export function keysMode(): "source" | "installed" {
-  return packageFromSource("@habemus-papadum/aiui") ? "source" : "installed";
+  return vendorKeysMode("@habemus-papadum/aiui");
 }
 
 /** Write one decision to the user config (schema-validated path). */
@@ -62,7 +73,7 @@ export function persistKeyDecision(provider: VendorProvider, decision: KeyDecisi
 const REVISIT_NOTE =
   "revisit anytime: `aiui keys interview` (all providers) or `aiui keys set <provider>` (one key)";
 
-function seams(overrides: KeysInterviewSeams): Required<KeysInterviewSeams> {
+function seams(overrides: KeysInterviewSeams): NormalizedSeams {
   return {
     ask: overrides.ask ?? choose,
     lookup: overrides.lookup ?? ((account) => vaultLookup(account)),
@@ -84,7 +95,7 @@ function seams(overrides: KeysInterviewSeams): Required<KeysInterviewSeams> {
 async function storeVerified(
   spec: VendorKeySpec,
   secret: string,
-  s: Required<KeysInterviewSeams>,
+  s: NormalizedSeams,
 ): Promise<boolean> {
   await s.store(spec.envVar, secret);
   const back = await s.lookup(spec.envVar);
@@ -102,27 +113,25 @@ async function storeVerified(
  * Ask about ONE undecided provider. Returns the decision persisted, or
  * undefined when the exchange ended without one (an empty paste re-asks; a
  * failed verify leaves the provider undecided so the next launch asks again).
+ *
+ * The gap-fill offers only paste or skip — never "import from the environment".
+ * A source checkout with the env var set is handled BEFORE we get here (the
+ * launch uses that key at runtime and asks nothing), and installed mode ignores
+ * the environment entirely, so env → vault migration is exclusively an explicit
+ * act: `aiui keys set` / `aiui keys interview`, never a launch side effect.
  */
 async function askUndecided(
   spec: VendorKeySpec,
-  mode: "source" | "installed",
-  env: NodeJS.ProcessEnv,
-  s: Required<KeysInterviewSeams>,
+  s: NormalizedSeams,
 ): Promise<KeyDecisionValue | undefined> {
-  const envValue = env[spec.envVar]?.trim();
-  const question =
-    `One-time setup — the ${spec.label} API key (${spec.envVar}).\n` +
-    `It powers ${spec.purpose}. aiui stores keys in your OS vault (keychain / Secret\n` +
-    "Service), never in a config file" +
-    (mode === "source"
-      ? `; in this source checkout the environment/.env still wins at runtime${envValue ? ` (${spec.envVar} is currently set)` : ""}.`
-      : ".") +
-    `\nSkipping just disables ${spec.label}-backed features until you revisit.`;
+  const question: Prompt = {
+    title: `Set up the ${spec.label} API key (${spec.envVar})?`,
+    detail:
+      `It powers ${spec.purpose}. aiui keeps keys in your OS vault (keychain / Secret Service), ` +
+      `never in a config file. Skipping just disables ${spec.label}-backed features until you revisit.`,
+  };
   const choices: Choice[] = [
     { key: "p", label: "paste the key now (stored in the OS vault, input hidden)" },
-    ...(envValue
-      ? [{ key: "e", label: `import the value currently in $${spec.envVar} into the vault` }]
-      : []),
     { key: "s", label: `skip — don't use ${spec.label}` },
   ];
   for (;;) {
@@ -132,7 +141,7 @@ async function askUndecided(
       s.note(REVISIT_NOTE);
       return "skip";
     }
-    const secret = answer === "e" && envValue ? envValue : await s.secret(`${spec.envVar}`);
+    const secret = await s.secret(`${spec.envVar}`);
     if (secret.trim() === "") {
       s.warn("empty value — nothing stored");
       continue; // re-present the menu; skip remains the deliberate exit
@@ -147,9 +156,17 @@ async function askUndecided(
 
 /**
  * The launch gap-fill: for each provider with NO recorded decision, either
- * adopt an existing vault entry silently (it was `aiui keys set` outside an
- * interview, or a pre-decision write) or ask. Call only from an interactive
- * session. Returns the config with any new decisions applied.
+ * defer to an env key (source mode), adopt an existing vault entry silently
+ * (it was `aiui keys set` outside an interview, or a pre-decision write), or
+ * ask. Call only from an interactive session. Returns the config with any new
+ * decisions applied.
+ *
+ * The launch NEVER writes the environment into the vault or records a decision
+ * on the user's behalf for an env-provided key: in a source checkout an
+ * exported key already wins at runtime (see aiui-util/vendor-keys.ts), so the
+ * gap-fill just uses it and stays silent, leaving the provider undecided — if
+ * the env var later disappears, the next launch falls through to the real ask.
+ * Migrating env → vault is exclusively `aiui keys set` / `aiui keys interview`.
  */
 export async function ensureKeyDecisions(
   config: AiuiConfig,
@@ -157,10 +174,21 @@ export async function ensureKeyDecisions(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<AiuiConfig> {
   const s = seams(overrides);
-  const mode = keysMode();
+  const mode = overrides.mode ?? keysMode();
   let keys = { ...config.keys };
   for (const spec of VENDOR_KEYS) {
     if (keys[spec.provider] !== undefined) {
+      continue;
+    }
+    // Source checkout with the env var set: the key resolves at runtime with no
+    // vault involvement. Don't prompt, don't write the vault, don't record a
+    // decision — just note it and how to persist it deliberately.
+    if (mode === "source" && env[spec.envVar]?.trim()) {
+      s.note(
+        `${theme.good.bold(spec.label)} ${theme.muted("· using")} ${theme.accent(`$${spec.envVar}`)} ` +
+          `${theme.muted("from the environment (source checkout) —")} ` +
+          `${theme.accent(`aiui keys set ${spec.provider}`)} ${theme.muted("stores it in the OS vault")}`,
+      );
       continue;
     }
     let existing: string | null = null;
@@ -181,7 +209,7 @@ export async function ensureKeyDecisions(
       keys = { ...keys, [spec.provider]: "vault" as const };
       continue;
     }
-    const decision = await askUndecided(spec, mode, env, s);
+    const decision = await askUndecided(spec, s);
     if (decision !== undefined) {
       keys = { ...keys, [spec.provider]: decision };
     }
@@ -220,7 +248,10 @@ export async function runKeysInterview(
       hasKey ? "vault entry: present" : "vault entry: none",
       ...(envValue ? [`$${spec.envVar} set (wins at runtime in this source checkout)`] : []),
     ].join(" · ");
-    const question = `${spec.label} (${spec.envVar}) — ${state}\nIt powers ${spec.purpose}.`;
+    const question: Prompt = {
+      title: `${spec.label} (${spec.envVar})`,
+      detail: `${state}. It powers ${spec.purpose}.`,
+    };
     const choices: Choice[] = [
       ...(hasKey ? [{ key: "k", label: "keep the stored key (mark in use)" }] : []),
       { key: "r", label: hasKey ? "replace it — paste a new key" : "paste a key now" },

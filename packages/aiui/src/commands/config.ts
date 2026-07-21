@@ -25,6 +25,7 @@ import {
   parseFieldValue,
   type ResolvedField,
 } from "../util/config-schema";
+import { type Choice, choose, type Prompt } from "../util/prompt";
 import { printError, printNote } from "../util/ui";
 
 /** The config file, read once — the raw material for every subcommand. */
@@ -175,30 +176,50 @@ export function writeValue(state: ResolvedField, value: ConfigValue): void {
   printNote(`wrote ${state.path}: ${formatConfigValue(value)} to ${file}`);
 }
 
-// ── set-dsp ──────────────────────────────────────────────────────────────────
+// ── yolo ──────────────────────────────────────────────────────────────────────
 
-/** The one dangerous flag `set-dsp` toggles into `claude.args`. */
+/** Injectable for tests; matches {@link choose} without a default key. */
+type Ask = (prompt: Prompt, choices: Choice[]) => Promise<string>;
+
+/** The dangerous flag YOLO mode adds to `claude.args`. */
 export const DSP_FLAG = "--dangerously-skip-permissions";
 
+const YOLO_PROMPT: Prompt = {
+  title: "Turn off both safety rails? (skip permissions + bind to your LAN)",
+  detail:
+    "--dangerously-skip-permissions lets Claude Code run tools — file edits, shell commands — " +
+    "without asking first. channel.bind: host puts the channel's WHOLE web surface on every " +
+    "interface, unauthenticated: prompt injection, /debug, and every sidecar become reachable " +
+    "by anyone on your network — only ever on a network that is yours alone, never café Wi-Fi. " +
+    "This command is the only thing that enables either.",
+};
+
 /**
- * `aiui config set-dsp` — idempotently append `--dangerously-skip-permissions`
- * to `claude.args`.
- *
- * The ergonomic opt-in for skipping Claude Code's permission prompts, which is
- * OFF by default now that there is no `claude.skipPermissions` flag: nothing
- * adds this unless you ask (docs/guide/warning). Running it twice is a no-op.
+ * `aiui config yolo` — the single, deliberately-inconvenient opt-in to the
+ * dangerous posture: append `--dangerously-skip-permissions` to `claude.args`
+ * AND set `channel.bind: host`. Both are OFF by default and asked for NOWHERE
+ * else (first-run no longer offers host — see util/first-run.ts). Interactive:
+ * it states both consequences and only acts on an explicit yes. The DSP append
+ * is idempotent; bind is set to host outright.
  */
-export function runConfigSetDsp(): void {
-  const loaded = readLoadedConfig();
-  const existing = loaded.config.claude?.args ?? [];
-  if (existing.includes(DSP_FLAG)) {
-    printNote(`${DSP_FLAG} is already in claude.args (${loaded.path})`);
+export async function runConfigYolo(ask: Ask = choose): Promise<void> {
+  const answer = await ask(YOLO_PROMPT, [
+    { key: "y", label: "yes — skip permissions AND bind host (I accept the risk)" },
+    { key: "n", label: "no — leave things as they are" },
+  ]);
+  if (answer !== "y") {
+    printNote("YOLO mode not enabled — nothing changed");
     return;
   }
   const file = updateConfigFile(configPath(), (config) => {
-    config.claude = { ...config.claude, args: [...(config.claude?.args ?? []), DSP_FLAG] };
+    const args = config.claude?.args ?? [];
+    config.claude = {
+      ...config.claude,
+      args: args.includes(DSP_FLAG) ? args : [...args, DSP_FLAG],
+    };
+    config.channel = { ...config.channel, bind: "host" };
   });
-  printNote(`added ${DSP_FLAG} to claude.args in ${file}`);
+  printNote(`YOLO mode enabled: ${DSP_FLAG} in claude.args + channel.bind: host (${file})`);
 }
 
 export function runConfigUnset(key: string): void {

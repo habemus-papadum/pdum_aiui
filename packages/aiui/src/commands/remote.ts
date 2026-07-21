@@ -42,7 +42,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { registerServer, writeFileAtomic } from "@habemus-papadum/aiui-registry";
-import { cacheDir } from "@habemus-papadum/aiui-util";
+import { cacheDir, openInSessionBrowser } from "@habemus-papadum/aiui-util";
 import { select } from "@inquirer/prompts";
 import { execa } from "execa";
 import { loadAiuiConfig } from "../util/config";
@@ -558,6 +558,20 @@ export async function runRemote(target: string, opts: RemoteOptions): Promise<vo
         `${name ? ` as "${name}"` : ""} — the local intent client can use it now.\n` +
         "(Ctrl-C disconnects and unregisters; the browser stays running.)",
     );
+
+    // Now that the proxy is real, open the remote channel's dashboard (the
+    // console served at /, reached over the local forward) as a tab in the
+    // session browser — the same courtesy `aiui claude` does once its channel
+    // is up. Best-effort: a failure changes nothing about the connection.
+    const dashboardUrl = `http://127.0.0.1:${channelPort}/`;
+    try {
+      await openInSessionBrowser(browser.session.browserUrl, dashboardUrl);
+      console.log(`opened the dashboard tab (${dashboardUrl})`);
+    } catch (err) {
+      console.log(
+        `(couldn't open the dashboard tab: ${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
 
     // Supervise until the master ends: an ssh drop is reconnectable; the
     // remote channel VANISHING from its registry is terminal (its death is a

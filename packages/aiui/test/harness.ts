@@ -78,7 +78,7 @@ export async function launchClaudeSession(opts) {
   // that would otherwise block this headless session.
   const cmd =
     `cd ${REPO_ROOT} && env ${unset}AIUI_CACHE=${cacheDir} IS_SANDBOX=1 ` +
-    `${TSX} ${AIUI_CLI} claude --aiui-tag ${opts.tag} --aiui-no-chrome --no-chrome --model ${model}`;
+    `${TSX} ${AIUI_CLI} claude --aiui-tag ${opts.tag} --aiui-no-session-browser --no-chrome --model ${model}`;
 
   try {
     tmux(["kill-session", "-t", sessionName]);

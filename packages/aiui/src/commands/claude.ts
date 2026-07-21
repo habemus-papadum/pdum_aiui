@@ -7,12 +7,12 @@ import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { channelLaunchFlags, resolveChannelLaunch } from "../util/channel-launch";
 import {
   CHROME_SERVER_ID,
-  chromeDevtoolsEnabled,
   chromeMcpAttachServer,
   chromeMcpServer,
   findIntentClientExtension,
   maybeExtensionAutoloadHint,
   resolveChromeSettings,
+  sessionBrowserEnabled,
   warnIntentClientState,
 } from "../util/chrome";
 import { type AiuiConfig, type ChromeChannel, loadAiuiConfig } from "../util/config";
@@ -89,17 +89,20 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     // to the user config; every later launch reads the choice silently.
     config = await ensureLaunchChoices(config);
     // The vendor-key gap-fill (util/keys-interview.ts): any provider with NO
-    // recorded decision gets one question — paste the key (into the OS vault),
-    // import it from the environment, or skip the provider. Decided providers
-    // are never re-asked; `aiui keys interview` is the full revisit.
+    // recorded decision gets one question — paste the key (into the OS vault)
+    // or skip the provider. A source checkout with the key already in the
+    // environment skips the question silently and writes nothing to the vault
+    // (env → vault is `aiui keys set`, never a launch side effect). Decided
+    // providers are never re-asked; `aiui keys interview` is the full revisit.
     config = await ensureKeyDecisions(config);
   }
 
   // Resolve the three vendor keys the way the channel itself will at boot
   // (aiui-util/vendor-keys.ts): a source checkout honors the environment/.env
   // first, an installed aiui reads the OS vault only, a skip stays keyless by
-  // choice. Values are used ONLY to preflight; the channel re-resolves
-  // vault-side in its own process — keys never ride through claude's env.
+  // choice (AIUI_NO_SOURCE_MODE forces the installed path in every process).
+  // Values are used ONLY to preflight; the channel re-resolves vault-side in
+  // its own process — keys never ride through claude's env.
   const resolvedKeys = await resolveVendorKeys({
     mode: keysMode(),
     onWarn: (message) => printWarning(message),
@@ -166,13 +169,13 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     [CHANNEL_SERVER_ID]: { command: channel.command, args: mcpArgs },
   };
 
-  // By default the session also gets the Chrome DevTools MCP — off under CI,
-  // `--aiui-no-chrome`, or `chrome.enabled: false`. In the default "attach"
-  // mode the MCP shares a user-visible session browser (see aiui-util's
-  // browser module);
+  // By default the session also gets the shared session browser + its Chrome
+  // DevTools MCP — off under CI, `--aiui-no-session-browser`, or
+  // `chrome.enabled: false`. In the default "attach" mode the MCP shares a
+  // user-visible session browser (see aiui-util's browser module);
   // "launch" mode keeps the browser private to the MCP and lazily started.
   let chromeInfo: ChromeDevtoolsInfo = { enabled: false };
-  if (chromeDevtoolsEnabled(aiuiArgs)) {
+  if (sessionBrowserEnabled(aiuiArgs)) {
     const chrome = await chromeServerEntry(aiuiArgs, { ...config.chrome }, interactive);
     mcpServers[CHROME_SERVER_ID] = chrome.entry;
     chromeInfo = chrome.info;
@@ -206,7 +209,7 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // test harness) to skip the browser-detection startup prompt.
   // Extra argv the user wants on every launch, forwarded verbatim ahead of the
   // machinery below (`claude.args`). This is where --dangerously-skip-permissions
-  // lives now — opt in with `aiui config set-dsp`; nothing adds it by default, so
+  // lives now — opt in with `aiui config yolo`; nothing adds it by default, so
   // out of the box Claude Code's own permission prompts stay in charge
   // (docs/guide/warning).
   const configArgs = config.claude?.args ?? [];
@@ -275,8 +278,8 @@ function printClaudeWrapperHelp(): void {
 
 aiui's own flags (everything else forwards to claude verbatim):
   --aiui-tag <tag>               tag the channel session (e.g. for \`quick --tag\`)
-  --aiui-chrome                  force the Chrome DevTools MCP on (even under CI)
-  --aiui-no-chrome               launch without the Chrome DevTools MCP
+  --aiui-session-browser         force the session browser + DevTools MCP on (even under CI)
+  --aiui-no-session-browser      launch with no session browser (and no DevTools MCP)
   --aiui-profile <name>          browser profile (~/.cache/aiui/userdata/<name>)
   --aiui-chrome-data-dir <path>  explicit browser user data dir
   --aiui-browser-url <url>       attach to a browser at this DevTools endpoint
@@ -346,7 +349,9 @@ async function chromeServerEntry(
   if (interactive) {
     // Start the session browser now — the SHARED pipeline (profile marker,
     // managed-browser sync, intent extension, profile NM host) that
-    // `open`/`remote` use; only the MCP-entry shaping is ours.
+    // `open`/`remote` use; only the MCP-entry shaping is ours. The MCP attaches
+    // to the browser's discovered debug endpoint. The channel opens its own
+    // dashboard as a tab once it boots (see the channel's mcp command).
     try {
       const { session, settings } = await startSessionBrowser({
         flags: aiuiArgs,

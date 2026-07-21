@@ -189,7 +189,7 @@ export async function runClean(opts: CleanOptions = {}): Promise<void> {
       return;
     }
     const answer = await choose(
-      "Delete these now?",
+      { title: "Delete these now?", detail: "This can't be undone." },
       [
         { key: "y", label: "yes, delete" },
         { key: "n", label: "no, cancel" },

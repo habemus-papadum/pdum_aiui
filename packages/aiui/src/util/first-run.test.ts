@@ -21,26 +21,20 @@ afterEach(() => {
 });
 
 describe("ensureLaunchChoices", () => {
-  it("asks for every unset choice, persists, and applies them", async () => {
-    // While the enter-nudge mechanism is disabled (ENTER_NUDGE_ENABLED=false),
-    // its question is skipped — asking for a preference nothing acts on is
-    // worse than either answer — so the bind posture is the one live question.
-    const questions: string[] = [];
-    const config = await ensureLaunchChoices({}, async (question) => {
-      questions.push(question);
-      return "h"; // bind the host interface
+  it("asks nothing: the nudge is disabled and bind is no longer a first-run question", async () => {
+    // ENTER_NUDGE_ENABLED=false holds the one remaining question, and the bind
+    // posture is deliberately NOT asked here — it defaults to loopback and the
+    // only opt-in to host is `aiui config yolo`. So nothing prompts, nothing
+    // persists, and channel.bind stays unset (→ loopback at launch).
+    const config = await ensureLaunchChoices({}, async () => {
+      throw new Error("should not prompt");
     });
-
-    expect(questions).toHaveLength(1);
-    expect(questions[0]).toMatch(/web server bind/i);
-    expect(config.claude?.enterNudge).toBeUndefined();
-    expect(config.channel).toEqual({ bind: "host" });
-
-    const persisted = readConfigFile(configPath());
-    expect(persisted?.channel).toEqual({ bind: "host" });
+    expect(config).toEqual({});
+    expect(config.channel).toBeUndefined();
+    expect(readConfigFile(configPath())).toBeUndefined();
   });
 
-  it("asks nothing when everything is already configured", async () => {
+  it("leaves an already-configured config untouched", async () => {
     const config = {
       claude: { enterNudge: false },
       channel: { bind: "loopback" as const },
@@ -51,19 +45,11 @@ describe("ensureLaunchChoices", () => {
     expect(result).toEqual(config);
   });
 
-  it("asks nothing once the bind posture is chosen (nudge question held while disabled)", async () => {
-    const result = await ensureLaunchChoices(
-      { claude: {}, channel: { bind: "host" } },
-      async () => {
-        throw new Error("should not prompt");
-      },
-    );
-    expect(result.channel).toEqual({ bind: "host" });
-  });
-
-  it("choosing loopback persists it, so it never asks again", async () => {
-    const config = await ensureLaunchChoices({ claude: { enterNudge: true } }, async () => "l");
-    expect(config.channel).toEqual({ bind: "loopback" });
-    expect(readConfigFile(configPath())?.channel).toEqual({ bind: "loopback" });
+  it("never sets channel.bind — host is opt-in via `aiui config yolo` only", async () => {
+    const result = await ensureLaunchChoices({ claude: {} }, async () => {
+      throw new Error("should not prompt");
+    });
+    expect(result.channel).toBeUndefined();
+    expect(readConfigFile(configPath())?.channel).toBeUndefined();
   });
 });

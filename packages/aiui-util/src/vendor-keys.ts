@@ -24,7 +24,35 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cacheDir } from "./index";
+import { packageFromSource } from "./provenance";
 import { vaultLookup } from "./vault";
+
+/**
+ * Env var that forces INSTALLED key resolution (env ignored, OS vault only) in
+ * every process that honors it — the `aiui claude` launcher and the spawned
+ * channel alike, since a child inherits it. Set it (to any value but empty /
+ * `0` / `false`) to exercise the installed-user startup flow from a source
+ * checkout. It only steers key resolution — nothing else about source-vs-dist.
+ */
+export const FORCE_INSTALLED_ENV = "AIUI_NO_SOURCE_MODE";
+
+/**
+ * The key-resolution mode for a package: `source` when running from the
+ * monorepo checkout (the environment/.env is honored), otherwise `installed`
+ * (OS vault only). {@link FORCE_INSTALLED_ENV} overrides both to `installed`.
+ * The one place every caller — launcher and channel — decides this, so the
+ * env override reaches all of them.
+ */
+export function vendorKeysMode(
+  packageName: string,
+  env: NodeJS.ProcessEnv = process.env,
+): "source" | "installed" {
+  const forced = env[FORCE_INSTALLED_ENV]?.trim().toLowerCase();
+  if (forced !== undefined && forced !== "" && forced !== "0" && forced !== "false") {
+    return "installed";
+  }
+  return packageFromSource(packageName) ? "source" : "installed";
+}
 
 /** One vendor the channel can hold a key for. */
 export interface VendorKeySpec {

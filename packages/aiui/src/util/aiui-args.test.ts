@@ -5,8 +5,8 @@ import { type AiuiArgs, infoFlag, splitAiuiArgs } from "./aiui-args";
 const none: AiuiArgs = {
   tag: undefined,
   mcp: undefined,
-  chrome: false,
-  noChrome: false,
+  sessionBrowser: false,
+  noSessionBrowser: false,
   browser: false,
   noBrowser: false,
   chromeProfile: undefined,
@@ -68,26 +68,26 @@ describe("splitAiuiArgs", () => {
     expect(() => splitAiuiArgs(["--aiui-mcp="])).toThrow(/requires a non-empty value/);
   });
 
-  it("consumes --aiui-chrome and --aiui-no-chrome as boolean flags", () => {
-    expect(splitAiuiArgs(["--aiui-chrome", "--resume"])).toEqual({
+  it("consumes --aiui-session-browser and --aiui-no-session-browser as boolean flags", () => {
+    expect(splitAiuiArgs(["--aiui-session-browser", "--resume"])).toEqual({
       ...none,
-      chrome: true,
+      sessionBrowser: true,
       passthrough: ["--resume"],
     });
-    expect(splitAiuiArgs(["--aiui-no-chrome", "--resume"])).toEqual({
+    expect(splitAiuiArgs(["--aiui-no-session-browser", "--resume"])).toEqual({
       ...none,
-      noChrome: true,
+      noSessionBrowser: true,
       passthrough: ["--resume"],
     });
   });
 
-  it("throws when a boolean chrome flag is given a value", () => {
-    expect(() => splitAiuiArgs(["--aiui-chrome=1"])).toThrow(/takes no value/);
-    expect(() => splitAiuiArgs(["--aiui-no-chrome=1"])).toThrow(/takes no value/);
+  it("throws when a boolean session-browser flag is given a value", () => {
+    expect(() => splitAiuiArgs(["--aiui-session-browser=1"])).toThrow(/takes no value/);
+    expect(() => splitAiuiArgs(["--aiui-no-session-browser=1"])).toThrow(/takes no value/);
   });
 
-  it("throws when --aiui-chrome and --aiui-no-chrome are combined", () => {
-    expect(() => splitAiuiArgs(["--aiui-chrome", "--aiui-no-chrome"])).toThrow(
+  it("throws when --aiui-session-browser and --aiui-no-session-browser are combined", () => {
+    expect(() => splitAiuiArgs(["--aiui-session-browser", "--aiui-no-session-browser"])).toThrow(
       /mutually exclusive/,
     );
   });

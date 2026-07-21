@@ -44,7 +44,7 @@ export type CdpAlignmentState =
    * browser has its own debug port is unknowable from inside.) */
   | "channel-drives-other"
   /** The bound channel reports no CDP endpoint: the agent has no browser at
-   * all (`--aiui-no-chrome`, `aiui serve`). Normal and calm. */
+   * all (`--aiui-no-session-browser`, `aiui serve`). Normal and calm. */
   | "channel-no-cdp"
   /** No channel bound, or the probe failed — nothing to say. */
   | "unknown";

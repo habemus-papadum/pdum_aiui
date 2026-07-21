@@ -18,7 +18,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { cacheDir } from "@habemus-papadum/aiui-util";
+import { cacheDir, USERDATA_NAMESPACE } from "@habemus-papadum/aiui-util";
 import {
   CHROME_CHANNELS,
   type ChromeChannel,
@@ -26,16 +26,13 @@ import {
   MANAGED_FLAVORS,
   type ManagedFlavor,
 } from "./config-schema";
-import { type Choice, choose } from "./prompt";
+import { type Choice, choose, type Prompt } from "./prompt";
 
 /** The marker's filename inside a profile's user-data dir. */
 export const PROFILE_MARKER = "aiui-profile.json";
 
 /** The profile used when no `--profile` names another. */
 export const DEFAULT_PROFILE = "default";
-
-/** The cache namespace profiles live under (`~/.cache/aiui/userdata`). */
-const USERDATA_NAMESPACE = "userdata";
 
 /** Lowercase slugs only — profile names are directory names and CLI words. */
 const PROFILE_NAME = /^[a-z0-9][a-z0-9-]*$/;
@@ -149,16 +146,18 @@ export function profileBrowserLabel(browser: ProfileBrowser): string {
 }
 
 /** Injectable for tests; matches {@link choose} without a default key. */
-type Ask = (question: string, choices: Choice[]) => Promise<string>;
+type Ask = (prompt: Prompt, choices: Choice[]) => Promise<string>;
 
-const BROWSER_QUESTION = (profile: string): string =>
-  `One-time setup — which browser should the "${profile}" profile use?\n` +
-  "aiui downloads and manages the browser for you (version-pinned, separate from your real\n" +
-  "Chrome, auto-loads the intent client's extension). Chromium's open-source build dodges the\n" +
-  '"verify you\'re human" reCAPTCHA Google serves to the Chrome-for-Testing automation build,\n' +
-  "at the cost of Widevine/DRM and Google-account sign-in. Recorded in the profile itself\n" +
-  `(${PROFILE_MARKER}) — immutable; a different browser is a different profile\n` +
-  "(advanced choices — a branded Chrome channel or an explicit binary — via `aiui profile new`).";
+const BROWSER_PROMPT = (profile: string): Prompt => ({
+  title: `Which browser should the "${profile}" profile use?`,
+  detail:
+    "aiui downloads and manages your pick — version-pinned, separate from your real Chrome, and " +
+    "it auto-loads the intent client's extension. Chromium (recommended) dodges the \"verify " +
+    "you're human\" reCAPTCHA that Chrome for Testing draws, trading away Widevine/DRM and Google " +
+    "sign-in. It installs right after you choose. (Advanced: to point a profile at your own " +
+    "installed Chrome instead, see `aiui profile new` and the docs.) The choice is recorded in " +
+    `${PROFILE_MARKER} and immutable — a different browser is a different profile.`,
+});
 
 /**
  * Make sure `dir` is a real profile: return its marker, creating one when the
@@ -183,7 +182,7 @@ export async function ensureProfileMarker(
   let browser: ProfileBrowser = { managed: DEFAULT_MANAGED_FLAVOR };
   if (opts.interactive) {
     const ask = opts.ask ?? choose;
-    const answer = await ask(BROWSER_QUESTION(opts.profileName ?? dir), [
+    const answer = await ask(BROWSER_PROMPT(opts.profileName ?? dir), [
       { key: "c", label: "Chromium (recommended)" },
       { key: "t", label: "Chrome for Testing" },
     ]);

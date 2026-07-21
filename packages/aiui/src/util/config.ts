@@ -102,7 +102,7 @@ const DEPRECATED_SECTIONS = new Set(["sidecars"]);
  * dataDir/executablePath/channel/managed/forTesting — moved into the profile
  * marker or became flag-only. `claude.skipPermissions` retired earlier when
  * `--dangerously-skip-permissions` moved into `claude.args` (run
- * `aiui config set-dsp` to opt back in).
+ * `aiui config yolo` to opt back in).
  */
 const DEPRECATED_FIELDS: Record<string, readonly string[]> = {
   claude: ["skipPermissions"],

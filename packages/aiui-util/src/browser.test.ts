@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   decideBrowserAction,
   discoverSessionBrowser,
-  discoverSessionBrowserUnder,
+  discoverSessionBrowserInProfiles,
   sessionBrowserBinary,
 } from "./browser";
 
@@ -38,42 +38,54 @@ describe("discoverSessionBrowser", () => {
   });
 });
 
-describe("discoverSessionBrowserUnder", () => {
+describe("discoverSessionBrowserInProfiles", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("nothing under a project that never launched", async () => {
-    expect(await discoverSessionBrowserUnder(dir)).toBeUndefined();
+  it("nothing under a profiles root that never launched", async () => {
+    expect(await discoverSessionBrowserInProfiles(dir)).toBeUndefined();
   });
 
-  it("a live VARIANT profile wins over a stale flat-layout leftover (found live 2026-07-19)", async () => {
-    // The exact confusion this exists to fix: a dead port file in the legacy
-    // flat layout, a living browser under the per-variant layout.
-    const flat = join(dir, ".aiui-cache", "chrome", "default");
-    const variant = join(dir, ".aiui-cache", "chrome", "chromium", "default");
-    mkdirSync(flat, { recursive: true });
-    mkdirSync(variant, { recursive: true });
-    writeFileSync(join(flat, "DevToolsActivePort"), "50018\n/devtools/browser/dead");
-    writeFileSync(join(variant, "DevToolsActivePort"), "62952\n/devtools/browser/live");
+  it("the newest LIVE profile wins; a stale one is skipped", async () => {
+    // Two user-level profiles: an older dead one and a newer living one. The
+    // liveness probe skips the dead port, so the live browser is returned.
+    const stale = join(dir, "default");
+    const live = join(dir, "work");
+    mkdirSync(stale, { recursive: true });
+    mkdirSync(live, { recursive: true });
+    writeFileSync(join(stale, "DevToolsActivePort"), "50018\n/devtools/browser/dead");
+    writeFileSync(join(live, "DevToolsActivePort"), "62952\n/devtools/browser/live");
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       if (String(input).includes(":62952/")) {
         return { ok: true } as Response;
       }
       throw new Error("ECONNREFUSED");
     });
-    expect(await discoverSessionBrowserUnder(dir)).toEqual({
+    expect(await discoverSessionBrowserInProfiles(dir)).toEqual({
       browserUrl: "http://127.0.0.1:62952",
       port: 62952,
     });
   });
 
   it("every profile stale -> undefined (never a dead endpoint)", async () => {
-    const flat = join(dir, ".aiui-cache", "chrome", "default");
-    mkdirSync(flat, { recursive: true });
-    writeFileSync(join(flat, "DevToolsActivePort"), "50018\n/devtools/browser/dead");
+    const profile = join(dir, "default");
+    mkdirSync(profile, { recursive: true });
+    writeFileSync(join(profile, "DevToolsActivePort"), "50018\n/devtools/browser/dead");
     vi.stubGlobal("fetch", async () => {
       throw new Error("ECONNREFUSED");
     });
-    expect(await discoverSessionBrowserUnder(dir)).toBeUndefined();
+    expect(await discoverSessionBrowserInProfiles(dir)).toBeUndefined();
+  });
+
+  it("does NOT scan a nested legacy layout — only direct profile children", async () => {
+    // A LIVE browser in the old project-local `.aiui-cache/chrome/**` shape,
+    // reproduced here two levels deep, must be invisible: the scanner reads
+    // only direct children of the profiles root. This is the fix for the
+    // phantom "endpoint moved" warning (2026-07-20).
+    const legacy = join(dir, ".aiui-cache", "chrome", "chromium", "default");
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(join(legacy, "DevToolsActivePort"), "50616\n/devtools/browser/live");
+    vi.stubGlobal("fetch", async () => ({ ok: true }) as Response);
+    expect(await discoverSessionBrowserInProfiles(dir)).toBeUndefined();
   });
 });
 

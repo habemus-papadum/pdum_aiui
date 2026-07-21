@@ -3,12 +3,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  chromeDevtoolsEnabled,
   chromeMcpAttachServer,
   chromeMcpServer,
   findIntentClientExtension,
   resolveChromeSettings,
   resolveIntentClientExtension,
+  sessionBrowserEnabled,
 } from "./chrome";
 import { writeProfileMarker } from "./profile";
 
@@ -16,30 +16,34 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("chromeDevtoolsEnabled (flag-only since the browser-profiles redesign)", () => {
-  const off = { chrome: false, noChrome: false };
+describe("sessionBrowserEnabled (flag-only since the browser-profiles redesign)", () => {
+  const off = { sessionBrowser: false, noSessionBrowser: false };
 
   it("is on by default outside CI", () => {
-    expect(chromeDevtoolsEnabled(off, {})).toBe(true);
+    expect(sessionBrowserEnabled(off, {})).toBe(true);
   });
 
   it("is off under CI", () => {
-    expect(chromeDevtoolsEnabled(off, { CI: "true" })).toBe(false);
-    expect(chromeDevtoolsEnabled(off, { CI: "1" })).toBe(false);
+    expect(sessionBrowserEnabled(off, { CI: "true" })).toBe(false);
+    expect(sessionBrowserEnabled(off, { CI: "1" })).toBe(false);
   });
 
   it("treats an explicitly falsy CI var as not-CI", () => {
-    expect(chromeDevtoolsEnabled(off, { CI: "" })).toBe(true);
-    expect(chromeDevtoolsEnabled(off, { CI: "0" })).toBe(true);
-    expect(chromeDevtoolsEnabled(off, { CI: "false" })).toBe(true);
+    expect(sessionBrowserEnabled(off, { CI: "" })).toBe(true);
+    expect(sessionBrowserEnabled(off, { CI: "0" })).toBe(true);
+    expect(sessionBrowserEnabled(off, { CI: "false" })).toBe(true);
   });
 
-  it("is off with --aiui-no-chrome regardless of environment", () => {
-    expect(chromeDevtoolsEnabled({ chrome: false, noChrome: true }, {})).toBe(false);
+  it("is off with --aiui-no-session-browser regardless of environment", () => {
+    expect(sessionBrowserEnabled({ sessionBrowser: false, noSessionBrowser: true }, {})).toBe(
+      false,
+    );
   });
 
-  it("is forced on with --aiui-chrome even under CI", () => {
-    expect(chromeDevtoolsEnabled({ chrome: true, noChrome: false }, { CI: "true" })).toBe(true);
+  it("is forced on with --aiui-session-browser even under CI", () => {
+    expect(
+      sessionBrowserEnabled({ sessionBrowser: true, noSessionBrowser: false }, { CI: "true" }),
+    ).toBe(true);
   });
 });
 

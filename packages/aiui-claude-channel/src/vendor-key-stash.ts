@@ -19,9 +19,9 @@
 
 import {
   type KeySource,
-  packageFromSource,
   type ResolvedVendorKeys,
   resolveVendorKeys,
+  vendorKeysMode,
 } from "@habemus-papadum/aiui-util";
 
 const STASH_KEY = Symbol.for("aiui.channel.vendorKeys");
@@ -87,7 +87,7 @@ export function absentKeyPhrase(envVar: string): string {
  * hygiene: sources only, never values.
  */
 export async function resolveAndStashVendorKeys(log: (message: string) => void): Promise<void> {
-  const mode = packageFromSource("@habemus-papadum/aiui-claude-channel") ? "source" : "installed";
+  const mode = vendorKeysMode("@habemus-papadum/aiui-claude-channel");
   const resolved = await resolveVendorKeys({ mode, onWarn: log });
   setResolvedVendorKeys(resolved);
   const summary = Object.values(resolved)

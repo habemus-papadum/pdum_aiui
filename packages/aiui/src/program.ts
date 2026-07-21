@@ -6,9 +6,9 @@ import { type CleanOptions, runClean } from "./commands/clean";
 import {
   runConfigGet,
   runConfigSet,
-  runConfigSetDsp,
   runConfigShow,
   runConfigUnset,
+  runConfigYolo,
   type ShowOptions,
 } from "./commands/config";
 import { runConfigTui } from "./commands/config-tui";
@@ -189,9 +189,11 @@ export function buildProgram(): Command {
     )
     .action((key: string, value: string) => runConfigSet(key, value));
   config
-    .command("set-dsp")
-    .description("opt in to --dangerously-skip-permissions: add it to claude.args (idempotent)")
-    .action(() => runConfigSetDsp());
+    .command("yolo")
+    .description(
+      "opt in to the dangerous posture: --dangerously-skip-permissions + channel.bind host (asks first)",
+    )
+    .action(() => runConfigYolo());
   config
     .command("unset")
     .description("remove a key from the config")
