@@ -8,7 +8,14 @@
  * way rather than mocked around.
  */
 import { describe, expect, it } from "vitest";
-import { type ToolRunner, vaultDelete, vaultLookup, vaultStore } from "./vault";
+import {
+  probeVault,
+  type ToolRunner,
+  VaultUnavailableError,
+  vaultDelete,
+  vaultLookup,
+  vaultStore,
+} from "./vault";
 
 interface Call {
   cmd: string;
@@ -69,13 +76,46 @@ describe.runIf(darwin)("macOS backend (security CLI, faked)", () => {
     await expect(vaultLookup("OPENAI_API_KEY", { runner })).rejects.toThrow(/keychain is locked/);
   });
 
-  it("a missing binary becomes the platform's install hint", async () => {
+  it("a missing binary becomes a typed VaultUnavailableError with the install hint", async () => {
     const runner: ToolRunner = () => {
       const err = new Error("spawn security ENOENT") as NodeJS.ErrnoException;
       err.code = "ENOENT";
       return Promise.reject(err);
     };
+    await expect(vaultLookup("OPENAI_API_KEY", { runner })).rejects.toThrow(VaultUnavailableError);
     await expect(vaultLookup("OPENAI_API_KEY", { runner })).rejects.toThrow(/not found on PATH/);
+  });
+});
+
+const hasBackend = darwin || linux;
+
+describe.runIf(hasBackend)("probeVault (faked runner)", () => {
+  it("reports available when the backend binary runs (exit code ignored)", async () => {
+    const { runner } = fakeRunner(() => ({ code: 0, stdout: "usage…" }));
+    await expect(probeVault({ runner })).resolves.toMatchObject({ available: true });
+  });
+
+  it("reports unavailable with the install hint when the binary is missing", async () => {
+    const runner: ToolRunner = () => {
+      const err = new Error("spawn ENOENT") as NodeJS.ErrnoException;
+      err.code = "ENOENT";
+      return Promise.reject(err);
+    };
+    const probe = await probeVault({ runner });
+    expect(probe.available).toBe(false);
+    if (!probe.available) {
+      expect(probe.bin).toBe(darwin ? "security" : "secret-tool");
+      expect(probe.help.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("a real spawn failure (not ENOENT) surfaces rather than reading as unavailable", async () => {
+    const runner: ToolRunner = () => {
+      const err = new Error("spawn EACCES") as NodeJS.ErrnoException;
+      err.code = "EACCES";
+      return Promise.reject(err);
+    };
+    await expect(probeVault({ runner })).rejects.toThrow(/EACCES/);
   });
 });
 

@@ -1,7 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ChromeDevtoolsInfo, LaunchInfo } from "@habemus-papadum/aiui-claude-channel";
-import { discoverSessionBrowser, isCi, resolveVendorKeys } from "@habemus-papadum/aiui-util";
+import {
+  discoverSessionBrowser,
+  isCi,
+  probeVault,
+  resolveVendorKeys,
+} from "@habemus-papadum/aiui-util";
 import { execa } from "execa";
 import { type AiuiArgs, infoFlag, splitAiuiArgs } from "../util/aiui-args";
 import { channelLaunchFlags, resolveChannelLaunch } from "../util/channel-launch";
@@ -112,6 +117,27 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     config = await ensureKeyDecisions(config);
   }
 
+  // Installed mode has exactly ONE key source — the OS vault — so if its CLI
+  // isn't even on PATH, every key resolves to "missing" and the session would
+  // boot quietly keyless (no transcription, no Live). That is a structural
+  // precondition, not a per-key degradation to warn past: fail loudly now, with
+  // the platform's install hint, rather than launch broken. (Source mode still
+  // has the environment/.env to fall back on, so a missing vault only degrades
+  // there — the channel re-resolves either way.)
+  const mode = keysMode();
+  if (mode === "installed") {
+    const vault = await probeVault();
+    if (!vault.available) {
+      printError(
+        "No OS key vault available",
+        `aiui reads your vendor API keys from the OS key vault, but ${vault.bin ? `\`${vault.bin}\`` : "no vault backend"} is unavailable. ` +
+          `Without it the session has no keys and would boot broken.\n\n${vault.help}`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   // Resolve the three vendor keys the way the channel itself will at boot
   // (aiui-util/vendor-keys.ts): a source checkout honors the environment/.env
   // first, an installed aiui reads the OS vault only, a skip stays keyless by
@@ -119,7 +145,7 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // Values are used ONLY to preflight; the channel re-resolves vault-side in
   // its own process — keys never ride through claude's env.
   const resolvedKeys = await resolveVendorKeys({
-    mode: keysMode(),
+    mode,
     onWarn: (message) => printWarning(message),
   });
 

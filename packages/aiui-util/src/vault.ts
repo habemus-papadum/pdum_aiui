@@ -32,6 +32,25 @@ export interface ToolRunResult {
 }
 
 /**
+ * The platform's vault CLI is not on PATH at all — a STRUCTURAL failure, not a
+ * per-key one. Kept distinct from an ordinary lookup error so callers can tell
+ * "there is no vault here" (fatal in installed mode, where the vault is the
+ * only key source) apart from "this one key isn't stored". `help` is the
+ * platform's actionable install hint.
+ */
+export class VaultUnavailableError extends Error {
+  constructor(
+    /** The missing binary (e.g. `secret-tool`). */
+    readonly bin: string,
+    /** The platform's install/setup hint. */
+    readonly help: string,
+  ) {
+    super(`\`${bin}\` was not found on PATH. ${help}`);
+    this.name = "VaultUnavailableError";
+  }
+}
+
+/**
  * The one process seam, injectable for tests: run `cmd args…` capturing
  * stdout/stderr, resolving even on a non-zero exit (backends distinguish
  * "not found" from real failure by inspecting `code` + `stderr` themselves).
@@ -78,6 +97,10 @@ interface VaultBackend {
   label: string;
   bin: string;
   notFoundHelp: string;
+  /** A harmless invocation used only to detect whether `bin` is on PATH — its
+   * exit code and output are ignored; only ENOENT (binary missing) matters. It
+   * must never touch the keyring or block on stdin. */
+  probeArgs: string[];
   store(run: ToolRunner, service: string, account: string, secret: string): Promise<void>;
   lookup(run: ToolRunner, service: string, account: string): Promise<string | null>;
   remove(run: ToolRunner, service: string, account: string): Promise<boolean>;
@@ -110,6 +133,7 @@ const macosBackend: VaultBackend = {
   bin: "security",
   notFoundHelp:
     "This shouldn't happen on macOS — `security` ships with the OS at /usr/bin/security. Check your PATH.",
+  probeArgs: ["help"], // prints usage, exits 0 — never prompts, never reads a keychain item
   async store(run, service, account, secret) {
     const { code, stderr } = await run("security", [
       "add-generic-password",
@@ -189,6 +213,7 @@ const linuxBackend: VaultBackend = {
     "Install it — Debian/Ubuntu: `sudo apt install libsecret-tools`; Fedora: `sudo dnf install libsecret`; " +
     "Arch: `sudo pacman -S libsecret`. It also needs a running Secret Service provider " +
     "(gnome-keyring-daemon, or KWallet's Secret Service shim) and an active D-Bus session.",
+  probeArgs: ["--version"], // GLib-standard flag; if unsupported it exits non-zero at once — either way no keyring access
   async store(run, service, account, secret) {
     const { code, stderr } = await run(
       "secret-tool",
@@ -260,11 +285,43 @@ function runnerFor(b: VaultBackend, runner: ToolRunner): ToolRunner {
       return await runner(cmd, args, opts);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        throw new Error(`\`${b.bin}\` was not found on PATH. ${b.notFoundHelp}`);
+        throw new VaultUnavailableError(b.bin, b.notFoundHelp);
       }
       throw err;
     }
   };
+}
+
+/** The outcome of a {@link probeVault} check. */
+export type VaultProbe =
+  | { available: true; label: string }
+  | { available: false; bin: string; help: string };
+
+/**
+ * Whether this platform's vault CLI is usable at all — the precondition an
+ * installed aiui must satisfy before it can resolve ANY key (the OS vault is
+ * its only source). Runs the backend's harmless probe purely to distinguish a
+ * missing binary from usage/exit-code noise; an unsupported platform (no
+ * backend) also reports unavailable, with the reason as `help`.
+ */
+export async function probeVault(options: VaultOptions = {}): Promise<VaultProbe> {
+  let b: VaultBackend;
+  try {
+    b = backend();
+  } catch (err) {
+    // Unsupported platform: no backend exists, so there is no binary to name.
+    return { available: false, bin: "", help: err instanceof Error ? err.message : String(err) };
+  }
+  const runner = options.runner ?? spawnRunner;
+  try {
+    await runnerFor(b, runner)(b.bin, b.probeArgs);
+    return { available: true, label: b.label };
+  } catch (err) {
+    if (err instanceof VaultUnavailableError) {
+      return { available: false, bin: err.bin, help: err.help };
+    }
+    throw err; // a real spawn failure (e.g. EACCES) — surface it rather than mask it
+  }
 }
 
 /** Create or overwrite the secret for `account` (idempotent). */
