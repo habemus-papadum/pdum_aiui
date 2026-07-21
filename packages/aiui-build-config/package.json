@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-build-config",
-  "version": "0.7.0+dev",
+  "version": "0.8.0",
   "private": true,
   "description": "Internal, never-published build-config helpers: the one home of the externalize-deps matcher and the Solid-under-Vitest incantation every package's vite config used to restate.",
   "type": "module",

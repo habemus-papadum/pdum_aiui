@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-claude-channel",
-  "version": "0.7.0+dev",
+  "version": "0.8.0",
   "description": "MCP server providing a custom Claude channel, plus a CLI to launch it and print config.",
   "type": "module",
   "license": "MIT",

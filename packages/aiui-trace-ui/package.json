@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-trace-ui",
-  "version": "0.7.0+dev",
+  "version": "0.8.0",
   "description": "The framework-free lowering-trace debugger UI: TraceView/TracesPane and the standalone /__aiui/debug page.",
   "type": "module",
   "license": "MIT",

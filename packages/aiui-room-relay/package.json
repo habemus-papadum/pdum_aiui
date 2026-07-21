@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-room-relay",
-  "version": "0.7.0+dev",
+  "version": "0.8.0",
   "description": "Host-neutral websocket room relay: pair a browser host with remote clients (register/join/leave/sessions/heartbeat), with message vocabulary supplied by a delegate. The shared core of aiui-pencil and aiui-remote-bar.",
   "type": "module",
   "license": "MIT",
