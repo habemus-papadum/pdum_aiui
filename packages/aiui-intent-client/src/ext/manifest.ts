@@ -55,7 +55,7 @@ export const manifest = {
   // Stamped by scripts/versioning.mjs with the workspace's semver CORE (Chrome
   // rejects the `+dev` suffix the package.jsons carry). Don't hand-edit it —
   // `pnpm version:check` fails if it drifts from lockstep.
-  version: "0.9.0",
+  version: "0.10.0",
   description:
     "The aiui intent client: a side panel that drives the page — ink, keys, capture, dictation — into a live Claude Code session.",
   key: PUBLIC_KEY,

@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-oscillator",
-  "version": "0.9.0+dev",
+  "version": "0.10.0+dev",
   "description": "A damped-oscillator slice: a reusable control-surface + cell factory (the scope/composability worked example). Internal, never published.",
   "type": "module",
   "license": "MIT",
