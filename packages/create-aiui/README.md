@@ -13,10 +13,12 @@ pnpm dev       # terminal 2 — the app (Vite + the intent tool)
 npx aiui open http://localhost:5173
 ```
 
-> Use the `@latest` tag. `pnpm create` / `npm create` run through a dlx cache that can reuse a
-> previously-resolved (older) scaffolder without re-checking the registry; `@latest` forces the
-> newest one. This matters because the scaffolder pins the app's aiui dependencies to *its own*
-> release line — an old scaffolder gives you old `@habemus-papadum/*` packages.
+> Use the `@latest` tag: `pnpm create` runs through a dlx cache that can otherwise reuse a
+> previously-resolved (older) scaffolder. And if you need a release published **within the last
+> day**, pin it exactly (`…/aiui@0.9.0 my-app`) — pnpm's minimum-release-age gate silently holds
+> back very fresh versions, even under `@latest`. Either way the version matters: the scaffolder
+> pins the app's aiui dependencies to *its own* release line, so an old scaffolder gives you old
+> `@habemus-papadum/*` packages.
 
 The scaffolded app opens on a banner that explains itself: the page is alive, arm the ✳ aiui
 overlay and start talking about the app you want. Its starter content — a Maurer rose driven by

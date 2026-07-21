@@ -225,7 +225,12 @@ function main(): void {
 
   // The sandbox's own dot-files: the repo root already ignores node_modules/,
   // dist/, and .aiui-cache/, and a demo in source control isn't a sandbox.
-  for (const dotfile of [".gitignore", ".envrc"]) {
+  // pnpm-workspace.yaml goes too: a standalone scaffold needs it (build-script
+  // allowances for esbuild), but inside demos/<slug> it would be a workspace
+  // *boundary marker* — pnpm walking up from the demo would stop there instead
+  // of the repo root, severing every workspace:^ dep (the trick bootstrap/
+  // plays on purpose). The root workspace already allows esbuild's build.
+  for (const dotfile of [".gitignore", ".envrc", "pnpm-workspace.yaml"]) {
     rmSync(join(dest, dotfile), { force: true });
   }
 

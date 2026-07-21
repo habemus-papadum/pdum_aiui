@@ -5,11 +5,6 @@
   "aiui": {
     "scaffold": true
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  },
   "scripts": {
     "dev": "vite",
     "open": "aiui open",

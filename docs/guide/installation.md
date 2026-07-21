@@ -31,8 +31,10 @@ pnpm create @habemus-papadum/aiui@latest my-app    # or: npm create @habemus-pap
 ```
 
 Keep the `@latest` tag: `pnpm create` / `npm create` run through a dlx cache that can otherwise
-reuse an older scaffolder without re-checking the registry, and the scaffolder pins the app's
-`@habemus-papadum/*` dependencies to its own release line — so a stale scaffolder means stale deps.
+reuse an older scaffolder without re-checking the registry. If you need a release published within
+the last day, pin it exactly (`…/aiui@0.9.0`) — pnpm's minimum-release-age gate holds back very
+fresh versions even under `@latest`. The version matters because the scaffolder pins the app's
+`@habemus-papadum/*` dependencies to its own release line — a stale scaffolder means stale deps.
 
 This is both the fastest way to try the loop without touching a real project **and** the way to
 start a keeper. It scaffolds a standalone SolidJS 2.0 app in its own git repo, opening on a banner

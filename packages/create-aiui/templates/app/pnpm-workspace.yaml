@@ -1,0 +1,11 @@
+# pnpm blocks dependency build scripts by default; esbuild (pulled in by Vite
+# and Vitest) runs a postinstall to link its native binary, so allow it — or the
+# first `pnpm install` exits nonzero with ERR_PNPM_IGNORED_BUILDS.
+#
+# Both spellings on purpose: `allowBuilds` is pnpm 11's name for the setting,
+# `onlyBuiltDependencies` is pnpm 10's; each version reads its own key and
+# ignores the other. (Inert under npm/yarn.)
+allowBuilds:
+  esbuild: true
+onlyBuiltDependencies:
+  - esbuild
