@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-vscode",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "VS Code extension: a selection provider for aiui sessions — pick a connected browser tab and send editor selections to it.",
   "type": "module",
   "license": "MIT",
