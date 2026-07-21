@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-remote-bar",
-  "version": "0.10.0",
+  "version": "0.10.0+dev",
   "description": "The command bar as its own channel: a mode engine projected over a websocket, mounted as a channel sidecar, with a Solid client that renders the bar and dispatches taps.",
   "type": "module",
   "license": "MIT",

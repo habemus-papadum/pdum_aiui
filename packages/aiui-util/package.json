@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-util",
-  "version": "0.10.0",
+  "version": "0.10.0+dev",
   "description": "Shared utilities for aiui packages (cache dirs, environment detection, session-browser plumbing).",
   "type": "module",
   "license": "MIT",
