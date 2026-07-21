@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-twins",
-  "version": "0.11.0",
+  "version": "0.11.0+dev",
   "description": "In-repo aiui demo: twins.",
   "private": true,
   "type": "module",
