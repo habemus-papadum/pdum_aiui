@@ -19,6 +19,7 @@
  * `index.html`.
  */
 
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
 import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
@@ -27,8 +28,15 @@ import type { Express } from "express";
 /** The path prefix the console app mounts under on the channel's server. */
 export const CONSOLE_PREFIX = "/__aiui";
 
+// Sibling paths via join(), never `new URL(rel, import.meta.url)`: Vite's lib
+// build rewrites that pattern (a file target like vite.config.ts gets INLINED
+// as a data: URL), so in an installed dist the eager fileURLToPath threw at
+// mount time and the whole sidecar was skipped (v0.8.0). join() is invisible
+// to the transform and resolves identically from src/ (tsx) and dist/ (node).
+const here = dirname(fileURLToPath(import.meta.url));
+
 /** The prebuilt dashboard bundle's default location (`build:app` writes here). */
-const defaultDistDir = (): string => fileURLToPath(new URL("../assets/app", import.meta.url));
+const defaultDistDir = (): string => join(here, "../assets/app");
 
 export interface ConsoleSidecarOptions {
   /** Override where the prebuilt dashboard bundle is served from (tests). */
@@ -51,8 +59,8 @@ export function consoleSidecar(options: ConsoleSidecarOptions = {}): Sidecar {
         mode: ctx.mode,
         prefix: CONSOLE_PREFIX,
         appType: "spa",
-        viteRoot: fileURLToPath(new URL("../app", import.meta.url)),
-        viteConfigFile: fileURLToPath(new URL("../app/vite.config.ts", import.meta.url)),
+        viteRoot: join(here, "../app"),
+        viteConfigFile: join(here, "../app/vite.config.ts"),
         distDir: options.distDir ?? defaultDistDir(),
         notBuiltHint: "pnpm -C packages/aiui-console build:app",
         log: ctx.log,

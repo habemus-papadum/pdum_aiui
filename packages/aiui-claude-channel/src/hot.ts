@@ -24,8 +24,8 @@
  * That's an accepted cost of a dev-only feature.
  */
 import { watch as fsWatch } from "node:fs";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { FormatRegistry } from "./channel";
 import { defaultFormats } from "./processors";
 
@@ -62,7 +62,12 @@ export function defaultFormatLoader(): FormatLoader {
     // Packaged: rebuild from the bundle — a fresh Map over the built formats.
     return () => defaultFormats();
   }
-  const reloadableUrl = new URL("./reloadable.ts", import.meta.url).href;
+  // path-composed, never `new URL("./reloadable.ts", import.meta.url)`: Vite's
+  // lib build rewrites that pattern, inlining the file as a data: URL in dist
+  // (dead weight behind the isSourceRun guard, but a trap all the same).
+  const reloadableUrl = pathToFileURL(
+    join(dirname(fileURLToPath(import.meta.url)), "reloadable.ts"),
+  ).href;
   return async (generation) => {
     const mod = await loadModuleFresh(reloadableUrl, generation);
     const build = mod.buildReloadableFormats as () => Promise<FormatRegistry>;

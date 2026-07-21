@@ -25,12 +25,18 @@
  * on this prefix stays JSON/websocket.
  */
 
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
 import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
 import type { Express } from "express";
 import { createPencilBackend } from "./backend";
 import { defaultClientDir } from "./client-static";
+
+// join(), never `new URL(rel, import.meta.url)`: Vite's lib build rewrites
+// that pattern (file targets get inlined as data: URLs), which made the eager
+// fileURLToPath throw at mount time in an installed dist (v0.8.0).
+const here = dirname(fileURLToPath(import.meta.url));
 
 /** The path prefix the pencil routes live under on the channel's server. */
 export const PENCIL_PREFIX = "/pencil";
@@ -68,8 +74,8 @@ export function pencilSidecar(options: PencilSidecarOptions): Sidecar {
       const surface = await serveClientSurface(app, {
         mode: ctx.mode,
         prefix: PENCIL_PREFIX,
-        viteRoot: fileURLToPath(new URL("../client", import.meta.url)),
-        viteConfigFile: fileURLToPath(new URL("../client/vite.config.ts", import.meta.url)),
+        viteRoot: join(here, "../client"),
+        viteConfigFile: join(here, "../client/vite.config.ts"),
         devEntry: "index.html",
         distDir: options.clientDir ?? defaultClientDir(),
         notBuiltHint: "pnpm -C packages/aiui-pencil build:client",

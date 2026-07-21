@@ -26,7 +26,7 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { join, normalize, resolve } from "node:path";
+import { dirname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TYPES: Record<string, string> = {
@@ -41,9 +41,13 @@ const TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-/** `../assets/client` — the same path from `src/` (tsx) and `dist/` (installed). */
+/**
+ * `../assets/client` — the same path from `src/` (tsx) and `dist/` (installed).
+ * join(), never `new URL(rel, import.meta.url)` — Vite's lib build rewrites
+ * that pattern (see sidecar.ts).
+ */
 export function defaultClientDir(): string {
-  return fileURLToPath(new URL("../assets/client", import.meta.url));
+  return join(dirname(fileURLToPath(import.meta.url)), "../assets/client");
 }
 
 export interface ClientStatic {

@@ -193,11 +193,35 @@ for (const name of names) {
   if (factory === undefined) throw new Error(name + "/sidecar exports no factory");
   built.push({ name, sidecar: factory({ root }) });
 }
-// Mount the lightweight one (the remote bar) to exercise the mount/ctx/express seam.
-const bar = built.find((b) => b.name.includes("remote-bar")) ?? built[0];
+// Mount EVERY sidecar in prod mode on one app, the way the channel does. A
+// mount that throws is the exact failure the channel logs-and-skips at
+// runtime (the v0.8.0 dashboard 404: Vite had rewritten the sidecars'
+// new URL(rel, import.meta.url) paths into data: URLs, so prod mounts threw
+// under plain node while source-first dev hid it) — here it must be fatal.
 const express = (await import("express")).default;
-const mounted = await bar.sidecar.mount(express(), { mode: "prod", log: () => {}, port: () => undefined });
-await mounted.dispose?.();
+const app = express();
+const mounted = [];
+for (const { name, sidecar } of built) {
+  try {
+    mounted.push(await sidecar.mount(app, { mode: "prod", log: () => {}, port: () => undefined }));
+  } catch (err) {
+    throw new Error(name + "/sidecar failed to mount in prod mode: " + (err?.message ?? err));
+  }
+}
+// And the client surfaces must actually answer with their built bundles —
+// a 503 here means a package shipped without its assets/ directory.
+const server = app.listen(0, "127.0.0.1");
+await new Promise((resolve) => server.once("listening", resolve));
+const port = server.address().port;
+for (const path of ["/__aiui/", "/intent/", "/pencil/"]) {
+  const res = await fetch("http://127.0.0.1:" + port + path);
+  const body = await res.text();
+  if (res.status !== 200) throw new Error("GET " + path + " -> " + res.status + ": " + body.slice(0, 200));
+}
+const redirect = await fetch("http://127.0.0.1:" + port + "/", { redirect: "manual" });
+if (redirect.status !== 302) throw new Error("GET / -> " + redirect.status + " (expected the console redirect)");
+for (const m of mounted) await m.dispose?.();
+server.close();
 console.log(names.join(" "));
 `,
 );
@@ -208,7 +232,7 @@ const probe = spawnSync(process.execPath, [sidecarProbe], {
   timeout: 60_000,
 });
 check(
-  `every published /sidecar subpath (${sidecarPackages.length}) resolves to dist and one mounts under plain node`,
+  `every published /sidecar subpath (${sidecarPackages.length}) resolves to dist, mounts in prod mode, and serves its client`,
   probe.status === 0 && sidecarPackages.every((name) => probe.stdout.includes(name)),
   probe.stderr || probe.stdout,
 );

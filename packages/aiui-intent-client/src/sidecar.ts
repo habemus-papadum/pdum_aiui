@@ -19,6 +19,7 @@
  * as pencil — the sidecar adds no listener and no new posture.
  */
 
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
 import { discoverSessionBrowserInProfiles } from "@habemus-papadum/aiui-util";
@@ -32,6 +33,13 @@ import { browserUrlFromLaunchInfo, createCdpProxy } from "./cdp-proxy";
 /** The path prefix the panel lives under on the channel's server. */
 const INTENT_PREFIX = "/intent";
 
+// join(), never `new URL(rel, import.meta.url)`: Vite's lib build rewrites
+// that pattern — file targets get inlined as data: URLs, and even the bare
+// ".." viteRoot below was resolved through the package entry and inlined —
+// which made the eager fileURLToPath throw at mount time in an installed
+// dist (v0.8.0).
+const here = dirname(fileURLToPath(import.meta.url));
+
 /** The global the injected page bundle defines in the victim page. */
 export const PAGE_GLOBAL = "__aiuiIntentPage";
 
@@ -43,7 +51,7 @@ export const PAGE_GLOBAL = "__aiuiIntentPage";
  */
 export async function pageBundle(): Promise<string> {
   const { build } = await import("esbuild");
-  const entry = fileURLToPath(new URL("./cdp/page-bundle.ts", import.meta.url));
+  const entry = join(here, "cdp/page-bundle.ts");
   const bundled = await build({
     entryPoints: [entry],
     bundle: true,
@@ -209,8 +217,8 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
       const surface = await serveClientSurface(app, {
         mode: ctx.mode,
         prefix: INTENT_PREFIX,
-        viteRoot: fileURLToPath(new URL("..", import.meta.url)),
-        distDir: fileURLToPath(new URL("../assets/panel", import.meta.url)),
+        viteRoot: join(here, ".."),
+        distDir: join(here, "../assets/panel"),
         notBuiltHint: "pnpm -C packages/aiui-intent-client build:panel",
         log: ctx.log,
       });
