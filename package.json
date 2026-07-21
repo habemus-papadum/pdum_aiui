@@ -1,6 +1,6 @@
 {
   "name": "pdum_aiui",
-  "version": "0.11.0+dev",
+  "version": "0.11.1",
   "private": true,
   "type": "module",
   "description": "pdum_aiui - a lockstep-versioned TypeScript monorepo.",
