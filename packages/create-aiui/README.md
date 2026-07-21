@@ -7,8 +7,9 @@ intent tool floating over your page.
 ```sh
 pnpm create @habemus-papadum/aiui my-app     # or: npm create @habemus-papadum/aiui my-app
 cd my-app
-npm run claude    # terminal 1 — Claude Code with the aiui channel + session browser
-npm run dev       # terminal 2 — the app (Vite + the intent tool)
+pnpm install
+npx aiui claude   # terminal 1 — Claude Code with the aiui channel + session browser
+pnpm dev       # terminal 2 — the app (Vite + the intent tool)
 npx aiui open http://localhost:5173
 ```
 

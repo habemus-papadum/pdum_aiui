@@ -84,7 +84,7 @@ function main(): void {
 your app is ready. Run the loop:
 
   cd ${rel}
-  ${pm} run claude     # terminal 1 — Claude Code with the aiui channel + session browser
+  npx aiui claude      # terminal 1 — Claude Code with the aiui channel + session browser
   ${pm} run dev        # terminal 2 — your app (Vite + the intent tool)
 
 then open it in the session browser (the window you share with the agent):

@@ -12,8 +12,11 @@ actually want.
 ## Run it
 
 ```sh
-npm run claude   # terminal 1 — Claude Code with the aiui channel + session browser
-npm run dev      # terminal 2 — this app (Vite + the intent tool overlay)
+pnpm install
+npx aiui claude   # terminal 1 — Claude Code with the aiui channel + session browser
+
+# in a second terminal
+pnpm dev
 ```
 
 Then open the app **in the session browser** (the window you share with the agent):

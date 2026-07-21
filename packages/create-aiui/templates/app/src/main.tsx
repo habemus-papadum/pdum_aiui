@@ -4,7 +4,7 @@
  * This is an INTERACTIVE WEB PAGE wired into a live coding loop — not a static
  * site. Two processes are (or should be) running:
  *
- *   terminal 1:  npm run claude    Claude Code with the aiui channel + browser
+ *   terminal 1:  npx aiui claude   Claude Code with the aiui channel + browser
  *   terminal 2:  npm run dev       this app, served by Vite via `aiui vite`
  *
  * On the page, activate the intent client (⌘B), then SAY or

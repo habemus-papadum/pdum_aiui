@@ -6,7 +6,6 @@
     "scaffold": true
   },
   "scripts": {
-    "claude": "aiui claude",
     "dev": "vite",
     "open": "aiui open",
     "test": "vitest run",

@@ -1,13 +1,12 @@
-Oracle mode
-  agent
-  realtime
-  transfer into app
-TTS
-Ink 
-  Better
-Demos:
-  Modal
-  Multipage
-  Ink
-  Oracle
-Editing
+cleanup interview
+
+no-chrome
+borrw keys
+launch daskboard
+
+
+test grant flow
+selections
+turn
+
+
