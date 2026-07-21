@@ -34,9 +34,19 @@ export type FormatLoader = (generation: number) => FormatRegistry | Promise<Form
 
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-/** True when this module is running from TypeScript source (not a built bundle). */
+/**
+ * True when this module is running from TypeScript source (not a built bundle).
+ *
+ * The signal is this module's own file extension: a source run executes
+ * `src/hot.ts` through tsx, a packaged run executes a `dist/*.js` bundle.
+ * Never a path-substring test — the earlier `includes("/src/")` matched any
+ * *install location* under a directory named `src` (e.g. `~/src/my-app`),
+ * sending installed channels down the hot-load path to a `dist/reloadable.ts`
+ * that ships in no tarball, which killed the web server before it could listen
+ * or register.
+ */
 export function isSourceRun(): boolean {
-  return import.meta.url.includes("/src/");
+  return /\.tsx?$/.test(new URL(import.meta.url).pathname);
 }
 
 /**

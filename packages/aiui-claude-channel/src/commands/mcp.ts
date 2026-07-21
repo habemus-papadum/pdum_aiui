@@ -157,15 +157,37 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
     }
   });
 
-  web = await startWebServer({
-    onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
-    traceDir: cacheDir,
-    launchInfo,
-    sidecars,
-    pageTools,
-    frameSink: channelLog.frameSink,
-    ...commonWebOptions(options),
-  });
+  // A web backend that fails to start is FATAL, and loudly so. Without the
+  // try/catch, the rejection bubbles to cli.ts, which logs to stderr — invisible
+  // for an MCP subprocess — and the connected stdio transport then keeps a
+  // zombie alive: MCP reachable, no web port, no registry entry, nothing in the
+  // channel log (exactly how the `isSourceRun` path bug hid for a day). Log it
+  // where post-mortems look, tell the session, and exit so Claude Code surfaces
+  // a dead MCP server instead of a silently useless one.
+  try {
+    web = await startWebServer({
+      onPrompt: (text, meta) => pushToSession(text, "prompt", meta),
+      traceDir: cacheDir,
+      launchInfo,
+      sidecars,
+      pageTools,
+      frameSink: channelLog.frameSink,
+      ...commonWebOptions(options),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    channelLog.log("web backend failed to start — exiting", { error: message });
+    process.stderr.write(`[aiui-channel] web backend failed to start: ${message}\n`);
+    await pushToSession(
+      `⚠️ aiui channel: the web backend failed to start (${message}). ` +
+        "The channel is exiting — no intent client, dashboard, or sidecar will work " +
+        `this session. See the channel log under ${cacheDir}/logs/.`,
+      "channel-error",
+    ).catch(() => {});
+    await channelLog.close().catch(() => {});
+    await mcp.close().catch(() => {});
+    process.exit(1);
+  }
 
   // Now that the web server has a port, open THIS channel's dashboard (the
   // console served at /) as a tab in the session browser the launcher opened —
