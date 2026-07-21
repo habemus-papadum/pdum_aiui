@@ -27,8 +27,12 @@ and can launch Claude Code with permissions skipped.
 ## Starting a fresh app (the SolidJS starter)
 
 ```sh
-pnpm create @habemus-papadum/aiui my-app    # or: npm create @habemus-papadum/aiui my-app
+pnpm create @habemus-papadum/aiui@latest my-app    # or: npm create @habemus-papadum/aiui@latest my-app
 ```
+
+Keep the `@latest` tag: `pnpm create` / `npm create` run through a dlx cache that can otherwise
+reuse an older scaffolder without re-checking the registry, and the scaffolder pins the app's
+`@habemus-papadum/*` dependencies to its own release line — so a stale scaffolder means stale deps.
 
 This is both the fastest way to try the loop without touching a real project **and** the way to
 start a keeper. It scaffolds a standalone SolidJS 2.0 app in its own git repo, opening on a banner

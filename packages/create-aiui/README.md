@@ -5,13 +5,18 @@ loop — a Claude Code session with a custom channel, a shared agent+human brows
 intent tool floating over your page.
 
 ```sh
-pnpm create @habemus-papadum/aiui my-app     # or: npm create @habemus-papadum/aiui my-app
+pnpm create @habemus-papadum/aiui@latest my-app   # or: npm create @habemus-papadum/aiui@latest my-app
 cd my-app
 pnpm install
 npx aiui claude   # terminal 1 — Claude Code with the aiui channel + session browser
 pnpm dev       # terminal 2 — the app (Vite + the intent tool)
 npx aiui open http://localhost:5173
 ```
+
+> Use the `@latest` tag. `pnpm create` / `npm create` run through a dlx cache that can reuse a
+> previously-resolved (older) scaffolder without re-checking the registry; `@latest` forces the
+> newest one. This matters because the scaffolder pins the app's aiui dependencies to *its own*
+> release line — an old scaffolder gives you old `@habemus-papadum/*` packages.
 
 The scaffolded app opens on a banner that explains itself: the page is alive, arm the ✳ aiui
 overlay and start talking about the app you want. Its starter content — a Maurer rose driven by
