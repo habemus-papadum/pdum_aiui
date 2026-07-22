@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-aztec",
-  "version": "0.12.0",
+  "version": "0.12.0+dev",
   "description": "Random domino tilings of the Aztec diamond: a streaming shuffle worker, a scrubbable growth ring, the arctic circle, and Ryser-permanent checks.",
   "private": true,
   "type": "module",

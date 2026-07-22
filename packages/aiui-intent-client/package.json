@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-intent-client",
-  "version": "0.12.0",
+  "version": "0.12.0+dev",
   "description": "The greenfield intent client: a detached plain-page panel on the mode engine — agent-drivable, HMR-native; the MV3 extension is a shell added last.",
   "type": "module",
   "license": "MIT",

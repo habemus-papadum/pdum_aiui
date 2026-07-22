@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-circle",
-  "version": "0.12.0",
+  "version": "0.12.0+dev",
   "description": "How round can you draw a circle? A vanishing-ink pencil surface, a live least-squares fit, and a Zen centre-ghost — the pencil-package demo.",
   "private": true,
   "type": "module",
