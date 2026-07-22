@@ -13,6 +13,10 @@
  * consumers pay for it. Styling is the consumer's throughout (`.site-*`,
  * `.toc-*`, `.math-*` class names) — the same CSS-ownership seam as CellView.
  */
+
+// Re-exported from core for discoverability: the page contract a shell mounts
+// (SiteHeader renders the tabs; a SitePage is what a tab shows).
+export type { SitePage } from "../site-page";
 export type { ColorMode } from "./color-mode";
 export { colorMode } from "./color-mode";
 export type { SiteHeaderProps, SiteTab } from "./site-header";

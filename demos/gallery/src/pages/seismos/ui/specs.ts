@@ -13,6 +13,8 @@
  * Specs read the per-mode palette live, so the MosaicView effect rebuilds the
  * island on a system theme flip (chart text/marks re-tint correctly).
  */
+
+import { plotStyle } from "@habemus-papadum/aiui-journal";
 import {
   bin,
   colorDomain,
@@ -40,7 +42,6 @@ import {
   yLabel,
   yTicks,
 } from "@uwdata/vgplot";
-import { plotStyle } from "../../../site/theme";
 import { seismic } from "../palette";
 import { DEFAULT_MC, EQ_X_MAX, EQ_Y_MAX, equalEarth, store } from "../store";
 import type { Directive } from "./MosaicView";

@@ -12,7 +12,7 @@
  * whether it is on the dark canvas or a white legend chip. Fixed assignment by
  * domino type: color follows the entity, and the legend + brickwork orientation
  * give a second, non-color channel of identity. (The frozen-fraction *chart*
- * line is a per-mode color from src/site/theme.ts — a chart on a panel, not a
+ * line is a per-mode color from @habemus-papadum/aiui-journal — a chart on a panel, not a
  * figure mark.)
  */
 import { E, N, S, W } from "./types";

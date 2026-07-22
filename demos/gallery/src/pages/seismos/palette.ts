@@ -12,7 +12,7 @@
  * cool; identity is never color-alone — the legend and the axis position carry
  * it too.
  */
-import { type Mode, mode } from "../../site/theme";
+import { type Mode, mode } from "@habemus-papadum/aiui-journal";
 
 export interface SeismicPalette {
   /** Single-series fill for the magnitude / depth / time histograms. */

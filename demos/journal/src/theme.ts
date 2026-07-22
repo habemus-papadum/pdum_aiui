@@ -1,19 +1,21 @@
 /**
- * theme.ts — this app's palettes and Plot cosmetics.
+ * theme.ts — the dark journal's palettes and Plot cosmetics, shared by every
+ * notebook demo and the gallery shell (the CSS half of the identity is
+ * ./styles.css — design tokens + notebook chrome).
  *
- * The gallery is a **dark-only journal** (owner, 2026-07-19): there is no light
- * mode and no toggle. `mode()` is a constant `"dark"`, kept as a function so the
- * chart/Plot option memos that read it don't change shape. The head stamps
- * `data-theme="dark"` before first paint; `initTheme()` re-asserts it
- * defensively at module load. `mode()` remains the single source of truth for
- * the *literal* colors below (chart series, Plot cosmetics, SVG strokes); CSS
- * goes through the `:root` tokens (styles.css).
+ * The journal is **dark only** (owner, 2026-07-19): there is no light mode and
+ * no toggle. `mode()` is a constant `"dark"`, kept as a function so the
+ * chart/Plot option memos that read it don't change shape. The host page's
+ * head stamps `data-theme="dark"` before first paint; `initTheme()` re-asserts
+ * it defensively at module load. `mode()` remains the single source of truth
+ * for the *literal* colors below (chart series, Plot cosmetics, SVG strokes);
+ * CSS goes through the `:root` tokens (styles.css).
  */
 
 export type ColorMode = "light" | "dark";
 export type Mode = ColorMode;
 
-/** The color mode. Constant `"dark"` — the gallery has one surface. */
+/** The color mode. Constant `"dark"` — the journal has one surface. */
 export const mode = (): Mode => "dark";
 export const isDark = (): boolean => true;
 

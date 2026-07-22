@@ -5,10 +5,11 @@
  * the recorded ring, so it fills in live as the fold runs and survives hot
  * edits. Observable Plot stays behind the shared PlotFigure seam.
  */
+
+import { chart, plot, plotStyle } from "@habemus-papadum/aiui-journal";
 import { PlotFigure } from "@habemus-papadum/aiui-viz/plot";
 import * as Plot from "@observablehq/plot";
 import { createMemo } from "solid-js";
-import { chart, plot, plotStyle } from "../../../site/theme";
 import { aztecGraph } from "../graph";
 
 export function FrozenChart() {

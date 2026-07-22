@@ -253,7 +253,7 @@ The gallery is now a single **dark journal** — no light mode, no toggle. seism
 once defaulted to light (the epicenter-density map reads better on white) with a
 per-page ThemeToggle, but two surfaces across the notebooks read as inconsistent,
 so the whole site committed to dark. `index.html`'s head stamps
-`data-theme="dark"` before first paint and `src/site/theme.ts` (`mode()`, a
+`data-theme="dark"` before first paint and `@habemus-papadum/aiui-journal` (`mode()`, a
 constant `"dark"`) is the source of truth for the literal chart/Plot colors; CSS
 goes through the `:root` tokens. The epicenter map keeps working on dark — it was
 always a supported mode — it just no longer gets the light surface it preferred.

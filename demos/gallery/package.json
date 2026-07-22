@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.33.1-dev45.0",
+    "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",

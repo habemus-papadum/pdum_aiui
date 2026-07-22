@@ -18,13 +18,14 @@
  * open turn.
  */
 import { render } from "@solidjs/web";
+import "@habemus-papadum/aiui-journal/styles.css";
 import "./styles.css";
+import { initTheme } from "@habemus-papadum/aiui-journal";
 import { SiteHeader } from "@habemus-papadum/aiui-viz/site";
 import { createEffect, createSignal, Show, untrack } from "solid-js";
 import { BRAND, LINKS, TABS } from "./site/nav";
 import { type GalleryPage, loadPage } from "./site/pages";
 import { interceptLocalLinks, type Route, route } from "./site/router";
-import { initTheme } from "./site/theme";
 
 initTheme(); // dark-only journal — re-assert the head's data-theme="dark"
 interceptLocalLinks();
