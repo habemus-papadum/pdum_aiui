@@ -45,9 +45,7 @@
  * page loaders automatically.
  */
 
-/** A Solid component with no props — the page's root view. Structural (not
- * imported from solid-js) so this type stays dependency-free. */
-type PageComponent = () => unknown;
+import type { Component } from "solid-js";
 
 /** One app, presented as a mountable page for a site shell. */
 export interface SitePage {
@@ -55,7 +53,7 @@ export interface SitePage {
   title: string;
   /** The page's root component — mounted per visit, disposable (a pure reader
    * over the page's durable state, the HMR discipline reused for routing). */
-  App: PageComponent;
+  App: Component;
   /** Resume continuous work (rAF loops). Called before mount; idempotent. */
   activate?(): void;
   /** Park continuous work. Called when the route leaves; idempotent. */

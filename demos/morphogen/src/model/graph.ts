@@ -33,6 +33,7 @@ import {
   DIFFUSION,
   failNextFetch,
   history,
+  morphogenScope,
   paramF,
   paramK,
   quality,
@@ -92,27 +93,32 @@ export const morphoGraph = hotCellGraph<MorphoGraph>(
           yield received; // the table fills in as "packets" arrive
         }
       },
+      { scope: morphogenScope },
     );
 
     // ---- heavy structure analysis in the worker ---------------------------
     const [capture, setCapture] = createSignal<
       { field: Float32Array; width: number; height: number; at: number } | undefined
     >(undefined);
-    const analysis = cell(() => {
-      const c = capture();
-      if (!c) return undefined; // hold until something is captured
-      // threshold/quality are read reactively: moving either slider
-      // supersedes the in-flight run (worker gets a cancel) and re-runs
-      // on the same captured field.
-      return {
-        field: c.field,
-        width: c.width,
-        height: c.height,
-        threshold: threshold.get(),
-        quality: quality.get(),
-        at: c.at,
-      } satisfies AnalysisParams & { at: number };
-    }, fromWorker<AnalysisParams, AnalysisResult>(analysisWorker));
+    const analysis = cell(
+      () => {
+        const c = capture();
+        if (!c) return undefined; // hold until something is captured
+        // threshold/quality are read reactively: moving either slider
+        // supersedes the in-flight run (worker gets a cancel) and re-runs
+        // on the same captured field.
+        return {
+          field: c.field,
+          width: c.width,
+          height: c.height,
+          threshold: threshold.get(),
+          quality: quality.get(),
+          at: c.at,
+        } satisfies AnalysisParams & { at: number };
+      },
+      fromWorker<AnalysisParams, AnalysisResult>(analysisWorker),
+      { scope: morphogenScope },
+    );
 
     const captureAnalysis = () => {
       const grab = sim.loop.captureField();
@@ -150,7 +156,7 @@ export const morphoGraph = hotCellGraph<MorphoGraph>(
 // --- agent tools: the app's operations, exposed as they are built -------------
 
 function registerTools(): void {
-  const kit = agentToolkit("morpho");
+  const kit = agentToolkit("morphogen");
   const { registerReporter } = kit;
   // The derived surface: report (controls/cells/actions/edges), set (validated
   // through each control's meta), locate, and one real tool per action().
@@ -200,6 +206,7 @@ function registerTools(): void {
 
 /** Jump to a named regime from the catalog (ids in report().catalog). */
 action({
+  scope: morphogenScope,
   name: "jump-regime",
   params: { id: "regime id, e.g. 'mitosis'" },
   run: (args) => {
@@ -217,6 +224,7 @@ action({
 
 /** Reinitialize the field. */
 action({
+  scope: morphogenScope,
   name: "reseed",
   params: { kind: "'center' | 'spots' | 'noise' | 'clear'" },
   run: (args) => {
@@ -229,6 +237,7 @@ action({
 
 /** Capture the current field and run the structure analysis. */
 action({
+  scope: morphogenScope,
   name: "analyze",
   run: () => {
     morphoGraph().captureAnalysis();

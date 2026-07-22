@@ -14,7 +14,7 @@
  * edited constantly. Splitting the two along module lines is what gives HMR
  * an easy job — see archive/agentic_ui_workflow/hmr_for_agentic_coding.md.
  */
-import { control, durable, durableCanvas, durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, durableCanvas, scope } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";
 import { GrayScottEngine } from "../sim/gray-scott";
 import { type SimLoop, type Snapshot, startLoop } from "../sim/loop";
@@ -22,6 +22,16 @@ import { DISPLAY_FRAG, ENCODE_FRAG, QUAD_VERT, STEP_FRAG } from "../sim/shaders"
 
 export const SIM_SIZE = 256;
 export const HISTORY_LIMIT = 600; // ~2.5 min at 4 Hz
+
+/**
+ * The demo's instance scope: ONE slug qualifying every declaration —
+ * controls ("morphogen/paramF"), durables ("morphogen/sim"), cells, actions,
+ * the graph key, and the toolkit namespace. This is what lets this page share
+ * a document with the other demos in the gallery shell without colliding on
+ * the window-global registries (see aiui-viz's scope.ts and the user guide's
+ * "Composing bigger apps").
+ */
+export const morphogenScope = scope("morphogen");
 
 // --- the control surface (described, constrained, agent-settable) ------------
 //
@@ -31,35 +41,59 @@ export const HISTORY_LIMIT = 600; // ~2.5 min at 4 Hz
 // through them.
 
 /** Gray-Scott feed rate F. */
-export const paramF = control({ value: 0.0545, min: 0.005, max: 0.09, step: 0.0005 });
+export const paramF = control({
+  scope: morphogenScope,
+  value: 0.0545,
+  min: 0.005,
+  max: 0.09,
+  step: 0.0005,
+});
 
 /** Gray-Scott kill rate k. */
-export const paramK = control({ value: 0.062, min: 0.03, max: 0.075, step: 0.0005 });
+export const paramK = control({
+  scope: morphogenScope,
+  value: 0.062,
+  min: 0.03,
+  max: 0.075,
+  step: 0.0005,
+});
 
 /** Simulation steps per frame; 0 pauses. */
-export const speed = control({ value: 12, min: 0, max: 48, step: 1 });
+export const speed = control({ scope: morphogenScope, value: 12, min: 0, max: 48, step: 1 });
 
 /** Brush radius for painting chemical V, in uv units. */
-export const brushRadius = control({ value: 0.04, min: 0.01, max: 0.12, step: 0.005 });
+export const brushRadius = control({
+  scope: morphogenScope,
+  value: 0.04,
+  min: 0.01,
+  max: 0.12,
+  step: 0.005,
+});
 
 /** Analysis cutoff: V above this counts as pattern. */
-export const threshold = control({ value: 0.1, min: 0.05, max: 0.5, step: 0.01 });
+export const threshold = control({
+  scope: morphogenScope,
+  value: 0.1,
+  min: 0.05,
+  max: 0.5,
+  step: 0.01,
+});
 
 /** Analysis thoroughness (spot-metric sampling density). */
-export const quality = control({ value: 3, min: 1, max: 5, step: 1 });
+export const quality = control({ scope: morphogenScope, value: 3, min: 1, max: 5, step: 1 });
 
 /** Re-run the structure analysis on a cadence while the sim runs. */
-export const autoAnalyze = control({ value: true });
+export const autoAnalyze = control({ scope: morphogenScope, value: true });
 
 /** Make the next catalog download fail (demonstrates the error/retry chrome). */
-export const failNextFetch = control({ value: false });
+export const failNextFetch = control({ scope: morphogenScope, value: false });
 
 // Diffusion rates are fixed in this demo (they rescale the same regimes).
 export const DIFFUSION = { Du: 1.0, Dv: 0.5 };
 
 // --- the live snapshot stream (loop → reactive bridge) ----------------------
 
-export const snapshot = durableSignal<Snapshot | undefined>("snapshot", undefined);
+export const snapshot = morphogenScope.durableSignal<Snapshot | undefined>("snapshot", undefined);
 
 // --- observable history (durable ring + version signal) ---------------------
 
@@ -70,7 +104,7 @@ export interface HistoryRing {
   clear(): void;
 }
 
-export const history: HistoryRing = durable("history", () => {
+export const history: HistoryRing = morphogenScope.durable("history", () => {
   const [version, setVersion] = createSignal(0);
   const rows: Snapshot[] = [];
   return {
@@ -97,7 +131,7 @@ export const history: HistoryRing = durable("history", () => {
  * `durableCanvas` owns both halves of that: the create-once element, and the
  * adoption whose cleanup never takes the canvas back from a successor.
  */
-export const simSurface = durableCanvas("canvas", (canvas) => {
+export const simSurface = durableCanvas(morphogenScope.qualify("canvas"), (canvas) => {
   canvas.width = SIM_SIZE * 2; // presented with CSS upscaling on top
   canvas.height = SIM_SIZE * 2;
   canvas.className = "sim-canvas";
@@ -111,7 +145,7 @@ export interface SimHandle {
   loop: SimLoop;
 }
 
-export const sim: SimHandle = durable("sim", () => {
+export const sim: SimHandle = morphogenScope.durable("sim", () => {
   const engine = new GrayScottEngine(simCanvas, SIM_SIZE, {
     vertex: QUAD_VERT,
     step: STEP_FRAG,
@@ -130,7 +164,7 @@ export const sim: SimHandle = durable("sim", () => {
 
 // --- analysis worker (durable resource) --------------------------------------
 
-export const analysisWorker: Worker = durable(
+export const analysisWorker: Worker = morphogenScope.durable(
   "analysisWorker",
   () => new Worker(new URL("../analysis/analysis.worker.ts", import.meta.url), { type: "module" }),
 );
@@ -151,11 +185,11 @@ if (import.meta.hot) {
         display: mod.DISPLAY_FRAG,
         encode: mod.ENCODE_FRAG,
       });
-      console.info("[morpho:hmr] shaders recompiled in place — field preserved");
+      console.info("[morphogen:hmr] shaders recompiled in place — field preserved");
     } catch (err) {
       // A bad GLSL edit fails loud and half-swaps nothing (recompile only
       // replaces programs when all three compile).
-      console.error("[morpho:hmr] shader recompile failed:", err);
+      console.error("[morphogen:hmr] shader recompile failed:", err);
     }
   });
 }

@@ -29,7 +29,7 @@ export interface GalleryPage {
 }
 
 const LOADERS: Record<Route, () => Promise<{ page: GalleryPage }>> = {
-  morphogen: () => import("../pages/morphogen/page"),
+  morphogen: () => import("@habemus-papadum/demo-morphogen/page"),
   aztec: () => import("../pages/aztec/page"),
   seismos: () => import("../pages/seismos/page"),
   circle: () => import("../pages/circle/page"),

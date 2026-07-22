@@ -19,7 +19,6 @@
  */
 import { render } from "@solidjs/web";
 import "@habemus-papadum/aiui-journal/styles.css";
-import "./styles.css";
 import { initTheme } from "@habemus-papadum/aiui-journal";
 import { SiteHeader } from "@habemus-papadum/aiui-viz/site";
 import { createEffect, createSignal, Show, untrack } from "solid-js";

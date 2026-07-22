@@ -1,6 +1,6 @@
 /* morphogen's page styles. The shared dark-journal chrome (tokens, panels,
  * sliders, tiles, cell/plot chrome, site header, TOC rail) comes from
- * @habemus-papadum/aiui-journal/styles.css, imported by main.tsx BEFORE this
+ * @habemus-papadum/aiui-journal/styles.css, imported by the host page BEFORE this
  * file; what remains here is morphogen-owned: the simulation figure, the
  * paired history charts, the analysis controls, and the regime atlas. */
 
