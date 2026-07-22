@@ -8,12 +8,13 @@
  * that walks the playhead through the ring at the chosen speed). The cell graph
  * (graph.ts) and components (ui/) are the disposable logic rebuilt over these.
  *
- * Under the SPA shell all notebooks share ONE window, so collision avoidance
- * is a naming discipline, not an accident of separate documents: durable keys
- * carry the `aztec:` prefix, control/cell names must be unique app-wide (the
- * registries are global), and the agent-tool namespace stays window.__aztec.
+ * In the gallery shell all notebooks share ONE window, so identity is scoped:
+ * `aztecScope` qualifies every control, durable, cell, and action
+ * ("aztec/seed"), names the graph key, and matches the agent-tool namespace
+ * (window.__aztec) — see aiui-viz's scope.ts and the user guide's "Composing
+ * bigger apps".
  */
-import { control, durable, durableCanvas, durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, durableCanvas, scope } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";
 import type { ShuffleFrame } from "./types";
 
@@ -25,6 +26,10 @@ export const MAX_N = 96;
 
 const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
 
+/** The demo's instance scope: ONE slug qualifying every declaration (see the
+ * module comment). New declarations MUST thread it. */
+export const aztecScope = scope("aztec");
+
 // --- the control surface (described, constrained, agent-settable) ------------
 //
 // Names and the descriptions below are compiler-injected (the doc comment IS
@@ -33,22 +38,22 @@ const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
 // the surface is curated.
 
 /** Target Aztec-diamond order n; changing it regrows to that size. */
-export const targetN = control({ value: 32, min: 1, max: MAX_N, step: 1 });
+export const targetN = control({ scope: aztecScope, value: 32, min: 1, max: MAX_N, step: 1 });
 
 /** Whether the growth animation is running. */
-export const playing = control({ value: true });
+export const playing = control({ scope: aztecScope, value: true });
 
 /** Animation speed, growth-frames per second. */
-export const fps = control({ value: 8, min: 1, max: 60, step: 1 });
+export const fps = control({ scope: aztecScope, value: 8, min: 1, max: 60, step: 1 });
 
 /** Show the theoretical arctic-circle overlay. */
-export const showCircle = control({ value: true });
+export const showCircle = control({ scope: aztecScope, value: true });
 
-export const seed = durableSignal<number>("aztec:seed", randomSeed());
+export const seed = aztecScope.durableSignal<number>("seed", randomSeed());
 /** Bumped to force a fresh run (regrow) without changing target/seed. */
-export const runId = durableSignal("aztec:runId", 0);
+export const runId = aztecScope.durableSignal("runId", 0);
 /** The playhead: which ring frame is currently painted. */
-export const frameIndex = durableSignal("aztec:frameIndex", 0);
+export const frameIndex = aztecScope.durableSignal("frameIndex", 0);
 
 /** Grow a fresh random tiling from a new seed. */
 export function regrow(): number {
@@ -68,7 +73,7 @@ export interface FrameRing {
   last(): ShuffleFrame | undefined;
 }
 
-export const frames: FrameRing = durable("aztec:frames", () => {
+export const frames: FrameRing = aztecScope.durable("frames", () => {
   const [version, setVersion] = createSignal(0);
   const rows: ShuffleFrame[] = [];
   return {
@@ -90,7 +95,7 @@ export const frames: FrameRing = durable("aztec:frames", () => {
 
 // --- the durable canvas island (adopted by AztecCanvas) ----------------------
 
-export const aztecSurface = durableCanvas("aztec:canvas", (canvas) => {
+export const aztecSurface = durableCanvas(aztecScope.qualify("canvas"), (canvas) => {
   canvas.width = CANVAS_PX;
   canvas.height = CANVAS_PX;
   canvas.className = "aztec-canvas";
@@ -99,7 +104,7 @@ export const aztecSurface = durableCanvas("aztec:canvas", (canvas) => {
 /** The element itself — what the tiling is painted into. */
 export const aztecCanvas: HTMLCanvasElement = aztecSurface.canvas;
 
-export const ctx2d: CanvasRenderingContext2D = durable("aztec:ctx", () => {
+export const ctx2d: CanvasRenderingContext2D = aztecScope.durable("ctx", () => {
   const c = aztecCanvas.getContext("2d");
   if (!c) throw new Error("aztec: 2D canvas context unavailable");
   return c;
@@ -107,8 +112,8 @@ export const ctx2d: CanvasRenderingContext2D = durable("aztec:ctx", () => {
 
 // --- the shuffle worker (durable resource) -----------------------------------
 
-export const shuffleWorker: Worker = durable(
-  "aztec:worker",
+export const shuffleWorker: Worker = aztecScope.durable(
+  "worker",
   () => new Worker(new URL("./shuffle.worker.ts", import.meta.url), { type: "module" }),
 );
 
@@ -131,7 +136,7 @@ export interface Player {
   dispose(): void;
 }
 
-export const player: Player = durable("aztec:player", () => {
+export const player: Player = aztecScope.durable("player", () => {
   let raf = 0;
   let last = performance.now();
   let acc = 0;

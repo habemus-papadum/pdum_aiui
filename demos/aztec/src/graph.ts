@@ -23,6 +23,7 @@ import { type Accessor, createEffect, createMemo } from "solid-js";
 import { tilingCount } from "./permanent";
 import { draw } from "./render";
 import {
+  aztecScope,
   ctx2d,
   fps,
   frameIndex,
@@ -86,6 +87,7 @@ export const aztecGraph = hotCellGraph<AztecGraph>(
           yield frame;
         }
       },
+      { scope: aztecScope },
     );
 
     // ---- the permanent check: runs once on load ----------------------------
@@ -97,6 +99,7 @@ export const aztecGraph = hotCellGraph<AztecGraph>(
           { kind: "permanents", maxN: d.maxN },
           ctx,
         ),
+      { scope: aztecScope },
     );
 
     // ---- a new run starts: reset the ring and playhead ---------------------
@@ -186,6 +189,7 @@ function registerTools(): void {
 
 /** Draw a fresh uniformly-random tiling (new seed) and replay the fold. */
 action({
+  scope: aztecScope,
   name: "regrow",
   params: { seed: "optional integer seed; omit for random" },
   run: (args) => {
@@ -202,6 +206,7 @@ action({
 
 /** Resume the growth animation (restarts from AD(1) if at the end). */
 action({
+  scope: aztecScope,
   name: "play",
   run: () => {
     if (atEnd()) frameIndex.set(0);
@@ -212,6 +217,7 @@ action({
 
 /** Pause the growth animation on the current frame. */
 action({
+  scope: aztecScope,
   name: "pause",
   run: () => {
     playing.set(false);
@@ -221,6 +227,7 @@ action({
 
 /** Move the playhead to a frame by ring index or by order n. */
 action({
+  scope: aztecScope,
   name: "seek",
   params: { index: "ring index", n: "target order to jump to" },
   run: (args) => {
