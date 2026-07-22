@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-walkthrough",
-  "version": "0.11.2",
+  "version": "0.11.2+dev",
   "description": "The playbook, built step by step: 1-D diffusion",
   "private": true,
   "type": "module",

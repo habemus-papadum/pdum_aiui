@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-console",
-  "version": "0.11.2",
+  "version": "0.11.2+dev",
   "description": "The aiui channel console: a dashboard landing page and the trace debugger, served at the channel root.",
   "type": "module",
   "license": "MIT",
