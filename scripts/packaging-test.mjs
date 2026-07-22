@@ -250,7 +250,11 @@ check(
   existsSync(join(scratch, "starter-app", "src", "main.tsx")) &&
     existsSync(join(scratch, "starter-app", ".envrc")) &&
     existsSync(join(scratch, "starter-app", ".gitignore")) &&
-    !readFileSync(join(scratch, "starter-app", "package.json"), "utf8").includes("__AIUI"),
+    !readFileSync(join(scratch, "starter-app", "package.json"), "utf8").includes("__AIUI") &&
+    // Tokens are resolved across SOURCE too (scope("__APP_NAME__") → the slug).
+    readFileSync(join(scratch, "starter-app", "src", "model", "store.ts"), "utf8").includes(
+      'scope("starter-app")',
+    ),
 );
 const createdAgain = runCreate(["starter-app", "--skip-install"]);
 check(

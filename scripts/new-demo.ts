@@ -77,6 +77,11 @@ function rewirePackageJson(
 ): void {
   const pkgPath = join(dest, "package.json");
   const template = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+    aiui?: { sitePage?: Record<string, unknown> };
+    exports: Record<string, string>;
+    main: string;
+    module: string;
+    types: string;
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
   };
@@ -88,6 +93,15 @@ function rewirePackageJson(
     type: "module",
     license: "MIT",
     repository: { type: "git", url: repoUrl, directory: `demos/${slug}` },
+    // The dual shape flows through from the template: the library exports and
+    // the `aiui.sitePage` marker (already token-resolved to this slug), which
+    // makes the gallery shell discover and mount the new demo automatically.
+    // Only `aiui.scaffold` is dropped — see the function doc above.
+    exports: template.exports,
+    main: template.main,
+    module: template.module,
+    types: template.types,
+    ...(template.aiui?.sitePage ? { aiui: { sitePage: template.aiui.sitePage } } : {}),
     scripts: {
       claude: "../../bin/aiui claude",
       dev: "vite",

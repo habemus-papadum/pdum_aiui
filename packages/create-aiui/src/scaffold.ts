@@ -79,10 +79,40 @@ export function appNameFrom(target: string): string {
   return slug || "aiui-app";
 }
 
+/** File extensions the token pass rewrites — the template's text files. */
+const TOKEN_FILE_EXTENSIONS = new Set([".ts", ".tsx", ".html", ".md", ".json", ".css"]);
+
+/** Recursively resolve `__APP_NAME__` / `__AIUI_VERSION_RANGE__` in the
+ * scaffolded tree's text files. Tokens live in string/comment positions in the
+ * template source (e.g. `scope("__APP_NAME__")` in store.ts), so the shipped
+ * template stays syntactically valid TypeScript and typecheckable as-is. */
+function resolveTokens(dir: string, appName: string, range: string): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      resolveTokens(path, appName, range);
+      continue;
+    }
+    const dot = entry.name.lastIndexOf(".");
+    if (dot === -1 || !TOKEN_FILE_EXTENSIONS.has(entry.name.slice(dot))) {
+      continue;
+    }
+    const text = readFileSync(path, "utf8");
+    const resolved = text
+      .replaceAll("__APP_NAME__", appName)
+      .replaceAll("__AIUI_VERSION_RANGE__", range);
+    if (resolved !== text) {
+      writeFileSync(path, resolved);
+    }
+  }
+}
+
 /**
  * Copy the template, restore the dot-paths npm strips from published tarballs
- * (`gitignore` → `.gitignore`, `envrc` → `.envrc`), and resolve the tokens:
- * the app's name (from the directory) and the aiui dependency range.
+ * (`gitignore` → `.gitignore`, `envrc` → `.envrc`), and resolve the tokens
+ * across the whole tree — package.json AND source (the app's name feeds
+ * `scope("__APP_NAME__")` in store.ts, the page title, the marker): the app's
+ * name comes from the directory, the aiui dependency range from `range`.
  *
  * `range` defaults to what this build should pin to, and exists so a caller can
  * override it: this repo's own `pnpm new-demo` scaffolds the same template into
@@ -102,13 +132,7 @@ export function scaffoldApp(
       renameSync(join(target, undotted), join(target, `.${undotted}`));
     }
   }
-  const pkgFile = join(target, "package.json");
-  writeFileSync(
-    pkgFile,
-    readFileSync(pkgFile, "utf8")
-      .replaceAll("__APP_NAME__", appNameFrom(target))
-      .replaceAll("__AIUI_VERSION_RANGE__", range),
-  );
+  resolveTokens(target, appNameFrom(target), range);
 }
 
 /**

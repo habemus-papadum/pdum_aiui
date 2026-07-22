@@ -19,7 +19,7 @@
  */
 import { action, type Cell, cell } from "@habemus-papadum/aiui-viz";
 import { buildRose, type Rose } from "./rose";
-import { angleStep, petals } from "./store";
+import { angleStep, appScope, petals } from "./store";
 
 export interface SceneryCells {
   /** The picture, recomputed whenever a parameter moves. */
@@ -35,12 +35,14 @@ export function sceneryCells(): SceneryCells {
     rose: cell(
       () => ({ petals: petals.get(), step: angleStep.get() }),
       async (params) => buildRose(params),
+      { scope: appScope },
     ),
   };
 }
 
 /** Jump both parameters to a fresh random flower. */
 action({
+  scope: appScope,
   name: "re-flower",
   run: () => {
     // Writes validate through each control's own meta — no clamping here.

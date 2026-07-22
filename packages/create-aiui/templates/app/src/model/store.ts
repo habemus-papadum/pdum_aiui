@@ -22,12 +22,33 @@
  * everything's ancestor — so avoid it while a live run matters.
  */
 
+import { scope } from "@habemus-papadum/aiui-viz";
+
+/**
+ * The app's instance scope: ONE slug qualifying every declaration — controls
+ * ("__APP_NAME__/petals"), durable keys, cells, actions — and naming the
+ * graph key and the agent toolkit. Thread it through everything you declare
+ * (`control({ scope: appScope, … })`, `appScope.durable(…)`,
+ * `cell(deps, compute, { scope: appScope })`, `action({ scope: appScope, … })`):
+ * it is what lets this app share a document with other aiui apps — mounted in
+ * a gallery shell, or composed as a library — without colliding on the
+ * window-global registries. See the user guide's "Composing bigger apps".
+ */
+export const appScope = scope("__APP_NAME__");
+
 // <aiui-scenery>
 import { control } from "@habemus-papadum/aiui-viz";
 
 /** Petal frequency n of the rose r = sin(n·θ). */
-export const petals = control({ value: 6, min: 2, max: 9, step: 1 });
+export const petals = control({ scope: appScope, value: 6, min: 2, max: 9, step: 1 });
 
 /** The Maurer walk's angle step d, in degrees. */
-export const angleStep = control({ value: 71, min: 1, max: 179, step: 1, unit: "°" });
+export const angleStep = control({
+  scope: appScope,
+  value: 71,
+  min: 1,
+  max: 179,
+  step: 1,
+  unit: "°",
+});
 // </aiui-scenery>

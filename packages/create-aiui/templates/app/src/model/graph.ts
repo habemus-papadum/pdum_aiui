@@ -21,13 +21,14 @@
 import { agentToolkit, hotCellGraph, registerStandardTools } from "@habemus-papadum/aiui-viz";
 // <aiui-scenery>
 import { sceneryCells } from "./scenery";
+import { appScope } from "./store";
 // </aiui-scenery>
 
 // --- the graph: rebuilt over the durable roots on every hot edit --------------
 
 /** The current graph — a stable accessor that survives hot swaps. */
 export const graph = hotCellGraph(
-  "app",
+  appScope.name,
   () => ({
     // Your cells go here: `myCell: cell(() => ({ …deps }), async (deps, ctx) => …),`
     // <aiui-scenery>
@@ -51,7 +52,8 @@ export type AppGraph = ReturnType<typeof graph>;
 // kit.registerTool(...) only for operations that are genuinely neither a value
 // nor a verb-with-args. Registration is idempotent by name (HMR-safe).
 
-const kit = agentToolkit("app");
+// The toolkit namespace is the app's slug: tools install at window.__<slug>.
+const kit = agentToolkit(appScope.name);
 
 // `locate` (element → source) and the `cells` attribution table: app-independent,
 // and every aiui app should have them.

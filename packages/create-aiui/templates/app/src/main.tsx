@@ -24,14 +24,16 @@
  * </aiui-scenery>
  *   src/model/graph.ts   the cell graph (dataflow) + the agent tools
  *   src/ui/              components — freely hot-swappable
+ *   src/page.tsx         the app as a mountable SitePage (both hosts' entry)
+ *   src/index.ts         the library barrel (what siblings import)
  *
  * Everything you can see is scenery, built to be rebuilt. Start talking.
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
 import { render } from "@solidjs/web";
-import "./styles.css";
-import "./model/graph"; // builds the cell graph + registers agent tools
-import { App } from "./ui/App";
+import { page } from "./page";
 
-render(() => <App />, document.getElementById("root") as HTMLElement);
+document.title = page.title;
+page.activate?.();
+render(() => <page.App />, document.getElementById("root") as HTMLElement);

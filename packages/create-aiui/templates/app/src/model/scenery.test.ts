@@ -22,7 +22,11 @@ import {
 } from "@habemus-papadum/aiui-viz/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { type SceneryCells, sceneryCells } from "./scenery";
-import { angleStep, petals } from "./store";
+import { angleStep, appScope, petals } from "./store";
+
+// Identity is scope-qualified (store.ts's appScope): "my-app/petals", tool
+// names included. Qualify through the scope so the test tracks the app's slug.
+const q = (leaf: string) => appScope.qualify(leaf);
 
 let h: CellHarness<SceneryCells> | undefined;
 afterEach(() => {
@@ -58,24 +62,24 @@ describe("the rose (controls + cell + derived tools)", () => {
       cells: Record<string, string>;
       edges: Record<string, string[]>;
     };
-    expect(brief.controls).toMatchObject({ petals: 6, angleStep: 71 });
-    expect(brief.actions).toContain("re-flower");
-    expect(brief.cells).toMatchObject({ rose: "ready" });
+    expect(brief.controls).toMatchObject({ [q("petals")]: 6, [q("angleStep")]: 71 });
+    expect(brief.actions).toContain(q("re-flower"));
+    expect(brief.cells).toMatchObject({ [q("rose")]: "ready" });
     // The dependency edges: which controls this cell's deps actually read.
-    expect(brief.edges.rose).toEqual(["control:petals", "control:angleStep"]);
+    expect(brief.edges[q("rose")]).toEqual([`control:${q("petals")}`, `control:${q("angleStep")}`]);
 
     // Descriptions arrive from the doc comments in store.ts, compiler-lifted.
     const full = kit.handle().call("report", { format: "full" }) as {
       controls: Array<{ name: string; description?: string }>;
     };
-    expect(full.controls.find((c) => c.name === "petals")?.description).toBe(
+    expect(full.controls.find((c) => c.name === q("petals"))?.description).toBe(
       "Petal frequency n of the rose r = sin(n·θ).",
     );
 
-    const written = kit.handle().call("set", { name: "petals", value: 99 }) as { value: number };
+    const written = kit.handle().call("set", { name: q("petals"), value: 99 }) as { value: number };
     expect(written.value).toBe(9); // same clamp as the slider — one validation path
 
-    const flowered = kit.handle().call("re-flower") as { petals: number; step: number };
+    const flowered = kit.handle().call(q("re-flower")) as { petals: number; step: number };
     expect(flowered.petals).toBeGreaterThanOrEqual(2);
     expect(flowered.petals).toBeLessThanOrEqual(9);
   });

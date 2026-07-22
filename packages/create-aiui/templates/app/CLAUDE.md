@@ -5,6 +5,17 @@ app wired for the aiui loop, whose visible content — the banner, the rose — 
 scenery meant to be replaced** the moment the user describes the app they actually want. Be bold
 about rebuilding the page (the banner included); be careful about the wiring underneath.
 
+The app has a **dual shape** — it is both a standalone app and a library:
+
+- `src/main.tsx` mounts `src/page.tsx`, the app as a mountable `SitePage`
+  (from `@habemus-papadum/aiui-viz`): one page contract for both hosts — this dev server, or a
+  multi-app shell that discovers the page through the `aiui.sitePage` marker in `package.json`
+  and the `./page` export.
+- `src/index.ts` is the library barrel (the `.` export): the scope, the graph, the root
+  component, and — as the real app grows — its widgets and pure model. Keep both export maps in
+  `package.json` pointing at source; keep page wiring (styles, graph side effects) out of the
+  barrel.
+
 ## Reset to a blank canvas
 
 Every piece of placeholder scenery is fenced with markers, so resetting the app is a **mechanical
@@ -47,15 +58,22 @@ Ground rules:
   screenshot/selection attribution reads. The loop stops working without it. (And never
   hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.)
 - **Keep the architecture's split.** `src/model/store.ts` holds the *durable roots* AND the
-  **control surface**: user-movable parameters are `control({ value, min, max, … })` with a real
-  doc comment (the compiler injects the name from the binding and lifts the comment as the
-  description — no name, no hand-written description). Internal state stays
-  `durableSignal()`/`durable()` — the surface is curated. `src/model/graph.ts` is *disposable
+  **control surface**: user-movable parameters are `control({ scope: appScope, value, min, max, … })`
+  with a real doc comment (the compiler injects the name from the binding and lifts the comment
+  as the description — no name, no hand-written description). Internal state stays
+  `appScope.durableSignal()`/`appScope.durable()` — the surface is curated. `src/model/graph.ts` is *disposable
   logic*: the cell graph, built by `hotCellGraph()` and rebuilt over the roots on every hot edit.
   UI components in `src/ui/` are freely hot-swappable, read cells through the `graph()` accessor
   (never importing one directly), and bind controls through `ControlSlider`/`ControlToggle`
   (bounds from the control's meta — never re-state min/max in JSX) or a hand-rolled binding for
   shapes those don't fit.
+- **Thread the scope.** `appScope` (src/model/store.ts) qualifies every declaration —
+  `control({ scope: appScope, … })`, `appScope.durable(…)`/`appScope.durableSignal(…)`,
+  `cell(deps, compute, { scope: appScope })`, `action({ scope: appScope, … })` — and names the
+  graph key and the agent toolkit. It is what lets this app share a document with other aiui
+  apps (mounted in a gallery shell, imported as a library) without colliding on the
+  window-global registries. Never declare an unscoped control/cell/action; see the user guide's
+  "Composing bigger apps" for the model.
 - **Declaring IS exposing.** Every `control()` is settable and every `action()` is a real named
   agent tool automatically via `registerStandardTools` (`report`/`set`/`locate` + one tool per
   action). Do NOT hand-write get-params/set-params tools; add an `action({ name, run })` next to

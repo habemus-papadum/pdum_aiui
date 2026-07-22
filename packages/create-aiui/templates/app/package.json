@@ -3,8 +3,20 @@
   "private": true,
   "type": "module",
   "aiui": {
-    "scaffold": true
+    "scaffold": true,
+    "sitePage": {
+      "title": "__APP_NAME__",
+      "desc": "an aiui app",
+      "order": 1000
+    }
   },
+  "exports": {
+    ".": "./src/index.ts",
+    "./page": "./src/page.tsx"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
     "dev": "vite",
     "open": "aiui open",
