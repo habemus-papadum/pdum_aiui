@@ -96,6 +96,15 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     return;
   }
 
+  // `claude` is the binary this command wraps — the most fundamental
+  // precondition of all. Check it FIRST, before the interactive key interview,
+  // the vault probe, or any network key verification: a user who hasn't
+  // installed Claude Code can't launch a session regardless of their keys, so
+  // "install claude" is the one message worth showing them.
+  if (!ensureClaudeOnPath()) {
+    return;
+  }
+
   // Settings from ~/.cache/aiui/config.json + .aiui-cache/config.json (project
   // wins per key; flags win over both) — see util/config and docs/guide/config.
   let config = loadAiuiConfig();
@@ -165,10 +174,6 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
       process.exitCode = 1;
       return;
     }
-  }
-
-  if (!ensureClaudeOnPath()) {
-    return;
   }
 
   // Plugins ship in the plugin package's marketplace/ (in both dev and
