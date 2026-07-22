@@ -21,8 +21,8 @@
 import { agentToolkit, hotCellGraph, registerStandardTools } from "@habemus-papadum/aiui-viz";
 // <aiui-scenery>
 import { sceneryCells } from "./scenery";
-import { appScope } from "./store";
 // </aiui-scenery>
+import { appScope } from "./store";
 
 // --- the graph: rebuilt over the durable roots on every hot edit --------------
 

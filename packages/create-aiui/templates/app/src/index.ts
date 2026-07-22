@@ -11,7 +11,7 @@
 export { type AppGraph, graph } from "./model/graph";
 // <aiui-scenery>
 export { buildRose, type Rose } from "./model/rose";
-export { type SceneryCells, sceneryCells } from "./model/scenery";
+export { angleStep, petals, type SceneryCells, sceneryCells } from "./model/scenery";
 // </aiui-scenery>
-export { angleStep, appScope, petals } from "./model/store";
+export { appScope } from "./model/store";
 export { App } from "./ui/App";

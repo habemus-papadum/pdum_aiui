@@ -21,6 +21,12 @@ import { action, type Cell, cell } from "@habemus-papadum/aiui-viz";
 import { buildRose, type Rose } from "./rose";
 import { angleStep, appScope, petals } from "./store";
 
+// Re-exported for the library barrel (index.ts): the barrel's scenery block
+// must reference ONLY scenery modules, so a reset can delete it mechanically —
+// an `export … from "./model/store"` line there would get merged by the import
+// organizer with the unfenced appScope export and break the invariant.
+export { angleStep, petals } from "./store";
+
 export interface SceneryCells {
   /** The picture, recomputed whenever a parameter moves. */
   rose: Cell<Rose>;
