@@ -99,7 +99,7 @@ attributes plus a registry would serve an agent identically.
 ## 3 · HMR: durable roots, a disposable graph, and a box
 
 The architecture that makes "edit under a running experiment" safe has three parts
-(reference: `demos/gallery/src/model/store.ts` and `graph.ts`; background: the archived
+(reference: `demos/morphogen/src/model/store.ts` and `graph.ts`; background: the archived
 *HMR for agentic coding* notes in the repo's `archive/`):
 
 **Durable roots** are owned by a keyed, idempotent registry:
@@ -158,7 +158,7 @@ edits hot-apply instead of bubbling to a full reload.
 ## 4 · Imperative islands and cadence bridges
 
 A 60 Hz render loop does not belong in a reactive graph. The pattern
-(`demos/gallery/src/sim/`, mirrored by aztec's player):
+(`demos/morphogen/src/sim/`, mirrored by aztec's player):
 
 - The engine is a plain imperative class; the rAF loop never touches signals.
 - **Inbound:** effects push parameter changes in — `createEffect(params, p => engine.setParams(p))`.

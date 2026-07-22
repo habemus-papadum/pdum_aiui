@@ -253,7 +253,9 @@ function main(): void {
       "Next:\n" +
       "  pnpm install                 # link the new workspace member\n" +
       `  pnpm -C demos/${slug} claude    # terminal 1 — Claude Code + channel\n` +
-      `  pnpm -C demos/${slug} dev       # terminal 2 — Vite + the intent tool\n`,
+      `  pnpm -C demos/${slug} dev       # terminal 2 — Vite + the intent tool\n` +
+      "The scaffold carries the aiui.sitePage marker, so the gallery shell\n" +
+      "(pnpm demo) discovers it as a tab on its next dev-server start.\n",
   );
 }
 

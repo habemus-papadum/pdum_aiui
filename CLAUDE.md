@@ -140,17 +140,43 @@ pnpm -C demos/spectra dev      # terminal 2 — Vite + the intent tool
 between `<aiui-scenery>` markers (whole scenery files carry `<aiui-scenery-file>` on line 1), so
 "reset to a blank app" is a mechanical deletion documented in the template's `CLAUDE.md` — cheap
 models can do it without reading the code. When editing the template, keep the invariant: fenced
-code is only referenced from other fenced code, and the post-deletion tree must typecheck.
+code is only referenced from other fenced code, and the post-deletion tree must typecheck. (Watch
+the import organizer here: a fenced import/export line must never share a module specifier with an
+unfenced one, or biome merges them across the fence — the scenery controls re-export through
+`scenery.ts` for exactly this reason.)
+
+**Every scaffolded app has the dual shape** — standalone app AND library. `src/main.tsx` mounts
+`src/page.tsx`, the app as a mountable `SitePage` (aiui-viz's page contract: title/App/
+activate/deactivate, pause-not-destroy); `src/index.ts` is the library barrel behind the `.`
+export; `package.json` carries the `aiui.sitePage` marker (title/desc/order). Identity is scoped:
+`appScope = scope("<slug>")` in `store.ts` qualifies every control/durable/cell/action and names
+the graph key + agent toolkit, so any two aiui apps can share one document (the reason the gallery
+can mount them all — see below).
 
 **There is exactly one starter template.** It used to be two: `aiui demo` scaffolded a throwaway
 playground from `packages/aiui/templates/demo`, predating `create-aiui`. That command and its
 template are gone — scaffolding is `create-aiui`'s job, and `pnpm new-demo` is its in-repo twin.
 
-**`demos/gallery` is the one demo that was not scaffolded.** It is the reference notebooks
-(morphogen · aztec · seismos), formerly `packages/aiui-demo`, moved into `demos/` because it is a
-demo, not a published package. `pnpm demo` serves it. It is deliberately far richer than the
-starter — workers, WebGL, DuckDB/Mosaic, the modal kit — and it is *not* a template: nothing
-scaffolds from it.
+**The reference notebooks are first-class demo packages**: `demos/morphogen` (WebGL
+reaction–diffusion + worker analysis), `demos/aztec` (streaming domino shuffling), `demos/seismos`
+(DuckDB-WASM/Mosaic crossfilter; its 4 MB catalog rides as `?url` asset imports so the data
+travels with the package), and `demos/circle` (the pencil-package demo, promoted from its old
+gitignored-scratch status). Each is deliberately far richer than the starter, runs standalone
+(`pnpm -C demos/<slug> claude` + `dev`), exports its widgets/store/pure model from `src/index.ts`,
+and is scoped under `scope("<slug>")` throughout. Their shared dark-journal look lives in
+`demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator`): the theme
+literals plus the tokens/notebook-chrome stylesheet.
+
+**`demos/gallery` is the thin composer** — the notebook site's SPA shell, and the published
+static site (`pnpm demo` serves it; `pnpm run publish` in it deploys). It does NOT depend on the
+demos: a Vite plugin (`demos/gallery/demo-discovery.ts`) scans `demos/*/package.json` for the
+`aiui.sitePage` marker, resolves each page entry through the demo's own `exports` map, and serves
+`virtual:demo-pages` — tabs, routes, and lazy page loaders all derive from it (the lowest `order`
+is the default route; `publish.sh` derives its deep-link routes from the same markers). Adding a
+demo to the gallery = the marker existing; a fresh `pnpm new-demo` scaffold carries it already.
+The demos stay self-contained pages behind aiui-viz's `SitePage` contract — the shell drives
+pause-not-destroy (`activate`/`deactivate`) across client-side routing so an open intent turn
+survives switching notebooks.
 
 **`demos/twins` is the composability worked example**: one reusable slice
 (`demos/oscillator`, an internal never-published package) instantiated twice under

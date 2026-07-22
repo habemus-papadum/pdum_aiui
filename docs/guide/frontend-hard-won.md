@@ -84,7 +84,7 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
 
 ## Mosaic / DuckDB-WASM (versions: @uwdata/vgplot 0.28.1, @duckdb/duckdb-wasm 1.33.1-dev45.0)
 
-Found building the seismos notebook (full detail: `demos/gallery/src/pages/seismos/NOTES.md`):
+Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
 
 - **A custom MosaicClient defaults to being served from the pre-aggregation index**, which
   applies interval clauses but silently DROPS point clauses — a categorical cross-filter that

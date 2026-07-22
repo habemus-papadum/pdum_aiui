@@ -1,27 +1,39 @@
 # demo: gallery
 
-**morphogen** — a Turing-pattern laboratory, and the reference app for this repo's
-reactive-frontend methodology. Gray-Scott reaction-diffusion runs on the GPU (WebGL2,
-SolidJS 2.0 beta); everything downstream of it — live observables, a worker-based
-structure analysis, a streaming regime catalog, an interactive (F, k) atlas — is an
-Observable-style **cell graph** over the running simulation. Never published — it exists
-to be run, poked at, and extended.
+The notebook site's **shell**: an SPA that discovers the sibling demo packages
+and composes them into one dark journal — the dev playground for the whole
+demo set, and the source of the published static site at
+<https://habemus-papadum.net/aiui/>.
 
-Two things live here on purpose:
+The notebooks themselves live in their own packages (the demo-package dual
+shape — see the root `CLAUDE.md`, "In-repo demo apps"):
 
-1. **The demo app** — deliberately rich: slow cancellable computations with progress,
-   streaming partials, a simulated failing download with retry, plots (Observable Plot),
-   a d3 parameter atlas, a table, pointer painting, and an agent tool registry at
-   `window.__morpho` (`.tools`, `.call(name, args)`, `.report()`).
-2. **[PRINCIPLES.md](./PRINCIPLES.md)** — the methodology discovered while building it:
-   cells for async dataflow, the durable-roots/disposable-logic HMR contract, imperative
-   islands with cadence bridges, worker choreography, the agent tool surface, and the
-   Solid 2.0 / Vite HMR / LocatorJS findings, each paid for with a real bug. Read it
-   next to the code; the file layout *is* the methodology.
+| tab | package | what it is |
+| --- | --- | --- |
+| morphogen | [`demos/morphogen`](../morphogen) | Gray-Scott reaction–diffusion: WebGL sim island, worker analysis, history ring |
+| aztec | [`demos/aztec`](../aztec) | random domino tilings: streaming shuffle worker, scrub ring, arctic circle |
+| seismos | [`demos/seismos`](../seismos) | earthquakes & Gutenberg–Richter: DuckDB-WASM + Mosaic crossfilter |
+| circle | [`demos/circle`](../circle) | how round can you draw a circle? the pencil-package demo |
 
-It is also a ready-made playground for the intent client: launch through `aiui claude` and
-the session browser's side panel (or the channel-served `/intent/` page) drives these pages;
-the `aiui()` plugin in `vite.config.ts` provides the source-location stamps attribution reads.
+**Discovery is marker-driven, not registered.** `demo-discovery.ts` (a Vite
+plugin) scans `demos/*/package.json` for the `aiui.sitePage` marker, resolves
+each demo's `./page` export to a real file, and serves `virtual:demo-pages`;
+the tabs, the routes, and the lazy page loaders (`src/site/`) all derive from
+it. The gallery's `package.json` deliberately does **not** depend on the
+demos. A new demo appears by carrying the marker (a fresh `pnpm new-demo`
+scaffold already does); restart the dev server to pick up a brand-new
+directory.
+
+Every page is an aiui-viz **`SitePage`** (title, App, activate/deactivate).
+Route changes are pause-not-destroy: the leaving page's components are
+disposed, its rAF loops parked, while every durable — the WebGL field, the
+workers, DuckDB, the history rings — survives for the return visit. All
+navigation is client-side (`src/site/router.ts`), so an open intent turn rides
+across notebook switches. The shared dark-journal look (tokens, notebook
+chrome, chart palette) is [`demos/journal`](../journal).
+
+[PRINCIPLES.md](./PRINCIPLES.md) is the methodology written while these
+notebooks were built — read it next to the demo packages' code.
 
 ## Run it
 
@@ -29,74 +41,20 @@ the `aiui()` plugin in `vite.config.ts` provides the source-location stamps attr
 # terminal 1 — a Claude Code session with the channel attached
 ./aiui claude
 
-# terminal 2 — this app, served by plain vite (the intent client finds the channel itself)
+# terminal 2 — this shell, served by plain vite (the intent client finds the channel itself)
 pnpm demo
 ```
 
-Open the printed URL **in the session browser**. Drag on the field to paint chemical V,
-click around the regime atlas (mitosis is a good show), watch the analysis stream in.
-The **✳ aiui** button sends intent into the session; the **🔍** button opens the
-lowering-trace debugger.
-
-The dev server doesn't care whether a channel is running — `pnpm demo` and
-`pnpm -C demos/gallery dev` are the same command. Skip terminal 1 and the page loads fine;
-there's just no session for the intent client to drive it through.
-
-## Things worth trying
-
-- Move the **thoroughness** slider while an analysis runs — the in-flight worker run is
-  cancelled (really: the worker stops) and the panel keeps the last result, dimmed.
-- Tick **fail next fetch**, hit **re-download**, then **Retry** — the whole
-  progress/error/retry affordance is cell chrome, not bespoke panel code.
-- Edit `src/sim/shaders.ts` while a pattern cooks — the GLSL recompiles in place and the
-  field survives (`[morpho:hmr]` lines in the console narrate what was preserved).
-- From the console: `__morpho.call("jump-regime", { id: "uskate" })`, then
-  `__morpho.report()` — or `__morpho.call("locate", { selector: ".tile" })` to map
-  anything on screen back to its source line.
+Open the printed URL **in the session browser**. Each demo also runs
+standalone from its own directory (`pnpm -C demos/<slug> dev`) with the same
+loop.
 
 ## Publishing the static site
 
-`pnpm run publish` (from this demo) builds both notebooks (base `/aiui/`) and dry-runs an
-`aws s3 sync` to `s3://habemus-papadum.net/aiui`; add `--publish` (or `PUBLISH=1`) to upload for
-real and invalidate the CloudFront cache. Live at <https://habemus-papadum.net/aiui/>. Uses the
-`personal` AWS profile (override with `AWS_PROFILE`). Note it must be `pnpm run publish` — bare
-`pnpm publish` is the npm registry command, which this private package refuses.
-
-## The playbook, in miniature
-
-The directory layout is the
-[frontend playbook](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-playbook)'s four
-layers, per notebook:
-
-| Layer | morphogen | aztec | seismos |
-| --- | --- | --- | --- |
-| 1 · pure functions | `analysis/core.ts` (+ tests) | `pages/aztec/{shuffle,permanent}.ts` (+ tests) | `pages/seismos/gr.ts` (+ tests) |
-| seam (worker) | `analysis/analysis.worker.ts` | `pages/aztec/shuffle.worker.ts` | — (DuckDB is the engine) |
-| 2 · cells + roots | `model/{graph,store}.ts` | `pages/aztec/{graph,store}.ts` | `pages/seismos/{graph,store}.ts` |
-| 3 · components | `ui/` | `pages/aztec/ui/` | `pages/seismos/ui/` |
-| 4 · application | `ui/App.tsx` + nav | `pages/aztec/page.tsx` | `pages/seismos/page.tsx` |
-
-## What to look at
-
-- `vite.config.ts` + `babel-source-locator.mjs` — the aiui integration and the
-  source-location stamps (`data-source-loc="src/…:line:col"` on every element).
-- `src/model/store.ts` vs `src/model/graph.ts` — the durable/disposable split.
-- `PRINCIPLES.md` — why everything is shaped the way it is.
-- Traces land in `.aiui-cache/` under wherever `aiui claude` ran (gitignored).
-
-## The aztec page
-
-A second notebook page (`/aztec` → `src/pages/aztec/`) demonstrating the
-many-notebooks pattern from [PRINCIPLES.md](./PRINCIPLES.md): **uniformly-random
-domino tilings of the Aztec diamond**, grown by EKLP domino shuffling. Watch the
-fold and the **arctic circle** emerges — four corners freeze into single-orientation
-brickwork (N/E/S/W dominoes) around a disordered disc of radius n/√2. A live panel
-computes the number of tilings two ways — Ryser's **permanent** of the dual graph's
-biadjacency matrix vs. the EKLP closed form 2^(n(n+1)/2) — and they match through
-n=4. Same methodology as morphogen: a durable canvas island, a worker streaming a
-frame per growth step into a scrub ring, a cell for progress/cancel, and an agent
-surface at `window.__aztec` (controls + actions via `registerStandardTools`, plus
-the bespoke pieces). Nav between notebooks is client-side routing under one
-document — leaving a page parks its loops, every durable survives, and an open
-intent turn rides across the switch. Build notes and the GPU/WebGPU mapping are
-in `src/pages/aztec/NOTES.md`.
+`pnpm run publish` (from this demo) builds the site (base `/aiui/`) and
+dry-runs an `aws s3 sync` to `s3://habemus-papadum.net/aiui`; add `--publish`
+(or `PUBLISH=1`) to upload for real and invalidate the CloudFront cache. The
+SPA deep-link routes are derived from the same `aiui.sitePage` markers the
+shell reads. Uses the `personal` AWS profile (override with `AWS_PROFILE`).
+Note it must be `pnpm run publish` — bare `pnpm publish` is the npm registry
+command, which this private package refuses. See [PUBLISHING.md](./PUBLISHING.md).

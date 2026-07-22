@@ -665,6 +665,15 @@ The living reference is `demos/oscillator` (the slice, with its own compiled ide
 and tests) consumed twice by `demos/twins` (two scoped instruments composed into a Lissajous
 figure — call `__app.call("report")` there to see a qualified surface).
 
+**Whole apps compose the same way.** Every scaffolded app is born with the dual shape: a scoped
+identity (`appScope = scope("<slug>")` threading every declaration), a library barrel
+(`src/index.ts`), and a mountable page (`src/page.tsx`, aiui-viz's `SitePage` contract) declared
+to shells through the `aiui.sitePage` marker in package.json. That is what lets a gallery mount
+many apps in ONE document — pdum_aiui's `demos/gallery` discovers its sibling demo packages by
+that marker alone (no registration) and drives their pause-not-destroy lifecycle across
+client-side routing. The four reference notebooks (`demos/morphogen` · `aztec` · `seismos` ·
+`circle`) are the worked examples: real apps that run standalone AND compose.
+
 ## Where to go next
 
 - **Do:** `npm create @habemus-papadum/aiui my-app` — the starter with this whole shape working,
@@ -675,8 +684,9 @@ figure — call `__app.call("report")` there to see a qualified surface).
 - **Watch it built:** `demos/walkthrough` — the playbook executed step by step on one small app
   (1-D heat diffusion), with every stage left standing as its own page and a narration of each
   diff (`WALKTHROUGH.md`).
-- **Read:** `demos/gallery` — three real notebooks (GPU simulation, worker pipeline, DuckDB
-  crossfilter) built from nothing but these steps.
+- **Read:** the reference notebooks — `demos/morphogen` (GPU simulation), `demos/aztec` (worker
+  pipeline), `demos/seismos` (DuckDB crossfilter), `demos/circle` (pencil input) — real demo
+  packages built from nothing but these steps, composed into one site by `demos/gallery`.
 - **Deeper:** [Concepts](./frontend-for-agents) · [Design choices](./frontend-design-choices) ·
   [Hard-won details](./frontend-hard-won) ·
   [Attribution: gesture → source](./attribution) (how "make *this* wider" finds your code) · the
