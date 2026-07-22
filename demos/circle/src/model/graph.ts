@@ -19,7 +19,7 @@ import {
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
 import { type CircleStats, summarize } from "./circle";
-import { paper, resetTurn, turnPhase, turnPoints } from "./store";
+import { circleScope, paper, resetTurn, turnPhase, turnPoints } from "./store";
 
 /** Build the graph — exported so headless tests build it inside `cellHarness`. */
 export function buildGraph() {
@@ -29,6 +29,7 @@ export function buildGraph() {
     stats: cell(
       () => ({ points: turnPoints(), phase: turnPhase.get() }),
       ({ points }): CircleStats | null => summarize(points),
+      { scope: circleScope },
     ),
   };
 }
@@ -47,6 +48,7 @@ const kit = agentToolkit("circle");
  * panel returns to its prompt. (The controls `fadeSeconds` and `brushSize`, and
  * the `stats` cell, surface automatically through `report`/`set`.) */
 action({
+  scope: circleScope,
   name: "clear",
   description: "Erase the drawing and reset the measured statistics to empty.",
   run: () => {

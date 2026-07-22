@@ -27,18 +27,38 @@ import {
   type PenSample,
   SKETCH,
 } from "@habemus-papadum/aiui-pencil";
-import { control, durable, durableSignal } from "@habemus-papadum/aiui-viz";
+import { control, scope } from "@habemus-papadum/aiui-viz";
 import { CenterGhost } from "./center-ghost";
 import { summarize, type Vec } from "./circle";
+
+/** The demo's instance scope: ONE slug qualifying every declaration —
+ * controls ("circle/fadeSeconds"), durables, cells, actions, the graph key,
+ * and the toolkit namespace (window.__circle). New declarations MUST thread
+ * it (see aiui-viz scope.ts; user guide, "Composing bigger apps"). */
+export const circleScope = scope("circle");
 
 // ── the control surface ──────────────────────────────────────────────────────
 
 /** How long the ink lingers before it fades and pops, in seconds. The measured
  * statistics stay after the ink is gone; only a new stroke resets them. */
-export const fadeSeconds = control({ value: 2.5, min: 1, max: 15, step: 0.5, unit: " s" });
+export const fadeSeconds = control({
+  scope: circleScope,
+  value: 2.5,
+  min: 1,
+  max: 15,
+  step: 0.5,
+  unit: " s",
+});
 
 /** Nominal pencil radius, px — the thickness of the line you draw with. */
-export const brushSize = control({ value: 3.2, min: 1, max: 8, step: 0.2, unit: "px" });
+export const brushSize = control({
+  scope: circleScope,
+  value: 3.2,
+  min: 1,
+  max: 8,
+  step: 0.2,
+  unit: "px",
+});
 
 /**
  * How much the app helps while you draw — the difficulty of the exercise.
@@ -49,6 +69,7 @@ export const brushSize = control({ value: 3.2, min: 1, max: 8, step: 0.2, unit: 
  *  - `blind`: no guide at all until you lift, then the fit is revealed.
  */
 export const guideMode = control<"guide" | "zen" | "blind">({
+  scope: circleScope,
   value: "zen",
   options: ["guide", "zen", "blind"],
 });
@@ -60,20 +81,20 @@ export const guideMode = control<"guide" | "zen" | "blind">({
 export type TurnPhase = "idle" | "drawing" | "settled";
 
 /** The current turn's phase. */
-export const turnPhase = durableSignal<TurnPhase>("circle:phase", "idle");
+export const turnPhase = circleScope.durableSignal<TurnPhase>("phase", "idle");
 
 /** The finished stroke's points, frozen at pen-up and held past the ink fade.
  * Empty while drawing (the live points come from `ink.live()` instead). */
-export const frozenPoints = durableSignal<readonly PenSample[]>("circle:frozen", []);
+export const frozenPoints = circleScope.durableSignal<readonly PenSample[]>("frozen", []);
 
 /** How many strokes have been drawn this session — a turn counter for the UI. */
-export const turnCount = durableSignal<number>("circle:turns", 0);
+export const turnCount = circleScope.durableSignal<number>("turns", 0);
 
 /** The most recent measured turn scores, oldest → newest, capped at this many —
  * the sparkline's data. Survives a `clear` (it is a session log, not the
  * current stroke). */
 export const HISTORY_LEN = 20;
-export const scoreHistory = durableSignal<readonly number[]>("circle:history", []);
+export const scoreHistory = circleScope.durableSignal<readonly number[]>("history", []);
 
 /** Append a settled turn's score to the history ring, dropping the oldest past
  * {@link HISTORY_LEN}. A stroke too short to measure (summarize → null) is not a
@@ -105,8 +126,8 @@ export function currentParams(): PencilParams {
  * recorder, because the surface is already the one place a stroke's points are
  * captured (`onStrokeEnd` hands us the committed samples).
  */
-export const paper = durable(
-  "circle:paper",
+export const paper = circleScope.durable(
+  "paper",
   () =>
     new PencilSurface({
       className: "circle-paper",
@@ -144,7 +165,7 @@ export const paper = durable(
  * `ink.live()` (the in-flight stroke, cumulative points at ~15 Hz — lossless).
  * The `stats` cell reads `live()` during the drawing phase.
  */
-export const ink = durable("circle:ink", () => inkSignals(paper));
+export const ink = circleScope.durable("ink", () => inkSignals(paper));
 
 /**
  * The Zen guide's centre-ghost renderer (imperative rAF island). It reads the
@@ -152,8 +173,8 @@ export const ink = durable("circle:ink", () => inkSignals(paper));
  * throttled `ink.live()` — so the focus dot tracks at 60 Hz, not 15. A
  * component adopts its canvas and arms/disarms it by mode + phase.
  */
-export const centerGhost = durable(
-  "circle:centerGhost",
+export const centerGhost = circleScope.durable(
+  "centerGhost",
   () =>
     new CenterGhost({
       source: () => {

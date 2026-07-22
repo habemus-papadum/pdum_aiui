@@ -32,7 +32,7 @@ const LOADERS: Record<Route, () => Promise<{ page: GalleryPage }>> = {
   morphogen: () => import("@habemus-papadum/demo-morphogen/page"),
   aztec: () => import("@habemus-papadum/demo-aztec/page"),
   seismos: () => import("@habemus-papadum/demo-seismos/page"),
-  circle: () => import("../pages/circle/page"),
+  circle: () => import("@habemus-papadum/demo-circle/page"),
 };
 
 const loaded = new Map<Route, GalleryPage>();

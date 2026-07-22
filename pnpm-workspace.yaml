@@ -5,13 +5,6 @@ packages:
   # Note this also enrolls them in version lockstep — scripts/versioning.mjs reads
   # the globs in this list, so every demo carries the shared version.
   - "demos/*"
-  # demos/circle is a deliberately transient local scratch app (gitignored): its
-  # worthwhile parts live on as the gallery's `circle` notebook page. Excluding
-  # it here keeps it OUT of the committed lockfile and version lockstep, so a
-  # clean clone (where the gitignored dir is absent) still installs
-  # --frozen-lockfile. It won't resolve its workspace deps locally — that's the
-  # cost of scratch status; the maintained copy is demos/gallery/src/pages/circle.
-  - "!demos/circle"
 
 # The ONE npm-pinned in-repo package (bootstrap/aiui-registry — outside the
 # workspace, published manually; see CLAUDE.md → "The bootstrap/ directory").

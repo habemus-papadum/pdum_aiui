@@ -45,10 +45,6 @@ pnpm-debug.log*
 # DevTools MCP — see docs/guide/web-intent-tool and docs/guide/getting-started)
 .aiui-cache/
 
-# Transient local scratch demo: kept out of the repo on purpose (see the
-# matching `!demos/circle` exclusion in pnpm-workspace.yaml). Its worthwhile
-# parts live on as the gallery's `circle` notebook page.
-demos/circle/
 
 # aiui-devtools-extension build output (tsc)
 packages/aiui-devtools-extension/extension/js/
