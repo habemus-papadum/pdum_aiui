@@ -1,6 +1,8 @@
+import { fileURLToPath } from "node:url";
 import aiui from "@habemus-papadum/aiui-source-processor";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
+import { demoPages } from "./demo-discovery";
 
 // Solid 2.0 (beta) via vite-plugin-solid@next (bundles solid-refresh for HMR).
 //
@@ -37,5 +39,8 @@ export default defineConfig(({ command, isPreview }) => ({
     // that degrades to a widget error, not a crash.)
     aiui(),
     solid(),
+    // Marker-driven discovery of the sibling demo packages (aiui.sitePage in
+    // their package.json) — serves virtual:demo-pages; see demo-discovery.ts.
+    demoPages(fileURLToPath(new URL("..", import.meta.url))),
   ],
 }));

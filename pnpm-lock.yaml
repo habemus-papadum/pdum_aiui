@@ -160,18 +160,6 @@ importers:
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../../packages/aiui-viz
-      '@habemus-papadum/demo-aztec':
-        specifier: workspace:^
-        version: link:../aztec
-      '@habemus-papadum/demo-circle':
-        specifier: workspace:^
-        version: link:../circle
-      '@habemus-papadum/demo-morphogen':
-        specifier: workspace:^
-        version: link:../morphogen
-      '@habemus-papadum/demo-seismos':
-        specifier: workspace:^
-        version: link:../seismos
       '@solidjs/web':
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)

@@ -10,32 +10,40 @@
  * multi-entry layout killed the turn on every header click
  * (docs/proposals/spa-navigation-and-turn-continuity.md traces the loss).
  *
+ * Routes are DATA now, not a union type: the slugs come from the discovered
+ * demo packages (site/registry.ts ← virtual:demo-pages), so a new demo's
+ * marker adds its route with no edit here. The lowest-order demo is the
+ * default route: it lives at the base URL and absorbs unknown paths.
+ *
  * Base-awareness: dev serves at "/", the published site at "/aiui/"
  * (vite.config.ts). `import.meta.env.BASE_URL` is compile-time truth for both;
- * routes are slugs, hrefs are `withBase(slug)`. Legacy `aztec.html` deep links
+ * routes are slugs, hrefs are base-prefixed. Legacy `aztec.html` deep links
  * (the old multi-entry URLs, still published as real objects — see publish.sh)
  * resolve to the same routes.
  */
 import { createSignal } from "solid-js";
+import { DEFAULT_ROUTE, SLUGS } from "./registry";
 
-export type Route = "morphogen" | "aztec" | "seismos" | "circle";
+export type Route = string;
 
 const BASE = import.meta.env.BASE_URL; // "/" in dev, "/aiui/" in the build
 
-/** A route's href, base-prefixed ("/aztec" in dev, "/aiui/aztec" published). */
+/** A route's href, base-prefixed ("/aztec" in dev, "/aiui/aztec" published);
+ * the default route is the base itself. */
 export function hrefOf(route: Route): string {
-  return route === "morphogen" ? BASE : `${BASE}${route}`;
+  return route === DEFAULT_ROUTE ? BASE : `${BASE}${route}`;
 }
 
-/** pathname → route; unknown paths (and the legacy .html names) → morphogen. */
+/** pathname → route; unknown paths (and the legacy .html names) fall back to
+ * the default route. */
 export function routeOf(pathname: string): Route {
   const rel = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname.slice(1);
   const slug = rel.replace(/\/$/, "").replace(/\.html$/, "");
-  return slug === "aztec" || slug === "seismos" || slug === "circle" ? slug : "morphogen";
+  return slug !== DEFAULT_ROUTE && SLUGS.includes(slug) ? slug : DEFAULT_ROUTE;
 }
 
 const [route, setRoute] = createSignal<Route>(
-  typeof location !== "undefined" ? routeOf(location.pathname) : "morphogen",
+  typeof location !== "undefined" ? routeOf(location.pathname) : DEFAULT_ROUTE,
 );
 
 /** The current route — the shell renders from this. */

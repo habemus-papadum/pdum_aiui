@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# publish.sh — build the demo (morphogen + aztec notebooks) as a static site
+# publish.sh — build the notebook gallery (the discovered demo packages) as a static site
 # and publish it to https://habemus-papadum.net/aiui/.
 #
 # What it does:
@@ -76,11 +76,31 @@ npx vite build
 # SPA deep links on a static host: the app is one document (src/main.tsx) and
 # the router reads the path, so every route must resolve to index.html. S3
 # behind CloudFront resolves neither folder indexes nor extensionless keys, so
-# ship EXPLICIT copies: `aztec`/`seismos` (the clean route URLs — uploaded with
-# content-type text/html below, since an extensionless key would sniff as
-# octet-stream) and `aztec.html`/`seismos.html` (the old multi-entry URLs;
-# inbound links keep working — the router maps the .html slugs to routes).
-ROUTES="aztec seismos circle"
+# ship EXPLICIT copies: the clean route URLs (uploaded with content-type
+# text/html below, since an extensionless key would sniff as octet-stream) and
+# their `.html` twins (the old multi-entry URLs; inbound links keep working —
+# the router maps the .html slugs to routes).
+#
+# The list is DERIVED from the same aiui.sitePage markers the shell's
+# discovery plugin reads (demo-discovery.ts), minus the default (lowest-order)
+# route, which is index.html itself — so a new marked demo publishes its deep
+# link with no edit here.
+ROUTES="$(node -e '
+  const { readdirSync, readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const root = join(process.cwd(), "..");
+  const found = [];
+  for (const slug of readdirSync(root)) {
+    try {
+      const pkg = JSON.parse(readFileSync(join(root, slug, "package.json"), "utf8"));
+      const m = pkg.aiui && pkg.aiui.sitePage;
+      if (m) found.push({ slug, order: m.order ?? Number.MAX_SAFE_INTEGER });
+    } catch {}
+  }
+  found.sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
+  console.log(found.slice(1).map((d) => d.slug).join(" "));
+')"
+echo "==> Deep-link routes (from aiui.sitePage markers): $ROUTES"
 for route in $ROUTES; do
   cp dist/index.html "dist/$route.html"
 done

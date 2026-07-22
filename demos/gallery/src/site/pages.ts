@@ -1,47 +1,29 @@
 /**
- * pages.ts — the shell's page registry: route → lazily-imported page module.
+ * pages.ts — the shell's page cache: route → lazily-loaded page module.
  *
- * Each notebook stays a self-contained module tree (its own store/graph/ui —
- * the property worth keeping from the old multi-entry layout); the dynamic
- * `import()` below is the code-splitting seam, so Vite still builds one chunk
- * per notebook and visiting morphogen never downloads DuckDB.
- *
- * The lifecycle contract is **pause-not-destroy**: durable resources (engines,
- * workers, canvases, accrued history) deliberately outlive the route — that is
- * the whole durable model — so leaving a page must PARK its continuous work
- * (the rAF loops), not tear anything down. Event-driven resources (workers
- * between jobs, DuckDB between queries, idle cells) cost nothing while
- * off-route and need no handling. Returning to a route re-mounts components
- * over the surviving durables, exactly like an HMR swap.
+ * The loaders come from the discovered demo packages (site/registry.ts ←
+ * virtual:demo-pages), one dynamic `import()` per demo — the code-splitting
+ * seam, so Vite still builds one chunk per notebook and visiting morphogen
+ * never downloads DuckDB. The page contract itself is aiui-viz's `SitePage`
+ * (title, App, activate/deactivate — see its docs for the pause-not-destroy
+ * lifecycle the shell drives).
  */
-import type { Component } from "solid-js";
+import type { SitePage } from "@habemus-papadum/aiui-viz";
+import { DEMOS } from "./registry";
 import type { Route } from "./router";
 
-export interface GalleryPage {
-  /** `document.title` while this page is the route. */
-  title: string;
-  /** The page's root component (layer 3/4) — mounted per visit, disposable. */
-  App: Component;
-  /** Resume continuous work (rAF loops). Called before mount, idempotent. */
-  activate?(): void;
-  /** Park continuous work. Called when the route leaves, idempotent. */
-  deactivate?(): void;
-}
+/** The shell's page type — aiui-viz's SitePage, re-exported for the shell. */
+export type GalleryPage = SitePage;
 
-const LOADERS: Record<Route, () => Promise<{ page: GalleryPage }>> = {
-  morphogen: () => import("@habemus-papadum/demo-morphogen/page"),
-  aztec: () => import("@habemus-papadum/demo-aztec/page"),
-  seismos: () => import("@habemus-papadum/demo-seismos/page"),
-  circle: () => import("@habemus-papadum/demo-circle/page"),
-};
-
-const loaded = new Map<Route, GalleryPage>();
+const loaded = new Map<Route, SitePage>();
 
 /** Load (once) a route's page module; later visits reuse the module and its durables. */
-export async function loadPage(route: Route): Promise<GalleryPage> {
+export async function loadPage(route: Route): Promise<SitePage> {
   const hit = loaded.get(route);
   if (hit !== undefined) return hit;
-  const { page } = await LOADERS[route]();
+  const demo = DEMOS.find((d) => d.slug === route);
+  if (!demo) throw new Error(`no demo page for route "${route}"`);
+  const { page } = await demo.load();
   loaded.set(route, page);
   return page;
 }

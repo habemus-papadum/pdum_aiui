@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-gallery",
   "version": "0.11.2+dev",
-  "description": "The reference notebooks: morphogen (reaction-diffusion), aztec (domino tilings), seismos (Mosaic/DuckDB).",
+  "description": "The notebook-gallery shell: discovers sibling demo packages via their aiui.sitePage markers and composes them into one SPA (dev + the published static site).",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -22,10 +22,6 @@
     "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
-    "@habemus-papadum/demo-aztec": "workspace:^",
-    "@habemus-papadum/demo-circle": "workspace:^",
-    "@habemus-papadum/demo-morphogen": "workspace:^",
-    "@habemus-papadum/demo-seismos": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",
     "solid-js": "2.0.0-beta.15"
   },

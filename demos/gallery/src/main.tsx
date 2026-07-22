@@ -6,8 +6,10 @@
  *
  * The shell owns what used to be duplicated per entry: the SiteHeader (tabs
  * driven by the route signal), the theme stamp, and `document.title`. Each
- * notebook remains a self-contained lazily-imported module (site/pages.ts) —
- * adding one is still a TABS entry plus a page module.
+ * notebook is a self-contained DEMO PACKAGE (demos/<slug>) discovered through
+ * its `aiui.sitePage` package.json marker (demo-discovery.ts →
+ * virtual:demo-pages) and lazily imported — adding one is giving a demo the
+ * marker; nothing here changes.
  *
  * Route changes are pause-not-destroy: the leaving page's component tree is
  * disposed (components are pure readers — the same disposability HMR relies
