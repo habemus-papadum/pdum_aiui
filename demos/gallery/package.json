@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gallery",
-  "version": "0.11.2+dev",
+  "version": "0.12.0",
   "description": "The notebook-gallery shell: discovers sibling demo packages via their aiui.sitePage markers and composes them into one SPA (dev + the published static site).",
   "private": true,
   "type": "module",

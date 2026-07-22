@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-journal",
-  "version": "0.11.2+dev",
+  "version": "0.12.0",
   "description": "The dark-journal visual identity shared by the notebook demos and the gallery shell: design tokens + notebook chrome CSS, and the chart/Plot palette module. Internal, never published.",
   "type": "module",
   "license": "MIT",

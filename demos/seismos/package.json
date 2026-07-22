@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-seismos",
-  "version": "0.11.2+dev",
+  "version": "0.12.0",
   "description": "Earthquakes & the Gutenberg–Richter law: DuckDB-WASM + Mosaic crossfilter over a bundled catalog, with a live b-value fit and an agent SQL tool.",
   "private": true,
   "type": "module",

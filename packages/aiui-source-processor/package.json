@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-source-processor",
-  "version": "0.11.2+dev",
+  "version": "0.12.0",
   "description": "The aiui source processor: the compile-time Babel pass that injects factory identity (name/loc/description for cell/control/action) and dev-only JSX source-location stamps, plus its Vite plugin. One transform, serve and build.",
   "type": "module",
   "license": "MIT",

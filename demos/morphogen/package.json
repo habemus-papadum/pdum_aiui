@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-morphogen",
-  "version": "0.11.2+dev",
+  "version": "0.12.0",
   "description": "Gray-Scott reaction–diffusion lab: a WebGL simulation island, a worker analysis pipeline, and an observable history ring — the original aiui reference notebook.",
   "private": true,
   "type": "module",
