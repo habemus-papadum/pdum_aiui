@@ -37,7 +37,7 @@ import {
   mcMaxCurvature,
   totalCount,
 } from "./gr";
-import { type Summary, store } from "./store";
+import { type Summary, seismosScope, store } from "./store";
 
 export interface GrStats {
   /** The filtered magnitude histogram (incremental FMD). */
@@ -71,6 +71,7 @@ export const seismosGraph = hotCellGraph<SeismosGraph>(
     const dataset = cell<Record<string, never>, Summary>(
       () => ({}),
       (_deps, ctx) => store.ensureLoaded(ctx.progress),
+      { scope: seismosScope },
     );
 
     // ---- derived Gutenberg–Richter statistics of the filtered selection ------

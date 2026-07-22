@@ -19,20 +19,15 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@duckdb/duckdb-wasm": "1.33.1-dev45.0",
     "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@habemus-papadum/demo-aztec": "workspace:^",
     "@habemus-papadum/demo-morphogen": "workspace:^",
+    "@habemus-papadum/demo-seismos": "workspace:^",
     "@observablehq/plot": "^0.6.17",
     "@solidjs/web": "2.0.0-beta.15",
-    "@uwdata/mosaic-core": "^0.28.1",
-    "@uwdata/mosaic-inputs": "^0.28.1",
-    "@uwdata/mosaic-plot": "^0.28.1",
-    "@uwdata/mosaic-sql": "^0.28.1",
-    "@uwdata/vgplot": "0.28.1",
     "katex": "^0.17.0",
     "solid-js": "2.0.0-beta.15"
   },

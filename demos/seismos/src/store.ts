@@ -15,9 +15,10 @@
  * its progress; on a hot reload the promise is already resolved, so the rebuilt
  * cell settles immediately against the surviving table.
  *
- * Under the SPA shell all notebooks share one window: durable keys carry the
- * `seismos:` prefix, control/cell names must be unique app-wide (the
- * registries are global), and the agent-tool namespace stays window.__seismos.
+ * In the gallery shell all notebooks share one window, so identity is scoped:
+ * `seismosScope` qualifies every control, durable, cell, and action, names the
+ * graph key, and matches the agent-tool namespace (window.__seismos) — see
+ * aiui-viz's scope.ts and the user guide's "Composing bigger apps".
  *
  * Why DuckDB is a durable island Mosaic reaches through a connector: Mosaic owns
  * its own reactivity (Selections → coordinator → client queries → SVG). Solid
@@ -26,18 +27,26 @@
  * histogram client's result signal. See NOTES.md.
  */
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
-import { type ControlBox, control, durable } from "@habemus-papadum/aiui-viz";
+import { type ControlBox, control, scope } from "@habemus-papadum/aiui-viz";
 import { Coordinator, loadParquet, Selection, wasmConnector } from "@uwdata/vgplot";
 import { type Accessor, createSignal } from "solid-js";
+// The bundled catalog + optional border overlay, as hashed Vite assets — NOT
+// public/-dir fetches: asset imports resolve from THIS package, so the data
+// travels with the demo into any consumer's build (the gallery's included).
+import worldUrl from "./data/countries-110m.geojson?url";
+import quakesUrl from "./data/quakes.parquet?url";
 import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "./duckdb";
 import type { MagBin } from "./gr";
 import { MagHistogramClient } from "./stats-client";
 
-/** Base-aware URL of the bundled catalog (dev "/", build/preview "/aiui/"). */
-const DATA_URL = `${import.meta.env.BASE_URL}data/quakes.parquet`;
-/** Base-aware URL of the faint country-border overlay for the epicenter map. */
-const WORLD_URL = `${import.meta.env.BASE_URL}data/countries-110m.geojson`;
+const DATA_URL = quakesUrl;
+const WORLD_URL = worldUrl;
 const TABLE = "quakes";
+
+/** The demo's instance scope: ONE slug qualifying every declaration —
+ * controls ("seismos/mc"), durables, cells, actions, the graph key, and the
+ * toolkit namespace (window.__seismos). New declarations MUST thread it. */
+export const seismosScope = scope("seismos");
 
 /** The on-disk shape: antimeridian-split MultiLineString features (NOTES.md). */
 interface BorderFeature {
@@ -151,12 +160,19 @@ function sanitize(row: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-export const store: SeismosStore = durable("seismos:store", () => {
+export const store: SeismosStore = seismosScope.durable("store", () => {
   const coordinator = new Coordinator();
   const brush = Selection.crossfilter();
 
   /** Magnitude of completeness Mc for the live Gutenberg-Richter b-value fit. */
-  const mc = control({ name: "mc", value: DEFAULT_MC, min: MC_MIN, max: MC_MAX, step: 0.1 });
+  const mc = control({
+    scope: seismosScope,
+    name: "mc",
+    value: DEFAULT_MC,
+    min: MC_MIN,
+    max: MC_MAX,
+    step: 0.1,
+  });
   const [loadState, setLoadState] = createSignal<LoadState>("idle");
   const [loadProgress, setLoadProgress] = createSignal(0);
   const [loadError, setLoadError] = createSignal<unknown>(undefined);
