@@ -64,8 +64,7 @@ export function Landing() {
         </h1>
         <p class="landing-lead">
           A gallery of interactive scientific notebooks, each built with aiui — SolidJS 2.0,
-          Observable-style dataflow, and an agent tool surface. Open one, then talk to it: the
-          intent client sends your words (and what you point at) into a live coding loop.
+          Observable-style dataflow, and an agent tool surface.
         </p>
       </header>
       <div class="demo-card-grid">
