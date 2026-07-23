@@ -1,0 +1,266 @@
+/* page.css — gears-owned styles, ALL scoped under `.gears` (the App root) so
+ * nothing leaks onto a sibling notebook when both are mounted in the gallery's
+ * one document. The shared dark-journal chrome (tokens, `.panel`, `.slider`,
+ * `.check`, `.btn`, CellView chrome) comes from
+ * `@habemus-papadum/aiui-journal/styles.css`, imported by the host before this;
+ * what remains here is the gear studio's own figures.
+ *
+ * The gear figure palette + a couple of journal-token aliases live on `.gears`
+ * as scoped custom properties (they cascade to descendants). */
+.gears {
+  --line: var(--panel-border);
+  --muted: var(--text-secondary);
+
+  /* gear figure palette (figure constants — dark plate in both modes) */
+  --gear-a: #7aa2f7;
+  --gear-a-fill: rgba(122, 162, 247, 0.14);
+  --gear-b: #f0a35e;
+  --gear-b-fill: rgba(240, 163, 94, 0.14);
+  --loa: #e6d24a;
+  --contact: #ff5d73;
+  --guide: #3a4256;
+
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+.gears .muted {
+  color: var(--muted);
+}
+.gears .panel {
+  margin-top: 16px;
+}
+
+.gears .masthead h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+.gears .masthead p {
+  margin: 0;
+  max-width: 68ch;
+}
+
+.gears .stage {
+  background: radial-gradient(120% 120% at 50% 0%, #141a28 0%, transparent 60%), #0b0d13;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.gears .gear-svg,
+.gears .tooth-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* construction overlay */
+.gears .axis-line {
+  stroke: var(--guide);
+  stroke-dasharray: 0.6 1.2;
+}
+.gears .pitch-circle {
+  stroke-dasharray: 1.4 1.4;
+  opacity: 0.55;
+}
+.gears .pitch-circle.gear-a,
+.gears .base-circle.gear-a {
+  stroke: var(--gear-a);
+}
+.gears .pitch-circle.gear-b,
+.gears .base-circle.gear-b {
+  stroke: var(--gear-b);
+}
+.gears .base-circle {
+  stroke-dasharray: 0.5 1.1;
+  opacity: 0.4;
+}
+.gears .line-of-action {
+  stroke: var(--loa);
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+.gears .pitch-point {
+  fill: var(--loa);
+  stroke: none;
+}
+
+/* gear bodies */
+.gears .gear-body {
+  stroke-linejoin: round;
+}
+.gears .gear-body.gear-a {
+  fill: var(--gear-a-fill);
+  stroke: var(--gear-a);
+}
+.gears .gear-body.gear-b {
+  fill: var(--gear-b-fill);
+  stroke: var(--gear-b);
+}
+.gears .gear-hub {
+  fill: #0b0d13;
+}
+.gears .gear-hub.gear-a {
+  stroke: var(--gear-a);
+  stroke-width: 0.4;
+}
+.gears .gear-hub.gear-b {
+  stroke: var(--gear-b);
+  stroke-width: 0.4;
+}
+
+/* contact */
+.gears .contact-dot {
+  fill: var(--contact);
+  stroke: #1a0d12;
+  stroke-width: 0.15;
+}
+.gears .contact-normal {
+  stroke: var(--contact);
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+/* readouts */
+.gears .readouts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.gears .readouts > div {
+  background: #0b0d13;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gears .rd-num {
+  font:
+    18px ui-monospace,
+    monospace;
+  color: var(--text);
+}
+.gears .rd-lbl {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* controls layout (the widgets themselves are journal-styled) */
+.gears .controls {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gears .control-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.gears .control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+/* tooth studio */
+.gears .studio {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gears .studio-tabs {
+  display: flex;
+  gap: 8px;
+}
+.gears .chip {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.gears .chip[data-active] {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(138, 180, 248, 0.12);
+}
+
+.gears .tooth-svg {
+  background: #0b0d13;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  max-height: 340px;
+}
+.gears .tooth-body {
+  fill: var(--gear-a-fill);
+  stroke: var(--gear-a);
+  stroke-linejoin: round;
+}
+.gears .tooth-guides .ref-circle {
+  stroke-dasharray: 1.2 1.2;
+}
+.gears .ref-circle.addendum {
+  stroke: #4a5268;
+}
+.gears .ref-circle.pitch {
+  stroke: var(--accent);
+  opacity: 0.7;
+}
+.gears .ref-circle.base {
+  stroke: #6b5a3a;
+}
+.gears .ref-circle.root {
+  stroke: #4a5268;
+}
+
+.gears .studio-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  align-items: center;
+}
+.gears .studio-legend .sw {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  vertical-align: -1px;
+  margin-right: 5px;
+}
+.gears .sw.tooth {
+  background: var(--gear-a-fill);
+  border: 1px solid var(--gear-a);
+}
+.gears .sw.space {
+  background: #0b0d13;
+  border: 1px solid var(--line);
+}
+
+.gears .foot {
+  margin-top: 26px;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* phones */
+@media (max-width: 720px) {
+  .gears .readouts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .gears .control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

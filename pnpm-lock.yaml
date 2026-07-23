@@ -186,6 +186,49 @@ importers:
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
 
+  demos/gears:
+    dependencies:
+      '@habemus-papadum/aiui-journal':
+        specifier: workspace:^
+        version: link:../journal
+      '@habemus-papadum/aiui-source-processor':
+        specifier: workspace:^
+        version: link:../../packages/aiui-source-processor
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../../packages/aiui-viz
+      '@solidjs/web':
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
+      solid-js:
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15
+    devDependencies:
+      '@babel/core':
+        specifier: ^7.29.7
+        version: 7.29.7
+      '@habemus-papadum/aiui':
+        specifier: workspace:^
+        version: link:../../packages/aiui
+      jsdom:
+        specifier: ^29.0.0
+        version: 29.1.1
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      typescript-language-server:
+        specifier: ^5.3.0
+        version: 5.3.0
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+      vite-plugin-solid:
+        specifier: 3.0.0-next.5
+        version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@26.1.0)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.5)(yaml@2.9.0)
+
   demos/journal:
     devDependencies:
       typescript:
