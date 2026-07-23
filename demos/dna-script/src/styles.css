@@ -1,0 +1,453 @@
+/* styles.css — a small dark surface for the starter. Restyle freely; the only
+ * contract worth keeping is the CellView class set at the bottom (cell-body,
+ * cell-pending, cell-error, progress-stripe, btn), which every cell rendered
+ * through @habemus-papadum/aiui-viz expects its host to style. */
+
+:root {
+  --bg: #0f1117;
+  --panel: #171b25;
+  --line: #262c3a;
+  --text: #e8e8ea;
+  --muted: #9aa0aa;
+  --accent: #8ab4f8;
+  --bloom: #f8a8c0;
+
+  /* The notation's two pair colours. One hue per Watson–Crick pair, so
+   * complements match and a mispairing would show as a colour clash. */
+  --at: #8ab4f8;
+  --gc: #f6a5bd;
+  --glyph-line: #4b5468;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px / 1.55 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel);
+  font:
+    12px ui-monospace,
+    monospace;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* --- panels ------------------------------------------------------------------ */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+
+/* --- the notation ------------------------------------------------------------- */
+
+.glyph {
+  display: inline-block;
+  vertical-align: -0.32em;
+  overflow: visible;
+}
+
+.glyph-outline {
+  fill: none;
+  stroke: var(--glyph-line);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.glyph-fill,
+.duplex-cell .glyph-fill {
+  stroke: none;
+}
+
+.glyph-AT .glyph-fill,
+.duplex-cell-AT .glyph-fill {
+  fill: var(--at);
+}
+
+.glyph-GC .glyph-fill,
+.duplex-cell-GC .glyph-fill {
+  fill: var(--gc);
+}
+
+/* A run of bases sets flush — one ribbon, not a row of tiles. Flex (not
+ * `font-size: 0`) is what closes the gaps between inline-blocks here: the
+ * glyphs are sized in `em`, so zeroing the font size would collapse them. */
+.strand {
+  display: inline-flex;
+  align-items: flex-start;
+  vertical-align: -0.32em;
+  white-space: nowrap;
+}
+
+.strand .glyph {
+  vertical-align: baseline;
+}
+
+/* --- the duplex figure --------------------------------------------------------- */
+
+.duplex {
+  display: inline-block;
+  min-width: var(--strand-w);
+}
+
+.duplex-figure {
+  position: relative;
+  padding: 0 2.6em;
+}
+
+.duplex-svg {
+  display: block;
+  overflow: visible;
+}
+
+.duplex-cell .glyph-outline {
+  stroke-width: 0.7;
+}
+
+.duplex-letters {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--cell);
+  margin-left: 2.6em;
+  width: var(--strand-w);
+  text-align: center;
+  font:
+    12px ui-monospace,
+    monospace;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.duplex-end {
+  position: absolute;
+  font:
+    11px ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+
+.duplex-end-tl,
+.duplex-end-tr {
+  top: 22%;
+}
+
+.duplex-end-bl,
+.duplex-end-br {
+  top: 62%;
+}
+
+.duplex-end-tl,
+.duplex-end-bl {
+  left: 0.5em;
+}
+
+.duplex-end-tr,
+.duplex-end-br {
+  right: 0.5em;
+}
+
+.figure-scroll {
+  overflow-x: auto;
+  padding: 18px 0 6px;
+}
+
+/* --- the folded strand ---------------------------------------------------------- */
+
+.fold-svg {
+  display: block;
+  overflow: visible;
+}
+
+/* Unpaired bases are still bases — quieter, but not ghosts. */
+.fold-unpaired .glyph-fill {
+  opacity: 0.5;
+}
+
+.fold-unpaired .glyph-outline {
+  stroke-opacity: 0.55;
+}
+
+.fold-end {
+  fill: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
+.structure {
+  font:
+    12.5px ui-monospace,
+    monospace;
+  color: var(--muted);
+  word-break: break-all;
+  letter-spacing: 0.06em;
+}
+
+/* --- the bench ------------------------------------------------------------------ */
+
+.app-head {
+  margin-bottom: 30px;
+}
+
+.lede {
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+section {
+  margin-top: 38px;
+}
+
+h2 {
+  font-size: 17px;
+  margin: 0 0 10px;
+}
+
+h3 {
+  font-size: 14px;
+  margin: 26px 0 8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+p {
+  max-width: 66ch;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.seq-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.seq-label {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.seq-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font:
+    14px ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.seq-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.examples,
+.knobs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.knobs {
+  margin-top: 12px;
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.readout code {
+  color: var(--text);
+  letter-spacing: 0.1em;
+}
+
+.flag {
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.flag-on {
+  border-color: var(--gc);
+  color: var(--gc);
+}
+
+.warn {
+  color: #f0b0a8;
+  font-size: 12px;
+}
+
+/* --- the key -------------------------------------------------------------------- */
+
+.key-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 150px));
+  gap: 12px;
+}
+
+.key-card {
+  margin: 0;
+  padding: 14px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+}
+
+.key-card figcaption {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.key-card b {
+  font:
+    15px ui-monospace,
+    monospace;
+}
+
+.pair-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+}
+
+.pair-demo {
+  margin: 0;
+}
+
+.pair-demo figcaption {
+  margin-top: 8px;
+  font-size: 12px;
+  max-width: 30ch;
+}
+
+.pair-demo b {
+  font:
+    13px ui-monospace,
+    monospace;
+}
+
+@media (max-width: 620px) {
+  .duplex-figure {
+    padding: 0 1.8em;
+  }
+
+  .duplex-letters {
+    margin-left: 1.8em;
+  }
+
+  .seq-field {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* --- the CellView contract (spinner, error, keep-latest, progress) ------------- */
+
+.cell-body-loading {
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+
+.cell-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  padding: 18px 0;
+}
+
+.cell-error {
+  border: 1px solid #b3564d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #f0b0a8;
+}
+
+.progress-stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress-stripe-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.btn {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-outline {
+  background: transparent;
+}
