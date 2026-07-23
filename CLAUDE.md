@@ -148,10 +148,14 @@ unfenced one, or biome merges them across the fence — the scenery controls re-
 **Every scaffolded app has the dual shape** — standalone app AND library. `src/main.tsx` mounts
 `src/page.tsx`, the app as a mountable `SitePage` (aiui-viz's page contract: title/App/
 activate/deactivate, pause-not-destroy); `src/index.ts` is the library barrel behind the `.`
-export; `package.json` carries the `aiui.sitePage` marker (title/desc/order). Identity is scoped:
-`appScope = scope("<slug>")` in `store.ts` qualifies every control/durable/cell/action and names
-the graph key + agent toolkit, so any two aiui apps can share one document (the reason the gallery
-can mount them all — see below).
+export; `src/card.tsx` is the app's **landing card** (aiui-viz's `DemoCard`: a blurb + a LIVE,
+self-contained preview mini-app) behind the `./card` export; `package.json` carries the
+`aiui.sitePage` marker (title/desc/order/card) and all three export subpaths (`.`/`./page`/`./card`).
+The card is deliberately SEPARATE from the page so a landing page can mount every app's preview
+without booting each one's heavy durable graph — a preview is built from the app's *pure* model
+only. Identity is scoped: `appScope = scope("<slug>")` in `store.ts` qualifies every
+control/durable/cell/action and names the graph key + agent toolkit, so any two aiui apps can
+share one document (the reason the gallery can mount them all — see below).
 
 **There is exactly one starter template.** It used to be two: `aiui demo` scaffolded a throwaway
 playground from `packages/aiui/templates/demo`, predating `create-aiui`. That command and its
@@ -160,23 +164,30 @@ template are gone — scaffolding is `create-aiui`'s job, and `pnpm new-demo` is
 **The reference notebooks are first-class demo packages**: `demos/morphogen` (WebGL
 reaction–diffusion + worker analysis), `demos/aztec` (streaming domino shuffling), `demos/seismos`
 (DuckDB-WASM/Mosaic crossfilter; its 4 MB catalog rides as `?url` asset imports so the data
-travels with the package), and `demos/circle` (the pencil-package demo, promoted from its old
-gitignored-scratch status). Each is deliberately far richer than the starter, runs standalone
-(`pnpm -C demos/<slug> claude` + `dev`), exports its widgets/store/pure model from `src/index.ts`,
-and is scoped under `scope("<slug>")` throughout. Their shared dark-journal look lives in
-`demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator`): the theme
-literals plus the tokens/notebook-chrome stylesheet.
+travels with the package), `demos/circle` (the pencil-package demo, promoted from its old
+gitignored-scratch status), and `demos/gears` (an involute-gear studio, pure SVG geometry). Each
+is deliberately far richer than the starter, runs standalone (`pnpm -C demos/<slug> claude` +
+`dev`), exports its widgets/store/pure model from `src/index.ts`, ships a live landing card
+(`src/card.tsx`), and is scoped under `scope("<slug>")` throughout. Their shared dark-journal look
+lives in `demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator`): the
+theme literals plus the tokens/notebook-chrome stylesheet (the sidebar + landing-card chrome too).
+A demo's page CSS uses demo-prefixed class names (or is scoped under a root class, like
+`demos/gears`' `.gears`) so nothing leaks onto a sibling mounted in the same document.
 
 **`demos/gallery` is the thin composer** — the notebook site's SPA shell, and the published
-static site (`pnpm demo` serves it; `pnpm run publish` in it deploys). It does NOT depend on the
-demos: a Vite plugin (`demos/gallery/demo-discovery.ts`) scans `demos/*/package.json` for the
-`aiui.sitePage` marker, resolves each page entry through the demo's own `exports` map, and serves
-`virtual:demo-pages` — tabs, routes, and lazy page loaders all derive from it (the lowest `order`
-is the default route; `publish.sh` derives its deep-link routes from the same markers). Adding a
-demo to the gallery = the marker existing; a fresh `pnpm new-demo` scaffold carries it already.
-The demos stay self-contained pages behind aiui-viz's `SitePage` contract — the shell drives
-pause-not-destroy (`activate`/`deactivate`) across client-side routing so an open intent turn
-survives switching notebooks.
+static site (`pnpm demo` serves it; `pnpm run publish` / `pnpm publish:gallery` deploys). It does
+NOT depend on the demos: a Vite plugin (`demos/gallery/demo-discovery.ts`) scans
+`demos/*/package.json` for the `aiui.sitePage` marker, resolves each demo's page AND card entries
+through its own `exports` map, and serves `virtual:demo-pages` — the sidebar items, routes, lazy
+page loaders, and lazy card loaders all derive from it (`publish.sh` derives its deep-link routes
+from the same markers). The shell is a left **sidebar** (`SiteNav`, collapsing to a top bar +
+drawer on a phone) plus a content area; the site HOME is a **landing** page (`src/site/Landing.tsx`)
+with a card per demo — each card's live preview is the demo's own `DemoCard.Preview`, lazily
+imported. Every demo lives at its own `/slug`. Adding a demo to the gallery = the marker existing;
+a fresh `pnpm new-demo` scaffold carries page + card already. The demos stay self-contained pages
+behind aiui-viz's `SitePage` contract — the shell drives pause-not-destroy
+(`activate`/`deactivate`) across client-side routing so an open intent turn survives switching
+notebooks.
 
 **`demos/twins` is the composability worked example**: one reusable slice
 (`demos/oscillator`, an internal never-published package) instantiated twice under

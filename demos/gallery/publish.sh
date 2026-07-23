@@ -81,10 +81,10 @@ npx vite build
 # their `.html` twins (the old multi-entry URLs; inbound links keep working —
 # the router maps the .html slugs to routes).
 #
-# The list is DERIVED from the same aiui.sitePage markers the shell's
-# discovery plugin reads (demo-discovery.ts), minus the default (lowest-order)
-# route, which is index.html itself — so a new marked demo publishes its deep
-# link with no edit here.
+# The list is DERIVED from the same aiui.sitePage markers the shell's discovery
+# plugin reads (demo-discovery.ts) — EVERY marked demo, since the base URL is
+# now the landing card grid (not a demo), so each demo needs its own deep-link
+# object. A new marked demo publishes its deep link with no edit here.
 ROUTES="$(node -e '
   const { readdirSync, readFileSync } = require("node:fs");
   const { join } = require("node:path");
@@ -98,7 +98,7 @@ ROUTES="$(node -e '
     } catch {}
   }
   found.sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
-  console.log(found.slice(1).map((d) => d.slug).join(" "));
+  console.log(found.map((d) => d.slug).join(" "));
 ')"
 echo "==> Deep-link routes (from aiui.sitePage markers): $ROUTES"
 for route in $ROUTES; do

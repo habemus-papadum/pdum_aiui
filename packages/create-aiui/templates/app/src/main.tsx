@@ -26,6 +26,7 @@
  *   src/ui/              components — freely hot-swappable
  *   src/page.tsx         the app as a mountable SitePage (both hosts' entry)
  *   src/index.ts         the library barrel (what siblings import)
+ *   src/card.tsx         the app's live landing card (a gallery's preview)
  *
  * Everything you can see is scenery, built to be rebuilt. Start talking.
  * ──────────────────────────────────────────────────────────────────────────────

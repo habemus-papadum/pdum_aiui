@@ -46,8 +46,8 @@
  * document without colliding on controls, durables, graphs, or toolkits).
  *
  * In the pdum_aiui repo, `demos/gallery` is the reference shell: its Vite
- * plugin scans sibling demos for the marker and composes the tabs and lazy
- * page loaders automatically.
+ * plugin scans sibling demos for the marker and composes the sidebar, the
+ * landing card grid, and the lazy page loaders automatically.
  */
 
 import type { Component } from "solid-js";

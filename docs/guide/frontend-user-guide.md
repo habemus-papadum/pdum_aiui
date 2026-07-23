@@ -685,8 +685,9 @@ client-side routing. The four reference notebooks (`demos/morphogen` · `aztec` 
   (1-D heat diffusion), with every stage left standing as its own page and a narration of each
   diff (`WALKTHROUGH.md`).
 - **Read:** the reference notebooks — `demos/morphogen` (GPU simulation), `demos/aztec` (worker
-  pipeline), `demos/seismos` (DuckDB crossfilter), `demos/circle` (pencil input) — real demo
-  packages built from nothing but these steps, composed into one site by `demos/gallery`.
+  pipeline), `demos/seismos` (DuckDB crossfilter), `demos/circle` (pencil input), `demos/gears`
+  (pure SVG geometry) — real demo packages built from nothing but these steps, composed into one
+  site (landing + sidebar) by `demos/gallery`.
 - **Deeper:** [Concepts](./frontend-for-agents) · [Design choices](./frontend-design-choices) ·
   [Hard-won details](./frontend-hard-won) ·
   [Attribution: gesture → source](./attribution) (how "make *this* wider" finds your code) · the

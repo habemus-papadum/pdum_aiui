@@ -12,9 +12,14 @@ The app has a **dual shape** — it is both a standalone app and a library:
   multi-app shell that discovers the page through the `aiui.sitePage` marker in `package.json`
   and the `./page` export.
 - `src/index.ts` is the library barrel (the `.` export): the scope, the graph, the root
-  component, and — as the real app grows — its widgets and pure model. Keep both export maps in
-  `package.json` pointing at source; keep page wiring (styles, graph side effects) out of the
+  component, and — as the real app grows — its widgets and pure model. Keep all three export maps
+  in `package.json` pointing at source; keep page wiring (styles, graph side effects) out of the
   barrel.
+- `src/card.tsx` is the app's **landing card** (aiui-viz's `DemoCard`, the `./card` export): a
+  blurb + a LIVE preview mini-app a gallery shows before you open the app. The preview must be
+  self-contained and cheap — build it from your *pure* model only, never `store`/`graph` (a
+  landing mounts every app's preview at once). The starter previews the rose (`ui/RosePreview.tsx`,
+  scenery); after a reset it falls back to a name placeholder.
 
 ## Reset to a blank canvas
 

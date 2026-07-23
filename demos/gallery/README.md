@@ -1,9 +1,10 @@
 # demo: gallery
 
 The notebook site's **shell**: an SPA that discovers the sibling demo packages
-and composes them into one dark journal — the dev playground for the whole
-demo set, and the source of the published static site at
-<https://habemus-papadum.net/aiui/>.
+and composes them into one dark journal — a **landing page** (a card per demo,
+each with a live preview) plus a left **sidebar** (collapsing to a top bar +
+drawer on a phone). The dev playground for the whole demo set, and the source of
+the published static site at <https://habemus-papadum.net/aiui/>.
 
 The notebooks themselves live in their own packages (the demo-package dual
 shape — see the root `CLAUDE.md`, "In-repo demo apps"):
@@ -14,17 +15,21 @@ shape — see the root `CLAUDE.md`, "In-repo demo apps"):
 | aztec | [`demos/aztec`](../aztec) | random domino tilings: streaming shuffle worker, scrub ring, arctic circle |
 | seismos | [`demos/seismos`](../seismos) | earthquakes & Gutenberg–Richter: DuckDB-WASM + Mosaic crossfilter |
 | circle | [`demos/circle`](../circle) | how round can you draw a circle? the pencil-package demo |
+| gears | [`demos/gears`](../gears) | involute spur gears in kinematic mesh (pure SVG geometry) |
 
 **Discovery is marker-driven, not registered.** `demo-discovery.ts` (a Vite
 plugin) scans `demos/*/package.json` for the `aiui.sitePage` marker, resolves
-each demo's `./page` export to a real file, and serves `virtual:demo-pages`;
-the tabs, the routes, and the lazy page loaders (`src/site/`) all derive from
-it. The gallery's `package.json` deliberately does **not** depend on the
+each demo's `./page` AND `./card` exports to real files, and serves
+`virtual:demo-pages`; the sidebar items, the routes, and the lazy page + card
+loaders (`src/site/`) all derive from it. The gallery's `package.json` deliberately does **not** depend on the
 demos. A new demo appears by carrying the marker (a fresh `pnpm new-demo`
 scaffold already does); restart the dev server to pick up a brand-new
 directory.
 
-Every page is an aiui-viz **`SitePage`** (title, App, activate/deactivate).
+The site home is a **landing** page (`src/site/Landing.tsx`): a card per demo,
+each mounting the demo's own live `DemoCard.Preview` (lazily imported, so the
+landing never boots a demo's heavy graph). Every page is an aiui-viz
+**`SitePage`** (title, App, activate/deactivate).
 Route changes are pause-not-destroy: the leaving page's components are
 disposed, its rAF loops parked, while every durable — the WebGL field, the
 workers, DuckDB, the history rings — survives for the return visit. All
