@@ -20,4 +20,11 @@ export {
 } from "./model/bench";
 export { type AppGraph, graph } from "./model/graph";
 export { appScope, type ScenePoint } from "./model/store";
+export {
+  apparentDirection,
+  exposePatch,
+  retinaView2D,
+  type ScenePoint3D,
+  WINDOW_SCENE,
+} from "./model/window2d";
 export { App } from "./ui/App";

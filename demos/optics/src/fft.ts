@@ -90,3 +90,33 @@ export function fftfreq(n: number, d: number): Float64Array {
   for (let i = half; i < n; i++) f[i] = (i - n) / (n * d);
   return f;
 }
+
+/**
+ * In-place 2-D FFT of a w×h row-major complex array (both dimensions must be
+ * powers of two): rows first, then columns through a scratch buffer. The 2-D
+ * far field of an aperture — what the eye's lens does to the film patch in
+ * the holograms notebook's window finale.
+ */
+export function fft2d(re: Float64Array, im: Float64Array, w: number, h: number): void {
+  if (re.length !== w * h) throw new Error("fft2d: length mismatch");
+  // rows
+  for (let y = 0; y < h; y++) {
+    const rowRe = re.subarray(y * w, (y + 1) * w);
+    const rowIm = im.subarray(y * w, (y + 1) * w);
+    fft(rowRe, rowIm);
+  }
+  // columns via scratch
+  const colRe = new Float64Array(h);
+  const colIm = new Float64Array(h);
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      colRe[y] = re[y * w + x];
+      colIm[y] = im[y * w + x];
+    }
+    fft(colRe, colIm);
+    for (let y = 0; y < h; y++) {
+      re[y * w + x] = colRe[y];
+      im[y * w + x] = colIm[y];
+    }
+  }
+}

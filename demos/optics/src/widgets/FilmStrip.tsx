@@ -7,7 +7,7 @@
  *
  * A plain 2-D canvas island: redraws on data/window change and on resize.
  */
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect, onCleanup, untrack } from "solid-js";
 import type { Rgb } from "../color";
 
 export function FilmStrip(props: {
@@ -29,12 +29,26 @@ export function FilmStrip(props: {
   let ro: ResizeObserver | undefined;
   onCleanup(() => ro?.disconnect());
 
-  const draw = (): void => {
+  // Snapshot ALL props once per draw: the pixel loop must never touch a
+  // reactive getter (each read walks the CellView accessor chain — thousands
+  // of untracked reads per frame was both a dev-warning storm and a real cost).
+  const snap = () => ({
+    data: props.data,
+    x0: props.x0,
+    dx: props.dx,
+    color: props.color,
+    height: props.height,
+    normalize: props.normalize,
+    window: props.window,
+  });
+  type Snap = ReturnType<typeof snap>;
+
+  const draw = (s: Snap): void => {
     const c2d = canvas.getContext("2d");
-    if (!c2d) return;
+    if (!c2d || !s.data) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const wCss = canvas.parentElement?.clientWidth ?? 300;
-    const hCss = props.height ?? 44;
+    const hCss = s.height ?? 44;
     const w = Math.max(1, Math.round(wCss * dpr));
     const h = Math.max(1, Math.round(hCss * dpr));
     if (canvas.width !== w || canvas.height !== h) {
@@ -43,29 +57,29 @@ export function FilmStrip(props: {
       canvas.style.height = `${hCss}px`;
     }
 
-    const data = props.data;
+    const data = s.data;
     const n = data.length;
     let norm: number;
-    if (typeof props.normalize === "number") norm = props.normalize;
-    else if (props.normalize === "mean") {
-      let s = 0;
-      for (let i = 0; i < n; i++) s += data[i];
-      norm = (2 * s) / n || 1;
+    if (typeof s.normalize === "number") norm = s.normalize;
+    else if (s.normalize === "mean") {
+      let acc = 0;
+      for (let i = 0; i < n; i++) acc += data[i];
+      norm = (2 * acc) / n || 1;
     } else {
       norm = 0;
       for (let i = 0; i < n; i++) if (data[i] > norm) norm = data[i];
       norm = norm || 1;
     }
 
-    const [tr, tg, tb] = props.color ?? [0.93, 0.87, 0.72];
+    const [tr, tg, tb] = s.color ?? [0.93, 0.87, 0.72];
     const img = c2d.createImageData(w, h);
-    const win = props.window;
-    const x1 = props.x0 + n * props.dx;
+    const win = s.window;
+    const x1 = s.x0 + n * s.dx;
     const lo = win ? win.center - win.width / 2 : Number.NEGATIVE_INFINITY;
     const hi = win ? win.center + win.width / 2 : Number.POSITIVE_INFINITY;
     for (let px = 0; px < w; px++) {
-      const x = props.x0 + ((px + 0.5) / w) * (x1 - props.x0);
-      const fi = (x - props.x0) / props.dx - 0.5;
+      const x = s.x0 + ((px + 0.5) / w) * (x1 - s.x0);
+      const fi = (x - s.x0) / s.dx - 0.5;
       const i0 = Math.max(0, Math.min(n - 1, Math.floor(fi)));
       const i1 = Math.min(n - 1, i0 + 1);
       const frac = Math.min(1, Math.max(0, fi - i0));
@@ -91,8 +105,8 @@ export function FilmStrip(props: {
       c2d.lineWidth = Math.max(1, dpr);
       c2d.setLineDash([5 * dpr, 4 * dpr]);
       for (const edge of [lo, hi]) {
-        if (edge <= props.x0 || edge >= x1) continue;
-        const px = ((edge - props.x0) / (x1 - props.x0)) * w;
+        if (edge <= s.x0 || edge >= x1) continue;
+        const px = ((edge - s.x0) / (x1 - s.x0)) * w;
         c2d.beginPath();
         c2d.moveTo(px, 0);
         c2d.lineTo(px, h);
@@ -104,14 +118,11 @@ export function FilmStrip(props: {
 
   const setup = (el: HTMLCanvasElement): void => {
     canvas = el;
-    ro = new ResizeObserver(draw);
+    ro = new ResizeObserver(() => draw(untrack(snap)));
     if (el.parentElement) ro.observe(el.parentElement);
   };
 
-  createEffect(
-    () => ({ d: props.data, w: props.window, h: props.height, c: props.color, n: props.normalize }),
-    () => draw(),
-  );
+  createEffect(snap, (s) => draw(s));
 
   return (
     <div class={props.class ? `optix-strip ${props.class}` : "optix-strip"}>
@@ -137,12 +148,16 @@ export function GrainStrip(props: {
   let ro: ResizeObserver | undefined;
   onCleanup(() => ro?.disconnect());
 
-  const draw = (): void => {
+  // same snapshot-per-draw discipline as FilmStrip: no reactive reads in loops
+  const snap = () => ({ dots: props.dots, x0: props.x0, x1: props.x1, height: props.height });
+  type Snap = ReturnType<typeof snap>;
+
+  const draw = (s: Snap): void => {
     const c2d = canvas.getContext("2d");
-    if (!c2d) return;
+    if (!c2d || !s.dots) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const wCss = canvas.parentElement?.clientWidth ?? 300;
-    const hCss = props.height ?? 44;
+    const hCss = s.height ?? 44;
     const w = Math.max(1, Math.round(wCss * dpr));
     const h = Math.max(1, Math.round(hCss * dpr));
     canvas.width = w;
@@ -152,11 +167,11 @@ export function GrainStrip(props: {
     c2d.fillStyle = "#cfc8b4";
     c2d.fillRect(0, 0, w, h);
     c2d.fillStyle = "rgba(28, 24, 18, 0.85)";
-    const dots = props.dots;
-    const span = props.x1 - props.x0 || 1;
+    const dots = s.dots;
+    const span = s.x1 - s.x0 || 1;
     const r = Math.max(1, 0.8 * dpr);
     for (let i = 0; i < dots.length; i += 2) {
-      const px = ((dots[i] - props.x0) / span) * w;
+      const px = ((dots[i] - s.x0) / span) * w;
       const py = dots[i + 1] * h;
       c2d.fillRect(px - r / 2, py - r / 2, r, r);
     }
@@ -164,14 +179,11 @@ export function GrainStrip(props: {
 
   const setup = (el: HTMLCanvasElement): void => {
     canvas = el;
-    ro = new ResizeObserver(draw);
+    ro = new ResizeObserver(() => draw(untrack(snap)));
     if (el.parentElement) ro.observe(el.parentElement);
   };
 
-  createEffect(
-    () => ({ d: props.dots, h: props.height }),
-    () => draw(),
-  );
+  createEffect(snap, (s) => draw(s));
 
   return (
     <div class={props.class ? `optix-strip ${props.class}` : "optix-strip"}>

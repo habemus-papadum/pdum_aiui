@@ -11,6 +11,8 @@ import { FilmPanel } from "./FilmPanel";
 import { EyeRow, HoloBench, PlaybackMap, RecordMap } from "./HoloBench";
 import { KitPanel } from "./KitPanel";
 import { PlaybackPanel, RemixPanel } from "./PlaybackPanel";
+import { VolumePanel } from "./VolumePanel";
+import { Window2D } from "./Window2D";
 
 export function App() {
   return (
@@ -183,6 +185,51 @@ export function App() {
             a desk lamp, and the volume gratings inside modern AR waveguides.
           </p>
           <RemixPanel />
+        </section>
+
+        {/* ── the thick film ───────────────────────────────────────────────── */}
+        <section id="volume" class="page-section">
+          <h2>the thick film: a hologram that picks its own color</h2>
+          <p class="section-lead">
+            Everything above treated the film as a surface. Real emulsions are ten to a hundred
+            wavelengths <i>deep</i>, and when the reference comes from the far side (Denisyuk's move
+            — object and reference counter-propagating), the fringes are not stripes on a face but{" "}
+            <b>layers through the depth</b>, spaced λ/2n apart. Each layer reflects faintly; the
+            reflections add in phase only for the wavelength that fits the stack — Bragg's
+            condition, <TeX tex="\lambda_B = 2n\Lambda\cos\theta" />. So the film IS a wavelength
+            filter: shine white light at it and it hands back the color it was recorded in, and
+            passes the rest. That one mechanism is the museum hologram under a desk lamp. The knobs
+            are the designer's real trade-offs: <b>thickness</b> buys purity (and brightness),{" "}
+            <b>Δn</b> buys brightness, <b>processing shrinkage</b> is the classic accident — the
+            emulsion dries thinner, the layers close ranks, and the hologram comes back
+            green-shifted (drag it negative) — and <b>viewing tilt</b> slides the color toward blue
+            (cos θ), which you have seen on every security sticker you ever tilted. It is also why
+            an AR-waveguide combiner can steer one narrow λ into your eye while the street stays
+            perfectly visible through it.
+          </p>
+          <VolumePanel />
+        </section>
+
+        {/* ── the finale ───────────────────────────────────────────────────── */}
+        <section id="finale" class="page-section">
+          <h2>finale: a real window</h2>
+          <p class="section-lead">
+            The benches above flattened the film to one dimension so you could watch the waves. Now
+            the real thing: a <b>two-dimensional film</b>, a <b>three-dimensional scene</b> — a
+            glowing wireframe cube, its front face 2.5 mm behind the plate, its back face 0.6 mm
+            deeper. The left pane is the film itself, exactly as exposed: |R + ΣO|², computed per
+            pixel. Zoomed out it is <i>featureless mottle</i> — no cube, no picture, nothing; zoom
+            in and the interference fringes appear, the local pitch and curvature at each patch
+            encoding where every point's light was going. The right pane is the only honest way to
+            see the cube again: press a pupil to the film (the bracket), develop that patch,
+            re-light it with the reference, add a lens, Fourier-transform — wave optics end to end,
+            no rays, nothing painted. <b>Drag the film</b> and the cube's near face slides against
+            its far face — parallax from a flat plate. Work the <b>focus</b> slider: front face
+            sharp, back face soft, then the reverse — the depth is real. Shrink the <b>pupil</b>:
+            the whole cube stays, blurrier — cut-the-film, one last time, in the dimension it was
+            always really about.
+          </p>
+          <Window2D />
         </section>
 
         {/* ── the rules ────────────────────────────────────────────────────── */}

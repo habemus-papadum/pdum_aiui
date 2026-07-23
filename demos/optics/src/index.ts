@@ -13,6 +13,12 @@
  * predicts what the wave engine will do is holo.ts.
  */
 
+export {
+  type BraggCurve,
+  type BraggParams,
+  braggCurve,
+  braggReflectance,
+} from "./bragg";
 export { type Rgb, spectralRgb, waveColor, waveColorCss } from "./color";
 export {
   apertureWindow,
@@ -27,7 +33,7 @@ export {
   zonePlate,
 } from "./elements";
 export { type EyeSpec, type RetinaImage, retinaImage } from "./eye";
-export { fft, fftfreq, ifft, isPow2, nextPow2 } from "./fft";
+export { fft, fft2d, fftfreq, ifft, isPow2, nextPow2 } from "./fft";
 export {
   addField,
   applyTransmission,

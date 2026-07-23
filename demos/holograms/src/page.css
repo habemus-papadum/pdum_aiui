@@ -216,3 +216,65 @@
   border: 1px solid var(--panel-border);
   border-radius: 10px;
 }
+
+/* --- the volume section -------------------------------------------------------- */
+.holograms .spectrum-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--figure-bg, #0b0d13);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+.holograms .color-chip {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+/* --- the finale ----------------------------------------------------------------- */
+.holograms .film2d-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: #05070c;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.holograms .film2d-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+.holograms .film2d-canvas:active {
+  cursor: grabbing;
+}
+.holograms .film2d-pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(230, 210, 74, 0.9);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2000px rgba(5, 7, 12, 0.28);
+  pointer-events: none;
+}
+.holograms .view2d-wrap {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #05070c;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.holograms .view2d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

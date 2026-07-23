@@ -201,3 +201,96 @@ export const scenePoints = appScope.durableSignal<ScenePoint[]>("scenePoints", [
   { x: 15, z: -760 },
   { x: 80, z: -1000 },
 ]);
+
+// --- the thick film (volume / white-light section) ---------------------------
+
+/** Emulsion thickness of the volume-hologram model, in fringe layers. Thin
+ *  (a few layers) barely selects — the white-light smear; thick selects one
+ *  color — the Denisyuk museum hologram. */
+export const braggPeriods = control({ scope: appScope, value: 24, min: 4, max: 80, step: 1 });
+
+/** Refractive-index modulation Δn the processing achieves in the emulsion. */
+export const braggDeltaN = control({
+  scope: appScope,
+  value: 0.03,
+  min: 0.004,
+  max: 0.06,
+  step: 0.002,
+});
+
+/** Emulsion thickness change in processing, % (negative = shrinkage — the
+ *  classic reason silver-halide reflection holograms come back green-shifted). */
+export const braggShrink = control({
+  scope: appScope,
+  value: 0,
+  min: -12,
+  max: 6,
+  step: 0.5,
+  unit: "%",
+});
+
+/** Viewing tilt from the normal, degrees — tilt a reflection hologram and its
+ *  color slides toward the blue (Bragg's cosθ). */
+export const braggTilt = control({
+  scope: appScope,
+  value: 0,
+  min: 0,
+  max: 40,
+  step: 1,
+  unit: "°",
+});
+
+// --- the finale: the 2-D window ----------------------------------------------
+
+/** Eye (pupil) position on the 2-D film, x, µm — drag either canvas too. */
+export const winEyeX = control({
+  scope: appScope,
+  value: 0,
+  min: -1200,
+  max: 1200,
+  step: 10,
+  unit: "µm",
+});
+
+/** Eye (pupil) position on the 2-D film, y, µm. */
+export const winEyeY = control({
+  scope: appScope,
+  value: 0,
+  min: -1200,
+  max: 1200,
+  step: 10,
+  unit: "µm",
+});
+
+/** The pupil width — the patch of film actually looked through, µm. Shrinking
+ *  it is cutting the film, in 2-D: same scene, blurrier. */
+export const winAperture = control({
+  scope: appScope,
+  value: 1000,
+  min: 300,
+  max: 1200,
+  step: 20,
+  unit: "µm",
+});
+
+/** Accommodation: the depth behind the film the eye focuses at, µm. The
+ *  cube's faces sit at 2500 and 3100. */
+export const winFocus = control({
+  scope: appScope,
+  value: 2800,
+  min: 2200,
+  max: 3600,
+  step: 25,
+  unit: "µm",
+});
+
+/** Film-view magnification: zoom from the whole plate (mottle — there is no
+ *  picture on a hologram) down to the actual fringes. */
+export const winZoom = control({
+  scope: appScope,
+  value: 1,
+  min: 1,
+  max: 40,
+  step: 0.5,
+  unit: "×",
+});

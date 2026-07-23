@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fft, fftfreq, ifft, isPow2, nextPow2 } from "./fft";
+import { fft, fft2d, fftfreq, ifft, isPow2, nextPow2 } from "./fft";
 
 /** Naive O(N²) DFT for cross-checking. */
 function dft(re: Float64Array, im: Float64Array): { re: Float64Array; im: Float64Array } {
@@ -81,5 +81,51 @@ describe("fft", () => {
 
   it("rejects non-pow2 lengths", () => {
     expect(() => fft(new Float64Array(12), new Float64Array(12))).toThrow();
+  });
+});
+
+describe("fft2d", () => {
+  it("a tilted plane wave concentrates into a single bin", () => {
+    const w = 16;
+    const h = 16;
+    const re = new Float64Array(w * h);
+    const im = new Float64Array(w * h);
+    // e^{2πi(3x/w + 5y/h)} → bin (3, 5)
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const ph = 2 * Math.PI * ((3 * x) / w + (5 * y) / h);
+        re[y * w + x] = Math.cos(ph);
+        im[y * w + x] = Math.sin(ph);
+      }
+    }
+    fft2d(re, im, w, h);
+    let best = 0;
+    let bx = -1;
+    let by = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = re[y * w + x] ** 2 + im[y * w + x] ** 2;
+        if (p > best) {
+          best = p;
+          bx = x;
+          by = y;
+        }
+      }
+    }
+    expect(bx).toBe(3);
+    expect(by).toBe(5);
+    expect(best).toBeCloseTo((w * h) ** 2, 4);
+  });
+
+  it("satisfies Parseval in 2-D", () => {
+    const w = 8;
+    const h = 8;
+    const { re, im } = randomSignal(w * h, 3);
+    let time = 0;
+    for (let i = 0; i < re.length; i++) time += re[i] * re[i] + im[i] * im[i];
+    fft2d(re, im, w, h);
+    let freq = 0;
+    for (let i = 0; i < re.length; i++) freq += re[i] * re[i] + im[i] * im[i];
+    expect(freq / (w * h)).toBeCloseTo(time, 8);
   });
 });

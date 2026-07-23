@@ -11,6 +11,7 @@
  * input of every inline cell.
  */
 import {
+  braggCurve,
   createMapAccumulator,
   type FieldMapData,
   grainDots,
@@ -36,6 +37,7 @@ import {
   FILM,
   finestFringe,
   ghostPredictions,
+  LAMBDA_BAND,
   meanObjectPath,
   playbackExitField,
   playbackMapRequest,
@@ -45,6 +47,10 @@ import {
 import {
   appScope,
   bleach,
+  braggDeltaN,
+  braggPeriods,
+  braggShrink,
+  braggTilt,
   coherenceLen,
   eyeFocus,
   eyeX,
@@ -60,9 +66,14 @@ import {
   refDist,
   scenePoints,
   vibration,
+  winAperture,
   windowCenter,
   windowWidth,
+  winEyeX,
+  winEyeY,
+  winFocus,
 } from "./store";
+import { exposePatch, retinaView2D } from "./window2d";
 
 // --- the one durable map worker ----------------------------------------------
 
@@ -273,6 +284,44 @@ export const graph = hotCellGraph(
       { scope: appScope },
     );
 
+    // ---- the thick film (volume / white-light) ------------------------------
+
+    /** Reflectance of the thick emulsion across the white-light band — the
+     *  Bragg stack picking its own color. */
+    const braggSelect = cell(
+      () => ({
+        lambdaRec: lambdaRec.get(),
+        periods: braggPeriods.get(),
+        deltaN: braggDeltaN.get(),
+        shrinkPct: braggShrink.get(),
+        tiltDeg: braggTilt.get(),
+      }),
+      ({ lambdaRec: lr, periods, deltaN, shrinkPct, tiltDeg }) =>
+        braggCurve({ lambdaRec: lr, periods, deltaN, shrink: shrinkPct / 100, tiltDeg }, [
+          LAMBDA_BAND[0],
+          LAMBDA_BAND[1],
+        ]),
+      { scope: appScope },
+    );
+
+    // ---- the finale: the 2-D window -----------------------------------------
+
+    /** The exposed film patch under the pupil (the slow half — one scene
+     *  evaluation per sample; ~50 ms at 256²). */
+    const windowPatch = cell(
+      () => ({ ex: winEyeX.get(), ey: winEyeY.get(), ap: winAperture.get() }),
+      ({ ex, ey, ap }) => exposePatch({ eyeX: ex, eyeY: ey, aperture: ap }),
+      { scope: appScope },
+    );
+
+    /** What the eye sees through the 2-D window (the cheap half — lens + FFT;
+     *  the focus slider re-runs only this). */
+    const windowView = cell(
+      () => ({ patch: windowPatch(), focus: winFocus.get() }),
+      ({ patch, focus }) => retinaView2D(patch, focus),
+      { scope: appScope },
+    );
+
     return {
       exposure,
       developed,
@@ -284,6 +333,9 @@ export const graph = hotCellGraph(
       eyeView,
       recordMap,
       playbackMap,
+      braggSelect,
+      windowPatch,
+      windowView,
     };
   },
   import.meta.hot,
