@@ -1,0 +1,188 @@
+/* page.css — gratings-owned styles, ALL scoped under `.gratings` (the App
+ * root) so nothing leaks onto a sibling notebook in the gallery's document.
+ * Shared chrome (tokens, panels, sliders, CellView, TocRail) comes from
+ * @habemus-papadum/aiui-journal/styles.css; the optics widget layout from
+ * @habemus-papadum/aiui-optics/widgets.css. What lives here: the bench grid,
+ * readout chips, map dots, and chart text. */
+
+.gratings .lead {
+  color: var(--text-heading);
+  font-size: 13.5px;
+  line-height: 1.62;
+  max-width: 840px;
+  margin: 8px 0 6px;
+}
+.gratings .lead-note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  max-width: 840px;
+  margin: 0 0 4px;
+}
+.gratings .foot {
+  margin: 40px 0 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* --- the bench grid ---------------------------------------------------------- */
+.gratings .bench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.gratings .bench-chart {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .gratings .bench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.gratings .map-wrap {
+  position: relative;
+}
+.gratings .map-caption {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  margin: 6px 2px 0;
+  line-height: 1.5;
+}
+
+/* --- controls & readouts ------------------------------------------------------ */
+.gratings .controls {
+  display: grid;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.gratings .readouts {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.gratings .readouts > div {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.gratings .rd-num {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.gratings .rd-lbl {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.gratings .readouts .warn {
+  grid-column: 1 / -1;
+  border-color: rgba(240, 163, 94, 0.55);
+}
+.gratings .readouts .warn .rd-num {
+  color: #f0a35e;
+}
+
+.gratings .dial-box {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px 10px 8px;
+}
+.gratings .dial-caption {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 8px 4px 0;
+  max-width: 300px;
+}
+
+/* --- dots over maps (screen-true HTML markers) -------------------------------- */
+.gratings .map-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  --dot-color: #e6d24a;
+}
+.gratings .map-dot-probe {
+  border: 2px solid var(--dot-color);
+  background: rgba(230, 210, 74, 0.25);
+  box-shadow: 0 0 6px rgba(230, 210, 74, 0.6);
+}
+.gratings .map-dot-ghost {
+  border: 2px dashed rgba(255, 255, 255, 0.85);
+  background: transparent;
+}
+.gratings .map-dot-source {
+  width: 9px;
+  height: 9px;
+  background: var(--dot-color);
+  border: none;
+}
+.gratings .map-dot-label {
+  position: absolute;
+  left: 14px;
+  top: -4px;
+  white-space: nowrap;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* --- the angle chart ---------------------------------------------------------- */
+.gratings .angle-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--figure-bg, #0b0d13);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+.gratings .chart-tick {
+  fill: var(--text-muted);
+  font-size: 10px;
+}
+.gratings .chart-mark-label {
+  fill: var(--text-secondary);
+  font-size: 9px;
+}
+
+/* --- the cheat sheet ---------------------------------------------------------- */
+.gratings .rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+  max-width: 900px;
+}
+.gratings .rule {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.gratings .rule p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 2px;
+}
+.gratings .rule-note {
+  margin: 2px 0;
+}

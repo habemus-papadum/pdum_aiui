@@ -10,7 +10,7 @@
  * changes, which is exactly why only *relative* phases matter, and why a
  * detector integrating over time sees a steady value.
  */
-import { onCleanup } from "solid-js";
+import { createEffect, onCleanup } from "solid-js";
 import { whileVisible } from "./anim";
 
 export interface PhasorArrow {
@@ -50,13 +50,21 @@ export function PhasorDial(props: {
   let spinGroup: SVGGElement | undefined;
   let stop: (() => void) | undefined;
   onCleanup(() => stop?.());
+  // the rAF loop reads only this mirrored let — never a reactive prop
+  let spinV = true;
+  createEffect(
+    () => props.spin !== false,
+    (v) => {
+      spinV = v;
+    },
+  );
   // observe the host div (IntersectionObserver on SVG internals is shaky);
   // the spin group's ref just records the node for the transform writes
   const host = (el: HTMLDivElement): void => {
     let angle = 0;
     let last = 0;
     stop = whileVisible(el, (t) => {
-      if (props.spin === false) {
+      if (!spinV) {
         last = t;
         return;
       }

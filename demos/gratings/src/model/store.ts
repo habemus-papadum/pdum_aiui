@@ -1,37 +1,138 @@
 /**
- * store.ts — the durable roots of the app (the state side of playbook layer 2),
- * and where the **control surface** is declared: the independent variables a
- * user moves through widgets and an agent moves through the derived `set` tool.
+ * store.ts — the control surface of the gratings notebook (playbook layer 2,
+ * durable side). One instrument bench, several apparatuses, ONE set of shared
+ * knobs: the wavelength and the grating geometry deliberately thread through
+ * every section, so changing λ in one section visibly moves the zone-plate
+ * focus two sections down — the chromatic link the page teaches.
  *
- * `control({ value, … })` needs no name and no description here — the aiui
- * compiler injects the name from the binding and lifts the description from
- * the doc comment above it (so write real doc comments: they become the editor
- * tooltip AND the agent-facing registry text). Constraints (`min`/`max`/`step`/
- * `unit`/`options`) live in the declaration, and every write — slider,
- * keyboard, agent — validates through them in one place. Controls are durable:
- * a hot edit never resets what the user set; renaming a binding DOES reset its
- * state (pass an explicit `{ name }` to rename without that).
- *
- * State that is NOT part of the surface (engines, workers, canvases, history
- * rings, transient bookkeeping) uses `durableSignal()`/`durable()` instead —
- * the surface is curated, not automatic.
- *
- * The companion rule: this file is the guarded, rarely-edited wiring; the cell
- * graph (graph.ts) and the components (ui/) are the disposable logic edited
- * constantly. Note that editing this file forces a full reload — it is
- * everything's ancestor — so avoid it while a live run matters.
+ * Doc comments here are compiler-lifted: they are the agent-facing
+ * descriptions behind the derived `set` tool. Editing this file full-reloads;
+ * the graph (graph.ts) and components (ui/) are the live-editable parts.
  */
 
-import { scope } from "@habemus-papadum/aiui-viz";
+import { control, scope } from "@habemus-papadum/aiui-viz";
 
-/**
- * The app's instance scope: ONE slug qualifying every declaration — controls
- * ("gratings/petals"), durable keys, cells, actions — and naming the
- * graph key and the agent toolkit. Thread it through everything you declare
- * (`control({ scope: appScope, … })`, `appScope.durable(…)`,
- * `cell(deps, compute, { scope: appScope })`, `action({ scope: appScope, … })`):
- * it is what lets this app share a document with other aiui apps — mounted in
- * a gallery shell, or composed as a library — without colliding on the
- * window-global registries. See the user guide's "Composing bigger apps".
- */
+/** The app's instance scope: qualifies every control/durable/cell/action and
+ * names the graph key + agent toolkit (window.__gratings). Thread it through
+ * every declaration. */
 export const appScope = scope("gratings");
+
+// --- the light ---------------------------------------------------------------
+
+/** Wavelength λ of the bench's light, µm. The bench runs scaled up (µm-scale
+ *  light instead of 0.4–0.7 µm) so the wave texture is visible on screen;
+ *  diffraction is scale-free, so every angle and λ/Λ ratio is faithful.
+ *  Color-coded violet→red across the 4.5–13.5 µm band. */
+export const lambda = control({
+  scope: appScope,
+  value: 8,
+  min: 4.5,
+  max: 13.5,
+  step: 0.1,
+  unit: "µm",
+});
+
+/** Show the traveling wave (animated Re E·e^{−iωt}). Off = the time-averaged
+ *  intensity |E|² — the only thing film, a detector, or an eye can see. */
+export const showWave = control({ scope: appScope, value: true });
+
+// --- the grating -------------------------------------------------------------
+
+/** Grating pitch Λ: centre-to-centre slit spacing, µm. THE steering knob —
+ *  every order angle follows sinθ = sinθin + mλ/Λ. */
+export const pitch = control({
+  scope: appScope,
+  value: 40,
+  min: 16,
+  max: 110,
+  step: 1,
+  unit: "µm",
+});
+
+/** Number of slits in the mask. Two gives Young fringes; many sharpen each
+ *  order into a needle (resolving power R = m·N). */
+export const nSlits = control({ scope: appScope, value: 24, min: 2, max: 40, step: 1 });
+
+/** Incident beam angle, degrees off the axis. The grating adds its kick to
+ *  sinθin — the whole fan shears sideways together. */
+export const incidentDeg = control({
+  scope: appScope,
+  value: 0,
+  min: -12,
+  max: 12,
+  step: 0.5,
+  unit: "°",
+});
+
+// --- the two-source lab ------------------------------------------------------
+
+/** Separation d between the two point sources, µm. Fringe spacing on the
+ *  screen goes as λ·L/d — closer sources, wider fringes. */
+export const srcSep = control({
+  scope: appScope,
+  value: 90,
+  min: 24,
+  max: 220,
+  step: 2,
+  unit: "µm",
+});
+
+/** Probe x: where the phasor dial samples the field, µm (dragging on the
+ *  two-source map moves it too). */
+export const probeX = control({
+  scope: appScope,
+  value: 70,
+  min: -300,
+  max: 300,
+  step: 1,
+  unit: "µm",
+});
+
+/** Probe z: the probe point's distance downstream, µm. */
+export const probeZ = control({
+  scope: appScope,
+  value: 330,
+  min: 30,
+  max: 600,
+  step: 1,
+  unit: "µm",
+});
+
+// --- the stripe lens ---------------------------------------------------------
+
+/** Zone-plate focal length f (designed at the current λ), µm. This knob
+ *  rewrites the stripes: the plate's local pitch is λf/|x|. */
+export const zoneF = control({
+  scope: appScope,
+  value: 380,
+  min: 260,
+  max: 900,
+  step: 10,
+  unit: "µm",
+});
+
+/** Object point transverse position on the imaging bench, µm. */
+export const objX = control({
+  scope: appScope,
+  value: -30,
+  min: -80,
+  max: 80,
+  step: 1,
+  unit: "µm",
+});
+
+/** Object point distance upstream of the stripe lens, µm. Against f it sets
+ *  the image distance and magnification through the lens law. */
+export const objDist = control({
+  scope: appScope,
+  value: 600,
+  min: 320,
+  max: 900,
+  step: 10,
+  unit: "µm",
+});
+
+/** Illuminate the imaging bench with three wavelengths at once (0.8λ, λ, 1.2λ).
+ *  The stripe lens focuses each at its own depth — chromatic blur, the
+ *  spectrometer's virtue reappearing as a lens defect. */
+export const whiteLight = control({ scope: appScope, value: false });

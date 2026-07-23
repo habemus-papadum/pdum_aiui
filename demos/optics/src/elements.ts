@@ -122,6 +122,12 @@ export function chirpedGrating(
  * local pitch Λ(x) = λf/|x| shrinks outward, so every strip deflects its light
  * toward the same point — a lens made of stripes. Φ(x) = π x²/(λf) (the +1st
  * order converges at f; the −1st diverges from −f; the 0th sails through).
+ *
+ * `exact: true` places the zones by the TRUE path difference √(x²+f²) − f
+ * instead of the paraxial x²/2f — aberration-free at any aperture. That is not
+ * a refinement so much as a spoiler: the exact plate is precisely the pattern
+ * that *recording the interference of a point source with a plane wave* prints
+ * on film. A hologram of one point IS this element.
  */
 export function zonePlate(
   n: number,
@@ -133,9 +139,14 @@ export function zonePlate(
     mode: "amplitude" | "phase";
     contrast?: number;
     phiMax?: number;
+    exact?: boolean;
   },
 ): Transmission {
-  return stripePattern(n, dx, x0, (x) => (Math.PI * x * x) / (opts.lambda * opts.f), opts);
+  const k = (2 * Math.PI) / opts.lambda;
+  const phase = opts.exact
+    ? (x: number): number => k * (Math.hypot(x, opts.f) - opts.f)
+    : (x: number): number => (Math.PI * x * x) / (opts.lambda * opts.f);
+  return stripePattern(n, dx, x0, phase, opts);
 }
 
 /** Ideal thin lens: pure quadratic phase e^{−ik x²/2f} (no orders, no chroma-free

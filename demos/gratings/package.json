@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-gratings",
   "version": "0.12.0+dev",
-  "description": "How gratings steer and split light: phase arrows, interference, the grating equation, a spectrometer designer, and the zone-plate lens — diffraction as a design tool.",
+  "description": "How stripes steer and split light: phase arrows, the grating equation, a spectrometer designer, and the zone-plate lens \u2014 diffraction as a design tool, computed live from the wave equation.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -21,8 +21,8 @@
   "aiui": {
     "sitePage": {
       "title": "gratings",
-      "desc": "an aiui app",
-      "order": 1000,
+      "desc": "steering light with stripes",
+      "order": 60,
       "card": "./card"
     }
   },
@@ -34,6 +34,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-journal": "workspace:^",
+    "@habemus-papadum/aiui-optics": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",

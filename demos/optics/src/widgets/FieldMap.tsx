@@ -16,7 +16,7 @@
  */
 
 import type { JSX } from "@solidjs/web";
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect, onCleanup, untrack } from "solid-js";
 import type { FieldMapData } from "../mapwork";
 import { whileVisible } from "./anim";
 
@@ -192,8 +192,8 @@ export function FieldMap(props: {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 
-  const upload = (data: FieldMapData): void => {
-    if (!ctx) return;
+  const upload = (data: FieldMapData | undefined): void => {
+    if (!ctx || !data) return;
     const { gl } = ctx;
     const texels = data.nx * data.nz;
     const packed = new Float32Array(texels * 4);
@@ -213,9 +213,8 @@ export function FieldMap(props: {
     // width = nx (x axis), height = nz (z axis) — matches the [iz·nx + ix] layout
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, data.nx, data.nz, 0, gl.RGBA, gl.FLOAT, packed);
     const s = stats(data);
-    const g = props.gain ?? 1;
-    amp = s.amp * g;
-    int = s.int * g;
+    amp = s.amp * gainV;
+    int = s.int * gainV;
     draw();
   };
 
@@ -247,13 +246,14 @@ export function FieldMap(props: {
       }
       lastT = t;
     });
-    upload(props.data);
+    upload(untrack(() => props.data));
     fitCanvas();
   };
 
   // reactive bridges into the island (two-arg createEffect; handlers consume
   // the computed value, the rAF loop reads only these mirrored lets)
   let speedV = 0.7;
+  let gainV = 1;
   createEffect(
     () => props.data,
     (d) => upload(d),
@@ -262,22 +262,27 @@ export function FieldMap(props: {
     () => ({
       view: props.view ?? "wave",
       gain: props.gain ?? 1,
-      kind: props.data.kind,
+      kind: props.data?.kind,
       speed: props.speed ?? 0.7,
     }),
     (v) => {
       speedV = v.speed;
+      gainV = v.gain;
       mode = v.kind === "rgb" ? 2 : v.view === "intensity" ? 1 : 0;
-      const s = stats(props.data);
-      amp = s.amp * v.gain;
-      int = s.int * v.gain;
+      const d = untrack(() => props.data);
+      if (d) {
+        const s = stats(d);
+        amp = s.amp * v.gain;
+        int = s.int * v.gain;
+      }
       draw();
     },
   );
 
-  const world = (ev: PointerEvent): { x: number; z: number } => {
-    const r = canvas.getBoundingClientRect();
+  const world = (ev: PointerEvent): { x: number; z: number } | null => {
     const d = props.data;
+    if (!d) return null;
+    const r = canvas.getBoundingClientRect();
     const z = d.z0 + ((ev.clientX - r.left) / r.width) * (d.z1 - d.z0);
     const x = d.x1 - ((ev.clientY - r.top) / r.height) * (d.x1 - d.x0);
     return { x, z };
@@ -286,7 +291,7 @@ export function FieldMap(props: {
 
   const viewBox = () => {
     const d = props.data;
-    return `${d.z0} ${-d.x1} ${d.z1 - d.z0} ${d.x1 - d.x0}`;
+    return d ? `${d.z0} ${-d.x1} ${d.z1 - d.z0} ${d.x1 - d.x0}` : "0 0 1 1";
   };
 
   return (
@@ -298,13 +303,20 @@ export function FieldMap(props: {
         ref={setup}
         class="optix-map-canvas"
         onPointerDown={(ev) => {
-          if (!props.onProbe) return;
+          const p = props.onProbe && world(ev);
+          if (!p) return;
           dragging = true;
-          canvas.setPointerCapture(ev.pointerId);
-          props.onProbe(world(ev));
+          try {
+            canvas.setPointerCapture(ev.pointerId);
+          } catch {
+            // synthetic pointer ids can't be captured — dragging still works
+          }
+          props.onProbe?.(p);
         }}
         onPointerMove={(ev) => {
-          if (dragging && props.onProbe) props.onProbe(world(ev));
+          if (!dragging) return;
+          const p = props.onProbe && world(ev);
+          if (p) props.onProbe?.(p);
         }}
         onPointerUp={() => {
           dragging = false;
