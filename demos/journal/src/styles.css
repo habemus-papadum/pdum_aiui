@@ -203,6 +203,12 @@ body {
   .app-frame {
     display: block;
   }
+  /* Belt-and-braces against a stray wide child scrolling the whole page
+   * sideways on a phone (the off-canvas drawer lives at translateX(-100%));
+   * safe for the sticky top bar, which sticks to the viewport, not the body. */
+  body {
+    overflow-x: hidden;
+  }
   .site-topbar {
     display: flex;
     align-items: center;
@@ -287,7 +293,9 @@ body {
 }
 .demo-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* min(280px, 100%) lets a single column shrink below 280 on a narrow phone
+   * instead of forcing the grid wider than the viewport. */
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 18px;
 }
 .demo-card {
@@ -796,6 +804,9 @@ body {
   /* Reclaim the generous desktop gutter on a ~390px screen. */
   .app {
     padding: 8px 14px 56px;
+  }
+  .landing {
+    padding: 28px 16px 56px;
   }
 
   /* The regime catalog is genuinely wide; let it scroll rather than crush its
