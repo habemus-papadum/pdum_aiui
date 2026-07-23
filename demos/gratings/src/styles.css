@@ -1,0 +1,118 @@
+/* styles.css — a small dark surface for the starter. Restyle freely; the only
+ * contract worth keeping is the CellView class set at the bottom (cell-body,
+ * cell-pending, cell-error, progress-stripe, btn), which every cell rendered
+ * through @habemus-papadum/aiui-viz expects its host to style. */
+
+:root {
+  --bg: #0f1117;
+  --panel: #171b25;
+  --line: #262c3a;
+  --text: #e8e8ea;
+  --muted: #9aa0aa;
+  --accent: #8ab4f8;
+  --bloom: #f8a8c0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px / 1.55 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel);
+  font:
+    12px ui-monospace,
+    monospace;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* --- panels ------------------------------------------------------------------ */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+
+/* --- the CellView contract (spinner, error, keep-latest, progress) ------------- */
+
+.cell-body-loading {
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+
+.cell-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  padding: 18px 0;
+}
+
+.cell-error {
+  border: 1px solid #b3564d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #f0b0a8;
+}
+
+.progress-stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress-stripe-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.btn {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-outline {
+  background: transparent;
+}

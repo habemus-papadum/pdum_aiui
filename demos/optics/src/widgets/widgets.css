@@ -1,0 +1,60 @@
+/* @habemus-papadum/aiui-optics/widgets.css — layout chrome for the shared
+ * optics widgets. Colors mostly ride on the consumer's theme; the map stage is
+ * a self-contained dark figure in any color mode (the journal convention for
+ * sim canvases). */
+
+.optix-map {
+  position: relative;
+  width: 100%;
+  background: #05070c;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.optix-map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+.optix-map-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.optix-phasor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.optix-phasor svg {
+  display: block;
+}
+.optix-phasor-ring {
+  fill: none;
+  stroke: rgba(140, 150, 170, 0.25);
+  stroke-width: 0.004;
+}
+.optix-phasor-axis {
+  stroke: rgba(140, 150, 170, 0.18);
+  stroke-width: 0.004;
+}
+.optix-phasor-readout {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  text-align: center;
+}
+
+.optix-strip {
+  width: 100%;
+}
+.optix-strip-canvas {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+}
