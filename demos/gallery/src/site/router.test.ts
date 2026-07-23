@@ -6,7 +6,7 @@
  */
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { hrefOf, interceptLocalLinks, navigate, route, routeOf } from "./router";
+import { hrefOf, interceptLocalLinks, LANDING, navigate, route, routeOf } from "./router";
 
 afterEach(() => {
   history.replaceState(null, "", "/");
@@ -16,17 +16,17 @@ afterEach(() => {
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe("routeOf", () => {
-  it("maps slugs, the root, and unknown paths", () => {
-    expect(routeOf("/")).toBe("morphogen");
+  it("maps the base to the landing, known slugs to demos, unknown paths to the landing", () => {
+    expect(routeOf("/")).toBe(LANDING);
     expect(routeOf("/aztec")).toBe("aztec");
     expect(routeOf("/seismos")).toBe("seismos");
-    expect(routeOf("/nonsense")).toBe("morphogen");
+    expect(routeOf("/nonsense")).toBe(LANDING);
   });
 
   it("maps the legacy multi-entry .html URLs onto the same routes", () => {
     expect(routeOf("/aztec.html")).toBe("aztec");
     expect(routeOf("/seismos.html")).toBe("seismos");
-    expect(routeOf("/index.html")).toBe("morphogen");
+    expect(routeOf("/index.html")).toBe(LANDING);
   });
 });
 

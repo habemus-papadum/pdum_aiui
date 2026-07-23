@@ -24,13 +24,18 @@
  * package.json so shells can discover it without a hand-maintained registry:
  *
  * ```jsonc
- * "exports": { ".": "./src/index.ts", "./page": "./src/page.tsx" },
+ * "exports": {
+ *   ".": "./src/index.ts",
+ *   "./page": "./src/page.tsx",   // the full app (heavy: builds the graph)
+ *   "./card": "./src/card.tsx"    // the landing-card preview (light) — see DemoCard
+ * },
  * "aiui": {
  *   "sitePage": {
- *     "title": "morphogen",            // tab label
- *     "desc": "reaction–diffusion lab", // tab description
- *     "order": 10,                      // tab position; lowest = default route
- *     "entry": "./page"                 // export subpath of the page module (default "./page")
+ *     "title": "morphogen",            // sidebar / card title
+ *     "desc": "reaction–diffusion lab", // one-line sidebar description
+ *     "order": 10,                      // sidebar position
+ *     "entry": "./page",                // export subpath of the page module (default "./page")
+ *     "card": "./card"                  // export subpath of the DemoCard module (default "./card")
  *   }
  * }
  * ```
@@ -58,4 +63,30 @@ export interface SitePage {
   activate?(): void;
   /** Park continuous work. Called when the route leaves; idempotent. */
   deactivate?(): void;
+}
+
+/**
+ * A demo's **landing-card** content: a short blurb and a LIVE, self-contained
+ * preview mini-app — the "gist" a gallery's landing page shows before you open
+ * the real thing.
+ *
+ * Kept SEPARATE from {@link SitePage} on purpose, and exported from a separate
+ * lightweight module (the `./card` subpath, alongside `./page`): a landing page
+ * mounts EVERY demo's preview at once, so a card must not drag in the demo's
+ * heavy durable graph (a WebGL context, DuckDB, workers…). A `Preview` is a
+ * small, cheap component with its own local state — it may run its own rAF —
+ * built from the demo's *pure* model only, never its `store`/`graph` modules.
+ *
+ * The package convention mirrors the page's (see this module's header): the
+ * card module exports `export const card: DemoCard`, and the `aiui.sitePage`
+ * marker's `card` field names its export subpath (default `"./card"`).
+ */
+export interface DemoCard {
+  /** A one- or two-sentence blurb for the card — richer than the sidebar's
+   * one-line `desc`. */
+  blurb: string;
+  /** The live preview: a small, self-contained, cheap mini-view of the app.
+   * Mounted on the landing page and disposed (its rAF cancelled via
+   * `onCleanup`) when the visitor leaves it. */
+  Preview: Component;
 }

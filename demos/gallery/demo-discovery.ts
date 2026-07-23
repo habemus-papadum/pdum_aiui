@@ -36,6 +36,7 @@ interface SitePageMarker {
   desc?: string;
   order?: number;
   entry?: string;
+  card?: string;
 }
 
 interface DiscoveredDemo {
@@ -45,11 +46,15 @@ interface DiscoveredDemo {
   order: number;
   /** Absolute path of the page entry module. */
   entryFile: string;
+  /** Absolute path of the landing-card (DemoCard) module, when the demo ships
+   * one — a demo without a `./card` export simply gets a preview-less card. */
+  cardFile?: string;
 }
 
 const VIRTUAL_ID = "virtual:demo-pages";
 const RESOLVED_VIRTUAL_ID = "\0virtual:demo-pages";
-const ENTRY_PREFIX = "demo-page:";
+const PAGE_PREFIX = "demo-page:";
+const CARD_PREFIX = "demo-card:";
 
 function discover(demosRoot: string): DiscoveredDemo[] {
   const found: DiscoveredDemo[] = [];
@@ -77,12 +82,25 @@ function discover(demosRoot: string): DiscoveredDemo[] {
           `name a source-first export (e.g. "./page": "./src/page.tsx")`,
       );
     }
+    // The landing card is OPTIONAL: resolve it only when the demo exports it.
+    // (A misconfigured card — marker says `card` but the export is missing — is
+    // an error; a demo that simply omits cards falls back to a preview-less
+    // card on the landing page.)
+    const cardSubpath = marker.card ?? "./card";
+    const cardTarget = pkg.exports?.[cardSubpath];
+    if (marker.card !== undefined && typeof cardTarget !== "string") {
+      throw new Error(
+        `demo-discovery: ${slug}/package.json marker names card "${cardSubpath}" but its ` +
+          `exports["${cardSubpath}"] is ${cardTarget === undefined ? "missing" : "not a plain string"}`,
+      );
+    }
     found.push({
       slug,
       title: marker.title ?? slug,
       desc: marker.desc ?? "",
       order: marker.order ?? Number.MAX_SAFE_INTEGER,
       entryFile: resolve(dir, target),
+      cardFile: typeof cardTarget === "string" ? resolve(dir, cardTarget) : undefined,
     });
   }
   // Stable presentation: by order, then slug (so equal orders don't shuffle).
@@ -96,10 +114,13 @@ export function demoPages(demosRoot: string): Plugin {
     name: "aiui:demo-pages",
     resolveId(id) {
       if (id === VIRTUAL_ID) return RESOLVED_VIRTUAL_ID;
-      if (id.startsWith(ENTRY_PREFIX)) {
-        const slug = id.slice(ENTRY_PREFIX.length);
-        const demo = demos.find((d) => d.slug === slug);
+      if (id.startsWith(PAGE_PREFIX)) {
+        const demo = demos.find((d) => d.slug === id.slice(PAGE_PREFIX.length));
         if (demo) return demo.entryFile;
+      }
+      if (id.startsWith(CARD_PREFIX)) {
+        const demo = demos.find((d) => d.slug === id.slice(CARD_PREFIX.length));
+        if (demo?.cardFile) return demo.cardFile;
       }
       return undefined;
     },
@@ -110,12 +131,16 @@ export function demoPages(demosRoot: string): Plugin {
       for (const d of demos) {
         this.addWatchFile(join(demosRoot, d.slug, "package.json"));
       }
-      const rows = demos.map(
-        (d) =>
+      const rows = demos.map((d) => {
+        const loadCard = d.cardFile
+          ? `, loadCard: () => import(${JSON.stringify(CARD_PREFIX + d.slug)})`
+          : "";
+        return (
           `  { slug: ${JSON.stringify(d.slug)}, title: ${JSON.stringify(d.title)}, ` +
           `desc: ${JSON.stringify(d.desc)}, order: ${d.order}, ` +
-          `load: () => import(${JSON.stringify(ENTRY_PREFIX + d.slug)}) },`,
-      );
+          `load: () => import(${JSON.stringify(PAGE_PREFIX + d.slug)})${loadCard} },`
+        );
+      });
       return `export const demos = [\n${rows.join("\n")}\n];\n`;
     },
     handleHotUpdate(ctx) {

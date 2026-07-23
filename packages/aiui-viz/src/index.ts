@@ -61,9 +61,9 @@ export {
 export type { Scope } from "./scope";
 // scope.ts — instance identity for composable slices (qualified names).
 export { scope } from "./scope";
-// site-page.ts — the mountable-page contract between an app and a site shell
-// (type-only; the shell chrome itself lives behind ./site).
-export type { SitePage } from "./site-page";
+// site-page.ts — the mountable-page contract between an app and a site shell,
+// and the landing-card contract (type-only; the chrome lives behind ./site).
+export type { DemoCard, SitePage } from "./site-page";
 // standard-tools.ts — the app-independent `locate` tool and `cells` reporter.
 export { registerStandardTools } from "./standard-tools";
 export type { ThrottledBox } from "./throttle";

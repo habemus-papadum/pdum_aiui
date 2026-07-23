@@ -3,7 +3,8 @@
  * components and theming machinery the frontend-for-agents methodology's
  * "page anatomy" calls for (docs/guide/frontend-style-guide in the repo docs).
  *
- * - {@link SiteHeader} — the slim sticky top bar with notebook tabs.
+ * - {@link SiteNav} — the primary navigation: a left sidebar on desktop that
+ *   collapses to a top bar + drawer on a phone.
  * - {@link TocRail} — the Observable-style "On this page" right rail.
  * - {@link TeX} — KaTeX math with the `data-tex` attribution stamp.
  * - {@link colorMode} — the reactive `prefers-color-scheme` signal apps key
@@ -15,11 +16,12 @@
  */
 
 // Re-exported from core for discoverability: the page contract a shell mounts
-// (SiteHeader renders the tabs; a SitePage is what a tab shows).
-export type { SitePage } from "../site-page";
+// (SiteNav lists the pages; a SitePage is what a page shows; a DemoCard is its
+// landing preview).
+export type { DemoCard, SitePage } from "../site-page";
 export type { ColorMode } from "./color-mode";
 export { colorMode } from "./color-mode";
-export type { SiteHeaderProps, SiteTab } from "./site-header";
-export { SiteHeader } from "./site-header";
+export type { SiteNavItem, SiteNavProps } from "./site-nav";
+export { SiteNav } from "./site-nav";
 export { TeX } from "./tex";
 export { TocRail } from "./toc-rail";
