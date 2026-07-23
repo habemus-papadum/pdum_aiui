@@ -165,11 +165,16 @@ template are gone — scaffolding is `create-aiui`'s job, and `pnpm new-demo` is
 reaction–diffusion + worker analysis), `demos/aztec` (streaming domino shuffling), `demos/seismos`
 (DuckDB-WASM/Mosaic crossfilter; its 4 MB catalog rides as `?url` asset imports so the data
 travels with the package), `demos/circle` (the pencil-package demo, promoted from its old
-gitignored-scratch status), and `demos/gears` (an involute-gear studio, pure SVG geometry). Each
+gitignored-scratch status), `demos/gears` (an involute-gear studio, pure SVG geometry), and the
+wave-optics pair `demos/gratings` + `demos/holograms` (diffraction and holography taught at
+design level: streamed 2-D wave maps from a worker, WebGL field islands, paraxial design
+equations overlaid on the honest wave — both riding `demos/optics`, the internal scalar-wave
+engine package whose unit tests pin the physics claims). Each
 is deliberately far richer than the starter, runs standalone (`pnpm -C demos/<slug> claude` +
 `dev`), exports its widgets/store/pure model from `src/index.ts`, ships a live landing card
 (`src/card.tsx`), and is scoped under `scope("<slug>")` throughout. Their shared dark-journal look
-lives in `demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator`): the
+lives in `demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator` and
+`demos/optics`): the
 theme literals plus the tokens/notebook-chrome stylesheet (the sidebar + landing-card chrome too).
 A demo's page CSS uses demo-prefixed class names (or is scoped under a root class, like
 `demos/gears`' `.gears`) so nothing leaks onto a sibling mounted in the same document.
