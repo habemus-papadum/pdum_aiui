@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-holograms",
   "version": "0.12.0+dev",
-  "description": "The film that remembers light: record interference on a virtual bench, develop the film, replay the reference beam, and watch the object's wavefront come back — parallax, cut-the-film, and playback remixes included.",
+  "description": "The film that remembers light: record interference on a virtual bench, develop the film, replay the reference, and the object's wavefront comes back \u2014 parallax, cut-the-film, magnification remixes, and every real failure mode, computed live from the wave equation.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -21,8 +21,8 @@
   "aiui": {
     "sitePage": {
       "title": "holograms",
-      "desc": "an aiui app",
-      "order": 1000,
+      "desc": "the film that remembers light",
+      "order": 70,
       "card": "./card"
     }
   },
@@ -34,6 +34,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-journal": "workspace:^",
+    "@habemus-papadum/aiui-optics": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "2.0.0-beta.15",

@@ -231,6 +231,12 @@ importers:
 
   demos/gratings:
     dependencies:
+      '@habemus-papadum/aiui-journal':
+        specifier: workspace:^
+        version: link:../journal
+      '@habemus-papadum/aiui-optics':
+        specifier: workspace:^
+        version: link:../optics
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor
@@ -271,6 +277,12 @@ importers:
 
   demos/holograms:
     dependencies:
+      '@habemus-papadum/aiui-journal':
+        specifier: workspace:^
+        version: link:../journal
+      '@habemus-papadum/aiui-optics':
+        specifier: workspace:^
+        version: link:../optics
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor

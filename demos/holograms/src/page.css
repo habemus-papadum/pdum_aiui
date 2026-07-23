@@ -1,0 +1,218 @@
+/* page.css — holograms-owned styles, ALL scoped under `.holograms` (the App
+ * root) so nothing leaks onto a sibling notebook in the gallery's document.
+ * Shared chrome (tokens, panels, sliders, CellView, TocRail) comes from
+ * @habemus-papadum/aiui-journal/styles.css; the optics widget layout from
+ * @habemus-papadum/aiui-optics/widgets.css. What lives here: the bench grid,
+ * readout chips, map dots, and chart text. */
+
+.holograms .lead {
+  color: var(--text-heading);
+  font-size: 13.5px;
+  line-height: 1.62;
+  max-width: 840px;
+  margin: 8px 0 6px;
+}
+.holograms .lead-note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  max-width: 840px;
+  margin: 0 0 4px;
+}
+.holograms .foot {
+  margin: 40px 0 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* --- the bench grid ---------------------------------------------------------- */
+.holograms .bench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.holograms .bench-chart {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .holograms .bench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.holograms .map-wrap {
+  position: relative;
+}
+.holograms .map-caption {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  margin: 6px 2px 0;
+  line-height: 1.5;
+}
+
+/* --- controls & readouts ------------------------------------------------------ */
+.holograms .controls {
+  display: grid;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.holograms .readouts {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.holograms .readouts > div {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.holograms .rd-num {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.holograms .rd-lbl {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.holograms .readouts .warn {
+  grid-column: 1 / -1;
+  border-color: rgba(240, 163, 94, 0.55);
+}
+.holograms .readouts .warn .rd-num {
+  color: #f0a35e;
+}
+
+.holograms .dial-box {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px 10px 8px;
+}
+.holograms .dial-caption {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 8px 4px 0;
+  max-width: 300px;
+}
+
+/* --- dots over maps (screen-true HTML markers) -------------------------------- */
+.holograms .map-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  --dot-color: #e6d24a;
+}
+.holograms .map-dot-probe {
+  border: 2px solid var(--dot-color);
+  background: rgba(230, 210, 74, 0.25);
+  box-shadow: 0 0 6px rgba(230, 210, 74, 0.6);
+}
+.holograms .map-dot-ghost {
+  border: 2px dashed rgba(255, 255, 255, 0.85);
+  background: transparent;
+}
+.holograms .map-dot-source {
+  width: 9px;
+  height: 9px;
+  background: var(--dot-color);
+  border: none;
+}
+.holograms .map-dot-label {
+  position: absolute;
+  left: 14px;
+  top: -4px;
+  white-space: nowrap;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* --- the angle chart ---------------------------------------------------------- */
+.holograms .angle-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--figure-bg, #0b0d13);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+.holograms .chart-tick {
+  fill: var(--text-muted);
+  font-size: 10px;
+}
+.holograms .chart-mark-label {
+  fill: var(--text-secondary);
+  font-size: 9px;
+}
+
+/* --- the cheat sheet ---------------------------------------------------------- */
+.holograms .rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+  max-width: 900px;
+}
+.holograms .rule {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.holograms .rule p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 2px;
+}
+.holograms .rule-note {
+  margin: 2px 0;
+}
+
+/* --- holograms-specific ------------------------------------------------------- */
+.holograms .map-dot-twin {
+  border: 2px solid rgba(255, 120, 120, 0.9);
+  background: rgba(255, 120, 120, 0.2);
+}
+.holograms .strip-stack {
+  display: grid;
+  gap: 10px;
+}
+.holograms .eye-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin-top: 10px;
+}
+@media (max-width: 900px) {
+  .holograms .eye-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.holograms .retina-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--figure-bg, #0b0d13);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}

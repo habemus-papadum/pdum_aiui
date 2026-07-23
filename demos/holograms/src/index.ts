@@ -1,13 +1,23 @@
 /**
- * index.ts — the app's LIBRARY surface (the `.` export): what a sibling
- * package importing this app gets. The starter exports its scope, graph, and
- * root component; as your real app grows, export its store surface, widgets,
- * and pure model functions here the same way (the in-repo reference demos —
- * morphogen, aztec, seismos, circle in pdum_aiui — model the shape).
- *
- * The mountable page lives behind the `./page` subpath on purpose: importing
- * THIS barrel should not drag in the page's stylesheet or wiring side effects.
+ * index.ts — the LIBRARY surface (the `.` export): the scope, the graph, the
+ * root component, and the pure bench pipeline (record → develop → playback
+ * over aiui-optics) for siblings that want the physics without the page.
+ * Page wiring (styles, graph side effects) stays behind ./page.
  */
+export {
+  beamSplit,
+  cutFilm,
+  developBench,
+  exposeBench,
+  FILM,
+  finestFringe,
+  ghostPredictions,
+  LAMBDA_BAND,
+  meanObjectPath,
+  playbackExitField,
+  referenceArm,
+  referenceBeam,
+} from "./model/bench";
 export { type AppGraph, graph } from "./model/graph";
-export { appScope } from "./model/store";
+export { appScope, type ScenePoint } from "./model/store";
 export { App } from "./ui/App";

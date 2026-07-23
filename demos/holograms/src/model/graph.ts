@@ -1,49 +1,381 @@
 /**
- * graph.ts — the cell graph (playbook layer 2): every dataflow in the app,
- * notebook-style, plus the agent tool surface. Cells wrap the pure functions
- * of layer 1 with reality — time, failure, cancellation, streaming.
+ * graph.ts — the cell graph of the holograms notebook: the darkroom pipeline
+ * as dataflow. The exposure cell integrates the film; the developed cell runs
+ * the darkroom; the cut cell applies the scissors; the maps and the eye read
+ * whatever film currently exists. Change ANY bench knob and the whole chain
+ * re-runs — the notebook's claim that a hologram is nothing but this pipeline
+ * is literally the shape of this graph.
  *
- * This module is *disposable logic*. `hotCellGraph` builds the graph from the
- * durable roots in store.ts and, on a hot edit, disposes the old graph and
- * swaps in a new one — the sliders keep their positions and every cell
- * recomputes from the roots. Components read `graph().someCell` through the
- * stable accessor it returns, so they can never hold a stale cell reference.
- *
- * Add your cells inside the builder — `cell(deps, compute)` handles aborts,
- * progress, and streaming — and test them headless with
- * @habemus-papadum/aiui-viz/testing (one `whenReady` probe per input).
+ * Map cells stream from the shared worker (held where Worker doesn't exist —
+ * jsdom/SSR); everything else is inline pure math. graph.test.ts probes every
+ * input of every inline cell.
  */
-import { agentToolkit, hotCellGraph, registerStandardTools } from "@habemus-papadum/aiui-viz";
-import { appScope } from "./store";
+import {
+  createMapAccumulator,
+  type FieldMapData,
+  grainDots,
+  type MapReplyChunk,
+  type MapRequest,
+  retinaImage,
+} from "@habemus-papadum/aiui-optics";
+import {
+  action,
+  agentToolkit,
+  cell,
+  hotCellGraph,
+  registerStandardTools,
+  workerStream,
+} from "@habemus-papadum/aiui-viz";
+import {
+  beamSplit,
+  cutFilm,
+  developBench,
+  EYE_APERTURE,
+  EYE_STANDOFF,
+  exposeBench,
+  FILM,
+  finestFringe,
+  ghostPredictions,
+  meanObjectPath,
+  playbackExitField,
+  playbackMapRequest,
+  recordMapRequest,
+  tintFor,
+} from "./bench";
+import {
+  appScope,
+  bleach,
+  coherenceLen,
+  eyeFocus,
+  eyeX,
+  filmRes,
+  gamma,
+  lambdaRec,
+  objGain,
+  pathTrim,
+  playAngleDeg,
+  playScale,
+  refAngleDeg,
+  refCurved,
+  refDist,
+  scenePoints,
+  vibration,
+  windowCenter,
+  windowWidth,
+} from "./store";
 
-// --- the graph: rebuilt over the durable roots on every hot edit --------------
+// --- the one durable map worker ----------------------------------------------
 
-/** The current graph — a stable accessor that survives hot swaps. */
+const canWorker = typeof Worker !== "undefined";
+
+const mapWorker = (): Worker =>
+  appScope.durable(
+    "mapWorker",
+    () => new Worker(new URL("./map.worker.ts", import.meta.url), { type: "module" }),
+  );
+
+/** Streamed map compute (typed explicitly so map cells infer Cell<FieldMapData>). */
+async function* mapCompute(
+  deps: { req: MapRequest },
+  ctx: { signal: AbortSignal; progress?: (f: number) => void },
+): AsyncGenerator<FieldMapData, void, void> {
+  const acc = createMapAccumulator(deps.req);
+  for await (const chunk of workerStream<MapRequest, MapReplyChunk>(mapWorker(), deps.req, ctx)) {
+    acc.write(chunk);
+    yield acc.snapshot();
+  }
+}
+
+/** The full exposure-parameter bundle (one place, several consumers). */
+function exposureDeps() {
+  return {
+    lambda: lambdaRec.get(),
+    ref: {
+      lambda: lambdaRec.get(),
+      angleDeg: refAngleDeg.get(),
+      curved: refCurved.get(),
+      dist: refDist.get(),
+      pathTrim: pathTrim.get(),
+    },
+    points: scenePoints.get(),
+    objGain: objGain.get(),
+    coherenceLen: coherenceLen.get(),
+    vibration: vibration.get(),
+  };
+}
+
 export const graph = hotCellGraph(
   appScope.name,
-  () => ({
-    // Your cells go here: `myCell: cell(() => ({ …deps }), async (deps, ctx) => …),`
-  }),
-  // Passed, not read here: `import.meta.hot` is bound to THIS module, and a
-  // library can't self-accept on our behalf. See hotCellGraph's docs.
+  () => {
+    // ---- the darkroom pipeline ----------------------------------------------
+
+    /** What the film integrates: |R + O|², with coherence and vibration
+     *  damping the cross terms. The ONLY thing the film will ever know. */
+    const exposure = cell(
+      () => exposureDeps(),
+      (p) => {
+        const e = exposeBench(p);
+        return {
+          exposure: e.exposure,
+          mean: e.mean,
+          worstContrast: e.worstContrast,
+          x0: FILM.x0,
+          dx: FILM.dx,
+          tint: tintFor(p.lambda),
+        };
+      },
+      { scope: appScope },
+    );
+
+    /** The developed film: exposure → transmission t(x) (the memory become an
+     *  optical element), including the emulsion's resolution rolloff. */
+    const developed = cell(
+      () => ({
+        exp: exposure(),
+        gamma: gamma.get(),
+        bleach: bleach.get(),
+        filmRes: filmRes.get(),
+      }),
+      ({ exp, gamma: g, bleach: b, filmRes: fr }) => {
+        const t = developBench(exp.exposure, exp.mean, { gamma: g, bleach: b, filmRes: fr });
+        // display profile: |t| for amplitude film, arg(t) for bleached
+        const profile = new Float64Array(t.n);
+        for (let i = 0; i < t.n; i++) {
+          profile[i] = b
+            ? Math.atan2(t.im[i], t.re[i]) + Math.PI / 2
+            : Math.hypot(t.re[i], t.im[i]);
+        }
+        return { t, profile, bleached: b };
+      },
+      { scope: appScope },
+    );
+
+    /** The film after the scissors. */
+    const cut = cell(
+      () => ({ dev: developed(), center: windowCenter.get(), width: windowWidth.get() }),
+      ({ dev, center, width }) => ({ t: cutFilm(dev.t, center, width) }),
+      { scope: appScope },
+    );
+
+    /** The emulsion's-eye view: blackened grains, denser where brighter. */
+    const grains = cell(
+      () => ({ exp: exposure() }),
+      ({ exp }) =>
+        grainDots(exp.exposure, exp.mean, { dx: FILM.dx, x0: FILM.x0 }, { count: 7000, seed: 41 }),
+      { scope: appScope },
+    );
+
+    // ---- design readouts ----------------------------------------------------
+
+    /** The bench numbers the prose quotes: fringe pitch vs emulsion, path
+     *  mismatch vs coherence, fringe contrast achieved. */
+    const benchNumbers = cell(
+      () => ({
+        p: exposureDeps(),
+        fr: filmRes.get(),
+        exp: exposure(),
+      }),
+      ({ p, fr, exp }) => {
+        const finest = finestFringe(p.points, p.ref.angleDeg, p.lambda);
+        return {
+          finest,
+          filmOk: fr <= finest * 0.75, // ≲30% MTF loss at the steepest fringe
+          meanPath: meanObjectPath(p.points),
+          contrast: exp.worstContrast,
+        };
+      },
+      { scope: appScope },
+    );
+
+    /** Where the played-back light goes: image / zero-order / twin split. */
+    const split = cell(
+      () => ({
+        c: cut(),
+        mu: playScale.get(),
+        lambda: lambdaRec.get(),
+        angle: playAngleDeg.get(),
+        points: scenePoints.get(),
+      }),
+      ({ c, mu, lambda, angle, points }) => beamSplit(c.t, lambda * mu, angle, points),
+      { scope: appScope },
+    );
+
+    /** Paraxial ghosts: where the designer's equations put every image. */
+    const ghosts = cell(
+      () => ({
+        points: scenePoints.get(),
+        ref: {
+          lambda: lambdaRec.get(),
+          angleDeg: refAngleDeg.get(),
+          curved: refCurved.get(),
+          dist: refDist.get(),
+          pathTrim: 0,
+        },
+        angle: playAngleDeg.get(),
+        mu: playScale.get(),
+      }),
+      ({ points, ref, angle, mu }) => ghostPredictions(points, ref, angle, mu),
+      { scope: appScope },
+    );
+
+    // ---- what the eye sees --------------------------------------------------
+
+    /** The retina image of an eye on the rail, looking through the (cut) film
+     *  at the reconstruction. Honest wave optics end to end. */
+    const eyeView = cell(
+      () => ({
+        c: cut(),
+        mu: playScale.get(),
+        lambda: lambdaRec.get(),
+        angle: playAngleDeg.get(),
+        ex: eyeX.get(),
+        focus: eyeFocus.get(),
+      }),
+      ({ c, mu, lambda, angle, ex, focus }) => {
+        const lam = lambda * mu;
+        const exit = playbackExitField(c.t, lam, angle);
+        const img = retinaImage(exit, lam, {
+          x: ex,
+          standoff: EYE_STANDOFF,
+          aperture: EYE_APERTURE,
+          focusDepth: focus,
+          viewHalfWidth: 300,
+          nPupil: 192,
+          nRetina: 200,
+        });
+        return { ...img, tint: tintFor(lam) };
+      },
+      { scope: appScope },
+    );
+
+    // ---- the two phase maps -------------------------------------------------
+
+    /** RECORD: both beams alive in space; the film line integrating at z=0. */
+    const recordMap = cell(
+      () => (canWorker ? { req: recordMapRequest(exposureDeps()) } : undefined),
+      mapCompute,
+      { scope: appScope },
+    );
+
+    /** PLAYBACK: the reference alone, through the developed (cut) film. */
+    const playbackMap = cell(
+      () =>
+        canWorker
+          ? {
+              req: playbackMapRequest(
+                cut().t,
+                lambdaRec.get() * playScale.get(),
+                playAngleDeg.get(),
+              ),
+            }
+          : undefined,
+      mapCompute,
+      { scope: appScope },
+    );
+
+    return {
+      exposure,
+      developed,
+      cut,
+      grains,
+      benchNumbers,
+      split,
+      ghosts,
+      eyeView,
+      recordMap,
+      playbackMap,
+    };
+  },
   import.meta.hot,
 );
 
-/** The graph's shape, inferred — components can type against it. */
+/** The graph's shape, inferred — components type against it. */
 export type AppGraph = ReturnType<typeof graph>;
 
-// --- the agent surface: derived from the declarations -------------------------
-//
-// Controls (store.ts) and actions (declared next to their features) surface
-// automatically: `registerStandardTools` provides `report` (the whole picture:
-// controls, cells, actions, dependency edges), `set` (validated through each
-// control's own meta), `locate`, and one real tool per action. Hand-write a
-// kit.registerTool(...) only for operations that are genuinely neither a value
-// nor a verb-with-args. Registration is idempotent by name (HMR-safe).
+// --- the agent surface ---------------------------------------------------------
 
-// The toolkit namespace is the app's slug: tools install at window.__<slug>.
 const kit = agentToolkit(appScope.name);
-
-// `locate` (element → source) and the `cells` attribution table: app-independent,
-// and every aiui app should have them.
 registerStandardTools(kit);
+
+/** Move a scene point (0-based index) to (x, z); z must be negative
+ *  (upstream of the film). Clamped to the bench's working volume. */
+action({
+  scope: appScope,
+  name: "movePoint",
+  params: { index: "0-based point index", x: "µm, −140..140", z: "µm, −1080..−380" },
+  run: (args) => {
+    const a = (args ?? {}) as { index?: number; x?: number; z?: number };
+    const pts = scenePoints.get().slice();
+    const i = Math.round(Number(a.index));
+    if (!Number.isFinite(i) || i < 0 || i >= pts.length) {
+      return { error: `no point ${a.index}`, count: pts.length };
+    }
+    pts[i] = {
+      x: Math.max(-140, Math.min(140, Number(a.x) || 0)),
+      z: Math.max(-1080, Math.min(-380, Number(a.z) || -700)),
+    };
+    scenePoints.set(pts);
+    return { points: pts };
+  },
+});
+
+/** Add a scene point at (x, z) — at most five points keep the bench readable. */
+action({
+  scope: appScope,
+  name: "addPoint",
+  params: { x: "µm, −140..140", z: "µm, −1080..−380" },
+  run: (args) => {
+    const a = (args ?? {}) as { x?: number; z?: number };
+    const pts = scenePoints.get().slice();
+    if (pts.length >= 5) return { error: "bench holds at most 5 points" };
+    pts.push({
+      x: Math.max(-140, Math.min(140, Number(a.x) || 0)),
+      z: Math.max(-1080, Math.min(-380, Number(a.z) || -700)),
+    });
+    scenePoints.set(pts);
+    return { points: pts };
+  },
+});
+
+/** Remove the last scene point (at least one stays). */
+action({
+  scope: appScope,
+  name: "removePoint",
+  run: () => {
+    const pts = scenePoints.get().slice();
+    if (pts.length > 1) pts.pop();
+    scenePoints.set(pts);
+    return { points: pts };
+  },
+});
+
+/** Reset the bench: default scene, matched arms, whole film, matched playback. */
+action({
+  scope: appScope,
+  name: "resetBench",
+  run: () => {
+    scenePoints.set([
+      { x: -70, z: -560 },
+      { x: 15, z: -760 },
+      { x: 80, z: -1000 },
+    ]);
+    lambdaRec.set(8);
+    refAngleDeg.set(14);
+    refCurved.set(false);
+    refDist.set(900);
+    objGain.set(4);
+    coherenceLen.set(3000);
+    pathTrim.set(0);
+    vibration.set(0);
+    gamma.set(1);
+    bleach.set(true);
+    filmRes.set(4);
+    windowCenter.set(0);
+    windowWidth.set(1536);
+    eyeX.set(0);
+    eyeFocus.set(1300);
+    playScale.set(1);
+    playAngleDeg.set(14);
+    return { reset: true };
+  },
+});
