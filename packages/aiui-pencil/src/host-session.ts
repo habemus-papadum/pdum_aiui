@@ -221,13 +221,17 @@ export class HostSession {
   }
 
   private pushVideoStatus(): void {
+    // The plane rides every status push — the client-side HUD's third number
+    // (host plane · track size · content box), and the one it cannot measure.
+    const plane = this.opts.size?.() ?? this.opts.surface().size();
     if (this.opts.stream()) {
-      this.send({ type: "videoStatus", state: "active" });
+      this.send({ type: "videoStatus", state: "active", plane });
     } else {
       const detail = this.opts.streamHint?.();
       this.send({
         type: "videoStatus",
         state: "needsGesture",
+        plane,
         ...(detail ? { detail } : {}),
       });
     }

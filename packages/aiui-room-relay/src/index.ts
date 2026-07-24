@@ -22,7 +22,11 @@
  * Routes (all under {@link RoomRelayOptions.prefix}, default ``):
  *   GET  <prefix>/info      readiness + counts, JSON (CORS — probes read it)
  *   GET  <prefix>/health    liveness + counts, JSON
- *   GET  <prefix>/sessions  the connectable hosts, JSON
+ *   GET  <prefix>/sessions  the connectable hosts, JSON — each entry carries
+ *                           `replay`, the host's cached replay frame (the
+ *                           pencil's last videoStatus, the bar's last bar):
+ *                           the curl-able debug surface. HTTP only; the wire's
+ *                           `sessions` frames stay lean.
  *   WS   <prefix>/host      a browser host
  *   WS   <prefix>/client    a remote client
  */
@@ -441,7 +445,16 @@ export function createRoomRelayBackend<M extends { type: string }>(
       return true;
     }
     if (url.pathname === `${prefix}/sessions`) {
-      sendJson(res, { sessions: sessions() });
+      // Enriched with the replay slot — diagnostics a debugging human curls
+      // for (what did the last videoStatus/bar say?). HTTP only, on purpose.
+      sendJson(res, {
+        sessions: [...hosts.values()]
+          .filter((h) => h.registered)
+          .map((h) => ({
+            ...h.info,
+            ...(h.replaySlot !== undefined ? { replay: h.replaySlot } : {}),
+          })),
+      });
       return true;
     }
     return false;

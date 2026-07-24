@@ -154,6 +154,13 @@ export interface VideoStatus {
   state: CaptureState;
   /** The upstream failure verbatim, when there is one. Diagnostics for the human. */
   detail?: string;
+  /**
+   * The host's plane (CSS px) at push time — the rectangle strokes are mapped
+   * onto (D2). Telemetry for the client's HUD: with the video track's size and
+   * the client's content box these are the three numbers that decide every
+   * coordinate bug, and this is the only one the client cannot measure itself.
+   */
+  plane?: Surface;
 }
 
 // ── session plumbing (relay-level) ─────────────────────────────────────────

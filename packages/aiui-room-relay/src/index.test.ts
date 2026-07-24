@@ -232,4 +232,23 @@ describe("the room relay core", () => {
     const missing = await fetch(`http://127.0.0.1:${port}/room/nope`);
     expect(missing.status).toBe(404);
   });
+
+  it("enriches the HTTP sessions dump with each host's cached replay frame", async () => {
+    const host = new Peer("/room/host");
+    await host.open();
+    await host.nextOf("registered");
+    host.send({ type: "register", label: "app" });
+    host.send({ type: "ping", value: 7 });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const res = await fetch(`http://127.0.0.1:${port}/room/sessions`);
+    const body = (await res.json()) as {
+      sessions: Array<{ label: string; replay?: { type: string; value: number } }>;
+    };
+    expect(body.sessions[0]).toMatchObject({
+      label: "app",
+      replay: { type: "ping", value: 7 },
+    });
+    host.close();
+  });
 });

@@ -35,7 +35,7 @@ import { createSignal, Show } from "solid-js";
 import { ClientSession } from "../client-session";
 import { clientRelayUrl } from "../host-session";
 import { type PencilMode, resolveParams } from "../pencil";
-import type { SessionInfo, StrokeOverrides } from "../protocol";
+import type { SessionInfo, StrokeOverrides, Surface } from "../protocol";
 import type { LinkStats } from "../remote";
 import type { Tool } from "../surface";
 import { SessionPicker } from "./picker";
@@ -58,6 +58,8 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
   const [presentation, setPresentation] = createSignal<ResolvedPresentation>(FULL_PRESENTATION);
   const [videoUp, setVideoUp] = createSignal(false);
   const [videoNote, setVideoNote] = createSignal("waiting for video…");
+  /** The host's plane, as the last videoStatus reported it (the HUD's number). */
+  const [hostPlane, setHostPlane] = createSignal<Surface | undefined>(undefined);
   const [tool, setTool] = createSignal<Tool>("draw");
   const [mode, setMode] = createSignal<PencilMode>("write");
   /** Latches on the first pen event: after this, only the pencil inks. */
@@ -128,6 +130,7 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
       setVideoUp(false);
     },
     onVideoStatus: (status) => {
+      setHostPlane(status.plane);
       setVideoNote(
         status.state === "active"
           ? "waiting for video…"
@@ -148,12 +151,12 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
   // its own "waiting" note and the pencil works regardless.
   const bar = createRemoteBarClient();
 
-  // Adaptive preview fade (D3's permitted scope): poll the link's stats.
-  let linkStats: LinkStats | undefined;
+  // Adaptive preview fade (D3's permitted scope) + the HUD: poll the link's
+  // stats. A signal, so the HUD re-derives on every poll instead of showing
+  // the first reading forever.
+  const [linkStats, setLinkStats] = createSignal<LinkStats | undefined>(undefined);
   setInterval(() => {
-    void session.stats().then((s) => {
-      linkStats = s;
-    });
+    void session.stats().then(setLinkStats);
   }, 2000);
 
   // Wired by RemoteView on mount (the view owns the stage/video/plane DOM).
@@ -174,7 +177,8 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
           tool={tool}
           params={previewParams}
           navigation={() => presentation().navigation}
-          linkStats={() => linkStats}
+          linkStats={linkStats}
+          hostPlane={hostPlane}
           videoUp={videoUp()}
           videoNote={videoNote()}
           onPenMode={() => setPenMode(true)}

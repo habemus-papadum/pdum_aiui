@@ -11,9 +11,10 @@
  */
 
 import type { JSX } from "@solidjs/web";
-import { Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import type { ClientSession } from "../client-session";
 import type { PencilParams } from "../pencil";
+import type { Surface } from "../protocol";
 import { fadeWindowMs, type LinkStats } from "../remote";
 import { PencilSurface, type Tool } from "../surface";
 import { bindPenInput } from "./pen-input";
@@ -28,6 +29,8 @@ export interface RemoteViewProps {
   navigation: () => boolean;
   /** The link's measured delays, for the D3 fade window (undefined until known). */
   linkStats: () => LinkStats | undefined;
+  /** The host's plane, as the last videoStatus reported it (HUD telemetry). */
+  hostPlane?: () => Surface | undefined;
   videoUp: boolean;
   videoNote: string;
   /** The first pen event was seen (the ✍️ chip + finger policy latch). */
@@ -54,6 +57,39 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
     video: () => video,
     plane: () => plane,
   });
+
+  // The HUD's geometry tick: tracker.box() and videoWidth are plain reads, so
+  // every event that can move them bumps this signal (the linkStats poll — a
+  // fresh object every 2 s — keeps the line honest between events regardless).
+  const [geomRev, setGeomRev] = createSignal(0);
+  const recompute = (): void => {
+    tracker.recompute();
+    setGeomRev((n) => n + 1);
+  };
+  const [hudOpen, setHudOpen] = createSignal(true);
+
+  /** The three numbers that decide every coordinate bug, plus the link. */
+  const hudLine = (): string => {
+    geomRev();
+    const px = (w: number, h: number): string => `${Math.round(w)}×${Math.round(h)}`;
+    const host = props.hostPlane?.();
+    const track = video !== undefined && video.videoWidth > 0;
+    const box = tracker.box();
+    const stats = props.linkStats();
+    const ms = (v: number | undefined): string => (v !== undefined ? `${Math.round(v)}ms` : "—");
+    const fps =
+      stats?.frameIntervalMs !== undefined && stats.frameIntervalMs > 0
+        ? `${Math.round(1000 / stats.frameIntervalMs)}fps`
+        : "—fps";
+    return [
+      `host ${host !== undefined ? px(host.width, host.height) : "—"}`,
+      `video ${track && video !== undefined ? px(video.videoWidth, video.videoHeight) : "—"}`,
+      `box ${px(box.width, box.height)}`,
+      `rtt ${ms(stats?.rttMs)}`,
+      `jit ${ms(stats?.jitterBufferMs)}`,
+      fps,
+    ].join(" · ");
+  };
 
   props.expose?.(
     () => {
@@ -97,8 +133,8 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
     });
 
     // The plane tracks the PICTURE, whose dimensions are late and mutable.
-    window.addEventListener("resize", tracker.recompute);
-    tracker.recompute();
+    window.addEventListener("resize", recompute);
+    recompute();
   };
 
   return (
@@ -111,8 +147,8 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
           // frame, and each change fires `resize` on the video element. The
           // listener must live HERE, on the video's own ref — attaching it
           // from the stage's ref was a bet on ref ordering, and it lost.
-          el.addEventListener("resize", tracker.recompute);
-          el.addEventListener("loadedmetadata", tracker.recompute);
+          el.addEventListener("resize", recompute);
+          el.addEventListener("loadedmetadata", recompute);
         }}
         autoplay
         muted
@@ -121,6 +157,16 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       <Show when={!props.videoUp}>
         <div class="no-video">{props.videoNote}</div>
       </Show>
+      <button
+        type="button"
+        class="hud"
+        data-testid="hud"
+        data-open={hudOpen() ? "true" : "false"}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => setHudOpen(!hudOpen())}
+      >
+        {hudOpen() ? hudLine() : "ⓘ"}
+      </button>
     </div>
   );
 }
