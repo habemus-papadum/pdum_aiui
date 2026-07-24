@@ -42,6 +42,29 @@ export function streamHeldFor(tabId: number | undefined): boolean {
   return stream !== undefined && heldTabId !== undefined && heldTabId === tabId;
 }
 
+/** Subscribers to the warm stream's hold/release EDGES. */
+const holdListeners = new Set<() => void>();
+
+/**
+ * Fire on every hold/release edge of the warm stream, whoever drove it (the
+ * tabStream claim, a tab switch, teardown). The MV3 pencil host re-offers
+ * video on this signal: before it existed, an iPad viewer that joined before
+ * a turn warmed the stream was parked forever (nothing called `refresh()`
+ * when the stream appeared), and a turn ending froze the iPad on the last
+ * frame with no status update — the CDP tier closes this loop via its
+ * screencast `onReady`; this is the extension tier's equivalent.
+ */
+export function onHeldStreamChange(handler: () => void): () => void {
+  holdListeners.add(handler);
+  return () => holdListeners.delete(handler);
+}
+
+function notifyHeldStream(): void {
+  for (const handler of holdListeners) {
+    handler();
+  }
+}
+
 /**
  * How a captured tab sits inside a stream frame: Chrome aspect-FITS the tab
  * into the frame, CENTERED, black filling the rest (measured live 2026-07-17:
@@ -120,10 +143,12 @@ export async function holdTabStream(
   stream = media;
   video = el;
   heldTabId = tabId;
+  notifyHeldStream();
 }
 
 /** Release the held stream (turn end, tab switch, disarm, panel teardown). */
 export function releaseTabStream(): void {
+  const held = stream !== undefined;
   for (const track of stream?.getTracks() ?? []) {
     track.stop();
   }
@@ -131,6 +156,9 @@ export function releaseTabStream(): void {
   stream = undefined;
   video = undefined;
   heldTabId = undefined;
+  if (held) {
+    notifyHeldStream(); // an edge only when something was actually released
+  }
 }
 
 /**

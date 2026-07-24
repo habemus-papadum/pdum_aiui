@@ -40,7 +40,7 @@ import type { SessionNameControl } from "../ui/session-name-chip";
 import { installPanelKeys, type Narration } from "../ui/shell";
 import { TargetTab } from "../ui/target-tab";
 import { superviseCdpAlignment } from "./align";
-import { heldStreamFor } from "./capture";
+import { heldStreamFor, onHeldStreamChange } from "./capture";
 import { discoverChannel, listChannels, pinPort, probeNativeHost, rememberPort } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { superviseMicGrant } from "./mic-grant";
@@ -227,6 +227,12 @@ async function boot(): Promise<{
     onStatus: (status) => client.setContext({ pencilClients: status.viewers }),
   });
   pencilHost.connect();
+  // The stream's hold/release edges re-offer video to connected iPads (the
+  // A1 triage's S1/S2): a viewer who joined before the turn warmed the stream
+  // gets its offer the moment the stream exists, and a turn ending pushes the
+  // status note instead of freezing the iPad on a stale frame. The CDP tier's
+  // twin is the screencast onReady loop in ui/main.tsx.
+  onHeldStreamChange(() => pencilHost.refresh());
 
   // The remote bar: the same mode engine's remote-flagged caps (hands-free,
   // video), projected over /bar for the iPad pencil client's embedded RemoteBar.

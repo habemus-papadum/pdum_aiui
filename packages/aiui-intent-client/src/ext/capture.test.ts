@@ -7,7 +7,7 @@
  * (5120/897 ≈ 5.7) sent every crop into the black bars.
  */
 import { describe, expect, it } from "vitest";
-import { letterboxFit } from "./capture";
+import { letterboxFit, onHeldStreamChange, releaseTabStream } from "./capture";
 
 describe("letterboxFit", () => {
   it("maps the measured display-sized frame: height-fit, centered horizontally", () => {
@@ -32,5 +32,17 @@ describe("letterboxFit", () => {
     expect(fit.scale).toBe(1);
     expect(fit.offX).toBe(0);
     expect(fit.offY).toBe(500);
+  });
+});
+
+describe("onHeldStreamChange", () => {
+  it("is edge-only: releasing with nothing held fires no notification", () => {
+    let fired = 0;
+    const off = onHeldStreamChange(() => {
+      fired += 1;
+    });
+    releaseTabStream(); // nothing held — a no-op release is not an edge
+    expect(fired).toBe(0);
+    off();
   });
 });
