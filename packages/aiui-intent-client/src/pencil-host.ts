@@ -42,6 +42,8 @@ export interface PencilHostSession {
   connect(): void;
   refresh(): void;
   dispose(): void;
+  /** Rename the session live (re-registers). Optional: test fakes may omit it. */
+  setName?(name: string): void;
 }
 
 export interface PencilHostOptions {
@@ -56,6 +58,8 @@ export interface PencilHostOptions {
   streamHint?: () => string | undefined;
   /** The session label the iPad sees in its list. */
   label: string;
+  /** The human-visible session name ("courageous-beaver") the picker leads with. */
+  name?: string;
   /** A viewer scrolled/zoomed — forward to the page (the app decides meaning). */
   onScroll?: (du: number, dv: number) => void;
   onZoom?: (centerU: number, centerV: number, scale: number) => void;
@@ -68,6 +72,8 @@ export interface PencilHost {
   connect(): void;
   /** Re-query the plane size and re-offer video (after a tab switch). */
   refresh(): void;
+  /** Rename the session live — the iPad's picker updates without a reconnect. */
+  setName(name: string): void;
   dispose(): void;
 }
 
@@ -128,6 +134,7 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
   const session = factory({
     url: `ws://127.0.0.1:${opts.port}/pencil/host`,
     label: opts.label,
+    ...(opts.name !== undefined ? { name: opts.name } : {}),
     // The paved-road customization (owner, 2026-07-17): the intent client's
     // remote is a MARKUP surface, not a paint studio — one tool, one preset,
     // no brush knobs. Navigation stays on (two-finger scroll/zoom forward to
@@ -169,6 +176,9 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
     refresh: () => {
       refreshSize();
       session.refresh();
+    },
+    setName: (name) => {
+      session.setName?.(name);
     },
     dispose: () => {
       offTab();

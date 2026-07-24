@@ -51,6 +51,9 @@ export interface HostSessionOptions {
   url: string;
   /** Shown in every client's session list. */
   label: string;
+  /** Human-visible session name ("courageous-beaver") — what the picker shows
+   * first. Renameable live via {@link HostSession.setName}. */
+  name?: string;
   /** How the remote client should present this session (see the protocol). */
   presentation?: RemotePresentation;
   /** The surface remote strokes land on. Read per message — planes may switch. */
@@ -96,8 +99,12 @@ export class HostSession {
   private state: HostSessionStatus["state"] = "off";
   private reconnect: ReturnType<typeof setTimeout> | undefined;
   private warm: ReturnType<typeof setInterval> | undefined;
+  /** The announced session name — survives reconnects (each dial re-registers it). */
+  private sessionName: string | undefined;
 
-  constructor(private readonly opts: HostSessionOptions) {}
+  constructor(private readonly opts: HostSessionOptions) {
+    this.sessionName = opts.name;
+  }
 
   /** Dial the relay. Reconnects every {@link RECONNECT_MS} until disposed. */
   connect(): void {
@@ -122,11 +129,7 @@ export class HostSession {
     this.core = core;
 
     ws.addEventListener("open", () => {
-      this.send({
-        type: "register",
-        label: this.opts.label,
-        ...(this.opts.presentation !== undefined ? { presentation: this.opts.presentation } : {}),
-      });
+      this.sendRegister();
       this.pushVideoStatus();
       this.publish("hosting");
     });
@@ -181,6 +184,14 @@ export class HostSession {
     this.publish();
   }
 
+  /** Rename the session live: re-registers, so every picker hears the new name. */
+  setName(name: string): void {
+    this.sessionName = name;
+    if (this.ws && this.ws.readyState === this.ws.OPEN) {
+      this.sendRegister();
+    }
+  }
+
   dispose(): void {
     this.stopped = true;
     clearTimeout(this.reconnect);
@@ -198,6 +209,15 @@ export class HostSession {
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
       this.ws.send(encode(message));
     }
+  }
+
+  private sendRegister(): void {
+    this.send({
+      type: "register",
+      label: this.opts.label,
+      ...(this.sessionName !== undefined ? { name: this.sessionName } : {}),
+      ...(this.opts.presentation !== undefined ? { presentation: this.opts.presentation } : {}),
+    });
   }
 
   private pushVideoStatus(): void {

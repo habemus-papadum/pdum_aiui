@@ -25,18 +25,21 @@ import { createIntentClient, type IntentClient, type IntentLanes } from "../clie
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { fakeBus } from "../fake-bus";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
-import { createPencilHost } from "../pencil-host";
+import { createPencilHost, type PencilHost } from "../pencil-host";
 import {
   asContributedSelection,
+  channelCwd,
   connectSessionBus,
   probeChannel,
   resolveChannelPort,
   type SessionBusClient,
 } from "../session";
+import { loadOrCreateSessionName, type NameStore, sessionNameKey } from "../session-name";
 import { createToolsLink } from "../tools-link";
 import type { IntentHost } from "../transport";
 import { agentsWarning, type ChannelEntry } from "./channel-header";
 import { PanelLayout } from "./panel-layout";
+import type { SessionNameControl } from "./session-name-chip";
 import { installPanelKeys, type Narration } from "./shell";
 import { TargetTab } from "./target-tab";
 
@@ -112,6 +115,15 @@ async function tryCdpHost(port: number): Promise<CdpBus | undefined> {
   }
 }
 
+/** The session-name store, this tier's flavor: localStorage (the page's own
+ * origin — the channel's, or Vite's in dev). Same `aiui2.*` key convention. */
+const nameStore: NameStore = {
+  get: async (key) => localStorage.getItem(key) ?? undefined,
+  set: async (key, value) => {
+    localStorage.setItem(key, value);
+  },
+};
+
 async function boot(): Promise<{
   client: IntentClient;
   mode: "cdp" | "channel" | "fake";
@@ -120,6 +132,8 @@ async function boot(): Promise<{
   cdp?: CdpBus;
   /** The channel the lanes dialed — also where the lowering traces live. */
   port?: number;
+  /** The panel's remote identity (iPad pickers) — absent with no channel. */
+  session?: SessionNameControl;
 }> {
   // The FakeBus stands in for the world whenever a real host isn't there — in
   // the CDP tier it isn't used at all (the pages are real).
@@ -215,11 +229,39 @@ async function boot(): Promise<{
       sessionBus,
     };
 
+    // The panel's remote identity — what the iPad pickers list for this panel.
+    // Keyed by the channel's project (ports are ephemeral across restarts).
+    const nameKey = sessionNameKey((await channelCwd(port)) ?? `port:${port}`);
+    const [sessionName, setSessionName] = createSignal(
+      await loadOrCreateSessionName(nameStore, nameKey),
+      { ownedWrite: true },
+    );
+    let pencilHostRef: PencilHost | undefined; // set in the CDP branch below
     // The remote bar: project the mode engine's remote-flagged caps (hands-free,
     // video) over /bar, so the iPad pencil client's embedded RemoteBar drives
     // them. Tab-agnostic (one machine, projected), so it runs for any channel —
     // both the CDP tier below and the fake-bus harness on a real channel.
-    createBarHost({ client, port, label: `aiui intent — ${location.host}` }).connect();
+    const barHost = createBarHost({
+      client,
+      port,
+      label: `aiui intent — ${location.host}`,
+      name: sessionName(),
+    });
+    barHost.connect();
+    // One rename fans out to storage and both wires — an open picker updates live.
+    const session: SessionNameControl = {
+      name: sessionName,
+      rename: (next) => {
+        const trimmed = next.trim();
+        if (trimmed === "" || trimmed === sessionName()) {
+          return;
+        }
+        setSessionName(trimmed);
+        void nameStore.set(nameKey, trimmed);
+        barHost.setName(trimmed);
+        pencilHostRef?.setName(trimmed);
+      },
+    };
 
     if (cdp !== undefined) {
       // The remote pencil: an iPad marks up a screencast of the leader tab, its
@@ -236,10 +278,12 @@ async function boot(): Promise<{
         stream: () => screencast.stream(),
         streamHint: () => "open a turn on the tab to start its video",
         label: `aiui intent — ${location.host}`,
+        name: sessionName(),
         // The 'ipad' status pill: connected remote pencil clients, live from
         // the relay session's status feed.
         onStatus: (status) => client.setContext({ pencilClients: status.viewers }),
       });
+      pencilHostRef = pencilHost;
       refreshPencil = () => pencilHost.refresh();
       pencilHost.connect();
       // No baseline status (owner, 2026-07-19): the simulate strip's summary
@@ -249,9 +293,9 @@ async function boot(): Promise<{
         "[intent-client]",
         `driving ${cdp.pages().length} real tab(s) over CDP — no extension installed`,
       );
-      return { client, mode: "cdp", lanes: channelLanes, cdp, port };
+      return { client, mode: "cdp", lanes: channelLanes, cdp, port, session };
     }
-    return { client, mode: "channel", lanes: channelLanes, fake: bus, port };
+    return { client, mode: "channel", lanes: channelLanes, fake: bus, port, session };
   }
 
   const consoleLanes: IntentLanes = {
@@ -282,7 +326,7 @@ const [busPhase, setBusPhase] = createSignal<"connected" | "connecting" | "close
   ownedWrite: true,
 });
 
-const { client, mode, lanes, fake, cdp, port } = await boot();
+const { client, mode, lanes, fake, cdp, port, session } = await boot();
 /** Whichever host is targeting pages — the CdpBus's real tabs, or the fake's. */
 const targeting = cdp?.targeting ?? fake?.targeting;
 
@@ -450,6 +494,7 @@ render(
       micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
       lanes={lanes}
       narration={narration}
+      sessionName={session}
       // Which real tab this detached panel is aimed at — the ring lives in that
       // tab, invisible from here, so name it in the panel. Only the CDP tier
       // drives real tabs; every other tier has none to identify.

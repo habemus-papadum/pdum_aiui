@@ -23,6 +23,7 @@ import type { ChannelLanes } from "../lanes";
 import { CHANNEL_HEADER_STYLES, ChannelHeader, type ChannelListing } from "./channel-header";
 import { Panel } from "./panel";
 import { PANES_STYLES } from "./panes";
+import { SESSION_NAME_STYLES, SessionNameChip, type SessionNameControl } from "./session-name-chip";
 import { type Narration, WirePane } from "./shell";
 import { TARGET_TAB_STYLES } from "./target-tab";
 import { RichTracePane, TRACE_PANE_STYLES } from "./trace-pane";
@@ -34,6 +35,7 @@ export const PANEL_LAYOUT_STYLES =
   TURN_PREVIEW_STYLES +
   TRACE_PANE_STYLES +
   CHANNEL_HEADER_STYLES +
+  SESSION_NAME_STYLES +
   TARGET_TAB_STYLES;
 
 export interface PanelLayoutProps {
@@ -55,6 +57,10 @@ export interface PanelLayoutProps {
   lanes?: ChannelLanes;
   /** The panes' shared narration (status line, toast, lowered prompt). */
   narration: Narration;
+  /** The panel's remote identity (the iPad pickers' display name) + renamer.
+   * Absent when no channel is bound — with no relay there is nobody to name
+   * this panel to. */
+  sessionName?: SessionNameControl;
   /** The CDP tier's target-tab strip; absent in every other tier. */
   targetTab?: JSX.Element;
   /** The debugging pane's shell-specific content and whether it starts open.
@@ -120,6 +126,9 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
         listChannels={props.listChannels}
         onSwitch={props.onSwitch}
       />
+      <Show when={props.sessionName} keyed>
+        {(control) => <SessionNameChip name={control.name} rename={control.rename} />}
+      </Show>
       {props.targetTab}
       <GrantBanner client={props.client} />
       <Panel

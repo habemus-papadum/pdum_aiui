@@ -1,8 +1,10 @@
 /**
  * picker.tsx — `<SessionPicker/>`: the connect/pick/lost states.
  *
- * A session row shows the host's presentation title when it declared one
- * (falling back to the label), plus the project and liveness meta.
+ * A session row leads with the host's session NAME when it announced one
+ * ("courageous-beaver" — the only field that tells two panels apart), then
+ * falls back to the presentation title, then the label. When a name leads,
+ * the label joins the meta line so the row stays correlatable with the host.
  */
 
 import type { JSX } from "@solidjs/web";
@@ -35,9 +37,10 @@ export function SessionPicker(props: SessionPickerProps): JSX.Element {
             disabled={item.busy}
             onClick={() => props.onJoin(item.id)}
           >
-            {item.presentation?.title ?? item.label}
+            {item.name ?? item.presentation?.title ?? item.label}
             {item.project ? ` — ${item.project}` : ""}
             <span class="session-meta">
+              {item.name !== undefined ? `${item.label} · ` : ""}
               {item.id} · since {new Date(item.connectedAt).toLocaleTimeString()}
               {item.busy ? " · busy" : ""}
             </span>

@@ -129,6 +129,39 @@ describe("createBarHost", () => {
     expect(fs.lastBar()?.rows.map((r) => r.command)).toEqual(["handsFree", "video", "pencil"]);
   });
 
+  it("carries the session name in register, and setName re-registers live", async () => {
+    const client = makeClient();
+    enterTurn(client);
+    const fs = fakeSocket();
+    const handle = createBarHost({
+      client,
+      port: 5099,
+      label: "aiui intent — test",
+      name: "courageous-beaver",
+      socketFactory: () => fs.socket,
+    });
+    handle.connect();
+    fs.open();
+    await settle();
+
+    expect(decode(fs.sent[0])).toEqual({
+      type: "register",
+      label: "aiui intent — test",
+      name: "courageous-beaver",
+      channelPort: 5099,
+    });
+
+    handle.setName("solemn-otter");
+    const registers = fs.sent
+      .map((s) => decode(s))
+      .filter(
+        (m): m is Extract<ReturnType<typeof decode>, { type: "register" }> =>
+          m?.type === "register",
+      );
+    expect(registers).toHaveLength(2);
+    expect(registers.at(-1)).toMatchObject({ name: "solemn-otter" });
+  });
+
   it("routes an inbound remote tap into the one engine (single writer)", async () => {
     const client = makeClient();
     enterTurn(client);

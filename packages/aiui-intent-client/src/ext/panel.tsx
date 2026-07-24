@@ -28,12 +28,15 @@ import { type ChannelLanes, createChannelLanes } from "../lanes";
 import { createPencilHost } from "../pencil-host";
 import {
   asContributedSelection,
+  channelCwd,
   connectSessionBus,
   probeChannel,
   type SessionBusClient,
 } from "../session";
+import { loadOrCreateSessionName, type NameStore, sessionNameKey } from "../session-name";
 import { createToolsLink } from "../tools-link";
 import { PanelLayout } from "../ui/panel-layout";
+import type { SessionNameControl } from "../ui/session-name-chip";
 import { installPanelKeys, type Narration } from "../ui/shell";
 import { TargetTab } from "../ui/target-tab";
 import { superviseCdpAlignment } from "./align";
@@ -66,6 +69,19 @@ const narration: Narration = {
 loadConfigBase();
 installConfigAutoSave(); // every change persists — no save/reset verbs (owner)
 
+/** The session-name store, this tier's flavor: chrome.storage.local, under the
+ * `aiui2.*` convention every other panel persistence uses (ext/channel.ts). */
+const nameStore: NameStore = {
+  get: async (key) => {
+    const got = await chrome.storage.local.get(key);
+    const raw = got[key];
+    return typeof raw === "string" ? raw : undefined;
+  },
+  set: async (key, value) => {
+    await chrome.storage.local.set({ [key]: value });
+  },
+};
+
 /** The alignment supervisor's latest verdict, held module-level so the lanes'
  * hello thunk (created inside boot, BEFORE the supervisor) can read it
  * TDZ-safely. One writer: the supervisor's onChange below. */
@@ -92,6 +108,8 @@ async function boot(): Promise<{
   port?: number;
   /** The bus, for the render tree (the target-tab chip reads its targeting). */
   host: Awaited<ReturnType<typeof connectExtensionBus>>;
+  /** The panel's remote identity (iPad pickers) — absent with no channel. */
+  session?: SessionNameControl;
 }> {
   const { id: windowId } = await chrome.windows.getCurrent();
   if (windowId === undefined) {
@@ -134,6 +152,16 @@ async function boot(): Promise<{
     return { client, windowId, host };
   }
   await rememberPort(port);
+
+  // The panel's remote identity — what the iPad pickers list for this panel.
+  // Keyed by (channel project, window): reconnecting to a known channel reuses
+  // the name; windowIds do not survive a browser restart, so a restart mints a
+  // fresh one (accepted — the name is display identity, not a durable handle).
+  const nameKey = sessionNameKey((await channelCwd(port)) ?? `port:${port}`, windowId);
+  const [sessionName, setSessionName] = createSignal(
+    await loadOrCreateSessionName(nameStore, nameKey),
+    { ownedWrite: true },
+  );
 
   const lanes = createChannelLanes({
     host,
@@ -186,21 +214,44 @@ async function boot(): Promise<{
   // in-page surface. The video is the SAME warm tabCapture MediaStream the shot
   // grabs off (heldStreamFor) — shared, not a second capture — so it appears
   // exactly when a turn warms the stream. Strokes forward to the tab in view.
-  createPencilHost({
+  const pencilHost = createPencilHost({
     host,
     port,
     tab: () => host.activeTab(),
     stream: () => heldStreamFor(host.activeTab()),
     streamHint: () => `grant this tab with ${hint} to start its video`,
     label: `aiui intent — window ${windowId}`,
+    name: sessionName(),
     // The 'ipad' status pill: connected remote pencil clients, live from the
     // relay session's status feed.
     onStatus: (status) => client.setContext({ pencilClients: status.viewers }),
-  }).connect();
+  });
+  pencilHost.connect();
 
   // The remote bar: the same mode engine's remote-flagged caps (hands-free,
   // video), projected over /bar for the iPad pencil client's embedded RemoteBar.
-  createBarHost({ client, port, label: `aiui intent — window ${windowId}` }).connect();
+  const barHost = createBarHost({
+    client,
+    port,
+    label: `aiui intent — window ${windowId}`,
+    name: sessionName(),
+  });
+  barHost.connect();
+
+  // One rename fans out to storage and both wires — an open picker updates live.
+  const session: SessionNameControl = {
+    name: sessionName,
+    rename: (next) => {
+      const trimmed = next.trim();
+      if (trimmed === "" || trimmed === sessionName()) {
+        return;
+      }
+      setSessionName(trimmed);
+      void nameStore.set(nameKey, trimmed);
+      pencilHost.setName(trimmed);
+      barHost.setName(trimmed);
+    },
+  };
   sessionBus = connectSessionBus({ port, label: "intent client (side panel)" });
   const bus2 = sessionBus;
   let recovered = false;
@@ -250,12 +301,12 @@ async function boot(): Promise<{
     "[intent-client]",
     `channel :${port} — this panel targets window ${windowId}'s tabs`,
   );
-  return { client, lanes, windowId, port, host };
+  return { client, lanes, windowId, port, host, session };
 }
 
 let blipSink: ((key: string) => void) | undefined;
 
-const { client, lanes, windowId, port, host } = await boot();
+const { client, lanes, windowId, port, host, session } = await boot();
 
 // The microphone, probed at every panel open (M9's deferred grant flow — see
 // mic-grant.ts). Silent where the mic works (flagged session browser; stock
@@ -348,6 +399,7 @@ render(
         micLevel={lanes !== undefined ? () => lanes.talk.level() : undefined}
         lanes={lanes}
         narration={narration}
+        sessionName={session}
         // Which tab this panel is aimed at (reintroduced for this tier, owner
         // 2026-07-19): the extension drives its own window's ACTIVE tab, and
         // naming it here confirms the plumbing (targeting + navigation

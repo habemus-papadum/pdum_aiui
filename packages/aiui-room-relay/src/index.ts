@@ -49,6 +49,10 @@ export type Assignable<Super, Sub extends Super> = Sub extends Super ? Super : n
 export interface RoomSessionInfo {
   id: string;
   label: string;
+  /** Human-visible session name the host announced ("courageous-beaver") — the
+   * pickers' display identity. A re-register updates it (that is how a host
+   * renames itself live); the label stays the structural description. */
+  name?: string;
   project?: string;
   channelTag?: string;
   busy: boolean;
@@ -60,7 +64,7 @@ export type RoomServerFrame =
   | { type: "registered"; id: string }
   | { type: "sessions"; sessions: RoomSessionInfo[] }
   | { type: "joinRejected"; reason: string }
-  | { type: "joined"; host: string; label: string }
+  | { type: "joined"; host: string; label: string; name?: string }
   | { type: "clientJoined"; client: string }
   | { type: "clientLeft"; client: string }
   | { type: "hostGone" };
@@ -157,6 +161,7 @@ function parseRequestUrl(raw: string | undefined): URL | undefined {
 /** The `register` fields the core reads generically; the rest is the delegate's. */
 interface RegisterFields {
   label?: string;
+  name?: string;
   project?: string;
   channelPort?: number;
 }
@@ -286,6 +291,9 @@ export function createRoomRelayBackend<M extends { type: string }>(
       if (message.type === "register") {
         const reg = message as unknown as RegisterFields;
         conn.info.label = reg.label || "app";
+        if (typeof reg.name === "string" && reg.name.trim() !== "") {
+          conn.info.name = reg.name.trim();
+        }
         if (reg.project) {
           conn.info.project = reg.project;
         }
@@ -301,7 +309,11 @@ export function createRoomRelayBackend<M extends { type: string }>(
           }
         }
         conn.registered = true;
-        log(`${logPrefix}: host "${conn.info.label}" registered (${hosts.size} host(s))`);
+        log(
+          `${logPrefix}: host "${conn.info.label}"${
+            conn.info.name !== undefined ? ` as "${conn.info.name}"` : ""
+          } registered (${hosts.size} host(s))`,
+        );
         broadcastSessions();
         return;
       }
@@ -368,7 +380,12 @@ export function createRoomRelayBackend<M extends { type: string }>(
         send(
           ws,
           asWire(
-            { type: "joined", host: host.id, label: host.info.label },
+            {
+              type: "joined",
+              host: host.id,
+              label: host.info.label,
+              ...(host.info.name !== undefined ? { name: host.info.name } : {}),
+            },
             joinedExtras?.(host.info),
           ),
         );

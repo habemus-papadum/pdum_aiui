@@ -178,6 +178,31 @@ export interface ChannelHealth {
   debug?: boolean;
 }
 
+/**
+ * The bound channel's project directory, from its own registry mirror
+ * (`/debug/api/channels`, CORS-open). This is the stable identity the panel's
+ * session NAME is keyed by: ports are ephemeral (a restarted channel picks a
+ * new one), the project path is not. `undefined` when the mirror is
+ * unreachable or the bound port is missing from it — callers fall back to a
+ * port-scoped key.
+ */
+export async function channelCwd(port: number): Promise<string | undefined> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/debug/api/channels`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) {
+      return undefined;
+    }
+    const body = (await res.json()) as {
+      channels?: Array<{ port?: number; cwd?: string }>;
+    };
+    return body.channels?.find((entry) => entry.port === port)?.cwd;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Probe one port. `undefined` = not a (reachable) channel. */
 export async function probeChannel(port: number): Promise<ChannelHealth | undefined> {
   try {

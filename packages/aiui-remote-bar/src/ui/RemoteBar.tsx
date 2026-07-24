@@ -67,7 +67,10 @@ function SessionList(props: { client: RemoteBarClient }) {
               data-host={session.id}
               onClick={() => props.client.join(session.id)}
             >
-              {session.label}
+              {session.name ?? session.label}
+              <Show when={session.name !== undefined}>
+                <small>{session.label}</small>
+              </Show>
               <Show when={session.project}>{(project) => <small>{project()}</small>}</Show>
             </button>
           )}

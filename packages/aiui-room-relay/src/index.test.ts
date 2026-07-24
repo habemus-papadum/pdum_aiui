@@ -12,7 +12,7 @@ import { createRoomRelayBackend, type RoomRelayBackend, type RoomServerFrame } f
 
 // A tiny wire: register + one host-published frame (cached) + one client frame.
 type TestWire =
-  | { type: "register"; label?: string; project?: string; channelPort?: number }
+  | { type: "register"; label?: string; name?: string; project?: string; channelPort?: number }
   | { type: "join"; host: string }
   | { type: "leave" }
   | { type: "ping"; value: number } // host → clients, cached for replay
@@ -178,6 +178,37 @@ describe("the room relay core", () => {
 
     client.send({ type: "poke", note: "hi" });
     expect(await host.nextOf("poke")).toMatchObject({ note: "hi" });
+    host.close();
+    client.close();
+  });
+
+  it("carries an announced session name, updates it on re-register, and hands it to joiners", async () => {
+    const client = new Peer("/room/client");
+    await client.open();
+    await client.nextOf("sessions");
+
+    const host = new Peer("/room/host");
+    await host.open();
+    const registered = (await host.nextOf("registered")) as { type: "registered"; id: string };
+    host.send({ type: "register", label: "app", name: "courageous-beaver" });
+
+    const listed = (await client.nextOf("sessions")) as {
+      sessions: Array<{ label: string; name?: string }>;
+    };
+    expect(listed.sessions[0]).toMatchObject({ label: "app", name: "courageous-beaver" });
+
+    // A rename is just a re-register; every listing client hears the new name.
+    host.send({ type: "register", label: "app", name: "solemn-otter" });
+    const renamed = (await client.nextOf("sessions")) as {
+      sessions: Array<{ name?: string }>;
+    };
+    expect(renamed.sessions[0]).toMatchObject({ name: "solemn-otter" });
+
+    // A blank name is ignored (the last real name stands), and `joined` carries it.
+    host.send({ type: "register", label: "app", name: "  " });
+    await client.nextOf("sessions");
+    client.send({ type: "join", host: registered.id });
+    expect(await client.nextOf("joined")).toMatchObject({ name: "solemn-otter" });
     host.close();
     client.close();
   });

@@ -114,6 +114,9 @@ export interface SessionInfo {
   id: string;
   /** Human label the host announced (page title, app name). */
   label: string;
+  /** Human-visible session name the host announced ("courageous-beaver") —
+   * what the list shows first. A re-register updates it (a live rename). */
+  name?: string;
   /** Project directory the host lives in, when known (for grouping). */
   project?: string;
   /** The aiui channel tag this host belongs to, when it declared one. */
@@ -130,7 +133,7 @@ export type ClientToRelay = { type: "join"; host: string } | { type: "leave" } |
 /** relay → remote client. */
 export type RelayToClient =
   | { type: "sessions"; sessions: SessionInfo[] }
-  | { type: "joined"; host: string; label: string }
+  | { type: "joined"; host: string; label: string; name?: string }
   | { type: "joinRejected"; reason: string }
   | { type: "hostGone" }
   | BarState;
@@ -140,6 +143,8 @@ export type HostToRelay =
   | {
       type: "register";
       label: string;
+      /** Human-visible session name; re-registering with a new one renames live. */
+      name?: string;
       project?: string;
       channelTag?: string;
       /**

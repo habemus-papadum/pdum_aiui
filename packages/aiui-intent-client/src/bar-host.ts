@@ -55,12 +55,16 @@ export interface BarHostOptions {
   port: number;
   /** The session label the iPad sees in its picker. */
   label: string;
+  /** The human-visible session name ("courageous-beaver") the list leads with. */
+  name?: string;
   /** Test seam: build the socket (default: a real loopback `WebSocket`). */
   socketFactory?: (url: string) => BarSocket;
 }
 
 export interface BarHostHandle {
   connect(): void;
+  /** Rename the session live — re-registers, so an open list updates. */
+  setName(name: string): void;
   dispose(): void;
 }
 
@@ -106,13 +110,22 @@ export function createBarHost(opts: BarHostOptions): BarHostHandle {
   let unbind: (() => void) | undefined;
   let reconnect: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
+  let name = opts.name;
+
+  const registerFrame = (): string =>
+    encode({
+      type: "register",
+      label: opts.label,
+      ...(name !== undefined ? { name } : {}),
+      channelPort: opts.port,
+    });
 
   const dial = (): void => {
     const ws = factory(url);
     socket = ws;
 
     ws.addEventListener("open", () => {
-      ws.send(encode({ type: "register", label: opts.label, channelPort: opts.port }));
+      ws.send(registerFrame());
       // Bind AFTER open: bindRemoteBar publishes once immediately (the relay
       // caches it for join-time replay), and a publish into a CONNECTING socket
       // is silently dropped.
@@ -150,6 +163,12 @@ export function createBarHost(opts: BarHostOptions): BarHostHandle {
     connect: () => {
       if (socket === undefined) {
         dial();
+      }
+    },
+    setName: (next) => {
+      name = next;
+      if (socket !== undefined && socket.readyState === WS_OPEN) {
+        socket.send(registerFrame());
       }
     },
     dispose: () => {

@@ -208,6 +208,9 @@ export interface RemotePresentation {
 export interface SessionInfo {
   id: string;
   label: string;
+  /** Human-visible session name the host announced ("courageous-beaver") —
+   * what the picker shows first. A re-register updates it (a live rename). */
+  name?: string;
   project?: string;
   /** How this host wants the client presented, when it declared it. */
   presentation?: RemotePresentation;
@@ -223,7 +226,13 @@ export type ClientToRelay = { type: "join"; host: string } | { type: "leave" } |
 /** relay → iPad client. */
 export type RelayToClient =
   | { type: "sessions"; sessions: SessionInfo[] }
-  | { type: "joined"; host: string; label: string; presentation?: RemotePresentation }
+  | {
+      type: "joined";
+      host: string;
+      label: string;
+      name?: string;
+      presentation?: RemotePresentation;
+    }
   | { type: "joinRejected"; reason: string }
   | { type: "hostGone" }
   | VideoStatus
@@ -234,6 +243,8 @@ export type HostToRelay =
   | {
       type: "register";
       label: string;
+      /** Human-visible session name; re-registering with a new one renames live. */
+      name?: string;
       project?: string;
       channelPort?: number;
       presentation?: RemotePresentation;
