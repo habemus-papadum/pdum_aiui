@@ -62,14 +62,19 @@ export interface ClientSessionOptions {
   onVideoUp?: () => void;
   onVideoDown?: () => void;
   onClose?: () => void;
+  /** Lifecycle breadcrumbs (join, offers, track state). Defaults to a prefixed
+   * `console.info`; pass `() => {}` to silence. */
+  log?: (line: string) => void;
 }
 
 export class ClientSession {
   private readonly ws: WebSocket;
   private readonly core: RemoteClient;
   private pc: RTCPeerConnection | undefined;
+  private readonly log: (line: string) => void;
 
   constructor(private readonly opts: ClientSessionOptions) {
+    this.log = opts.log ?? ((line) => console.info("[pencil-client]", line));
     this.ws = new WebSocket(opts.url);
 
     this.core = new RemoteClient({
@@ -79,8 +84,18 @@ export class ClientSession {
       mode: opts.mode,
       ...(opts.overrides ? { overrides: opts.overrides } : {}),
       onSignal: (data) => void this.onSignal(data),
-      ...(opts.onVideoStatus ? { onVideoStatus: opts.onVideoStatus } : {}),
+      onVideoStatus: (status) => {
+        this.log(
+          `videoStatus ${status.state}${status.detail !== undefined ? ` — ${status.detail}` : ""}${
+            status.plane !== undefined
+              ? ` (plane ${Math.round(status.plane.width)}×${Math.round(status.plane.height)})`
+              : ""
+          }`,
+        );
+        opts.onVideoStatus?.(status);
+      },
       onHostGone: () => {
+        this.log("host gone");
         this.pc?.close();
         this.pc = undefined;
         opts.onVideoDown?.();
@@ -101,16 +116,21 @@ export class ClientSession {
           this.opts.onSessions?.(message.sessions);
           return;
         case "joined":
+          this.log(`joined ${message.host} ("${message.name ?? message.label}")`);
           this.opts.onJoined?.(message.host, message.label, message.presentation);
           return;
         case "joinRejected":
+          this.log(`join rejected — ${message.reason}`);
           this.opts.onJoinRejected?.(message.reason);
           return;
         default:
           this.core.receive(message);
       }
     });
-    this.ws.addEventListener("close", () => opts.onClose?.());
+    this.ws.addEventListener("close", () => {
+      this.log("relay socket closed");
+      opts.onClose?.();
+    });
   }
 
   // ── rooms ──────────────────────────────────────────────────────────────────
@@ -214,10 +234,12 @@ export class ClientSession {
     if (payload.sdp) {
       // Any SDP from the host is a fresh offer (plane switches re-offer):
       // rebuild this side rather than trying to renegotiate a stale pair.
+      this.log("offer received — rebuilding the peer connection");
       this.pc?.close();
       const pc = new RTCPeerConnection();
       this.pc = pc;
       pc.onconnectionstatechange = () => {
+        this.log(`peer connection ${pc.connectionState}`);
         if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
           this.opts.onVideoDown?.();
         }
@@ -228,6 +250,18 @@ export class ClientSession {
           video.srcObject = e.streams[0] ?? new MediaStream([e.track]);
           this.opts.onVideoUp?.();
         }
+        // A stopped host track ends here without any connectionState change —
+        // the frozen-last-frame failure. Say so, and drop the chrome to the
+        // status note instead of freezing silently. mute/unmute are the
+        // "frames stopped arriving" signals (they fire on stream pause too).
+        const track = e.track;
+        this.log(`video track attached (${track.id})`);
+        track.addEventListener("ended", () => {
+          this.log("video track ENDED — the host stopped its capture");
+          this.opts.onVideoDown?.();
+        });
+        track.addEventListener("mute", () => this.log("video track muted — frames stopped"));
+        track.addEventListener("unmute", () => this.log("video track unmuted — frames resumed"));
       };
       pc.onicecandidate = (e) => {
         if (e.candidate) {

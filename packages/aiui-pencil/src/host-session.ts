@@ -86,6 +86,13 @@ export interface HostSessionOptions {
   onZoom?: (centerU: number, centerV: number, scale: number) => void;
   /** Status snapshots, on every change. Bridge into a signal at the app edge. */
   onStatus?: (status: HostSessionStatus) => void;
+  /**
+   * Lifecycle breadcrumbs (register, viewers, refresh, deny). Defaults to a
+   * prefixed `console.info` — the remote path had ZERO logging and its bugs
+   * are timing-shaped, so visible-by-default is the point; pass `() => {}` to
+   * silence.
+   */
+  log?: (line: string) => void;
 }
 
 const RECONNECT_MS = 2000;
@@ -101,9 +108,11 @@ export class HostSession {
   private warm: ReturnType<typeof setInterval> | undefined;
   /** The announced session name — survives reconnects (each dial re-registers it). */
   private sessionName: string | undefined;
+  private readonly log: (line: string) => void;
 
   constructor(private readonly opts: HostSessionOptions) {
     this.sessionName = opts.name;
+    this.log = opts.log ?? ((line) => console.info("[pencil-host]", line));
   }
 
   /** Dial the relay. Reconnects every {@link RECONNECT_MS} until disposed. */
@@ -129,6 +138,11 @@ export class HostSession {
     this.core = core;
 
     ws.addEventListener("open", () => {
+      this.log(
+        `registered "${this.sessionName ?? this.opts.label}" — stream ${
+          this.opts.stream() !== undefined ? "held" : "absent"
+        }`,
+      );
       this.sendRegister();
       this.pushVideoStatus();
       this.publish("hosting");
@@ -154,6 +168,7 @@ export class HostSession {
     });
 
     ws.addEventListener("close", () => {
+      this.log(this.stopped ? "relay socket closed (disposed)" : "relay socket closed — redialing");
       for (const id of [...this.peers.keys()]) {
         this.dropViewer(id);
       }
@@ -171,6 +186,12 @@ export class HostSession {
    * (clients treat any incoming SDP as a fresh offer and rebuild their side).
    */
   refresh(): void {
+    const plane = this.opts.size?.() ?? this.opts.surface().size();
+    this.log(
+      `refresh — plane ${Math.round(plane.width)}×${Math.round(plane.height)}, stream ${
+        this.opts.stream() !== undefined ? "held" : "absent"
+      }, re-offering to ${this.peers.size} viewer(s)`,
+    );
     this.pushVideoStatus();
     this.publish();
     for (const id of [...this.peers.keys()]) {
@@ -180,6 +201,7 @@ export class HostSession {
 
   /** A capture attempt failed — tell every viewer why, verbatim. */
   deny(detail: string): void {
+    this.log(`capture denied — ${detail}`);
     this.send({ type: "videoStatus", state: "denied", detail });
     this.publish();
   }
@@ -187,6 +209,7 @@ export class HostSession {
   /** Rename the session live: re-registers, so every picker hears the new name. */
   setName(name: string): void {
     this.sessionName = name;
+    this.log(`renamed to "${name}"`);
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
       this.sendRegister();
     }
@@ -253,6 +276,7 @@ export class HostSession {
       // No capture yet (a tab plane before its grant): remember the viewer —
       // the join-time videoStatus replay already told it why — and offer when
       // refresh() says the stream exists.
+      this.log(`viewer ${peer} parked — no stream to offer yet`);
       this.peers.get(peer)?.close();
       this.peers.set(peer, null);
       this.publish();
@@ -261,6 +285,7 @@ export class HostSession {
     this.peers.get(peer)?.close();
     const pc = new RTCPeerConnection();
     this.peers.set(peer, pc);
+    this.log(`offering video to ${peer} (${this.peers.size} viewer(s))`);
     this.keepalive();
     this.publish();
 
@@ -286,6 +311,9 @@ export class HostSession {
   }
 
   private dropViewer(peer: string): void {
+    if (this.peers.has(peer)) {
+      this.log(`viewer ${peer} left (${this.peers.size - 1} viewer(s))`);
+    }
     this.peers.get(peer)?.close();
     this.peers.delete(peer);
     this.keepalive();

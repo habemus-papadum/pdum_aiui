@@ -116,6 +116,7 @@ describe("createBarHost", () => {
       port: 5099,
       label: "aiui intent — test",
       socketFactory: () => fs.socket,
+      log: () => {},
     }).connect();
     fs.open();
     await settle();
@@ -139,6 +140,7 @@ describe("createBarHost", () => {
       label: "aiui intent — test",
       name: "courageous-beaver",
       socketFactory: () => fs.socket,
+      log: () => {},
     });
     handle.connect();
     fs.open();
@@ -171,6 +173,7 @@ describe("createBarHost", () => {
       port: 5099,
       label: "t",
       socketFactory: () => fs.socket,
+      log: () => {},
     }).connect();
     fs.open();
     await settle();
@@ -188,6 +191,7 @@ describe("createBarHost", () => {
       port: 5099,
       label: "t",
       socketFactory: () => fs.socket,
+      log: () => {},
     }).connect();
     fs.open();
     await settle();

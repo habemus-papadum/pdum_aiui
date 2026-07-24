@@ -213,6 +213,27 @@ describe("the room relay core", () => {
     client.close();
   });
 
+  it("records received frames in the ring, collapsing same-shape runs", async () => {
+    const host = new Peer("/room/host");
+    await host.open();
+    await host.nextOf("registered");
+    host.send({ type: "register", label: "app" });
+    host.send({ type: "ping", value: 1 });
+    host.send({ type: "ping", value: 2 });
+    host.send({ type: "ping", value: 3 });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const res = await fetch(`http://127.0.0.1:${port}/room/frames`);
+    const body = (await res.json()) as {
+      frames: Array<{ from: string; type: string; n: number }>;
+    };
+    expect(body.frames.map(({ from, type, n }) => ({ from, type, n }))).toEqual([
+      { from: "host-1", type: "register", n: 1 },
+      { from: "host-1", type: "ping", n: 3 },
+    ]);
+    host.close();
+  });
+
   it("rejects a join to a missing host", async () => {
     const client = new Peer("/room/client");
     await client.open();

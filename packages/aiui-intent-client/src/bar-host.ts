@@ -57,6 +57,9 @@ export interface BarHostOptions {
   label: string;
   /** The human-visible session name ("courageous-beaver") the list leads with. */
   name?: string;
+  /** Lifecycle breadcrumbs (register, taps, redials). Defaults to a prefixed
+   * `console.info`; pass `() => {}` to silence. */
+  log?: (line: string) => void;
   /** Test seam: build the socket (default: a real loopback `WebSocket`). */
   socketFactory?: (url: string) => BarSocket;
 }
@@ -105,6 +108,7 @@ export function createBarHost(opts: BarHostOptions): BarHostHandle {
   const source = intentBarSource(opts.client);
   const url = `ws://127.0.0.1:${opts.port}/bar/host`;
   const factory = opts.socketFactory ?? ((u: string) => new WebSocket(u) as unknown as BarSocket);
+  const log = opts.log ?? ((line: string) => console.info("[bar-host]", line));
 
   let socket: BarSocket | undefined;
   let unbind: (() => void) | undefined;
@@ -125,6 +129,7 @@ export function createBarHost(opts: BarHostOptions): BarHostHandle {
     socket = ws;
 
     ws.addEventListener("open", () => {
+      log(`registered "${name ?? opts.label}" on :${opts.port}`);
       ws.send(registerFrame());
       // Bind AFTER open: bindRemoteBar publishes once immediately (the relay
       // caches it for join-time replay), and a publish into a CONNECTING socket
@@ -144,12 +149,16 @@ export function createBarHost(opts: BarHostOptions): BarHostHandle {
         }
         const message = decode(event.data);
         if (message) {
+          if (message.type === "command") {
+            log(`remote command "${message.command}"`);
+          }
           bound.host.receive(message as never);
         }
       });
     });
 
     ws.addEventListener("close", () => {
+      log(stopped ? "relay socket closed (disposed)" : "relay socket closed — redialing");
       unbind?.();
       unbind = undefined;
       if (!stopped) {

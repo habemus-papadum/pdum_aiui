@@ -27,6 +27,8 @@
  *                           pencil's last videoStatus, the bar's last bar):
  *                           the curl-able debug surface. HTTP only; the wire's
  *                           `sessions` frames stay lean.
+ *   GET  <prefix>/frames    the recent-frame ring (type + sender + count),
+ *                           newest last — "did the signal actually cross?"
  *   WS   <prefix>/host      a browser host
  *   WS   <prefix>/client    a remote client
  */
@@ -189,6 +191,34 @@ export function createRoomRelayBackend<M extends { type: string }>(
   let hostSeq = 0;
   let clientSeq = 0;
 
+  // ── the frame ring: every received frame's (sender, type), newest last ──────
+  // The sequencing record a debugging human curls at <prefix>/frames — did the
+  // videoStatus / re-offer / command actually cross? Consecutive same-shape
+  // frames collapse into one row with a count (a stroke is thousands of
+  // strokePoints; the ring must keep the story, not drown in it).
+  interface FrameRecord {
+    at: string;
+    from: string;
+    type: string;
+    n: number;
+    lastAt?: string;
+  }
+  const FRAME_RING = 300;
+  const frames: FrameRecord[] = [];
+  const record = (from: string, type: string): void => {
+    const at = new Date().toISOString();
+    const last = frames.at(-1);
+    if (last !== undefined && last.from === from && last.type === type) {
+      last.n += 1;
+      last.lastAt = at;
+      return;
+    }
+    frames.push({ at, from, type, n: 1 });
+    if (frames.length > FRAME_RING) {
+      frames.splice(0, frames.length - FRAME_RING);
+    }
+  };
+
   /** Send a wire frame if the socket is open. */
   const send = (ws: WebSocket, message: M): void => {
     if (ws.readyState === ws.OPEN) {
@@ -225,6 +255,7 @@ export function createRoomRelayBackend<M extends { type: string }>(
         continue;
       }
       if (alive.get(ws) === false) {
+        log(`${logPrefix}: ${conn.id} missed a heartbeat — terminating`);
         ws.terminate(); // close events run the normal leave/cleanup paths
         continue;
       }
@@ -292,6 +323,7 @@ export function createRoomRelayBackend<M extends { type: string }>(
       if (!message) {
         return;
       }
+      record(id, message.type);
       if (message.type === "register") {
         const reg = message as unknown as RegisterFields;
         conn.info.label = reg.label || "app";
@@ -326,6 +358,10 @@ export function createRoomRelayBackend<M extends { type: string }>(
 
     ws.on("close", () => {
       hosts.delete(id);
+      log(
+        `${logPrefix}: host ${id} ("${conn.info.name ?? conn.info.label}") gone — ` +
+          `${conn.clients.size} client(s) notified`,
+      );
       for (const client of conn.clients.values()) {
         client.host = undefined;
         send(client.ws, asWire({ type: "hostGone" }));
@@ -340,6 +376,7 @@ export function createRoomRelayBackend<M extends { type: string }>(
     const conn: ClientConn<M> = { id: `client-${++clientSeq}`, ws, host: undefined };
     clients.add(conn);
     track(ws);
+    log(`${logPrefix}: ${conn.id} connected (${clients.size} client(s))`);
     send(ws, asWire({ type: "sessions", sessions: sessions() }));
 
     const leaveRoom = (): void => {
@@ -350,6 +387,7 @@ export function createRoomRelayBackend<M extends { type: string }>(
       host.clients.delete(conn.id);
       conn.host = undefined;
       host.info.busy = host.clients.size > 0;
+      log(`${logPrefix}: ${conn.id} left ${host.id}`);
       send(host.ws, asWire({ type: "clientLeft", client: conn.id }));
       broadcastSessions();
     };
@@ -371,16 +409,19 @@ export function createRoomRelayBackend<M extends { type: string }>(
       if (!message) {
         return;
       }
+      record(conn.id, message.type);
       if (message.type === "join") {
         leaveRoom();
         const host = hosts.get((message as unknown as { host: string }).host);
         if (!host?.registered) {
+          log(`${logPrefix}: ${conn.id} join rejected — host not found`);
           send(ws, asWire({ type: "joinRejected", reason: "host not found" }));
           return;
         }
         conn.host = host;
         host.clients.set(conn.id, conn);
         host.info.busy = true;
+        log(`${logPrefix}: ${conn.id} joined ${host.id} ("${host.info.name ?? host.info.label}")`);
         send(
           ws,
           asWire(
@@ -415,6 +456,7 @@ export function createRoomRelayBackend<M extends { type: string }>(
     ws.on("close", () => {
       leaveRoom();
       clients.delete(conn);
+      log(`${logPrefix}: ${conn.id} disconnected (${clients.size} client(s))`);
     });
     ws.on("error", () => {});
   });
@@ -455,6 +497,10 @@ export function createRoomRelayBackend<M extends { type: string }>(
             ...(h.replaySlot !== undefined ? { replay: h.replaySlot } : {}),
           })),
       });
+      return true;
+    }
+    if (url.pathname === `${prefix}/frames`) {
+      sendJson(res, { frames });
       return true;
     }
     return false;

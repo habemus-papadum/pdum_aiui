@@ -25,6 +25,7 @@ export const REMOTE_APP_CSS = `
          color: #9aa3b5; background: rgba(13, 13, 17, 0.72); border: 1px solid #2a2a34;
          border-radius: 6px; padding: 3px 8px; cursor: pointer; }
   .hud[data-open="false"] { opacity: 0.6; }
+  .hud[data-stale="true"] { color: #e8b34a; border-color: #7a5c1e; }
   .host-bar { background: #101016; border-top: 1px solid #26262e; }
   .bar { display: flex; gap: 8px; padding: 10px; justify-content: center; align-items: center;
          flex-wrap: wrap; background: #16161c; border-top: 1px solid #26262e; }

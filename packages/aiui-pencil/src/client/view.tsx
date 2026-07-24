@@ -68,6 +68,37 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
   };
   const [hudOpen, setHudOpen] = createSignal(true);
 
+  // The stall detector: every PRESENTED frame stamps lastFrameAt (rVFC — the
+  // only signal that distinguishes "frames arriving" from "a frozen last
+  // frame"); a 1 s clock re-derives the age. Older Safaris without rVFC just
+  // omit the segment.
+  const [lastFrameAt, setLastFrameAt] = createSignal<number | undefined>(undefined);
+  const [clock, setClock] = createSignal(0);
+  setInterval(() => setClock((n) => n + 1), 1000);
+  const watchFrames = (el: HTMLVideoElement): void => {
+    const withVfc = el as HTMLVideoElement & {
+      requestVideoFrameCallback?: (callback: () => void) => number;
+    };
+    if (typeof withVfc.requestVideoFrameCallback !== "function") {
+      return;
+    }
+    const tick = (): void => {
+      setLastFrameAt(performance.now());
+      withVfc.requestVideoFrameCallback?.(tick);
+    };
+    withVfc.requestVideoFrameCallback(tick);
+  };
+  /** Seconds since the last presented frame, or undefined before the first. */
+  const frameAge = (): number | undefined => {
+    clock();
+    const at = lastFrameAt();
+    return at !== undefined ? (performance.now() - at) / 1000 : undefined;
+  };
+  const stalled = (): boolean => {
+    const age = frameAge();
+    return props.videoUp && age !== undefined && age > 3;
+  };
+
   /** The three numbers that decide every coordinate bug, plus the link. */
   const hudLine = (): string => {
     geomRev();
@@ -81,6 +112,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       stats?.frameIntervalMs !== undefined && stats.frameIntervalMs > 0
         ? `${Math.round(1000 / stats.frameIntervalMs)}fps`
         : "—fps";
+    const age = frameAge();
     return [
       `host ${host !== undefined ? px(host.width, host.height) : "—"}`,
       `video ${track && video !== undefined ? px(video.videoWidth, video.videoHeight) : "—"}`,
@@ -88,6 +120,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       `rtt ${ms(stats?.rttMs)}`,
       `jit ${ms(stats?.jitterBufferMs)}`,
       fps,
+      ...(age !== undefined ? [`frame ${age < 10 ? age.toFixed(1) : Math.round(age)}s`] : []),
     ].join(" · ");
   };
 
@@ -149,6 +182,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
           // from the stage's ref was a bet on ref ordering, and it lost.
           el.addEventListener("resize", recompute);
           el.addEventListener("loadedmetadata", recompute);
+          watchFrames(el);
         }}
         autoplay
         muted
@@ -162,6 +196,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
         class="hud"
         data-testid="hud"
         data-open={hudOpen() ? "true" : "false"}
+        data-stale={stalled() ? "true" : "false"}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={() => setHudOpen(!hudOpen())}
       >

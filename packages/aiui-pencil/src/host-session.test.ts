@@ -65,6 +65,7 @@ describe("HostSession wire framing", () => {
       size: () => ({ width: 1440, height: 812 }),
       stream: () => stream,
       streamHint: () => "grant the tab first",
+      log: () => {},
     });
     session.connect();
     const ws = FakeWebSocket.instances.at(-1);
@@ -103,6 +104,7 @@ describe("HostSession wire framing", () => {
       label: "lab",
       surface: () => surface,
       stream: () => undefined,
+      log: () => {},
     });
     session.connect();
     const ws = FakeWebSocket.instances.at(-1);
