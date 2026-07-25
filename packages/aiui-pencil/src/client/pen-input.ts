@@ -64,11 +64,21 @@ export interface PenActivity {
   penDown(): boolean;
   /** `performance.now()` of the last pen lift (0 = never). */
   lastPenUp(): number;
-  /** Lifetime counters — the HUD's stroke ledger (the X-stroke hunt: which
-   * leg lost a stroke is unanswerable without knowing how many this layer
-   * SAW). began/ended = strokes this binder started/committed; cancelled =
-   * pointercancel or supersede kills. */
-  counts(): { began: number; ended: number; cancelled: number };
+  /** Lifetime counters — the HUD's ledgers (which leg lost an input is
+   * unanswerable without knowing how many this layer SAW). Strokes:
+   * began/ended/cancelled. Navigation: scrolls/zooms emitted. Touches:
+   * touchDowns seen, palms rejected, maxTouches simultaneously tracked —
+   * a pan that emits nothing names its reason here. */
+  counts(): {
+    began: number;
+    ended: number;
+    cancelled: number;
+    scrolls: number;
+    zooms: number;
+    touchDowns: number;
+    palms: number;
+    maxTouches: number;
+  };
 }
 
 /** A touch contact larger than this (either axis) is a palm, not a finger. */
@@ -94,6 +104,11 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
   let began = 0;
   let ended = 0;
   let cancelled = 0;
+  let scrolls = 0;
+  let zooms = 0;
+  let touchDowns = 0;
+  let palms = 0;
+  let maxTouches = 0;
   const pinch = { dist: 0, cx: 0, cy: 0 };
 
   const localSample = (e: PointerEvent): PenSample => {
@@ -162,6 +177,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
       const box = deps.plane.box();
       const scale = d / pinch.dist;
       if (Math.abs(scale - 1) > 0.01) {
+        zooms += 1;
         deps.sink.zoom(
           (cx - rect.left - box.left) / box.width,
           (cy - rect.top - box.top) / box.height,
@@ -171,6 +187,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
       const du = box.width > 0 ? -(cx - pinch.cx) / box.width : 0;
       const dv = box.height > 0 ? -(cy - pinch.cy) / box.height : 0;
       if (du !== 0 || dv !== 0) {
+        scrolls += 1;
         deps.sink.scroll(du, dv);
       }
     }
@@ -237,6 +254,11 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
       return;
     }
     // touch
+    touchDowns += 1;
+    if (p.palm) {
+      palms += 1;
+    }
+    maxTouches = Math.max(maxTouches, drawTouches().length);
     if (p.palm || penDrawing()) {
       return; // palms never matter, and no finger interrupts the pencil
     }
@@ -306,6 +328,15 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
   return {
     penDown: () => penContacts > 0,
     lastPenUp: () => lastPenUp,
-    counts: () => ({ began, ended, cancelled }),
+    counts: () => ({
+      began,
+      ended,
+      cancelled,
+      scrolls,
+      zooms,
+      touchDowns,
+      palms,
+      maxTouches,
+    }),
   };
 }

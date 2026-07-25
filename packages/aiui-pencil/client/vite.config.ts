@@ -28,6 +28,12 @@ const OUT_DIR = fileURLToPath(new URL("../assets/client", import.meta.url));
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   base: "/pencil/",
+  // The HUD's build stamp: staleness on the iPad has burned a debugging round
+  // more than once (Safari caching, an unrebuilt bundle). Baked at build time
+  // for the artifact; at channel-boot time in dev middleware (same config).
+  define: {
+    __AIUI_CLIENT_BUILD__: JSON.stringify(new Date().toISOString().slice(5, 16).replace("T", " ")),
+  },
   plugins: [solid()],
   build: {
     outDir: OUT_DIR,

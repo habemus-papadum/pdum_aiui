@@ -21,6 +21,11 @@ import { penWriting } from "./chrome-guard";
 import { bindPenInput, type PenActivity } from "./pen-input";
 import { createPlaneTracker } from "./plane";
 
+/** Injected by client/vite.config.ts (build AND channel dev middleware); the
+ * Lab's rig serves these sources without it, hence the typeof guard. */
+declare const __AIUI_CLIENT_BUILD__: string | undefined;
+const CLIENT_BUILD = typeof __AIUI_CLIENT_BUILD__ === "string" ? __AIUI_CLIENT_BUILD__ : "dev";
+
 export interface RemoteViewProps {
   session: ClientSession;
   tool: () => Tool;
@@ -155,6 +160,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
     const counts = pen?.counts();
     const snap = preview?.ink();
     return [
+      CLIENT_BUILD,
       `host ${host !== undefined ? px(host.width, host.height) : "—"}`,
       `video ${track && video !== undefined ? px(video.videoWidth, video.videoHeight) : "—"}`,
       `box ${px(box.width, box.height)}`,
@@ -163,6 +169,12 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       fps,
       ...(age !== undefined ? [`frame ${age < 10 ? age.toFixed(1) : Math.round(age)}s`] : []),
       ...(counts !== undefined ? [`pen ${counts.began}/${counts.ended}/${counts.cancelled}`] : []),
+      ...(counts !== undefined
+        ? [
+            `nv ${counts.scrolls}/${counts.zooms}`,
+            `tch ${counts.touchDowns}p${counts.palms}m${counts.maxTouches}`,
+          ]
+        : []),
       ...(snap !== undefined ? [`pv ${snap.strokes.length}+${snap.live.length}`] : []),
       `raw w${rawWindow}/s${rawStage}`,
       `tgt ${lastTarget}`,
