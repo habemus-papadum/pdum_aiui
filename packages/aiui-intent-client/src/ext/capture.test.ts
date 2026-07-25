@@ -7,7 +7,12 @@
  * (5120/897 ≈ 5.7) sent every crop into the black bars.
  */
 import { describe, expect, it } from "vitest";
-import { letterboxFit, onHeldStreamChange, releaseTabStream } from "./capture";
+import {
+  describeMissingStream,
+  letterboxFit,
+  onHeldStreamChange,
+  releaseTabStream,
+} from "./capture";
 
 describe("letterboxFit", () => {
   it("maps the measured display-sized frame: height-fit, centered horizontally", () => {
@@ -32,6 +37,32 @@ describe("letterboxFit", () => {
     expect(fit.scale).toBe(1);
     expect(fit.offX).toBe(0);
     expect(fit.offY).toBe(500);
+  });
+});
+
+describe("describeMissingStream — the three-way split", () => {
+  const REMEDY = "right-click → aiui: grant capture";
+
+  it("names the grant remedy only when there IS no grant", () => {
+    expect(describeMissingStream(7, undefined, REMEDY)).toBe(
+      `this tab needs a capture grant on the host — ${REMEDY}`,
+    );
+  });
+
+  it("says wrong-tab when a grant exists elsewhere", () => {
+    expect(describeMissingStream(7, 9, REMEDY)).toBe(
+      `the host is on a different tab than the granted one — switch back, or grant this one (${REMEDY})`,
+    );
+  });
+
+  it("points at the turn when the grant is already in place", () => {
+    expect(describeMissingStream(7, 7, REMEDY)).toBe(
+      "capture is granted — open a turn on the host to start video",
+    );
+  });
+
+  it("says so when the host has no tab at all", () => {
+    expect(describeMissingStream(undefined, undefined, REMEDY)).toBe("the host has no tab in view");
   });
 });
 

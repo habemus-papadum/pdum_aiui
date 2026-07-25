@@ -25,7 +25,7 @@ import { type CdpAlignment, describeCdpAlignment } from "../cdp-align";
 import { createIntentClient, type IntentClient, type IntentLanes } from "../client";
 import { installConfigAutoSave, loadConfigBase } from "../config-store";
 import { type ChannelLanes, createChannelLanes } from "../lanes";
-import { createPencilHost } from "../pencil-host";
+import { createPencilHost, type PencilHost } from "../pencil-host";
 import {
   asContributedSelection,
   channelCwd,
@@ -40,7 +40,7 @@ import type { SessionNameControl } from "../ui/session-name-chip";
 import { installPanelKeys, type Narration } from "../ui/shell";
 import { TargetTab } from "../ui/target-tab";
 import { superviseCdpAlignment } from "./align";
-import { heldStreamFor, onHeldStreamChange } from "./capture";
+import { describeMissingStream, heldStreamFor, onHeldStreamChange } from "./capture";
 import { discoverChannel, listChannels, pinPort, probeNativeHost, rememberPort } from "./channel";
 import { connectExtensionBus } from "./extension-bus";
 import { superviseMicGrant } from "./mic-grant";
@@ -110,6 +110,8 @@ async function boot(): Promise<{
   host: Awaited<ReturnType<typeof connectExtensionBus>>;
   /** The panel's remote identity (iPad pickers) — absent with no channel. */
   session?: SessionNameControl;
+  /** The remote-pencil host — the grant gesture re-announces through it. */
+  pencilHost?: PencilHost;
 }> {
   const { id: windowId } = await chrome.windows.getCurrent();
   if (windowId === undefined) {
@@ -219,7 +221,13 @@ async function boot(): Promise<{
     port,
     tab: () => host.activeTab(),
     stream: () => heldStreamFor(host.activeTab()),
-    streamHint: () => `grant this tab with ${hint} to start its video`,
+    // Read fresh on every videoStatus push: "no stream" is three different
+    // facts (no grant / wrong tab / no open turn), and the iPad should name
+    // the one remedy that actually applies (the three-way split, A2 fix #4).
+    streamHint: () => {
+      const ctx = client.context();
+      return describeMissingStream(ctx.activeTab, ctx.grantedTab, hint);
+    },
     label: `aiui intent — window ${windowId}`,
     name: sessionName(),
     // The 'ipad' status pill: connected remote pencil clients, live from the
@@ -307,12 +315,12 @@ async function boot(): Promise<{
     "[intent-client]",
     `channel :${port} — this panel targets window ${windowId}'s tabs`,
   );
-  return { client, lanes, windowId, port, host, session };
+  return { client, lanes, windowId, port, host, session, pencilHost };
 }
 
 let blipSink: ((key: string) => void) | undefined;
 
-const { client, lanes, windowId, port, host, session } = await boot();
+const { client, lanes, windowId, port, host, session, pencilHost } = await boot();
 
 // The microphone, probed at every panel open (M9's deferred grant flow — see
 // mic-grant.ts). Silent where the mic works (flagged session browser; stock
@@ -357,6 +365,10 @@ superviseCdpAlignment({
  */
 const activate = (tabId: number | undefined): void => {
   activationGesture(client, tabId ?? client.context().activeTab);
+  // The grant changes which "no video" sentence is true (the three-way
+  // split), but moves no stream — re-announce so the iPad's note updates
+  // the moment the grant lands, not at the next stream edge.
+  pencilHost?.announce();
 };
 chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (isActivateMessage(msg) && msg.windowId === windowId) {

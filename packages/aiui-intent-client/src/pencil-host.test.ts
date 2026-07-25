@@ -226,6 +226,10 @@ describe("createPencilHost", () => {
     expect(fs.calls).toContain("refresh");
     expect(bus.log).toContain('page:pencil@9 {"op":"size"}');
 
+    // announce() forwards (no re-offer — the grant-landed / plane-moved push).
+    host.announce();
+    expect(fs.calls).toContain("announce");
+
     host.dispose();
     expect(fs.calls).toContain("dispose");
     // Deaf after dispose: a later switch does not re-query.

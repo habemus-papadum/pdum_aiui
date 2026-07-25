@@ -86,6 +86,30 @@ export function letterboxFit(
 }
 
 /**
+ * Why there is no stream for the tab in view, as the ONE precise sentence the
+ * iPad shows (videoStatus.detail). "No stream" is three different facts with
+ * three different remedies, and the old single message ("grant this tab…")
+ * sent the user to re-grant a tab that was already granted (found live
+ * 2026-07-25). The host knows which case it is in; say that one. Pure.
+ */
+export function describeMissingStream(
+  activeTab: number | undefined,
+  grantedTab: number | undefined,
+  grantRemedy: string,
+): string {
+  if (activeTab === undefined) {
+    return "the host has no tab in view";
+  }
+  if (grantedTab === undefined) {
+    return `this tab needs a capture grant on the host — ${grantRemedy}`;
+  }
+  if (grantedTab !== activeTab) {
+    return `the host is on a different tab than the granted one — switch back, or grant this one (${grantRemedy})`;
+  }
+  return "capture is granted — open a turn on the host to start video";
+}
+
+/**
  * The warm `tabCapture` MediaStream for `tabId`, or `undefined` (none held, or
  * held for another tab). This is the pencil host's video source in the MV3 tier
  * (pencil-host.ts) — the same stream the shot grabs off, shared, not a second

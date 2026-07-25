@@ -99,7 +99,8 @@ function GrantBanner(props: { client: IntentClient }) {
           one-click grants).
         </div>
         <div style="opacity: 0.7; margin-top: 2px">
-          talk, text, selection, and pencil work without it; shots and video need it.
+          talk, text, selection, and pencil work without it; shots, video, and the iPad's picture
+          need it.
         </div>
       </div>
     </Show>

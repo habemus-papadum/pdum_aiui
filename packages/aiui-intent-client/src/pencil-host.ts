@@ -75,6 +75,9 @@ export interface PencilHost {
   connect(): void;
   /** Re-query the plane size and re-offer video (after a tab switch). */
   refresh(): void;
+  /** Re-push videoStatus without re-offering — for facts that change the
+   * MESSAGE but not the stream (the grant landing; the plane moving). */
+  announce(): void;
   /** Rename the session live — the iPad's picker updates without a reconnect. */
   setName(name: string): void;
   dispose(): void;
@@ -260,6 +263,9 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
     refresh: () => {
       refreshSize();
       session.refresh();
+    },
+    announce: () => {
+      session.announce?.();
     },
     setName: (name) => {
       session.setName?.(name);
