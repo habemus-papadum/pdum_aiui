@@ -11,6 +11,7 @@
  * config surface is visible now and cannot get lost on the road to parity.
  */
 
+import { controlByName } from "@habemus-papadum/aiui-viz";
 import type { BarNode } from "@habemus-papadum/aiui-viz/modal";
 import type { IntentContext } from "./spec";
 
@@ -99,17 +100,19 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         hint: { key: "v", label: "video", icon: "🎥" },
         litWhen: ({ state }) => state.video === true,
         children: [
-          {
-            command: "fpsMode",
-            hint: { key: "f", label: "constant", icon: "⏱" },
-            litWhen: ({ state }) => state.videoMode === "constant",
-          },
+          // The cadence, made READABLE (owner, 2026-07-25): a mode SELECT
+          // (smart | constant — the videoMode agent control) replaces the
+          // ambiguous "constant" cap whose unlit state didn't say "smart";
+          // the period slider stays visible and DIMS unless constant is the
+          // mode — the honest signal that smart never reads it (smart's
+          // quiescence gate is its own fixed clock).
+          { kind: "widget", control: "videoMode", widget: "select", label: "mode" },
           {
             kind: "widget",
             control: "videoPeriodSec",
             widget: "slider",
-            label: "s/frame",
-            showWhen: ({ state }) => state.videoMode === "constant",
+            label: "every",
+            enabledWhen: ({ state }) => state.videoMode === "constant",
           },
         ],
       },
@@ -132,11 +135,13 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
           { command: "pencilClear", hint: { key: "c", label: "clear", icon: "🧹" } },
           { kind: "widget", control: "pencilVanish", widget: "toggle", label: "vanish" },
           {
+            // Visible with its siblings, DIMMED unless vanish is on (owner,
+            // 2026-07-25): a live-looking fade slider with vanish off lied.
             kind: "widget",
             control: "pencilFade",
             widget: "slider",
             label: "fade",
-            showWhen: ({ state }) => state.pencil === true,
+            enabledWhen: () => controlByName("pencilVanish")?.get() === true,
           },
         ],
       },

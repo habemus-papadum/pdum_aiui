@@ -100,12 +100,16 @@ const cdpPillState = (alignment: CdpAlignment | undefined): Pill["state"] => {
 export function StatusPills(props: { client: IntentClient; micLevel?: () => number }) {
   const { client } = props;
 
-  // The REC meter: poll talk.level while a talk window is open (display
-  // state at display cadence — the machine is untouched).
+  // The REC meter: poll talk.level while a talk WINDOW is open — talk mode ∧
+  // an open turn (C3′: hands-free STANDS outside turns with nothing
+  // recording, so the meter must not show for a standing-idle mode — found
+  // live 2026-07-25: the volume bar lingered after escaping the turn).
   const [micLevel, setMicLevel] = createSignal(0, { ownedWrite: true });
   let meterTimer: ReturnType<typeof setInterval> | undefined;
+  const windowOpen = (): boolean =>
+    client.state().talk !== "off" && client.state().phase === "turn";
   createEffect(
-    () => client.state().talk !== "off" && props.micLevel !== undefined,
+    () => windowOpen() && props.micLevel !== undefined,
     (talking) => {
       clearInterval(meterTimer);
       if (talking) {
@@ -137,8 +141,25 @@ export function StatusPills(props: { client: IntentClient; micLevel?: () => numb
       },
       {
         label: "rec",
-        state: talk === "off" ? "off" : state.micMuted === true ? "busy" : "live",
-        detail: talk === "off" ? undefined : state.micMuted === true ? `${talk} · muted` : talk,
+        // Window semantics (C3′): "live"/"muted" only while a turn routes the
+        // mic; a STANDING hands-free with no turn shows "busy" (armed, idle —
+        // nothing records) so the pill never claims a recording that isn't.
+        state:
+          talk === "off"
+            ? "off"
+            : state.phase !== "turn"
+              ? "busy"
+              : state.micMuted === true
+                ? "busy"
+                : "live",
+        detail:
+          talk === "off"
+            ? undefined
+            : state.phase !== "turn"
+              ? `${talk} · standing (nothing records until a turn)`
+              : state.micMuted === true
+                ? `${talk} · muted`
+                : talk,
       },
       { label: "stream", state: claimPillState(claims.tabStream) },
       { label: "video", state: claimPillState(claims.videoSample) },

@@ -42,6 +42,10 @@ export const BAR_STYLES = `
     border-color: #16a34a; transition: none; }
   .aiui-cap[disabled] { opacity: 0.35; cursor: default; }
   .aiui-cap[data-tone="danger"] { border-color: color-mix(in srgb, #dc2626 60%, transparent); }
+  .aiui-widget .slider-label { opacity: 0.7; }
+  .aiui-widget .slider-readout { font-variant-numeric: tabular-nums; min-width: 2.6em;
+    text-align: right; opacity: 0.85; }
+  .aiui-widget:has(input:disabled) { opacity: 0.45; }
   .aiui-widget { display: inline-flex; align-items: center; gap: 4px; font-size: 12px;
     opacity: 0.9; }
   .aiui-widget select { font: inherit; }
@@ -97,8 +101,10 @@ function BarWidget(props: { item: () => Extract<BarItem, { kind: "widget" }> }) 
         <span class="aiui-widget" data-widget={props.item().control}>
           <Switch>
             <Match when={props.item().widget === "slider"}>
-              {/* Bare range, no label/readout — text beside a slider relayouts
-                  as the value moves (owner); the tooltip carries the name. */}
+              {/* Label + FIXED-WIDTH tabular readout (owner, 2026-07-25): the
+                  value must be visible, and dragging must not bounce the
+                  layout — tabular-nums + a min-width absorb every digit. */}
+              <span class="slider-label">{props.item().label}</span>
               <input
                 type="range"
                 name={props.item().control}
@@ -110,6 +116,10 @@ function BarWidget(props: { item: () => Extract<BarItem, { kind: "widget" }> }) 
                 disabled={!props.item().enabled}
                 onInput={(e) => control.set(Number(e.currentTarget.value) as never)}
               />
+              <span class="slider-readout">
+                {control.get() as number}
+                {control.meta.unit ?? "s"}
+              </span>
             </Match>
             <Match when={props.item().widget === "toggle"}>
               <ControlToggle of={control as ControlBox<boolean>} label={props.item().label} />

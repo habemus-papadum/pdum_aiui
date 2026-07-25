@@ -788,14 +788,18 @@ describe("the bar: a tree presented linearly", () => {
     expect(findCap(r, "mute")).toBeDefined();
 
     r.client.dispatch("video");
-    expect(findCap(r, "fpsMode")).toBeDefined();
-    expect(
-      flatBar(r).find((i) => i.kind === "widget" && i.control === "videoPeriodSec"),
-    ).toBeUndefined(); // smart mode — no rate slider
+    // The cadence is a MODE SELECT + an always-visible slider now (owner,
+    // 2026-07-25) — the "constant" cap whose unlit state didn't read as
+    // "smart" is gone; the slider dims via enabledWhen unless constant.
+    expect(flatBar(r).find((i) => i.kind === "widget" && i.control === "videoMode")).toBeDefined();
+    const slider = () =>
+      flatBar(r).find((i) => i.kind === "widget" && i.control === "videoPeriodSec") as
+        | { enabled: boolean }
+        | undefined;
+    expect(slider()).toBeDefined(); // always visible…
+    expect(slider()?.enabled).toBe(false); // …but DIMMED in smart mode
     r.client.dispatch("fpsMode");
-    expect(
-      flatBar(r).find((i) => i.kind === "widget" && i.control === "videoPeriodSec"),
-    ).toBeDefined();
+    expect(slider()?.enabled).toBe(true); // constant: the slider is live
   });
 
   it("labels are STABLE — engaging a mode never rewrites its cap text", () => {
