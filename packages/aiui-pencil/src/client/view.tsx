@@ -104,6 +104,34 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
     return props.videoUp && age !== undefined && age > 3;
   };
 
+  // The RAW pen-event ledger (X-stroke hunt, round 2): the binder saw 16 of
+  // 18 strokes, so the loss is UPSTREAM of our logic. Count pen pointerdowns
+  // at window-capture (did Safari deliver at all?) and stage-capture (did it
+  // land in the stage subtree?), and name the last down's target. The three-way
+  // split: w short = Safari/system dropped it; w>s = it landed OUTSIDE the
+  // stage (the chrome); s > strokes = a stage CHILD stopped propagation.
+  let rawWindow = 0;
+  let rawStage = 0;
+  let lastTarget = "—";
+  const describeTarget = (event: PointerEvent): string => {
+    const t = event.composedPath?.()[0] ?? event.target;
+    if (!(t instanceof Element)) {
+      return String(t);
+    }
+    const cls = typeof t.className === "string" && t.className !== "" ? `.${t.className}` : "";
+    return `${t.tagName}${cls}`;
+  };
+  window.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (event.pointerType === "pen") {
+        rawWindow += 1;
+        lastTarget = describeTarget(event);
+      }
+    },
+    true,
+  );
+
   /** The three numbers that decide every coordinate bug, plus the link. */
   const hudLine = (): string => {
     geomRev();
@@ -133,6 +161,8 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       ...(age !== undefined ? [`frame ${age < 10 ? age.toFixed(1) : Math.round(age)}s`] : []),
       ...(counts !== undefined ? [`pen ${counts.began}/${counts.ended}/${counts.cancelled}`] : []),
       ...(snap !== undefined ? [`pv ${snap.strokes.length}+${snap.live.length}`] : []),
+      `raw w${rawWindow}/s${rawStage}`,
+      `tgt ${lastTarget}`,
     ].join(" · ");
   };
 
@@ -146,6 +176,18 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
 
   const bindStage = (element: HTMLDivElement): void => {
     stage = element;
+
+    // The raw ledger's stage leg — CAPTURE phase, so a child's bubble-phase
+    // stopPropagation cannot hide the event from this counter.
+    element.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (event.pointerType === "pen") {
+          rawStage += 1;
+        }
+      },
+      true,
+    );
 
     // The plane: congruent to the displayed picture; the preview lives inside
     // it, so preview pixels sit exactly over the video pixels they anticipate.
