@@ -912,6 +912,20 @@ export class PencilSurface {
   }
 
   private bindLocalInput(): void {
+    // iPadOS Safari drops the POINTERDOWN of a fast second pen contact after
+    // a lift (measured live 2026-07-25: the second diagonal of a quickly-drawn
+    // X, on the Lab's own paper — no remote machinery anywhere; native apps
+    // unaffected, so it is Safari's pencil gesture recognition claiming the
+    // contact). Cancelling the TOUCH stream at the canvas opts out of that
+    // recognition; per spec it never suppresses pointer events (they are
+    // dispatched before the corresponding touch events), and finger drawing
+    // still rides the pointer path.
+    const swallowTouch = (e: TouchEvent): void => {
+      e.preventDefault();
+    };
+    this.canvas.addEventListener("touchstart", swallowTouch, { passive: false });
+    this.canvas.addEventListener("touchmove", swallowTouch, { passive: false });
+
     this.canvas.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse" && e.button !== 0) {
         return;

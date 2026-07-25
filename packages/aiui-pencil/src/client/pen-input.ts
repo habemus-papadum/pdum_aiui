@@ -179,6 +179,19 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
     pinch.cy = cy;
   };
 
+  // The Safari pencil-gesture opt-out (surface.ts bindLocalInput has the full
+  // story): cancel the touch stream so a fast second pen contact's pointerdown
+  // is not claimed by the system. The HUD button is exempt — preventDefault on
+  // touchstart would kill its synthesized click (its own guard handles palms).
+  const swallowTouch = (e: TouchEvent): void => {
+    if (e.target instanceof Element && e.target.closest(".hud") !== null) {
+      return;
+    }
+    e.preventDefault();
+  };
+  element.addEventListener("touchstart", swallowTouch, { passive: false });
+  element.addEventListener("touchmove", swallowTouch, { passive: false });
+
   element.addEventListener("pointerdown", (e) => {
     try {
       element.setPointerCapture(e.pointerId);
