@@ -33,7 +33,15 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         hint: { key: "", label: "turn", icon: "💬" },
         litWhen: ({ state }) => inTurn(state.phase),
         children: [
-          { command: "shot", hint: { key: "s", label: "shot", icon: "🖼" } },
+          {
+            // Remote (owner, 2026-07-25): a one-off screenshot from the couch.
+            // Turn-tier, so the iPad's button EXISTS only while a turn is open
+            // (the projection is live — caps come and go with their tiers) and
+            // dims whenever the grant isn't on the tab in view (`available`).
+            command: "shot",
+            remote: true,
+            hint: { key: "s", label: "shot", icon: "🖼" },
+          },
           {
             command: "region",
             hint: { key: "a", label: "area", icon: "⛶" },
