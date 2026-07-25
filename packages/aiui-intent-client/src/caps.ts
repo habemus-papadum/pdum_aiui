@@ -104,31 +104,34 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
               },
             ],
           },
-          // The pencil markup surface (mouse + stylus locally, iPad remotely) —
-          // a `k` on/off toggle that lights, revealing clear · vanish · fade
-          // (owner, 2026-07-16).
-          // Remote: the iPad IS the remote pencil — the person holding it must
-          // be able to enter/leave ink mode without reaching for the desktop
-          // (owner, 2026-07-17). Children stay desktop-only: the iPad strip
-          // already carries its own undo/clear.
-          {
-            command: "pencil",
-            remote: true,
-            hint: { key: "k", label: "pencil", icon: "🖊" },
-            litWhen: ({ state }) => state.pencil === true,
-            children: [
-              { command: "pencilClear", hint: { key: "c", label: "clear", icon: "🧹" } },
-              { kind: "widget", control: "pencilVanish", widget: "toggle", label: "vanish" },
-              {
-                kind: "widget",
-                control: "pencilFade",
-                widget: "slider",
-                label: "fade",
-                showWhen: ({ state }) => state.pencil === true,
-              },
-            ],
-          },
           { command: "send", hint: { key: "⏎", label: "send", icon: "📤" } },
+        ],
+      },
+      // The pencil markup surface (mouse + stylus locally, iPad remotely) — a
+      // `k` on/off toggle that lights, revealing clear · vanish · fade. Lives
+      // on the ARMED tier since C2 (owner, 2026-07-25 — markup is a source):
+      // togglable and clearable with no turn open, on the desktop bar and the
+      // iPad's remote bar alike (the founding complaint was opening a turn
+      // just to clear ink).
+      // Remote: the iPad IS the remote pencil — the person holding it must
+      // be able to enter/leave ink mode without reaching for the desktop
+      // (owner, 2026-07-17). Children stay desktop-only: the iPad strip
+      // already carries its own undo/clear.
+      {
+        command: "pencil",
+        remote: true,
+        hint: { key: "k", label: "pencil", icon: "🖊" },
+        litWhen: ({ state }) => state.pencil === true,
+        children: [
+          { command: "pencilClear", hint: { key: "c", label: "clear", icon: "🧹" } },
+          { kind: "widget", control: "pencilVanish", widget: "toggle", label: "vanish" },
+          {
+            kind: "widget",
+            control: "pencilFade",
+            widget: "slider",
+            label: "fade",
+            showWhen: ({ state }) => state.pencil === true,
+          },
         ],
       },
     ],

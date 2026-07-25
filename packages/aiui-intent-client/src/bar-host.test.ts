@@ -93,16 +93,17 @@ function fakeSocket() {
 }
 
 describe("intentBarSource — the remote subset", () => {
-  it("projects exactly the remote-flagged caps (hands-free, video, pencil) while in a turn", () => {
+  it("projects exactly the remote-flagged caps (pencil, hands-free, video) while in a turn", () => {
     const client = makeClient();
     enterTurn(client);
-    expect(remoteCommands(client)).toEqual(["handsFree", "video", "pencil"]);
+    // pencil first: it rides the ARMED tier since C2 (an earlier bar row).
+    expect(remoteCommands(client)).toEqual(["pencil", "handsFree", "video"]);
   });
 
-  it("projects nothing remote outside a turn — the tier is not even revealed", () => {
+  it("projects the pencil while merely armed (C2); talk/video stay behind the turn", () => {
     const client = makeClient();
     client.setContext({ connected: true }); // the edge arms — not in a turn
-    expect(remoteCommands(client)).toEqual([]);
+    expect(remoteCommands(client)).toEqual(["pencil"]);
   });
 });
 
@@ -127,7 +128,7 @@ describe("createBarHost", () => {
       label: "aiui intent — test",
       channelPort: 5099,
     });
-    expect(fs.lastBar()?.rows.map((r) => r.command)).toEqual(["handsFree", "video", "pencil"]);
+    expect(fs.lastBar()?.rows.map((r) => r.command)).toEqual(["pencil", "handsFree", "video"]);
   });
 
   it("carries the session name in register, and setName re-registers live", async () => {

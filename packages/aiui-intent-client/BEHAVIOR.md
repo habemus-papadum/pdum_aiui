@@ -114,8 +114,13 @@ turn end no longer freezes it, and an in-turn shot rides the same warmth it alwa
 CDP tier's screencast already had a viewer-driven lifecycle (a joining iPad starts it) — C1
 made the MV3 tier agree. **Video SAMPLING stays turn-scoped on purpose**: sampled frames
 feed the PROMPT, and the prompt is the turn — that is the sources/routes line, not a
-leftover. Still turn-scoped until their slices land: the pencil surface + clear (C2),
-talk/hands-free (C3).
+leftover.
+
+**C2 (landed): the pencil rides armed.** The mode toggles, the surface engages, and clear
+works while merely armed (see "Markup: the pencil"); the pencil cap moved to the armed tier,
+so the iPad's remote bar carries it with no turn open; `k`/`c` ride the armed key layer
+(panel-document scope — page keys stay the page's outside a turn). Still turn-scoped until
+its slice lands: talk/hands-free (C3).
 
 ## The bar
 
@@ -135,10 +140,13 @@ talk/hands-free (C3).
 The pencil replaced the legacy ink surface (it was integrated as ink's exact twin, and the
 twin won). The shape, at every layer: a durable on/off mode region (`pencil`, `k`, cleared by
 `disarmed-is-hard`), a reconciler claim that engages the in-page surface while the mode is on
-in an open turn and re-points it on a tab switch (`pencilSurface`), a clear gated on the mode
-(`c` / the bar), and vanish/fade as config controls with a live re-relay effect. The surface
-owns the pointer only while the mode is on, and **strokes survive leaving the mode / the
-turn** — only a clear or a fade removes them. On the
+**armed or in a turn** (C2, owner 2026-07-25 — markup is a source; the founding complaint was
+opening a turn just to clear ink; deliberately NOT in tweak, where the page owns its pointer)
+and re-points it on a tab switch (`pencilSurface`), a clear gated on the mode — armed or
+in-turn — (`c` / the bar; the cap lives on the ARMED tier now, desktop and iPad remote bar
+alike), and vanish/fade as config controls with a live re-relay effect. The surface owns the
+pointer only while the mode is on, and **strokes survive leaving the mode / the turn** — only
+a clear or a fade removes them. On the
 host the pencil takes **mouse, pen, and touch** (native `localInput`); palm rejection is the
 remote iPad client's job (its `shouldCapture` veto), never the desktop's. The iPad rides the
 same surface through the `remote*` ops.

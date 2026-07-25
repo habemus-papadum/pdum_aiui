@@ -174,7 +174,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // overlay, so at most one is on. Turning any ON clears the other two; the
     // reducer expresses the exclusion directly (an exclude can't — it can't say
     // "the last one pressed wins"). Turning OFF just clears itself.
-    /** k — toggle pencil markup mode (standing; the claim gates on turn). */
+    /** k — toggle pencil markup mode (standing; the surface engages while
+     * armed or in a turn — C2: markup is a SOURCE, not a turn perk). */
     pencil: (s): StatePatch =>
       s.pencil ? { pencil: false } : { pencil: true, region: false, jump: false },
     /** v — toggle video sampling (standing; the claim gates on turn). */
@@ -333,9 +334,14 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     jump: (s, ctx) =>
       s.jump === true || (s.phase === "turn" && ctx.activeTab !== undefined && ctx.aiuiPage),
     // Pencil markup is a PAGE act (the surface follows the tab in view, no grant
-    // — a mouse, a stylus, and the iPad's strokes all land in-page). Its clear is
-    // enabled only while pencil mode is on in an open turn (owner, 2026-07-16).
-    // Vanish/fade are config controls, not commands.
-    pencilClear: (s, ctx) => s.phase === "turn" && s.pencil === true && ctx.activeTab !== undefined,
+    // — a mouse, a stylus, and the iPad's strokes all land in-page). Its clear
+    // rides the MODE, not the turn (C2, owner 2026-07-25 — superseding the
+    // in-a-turn gate of 2026-07-16): the owner's founding complaint was having
+    // to open a turn just to clear ink. Enabled while pencil mode is on, armed
+    // or in-turn. Vanish/fade are config controls, not commands.
+    pencilClear: (s, ctx) =>
+      (s.phase === "turn" || s.phase === "armed") &&
+      s.pencil === true &&
+      ctx.activeTab !== undefined,
   },
 };

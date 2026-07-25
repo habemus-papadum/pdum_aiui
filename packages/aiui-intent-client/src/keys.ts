@@ -177,7 +177,25 @@ export const turnLayer: KeyLayer<EngineState, string> = {
 export const armedLayer: KeyLayer<EngineState, string> = {
   name: "armed",
   active: (state) => state.phase === "armed",
-  bindings: [],
+  // The armed rows work where keys reach the CLIENT while armed: the panel's
+  // own document (page keys are not routed outside a turn — deliberately; the
+  // page keeps its keyboard). The bar caps and the iPad's remote bar are the
+  // any-context path for the same commands.
+  bindings: [
+    {
+      // C2: the pencil rides armed — toggle markup with no turn open.
+      keys: ["k", "K"],
+      down: onPress("pencil"),
+      hint: (s) => ({ key: "k", label: "pencil", icon: "🖊", active: s.pencil === true }),
+    },
+    {
+      keys: ["c", "C"],
+      down: (state, _key, repeat) =>
+        !repeat && state.pencil === true ? command("pencilClear") : "pass",
+      hint: (s) =>
+        s.pencil === true ? { key: "c", label: "clear pencil", icon: "🧹" } : undefined,
+    },
+  ],
   fallback: "pass",
 };
 

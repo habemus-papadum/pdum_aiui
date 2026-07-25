@@ -39,13 +39,18 @@ export function intentClaims(
   return {
     /** The pencil markup surface — a PAGE act that follows the tab in view
      * (no grant — a stylus, a mouse, and the iPad's strokes all land in-page),
-     * asserted while pencil mode is on in an open turn (owner, 2026-07-16).
-     * acquire ENGAGES (the surface owns the pointer); release DISENGAGES
-     * (strokes STAY — page-side keeps the surface). The live fade re-relay is
-     * a separate effect in lanes.ts. */
+     * asserted while pencil MODE is on, armed or in a turn (C2, owner
+     * 2026-07-25: markup is a source; the mode is the switch, not the turn).
+     * Deliberately NOT in tweak — tweak hands the page its pointer back, and
+     * the surface owning it would defeat tweak's whole point. acquire ENGAGES
+     * (the surface owns the pointer); release DISENGAGES (strokes STAY —
+     * page-side keeps the surface). The live fade re-relay is a separate
+     * effect in lanes.ts. */
     pencilSurface: {
       derive: (s, ctx) =>
-        s.phase === "turn" && s.pencil === true && ctx.activeTab !== undefined
+        (s.phase === "turn" || s.phase === "armed") &&
+        s.pencil === true &&
+        ctx.activeTab !== undefined
           ? { tab: ctx.activeTab }
           : null,
       acquire: async (desire: { tab: number }) => {

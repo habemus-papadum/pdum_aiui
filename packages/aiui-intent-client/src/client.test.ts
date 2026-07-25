@@ -294,24 +294,28 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     expect(r.client.context().selectionPresent).toBe(true);
   });
 
-  it("pencil markup is ink's twin: a durable on/off mode; clear gates on pencil-on in a turn", async () => {
-    // The pencil is a page act (surface follows the tab, no grant), now modeled
-    // exactly like ink: a durable `pencil` toggle, and a clear enabled only while
-    // that mode is on in an open turn (owner, 2026-07-16).
+  it("pencil markup rides ARMED (C2): mode, surface, and clear — no turn needed", async () => {
+    // The pencil is a page act (surface follows the tab, no grant). C2 (owner,
+    // 2026-07-25): markup is a SOURCE — the durable `pencil` toggle engages the
+    // surface and enables clear while merely armed; the founding complaint was
+    // opening a turn just to clear ink.
     const r = makeRig();
     r.client.setContext({ connected: true }); // the edge arms
-    expect(r.client.canDispatch("pencilClear")).toBe(false); // armed, but no open turn
-
-    grantAndOpen(r);
-    // Mode off by default (like ink); its clear is dark until you turn it on.
-    expect(r.client.state().pencil).not.toBe(true);
+    // Mode off by default (like ink); clear rides the MODE, so it is dark.
     expect(r.client.canDispatch("pencilClear")).toBe(false);
 
-    r.client.dispatch("pencil"); // markup mode ON
+    r.client.dispatch("pencil"); // markup mode ON — while ARMED, no turn
+    await settle();
     expect(r.client.state().pencil).toBe(true);
+    expect(r.bus.log).toContain('page:pencil@7 {"op":"engage","fadeSec":0}');
     expect(r.client.canDispatch("pencilClear")).toBe(true);
     r.client.dispatch("pencilClear");
     expect(r.lanes).toContain("clearPencil:7");
+
+    // A turn changes nothing for the pencil — the mode and clear carry through.
+    grantAndOpen(r);
+    expect(r.client.state().pencil).toBe(true);
+    expect(r.client.canDispatch("pencilClear")).toBe(true);
 
     // Disarm clears the mode — the hard-disarm exclude, ink's twin.
     r.client.dispatch("disarm");
@@ -736,7 +740,10 @@ describe("the bar: a tree presented linearly", () => {
     // dead-ended the bar for anyone who armed via the cap). The capture acts
     // below gate on the grant individually.
     expect(findCap(r, "turn")?.enabled).toBe(true);
-    expect(findCap(r, "pencil")).toBeUndefined(); // turn tier closed
+    // C2: the pencil lives on the ARMED tier — togglable with no turn open
+    // (markup is a source); `shot` stays behind the closed turn tier.
+    expect(findCap(r, "pencil")).toBeDefined();
+    expect(findCap(r, "shot")).toBeUndefined(); // turn tier closed
 
     r.client.dispatch("turn");
     expect(r.lanes).toContain("openTurn"); // the bar's turn opens the thread too

@@ -177,8 +177,12 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         }
         break;
       case "pencilClear":
-        // A page act — clears the pencil surface on the tab in view (no grant).
-        if (event.before.phase === "turn" && activeTab !== undefined) {
+        // A page act — clears the pencil surface on the tab in view (no
+        // grant). Armed or in-turn (C2): clear rides the mode, not the turn.
+        if (
+          (event.before.phase === "turn" || event.before.phase === "armed") &&
+          activeTab !== undefined
+        ) {
           lanes.clearPencil(activeTab);
         }
         break;
