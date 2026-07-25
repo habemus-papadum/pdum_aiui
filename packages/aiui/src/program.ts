@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { type OpenOptions, runOpen } from "./commands/browser";
+import { type ChannelsListOptions, runChannelsList } from "./commands/channels";
 import { runChrome } from "./commands/chrome";
 import { runClaude } from "./commands/claude";
 import { type CleanOptions, runClean } from "./commands/clean";
@@ -61,6 +62,20 @@ export function buildProgram(): Command {
     .option("--mcp <tag>", "target a channel by registry tag (skips the selector)")
     .option("--no-open", "print the URL but don't open the browser")
     .action((opts: DashboardOptions) => runDashboard(opts));
+
+  // The registry, read out loud. `dashboard` and `mcp quick` PICK a channel;
+  // this one prints them — every value an entry carries, through the same
+  // enriched listing the native host, /debug/api/channels, and VS Code use.
+  const channels = program
+    .command("channels")
+    .description("inspect the channel registry: list")
+    .action(() => runChannelsList());
+  channels
+    .command("list")
+    .description("print every running channel and all its registry values")
+    .option("--json", "machine-readable: the raw ChannelListing")
+    .option("--no-prune", "leave dead entry files on disk (listing is unaffected)")
+    .action((opts: ChannelsListOptions) => runChannelsList(opts));
 
   // Unlike its siblings, `aiui chrome` is a real subcommand (not a forwarding
   // wrapper): it manages the agent's browser — the managed-browser install

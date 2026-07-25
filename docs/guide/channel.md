@@ -62,6 +62,14 @@ pick a channel to attach to (exporting its port to Vite as `VITE_AIUI_PORT`), ho
 plugin seeds the source root into pages (`window.__AIUI__.sourceRoot`), and how CLI helpers like
 `aiui-claude-channel quick` pick a server to push a test prompt into.
 
+To see it, `aiui channels list` prints every entry with the values above, the session it belongs
+to (name, status, session id — joined live from `claude agents`), and the file it was read from.
+It goes through the registry package's enriched read path, so a channel missing here is a channel
+every other surface is also missing — and it prints the *other* side of that join too: the Claude
+Code sessions running with no channel at all, which is what "I started this one with plain
+`claude`" looks like from the outside. `--json` emits the `/debug/api/channels` wire shape plus a
+`sessionsWithoutChannel` array.
+
 ## The surfaces
 
 | Surface | Speaks | Purpose |

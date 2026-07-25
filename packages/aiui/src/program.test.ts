@@ -11,6 +11,7 @@ describe("aiui cli", () => {
       .commands.map((cmd) => cmd.name())
       .sort();
     expect(names).toEqual([
+      "channels",
       "chrome",
       "claude",
       "clean",
@@ -35,6 +36,11 @@ describe("aiui cli", () => {
     for (const retired of ["demo", "vite", "env", "pencil", "browser", "native-host"]) {
       expect(names).not.toContain(retired);
     }
+  });
+
+  it("gives aiui channels its list subcommand", () => {
+    const channels = buildProgram().commands.find((cmd) => cmd.name() === "channels");
+    expect(channels?.commands.map((cmd) => cmd.name())).toEqual(["list"]);
   });
 
   it("gives aiui config its tui, show, get, set, yolo, and unset subcommands", () => {
