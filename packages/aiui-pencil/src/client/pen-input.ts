@@ -64,6 +64,11 @@ export interface PenActivity {
   penDown(): boolean;
   /** `performance.now()` of the last pen lift (0 = never). */
   lastPenUp(): number;
+  /** Lifetime counters — the HUD's stroke ledger (the X-stroke hunt: which
+   * leg lost a stroke is unanswerable without knowing how many this layer
+   * SAW). began/ended = strokes this binder started/committed; cancelled =
+   * pointercancel or supersede kills. */
+  counts(): { began: number; ended: number; cancelled: number };
 }
 
 /** A touch contact larger than this (either axis) is a palm, not a finger. */
@@ -86,6 +91,9 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
   let penSeen = false;
   let penContacts = 0;
   let lastPenUp = 0;
+  let began = 0;
+  let ended = 0;
+  let cancelled = 0;
   const pinch = { dist: 0, cx: 0, cy: 0 };
 
   const localSample = (e: PointerEvent): PenSample => {
@@ -108,6 +116,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
     const id = `c-${++strokeSeq}`;
     p.strokeId = id;
     drawPointer = e.pointerId;
+    began += 1;
     const sample = localSample(e);
     deps.preview()?.remoteBegin(id, { tool: deps.tool(), params: deps.params(), point: sample });
     deps.sink.begin(id, sample, e.pointerType as "pen" | "touch" | "mouse");
@@ -121,6 +130,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
     }
     const p = active.get(drawPointer);
     if (p?.strokeId) {
+      cancelled += 1;
       deps.preview()?.remoteCancel(p.strokeId);
       deps.sink.cancel(p.strokeId);
       p.strokeId = null;
@@ -257,6 +267,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
     }
     if (drawPointer === e.pointerId) {
       if (p.strokeId) {
+        ended += 1;
         deps.preview()?.remoteEnd(p.strokeId);
         deps.sink.end(p.strokeId, localSample(e));
       }
@@ -274,5 +285,6 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
   return {
     penDown: () => penContacts > 0,
     lastPenUp: () => lastPenUp,
+    counts: () => ({ began, ended, cancelled }),
   };
 }

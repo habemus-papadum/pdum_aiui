@@ -184,8 +184,20 @@ export function createPencilOps(
   getMount: () => (() => PencilHandle) | undefined,
 ): (payload: Record<string, unknown>) => PageCapabilityMap["pencil"]["reply"] {
   let handle: PencilHandle | undefined;
+  // Stroke-LEVEL breadcrumbs (never per-point): the X-stroke hunt needs to
+  // know which ops actually reached this document, and the page console is
+  // the one surface readable from outside (2026-07-25). Cheap; keep.
+  const strokeOps = new Set(["engage", "disengage", "clear", "undo", "rbegin", "rend", "rcancel"]);
   return (payload: Record<string, unknown>): PageCapabilityMap["pencil"]["reply"] => {
     const op = String(payload.op ?? "");
+    if (strokeOps.has(op)) {
+      console.info(
+        "[aiui-pencil]",
+        op,
+        payload.id ?? "",
+        handle === undefined ? "(no handle yet)" : "",
+      );
+    }
     if (op === "size") {
       return { width: window.innerWidth, height: window.innerHeight };
     }
@@ -199,7 +211,10 @@ export function createPencilOps(
       return { ok: true };
     }
     if (handle === undefined) {
-      return { ok: true }; // nothing mounted yet — a stray op after disengage
+      // Nothing mounted yet: REMOTE ops land here when the iPad draws before
+      // pencil mode ever engaged on this document — the decided contract (the
+      // mode is the switch), and the breadcrumb above says so out loud.
+      return { ok: true };
     }
     switch (op) {
       case "disengage":

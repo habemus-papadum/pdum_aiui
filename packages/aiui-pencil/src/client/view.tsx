@@ -118,6 +118,11 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
         ? `${Math.round(1000 / stats.frameIntervalMs)}fps`
         : "—fps";
     const age = frameAge();
+    // The stroke ledger (the X-stroke hunt): pen = strokes this binder
+    // began/ended/cancelled; pv = the preview's retained+live counts. A lost
+    // stroke names its leg by which counter failed to move.
+    const counts = pen?.counts();
+    const snap = preview?.ink();
     return [
       `host ${host !== undefined ? px(host.width, host.height) : "—"}`,
       `video ${track && video !== undefined ? px(video.videoWidth, video.videoHeight) : "—"}`,
@@ -126,6 +131,8 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       `jit ${ms(stats?.jitterBufferMs)}`,
       fps,
       ...(age !== undefined ? [`frame ${age < 10 ? age.toFixed(1) : Math.round(age)}s`] : []),
+      ...(counts !== undefined ? [`pen ${counts.began}/${counts.ended}/${counts.cancelled}`] : []),
+      ...(snap !== undefined ? [`pv ${snap.strokes.length}+${snap.live.length}`] : []),
     ].join(" · ");
   };
 
