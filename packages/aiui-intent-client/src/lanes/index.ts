@@ -31,7 +31,7 @@ import { createWire } from "@habemus-papadum/aiui-intent-runtime/wire";
 import { Engine } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createSignal } from "solid-js";
 import type { IntentClient } from "../client";
-import { linter, oracle, stt } from "../config";
+import { linter, stt } from "../config";
 import { createLinterPulse } from "../linter-pulse";
 import { createCaptureLanes } from "./capture-lanes";
 import { createConfigEffects } from "./config-effects";
@@ -53,9 +53,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   const toast = config.onToast ?? ((m: string) => console.warn("[intent-client]", m));
 
   // ── the shared intent pipeline: one engine per page ────────────────────────
-  const engine = new Engine(
-    panelIntentConfig(stt.get() as string, linter.get() as string, oracle.get() as string),
-  );
+  const engine = new Engine(panelIntentConfig(stt.get() as string, linter.get() as string));
 
   // ── speech playback (server-pushed clips; talking barges in) ───────────────
   // The retired overlay's composition, adapted to the panel: the speaker line

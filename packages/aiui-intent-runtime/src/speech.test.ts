@@ -195,14 +195,14 @@ describe("SpeechPlayer (streamed PCM)", () => {
   it("cancelStream stops the CURRENT stream's scheduled sources (speech-cancel)", () => {
     const { ctx, sources } = fakeContext();
     const player = new SpeechPlayer({ createContext: () => ctx });
-    player.feedChunk(pcmChunk("oracle_0", 0, 2400));
-    player.feedChunk(pcmChunk("oracle_0", 1, 2400));
-    player.cancelStream("oracle_0");
+    player.feedChunk(pcmChunk("lint_0", 0, 2400));
+    player.feedChunk(pcmChunk("lint_0", 1, 2400));
+    player.cancelStream("lint_0");
     expect(sources.every((s) => s.stopped)).toBe(true);
     expect(player.active).toBe(false);
     // A cancel for a stream that is no longer current is a no-op.
-    player.feedChunk(pcmChunk("oracle_1", 0, 2400));
-    player.cancelStream("oracle_0");
+    player.feedChunk(pcmChunk("lint_1", 0, 2400));
+    player.cancelStream("lint_0");
     expect(sources[2].stopped).toBe(false);
   });
 

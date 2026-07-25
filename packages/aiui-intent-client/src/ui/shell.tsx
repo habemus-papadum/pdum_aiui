@@ -26,7 +26,7 @@ import { isPageTypingTarget } from "../page/typing-target";
  *  - the **toast** — red, bordered, self-dismissing: errors and misuse only.
  *  - the **status line** — quiet, persistent, last-writer-wins: actionable
  *    degradations ("no channel found — run `aiui claude`"), send feedback
- *    ("wire: sent ✓"), and the live streams (💡 linter, 🔮 oracle, 🔊 speech).
+ *    ("wire: sent ✓"), and the live streams (💡 linter, 🔊 speech).
  *    EMPTY when there is nothing to say — the channel identity lives in the
  *    header, not here (the "driving this window's tabs" baseline is gone).
  *

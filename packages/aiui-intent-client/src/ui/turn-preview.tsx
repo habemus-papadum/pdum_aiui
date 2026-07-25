@@ -165,13 +165,11 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
       return [];
     }
     const dismissed = dismissedLints();
-    // The oracle's replies ride the same chip rail (🔮 vs 💡): both are
-    // advisory record events the compiler ignores; only the voice differs.
     return props.lanes
       .threadEvents()
       .filter(
-        (event): event is Extract<typeof event, { type: "linter-note" | "oracle-said" }> =>
-          event.type === "linter-note" || event.type === "oracle-said",
+        (event): event is Extract<typeof event, { type: "linter-note" }> =>
+          event.type === "linter-note",
       )
       .filter((event) => !dismissed.has(event.at));
   });
@@ -224,8 +222,7 @@ export function TurnPreview(props: { lanes: ChannelLanes }) {
               const n = untrack(note);
               return (
                 <span class="aiui-tp-chip aiui-tp-lint" title={n.text}>
-                  {n.type === "oracle-said" ? "🔮" : "💡"}{" "}
-                  {n.text.length > 60 ? `${n.text.slice(0, 57)}…` : n.text}
+                  💡 {n.text.length > 60 ? `${n.text.slice(0, 57)}…` : n.text}
                   <button
                     type="button"
                     class="aiui-tp-x"

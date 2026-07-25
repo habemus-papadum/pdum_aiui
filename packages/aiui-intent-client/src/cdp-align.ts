@@ -5,8 +5,8 @@
  * Why it exists: the agent behind the channel may hold a Chrome DevTools MCP
  * pointed at the channel's session browser — while the intent client can be
  * running in a completely different Chrome. Nothing else makes that visible,
- * and features key off it: the user's pill, the prompt prelude's warning to
- * the agent, and (later) which tools the oracle is granted.
+ * and features key off it: the user's pill and the prompt prelude's warning
+ * to the agent.
  *
  * The evidence, combined from both sides of the wire:
  *  - the LOCAL DRIVER ROSTER (`aiui2.cdpDriver:<port>` entries) — written

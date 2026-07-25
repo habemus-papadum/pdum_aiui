@@ -22,7 +22,6 @@ import type {
   IntentPipelineConfig,
   LinterVendor,
   LintTurnAction,
-  OracleVendor,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import { REALTIME_PCM_MIME } from "./audio";
 import type { IntentErrorInput } from "./errors";
@@ -94,7 +93,6 @@ export interface Wire {
    */
   sendControl(control: "linter", value: LinterVendor): Promise<void>;
   sendControl(control: "lint", value: LintTurnAction): Promise<void>;
-  sendControl(control: "oracle", value: OracleVendor): Promise<void>;
   /** The send path: flush, consume the selection, `fin`, surface the ack. */
   finalizeThread(): Promise<void>;
   /** Close the socket without `fin` (a cancel) and reset the wire state. */
@@ -269,8 +267,8 @@ export function createWire(deps: WireDeps): Wire {
   }
 
   async function sendControl(
-    control: "linter" | "lint" | "oracle",
-    value: LinterVendor | LintTurnAction | OracleVendor,
+    control: "linter" | "lint",
+    value: LinterVendor | LintTurnAction,
   ): Promise<void> {
     const thread = await getThread();
     if (!thread) {
@@ -352,17 +350,14 @@ export function createWire(deps: WireDeps): Wire {
       typeof msg.data === "string"
     ) {
       // Spoken audio. The gate depends on WHOSE voice it is: a linter reply
-      // (`lint_N`) plays whenever the linter is on, an oracle reply
-      // (`oracle_N`) whenever the oracle is on — `audioBack` is the TTS-ack
-      // knob and must not mute either (the silent-linter bug). Everything
+      // (`lint_N`) plays whenever the linter is on — `audioBack` is the
+      // TTS-ack knob and must not mute it (the silent-linter bug). Everything
       // else (acks) honors audioBack. Read live so a config switch takes
       // effect immediately.
       const id = typeof msg.id === "string" ? msg.id : "";
       const gateOpen = id.startsWith("lint_")
         ? (config().linter ?? "off") !== "off"
-        : id.startsWith("oracle_")
-          ? (config().oracle ?? "off") !== "off"
-          : config().audioBack !== "off";
+        : config().audioBack !== "off";
       if (gateOpen) {
         if (typeof msg.seq === "number") {
           // A streamed reply chunk: scheduled for gapless playback the
@@ -417,19 +412,6 @@ export function createWire(deps: WireDeps): Wire {
         } else if (event.type === "linter-turn-complete") {
           // The button-driven (converse debug) lint finished — chronicled so
           // the client's auto-off tap and the pulse both see it.
-          engine.ingestLinter(event);
-        } else if (event.type === "oracle-said") {
-          // The oracle's reply transcript: a 🔮 chip + the status line (the
-          // spoken clip rides `speech`). Record, never prompt.
-          engine.ingestLinter(event);
-          setStatus(`🔮 ${event.text}`);
-        } else if (
-          event.type === "oracle-heard" ||
-          event.type === "oracle-tool-call" ||
-          event.type === "oracle-tool-result"
-        ) {
-          // The other-direction record + tool round-trips — chronicled for
-          // the turn store and the trace; no status noise.
           engine.ingestLinter(event);
         }
       }

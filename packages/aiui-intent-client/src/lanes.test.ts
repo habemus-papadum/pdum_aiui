@@ -11,7 +11,7 @@ import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { activationGesture } from "./activation";
 import { createIntentClient, type IntentClient } from "./client";
-import { linter, oracle, stt } from "./config";
+import { linter, stt } from "./config";
 import { type FakeBus, fakeBus } from "./fake-bus";
 import {
   type ChannelLanes,
@@ -605,49 +605,6 @@ describe("config consumers", () => {
       expect(r.thread.chunks.some((c) => c.kind === "chunk:control")).toBe(false);
     } finally {
       linter.set("off");
-    }
-  });
-});
-
-describe("the oracle — the journeys' XOR, the control rail, the hello", () => {
-  it("oracle-on flips the linter off, and vice versa (the XOR is unrepresentable)", async () => {
-    const r = makeRig();
-    try {
-      linter.set("gemini");
-      await settle();
-      oracle.set("openai");
-      await settle();
-      expect(linter.get()).toBe("off"); // oracle-on flipped it
-      expect(oracle.get()).toBe("openai");
-
-      linter.set("openai");
-      await settle();
-      expect(oracle.get()).toBe("off"); // linter-on flipped it back
-      expect(r.lanes.engine.settings.linter).toBe("openai");
-      expect(r.lanes.engine.settings.oracle).toBeUndefined();
-    } finally {
-      linter.set("off");
-      oracle.set("off");
-    }
-  });
-
-  it("the oracle select rides the hello, and moving it mid-thread sends an `oracle` control", async () => {
-    const r = makeRig();
-    try {
-      oracle.set("openai");
-      await settle();
-      grantAndOpen(r.client, 7);
-      r.client.dispatch("pencil"); // contentful → the wire dials
-      await settle(30);
-      expect((r.thread.dials[0]?.intent as { oracle?: string }).oracle).toBe("openai");
-
-      const before = r.thread.chunks.length;
-      oracle.set("off");
-      await settle(30);
-      const control = r.thread.chunks.slice(before).find((c) => c.kind === "chunk:control");
-      expect(control?.payload).toEqual({ control: "oracle", value: "off" });
-    } finally {
-      oracle.set("off");
     }
   });
 });

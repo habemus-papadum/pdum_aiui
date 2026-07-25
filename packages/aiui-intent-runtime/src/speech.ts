@@ -3,7 +3,7 @@
  *
  *  - **Whole clips** (the premium tier's TTS acks): queue and play one at a
  *    time from a `data:` URL, as ever.
- *  - **Streamed PCM chunks** (model replies — linter notes, oracle turns):
+ *  - **Streamed PCM chunks** (model replies — linter notes):
  *    `seq`-ordered raw PCM16 frames sharing a stream id, scheduled GAPLESSLY
  *    through one Web Audio context the moment they arrive. Streaming playback
  *    is the contract (whole-clip reply buffering retired 2026-07-19 — it
