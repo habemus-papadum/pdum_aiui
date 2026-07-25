@@ -71,7 +71,10 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
     tracker.recompute();
     setGeomRev((n) => n + 1);
   };
-  const [hudOpen, setHudOpen] = createSignal(true);
+  // Collapsed by default (owner, 2026-07-25): the HUD is a debugging
+  // instrument, not chrome — the ⓘ keeps it one tap away when a session
+  // needs numbers.
+  const [hudOpen, setHudOpen] = createSignal(false);
 
   // The stall detector: every PRESENTED frame stamps lastFrameAt (rVFC — the
   // only signal that distinguishes "frames arriving" from "a frozen last
