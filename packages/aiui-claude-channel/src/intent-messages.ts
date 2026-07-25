@@ -55,7 +55,7 @@ export interface LoweredPromptMessage {
 export interface SpeechMessage {
   kind: "speech";
   threadId: string;
-  /** A per-thread clip/stream id (`ack_N` / `lint_N` / `oracle_N`), for the client player. */
+  /** A per-thread clip/stream id (`ack_N` / `lint_N`), for the client player. */
   id: string;
   /**
    * MIME of the payload. Whole clips (TTS acks): a container (`audio/mpeg`).

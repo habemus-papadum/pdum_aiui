@@ -102,9 +102,8 @@ lands and returns on a switch to an ungranted tab. A signpost, not an error: nev
 
 **Decided direction, landing in slices.** Capture SOURCES — video, the mic, the pencil
 surface — belong to the ARMED scope; a TURN is a routing fact (what the prompt collects), not
-the power switch. Only the prompt-building routes stay turn-scoped; the iPad mirror and the
-oracle route need no turn at all (the owner's mandate, re-confirmed live: video must not be
-turn-gated). The old doctrine "armed means the client owns the events" was never what the
+the power switch. Only the prompt-building routes stay turn-scoped; the iPad mirror needs no
+turn at all (the owner's mandate, re-confirmed live: video must not be turn-gated). The old doctrine "armed means the client owns the events" was never what the
 shipped machine did — armed gates only the ring and turn-openability — and it is retired as a
 goal: while merely armed the page keeps its keyboard and pointer, and interference rides
 explicit MODES (pencil on, a turn open), never the phase.
@@ -194,7 +193,7 @@ while engaged, exactly like pencil.
 ## Talk — the audio source
 
 Talk is the capture bus's **audio source** (capture-bus-and-consumers.md §1): what is being
-*sensed*, independent of who consumes it. The consumers — transcriber, linter, oracle — are
+*sensed*, independent of who consumes it. The consumers — transcriber and linter — are
 routes onto it ("Sources, routes, and turns" below). Two source-level invariants:
 
 - **Mute is a property of the source, never of a route.** "Muted" means *nothing in the system
@@ -230,26 +229,21 @@ Phase 2 implemented 2026-07-18):
 - **linter** (converse, on-demand) — accumulates silently and speaks one comprehensive
   advisory read when the **lint now** button asks; never touches the prompt. (Overhear — the
   automatic pause-lints — retired 2026-07-19.)
-- **oracle** (converse) — a *direct* conversation: vendor auto-VAD turns, replies loop, and the
-  mic is ADDRESSED to it — **prompt building pauses** while it is on:
-  talk segments resolve empty, and building resumes when it turns off. Send still sends the
-  prompt as built so far, and the oracle select survives the send (the next turn re-opens it).
-  OpenAI-only in v1; its own transcripts of both directions ride `oracle-heard`/`oracle-said`
-  record events (chronicled + traced, never composed), replies also render as 🔮 chips.
+A third route, the **oracle** — a direct voice conversation the mic was ADDRESSED to — is
+**retired from the client** (owner, 2026-07-25): it returns as a standalone WebRTC tool
+(`packages/aiui-oracle`, lab-first) rather than a channel route. The channel-side handler is
+mothballed behind `ORACLE_ENABLED` (channel `intent-resolve.ts`); the journeys' XOR
+(oracle ⊕ linter) died with it.
 
 **Reply audio STREAMS (owner, 2026-07-19: "we don't want whole playback anything").** Every
 live consumer's spoken reply reaches the client as `seq`-ordered PCM chunks the moment the
 vendor generates them, scheduled gaplessly — the first audible byte does not wait for the reply
-to finish. Barge-in is layered on the model's own capability: the ORACLE's vendor (server VAD)
-detects the human and interrupts itself — the system only LISTENS and relays a `speech-cancel`;
-the LINTER runs manual VAD (the vendor cannot detect it), so its talk-start/`stop`-button
-cancel is client-boundary-driven. TTS acks — whole little files — keep the clip path.
+to finish. Barge-in is client-boundary-driven: the LINTER runs manual VAD (its vendor cannot
+detect the human talking over it), so the cancel rides talk-start and the `stop` button. TTS
+acks — whole little files — keep the clip path.
 
-**The journeys' XOR (owner, 2026-07-18): oracle ⊕ linter.** Turning either select on flips the
-other off — enforced in the client config layer (the illegal pair is unrepresentable), backstopped
-by a server-side resolve coercion (oracle wins) and by the mid-thread control handler. Shots and
-selections are journey-independent: they land in the prompt AND forward to whichever live
-consumer is on; only the *voice* switches addressee.
+**Shots and selections are journey-independent:** they land in the prompt AND forward to
+whichever live consumer is on.
 
 ### The prompt linter, reconfigurable mid-turn
 
@@ -439,7 +433,7 @@ attaching IS alignment by construction):
   underneath you") — or warn that DevTools reads will NOT match what the user sees; unknown
   stays SILENT (no false comfort). It rides the traced hello (the `clientContext` stage) for
   free;
-- **feature gates to come** (e.g. which tools the oracle is granted) read the same fact.
+- **feature gates to come** read the same fact.
 
 ## Status pills (permanent expert strip)
 

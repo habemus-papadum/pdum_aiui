@@ -85,7 +85,7 @@ import { rawCodec } from "./codec";
 import type { ChunkDescriptor } from "./frame";
 import { finishTurn } from "./intent-fin";
 import type { LoweredMessage } from "./intent-messages";
-import { GEMINI_KEY_HINT, OPENAI_KEY_HINT, resolveIntent } from "./intent-resolve";
+import { GEMINI_KEY_HINT, OPENAI_KEY_HINT, ORACLE_ENABLED, resolveIntent } from "./intent-resolve";
 import {
   decodeJson,
   imageDownscale,
@@ -643,6 +643,13 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       return;
     }
     if (decoded.control === "oracle") {
+      // Door 2 of the mothball (see ORACLE_ENABLED, intent-resolve.ts): the
+      // whole branch, not just buildOracle — the XOR backstop below kills a
+      // running linter BEFORE building, so a gate any deeper would let a
+      // stray `oracle` control silently murder the linter and start nothing.
+      if (!ORACLE_ENABLED) {
+        return;
+      }
       const value = decoded.value;
       if (!isOracleVendor(value) || value === intent.oracle) {
         return;

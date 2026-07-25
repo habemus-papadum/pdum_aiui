@@ -14,12 +14,18 @@
  *
  * The engine is a scripted {@link LiveSession} (options.oracleSessionFactory)
  * — the OpenAI dialect (server_vad, input transcription) has its own suite
- * in openai-live.test.ts.
+ * in openai-live.test.ts (which keeps RUNNING: it tests the shared dialect,
+ * not the sidecar).
+ *
+ * MOTHBALLED (owner, 2026-07-25): every suite here is runIf-gated on
+ * {@link ORACLE_ENABLED} — the constant that shut both doors into the
+ * sidecar (intent-resolve.ts). Flip it and this file is the contract again.
  */
 import type { IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelFormat, MessageMeta, StreamProcessor, ThreadContext } from "./channel";
 import type { ChunkDescriptor } from "./frame";
+import { ORACLE_ENABLED } from "./intent-resolve";
 import { createIntentV1Format, type IntentV1Options } from "./intent-v1";
 import type { LiveSession, LiveSessionCallbacks } from "./live-session";
 
@@ -132,7 +138,7 @@ const eventsOf = (pushed: unknown[], type: string): IntentEvent[] =>
     ),
   );
 
-describe("the route switch — the oracle holds the mic", () => {
+describe.runIf(ORACLE_ENABLED)("the route switch — the oracle holds the mic", () => {
   it("audio frames go to the oracle ALONE, and talk segments resolve EMPTY (prompt paused)", async () => {
     const live = fakeLive();
     const d = drive(ORACLE_HELLO, { oracleSessionFactory: live.factory });
@@ -184,7 +190,7 @@ describe("the route switch — the oracle holds the mic", () => {
   });
 });
 
-describe("the §8-6 record — oracle-heard / oracle-said", () => {
+describe.runIf(ORACLE_ENABLED)("the §8-6 record — oracle-heard / oracle-said", () => {
   it("input + reply transcripts push as record events (and never as prompt text)", async () => {
     const live = fakeLive();
     const d = drive(ORACLE_HELLO, { oracleSessionFactory: live.factory });
@@ -219,7 +225,7 @@ describe("the §8-6 record — oracle-heard / oracle-said", () => {
   });
 });
 
-describe("the journeys' XOR — oracle ⊕ linter", () => {
+describe.runIf(ORACLE_ENABLED)("the journeys' XOR — oracle ⊕ linter", () => {
   it("a hello carrying BOTH coerces: the oracle wins, the linter never opens", async () => {
     const oracleLive = fakeLive();
     const linterLive = fakeLive();
@@ -252,7 +258,7 @@ describe("the journeys' XOR — oracle ⊕ linter", () => {
   });
 });
 
-describe("posture", () => {
+describe.runIf(ORACLE_ENABLED)("posture", () => {
   it("keyless oracling degrades loudly — and briefing capture still works", async () => {
     const d = drive(ORACLE_HELLO); // no key, no seams: the real keyless path
     await d.feedEvents(opening());

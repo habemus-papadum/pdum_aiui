@@ -106,6 +106,18 @@ export interface ResolvedIntent {
 export const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 
 /**
+ * The oracle is MOTHBALLED (owner, 2026-07-25): retired from the intent
+ * client, being rebuilt lab-first as a standalone WebRTC tool
+ * (`packages/aiui-oracle`). This gate closes both doors into the channel-side
+ * sidecar — the hello's resolve (below) and the mid-thread `oracle` control
+ * (intent-v1.ts) — so `turn.oracle` can never be set; oracle-sidecar.ts stays
+ * compiling, warm for the rebuild. Typed `boolean`, not `false`, so neither
+ * door's code narrows to dead. Flip to true to resurrect the old in-channel
+ * oracle (its suite is skip-gated on this constant, intent-v1.oracle.test.ts).
+ */
+export const ORACLE_ENABLED: boolean = false;
+
+/**
  * The remediation line every OpenAI-backed failure carries on its error push.
  * The single most common cause of "the pipeline stopped working" is a stale or
  * revoked OPENAI_API_KEY in the channel process's environment — a condition
@@ -185,7 +197,11 @@ export function resolveIntent(raw: unknown): ResolvedIntent {
     linter: oneOf(cfg.linter, ["off", "openai", "gemini"] as const, preset.linter ?? "off"),
     linterModel: optStr(cfg.linterModel ?? preset.linterModel),
     linterInstructions: optStr(cfg.linterInstructions ?? preset.linterInstructions),
-    oracle: oneOf(cfg.oracle, ["off", "openai"] as const, preset.oracle ?? "off"),
+    // Door 1 of the mothball (see ORACLE_ENABLED): a hello can no longer
+    // open the in-channel oracle, however it was written.
+    oracle: ORACLE_ENABLED
+      ? oneOf(cfg.oracle, ["off", "openai"] as const, preset.oracle ?? "off")
+      : "off",
     oracleModel: optStr(cfg.oracleModel ?? preset.oracleModel),
     oracleInstructions: optStr(cfg.oracleInstructions ?? preset.oracleInstructions),
     videoFrameIntervalMs:

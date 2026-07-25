@@ -1,5 +1,15 @@
 # The Oracle
 
+::: warning RETIRED FROM THE CLIENT (2026-07-25)
+This page describes the oracle as it shipped **inside the intent client and channel** — a
+config-strip select riding the capture bus. That incarnation is retired: the select and its
+surfaces are gone from the client, and the channel-side handler is mothballed behind
+`ORACLE_ENABLED` (`aiui-claude-channel/src/intent-resolve.ts`). The oracle returns as a
+**standalone tool** (`packages/aiui-oracle`, built lab-first: browser WebRTC directly to the
+vendor over ephemeral keys). The persona and conversation contracts documented here — including
+the instructions below, still the persona of record (`oracle-sidecar.ts`) — carry over.
+:::
+
 The **oracle** is a direct, real-time voice conversation with a model, available mid-way through
 composing a briefing. Where the [prompt linter](./prompt-linting.md) is a *bystander* — it
 silently accumulates your briefing and gives one advisory read when you press **lint now** —
