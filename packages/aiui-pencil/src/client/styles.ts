@@ -5,7 +5,12 @@
 export const REMOTE_APP_CSS = `
   * { margin: 0; box-sizing: border-box; }
   body { background: #0d0d11; color: #e8e8ee; font: 15px/1.4 system-ui, sans-serif; }
-  .remote { height: 100dvh; display: flex; flex-direction: column; }
+  /* An instrument panel, not a document: nothing here is text to select. A
+     resting palm is a LONG-PRESS, and iOS answered it with text selection on
+     whatever label it landed on (the HUD's "host…" — found live 2026-07-25),
+     whose selection UI then ate the pen strokes that followed. */
+  .remote { height: 100dvh; display: flex; flex-direction: column;
+            -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .picker { margin: auto; text-align: center; display: flex; flex-direction: column; gap: 12px; }
   .picker h1 { font-size: 18px; font-weight: 600; }
   .session { padding: 12px 20px; border-radius: 10px; border: 1px solid #333;
@@ -25,7 +30,8 @@ export const REMOTE_APP_CSS = `
               padding: 24px; text-align: center; }
   .hud { position: absolute; left: 8px; bottom: 8px; z-index: 3; font: 11px ui-monospace, monospace;
          color: #9aa3b5; background: rgba(13, 13, 17, 0.72); border: 1px solid #2a2a34;
-         border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+         border-radius: 6px; padding: 3px 8px; cursor: pointer;
+         touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .hud[data-open="false"] { opacity: 0.6; }
   .hud[data-stale="true"] { color: #e8b34a; border-color: #7a5c1e; }
   .host-bar { background: #101016; border-top: 1px solid #26262e; }

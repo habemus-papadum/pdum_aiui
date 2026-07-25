@@ -17,6 +17,7 @@ import type { PencilParams } from "../pencil";
 import type { Surface } from "../protocol";
 import { fadeWindowMs, type LinkStats } from "../remote";
 import { PencilSurface, type Tool } from "../surface";
+import { penWriting } from "./chrome-guard";
 import { bindPenInput, type PenActivity } from "./pen-input";
 import { createPlaneTracker } from "./plane";
 
@@ -53,6 +54,8 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
   let video: HTMLVideoElement | undefined;
   let plane: HTMLDivElement | undefined;
   let preview: PencilSurface | undefined;
+  /** The pen's activity, once bound — the HUD's own palm guard reads it. */
+  let pen: PenActivity | undefined;
 
   const tracker = createPlaneTracker({
     stage: () => stage,
@@ -166,6 +169,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       navigation: props.navigation,
       ...(props.onPenMode ? { onPenMode: props.onPenMode } : {}),
     });
+    pen = activity;
     props.onActivity?.(activity);
 
     // The plane tracks the PICTURE, whose dimensions are late and mutable.
@@ -194,14 +198,28 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       <Show when={!props.videoUp}>
         <div class="no-video">{props.videoNote}</div>
       </Show>
+      {/* The HUD sits exactly where a writing palm lands (found live
+          2026-07-25: a resting palm is a LONG-PRESS, which text-selected the
+          HUD's label and iOS's selection UI then ate the pen). Its text is
+          unselectable (styles.ts), and a touch while the pen is writing
+          neither toggles it nor reaches the stage. */}
       <button
         type="button"
         class="hud"
         data-testid="hud"
         data-open={hudOpen() ? "true" : "false"}
         data-stale={stalled() ? "true" : "false"}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => setHudOpen(!hudOpen())}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          if (event.pointerType === "touch" && penWriting(pen)) {
+            event.preventDefault();
+          }
+        }}
+        onClick={() => {
+          if (!penWriting(pen)) {
+            setHudOpen(!hudOpen());
+          }
+        }}
       >
         {hudOpen() ? hudLine() : "ⓘ"}
       </button>

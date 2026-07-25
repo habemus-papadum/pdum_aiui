@@ -28,6 +28,22 @@ const CHROME_COOLDOWN_MS = 350;
 /** How long after a refused touch lifts its trailing click is swallowed. */
 const CLICK_TAIL_MS = 80;
 
+/** Is the pen writing right now (stroke in flight, or within the cooldown)?
+ * The one predicate every palm-guarded surface shares — the chrome below the
+ * stage here, the HUD inside it (view.tsx). */
+export function penWriting(
+  activity: PenActivity | undefined,
+  now: () => number = () => performance.now(),
+): boolean {
+  if (activity === undefined) {
+    return false;
+  }
+  return (
+    activity.penDown() ||
+    (activity.lastPenUp() > 0 && now() - activity.lastPenUp() < CHROME_COOLDOWN_MS)
+  );
+}
+
 /**
  * Install the guard on one chrome container. `activity` is read lazily — the
  * stage (which owns the pen policy) may bind after the chrome mounts.
@@ -40,13 +56,7 @@ export function guardChrome(
   const refused = new Set<number>();
   let swallowClicksUntil = 0;
 
-  const writing = (): boolean => {
-    const pen = activity();
-    if (pen === undefined) {
-      return false;
-    }
-    return pen.penDown() || (pen.lastPenUp() > 0 && now() - pen.lastPenUp() < CHROME_COOLDOWN_MS);
-  };
+  const writing = (): boolean => penWriting(activity(), now);
 
   element.addEventListener(
     "pointerdown",
