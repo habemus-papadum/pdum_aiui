@@ -8,9 +8,9 @@
  */
 
 import type { PenSample } from "@habemus-papadum/aiui-pencil";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeBus } from "./fake-bus";
-import { createPencilHost, type PencilHostSession } from "./pencil-host";
+import { correctRemotePoint, createPencilHost, type PencilHostSession } from "./pencil-host";
 
 // A minimal PenSample for forwarding assertions.
 const POINT = {
@@ -37,12 +37,58 @@ function fakeSession() {
       connect: () => calls.push("connect"),
       refresh: () => calls.push("refresh"),
       dispose: () => calls.push("dispose"),
+      announce: () => calls.push("announce"),
     };
   };
   return { calls, factory, options: () => captured };
 }
 
+/** A held stream whose one video track reports a fixed frame size. */
+function fakeStream(width: number, height: number): MediaStream {
+  return {
+    getVideoTracks: () => [{ getSettings: () => ({ width, height }) }],
+  } as unknown as MediaStream;
+}
+
+describe("correctRemotePoint — the letterbox belt", () => {
+  const point = (x: number, y: number): PenSample => ({ ...POINT, x, y }) as PenSample;
+
+  it("undoes the in-frame letterbox a resize introduces", () => {
+    // Plane 200×100 (aspect 2), frame 100×100 (aspect 1): the tab image sits
+    // 100×50, centered — bars 25px top and bottom INSIDE the frame.
+    const fixed = correctRemotePoint(
+      point(100, 25),
+      { width: 200, height: 100 },
+      { width: 100, height: 100 },
+    );
+    // u=.5, v=.25 → frame px (50, 25) → the bar's top edge → CSS (100, 0).
+    expect(fixed.x).toBeCloseTo(100, 6);
+    expect(fixed.y).toBeCloseTo(0, 6);
+  });
+
+  it("is the identity when the frame matches the plane's aspect", () => {
+    const fixed = correctRemotePoint(
+      point(100, 25),
+      { width: 200, height: 100 },
+      { width: 400, height: 200 },
+    );
+    expect(fixed.x).toBeCloseTo(100, 6);
+    expect(fixed.y).toBeCloseTo(25, 6);
+  });
+
+  it("passes through untouched with no frame to correct against", () => {
+    expect(correctRemotePoint(point(3, 4), { width: 200, height: 100 }, undefined)).toMatchObject({
+      x: 3,
+      y: 4,
+    });
+  });
+});
+
 describe("createPencilHost", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("dials the relay loopback and connects", () => {
     const bus = fakeBus({ activeTab: 7 });
     const fs = fakeSession();
@@ -95,6 +141,71 @@ describe("createPencilHost", () => {
     expect(bus.log.some((l) => l.startsWith('page:pencil@7 {"op":"rend","id":"r1"'))).toBe(true);
     expect(bus.log).toContain('page:pencil@7 {"op":"clear"}');
     expect(bus.log).toContain('page:pencil@7 {"op":"undo"}');
+  });
+
+  it("wears the letterbox belt: remote points are frame-corrected before forwarding", () => {
+    const bus = fakeBus({ activeTab: 7 });
+    const fs = fakeSession();
+    createPencilHost({
+      host: bus,
+      port: 5050,
+      tab: () => bus.targeting.activeTab(),
+      // A square 640×640 frame against the DEFAULT 1280×720 plane (the fake
+      // bus answers no real size): the tab image is 640×360 centered, bars
+      // 140px top and bottom inside the frame.
+      stream: () => fakeStream(640, 640),
+      label: "demo",
+      sessionFactory: fs.factory,
+    }).connect();
+    bus.clearLog();
+
+    const surface = fs.options().surface();
+    // Plane (640, 180) = u .5, v .25 → frame px (320, 160) → CSS (640, 40).
+    surface.remoteBegin("r1", {
+      tool: "draw",
+      params: {} as never,
+      point: { ...POINT, x: 640, y: 180 } as PenSample,
+    });
+    const rbegin = bus.log.find((l) => l.startsWith('page:pencil@7 {"op":"rbegin"'));
+    if (rbegin === undefined) {
+      throw new Error("no rbegin forwarded");
+    }
+    const op = JSON.parse(rbegin.slice(rbegin.indexOf("{"))) as {
+      init: { point: { x: number; y: number } };
+    };
+    expect(op.init.point.x).toBeCloseTo(640, 6);
+    expect(op.init.point.y).toBeCloseTo(40, 6);
+  });
+
+  it("polls the plane while a viewer is connected, and announces a change", async () => {
+    vi.useFakeTimers();
+    const bus = fakeBus({ activeTab: 7 });
+    const fs = fakeSession();
+    createPencilHost({
+      host: bus,
+      port: 5050,
+      tab: () => bus.targeting.activeTab(),
+      stream: () => undefined,
+      label: "demo",
+      sessionFactory: fs.factory,
+    }).connect();
+    bus.clearLog();
+
+    const sizeOps = () => bus.log.filter((l) => l === 'page:pencil@7 {"op":"size"}').length;
+    // Nobody watching: no poll.
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(sizeOps()).toBe(0);
+
+    // A viewer joins (the session's status feed) → the poll runs.
+    fs.options().onStatus?.({ state: "hosting", viewers: 1, capturing: false });
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(sizeOps()).toBeGreaterThanOrEqual(2);
+
+    // The viewer leaves → the poll stops.
+    fs.options().onStatus?.({ state: "hosting", viewers: 0, capturing: false });
+    const seen = sizeOps();
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(sizeOps()).toBe(seen);
   });
 
   it("follows the tab in view — re-queries the plane and re-offers on a switch", () => {

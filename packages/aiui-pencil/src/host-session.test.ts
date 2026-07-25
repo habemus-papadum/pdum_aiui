@@ -118,6 +118,13 @@ describe("HostSession wire framing", () => {
 
     session.setName("solemn-otter");
     expect(ws.frames().at(-1)).toEqual({ type: "register", label: "lab", name: "solemn-otter" });
+
+    // announce() re-pushes videoStatus (the plane rider) without re-offering.
+    session.announce();
+    expect(ws.frames().at(-1)).toMatchObject({
+      type: "videoStatus",
+      plane: { width: 640, height: 360 },
+    });
     session.dispose();
   });
 });

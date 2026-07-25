@@ -34,6 +34,7 @@ import {
   type Surface,
   type Tool,
 } from "@habemus-papadum/aiui-pencil";
+import { letterboxFit } from "./ext/capture";
 import { MARKUP } from "./page/pencil-mount";
 import type { IntentHost, PencilOp } from "./transport";
 
@@ -44,6 +45,8 @@ export interface PencilHostSession {
   dispose(): void;
   /** Rename the session live (re-registers). Optional: test fakes may omit it. */
   setName?(name: string): void;
+  /** Re-push videoStatus (the plane rider) without re-offering. Optional. */
+  announce?(): void;
 }
 
 export interface PencilHostOptions {
@@ -81,6 +84,53 @@ export interface PencilHost {
  * zero (which would collapse every `fromNorm` to the origin). */
 const DEFAULT_PLANE: Surface = { width: 1280, height: 720 };
 
+/** How often the plane is re-queried while an iPad is connected. Resize and
+ * zoom move the viewport with no tab switch — the only signals the host used
+ * to re-query on — and a stale plane skews every remote stroke linearly
+ * (found live 2026-07-25, the A2 ladder's Suspect A). */
+const PLANE_POLL_MS = 1000;
+
+/**
+ * Map a remote sample from FRAME space onto the page's CSS plane. The iPad
+ * normalizes against the video frame it sees; RemoteHost denormalized that
+ * against OUR plane, assuming frame ≡ plane (D2). After a resize the frame
+ * stops matching the tab — the stream keeps its hold-time size box and Chrome
+ * re-fits the new tab shape inside it, bars INSIDE the picture — so that
+ * assumption lands every stroke offset and scaled (measured live 2026-07-25:
+ * plane 2230×1190 against a 1556×1182 track). This is the same letterbox belt
+ * the shot path wears (ext/capture.ts); identity when the frame matches the
+ * plane's aspect. Pure — exported for tests.
+ */
+export function correctRemotePoint(
+  point: PenSample,
+  plane: Surface,
+  frame: { width: number; height: number } | undefined,
+): PenSample {
+  if (
+    frame === undefined ||
+    frame.width <= 0 ||
+    frame.height <= 0 ||
+    plane.width <= 0 ||
+    plane.height <= 0
+  ) {
+    return point;
+  }
+  const fit = letterboxFit(
+    { w: frame.width, h: frame.height },
+    { w: plane.width, h: plane.height },
+  );
+  if (fit.scale <= 0) {
+    return point;
+  }
+  const u = point.x / plane.width;
+  const v = point.y / plane.height;
+  return {
+    ...point,
+    x: (u * frame.width - fit.offX) / fit.scale,
+    y: (v * frame.height - fit.offY) / fit.scale,
+  };
+}
+
 export function createPencilHost(opts: PencilHostOptions): PencilHost {
   let size: Surface = DEFAULT_PLANE;
 
@@ -90,6 +140,18 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
       void opts.host.transport.requestPage(tab, "pencil", op).catch(() => {});
     }
   };
+
+  /** The held track's actual frame size — the letterbox belt's ground truth. */
+  const frameSize = (): { width: number; height: number } | undefined => {
+    const settings = opts.stream()?.getVideoTracks()[0]?.getSettings();
+    return settings?.width !== undefined &&
+      settings.width > 0 &&
+      settings?.height !== undefined &&
+      settings.height > 0
+      ? { width: settings.width, height: settings.height }
+      : undefined;
+  };
+  const fix = (point: PenSample): PenSample => correctRemotePoint(point, size, frameSize());
 
   // The proxy surface: only the fire-and-forget calls RemoteHost makes, each
   // forwarded to the in-page surface. Cast because we deliberately implement a
@@ -104,17 +166,17 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
       forward({
         op: "rbegin",
         id,
-        init: { ...init, tool: "draw", params: MARKUP },
+        init: { ...init, tool: "draw", params: MARKUP, point: fix(init.point) },
       }),
-    remotePoint: (id: string, point: PenSample) => forward({ op: "rpoint", id, point }),
+    remotePoint: (id: string, point: PenSample) => forward({ op: "rpoint", id, point: fix(point) }),
     remoteEnd: (id: string, point?: PenSample) =>
-      forward({ op: "rend", id, ...(point !== undefined ? { point } : {}) }),
+      forward({ op: "rend", id, ...(point !== undefined ? { point: fix(point) } : {}) }),
     remoteCancel: (id: string) => forward({ op: "rcancel", id }),
     undo: () => forward({ op: "undo" }),
     clear: () => forward({ op: "clear" }),
   } as unknown as PencilSurface;
 
-  const refreshSize = (): void => {
+  const refreshSize = (onChange?: () => void): void => {
     const tab = opts.tab();
     if (tab === undefined) {
       return;
@@ -124,10 +186,29 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
       .then((got) => {
         const s = got as { width?: number; height?: number } | undefined;
         if (s?.width !== undefined && s.width > 0 && s?.height !== undefined && s.height > 0) {
+          const changed = s.width !== size.width || s.height !== size.height;
           size = { width: s.width, height: s.height };
+          if (changed) {
+            onChange?.();
+          }
         }
       })
       .catch(() => {});
+  };
+
+  // The plane poll: while an iPad is connected, re-query the viewport every
+  // second and re-announce on change (resize/zoom happen with no tab switch —
+  // the only edges the host used to see). Viewer count rides the session's
+  // own status feed, so the poll costs nothing while nobody is watching.
+  let poll: ReturnType<typeof setInterval> | undefined;
+  const syncPoll = (viewers: number): void => {
+    const wanted = viewers > 0;
+    if (wanted && poll === undefined) {
+      poll = setInterval(() => refreshSize(() => session.announce?.()), PLANE_POLL_MS);
+    } else if (!wanted && poll !== undefined) {
+      clearInterval(poll);
+      poll = undefined;
+    }
   };
 
   const factory = opts.sessionFactory ?? ((o: HostSessionOptions) => new HostSession(o));
@@ -159,7 +240,10 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
     ...(opts.streamHint ? { streamHint: opts.streamHint } : {}),
     ...(opts.onScroll ? { onScroll: opts.onScroll } : {}),
     ...(opts.onZoom ? { onZoom: opts.onZoom } : {}),
-    ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
+    onStatus: (status) => {
+      syncPoll(status.viewers);
+      opts.onStatus?.(status);
+    },
   });
 
   // Follow the tab in view: re-query the plane and re-offer the (new) stream.
@@ -182,6 +266,7 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
     },
     dispose: () => {
       offTab();
+      syncPoll(0);
       session.dispose();
     },
   };

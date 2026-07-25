@@ -206,6 +206,17 @@ export class HostSession {
     this.publish();
   }
 
+  /**
+   * Re-announce `videoStatus` (the plane rider) WITHOUT re-offering — for
+   * changes the track absorbs on its own (a window resize moves the plane;
+   * WebRTC re-fits the same track), where a re-offer would blink the video
+   * for nothing. `refresh()` remains the plane-SWITCH path (new stream).
+   */
+  announce(): void {
+    this.pushVideoStatus();
+    this.publish();
+  }
+
   /** Rename the session live: re-registers, so every picker hears the new name. */
   setName(name: string): void {
     this.sessionName = name;
