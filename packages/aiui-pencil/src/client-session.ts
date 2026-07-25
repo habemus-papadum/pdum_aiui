@@ -38,6 +38,8 @@ import { RemoteClient } from "./remote";
 import type { Tool } from "./surface";
 import type { PenSample } from "./telemetry";
 
+const RECONNECT_MS = 2000;
+
 export interface ClientSessionOptions {
   /**
    * The relay's client endpoint, e.g. `ws://<mac>:<port>/pencil/client`.
@@ -68,14 +70,15 @@ export interface ClientSessionOptions {
 }
 
 export class ClientSession {
-  private readonly ws: WebSocket;
+  private ws!: WebSocket;
   private readonly core: RemoteClient;
   private pc: RTCPeerConnection | undefined;
   private readonly log: (line: string) => void;
+  private stopped = false;
+  private reconnect: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly opts: ClientSessionOptions) {
     this.log = opts.log ?? ((line) => console.info("[pencil-client]", line));
-    this.ws = new WebSocket(opts.url);
 
     this.core = new RemoteClient({
       send: (message) => this.send(message),
@@ -103,7 +106,18 @@ export class ClientSession {
       },
     });
 
-    this.ws.addEventListener("message", (event) => {
+    this.dial();
+  }
+
+  /** Dial the relay. Redials every {@link RECONNECT_MS} until disposed — the
+   * old single-shot socket made "lost" terminal: a channel restart or a Wi-Fi
+   * blip stranded the iPad on a promise ("waiting for it to come back…") the
+   * code could not keep, and only a page reload recovered. */
+  private dial(): void {
+    const ws = new WebSocket(this.opts.url);
+    this.ws = ws;
+
+    ws.addEventListener("message", (event) => {
       if (typeof event.data !== "string") {
         return;
       }
@@ -127,10 +141,14 @@ export class ClientSession {
           this.core.receive(message);
       }
     });
-    this.ws.addEventListener("close", () => {
-      this.log("relay socket closed");
-      opts.onClose?.();
+    ws.addEventListener("close", () => {
+      this.log(this.stopped ? "relay socket closed (disposed)" : "relay socket closed — redialing");
+      this.opts.onClose?.();
+      if (!this.stopped) {
+        this.reconnect = setTimeout(() => this.dial(), RECONNECT_MS);
+      }
     });
+    ws.addEventListener("error", () => ws.close());
   }
 
   // ── rooms ──────────────────────────────────────────────────────────────────
@@ -213,6 +231,8 @@ export class ClientSession {
   }
 
   dispose(): void {
+    this.stopped = true;
+    clearTimeout(this.reconnect);
     this.pc?.close();
     this.pc = undefined;
     this.ws.close();

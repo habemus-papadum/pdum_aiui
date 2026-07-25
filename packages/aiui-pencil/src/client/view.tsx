@@ -17,7 +17,7 @@ import type { PencilParams } from "../pencil";
 import type { Surface } from "../protocol";
 import { fadeWindowMs, type LinkStats } from "../remote";
 import { PencilSurface, type Tool } from "../surface";
-import { bindPenInput } from "./pen-input";
+import { bindPenInput, type PenActivity } from "./pen-input";
 import { createPlaneTracker } from "./plane";
 
 export interface RemoteViewProps {
@@ -35,6 +35,8 @@ export interface RemoteViewProps {
   videoNote: string;
   /** The first pen event was seen (the ✍️ chip + finger policy latch). */
   onPenMode?: () => void;
+  /** The pen's live activity, once bound — the chrome guard reads it. */
+  onActivity?: (activity: PenActivity) => void;
   /**
    * Hand the composer the view's live seams once mounted: the plane's content
    * box (what `ClientSession.surface` must report) and the video element
@@ -155,7 +157,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       fadeCurve: () => "crossfade",
     });
 
-    bindPenInput(element, {
+    const activity = bindPenInput(element, {
       plane: tracker,
       sink: props.session,
       preview: () => preview,
@@ -164,6 +166,7 @@ export function RemoteView(props: RemoteViewProps): JSX.Element {
       navigation: props.navigation,
       ...(props.onPenMode ? { onPenMode: props.onPenMode } : {}),
     });
+    props.onActivity?.(activity);
 
     // The plane tracks the PICTURE, whose dimensions are late and mutable.
     window.addEventListener("resize", recompute);

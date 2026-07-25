@@ -38,6 +38,8 @@ import { type PencilMode, resolveParams } from "../pencil";
 import type { SessionInfo, StrokeOverrides, Surface } from "../protocol";
 import type { LinkStats } from "../remote";
 import type { Tool } from "../surface";
+import { guardChrome } from "./chrome-guard";
+import type { PenActivity } from "./pen-input";
 import { SessionPicker } from "./picker";
 import { FULL_PRESENTATION, type ResolvedPresentation, resolvePresentation } from "./presentation";
 import { PencilStrip } from "./strip";
@@ -109,7 +111,10 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
     video: () => videoEl(),
     onSessions: (list) => {
       setSessions(list);
-      setPhase((p) => (p === "connecting" ? "picking" : p));
+      // From "lost" too: the host coming back (or the socket redialing) lands
+      // here, and "lost" must not be terminal — the old code parked there
+      // forever while promising "waiting for it to come back…".
+      setPhase((p) => (p === "connecting" || p === "lost" ? "picking" : p));
     },
     onJoined: (_host, _label, p) => {
       const resolved = resolvePresentation(p);
@@ -162,6 +167,8 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
   // Wired by RemoteView on mount (the view owns the stage/video/plane DOM).
   let viewSurface: () => { width: number; height: number } = () => ({ width: 1, height: 1 });
   let videoEl: () => HTMLVideoElement | undefined = () => undefined;
+  // The pen's live activity (bound by the view) — the chrome guard reads it.
+  let penActivity: PenActivity | undefined;
 
   return (
     <main class="remote" style={accentStyle(presentation())}>
@@ -182,31 +189,39 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
           videoUp={videoUp()}
           videoNote={videoNote()}
           onPenMode={() => setPenMode(true)}
+          onActivity={(activity) => {
+            penActivity = activity;
+          }}
           expose={(surface, video) => {
             viewSurface = surface;
             videoEl = video;
           }}
         />
 
-        {/* the host's command bar — its own channel (D5), one component */}
-        <div class="host-bar">
-          <RemoteBar client={bar} />
-        </div>
+        {/* The chrome below the stage, palm-guarded as one surface: a writing
+            palm must not press UNDO (chrome-guard.ts). display:contents keeps
+            the flex layout exactly as if the wrapper were not there. */}
+        <div style={{ display: "contents" }} ref={(el) => guardChrome(el, () => penActivity)}>
+          {/* the host's command bar — its own channel (D5), one component */}
+          <div class="host-bar">
+            <RemoteBar client={bar} />
+          </div>
 
-        <PencilStrip
-          presentation={presentation()}
-          penMode={penMode()}
-          tool={tool()}
-          onTool={setTool}
-          mode={mode()}
-          onMode={setMode}
-          color={color()}
-          onColor={setColor}
-          size={size()}
-          onSize={setSize}
-          onUndo={() => session.undo()}
-          onClear={() => session.clear()}
-        />
+          <PencilStrip
+            presentation={presentation()}
+            penMode={penMode()}
+            tool={tool()}
+            onTool={setTool}
+            mode={mode()}
+            onMode={setMode}
+            color={color()}
+            onColor={setColor}
+            size={size()}
+            onSize={setSize}
+            onUndo={() => session.undo()}
+            onClear={() => session.clear()}
+          />
+        </div>
       </div>
     </main>
   );

@@ -53,6 +53,19 @@ export interface PenInputDeps {
   onPenMode?: () => void;
 }
 
+/**
+ * The pen's live activity, for policy OUTSIDE the stage: the chrome guard
+ * (chrome-guard.ts) refuses palm touches on the strip/bar exactly while a
+ * stroke is in flight or just ended — the stage's own rules never see those
+ * touches, because they land on buttons, not paper.
+ */
+export interface PenActivity {
+  /** A pen contact is down right now. */
+  penDown(): boolean;
+  /** `performance.now()` of the last pen lift (0 = never). */
+  lastPenUp(): number;
+}
+
 /** A touch contact larger than this (either axis) is a palm, not a finger. */
 const PALM_CONTACT = 60;
 
@@ -64,12 +77,15 @@ interface ActivePointer {
   strokeId: string | null;
 }
 
-/** Bind the whole pen policy to `element` (the stage). */
-export function bindPenInput(element: HTMLElement, deps: PenInputDeps): void {
+/** Bind the whole pen policy to `element` (the stage). Returns the pen's
+ * live activity, for the chrome guard outside the stage. */
+export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActivity {
   let strokeSeq = 0;
   const active = new Map<number, ActivePointer>();
   let drawPointer: number | null = null;
   let penSeen = false;
+  let penContacts = 0;
+  let lastPenUp = 0;
   const pinch = { dist: 0, cx: 0, cy: 0 };
 
   const localSample = (e: PointerEvent): PenSample => {
@@ -169,6 +185,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): void {
     active.set(e.pointerId, p);
 
     if (e.pointerType === "pen") {
+      penContacts += 1;
       if (!penSeen) {
         penSeen = true;
         deps.onPenMode?.();
@@ -234,6 +251,10 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): void {
       return;
     }
     active.delete(e.pointerId);
+    if (p.type === "pen") {
+      penContacts = Math.max(0, penContacts - 1);
+      lastPenUp = performance.now();
+    }
     if (drawPointer === e.pointerId) {
       if (p.strokeId) {
         deps.preview()?.remoteEnd(p.strokeId);
@@ -249,4 +270,9 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): void {
   };
   element.addEventListener("pointerup", endPointer);
   element.addEventListener("pointercancel", endPointer);
+
+  return {
+    penDown: () => penContacts > 0,
+    lastPenUp: () => lastPenUp,
+  };
 }

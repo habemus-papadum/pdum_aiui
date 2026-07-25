@@ -9,7 +9,9 @@ export const REMOTE_APP_CSS = `
   .picker { margin: auto; text-align: center; display: flex; flex-direction: column; gap: 12px; }
   .picker h1 { font-size: 18px; font-weight: 600; }
   .session { padding: 12px 20px; border-radius: 10px; border: 1px solid #333;
-             background: #1a1a22; color: inherit; font-size: 15px; cursor: pointer; }
+             background: #1a1a22; color: inherit; font-size: 15px; cursor: pointer;
+             touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .session:active:not(:disabled) { background: #2c2c3a; }
   .session:disabled { opacity: 0.4; }
   .session-meta { display: block; font-size: 11px; color: #888; margin-top: 2px; }
   .stage-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -30,7 +32,12 @@ export const REMOTE_APP_CSS = `
   .bar { display: flex; gap: 8px; padding: 10px; justify-content: center; align-items: center;
          flex-wrap: wrap; background: #16161c; border-top: 1px solid #26262e; }
   .bar button { padding: 10px 16px; border-radius: 8px; border: 1px solid #333;
-                background: #1a1a22; color: inherit; font-size: 14px; cursor: pointer; }
+                background: #1a1a22; color: inherit; font-size: 14px; cursor: pointer;
+                touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+                transition: transform 60ms ease-out, background 60ms ease-out,
+                            border-color 60ms ease-out; }
+  .bar button:active { transform: scale(0.92); background: #34344a;
+                       border-color: var(--remote-accent, #7aa2ff); }
   .bar button[data-lit="true"] { border-color: var(--remote-accent, #7aa2ff);
                                  color: var(--remote-accent, #a9c4ff); }
   .knob { display: inline-flex; align-items: center; gap: 4px; }

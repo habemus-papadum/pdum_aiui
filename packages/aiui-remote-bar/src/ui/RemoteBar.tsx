@@ -22,7 +22,11 @@ export const REMOTE_BAR_STYLES = `
   .aiui-remote-phase[data-phase="turn"], .aiui-remote-phase[data-phase="tweak"] { color: #7c3aed; }
   .aiui-remote-rows { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
   .aiui-remote-cap { border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit; }
+    border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    transition: transform 60ms ease-out, background 60ms ease-out, border-color 60ms ease-out; }
+  .aiui-remote-cap:active:not([disabled]) { transform: scale(0.92);
+    background: color-mix(in srgb, #7c3aed 30%, transparent); border-color: #7c3aed; }
   .aiui-remote-cap[data-lit="true"] { background: color-mix(in srgb, #7c3aed 18%, transparent);
     border-color: #7c3aed; }
   .aiui-remote-cap[disabled] { opacity: 0.4; cursor: default; }
@@ -35,7 +39,9 @@ export const REMOTE_BAR_STYLES = `
   .aiui-remote-claim[data-phase="error"] { color: #dc2626; opacity: 1; }
   .aiui-remote-sessions { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
   .aiui-remote-session { text-align: left; border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 6px; padding: 6px 10px; background: transparent; cursor: pointer; font: inherit; }
+    border-radius: 6px; padding: 6px 10px; background: transparent; cursor: pointer; font: inherit;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .aiui-remote-session:active { background: color-mix(in srgb, currentColor 12%, transparent); }
   .aiui-remote-session small { display: block; opacity: 0.6; }
   .aiui-remote-note { margin-top: 8px; opacity: 0.8; }
   .aiui-remote-note[data-tone="error"] { color: #dc2626; }
