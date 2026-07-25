@@ -55,9 +55,15 @@ describe("describeMissingStream — the three-way split", () => {
     );
   });
 
-  it("points at the turn when the grant is already in place", () => {
+  it("granted + armed means the stream is warming (C1: no turn required)", () => {
     expect(describeMissingStream(7, 7, REMEDY)).toBe(
-      "capture is granted — open a turn on the host to start video",
+      "capture is granted — the host's stream is warming…",
+    );
+  });
+
+  it("granted + disarmed names the arm remedy", () => {
+    expect(describeMissingStream(7, 7, REMEDY, true)).toBe(
+      "the host is disarmed — press arm on the panel",
     );
   });
 

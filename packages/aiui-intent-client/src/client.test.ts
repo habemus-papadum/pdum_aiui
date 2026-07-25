@@ -493,15 +493,23 @@ describe("claims — the end of hand-called syncs", () => {
     expect(r.bus.log).toContain('page:pencil@7 {"op":"engage","fadeSec":0}');
   });
 
-  it("the warm stream is held for the turn's life and re-pointed on re-grant", async () => {
+  it("the warm stream is ARMED-scoped: survives the turn, releases on disarm (C1)", async () => {
     const r = makeRig();
     grantAndOpen(r);
     await settle();
     expect(r.bus.heldStreams()).toEqual([7]);
 
+    // C1 (owner, 2026-07-25): video is a SOURCE — a turn is not the power
+    // switch. Send returns to armed; the stream stays warm (the iPad mirror
+    // keeps running, the next shot rides the same warmth).
     r.client.dispatch("send");
     await settle();
-    expect(r.bus.heldStreams()).toEqual([]); // released with the turn
+    expect(r.bus.heldStreams()).toEqual([7]);
+
+    // Only disarm ends the source.
+    r.client.dispatch("disarm");
+    await settle();
+    expect(r.bus.heldStreams()).toEqual([]);
   });
 
   it("key routing follows the ACTIVE tab and leaves tweak alone", async () => {

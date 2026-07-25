@@ -214,8 +214,9 @@ async function boot(): Promise<{
 
   // The remote pencil: an iPad marks up the tab, its strokes landing on the
   // in-page surface. The video is the SAME warm tabCapture MediaStream the shot
-  // grabs off (heldStreamFor) — shared, not a second capture — so it appears
-  // exactly when a turn warms the stream. Strokes forward to the tab in view.
+  // grabs off (heldStreamFor) — shared, not a second capture — held for the
+  // ARMED session's life since C1 (grant in hand → video; only disarm ends it).
+  // Strokes forward to the tab in view.
   const pencilHost = createPencilHost({
     host,
     port,
@@ -226,7 +227,12 @@ async function boot(): Promise<{
     // the one remedy that actually applies (the three-way split, A2 fix #4).
     streamHint: () => {
       const ctx = client.context();
-      return describeMissingStream(ctx.activeTab, ctx.grantedTab, hint);
+      return describeMissingStream(
+        ctx.activeTab,
+        ctx.grantedTab,
+        hint,
+        client.state().phase === "disarmed",
+      );
     },
     label: `aiui intent — window ${windowId}`,
     name: sessionName(),

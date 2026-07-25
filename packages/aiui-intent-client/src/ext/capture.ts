@@ -96,6 +96,7 @@ export function describeMissingStream(
   activeTab: number | undefined,
   grantedTab: number | undefined,
   grantRemedy: string,
+  disarmed = false,
 ): string {
   if (activeTab === undefined) {
     return "the host has no tab in view";
@@ -106,16 +107,21 @@ export function describeMissingStream(
   if (grantedTab !== activeTab) {
     return `the host is on a different tab than the granted one — switch back, or grant this one (${grantRemedy})`;
   }
-  return "capture is granted — open a turn on the host to start video";
+  // C1: the stream is armed-scoped, so "granted yet no stream" means the
+  // client is disarmed — or the hold is still warming (transient).
+  return disarmed
+    ? "the host is disarmed — press arm on the panel"
+    : "capture is granted — the host's stream is warming…";
 }
 
 /**
  * The warm `tabCapture` MediaStream for `tabId`, or `undefined` (none held, or
  * held for another tab). This is the pencil host's video source in the MV3 tier
  * (pencil-host.ts) — the same stream the shot grabs off, shared, not a second
- * capture (a tab supports only one). Undefined outside a turn: the stream is
- * warmed by the tabStream claim, so remote video appears exactly when capture
- * does — which is the only time the iPad has anything to mark up.
+ * capture (a tab supports only one). Warmed by the tabStream claim, which is
+ * ARMED-scoped since C1 (owner: video is a source, not a turn perk): the
+ * stream exists from armed-with-a-grant until disarm, so the iPad mirror runs
+ * with no turn open and a turn end no longer freezes it.
  */
 export function heldStreamFor(tabId: number | undefined): MediaStream | undefined {
   return streamHeldFor(tabId) ? stream : undefined;

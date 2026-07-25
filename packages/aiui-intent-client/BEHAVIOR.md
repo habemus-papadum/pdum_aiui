@@ -106,8 +106,15 @@ Landed so far (C0): the page-side typing-target carve-out (above), and the key s
 into the in-turn swallow layer over an **armed-level pass layer** (`armedLayer`, empty today)
 — armed-scope keys arrive as table rows in the C1/C2/C3 slices. The sticky/replay capability
 table is single-sourced (`STICKY_CAPABILITIES`, transport.ts) so a page assertion added for
-one tier cannot silently not-survive reloads on the other. Still turn-scoped until their
-slices land: the warm stream + video sampling (C1), the pencil surface + clear (C2),
+one tier cannot silently not-survive reloads on the other.
+
+**C1 (landed): the warm stream is ARMED-scoped.** `tabStream` derives on
+armed-with-a-grant and releases only on disarm: the iPad mirror runs with no turn open, a
+turn end no longer freezes it, and an in-turn shot rides the same warmth it always did. The
+CDP tier's screencast already had a viewer-driven lifecycle (a joining iPad starts it) — C1
+made the MV3 tier agree. **Video SAMPLING stays turn-scoped on purpose**: sampled frames
+feed the PROMPT, and the prompt is the turn — that is the sources/routes line, not a
+leftover. Still turn-scoped until their slices land: the pencil surface + clear (C2),
 talk/hands-free (C3).
 
 ## The bar

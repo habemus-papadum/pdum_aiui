@@ -103,10 +103,17 @@ export function intentClaims(
       },
     },
 
-    /** The warm capture stream, held for the turn's life (shots ride it). */
+    /** The warm capture stream — ARMED-scoped (C1, owner 2026-07-25: video is
+     * a SOURCE, and sources are not turn-gated). Held from the moment the
+     * client is armed with a grant in hand: the iPad mirror runs without a
+     * turn, a turn end no longer freezes it, and an in-turn shot still rides
+     * the same warmth. Only disarm releases it. What stays turn-scoped is the
+     * ROUTE — videoSample below feeds the PROMPT, which only exists in a
+     * turn. (CDP tier: holdStream is a no-op handle; its screencast has its
+     * own viewer-driven lifecycle.) */
     tabStream: {
       derive: (s, ctx) =>
-        inTurn(s) && ctx.grantedTab !== undefined ? { tab: ctx.grantedTab } : null,
+        s.phase !== "disarmed" && ctx.grantedTab !== undefined ? { tab: ctx.grantedTab } : null,
       acquire: (desire: { tab: number }) => capture.holdStream(desire.tab),
       release: (stream: HeldStream) => {
         stream.release();
