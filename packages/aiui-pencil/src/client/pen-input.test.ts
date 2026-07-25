@@ -28,13 +28,22 @@ const plane: PlaneTracker = {
   recompute: () => {},
 };
 
-function pe(type: string, pointerType: string, id: number, x: number, y: number): PointerEvent {
+function pe(
+  type: string,
+  pointerType: string,
+  id: number,
+  x: number,
+  y: number,
+  contact = 1,
+): PointerEvent {
   return new PointerEvent(type, {
     pointerId: id,
     pointerType,
     button: 0,
     clientX: x,
     clientY: y,
+    width: contact,
+    height: contact,
     bubbles: true,
     cancelable: true,
   });
@@ -52,6 +61,7 @@ describe("two-finger navigation", () => {
       tool: () => "draw",
       params: () => ({}) as PencilParams,
       navigation: () => true,
+      navCooldownMs: 0,
     });
 
     // Latch pen mode first — the real iPad state when the user pans.
@@ -59,11 +69,17 @@ describe("two-finger navigation", () => {
     el.dispatchEvent(pe("pointerup", "pen", 9, 20, 20));
     calls.length = 0;
 
-    el.dispatchEvent(pe("pointerdown", "touch", 1, 40, 40));
-    el.dispatchEvent(pe("pointerdown", "touch", 2, 60, 40));
-    el.dispatchEvent(pe("pointermove", "touch", 1, 40, 30));
-    el.dispatchEvent(pe("pointermove", "touch", 2, 60, 30));
+    // PALM-SIZED contacts on purpose (66px): current iPadOS reports EVERY
+    // finger above the palm threshold (measured live 2026-07-25 — 13 of 13
+    // touches classified palm, nav permanently dead). The gesture must count
+    // all finger contacts; the size heuristic gates only INK.
+    el.dispatchEvent(pe("pointerdown", "touch", 1, 40, 40, 66));
+    el.dispatchEvent(pe("pointerdown", "touch", 2, 60, 40, 66));
+    el.dispatchEvent(pe("pointermove", "touch", 1, 40, 30, 66));
+    el.dispatchEvent(pe("pointermove", "touch", 2, 60, 30, 66));
     expect(calls.some((c) => c.startsWith("scroll:"))).toBe(true);
+    // …and no palm ever DREW: only scroll/zoom intents, no begins.
+    expect(calls.some((c) => c.startsWith("begin:"))).toBe(false);
     el.remove();
   });
 
@@ -78,6 +94,7 @@ describe("two-finger navigation", () => {
       tool: () => "draw",
       params: () => ({}) as PencilParams,
       navigation: () => false,
+      navCooldownMs: 0,
     });
     el.dispatchEvent(pe("pointerdown", "touch", 1, 40, 40));
     el.dispatchEvent(pe("pointerdown", "touch", 2, 60, 40));

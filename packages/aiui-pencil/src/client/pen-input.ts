@@ -51,6 +51,10 @@ export interface PenInputDeps {
   navigation: () => boolean;
   /** The first pen event was seen (drives the ✍️ chip + finger policy). */
   onPenMode?: () => void;
+  /** How long after pen-up the nav gesture stays dead (default 500ms) — the
+   * window in which multi-contact touches are a resting palm, not a pan.
+   * Tests pass 0. */
+  navCooldownMs?: number;
 }
 
 /**
@@ -81,8 +85,15 @@ export interface PenActivity {
   };
 }
 
-/** A touch contact larger than this (either axis) is a palm, not a finger. */
+/** A touch contact larger than this (either axis) is a palm, not a finger —
+ * for INK decisions only. Contact-size reporting is device/OS-dependent
+ * (measured 2026-07-25: current iPadOS reports EVERY finger > 60px, so this
+ * classifier must never gate the nav gesture — it would, and did, disable
+ * two-finger pan wholesale). */
 const PALM_CONTACT = 60;
+
+/** Default nav cooldown after pen-up (see PenInputDeps.navCooldownMs). */
+const NAV_COOLDOWN_MS = 500;
 
 interface ActivePointer {
   x: number;
@@ -122,10 +133,19 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
   const isPalm = (e: PointerEvent): boolean =>
     e.pointerType === "touch" && (e.width > PALM_CONTACT || e.height > PALM_CONTACT);
 
-  const drawTouches = (): ActivePointer[] =>
-    [...active.values()].filter((p) => p.type === "touch" && !p.palm);
+  /** The GESTURE set: every finger contact, palm classification ignored —
+   * the width heuristic is unreliable (see PALM_CONTACT) and the pan gate is
+   * the pen being idle, not the contact's size. */
+  const gestureTouches = (): ActivePointer[] =>
+    [...active.values()].filter((p) => p.type === "touch");
 
   const penDrawing = (): boolean => drawPointer !== null && active.get(drawPointer)?.type === "pen";
+
+  /** Nav fires only while the pen is idle: no contact down, and past the
+   * post-pen-up window in which multi-contact touches are a resting palm. */
+  const navReady = (): boolean =>
+    penContacts === 0 &&
+    (lastPenUp === 0 || performance.now() - lastPenUp > (deps.navCooldownMs ?? NAV_COOLDOWN_MS));
 
   const beginStroke = (e: PointerEvent, p: ActivePointer): void => {
     const id = `c-${++strokeSeq}`;
@@ -154,7 +174,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
   };
 
   const baselinePinch = (): void => {
-    const t = drawTouches();
+    const t = gestureTouches();
     if (t.length < 2) {
       return;
     }
@@ -165,7 +185,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
 
   /** Two fingers: pinch is zoom, drift is scroll — both plane-relative. */
   const navGesture = (): void => {
-    const t = drawTouches();
+    const t = gestureTouches();
     if (t.length < 2) {
       return;
     }
@@ -258,14 +278,17 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
     if (p.palm) {
       palms += 1;
     }
-    maxTouches = Math.max(maxTouches, drawTouches().length);
-    if (p.palm || penDrawing()) {
-      return; // palms never matter, and no finger interrupts the pencil
+    maxTouches = Math.max(maxTouches, gestureTouches().length);
+    if (penDrawing()) {
+      return; // no finger (or palm) interrupts the pencil
     }
-    if (drawTouches().length >= 2) {
+    if (gestureTouches().length >= 2) {
       cancelDraw(); // that first finger was half of a gesture, not a stroke
       baselinePinch();
       return;
+    }
+    if (p.palm) {
+      return; // palms never DRAW — ink is where the size heuristic still gates
     }
     if (!penSeen) {
       e.preventDefault();
@@ -293,7 +316,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
       deps.sink.points(p.strokeId, samples);
       return;
     }
-    if (drawTouches().length >= 2) {
+    if (navReady() && gestureTouches().length >= 2) {
       navGesture();
     }
   });
@@ -316,7 +339,7 @@ export function bindPenInput(element: HTMLElement, deps: PenInputDeps): PenActiv
       }
       drawPointer = null;
     }
-    if (drawTouches().length >= 2) {
+    if (gestureTouches().length >= 2) {
       baselinePinch();
     } else {
       pinch.dist = 0;
