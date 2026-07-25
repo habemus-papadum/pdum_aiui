@@ -61,16 +61,10 @@ const rows: Array<{
     command: "turn",
     expected: { phase: "disarmed" },
   },
-  // Enter column: send keeps armed, from tweak too
+  // Enter column: send keeps armed
   {
     name: "send from turn keeps armed",
     start: { phase: "turn" },
-    command: "send",
-    expected: { phase: "armed" },
-  },
-  {
-    name: "send from tweak keeps armed",
-    start: { phase: "tweak" },
     command: "send",
     expected: { phase: "armed" },
   },
@@ -80,32 +74,8 @@ const rows: Array<{
     command: "send",
     expected: { phase: "armed" },
   },
-  // T column
-  {
-    name: "tweak from turn",
-    start: { phase: "turn" },
-    command: "tweak",
-    expected: { phase: "tweak" },
-  },
-  {
-    name: "tweak from tweak releases back to turn (the panel cap; T on the page passes through)",
-    start: { phase: "tweak" },
-    command: "tweak",
-    expected: { phase: "turn" },
-  },
-  {
-    name: "tweak outside turn is nothing",
-    start: { phase: "armed" },
-    command: "tweak",
-    expected: { phase: "armed" },
-  },
+  // (The T column is GONE — tweak died in C3': disarm is the escape hatch.)
   // Esc column: one level per press, the WHOLE ladder (armed → disarmed too)
-  {
-    name: "esc from tweak returns to turn",
-    start: { phase: "tweak" },
-    command: "escape",
-    expected: { phase: "turn" },
-  },
   {
     name: "esc from turn cancels to armed",
     start: { phase: "turn" },
@@ -169,16 +139,28 @@ const rows: Array<{
     expected: { talk: "handsFree" },
   },
   {
-    name: "tweak PAUSES hands-free talk (the window survives the detour)",
+    name: "hands-free STANDS across a send (C3': a standing mode; the window closes, the mode survives)",
     start: { phase: "turn", talk: "handsFree" },
-    command: "tweak",
-    expected: { phase: "tweak", talk: "handsFree" },
+    command: "send",
+    expected: { phase: "armed", talk: "handsFree" },
   },
   {
-    name: "tweak ends a HOLD window (its physical key leaves with tweak)",
+    name: "h toggles hands-free while merely ARMED (C3': nothing records until a turn routes it)",
+    start: { phase: "armed" },
+    command: "handsFree",
+    expected: { phase: "armed", talk: "handsFree" },
+  },
+  {
+    name: "a send ends a HOLD window (its physical key lives in the turn grammar)",
     start: { phase: "turn", talk: "hold" },
-    command: "tweak",
-    expected: { phase: "tweak", talk: "off" },
+    command: "send",
+    expected: { phase: "armed", talk: "off" },
+  },
+  {
+    name: "disarm ends hands-free (disarmed-is-hard widened in C3')",
+    start: { phase: "turn", talk: "handsFree" },
+    command: "disarm",
+    expected: { phase: "disarmed", talk: "off", micMuted: false },
   },
   {
     name: "mute outside talk is nothing",
@@ -228,10 +210,22 @@ const rows: Array<{
     expected: { jump: false },
   },
   {
-    name: "tweak clears area/jump — they need an open turn (tools-need-turn)",
+    name: "leaving the turn clears the area drag (area-needs-turn)",
     start: { phase: "turn", region: true },
-    command: "tweak",
-    expected: { phase: "tweak", region: false },
+    command: "send",
+    expected: { phase: "armed", region: false },
+  },
+  {
+    name: "jump SURVIVES the turn (C3': an editor act, armed-scope like pencil)",
+    start: { phase: "turn", jump: true },
+    command: "send",
+    expected: { phase: "armed", jump: true },
+  },
+  {
+    name: "jump toggles OFF while merely ARMED (always escapable; the ON gate lives in available)",
+    start: { phase: "armed", jump: true },
+    command: "jump",
+    expected: { phase: "armed", jump: false },
   },
   {
     name: "disarm clears a live jump too",
@@ -259,7 +253,7 @@ describe("the §13.6 tables", () => {
 
 describe("spec-level properties", () => {
   it("esc terminates at quiescence from the deepest state", () => {
-    const e = engine({ phase: "tweak", help: true, pencil: true, talk: "off" });
+    const e = engine({ phase: "turn", help: true, pencil: true, talk: "off" });
     let steps = 0;
     for (; steps < 10; steps++) {
       const before = e.state();
@@ -267,7 +261,7 @@ describe("spec-level properties", () => {
         break;
       }
     }
-    expect(steps).toBeLessThanOrEqual(4); // help + tweak→turn + turn→armed + armed→disarmed
+    expect(steps).toBeLessThanOrEqual(3); // help + turn→armed + armed→disarmed
     expect(e.state()).toMatchObject({ phase: "disarmed", help: false, pencil: false });
   });
 
@@ -275,31 +269,27 @@ describe("spec-level properties", () => {
     const e = engine({ phase: "turn", talk: "handsFree", micMuted: true, help: true });
     for (const command of ["send", "turn", "handsFree", "disarm", "arm", "turn", "escape", "arm"]) {
       const s: EngineState = e.dispatch(command);
-      // Leaving the turn SCOPE ends talk; tweak alone would pause it (not
-      // reached here — no `tweak` in the sequence).
-      if (s.phase !== "turn" && s.phase !== "tweak") {
+      // C3': hands-free STANDS outside a turn; only a HOLD needs one, and
+      // disarm ends every talk mode (disarmed-is-hard).
+      if (s.phase !== "turn") {
+        expect(s.talk).not.toBe("hold");
+      }
+      if (s.phase === "disarmed") {
         expect(s.talk).toBe("off");
+        expect(s.pencil).toBe(false); // one disarmed, and it is hard
       }
       if (s.talk === "off") {
         expect(s.micMuted).toBe(false);
       }
-      if (s.phase === "disarmed") {
-        expect(s.pencil).toBe(false); // one disarmed, and it is hard
-      }
     }
   });
 
-  it("tweak pauses then resumes hands-free talk (turn → tweak → turn keeps the window)", () => {
-    const e = engine({ phase: "turn", talk: "handsFree" });
-    expect(e.dispatch("tweak")).toMatchObject({ phase: "tweak", talk: "handsFree" });
-    expect(e.dispatch("tweak")).toMatchObject({ phase: "turn", talk: "handsFree" });
-  });
-
-  it("stepping OUT of a tweak-paused window (to armed) finally ends it", () => {
-    const e = engine({ phase: "tweak", talk: "handsFree" });
-    // esc from tweak lands in turn (talk kept); a second esc leaves the turn.
-    expect(e.dispatch("escape")).toMatchObject({ phase: "turn", talk: "handsFree" });
-    expect(e.dispatch("escape")).toMatchObject({ phase: "armed", talk: "off" });
+  it("hands-free stands across the whole armed session; only disarm ends it (C3')", () => {
+    const e = engine({ phase: "armed" });
+    expect(e.dispatch("handsFree")).toMatchObject({ phase: "armed", talk: "handsFree" });
+    expect(e.dispatch("turn")).toMatchObject({ phase: "turn", talk: "handsFree" });
+    expect(e.dispatch("send")).toMatchObject({ phase: "armed", talk: "handsFree" });
+    expect(e.dispatch("escape")).toMatchObject({ phase: "disarmed", talk: "off" });
   });
 
   it("help is a standing root-level toggle (blank system: arm · step out · help)", () => {

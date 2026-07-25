@@ -19,15 +19,16 @@
  *  - send keeps you armed; disarm is its own deliberate command
  *  - pencil · area · jump are the three PAGE-POINTER TOOLS, mutually
  *    exclusive — one owns the page pointer at a time (turning any on turns the
- *    others off). pencil is durable (survives turns; disarm clears it);
- *    area/jump are transient (need an open turn — tools-need-turn clears them off
- *    it) and AUTO-EXIT after their one act (regionDone/jumpDone). Esc unwinds the
- *    active tool before the phase ladder (escOrder) — one Escape source, no
- *    page-side split-brain. (owner, 2026-07-16)
+ *    others off). pencil and jump are durable, ARMED-scope (survive turns;
+ *    disarm clears them — C3'); area is transient (needs an open turn —
+ *    area-needs-turn clears it). area/jump AUTO-EXIT after their one act
+ *    (regionDone/jumpDone). Esc unwinds the active tool before the phase
+ *    ladder (escOrder) — one Escape source, no page-side split-brain.
  *  - standing video/videoMode survive turns and disarm (standing settings)
  *  - talk is per-turn: leaving the turn SCOPE (armed/disarmed) ends it — but
- *    tweak PAUSES hands-free talk (mic quiet, resumes on return); hold always
- *    ends (its physical key leaves with tweak). Excludes, not a memory.
+ *    hands-free is a STANDING mode (C3'): survives turns, disarm clears;
+ *    hold always ends with the turn (its physical key lives in the turn
+ *    grammar). Excludes, not a memory.
  *  - mute exists only while talking; starting talk starts unmuted
  */
 
@@ -84,11 +85,14 @@ export const initialContext: IntentContext = {
  */
 export const intentSpec: ModeEngineSpec<IntentContext> = {
   regions: {
-    /** THE machine: disarmed ⊂ armed ⊂ turn, tweak a submode of turn. Esc
-     * unwinds the WHOLE ladder one level per press (owner, 2026-07-13):
-     * tweak → turn → armed → disarmed — stepping out of armed IS disarming,
-     * and there is only one disarmed (the hard one; see the exclude). */
-    phase: ladder(["disarmed", "armed", "turn", "tweak"]),
+    /** THE machine: disarmed ⊂ armed ⊂ turn. (Tweak DIED in C3′, owner
+     * 2026-07-25: armed means the grammar is live — a few claimed keys — and
+     * a turn claims the whole keyboard; DISARM is the escape hatch, and the
+     * page keeps its pointer unless an explicit mode owns it.) Esc unwinds
+     * the ladder one level per press: turn → armed → disarmed — stepping out
+     * of armed IS disarming, and there is only one disarmed (the hard one;
+     * see the exclude). */
+    phase: ladder(["disarmed", "armed", "turn"]),
     /** Pencil markup mode (owner, 2026-07-16): standing (survives turns),
      * durable, disarm clears it. On ⇒ the pencilSurface claim engages the page
      * surface (mouse + pen + iPad); strokes survive turns until cleared. Vanish
@@ -104,8 +108,10 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     /** Jump-to-editor pick (`j`), a TOGGLE like area (owner, 2026-07-16). On ⇒
      * the jumpSurface claim raises the picker on the instrumented tab in view; a
      * commit or cancel flips this off (auto-exit, via the page's jumpDone). Also
-     * a page-pointer tool: mutually exclusive with pencil/area. Transient. */
-    jump: toggle(),
+     * a page-pointer tool: mutually exclusive with pencil/area. ARMED-scope
+     * since C3′ (owner: an editor act, not a prompt act) — durable like pencil;
+     * disarm clears it. */
+    jump: toggle({ durable: true }),
     /** Video sampling — standing, durable, agent-visible. */
     video: toggle({
       durable: true,
@@ -118,8 +124,12 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       agent: "videoMode",
       description: "video cadence: smart (interaction-gated) or constant",
     }),
-    /** One talk window at a time: hold (Space) or hands-free (h). Per-turn. */
-    talk: choice(["off", "hold", "handsFree"]),
+    /** One talk grip at a time: hold (Space, turn-only — a gesture) or
+     * hands-free (h — a STANDING mode since C3′: survives turns; the capture
+     * WINDOW opens only while a consumer exists, i.e. a turn; disarm clears).
+     * Durable so window blur never kills the standing mode (the panel blurs
+     * every time you touch the page). */
+    talk: choice(["off", "hold", "handsFree"], { durable: true }),
     /** Mic muted — only meaningful while talking (an exclude clears it). */
     micMuted: toggle(),
     /** The keymap table popup. Esc dismisses it BEFORE the cancel rung.
@@ -152,23 +162,15 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      * escape-from-turn rung, one click). The verb effects treat it like
      * escape: leaving the turn via `turn` cancels the thread. */
     turn: (s) =>
-      s.phase === "armed"
-        ? { phase: "turn" }
-        : s.phase === "turn" || s.phase === "tweak"
-          ? { phase: "armed" }
-          : null,
+      s.phase === "armed" ? { phase: "turn" } : s.phase === "turn" ? { phase: "armed" } : null,
     /** Enter — send the turn; the seat stays armed (divergence 2, decided). */
-    send: (s) => (s.phase === "turn" || s.phase === "tweak" ? { phase: "armed" } : null),
+    send: (s) => (s.phase === "turn" ? { phase: "armed" } : null),
     /** d — disarm from anywhere in-turn (same hard disarmed as everything). */
     disarm: () => ({ phase: "disarmed" }),
-    /**
-     * t — hand keyboard and pointer back to the page; the turn stays open.
-     * A TOGGLE: the panel's tweak cap also releases it (in tweak the page
-     * owns every ordinary key, so the cap and ⌘B are the only ways back —
-     * pressing T on the page must pass through to the page).
-     */
-    tweak: (s) =>
-      s.phase === "turn" ? { phase: "tweak" } : s.phase === "tweak" ? { phase: "turn" } : null,
+    // NOTE: `tweak` is GONE (C3′, owner 2026-07-25). It existed to escape
+    // in-turn interference; now interference is precise (a claimed key SET
+    // while armed, wholesale only in a turn, pointer only under explicit
+    // modes), and DISARM is the escape hatch.
     // The three page-pointer tools are MUTUALLY EXCLUSIVE (owner, 2026-07-16):
     // pencil, area, and jump each own the page pointer with a full-viewport
     // overlay, so at most one is on. Turning any ON clears the other two; the
@@ -187,9 +189,12 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       s.phase === "turn" && s.talk === "off" ? { talk: "hold", micMuted: false } : null,
     /** Space up — ends only a HOLD window (hands-free ignores it). */
     talkRelease: (s) => (s.talk === "hold" ? { talk: "off" } : null),
-    /** h — toggle hands-free talk (starts unmuted). */
+    /** h — toggle hands-free talk (starts unmuted). ARMED-scope since C3′:
+     * the mode stands with no turn open (nothing records until a consumer
+     * exists — the window derives in client.ts); a turn opening routes it to
+     * the transcriber/linter. */
     handsFree: (s) =>
-      s.phase !== "turn"
+      s.phase === "disarmed"
         ? null
         : s.talk === "handsFree"
           ? { talk: "off", micMuted: false }
@@ -200,7 +205,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     help: (s) => ({ help: !(s.help as boolean) }),
 
     /** The wire closed the thread under us (idle timeout, server end). */
-    turnEnded: (s) => (s.phase === "turn" || s.phase === "tweak" ? { phase: "armed" } : null),
+    turnEnded: (s) => (s.phase === "turn" ? { phase: "armed" } : null),
 
     /** a — toggle the area drag (rubber band → cropped shot); on ⇒ pencil/jump
      * off. The regionSurface claim raises/lowers the crosshair; a completed drag
@@ -229,7 +234,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
 
   /** Esc's one-level ladder (owner, 2026-07-16): help first, then the active
    * page-pointer TOOL (area/jump — one press cancels the pick and stays in the
-   * turn), then the phase rung (tweak → turn → armed, never past the floor).
+   * turn), then the phase rung (turn → armed → disarmed — no floor).
    * This is what dissolves the old region/jump Escape split-brain: the tool is
    * mode-engine state now, so ONE Escape source unwinds it — the page overlay no
    * longer runs its own private Escape listener. (area and jump are mutually
@@ -237,43 +242,31 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
   escOrder: ["help", "region", "jump", "phase"],
 
   excludes: [
-    // ONE disarmed, and it is HARD (owner, 2026-07-13): however you get
-    // there — the d key, the arm toggle, Esc unwinding the last rung — pencil
-    // markup mode clears. Declared once as an invariant, not remembered per
-    // route. (Standing video/videoMode survive disarm, as in the retired client.)
+    // ONE disarmed, and it is HARD (owner, 2026-07-13; widened in C3′):
+    // however you get there — the d key, the arm toggle, Esc unwinding the
+    // last rung — every standing MODE clears: pencil, jump, and hands-free
+    // talk (mute cascades via mute-needs-talk below). Declared once as an
+    // invariant, not remembered per route. (Standing video/videoMode survive
+    // disarm, as in the retired client.)
     {
       name: "disarmed-is-hard",
       when: (s) => s.phase === "disarmed",
-      set: { pencil: false },
+      set: { pencil: false, jump: false, talk: "off" },
     },
-    // The page-pointer TOOLS that need pixels/a live pick — area and jump — are
-    // transient (owner, 2026-07-16): they only make sense inside an open turn
-    // (area needs the grant, jump needs the picker on the tab in view), and in
-    // tweak the page owns the pointer. So leaving the turn SCOPE — into tweak,
-    // armed, or disarmed — clears them. (pencil is durable and survives into
-    // tweak; only disarm clears it, above.)
+    // The area drag needs pixels IN a turn (the shot it fires lands in the
+    // prompt), so leaving the turn clears it. Jump left this exclude in C3′ —
+    // it is an EDITOR act, armed-scope like pencil (disarm clears it, above).
     {
-      name: "tools-need-turn",
-      when: (s) => s.phase !== "turn" && (s.region === true || s.jump === true),
-      set: { region: false, jump: false },
+      name: "area-needs-turn",
+      when: (s) => s.phase !== "turn" && s.region === true,
+      set: { region: false },
     },
-    // Talk and tweak (owner, 2026-07-16): tweak PAUSES hands-free talk rather
-    // than ending it — the mic goes quiet (client.ts drives the mute off the
-    // phase) and RESUMES when you step back to the turn, so the talk window
-    // and its linter window survive the detour. Two rules encode that:
-    //  · a HOLD window is bound to a physical key, and tweak hands keys to the
-    //    page — you can no longer be "holding" — so hold ends whenever you
-    //    leave the turn, tweak included.
+    // A HOLD window is bound to a physical key inside a turn's grammar — you
+    // can no longer be "holding" once the turn is gone. (Hands-free is a
+    // STANDING mode since C3′ and survives turn exits; only disarm ends it.)
     {
       name: "hold-needs-turn",
       when: (s) => s.phase !== "turn" && s.talk === "hold",
-      set: { talk: "off" },
-    },
-    //  · hands-free talk ends only when you leave the turn SCOPE entirely
-    //    (armed/disarmed) — not into tweak, where it is merely paused.
-    {
-      name: "handsfree-off-turn",
-      when: (s) => s.phase !== "turn" && s.phase !== "tweak" && s.talk === "handsFree",
       set: { talk: "off" },
     },
     // Mute exists only while talking.
@@ -292,7 +285,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
 
   /**
    * Availability the reducer can't derive: verbs (they move no region) and
-   * the channel gate on arming. Everything else — pencil/tweak/send/mute/turn
+   * the channel gate on arming. Everything else — pencil/send/mute/turn
    * disabled while disarmed, escape at the floor — derives from the dry-run.
    */
   available: {
@@ -325,14 +318,16 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // pixels follow the grant.
     // …and only when the page actually HAS one (owner, 2026-07-14): a
     // selection pull with nothing selected is a guaranteed miss — the cap
-    // grays and its tooltip points at tweak mode instead.
+    // grays and its tooltip points at selecting something first.
     selection: (s, ctx) =>
       s.phase === "turn" && ctx.activeTab !== undefined && ctx.selectionPresent,
     // Jump-to-editor is a PAGE act on instrumented pages only: the picker
     // reads the aiui stamps and source root, so a page without `__AIUI__`
     // grays the cap — the gate IS the feature detection (owner, 2026-07-15).
+    // ARMED-scope since C3′ (an editor act, not a prompt act).
     jump: (s, ctx) =>
-      s.jump === true || (s.phase === "turn" && ctx.activeTab !== undefined && ctx.aiuiPage),
+      s.jump === true ||
+      ((s.phase === "turn" || s.phase === "armed") && ctx.activeTab !== undefined && ctx.aiuiPage),
     // Pencil markup is a PAGE act (the surface follows the tab in view, no grant
     // — a mouse, a stylus, and the iPad's strokes all land in-page). Its clear
     // rides the MODE, not the turn (C2, owner 2026-07-25 — superseding the

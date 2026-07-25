@@ -11,10 +11,9 @@
  */
 
 import type { ClaimSpecs, EngineState } from "@habemus-papadum/aiui-viz/modal";
+import { claimedPageKeys } from "./keys";
 import type { IntentContext } from "./spec";
 import type { HeldStream, IntentHost, RingState } from "./transport";
-
-const inTurn = (s: EngineState): boolean => s.phase === "turn" || s.phase === "tweak";
 
 /** Lane hooks: the REAL operations behind two claims (the fake host's
  * transport assertions remain the default, which is what harness tests
@@ -41,8 +40,7 @@ export function intentClaims(
      * (no grant — a stylus, a mouse, and the iPad's strokes all land in-page),
      * asserted while pencil MODE is on, armed or in a turn (C2, owner
      * 2026-07-25: markup is a source; the mode is the switch, not the turn).
-     * Deliberately NOT in tweak — tweak hands the page its pointer back, and
-     * the surface owning it would defeat tweak's whole point. acquire ENGAGES
+     * acquire ENGAGES
      * (the surface owns the pointer); release DISENGAGES (strokes STAY —
      * page-side keeps the surface). The live fade re-relay is a separate
      * effect in lanes.ts. */
@@ -96,7 +94,10 @@ export function intentClaims(
      * `jumpDone` and client.ts dispatches the force-off. */
     jumpSurface: {
       derive: (s, ctx) =>
-        s.phase === "turn" && s.jump === true && ctx.aiuiPage && ctx.activeTab !== undefined
+        (s.phase === "turn" || s.phase === "armed") &&
+        s.jump === true &&
+        ctx.aiuiPage &&
+        ctx.activeTab !== undefined
           ? { tab: ctx.activeTab }
           : null,
       acquire: async (desire: { tab: number }) => {
@@ -162,13 +163,22 @@ export function intentClaims(
       },
     },
 
-    /** Key capture pointed at the active tab — in turn, NOT in tweak (the
-     * page owns every ordinary key in tweak; only ⌘B resumes). */
+    /** Key capture pointed at the active tab — ARMED-level since C3′, with
+     * the claimed-key SET riding the payload: "all" in a turn (the wholesale
+     * claim, unchanged), exactly the armed grammar's live bound keys while
+     * merely armed (everything else stays the page's; Escape never claimed
+     * outside a turn). The desire embeds the set, so a state change that
+     * moves the set (pencil on ⇒ `c` joins) re-asserts structurally. */
     keyRouting: {
       derive: (s, ctx) =>
-        s.phase === "turn" && ctx.activeTab !== undefined ? { tab: ctx.activeTab } : null,
-      acquire: async (desire: { tab: number }) => {
-        await transport.requestPage(desire.tab, "keylayer", { capture: true });
+        s.phase !== "disarmed" && ctx.activeTab !== undefined
+          ? { tab: ctx.activeTab, keys: claimedPageKeys(s) }
+          : null,
+      acquire: async (desire: { tab: number; keys: "all" | string[] }) => {
+        await transport.requestPage(desire.tab, "keylayer", {
+          capture: true,
+          keys: desire.keys,
+        });
         return desire.tab;
       },
       release: async (tab: number) => {
@@ -190,7 +200,7 @@ export function intentClaims(
         const gated = capture.grantless !== true;
         return {
           on,
-          turnTone: inTurn(s),
+          turnTone: s.phase === "turn",
           ...(on && gated
             ? {
                 grant: {

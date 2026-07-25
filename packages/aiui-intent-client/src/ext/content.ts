@@ -97,9 +97,11 @@ const report = (r: PageReport): void => {
 const { assert: assertRing } = createRingSurface();
 const flash = createFlash();
 
-// ── the in-turn key layer (the wholesale claim) ──────────────────────────────
+// ── the key layer (wholesale in a turn; a claimed SET while armed — C3′) ────
 let keyHandlers: { down: (e: KeyboardEvent) => void; up: (e: KeyboardEvent) => void } | undefined;
-const setKeyCapture = (capture: boolean): void => {
+let claimedKeys: "all" | readonly string[] = "all";
+const setKeyCapture = (capture: boolean, keys: "all" | readonly string[] = "all"): void => {
+  claimedKeys = keys; // re-asserting with a new set updates in place
   if (!capture) {
     if (keyHandlers !== undefined) {
       window.removeEventListener("keydown", keyHandlers.down, true);
@@ -115,6 +117,11 @@ const setKeyCapture = (capture: boolean): void => {
     // Browser chords (⌘L, ⌘T…) stay the browser's — the wholesale claim is for
     // ordinary keys; the panel's grammar decides swallow-vs-command.
     if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    // Outside the claimed set the page keeps the key untouched (the armed
+    // claim is a few bound keys; only a turn claims "all").
+    if (claimedKeys !== "all" && !claimedKeys.includes(event.key)) {
       return;
     }
     // A key born in the page's own input belongs to the FIELD, never the
@@ -298,7 +305,11 @@ servePageCapabilities({
   },
   keylayer: (payload) => {
     driverWatch.alive();
-    setKeyCapture((payload as { capture?: boolean } | null)?.capture === true);
+    const p = payload as { capture?: boolean; keys?: unknown } | null;
+    setKeyCapture(
+      p?.capture === true,
+      Array.isArray(p?.keys) ? p.keys.filter((k): k is string => typeof k === "string") : "all",
+    );
     return { ok: true };
   },
   selection: () => {

@@ -516,20 +516,33 @@ describe("claims — the end of hand-called syncs", () => {
     expect(r.bus.heldStreams()).toEqual([]);
   });
 
-  it("key routing follows the ACTIVE tab and leaves tweak alone", async () => {
+  it('key routing is ARMED-level (C3\'): the claimed SET while armed, "all" in a turn', async () => {
     const r = makeRig();
+    r.client.setContext({ connected: true }); // the edge arms — no turn yet
+    await settle();
+    // Armed: the page claim is the armed grammar's live bound set.
+    const armedClaim = r.bus.log.find((l) => l.startsWith("page:keylayer@7"));
+    expect(armedClaim).toBeDefined();
+    expect(armedClaim).toContain('"capture":true');
+    expect(armedClaim).toContain('"Enter"');
+    expect(armedClaim).toContain('"h"');
+    expect(armedClaim).not.toContain('"all"');
+    expect(armedClaim).not.toContain('"c"'); // pencil off ⇒ its clear unclaimed
+    expect(armedClaim).not.toContain("Escape"); // NEVER claimed outside a turn
+
+    r.client.dispatch("pencil"); // pencil on ⇒ `c` joins the armed set
+    await settle();
+    expect(r.bus.log.filter((l) => l.includes('"c"')).length).toBeGreaterThan(0);
+    r.client.dispatch("pencil");
+
     grantAndOpen(r);
     await settle();
-    expect(r.bus.log).toContain('page:keylayer@7 {"capture":true}');
+    expect(r.bus.log).toContain('page:keylayer@7 {"capture":true,"keys":"all"}');
 
     r.bus.switchTab(9); // ledger: tab switch re-points capture
     await settle();
     expect(r.bus.log).toContain('page:keylayer@7 {"capture":false}');
-    expect(r.bus.log).toContain('page:keylayer@9 {"capture":true}');
-
-    r.client.dispatch("tweak"); // ledger: "the pen kept drawing in tweak" — in
-    await settle(); //             tweak the page owns keys; capture released
-    expect(r.bus.log).toContain('page:keylayer@9 {"capture":false}');
+    expect(r.bus.log).toContain('page:keylayer@9 {"capture":true,"keys":"all"}');
   });
 
   it("video sampling requires turn ∧ video ∧ grant — and reports status", async () => {
@@ -604,45 +617,38 @@ describe("talk — per-turn, hold vs hands-free", () => {
     expect(r.client.state().micMuted).toBe(false); // mute needs talk
   });
 
-  it("every exit from the turn SCOPE ends the talk window (the exclude, not memory)", () => {
+  it("hands-free STANDS across a send; the WINDOW closes and reopens with the turn (C3')", () => {
     const r = makeRig();
     grantAndOpen(r);
     r.client.dispatch("handsFree");
     expect(r.client.state().talk).toBe("handsFree");
+    expect(r.lanes).toContain("startTalk:handsFree");
 
-    r.client.dispatch("send"); // ledger: "stuck `talking` outlived its thread"
-    expect(r.client.state().talk).toBe("off");
+    r.client.dispatch("send"); // the mode SURVIVES; the window (capture) ends
+    expect(r.client.state().talk).toBe("handsFree");
     expect(r.lanes).toContain("stopTalk");
+
+    r.client.dispatch("turn"); // the next turn reopens the window by itself
+    expect(r.lanes.filter((l) => l === "startTalk:handsFree")).toHaveLength(2);
   });
 
-  it("tweak PAUSES hands-free talk — mic quiets on entry, resumes on return, the window is kept", () => {
+  it("hands-free while merely ARMED opens no window — nothing records until a turn routes it", () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true }); // armed, no turn
+    r.client.dispatch("handsFree");
+    expect(r.client.state().talk).toBe("handsFree");
+    expect(r.lanes).not.toContain("startTalk:handsFree");
+
+    r.client.dispatch("turn");
+    expect(r.lanes).toContain("startTalk:handsFree");
+  });
+
+  it("disarm ends the standing mode AND the window (disarmed-is-hard widened)", () => {
     const r = makeRig();
     grantAndOpen(r);
     r.client.dispatch("handsFree");
-    expect(r.lanes).toContain("startTalk:handsFree");
-
-    r.client.dispatch("tweak");
-    expect(r.client.state()).toMatchObject({ phase: "tweak", talk: "handsFree" });
-    // The window is NOT closed (no stopTalk, so the server-side linter window
-    // survives) — only the mic goes quiet.
-    expect(r.lanes).not.toContain("stopTalk");
-    expect(r.lanes).toContain("setMicMuted:true");
-
-    r.client.dispatch("tweak"); // back to the turn
-    expect(r.client.state()).toMatchObject({ phase: "turn", talk: "handsFree" });
-    expect(r.lanes).toContain("setMicMuted:false"); // mic resumes
-    expect(r.lanes.filter((l) => l === "startTalk:handsFree")).toHaveLength(1); // no re-open
-    expect(r.lanes).not.toContain("stopTalk");
-  });
-
-  it("tweak ENDS a hold window — its physical key leaves with tweak", () => {
-    const r = makeRig();
-    grantAndOpen(r);
-    r.client.handleKey(" ", "down", false);
-    expect(r.client.state().talk).toBe("hold");
-
-    r.client.dispatch("tweak");
-    expect(r.client.state()).toMatchObject({ phase: "tweak", talk: "off" });
+    r.client.dispatch("disarm");
+    expect(r.client.state().talk).toBe("off");
     expect(r.lanes).toContain("stopTalk");
   });
 });
@@ -798,8 +804,8 @@ describe("the bar: a tree presented linearly", () => {
     const before = findCap(r, "handsFree")?.hint.label;
     r.client.dispatch("handsFree");
     expect(findCap(r, "handsFree")?.hint.label).toBe(before);
-    r.client.dispatch("tweak");
-    expect(findCap(r, "tweak")?.hint.label).toBe("tweak");
+    r.client.dispatch("pencil");
+    expect(findCap(r, "pencil")?.hint.label).toBe("pencil");
   });
 
   it("the config strip carries the standing settings as control widgets", () => {

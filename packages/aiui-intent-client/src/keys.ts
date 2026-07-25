@@ -92,11 +92,6 @@ export const turnLayer: KeyLayer<EngineState, string> = {
         s.pencil === true ? { key: "c", label: "clear pencil", icon: "🧹" } : undefined,
     },
     {
-      keys: ["t", "T"],
-      down: onPress("tweak"),
-      hint: { key: "t", label: "tweak the page", icon: "🔧" },
-    },
-    {
       keys: [" "],
       down: onPress("talkPress"),
       up: () => command("talkRelease"),
@@ -176,12 +171,39 @@ export const turnLayer: KeyLayer<EngineState, string> = {
  */
 export const armedLayer: KeyLayer<EngineState, string> = {
   name: "armed",
+  // The armed grammar (C3′, owner 2026-07-25: "armed means the grammar is
+  // live"): a FEW claimed keys, live on the panel document AND on the page
+  // (the keyRouting claim asserts exactly this layer's live bound set —
+  // claimedPageKeys below); everything unbound stays the page's. Escape is
+  // deliberately NOT here: pages need Esc for their own modals — the panel's
+  // local listener still steps the ladder.
   active: (state) => state.phase === "armed",
-  // The armed rows work where keys reach the CLIENT while armed: the panel's
-  // own document (page keys are not routed outside a turn — deliberately; the
-  // page keeps its keyboard). The bar caps and the iPad's remote bar are the
-  // any-context path for the same commands.
   bindings: [
+    {
+      // Enter advances the ladder: while armed it OPENS the turn (in a turn
+      // it already sends) — the shortcut the turn cap's click was missing.
+      keys: ["Enter"],
+      down: onPress("turn"),
+      hint: { key: "⏎", label: "open a turn", icon: "💬" },
+    },
+    {
+      // C3′: hands-free is a standing mode — toggle it with no turn open
+      // (nothing records until a consumer exists; a turn routes it).
+      keys: ["h", "H"],
+      down: onPress("handsFree"),
+      hint: (s) => ({
+        key: "h",
+        label: "hands-free talk",
+        icon: "🎧",
+        active: s.talk === "handsFree",
+      }),
+    },
+    {
+      // C3′: jump is an EDITOR act — armed-scope like pencil.
+      keys: ["j", "J"],
+      down: onPress("jump"),
+      hint: (s) => ({ key: "j", label: "jump to editor", icon: "🎯", active: s.jump === true }),
+    },
     {
       // C2: the pencil rides armed — toggle markup with no turn open.
       keys: ["k", "K"],
@@ -195,9 +217,59 @@ export const armedLayer: KeyLayer<EngineState, string> = {
       hint: (s) =>
         s.pencil === true ? { key: "c", label: "clear pencil", icon: "🧹" } : undefined,
     },
+    {
+      // Video is a standing source (C1) — its toggles ride armed too.
+      keys: ["v", "V"],
+      down: onPress("video"),
+      hint: (s) => ({ key: "v", label: "video", icon: "🎥", active: s.video === true }),
+    },
+    {
+      keys: ["f", "F"],
+      down: onPress("fpsMode"),
+      hint: (s) => ({
+        key: "f",
+        label: "constant cadence",
+        icon: "⏱",
+        active: s.videoMode === "constant",
+      }),
+    },
+    {
+      keys: ["d", "D"],
+      down: onPress("disarm"),
+      hint: { key: "d", label: "disarm", icon: "💤", tone: "danger" },
+    },
   ],
   fallback: "pass",
 };
+
+/**
+ * The page-side claim SET for the current state (the keyRouting claim's
+ * payload — C3′): `"all"` whenever a swallow-fallback layer is active (a turn
+ * claims the whole keyboard — unknown keys swallow+blip, unchanged contract);
+ * otherwise exactly the keys the active pass-fallback layers would answer
+ * for, probed through the real resolver so a state-gated binding (pencil's
+ * `c`) is claimed only while it would act. Escape is NEVER claimed on the
+ * page outside a turn (pages need it for their own modals — decided, C3′).
+ */
+export function claimedPageKeys(state: EngineState): "all" | string[] {
+  const candidates = new Set<string>();
+  for (const layer of keyStack) {
+    if (layer.active && !layer.active(state)) {
+      continue;
+    }
+    if (layer.fallback === "swallow") {
+      return "all";
+    }
+    for (const binding of layer.bindings) {
+      for (const key of binding.keys) {
+        candidates.add(key);
+      }
+    }
+  }
+  return [...candidates].filter(
+    (key) => key !== "Escape" && resolveKey(keyStack, state, key, "down", false) !== "pass",
+  );
+}
 
 export const keyStack: readonly KeyLayer<EngineState, string>[] = [turnLayer, armedLayer];
 

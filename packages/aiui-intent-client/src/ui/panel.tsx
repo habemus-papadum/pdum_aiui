@@ -107,7 +107,7 @@ export function Panel(props: PanelProps) {
   const [confirming, setConfirming] = createSignal(false, { ownedWrite: true });
   const inOpenTurn = (): boolean => {
     const phase = client.state().phase;
-    return phase === "turn" || phase === "tweak";
+    return phase === "turn";
   };
   const closeConfirm = (): void => {
     setConfirming(false);

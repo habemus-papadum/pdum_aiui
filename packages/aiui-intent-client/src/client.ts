@@ -102,14 +102,7 @@ export interface IntentClient
   engine: SolidModeEngine<IntentContext>;
 }
 
-const inTurn = (phase: unknown): boolean => phase === "turn" || phase === "tweak";
-
-/** The mic is silenced by the user's toggle OR by the tweak pause: tweak hands
- * keys to the page and quiets the mic without ending the talk window (spec.ts
- * `handsfree-off-turn` keeps the window open), so the linter window survives
- * and the mic resumes on return to the turn. */
-const effectiveMuted = (s: { micMuted?: unknown; phase?: unknown }): boolean =>
-  s.micMuted === true || s.phase === "tweak";
+const inTurn = (phase: unknown): boolean => phase === "turn";
 
 export function createIntentClient(config: IntentClientConfig): IntentClient {
   const { host, lanes } = config;
@@ -190,25 +183,27 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         break;
     }
 
-    // Talk lifecycle: derived from the talk REGION's movement so every path
-    // (space, h, excludes on send/cancel/disarm) lands here. Entering tweak no
-    // longer moves the talk region (hands-free survives it; see spec.ts), so a
-    // talk window is opened/closed only on a real region change.
-    if (event.before.talk !== event.after.talk) {
-      if (event.after.talk !== "off") {
+    // Talk WINDOW lifecycle (C3′): the window — real capture + upload — opens
+    // only while the standing talk mode has a CONSUMER, i.e. an open turn
+    // (talk-lanes upload into the thread; hands-free with no turn stands with
+    // nothing recording — the owner's "dropped on the floor", implemented as
+    // no-capture). Derived from (talk ∧ phase), so every route lands here:
+    // h while armed (mode on, no window), turn opens (window opens), send
+    // (window closes, mode STANDS), disarm (exclude ends the mode too).
+    const windowBefore = event.before.talk !== "off" && event.before.phase === "turn";
+    const windowAfter = event.after.talk !== "off" && event.after.phase === "turn";
+    if (windowBefore !== windowAfter) {
+      if (windowAfter) {
         lanes.startTalk(event.after.talk as string);
       } else {
         lanes.stopTalk();
       }
     }
-    // Effective mute = the user's toggle OR the tweak pause. Tweak keeps the
-    // hands-free window OPEN (no talk-end, so the server-side linter window
-    // isn't triggered) but silences the mic; stepping back to the turn resumes
-    // it. So the mic obeys `micMuted || phase === "tweak"`, and we relay only
-    // when that effective value actually flips (and a window is open to mute).
-    const muteBefore = event.before.talk !== "off" && effectiveMuted(event.before);
-    const muteAfter = event.after.talk !== "off" && effectiveMuted(event.after);
-    if (event.after.talk !== "off" && muteBefore !== muteAfter) {
+    // Mute relays only while a window is open (tweak is gone; the user's
+    // toggle is the one mute source again).
+    const muteBefore = windowBefore && event.before.micMuted === true;
+    const muteAfter = windowAfter && event.after.micMuted === true;
+    if (windowAfter && muteBefore !== muteAfter) {
       lanes.setMicMuted(muteAfter);
     }
   };

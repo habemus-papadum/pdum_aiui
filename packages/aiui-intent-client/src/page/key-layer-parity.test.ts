@@ -140,5 +140,30 @@ describe("in-turn key layer: CDP and MV3 forward the same stream", () => {
     expect(mv3Reports).toEqual(cdpReports);
     expect(cdpPrevented).toEqual([true, true, true, false, false]);
     expect(mv3Prevented).toEqual(cdpPrevented);
+
+    // ── The SELECTIVE claim (C3′): while armed the payload names the claimed
+    // set — a listed key forwards + prevents; everything else stays the
+    // page's, identically in both tiers.
+    cdpReports.length = 0;
+    page.handle("keylayer", { capture: true, keys: ["h", "Enter"] });
+    const cdpSelective = driveSequence(); // 's' is NOT in the set
+    page.handle("keylayer", { capture: false });
+
+    mv3Reports.length = 0;
+    const relaySelective = { aiui: 1, to: PAGE_ADDRESS, cmd: "keylayer" as const };
+    for (const listener of relayListeners) {
+      listener(
+        { ...relaySelective, payload: { capture: true, keys: ["h", "Enter"] } },
+        {},
+        () => {},
+      );
+    }
+    const mv3Selective = driveSequence();
+    relay(false);
+
+    expect(cdpReports).toEqual([]); // 's' unclaimed — the page kept every event
+    expect(mv3Reports).toEqual(cdpReports);
+    expect(cdpSelective).toEqual([false, false, false, false, false]);
+    expect(mv3Selective).toEqual(cdpSelective);
   });
 });

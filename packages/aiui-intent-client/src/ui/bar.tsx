@@ -167,7 +167,7 @@ const cap = (item: () => Extract<BarItem, { kind: "cap" }> | undefined, runtime:
         // UI copy for the one cap whose disablement has a REMEDY the user
         // can take right now (owner, 2026-07-14).
         if (it.command === "selection" && !it.enabled) {
-          return "no selection on the page — consider tweak mode (t) and selecting something";
+          return "no selection on the page — select something on the page first";
         }
         const h = it.hint;
         return h.key !== "" ? `${h.key} — ${h.label}` : h.label;

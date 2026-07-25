@@ -74,8 +74,12 @@ export interface PageCapabilityMap {
   /** The full-frame flash wash. Only `"shot"` is ever sent today; `"miss"` is
    * handler-supported vocabulary with no live sender (kept as declared). */
   flash: { payload: { kind: "shot" | "miss" }; reply: Ack };
-  /** The in-turn wholesale key claim (STICKY: replayed by both buses on reload). */
-  keylayer: { payload: { capture: boolean }; reply: Ack };
+  /** The page-side key claim (STICKY: replayed by both buses on reload).
+   * `keys` narrows WHICH keys are intercepted:
+   * `"all"` (the in-turn wholesale claim — unknown keys swallow+blip) or an
+   * explicit list (the armed-level claim, C3′ — everything else stays the
+   * page's). Absent = "all" (older sticky payloads replay fine). */
+  keylayer: { payload: { capture: boolean; keys?: "all" | readonly string[] }; reply: Ack };
   /** The on-page selection, request/reply — no payload. The reply is
    * {@link AppSelection} plus a `title` the event schema omits (the extra field
    * rides the wire and `engine.appSelection` ignores it). Diverges per tier: CDP
@@ -136,7 +140,7 @@ export const DRIVER_TIMEOUT_MS = 2500;
 /** The on-page indicator's asserted state (a claim's desire, as data). */
 export interface RingState {
   on: boolean;
-  /** The richer tone while a turn is open (turn/tweak). */
+  /** The richer tone while a turn is open. */
   turnTone: boolean;
   /**
    * Present when this host's capture grant is REAL (not grantless) and the

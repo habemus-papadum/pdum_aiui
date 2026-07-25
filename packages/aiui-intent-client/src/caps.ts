@@ -14,7 +14,7 @@
 import type { BarNode } from "@habemus-papadum/aiui-viz/modal";
 import type { IntentContext } from "./spec";
 
-const inTurn = (phase: unknown): boolean => phase === "turn" || phase === "tweak";
+const inTurn = (phase: unknown): boolean => phase === "turn";
 
 /** The main bar: the mode tree. */
 export const intentBar: readonly BarNode<IntentContext>[] = [
@@ -40,20 +40,13 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
             litWhen: ({ state }) => state.region === true,
           },
           {
-            command: "jump",
-            hint: { key: "j", label: "jump", icon: "🎯" },
-            litWhen: ({ state }) => state.jump === true,
-          },
-          {
             command: "selection",
             hint: { key: "p", label: "selection", icon: "📋" },
             litWhen: ({ ctx }) => ctx.selectionPresent,
           },
-          {
-            command: "tweak",
-            hint: { key: "t", label: "tweak", icon: "🔧" },
-            litWhen: ({ state }) => state.phase === "tweak",
-          },
+          // NOTE: the tweak cap is GONE (C3′ — the phase died with it; disarm
+          // is the escape hatch), and jump/hands-free/video moved to the
+          // ARMED tier below (standing modes, not turn perks).
           {
             // Push-to-talk: a HOLD cap — press opens the talk window, release
             // ends it; the identical commands Space uses. A separate
@@ -64,47 +57,52 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
             hint: { key: "␣", label: "push to talk", icon: "🎙" },
             litWhen: ({ state }) => state.talk === "hold",
           },
-          {
-            // Remote: the iPad drives voice from across the room — its whole
-            // point (a wired-up remote surface). No child (mute) is remote; the
-            // subset is deliberately the engagement toggles (hands-free, video,
-            // pencil below).
-            command: "handsFree",
-            remote: true,
-            hint: { key: "h", label: "hands-free", icon: "🎧" },
-            litWhen: ({ state }) => state.talk === "handsFree",
-            children: [
-              {
-                command: "mute",
-                hint: { key: "m", label: "mute", icon: "🔇" },
-                litWhen: ({ state }) => state.micMuted === true,
-              },
-            ],
-          },
-          {
-            // Remote: whether the tab is being filmed is exactly what the person
-            // holding the iPad wants to toggle. Its cadence children stay
-            // desktop-only (a slider can't wire; fpsMode isn't flagged).
-            command: "video",
-            remote: true,
-            hint: { key: "v", label: "video", icon: "🎥" },
-            litWhen: ({ state }) => state.video === true,
-            children: [
-              {
-                command: "fpsMode",
-                hint: { key: "f", label: "constant", icon: "⏱" },
-                litWhen: ({ state }) => state.videoMode === "constant",
-              },
-              {
-                kind: "widget",
-                control: "videoPeriodSec",
-                widget: "slider",
-                label: "s/frame",
-                showWhen: ({ state }) => state.videoMode === "constant",
-              },
-            ],
-          },
           { command: "send", hint: { key: "⏎", label: "send", icon: "📤" } },
+        ],
+      },
+      {
+        // C3′: jump is an EDITOR act, armed-scope like pencil.
+        command: "jump",
+        hint: { key: "j", label: "jump", icon: "🎯" },
+        litWhen: ({ state }) => state.jump === true,
+      },
+      {
+        // Remote: the iPad drives voice from across the room — its whole
+        // point. Standing mode since C3′: toggles while armed; the window
+        // opens when a turn (the consumer) does. No child (mute) is remote.
+        command: "handsFree",
+        remote: true,
+        hint: { key: "h", label: "hands-free", icon: "🎧" },
+        litWhen: ({ state }) => state.talk === "handsFree",
+        children: [
+          {
+            command: "mute",
+            hint: { key: "m", label: "mute", icon: "🔇" },
+            litWhen: ({ state }) => state.micMuted === true,
+          },
+        ],
+      },
+      {
+        // Remote: whether the tab is being filmed is exactly what the person
+        // holding the iPad wants to toggle. Standing source (C1); its cadence
+        // children stay desktop-only (a slider can't wire; fpsMode unflagged).
+        command: "video",
+        remote: true,
+        hint: { key: "v", label: "video", icon: "🎥" },
+        litWhen: ({ state }) => state.video === true,
+        children: [
+          {
+            command: "fpsMode",
+            hint: { key: "f", label: "constant", icon: "⏱" },
+            litWhen: ({ state }) => state.videoMode === "constant",
+          },
+          {
+            kind: "widget",
+            control: "videoPeriodSec",
+            widget: "slider",
+            label: "s/frame",
+            showWhen: ({ state }) => state.videoMode === "constant",
+          },
         ],
       },
       // The pencil markup surface (mouse + stylus locally, iPad remotely) — a

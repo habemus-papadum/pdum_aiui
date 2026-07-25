@@ -9,10 +9,13 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 
 ## The machine
 
-- **Phase ladder**: `disarmed ⊂ armed ⊂ turn ⊂ tweak`. State is the product of orthogonal
-  regions; commands are the only writers; cross-region invariants are declared excludes.
+- **Phase ladder**: `disarmed ⊂ armed ⊂ turn` (C3′, owner 2026-07-25 — tweak DIED: armed
+  means the grammar is live — a few claimed keys — a turn claims the whole keyboard, the
+  pointer belongs to explicit modes, and DISARM is the escape hatch). State is the product of
+  orthogonal regions; commands are the only writers; cross-region invariants are declared
+  excludes.
 - **Step out (Esc / the ✖ cap) unwinds the whole ladder, one level per press**: help closes
-  first (the esc order), then tweak → turn → turn-cancel → armed → **disarmed**.
+  first (the esc order), then turn → turn-cancel → armed → **disarmed**.
   *Deviation from the old client* (whose Esc never disarmed): stepping out of armed IS
   disarming — the ladder has no floor.
   Where the Esc KEY works: in-turn everywhere (the grammar claims it); outside a turn, only
@@ -40,10 +43,7 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
   gate lives entirely in the panel UI — the machine's `turn` toggle is unchanged.
 - **The selection cap is enabled only when the page HAS a selection** (owner, 2026-07-14): a
   pull with nothing selected is a guaranteed miss. Disabled, its tooltip points at the remedy —
-  tweak mode (`t`), select something, come back. The `sel` pill mirrors the same fact.
-- **Tweak is a toggle**: `t` or the cap enters; the cap releases. In tweak the page owns
-  every ordinary key — pressing `t` on the page must reach the page — so the cap is the one
-  way back.
+  select something on the page, come back. The `sel` pill mirrors the same fact.
 - **Help is a standing root-level toggle** (blank system: arm · step out · help). Esc
   dismisses it before anything else; it SURVIVES window blur (owner, 2026-07-15) — a
   reference card must be readable while the target page has focus. Its table always shows
@@ -66,6 +66,13 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 
 (Owner, 2026-07-20 — superseding the ⌘./⌘B activation ladder, which is retired along with
 the `chrome.commands` chord itself.)
+
+**The armed grammar (C3′).** While ARMED the page carries a claimed-key SET — exactly the
+armed layer's live bound keys (Enter opens the turn; h hands-free; j jump; k pencil; c clear
+while pencil is on; v/f video; d disarm) — and every other key stays the page's, untouched.
+In a TURN the claim widens to the whole keyboard (below). **Escape is never claimed on the
+page outside a turn** (pages need Esc for their own modals; the panel's local Esc always
+steps the ladder). Typing targets are exempt everywhere (C0).
 
 **Arm-on-connect.** The client arms itself on the channel-connected EDGE (client.ts wraps
 `setContext`; one home, every host and tier inherits it). A repeated `connected: true` write
@@ -116,6 +123,12 @@ made the MV3 tier agree. **Video SAMPLING stays turn-scoped on purpose**: sample
 feed the PROMPT, and the prompt is the turn — that is the sources/routes line, not a
 leftover.
 
+**C3′ (landed): the armed grammar, standing hands-free, jump-armed — and tweak is DEAD.**
+The ladder is `disarmed ⊂ armed ⊂ turn`; the page keylayer claims the armed grammar's live
+bound set while armed and the whole keyboard in a turn (the claimed-key set rides the claim's
+payload — pinned by the surface-parity test); Enter-while-armed opens the turn; hands-free
+and jump are standing modes (see their sections); disarm is the escape hatch.
+
 **C2 (landed): the pencil rides armed.** The mode toggles, the surface engages, and clear
 works while merely armed (see "Markup: the pencil"); the pencil cap moved to the armed tier,
 so the iPad's remote bar carries it with no turn open; `k`/`c` ride the armed key layer
@@ -141,7 +154,7 @@ The pencil replaced the legacy ink surface (it was integrated as ink's exact twi
 twin won). The shape, at every layer: a durable on/off mode region (`pencil`, `k`, cleared by
 `disarmed-is-hard`), a reconciler claim that engages the in-page surface while the mode is on
 **armed or in a turn** (C2, owner 2026-07-25 — markup is a source; the founding complaint was
-opening a turn just to clear ink; deliberately NOT in tweak, where the page owns its pointer)
+opening a turn just to clear ink)
 and re-points it on a tab switch (`pencilSurface`), a clear gated on the mode — armed or
 in-turn — (`c` / the bar; the cap lives on the ARMED tier now, desktop and iPad remote bar
 alike), and vanish/fade as config controls with a live re-relay effect. The surface owns the
@@ -166,9 +179,10 @@ while engaged, exactly like pencil.
 - **`jump`** raises the editor picker on an instrumented tab (a `jumpSurface` claim, a page act →
   follows the tab in view). It **auto-exits on a commit or cancel**: the page reports `jumpDone`
   (jump-mode's `onExit`) and the mode flips off.
-- **Transient**: `area`/`jump` need an open turn (area needs pixels, jump needs a live picker;
-  tweak hands the page to the user), so leaving the turn clears them (`tools-need-turn`).
-  `pencil` is durable and survives into tweak; only disarm clears it.
+- **Transient vs standing**: `area` needs an open turn (its shot lands in the prompt), so
+  leaving the turn clears it (`area-needs-turn`). `pencil` and `jump` are STANDING,
+  armed-scope (C2/C3′ — markup and jump-to-editor are not prompt acts); only disarm clears
+  them.
 - **Escape is one source of truth.** With a tool on, Esc cancels *that tool* and keeps the turn
   (`escOrder: help → area → jump → phase`), then the next Esc steps the phase ladder. The page
   overlays no longer run their own private Escape listeners — the old split-brain (page-Esc
@@ -194,16 +208,17 @@ simultaneous talk window is unrepresentable by construction. Push-to-talk is a *
 hold Space, or press-and-hold the 🎙 cap (pointer down/up = the same `talkPress`/`talkRelease`
 commands). Hands-free is a *mode*: the `h` key or the 🎧 toggle cap. While one grip is engaged
 the other's cap disables (`h` switches grips; Space during hands-free does nothing; Space-up
-only ends a hold). Talk is per-turn — leaving the turn SCOPE ends it, whoever caused the exit.
-Mute exists only while talking; starting talk starts unmuted. The REC pill is the always-visible
+only ends a hold). Hands-free is a standing mode (above); a hold ends with its turn.
+Mute exists only while a window is open; starting talk starts unmuted. The REC pill is the always-visible
 recording indicator: red while live, amber while muted.
 
-**Tweak pauses talk, it does not end it (owner, 2026-07-16).** Tweak hands every ordinary key to
-the page, so a *hold* window — bound to a physical key you can no longer be holding — ends on
-entry. A *hands-free* window instead **pauses**: the mic goes quiet (the effective mute is
-`micMuted || phase === "tweak"`, driven off the phase in `client.ts`) but the talk window stays
-open, so its server-side linter window is not triggered, and stepping back to the turn resumes
-the mic where it left off. Leaving the turn scope entirely (armed/disarmed) still ends it.
+**Hands-free is a STANDING mode (C3′, owner 2026-07-25) — the mode survives turns; the
+WINDOW rides the consumer.** Toggling `h` while merely armed lights the mode with nothing
+recording (there is no consumer — deliberately: "dropped on the floor" is implemented as
+no-capture). A turn opening routes it — the window (real capture + upload) opens to the
+transcriber/linter — and a send closes the window while the MODE stands, so the next turn
+reopens it by itself. Only disarm ends the mode (`disarmed-is-hard`). A *hold* (Space) stays
+turn-scoped: it is a gesture bound to a physical key in the turn grammar.
 
 ## Sources, routes, and turns (the capture bus)
 
@@ -216,7 +231,7 @@ Phase 2 implemented 2026-07-18):
   advisory read when the **lint now** button asks; never touches the prompt. (Overhear — the
   automatic pause-lints — retired 2026-07-19.)
 - **oracle** (converse) — a *direct* conversation: vendor auto-VAD turns, replies loop, and the
-  mic is ADDRESSED to it — **prompt building pauses** while it is on (like tweak pauses talk):
+  mic is ADDRESSED to it — **prompt building pauses** while it is on:
   talk segments resolve empty, and building resumes when it turns off. Send still sends the
   prompt as built so far, and the oracle select survives the send (the next turn re-opens it).
   OpenAI-only in v1; its own transcripts of both directions ride `oracle-heard`/`oracle-said`

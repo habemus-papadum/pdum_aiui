@@ -114,9 +114,11 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
   const { assert: assertRing } = makeRing();
   const flash = makeFlash();
 
-  // ── keylayer: the in-turn wholesale key claim, forwarded to the panel ─────
+  // ── keylayer: wholesale in a turn; a claimed SET while armed (C3′) ────────
   let keyHandlers: { down: (e: KeyboardEvent) => void; up: (e: KeyboardEvent) => void } | undefined;
-  const setKeyCapture = (capture: boolean): void => {
+  let claimedKeys: "all" | readonly string[] = "all";
+  const setKeyCapture = (capture: boolean, keys: "all" | readonly string[] = "all"): void => {
+    claimedKeys = keys; // re-asserting with a new set updates in place
     if (!capture) {
       if (keyHandlers !== undefined) {
         document.removeEventListener("keydown", keyHandlers.down, true);
@@ -132,6 +134,11 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
       // Never claim browser chords (⌘L, ⌘T…) — the wholesale claim is for
       // ordinary keys; the panel's grammar decides swallow-vs-command.
       if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      // Outside the claimed set the page keeps the key untouched (the armed
+      // claim is a few bound keys; only a turn claims "all").
+      if (claimedKeys !== "all" && !claimedKeys.includes(event.key)) {
         return;
       }
       // A key born in the page's own input belongs to the FIELD, never the
@@ -320,7 +327,11 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
         }
         case "keylayer": {
           driverWatch.alive();
-          setKeyCapture(payload?.capture === true);
+          const keys = payload?.keys;
+          setKeyCapture(
+            payload?.capture === true,
+            Array.isArray(keys) ? keys.filter((k): k is string => typeof k === "string") : "all",
+          );
           return { ok: true } satisfies PageCapabilityMap["keylayer"]["reply"];
         }
         case "selection": {
