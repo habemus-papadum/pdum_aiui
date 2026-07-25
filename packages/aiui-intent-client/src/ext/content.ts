@@ -39,6 +39,7 @@ import {
   createRegionSurface,
   createRingSurface,
 } from "../page/surfaces";
+import { isPageTypingTarget } from "../page/typing-target";
 import {
   type Ack,
   DRIVER_TIMEOUT_MS,
@@ -114,6 +115,11 @@ const setKeyCapture = (capture: boolean): void => {
     // Browser chords (⌘L, ⌘T…) stay the browser's — the wholesale claim is for
     // ordinary keys; the panel's grammar decides swallow-vs-command.
     if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    // A key born in the page's own input belongs to the FIELD, never the
+    // grammar (C0; the shared predicate — the CDP twin stringifies the same one).
+    if (isPageTypingTarget(event)) {
       return;
     }
     event.preventDefault();

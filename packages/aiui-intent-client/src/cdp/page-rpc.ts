@@ -14,12 +14,12 @@
  * are stringified/evaluated INTO arbitrary pages and must stay dependency-free.
  */
 import { PAGE_REPORT_BINDING } from "../page/report";
-import { type PageCapability, type RingState, ringForTab } from "../transport";
+import { type PageCapability, type RingState, ringForTab, STICKY_CAPABILITIES } from "../transport";
 import type { AttachedPage } from "./cdp-bus";
 import type { CdpConnection } from "./protocol";
 
-/** Capabilities whose effect lives in the DOCUMENT — replay them on reload. */
-const STICKY: ReadonlySet<PageCapability> = new Set(["keylayer"]);
+/** The ONE sticky list (transport.ts) — shared with the MV3 tier's replay. */
+const STICKY: ReadonlySet<PageCapability> = new Set(STICKY_CAPABILITIES);
 
 export interface PageRpc {
   /** Deliver one capability to one page — the single path everything takes. */

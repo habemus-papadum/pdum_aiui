@@ -107,6 +107,17 @@ export interface PageCapabilityMap {
  * so the union and the per-capability payload/reply shapes cannot drift. */
 export type PageCapability = keyof PageCapabilityMap;
 
+/**
+ * Capabilities whose effect lives in the DOCUMENT — a fresh document (reload,
+ * SPA navigation, extension reload) gets them replayed by the tier's replay
+ * machinery. ONE list, consumed by BOTH tiers (cdp/page-rpc.ts,
+ * ext/extension-bus.ts): the tables used to be hand-duplicated per tier, which
+ * is exactly how an armed-level assertion added to one side would silently
+ * not survive reloads on the other (the C0 fold; the tranche-C slices add to
+ * this list instead of to two).
+ */
+export const STICKY_CAPABILITIES: readonly PageCapability[] = ["keylayer"];
+
 /** How often a live driver beats the pages it can reach. */
 export const HEARTBEAT_MS = 750;
 /** Beat silence past this = the driver is gone (page/driver-watch.ts). Three

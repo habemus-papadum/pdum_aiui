@@ -50,7 +50,12 @@ is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
   the full in-turn keymap from the one working source (`hintsFor`): live in a turn, and
   outside one the same rows dimmed as a PREVIEW under a single "these keys live in-turn —
   the turn cap opens one" note, so pre-turn help is a real reference card, not a one-line shrug.
-- **Unknown in-turn keys swallow + blip** — never exit, never leak to the page.
+- **Unknown in-turn keys swallow + blip** — never exit, never leak to the page. One carve-out
+  (C0, 2026-07-25): a key born inside a page's own text field (input, textarea, select,
+  contenteditable, role=textbox) belongs to the FIELD — the wholesale claim yields on the page
+  side, with the same predicate the panel document already applied
+  (`page/typing-target.ts`, one function shared by both tiers and the panel; pinned by the
+  surface-parity test).
 - **A dimmed cap is a REFUSED command, not a discouraged one.** Availability is a gate the
   machine enforces (`dispatch` consults `spec.available`), so every route in — a cap tap, a key,
   an agent's `control()` write, a recovered turn — meets the same answer. Anything less makes
@@ -85,6 +90,25 @@ quiet banner names both remedies — right-click → *aiui: grant capture on thi
 (it works with the toolbar icon unpinned), then the toolbar click (pin it for one-click
 grants) — and states that only pixels need the grant. It disappears the moment the grant
 lands and returns on a switch to an ungranted tab. A signpost, not an error: never a toast.
+
+## Sources alongside turns — the tranche-C direction (owner, 2026-07-25)
+
+**Decided direction, landing in slices.** Capture SOURCES — video, the mic, the pencil
+surface — belong to the ARMED scope; a TURN is a routing fact (what the prompt collects), not
+the power switch. Only the prompt-building routes stay turn-scoped; the iPad mirror and the
+oracle route need no turn at all (the owner's mandate, re-confirmed live: video must not be
+turn-gated). The old doctrine "armed means the client owns the events" was never what the
+shipped machine did — armed gates only the ring and turn-openability — and it is retired as a
+goal: while merely armed the page keeps its keyboard and pointer, and interference rides
+explicit MODES (pencil on, a turn open), never the phase.
+
+Landed so far (C0): the page-side typing-target carve-out (above), and the key stack split
+into the in-turn swallow layer over an **armed-level pass layer** (`armedLayer`, empty today)
+— armed-scope keys arrive as table rows in the C1/C2/C3 slices. The sticky/replay capability
+table is single-sourced (`STICKY_CAPABILITIES`, transport.ts) so a page assertion added for
+one tier cannot silently not-survive reloads on the other. Still turn-scoped until their
+slices land: the warm stream + video sampling (C1), the pencil surface + clear (C2),
+talk/hands-free (C3).
 
 ## The bar
 

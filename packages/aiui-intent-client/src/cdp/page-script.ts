@@ -36,6 +36,7 @@ import {
   createRegionSurface,
   createRingSurface,
 } from "../page/surfaces";
+import { isPageTypingTarget } from "../page/typing-target";
 import { type CapError, DRIVER_TIMEOUT_MS, type PageCapabilityMap } from "../transport";
 
 // The page→panel report wire contract lives one level down, in the tier-shared
@@ -60,6 +61,7 @@ interface PageBootstrapDeps {
   makeRegion: typeof createRegionSurface;
   makePencilOps: typeof createPencilOps;
   makeDriverWatch: typeof createDriverWatch;
+  isTyping: typeof isPageTypingTarget;
   driverTimeoutMs: number;
   tabRecord?: () => PageTabRecord | undefined;
 }
@@ -88,7 +90,15 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
   // something else under that name: install over it. `adopt` would keep the
   // stale code running — which, in dev, means testing the bootstrap you just
   // replaced. A few doubled reports beat that; the page's next load is clean.
-  const { makeRing, makeFlash, makeRegion, makePencilOps, makeDriverWatch, driverTimeoutMs } = deps;
+  const {
+    makeRing,
+    makeFlash,
+    makeRegion,
+    makePencilOps,
+    makeDriverWatch,
+    isTyping,
+    driverTimeoutMs,
+  } = deps;
   const tabRecord = deps.tabRecord;
   const report = (payload: unknown): void => {
     try {
@@ -122,6 +132,11 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
       // Never claim browser chords (⌘L, ⌘T…) — the wholesale claim is for
       // ordinary keys; the panel's grammar decides swallow-vs-command.
       if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      // A key born in the page's own input belongs to the FIELD, never the
+      // grammar (C0; the shared predicate — the MV3 twin applies the same one).
+      if (isTyping(event)) {
         return;
       }
       event.preventDefault();
@@ -459,9 +474,10 @@ export function buildPageScript(): string {
   const region = createRegionSurface.toString();
   const pencilOps = createPencilOps.toString();
   const driverWatch = createDriverWatch.toString();
+  const typing = isPageTypingTarget.toString();
   const tabRecord = pageTabRecord.toString();
   const version = fingerprint(
-    bootstrap + ring + flash + region + pencilOps + driverWatch + tabRecord,
+    bootstrap + ring + flash + region + pencilOps + driverWatch + typing + tabRecord,
   );
   return `(${bootstrap})(${JSON.stringify(version)}, {
     makeRing: (${ring}),
@@ -469,6 +485,7 @@ export function buildPageScript(): string {
     makeRegion: (${region}),
     makePencilOps: (${pencilOps}),
     makeDriverWatch: (${driverWatch}),
+    isTyping: (${typing}),
     driverTimeoutMs: ${DRIVER_TIMEOUT_MS},
     tabRecord: (${tabRecord}),
   });`;

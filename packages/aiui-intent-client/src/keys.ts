@@ -165,7 +165,23 @@ export const turnLayer: KeyLayer<EngineState, string> = {
   fallback: "swallow",
 };
 
-export const keyStack: readonly KeyLayer<EngineState, string>[] = [turnLayer];
+/**
+ * The armed-level layer — the C0 split, empty on purpose. It sits BELOW the
+ * turn layer with `fallback: "pass"`: while merely armed the page keeps its
+ * whole keyboard (the retired "armed owns the events" doctrine stays
+ * retired), and the tranche-C slices add armed-scope keys HERE as table rows
+ * (C1 video, C2 pencil, C3 talk) instead of inventing new machinery. In a
+ * turn it is unreachable by construction — the turn layer's swallow fallback
+ * ends the walk first.
+ */
+export const armedLayer: KeyLayer<EngineState, string> = {
+  name: "armed",
+  active: (state) => state.phase === "armed",
+  bindings: [],
+  fallback: "pass",
+};
+
+export const keyStack: readonly KeyLayer<EngineState, string>[] = [turnLayer, armedLayer];
 
 /** The resolver's verdict, with the blip distinction made explicit. */
 export type KeyVerdict =
@@ -190,7 +206,13 @@ export function keyVerdict(
     return { kind: "command", command: claim.command };
   }
   // A swallow is a blip only for a distinct, unbound, non-modifier keydown.
-  const bound = turnLayer.bindings.some((b) => b.keys.includes(key));
+  // "Bound" reads the whole ACTIVE stack, not one layer — an armed-scope
+  // binding must not blip as a typo once the armed layer carries rows.
+  const bound = keyStack.some(
+    (layer) =>
+      (layer.active === undefined || layer.active(state)) &&
+      layer.bindings.some((b) => b.keys.includes(key)),
+  );
   if (phase === "down" && !repeat && !bound && !MODIFIER_KEYS.has(key)) {
     return { kind: "blip", key };
   }

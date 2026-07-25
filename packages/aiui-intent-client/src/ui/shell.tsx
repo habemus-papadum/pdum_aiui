@@ -12,6 +12,7 @@
 import { Show } from "solid-js";
 import type { IntentClient } from "../client";
 import { keyVerdict } from "../keys";
+import { isPageTypingTarget } from "../page/typing-target";
 
 // NOTE: panel zoom used to live here (installUiScaleRoot + a ⌘-key block in
 // installPanelKeys). It moved OUT (owner, 2026-07-16): it is a side-panel-only
@@ -66,14 +67,9 @@ export function installPanelKeys(config: {
     // strip's selects, any future input) must reach it untouched. Found
     // live: the in-turn grammar was eating the editor's every keystroke —
     // arrows blipped, letters dispatched commands under the open popup.
-    const target = event.target;
-    if (
-      target instanceof HTMLElement &&
-      (target.isContentEditable ||
-        target.closest(
-          'input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]',
-        ) !== null)
-    ) {
+    // The predicate is the tier-shared one (page/typing-target.ts) — the same
+    // rule the page tiers apply, so panel and page cannot drift (C0).
+    if (isPageTypingTarget(event)) {
       return;
     }
     // NOTE: panel zoom is NOT here anymore (owner, 2026-07-16). It is a side-panel

@@ -27,25 +27,35 @@ interface KeyReport {
 }
 
 /** The identical sequence both tiers must forward the same way: a plain
- * down/up, a repeat, and a meta-chord (which stays the browser's — no report,
- * no preventDefault). */
-const SEQUENCE: ReadonlyArray<{ type: "keydown" | "keyup"; init: KeyboardEventInit }> = [
+ * down/up, a repeat, a meta-chord (which stays the browser's — no report, no
+ * preventDefault), and a key born in a page INPUT (the C0 typing-target rule:
+ * the field keeps it — no report, no preventDefault, both tiers). */
+const SEQUENCE: ReadonlyArray<{
+  type: "keydown" | "keyup";
+  init: KeyboardEventInit;
+  target?: "input";
+}> = [
   { type: "keydown", init: { key: "s", cancelable: true, bubbles: true } },
   { type: "keyup", init: { key: "s", cancelable: true, bubbles: true } },
   { type: "keydown", init: { key: "s", repeat: true, cancelable: true, bubbles: true } },
   { type: "keydown", init: { key: "l", metaKey: true, cancelable: true, bubbles: true } },
+  { type: "keydown", init: { key: "h", cancelable: true, bubbles: true }, target: "input" },
 ];
 
 /** Dispatch the sequence on `document.body` (its capture path is window →
- * document → body, so both tiers' capture listeners fire) and return each
- * event's defaultPrevented. */
+ * document → body, so both tiers' capture listeners fire) — or on a page
+ * input for the typing-target steps — and return each event's
+ * defaultPrevented. */
 function driveSequence(): boolean[] {
+  const input = document.createElement("input");
+  document.body.append(input);
   const prevented: boolean[] = [];
   for (const step of SEQUENCE) {
     const event = new KeyboardEvent(step.type, step.init);
-    document.body.dispatchEvent(event);
+    (step.target === "input" ? input : document.body).dispatchEvent(event);
     prevented.push(event.defaultPrevented);
   }
+  input.remove();
   return prevented;
 }
 
@@ -118,16 +128,17 @@ describe("in-turn key layer: CDP and MV3 forward the same stream", () => {
     const mv3Prevented = driveSequence();
     relay(false); // remove the window listeners
 
-    // The shared surface: same reports (meta-chord excluded on both), same
-    // preventDefault verdicts — the window-vs-document target and the
-    // stop-function are the documented, deliberately excluded differences.
+    // The shared surface: same reports (meta-chord AND the input-born key
+    // excluded on both — the C0 typing-target rule), same preventDefault
+    // verdicts — the window-vs-document target and the stop-function are the
+    // documented, deliberately excluded differences.
     expect(cdpReports).toEqual([
       { key: "s", phase: "down", repeat: false },
       { key: "s", phase: "up", repeat: false },
       { key: "s", phase: "down", repeat: true },
     ]);
     expect(mv3Reports).toEqual(cdpReports);
-    expect(cdpPrevented).toEqual([true, true, true, false]);
+    expect(cdpPrevented).toEqual([true, true, true, false, false]);
     expect(mv3Prevented).toEqual(cdpPrevented);
   });
 });

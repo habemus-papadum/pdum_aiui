@@ -14,7 +14,8 @@
  *    to the connection (client.ts arms on the connected edge), turns to the
  *    turn cap — no gesture escalates, and nothing ever auto-cancels
  *  - Esc steps out one level (help before turn-cancel), never destructive
- *    beyond scope, and never disarms (the ladder's escFloor)
+ *    beyond scope — and the ladder has NO floor: the last step IS disarm
+ *    (BEHAVIOR.md "step out"; pinned in spec.test.ts)
  *  - send keeps you armed; disarm is its own deliberate command
  *  - pencil · area · jump are the three PAGE-POINTER TOOLS, mutually
  *    exclusive — one owns the page pointer at a time (turning any on turns the

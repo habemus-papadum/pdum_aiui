@@ -22,7 +22,7 @@
  *    the label as fixed.)
  *  - **Enabled is derived.** A cap's default enablement asks the engine
  *    `canDispatch(command)` — "would this do anything right now?" — which
- *    dry-runs the pure reducer. Disarmed ⇒ ink/tweak/send disable
+ *    dry-runs the pure reducer. Disarmed ⇒ pencil/tweak/send disable
  *    mechanically; nothing is hand-written per cap. Verbs gate via the
  *    spec's `available` map; `enabledWhen` remains as a rare override.
  *

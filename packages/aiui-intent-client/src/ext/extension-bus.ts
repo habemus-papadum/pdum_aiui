@@ -37,6 +37,7 @@ import {
   type PageTransport,
   type RingState,
   ringForTab,
+  STICKY_CAPABILITIES,
   type SurfaceTargeting,
 } from "../transport";
 import { grabTabShot, holdTabStream, releaseTabStream } from "./capture";
@@ -66,8 +67,11 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   const log = options.log ?? (() => {});
   const pageHandlers = new Set<(event: PageEvent) => void>();
   const tabHandlers = new Set<(tab: number | undefined) => void>();
-  /** What we asserted per tab — a fresh document gets it back (see below). */
-  const sticky = new Map<number, { keylayer?: unknown }>();
+  /** What we asserted per tab — a fresh document gets it back (see below).
+   * WHICH capabilities are sticky is the ONE shared list (transport.ts),
+   * consumed here and by the CDP tier's page-rpc — never two tables. */
+  const stickySet: ReadonlySet<PageCapability> = new Set(STICKY_CAPABILITIES);
+  const sticky = new Map<number, Map<PageCapability, unknown>>();
   /**
    * The latest PAGE FACTS per tab (hello's aiui verdict, selection presence),
    * replayed to late subscribers. The panel's client registers its page-event
@@ -132,9 +136,8 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
     if (ring.on) {
       void request(tab, "ring", ringForTab(ring, tab));
     }
-    const held = sticky.get(tab);
-    if (held?.keylayer !== undefined) {
-      void request(tab, "keylayer", held.keylayer);
+    for (const [capability, payload] of sticky.get(tab) ?? []) {
+      void request(tab, capability, payload);
     }
   };
 
@@ -256,9 +259,9 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
 
   const transport: PageTransport = {
     requestPage: (tab, capability, payload) => {
-      if (capability === "keylayer") {
-        const held = sticky.get(tab) ?? {};
-        held.keylayer = payload;
+      if (stickySet.has(capability)) {
+        const held = sticky.get(tab) ?? new Map<PageCapability, unknown>();
+        held.set(capability, payload);
         sticky.set(tab, held);
       }
       // The relay result is `unknown`; assert it to the capability's declared
