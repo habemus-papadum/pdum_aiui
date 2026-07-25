@@ -201,6 +201,18 @@ export function createPencilOps(
     if (op === "size") {
       return { width: window.innerWidth, height: window.innerHeight };
     }
+    if (op === "scroll") {
+      // The iPad's two-finger pan (fractions of the plane). Before the handle
+      // guard on purpose: scrolling the page needs no pencil surface — and the
+      // pencil-mount's anchor machinery rides the resulting scroll like any
+      // other (glide + rebase).
+      window.scrollBy({
+        left: Number(payload.du ?? 0) * window.innerWidth,
+        top: Number(payload.dv ?? 0) * window.innerHeight,
+        behavior: "auto",
+      });
+      return { ok: true };
+    }
     if (op === "engage") {
       const mount = getMount();
       if (mount === undefined) {

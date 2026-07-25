@@ -36,7 +36,11 @@ export type PencilOp =
   | { op: "rbegin"; id: string; init: { tool: Tool; params: PencilParams; point: PenSample } }
   | { op: "rpoint"; id: string; point: PenSample }
   | { op: "rend"; id: string; point?: PenSample }
-  | { op: "rcancel"; id: string };
+  | { op: "rcancel"; id: string }
+  /** An iPad two-finger pan, as a fraction of the plane per step — the page
+   * scrolls by it (the intent client's meaning for the wire's nav gesture;
+   * pinch-zoom has no page meaning and is deliberately dropped host-side). */
+  | { op: "scroll"; du: number; dv: number };
 
 /**
  * The page capabilities a transport must deliver — one entry per relay command,

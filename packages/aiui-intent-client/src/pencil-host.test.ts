@@ -177,6 +177,26 @@ describe("createPencilHost", () => {
     expect(op.init.point.y).toBeCloseTo(40, 6);
   });
 
+  it("the iPad's two-finger pan scrolls the target page (default onScroll)", () => {
+    const bus = fakeBus({ activeTab: 7 });
+    const fs = fakeSession();
+    createPencilHost({
+      host: bus,
+      port: 5050,
+      tab: () => bus.targeting.activeTab(),
+      stream: () => undefined,
+      label: "demo",
+      sessionFactory: fs.factory,
+    }).connect();
+    bus.clearLog();
+
+    fs.options().onScroll?.(0.1, -0.25);
+    expect(bus.log).toContain('page:pencil@7 {"op":"scroll","du":0.1,"dv":-0.25}');
+    // Pinch-zoom stays dropped: no default handler (visual-viewport zoom is
+    // not scriptable; faking it would break the D2 plane contract).
+    expect(fs.options().onZoom).toBeUndefined();
+  });
+
   it("polls the plane while a viewer is connected, and announces a change", async () => {
     vi.useFakeTimers();
     const bus = fakeBus({ activeTab: 7 });

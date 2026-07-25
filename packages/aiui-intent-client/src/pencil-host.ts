@@ -241,7 +241,12 @@ export function createPencilHost(opts: PencilHostOptions): PencilHost {
     size: () => size,
     stream: opts.stream,
     ...(opts.streamHint ? { streamHint: opts.streamHint } : {}),
-    ...(opts.onScroll ? { onScroll: opts.onScroll } : {}),
+    // The iPad's two-finger pan SCROLLS the target page by default — the
+    // intents used to arrive and drop on the floor (neither panel wired a
+    // handler; found 2026-07-25). Pinch-zoom stays dropped deliberately: a
+    // page's visual-viewport zoom is not scriptable, and faking it (CSS
+    // transforms) would break the D2 plane contract.
+    onScroll: opts.onScroll ?? ((du, dv) => forward({ op: "scroll", du, dv })),
     ...(opts.onZoom ? { onZoom: opts.onZoom } : {}),
     onStatus: (status) => {
       syncPoll(status.viewers);

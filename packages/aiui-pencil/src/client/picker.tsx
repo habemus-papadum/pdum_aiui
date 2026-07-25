@@ -5,6 +5,11 @@
  * ("courageous-beaver" — the only field that tells two panels apart), then
  * falls back to the presentation title, then the label. When a name leads,
  * the label joins the meta line so the row stays correlatable with the host.
+ *
+ * Busy rows stay JOINABLE (2026-07-25): the room supports several viewers per
+ * host, and the disable was vestigial — its real-world effect was locking you
+ * out of your own session for 30 s while the heartbeat reaped your ghost
+ * (sleep, a Wi-Fi roam). "· busy" in the meta still says someone is on it.
  */
 
 import type { JSX } from "@solidjs/web";
@@ -34,7 +39,6 @@ export function SessionPicker(props: SessionPickerProps): JSX.Element {
             type="button"
             class="session"
             data-session={item.id}
-            disabled={item.busy}
             onClick={() => props.onJoin(item.id)}
           >
             {item.name ?? item.presentation?.title ?? item.label}
