@@ -136,6 +136,14 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
     },
     onVideoStatus: (status) => {
       setHostPlane(status.plane);
+      // A non-active status while viewing means the picture is GONE (wrong
+      // tab, turn ended, capture denied) — blank it now. The host's push
+      // arrives instantly; waiting for the peer connection to notice leaves
+      // a stale last frame under the note for seconds (owner, 2026-07-25).
+      if (status.state !== "active") {
+        setVideoUp(false);
+        blankVideo();
+      }
       setVideoNote(
         status.state === "active"
           ? "waiting for video…"
@@ -147,7 +155,10 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
       );
     },
     onVideoUp: () => setVideoUp(true),
-    onVideoDown: () => setVideoUp(false),
+    onVideoDown: () => {
+      setVideoUp(false);
+      blankVideo();
+    },
     onClose: () => setPhase("lost"),
   });
 
@@ -167,6 +178,15 @@ export function PencilRemoteApp(options: PencilRemoteAppOptions = {}): JSX.Eleme
   // Wired by RemoteView on mount (the view owns the stage/video/plane DOM).
   let viewSurface: () => { width: number; height: number } = () => ({ width: 1, height: 1 });
   let videoEl: () => HTMLVideoElement | undefined = () => undefined;
+
+  /** Drop the picture outright — a dead view must read as blank + the note,
+   * never as a plausible-looking stale frame. A fresh offer re-attaches. */
+  const blankVideo = (): void => {
+    const el = videoEl();
+    if (el) {
+      el.srcObject = null;
+    }
+  };
   // The pen's live activity (bound by the view) — the chrome guard reads it.
   let penActivity: PenActivity | undefined;
 

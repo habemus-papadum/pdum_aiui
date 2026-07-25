@@ -27,7 +27,7 @@ export const REMOTE_APP_CSS = `
   .preview-canvas { position: absolute; inset: 0; width: 100%; height: 100%;
                     pointer-events: none; }
   .no-video { position: absolute; inset: 0; display: grid; place-items: center; color: #888;
-              padding: 24px; text-align: center; }
+              padding: 24px; text-align: center; background: #0d0d11; }
   .hud { position: absolute; left: 8px; bottom: 8px; z-index: 3; font: 11px ui-monospace, monospace;
          color: #9aa3b5; background: rgba(13, 13, 17, 0.72); border: 1px solid #2a2a34;
          border-radius: 6px; padding: 3px 8px; cursor: pointer;
