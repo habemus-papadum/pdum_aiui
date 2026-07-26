@@ -774,7 +774,8 @@ are the answer taking shape.
    `NEW` section. That is the first real test of whether the drift workflow earns
    its keep.
 6. **Cross-filter the existing panels.** They are static reads today; the
-   `Selection` is wired but nothing publishes into it yet.
+   `Selection` is wired but nothing publishes into it yet — the timeline's brush
+   is the natural first producer, via the semi-join pattern in §5.6.3.
 
 ## 8. Reconciliation against `ccusage`, and what it changed
 
@@ -804,11 +805,26 @@ total at $10,202.68).
 
 ### 8.1 What this validates — and what it does not
 
-`ccusage` reads the same logs **and the same LiteLLM price table** we do. The
-0.29% agreement therefore validates **token extraction**, not **prices**. If
-LiteLLM's `claude-fable-5` or `claude-opus-4-8` entries are wrong, both tools are
-wrong identically and by the same amount. Those two models carry 94% of the
-total, so they are the only remaining source of systematic error worth chasing.
+`ccusage` reads the same logs **and the same LiteLLM price table** we do, so the
+0.29% agreement validates **token extraction**, not **prices**. A wrong LiteLLM
+entry would make both tools wrong identically.
+
+**That gap is now closed too.** The two models carrying 94% of the total were
+checked against Anthropic's published first-party rates:
+
+| | input | output | cache read | cache write 5m | cache write 1h |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `claude-fable-5` | $10.00 | $50.00 | $1.00 | $12.50 | $20.00 |
+| `claude-opus-4-8` | $5.00 | $25.00 | $0.50 | $6.25 | $10.00 |
+
+All ten values match LiteLLM exactly. The cache rates are not independent
+numbers — they are multiples of the input rate: **read = 0.1x, write 5m = 1.25x,
+write 1h = 2x**.
+
+Which retro-justifies §3: the **1.6x** 1h/5m premium that disqualified
+genai-prices is not a LiteLLM quirk or an artefact of one model's entry, it is
+`2 / 1.25` — a structural property of Anthropic's cache pricing that any table
+modelling cache writes as a single bucket must get wrong.
 
 ### 8.2 There is no dollar ground truth, and the label must say so
 
