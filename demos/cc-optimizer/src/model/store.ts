@@ -251,6 +251,46 @@ export function brushTime(range: [number, number] | null): void {
   clientBox.timeline?.publish(range);
 }
 
+/**
+ * Bumped whenever the crossfilter changes, so cell-based panels can depend on
+ * it and recompute.
+ *
+ * The panels that aggregate a few hundred rows (daily spend, attribution, the
+ * session table) are cells rather than Mosaic clients — see DailySpend.tsx on
+ * why. That leaves them outside the coordinator's push, so they need something
+ * reactive to key on, and a version counter is the smallest thing that works.
+ */
+const filterVersion = appScope.durableSignal<number>("filterVersion", 0);
+
+/**
+ * The crossfilter's current predicate as SQL text, for those cell consumers.
+ *
+ * Read from the `Selection` itself rather than mirrored from `brushRange`, and
+ * that distinction is load-bearing. Mirroring worked while the timeline was the
+ * only thing that published a clause; the turn scatter is a second producer
+ * with a second dimension (cost), and a mirror of one range would silently
+ * ignore it. Asking the Selection means any number of producers compose, which
+ * is what a crossfilter is for.
+ *
+ * `predicate(undefined)` is documented as "a predicate with all clauses" — no
+ * client to exclude, which is right: a cell is nobody's source, so nothing
+ * should be skipped on its behalf.
+ */
+export function filterSql(): string {
+  const p = filter.predicate(undefined);
+  const parts = (Array.isArray(p) ? p : [p])
+    .filter((x) => x != null && x !== true)
+    .map((x) => String(x))
+    .filter((s) => s.length > 0);
+  return parts.length ? parts.join(" AND ") : "TRUE";
+}
+
+/** True when anything is brushed — the panels say so rather than looking empty. */
+export const filterActive = (): boolean => {
+  filterVersion.get(); // subscribe: the predicate itself is not reactive
+  return filterSql() !== "TRUE";
+};
+
 /** Idempotent: the first caller kicks the load, everyone else awaits it. */
 export function ensureLoaded(): Promise<void> {
   engineBox.loading ??= load().catch((e: unknown) => {
@@ -342,6 +382,12 @@ async function load(): Promise<void> {
   clientBox.timeline = tl;
   coordinator.connect(tl);
   coordinator.connect(new SelectionStatsClient(filter, (s) => selectionStats.set(s)));
+
+  // The bridge from Mosaic's push to Solid's pull. Registered once, after the
+  // clients, so the first event a panel sees is a real one.
+  filter.addEventListener("value", () => {
+    filterVersion.set(filterVersion.get() + 1);
+  });
 
   ready.set(true);
   progress.set({ fraction: 1, label: "ready" });
@@ -500,5 +546,8 @@ export const store = {
   expandedSessions: expandedSessions.get,
   focusedSession: focusedSession.get,
   replayIndex: replayIndex.get,
+  filterVersion: filterVersion.get,
+  filterSql,
+  filterActive,
   ensureReplay,
 };

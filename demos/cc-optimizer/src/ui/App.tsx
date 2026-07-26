@@ -3,7 +3,8 @@
  *
  * Reading order is the argument the page makes: the summary strip first,
  * because the cache-read share reframes everything after it; then the session
- * graph (the shape of the work — what ran when, beside what); then daily spend
+ * graph (the shape of the work — what ran when, beside what); then every turn
+ * as a dot (the other half of the crossfilter); then daily spend
  * (where and when); then attribution (what caused it); then sessions (was it
  * time well spent); and last the two drill-downs into one of them: its
  * turn-by-turn cost, and then the transcript itself. That is the whole descent
@@ -25,6 +26,7 @@ import { SessionReplay } from "./SessionReplay";
 import { Sessions } from "./Sessions";
 import { SessionTimeline } from "./SessionTimeline";
 import { Summary } from "./Summary";
+import { TurnScatter } from "./TurnScatter";
 
 function Loading() {
   const p = () => store.progress();
@@ -78,6 +80,7 @@ export function App() {
           <>
             <Summary />
             <SessionTimeline />
+            <TurnScatter />
             <DailySpend />
             <Attribution />
             <Sessions />

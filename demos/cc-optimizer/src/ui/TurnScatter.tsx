@@ -1,0 +1,139 @@
+/**
+ * TurnScatter.tsx — one dot per billed turn (playbook layer 3).
+ *
+ * The other half of the crossfilter, and the one view here built from **stock
+ * vgplot marks** rather than a hand-written client. The session graph needed a
+ * custom `MosaicClient` because its y position is a lane assignment no SQL
+ * expression produces; this needs nothing of the sort — x is a timestamp, y is
+ * a number, colour is a category — so it is `vg.dot` over `vg.from("turns")`
+ * and Mosaic does the rest.
+ *
+ * That difference is the point of having both. Between them they show where the
+ * line falls: a mark whose position is a function of its row is stock, and a
+ * mark whose position depends on every other row is not.
+ *
+ * **It publishes as well as reads.** `intervalXY` writes a clause covering both
+ * axes, so dragging a box here filters by time AND by cost — a dimension no
+ * other view can express. That is what makes it a crossfilter participant
+ * rather than a picture of one.
+ *
+ * **The context is ours, not the default.** `vg.plot` resolves its coordinator
+ * from the module-global unless given one, and this app runs its own (with
+ * preagg off — see store.ts). `createAPIContext` is what binds the marks to it.
+ */
+
+import { CellView } from "@habemus-papadum/aiui-viz";
+import { createAPIContext } from "@uwdata/vgplot";
+import { createEffect, createSignal, Show } from "solid-js";
+import { graph } from "../model/graph";
+import { filter, store } from "../model/store";
+
+/**
+ * Log y, because turn cost spans nearly three orders of magnitude: p01 is
+ * $0.025, the median $0.22, the maximum $20.86. On a linear axis 99% of the
+ * corpus is a smear along the bottom and the only readable feature is the
+ * handful of outliers — which the panel above already covers.
+ *
+ * Log cannot draw a zero, so the zero-cost turns are counted and named in the
+ * note rather than silently dropped.
+ */
+function ScatterPlot(props: { zeroCost: number; turns: number }) {
+  const [host, setHost] = createSignal<HTMLDivElement | undefined>();
+  const [error, setError] = createSignal<string | null>(null);
+
+  createEffect(
+    () => ({ el: host() }),
+    ({ el }) => {
+      if (!el) return;
+      el.replaceChildren();
+      try {
+        const vg = createAPIContext({ coordinator: store.coordinator });
+        const chart = vg.plot(
+          vg.dot(vg.from("turns", { filterBy: filter }), {
+            x: "ts",
+            y: "costTotal",
+            fill: "project",
+            r: 1.6,
+            fillOpacity: 0.35,
+          }),
+          // Publishes into the same crossfilter the timeline uses. Two axes, so
+          // a drag here says "these turns, in this cost band".
+          vg.intervalXY({ as: filter, brush: { fill: "none", stroke: "#e6e9ef" } }),
+          vg.colorLegend({ as: filter, columns: 4 }),
+          vg.width(900),
+          vg.height(300),
+          vg.marginLeft(56),
+          vg.marginBottom(30),
+          vg.xLabel("→ when"),
+          // Both domains pinned to the unfiltered extent, for the reason the
+          // timeline pins its own: an axis that rescales to the brush makes the
+          // next drag chase its own tail, and here it also breaks the alignment
+          // between this time axis and the session graph's directly above it.
+          vg.xDomain(vg.Fixed),
+          vg.yDomain(vg.Fixed),
+          vg.yScale("log"),
+          vg.yLabel("↑ USD / turn"),
+          vg.yTickFormat("$,.3~f"),
+          vg.yGrid(true),
+          vg.style({
+            background: "transparent",
+            color: "var(--cco-fg-dim)",
+            fontSize: "11px",
+          }),
+        );
+        // `plot()` returns `p.element`, which is undefined if a directive threw
+        // before the element was built. Appending that is a confusing DOM error
+        // several frames from the cause.
+        if (!(chart instanceof Node)) throw new Error("vg.plot returned no element");
+        el.append(chart);
+      } catch (e) {
+        // A stock-mark failure must not blank the page; the panel says what
+        // broke and everything above it keeps working.
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
+  // Built as a string rather than nested JSX: the sentence has two optional
+  // clauses and assembling them inline made a fragment-in-ternary that Solid 2
+  // would not insert.
+  const caption = () => {
+    const zero =
+      props.zeroCost > 0
+        ? ` A log axis has no zero, so ${props.zeroCost} zero-cost ${
+            props.zeroCost === 1 ? "turn is" : "turns are"
+          } not drawn.`
+        : "";
+    return (
+      `One dot per billed turn — ${props.turns.toLocaleString()} of them. Drag a box to filter ` +
+      `every panel above by time AND by cost; the colour legend filters by project. Cost is on a ` +
+      `log axis because it spans three orders of magnitude.${zero}`
+    );
+  };
+
+  return (
+    <>
+      <p class="cco-note cco-note-tight">{caption()}</p>
+      <Show when={error()}>{(e) => <pre class="cco-err">{e()}</pre>}</Show>
+      <div class="cco-chart" ref={setHost} />
+    </>
+  );
+}
+
+export function TurnScatter() {
+  return (
+    <section class="cco-panel">
+      <header class="cco-panel-head">
+        <h2 class="cco-h2">every turn</h2>
+        <Show when={store.filterActive()}>
+          <button type="button" class="cco-btn" onClick={() => filter.reset()}>
+            clear filter
+          </button>
+        </Show>
+      </header>
+      <CellView of={graph().scatterMeta}>
+        {(m) => <ScatterPlot zeroCost={m().zeroCost} turns={m().turns} />}
+      </CellView>
+    </section>
+  );
+}

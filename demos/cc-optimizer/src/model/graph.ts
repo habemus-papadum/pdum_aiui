@@ -96,7 +96,10 @@ export const graph = hotCellGraph(
      * the same numbers, and one SQL round-trip is cheaper than three.
      */
     dailyCost: cell(
-      () => ({}),
+      // Keyed on the crossfilter's version, not on any one brush: `filterSql`
+      // composes every clause, so this recomputes for the timeline's time
+      // range and the scatter's cost range alike.
+      () => ({ v: store.filterVersion() }),
       async () =>
         store.sql<{ day: number; project: string; cost: number; turns: number }>(`
           SELECT epoch_ms(date_trunc('day', ts)) AS day,
@@ -104,6 +107,7 @@ export const graph = hotCellGraph(
                  sum(costTotal)                  AS cost,
                  count(*)                        AS turns
           FROM turns
+          WHERE ${store.filterSql()}
           GROUP BY 1, 2
           ORDER BY 1
         `),
@@ -116,7 +120,7 @@ export const graph = hotCellGraph(
      * the cell that makes that visible.
      */
     tokenClasses: cell(
-      () => ({}),
+      () => ({ v: store.filterVersion() }),
       async () =>
         store.sql<
           CostSlice & { cacheRead: number; cacheCreate: number; output: number; input: number }
@@ -129,6 +133,7 @@ export const graph = hotCellGraph(
                  sum(costOutput)        AS output,
                  sum(costInput)         AS input
           FROM turns
+          WHERE ${store.filterSql()}
           GROUP BY 1
           ORDER BY cost DESC
         `),
@@ -141,20 +146,21 @@ export const graph = hotCellGraph(
      * is labelled rather than dropped.
      */
     attribution: cell(
-      () => ({}),
+      () => ({ v: store.filterVersion() }),
       async () =>
         store.sql<CostSlice & { kind: string }>(`
+          WITH t AS (SELECT * FROM turns WHERE ${store.filterSql()})
           SELECT 'agent'      AS kind, coalesce(agentType, '(main loop)') AS key,
                  sum(costTotal) AS cost, count(*) AS turns
-          FROM turns GROUP BY 1, 2
+          FROM t GROUP BY 1, 2
           UNION ALL
           SELECT 'skill', coalesce(attributionSkill, '(none)'),
                  sum(costTotal), count(*)
-          FROM turns GROUP BY 1, 2
+          FROM t GROUP BY 1, 2
           UNION ALL
           SELECT 'mcp', coalesce(attributionMcpServer, '(none)'),
                  sum(costTotal), count(*)
-          FROM turns GROUP BY 1, 2
+          FROM t GROUP BY 1, 2
           ORDER BY kind, cost DESC
         `),
       { scope: appScope },
@@ -169,7 +175,7 @@ export const graph = hotCellGraph(
      * decoration — the whole point of exposing it.
      */
     sessions: cell(
-      () => ({ gapMin: idleGapMinutes.get() }),
+      () => ({ gapMin: idleGapMinutes.get(), v: store.filterVersion() }),
       async ({ gapMin }) => {
         const gapMs = Math.max(1, gapMin) * 60_000;
         return store
@@ -181,6 +187,7 @@ export const graph = hotCellGraph(
                    costTotal,
                    cacheReadTokens
             FROM turns
+            WHERE ${store.filterSql()}
           )
           SELECT g.sessionId,
                  any_value(s.project)                              AS project,
@@ -207,6 +214,26 @@ export const graph = hotCellGraph(
               dutyCycle: r.spanSeconds > 0 ? r.activeSeconds / r.spanSeconds : 1,
             })),
           );
+      },
+      { scope: appScope },
+    ),
+
+    /**
+     * The two numbers the scatter's caption needs, counted rather than
+     * hardcoded so they cannot go stale against a regenerated dataset.
+     *
+     * Unfiltered on purpose: the caption describes the CHART's scale, and a
+     * brush must not rewrite the sentence explaining what the axis means.
+     */
+    scatterMeta: cell(
+      () => ({}),
+      async () => {
+        const [row] = await store.sql<{ turns: number; zeroCost: number }>(`
+          SELECT count(*) AS turns,
+                 sum(CASE WHEN costTotal <= 0 THEN 1 ELSE 0 END) AS zeroCost
+          FROM turns
+        `);
+        return { turns: row?.turns ?? 0, zeroCost: row?.zeroCost ?? 0 };
       },
       { scope: appScope },
     ),
