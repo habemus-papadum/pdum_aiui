@@ -370,6 +370,67 @@ importers:
         specifier: ^3.2.0
         version: 3.2.6(@types/node@26.1.0)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.5)(yaml@2.9.0)
 
+  demos/ledger:
+    dependencies:
+      '@duckdb/duckdb-wasm':
+        specifier: 1.33.1-dev45.0
+        version: 1.33.1-dev45.0
+      '@habemus-papadum/aiui-journal':
+        specifier: workspace:^
+        version: link:../journal
+      '@habemus-papadum/aiui-source-processor':
+        specifier: workspace:^
+        version: link:../../packages/aiui-source-processor
+      '@habemus-papadum/aiui-transcript':
+        specifier: workspace:^
+        version: link:../transcript
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../../packages/aiui-viz
+      '@observablehq/plot':
+        specifier: ^0.6.17
+        version: 0.6.17
+      '@solidjs/web':
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
+      '@uwdata/mosaic-core':
+        specifier: ^0.28.1
+        version: 0.28.1
+      '@uwdata/mosaic-sql':
+        specifier: ^0.28.1
+        version: 0.28.1
+      '@uwdata/vgplot':
+        specifier: 0.28.1
+        version: 0.28.1
+      solid-js:
+        specifier: 2.0.0-beta.15
+        version: 2.0.0-beta.15
+    devDependencies:
+      '@babel/core':
+        specifier: ^7.29.7
+        version: 7.29.7
+      '@habemus-papadum/aiui':
+        specifier: workspace:^
+        version: link:../../packages/aiui
+      jsdom:
+        specifier: ^29.0.0
+        version: 29.1.1
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      typescript-language-server:
+        specifier: ^5.3.0
+        version: 5.3.0
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0)
+      vite-plugin-solid:
+        specifier: 3.0.0-next.5
+        version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@26.1.0)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.5)(yaml@2.9.0)
+
   demos/morphogen:
     dependencies:
       '@habemus-papadum/aiui-journal':
@@ -516,6 +577,25 @@ importers:
       vite-plugin-solid:
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@1.21.7)(tsx@4.22.5)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@26.1.0)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.5)(yaml@2.9.0)
+
+  demos/transcript:
+    dependencies:
+      hyparquet:
+        specifier: ^1.20.0
+        version: 1.26.2
+      hyparquet-writer:
+        specifier: ^0.16.1
+        version: 0.16.1
+    devDependencies:
+      tsx:
+        specifier: ^4.22.5
+        version: 4.22.5
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
       vitest:
         specifier: ^3.2.0
         version: 3.2.6(@types/node@26.1.0)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.5)(yaml@2.9.0)
@@ -3896,6 +3976,15 @@ packages:
   human-signals@8.0.1:
     resolution: {integrity: sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ==}
     engines: {node: '>=18.18.0'}
+
+  hyparquet-writer@0.16.1:
+    resolution: {integrity: sha512-vb87T2ub06kbEKZOQoHTbVwN0kXQPM5mnMuyTNqQPsOzf85qYBzyFG6R83CnXNhrlncdpRtXeKrbF3ZoLj26pg==}
+
+  hyparquet@1.26.1:
+    resolution: {integrity: sha512-Me2psKksCqJGR8+TbalUYUyK4Ao+ReA6XmMSiOVPhOBswULbl3ojT06PQajyTafbNPW1vD0tCA7H6dXJAC1TPw==}
+
+  hyparquet@1.26.2:
+    resolution: {integrity: sha512-6qjyK7R2tZ4vnYP1J8NpcCeDPK1UIYk3xh5XgtQUnUM1iwkYbvI6Mz3xtmpMd6AfCCeoUoJVbEq29k5GReZRWA==}
 
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
@@ -8235,6 +8324,14 @@ snapshots:
       - supports-color
 
   human-signals@8.0.1: {}
+
+  hyparquet-writer@0.16.1:
+    dependencies:
+      hyparquet: 1.26.1
+
+  hyparquet@1.26.1: {}
+
+  hyparquet@1.26.2: {}
 
   iconv-lite@0.6.3:
     dependencies:

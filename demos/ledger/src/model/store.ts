@@ -1,0 +1,268 @@
+/**
+ * store.ts — the durable roots of the app (the state side of playbook layer 2),
+ * and where the **control surface** is declared: the independent variables a
+ * user moves through widgets and an agent moves through the derived `set` tool.
+ *
+ * `control({ value, … })` needs no name and no description here — the aiui
+ * compiler injects the name from the binding and lifts the description from
+ * the doc comment above it (so write real doc comments: they become the editor
+ * tooltip AND the agent-facing registry text). Constraints (`min`/`max`/`step`/
+ * `unit`/`options`) live in the declaration, and every write — slider,
+ * keyboard, agent — validates through them in one place. Controls are durable:
+ * a hot edit never resets what the user set; renaming a binding DOES reset its
+ * state (pass an explicit `{ name }` to rename without that).
+ *
+ * State that is NOT part of the surface (engines, workers, canvases, history
+ * rings, transient bookkeeping) uses `durableSignal()`/`durable()` instead —
+ * the surface is curated, not automatic.
+ *
+ * The companion rule: this file is the guarded, rarely-edited wiring; the cell
+ * graph (graph.ts) and the components (ui/) are the disposable logic edited
+ * constantly. Note that editing this file forces a full reload — it is
+ * everything's ancestor — so avoid it while a live run matters.
+ */
+
+import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
+import { control, scope } from "@habemus-papadum/aiui-viz";
+import { Coordinator, Selection, wasmConnector } from "@uwdata/vgplot";
+// Asset imports, not public/ fetches: these resolve from THIS package, so the
+// data travels with the demo into any consumer's build.
+import eventsUrl from "../data/events.parquet?url";
+import imagesUrl from "../data/images.parquet?url";
+import sessionsUrl from "../data/sessions.parquet?url";
+import toolCallsUrl from "../data/toolCalls.parquet?url";
+import turnsUrl from "../data/turns.parquet?url";
+import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "../duckdb";
+
+/**
+ * The app's instance scope: ONE slug qualifying every declaration — controls
+ * ("ledger/petals"), durable keys, cells, actions — and naming the
+ * graph key and the agent toolkit. Thread it through everything you declare
+ * (`control({ scope: appScope, … })`, `appScope.durable(…)`,
+ * `cell(deps, compute, { scope: appScope })`, `action({ scope: appScope, … })`):
+ * it is what lets this app share a document with other aiui apps — mounted in
+ * a gallery shell, or composed as a library — without colliding on the
+ * window-global registries. See the user guide's "Composing bigger apps".
+ */
+export const appScope = scope("ledger");
+
+/**
+ * Where the line falls between "thinking" and "went to lunch", in minutes.
+ *
+ * A control rather than a constant on purpose: duty cycle is the headline
+ * session statistic and it moves a great deal with this threshold, so the
+ * reader sets it rather than inheriting someone's guess.
+ */
+export const idleGapMinutes = control({
+  scope: appScope,
+  value: 30,
+  min: 1,
+  max: 240,
+  step: 1,
+  unit: "min",
+});
+
+/** The five grains the normalizer writes. Keys match the parquet filenames. */
+export const TABLES = {
+  turns: turnsUrl,
+  toolCalls: toolCallsUrl,
+  events: eventsUrl,
+  sessions: sessionsUrl,
+  images: imagesUrl,
+} as const;
+
+export type TableName = keyof typeof TABLES;
+
+/** What the normalizer recorded about the run that produced this data. */
+export interface Manifest {
+  generatedAt: string;
+  pricing: { source: string; version: string };
+  stats: {
+    files: number;
+    records: number;
+    assistantRecords: number;
+    dedupedTurns: number;
+    naiveOutputTokens: number;
+    dedupedOutputTokens: number;
+    crossFileDuplicates: number;
+    totalCost: number;
+    unpricedTurns: number;
+  };
+  invariants: { ok: boolean; problems: string[] };
+}
+
+export interface CorpusSummary {
+  turns: number;
+  sessions: number;
+  projects: number;
+  firstTs: number;
+  lastTs: number;
+  totalCost: number;
+  costInput: number;
+  costOutput: number;
+  costCacheCreate: number;
+  costCacheRead: number;
+}
+
+export interface LoadProgress {
+  /** 0..1 across all five tables, or null before the first byte arrives. */
+  fraction: number | null;
+  label: string;
+}
+
+// --- durable roots -----------------------------------------------------------
+
+const progress = appScope.durableSignal<LoadProgress>("progress", {
+  fraction: null,
+  label: "starting",
+});
+const ready = appScope.durableSignal<boolean>("ready", false);
+const loadError = appScope.durableSignal<string | null>("loadError", null);
+const manifest = appScope.durableSignal<Manifest | null>("manifest", null);
+const summary = appScope.durableSignal<CorpusSummary | null>("summary", null);
+
+/**
+ * The shared crossfilter. Every view publishes its brush here and reads
+ * everyone else's — one Selection is what makes this a crossfilter rather than
+ * several charts that happen to share a page.
+ */
+export const filter: Selection = appScope.durable("filter", () => Selection.crossfilter());
+
+/** DuckDB + Mosaic live in a durable box so a hot edit never re-instantiates them. */
+interface Engine {
+  db: AsyncDuckDB;
+  conn: AsyncDuckDBConnection;
+  coordinator: Coordinator;
+}
+const engineBox = appScope.durable<{ engine: Engine | null; loading: Promise<void> | null }>(
+  "engine",
+  () => ({ engine: null, loading: null }),
+);
+
+/** Idempotent: the first caller kicks the load, everyone else awaits it. */
+export function ensureLoaded(): Promise<void> {
+  engineBox.loading ??= load().catch((e: unknown) => {
+    loadError.set(e instanceof Error ? e.message : String(e));
+    throw e;
+  });
+  return engineBox.loading;
+}
+
+async function load(): Promise<void> {
+  // Yield before the first write. Solid 2.0 rejects a reactive write inside an
+  // owned scope, and whoever calls `ensureLoaded` — a component body, a cell's
+  // compute — is inside one synchronously. After an await the owner is no
+  // longer current, so every signal this function touches is written safely.
+  await Promise.resolve();
+  progress.set({ fraction: null, label: "starting DuckDB" });
+  const db = await instantiateDuckDB(BUNDLES);
+  const conn = await db.connect();
+  const coordinator = new Coordinator();
+  coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: conn }));
+  engineBox.engine = { db, conn, coordinator };
+
+  const names = Object.keys(TABLES) as TableName[];
+  let done = 0;
+  for (const name of names) {
+    progress.set({ fraction: done / names.length, label: `loading ${name}` });
+    const buf = await fetchWithProgress(TABLES[name], (within: number) => {
+      progress.set({ fraction: (done + within) / names.length, label: `loading ${name}` });
+    });
+    await db.registerFileBuffer(`${name}.parquet`, buf);
+    await conn.query(
+      `CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_parquet('${name}.parquet')`,
+    );
+    done++;
+  }
+
+  progress.set({ fraction: 1, label: "summarizing" });
+  await loadManifest();
+  summary.set(await querySummary(conn));
+  ready.set(true);
+  progress.set({ fraction: 1, label: "ready" });
+}
+
+/**
+ * Fetched rather than imported: the manifest is written beside the parquet by
+ * the normalizer, and a missing one should degrade to "unlabelled numbers", not
+ * a build error in a fresh checkout.
+ */
+async function loadManifest(): Promise<void> {
+  try {
+    const res = await fetch(new URL("../data/manifest.json", import.meta.url));
+    if (res.ok) manifest.set((await res.json()) as Manifest);
+  } catch {
+    /* no manifest — the UI falls back to "pricing table unknown" */
+  }
+}
+
+async function querySummary(c: AsyncDuckDBConnection): Promise<CorpusSummary> {
+  const rows = await c.query(`
+    SELECT count(*)                    AS turns,
+           count(DISTINCT sessionId)   AS sessions,
+           count(DISTINCT projectSlug) AS projects,
+           min(epoch_ms(ts))           AS firstTs,
+           max(epoch_ms(ts))           AS lastTs,
+           sum(costTotal)              AS totalCost,
+           sum(costInput)              AS costInput,
+           sum(costOutput)             AS costOutput,
+           sum(costCacheCreate)        AS costCacheCreate,
+           sum(costCacheRead)          AS costCacheRead
+    FROM turns
+  `);
+  const r = rows.get(0)?.toJSON() as Record<string, unknown> | undefined;
+  const n = (k: string) => Number(r?.[k] ?? 0); // Number() handles the BigInt columns too
+  return {
+    turns: n("turns"),
+    sessions: n("sessions"),
+    projects: n("projects"),
+    firstTs: n("firstTs"),
+    lastTs: n("lastTs"),
+    totalCost: n("totalCost"),
+    costInput: n("costInput"),
+    costOutput: n("costOutput"),
+    costCacheCreate: n("costCacheCreate"),
+    costCacheRead: n("costCacheRead"),
+  };
+}
+
+/**
+ * DuckDB hands back INT64 / HUGEINT columns as BigInt, which then poisons every
+ * downstream arithmetic and every `new Date(...)` with "Cannot convert a BigInt
+ * value to a number". Coercing once here — rather than at each call site — is
+ * what keeps the cells and the chart specs free of the problem. Token counts and
+ * epoch-millisecond timestamps are both far inside Number's exact-integer range,
+ * so nothing is lost.
+ */
+function unwrapBigInts(row: Record<string, unknown>): Record<string, unknown> {
+  for (const k in row) {
+    const v = row[k];
+    if (typeof v === "bigint") row[k] = Number(v);
+  }
+  return row;
+}
+
+/** Ad-hoc query against the loaded tables. Used by cells and by agent tools. */
+export async function sql<T = Record<string, unknown>>(query: string): Promise<T[]> {
+  await ensureLoaded();
+  const e = engineBox.engine;
+  if (!e) throw new Error("no connection");
+  const result = await e.conn.query(query);
+  return result.toArray().map((r) => unwrapBigInts(r.toJSON() as Record<string, unknown>) as T);
+}
+
+export const store = {
+  progress: progress.get,
+  ready: ready.get,
+  loadError: loadError.get,
+  manifest: manifest.get,
+  summary: summary.get,
+  filter,
+  get coordinator(): Coordinator {
+    const e = engineBox.engine;
+    if (!e) throw new Error("coordinator not ready — await ensureLoaded()");
+    return e.coordinator;
+  },
+  ensureLoaded,
+  sql,
+};

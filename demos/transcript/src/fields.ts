@@ -1,0 +1,507 @@
+/**
+ * Everything we know about Claude Code's transcript schema, encoded as accessor
+ * functions rather than as a validating type system.
+ *
+ * The design bet (docs/proposals/claude-code-usage-analytics.md §5.1): Claude
+ * Code ships a new build every few days and adds fields freely — 28 builds in
+ * the five weeks of the baseline corpus. A validating parser turns every such
+ * addition into a crash or a silent record drop. What we need instead is a
+ * **lenient reader plus a loud census**: read defensively here, and let
+ * `exploration/cc-usage/{census,diff}.mjs` be the thing that notices drift.
+ *
+ * Every accessor below obeys three rules:
+ *   1. Never throw on a malformed record — return a null-ish value.
+ *   2. Never assume a field exists; presence is data.
+ *   3. Encode *semantics* the raw JSON does not: which fields are categorical,
+ *      which are billing ground truth, which are traps.
+ *
+ * `Record` here is deliberately `unknown`-ish. Typing the wire format would be
+ * the very mistake this module exists to avoid.
+ */
+
+/** One parsed JSONL line. Intentionally untyped — see the module docstring. */
+export type Rec = Record<string, unknown>;
+
+// ---------------------------------------------------------------------------
+// safe navigation
+// ---------------------------------------------------------------------------
+
+/** `get(rec, "message.usage.input_tokens")` — never throws. */
+export function get(obj: unknown, dotted: string): unknown {
+  let cur: unknown = obj;
+  for (const k of dotted.split(".")) {
+    if (cur == null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[k];
+  }
+  return cur;
+}
+
+export const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+export const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+export const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+export const obj = (v: unknown): Record<string, unknown> | undefined =>
+  v != null && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : undefined;
+
+// ---------------------------------------------------------------------------
+// record identity & kind
+// ---------------------------------------------------------------------------
+
+export const recordType = (rec: Rec): string => str(rec?.type) ?? "<missing>";
+export const isAssistant = (rec: Rec): boolean => rec?.type === "assistant";
+export const isUser = (rec: Rec): boolean => rec?.type === "user";
+/** True for records produced inside a Task subagent / Workflow agent. */
+export const isSidechain = (rec: Rec): boolean => rec?.isSidechain === true;
+
+/**
+ * The billing dedup key. **The single most important function here.**
+ *
+ * Claude Code writes ONE RECORD PER CONTENT BLOCK of an assistant turn — a
+ * response with thinking + text + tool_use becomes three records, each carrying
+ * a byte-identical `message.usage`. Summing over records overstates output
+ * tokens by 237% on the baseline corpus (worse than the 2.38x record ratio,
+ * because duplication correlates with response size). Group by this key and
+ * take ONE member.
+ *
+ * NUL joins the two ids: it cannot occur inside either, so the composite is
+ * unambiguous. Written as an escape, never as a literal — a raw NUL in source
+ * makes git treat the file as binary.
+ */
+export function billingKey(rec: Rec): string | undefined {
+  const id = str(get(rec, "message.id"));
+  if (!id) return undefined;
+  return `${id}\u0000${str(rec?.requestId) ?? ""}`;
+}
+
+export const messageId = (rec: Rec): string | undefined => str(get(rec, "message.id"));
+
+/**
+ * When two records share a `message.id` but differ in `requestId`, keep the
+ * non-sidechain one — the sidechain copy is a replay of the parent's turn and
+ * its tokens were never separately billed. (ccusage issue #913.)
+ */
+export const preferOriginal = (a: Rec, b: Rec): Rec => (isSidechain(a) && !isSidechain(b) ? b : a);
+
+// ---------------------------------------------------------------------------
+// fork provenance
+// ---------------------------------------------------------------------------
+
+/**
+ * True when this record was COPIED into its file by a fork/resume rather than
+ * produced there. Its tokens were billed once, to `originSession(rec)`.
+ *
+ * Forking COPIES the inherited prefix into the new session's file, preserving
+ * `uuid` / `timestamp` / `requestId` / `message.id`. On the copy, `sessionId`
+ * is rewritten to the CONTAINING session while `session_id` keeps the
+ * ORIGINATING one — so the snake/camel pair is provenance, not a rename.
+ *
+ * Only decidable from Claude Code 2.1.199 onward; earlier builds omit
+ * `session_id` entirely, which is the whole reason its presence is ~78%. An
+ * inherited record from those builds is indistinguishable from a native one and
+ * must be caught by cross-file dedup instead — which is why dedup, not this, is
+ * the correctness floor.
+ */
+export function isInherited(rec: Rec): boolean {
+  const origin = str(rec?.session_id);
+  const container = str(rec?.sessionId);
+  return Boolean(origin && container && origin !== container);
+}
+
+/** The session that actually paid for this turn. Falls back to the container. */
+export const originSession = (rec: Rec): string | undefined =>
+  str(rec?.session_id) ?? str(rec?.sessionId);
+
+/** The session whose file this record lives in. */
+export const containingSession = (rec: Rec): string | undefined => str(rec?.sessionId);
+
+export interface ForkContextRef {
+  agentId?: string;
+  parentSessionId?: string;
+  parentLastUuid?: string;
+  contextLength: number;
+}
+
+/**
+ * A subagent that inherits its parent's context declares it in a
+ * `fork-context-ref` record. Note these are themselves copied when the parent
+ * session is forked, so one agentId can appear under two session dirs.
+ */
+export function forkContextRef(rec: Rec): ForkContextRef | undefined {
+  if (rec?.type !== "fork-context-ref") return undefined;
+  return {
+    agentId: str(rec.agentId),
+    parentSessionId: str(rec.parentSessionId),
+    parentLastUuid: str(rec.parentLastUuid),
+    contextLength: num(rec.contextLength),
+  };
+}
+
+/**
+ * Which agent produced this record. `attributionAgent` names the agent TYPE
+ * (`Explore`, `Plan`, `general-purpose`, `fork`, a custom name, …) and is on
+ * ~76% of sidechain records; `agentId` is the per-instance id.
+ */
+export const agentIdentity = (rec: Rec): { agentId?: string; agentType?: string } | undefined =>
+  isSidechain(rec)
+    ? { agentId: str(rec.agentId), agentType: str(rec.attributionAgent) }
+    : undefined;
+
+// ---------------------------------------------------------------------------
+// usage / tokens — the billing surface
+// ---------------------------------------------------------------------------
+
+export interface TokenCounts {
+  input: number;
+  output: number;
+  cacheCreate: number;
+  cacheRead: number;
+  /** The two cache-write TTL tiers. 1h is priced ~1.6x the 5m rate. */
+  cache5m: number;
+  cache1h: number;
+  webSearches: number;
+  webFetches: number;
+  serviceTier?: string;
+  speed?: string;
+}
+
+export function readUsage(usage: unknown): TokenCounts {
+  const u = obj(usage);
+  return {
+    input: num(u?.input_tokens),
+    output: num(u?.output_tokens),
+    cacheCreate: num(u?.cache_creation_input_tokens),
+    cacheRead: num(u?.cache_read_input_tokens),
+    cache5m: num(get(u, "cache_creation.ephemeral_5m_input_tokens")),
+    cache1h: num(get(u, "cache_creation.ephemeral_1h_input_tokens")),
+    webSearches: num(get(u, "server_tool_use.web_search_requests")),
+    webFetches: num(get(u, "server_tool_use.web_fetch_requests")),
+    serviceTier: str(u?.service_tier),
+    speed: str(u?.speed),
+  };
+}
+
+export interface BillableUnit extends TokenCounts {
+  model?: string;
+  /** `"message"` | `"fallback_message"` | undefined on pre-iterations builds. */
+  iterationType?: string;
+}
+
+/**
+ * Billing ground truth for one assistant record, as a list of (model, usage)
+ * pairs — plural because of model fallback.
+ *
+ * `message.usage.iterations[]` is the real per-attempt ledger. On a fallback
+ * (`type: "fallback_message"`) it holds BOTH the aborted cheap-model attempt
+ * and the expensive retry, each with its own `model`, while top-level
+ * `message.usage` reflects only the LAST attempt. Pricing the top level alone
+ * silently drops the wasted first attempt.
+ *
+ * When `iterations` is absent (older builds) fall back to top-level usage.
+ */
+export function billableUnits(rec: Rec): BillableUnit[] {
+  const usage = get(rec, "message.usage");
+  if (!usage) return [];
+  const topModel = str(get(rec, "message.model"));
+  const iterations = arr((usage as Record<string, unknown>).iterations);
+  if (iterations.length === 0) {
+    return [{ model: topModel, iterationType: undefined, ...readUsage(usage) }];
+  }
+  return iterations.map((it) => {
+    const o = obj(it);
+    return {
+      // per-iteration `model` only appears when it differs from the top-level one
+      model: str(o?.model) ?? topModel,
+      iterationType: str(o?.type),
+      ...readUsage(it),
+    };
+  });
+}
+
+/** A fallback happened: a cheaper model's attempt was thrown away and retried. */
+export const hadFallback = (rec: Rec): boolean =>
+  arr(get(rec, "message.usage.iterations")).some((it) => obj(it)?.type === "fallback_message");
+
+/**
+ * Models that must never be priced. `<synthetic>` is Claude Code's own
+ * placeholder for locally-generated assistant messages (e.g. an interrupt
+ * notice) — it never hit the API.
+ */
+export const UNPRICED_MODELS: ReadonlySet<string> = new Set(["<synthetic>"]);
+
+/**
+ * Model ids may carry a bracketed context-window variant, e.g.
+ * `claude-opus-4-8[1m]` (1M context), priced differently from the base model.
+ */
+export function splitModel(model: string | undefined): {
+  base?: string;
+  variant?: string;
+} {
+  const m = /^(.*?)\[([^\]]+)\]$/.exec(model ?? "");
+  return m ? { base: m[1], variant: m[2] } : { base: model, variant: undefined };
+}
+
+// ---------------------------------------------------------------------------
+// events — the "what went wrong / what got expensive" signals
+// ---------------------------------------------------------------------------
+
+export interface Compaction {
+  trigger?: string;
+  preTokens: number;
+  postTokens: number;
+  droppedCumulative: number;
+  durationMs: number;
+  preservedCount: number;
+  toolsDiscovered: number;
+}
+
+/** Context compaction: the single biggest driver of cache-read cost. */
+export function compaction(rec: Rec): Compaction | undefined {
+  const cm = obj(rec?.compactMetadata);
+  if (!cm) return undefined;
+  return {
+    trigger: str(cm.trigger),
+    preTokens: num(cm.preTokens),
+    postTokens: num(cm.postTokens),
+    droppedCumulative: num(cm.cumulativeDroppedTokens),
+    durationMs: num(cm.durationMs),
+    preservedCount: arr(get(cm, "preservedMessages.uuids")).length,
+    toolsDiscovered: arr(cm.preCompactDiscoveredTools).length,
+  };
+}
+
+/** Model fallback events are logged as `type:"system"` with these two fields. */
+export function fallbackEvent(rec: Rec): { from?: string; to?: string } | undefined {
+  const from = str(rec?.originalModel);
+  const to = str(rec?.fallbackModel);
+  return from || to ? { from, to } : undefined;
+}
+
+/** Work that was paid for and thrown away. */
+export const isWasted = (rec: Rec): boolean =>
+  rec?.isAbortedMidStream === true || rec?.isApiErrorMessage === true;
+
+export interface ToolUse {
+  id?: string;
+  name?: string;
+  input: unknown;
+}
+
+export const toolUses = (rec: Rec): ToolUse[] =>
+  arr(get(rec, "message.content"))
+    .filter((b) => obj(b)?.type === "tool_use")
+    .map((b) => {
+      const o = obj(b) ?? {};
+      return { id: str(o.id), name: str(o.name), input: o.input };
+    });
+
+export interface ToolOutcome {
+  shape: "string" | "array" | "object";
+  ok?: boolean;
+  interrupted?: boolean;
+  error?: string;
+  exitCode?: number;
+  durationMs?: number;
+  size: number;
+}
+
+/**
+ * Tool outcome, read from the `toolUseResult` sidecar on the *user* record that
+ * carries the tool_result. Polymorphic (`object | array | string`), so this is
+ * pure defensive reading.
+ */
+export function toolOutcome(rec: Rec): ToolOutcome | undefined {
+  const r = rec?.toolUseResult;
+  if (r == null) return undefined;
+  if (typeof r === "string") return { shape: "string", size: r.length };
+  if (Array.isArray(r)) return { shape: "array", size: r.length };
+  const o = obj(r);
+  if (!o) return undefined;
+  const stderr = str(o.stderr);
+  return {
+    shape: "object",
+    ok: typeof o.success === "boolean" ? o.success : undefined,
+    interrupted: o.interrupted === true,
+    error: str(o.error) || (stderr ? stderr : undefined),
+    exitCode: typeof o.exitCode === "number" ? o.exitCode : undefined,
+    durationMs: typeof o.durationMs === "number" ? o.durationMs : undefined,
+    size: 0,
+  };
+}
+
+/** Content-block types on one record (records are per-block, so usually one). */
+export const blockTypes = (rec: Rec): (string | undefined)[] =>
+  arr(get(rec, "message.content")).map((b) => str(obj(b)?.type));
+
+/** Thinking is billed as output tokens; tracking it separately explains spend. */
+export const thinkingChars = (rec: Rec): number =>
+  arr(get(rec, "message.content"))
+    .filter((b) => obj(b)?.type === "thinking")
+    .reduce<number>((n, b) => n + (str(obj(b)?.thinking)?.length ?? 0), 0);
+
+// ---------------------------------------------------------------------------
+// categorical dimensions — the cross-filter axes for the Mosaic layer
+// ---------------------------------------------------------------------------
+
+export interface Dimension {
+  name: string;
+  path: string;
+  grain: "assistant" | "user" | "system" | "any";
+  /** Fraction of records carrying it in the July 2026 corpus. */
+  presence?: number;
+  values?: readonly string[];
+  note?: string;
+}
+
+/**
+ * Every low-cardinality field worth exposing as a filterable dimension.
+ * `presence` is a reminder that most are optional — a chart must handle the
+ * null bucket.
+ */
+export const DIMENSIONS: readonly Dimension[] = [
+  // --- turn grain ---
+  { name: "model", path: "message.model", grain: "assistant", presence: 1.0 },
+  { name: "stopReason", path: "message.stop_reason", grain: "assistant" },
+  { name: "serviceTier", path: "message.usage.service_tier", grain: "assistant" },
+  { name: "speed", path: "message.usage.speed", grain: "assistant" },
+  {
+    name: "effort",
+    path: "effort",
+    grain: "assistant",
+    presence: 0.3,
+    values: ["medium", "high", "xhigh"],
+  },
+  { name: "entrypoint", path: "entrypoint", grain: "any", values: ["cli", "sdk-cli"] },
+  {
+    name: "sessionKind",
+    path: "sessionKind",
+    grain: "any",
+    presence: 0.01,
+    note: '"bg" = background session',
+  },
+  { name: "userType", path: "userType", grain: "any" },
+  {
+    name: "isSidechain",
+    path: "isSidechain",
+    grain: "any",
+    note: "true inside a subagent",
+  },
+
+  // --- attribution: what *caused* this spend. The efficiency axis. ---
+  { name: "attributionSkill", path: "attributionSkill", grain: "assistant", presence: 0.038 },
+  { name: "attributionPlugin", path: "attributionPlugin", grain: "assistant", presence: 0.028 },
+  {
+    name: "attributionMcpServer",
+    path: "attributionMcpServer",
+    grain: "assistant",
+    presence: 0.059,
+  },
+  { name: "attributionMcpTool", path: "attributionMcpTool", grain: "assistant", presence: 0.059 },
+  { name: "attributionAgent", path: "attributionAgent", grain: "assistant", presence: 0.758 },
+
+  // --- project / place ---
+  { name: "cwd", path: "cwd", grain: "any", note: "high cardinality but the real project key" },
+  { name: "gitBranch", path: "gitBranch", grain: "any" },
+  { name: "version", path: "version", grain: "any", note: "Claude Code build — the drift axis" },
+
+  // --- user grain ---
+  { name: "permissionMode", path: "permissionMode", grain: "user", presence: 0.047 },
+  { name: "promptSource", path: "promptSource", grain: "user", presence: 0.047 },
+  { name: "originKind", path: "origin.kind", grain: "user", presence: 0.047 },
+  { name: "toolDenialKind", path: "toolDenialKind", grain: "user", presence: 0.0004 },
+
+  // --- system grain ---
+  { name: "level", path: "level", grain: "system", values: ["info", "notice", "warning"] },
+  {
+    name: "compactTrigger",
+    path: "compactMetadata.trigger",
+    grain: "system",
+    values: ["auto", "manual"],
+  },
+  { name: "apiRefusalCategory", path: "apiRefusalCategory", grain: "system", presence: 0.003 },
+] as const;
+
+// ---------------------------------------------------------------------------
+// known traps — encoded so the next reader does not rediscover them
+// ---------------------------------------------------------------------------
+
+export interface Trap {
+  id: string;
+  severity: "critical" | "high" | "medium" | "low";
+  what: string;
+  detect?: string;
+  fix: string;
+}
+
+export const TRAPS: readonly Trap[] = [
+  {
+    id: "per-block-record-duplication",
+    severity: "critical",
+    what: "One API response is written as one record per content block, each repeating the full message.usage.",
+    detect: "count(assistant records) / count(distinct message.id) — 2.38 on the July 2026 corpus",
+    fix: "Group by billingKey(); take one member per group.",
+  },
+  {
+    id: "subagent-files-missed",
+    severity: "critical",
+    what: "Subagent + workflow transcripts live in <sessionId>/subagents/**, not <sessionId>.jsonl.",
+    detect: "Compare a recursive walk to a `<slug>/*.jsonl` glob — 477 files vs 109.",
+    fix: "Walk the project dir recursively; tag each file with its kind.",
+  },
+  {
+    id: "fork-copies-the-prefix",
+    severity: "critical",
+    what:
+      "Resuming or forking COPIES the inherited transcript prefix into the new session's file, " +
+      "preserving uuid / timestamp / requestId / message.id. The same billed turn exists in 2+ " +
+      "files (5.5% of message.ids, chains up to 4 deep). Per-file summing double-counts.",
+    detect: "count message.ids appearing in more than one file",
+    fix: "Dedup by billingKey() across the WHOLE corpus, then attribute via originSession().",
+  },
+  {
+    id: "session-id-is-provenance-not-a-rename",
+    severity: "high",
+    what:
+      "sessionId and session_id are NOT a naming migration. On a copied record sessionId is " +
+      "rewritten to the CONTAINING session while session_id keeps the ORIGINATING one. " +
+      "Introduced in Claude Code 2.1.199; absent before, hence ~78% presence.",
+    detect: "records where session_id !== sessionId are inherited, not native",
+    fix: "isInherited() / originSession(); never treat session_id as an alias.",
+  },
+  {
+    id: "fallback-iteration-dropped",
+    severity: "high",
+    what:
+      "On model fallback, top-level message.usage reflects only the final attempt; the discarded " +
+      "cheaper attempt is billed but visible only in message.usage.iterations[].",
+    detect: 'assistant records where iterations[].type includes "fallback_message"',
+    fix: "Price over billableUnits(), never over top-level usage alone.",
+  },
+  {
+    id: "no-cost-field",
+    severity: "high",
+    what: "There is NO costUSD/total_cost_usd anywhere in the transcript. Cost is always derived.",
+    detect: "grep costUSD ~/.claude/projects — zero hits.",
+    fix: "Carry a versioned pricing table; stamp every number with the table version.",
+  },
+  {
+    id: "no-image-token-counter",
+    severity: "medium",
+    what:
+      "Anthropic bills images as ordinary input tokens; message.usage has no image counter and " +
+      "no price table has an Anthropic image rate. Exact image attribution is impossible.",
+    fix: "Estimate from PNG IHDR / JPEG SOFn dimensions via w*h/750; label it an estimate.",
+  },
+  {
+    id: "synthetic-model",
+    severity: "medium",
+    what: 'model can be "<synthetic>" for locally generated messages that never hit the API.',
+    fix: "Skip UNPRICED_MODELS before pricing.",
+  },
+  {
+    id: "model-variant-suffix",
+    severity: "medium",
+    what: "Model ids can carry a bracketed variant, e.g. claude-opus-4-8[1m] (1M context), priced differently.",
+    fix: "splitModel() before pricing lookup; price the variant, do not silently strip it.",
+  },
+] as const;
