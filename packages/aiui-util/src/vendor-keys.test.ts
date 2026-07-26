@@ -12,7 +12,7 @@ import {
   readKeyDecisions,
   resolveVendorKeys,
   vendorKeysMode,
-} from "./vendor-keys";
+} from "./vendor-keys.ts";
 
 const emptyVault = () => Promise.resolve(null);
 

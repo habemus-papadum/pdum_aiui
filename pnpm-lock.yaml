@@ -983,6 +983,10 @@ importers:
         version: 8.18.1
 
   packages/aiui-source-processor:
+    dependencies:
+      '@habemus-papadum/aiui-util':
+        specifier: workspace:^
+        version: link:../aiui-util
     devDependencies:
       '@babel/core':
         specifier: ^7.29.0

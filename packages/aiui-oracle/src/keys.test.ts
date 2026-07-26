@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   cachingKeySource,
   chainKeySource,
-  DEV_KEY_GLOBAL,
   devKeySource,
   mintClientSecret,
   PASTED_KEY_STORAGE_KEY,
@@ -142,33 +141,38 @@ describe("cachingKeySource — reuse until the TTL margin", () => {
 
 describe("devKeySource + standardKeySources — the three flows in the decided order", () => {
   const global = globalThis as Record<string, unknown>;
+  const injectDevKeys = (keys: Record<string, string>) => {
+    global.__AIUI__ = { v: 1, devKeys: keys };
+  };
   afterEach(() => {
-    delete global[DEV_KEY_GLOBAL];
+    delete global.__AIUI__;
   });
 
-  it("reads the plugin-injected global; absent is a refusal, not a hang", async () => {
+  it("reads __AIUI__.devKeys (the aiui plugin's seed); absent is a refusal, not a hang", async () => {
     await expect(devKeySource().credential({})).rejects.toThrow("dev key");
-    global[DEV_KEY_GLOBAL] = "ek_injected";
+    injectDevKeys({ openai: "ek_injected" });
     const credential = await devKeySource().credential({});
     expect(credential.ek).toBe("ek_injected");
-    expect(credential.source).toBe("dev-key");
+    expect(credential.source).toBe("dev-key:openai");
+    // Vendor-keyed: a gemini request refuses when only openai was seeded.
+    await expect(devKeySource("gemini").credential({})).rejects.toThrow("gemini");
   });
 
   it("paste trumps dev-key; dev-key covers the no-mint static app; mint only when configured", async () => {
     const slot = new Map<string, string>();
     const storage = { getItem: (key: string) => slot.get(key) ?? null };
-    global[DEV_KEY_GLOBAL] = "ek_injected";
+    injectDevKeys({ openai: "ek_injected" });
 
     // No mintUrl (a purely static app): dev key answers in dev.
     const noMint = standardKeySources({ storage });
-    expect((await noMint.credential({})).source).toBe("dev-key");
+    expect((await noMint.credential({})).source).toBe("dev-key:openai");
     // Pasting trumps it.
     slot.set(PASTED_KEY_STORAGE_KEY, "ek_pasted");
     expect((await noMint.credential({})).source).toBe("paste-key");
 
     // No paste, no dev key (a deployed app WITH a minter): mint runs.
     slot.delete(PASTED_KEY_STORAGE_KEY);
-    delete global[DEV_KEY_GLOBAL];
+    delete global.__AIUI__;
     const { impl } = fakeFetch(minted);
     const withMint = standardKeySources({
       storage,

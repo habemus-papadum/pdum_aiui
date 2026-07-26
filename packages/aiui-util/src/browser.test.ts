@@ -7,7 +7,7 @@ import {
   discoverSessionBrowser,
   discoverSessionBrowserInProfiles,
   sessionBrowserBinary,
-} from "./browser";
+} from "./browser.ts";
 
 let dir: string;
 

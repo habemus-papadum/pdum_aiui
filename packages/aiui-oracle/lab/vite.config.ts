@@ -6,7 +6,6 @@ import solid from "vite-plugin-solid";
 // imports with esbuild but hands package imports to node's ESM resolver
 // (the pencil lab's lesson).
 import { createMintBackend } from "../src/mint-backend";
-import { oracleDevKey } from "../src/vite";
 
 /**
  * Mount the mint endpoint INTO the lab's dev server — the dev-mode key flow:
@@ -46,8 +45,9 @@ function oracleMint(): Plugin {
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   // All three key flows live here: the mint endpoint (oracleMint), the
-  // injected dev key (oracleDevKey — serve-only), and paste-key in the page.
-  plugins: [oracleMint(), oracleDevKey(), aiui({ locator: true }), solid()],
+  // injected dev key (the aiui plugin's devKeys option — serve-only, resolved
+  // env-first then OS vault by the house machinery), and paste-key in-page.
+  plugins: [oracleMint(), aiui({ locator: true, devKeys: ["openai"] }), solid()],
   server: {
     // A LAN device (the iPad) may join — the trusted-LAN posture,
     // docs/guide/warning.md. Note the mic needs a secure context: fine on

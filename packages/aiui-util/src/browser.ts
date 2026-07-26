@@ -31,8 +31,8 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { join } from "node:path";
 import { Browser, ChromeReleaseChannel, computeSystemExecutablePath } from "@puppeteer/browsers";
 import { execa } from "execa";
-import { headlessReason } from "./environment";
-import { cacheDir } from "./index";
+import { headlessReason } from "./environment.ts";
+import { cacheDir } from "./index.ts";
 
 /** Chrome writes this into the user data dir when debugging is enabled. */
 const ACTIVE_PORT_FILE = "DevToolsActivePort";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rehostSocketUrl } from "./socket-url";
+import { rehostSocketUrl } from "./socket-url.ts";
 
 describe("rehostSocketUrl", () => {
   it("keeps the browser's session path, takes the authority we reached it on", () => {

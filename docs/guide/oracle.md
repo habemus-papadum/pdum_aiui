@@ -17,26 +17,28 @@ it was deleted end to end on 2026-07-25 — git history keeps it, and
 
 In an aiui app (scaffolded by `create-aiui` or `pnpm new-demo`), two steps:
 
-**1. The Vite config.** Your app already carries the aiui compiler plugin and Solid; add the
-dev-key plugin so dev mode needs no pasting and no mint server:
+**1. The Vite config.** Your app already carries the aiui compiler plugin and Solid; opt in
+to dev keys so dev mode needs no pasting and no mint server:
 
 ```ts
 // vite.config.ts
-import { oracleDevKey } from "@habemus-papadum/aiui-oracle/vite";
 import { aiui } from "@habemus-papadum/aiui-source-processor";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
 export default defineConfig({
-  plugins: [oracleDevKey(), aiui({ locator: true }), solid()],
+  plugins: [aiui({ locator: true, devKeys: ["openai"] }), solid()],
 });
 ```
 
-`oracleDevKey()` reads `OPENAI_API_KEY` from the **dev server's** environment (a `.env` /
-direnv setup, same as the channel's source-checkout posture) and injects it into served
-pages. Serve-only, by construction — `vite build` never sees it. Note the injected key rides
-every page the dev server serves: with `server.host: true` (the trusted-LAN posture) that
-means LAN-readable, exactly like the rest of the dev surface.
+`devKeys` is an option on the aiui plugin itself (it already stamps dev context like
+`sourceRoot` onto `window.__AIUI__`; keys are just more dev context, vendor-keyed for
+Gemini later). Resolution is the house vendor-key machinery: a source checkout honors the
+**environment** first (`.env` / direnv), then the **OS vault**; an installed aiui reads the
+vault only (`aiui keys set openai`). Serve-only, by construction — `vite build` never sees
+it. Note the injected key rides every page the dev server serves: with `server.host: true`
+(the trusted-LAN posture) that means LAN-readable, exactly like the rest of the dev
+surface — which is why it is opt-in, never a default.
 
 **2. The app wiring** — a session over the projected tool surface plus whichever widgets you
 want (the sketch below). `pnpm dev`, open the app, hit start: the chain finds the dev key and
@@ -68,7 +70,9 @@ The package has four subpaths — dev-mode source-first like every workspace pac
 | `.` | the chromeless core: `OracleSession`, key sources, transports, the tool bridge |
 | `./widgets` | the Solid widgets: `OracleControl`, `OracleMind`, `OracleViewer` |
 | `./server` | node-only: the mint backend (`createMintBackend`, `runMintServer`) |
-| `./vite` | the `oracleDevKey()` dev-server plugin |
+
+(Dev-key injection is NOT an oracle subpath — it is the aiui Vite plugin's `devKeys`
+option, above.)
 
 A minimal integration, in an app whose store declares `control()`s and `action()`s:
 
@@ -104,9 +108,9 @@ Auth is a pluggable `KeySource`; `standardKeySources()` is the decided priority 
 1. **A pasted key trumps everything.** The control widget's key field writes
    `localStorage`; whatever the user pastes (an `sk-…` parent key or a pre-minted `ek_…`)
    wins. This is also the whole deployment story for a purely static app.
-2. **The dev key** — add `oracleDevKey()` from `./vite` to the app's Vite config and dev
-   mode just works: the dev server injects its own `OPENAI_API_KEY` into the page as a
-   runtime global. The plugin declares `apply: "serve"`, so it does not exist during
+2. **The dev key** — opt in with `aiui({ devKeys: ["openai"] })` and dev mode just works:
+   the dev server resolves the key (env first, OS vault fallback) and injects it as
+   `window.__AIUI__.devKeys`. The seed applies to serve alone, so it does not exist during
    `vite build` — a production bundle structurally cannot contain the key.
 3. **A mint endpoint**, when the app has one: pass `mintUrl` and the chain fetches
    short-lived credentials from it (cached, refreshed near expiry). The endpoint is the

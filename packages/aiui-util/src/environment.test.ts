@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { headlessReason, isCi, isHeadless, isSsh } from "./environment";
+import { headlessReason, isCi, isHeadless, isSsh } from "./environment.ts";
 
 describe("isCi", () => {
   it("is true for the conventional truthy CI values", () => {

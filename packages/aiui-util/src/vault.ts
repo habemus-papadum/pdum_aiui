@@ -39,14 +39,19 @@ export interface ToolRunResult {
  * platform's actionable install hint.
  */
 export class VaultUnavailableError extends Error {
-  constructor(
-    /** The missing binary (e.g. `secret-tool`). */
-    readonly bin: string,
-    /** The platform's install/setup hint. */
-    readonly help: string,
-  ) {
+  /** The missing binary (e.g. `secret-tool`). */
+  readonly bin: string;
+  /** The platform's install/setup hint. */
+  readonly help: string;
+
+  // Explicit fields, NOT constructor parameter properties: this package is
+  // reachable from Vite configs, which plain node loads with STRIP-ONLY
+  // TypeScript — parameter properties need a transform and crash the loader.
+  constructor(bin: string, help: string) {
     super(`\`${bin}\` was not found on PATH. ${help}`);
     this.name = "VaultUnavailableError";
+    this.bin = bin;
+    this.help = help;
   }
 }
 

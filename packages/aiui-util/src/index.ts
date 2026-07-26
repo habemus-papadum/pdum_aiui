@@ -6,14 +6,14 @@
  * @packageDocumentation
  */
 
-export * from "./browser";
-export * from "./environment";
-export * from "./extension";
-export { packageFromSource, packageRoot, runningFromSource } from "./provenance";
-export * from "./secret-input";
-export * from "./socket-url";
-export * from "./vault";
-export * from "./vendor-keys";
+export * from "./browser.ts";
+export * from "./environment.ts";
+export * from "./extension.ts";
+export { packageFromSource, packageRoot, runningFromSource } from "./provenance.ts";
+export * from "./secret-input.ts";
+export * from "./socket-url.ts";
+export * from "./vault.ts";
+export * from "./vendor-keys.ts";
 
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";

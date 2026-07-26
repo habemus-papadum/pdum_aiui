@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { packageFromSource, packageRoot, runningFromSource } from "./provenance";
+import { packageFromSource, packageRoot, runningFromSource } from "./provenance.ts";
 
 const temps: string[] = [];
 function tempDir(): string {

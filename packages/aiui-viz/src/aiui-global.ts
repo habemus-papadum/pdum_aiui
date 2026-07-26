@@ -40,6 +40,10 @@ export interface AiuiGlobal {
   v: 1;
   sourceRoot?: string;
   tools?: AiuiToolsRegistry;
+  /** DEV-SERVE ONLY: vendor keys the aiui Vite plugin's opt-in `devKeys`
+   * option injected (per-provider, e.g. `{ openai: "sk-…" }`). Never present
+   * in a production build — the seeding plugin applies to serve alone. */
+  devKeys?: Record<string, string>;
   [key: string]: unknown;
 }
 

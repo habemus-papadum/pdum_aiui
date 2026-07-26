@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
-import { serveClientSurface } from "./web-surface";
+import { serveClientSurface } from "./web-surface.ts";
 
 /** Mount a prod static surface over a temp dist dir and return its base URL. */
 async function mount(

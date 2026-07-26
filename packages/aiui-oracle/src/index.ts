@@ -15,7 +15,6 @@ export type { StandardKeySourcesOptions } from "./keys";
 export {
   cachingKeySource,
   chainKeySource,
-  DEV_KEY_GLOBAL,
   devKeySource,
   mintClientSecret,
   mintingKeySource,

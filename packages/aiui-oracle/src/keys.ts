@@ -23,9 +23,6 @@ export const OPENAI_BASE_URL = "https://api.openai.com";
 /** The localStorage slot the paste-key source and its widget share. */
 export const PASTED_KEY_STORAGE_KEY = "aiui.oracle.key";
 
-/** The global the `oracleDevKey` Vite plugin injects (dev serve ONLY). */
-export const DEV_KEY_GLOBAL = "__aiuiOracleDevKey";
-
 export interface MintOptions {
   ttlSeconds?: number;
   baseUrl?: string;
@@ -100,23 +97,30 @@ export function pasteKeySource(
 }
 
 /**
- * The DEV-MODE key: whatever the `oracleDevKey` Vite plugin (the `./vite`
- * subpath) injected at `globalThis.__aiuiOracleDevKey`. Exists only under
- * `vite serve` — a built app never carries it — so a purely static app
- * develops with zero setup (no pasting, no mint server) and deploys on
+ * The DEV-MODE key: what the aiui Vite plugin's opt-in `devKeys` option
+ * injected at `window.__AIUI__.devKeys` (resolution is the house vendor-key
+ * machinery — env first in a source checkout, the OS vault otherwise). Exists
+ * only under `vite serve` — a built app never carries it — so a purely static
+ * app develops with zero setup (no pasting, no mint server) and deploys on
  * paste-key alone.
  */
-export function devKeySource(options: MintOptions = {}): KeySource {
+export function devKeySource(vendor = "openai", options: MintOptions = {}): KeySource {
   return {
-    describe: () => "dev-key",
+    describe: () => `dev-key:${vendor}`,
     async credential(session) {
-      const key = (globalThis as Record<string, unknown>)[DEV_KEY_GLOBAL];
+      const aiui = (globalThis as Record<string, unknown>).__AIUI__ as
+        | { devKeys?: Record<string, string> }
+        | undefined;
+      const key = aiui?.devKeys?.[vendor];
       if (typeof key !== "string" || key === "") {
         throw new Error(
-          "no dev key injected (the oracleDevKey vite plugin runs in dev serve only)",
+          `no ${vendor} dev key injected (the aiui vite plugin's devKeys option, dev serve only)`,
         );
       }
-      return { ...(await staticKeySource(key, options).credential(session)), source: "dev-key" };
+      return {
+        ...(await staticKeySource(key, options).credential(session)),
+        source: `dev-key:${vendor}`,
+      };
     },
   };
 }
@@ -143,7 +147,7 @@ export interface StandardKeySourcesOptions {
 export function standardKeySources(options: StandardKeySourcesOptions = {}): KeySource {
   const sources: KeySource[] = [
     pasteKeySource(options.storage ?? localStorage, options.mint ?? {}),
-    devKeySource(options.mint ?? {}),
+    devKeySource("openai", options.mint ?? {}),
   ];
   if (options.mintUrl !== undefined) {
     sources.push(

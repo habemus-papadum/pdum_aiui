@@ -23,9 +23,9 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cacheDir } from "./index";
-import { packageFromSource } from "./provenance";
-import { vaultLookup } from "./vault";
+import { cacheDir } from "./index.ts";
+import { packageFromSource } from "./provenance.ts";
+import { vaultLookup } from "./vault.ts";
 
 /**
  * Env var that forces INSTALLED key resolution (env ignored, OS vault only) in

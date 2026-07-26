@@ -15,7 +15,7 @@ import {
   vaultDelete,
   vaultLookup,
   vaultStore,
-} from "./vault";
+} from "./vault.ts";
 
 interface Call {
   cmd: string;
