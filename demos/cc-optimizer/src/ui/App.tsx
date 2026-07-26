@@ -2,9 +2,15 @@
  * App.tsx — the root layout (playbook layer 4: the application shell).
  *
  * Reading order is the argument the page makes: the summary strip first,
- * because the cache-read share reframes everything after it; then daily spend
+ * because the cache-read share reframes everything after it; then the session
+ * graph (the shape of the work — what ran when, beside what); then daily spend
  * (where and when); then attribution (what caused it); then sessions (was it
- * time well spent). Each panel is a pure reader of the cell graph.
+ * time well spent).
+ *
+ * All but one panel are pure readers of the cell graph. The session graph is
+ * the exception and deliberately so: it is a Mosaic client on the shared
+ * cross-filter, so brushing a time range in it re-queries every other client
+ * through the coordinator rather than through this tree.
  */
 
 import { CellView } from "@habemus-papadum/aiui-viz";
@@ -13,6 +19,7 @@ import { store } from "../model/store";
 import { Attribution } from "./Attribution";
 import { DailySpend } from "./DailySpend";
 import { Sessions } from "./Sessions";
+import { SessionTimeline } from "./SessionTimeline";
 import { Summary } from "./Summary";
 
 function Loading() {
@@ -66,6 +73,7 @@ export function App() {
         {() => (
           <>
             <Summary />
+            <SessionTimeline />
             <DailySpend />
             <Attribution />
             <Sessions />

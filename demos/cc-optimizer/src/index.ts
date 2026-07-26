@@ -10,4 +10,22 @@
  */
 export { type AppGraph, graph } from "./model/graph";
 export { appScope } from "./model/store";
+export {
+  type ForkEdgeInput,
+  type LayoutBar,
+  type LayoutEdge,
+  type LayoutGroup,
+  type LayoutRow,
+  layoutTimeline,
+  packLanes,
+  type TimelineLayout,
+  type TimelineSpan,
+  timeScale,
+} from "./model/timeline";
+export {
+  SelectionStatsClient,
+  SessionTimelineClient,
+  type TimelineData,
+} from "./model/timeline-client";
 export { App } from "./ui/App";
+export { SessionTimeline } from "./ui/SessionTimeline";
