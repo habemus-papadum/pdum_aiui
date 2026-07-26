@@ -107,9 +107,15 @@ export const totalOutput = (rec: Rec): number =>
  * the original "do members agree?" check was run against a MAIN-session file,
  * where they do agree.
  *
- * So: take the member with the most output. Ties fall through to
- * `preferOriginal`, which is what settles fork copies — those genuinely do carry
- * identical usage, so the tie-break is the operative rule there.
+ * So: take the member with the most output — **max, not last**. Last-by-timestamp
+ * looks equivalent and is not: a fork copy can carry `output_tokens: 0` with a
+ * timestamp identical to the original's, so "last" can select the zeroed copy.
+ * 44 groups in the baseline corpus differ between the two rules, and max is
+ * right in every one. Max is also order-independent, which matters because dedup
+ * is global across files and file walk order must not change a number.
+ *
+ * Ties fall through to `preferOriginal`, which is what settles fork copies whose
+ * usage genuinely does match.
  */
 export function preferForBilling(a: Rec, b: Rec): Rec {
   const oa = totalOutput(a);
