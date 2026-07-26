@@ -42,6 +42,9 @@ export interface OracleState {
   replying: boolean;
   /** The current reply's transcript, streamed (resets per response). */
   replyText: string;
+  /** The tool executing RIGHT NOW — the "acting" cue for the mind strip.
+   * (`| undefined` so the clear can ride a setState patch.) */
+  runningTool?: string | undefined;
   usage: UsageTotals;
   toolNames: string[];
   /** The vendor call id (WebRTC) — the sideband hook, surfaced first-class. */
@@ -504,6 +507,7 @@ export class OracleSession {
   private async runToolCalls(calls: PendingFunctionCall[]): Promise<void> {
     for (const call of calls) {
       const started = this.now();
+      this.setState({ runningTool: call.name });
       const { ok, output } = await this.runOneTool(call);
       this.record({
         kind: "tool-result",
@@ -518,6 +522,7 @@ export class OracleSession {
         item: { type: "function_call_output", call_id: call.callId, output },
       });
     }
+    this.setState({ runningTool: undefined });
     this.send({ type: "response.create" });
   }
 

@@ -101,44 +101,203 @@ body {
   font-size: 0.8rem;
 }
 
-/* the ledger pane */
-.lab-ledger {
+/* the composer + folds */
+.lab-composer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+  align-items: center;
+}
+
+.lab-composer input[type="text"] {
+  flex: 1;
+  background: #101216;
+  color: #e6e2d8;
+  border: 1px solid #3a404b;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+
+.lab-composer button,
+.lab-attach {
+  background: #262b33;
+  color: #e6e2d8;
+  border: 1px solid #3a404b;
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.lab-attach input[type="file"] {
+  display: none;
+}
+
+.lab-fold {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.lab-fold summary {
+  cursor: pointer;
+  color: #9aa0ab;
+}
+
+.lab-fold textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #101216;
+  color: #e6e2d8;
+  border: 1px solid #3a404b;
+  border-radius: 6px;
+  margin: 0.4rem 0;
+  padding: 0.4rem;
+  font-family: inherit;
+}
+
+.lab-tool-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  padding: 0.4rem 0;
+}
+
+.lab-tool-toggles label {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
-  max-height: 320px;
+}
+
+/* the mind strip */
+.aiui-oracle-mind {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.35rem 0.2rem;
+  font-size: 0.95rem;
+}
+
+.aiui-oracle-mind-text {
+  color: #b9c0cc;
+  font-style: italic;
+}
+
+.aiui-oracle-mind[data-status="live"] .aiui-oracle-mind-text {
+  color: #e6e2d8;
+}
+
+/* the session viewer */
+.aiui-oracle-chips {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.aiui-oracle-chip {
+  background: #1a1d23;
+  color: #7d8590;
+  border: 1px solid #2a2e36;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.aiui-oracle-chip[data-on="true"] {
+  color: #e6e2d8;
+  border-color: #4a5160;
+  background: #262b33;
+}
+
+.aiui-oracle-turns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 420px;
   overflow-y: auto;
+}
+
+.aiui-oracle-turn {
+  border: 1px solid #2a2e36;
+  border-radius: 8px;
+  background: #181b20;
+}
+
+.aiui-oracle-turn-summary {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #cfd4dc;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.aiui-oracle-turn[data-open="true"] .aiui-oracle-turn-summary {
+  border-bottom: 1px solid #2a2e36;
+}
+
+.aiui-oracle-turn-entries {
+  padding: 0.3rem 0.6rem 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.lab-ledger-entry {
+.aiui-oracle-entry-line {
   display: flex;
   gap: 0.6rem;
   align-items: baseline;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 1px 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.76rem;
+  cursor: pointer;
 }
 
-.lab-ledger-kind {
+.aiui-oracle-entry-line:disabled {
+  cursor: default;
+}
+
+.aiui-oracle-entry-kind {
   color: #7d8590;
   min-width: 6.5rem;
   text-align: right;
+  flex-shrink: 0;
 }
 
-.lab-ledger-entry[data-kind="error"] .lab-ledger-kind {
+.aiui-oracle-entry[data-kind="error"] .aiui-oracle-entry-kind {
   color: #e06c75;
 }
 
-.lab-ledger-entry[data-kind="tool-call"] .lab-ledger-kind,
-.lab-ledger-entry[data-kind="tool-result"] .lab-ledger-kind {
+.aiui-oracle-entry[data-kind="tool-call"] .aiui-oracle-entry-kind,
+.aiui-oracle-entry[data-kind="tool-result"] .aiui-oracle-entry-kind {
   color: #61afef;
 }
 
-.lab-ledger-entry[data-kind="heard"] .lab-ledger-kind,
-.lab-ledger-entry[data-kind="said"] .lab-ledger-kind {
+.aiui-oracle-entry[data-kind="heard"] .aiui-oracle-entry-kind,
+.aiui-oracle-entry[data-kind="said"] .aiui-oracle-entry-kind {
   color: #98c379;
 }
 
-.lab-ledger-body {
+.aiui-oracle-entry-body {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.aiui-oracle-entry-json {
+  margin: 0.2rem 0 0.4rem 7.1rem;
+  padding: 0.4rem;
+  background: #101216;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  overflow-x: auto;
 }
