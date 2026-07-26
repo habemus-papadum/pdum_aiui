@@ -509,6 +509,9 @@
 .cco .cco-tl-fork-key {
   width: 18px;
   height: 0;
-  border-top: 1.4px dashed #c2872f;
+  border-top: 1.4px solid #c2872f;
   display: inline-block;
+}
+.cco .cco-tl-fork-amb {
+  border-top-style: dotted;
 }

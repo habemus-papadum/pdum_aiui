@@ -27,8 +27,11 @@ import { control, scope } from "@habemus-papadum/aiui-viz";
 import { Coordinator, Selection, wasmConnector } from "@uwdata/vgplot";
 // Asset imports, not public/ fetches: these resolve from THIS package, so the
 // data travels with the demo into any consumer's build.
+import agentRunsUrl from "../data/agentRuns.parquet?url";
 import eventsUrl from "../data/events.parquet?url";
+import forkEdgesUrl from "../data/forkEdges.parquet?url";
 import imagesUrl from "../data/images.parquet?url";
+import lineagesUrl from "../data/lineages.parquet?url";
 import sessionsUrl from "../data/sessions.parquet?url";
 import toolCallsUrl from "../data/toolCalls.parquet?url";
 import turnsUrl from "../data/turns.parquet?url";
@@ -69,7 +72,7 @@ export const idleGapMinutes = control({
   unit: "min",
 });
 
-/** The five grains the normalizer writes. Keys match the parquet filenames. */
+/** The five grains every version of the normalizer writes. */
 export const TABLES = {
   turns: turnsUrl,
   toolCalls: toolCallsUrl,
@@ -78,7 +81,22 @@ export const TABLES = {
   images: imagesUrl,
 } as const;
 
-export type TableName = keyof typeof TABLES;
+/**
+ * Grains the normalizer grew later — fork lineage and per-agent runs.
+ *
+ * Optional, and loaded through a `?url` import that resolves at build time, so
+ * a checkout whose `src/data` predates them still boots: a missing file 404s at
+ * fetch and the app carries on without that table. The alternative — listing
+ * them as required — turns a stale dataset into a blank page, and the sessions
+ * are the point even when the lineage is absent.
+ */
+export const OPTIONAL_TABLES = {
+  forkEdges: forkEdgesUrl,
+  agentRuns: agentRunsUrl,
+  lineages: lineagesUrl,
+} as const;
+
+export type TableName = keyof typeof TABLES | keyof typeof OPTIONAL_TABLES;
 
 /** What the normalizer recorded about the run that produced this data. */
 export interface Manifest {
@@ -176,6 +194,9 @@ const clientBox = appScope.durable<{ timeline: SessionTimelineClient | null }>("
   timeline: null,
 }));
 
+/** Which optional grains this dataset actually turned out to have. */
+const loaded = appScope.durable<Set<string>>("loadedTables", () => new Set<string>());
+
 /** Toggle membership without mutating in place — Solid compares by identity. */
 function toggled(set: ReadonlySet<string>, key: string): Set<string> {
   const next = new Set(set);
@@ -233,18 +254,35 @@ async function load(): Promise<void> {
   coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: conn }));
   engineBox.engine = { db, conn, coordinator };
 
-  const names = Object.keys(TABLES) as TableName[];
-  let done = 0;
-  for (const name of names) {
-    progress.set({ fraction: done / names.length, label: `loading ${name}` });
-    const buf = await fetchWithProgress(TABLES[name], (within: number) => {
-      progress.set({ fraction: (done + within) / names.length, label: `loading ${name}` });
-    });
+  const registerTable = async (name: string, url: string, onBytes: (f: number) => void) => {
+    const buf = await fetchWithProgress(url, onBytes);
     await db.registerFileBuffer(`${name}.parquet`, buf);
     await conn.query(
       `CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_parquet('${name}.parquet')`,
     );
+  };
+
+  const names = Object.keys(TABLES) as Array<keyof typeof TABLES>;
+  let done = 0;
+  for (const name of names) {
+    progress.set({ fraction: done / names.length, label: `loading ${name}` });
+    await registerTable(name, TABLES[name], (within: number) => {
+      progress.set({ fraction: (done + within) / names.length, label: `loading ${name}` });
+    });
     done++;
+  }
+
+  // The optional grains, each independently. One that is absent (an older
+  // src/data) or malformed must not take the other four down with it, so every
+  // failure is recorded and swallowed rather than propagated.
+  for (const name of Object.keys(OPTIONAL_TABLES) as Array<keyof typeof OPTIONAL_TABLES>) {
+    progress.set({ fraction: 1, label: `loading ${name}` });
+    try {
+      await registerTable(name, OPTIONAL_TABLES[name], () => {});
+      loaded.add(name);
+    } catch {
+      /* grain not in this dataset — the app runs without it */
+    }
   }
 
   progress.set({ fraction: 1, label: "summarizing" });
@@ -255,6 +293,7 @@ async function load(): Promise<void> {
   // the tables have to exist before the coordinator initialises them.
   const tl = new SessionTimelineClient({
     filterBy: filter,
+    hasForkEdges: loaded.has("forkEdges"),
     onResult: (data) => {
       timeline.set(data);
       timelineBusy.set(false);
@@ -363,6 +402,7 @@ export const store = {
   timelineBusy: timelineBusy.get,
   selectionStats: selectionStats.get,
   brushRange: brushRange.get,
+  hasTable: (name: string): boolean => loaded.has(name),
   collapsedProjects: collapsedProjects.get,
   expandedSessions: expandedSessions.get,
 };

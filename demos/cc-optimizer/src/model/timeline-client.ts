@@ -66,12 +66,19 @@ export interface TimelineClientOptions {
   onPending?: () => void;
   onError?: (error: Error) => void;
   onDomain?: (domain: TimelineDomain) => void;
+  /**
+   * Whether cc-slurp's `forkEdges` grain is loaded. False in an older dataset,
+   * where the client falls back to deriving edges from the turns table.
+   */
+  hasForkEdges?: boolean;
 }
 
 export class SessionTimelineClient extends MosaicClient {
   private readonly opts: TimelineClientOptions;
   /** The last range published, so the view can render its own brush. */
   private range: [number, number] | null = null;
+  /** Resolved once in `prepare` from the `forkEdges` grain; see `loadForkEdges`. */
+  private forks: ForkEdgeInput[] = [];
 
   constructor(opts: TimelineClientOptions) {
     super(opts.filterBy);
@@ -106,13 +113,64 @@ export class SessionTimelineClient extends MosaicClient {
    * `fieldInfo` hook to hang this on any more.)
    */
   async prepare(): Promise<void> {
+    if (this.opts.hasForkEdges) await this.loadForkEdges();
     if (!this.opts.onDomain) return;
     const q = Query.from("turns").select({
       t0: sql`epoch_ms(min(ts))`,
       t1: sql`epoch_ms(max(ts))`,
     });
-    const result = rows(await this.coordinator!.query(q))[0];
+    const result = rows(await this.coordinator?.query(q))[0];
     if (result) this.opts.onDomain({ t0: n(result.t0), t1: n(result.t1) });
+  }
+
+  /**
+   * Fork lineage, read once from cc-slurp's `forkEdges` grain.
+   *
+   * Fetched in `prepare` and held, rather than joined into the per-brush query,
+   * for two reasons. It is tiny and static — ten rows for this corpus, and no
+   * brush can change them. And `forkEdges` is keyed by `childSessionId` /
+   * `parentSessionId`, neither of which is named `sessionId`, so a crossfilter
+   * predicate written against `turns` columns cannot be applied to it without a
+   * hand-written key translation. Filtering the edges is unnecessary anyway:
+   * `layoutTimeline` already drops any edge whose endpoints are not both on
+   * screen, which is the same answer and needs no SQL.
+   *
+   * Two shape hazards in the grain, both handled here rather than downstream:
+   * the `*Ts` columns are TIMESTAMP, not epoch milliseconds, so they go through
+   * `epoch_ms()` in SQL rather than arriving as a `{micros}` object the layout
+   * would silently render at x=NaN; and they are nullable — the writer maps 0
+   * to NULL — so a missing fork point falls back to the child's first native
+   * record, and an edge with neither is dropped.
+   */
+  private async loadForkEdges(): Promise<void> {
+    const q = Query.from("forkEdges").select({
+      childId: "childSessionId",
+      parentId: "parentSessionId",
+      forkTs: sql`coalesce(epoch_ms(forkPointTs), epoch_ms(childFirstNativeTs))`,
+      kind: "kind",
+      ambiguous: "ambiguous",
+      parentMissing: "parentMissing",
+    });
+    try {
+      for (const row of rows(await this.coordinator?.query(q))) {
+        const childId = s(row.childId);
+        const parentId = s(row.parentId);
+        const forkTs = row.forkTs == null ? null : n(row.forkTs);
+        // A named-but-absent parent has nothing to draw from.
+        if (!childId || !parentId || forkTs === null || row.parentMissing === true) continue;
+        this.forks.push({
+          childId,
+          parentId,
+          forkTs,
+          kind: s(row.kind) === "continuation" ? "continuation" : "copy",
+          ambiguous: row.ambiguous === true,
+        });
+      }
+    } catch (e) {
+      // An older dataset without the grain must degrade to no edges, not to a
+      // blank timeline — the sessions themselves are the point.
+      this.opts.onError?.(e instanceof Error ? e : new Error(String(e)));
+    }
   }
 
   /**
@@ -165,14 +223,14 @@ export class SessionTimelineClient extends MosaicClient {
       .where(sql`context <> 'main' AND agentId IS NOT NULL`)
       .groupby("agentId");
 
-    // Session→session forks, best-effort. A turn whose containing file is not
-    // its origin session was COPIED there by a fork, so `fileSessionId` is the
-    // child and `sessionId` the parent; `max(ts)` over those inherited turns is
-    // the point in the parent's timeline that was branched. Best-effort because
-    // dedup keeps only ONE copy of each billed turn and which file it came from
-    // is arbitrary — the parent's copy usually wins, and then the fork leaves no
-    // trace here at all. The durable fix belongs in the normalizer; see the
-    // proposal in this app's README.
+    if (this.opts.hasForkEdges) return Query.unionAll(sessions, agents).with({ t });
+
+    // Fallback for a dataset predating cc-slurp's `forkEdges` grain: infer the
+    // edge from a turn whose containing file is not its origin session, which
+    // means a fork copied it there. Unsound, and knowingly so — dedup keeps ONE
+    // copy of each billed turn and which file wins is arbitrary, so when the
+    // parent's copy survives the fork leaves no trace at all. It recovers 3 of
+    // this corpus's 10 real edges. `loadForkEdges` is the correct path.
     const forks = Query.from("t")
       .select({
         kind: sql`'fork'`,
@@ -202,10 +260,17 @@ export class SessionTimelineClient extends MosaicClient {
     return this;
   }
 
-  /** Split the three row kinds apart and hand the layout its inputs. */
+  /**
+   * Split the row kinds apart and hand the layout its inputs.
+   *
+   * The fork edges come from `prepare` (real lineage) and are re-emitted with
+   * every result; only the fallback path finds them in the rows. Either way the
+   * layout drops the ones whose endpoints did not survive the filter, so the
+   * edge set narrows with the brush without the edges themselves being queried.
+   */
   queryResult(data: unknown): this {
     const spans: TimelineSpan[] = [];
-    const forks: ForkEdgeInput[] = [];
+    const forks: ForkEdgeInput[] = [...this.forks];
     for (const row of rows(data)) {
       const kind = String(row.kind);
       const id = s(row.id);
