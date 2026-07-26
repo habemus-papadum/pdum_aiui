@@ -648,19 +648,80 @@ the distribution rather than to be clever.
 It is the second half of the cross-filter: brushing the scatter should filter the
 timeline and vice versa, which is exactly the cross-table question below.
 
-#### 5.6.3 The two questions these raise
+#### 5.6.3 Cross-table filtering — answered: yes, and do not denormalize
 
-1. **Can filters built from one table apply to visualizations over another?**
-   The timeline is backed by `sessions` (and a lineage/agent-run grain); the
-   scatter is backed by `turns`. Mosaic has historically assumed one source-of-truth
-   table with every clause built against it. If that still holds, either the schema
-   denormalizes or the clauses carry semi-join predicates — both have costs.
-2. **Is the timeline expressible in SQL at all?** Mosaic filtering *is* SQL
-   construction, so this is a data-representation problem before it is a
-   rendering problem: fork edges, lanes, and agent spans have to be columns
-   something can `WHERE` against, not shapes computed in a render pass.
+The timeline is backed by `sessions` (plus lineage/agent-run grains); the scatter
+is backed by `turns`. The working assumption was that Mosaic requires one
+source-of-truth table with every clause built against it. **That is false for
+mosaic-core 0.28.1**, verified by reading the source and by running two clients
+over two tables against the real Parquet.
 
-Both are under investigation; §7 tracks the outcome.
+There is no table-identity check anywhere in the coordination path.
+`SelectionResolver.skip()` is the only client-aware logic in predicate
+resolution, and it checks clause *ownership*, not tables. The proof is what
+happens when you don't think about it: a `sessions.firstTs` brush reaching a
+`turns` client emits
+
+```sql
+SELECT "model", count(*) FROM "turns" WHERE ("firstTs" BETWEEN … )
+-- Binder Error: Referenced column "firstTs" not found in FROM clause!
+```
+
+The predicate crosses the table boundary **completely unmodified**. Mosaic is
+table-blind — permissive and unforgiving at once. Nobody rewrites the predicate
+for you, so phrase it over the shared key:
+
+```sql
+WHERE "sessionId" IN (SELECT "sessionId" FROM "sessions" WHERE "firstTs" BETWEEN … )
+```
+
+which matched hand-written JOIN ground truth exactly, in both directions, with
+cache and query consolidation enabled.
+
+**Schema consequence: none.** All five grains already carry `sessionId`. Keep
+them normalized. A wide table both explodes 29k×47 *and* destroys session-level
+aggregates — `count(*)` would count turns, not sessions, losing the honest 104.
+A pre-joined VIEW has the identical grain problem. Two details: `sessionId` must
+never be NULL (`IN (SELECT …)` drops NULLs silently), and a `toolCalls` client
+that wants filtering by individual *turns* rather than whole sessions should key
+on `messageId` — so the join key is a per-pair choice, not a hardcoded constant.
+
+**The one thing that must be switched off: pre-aggregation.** `PreAggregator` is
+the single table-coupled component in mosaic-core. It materialises its view as
+`Query.from(clientQuery._from).select({...activeClauseColumns})` — the *client's*
+table with the *clause's* columns — so a cross-table clause makes it emit SQL
+naming a column that table does not have. The client receives a hard
+`Binder Error`, not a degraded path.
+
+A per-client `filterStable = false` also makes preagg decline, and where it is
+genuinely true it is the better fix: `SessionTimelineClient` declares it because
+its group keys *are* the surviving sessions, so lanes must repack under a
+narrower brush. But it is not a general substitute. An aggregate that really is
+stable under filtering — the token-class and attribution panels, grouped by
+model / project / skill — would have to misstate its own semantics purely to
+dodge the optimizer. The breakage has nothing to do with stability.
+
+> **Rule.** If any cross-table clause can reach a filter-stable aggregate client,
+> disable pre-aggregation Coordinator-wide. Only rely on per-client
+> `filterStable` when *every* cross-table consumer is independently unstable and
+> says so honestly.
+
+We have such clients, so `new Coordinator(undefined, { preagg: { enabled: false } })`
+is the standing configuration in `store.ts`. One related trap: never attach
+`meta` to a semi-join clause — its absence is what makes preagg decline cleanly,
+and adding `meta: { type: 'point' }` re-engages it and reproduces the error.
+
+Not benchmarked: behaviour under a live drag. With preagg off every brush tick is
+a full re-scan; 29k/35k rows is small and DuckDB executes this as a semi-join,
+but expect to need throttling.
+
+#### 5.6.4 Is the timeline expressible in SQL at all?
+
+Mosaic filtering *is* SQL construction, so this is a data-representation problem
+before it is a rendering one: fork edges, lanes and agent spans must be columns
+something can `WHERE` against, not shapes computed during a render pass. §7
+tracks the outcome; the lineage grains (`forkEdges` / `lineages` / `agentRuns`)
+are the answer taking shape.
 
 ## 6. Open questions
 
