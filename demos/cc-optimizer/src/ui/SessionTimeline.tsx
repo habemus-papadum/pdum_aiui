@@ -472,7 +472,11 @@ export function SessionTimeline() {
                   {h().bar.id.slice(0, 8)}
                 </div>
                 <div class="cco-tl-tip-row">
-                  {when(h().bar.t0)} → {when(h().bar.t1)}
+                  {/* A ghost has t1 === t0 (no billed turn to end at), so an
+                      arrow would read as a span from a time to itself — i.e.
+                      as work that took no time, rather than work that never
+                      happened. Show the fork instant alone. */}
+                  {h().bar.ghost ? when(h().bar.t0) : `${when(h().bar.t0)} → ${when(h().bar.t1)}`}
                 </div>
                 <div class="cco-tl-tip-row">
                   {h().bar.ghost
