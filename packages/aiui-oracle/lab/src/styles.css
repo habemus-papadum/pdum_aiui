@@ -1,0 +1,144 @@
+/* Oracle Lab — a small dark bench. Lab-only styling; the widgets carry bare
+ * `aiui-oracle-*` classes so an integrating app themes them itself. */
+
+:root {
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #14161a;
+  color: #e6e2d8;
+}
+
+.lab {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+.lab h1 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lab-panel {
+  background: #1c1f25;
+  border: 1px solid #2a2e36;
+  border-radius: 10px;
+  padding: 1rem;
+  margin: 0.8rem 0;
+}
+
+.lab-controls {
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.lab-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #9aa0ab;
+}
+
+.lab-wave {
+  width: 100%;
+  height: 180px;
+  display: block;
+}
+
+/* the control widget */
+.aiui-oracle-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.aiui-oracle-control button {
+  background: #262b33;
+  color: #e6e2d8;
+  border: 1px solid #3a404b;
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+}
+
+.aiui-oracle-control button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.aiui-oracle-key {
+  background: #101216;
+  color: #e6e2d8;
+  border: 1px solid #3a404b;
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  min-width: 16rem;
+}
+
+.aiui-oracle-reply {
+  flex-basis: 100%;
+  min-height: 1.2em;
+  font-style: italic;
+  color: #b9c0cc;
+}
+
+.aiui-oracle-usage {
+  font-size: 0.75rem;
+  color: #7d8590;
+}
+
+.aiui-oracle-blocked {
+  color: #e8b84a;
+  font-size: 0.8rem;
+}
+
+/* the ledger pane */
+.lab-ledger {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lab-ledger-entry {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.lab-ledger-kind {
+  color: #7d8590;
+  min-width: 6.5rem;
+  text-align: right;
+}
+
+.lab-ledger-entry[data-kind="error"] .lab-ledger-kind {
+  color: #e06c75;
+}
+
+.lab-ledger-entry[data-kind="tool-call"] .lab-ledger-kind,
+.lab-ledger-entry[data-kind="tool-result"] .lab-ledger-kind {
+  color: #61afef;
+}
+
+.lab-ledger-entry[data-kind="heard"] .lab-ledger-kind,
+.lab-ledger-entry[data-kind="said"] .lab-ledger-kind {
+  color: #98c379;
+}
+
+.lab-ledger-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}

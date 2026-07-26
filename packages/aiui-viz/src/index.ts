@@ -38,7 +38,14 @@ export type {
   RegisteredAction,
 } from "./control";
 // control.ts — the control surface: controls (writable frontier) + actions (verbs).
-export { action, actionByName, control, controlByName, controlSurface } from "./control";
+export {
+  action,
+  actionByName,
+  control,
+  controlByName,
+  controlSurface,
+  subscribeControlSurface,
+} from "./control";
 // control-widgets.tsx — the earned control-bound widgets (slider, toggle).
 export { ControlSlider, ControlToggle } from "./control-widgets";
 export { Dropdown } from "./dropdown";

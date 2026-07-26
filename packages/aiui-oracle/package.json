@@ -1,0 +1,60 @@
+{
+  "name": "@habemus-papadum/aiui-oracle",
+  "version": "0.12.0+dev",
+  "description": "The oracle — a realtime voice control surface for aiui apps (WebRTC to OpenAI Realtime, the app's cells as tools).",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-oracle"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./widgets": "./src/widgets/index.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./widgets": {
+        "types": "./dist/widgets/index.d.ts",
+        "import": "./dist/widgets.js",
+        "default": "./dist/widgets.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p lab/tsconfig.json",
+    "test": "vitest run",
+    "lab": "vite --config lab/vite.config.ts"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
+    "jsdom": "^29.0.0",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "3.0.0-next.5"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15"
+  }
+}
