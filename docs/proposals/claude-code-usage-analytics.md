@@ -1,8 +1,9 @@
 # Claude Code usage analytics — schema research and ingestion design
 
 **Status:** built. Two-stage ingestion (§6.2), eight analytic grains, the
-session graph and the session cost drill-down (§10) are live in
-`demos/cc-slurp` + `demos/cc-optimizer`; session replay is what remains (§7).
+session graph, and both drill-downs — per-turn cost (§10) and the transcript
+replay (§11) — are live in `demos/cc-slurp` + `demos/cc-optimizer`. What remains
+is the turn scatter and wiring the timeline's brush into the other panels (§7).
 **Spike:** [`exploration/cc-usage/`](../../exploration/cc-usage/) (runnable, zero deps).
 **Generated schema reference:** [`exploration/cc-usage/SCHEMA.md`](../../exploration/cc-usage/SCHEMA.md).
 **Date:** 2026-07-26. Corpus: 965 files (485 JSONL) · 168,171 records · 677 MB ·
@@ -1008,11 +1009,11 @@ override in `pnpm-workspace.yaml` collapses them.
    series with compactions ruled through both, and the proxy validated against
    `compactMetadata.preTokens` (38 of 40 within ±20%).
 
+9. ~~Session replay.~~ §11 — the transcript itself, multi-agent aware, scoped
+   to the whole session or one hour inside it.
+
 **Next.**
 
-9. **Session replay.** The finest level: multi-agent aware, scoped to a whole
-   session or one hour inside it. This is the reason stage 1 keeps message
-   bodies the analytic grains throw away.
 10. **The turn scatter** (§5.6.2) — stock vgplot, 10–20k points.
 11. **Cross-filter the existing panels.** Static reads today; the `Selection` is
     wired but nothing publishes into it — the timeline's brush is the natural
@@ -1224,3 +1225,81 @@ one case where the series means "tokens transmitted" rather than "context size".
 **Main-loop turns only.** A subagent carries its own context; mixing them in
 draws a sawtooth that says nothing about the session's own growth.
 
+
+## 11. Session replay — the transcript itself
+
+The finest drill-down, and the one that justifies stage 1: the analytic grains
+drop message bodies, and this is the view that needs them.
+
+### 11.1 The grain is partitioned per session, because the content does not fit
+
+| block | count | content |
+| --- | ---: | ---: |
+| `tool_result` | 39,138 | **112 MB** |
+| `tool_use` | 39,138 | ~30 MB |
+| `text` (assistant) | 13,036 | 8 MB |
+| typed prompt | 2,226 | 7 MB |
+| `thinking` | 20,784 | **0** — see §11.3 |
+| `image` | 152 | — |
+
+Even truncated that is tens of megabytes, against a page that already loads
+5.5 MB of grains before it draws anything. But a replay is *always* scoped to
+one session, so it ships as `replay/<sessionId>.parquet` and the viewer fetches
+one file: **109 files, 113,569 blocks, 29.5 MB total**, biggest session 3.2 MB.
+Behind a `--replay` flag, since it roughly doubles the run's peak memory.
+
+Prompts and assistant text survive in full — 15 MB together, and they are the
+story. Tool inputs and results are truncated hard; every truncated row records
+its true length so the view says "showing 800 of 48,000 characters" instead of
+implying completeness. `file-history-snapshot` and `attachment` are dropped
+entirely: editor state rather than conversation, and 24% of one session's bytes.
+
+### 11.2 Keyed by FILE, not by attributed session
+
+The one place the fork attribution of §1.6 is deliberately *not* applied.
+Replaying session X means reading X's transcript top to bottom, inherited prefix
+included, because that is what the session looked like from the inside. Billing
+needs the attribution; reading does not, and applying it here would delete the
+first half of every fork.
+
+A visible consequence: the drill-down reports 3 compactions for the corpus's
+priciest session and the replay shows 4. Both are right — one was inherited from
+the parent, so it is in the file but attributed elsewhere.
+
+### 11.3 Thinking text does not exist
+
+**20,784 `thinking` blocks, every one with `thinking: ""`.** Only the encrypted
+`signature` is retained:
+
+```json
+{ "type": "thinking", "thinking": "", "signature": "CAIS1wgKmAEIDxgCKkBkJ2SX…" }
+```
+
+So a replay can show *that* the model thought, and price it through output
+tokens, but never what it thought. The view says "thought (content not
+retained)" rather than rendering nothing — an absent block would let the reader
+assume the model went straight from prompt to tool call.
+
+### 11.4 Order by time, not by file position
+
+`seq` follows the ingest walk, which yields a session's `subagents/` directory
+**before** the session file beside it. Ordering a transcript by it opens on an
+agent's work rather than on the conversation that launched it — which is what
+the first build did. Every block carries a real timestamp (0 nulls of 113,569),
+so time is a total order; `seq` breaks same-millisecond ties.
+
+### 11.5 What the view does with it
+
+**Tool calls are folded.** A `tool_use` and its `tool_result` are separate
+blocks, often far apart, and read literally each says half a thing. Matched by
+`toolUseId` and never by adjacency — a backgrounded tool answers thousands of
+blocks later. Exact on the real corpus: 2,932 calls, 2,932 results, 2,932
+distinct ids on each side.
+
+**Hours are the navigation unit** — the user's own framing. One cell per
+*active* hour, height by volume, red where something failed. Empty hours are
+omitted: the session is 92% idle and a strip of 307 blanks is not navigation.
+
+**Agents are a filter over one interleaved stream**, not a separate view, so
+"what was going on" includes the excursions. One session launched 78 agents, so
+the chip list says "+71 more" rather than stopping silently at 8.

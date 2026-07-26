@@ -33,7 +33,7 @@ const MAX_ROWS = 400;
 const AGENT_CHIPS = 8;
 
 const hhmm = (t: number) => new Date(t).toISOString().slice(11, 16);
-const dayHour = (t: number) => new Date(t).toISOString().slice(0, 13).replace("T", " ") + ":00";
+const dayHour = (t: number) => `${new Date(t).toISOString().slice(0, 13).replace("T", " ")}:00`;
 const ms = (n: number | null) =>
   n === null ? "" : n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${n}ms`;
 
