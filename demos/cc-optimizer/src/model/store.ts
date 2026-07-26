@@ -194,6 +194,21 @@ const collapsedProjects = appScope.durableSignal<ReadonlySet<string>>(
 /** Sessions whose agents are broken out onto their own sub-lanes. */
 const expandedSessions = appScope.durableSignal<ReadonlySet<string>>("expandedSessions", new Set());
 
+/**
+ * The session the drill-down is looking at, or null for "pick the priciest".
+ *
+ * Deliberately NOT the crossfilter. The drill-down answers a different kind of
+ * question from the panels above it — "what happened inside this one session"
+ * rather than "how do these dimensions co-vary" — and routing it through the
+ * shared Selection would make every other panel collapse to one session the
+ * moment you looked at one. One explicit pointer, no filtering.
+ */
+const focusedSession = appScope.durableSignal<string | null>("focusedSession", null);
+
+export function focusSession(sessionId: string | null): void {
+  focusedSession.set(sessionId);
+}
+
 const clientBox = appScope.durable<{ timeline: SessionTimelineClient | null }>("clients", () => ({
   timeline: null,
 }));
@@ -424,4 +439,5 @@ export const store = {
   hasTable: (name: string): boolean => loaded.has(name),
   collapsedProjects: collapsedProjects.get,
   expandedSessions: expandedSessions.get,
+  focusedSession: focusedSession.get,
 };

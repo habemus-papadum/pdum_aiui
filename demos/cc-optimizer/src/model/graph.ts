@@ -20,13 +20,24 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
-import { appScope, brushTime, idleGapMinutes, setAllCollapsed, store } from "./store";
+import type { DetailCompaction, DetailTurn } from "./session-detail";
+import { appScope, brushTime, focusSession, idleGapMinutes, setAllCollapsed, store } from "./store";
 
 /** One row of the "where did the money go" breakdown. */
 export interface CostSlice {
   key: string;
   cost: number;
   turns: number;
+}
+
+/** Everything the drill-down draws for one session. */
+export interface SessionDetailData {
+  sessionId: string;
+  name: string;
+  nameWas: string | null;
+  project: string;
+  turns: DetailTurn[];
+  compactions: DetailCompaction[];
 }
 
 /** A session as the timeline view needs it: wall-clock vs work. */
@@ -192,6 +203,76 @@ export const graph = hotCellGraph(
     ),
 
     /**
+     * The drill-down: every turn of ONE session, plus its compactions.
+     *
+     * Keyed on `focusedSession`, so choosing a session in the table re-runs
+     * exactly this cell and nothing else. A null focus resolves to the priciest
+     * session — the panel is more useful with something in it than with a
+     * "choose a session" placeholder, and the priciest is the one worth looking
+     * at first.
+     *
+     * Deliberately unfiltered by the crossfilter: see `focusedSession` in
+     * store.ts. This answers "what happened inside this session", not "how do
+     * these dimensions co-vary".
+     */
+    sessionDetail: cell(
+      () => ({ sessionId: store.focusedSession() }),
+      async ({ sessionId }): Promise<SessionDetailData | null> => {
+        const id =
+          sessionId ??
+          (
+            await store.sql<{ sessionId: string }>(`
+              SELECT sessionId FROM turns
+              GROUP BY 1 ORDER BY sum(costTotal) DESC LIMIT 1
+            `)
+          )[0]?.sessionId;
+        if (!id) return null;
+        const quoted = `'${id.replace(/'/g, "''")}'`;
+
+        const [turns, compactions, meta] = await Promise.all([
+          store.sql<DetailTurn>(`
+            SELECT epoch_ms(ts)      AS ts,
+                   costCacheRead, costCacheCreate, costOutput, costInput, costTotal,
+                   cacheReadTokens + cacheCreate5m + cacheCreate1h + inputTokens
+                                     AS contextTokens,
+                   outputTokens, model, context, agentType, hadFallback
+            FROM turns WHERE sessionId = ${quoted}
+            ORDER BY ts
+          `),
+          // The payload is deliberately untyped JSON in the grain, so the
+          // fields come out through json_extract rather than as columns.
+          store
+            .sql<DetailCompaction>(`
+              SELECT epoch_ms(ts)                                        AS ts,
+                     CAST(json_extract(payload, '$.preTokens')  AS BIGINT) AS preTokens,
+                     CAST(json_extract(payload, '$.postTokens') AS BIGINT) AS postTokens,
+                     json_extract_string(payload, '$.trigger')             AS trigger
+              FROM events WHERE kind = 'compaction' AND sessionId = ${quoted}
+              ORDER BY ts
+            `)
+            .catch(() => [] as DetailCompaction[]),
+          store
+            .sql<{ name: string; project: string; nameWas: string | null }>(`
+              SELECT name, project,
+                     CASE WHEN nameChanged THEN nameFirst END AS nameWas
+              FROM sessions WHERE sessionId = ${quoted} LIMIT 1
+            `)
+            .catch(() => []),
+        ]);
+
+        return {
+          sessionId: id,
+          name: meta[0]?.name ?? id.slice(0, 8),
+          nameWas: meta[0]?.nameWas ?? null,
+          project: meta[0]?.project ?? "",
+          turns,
+          compactions,
+        };
+      },
+      { scope: appScope },
+    ),
+
+    /**
      * Images: estimated tokens, deduplicated by content hash. `tool_result` and
      * `toolUseResult` are two views of one payload, so a naive count of rows
      * would nearly double the real image count.
@@ -296,6 +377,44 @@ export const brush = action({
     // The coordinator batches; let it settle so the returned stats are real.
     await new Promise((r) => setTimeout(r, 120));
     return { brushed: [Math.min(from, to), Math.max(from, to)], selection: store.selectionStats() };
+  },
+});
+
+/**
+ * Point the drill-down at a session.
+ *
+ * Takes a name as readily as an id, because a name is what the reader has in
+ * front of them — the timeline and the sessions table both show one. Matching
+ * is case-insensitive and accepts a prefix of the id, so `inspect march` and
+ * `inspect de93c3a5` both land.
+ */
+export const inspectSession = action({
+  scope: appScope,
+  name: "inspect",
+  description:
+    "Focus the session drill-down on one session, by name or session id (a prefix is enough). " +
+    "Pass nothing to fall back to the priciest session.",
+  params: { session: "A session name or (a prefix of) its id." },
+  run: async (args?: Record<string, unknown>) => {
+    const q = String(args?.session ?? "").trim();
+    if (!q) {
+      focusSession(null);
+      return { focused: null, note: "reset to the priciest session" };
+    }
+    const like = q.toLowerCase().replace(/'/g, "''");
+    const hits = await store.sql<{ sessionId: string; name: string; cost: number }>(`
+      SELECT s.sessionId, s.name, sum(t.costTotal) AS cost
+      FROM sessions s JOIN turns t USING (sessionId)
+      WHERE lower(s.name) = '${like}' OR lower(s.sessionId) LIKE '${like}%'
+         OR lower(s.name) LIKE '%${like}%'
+      GROUP BY 1, 2 ORDER BY cost DESC LIMIT 5
+    `);
+    if (hits.length === 0) return { error: `no session matches ${q}` };
+    focusSession(hits[0].sessionId);
+    return {
+      focused: { sessionId: hits[0].sessionId, name: hits[0].name, cost: hits[0].cost },
+      ...(hits.length > 1 ? { alsoMatched: hits.slice(1).map((h) => h.name) } : {}),
+    };
   },
 });
 

@@ -5,7 +5,8 @@
  * because the cache-read share reframes everything after it; then the session
  * graph (the shape of the work — what ran when, beside what); then daily spend
  * (where and when); then attribution (what caused it); then sessions (was it
- * time well spent).
+ * time well spent); and last the drill-down into one of them, which is where
+ * the aggregates stop and a single session's turn-by-turn history starts.
  *
  * All but one panel are pure readers of the cell graph. The session graph is
  * the exception and deliberately so: it is a Mosaic client on the shared
@@ -18,6 +19,7 @@ import { graph } from "../model/graph";
 import { store } from "../model/store";
 import { Attribution } from "./Attribution";
 import { DailySpend } from "./DailySpend";
+import { SessionDetail } from "./SessionDetail";
 import { Sessions } from "./Sessions";
 import { SessionTimeline } from "./SessionTimeline";
 import { Summary } from "./Summary";
@@ -77,6 +79,7 @@ export function App() {
             <DailySpend />
             <Attribution />
             <Sessions />
+            <SessionDetail />
           </>
         )}
       </CellView>

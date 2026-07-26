@@ -535,3 +535,76 @@
   border-radius: 2px;
   display: inline-block;
 }
+
+/* --- the drill-down: one session, turn by turn ----------------------------- */
+
+/* The sessions table is the way into the drill-down, so its rows have to look
+   like they do something. */
+.cco-sess-row {
+  cursor: pointer;
+}
+
+.cco-sess-row:hover {
+  background: #1f232b;
+}
+
+.cco-sess-row-on {
+  background: #202634;
+  box-shadow: inset 2px 0 0 var(--cco-accent);
+}
+
+.cco-detail-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 2px 0 6px;
+}
+
+.cco-detail-name {
+  color: var(--cco-fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cco-detail-was {
+  color: var(--cco-fg-dim);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.cco-detail-meta {
+  color: var(--cco-fg-dim);
+  font-size: 11px;
+}
+
+.cco-detail-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  color: var(--cco-fg-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
+}
+
+.cco-detail-stats b {
+  color: var(--cco-fg);
+  font-weight: 600;
+}
+
+.cco-btn {
+  background: transparent;
+  border: 1px solid var(--cco-rule);
+  border-radius: 4px;
+  color: var(--cco-fg-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.cco-btn:hover {
+  border-color: var(--cco-accent);
+  color: var(--cco-fg);
+}

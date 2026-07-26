@@ -15,7 +15,7 @@
 import { CellView, ControlSlider } from "@habemus-papadum/aiui-viz";
 import { For, Show } from "solid-js";
 import { graph, type SessionShape } from "../model/graph";
-import { idleGapMinutes } from "../model/store";
+import { focusSession, idleGapMinutes, store } from "../model/store";
 
 const usd = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
 const dur = (s: number) =>
@@ -30,8 +30,16 @@ function SessionRow(props: { s: SessionShape; maxSpan: number }) {
   // The active bar is drawn as a fraction OF THE SPAN BAR, not of the axis, so
   // the eye reads duty cycle directly as "how much of this bar is filled".
   const activeFrac = () => Math.min(1, props.s.dutyCycle);
+  const focused = () => store.focusedSession() === props.s.sessionId;
   return (
-    <tr>
+    // The row IS the way into the drill-down below. A whole clickable row
+    // rather than a link in one cell: the target is the session, and every
+    // cell of the row is describing it.
+    <tr
+      class={`cco-sess-row${focused() ? " cco-sess-row-on" : ""}`}
+      onClick={() => focusSession(props.s.sessionId)}
+      title="show this session's turns below"
+    >
       <td class="cco-sess-name">
         <span class="cco-sess-project">{props.s.project}</span>
         <Show when={props.s.name}>
