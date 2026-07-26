@@ -315,24 +315,46 @@ export function SessionTimeline() {
 
             {/* edges under the bars: they are relationships, not marks */}
             <g fill="none">
+              {/* Two independent dash codes, and they must not be confused.
+                  `1 3` (dotted) means cc-slurp could not PROVE which session
+                  was the copy — a claim about certainty. `4 3` (dashed) means
+                  the two endpoints are far apart in time — a claim about the
+                  data. A proven fork across a long gap is solid-but-faded;
+                  only an unproven one is dotted. */}
               <For each={layout().edges}>
                 {(e) => (
                   <path
                     d={e.path}
                     stroke={e.kind === "fork" ? "#c2872f" : "var(--cco-fg-dim)"}
                     stroke-width={e.kind === "fork" ? 1.4 : 1}
-                    stroke-dasharray={e.long ? "3 3" : undefined}
-                    opacity={e.kind === "fork" ? (e.long ? 0.55 : 0.85) : 0.35}
+                    stroke-dasharray={
+                      e.kind !== "fork"
+                        ? undefined
+                        : e.ambiguous
+                          ? "1 3"
+                          : e.long
+                            ? "4 3"
+                            : undefined
+                    }
+                    opacity={e.kind === "fork" ? (e.long ? 0.6 : 0.9) : 0.35}
                   />
                 )}
               </For>
-              {/* a diamond at each fork point: even when the curve is too long to
-                trace, the moment that was branched stays visible */}
+              {/* A marker at each departure point, so the branched moment stays
+                  visible even when the curve is too long to trace. A copy left
+                  the middle of the parent's life (diamond); a continuation left
+                  its end (a bar, like a terminator). */}
               <For each={layout().edges.filter((e) => e.kind === "fork")}>
                 {(e) => (
                   <path
-                    d={`M${e.x1},${e.y1 - 3.2}L${e.x1 + 3.2},${e.y1}L${e.x1},${e.y1 + 3.2}L${e.x1 - 3.2},${e.y1}Z`}
-                    fill="#c2872f"
+                    d={
+                      e.forkKind === "continuation"
+                        ? `M${e.x1 - 0.8},${e.y1 - 3.4}L${e.x1 + 0.8},${e.y1 - 3.4}L${e.x1 + 0.8},${e.y1 + 3.4}L${e.x1 - 0.8},${e.y1 + 3.4}Z`
+                        : `M${e.x1},${e.y1 - 3.2}L${e.x1 + 3.2},${e.y1}L${e.x1},${e.y1 + 3.2}L${e.x1 - 3.2},${e.y1}Z`
+                    }
+                    fill={e.ambiguous ? "none" : "#c2872f"}
+                    stroke="#c2872f"
+                    stroke-width={e.ambiguous ? 1 : 0}
                     opacity={0.9}
                   />
                 )}
@@ -470,7 +492,9 @@ export function SessionTimeline() {
           <span class="cco-tl-swatch" style={{ background: AGENT_COLOR["workflow-agent"] }} />
           <span class="cco-tl-legend-label">workflow agent</span>
           <span class="cco-tl-fork-key" />
-          <span class="cco-tl-legend-label">fork (dashed = distant in time)</span>
+          <span class="cco-tl-legend-label">fork</span>
+          <span class="cco-tl-fork-key cco-tl-fork-amb" />
+          <span class="cco-tl-legend-label">unproven direction</span>
         </span>
       </div>
     </section>

@@ -441,3 +441,69 @@ describe("hitTest", () => {
     expect(hitTest(layout, 5, 5000, 0)).toBeNull();
   });
 });
+
+describe("fork edge provenance", () => {
+  const scale = () => timeScale([T0, T0 + 10 * DAY], [0, 1000]);
+  const pair = (forkTs: number, extra: Partial<import("./timeline").ForkEdgeInput> = {}) =>
+    layoutTimeline(
+      {
+        spans: [sess("parent", "p", 0, 20), sess("child", "p", 40, 50)],
+        forks: [{ childId: "child", parentId: "parent", forkTs, ...extra }],
+      },
+      { scale: scale(), expandedProjects: new Set(["p"]) },
+    );
+
+  it("leaves a copy at the fork point, inside the parent's life", () => {
+    const forkTs = T0 + 6 * H; // parent runs 0..20h, so this is mid-bar
+    const l = pair(forkTs, { kind: "copy" });
+    const edge = l.edges.find((e) => e.kind === "fork");
+    const parent = l.bars.find((b) => b.id === "parent");
+    expect(edge?.x1).toBeCloseTo(scale().toPx(forkTs), 5);
+    expect(edge?.x1).toBeLessThan((parent?.x ?? 0) + (parent?.width ?? 0));
+    expect(edge?.forkKind).toBe("copy");
+  });
+
+  it("leaves a continuation at the parent's end, never inside its bar", () => {
+    // Nothing was inherited on disk, so a departure drawn mid-bar would show a
+    // branch that never happened.
+    const forkTs = T0 + 6 * H;
+    const l = pair(forkTs, { kind: "continuation" });
+    const edge = l.edges.find((e) => e.kind === "fork");
+    const parent = l.bars.find((b) => b.id === "parent");
+    expect(edge?.x1).toBeGreaterThanOrEqual((parent?.x ?? 0) + (parent?.width ?? 0));
+  });
+
+  it("carries the unproven-direction flag through to the edge", () => {
+    expect(pair(T0 + 6 * H, { ambiguous: true }).edges[0].ambiguous).toBe(true);
+    expect(pair(T0 + 6 * H).edges[0].ambiguous).toBe(false);
+  });
+
+  it("keeps ambiguity and long-gap independent", () => {
+    // Two different claims — "we could not prove the direction" and "these are
+    // far apart in time" — so one must never imply the other.
+    const near = pair(T0 + 19 * H, { ambiguous: true });
+    expect(near.edges[0].ambiguous).toBe(true);
+    expect(near.edges[0].long).toBe(false);
+    const far = pair(T0 + 1 * H, { ambiguous: false });
+    expect(far.edges[0].ambiguous).toBe(false);
+    expect(far.edges[0].long).toBe(true);
+  });
+
+  it("routes a multi-level fork chain, each hop independently", () => {
+    // The real pdum_rfb shape: a -> b -> c, three sessions, two edges.
+    const l = layoutTimeline(
+      {
+        spans: [sess("a", "p", 0, 10), sess("b", "p", 8, 20), sess("c", "p", 18, 30)],
+        forks: [
+          { childId: "b", parentId: "a", forkTs: T0 + 5 * H, kind: "copy" },
+          { childId: "c", parentId: "b", forkTs: T0 + 15 * H, kind: "copy" },
+        ],
+      },
+      { scale: scale(), expandedProjects: new Set(["p"]) },
+    );
+    const forks = l.edges.filter((e) => e.kind === "fork");
+    expect(forks).toHaveLength(2);
+    // Each hop connects two DIFFERENT lanes — a, b and c all overlap.
+    for (const e of forks) expect(e.y1).not.toBe(e.y2);
+  });
+});

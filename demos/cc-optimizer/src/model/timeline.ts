@@ -100,9 +100,20 @@ export interface TimelineSpan {
 }
 
 /**
+ * What the child took from the parent (cc-slurp's `forkEdges.kind`).
+ *
+ * `copy` is a true fork: the inherited prefix was physically copied into the
+ * child's file, so the branch leaves the MIDDLE of the parent's life.
+ * `continuation` is a session continued into a fresh file — the link is real
+ * but nothing was inherited on disk, so the branch leaves the parent's END.
+ * The two are drawn from different anchors for exactly that reason.
+ */
+export type ForkKind = "copy" | "continuation";
+
+/**
  * A session→session fork: `childId` was started from `parentId`'s transcript.
  *
- * `forkTs` is the timestamp of the last turn the child inherited — i.e. the
+ * `forkTs` is the timestamp of the last record the child inherited — i.e. the
  * point in the PARENT's timeline the fork was taken from, which is generally
  * nowhere near the parent's last event and may precede the child's own start by
  * days. Anchoring the edge there rather than at `parent.lastTs` is what makes a
@@ -112,6 +123,14 @@ export interface ForkEdgeInput {
   childId: string;
   parentId: string;
   forkTs: number;
+  kind?: ForkKind;
+  /**
+   * The direction of this edge rested on file creation order, not on content —
+   * cc-slurp could not prove which of the two sessions was the copy. Drawn
+   * differently from a proven edge on purpose: a widget that renders a guess
+   * identically to a fact is lying.
+   */
+  ambiguous?: boolean;
 }
 
 export interface TimelineInput {
@@ -310,6 +329,10 @@ export interface LayoutEdge {
    * tracks are neighbours.
    */
   long: boolean;
+  /** Fork edges only: cc-slurp could not prove the direction. */
+  ambiguous: boolean;
+  /** Fork edges only. */
+  forkKind?: ForkKind;
 }
 
 export interface LayoutGroup {
@@ -655,8 +678,18 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
   for (const f of input.forks) {
     const child = barById.get(f.childId);
     const parentRow = sessionRow.get(f.parentId);
-    if (!child || !parentRow) continue; // an endpoint was filtered away
-    const x1 = scale.toPx(f.forkTs);
+    const parentBar = barById.get(f.parentId);
+    if (!child || !parentRow || !parentBar) continue; // an endpoint was filtered away
+
+    // A `copy` branched out of the middle of the parent's life, so it leaves at
+    // the fork point. A `continuation` inherited nothing on disk — the parent
+    // simply carried on in a new file — so it leaves at the parent's end. Using
+    // one anchor for both would put a continuation's departure inside the
+    // parent's bar, reading as a branch that never happened.
+    const x1 =
+      f.kind === "continuation"
+        ? Math.max(scale.toPx(f.forkTs), parentBar.x + parentBar.width)
+        : scale.toPx(f.forkTs);
     const y1 = parentRow.y + parentRow.height / 2;
     const x2 = child.x;
     const y2 = child.y + child.height / 2;
@@ -671,6 +704,8 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
       y2,
       gapPx,
       long: gapPx > o.longGapPx,
+      ambiguous: f.ambiguous === true,
+      forkKind: f.kind,
     });
   }
 
@@ -693,6 +728,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
       y2,
       gapPx: 0,
       long: false,
+      ambiguous: false,
     });
   }
 
