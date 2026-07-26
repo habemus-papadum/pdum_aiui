@@ -95,6 +95,36 @@ export function SessionTimeline() {
   const [width, setWidth] = createSignal(1200);
   const [hover, setHover] = createSignal<Hover | null>(null);
 
+  /**
+   * The name for a bar, or undefined when it has none.
+   *
+   * A fork's label is deliberately NOT shown: it is built from the opening
+   * words of a prompt (`where-is-the`), so presenting it as a name would
+   * attribute to the user a choice they never made.
+   */
+  const named = (bar: LayoutBar) => {
+    const hit = store.timeline().names.get(bar.id);
+    return hit && hit.kind !== "fork" ? hit : undefined;
+  };
+
+  /**
+   * The line under the name: what kind of thing this is and where it lives.
+   *
+   * Built by filtering rather than by branching because the parts are
+   * independently absent — a named agent carries no `agentType`, and an agent's
+   * id prefix says nothing once it has a name (`achannel` from
+   * `achannel-explorer-…`). A session's id stays, since it is the handle you
+   * would resume with.
+   */
+  const qualifiers = (bar: LayoutBar): string[] => {
+    const isSession = bar.kind === "session";
+    return [
+      bar.project,
+      isSession ? "session" : (bar.agentType ?? bar.context),
+      isSession || !named(bar) ? bar.id.slice(0, 8) : null,
+    ].filter((p): p is string => !!p);
+  };
+
   let svg!: SVGSVGElement;
   let ro: ResizeObserver | undefined;
   let raf = 0;
@@ -460,17 +490,28 @@ export function SessionTimeline() {
               <div
                 class="cco-tl-tip"
                 style={{
-                  left: `${Math.min(h().x + 14, width() - 240)}px`,
+                  // 300 ≈ the widest the tip gets once a 34ch name is in it;
+                  // clamping to a narrower guess pushed long titles off-screen.
+                  left: `${Math.max(0, Math.min(h().x + 14, width() - 300))}px`,
                   top: `${h().y + 16}px`,
                 }}
               >
+                {/* The name leads, because it is the thing the user recognises;
+                    the project and id stay as the qualifiers beneath it. An
+                    unnamed session falls back to the project, which is what the
+                    head showed before names existed. */}
                 <div class="cco-tl-tip-head">
-                  {h().bar.kind === "session" ? h().bar.project : (h().bar.agentType ?? "agent")}
+                  {named(h().bar)?.name ??
+                    (h().bar.kind === "session" ? h().bar.project : (h().bar.agentType ?? "agent"))}
                 </div>
-                <div class="cco-tl-tip-row">
-                  {h().bar.kind === "session" ? "session" : h().bar.context} ·{" "}
-                  {h().bar.id.slice(0, 8)}
-                </div>
+                <Show when={named(h().bar)?.was}>
+                  {(was) => (
+                    /* A rename is worth surfacing rather than silently adopting:
+                       anything written down before it still uses the old name. */
+                    <div class="cco-tl-tip-row cco-tl-tip-was">was “{was()}”</div>
+                  )}
+                </Show>
+                <div class="cco-tl-tip-row">{qualifiers(h().bar).join(" · ")}</div>
                 <div class="cco-tl-tip-row">
                   {/* A ghost has t1 === t0 (no billed turn to end at), so an
                       arrow would read as a span from a time to itself — i.e.

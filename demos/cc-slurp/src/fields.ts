@@ -202,6 +202,94 @@ export const agentIdentity = (rec: Rec): { agentId?: string; agentType?: string 
     : undefined;
 
 // ---------------------------------------------------------------------------
+// names — what a human calls a session or an agent
+// ---------------------------------------------------------------------------
+
+/**
+ * The three record types that name a session.
+ *
+ * They are unlike every other record here: `{type, <the name>, sessionId}` and
+ * nothing else — **no timestamp and no uuid**. So they cannot be ordered by
+ * time, only by position in the file, and they cannot be deduped by uuid. What
+ * makes them tractable anyway is that their `sessionId` is always the session
+ * of the file they sit in (verified: 12,496 of 12,496 records, zero
+ * exceptions), and they appear only in main session files — never in a
+ * subagent's or a workflow agent's.
+ *
+ * They are also re-emitted constantly rather than written once on change: one
+ * file carries 444 of them for 3 distinct values. So the useful reduction is
+ * "first and last DISTINCT value", not a count.
+ */
+export const NAME_RECORD_TYPES = ["ai-title", "custom-title", "agent-name"] as const;
+
+/**
+ * The name a record assigns to its session, if it assigns one.
+ *
+ * `custom-title` and `agent-name` are folded together into one `explicit` kind:
+ * they are written as a pair and never disagreed in this corpus (0 of 33
+ * sessions carrying both), but `agent-name` appears on 4 sessions that have no
+ * `custom-title`, so taking either alone would lose those.
+ */
+export function sessionNameOf(rec: Rec): { kind: "explicit" | "ai"; value: string } | undefined {
+  const type = str(rec?.type);
+  if (type === "ai-title") {
+    const v = str(rec.aiTitle);
+    return v ? { kind: "ai", value: v } : undefined;
+  }
+  if (type === "custom-title" || type === "agent-name") {
+    const v = str(type === "custom-title" ? rec.customTitle : rec.agentName);
+    return v ? { kind: "explicit", value: v } : undefined;
+  }
+  return undefined;
+}
+
+/** `a<name>-<16 hex>` — an agent whose id encodes a label. */
+const NAMED_AGENT = /^a(.+)-[0-9a-f]{16}$/;
+
+/**
+ * An agent's name, read straight out of its id.
+ *
+ * The id is `a<name>-<16 hex>` when there was a name and `a<hex>` when there
+ * was not, so no join to the launching `Task` call is needed — which matters,
+ * because that call lives in the parent session's records and may have been
+ * compacted away. Verified against every agent id in the corpus: 368 of 368
+ * classified, no residue.
+ *
+ * Two different things produce a name, and `agentType` is what separates them:
+ *
+ *  - `kind: "named"` — an explicit `name` argument to `Task`. These carry NO
+ *    `attributionAgent`, so the name is the only label they have.
+ *  - `kind: "fork"` — a fork, labelled from the opening words of the prompt
+ *    (`where-is-the`, `can-you-change`). Reads like a name but is not one, and
+ *    a UI should not present it as though the user chose it.
+ */
+export function agentNameOf(
+  agentId: string | undefined,
+  agentType?: string,
+): { name?: string; kind: "named" | "fork" | "anonymous" } {
+  const m = agentId ? NAMED_AGENT.exec(agentId) : null;
+  if (!m) return { kind: "anonymous" };
+  return { name: m[1], kind: agentType === "fork" ? "fork" : "named" };
+}
+
+/**
+ * Which of a session's names to show, and what it came from.
+ *
+ * Coverage is the reason this is a ladder rather than one field: explicit names
+ * reach 34% of sessions, `aiTitle` 75%, `slug` 23%, and only the session id is
+ * always there. Falling back is what keeps every row labelled.
+ */
+export function resolveSessionName(
+  n: { explicit?: string; ai?: string; slug?: string },
+  sessionId: string,
+): { name: string; kind: "explicit" | "ai" | "slug" | "id" } {
+  if (n.explicit) return { name: n.explicit, kind: "explicit" };
+  if (n.ai) return { name: n.ai, kind: "ai" };
+  if (n.slug) return { name: n.slug, kind: "slug" };
+  return { name: sessionId.slice(0, 8), kind: "id" };
+}
+
+// ---------------------------------------------------------------------------
 // usage / tokens — the billing surface
 // ---------------------------------------------------------------------------
 

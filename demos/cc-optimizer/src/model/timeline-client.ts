@@ -30,10 +30,26 @@ import { clauseInterval, MosaicClient, type Selection } from "@uwdata/mosaic-cor
 import { count, Query, sql, sum } from "@uwdata/mosaic-sql";
 import type { ForkEdgeInput, TimelineSpan } from "./timeline";
 
+/**
+ * What something is called, and what it used to be called.
+ *
+ * `was` is present only when the name actually changed, so a tooltip can say
+ * so without carrying a redundant field on every row.
+ */
+export interface TimelineName {
+  name: string;
+  /** `explicit` | `ai` | `slug` | `id` for a session; `named` | `fork` for an agent. */
+  kind: string;
+  /** The first name this thing had, when it later changed. */
+  was?: string;
+}
+
 /** What one query delivers: everything the layout needs, already parsed. */
 export interface TimelineData {
   spans: TimelineSpan[];
   forks: ForkEdgeInput[];
+  /** sessionId → name, and agentId → name. Static across brushes. */
+  names: Map<string, TimelineName>;
 }
 
 /** The unfiltered extent of the corpus, resolved once in `prepare`. */
@@ -81,6 +97,9 @@ export class SessionTimelineClient extends MosaicClient {
   private forks: ForkEdgeInput[] = [];
   /** Zero-turn fork nodes, also resolved once; see `loadGhostSessions`. */
   private ghosts: TimelineSpan[] = [];
+  /** sessionId → name and agentId → name, resolved once; see `loadNames`. */
+  private readonly names = new Map<string, TimelineName>();
+  private readonly agentNames = new Map<string, TimelineName>();
 
   constructor(opts: TimelineClientOptions) {
     super(opts.filterBy);
@@ -117,6 +136,7 @@ export class SessionTimelineClient extends MosaicClient {
   async prepare(): Promise<void> {
     if (this.opts.hasForkEdges) await this.loadForkEdges();
     await this.loadGhostSessions();
+    await this.loadNames();
     if (!this.opts.onDomain) return;
     const q = Query.from("turns").select({
       t0: sql`epoch_ms(min(ts))`,
@@ -124,6 +144,49 @@ export class SessionTimelineClient extends MosaicClient {
     });
     const result = rows(await this.coordinator?.query(q))[0];
     if (result) this.opts.onDomain({ t0: n(result.t0), t1: n(result.t1) });
+  }
+
+  /**
+   * What each session and agent is called, read once from the grains.
+   *
+   * Names belong in `prepare` and not in the filtered query for the same reason
+   * the fork edges do: a brush cannot change what something is called, and the
+   * filtered query aggregates `turns`, which carries no name column. Two small
+   * lookups (109 sessions, 368 agents here) beat widening every grouped query.
+   *
+   * `nameFirst` rides along so the tooltip can show a rename rather than
+   * silently adopting the new label — the old one is what any note written
+   * before the rename refers to.
+   */
+  private async loadNames(): Promise<void> {
+    const put = async (
+      table: string,
+      idCol: string,
+      into: Map<string, TimelineName>,
+      extra: Record<string, string> = {},
+    ) => {
+      const q = Query.from(table).select({ id: idCol, name: "name", ...extra });
+      for (const row of rows(await this.coordinator?.query(q))) {
+        const id = s(row.id);
+        const name = s(row.name);
+        if (!id || !name) continue;
+        const first = s(row.nameFirst);
+        into.set(id, {
+          name,
+          kind: s(row.nameKind) ?? "",
+          ...(first && first !== name ? { was: first } : {}),
+        });
+      }
+    };
+    try {
+      await put("sessions", "sessionId", this.names, {
+        nameKind: "nameKind",
+        nameFirst: "nameFirst",
+      });
+      await put("agentRuns", "agentId", this.agentNames, { nameKind: "nameKind" });
+    } catch {
+      /* a dataset predating the name columns simply has no names to show */
+    }
   }
 
   /**
@@ -361,7 +424,11 @@ export class SessionTimelineClient extends MosaicClient {
         context: s(row.context) ?? "main",
       });
     }
-    this.opts.onResult({ spans, forks });
+    // One lookup for both kinds: ids are disjoint (a session id is a uuid, an
+    // agent id starts with `a`), and the view holds a bar without knowing which
+    // map it came from.
+    const names = new Map([...this.names, ...this.agentNames]);
+    this.opts.onResult({ spans, forks, names });
     return this;
   }
 

@@ -31,6 +31,7 @@
 import type { Rec } from "./fields.ts";
 import {
   agentIdentity,
+  agentNameOf,
   arr,
   billableUnits,
   billingKey,
@@ -45,6 +46,8 @@ import {
   num,
   obj,
   preferForBilling,
+  resolveSessionName,
+  sessionNameOf,
   splitModel,
   str,
   thinkingChars,
@@ -161,6 +164,34 @@ export interface SessionRow {
   project: string;
   cwd?: string;
   slug?: string;
+  // --- names (proposal §9) ---
+  /**
+   * What to call this session: the newest explicit name, else the newest
+   * AI-generated title, else the slug, else the id's first 8 characters.
+   * Always populated — the fallbacks exist so no row is unlabelled.
+   */
+  name: string;
+  /** Which rung of that ladder `name` came from. */
+  nameKind: "explicit" | "ai" | "slug" | "id";
+  /**
+   * The same ladder applied to each source's FIRST value instead of its last.
+   *
+   * A session can be renamed, and re-ingesting weeks later would then relabel
+   * rows that an earlier analysis referred to by name. This field is the one
+   * that does not move: it is what a note written last month still matches.
+   * (The stable *key* is `sessionId`; these are both labels.)
+   */
+  nameFirst: string;
+  /** True when any name source changed within the session — `name != nameFirst`. */
+  nameChanged: boolean;
+  /** Newest `/rename` (or agent name); absent if never named explicitly. */
+  customTitle?: string;
+  /** First explicit name, when it later changed. */
+  customTitleFirst?: string;
+  /** Newest system-generated descriptive title. */
+  aiTitle?: string;
+  /** First AI title, when it later changed. */
+  aiTitleFirst?: string;
   // --- lineage: a file is not a session (proposal §1.6) ---
   /** The session this one was forked/resumed from. Absent on a root. */
   parentSessionId?: string;
@@ -310,6 +341,17 @@ export interface AgentRunRow {
   agentId: string;
   /** `general-purpose`, `Explore`, `fork`, … Absent on pre-`attributionAgent` builds. */
   agentType?: string;
+  /**
+   * The label carried in the agent id. Read from the id itself rather than
+   * joined to the launching `Task` call, which may have been compacted away.
+   */
+  name?: string;
+  /**
+   * `named` (an explicit `Task` name — these carry no `agentType`, so the name
+   * is their only label), `fork` (a label built from the prompt's opening
+   * words, which reads like a name but was not chosen), or `anonymous`.
+   */
+  nameKind: "named" | "fork" | "anonymous";
   /** The session that launched it. */
   parentSessionId: string;
   lineageId: string;
@@ -525,6 +567,18 @@ export class Normalizer {
       slug?: string;
       cwd?: string;
       projectSlug: string;
+      /**
+       * First and last value of each name source, in file order.
+       *
+       * File order is the ONLY order available — naming records carry no
+       * timestamp — and it is what both ingest paths already guarantee within a
+       * file. `first` is set once and `last` overwritten, so no sort is needed
+       * and the whole thing costs one comparison per naming record.
+       */
+      explicitFirst?: string;
+      explicitLast?: string;
+      aiFirst?: string;
+      aiLast?: string;
     }
   >();
   /**
@@ -716,6 +770,22 @@ export class Normalizer {
       return;
     }
 
+    const named = sessionNameOf(rec);
+    if (named) {
+      // These records carry no timestamp, so first/last mean *file order*.
+      // Their `sessionId` is always their own file's, so no origin machinery
+      // applies — and they only ever appear in main session files.
+      const m = this.metaFor(str(rec.sessionId) ?? file.fileSessionId, file);
+      if (named.kind === "explicit") {
+        m.explicitFirst ??= named.value;
+        m.explicitLast = named.value;
+      } else {
+        m.aiFirst ??= named.value;
+        m.aiLast = named.value;
+      }
+      return;
+    }
+
     if (type === "fork-context-ref") {
       const ref = forkContextRef(rec);
       // The subagent's own declaration of the context it inherited. Copied along
@@ -732,6 +802,58 @@ export class Normalizer {
     if (type === "relocated" || type === "fork-context-ref" || type === "pr-link") {
       this.queueEvent(rec, file, type, rec);
     }
+  }
+
+  /**
+   * The name columns for one session.
+   *
+   * `nameFirst` re-runs the same precedence over the first values rather than
+   * reusing whichever source won for `name`: a session can acquire an explicit
+   * name partway through, and in that case its stable label is the AI title it
+   * had before, not an explicit name that did not exist yet.
+   */
+  private namesFor(
+    sessionId: string,
+    meta:
+      | {
+          explicitFirst?: string;
+          explicitLast?: string;
+          aiFirst?: string;
+          aiLast?: string;
+          slug?: string;
+        }
+      | undefined,
+  ): Pick<
+    SessionRow,
+    | "name"
+    | "nameKind"
+    | "nameFirst"
+    | "nameChanged"
+    | "customTitle"
+    | "customTitleFirst"
+    | "aiTitle"
+    | "aiTitleFirst"
+  > {
+    const last = resolveSessionName(
+      { explicit: meta?.explicitLast, ai: meta?.aiLast, slug: meta?.slug },
+      sessionId,
+    );
+    const first = resolveSessionName(
+      { explicit: meta?.explicitFirst, ai: meta?.aiFirst, slug: meta?.slug },
+      sessionId,
+    );
+    return {
+      name: last.name,
+      nameKind: last.kind,
+      nameFirst: first.name,
+      nameChanged: last.name !== first.name,
+      customTitle: meta?.explicitLast,
+      // Only worth a column when it actually differs; otherwise it is noise.
+      customTitleFirst:
+        meta?.explicitFirst !== meta?.explicitLast ? meta?.explicitFirst : undefined,
+      aiTitle: meta?.aiLast,
+      aiTitleFirst: meta?.aiFirst !== meta?.aiLast ? meta?.aiFirst : undefined,
+    };
   }
 
   private queueEvent(rec: Rec, file: TranscriptFile, kind: string, payload: unknown): void {
@@ -1124,9 +1246,12 @@ export class Normalizer {
       // (subagent records keep the original `sessionId`), so it beats the
       // directory the file happens to sit in.
       const parentSessionId = list[0].sessionId || (meta?.dirSessionId ?? "");
+      const label = agentNameOf(agentId, agentType);
       rows.push({
         agentId,
         agentType,
+        name: label.name,
+        nameKind: label.kind,
         parentSessionId,
         lineageId: lineageOf(parentSessionId),
         projectSlug: meta?.projectSlug ?? list[0].projectSlug,
@@ -1253,6 +1378,7 @@ export class Normalizer {
         ),
         cwd: meta?.cwd ?? list[0]?.cwd,
         slug: meta?.slug,
+        ...this.namesFor(sessionId, meta),
         parentSessionId: edge?.parentSessionId,
         lineageId: lineage.lineageId.get(sessionId) ?? sessionId,
         depth: lineage.depth.get(sessionId) ?? 0,

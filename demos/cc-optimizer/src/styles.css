@@ -473,6 +473,19 @@
 .cco .cco-tl-tip-head {
   color: var(--cco-fg);
   font-weight: 600;
+  /* An AI title is a sentence ("Debug .zprofile SSH keychain issue in VS
+     Code"), not a slug, so the head needs a bound the other rows do not. */
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cco-tl-tip-was {
+  color: var(--cco-fg-faint, var(--cco-fg-dim));
+  font-style: italic;
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cco .cco-tl-tip-row {
   font-variant-numeric: tabular-nums;

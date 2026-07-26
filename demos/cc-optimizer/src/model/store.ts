@@ -170,7 +170,11 @@ const engineBox = appScope.durable<{ engine: Engine | null; loading: Promise<voi
 // hot edit must not leave a disconnected client behind holding a stale callback.
 // Everything they produce lands in a signal, and from there it is pure Solid.
 
-const timeline = appScope.durableSignal<TimelineData>("timeline", { spans: [], forks: [] });
+const timeline = appScope.durableSignal<TimelineData>("timeline", {
+  spans: [],
+  forks: [],
+  names: new Map(),
+});
 const timelineDomain = appScope.durableSignal<TimelineDomain | null>("timelineDomain", null);
 const timelineBusy = appScope.durableSignal<boolean>("timelineBusy", false);
 const selectionStats = appScope.durableSignal<SelectionStats | null>("selectionStats", null);

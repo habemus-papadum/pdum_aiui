@@ -5,7 +5,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { billableUnits, billingKey, isInherited, originSession, splitModel } from "./fields.ts";
+import {
+  agentNameOf,
+  billableUnits,
+  billingKey,
+  isInherited,
+  originSession,
+  splitModel,
+} from "./fields.ts";
 import { estimateImageTokens, imageDims, pngDims } from "./images.ts";
 import { checkInvariants, Normalizer } from "./normalize.ts";
 import type { PriceTable } from "./pricing.ts";
@@ -380,6 +387,124 @@ describe("sessions", () => {
     expect(s.spanSeconds).toBeCloseTo(5 * 3600 + 60);
     expect(s.activeSeconds).toBeCloseTo(60); // the 5h gap is idle, not work
     expect(s.dutyCycle).toBeLessThan(0.01);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// names — see fields.ts on why these records are unlike every other kind
+// ---------------------------------------------------------------------------
+
+/** Naming records carry no timestamp and no uuid; file order is all there is. */
+const nameRec = (type: string, field: string, value: string, session = "s1") => ({
+  type,
+  [field]: value,
+  sessionId: session,
+});
+
+describe("session names", () => {
+  const turn = (f: TranscriptFile, n: Normalizer, i = 1) =>
+    n.add(
+      assistantRec({ id: `m${i}`, uuid: `u${i}`, session: "s1", ts: "2026-07-01T00:00:00.000Z" }),
+      f,
+    );
+
+  it("takes the last value as the name and the first as the stable one", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const f = FILE("s1");
+    turn(f, n);
+    // Re-emitted many times, as the real format does — 444 records for 3 values
+    // in the widest case. The reduction must be on distinct values, not count.
+    n.add(nameRec("custom-title", "customTitle", "dsl-fork-point"), f);
+    n.add(nameRec("custom-title", "customTitle", "dsl-fork-point"), f);
+    n.add(nameRec("custom-title", "customTitle", "march"), f);
+
+    const [s] = n.finish().sessions;
+    expect(s.name).toBe("march"); // what the user calls it now
+    expect(s.nameFirst).toBe("dsl-fork-point"); // what a note from last month says
+    expect(s.nameChanged).toBe(true);
+    expect(s.customTitleFirst).toBe("dsl-fork-point");
+  });
+
+  it("omits the -First columns when nothing changed", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const f = FILE("s1");
+    turn(f, n);
+    n.add(nameRec("custom-title", "customTitle", "pencil"), f);
+    n.add(nameRec("custom-title", "customTitle", "pencil"), f);
+
+    const [s] = n.finish().sessions;
+    expect(s.name).toBe("pencil");
+    expect(s.nameChanged).toBe(false);
+    expect(s.customTitleFirst).toBeUndefined();
+  });
+
+  it("prefers an explicit name over an AI title over the slug", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const f = FILE("s1");
+    n.add(
+      {
+        ...assistantRec({ id: "m1", uuid: "u1", session: "s1", ts: "2026-07-01T00:00:00.000Z" }),
+        slug: "abstract-wiggling-aho",
+      },
+      f,
+    );
+    n.add(nameRec("ai-title", "aiTitle", "Review ink package iPad backend"), f);
+    expect(n.finish().sessions[0].name).toBe("Review ink package iPad backend");
+
+    const m = new Normalizer({ pricing: PRICES });
+    const g = FILE("s1");
+    turn(g, m);
+    m.add(nameRec("ai-title", "aiTitle", "Review ink package iPad backend"), g);
+    m.add(nameRec("custom-title", "customTitle", "pencil"), g);
+    const [s] = m.finish().sessions;
+    expect(s.name).toBe("pencil");
+    expect(s.nameKind).toBe("explicit");
+    expect(s.aiTitle).toBe("Review ink package iPad backend"); // still available
+  });
+
+  it("treats agent-name as an alias of custom-title", () => {
+    // The two are written as a pair and never disagreed across the corpus, but
+    // 4 sessions carry agent-name alone — taking custom-title only loses them.
+    const n = new Normalizer({ pricing: PRICES });
+    const f = FILE("s1");
+    turn(f, n);
+    n.add(nameRec("agent-name", "agentName", "rfb-publish"), f);
+    const [s] = n.finish().sessions;
+    expect(s.name).toBe("rfb-publish");
+    expect(s.nameKind).toBe("explicit");
+  });
+
+  it("always labels a session, falling back to the id", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const f = FILE("abcdef12-3456-7890-abcd-ef1234567890");
+    n.add(
+      assistantRec({
+        id: "m1",
+        uuid: "u1",
+        session: "abcdef12-3456-7890-abcd-ef1234567890",
+        ts: "2026-07-01T00:00:00.000Z",
+      }),
+      f,
+    );
+    const [s] = n.finish().sessions;
+    expect(s.name).toBe("abcdef12");
+    expect(s.nameKind).toBe("id");
+    expect(s.nameChanged).toBe(false);
+  });
+
+  it("reads an agent's name out of its id, and marks a fork as not-a-name", () => {
+    expect(agentNameOf("abar-channel-71b78c98767d31e4")).toEqual({
+      name: "bar-channel",
+      kind: "named",
+    });
+    // A fork's label is built from the prompt's opening words; it reads like a
+    // name but the user did not choose it, so a UI must not present it as one.
+    expect(agentNameOf("awhere-is-the-1da17ee1af061e5a", "fork")).toEqual({
+      name: "where-is-the",
+      kind: "fork",
+    });
+    expect(agentNameOf("a18d7d29490a075c2")).toEqual({ kind: "anonymous" });
+    expect(agentNameOf(undefined)).toEqual({ kind: "anonymous" });
   });
 });
 

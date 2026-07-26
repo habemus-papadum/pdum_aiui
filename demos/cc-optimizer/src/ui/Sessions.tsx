@@ -34,8 +34,15 @@ function SessionRow(props: { s: SessionShape; maxSpan: number }) {
     <tr>
       <td class="cco-sess-name">
         <span class="cco-sess-project">{props.s.project}</span>
-        <Show when={props.s.slug}>
-          <span class="cco-sess-slug">{props.s.slug}</span>
+        <Show when={props.s.name}>
+          {/* `title` carries the rename, since the cell is too narrow for it
+              and an AI title already fills the width. */}
+          <span
+            class="cco-sess-slug"
+            title={props.s.nameWas ? `was “${props.s.nameWas}”` : undefined}
+          >
+            {props.s.name}
+          </span>
         </Show>
       </td>
       <td class="cco-sess-bar">

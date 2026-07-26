@@ -33,7 +33,10 @@ export interface CostSlice {
 export interface SessionShape {
   sessionId: string;
   project: string;
-  slug: string | null;
+  /** The resolved display name; see cc-slurp's `resolveSessionName`. */
+  name: string | null;
+  /** The name this session started with, when it was later renamed. */
+  nameWas: string | null;
   firstTs: number;
   lastTs: number;
   spanSeconds: number;
@@ -161,7 +164,8 @@ export const graph = hotCellGraph(
           )
           SELECT g.sessionId,
                  any_value(s.project)                              AS project,
-                 any_value(s.slug)                                 AS slug,
+                 any_value(s.name)                                 AS name,
+                 any_value(CASE WHEN s.nameChanged THEN s.nameFirst END) AS nameWas,
                  min(g.t)                                          AS firstTs,
                  max(g.t)                                          AS lastTs,
                  (max(g.t) - min(g.t)) / 1000.0                    AS spanSeconds,
