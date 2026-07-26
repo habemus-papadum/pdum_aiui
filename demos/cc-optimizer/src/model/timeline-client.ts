@@ -177,8 +177,16 @@ export class SessionTimelineClient extends MosaicClient {
   }
 
   /**
-   * The session files that produced no billed turn — forks taken and never
-   * continued.
+   * The session files that produced no billed turn AND have a parent — forks
+   * taken and never continued.
+   *
+   * `parentSessionId IS NOT NULL` is the load-bearing half of that predicate.
+   * Five session files in this corpus billed nothing, but only ONE is a fork;
+   * the other four are parentless false starts — sessions that opened, ran for
+   * two seconds to three minutes, and never billed a turn. Drawing those on a
+   * *fork* graph labels them as something they are not, and one of them
+   * manufactures an entire project row for a ten-second false start. They are
+   * real data and worth a view; this is not that view.
    *
    * They cannot come from the main query, which aggregates `turns`: a session
    * with no turns has no rows there to aggregate. Without them the fork forest
@@ -205,7 +213,9 @@ export class SessionTimelineClient extends MosaicClient {
         t0: sql`epoch_ms(${startTs})`,
         t1: sql`epoch_ms(greatest(coalesce(lastNativeTs, lastTs, ${startTs}), ${startTs}))`,
       })
-      .where(sql`coalesce(nTurnsNative, 0) = 0 AND ${startTs} IS NOT NULL`);
+      .where(
+        sql`coalesce(nTurnsNative, 0) = 0 AND parentSessionId IS NOT NULL AND ${startTs} IS NOT NULL`,
+      );
     try {
       for (const row of rows(await this.coordinator?.query(q))) {
         const id = s(row.id);

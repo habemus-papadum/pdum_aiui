@@ -549,22 +549,102 @@ describe("ghost sessions (forks that produced no turns)", () => {
     expect(without.edges.filter((e) => e.kind === "fork")).toHaveLength(0);
   });
 
+  // A ghost needs an edge to a real session to be drawn at all — see the
+  // transitive-visibility suite below — so these two fixtures carry one.
+  const attached = {
+    spans: [sess("real", "p", 0, 10), ghost("empty", "p", 5, 5)],
+    forks: [{ childId: "empty", parentId: "real", forkTs: T0 + 5 * H }],
+  };
+
   it("marks the bar as a ghost so the view can draw it hollow", () => {
-    const l = layoutTimeline(
-      { spans: [sess("real", "p", 0, 10), ghost("empty", "p", 5, 5)], forks: [] },
-      { scale: gscale(), expandedProjects: new Set(["p"]) },
-    );
+    const l = layoutTimeline(attached, {
+      scale: gscale(),
+      expandedProjects: new Set(["p"]),
+    });
     expect(l.bars.find((b) => b.id === "empty")?.ghost).toBe(true);
     expect(l.bars.find((b) => b.id === "real")?.ghost).toBe(false);
   });
 
   it("gives a zero-duration ghost its own lane rather than overlaying a session", () => {
+    const l = layoutTimeline(attached, {
+      scale: gscale(),
+      expandedProjects: new Set(["p"]),
+    });
+    const empty = l.bars.find((b) => b.id === "empty");
+    expect(empty).toBeDefined();
+    expect(empty?.rowIndex).not.toBe(l.bars.find((b) => b.id === "real")?.rowIndex);
+  });
+});
+
+describe("ghost visibility is transitive, not exempt", () => {
+  const tscale = () => timeScale([T0, T0 + 10 * DAY], [0, 1000]);
+  const gh = (id: string, project: string, h0: number): TimelineSpan => ({
+    ...sess(id, project, h0, h0),
+    nTurns: 0,
+    cost: 0,
+    ghost: true,
+  });
+  // The real pdum_dsl family: root -> ghost -> {childA, childB}.
+  const root = sess("root", "p", 0, 20);
+  const middle = gh("middle", "p", 20);
+  const childA = sess("childA", "p", 21, 30);
+  const childB = sess("childB", "p", 22, 40);
+  const forks = [
+    { childId: "middle", parentId: "root", forkTs: T0 + 18 * H },
+    { childId: "childA", parentId: "middle", forkTs: T0 + 20 * H },
+    { childId: "childB", parentId: "middle", forkTs: T0 + 20 * H },
+  ];
+  const lay = (spans: TimelineSpan[]) =>
+    layoutTimeline({ spans, forks }, { scale: tscale(), expandedProjects: new Set(["p"]) });
+
+  it("draws the ghost and every edge when the family is in the filtered set", () => {
+    const l = lay([root, middle, childA, childB]);
+    expect(l.bars.some((b) => b.id === "middle")).toBe(true);
+    expect(l.edges.filter((e) => e.kind === "fork")).toHaveLength(3);
+  });
+
+  it("drops the ghost and its edges when the filter excludes the whole family", () => {
+    // A filter that selects no turn-bearing session in this family leaves the
+    // ghost with nothing to anchor: a hollow mark alone would read as "something
+    // happened here" when the filter says nothing did.
+    const l = lay([middle]);
+    expect(l.bars.some((b) => b.id === "middle")).toBe(false);
+    expect(l.edges).toHaveLength(0);
+    expect(l.groups).toHaveLength(0); // and it must not manufacture a project row
+  });
+
+  it("keeps a ghost whose only surviving neighbour is its parent", () => {
+    // Deliberately NOT requiring a neighbour on both sides. "You forked here and
+    // it went nowhere" is the case this feature exists for, and an abandoned
+    // fork usually has no children — demanding one would hide exactly it.
+    const l = lay([root, middle]);
+    expect(l.bars.some((b) => b.id === "middle")).toBe(true);
+    expect(l.edges.filter((e) => e.kind === "fork")).toHaveLength(1);
+  });
+
+  it("keeps a ghost whose only surviving neighbours are its children", () => {
+    const l = lay([middle, childA, childB]);
+    expect(l.bars.some((b) => b.id === "middle")).toBe(true);
+    expect(l.edges.filter((e) => e.kind === "fork")).toHaveLength(2);
+  });
+
+  it("never lets one ghost justify another", () => {
+    // Connectivity is measured against REAL sessions only, in one pass, so a
+    // chain of ghosts cannot bootstrap itself into existence.
+    const g1 = gh("g1", "p", 5);
+    const g2 = gh("g2", "p", 6);
     const l = layoutTimeline(
-      { spans: [sess("real", "p", 0, 10), ghost("empty", "p", 5, 5)], forks: [] },
-      { scale: gscale(), expandedProjects: new Set(["p"]) },
+      { spans: [g1, g2], forks: [{ childId: "g2", parentId: "g1", forkTs: T0 + 5 * H }] },
+      { scale: tscale(), expandedProjects: new Set(["p"]) },
     );
-    expect(l.bars.find((b) => b.id === "empty")?.rowIndex).not.toBe(
-      l.bars.find((b) => b.id === "real")?.rowIndex,
-    );
+    expect(l.bars).toHaveLength(0);
+    expect(l.groups).toHaveLength(0);
+  });
+
+  it("costs no lane when pruned", () => {
+    // Pruning happens before packing, so a dropped ghost cannot widen a project.
+    const withGhost = lay([root, middle, childA, childB]);
+    const noFamily = lay([root, childA, childB]);
+    expect(noFamily.rows.length).toBeLessThanOrEqual(withGhost.rows.length);
   });
 });

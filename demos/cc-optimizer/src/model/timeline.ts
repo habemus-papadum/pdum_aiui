@@ -447,6 +447,45 @@ function projectOrder(spans: readonly TimelineSpan[]): string[] {
 }
 
 /**
+ * Which ghosts have earned a lane under the current filter.
+ *
+ * A ghost is not filterable the way a real session is — it has no turns, so no
+ * turn-grain predicate can select it, and it must not respond to the client's
+ * own brush either, or it would behave differently from the real bars beside
+ * it (a crossfilter excludes a client from its own clause, so the real bars
+ * hold still). Its relevance is therefore **transitive**: a ghost is worth
+ * drawing exactly when it connects to something that is being drawn.
+ *
+ * Computed against the set of *real* sessions that survived the filter, in one
+ * pass, so there is no circularity — a ghost never justifies another ghost.
+ * This inherits whatever semantics produced that set, which is why it behaves
+ * correctly under a project filter (the ghost's family is gone, so it goes) and
+ * under the client's own brush (the real set is unchanged, so it stays).
+ *
+ * A ghost whose only surviving neighbour is its PARENT is kept, deliberately.
+ * It reads as "you forked here and it went nowhere", which is the case the
+ * whole feature exists for — an abandoned fork usually has no children, so
+ * requiring one on each side would hide precisely the thing worth seeing.
+ */
+function connectedGhosts(
+  spans: readonly TimelineSpan[],
+  forks: readonly ForkEdgeInput[],
+): Set<string> {
+  const real = new Set<string>();
+  const ghosts = new Set<string>();
+  for (const s of spans) {
+    if (s.kind !== "session") continue;
+    (s.ghost ? ghosts : real).add(s.id);
+  }
+  const keep = new Set<string>();
+  for (const f of forks) {
+    if (ghosts.has(f.childId) && real.has(f.parentId)) keep.add(f.childId);
+    if (ghosts.has(f.parentId) && real.has(f.childId)) keep.add(f.parentId);
+  }
+  return keep;
+}
+
+/**
  * The whole geometry, in one pass.
  *
  * Sessions are packed per project; agents are packed per *expanded* session and
@@ -454,6 +493,9 @@ function projectOrder(spans: readonly TimelineSpan[]): string[] {
  * last, once every bar has a y — and are dropped when either endpoint is absent
  * from the filtered set, because an edge to a session that is not on screen is
  * a line pointing at nothing.
+ *
+ * Ghosts are pruned before packing (see `connectedGhosts`) so a ghost with no
+ * surviving family costs neither a lane nor a project row.
  */
 export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): TimelineLayout {
   const o = { ...DEFAULTS, ...opts };
@@ -465,8 +507,13 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
   const pack = (spans: readonly Packable[]) =>
     packLanes(drawnExtent(spans, minExtentMs), laneGapMs);
 
-  const sessions = input.spans.filter((s) => s.kind === "session");
-  const agents = input.spans.filter((s) => s.kind === "agent");
+  // Prune disconnected ghosts first: a project whose only member is an orphan
+  // ghost must not get a row, so this has to happen before `projectOrder`.
+  const keepGhost = connectedGhosts(input.spans, input.forks);
+  const spans = input.spans.filter((s) => !s.ghost || keepGhost.has(s.id));
+
+  const sessions = spans.filter((s) => s.kind === "session");
+  const agents = spans.filter((s) => s.kind === "agent");
 
   const agentsBySession = new Map<string, TimelineSpan[]>();
   for (const a of agents) {
@@ -492,7 +539,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
   };
 
   let y = 0;
-  for (const project of projectOrder(input.spans)) {
+  for (const project of projectOrder(spans)) {
     const mine = sessions.filter((s) => s.project === project);
     if (mine.length === 0) continue;
     const collapsed = !expandedProjects.has(project);
