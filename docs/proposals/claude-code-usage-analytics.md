@@ -56,7 +56,7 @@ vocabulary that exists in one file kind.
 
 These are encoded in [`fields.mjs`](../../exploration/cc-usage/fields.mjs) as a
 `TRAPS` list, with a `detect` recipe each, so they are testable rather than
-folklore. The four that matter:
+folklore. The five that matter:
 
 **(a) One API response is written as many records.** Claude Code emits **one
 record per content block**, each carrying a byte-identical `message.usage`. A
@@ -94,9 +94,11 @@ extra.
 prices differently from `claude-opus-4-8`. `<synthetic>` is a locally generated
 message that never hit the API and must never be priced.
 
-Lesser ones, all encoded: `sessionId` and `session_id` coexist on the same
-records (a rename in flight, 100% vs 78%); sidechain files can replay a parent's
-`message.id` under a different `requestId` (ccusage
+**(e) Forking and resuming copy the transcript prefix.** This is the fifth
+critical trap and it gets its own section — see §1.6.
+
+Lesser ones, all encoded: sidechain files can replay a parent's `message.id`
+under a different `requestId` (ccusage
 [#913](https://github.com/ccusage/ccusage/issues/913)) — not present in this
 corpus but cheap to defend against; `toolUseResult` is polymorphic
 (`object | array | string`).
@@ -148,6 +150,128 @@ Session shape is the other half. Sampling five large sessions:
 
 Exactly the "ran for five calendar days, actually seven hours" shape asked for,
 and it falls straight out of timestamps with a gap threshold.
+
+### 1.6 Forking and resuming — a file is not a session
+
+**Forking copies; it does not reference.** When a session is resumed or forked,
+Claude Code writes the inherited transcript prefix into the *new* session's
+`.jsonl`, preserving `uuid`, `timestamp`, `requestId` and `message.id` byte for
+byte. Worked example:
+
+```
+402656ea….jsonl   7,968 messages   2026-07-13T12:37 … 2026-07-16T11:49
+52e85b58….jsonl   4,303 messages   2026-07-15T10:09 … 2026-07-16T19:28
+                  └─ its first 1,333 messages ARE 402656ea's last 1,333
+```
+
+Corpus-wide: **1,615 of 29,108 distinct `message.id`s (5.5%) appear in more than
+one file**, in chains up to four deep (`de93c3a5 → 70486150 → 63baa90e →
+4df4dbb9`). Subagent directories are copied along with the parent, so the same
+`agent-<id>.jsonl` can exist under two session dirs.
+
+So a per-file or per-session sum double-counts. **Only a global dedup is
+correct** — which the proposed `billingKey()` grouping already is, but it must be
+stated as a requirement rather than left as an accident of implementation.
+
+**The provenance field.** On a copied record:
+
+| field | on the original | on the copy |
+| --- | --- | --- |
+| `sessionId` | `402656ea…` | **`52e85b58…`** — rewritten to the containing session |
+| `session_id` | `402656ea…` | **`402656ea…`** — preserved: the originating session |
+| `uuid` · `timestamp` · `requestId` · `message.id` | | identical |
+| `slug` | `steady-watching-stream` | `null` |
+
+This **corrects §1.3 of the first draft**, which called the `sessionId` /
+`session_id` pair "a naming migration in flight". It is not a migration — it is
+the fork-provenance mechanism, and it is exactly the field needed to avoid
+double-counting. `session_id !== sessionId` ⟺ this record was inherited.
+
+**It is only available from Claude Code 2.1.199.** The version split is clean:
+absent on every record from `2.1.186`–`2.1.198`, present on ~100% from `2.1.199`
+onward. That is the entire explanation for its ~78% presence. Consequently the
+marker catches 911 of the 1,615 cross-file duplicates (56%); the other 704 are
+all pre-2.1.199 records that lack the field. Content-based dedup remains
+mandatory as the floor; `session_id` is what makes *attribution* correct on top
+of it.
+
+**Design consequence — the `sessions` grain changes.** A session file is not a
+session. Model a **lineage**:
+
+- Dedup globally by `billingKey()`. Every billed turn exists exactly once.
+- Attribute each turn to `originSession(rec)` (`session_id` when present, else
+  the earliest-timestamped file containing it). A turn is paid for once, by the
+  session that produced it.
+- `sessions` therefore carries `sessionId`, `originSessionId`, `lineageId`, and
+  both `nativeCost` (turns it produced) and `inheritedContextTurns` (turns it
+  merely carried). **Only `nativeCost` sums** — summing it over all sessions
+  reproduces the corpus total exactly, which is the invariant to test.
+- Fork edges are derivable: file *B* inherits from *A* when *B* contains records
+  whose `session_id` is *A*. For pre-2.1.199 sessions, fall back to
+  "*B*'s head uuids equal *A*'s tail uuids". Both are cheap; the lineage graph is
+  worth materialising once rather than re-deriving per query.
+
+This is also the honest answer to "did forking cost me anything?" — forking is
+**free** in tokens for the inherited prefix at fork time, but every subsequent
+turn in the fork re-reads that inherited context as cache-read tokens. Given
+cache reads are 62.7% of spend (§1.5), the real cost of a fork is the ongoing
+context weight it carries forward, and that is directly measurable per lineage.
+
+### 1.7 Mid-session model changes are fully visible
+
+Two distinct mechanisms, both detectable:
+
+**Explicit switches** — `message.model` simply varies across turns within one
+session file. This is common in the corpus, not exceptional:
+
+```
+claude-fable-5  → claude-opus-4-8    @ 2026-07-13T20:40:26Z
+claude-opus-4-8 → claude-fable-5     @ 2026-07-13T22:22:28Z
+claude-fable-5  → claude-opus-4-8    @ 2026-07-13T22:24:12Z
+claude-opus-4-8 → claude-fable-5     @ 2026-07-14T11:12:37Z
+```
+
+Per-turn model is on every record, so a "model over time" lane in the session
+timeline is free, and cost attribution per model within a session is exact.
+(`<synthetic>` appears in these sequences too — filter it, it never hit the API.)
+
+**Automatic downgrades/upgrades** — the fallback path of §1.3(c), logged twice
+over: a `type:"system"` record carrying `originalModel` → `fallbackModel`, and
+the `iterations[]` ledger on the affected assistant turn. Observed here:
+`claude-fable-5 → claude-opus-4-8` (5×) and `claude-fable-5 →
+claude-opus-4-8[1m]` (1×). So the answer to "am I being downgraded on the fly?"
+is yes-and-it-is-recorded — with the caveat that the *discarded* attempt's tokens
+appear **only** in `iterations[]`, which is precisely why that array is the
+billing ground truth.
+
+### 1.8 Agent spend is fully attributable
+
+`attributionAgent` on sidechain records names the agent *type* and is present on
+75.8% of them; `agentId` gives the instance, and `sessionId` links to the parent.
+Deduped and priced over the baseline corpus:
+
+| context | cost | share |
+| --- | ---: | ---: |
+| main session | $9,437.28 | 89.8% |
+| subagents | $721.13 | 6.9% |
+| workflow agents | $347.89 | 3.3% |
+
+| agent type | cost |
+| --- | ---: |
+| `general-purpose` | $381.17 |
+| `workflow-subagent` | $347.89 |
+| *(unlabelled — pre-`attributionAgent` builds)* | $254.38 |
+| `fork` | $65.36 |
+| `Explore` | $15.72 |
+| `Plan` | $4.44 |
+| `claude-code-guide` | $0.06 |
+
+Two things worth noting. Agents are **10.2% of spend** — material, but far less
+than the main loop, so the "am I overusing agents?" question resolves to *no* on
+this corpus. And model choice differs sharply by context: the main loop is 69%
+`claude-fable-5`, while subagent spend skews to `claude-opus-4-8` ($390.60 vs
+$308.76) — an agent-vs-main model-policy comparison the `turns` grain supports
+directly.
 
 ## 2. Existing tools — surveyed, not adopted
 
@@ -274,13 +398,28 @@ Answers "which tools fail, how often, and what do retries cost".
 features land first. DuckDB reads JSON out of a string column fine, so a new
 event kind is queryable the day it appears without a migration.
 
-**`sessions`** — one row per session, derived from `turns` and `events`.
-> `sessionId` · `projectSlug` · `slug` · `firstTs` · `lastTs` · `spanSeconds` ·
-> `activeSeconds` · `dutyCycle` · `nTurns` · `nSubagents` · `nCompactions` ·
-> `peakContextTokens` · `totalCost` · `models` (list) · `ccVersions` (list)
+**`sessions`** — one row per session **file**, derived from `turns` and `events`.
+Fork-aware per §1.6: a file is not a session, so this grain carries both its own
+identity and its lineage, and only the *native* columns are summable.
+> `sessionId` · `originSessionId` · `lineageId` · `parentSessionId` ·
+> `projectSlug` · `slug` · `firstTs` · `lastTs` · `spanSeconds` ·
+> `activeSeconds` · `dutyCycle` · `nTurnsNative` · `nTurnsInherited` ·
+> `nSubagents` · `nCompactions` · `peakContextTokens` · **`nativeCost`** ·
+> `inheritedContextTokens` · `models` (list) · `ccVersions` (list)
+
+`SUM(nativeCost)` over all rows must equal the corpus total — that is the
+regression test for the whole dedup/attribution path, and it is worth asserting
+in the writer rather than discovering later in a chart.
 
 `activeSeconds` sums inter-turn gaps below a threshold (30 min default, and it
 should be a control in the UI — the threshold is a judgement call, so expose it).
+It must be computed over *native* turns only, or a fork inherits its ancestor's
+elapsed time and reports a nonsense duty cycle.
+
+**`lineages`** — one row per fork chain, the unit a human actually means by
+"a session".
+> `lineageId` · `rootSessionId` · `sessionIds` (list) · `firstTs` · `lastTs` ·
+> `totalCost` · `nForks` · `depth`
 
 Partition by month, Hive-style (`turns/month=2026-07/…`). At current volume
 (29k turns / 5 weeks) the whole corpus is a few MB of Parquet and DuckDB-WASM
@@ -363,6 +502,10 @@ the demo runs standalone without a live scan.
   at compaction boundaries before any chart claims to show "context size".
 - **Multi-machine.** Logs are per-machine. Out of scope for v1; noted because the
   Parquet layout would need a `host` column and it is far cheaper to add now.
+- **Pre-2.1.199 lineage reconstruction.** The uuid-overlap fallback (§1.6) is
+  O(files²) if done naively. A uuid→file index makes it linear, but it is only
+  needed for the 704 unmarked duplicates in this corpus and that fraction shrinks
+  with every new session. Possibly not worth building at all — measure first.
 
 ## 5. Next steps
 
