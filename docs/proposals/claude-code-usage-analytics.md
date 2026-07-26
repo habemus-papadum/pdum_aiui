@@ -715,13 +715,43 @@ Not benchmarked: behaviour under a live drag. With preagg off every brush tick i
 a full re-scan; 29k/35k rows is small and DuckDB executes this as a semi-join,
 but expect to need throttling.
 
-#### 5.6.4 Is the timeline expressible in SQL at all?
+#### 5.6.4 Is the timeline expressible in SQL at all? — answered, with limits
 
-Mosaic filtering *is* SQL construction, so this is a data-representation problem
-before it is a rendering one: fork edges, lanes and agent spans must be columns
-something can `WHERE` against, not shapes computed during a render pass. §7
-tracks the outcome; the lineage grains (`forkEdges` / `lineages` / `agentRuns`)
-are the answer taking shape.
+Yes: `forkEdges` / `lineages` / `agentRuns` in `demos/cc-slurp`. The measured
+result on the baseline corpus, and the limits worth knowing before trusting a
+drawn lineage:
+
+| | |
+| --- | ---: |
+| sessions | 109 |
+| …with a parent | 10 |
+| fork edges | 10 |
+| lineages (multi-session) | 99 (6) |
+| max depth · max lineage | 3 · 4 sessions |
+| `ambiguous` | **4 of 10** |
+| `parentMissing` | 0 |
+
+**The marker corroborates; it does not derive.** §1.6 presents `session_id` as
+*the* provenance mechanism, and at the record level it is — but the lineage
+derivation is uuid-overlap first, with the marker used as a cross-check:
+`source: "marker"` (4 edges) means overlap and marker agreed, `"uuid-overlap"`
+(6) means they did not. So the fallback I expected to be a legacy path for
+pre-2.1.199 sessions is in fact carrying the majority of edges, on a corpus
+where 89 of 109 sessions are entirely marker-capable (14 entirely below, 1
+spanning). Worth knowing before anyone "simplifies" the derivation to trust the
+marker alone.
+
+**40% of edges are flagged ambiguous** — neither structurally unambiguous nor
+marker-corroborated. The widget draws those dotted rather than solid, which is
+the right call: a session graph that renders an uncertain lineage as fact is
+worse than one that shows its own doubt.
+
+**The long-gap fork is not exercised by this corpus.** §5.6.1 names it as the
+hard case — a fork whose child starts days after the parent's fork point — on
+the strength of the user's stated experience. Measured lag
+(`childFirstNativeTs − forkPointTs`): **min 0m, median 4m, max 1.9h**. The
+layout must still handle it (the unit test uses a 3-day lag deliberately), but
+no rendered edge currently spans one, so that path is covered by test only.
 
 ## 6. Open questions
 
