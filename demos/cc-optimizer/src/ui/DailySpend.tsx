@@ -26,12 +26,17 @@ interface DayRow {
  * owns a container and re-renders into it when the data changes. Nothing
  * reactive lives inside the SVG.
  */
-function SpendChart(props: { rows: DayRow[]; scale: { domain: string[]; range: string[] } }) {
+function SpendChart(props: {
+  rows: DayRow[];
+  /** Every day's total, unfiltered — the context the selection is read against. */
+  totals: { day: number; cost: number }[];
+  scale: { domain: string[]; range: string[] };
+}) {
   const [host, setHost] = createSignal<HTMLDivElement | undefined>();
 
   createEffect(
-    () => ({ el: host(), rows: props.rows, scale: props.scale }),
-    ({ el, rows, scale }) => {
+    () => ({ el: host(), rows: props.rows, totals: props.totals, scale: props.scale }),
+    ({ el, rows, totals, scale }) => {
       if (!el) return;
       el.replaceChildren();
       if (rows.length === 0) return;
@@ -47,6 +52,16 @@ function SpendChart(props: { rows: DayRow[]; scale: { domain: string[]; range: s
         color: { legend: true, domain: scale.domain, range: scale.range },
         style: { background: "transparent", color: "var(--cco-fg-dim)", fontSize: "11px" },
         marks: [
+          // The corpus behind the selection — same crossfilter idiom the
+          // scatter uses. Drawn first so the coloured bars sit on top, and
+          // scaled by the same y so the comparison is direct rather than
+          // each chart re-normalising to whatever survived.
+          Plot.rectY(totals, {
+            x: (d: { day: number }) => new Date(d.day),
+            interval: "day",
+            y: "cost",
+            fill: "#2a2f3a",
+          }),
           Plot.rectY(rows, {
             x: (d: DayRow) => new Date(d.day),
             interval: "day",
@@ -72,8 +87,12 @@ export function DailySpend() {
       <h2 class="cco-h2">spend by day</h2>
       <CellView of={graph().dailyCost}>
         {(rows) => (
-          <CellView of={graph().projects}>
-            {(p) => <SpendChart rows={rows()} scale={p().scale} />}
+          <CellView of={graph().dailyTotals}>
+            {(totals) => (
+              <CellView of={graph().projects}>
+                {(p) => <SpendChart rows={rows()} totals={totals()} scale={p().scale} />}
+              </CellView>
+            )}
           </CellView>
         )}
       </CellView>

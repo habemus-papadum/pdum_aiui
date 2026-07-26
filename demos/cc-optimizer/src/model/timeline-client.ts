@@ -46,10 +46,13 @@ export interface TimelineName {
 
 /** What one query delivers: everything the layout needs, already parsed. */
 export interface TimelineData {
+  /** ALWAYS the whole corpus, so lanes do not reflow when a brush moves. */
   spans: TimelineSpan[];
   forks: ForkEdgeInput[];
   /** sessionId → name, and agentId → name. Static across brushes. */
   names: Map<string, TimelineName>;
+  /** Ids surviving the crossfilter; undefined when nothing is filtered. */
+  live?: Set<string>;
 }
 
 /** The unfiltered extent of the corpus, resolved once in `prepare`. */
@@ -97,6 +100,15 @@ export class SessionTimelineClient extends MosaicClient {
   private forks: ForkEdgeInput[] = [];
   /** Zero-turn fork nodes, also resolved once; see `loadGhostSessions`. */
   private ghosts: TimelineSpan[] = [];
+  /**
+   * Every span in the corpus, resolved once — the layout's stable input.
+   *
+   * The filtered query then only says which of these are *live*. Drawing the
+   * full set and dimming the rest is the crossfilter idiom the other charts
+   * use, and it additionally stops the chart reflowing under a drag: lanes are
+   * packed from a set that never changes.
+   */
+  private allSpans: TimelineSpan[] = [];
   /** sessionId → name and agentId → name, resolved once; see `loadNames`. */
   private readonly names = new Map<string, TimelineName>();
   private readonly agentNames = new Map<string, TimelineName>();
@@ -137,6 +149,7 @@ export class SessionTimelineClient extends MosaicClient {
     if (this.opts.hasForkEdges) await this.loadForkEdges();
     await this.loadGhostSessions();
     await this.loadNames();
+    await this.loadAllSpans();
     if (!this.opts.onDomain) return;
     const q = Query.from("turns").select({
       t0: sql`epoch_ms(min(ts))`,
@@ -186,6 +199,38 @@ export class SessionTimelineClient extends MosaicClient {
       await put("agentRuns", "agentId", this.agentNames, { nameKind: "nameKind" });
     } catch {
       /* a dataset predating the name columns simply has no names to show */
+    }
+  }
+
+  /**
+   * The unfiltered span set: the same three arms `query()` builds, with no
+   * predicate. Resolved once, because the corpus does not change under a brush.
+   */
+  private async loadAllSpans(): Promise<void> {
+    try {
+      const rows0 = rows(await this.coordinator?.query(this.query([])));
+      const out: TimelineSpan[] = [];
+      for (const row of rows0) {
+        const kind = String(row.kind);
+        const id = s(row.id);
+        if (!id || kind === "fork") continue;
+        out.push({
+          kind: kind === "agent" ? "agent" : "session",
+          id,
+          project: s(row.project) ?? "(unknown)",
+          parentId: s(row.parentId),
+          t0: n(row.t0),
+          t1: n(row.t1),
+          nTurns: n(row.nTurns),
+          cost: n(row.cost),
+          agentType: s(row.agentType),
+          context: s(row.context) ?? "main",
+        });
+      }
+      this.allSpans = out;
+    } catch (e) {
+      // Without this the chart still works, it just loses the dimmed context.
+      this.opts.onError?.(e instanceof Error ? e : new Error(String(e)));
     }
   }
 
@@ -398,6 +443,7 @@ export class SessionTimelineClient extends MosaicClient {
    * edge set narrows with the brush without the edges themselves being queried.
    */
   queryResult(data: unknown): this {
+    const live = new Set<string>();
     const spans: TimelineSpan[] = [...this.ghosts];
     const forks: ForkEdgeInput[] = [...this.forks];
     for (const row of rows(data)) {
@@ -411,6 +457,7 @@ export class SessionTimelineClient extends MosaicClient {
         }
         continue;
       }
+      live.add(id);
       spans.push({
         kind: kind === "agent" ? "agent" : "session",
         id,
@@ -428,7 +475,18 @@ export class SessionTimelineClient extends MosaicClient {
     // agent id starts with `a`), and the view holds a bar without knowing which
     // map it came from.
     const names = new Map([...this.names, ...this.agentNames]);
-    this.opts.onResult({ spans, forks, names });
+    // Hand the layout the WHOLE corpus plus the live set, so lanes stay put and
+    // the excluded bars are drawn faint rather than removed. Zero-turn ghosts
+    // are always live — they have no activity for an activity filter to act on
+    // (see `loadGhostSessions`), so dimming them would assert something false.
+    const all = this.allSpans.length ? [...this.ghosts, ...this.allSpans] : spans;
+    for (const g of this.ghosts) live.add(g.id);
+    this.opts.onResult({
+      spans: all,
+      forks,
+      names,
+      ...(this.allSpans.length ? { live } : {}),
+    });
     return this;
   }
 

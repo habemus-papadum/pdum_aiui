@@ -156,6 +156,8 @@ export function SessionTimeline() {
   const projects = createMemo(() => [...new Set(store.timeline().spans.map((s) => s.project))]);
 
   const layout = createMemo(() => {
+    // `data` already carries the whole corpus plus `live`; the layout dims
+    // rather than drops, so lanes hold still while a brush moves.
     const data = store.timeline();
     const collapsed = store.collapsedProjects();
     const expandedProjects = new Set(
@@ -403,11 +405,18 @@ export function SessionTimeline() {
                     fill={
                       b.ghost
                         ? "none"
-                        : b.kind === "session"
-                          ? costColor(b.cost)
-                          : agentColor(b.context)
+                        : b.dim
+                          ? // Excluded by the filter: still drawn, in neutral
+                            // grey, so the selection reads against the shape it
+                            // came from. Grey and not a faded cost colour —
+                            // a dim blue would read as "cheap", which is a
+                            // different claim than "not selected".
+                            "#8b93a7"
+                          : b.kind === "session"
+                            ? costColor(b.cost)
+                            : agentColor(b.context)
                     }
-                    opacity={b.collapsed ? 0.62 : b.strip ? 0.75 : 1}
+                    opacity={b.dim ? 0.22 : b.collapsed ? 0.62 : b.strip ? 0.75 : 1}
                     stroke={
                       hover()?.bar.id === b.id && hover()?.bar.rowIndex === b.rowIndex
                         ? "var(--cco-fg)"

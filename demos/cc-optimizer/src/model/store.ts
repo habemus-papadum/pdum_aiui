@@ -297,6 +297,19 @@ export function toggleProjectVisible(project: string, all: readonly string[]): v
 }
 
 /**
+ * Drop every clause AND the widget state that produced them.
+ *
+ * `filter.reset()` alone clears the Selection but leaves `visibleProjects`
+ * holding a set, so the chips would keep showing a selection that no longer
+ * filters anything. One entry point, so the two cannot drift.
+ */
+export function clearAllFilters(): void {
+  visibleProjects.set(null);
+  brushRange.set(null);
+  filter.reset();
+}
+
+/**
  * Bumped whenever the crossfilter changes, so cell-based panels can depend on
  * it and recompute.
  *
@@ -597,6 +610,7 @@ export const store = {
   visibleProjects: visibleProjects.get,
   toggleProjectVisible,
   setVisibleProjects,
+  clearAllFilters,
   replayIndex: replayIndex.get,
   filterVersion: filterVersion.get,
   filterSql,

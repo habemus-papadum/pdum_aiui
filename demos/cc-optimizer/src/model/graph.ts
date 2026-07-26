@@ -116,6 +116,38 @@ export const graph = hotCellGraph(
     ),
 
     /**
+     * Spend per day for the WHOLE corpus, never filtered.
+     *
+     * The context layer behind `dailyCost`. Same crossfilter idiom the scatter
+     * uses: a selection is only readable against the shape it came from, and
+     * bars that vanish leave nothing to judge the survivors against.
+     */
+    dailyTotals: cell(
+      () => ({}),
+      async () =>
+        store.sql<{ day: number; cost: number }>(`
+          SELECT epoch_ms(date_trunc('day', ts)) AS day, sum(costTotal) AS cost
+          FROM turns GROUP BY 1 ORDER BY 1
+        `),
+      { scope: appScope },
+    ),
+
+    /** Unfiltered attribution totals — the ghost behind each bar. */
+    attributionTotals: cell(
+      () => ({}),
+      async () =>
+        store.sql<{ kind: string; key: string; cost: number }>(`
+          SELECT 'agent' AS kind, coalesce(agentType, '(main loop)') AS key, sum(costTotal) AS cost
+          FROM turns GROUP BY 1, 2
+          UNION ALL
+          SELECT 'skill', coalesce(attributionSkill, '(none)'), sum(costTotal) FROM turns GROUP BY 1, 2
+          UNION ALL
+          SELECT 'mcp', coalesce(attributionMcpServer, '(none)'), sum(costTotal) FROM turns GROUP BY 1, 2
+        `),
+      { scope: appScope },
+    ),
+
+    /**
      * The headline finding, per project: what fraction of spend is context
      * re-transmission rather than generation. Cache reads dominate, and this is
      * the cell that makes that visible.

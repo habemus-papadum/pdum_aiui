@@ -240,6 +240,54 @@ const agent = (
 
 const scaleOver = (hours: number, width = 1000) => timeScale([T0, T0 + hours * H], [0, width]);
 
+describe("layoutTimeline — the filter dims, it does not drop", () => {
+  // The crossfilter idiom, and the reason it is in the layout rather than the
+  // view: bars must keep their lanes while a brush moves, so the layout is fed
+  // the whole corpus and told which ids survive.
+  const spans = [sess("s1", "p", 0, 2), sess("s2", "p", 3, 5), sess("s3", "p", 6, 8)];
+  const opts = { scale: scaleOver(10) };
+
+  it("keeps every bar and marks the excluded ones", () => {
+    const l = layoutTimeline({ spans, forks: [], live: new Set(["s2"]) }, opts);
+    expect(l.bars).toHaveLength(3);
+    const by = new Map(l.bars.map((b) => [b.id, b]));
+    expect(by.get("s2")?.dim).toBe(false);
+    expect(by.get("s1")?.dim).toBe(true);
+    expect(by.get("s3")?.dim).toBe(true);
+  });
+
+  it("treats an absent live set as nothing filtered", () => {
+    const l = layoutTimeline({ spans, forks: [] }, opts);
+    expect(l.bars.every((b) => !b.dim)).toBe(true);
+  });
+
+  it("lays out identically whatever survives — lanes must not move", () => {
+    // The stability claim. If a brush changed the geometry, every drag would
+    // reflow the chart under the cursor.
+    const geom = (live?: ReadonlySet<string>) =>
+      layoutTimeline({ spans, forks: [], ...(live ? { live } : {}) }, opts)
+        .bars.map((b) => `${b.id}:${b.x.toFixed(2)},${b.y},${b.rowIndex}`)
+        .sort()
+        .join("|");
+    expect(geom(new Set(["s2"]))).toBe(geom());
+    expect(geom(new Set())).toBe(geom());
+  });
+
+  it("dims an agent independently of its session", () => {
+    const withAgent = [...spans, agent("a1", "s1", "p", 0, 1)];
+    const l = layoutTimeline(
+      { spans: withAgent, forks: [], live: new Set(["s1"]) },
+      // Both, not just the session: an unexpanded PROJECT collapses to one row
+      // and never lays out its agents at all.
+      { ...opts, expandedProjects: new Set(["p"]), expandedSessions: new Set(["s1"]) },
+    );
+    const by = new Map(l.bars.map((b) => [b.id, b]));
+    expect(by.get("s1")?.dim).toBe(false);
+    expect(by.get("a1"), "the agent bar should still be laid out").toBeDefined();
+    expect(by.get("a1")?.dim).toBe(true);
+  });
+});
+
 describe("layoutTimeline", () => {
   it("orders projects by first activity and gives each its own band", () => {
     const spans = [sess("s1", "late", 10, 12), sess("s2", "early", 0, 2)];

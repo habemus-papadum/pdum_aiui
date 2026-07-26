@@ -910,3 +910,23 @@
   font-size: 14px;
   padding-top: 6px;
 }
+
+/* The corpus total behind a filtered attribution bar: present enough to give
+   the filtered bar a denominator, quiet enough not to compete with it. */
+.cco-attr-ghost {
+  background: #313846;
+  border-radius: 3px;
+  display: block;
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.cco-attr-track {
+  position: relative;
+}
+
+.cco-attr-fill {
+  position: relative;
+}

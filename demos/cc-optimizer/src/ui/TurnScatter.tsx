@@ -53,12 +53,28 @@ function ScatterPlot(props: {
       try {
         const vg = createAPIContext({ coordinator: store.coordinator });
         const chart = vg.plot(
+          // Two layers over the same rows, which is the whole crossfilter
+          // idiom: the base is EVERY turn and carries no `filterBy`, so it
+          // never moves; the coloured layer is what survives. A selection then
+          // reads against the shape it came from instead of the rest of the
+          // data vanishing and leaving nothing to judge it against.
+          //
+          // Grey rather than a faded version of each project's colour: 30,000
+          // dots at low alpha still read as colour, and the point of the base
+          // is to be visibly *not* the selection.
+          vg.dot(vg.from("turns"), {
+            x: "ts",
+            y: "costTotal",
+            fill: "#8b93a7",
+            r: 1.4,
+            fillOpacity: 0.12,
+          }),
           vg.dot(vg.from("turns", { filterBy: filter }), {
             x: "ts",
             y: "costTotal",
             fill: "project",
             r: 1.6,
-            fillOpacity: 0.35,
+            fillOpacity: 0.5,
           }),
           // Publishes into the same crossfilter the timeline uses. Two axes, so
           // a drag here says "these turns, in this cost band".
@@ -70,7 +86,14 @@ function ScatterPlot(props: {
           // identity. See palette.ts.
           vg.colorDomain(scale.domain),
           vg.colorRange(scale.range),
-          vg.colorLegend({ as: filter, columns: 4 }),
+          // A key, NOT a control. With `as: filter` this legend publishes its
+          // own clause over `project` — a second widget filtering the same
+          // column from a different source than the chips, so the two could
+          // disagree, and selecting every entry left a `project IN (all)`
+          // clause that filters nothing while still reading as "filtered".
+          // The chips own project selection; this just says what the colours
+          // mean.
+          vg.colorLegend({ columns: 4 }),
           vg.width(900),
           vg.height(300),
           vg.marginLeft(56),
@@ -117,7 +140,8 @@ function ScatterPlot(props: {
         : "";
     return (
       `One dot per billed turn — ${props.turns.toLocaleString()} of them. Drag a box to filter ` +
-      `every panel above by time AND by cost; the colour legend filters by project. Cost is on a ` +
+      `every panel above by time AND by cost — the chips at the top pick projects. Grey is the ` +
+      `whole corpus, colour is what survives the filter. Cost is on a ` +
       `log axis because it spans three orders of magnitude.${zero}`
     );
   };
@@ -137,7 +161,7 @@ export function TurnScatter() {
       <header class="cco-panel-head">
         <h2 class="cco-h2">every turn</h2>
         <Show when={store.filterActive()}>
-          <button type="button" class="cco-btn" onClick={() => filter.reset()}>
+          <button type="button" class="cco-btn" onClick={() => store.clearAllFilters()}>
             clear filter
           </button>
         </Show>

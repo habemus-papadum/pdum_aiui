@@ -144,6 +144,13 @@ export interface ForkEdgeInput {
 export interface TimelineInput {
   spans: readonly TimelineSpan[];
   forks: readonly ForkEdgeInput[];
+  /**
+   * Ids surviving the crossfilter, or undefined for "no filter, all live".
+   *
+   * `spans` is always the whole corpus so the layout is stable; this says which
+   * of them are in the selection.
+   */
+  live?: ReadonlySet<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +327,16 @@ export interface LayoutBar {
   strip: boolean;
   /** A fork that produced no billed turn. Drawn hollow. See `TimelineSpan`. */
   ghost: boolean;
+  /**
+   * True when this bar exists in the corpus but not in the current selection.
+   *
+   * Drawn faint rather than dropped. Two reasons, and the second is the one
+   * that made it worth doing: a selection is only readable against the shape it
+   * came from, and laying out the FULL set means lanes and rows keep their
+   * positions while a brush moves — otherwise every drag reflows the chart
+   * under the cursor.
+   */
+  dim: boolean;
 }
 
 export interface LayoutEdge {
@@ -509,6 +526,10 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
 
   // Prune disconnected ghosts first: a project whose only member is an orphan
   // ghost must not get a row, so this has to happen before `projectOrder`.
+  // Undefined `live` means nothing is filtered, so every bar is live. A bar
+  // whose id is absent from a present set is dimmed, never dropped.
+  const isDim = (id: string) => (input.live ? !input.live.has(id) : false);
+
   const keepGhost = connectedGhosts(input.spans, input.forks);
   const spans = input.spans.filter((s) => !s.ghost || keepGhost.has(s.id));
 
@@ -582,6 +603,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
           collapsed: true,
           strip: false,
           ghost: s.ghost === true,
+          dim: isDim(s.id),
         };
         bars.push(bar);
         barById.set(s.id, bar);
@@ -626,6 +648,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
           collapsed: false,
           strip: false,
           ghost: s.ghost === true,
+          dim: isDim(s.id),
         };
         bars.push(bar);
         barById.set(s.id, bar);
@@ -656,6 +679,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
               collapsed: false,
               strip: true,
               ghost: false,
+              dim: isDim(a.id),
             });
           }
         }
@@ -707,6 +731,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
             collapsed: false,
             strip: false,
             ghost: false,
+            dim: isDim(a.id),
           });
         }
       }
