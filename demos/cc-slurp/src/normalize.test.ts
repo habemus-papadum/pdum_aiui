@@ -626,6 +626,60 @@ describe("fork lineage", () => {
     expect(checkInvariants(out).ok).toBe(true);
   });
 
+  it("anchors a grandchild to the nearest ancestor that has a bar to draw", () => {
+    // The corpus shape: 63baa90e → 4df4dbb9 → {70486150, de93c3a5}, where the
+    // MIDDLE session produced no billed turn. A timeline built by aggregating
+    // `turns` has no bar for it, so three of ten edges vanish and the chain
+    // breaks in half. `billedAncestor*` gives the two outgoing edges an anchor
+    // that exists, without inventing an edge that never happened.
+    const n = new Normalizer({ pricing: PRICES });
+    const gp = BORN("gp", "2026-07-01T00:00:00.000Z");
+    const gpRecs = [
+      plainRec({ type: "user", uuid: "h", session: "gp", ts: "2026-07-01T00:00:00.000Z" }),
+      assistantRec({ id: "m1", uuid: "u1", session: "gp", ts: "2026-07-01T00:01:00.000Z" }),
+    ];
+    for (const r of gpRecs) n.add(r, gp);
+
+    // The middle: inherits everything, adds one un-billed record, stops.
+    const mid = BORN("mid", "2026-07-01T01:00:00.000Z");
+    for (const r of copyInto(gpRecs, "mid", false)) n.add(r, mid);
+    const midOwn = plainRec({
+      type: "system",
+      uuid: "s1",
+      session: "mid",
+      ts: "2026-07-01T01:00:05.000Z",
+    });
+    n.add(midOwn, mid);
+
+    const kid = BORN("kid", "2026-07-01T02:00:00.000Z");
+    for (const r of copyInto([...gpRecs, midOwn], "kid", false)) n.add(r, kid);
+    n.add(
+      assistantRec({ id: "m2", uuid: "u2", session: "kid", ts: "2026-07-01T02:00:10.000Z" }),
+      kid,
+    );
+
+    const out = n.finish();
+    const byChild = new Map(out.forkEdges.map((e) => [e.childSessionId, e]));
+
+    const midEdge = byChild.get("mid");
+    expect(midEdge?.parentHasTurns).toBe(true);
+    expect(midEdge?.childHasTurns).toBe(false); // nothing to hang a bar on
+
+    const kidEdge = byChild.get("kid");
+    expect(kidEdge?.parentSessionId).toBe("mid");
+    expect(kidEdge?.parentHasTurns).toBe(false);
+    // …so fall back to gp, at the point kid branched off *gp's* timeline.
+    expect(kidEdge?.billedAncestorSessionId).toBe("gp");
+    expect(new Date(kidEdge?.billedAncestorForkPointTs ?? 0).toISOString()).toBe(
+      "2026-07-01T00:01:00.000Z",
+    );
+    // When the parent does have turns the anchor is just the parent — no
+    // special case for a widget to write.
+    expect(midEdge?.billedAncestorSessionId).toBe("gp");
+    expect(midEdge?.billedAncestorForkPointTs).toBe(midEdge?.forkPointTs);
+    expect(checkInvariants(out).ok).toBe(true);
+  });
+
   it("calls a marked link with no copied records a continuation", () => {
     // Claude Code 2.1.220: every record carries `session_id` of an earlier
     // session, yet not one uuid is shared. Believing the marker would hand this

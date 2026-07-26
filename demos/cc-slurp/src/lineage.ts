@@ -130,6 +130,31 @@ export interface LineageResolution {
   unresolved: { sessionId: string; reason: string }[];
 }
 
+/**
+ * Where `child` branched off `ancestor`, in **`ancestor`'s** timeline.
+ *
+ * Works for any ancestor, not just the direct parent, which is what makes a
+ * chain drawable when a link in it has nothing to draw: a session that forked
+ * and produced no billed turn is a real node with no bar, and a timeline that
+ * hangs its children off it loses them. Asking the same question of the nearest
+ * ancestor that DOES have turns gives an honest anchor — the last record the
+ * child inherited that this ancestor actually produced — rather than a
+ * fabricated edge.
+ *
+ * `run` of 0 means nothing was copied (a continuation), and the branch point is
+ * the ancestor's last breath.
+ */
+export function branchPoint(
+  child: SessionDigest,
+  ancestor: SessionDigest,
+): { run: number; ts: number } {
+  const run = leadingRun(child, ancestor.uuidSet);
+  return {
+    run,
+    ts: run > 0 ? child.ts[run - 1] : (ancestor.ts[ancestor.ts.length - 1] ?? 0),
+  };
+}
+
 /** How much of `child`'s head also exists in `parent`. */
 function leadingRun(child: SessionDigest, parentSet: Set<string>): number {
   let n = 0;
