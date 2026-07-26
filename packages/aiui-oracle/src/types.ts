@@ -63,6 +63,9 @@ export interface OracleCredential {
   ek: string;
   /** Unix seconds; 0 = unknown (a pasted `ek_` we didn't mint). */
   expiresAt: number;
+  /** Which source answered (paste-key / dev-key / mint:URL) — the ledger's
+   * auth attribution. */
+  source?: string;
 }
 
 /** Where credentials come from — the pluggable auth seam. */

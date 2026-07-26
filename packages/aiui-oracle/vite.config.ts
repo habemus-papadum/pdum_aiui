@@ -18,6 +18,7 @@ export default defineConfig({
         index: "src/index.ts",
         widgets: "src/widgets/index.ts",
         server: "src/mint-backend.ts",
+        vite: "src/vite.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

@@ -163,10 +163,14 @@ export class OracleSession {
     this.sendSessionUpdate(this.updatableSession());
     const callId = this.handle.callId;
     this.setState({ status: "live", ...(callId !== undefined ? { callId } : {}) });
+    const liveBits = [
+      ...(callId !== undefined ? [`call ${callId}`] : []),
+      ...(credential.source !== undefined ? [`key: ${credential.source}`] : []),
+    ];
     this.record({
       kind: "session",
       phase: "live",
-      ...(callId !== undefined ? { detail: `call ${callId}` } : {}),
+      ...(liveBits.length > 0 ? { detail: liveBits.join(" · ") } : {}),
     });
   }
 

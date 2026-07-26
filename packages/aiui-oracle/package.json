@@ -13,7 +13,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./widgets": "./src/widgets/index.ts",
-    "./server": "./src/mint-backend.ts"
+    "./server": "./src/mint-backend.ts",
+    "./vite": "./src/vite.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -42,6 +43,11 @@
         "types": "./dist/mint-backend.d.ts",
         "import": "./dist/server.js",
         "default": "./dist/server.js"
+      },
+      "./vite": {
+        "types": "./dist/vite.d.ts",
+        "import": "./dist/vite.js",
+        "default": "./dist/vite.js"
       }
     }
   },

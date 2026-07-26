@@ -11,14 +11,18 @@ export {
   toolsFromAiuiRegistry,
   toolsFromControlSurface,
 } from "./aiui-tools";
+export type { StandardKeySourcesOptions } from "./keys";
 export {
   cachingKeySource,
   chainKeySource,
+  DEV_KEY_GLOBAL,
+  devKeySource,
   mintClientSecret,
   mintingKeySource,
   OPENAI_BASE_URL,
   PASTED_KEY_STORAGE_KEY,
   pasteKeySource,
+  standardKeySources,
   staticKeySource,
 } from "./keys";
 export type { WeaveOptions } from "./prompt";

@@ -2,13 +2,16 @@
  * KeySources: `ek_` passthrough vs mint-from-parent, the shared mint shape
  * (the exploration's verified wire form), and the paste slot's failure mode.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   cachingKeySource,
   chainKeySource,
+  DEV_KEY_GLOBAL,
+  devKeySource,
   mintClientSecret,
   PASTED_KEY_STORAGE_KEY,
   pasteKeySource,
+  standardKeySources,
   staticKeySource,
 } from "./keys";
 
@@ -134,6 +137,50 @@ describe("cachingKeySource — reuse until the TTL margin", () => {
     await cached.credential({});
     await cached.credential({});
     expect(mints).toBe(2);
+  });
+});
+
+describe("devKeySource + standardKeySources — the three flows in the decided order", () => {
+  const global = globalThis as Record<string, unknown>;
+  afterEach(() => {
+    delete global[DEV_KEY_GLOBAL];
+  });
+
+  it("reads the plugin-injected global; absent is a refusal, not a hang", async () => {
+    await expect(devKeySource().credential({})).rejects.toThrow("dev key");
+    global[DEV_KEY_GLOBAL] = "ek_injected";
+    const credential = await devKeySource().credential({});
+    expect(credential.ek).toBe("ek_injected");
+    expect(credential.source).toBe("dev-key");
+  });
+
+  it("paste trumps dev-key; dev-key covers the no-mint static app; mint only when configured", async () => {
+    const slot = new Map<string, string>();
+    const storage = { getItem: (key: string) => slot.get(key) ?? null };
+    global[DEV_KEY_GLOBAL] = "ek_injected";
+
+    // No mintUrl (a purely static app): dev key answers in dev.
+    const noMint = standardKeySources({ storage });
+    expect((await noMint.credential({})).source).toBe("dev-key");
+    // Pasting trumps it.
+    slot.set(PASTED_KEY_STORAGE_KEY, "ek_pasted");
+    expect((await noMint.credential({})).source).toBe("paste-key");
+
+    // No paste, no dev key (a deployed app WITH a minter): mint runs.
+    slot.delete(PASTED_KEY_STORAGE_KEY);
+    delete global[DEV_KEY_GLOBAL];
+    const { impl } = fakeFetch(minted);
+    const withMint = standardKeySources({
+      storage,
+      mintUrl: "http://mint.test/mint",
+      mint: { fetchImpl: impl },
+    });
+    expect((await withMint.credential({})).source).toBe("mint:http://mint.test/mint");
+
+    // And when NO mint endpoint exists (the purely static app, deployed):
+    // everything refuses loudly, each reason named.
+    const noneLeft = standardKeySources({ storage });
+    await expect(noneLeft.credential({})).rejects.toThrow(/paste-key.*dev-key/);
   });
 });
 

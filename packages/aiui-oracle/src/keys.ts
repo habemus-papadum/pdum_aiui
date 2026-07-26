@@ -23,6 +23,9 @@ export const OPENAI_BASE_URL = "https://api.openai.com";
 /** The localStorage slot the paste-key source and its widget share. */
 export const PASTED_KEY_STORAGE_KEY = "aiui.oracle.key";
 
+/** The global the `oracleDevKey` Vite plugin injects (dev serve ONLY). */
+export const DEV_KEY_GLOBAL = "__aiuiOracleDevKey";
+
 export interface MintOptions {
   ttlSeconds?: number;
   baseUrl?: string;
@@ -76,9 +79,9 @@ export function staticKeySource(key: string, options: MintOptions = {}): KeySour
 }
 
 /**
- * The standalone/dev default: the key lives in localStorage (the control
- * widget's key prompt writes the same slot). Read at connect time, so pasting
- * a new key needs no reload.
+ * The user's own key, from localStorage (the control widget's key prompt
+ * writes the same slot). Read at connect time, so pasting a new key needs no
+ * reload. In the standard chain this TRUMPS everything.
  */
 export function pasteKeySource(
   storage: Pick<Storage, "getItem"> = localStorage,
@@ -91,9 +94,68 @@ export function pasteKeySource(
       if (key === undefined || key === "") {
         throw new Error("no key pasted — set one in the oracle's key field");
       }
-      return staticKeySource(key, options).credential(session);
+      return { ...(await staticKeySource(key, options).credential(session)), source: "paste-key" };
     },
   };
+}
+
+/**
+ * The DEV-MODE key: whatever the `oracleDevKey` Vite plugin (the `./vite`
+ * subpath) injected at `globalThis.__aiuiOracleDevKey`. Exists only under
+ * `vite serve` — a built app never carries it — so a purely static app
+ * develops with zero setup (no pasting, no mint server) and deploys on
+ * paste-key alone.
+ */
+export function devKeySource(options: MintOptions = {}): KeySource {
+  return {
+    describe: () => "dev-key",
+    async credential(session) {
+      const key = (globalThis as Record<string, unknown>)[DEV_KEY_GLOBAL];
+      if (typeof key !== "string" || key === "") {
+        throw new Error(
+          "no dev key injected (the oracleDevKey vite plugin runs in dev serve only)",
+        );
+      }
+      return { ...(await staticKeySource(key, options).credential(session)), source: "dev-key" };
+    },
+  };
+}
+
+export interface StandardKeySourcesOptions {
+  /** A mint endpoint, when this app has one (a channel, a cloud function).
+   * Absent = the flow simply doesn't exist for this app. */
+  mintUrl?: string;
+  storage?: Pick<Storage, "getItem">;
+  mint?: MintOptions;
+}
+
+/**
+ * The canonical V1 chain — the three key flows, in the decided order:
+ *
+ *  1. the user's PASTED key (trumps everything);
+ *  2. the DEV key the Vite plugin injected (dev serve only — a static app
+ *     under development just works, no server, nothing pasted);
+ *  3. a MINT endpoint, when the app has one (cached, TTL-refreshed).
+ *
+ * Compose the pieces yourself for a different order (the lab does, to force
+ * its mint flow ahead of the dev key).
+ */
+export function standardKeySources(options: StandardKeySourcesOptions = {}): KeySource {
+  const sources: KeySource[] = [
+    pasteKeySource(options.storage ?? localStorage, options.mint ?? {}),
+    devKeySource(options.mint ?? {}),
+  ];
+  if (options.mintUrl !== undefined) {
+    sources.push(
+      cachingKeySource(
+        mintingKeySource(
+          options.mintUrl,
+          options.mint?.fetchImpl !== undefined ? { fetchImpl: options.mint.fetchImpl } : {},
+        ),
+      ),
+    );
+  }
+  return chainKeySource(sources);
 }
 
 /**
@@ -172,6 +234,7 @@ export function mintingKeySource(
       return {
         ek: data.value,
         expiresAt: typeof data.expires_at === "number" ? data.expires_at : 0,
+        source: `mint:${mintUrl}`,
       };
     },
   };
