@@ -83,6 +83,41 @@ export const messageId = (rec: Rec): string | undefined => str(get(rec, "message
  */
 export const preferOriginal = (a: Rec, b: Rec): Rec => (isSidechain(a) && !isSidechain(b) ? b : a);
 
+/** Total billable output tokens on one record, across its iteration ledger. */
+export const totalOutput = (rec: Rec): number =>
+  billableUnits(rec).reduce((n, u) => n + u.output, 0);
+
+/**
+ * Choose the canonical record for a billing group. **Read this before changing
+ * the dedup.**
+ *
+ * The per-block records of one response do NOT all carry the same usage. In
+ * SUBAGENT transcripts the earlier records hold a placeholder `output_tokens`
+ * and only the final one carries the true count — a real group looks like:
+ *
+ *     out=5      cache_read=156614   [thinking]
+ *     out=5      cache_read=156614   [text]
+ *     out=5      cache_read=156614   [tool_use]
+ *     out=48469  cache_read=156614   [tool_use]   <- the real number
+ *
+ * `cache_read` / `cache_creation` / `input` are constant across the group, so
+ * any member prices those correctly; `output_tokens` is not. Taking the first
+ * member undercounted output by 32% corpus-wide (2,062 of 2,759 subagent groups
+ * on the worst day disagreed internally) and was invisible for a while because
+ * the original "do members agree?" check was run against a MAIN-session file,
+ * where they do agree.
+ *
+ * So: take the member with the most output. Ties fall through to
+ * `preferOriginal`, which is what settles fork copies — those genuinely do carry
+ * identical usage, so the tie-break is the operative rule there.
+ */
+export function preferForBilling(a: Rec, b: Rec): Rec {
+  const oa = totalOutput(a);
+  const ob = totalOutput(b);
+  if (oa !== ob) return oa > ob ? a : b;
+  return preferOriginal(a, b);
+}
+
 // ---------------------------------------------------------------------------
 // fork provenance
 // ---------------------------------------------------------------------------
@@ -447,6 +482,19 @@ export const TRAPS: readonly Trap[] = [
     what: "Subagent + workflow transcripts live in <sessionId>/subagents/**, not <sessionId>.jsonl.",
     detect: "Compare a recursive walk to a `<slug>/*.jsonl` glob — 477 files vs 109.",
     fix: "Walk the project dir recursively; tag each file with its kind.",
+  },
+  {
+    id: "partial-usage-in-a-billing-group",
+    severity: "critical",
+    what:
+      "The per-block records of one response do NOT all carry the same usage. In subagent " +
+      "transcripts the earlier records hold a placeholder output_tokens (often 5) and only the " +
+      "final record carries the true count; cache_read/cache_creation/input ARE constant. " +
+      "Taking the first member of a billing group undercounts output by ~32% corpus-wide.",
+    detect:
+      "group subagent assistant records by (message.id, requestId) and count groups whose " +
+      "members disagree on output_tokens — 2,062 of 2,759 on the worst day",
+    fix: "preferForBilling(): take the member with the most output, not the first.",
   },
   {
     id: "fork-copies-the-prefix",

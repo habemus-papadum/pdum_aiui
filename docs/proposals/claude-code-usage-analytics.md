@@ -59,18 +59,35 @@ These are encoded in [`fields.mjs`](../../exploration/cc-usage/fields.mjs) as a
 folklore. The five that matter:
 
 **(a) One API response is written as many records.** Claude Code emits **one
-record per content block**, each carrying a byte-identical `message.usage`. A
-response with thinking + text + tool_use is three records claiming the same
-tokens.
+record per content block**. A response with thinking + text + tool_use is three
+records, and they mostly repeat the same `message.usage`.
+
+**Mostly** is doing real work in that sentence, and getting it wrong cost us a
+32% undercount for a day. `cache_read`, `cache_creation` and `input` ARE
+identical across a group. `output_tokens` is NOT: in **subagent** transcripts
+the earlier records carry a placeholder and only the final record carries the
+true count —
+
+```
+out=5      cache_read=156614   [thinking]
+out=5      cache_read=156614   [text]
+out=5      cache_read=156614   [tool_use]
+out=48469  cache_read=156614   [tool_use]   ← the real number
+```
+
+so the dedup rule is **take the member with the most output**, not the first
+(`fields.ts` `preferForBilling`). The first draft of this document asserted
+"byte-identical" on the strength of a check run against a *main-session* file,
+where it happens to be true. 5,930 groups in this corpus disagree internally.
 
 | | |
 | --- | --- |
-| assistant records | 69,187 |
-| distinct `message.id` | 29,050 |
+| assistant records | 70,444 |
+| distinct `message.id` | 29,600 |
 | records per response | **2.38×** |
-| naive output-token sum | 86,394,818 |
-| deduped | 25,603,020 |
-| **naive overstates by** | **237%** |
+| naive output-token sum | 87,538,618 |
+| deduped | 34,615,315 |
+| **naive overstates by** | **153%** |
 
 The overcount is *worse* than the record ratio because duplication correlates
 with response size — 1-block responses average 552 output tokens, 5-block

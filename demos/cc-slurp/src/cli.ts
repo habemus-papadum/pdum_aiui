@@ -109,6 +109,7 @@ DEDUP EARNED ITS KEEP
   deduped                     ${fmt(stats.dedupedOutputTokens)}
   naive overstates by         ${pctMore(stats.naiveOutputTokens, Math.max(1, stats.dedupedOutputTokens))}
   message.ids in >1 file      ${fmt(stats.crossFileDuplicates)}   (fork/resume copies)
+  groups w/ partial usage     ${fmt(stats.groupsWithVaryingOutput)}   (final record carries the real output)
   records marked inherited    ${fmt(stats.inheritedTurnsSeen)}   (session_id != sessionId)
 
 TABLES → ${args.out}
