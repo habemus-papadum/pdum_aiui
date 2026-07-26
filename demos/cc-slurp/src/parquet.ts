@@ -12,6 +12,17 @@
  *  - **Columns are typed up front**, so a column that is all-null still needs a
  *    declared type. `col()` handles that rather than letting the writer infer
  *    from an empty array.
+ *
+ * **This file is where `number` becomes `TIMESTAMP`.** Every `*Ts` field is a
+ * plain JS epoch-millisecond `number` in the row types, and lands in Parquet as
+ * a real `TIMESTAMP` column — so SQL gets `WHERE ts BETWEEN TIMESTAMP '…'`
+ * rather than integer arithmetic, and a consumer that wants the millis back asks
+ * for `epoch_ms(ts)`. The row interfaces describe the in-memory shape, not the
+ * column type; this is the only place the two are related, deliberately.
+ *
+ * A `*Ts` of 0 means "unknown" and is written as **NULL**, never as 1970 — an
+ * epoch-zero timestamp is a mark in the wrong place in any chart that forgets to
+ * check, while a null just does not draw.
  */
 
 import { parquetWriteFile } from "hyparquet-writer";
@@ -136,7 +147,7 @@ const sessionColumns = (rows: SessionRow[]): ColumnData[] => [
   col("parentSessionId", rows, "STRING", (r) => r.parentSessionId),
   col("lineageId", rows, "STRING", (r) => r.lineageId),
   col("depth", rows, "INT64", (r) => r.depth),
-  col("forkPointTs", rows, "TIMESTAMP", (r) => r.forkPointTs),
+  col("forkPointTs", rows, "TIMESTAMP", (r) => r.forkPointTs || undefined),
   col("parentSource", rows, "STRING", (r) => r.parentSource),
   col("parentKind", rows, "STRING", (r) => r.parentKind),
   col("parentAmbiguous", rows, "BOOLEAN", (r) => r.parentAmbiguous),
@@ -179,6 +190,15 @@ const forkEdgeColumns = (rows: ForkEdgeRow[]): ColumnData[] => [
   col("source", rows, "STRING", (r) => r.source),
   col("ambiguous", rows, "BOOLEAN", (r) => r.ambiguous),
   col("parentMissing", rows, "BOOLEAN", (r) => r.parentMissing),
+  col("parentHasTurns", rows, "BOOLEAN", (r) => r.parentHasTurns),
+  col("childHasTurns", rows, "BOOLEAN", (r) => r.childHasTurns),
+  col("billedAncestorSessionId", rows, "STRING", (r) => r.billedAncestorSessionId),
+  col(
+    "billedAncestorForkPointTs",
+    rows,
+    "TIMESTAMP",
+    (r) => r.billedAncestorForkPointTs || undefined,
+  ),
 ];
 
 const lineageColumns = (rows: LineageRow[]): ColumnData[] => [
@@ -189,8 +209,8 @@ const lineageColumns = (rows: LineageRow[]): ColumnData[] => [
   col("nSessions", rows, "INT64", (r) => r.nSessions),
   col("nForks", rows, "INT64", (r) => r.nForks),
   col("maxDepth", rows, "INT64", (r) => r.maxDepth),
-  col("firstTs", rows, "TIMESTAMP", (r) => r.firstTs),
-  col("lastTs", rows, "TIMESTAMP", (r) => r.lastTs),
+  col("firstTs", rows, "TIMESTAMP", (r) => r.firstTs || undefined),
+  col("lastTs", rows, "TIMESTAMP", (r) => r.lastTs || undefined),
   col("nTurns", rows, "INT64", (r) => r.nTurns),
   col("totalCost", rows, "DOUBLE", (r) => r.totalCost),
   col("sessionIds", rows, "STRING", (r) => r.sessionIds),

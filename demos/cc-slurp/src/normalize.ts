@@ -55,7 +55,7 @@ import {
 } from "./fields.ts";
 import { imageRefs } from "./images.ts";
 import type { ForkKind, LineageResolution, ParentSource, SessionDigest } from "./lineage.ts";
-import { originForRecord, resolveLineage } from "./lineage.ts";
+import { branchPoint, originForRecord, resolveLineage } from "./lineage.ts";
 import type { PriceTable } from "./pricing.ts";
 import { priceUnit } from "./pricing.ts";
 import type { FileKind, TranscriptFile } from "./scan.ts";
@@ -250,6 +250,35 @@ export interface ForkEdgeRow {
   ambiguous: boolean;
   /** A marker named the parent, but its file is not in the corpus. */
   parentMissing: boolean;
+  // --- drawability -------------------------------------------------------
+  /**
+   * Whether each end of this edge produced a billed turn.
+   *
+   * A timeline that builds its bars by aggregating `turns` — which is the right
+   * way to build one, because then every cross-filter clause resolves — has no
+   * bar for a session that produced none, and an edge touching one silently
+   * vanishes. In this corpus that is `4df4dbb9`, and it sits in the MIDDLE of a
+   * chain, so three of ten edges disappear and `63baa90e → … → de93c3a5` breaks
+   * in half. These two booleans make that a decision rather than an accident.
+   */
+  parentHasTurns: boolean;
+  childHasTurns: boolean;
+  /**
+   * The nearest ancestor that DOES have billed turns, and where this child
+   * branched off **in that ancestor's** timeline. Equal to `parentSessionId` /
+   * `forkPointTs` whenever the parent has turns, which is 8 of 10 edges here.
+   *
+   * This invents nothing: it is the same last-inherited-record question asked
+   * further up the chain, and it is what lets a turns-derived timeline anchor a
+   * grandchild when the intermediate has no bar. Absent when no ancestor has
+   * turns at all.
+   *
+   * Unlike a materialised lane, this stays *true* under a brush — the anchor may
+   * itself be filtered out, in which case the edge drops exactly as it would
+   * have anyway. It degrades; it does not lie.
+   */
+  billedAncestorSessionId?: string;
+  billedAncestorForkPointTs?: number;
 }
 
 /** One fork family — the unit a human means by "a session". */
@@ -1226,6 +1255,8 @@ export class Normalizer {
       // The child's own first activity is the honest far endpoint; its file
       // birthtime is the fallback for a fork that never produced anything.
       const childStart = child.firstNativeTs || e.childCreatedTs || child.firstTs;
+      const parent = bySession.get(e.parentSessionId);
+      const anchor = this.billedAnchor(childId, lineage, bySession);
       rows.push({
         childSessionId: childId,
         parentSessionId: e.parentSessionId,
@@ -1244,10 +1275,37 @@ export class Normalizer {
         source: e.source,
         ambiguous: e.ambiguous,
         parentMissing: e.parentMissing,
+        parentHasTurns: (parent?.nTurnsNative ?? 0) > 0,
+        childHasTurns: child.nTurnsNative > 0,
+        billedAncestorSessionId: anchor?.sessionId,
+        billedAncestorForkPointTs: anchor?.ts,
       });
     }
     rows.sort((a, b) => a.forkPointTs - b.forkPointTs);
     return rows;
+  }
+
+  /**
+   * Walk up from a child's parent to the first ancestor with a billed turn, and
+   * ask the branch-point question of *that* ancestor. See `ForkEdgeRow`.
+   */
+  private billedAnchor(
+    childId: string,
+    lineage: LineageResolution,
+    bySession: Map<string, SessionRow>,
+  ): { sessionId: string; ts: number } | undefined {
+    const chain = lineage.chain.get(childId);
+    const child = this.digests.get(childId);
+    if (!chain || !child) return undefined;
+    // chain is [root, …, parent, self]; nearest first means walking backwards.
+    for (let i = chain.length - 2; i >= 0; i--) {
+      const id = chain[i];
+      if ((bySession.get(id)?.nTurnsNative ?? 0) === 0) continue;
+      const ancestor = this.digests.get(id);
+      if (!ancestor) continue;
+      return { sessionId: id, ts: branchPoint(child, ancestor).ts };
+    }
+    return undefined;
   }
 
   private lineageRows(sessions: SessionRow[]): LineageRow[] {
