@@ -17,6 +17,6 @@ import type { SitePage } from "@habemus-papadum/aiui-viz";
 import { App } from "./ui/App";
 
 export const page: SitePage = {
-  title: "ledger — an aiui app",
+  title: "cc-optimizer — an aiui app",
   App,
 };

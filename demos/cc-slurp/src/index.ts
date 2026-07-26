@@ -1,5 +1,5 @@
 /**
- * `@habemus-papadum/aiui-transcript` — reading, normalizing and pricing Claude
+ * `@habemus-papadum/aiui-cc-slurp` — reading, normalizing and pricing Claude
  * Code session transcripts.
  *
  * The schema knowledge lives in `fields.ts` and is the point of this package:

@@ -43,7 +43,7 @@ function SpendChart(props: { rows: DayRow[] }) {
         x: { type: "utc", label: null, grid: false },
         y: { label: "USD / day", grid: true, tickFormat: (d: number) => `$${d}` },
         color: { legend: true, scheme: "observable10" },
-        style: { background: "transparent", color: "var(--lg-fg-dim)", fontSize: "11px" },
+        style: { background: "transparent", color: "var(--cco-fg-dim)", fontSize: "11px" },
         marks: [
           Plot.rectY(rows, {
             x: (d: DayRow) => new Date(d.day),
@@ -54,20 +54,20 @@ function SpendChart(props: { rows: DayRow[] }) {
             title: (d: DayRow) =>
               `${d.project}\n${new Date(d.day).toISOString().slice(0, 10)}\n$${d.cost.toFixed(2)} · ${d.turns} turns`,
           }),
-          Plot.ruleY([0], { stroke: "var(--lg-rule)" }),
+          Plot.ruleY([0], { stroke: "var(--cco-rule)" }),
         ],
       });
       el.append(chart);
     },
   );
 
-  return <div class="lg-chart" ref={setHost} />;
+  return <div class="cco-chart" ref={setHost} />;
 }
 
 export function DailySpend() {
   return (
-    <section class="lg-panel">
-      <h2 class="lg-h2">spend by day</h2>
+    <section class="cco-panel">
+      <h2 class="cco-h2">spend by day</h2>
       <CellView of={graph().dailyCost}>{(rows) => <SpendChart rows={rows()} />}</CellView>
     </section>
   );

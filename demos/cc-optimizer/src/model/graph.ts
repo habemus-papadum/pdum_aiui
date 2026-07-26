@@ -248,7 +248,7 @@ export const querySql = action({
   name: "query",
   description:
     "Run read-only SQL over the loaded tables: turns, toolCalls, events, sessions, images. " +
-    "Returns at most 200 rows as JSON. See aiui-transcript's normalize.ts for the column list.",
+    "Returns at most 200 rows as JSON. See aiui-cc-slurp's normalize.ts for the column list.",
   params: { sql: "A DuckDB SELECT statement over turns/toolCalls/events/sessions/images." },
   run: async (args?: Record<string, unknown>) => {
     const query = typeof args?.sql === "string" ? args.sql : "";
