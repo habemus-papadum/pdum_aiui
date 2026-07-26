@@ -884,8 +884,16 @@
   border-color: var(--cco-fg-dim);
 }
 
+.cco-pchip-dot {
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 9px;
+  width: 9px;
+}
+
 /* Deselected chips keep their swatch but drop out of the foreground, so the
-   set of colours in play stays readable while off-state is unmistakable. */
+   set of colours in play stays readable while off-state is unmistakable.
+   Declared AFTER the base rule so the cascade runs in specificity order. */
 .cco-pchip-off {
   color: #5c6577;
   opacity: 0.55;
@@ -895,17 +903,10 @@
   opacity: 0.35;
 }
 
-.cco-pchip-dot {
-  border-radius: 50%;
-  flex: 0 0 auto;
-  height: 9px;
-  width: 9px;
-}
-
 /* The corpus denominator behind a filtered strip: present, but never competing
    with the live numbers it qualifies. */
-.cco-stat-of {
+.cco-stat-value.cco-stat-of {
   color: var(--cco-fg-dim);
-  font-size: 14px !important;
+  font-size: 14px;
   padding-top: 6px;
 }
