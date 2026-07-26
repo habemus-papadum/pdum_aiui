@@ -157,11 +157,7 @@ export class OracleSession {
     // (never voice/model). Redundant when the mint baked the same config —
     // and exactly what makes a pasted foreign `ek_` (unknown baked config)
     // behave identically.
-    this.send({
-      type: "session.update",
-      session: this.updatableSession(),
-    });
-    this.pendingUpdates.push(this.updatableSession());
+    this.sendSessionUpdate(this.updatableSession());
     const callId = this.handle.callId;
     this.setState({ status: "live", ...(callId !== undefined ? { callId } : {}) });
     this.record({
@@ -217,19 +213,25 @@ export class OracleSession {
   setTools(tools: OracleTool[]): void {
     this.applyTools(tools);
     if (this.handle !== undefined) {
-      const session = { tools: this.toolSchemas() };
-      this.send({ type: "session.update", session });
-      this.pendingUpdates.push(session);
+      this.sendSessionUpdate({ tools: this.toolSchemas() });
     }
   }
 
   setInstructions(instructions: string): void {
     this.options.config.instructions = instructions;
     if (this.handle !== undefined) {
-      const session = { instructions };
-      this.send({ type: "session.update", session });
-      this.pendingUpdates.push(session);
+      this.sendSessionUpdate({ instructions });
     }
+  }
+
+  /** Every session.update goes through here: GA requires the `type`
+   * discriminator on the session object — omitting it is rejected with
+   * "Missing required parameter: 'session.type'" (found live at first
+   * light; masked on connect because the mint had baked the same config). */
+  private sendSessionUpdate(session: Record<string, unknown>): void {
+    const typed = { type: "realtime", ...session };
+    this.send({ type: "session.update", session: typed });
+    this.pendingUpdates.push(typed);
   }
 
   // ── rich input (ad-hoc text and images ride the same conversation) ─────────
@@ -363,6 +365,16 @@ export class OracleSession {
         }
         return;
       }
+      case "conversation.item.input_audio_transcription.failed": {
+        const error = (event.error ?? {}) as Record<string, unknown>;
+        this.record({
+          kind: "error",
+          source: "vendor",
+          message: `input transcription failed: ${typeof error.message === "string" ? error.message : "?"}`,
+          data: error,
+        });
+        return;
+      }
       case "response.created":
         this.setState({ replying: true, replyText: "" });
         return;
@@ -402,16 +414,25 @@ export class OracleSession {
         }
         return;
       }
-      // Streaming argument deltas and per-item adds are display material the
-      // widgets don't need yet; the response.done path below is the record.
+      // Known chatter the ledger doesn't need: streaming deltas whose final
+      // form is recorded elsewhere (heard/said), per-item adds the
+      // response.done path covers, and buffer bookkeeping. Everything NOT
+      // named here still lands as `raw` — the list is allow-to-drop, and it
+      // was grown from a real first-light transcript, not guessed.
       case "response.function_call_arguments.delta":
       case "response.output_audio_transcript.started":
+      case "conversation.item.input_audio_transcription.delta":
+      case "conversation.item.input_audio_transcription.segment":
       case "conversation.item.added":
       case "conversation.item.done":
       case "response.output_item.added":
       case "response.output_item.done":
       case "response.content_part.added":
       case "response.content_part.done":
+      case "response.output_audio.delta":
+      case "response.output_audio.done":
+      case "input_audio_buffer.committed":
+      case "input_audio_buffer.cleared":
       case "output_audio_buffer.started":
       case "output_audio_buffer.stopped":
       case "output_audio_buffer.cleared":

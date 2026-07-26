@@ -83,6 +83,9 @@ describe("start", () => {
     };
     expect(opening.type).toBe("session.update");
     expect(opening.event_id).toMatch(/^evt_/);
+    // GA rejects a session.update without the type discriminator (found at
+    // first light) — but voice/model stay frozen fields we never send.
+    expect(opening.session.type).toBe("realtime");
     expect(opening.session.voice).toBeUndefined();
     expect(opening.session.model).toBeUndefined();
     expect((opening.session.tools as Array<{ name: string }>).map((t) => t.name)).toEqual([
@@ -238,9 +241,10 @@ describe("the live surface", () => {
     session.setTools([
       { name: "added", description: "new", parameters: { type: "object" }, execute: () => null },
     ]);
-    expect(
-      (rig.sent[0] as { session: { tools: Array<{ name: string }> } }).session.tools,
-    ).toHaveLength(1);
+    const update = (rig.sent[0] as { session: { type: string; tools: Array<{ name: string }> } })
+      .session;
+    expect(update.type).toBe("realtime"); // the live path needs the discriminator too
+    expect(update.tools).toHaveLength(1);
     // The server acks WITHOUT the tool — drift must be named, not swallowed.
     rig.emit({ type: "session.updated", session: { tools: [] } });
     const entries = session.ledger().filter((e) => e.kind === "config") as Array<
