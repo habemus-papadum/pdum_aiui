@@ -902,6 +902,62 @@ SELECT CAST(rec.message.content[1].type AS VARCHAR) ...      -- thinking / text 
 
 Deep paths and array indexing both work, on fields nothing ever declared.
 
+### 6.2 Both stages are built, and equivalence is the test that keeps them honest
+
+```sh
+pnpm -C demos/cc-slurp raw       -- --out ~/.cache/aiui/cc-raw/<host>   # stage 1
+pnpm -C demos/cc-slurp normalize -- --raw ~/.cache/aiui/cc-raw --out …  # stage 2
+```
+
+Stage 1 on this machine: **965 files** (485 JSONL, 480 sidecar), **168,171
+lines**, 0 parse errors, 676 MB → 289 MB (43%), 40 s. The sidecars turned out to
+be **agent memory files** — `memory/MEMORY.md` plus 376 `.json` and 48 `.md`,
+448 of them small enough to carry inline. Worth having captured before knowing
+what they were.
+
+Stage 2 accepts a directory holding one host set or many; every host feeds one
+`Normalizer`, so cross-host dedup is free — the same session synced from two
+machines collapses on `billingKey` exactly as a fork copy does within one.
+
+**The load-bearing test is `raw-equivalence.test.ts`**: normalizing through the
+raw layer must produce the same grains, table by table, as normalizing the JSONL
+directly. `hostId` is the one exempt field — the raw path carries the ingesting
+machine's minted id and the JSONL path has no host to name.
+
+Writing it found three defects. All three were **exposed** by the raw layer
+rather than caused by it, which is the argument for having the property at all:
+
+1. **Event dedup was key-order sensitive.** Records without a uuid (`relocated`
+   in practice) were deduped on `JSON.stringify(rec)`. A fork copy does not
+   always preserve key order, so one record got two dedup keys and was drawn
+   twice. Payloads are canonicalised now — which also makes the grains
+   byte-identical whichever path produced them, since VARIANT sorts keys by
+   construction.
+2. **`birthtimeMs` is fractional on APFS**, but the raw layer stores it as an
+   INT64. `lagSeconds` therefore disagreed between the paths by sub-millisecond
+   noise. Both ingest paths floor it.
+3. **A file holding no records was invisible to the raw reader**, which was
+   driven by rows. `noteFile` is what registers a session that produced
+   nothing — precisely the row a timeline must draw to show an abandoned fork.
+   The reader now replays the same file/record event sequence the JSONL path
+   emits. This also fixed the file and byte stats: the demo had been reporting
+   "derived from 0 files".
+
+Each fix is pinned by a test that fails when the fix is reverted — checked, not
+assumed. The live corpus has **zero** zero-line JSONL files today, so defect 3
+was latent; that is the reason to pin it rather than to shrug.
+
+Verified on a frozen 230-file / 61k-line / 3-project corpus: **all 8 tables
+identical**, file and byte counts equal.
+
+**Two process notes, both earned.** `--raw` was accepted by the interface but
+never parsed, and the CLI silently fell back to the whole live corpus — the
+numbers looked entirely plausible and the mistake surfaced only as a failed
+equivalence check. Unknown flags now exit 2. And Mosaic pins an exact older
+`duckdb-wasm` (`mosaic-core@0.28.1` → `1.33.1-dev45.0`), so two copies installed
+and `wasmConnector()` would not typecheck against our connection; a workspace
+override in `pnpm-workspace.yaml` collapses them.
+
 ## 6. Open questions
 
 - ~~Where does `fields.mjs` graduate to?~~ **Settled.** It is
@@ -929,32 +985,40 @@ Deep paths and array indexing both work, on fields nothing ever declared.
 
 **Done.**
 
-1. ~~Ship the normaliser.~~ `demos/cc-slurp` — five Parquet grains + a manifest,
-   480 files / 163k records / 562 MB → 29,378 turns in 3.1s. `checkInvariants`
-   asserts `SUM(sessions.nativeCost) == SUM(turns.costTotal)` and runs on every
-   invocation.
+1. ~~Ship the normaliser.~~ `demos/cc-slurp` — eight Parquet grains + a manifest.
+   `checkInvariants` asserts `SUM(sessions.nativeCost) == SUM(turns.costTotal)`
+   and runs on every invocation.
 2. ~~Scaffold the demo.~~ `demos/cc-optimizer` — gallery-private, DuckDB-WASM
-   over the five tables, four panels, plus a `query` action giving the agent
-   read-only SQL. Verified rendering against the real corpus.
+   over the tables, plus a `query` action giving the agent read-only SQL.
+3. ~~Validate cost against ground truth.~~ **It found a bug** — see §8.
+4. ~~Fork lineage edges.~~ The normalizer emits `forkEdges` and `lineages`, not
+   just `fork-context-ref` events; §1.6's provenance mechanism is implemented,
+   uuid-overlap first with the `session_id` marker only corroborating.
+5. ~~The session timeline.~~ Built as a custom `MosaicClient` (§5.6.1); both
+   questions it raised are answered in §5.6.3 and §5.6.6.
+6. ~~Two-stage ingestion.~~ §6.2 — built, and equivalence between the two paths
+   is a test.
 
-**In flight.**
+**Next.**
 
-3. ~~Validate cost against ground truth.~~ **Done, and it found a bug** — see
-   §8.
-4. **The two core widgets** (§5.6) and the two questions they raise: cross-table
-   filtering in Mosaic, and whether the session graph is expressible in SQL.
-   The data model for fork lineage / lanes / agent spans is the gating piece —
-   §1.6 established the provenance mechanism but the normalizer does not yet
-   emit lineage edges, only `fork-context-ref` events.
+7. **Session cost drill-down.** Pick one session; stacked per-turn bars over its
+   timeline, one colour per cost class, compaction markers in place. This is
+   also where `cache_read_input_tokens` gets validated as a context-size proxy
+   against `compactMetadata.preTokens` — the two should track until a compaction
+   resets the first.
+8. **Session replay.** The finest level: multi-agent aware, scoped to a whole
+   session or one hour inside it. This is the reason stage 1 keeps message
+   bodies the analytic grains throw away.
+9. **The turn scatter** (§5.6.2) — stock vgplot, 10–20k points.
+10. **Cross-filter the existing panels.** Static reads today; the `Selection` is
+    wired but nothing publishes into it — the timeline's brush is the natural
+    first producer, via the semi-join pattern in §5.6.3.
 
 **Standing.**
 
-5. **Re-run the census in ~3 weeks** (`exploration/cc-usage/`) and read the diff's
-   `NEW` section. That is the first real test of whether the drift workflow earns
-   its keep.
-6. **Cross-filter the existing panels.** They are static reads today; the
-   `Selection` is wired but nothing publishes into it yet — the timeline's brush
-   is the natural first producer, via the semi-join pattern in §5.6.3.
+11. **Re-run the census in ~3 weeks** (`exploration/cc-usage/`) and read the
+    diff's `NEW` section. That is the first real test of whether the drift
+    workflow earns its keep.
 
 ## 8. Reconciliation against `ccusage`, and what it changed
 
