@@ -1,8 +1,8 @@
 # Claude Code usage analytics — schema research and ingestion design
 
-**Status:** built. Two-stage ingestion (§6.2), eight analytic grains, and the
-session graph are live in `demos/cc-slurp` + `demos/cc-optimizer`; the two
-drill-down tools in §7 are what remain.
+**Status:** built. Two-stage ingestion (§6.2), eight analytic grains, the
+session graph and the session cost drill-down (§10) are live in
+`demos/cc-slurp` + `demos/cc-optimizer`; session replay is what remains (§7).
 **Spike:** [`exploration/cc-usage/`](../../exploration/cc-usage/) (runnable, zero deps).
 **Generated schema reference:** [`exploration/cc-usage/SCHEMA.md`](../../exploration/cc-usage/SCHEMA.md).
 **Date:** 2026-07-26. Corpus: 965 files (485 JSONL) · 168,171 records · 677 MB ·
@@ -1004,14 +1004,12 @@ override in `pnpm-workspace.yaml` collapses them.
    is a test.
 7. ~~Names.~~ §8 — sessions and agents are labelled by what the user calls them,
    with a rename surfaced rather than silently adopted.
+8. ~~Session cost drill-down.~~ §10 — stacked per-turn bars, a context-size
+   series with compactions ruled through both, and the proxy validated against
+   `compactMetadata.preTokens` (38 of 40 within ±20%).
 
 **Next.**
 
-8. **Session cost drill-down.** Pick one session; stacked per-turn bars over its
-   timeline, one colour per cost class, compaction markers in place. This is
-   also where `cache_read_input_tokens` gets validated as a context-size proxy
-   against `compactMetadata.preTokens` — the two should track until a compaction
-   resets the first.
 9. **Session replay.** The finest level: multi-agent aware, scoped to a whole
    session or one hour inside it. This is the reason stage 1 keeps message
    bodies the analytic grains throw away.
@@ -1165,3 +1163,64 @@ quantity — it is the right unit for comparing a workflow against an agent swar
 or this month against last — but it is not a bill, and the UI must not imply it
 is. §1.3(b) already said cost is derived; this is the stronger statement, and it
 is the one that belongs on screen.
+## 10. The session drill-down, and three things the data decided
+
+Built as `demos/cc-optimizer`'s last panel: cost per turn stacked by class, and
+under it the context size that drives it, compactions ruled through both.
+
+### 10.1 The x axis is a turn ordinal, not wall-clock
+
+| session | turns | span | idle | largest single gap |
+| --- | ---: | ---: | ---: | --- |
+| de93c3a5 | 2,183 | 12.8d | **92%** | 4.8d (**37% of the span**) |
+| 402656ea | 2,405 | 3.0d | 74% | 0.5d (17%) |
+| 63baa90e | 1,790 | 2.2d | 66% | 0.6d (25%) |
+
+On a time axis the work collapses into slivers and the empty stretches get the
+pixels — the part that answers "does cost per turn grow?" is exactly the part
+that gets squashed. Wall-clock is demoted rather than dropped: it rides in every
+tooltip, and idle gaps are ruled, so a session picked up a week later still
+reads as one.
+
+### 10.2 Grouped bars must SUM, not average
+
+2,183 turns across ~780px is a third of a pixel per bar, so bars cover ~13 turns.
+The aggregate had to be a sum, and the distribution is why:
+
+| statistic | value |
+| --- | ---: |
+| median turn | $0.366 |
+| p90 | $0.974 |
+| p99 | $8.964 |
+| max | $12.66 |
+| **share of spend from turns over $4** | **28.8%** |
+| share of turns over $4 | 2.06% |
+
+**2% of turns carry 29% of the spend.** Averaging a $12.66 turn across twelve
+quiet neighbours turns it into a $1 bar — the chart would silently flatten
+almost a third of the money. Summing keeps the spike, and because every bucket
+holds the same number of turns, bucket heights still compare as cost per turn,
+so the growth question survives the grouping. The y axis says `USD / 13 turns`
+so a bucket is never misread as a turn.
+
+Clipping the y axis was the other tempting option, and the same number rules it
+out: the outliers are not noise to hide, they are the finding.
+
+### 10.3 Context size is derived, and the chart plots its own error
+
+Nothing records context size. Tokens *sent up* — cache read + cache creation +
+fresh input — is the proxy, and it is checkable because every compaction records
+its own `preTokens`. Against this corpus's 40 compactions, restricted to
+main-loop turns, the proxy lands **within ±20% on 38**, most within 2%.
+
+Rather than assert that in a caption, the panel plots the measured `preTokens`
+as dots on top of the estimated line, so the agreement is visible.
+
+The two misses read ~2.2× high and both are `hadFallback` turns — a fallback
+re-sends the whole context to the second model, so the turn's summed tokens
+legitimately count it twice. That is 2 turns in 21,583 (0.01%), and it is the
+one case where the series means "tokens transmitted" rather than "context size".
+
+**Main-loop turns only.** A subagent carries its own context; mixing them in
+draws a sawtooth that says nothing about the session's own growth.
+
