@@ -117,6 +117,55 @@ describe("trap: per-block record duplication", () => {
   });
 });
 
+describe("trap: partial usage inside a billing group", () => {
+  it("takes the member with the real output, not the first one", () => {
+    // The exact shape found in subagent transcripts: cache_read constant across
+    // the group, output_tokens a placeholder until the final record.
+    const n = new Normalizer({ pricing: PRICES });
+    const f = FILE("s1", "subagent");
+    const partial = (uuid: string, out: number, block: unknown) =>
+      assistantRec({
+        id: "m1",
+        uuid,
+        session: "s1",
+        block,
+        usageOverride: {
+          input_tokens: 3,
+          output_tokens: out,
+          cache_read_input_tokens: 156614,
+          cache_creation_input_tokens: 0,
+          cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 0 },
+        },
+      });
+    n.add(partial("u1", 5, { type: "thinking", thinking: "x" }), f);
+    n.add(partial("u2", 5, { type: "text", text: "y" }), f);
+    n.add(partial("u3", 48469, { type: "tool_use", id: "t1", name: "Bash", input: {} }), f);
+
+    const out = n.finish();
+    expect(out.turns).toHaveLength(1);
+    // 48469, not 5 — taking the first member undercounted output by 32% corpus-wide
+    expect(out.turns[0].outputTokens).toBe(48469);
+    // the constant classes are unaffected, whichever member is chosen
+    expect(out.turns[0].cacheReadTokens).toBe(156614);
+    // structure is still unioned across all three records
+    expect(out.turns[0].nBlocks).toBe(3);
+    expect(out.toolCalls).toHaveLength(1);
+  });
+
+  it("still prefers the non-sidechain copy when output ties (fork case)", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    n.add(assistantRec({ id: "m1", uuid: "u1", session: "s1", originSession: "s1" }), FILE("s1"));
+    n.add(
+      assistantRec({ id: "m1", uuid: "u1", session: "s2", originSession: "s1" }),
+      FILE("s2", "subagent"),
+    );
+    const out = n.finish();
+    expect(out.turns).toHaveLength(1);
+    // attributed to the session that produced it, not the file it was copied into
+    expect(out.turns[0].sessionId).toBe("s1");
+  });
+});
+
 describe("trap: fork copies the prefix", () => {
   it("counts a turn once when it appears in two session files", () => {
     const n = new Normalizer({ pricing: PRICES });

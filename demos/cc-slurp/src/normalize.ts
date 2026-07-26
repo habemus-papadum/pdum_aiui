@@ -34,12 +34,13 @@ import {
   num,
   obj,
   originSession,
-  preferOriginal,
+  preferForBilling,
   splitModel,
   str,
   thinkingChars,
   toolOutcome,
   toolUses,
+  totalOutput,
   UNPRICED_MODELS,
 } from "./fields.ts";
 import { imageRefs } from "./images.ts";
@@ -196,6 +197,14 @@ export interface NormalizeStats {
   unpricedTurns: number;
   /** Data-quality observation, not a pipeline fault — see checkInvariants. */
   turnsWithoutTimestamp: number;
+  /**
+   * Billing groups whose members disagreed on output_tokens. Surfaced because
+   * this is the regime where `preferForBilling` is load-bearing: if a refactor
+   * ever reverted to "keep the first member", output would silently drop by
+   * roughly this population's share. A non-zero value here is normal (subagent
+   * transcripts), a zero value on a corpus with subagents is suspicious.
+   */
+  groupsWithVaryingOutput: number;
   totalCost: number;
   pricingVersion: string;
 }
@@ -293,6 +302,7 @@ export class Normalizer {
       crossFileDuplicates: 0,
       unpricedTurns: 0,
       turnsWithoutTimestamp: 0,
+      groupsWithVaryingOutput: 0,
       totalCost: 0,
       pricingVersion: options.pricing.version,
     };
@@ -342,10 +352,13 @@ export class Normalizer {
           entry = { rec, file, uuids: new Set(), blocks: 0, toolUses: [], thinkingChars: 0 };
           this.billed.set(key, entry);
         } else {
-          // preferOriginal keeps the parent's copy over a sidechain replay; when
-          // both rank equally the first wins, which is stable because
-          // findTranscripts walks in sorted order.
-          entry.rec = preferOriginal(entry.rec, rec);
+          // NOT "keep the first". A group's members disagree on output_tokens
+          // (see fields.ts preferForBilling) — the final record carries the real
+          // count. Ties fall through to the non-sidechain copy, which settles
+          // fork duplicates.
+          const before = totalOutput(entry.rec);
+          entry.rec = preferForBilling(entry.rec, rec);
+          if (totalOutput(entry.rec) !== before) this.stats.groupsWithVaryingOutput++;
         }
         const uuid = str(rec.uuid);
         // A fork copies whole records; without this guard its blocks would be
