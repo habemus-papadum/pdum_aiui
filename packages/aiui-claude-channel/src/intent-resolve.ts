@@ -15,7 +15,6 @@ import {
   expandTier,
   type IntentPipelineConfig,
   type LinterVendor,
-  type OracleVendor,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import { DEFAULT_GEMINI_LIVE_MODEL } from "./gemini-live";
 import { DEFAULT_OPENAI_LIVE_MODEL } from "./openai-live";
@@ -90,12 +89,6 @@ export interface ResolvedIntent {
   linterModel: string | undefined;
   /** Linter persona override; undefined → LINTER_INSTRUCTIONS. */
   linterInstructions: string | undefined;
-  /** The oracle: off, or the live vendor the mic is ADDRESSED to (XOR linter). */
-  oracle: OracleVendor;
-  /** Oracle model id; undefined → the vendor default. */
-  oracleModel: string | undefined;
-  /** Oracle persona override; undefined → ORACLE_INSTRUCTIONS. */
-  oracleInstructions: string | undefined;
   /** Ambient screen-frame cadence while sharing (ms per frame). */
   videoFrameIntervalMs: number;
   /** Legacy translations applied while resolving (each one human-readable). */
@@ -104,18 +97,6 @@ export interface ResolvedIntent {
 
 /** The premium TTS default model. */
 export const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
-
-/**
- * The oracle is MOTHBALLED (owner, 2026-07-25): retired from the intent
- * client, being rebuilt lab-first as a standalone WebRTC tool
- * (`packages/aiui-oracle`). This gate closes both doors into the channel-side
- * sidecar — the hello's resolve (below) and the mid-thread `oracle` control
- * (intent-v1.ts) — so `turn.oracle` can never be set; oracle-sidecar.ts stays
- * compiling, warm for the rebuild. Typed `boolean`, not `false`, so neither
- * door's code narrows to dead. Flip to true to resurrect the old in-channel
- * oracle (its suite is skip-gated on this constant, intent-v1.oracle.test.ts).
- */
-export const ORACLE_ENABLED: boolean = false;
 
 /**
  * The remediation line every OpenAI-backed failure carries on its error push.
@@ -197,13 +178,6 @@ export function resolveIntent(raw: unknown): ResolvedIntent {
     linter: oneOf(cfg.linter, ["off", "openai", "gemini"] as const, preset.linter ?? "off"),
     linterModel: optStr(cfg.linterModel ?? preset.linterModel),
     linterInstructions: optStr(cfg.linterInstructions ?? preset.linterInstructions),
-    // Door 1 of the mothball (see ORACLE_ENABLED): a hello can no longer
-    // open the in-channel oracle, however it was written.
-    oracle: ORACLE_ENABLED
-      ? oneOf(cfg.oracle, ["off", "openai"] as const, preset.oracle ?? "off")
-      : "off",
-    oracleModel: optStr(cfg.oracleModel ?? preset.oracleModel),
-    oracleInstructions: optStr(cfg.oracleInstructions ?? preset.oracleInstructions),
     videoFrameIntervalMs:
       typeof cfg.videoFrameIntervalMs === "number" && cfg.videoFrameIntervalMs > 0
         ? cfg.videoFrameIntervalMs
@@ -246,14 +220,6 @@ export function resolveIntent(raw: unknown): ResolvedIntent {
     resolved.coerced.push(
       `submode realtime → linter ${resolved.linter} (the model-composes path retired; the compiler composes everywhere)`,
     );
-  }
-  if (resolved.oracle !== "off" && resolved.linter !== "off") {
-    // The journeys' XOR (capture-bus §4): oracle ⊕ linter is structural. The
-    // client's config layer enforces it; a hello carrying both anyway (a
-    // hand-written config, a race) is coerced — the oracle wins, since it is
-    // the more deliberate of the two selections.
-    resolved.linter = "off";
-    resolved.coerced.push("linter off (oracle on — the journeys' XOR: oracle ⊕ linter)");
   }
   return resolved;
 }

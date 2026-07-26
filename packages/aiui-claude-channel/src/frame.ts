@@ -123,8 +123,7 @@ export interface HelloMeta {
  *    `{ control: "lint", value: "now" | "stop" }` — the converse turn
  *    strategy's button pair (`now` ends the lint turn at the button, `stop`
  *    cancels the in-flight reply; capture-bus-and-consumers.md §6 Phase 1).
- *    (A third, `{ control: "oracle", … }`, is MOTHBALLED — the handler
- *    ignores it while ORACLE_ENABLED is off; see intent-resolve.ts.)
+ *    An unrecognized control name is a no-op.
  */
 export type ChunkDescriptor =
   | { kind: "events" }

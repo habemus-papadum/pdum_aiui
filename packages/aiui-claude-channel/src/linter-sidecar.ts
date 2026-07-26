@@ -303,8 +303,7 @@ export function createLinterSidecar(options: LinterSidecarOptions): LinterSideca
       // Client-boundary barge-in: a human talking over the lint wants to keep
       // briefing, not listen to the rest of it. The LINTER runs manual VAD
       // (turn_detection: null) so the vendor cannot detect this itself — the
-      // talk boundary is the one signal there is (the oracle, under server
-      // VAD, deliberately has none of this: its vendor owns barge-in).
+      // talk boundary is the one signal there is.
       session.cancelActiveResponse();
       closeReplyStream(true); // stop the client playing the stale reply
       // Accumulation, not turn-taking: the window opens once and stays open

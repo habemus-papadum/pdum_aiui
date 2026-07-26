@@ -74,13 +74,13 @@ export const VENDOR_KEYS: readonly VendorKeySpec[] = [
     provider: "openai",
     envVar: "OPENAI_API_KEY",
     label: "OpenAI",
-    purpose: "speech transcription, dictation correction, and the default linter/oracle",
+    purpose: "speech transcription, dictation correction, and the default linter",
   },
   {
     provider: "gemini",
     envVar: "GEMINI_API_KEY",
     label: "Gemini",
-    purpose: "the Gemini Live realtime engine and the Gemini linter/oracle options",
+    purpose: "the Gemini Live realtime engine and the Gemini linter option",
   },
   {
     provider: "elevenlabs",

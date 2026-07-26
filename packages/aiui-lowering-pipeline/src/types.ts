@@ -506,24 +506,7 @@ export type IntentEvent =
    * again). Compiler-skipped like every `linter-*` kind. `segment` anchors
    * the turn it completed, when known.
    */
-  | { at: number; type: "linter-turn-complete"; segment?: number }
-  /**
-   * The ORACLE's record of what it heard — the vendor's own transcription of
-   * the human's speech while the oracle journey is on (§8 decision 6:
-   * model-emitted, model-dependent, a RECORD artifact). NEVER prompt text —
-   * the compiler skips it like every advisory kind; while the oracle is on,
-   * prompt building is paused and the matching talk segments resolve empty.
-   */
-  | { at: number; type: "oracle-heard"; text: string }
-  /**
-   * The ORACLE's reply transcript — what it spoke back (the other direction
-   * of the §8-6 record). Rendered as a chip; never composed.
-   */
-  | { at: number; type: "oracle-said"; text: string }
-  /** The oracle asked to use a tool — the request half (mirrors `linter-tool-call`). */
-  | { at: number; type: "oracle-tool-call"; tool: string; args: Record<string, unknown> }
-  /** The tool's answer to an `oracle-tool-call` (mirrors `linter-tool-result`). */
-  | { at: number; type: "oracle-tool-result"; tool: string; ok: boolean; summary: string };
+  | { at: number; type: "linter-turn-complete"; segment?: number };
 
 // (LINTER_TRANSCRIPT_WAIT_MS lived here until the overhear retirement,
 // 2026-07-19: the linter is converse-only — no automatic turn-end, so no

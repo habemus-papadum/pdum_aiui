@@ -122,10 +122,9 @@ export function executeReadFile(args: Record<string, unknown>, cwd?: string): Re
 
 /**
  * How a live consumer observes a tool round-trip — the consumer supplies its
- * OWN event/label vocabulary (`linter-tool-*` vs `oracle-tool-*`); the
- * execution policy above stays in one place. Part of the shared live-consumer
- * core (capture-bus-and-consumers.md §6 Phase 2): the linter and the oracle
- * run the same tools, differing only in how the round-trip is recorded.
+ * OWN event/label vocabulary (`linter-tool-*`); the execution policy above
+ * stays in one place (the shared live-consumer core,
+ * capture-bus-and-consumers.md §6 Phase 2).
  */
 export interface ToolRunObserver {
   /** The request half arrived — chronicle + trace it (before execution). */

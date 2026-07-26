@@ -139,13 +139,6 @@ export interface LiveSessionCallbacks {
    * ignore it. Optional.
    */
   onTurnComplete?(): void;
-  /**
-   * The vendor's own transcription of the HUMAN's input audio — the
-   * `oracle-heard` record (capture-bus §8 decision 6). Only fires when the
-   * session enabled input transcription (the oracle does; the linter and STT
-   * deliberately do not — the STT session owns the chronicle there). Optional.
-   */
-  onInputTranscript?(text: string): void;
 }
 
 /**

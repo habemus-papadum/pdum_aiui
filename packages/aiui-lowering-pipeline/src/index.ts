@@ -16,14 +16,8 @@
  */
 
 export { composeIntent } from "./compose";
-export type { IntentPipelineConfig, LinterVendor, LintTurnAction, OracleVendor } from "./config";
-export {
-  DEFAULT_INTENT_CONFIG,
-  expandTier,
-  LINT_TURN_ACTIONS,
-  LINTER_VENDORS,
-  ORACLE_VENDORS,
-} from "./config";
+export type { IntentPipelineConfig, LinterVendor, LintTurnAction } from "./config";
+export { DEFAULT_INTENT_CONFIG, expandTier, LINT_TURN_ACTIONS, LINTER_VENDORS } from "./config";
 export type { EngineListener } from "./engine";
 export { Engine } from "./engine";
 export type { DiffRun } from "./patch";

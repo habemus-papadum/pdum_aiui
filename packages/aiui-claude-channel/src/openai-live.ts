@@ -28,8 +28,7 @@
  *    routed through `onToolCall`; `respond` writes a `function_call_output`
  *    item then `response.create` (the resume rule — a written tool result
  *    never re-triggers the response on its own).
- *  - **Back:** `conversation.item.input_audio_transcription.completed` (the user
- *    transcript), `response.output_audio.delta`/`.done` (reply audio),
+ *  - **Back:** `response.output_audio.delta`/`.done` (reply audio),
  *    `response.output_audio_transcript.done` (reply transcript), `response.done`
  *    (usage + the tool call).
  *
@@ -91,22 +90,6 @@ export interface OpenAiLiveSessionOptions {
    * {@link LINTER_INSTRUCTIONS}, the shared authoritative text.
    */
   instructions?: string;
-  /**
-   * Vendor auto-VAD turn detection (`turn_detection: server_vad`) — the
-   * ORACLE's converse mode: the vendor decides when the human finished and
-   * responds on its own; `activityEnd`'s manual commit becomes a no-op (a
-   * manual commit under server VAD would double-commit). Default false — the
-   * linter's manual (PTT-boundary) mode, `turn_detection: null`.
-   */
-  serverVad?: boolean;
-  /**
-   * Enable vendor INPUT transcription with this model (e.g.
-   * `gpt-4o-mini-transcribe`) — the oracle's `oracle-heard` record rides
-   * {@link LiveSessionCallbacks.onInputTranscript}. Default off: the linter
-   * and STT sessions must NOT double-transcribe (the STT session owns the
-   * chronicle).
-   */
-  inputTranscriptionModel?: string;
   /** Override the endpoint (tests). */
   url?: string;
   /** Injected upstream socket (tests); defaults to the real `ws` factory (via realtime.ts). */
@@ -239,23 +222,6 @@ export function openOpenAiLiveSession(
         }
         return;
       }
-      case "input_audio_buffer.speech_started": {
-        // Server VAD (oracle mode) heard the human start talking: the VENDOR
-        // owns barge-in — it truncates its own response. We only LISTEN and
-        // relay, so the client stops playing the now-stale reply chunks.
-        // Never sent under manual VAD (the linter), where the client's talk
-        // boundary drives the explicit cancel instead.
-        callbacks.onInterrupted();
-        return;
-      }
-      case "conversation.item.input_audio_transcription.completed": {
-        // Vendor input transcription (oracle mode only — see the session
-        // config): the model's own record of what the human said.
-        if (typeof message.transcript === "string" && message.transcript !== "") {
-          callbacks.onInputTranscript?.(message.transcript);
-        }
-        return;
-      }
       case "response.done": {
         const id = message.response?.id ?? message.response_id ?? "";
         const usage = usageFromRealtimeResponse(message.response?.usage);
@@ -319,12 +285,11 @@ export function openOpenAiLiveSession(
       if (typeof voice === "string" && voice !== "") {
         output.voice = voice;
       }
-      // Linter mode declares read_file and NO vendor input transcription —
-      // the STT session owns the chronicle, and the sidecar injects
-      // `[transcript seg_N: …]` items instead (double-transcribing the same
-      // audio would double the cost for a worse record). Oracle mode flips
-      // both knobs: server VAD decides the turns, and input transcription IS
-      // the record (the STT session is paused while the oracle has the mic).
+      // The linter declares read_file, manual VAD (turn_detection: null — the
+      // client's talk boundary drives the turns), and NO vendor input
+      // transcription — the STT session owns the chronicle, and the sidecar
+      // injects `[transcript seg_N: …]` items instead (double-transcribing
+      // the same audio would double the cost for a worse record).
       socket.send(
         JSON.stringify({
           type: "session.update",
@@ -336,10 +301,7 @@ export function openOpenAiLiveSession(
             audio: {
               input: {
                 format: { type: "audio/pcm", rate: REALTIME_VOICE_RATE },
-                turn_detection: options.serverVad === true ? { type: "server_vad" } : null,
-                ...(options.inputTranscriptionModel !== undefined
-                  ? { transcription: { model: options.inputTranscriptionModel } }
-                  : {}),
+                turn_detection: null,
               },
               output,
             },
@@ -376,12 +338,6 @@ export function openOpenAiLiveSession(
     },
     activityEnd() {
       if (gate.isDead()) {
-        return;
-      }
-      // Under server VAD the VENDOR commits and responds on its own silence
-      // detection — a manual commit here would double-commit the buffer.
-      if (options.serverVad === true) {
-        windowBytes = 0;
         return;
       }
       // The commit floor: a tapped-and-released window under ~100 ms cannot

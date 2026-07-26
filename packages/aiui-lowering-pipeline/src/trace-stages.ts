@@ -111,21 +111,6 @@ export type ParsedStage =
   | { t: "linter-error" }
   | { t: "linter-close" }
   | { t: "linter-control" }
-  // ── the oracle consumer (converse: auto-VAD + loop) ──
-  | { t: "oracle-open" }
-  | { t: "oracle-disabled" }
-  | { t: "oracle-heard" }
-  | { t: "oracle-said" }
-  | { t: "oracle-tool-call"; tool: string }
-  | { t: "oracle-tool-result" }
-  | { t: "oracle-label"; id: string }
-  | { t: "oracle-selection" }
-  | { t: "oracle-selection-retracted" }
-  | { t: "oracle-interrupted" }
-  | { t: "oracle-error" }
-  | { t: "oracle-close" }
-  | { t: "oracle-control" }
-  | { t: "oracle-addressed"; segment: number }
   // ── unclassified live writer ──
   | { t: "user-text" }
   // ── reader-only LEGACY labels (no living writer; kept so old traces render) ──
@@ -173,27 +158,6 @@ export type LinterStageLabel =
   | `linter tool call ${string}`
   | `linter transcript seg_${number}`
   | `linter label ${string}`;
-
-/**
- * The union of every label the ORACLE consumer mints — same contract as
- * {@link LinterStageLabel}: the oracle sidecar's `record` narrows to this, so
- * a new oracle label must go through the builders.
- */
-export type OracleStageLabel =
-  | "oracle open"
-  | "oracle disabled"
-  | "oracle heard"
-  | "oracle said"
-  | "oracle tool result"
-  | "oracle selection"
-  | "oracle selection retracted"
-  | "oracle interrupted"
-  | "oracle error"
-  | "oracle close"
-  | "oracle control"
-  | `oracle tool call ${string}`
-  | `oracle label ${string}`
-  | `oracle addressed seg_${number}`;
 
 /** Build a `frame …` input label exactly as the tracing decorator did. */
 function inputFrameLabel(spec: {
@@ -262,20 +226,6 @@ export const stageLabel = {
   linterError: () => "linter error" as const,
   linterClose: () => "linter close" as const,
   linterControl: () => "linter control" as const,
-  oracleOpen: () => "oracle open" as const,
-  oracleDisabled: () => "oracle disabled" as const,
-  oracleHeard: () => "oracle heard" as const,
-  oracleSaid: () => "oracle said" as const,
-  oracleToolCall: (tool: string) => `oracle tool call ${tool}` as const,
-  oracleToolResult: () => "oracle tool result" as const,
-  oracleLabel: (id: string) => `oracle label ${id}` as const,
-  oracleSelection: () => "oracle selection" as const,
-  oracleSelectionRetracted: () => "oracle selection retracted" as const,
-  oracleInterrupted: () => "oracle interrupted" as const,
-  oracleError: () => "oracle error" as const,
-  oracleClose: () => "oracle close" as const,
-  oracleControl: () => "oracle control" as const,
-  oracleAddressed: (segment: number) => `oracle addressed seg_${segment}` as const,
   userText: () => "user text" as const,
 } as const;
 
@@ -318,17 +268,6 @@ const EXACT: Record<string, StageTag> = {
   "linter error": "linter-error",
   "linter close": "linter-close",
   "linter control": "linter-control",
-  "oracle open": "oracle-open",
-  "oracle disabled": "oracle-disabled",
-  "oracle heard": "oracle-heard",
-  "oracle said": "oracle-said",
-  "oracle tool result": "oracle-tool-result",
-  "oracle selection": "oracle-selection",
-  "oracle selection retracted": "oracle-selection-retracted",
-  "oracle interrupted": "oracle-interrupted",
-  "oracle error": "oracle-error",
-  "oracle close": "oracle-close",
-  "oracle control": "oracle-control",
   "user text": "user-text",
   // legacy reader-only:
   "correction request": "correction-request",
@@ -469,19 +408,6 @@ export function parseStageLabel(label: string): ParsedStage {
   }
   if (label.startsWith("linter label shot_")) {
     return { t: "linter-label", id: attachmentIdOf(label) ?? "shot" };
-  }
-
-  // oracle templated forms (before the exact oracle labels).
-  m = /^oracle tool call (.+)$/.exec(label);
-  if (m) {
-    return { t: "oracle-tool-call", tool: m[1] };
-  }
-  m = /^oracle addressed seg_(\d+)$/.exec(label);
-  if (m) {
-    return { t: "oracle-addressed", segment: Number(m[1]) };
-  }
-  if (label.startsWith("oracle label shot_")) {
-    return { t: "oracle-label", id: attachmentIdOf(label) ?? "shot" };
   }
 
   // legacy templated forms.

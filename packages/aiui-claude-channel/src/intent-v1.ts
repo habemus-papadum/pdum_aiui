@@ -66,8 +66,6 @@ import {
   LINTER_VENDORS,
   type LinterVendor,
   type LintTurnAction,
-  ORACLE_VENDORS,
-  type OracleVendor,
 } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   type ConditionData,
@@ -85,7 +83,7 @@ import { rawCodec } from "./codec";
 import type { ChunkDescriptor } from "./frame";
 import { finishTurn } from "./intent-fin";
 import type { LoweredMessage } from "./intent-messages";
-import { GEMINI_KEY_HINT, OPENAI_KEY_HINT, ORACLE_ENABLED, resolveIntent } from "./intent-resolve";
+import { GEMINI_KEY_HINT, OPENAI_KEY_HINT, resolveIntent } from "./intent-resolve";
 import {
   decodeJson,
   imageDownscale,
@@ -93,17 +91,11 @@ import {
   readEventBatch,
   silenceTrim,
 } from "./intent-stream-util";
-import {
-  commitRealtimeSegment,
-  onAudioChunk,
-  openSttSession,
-  resolveOracleAddressedSegment,
-} from "./intent-stt";
+import { commitRealtimeSegment, onAudioChunk, openSttSession } from "./intent-stt";
 import { createIntentTurn } from "./intent-turn";
 import { createLinterSidecar } from "./linter-sidecar";
 import type { SelectionEntry } from "./live-resolve";
 import type { LiveSession, LiveSessionCallbacks } from "./live-session";
-import { createOracleSidecar } from "./oracle-sidecar";
 import { promptContextSections } from "./prompt-context";
 import type { RealtimeSocketFactory } from "./realtime";
 
@@ -169,11 +161,6 @@ export interface IntentV1Options {
    */
   linterSessionFactory?: (callbacks: LiveSessionCallbacks) => LiveSession;
   /**
-   * Test seam override replacing the ORACLE's whole engine with a scripted
-   * {@link LiveSession} — same pattern as {@link linterSessionFactory}.
-   */
-  oracleSessionFactory?: (callbacks: LiveSessionCallbacks) => LiveSession;
-  /**
    * Test seam override for the post-send turn summarizer (see summarize.ts). Its
    * mere presence enables summaries even with no key; absent + keyless → no
    * summary (the gloss is a convenience, never load-bearing). Real seam is the
@@ -198,11 +185,6 @@ function isLinterVendor(value: unknown): value is LinterVendor {
  */
 function isLintTurnAction(value: unknown): value is LintTurnAction {
   return (LINT_TURN_ACTIONS as readonly string[]).includes(value as string);
-}
-
-/** Revalidate an untrusted `oracle` control value — derived from {@link ORACLE_VENDORS}. */
-function isOracleVendor(value: unknown): value is OracleVendor {
-  return (ORACLE_VENDORS as readonly string[]).includes(value as string);
 }
 
 /**
@@ -410,64 +392,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
   };
   buildLinter(intent.linter);
 
-  // ── the ORACLE sidecar (oracle != "off") — capture-bus Phase 2 ───────────────
-  // The second live consumer: a direct conversation the mic is ADDRESSED to.
-  // While it exists, audio routes here instead of the STT session (prompt
-  // building paused — the talk segments resolve empty) and the linter is
-  // structurally off (the journeys' XOR; resolve coerced it, the control
-  // handler enforces it live). Keyless → disabled LOUDLY, once.
-  const buildOracle = (vendor: OracleVendor): void => {
-    turn.oracle?.close();
-    turn.oracle = undefined;
-    if (vendor === "off") {
-      return;
-    }
-    if (
-      (apiKey !== undefined && apiKey !== "") ||
-      options.openaiLiveSocketFactory !== undefined ||
-      options.oracleSessionFactory !== undefined
-    ) {
-      turn.oracle = createOracleSidecar({
-        apiKey: apiKey ?? "",
-        ...(intent.oracleModel !== undefined ? { model: intent.oracleModel } : {}),
-        ...(intent.oracleInstructions !== undefined
-          ? { instructions: intent.oracleInstructions }
-          : {}),
-        ...(intent.realtimeVoice !== undefined ? { voice: intent.realtimeVoice } : {}),
-        promptCwd,
-        appendEvent: (event) => appendEvent(event as unknown as IntentEvent),
-        push: (produced) => push(produced as unknown as IntentEvent[]),
-        pushSpeechChunk,
-        pushSpeechCancel,
-        recordCost,
-        onError: (message, data) =>
-          pushError(ctx, {
-            source: "oracle",
-            message,
-            detail: OPENAI_KEY_HINT,
-            ...(data !== undefined ? { data } : {}),
-          }),
-        ...(trace !== undefined ? { record: (stage) => trace.record(stage) } : {}),
-        ...(options.openaiLiveSocketFactory !== undefined
-          ? { socketFactory: options.openaiLiveSocketFactory }
-          : {}),
-        ...(options.oracleSessionFactory !== undefined
-          ? { openSession: options.oracleSessionFactory }
-          : {}),
-      });
-    } else {
-      const message = `oracle disabled — ${absentKeyPhrase("OPENAI_API_KEY")}; briefing capture still works`;
-      push([{ at: Date.now(), type: "note", text: message }]);
-      pushError(ctx, { source: "oracle", message, detail: OPENAI_KEY_HINT });
-      trace?.record({
-        kind: "info",
-        label: stageLabel.oracleDisabled(),
-        data: { vendor, reason: "no key" },
-      });
-    }
-  };
-  buildOracle(intent.oracle);
-
   // ── realtime (streaming) transcription session ───────────────────────────────
   // Opened here, at processor construction (≈ thread-open), so the handshake +
   // session.update overlap the arm→talk gap. Deltas echo the preview as you
@@ -498,7 +422,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           selectionRegistry.set(marker, entry);
         }
         turn.sidecar?.onSelection(marker, entry, updated);
-        turn.oracle?.onSelection(marker, entry, updated);
       } else if (event.type === "code-selection") {
         const { at: _at, type: _type, marker, ...data } = event;
         trace?.record({ kind: "ir", label: stageLabel.codeSelection(), data: { ...data, marker } });
@@ -508,7 +431,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           selectionRegistry.set(marker, entry);
         }
         turn.sidecar?.onSelection(marker, entry, updated);
-        turn.oracle?.onSelection(marker, entry, updated);
       } else if (event.type === "app-selection-drop") {
         trace?.record({
           kind: "ir",
@@ -516,7 +438,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           data: { ...(event.marker !== undefined ? { marker: event.marker } : {}) },
         });
         turn.sidecar?.onSelectionDrop(event.marker);
-        turn.oracle?.onSelectionDrop(event.marker);
       } else if (event.type === "code-selection-drop") {
         trace?.record({
           kind: "ir",
@@ -524,19 +445,12 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
           data: { marker: event.marker },
         });
         turn.sidecar?.onSelectionDrop(event.marker);
-        turn.oracle?.onSelectionDrop(event.marker);
       }
       // talk-end is the segment-commit boundary for the streaming transcriber
       // (PTT stays the contract — no `last` flag on the audio frames). The
       // client flushes talk-end immediately past its 60 ms debounce so the
       // upstream buffer commits promptly.
-      if (event.type === "talk-end" && turn.oracle !== undefined) {
-        // The mic was ADDRESSED TO THE ORACLE for this segment: prompt
-        // building is paused. Resolve the segment EMPTY (the preview stops
-        // waiting; the compiler composes nothing) — the record of what was
-        // said rides the oracle's own transcripts (`oracle-heard`).
-        resolveOracleAddressedSegment(turn, trace, event.segment);
-      } else if (realtimeEnabled && event.type === "talk-end") {
+      if (realtimeEnabled && event.type === "talk-end") {
         commitRealtimeSegment(turn, trace, intent, event.segment);
       }
       // The live consumers observe talk boundaries and finals. The linter has
@@ -546,7 +460,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       // same path as a server one).
       if (event.type === "talk-start") {
         turn.sidecar?.onTalkStart(event.segment);
-        // (no oracle hook: under server VAD the vendor owns barge-in itself)
       } else if (event.type === "transcript-final" && !event.correction) {
         turn.sidecar?.onTranscriptFinal(event.segment, event.text);
       }
@@ -607,7 +520,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
         recomposeIfStale();
       }
       turn.sidecar?.onShot(id, conditioned, mime);
-      turn.oracle?.onShot(id, conditioned, mime);
     }
     // Any other attachment id has no place in the compose and no blob to save.
   };
@@ -642,34 +554,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       }
       return;
     }
-    if (decoded.control === "oracle") {
-      // Door 2 of the mothball (see ORACLE_ENABLED, intent-resolve.ts): the
-      // whole branch, not just buildOracle — the XOR backstop below kills a
-      // running linter BEFORE building, so a gate any deeper would let a
-      // stray `oracle` control silently murder the linter and start nothing.
-      if (!ORACLE_ENABLED) {
-        return;
-      }
-      const value = decoded.value;
-      if (!isOracleVendor(value) || value === intent.oracle) {
-        return;
-      }
-      trace?.record({
-        kind: "info",
-        label: stageLabel.oracleControl(),
-        data: { from: intent.oracle, to: value },
-      });
-      // The journeys' XOR, enforced live: turning the oracle on closes any
-      // running linter (the client's config layer already flipped its select;
-      // this is the server-side backstop).
-      if (value !== "off" && intent.linter !== "off") {
-        intent.linter = "off";
-        buildLinter("off");
-      }
-      intent.oracle = value;
-      buildOracle(value);
-      return;
-    }
     if (decoded.control !== "linter") {
       return;
     }
@@ -682,11 +566,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       label: stageLabel.linterControl(),
       data: { from: intent.linter, to: value },
     });
-    // The XOR's other direction: turning the linter on closes a running oracle.
-    if (value !== "off" && intent.oracle !== "off") {
-      intent.oracle = "off";
-      buildOracle("off");
-    }
     intent.linter = value;
     buildLinter(value);
   };
@@ -728,7 +607,6 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
       turn.reset();
       turn.realtime?.close();
       turn.sidecar?.close();
-      turn.oracle?.close();
       turn.flushSpeechTrace();
     },
   };

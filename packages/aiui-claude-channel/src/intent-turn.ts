@@ -37,7 +37,6 @@ import type { LoweredMessage, SpeechCancelMessage, SpeechMessage } from "./inten
 import type { ResolvedIntent } from "./intent-resolve";
 import { ordinalOf } from "./intent-stream-util";
 import type { LinterSidecar } from "./linter-sidecar";
-import type { OracleSidecar } from "./oracle-sidecar";
 import type { RealtimeSession } from "./realtime";
 import type { TraceHandle } from "./trace";
 
@@ -79,14 +78,6 @@ export interface IntentTurn {
    * start / stop / swap it live.
    */
   sidecar: LinterSidecar | undefined;
-  /**
-   * The ORACLE sidecar (capture-bus Phase 2). Reassignable slot like the
-   * linter's; mutually exclusive with it (the journeys' XOR — the resolve
-   * coercion and the control handler both enforce it). While set, the mic is
-   * addressed HERE: audio routes to it instead of the STT session, and the
-   * talk segments resolve empty (prompt building paused).
-   */
-  oracle: OracleSidecar | undefined;
 
   /** Append one event to the stream and bump the mutation counter. */
   appendEvent(event: IntentEvent): void;
@@ -191,7 +182,6 @@ export function createIntentTurn(
     ackSeq: 0,
     realtime: undefined,
     sidecar: undefined,
-    oracle: undefined,
 
     appendEvent: (event) => {
       turn.events.push(event);

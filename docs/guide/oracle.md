@@ -1,13 +1,14 @@
 # The Oracle
 
-::: warning RETIRED FROM THE CLIENT (2026-07-25)
+::: warning RETIRED (2026-07-25) — THIS PAGE IS THE HISTORICAL RECORD
 This page describes the oracle as it shipped **inside the intent client and channel** — a
-config-strip select riding the capture bus. That incarnation is retired: the select and its
-surfaces are gone from the client, and the channel-side handler is mothballed behind
-`ORACLE_ENABLED` (`aiui-claude-channel/src/intent-resolve.ts`). The oracle returns as a
-**standalone tool** (`packages/aiui-oracle`, built lab-first: browser WebRTC directly to the
-vendor over ephemeral keys). The persona and conversation contracts documented here — including
-the instructions below, still the persona of record (`oracle-sidecar.ts`) — carry over.
+config-strip select riding the capture bus. That incarnation is **deleted end to end**: no
+client surface, no channel handler, no `oracle-*` events in the pipeline vocabulary (git
+history keeps the implementation; old traces render their oracle stages as generic cards).
+The oracle returns as a **standalone tool** (`packages/aiui-oracle`, built lab-first: browser
+WebRTC directly to the vendor over ephemeral keys) that deliberately contributes nothing to
+turns or prompt lowering. Until that package lands, the instructions quoted below are the
+**persona of record** — this page is their living home.
 :::
 
 The **oracle** is a direct, real-time voice conversation with a model, available mid-way through

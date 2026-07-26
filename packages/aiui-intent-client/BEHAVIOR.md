@@ -230,10 +230,11 @@ Phase 2 implemented 2026-07-18):
   advisory read when the **lint now** button asks; never touches the prompt. (Overhear — the
   automatic pause-lints — retired 2026-07-19.)
 A third route, the **oracle** — a direct voice conversation the mic was ADDRESSED to — is
-**retired from the client** (owner, 2026-07-25): it returns as a standalone WebRTC tool
-(`packages/aiui-oracle`, lab-first) rather than a channel route. The channel-side handler is
-mothballed behind `ORACLE_ENABLED` (channel `intent-resolve.ts`); the journeys' XOR
-(oracle ⊕ linter) died with it.
+**deleted end to end** (owner, 2026-07-25/26): no client surface, no channel handler, no
+`oracle-*` events in the pipeline vocabulary. It returns as a standalone WebRTC tool
+(`packages/aiui-oracle`, lab-first) that deliberately contributes NOTHING to turns or prompt
+lowering; the journeys' XOR (oracle ⊕ linter) died with it. Git history keeps the old
+implementation; `docs/guide/oracle.md` keeps the persona of record.
 
 **Reply audio STREAMS (owner, 2026-07-19: "we don't want whole playback anything").** Every
 live consumer's spoken reply reaches the client as `seq`-ordered PCM chunks the moment the

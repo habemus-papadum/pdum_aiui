@@ -129,7 +129,7 @@ shells out to Claude Code itself — those configure Claude Code, not aiui; see
 
 ## Vendor API keys (OpenAI · Gemini · ElevenLabs)
 
-The intent pipeline's model-backed features (transcription, correction, the linter/oracle,
+The intent pipeline's model-backed features (transcription, correction, the linter,
 Scribe) run in the **channel process** `aiui claude` spawns, against three vendors. Where their
 keys come from depends on how aiui itself is running:
 
