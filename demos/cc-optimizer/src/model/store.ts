@@ -37,6 +37,7 @@ import sessionsUrl from "../data/sessions.parquet?url";
 import toolCallsUrl from "../data/toolCalls.parquet?url";
 import turnsUrl from "../data/turns.parquet?url";
 import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "../duckdb";
+import { type DurableState, durableState, toggled } from "./durable-state";
 import {
   type SelectionStats,
   SelectionStatsClient,
@@ -136,6 +137,20 @@ export interface LoadProgress {
   label: string;
 }
 
+/**
+ * The staged-write guard, bound to this app's scope.
+ *
+ * See `durable-state.ts` for why it exists: every toggle here computes its next
+ * value from its current one, and a Solid 2 signal read is stale until the next
+ * microtask, so rapid clicks all read the same base and only the last survives.
+ */
+function scopedState<T>(key: string, initial: T): DurableState<T> {
+  return durableState<T>(
+    appScope.durable<{ v: T }>(`${key}:authority`, () => ({ v: initial })),
+    appScope.durableSignal<T>(key, initial as never),
+  );
+}
+
 // --- durable roots -----------------------------------------------------------
 
 const progress = appScope.durableSignal<LoadProgress>("progress", {
@@ -208,12 +223,9 @@ const brushRange = appScope.durableSignal<[number, number] | null>("brushRange",
  * expanded set instead would need a "not yet initialised" sentinel and a first
  * -data hook to fill it in.
  */
-const collapsedProjects = appScope.durableSignal<ReadonlySet<string>>(
-  "collapsedProjects",
-  new Set(),
-);
+const collapsedProjects = scopedState<ReadonlySet<string>>("collapsedProjects", new Set());
 /** Sessions whose agents are broken out onto their own sub-lanes. */
-const expandedSessions = appScope.durableSignal<ReadonlySet<string>>("expandedSessions", new Set());
+const expandedSessions = scopedState<ReadonlySet<string>>("expandedSessions", new Set());
 
 /**
  * The session the drill-down is looking at, or null for "pick the priciest".
@@ -237,19 +249,12 @@ const clientBox = appScope.durable<{ timeline: SessionTimelineClient | null }>("
 /** Which optional grains this dataset actually turned out to have. */
 const loaded = appScope.durable<Set<string>>("loadedTables", () => new Set<string>());
 
-/** Toggle membership without mutating in place — Solid compares by identity. */
-function toggled(set: ReadonlySet<string>, key: string): Set<string> {
-  const next = new Set(set);
-  if (!next.delete(key)) next.add(key);
-  return next;
-}
-
 export function toggleProject(project: string): void {
-  collapsedProjects.set(toggled(collapsedProjects.get(), project));
+  collapsedProjects.set(toggled(collapsedProjects.peek(), project));
 }
 
 export function toggleSession(sessionId: string): void {
-  expandedSessions.set(toggled(expandedSessions.get(), sessionId));
+  expandedSessions.set(toggled(expandedSessions.peek(), sessionId));
 }
 
 export function setAllCollapsed(projects: readonly string[], collapsed: boolean): void {
@@ -279,7 +284,7 @@ export function brushTime(range: [number, number] | null): void {
  * of which projects exist — the same reasoning as `collapsedProjects`, and it
  * means no clause is published until the reader actually narrows something.
  */
-const visibleProjects = appScope.durableSignal<ReadonlySet<string> | null>("visibleProjects", null);
+const visibleProjects = scopedState<ReadonlySet<string> | null>("visibleProjects", null);
 
 /**
  * A stable clause source for the project filter.
@@ -308,7 +313,7 @@ export function setVisibleProjects(projects: ReadonlySet<string> | null): void {
 
 /** Toggle one project without disturbing the others. */
 export function toggleProjectVisible(project: string, all: readonly string[]): void {
-  const current = visibleProjects.get() ?? new Set(all);
+  const current = visibleProjects.peek() ?? new Set(all);
   const next = new Set(current);
   if (!next.delete(project)) next.add(project);
   // Back to everything selected means back to no clause at all, so the page
@@ -338,7 +343,7 @@ export function clearAllFilters(): void {
  * why. That leaves them outside the coordinator's push, so they need something
  * reactive to key on, and a version counter is the smallest thing that works.
  */
-const filterVersion = appScope.durableSignal<number>("filterVersion", 0);
+const filterVersion = scopedState<number>("filterVersion", 0);
 
 /**
  * The crossfilter's current predicate as SQL text, for those cell consumers.
@@ -464,7 +469,10 @@ async function load(): Promise<void> {
   // The bridge from Mosaic's push to Solid's pull. Registered once, after the
   // clients, so the first event a panel sees is a real one.
   filter.addEventListener("value", () => {
-    filterVersion.set(filterVersion.get() + 1);
+    // peek(), not get(): two clauses landing in one tick would otherwise both
+    // read the same committed number, write the same value, and leave every
+    // filter-keyed panel un-recomputed.
+    filterVersion.set(filterVersion.peek() + 1);
   });
 
   ready.set(true);
