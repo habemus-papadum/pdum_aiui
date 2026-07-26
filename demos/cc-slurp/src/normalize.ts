@@ -66,6 +66,8 @@ import { projectLabel, repoRoot } from "./scan.ts";
 // ---------------------------------------------------------------------------
 
 export interface TurnRow {
+  /** Which machine produced this turn. Empty for a single-machine run. */
+  hostId: string;
   messageId: string;
   requestId?: string;
   /** Record uuid of the chosen copy. Joins a turn to lineage and to events. */
@@ -152,6 +154,8 @@ export interface EventRow {
 }
 
 export interface SessionRow {
+  /** Which machine the session ran on — sessions do not span machines. */
+  hostId: string;
   sessionId: string;
   projectSlug: string;
   project: string;
@@ -440,6 +444,34 @@ const tsOf = (rec: Rec): number => {
 const contextOf = (kind: FileKind): string =>
   kind === "session" ? "main" : kind === "workflow-journal" ? "workflow-journal" : kind;
 
+/**
+ * `JSON.stringify` with object keys sorted, at every depth.
+ *
+ * Two things depend on this, and both were bugs before it existed:
+ *
+ *  1. Records without a uuid — `relocated` is the one in practice — are deduped
+ *     by their serialized payload. A fork copy does not always preserve key
+ *     order, so plain `stringify` gave two spellings of one record two dedup
+ *     keys and drew the same relocation twice.
+ *  2. The grains must not depend on which ingest path produced them. Parquet
+ *     VARIANT normalises key order, so a record read back from the raw layer
+ *     serializes differently from the same record read from JSONL. Canonical
+ *     form is what makes the two byte-identical.
+ */
+export function canonicalJson(value: unknown): string {
+  const sort = (v: unknown): unknown => {
+    if (v === null || typeof v !== "object") return v;
+    if (Array.isArray(v)) return v.map(sort);
+    const o = v as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(o)
+        .sort()
+        .map((k) => [k, sort(o[k])]),
+    );
+  };
+  return JSON.stringify(sort(value));
+}
+
 // ---------------------------------------------------------------------------
 // the accumulator
 // ---------------------------------------------------------------------------
@@ -488,7 +520,12 @@ export class Normalizer {
   /** sessionId → per-session facts that do not come from turns. */
   private readonly sessionMeta = new Map<
     string,
-    { slug?: string; cwd?: string; projectSlug: string }
+    {
+      hostId: string;
+      slug?: string;
+      cwd?: string;
+      projectSlug: string;
+    }
   >();
   /**
    * One digest per session-kind FILE: the ordered uuids that let `lineage.ts`
@@ -705,7 +742,7 @@ export class Normalizer {
       markedOrigin: marked && marked !== str(rec.sessionId) ? marked : undefined,
       file,
       kind,
-      payload: JSON.stringify(payload),
+      payload: canonicalJson(payload),
     });
   }
 
@@ -753,7 +790,7 @@ export class Normalizer {
   private metaFor(sessionId: string, file: TranscriptFile) {
     let m = this.sessionMeta.get(sessionId);
     if (!m) {
-      m = { projectSlug: file.projectSlug };
+      m = { hostId: file.hostId ?? "", projectSlug: file.projectSlug };
       this.sessionMeta.set(sessionId, m);
     }
     return m;
@@ -963,6 +1000,7 @@ export class Normalizer {
     const sessionId = this.originOfRecord(rec, file);
 
     return {
+      hostId: file.hostId ?? "",
       messageId,
       requestId: str(rec.requestId),
       uuid: str(rec.uuid),
@@ -1205,6 +1243,8 @@ export class Normalizer {
       const firstNativeIdx = inheritedRecords;
 
       rows.push({
+        // Sessions do not span machines, so any turn's host is the session's.
+        hostId: list[0]?.hostId ?? meta?.hostId ?? "",
         sessionId,
         projectSlug: meta?.projectSlug ?? digest?.projectSlug ?? list[0]?.projectSlug ?? "",
         project: projectLabel(

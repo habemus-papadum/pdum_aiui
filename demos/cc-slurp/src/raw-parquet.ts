@@ -56,6 +56,7 @@ export const fileColumns = (rows: FileRow[]): ColumnData[] => [
   col("mtimeMs", rows, "INT64", (r) => r.mtimeMs),
   col("sha256", rows, "STRING", (r) => r.sha256),
   col("lines", rows, "INT64", (r) => r.lines),
+  col("createdMs", rows, "INT64", (r) => r.createdMs),
   col("text", rows, "STRING", (r) => r.text),
 ];
 

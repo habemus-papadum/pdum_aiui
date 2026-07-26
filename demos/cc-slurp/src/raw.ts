@@ -82,6 +82,16 @@ export interface FileRow {
   mtimeMs: number;
   /** sha256 of the file's bytes — the identity used for incremental skips. */
   sha256: string;
+  /**
+   * File birthtime in ms, or undefined where the platform has none.
+   *
+   * Captured here because it CANNOT be recovered later: once this artifact is
+   * copied to another machine the original filesystem is gone. `lineage.ts`
+   * needs it twice — a fork's file is created at the moment of the fork, which
+   * is the honest position of a fork that produced nothing, and it is the
+   * last-resort tiebreak when content cannot say which of two files is the copy.
+   */
+  createdMs?: number;
   /** Line count for JSONL files; 0 otherwise. */
   lines: number;
   /** Inline content for small text sidecars; absent for binaries and big files. */
@@ -252,6 +262,10 @@ export async function ingestRoot(
           mtimeMs: st.mtimeMs,
           sha256: unchanged ? "" : sha256(await readFile(abs)),
           lines,
+          // ext4 without statx reports 0; an epoch birthtime is worse than none.
+          // Floored to whole ms — this column is an INT64, and `scan.ts` floors
+          // to match so both ingest paths derive identical values from it.
+          ...(st.birthtimeMs > 0 ? { createdMs: Math.floor(st.birthtimeMs) } : {}),
         });
         continue;
       }
@@ -272,6 +286,7 @@ export async function ingestRoot(
         mtimeMs: st.mtimeMs,
         sha256: buf ? sha256(buf) : "",
         lines: 0,
+        ...(st.birthtimeMs > 0 ? { createdMs: Math.floor(st.birthtimeMs) } : {}),
         ...(inlineText !== undefined ? { text: inlineText } : {}),
       });
     }
