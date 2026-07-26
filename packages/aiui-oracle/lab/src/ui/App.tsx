@@ -6,6 +6,9 @@
  */
 
 import {
+  cachingKeySource,
+  chainKeySource,
+  mintingKeySource,
   OracleSession,
   type OracleTool,
   onControlSurfaceChange,
@@ -41,7 +44,12 @@ export function App() {
 
   const session = new OracleSession({
     config: { instructions: initialInstructions, tools: untrack(() => toolsFromControlSurface()) },
-    keySource: pasteKeySource(),
+    // The V1 priority chain: a pasted key TRUMPS everything; otherwise the
+    // dev server mints from its own environment (cached, TTL-refreshed).
+    keySource: chainKeySource([
+      pasteKeySource(),
+      cachingKeySource(mintingKeySource("/oracle/mint")),
+    ]),
     transport: webRtcTransport(),
   });
   onCleanup(onControlSurfaceChange(() => setAllTools(untrack(() => toolsFromControlSurface()))));

@@ -97,9 +97,57 @@ export function pasteKeySource(
 }
 
 /**
- * A mint service: POST the wire session config to a URL we trust (the cloud
- * function for static sites; a channel route later); it answers
- * `{ value, expires_at }` — the same shape the vendor mint returns.
+ * Try sources IN ORDER; the first to produce a credential wins, a source
+ * that throws falls through to the next. The V1 priority chain is
+ * `chainKeySource([pasteKeySource(), cachingKeySource(mintingKeySource(…))])`
+ * — a user's pasted key TRUMPS everything (owner decision); the dev-server
+ * mint is the fallback; all failing, the combined refusals surface loudly.
+ */
+export function chainKeySource(sources: KeySource[]): KeySource {
+  return {
+    describe: () => `chain(${sources.map((source) => source.describe()).join(" → ")})`,
+    async credential(session) {
+      const refusals: string[] = [];
+      for (const source of sources) {
+        try {
+          return await source.credential(session);
+        } catch (error) {
+          refusals.push(
+            `${source.describe()}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      throw new Error(`no key source produced a credential — ${refusals.join("; ")}`);
+    },
+  };
+}
+
+/**
+ * Cache the inner source's credential and refresh it only when its TTL is
+ * within `marginSeconds` of expiring — so reconnects inside a session reuse
+ * the live `ek_` (one secret opens multiple sessions until it expires) and a
+ * long session never trips over a stale one. Credentials with an unknown
+ * expiry (a pasted `ek_`) are never cached — the inner source is the truth.
+ */
+export function cachingKeySource(inner: KeySource, marginSeconds = 60): KeySource {
+  let held: OracleCredential | undefined;
+  return {
+    describe: () => `${inner.describe()} (cached)`,
+    async credential(session) {
+      const now = Date.now() / 1000;
+      if (held !== undefined && held.expiresAt > 0 && held.expiresAt - marginSeconds > now) {
+        return held;
+      }
+      held = await inner.credential(session);
+      return held;
+    },
+  };
+}
+
+/**
+ * A mint service: POST the wire session config to a URL we trust (the lab's
+ * dev-server mount, the standalone mint server, a channel route later); it
+ * answers `{ value, expires_at }` — the same shape the vendor mint returns.
  */
 export function mintingKeySource(
   mintUrl: string,

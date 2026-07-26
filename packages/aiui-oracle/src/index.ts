@@ -12,6 +12,8 @@ export {
   toolsFromControlSurface,
 } from "./aiui-tools";
 export {
+  cachingKeySource,
+  chainKeySource,
   mintClientSecret,
   mintingKeySource,
   OPENAI_BASE_URL,

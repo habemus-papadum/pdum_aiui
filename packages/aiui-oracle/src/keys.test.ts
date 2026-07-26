@@ -3,7 +3,14 @@
  * (the exploration's verified wire form), and the paste slot's failure mode.
  */
 import { describe, expect, it } from "vitest";
-import { mintClientSecret, PASTED_KEY_STORAGE_KEY, pasteKeySource, staticKeySource } from "./keys";
+import {
+  cachingKeySource,
+  chainKeySource,
+  mintClientSecret,
+  PASTED_KEY_STORAGE_KEY,
+  pasteKeySource,
+  staticKeySource,
+} from "./keys";
 
 function fakeFetch(handler: (url: string, init: RequestInit) => Response) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -53,6 +60,80 @@ describe("staticKeySource", () => {
     const { impl } = fakeFetch(minted);
     const source = staticKeySource("sk-parent", { fetchImpl: impl });
     expect((await source.credential({})).ek).toBe("ek_minted");
+  });
+});
+
+describe("chainKeySource — paste trumps, mint is the fallback", () => {
+  it("first source to produce wins; a refusing source falls through; all refusing is loud", async () => {
+    const slot = new Map<string, string>();
+    const storage = { getItem: (key: string) => slot.get(key) ?? null };
+    const { impl } = fakeFetch(minted);
+    const chain = chainKeySource([
+      pasteKeySource(storage, { fetchImpl: impl }),
+      {
+        describe: () => "fallback",
+        credential: async () => ({ ek: "ek_fallback", expiresAt: 0 }),
+      },
+    ]);
+    // Nothing pasted → the fallback answers.
+    expect((await chain.credential({})).ek).toBe("ek_fallback");
+    // Pasted → trumps.
+    slot.set(PASTED_KEY_STORAGE_KEY, "ek_pasted");
+    expect((await chain.credential({})).ek).toBe("ek_pasted");
+    // Everything refusing → every refusal named.
+    const dead = chainKeySource([
+      { describe: () => "a", credential: async () => Promise.reject(new Error("nope-a")) },
+      { describe: () => "b", credential: async () => Promise.reject(new Error("nope-b")) },
+    ]);
+    await expect(dead.credential({})).rejects.toThrow(/nope-a.*nope-b/);
+  });
+});
+
+describe("cachingKeySource — reuse until the TTL margin", () => {
+  it("mints once and reuses while the credential stays clear of the margin", async () => {
+    let mints = 0;
+    const inner = {
+      describe: () => "mint",
+      credential: async () => {
+        mints += 1;
+        return { ek: `ek_${mints}`, expiresAt: Date.now() / 1000 + 3600 };
+      },
+    };
+    const cached = cachingKeySource(inner);
+    expect((await cached.credential({})).ek).toBe("ek_1");
+    expect((await cached.credential({})).ek).toBe("ek_1"); // reused
+    expect(mints).toBe(1);
+  });
+
+  it("a near-expiry held credential is replaced", async () => {
+    let mints = 0;
+    const inner = {
+      describe: () => "mint",
+      credential: async () => {
+        mints += 1;
+        // Every mint is already inside the margin → never cacheable.
+        return { ek: `ek_${mints}`, expiresAt: Date.now() / 1000 + 10 };
+      },
+    };
+    const cached = cachingKeySource(inner);
+    await cached.credential({});
+    await cached.credential({});
+    expect(mints).toBe(2);
+  });
+
+  it("unknown expiry (a pasted ek_) is never cached", async () => {
+    let mints = 0;
+    const inner = {
+      describe: () => "static",
+      credential: async () => {
+        mints += 1;
+        return { ek: "ek_x", expiresAt: 0 };
+      },
+    };
+    const cached = cachingKeySource(inner);
+    await cached.credential({});
+    await cached.credential({});
+    expect(mints).toBe(2);
   });
 });
 

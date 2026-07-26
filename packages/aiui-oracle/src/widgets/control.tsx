@@ -138,7 +138,7 @@ export function OracleControl(props: OracleControlProps) {
         <input
           class="aiui-oracle-key"
           type="password"
-          placeholder="OpenAI key (sk-… or ek_…)"
+          placeholder="OpenAI key (sk-…/ek_…) — blank falls through to the app's key source"
           value={keyDraft()}
           onInput={(event) => saveKey(event.currentTarget.value)}
         />

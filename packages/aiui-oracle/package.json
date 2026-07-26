@@ -12,7 +12,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./widgets": "./src/widgets/index.ts"
+    "./widgets": "./src/widgets/index.ts",
+    "./server": "./src/mint-backend.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -36,12 +37,17 @@
         "types": "./dist/widgets/index.d.ts",
         "import": "./dist/widgets.js",
         "default": "./dist/widgets.js"
+      },
+      "./server": {
+        "types": "./dist/mint-backend.d.ts",
+        "import": "./dist/server.js",
+        "default": "./dist/server.js"
       }
     }
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p lab/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p lab/tsconfig.json",
     "test": "vitest run",
     "lab": "vite --config lab/vite.config.ts"
   },

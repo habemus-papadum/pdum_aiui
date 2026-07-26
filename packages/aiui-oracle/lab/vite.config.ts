@@ -1,7 +1,34 @@
 import { fileURLToPath } from "node:url";
 import { aiui } from "@habemus-papadum/aiui-source-processor";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import solid from "vite-plugin-solid";
+// Relative, not the package specifier: vite bundles a config's RELATIVE
+// imports with esbuild but hands package imports to node's ESM resolver
+// (the pencil lab's lesson).
+import { createMintBackend } from "../src/mint-backend";
+
+/**
+ * Mount the mint endpoint INTO the lab's dev server — the dev-mode key flow:
+ * the parent key stays in this process's environment (direnv/.env), the page
+ * fetches short-lived `ek_`s from `POST /oracle/mint`. The SAME backend runs
+ * standalone (runMintServer) and, later, under the channel sidecar — one
+ * code path, which is what makes the sidecar seam honest.
+ */
+function oracleMint(): Plugin {
+  return {
+    name: "oracle-mint",
+    configureServer(server) {
+      const backend = createMintBackend({
+        log: (line) => server.config.logger.info(line),
+      });
+      server.middlewares.use((req, res, next) => {
+        if (!backend.handleHttp(req, res)) {
+          next();
+        }
+      });
+    },
+  };
+}
 
 /**
  * Oracle Lab's dev server — the pencil playbook, minus the relay (the oracle
@@ -17,7 +44,7 @@ import solid from "vite-plugin-solid";
  */
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
-  plugins: [aiui({ locator: true }), solid()],
+  plugins: [oracleMint(), aiui({ locator: true }), solid()],
   server: {
     // A LAN device (the iPad) may join — the trusted-LAN posture,
     // docs/guide/warning.md. Note the mic needs a secure context: fine on
