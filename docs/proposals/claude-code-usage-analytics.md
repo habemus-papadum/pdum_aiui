@@ -699,11 +699,8 @@ Both are under investigation; §7 tracks the outcome.
 
 **In flight.**
 
-3. **Validate cost against ground truth.** The honest comparison is `ccusage`
-   over the same window: any disagreement is diagnostic, because we know exactly
-   which traps we handle that it may not (fork-copy dedup — would read high; the
-   1h cache tier — would read ~7% low). The Console's billing page is the only
-   true ground truth and needs a human.
+3. ~~Validate cost against ground truth.~~ **Done, and it found a bug** — see
+   §8.
 4. **The two core widgets** (§5.6) and the two questions they raise: cross-table
    filtering in Mosaic, and whether the session graph is expressible in SQL.
    The data model for fork lineage / lanes / agent spans is the gating piece —
@@ -717,3 +714,50 @@ Both are under investigation; §7 tracks the outcome.
    its keep.
 6. **Cross-filter the existing panels.** They are static reads today; the
    `Selection` is wired but nothing publishes into it yet.
+
+## 8. Reconciliation against `ccusage`, and what it changed
+
+Run 2026-07-26, `ccusage@20.0.18 daily --since 20260619 --until 20260726`, over
+the identical corpus.
+
+| | ours (before) | ccusage | delta |
+| --- | ---: | ---: | ---: |
+| total USD | $10,600.80 | $10,888.26 | −2.6% |
+| input tokens | 2,220,139 | 2,219,614 | +0.02% |
+| **output tokens** | **25,928,047** | **34,260,374** | **−24.3%** |
+| cache creation | 224,369,778 | 224,073,071 | +0.13% |
+| cache read | 8,242,843,581 | 8,198,412,191 | +0.54% |
+
+Every class agreed to well under 1% except output, which is what made the bug
+findable: a dedup error would have moved all four together. The cause is §1.3(a)
+— we picked the wrong member of a billing group. Fixed; we now reconcile to
+**0.29%**, inside window-edge noise.
+
+**A prediction in an earlier draft of this document was wrong** and is corrected
+here: it assumed `ccusage` would read *higher* than us because it might not dedup
+fork copies. It does dedup them, globally, across files — its total matches
+per-id-last (34,238,566), not per-file (which the 1,615 duplicated ids would have
+pushed higher). We were right about the other four traps; `ccusage` agrees on all
+of them, including pricing the 1h cache tier (flat-rating it would have put its
+total at $10,202.68).
+
+### 8.1 What this validates — and what it does not
+
+`ccusage` reads the same logs **and the same LiteLLM price table** we do. The
+0.29% agreement therefore validates **token extraction**, not **prices**. If
+LiteLLM's `claude-fable-5` or `claude-opus-4-8` entries are wrong, both tools are
+wrong identically and by the same amount. Those two models carry 94% of the
+total, so they are the only remaining source of systematic error worth chasing.
+
+### 8.2 There is no dollar ground truth, and the label must say so
+
+This account is on a **Max subscription**, not API-key billing. No per-token
+charge was ever incurred, and the Anthropic Console has nothing comparable to
+reconcile against — pursuing it is not a hard problem, it is a category error.
+
+Every figure this project produces is a **list-price equivalent**: what these
+tokens would have cost at published API rates. That is a genuinely useful
+quantity — it is the right unit for comparing a workflow against an agent swarm,
+or this month against last — but it is not a bill, and the UI must not imply it
+is. §1.3(b) already said cost is derived; this is the stronger statement, and it
+is the one that belongs on screen.

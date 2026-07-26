@@ -7,8 +7,13 @@
  * efficiently" is a context-management problem far more than a prompting one.
  * A dashboard that led with total dollars would bury that.
  *
- * Every dollar carries its provenance: there is no cost field in a Claude Code
- * transcript, so the pricing-table version is shown, not hidden.
+ * Every dollar carries its provenance, and the provenance is stronger than
+ * "derived": this account is on a Max subscription, so no per-token charge was
+ * ever incurred and there is no bill to reconcile against. These are
+ * **list-price equivalents** — what the tokens would have cost at published API
+ * rates. That is the right unit for comparing a workflow against an agent swarm,
+ * or one month against another; it is not money that changed hands, and the copy
+ * must not let a reader think it is. See the proposal, §8.2.
  */
 
 import { Show } from "solid-js";
@@ -52,7 +57,7 @@ export function Summary() {
           <div class="cco-stats">
             <div class="cco-stat">
               <div class="cco-stat-value">{usd(sum().totalCost)}</div>
-              <div class="cco-stat-label">derived spend</div>
+              <div class="cco-stat-label">list-price equivalent</div>
             </div>
             <div class="cco-stat">
               <div class="cco-stat-value">{sum().turns.toLocaleString()}</div>
@@ -110,9 +115,12 @@ export function Summary() {
           <Show when={m()}>
             {(man) => (
               <p class="cco-provenance">
-                No cost field exists in a Claude Code transcript — every figure here is tokens ×{" "}
+                <strong>Not a bill.</strong> No cost field exists in a Claude Code transcript, and a
+                Max subscription is charged a flat rate, not per token — so every figure here is
+                what these tokens <em>would</em> have cost at published API rates: tokens ×{" "}
                 <code>{man().pricing.source}</code> @ {man().pricing.version.slice(0, 10)}, derived
-                from {man().stats.files} files. A naive per-record sum would have reported{" "}
+                from {man().stats.files} files. Useful for comparing one workflow against another,
+                or this month against last. A naive per-record sum would have reported{" "}
                 {(
                   man().stats.naiveOutputTokens / Math.max(1, man().stats.dedupedOutputTokens)
                 ).toFixed(2)}
