@@ -1,6 +1,13 @@
 /**
  * timeline.test.ts — the lane algebra, checked without a browser.
  *
+ * One standing hazard, learned here the hard way (see this demo's CLAUDE.md):
+ * several assertions below reach into `bars.find(...)` or `edges.find(...)`
+ * with `?.`, so when a rules change makes the subject disappear, a NEGATIVE
+ * assertion goes vacuously true and stays green. Where a fixture's presence is
+ * load-bearing, assert it — `expect(bar).toBeDefined()` — before asserting
+ * anything about its fields.
+ *
  * The layout is a pure function, so the interesting claims are all testable as
  * claims: that the packing is *optimal* (never more lanes than the data forces),
  * that it is *sound* (nothing overlaps on a lane), that it is *stable* (input
@@ -508,6 +515,29 @@ describe("fork edge provenance", () => {
   });
 });
 
+/**
+ * A lesson these tests taught the hard way, worth keeping next to them.
+ *
+ * When the ghost visibility rule changed, two tests here relied on an edgeless
+ * ghost. One failed loudly — good. The other had silently gone **vacuous**:
+ * `expect(undefined).not.toBe(0)` passes, for entirely the wrong reason. An
+ * optional chain in an assertion turns a real check into a tautology the moment
+ * the thing it reaches for stops existing.
+ *
+ * That failure survives every gate — biome, typecheck, a green test run — while
+ * still reading as coverage, which makes it worse than a missing test. When an
+ * assertion narrows through `?.`, assert the subject exists first
+ * (`expect(bar).toBeDefined()`), or match on a whole object rather than a field
+ * reached through an optional.
+ *
+ * **Do not take biome's autofix here.** `lint/style/noNonNullAssertion` warns on
+ * the `!` in `bars.find(...)!.y` and offers `?.` as the fix — which is precisely
+ * the transformation that produces the bug above. On a missing bar, `!` throws
+ * and the test fails loudly; `?.` yields `undefined` and
+ * `expect(undefined).toBe(undefined)` passes. The rule is right about production
+ * code and wrong about assertions, so the `!`s in this file are deliberate: in a
+ * test, a throw IS the failure signal.
+ */
 describe("ghost sessions (forks that produced no turns)", () => {
   const gscale = () => timeScale([T0, T0 + 10 * DAY], [0, 1000]);
   const ghost = (id: string, project: string, h0: number, h1: number): TimelineSpan => ({

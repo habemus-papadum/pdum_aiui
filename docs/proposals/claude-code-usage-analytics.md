@@ -793,12 +793,22 @@ marker-corroborated. The widget draws those dotted rather than solid, which is
 the right call: a session graph that renders an uncertain lineage as fact is
 worse than one that shows its own doubt.
 
-**The long-gap fork is not exercised by this corpus.** §5.6.1 names it as the
-hard case — a fork whose child starts days after the parent's fork point — on
-the strength of the user's stated experience. Measured lag
-(`childFirstNativeTs − forkPointTs`): **min 0m, median 4m, max 1.9h**. The
-layout must still handle it (the unit test uses a 3-day lag deliberately), but
-no rendered edge currently spans one, so that path is covered by test only.
+**The long-gap fork does not occur in this corpus at all.** §5.6.1 names it as
+the hard case — a fork whose child starts days after the parent's fork point —
+on the strength of the user's stated experience. Measured lag
+(`childFirstNativeTs − forkPointTs`): **min 1.0s, median 3.5m, max 1.93h**.
+
+Measured in the unit the layout actually keys on, it is not close: at 1400px
+across this 37-day corpus the widest fork edge spans **3.04px** against the
+90px long-gap threshold — **30x short**. Independently confirmed by the render,
+whose dash census shows only the ambiguous and solid strokes, never the
+long-gap one.
+
+So the honest statement is neither "handled" nor "untested" but *currently
+hypothetical*: the handling is right, a deliberately synthetic 3-day-lag unit
+test pins it, and nothing at this corpus and zoom can trip it. It becomes real
+the moment a fork is abandoned for a day — which the user reports doing — so it
+should stay.
 
 ## 6. Open questions
 
