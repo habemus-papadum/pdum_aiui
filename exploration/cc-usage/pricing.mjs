@@ -7,7 +7,17 @@
  * returns the table version alongside the number rather than a bare float.
  *
  * Source: LiteLLM's `model_prices_and_context_window.json`, the same table
- * ccusage uses. It is a plain JSON map keyed by model id, with per-token
+ * ccusage uses.
+ *
+ * **Why not `@pydantic/genai-prices`**, which this repo already depends on in
+ * `packages/aiui-claude-channel`? Because it models cache writes as a single
+ * bucket — one `cache_write_mtok` rate, one `cache_write_tokens` usage field —
+ * and Anthropic charges the 1-hour cache tier at 1.6x the 5-minute one. On the
+ * July 2026 corpus, 54.8% of cache-creation tokens are 1h-tier, so flat-rating
+ * them understates cache-creation cost by 30.4% and total spend by 6.9%. That
+ * is a limit of its schema, not of its data. See the proposal, §3.
+ *
+ * It is a plain JSON map keyed by model id, with per-token
  * (not per-million) rates:
  *
  *   input_cost_per_token

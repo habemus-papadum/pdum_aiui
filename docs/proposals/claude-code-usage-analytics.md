@@ -308,9 +308,110 @@ one number and re-deriving everything else. The schema knowledge is the valuable
 part and it is ~400 lines — already written in `fields.mjs`. Take the doctrine,
 take the price table, keep the model.
 
-## 3. Design
+## 3. Price table: LiteLLM vs `@pydantic/genai-prices`
 
-### 3.1 Own the schema as *knowledge*, not as types
+The repo already depends on [`@pydantic/genai-prices`](https://github.com/pydantic/genai-prices)
+in `packages/aiui-claude-channel` (`src/cost.ts`), so the default should be to
+reuse it. **For this demo it is the wrong choice, for one structural reason.**
+
+Both catalogs cover every model in the corpus, and where they overlap the rates
+are identical (`claude-fable-5`: $10/$50/Mtok, cache write $12.50, cache read
+$1.00). genai-prices is arguably the better-maintained of the two —
+`prices_checked: 2026-07-24`, bundled offline data, historic prices, a real
+TS API instead of a raw JSON fetch.
+
+**The disqualifier is Anthropic's cache TTL tiers.** genai-prices models cache
+writes as a single bucket — one `cache_write_mtok` price, one
+`cache_write_tokens` usage field. Claude Code reports the two tiers separately
+(`cache_creation.ephemeral_5m_input_tokens` / `ephemeral_1h_input_tokens`), and
+the 1-hour tier costs **1.6×** the 5-minute one. On this corpus:
+
+| | tokens | |
+| --- | ---: | --- |
+| 5m cache writes | 99,975,659 | 45.2% |
+| **1h cache writes** | **121,192,650** | **54.8%** |
+
+| cache-creation cost | | |
+| --- | ---: | --- |
+| tiered (LiteLLM, 1h @ 1.6×) | $2,926.89 | |
+| flat (genai-prices, one rate) | $2,244.46 | **30.4% low** |
+| **effect on total spend** | | **6.9% understated ($682 / 5 weeks)** |
+
+This is not a stale-data problem that a PR fixes — genai-prices' *type* cannot
+express the split, so a fix means a schema change upstream. Worth opening an
+issue since we are already a consumer, but not worth blocking on.
+
+genai-prices' one real advantage — historic prices — is **already neutralised by
+the design**: §5.3 materialises cost columns into Parquet stamped with
+`pricingVersion`, so price history is preserved by us rather than by the table.
+LiteLLM's current-only nature costs us nothing given that.
+
+**Decision: LiteLLM for cc-usage; genai-prices stays in the channel.** They solve
+different problems — the channel prices many providers including audio, and never
+touches Anthropic cache tiers; this demo prices one provider and lives or dies on
+those tiers. Revisit if genai-prices grows a TTL-aware cache model.
+
+## 4. Image tokens: not attributable from the transcript, but estimable
+
+**Neither catalog helps here, and the reason is upstream of both.** Anthropic
+does not bill images as a separate category — an image is tokenized into the
+ordinary input stream. Accordingly:
+
+- `message.usage` has exactly ten keys, and **none of them is an image counter**:
+  `input_tokens`, `output_tokens`, `cache_creation_input_tokens`,
+  `cache_read_input_tokens`, `cache_creation`, `iterations`, `server_tool_use`,
+  `service_tier`, `speed`, `inference_geo`.
+- genai-prices has audio categories but **no image category at all**.
+- LiteLLM *does* carry `input_cost_per_image` / `input_cost_per_image_token` /
+  `input_cost_per_pixel` — but not for Anthropic models, which only declare
+  `supports_vision`. Correctly so: there is no separate image rate to declare.
+
+So exact image attribution is impossible. **Estimation, however, is
+straightforward and worth building**, because the raw images are in the
+transcript as base64 and Anthropic publishes the formula (`tokens ≈ w × h / 750`).
+
+Images ride in three places, all on `user` records:
+
+| carrier | count |
+| --- | ---: |
+| `message.content[].image` | 152 |
+| `message.content[].tool_result.content[].image` | 151 |
+| `toolUseResult[].image` (sidecar copy of the above) | 79 |
+
+Dimensions are recoverable from the PNG `IHDR` / JPEG `SOFn` header without
+decoding the pixels — verified on 148 images, 100% success, e.g. `2000×966 →
+≈2,576 tokens`, `1185×781 → ≈1,234 tokens`. Total across those 148: ≈114,000
+estimated input tokens.
+
+**Why this matters more than the raw number suggests.** 114k tokens against 2.2M
+fresh input tokens looks like ~5%. But an image, once in context, is re-read as
+**cache-read tokens on every subsequent turn until compaction** — and cache reads
+are 62.7% of spend (§1.5). The interesting quantity is therefore not "what did
+this image cost once" but "how many turns did this image ride along for", which
+is computable: images have positions in the conversation, and compaction events
+have boundaries.
+
+Design additions:
+
+- `turns` gains `nImages` and `estImageTokens` (clearly labelled as estimates).
+- A new **`images`** table — one row per image payload:
+  > `messageId` · `sessionId` · `ts` · `carrier` · `mediaType` · `width` ·
+  > `height` · `bytesBase64` · `estTokens` · `turnsResident` · `estCacheReadCost`
+
+  `turnsResident` is the count of subsequent turns before the next compaction —
+  the multiplier that turns a 2.5k-token screenshot into real money.
+- Never store the base64 itself in Parquet; a content hash is enough to
+  deduplicate the same screenshot pasted twice.
+
+The honest caveat: `w × h / 750` is Anthropic's documented approximation, and
+Claude Code may downscale images before sending. Every number in the `images`
+table is therefore an estimate with a systematic upward bias, and the UI must say
+so — this is the one place in the design where we cannot reconcile against a
+ground-truth counter, because none exists.
+
+## 5. Design
+
+### 5.1 Own the schema as *knowledge*, not as types
 
 The user's instinct — string-based, functional, no heavy Zod layer — is right,
 for a specific reason: **a validating parser converts every Claude Code release
@@ -331,11 +432,11 @@ Functional style works here without pipe syntax because the accessors are shallo
 (`billableUnits(rec)`, `compaction(rec)`, `toolOutcome(rec)`) — record in,
 plain object out. The composition happens in the aggregation loop, not in a chain.
 
-**Where Zod does earn its place:** the *derived* Parquet schemas of §3.3. Those
+**Where Zod does earn its place:** the *derived* Parquet schemas of §5.3. Those
 are ours, they are stable by construction, and a type error there is a real bug.
 The rule: no validation at the raw-JSON boundary, full typing after normalisation.
 
-### 3.2 Ingest pipeline
+### 5.2 Ingest pipeline
 
 ```
 ~/.claude/projects/**/*.jsonl
@@ -349,10 +450,10 @@ The rule: no validation at the raw-JSON boundary, full typing after normalisatio
    dedup by (message.id, requestId), prefer non-sidechain
         │
         ▼
-   normalise to grains ──────────────► Parquet  (§3.3)
+   normalise to grains ──────────────► Parquet  (§5.3)
         │
         ▼
-   DuckDB-WASM / Mosaic ─────────────► the demo (§3.5)
+   DuckDB-WASM / Mosaic ─────────────► the demo (§5.5)
 ```
 
 Incremental by design: JSONL files are append-only, so record
@@ -362,7 +463,7 @@ active session's file is the only one that grows. A full 559 MB cold pass takes
 incrementality is an optimisation, not a requirement, and correctness never
 depends on it.
 
-### 3.3 The Parquet layers
+### 5.3 The Parquet layers
 
 Four tables, at four grains. Everything downstream is a query over these; they
 are the contract.
@@ -429,7 +530,7 @@ loads it instantly; partitioning is for the year-two case, not today.
 Parquet. It is the only record of what the schema looked like when a number was
 computed.
 
-### 3.4 The drift workflow
+### 5.4 The drift workflow
 
 Every few weeks (or on a `claude` version bump):
 
@@ -461,7 +562,7 @@ inline produced 435 findings, of which ~400 were noise; and data-keyed maps
 key-shape signal, not a count threshold, because a count threshold collapses the
 same field in some records and not others and makes snapshots non-comparable.
 
-### 3.5 The demo
+### 5.5 The demo
 
 `demos/ccusage` (name TBD), private to the gallery — `package.json` carries no
 `aiui.sitePage` marker, so `demo-discovery.ts` will not pick it up, and it stays
@@ -486,7 +587,7 @@ pattern. Views, roughly in build order:
 Data flows in as `?url` Parquet asset imports (the `demos/seismos` precedent) so
 the demo runs standalone without a live scan.
 
-## 4. Open questions
+## 6. Open questions
 
 - **Where does `fields.mjs` graduate to?** A package (`aiui-cc-schema`) is the
   natural home if anything else ever wants it; otherwise it lives in the demo.
@@ -507,7 +608,7 @@ the demo runs standalone without a live scan.
   needed for the 704 unmarked duplicates in this corpus and that fraction shrinks
   with every new session. Possibly not worth building at all — measure first.
 
-## 5. Next steps
+## 7. Next steps
 
 1. **Ship the normaliser** — `census.mjs`'s walker + `fields.mjs`'s accessors,
    plus dedup, into a `turns`/`toolCalls`/`events`/`sessions` Parquet writer.
