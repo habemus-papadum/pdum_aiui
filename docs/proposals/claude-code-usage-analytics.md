@@ -762,7 +762,42 @@ Verified live rather than only in tests: no filter → 1 ghost / 10 edges / 12
 project rows; a clause selecting a different project → 0 ghosts; a clause
 selecting the ghost's own project → 1 ghost, chain intact.
 
-#### 5.6.5 Is the timeline expressible in SQL at all? — answered, with limits
+#### 5.6.5 Lane layout: first-fit packing, not a lane per family — rejected, measured
+
+A `DENSE_RANK`-by-family row ordering was proposed three times as the timeline's
+best remaining improvement: give each fork family its own lane column so
+relatives stay adjacent instead of interleaving. It was measured and **rejected**,
+and the numbers are recorded here because the idea is attractive enough to be
+proposed again.
+
+It replaces lane *packing* with one column per family, abandoning reuse:
+
+| project | sessions | families | lane per family | first-fit (today) |
+| --- | ---: | ---: | ---: | ---: |
+| `pdum_aiui` | 54 | 51 | 51 | **6** |
+| `pdum_rfb` | 14 | 11 | 11 | **3** |
+| `mcp-list-changed` | 10 | 10 | 10 | **1** |
+| `pdum_dsl` | 8 | 5 | 5 | **3** |
+| **total rows** | | | **95** | **23** |
+
+A **4.1x taller** chart, because **89 of 95 families are singletons** (94%;
+largest is 4 sessions). `DENSE_RANK` therefore mostly ranks each session against
+itself, and `mcp-list-changed`'s ten strictly *sequential* sessions become ten
+lanes — the proximity-not-concurrency failure the `laneGapPx` default already
+documents, arriving by another route.
+
+The problem it targets also mostly does not exist. First-fit already keeps a
+*chain* on one lane: a fork taken after its parent finished reuses the parent's
+lane by construction, which is the family-column look the proposal wanted.
+Interleaving only happens for relatives that genuinely overlap in time — and
+those must occupy different lanes regardless of the ordering scheme.
+
+It is a coherent layout philosophy (family stability over compactness) applied to
+the wrong corpus. If family adjacency is wanted later, the narrow version is to
+bias the tie-break in `packOrder` toward same-lineage neighbours while keeping
+first-fit — bounded, and it can only affect the 6 multi-session families.
+
+#### 5.6.6 Is the timeline expressible in SQL at all? — answered, with limits
 
 Yes: `forkEdges` / `lineages` / `agentRuns` in `demos/cc-slurp`. The measured
 result on the baseline corpus, and the limits worth knowing before trusting a
