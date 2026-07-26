@@ -13,6 +13,52 @@ pipeline. (An earlier, entirely different oracle lived inside the intent client 
 it was deleted end to end on 2026-07-25 — git history keeps it, and
 `docs/proposals/aiui-oracle.md` records the research and decisions behind this rebuild.)
 
+## Developer setup
+
+In an aiui app (scaffolded by `create-aiui` or `pnpm new-demo`), two steps:
+
+**1. The Vite config.** Your app already carries the aiui compiler plugin and Solid; add the
+dev-key plugin so dev mode needs no pasting and no mint server:
+
+```ts
+// vite.config.ts
+import { oracleDevKey } from "@habemus-papadum/aiui-oracle/vite";
+import { aiui } from "@habemus-papadum/aiui-source-processor";
+import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
+
+export default defineConfig({
+  plugins: [oracleDevKey(), aiui({ locator: true }), solid()],
+});
+```
+
+`oracleDevKey()` reads `OPENAI_API_KEY` from the **dev server's** environment (a `.env` /
+direnv setup, same as the channel's source-checkout posture) and injects it into served
+pages. Serve-only, by construction — `vite build` never sees it. Note the injected key rides
+every page the dev server serves: with `server.host: true` (the trusted-LAN posture) that
+means LAN-readable, exactly like the rest of the dev surface.
+
+**2. The app wiring** — a session over the projected tool surface plus whichever widgets you
+want (the sketch below). `pnpm dev`, open the app, hit start: the chain finds the dev key and
+you are talking to your app. When you later deploy the same app statically, the dev key
+simply does not exist — users paste their own key (or you stand up a mint endpoint and pass
+`mintUrl`).
+
+To also exercise the **mint flow** in dev, mount the backend into the same dev server:
+
+```ts
+// an extra plugin in vite.config.ts — optional, only to test the minted-key flow
+import { createMintBackend } from "@habemus-papadum/aiui-oracle/server";
+
+const oracleMint = () => ({
+  name: "oracle-mint",
+  configureServer(server) {
+    const backend = createMintBackend({ log: (l) => server.config.logger.info(l) });
+    server.middlewares.use((req, res, next) => backend.handleHttp(req, res) || next());
+  },
+});
+```
+
 ## Using it in an app
 
 The package has four subpaths — dev-mode source-first like every workspace package:
