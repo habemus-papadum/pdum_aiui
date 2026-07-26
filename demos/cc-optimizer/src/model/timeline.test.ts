@@ -507,3 +507,64 @@ describe("fork edge provenance", () => {
     for (const e of forks) expect(e.y1).not.toBe(e.y2);
   });
 });
+
+describe("ghost sessions (forks that produced no turns)", () => {
+  const gscale = () => timeScale([T0, T0 + 10 * DAY], [0, 1000]);
+  const ghost = (id: string, project: string, h0: number, h1: number): TimelineSpan => ({
+    ...sess(id, project, h0, h1),
+    nTurns: 0,
+    cost: 0,
+    ghost: true,
+  });
+
+  it("keeps a fork chain connected through a node that produced nothing", () => {
+    // The real pdum_dsl shape: 63baa90e -> 4df4dbb9 -> {70486150, de93c3a5},
+    // where the middle session file has zero billed turns. Without a mark for
+    // it, BOTH downstream edges have nowhere to attach and the family reads as
+    // three unrelated sessions.
+    const spans = [
+      sess("root", "p", 0, 20),
+      ghost("middle", "p", 20, 20),
+      sess("childA", "p", 21, 30),
+      sess("childB", "p", 22, 40),
+    ];
+    const forks = [
+      { childId: "middle", parentId: "root", forkTs: T0 + 18 * H },
+      { childId: "childA", parentId: "middle", forkTs: T0 + 20 * H },
+      { childId: "childB", parentId: "middle", forkTs: T0 + 20 * H },
+    ];
+    const l = layoutTimeline(
+      { spans, forks },
+      { scale: gscale(), expandedProjects: new Set(["p"]) },
+    );
+    expect(l.edges.filter((e) => e.kind === "fork")).toHaveLength(3);
+
+    // Drop the ghost and EVERY edge in the family disappears — the two below it
+    // lose their parent, and the one above it loses its child. One unrenderable
+    // node takes the whole fork tree with it, which is why it gets a mark.
+    const without = layoutTimeline(
+      { spans: spans.filter((x) => !x.ghost), forks },
+      { scale: gscale(), expandedProjects: new Set(["p"]) },
+    );
+    expect(without.edges.filter((e) => e.kind === "fork")).toHaveLength(0);
+  });
+
+  it("marks the bar as a ghost so the view can draw it hollow", () => {
+    const l = layoutTimeline(
+      { spans: [sess("real", "p", 0, 10), ghost("empty", "p", 5, 5)], forks: [] },
+      { scale: gscale(), expandedProjects: new Set(["p"]) },
+    );
+    expect(l.bars.find((b) => b.id === "empty")?.ghost).toBe(true);
+    expect(l.bars.find((b) => b.id === "real")?.ghost).toBe(false);
+  });
+
+  it("gives a zero-duration ghost its own lane rather than overlaying a session", () => {
+    const l = layoutTimeline(
+      { spans: [sess("real", "p", 0, 10), ghost("empty", "p", 5, 5)], forks: [] },
+      { scale: gscale(), expandedProjects: new Set(["p"]) },
+    );
+    expect(l.bars.find((b) => b.id === "empty")?.rowIndex).not.toBe(
+      l.bars.find((b) => b.id === "real")?.rowIndex,
+    );
+  });
+});

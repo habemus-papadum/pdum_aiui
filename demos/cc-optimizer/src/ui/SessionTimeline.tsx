@@ -367,17 +367,26 @@ export function SessionTimeline() {
                   <rect
                     x={b.x}
                     y={b.y}
-                    width={b.width}
+                    width={b.ghost ? Math.max(b.width, 3) : b.width}
                     height={b.height}
                     rx={b.kind === "session" && b.height > 4 ? 2 : 0.5}
-                    fill={b.kind === "session" ? costColor(b.cost) : agentColor(b.context)}
+                    fill={
+                      b.ghost
+                        ? "none"
+                        : b.kind === "session"
+                          ? costColor(b.cost)
+                          : agentColor(b.context)
+                    }
                     opacity={b.collapsed ? 0.62 : b.strip ? 0.75 : 1}
                     stroke={
                       hover()?.bar.id === b.id && hover()?.bar.rowIndex === b.rowIndex
                         ? "var(--cco-fg)"
-                        : "none"
+                        : b.ghost
+                          ? "#c2872f"
+                          : "none"
                     }
                     stroke-width={1}
+                    stroke-dasharray={b.ghost ? "2 2" : undefined}
                   />
                 )}
               </For>
@@ -466,7 +475,9 @@ export function SessionTimeline() {
                   {when(h().bar.t0)} → {when(h().bar.t1)}
                 </div>
                 <div class="cco-tl-tip-row">
-                  {dur(h().bar.t1 - h().bar.t0)} · {h().bar.nTurns} turns · {usd(h().bar.cost)}
+                  {h().bar.ghost
+                    ? "fork taken, never continued — no billed turns"
+                    : `${dur(h().bar.t1 - h().bar.t0)} · ${h().bar.nTurns} turns · ${usd(h().bar.cost)}`}
                 </div>
               </div>
             )}
@@ -495,6 +506,8 @@ export function SessionTimeline() {
           <span class="cco-tl-legend-label">fork</span>
           <span class="cco-tl-fork-key cco-tl-fork-amb" />
           <span class="cco-tl-legend-label">unproven direction</span>
+          <span class="cco-tl-ghost-key" />
+          <span class="cco-tl-legend-label">fork with no turns</span>
         </span>
       </div>
     </section>

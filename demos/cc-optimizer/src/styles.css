@@ -515,3 +515,10 @@
 .cco .cco-tl-fork-amb {
   border-top-style: dotted;
 }
+.cco .cco-tl-ghost-key {
+  width: 13px;
+  height: 9px;
+  border: 1px dashed #c2872f;
+  border-radius: 2px;
+  display: inline-block;
+}

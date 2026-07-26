@@ -79,6 +79,8 @@ export class SessionTimelineClient extends MosaicClient {
   private range: [number, number] | null = null;
   /** Resolved once in `prepare` from the `forkEdges` grain; see `loadForkEdges`. */
   private forks: ForkEdgeInput[] = [];
+  /** Zero-turn fork nodes, also resolved once; see `loadGhostSessions`. */
+  private ghosts: TimelineSpan[] = [];
 
   constructor(opts: TimelineClientOptions) {
     super(opts.filterBy);
@@ -114,6 +116,7 @@ export class SessionTimelineClient extends MosaicClient {
    */
   async prepare(): Promise<void> {
     if (this.opts.hasForkEdges) await this.loadForkEdges();
+    await this.loadGhostSessions();
     if (!this.opts.onDomain) return;
     const q = Query.from("turns").select({
       t0: sql`epoch_ms(min(ts))`,
@@ -170,6 +173,59 @@ export class SessionTimelineClient extends MosaicClient {
       // An older dataset without the grain must degrade to no edges, not to a
       // blank timeline — the sessions themselves are the point.
       this.opts.onError?.(e instanceof Error ? e : new Error(String(e)));
+    }
+  }
+
+  /**
+   * The session files that produced no billed turn — forks taken and never
+   * continued.
+   *
+   * They cannot come from the main query, which aggregates `turns`: a session
+   * with no turns has no rows there to aggregate. Without them the fork forest
+   * breaks in the middle — in this corpus one such file sits between a parent
+   * and its two children, so three of ten edges had nowhere to attach.
+   *
+   * Read from `sessions` in `prepare`, and **deliberately not filtered**. That
+   * is the honest position rather than a shortcut: an activity filter has
+   * nothing to say about a session with zero activity, so there is no predicate
+   * that would legitimately remove one. They are drawn hollow (`ghost`) so they
+   * can never be read as work that happened.
+   *
+   * Times use cc-slurp's own recipe. `firstTs`/`lastTs` now strictly mean
+   * "first/last billed turn" and are NULL on exactly these rows — they used to
+   * be epoch zero, which planted marks in 1970 — so the fallback chain runs
+   * through `firstNativeTs` and the file's birthtime.
+   */
+  private async loadGhostSessions(): Promise<void> {
+    const startTs = sql`coalesce(firstNativeTs, firstTs, createdTs)`;
+    const q = Query.from("sessions")
+      .select({
+        id: "sessionId",
+        project: "project",
+        t0: sql`epoch_ms(${startTs})`,
+        t1: sql`epoch_ms(greatest(coalesce(lastNativeTs, lastTs, ${startTs}), ${startTs}))`,
+      })
+      .where(sql`coalesce(nTurnsNative, 0) = 0 AND ${startTs} IS NOT NULL`);
+    try {
+      for (const row of rows(await this.coordinator?.query(q))) {
+        const id = s(row.id);
+        if (!id || row.t0 == null) continue;
+        this.ghosts.push({
+          kind: "session",
+          id,
+          project: s(row.project) ?? "(unknown)",
+          parentId: null,
+          t0: n(row.t0),
+          t1: row.t1 == null ? n(row.t0) : n(row.t1),
+          nTurns: 0,
+          cost: 0,
+          agentType: null,
+          context: "main",
+          ghost: true,
+        });
+      }
+    } catch {
+      /* older dataset without the lineage columns — no ghosts, edges just drop */
     }
   }
 
@@ -269,7 +325,7 @@ export class SessionTimelineClient extends MosaicClient {
    * edge set narrows with the brush without the edges themselves being queried.
    */
   queryResult(data: unknown): this {
-    const spans: TimelineSpan[] = [];
+    const spans: TimelineSpan[] = [...this.ghosts];
     const forks: ForkEdgeInput[] = [...this.forks];
     for (const row of rows(data)) {
       const kind = String(row.kind);
