@@ -33,6 +33,13 @@ import sessionsUrl from "../data/sessions.parquet?url";
 import toolCallsUrl from "../data/toolCalls.parquet?url";
 import turnsUrl from "../data/turns.parquet?url";
 import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "../duckdb";
+import {
+  type SelectionStats,
+  SelectionStatsClient,
+  SessionTimelineClient,
+  type TimelineData,
+  type TimelineDomain,
+} from "./timeline-client";
 
 /**
  * The app's instance scope: ONE slug qualifying every declaration — controls
@@ -139,6 +146,71 @@ const engineBox = appScope.durable<{ engine: Engine | null; loading: Promise<voi
   () => ({ engine: null, loading: null }),
 );
 
+// --- the session timeline: Mosaic's side of the crossfilter -------------------
+//
+// The two clients are durable roots for the same reason the coordinator is: a
+// hot edit must not leave a disconnected client behind holding a stale callback.
+// Everything they produce lands in a signal, and from there it is pure Solid.
+
+const timeline = appScope.durableSignal<TimelineData>("timeline", { spans: [], forks: [] });
+const timelineDomain = appScope.durableSignal<TimelineDomain | null>("timelineDomain", null);
+const timelineBusy = appScope.durableSignal<boolean>("timelineBusy", false);
+const selectionStats = appScope.durableSignal<SelectionStats | null>("selectionStats", null);
+/** The time range currently published to the crossfilter — the drawn brush. */
+const brushRange = appScope.durableSignal<[number, number] | null>("brushRange", null);
+
+/**
+ * Collapsed rather than expanded, so the default needs no knowledge of which
+ * projects exist: an empty set means every project shows its lanes. Storing the
+ * expanded set instead would need a "not yet initialised" sentinel and a first
+ * -data hook to fill it in.
+ */
+const collapsedProjects = appScope.durableSignal<ReadonlySet<string>>(
+  "collapsedProjects",
+  new Set(),
+);
+/** Sessions whose agents are broken out onto their own sub-lanes. */
+const expandedSessions = appScope.durableSignal<ReadonlySet<string>>("expandedSessions", new Set());
+
+const clientBox = appScope.durable<{ timeline: SessionTimelineClient | null }>("clients", () => ({
+  timeline: null,
+}));
+
+/** Toggle membership without mutating in place — Solid compares by identity. */
+function toggled(set: ReadonlySet<string>, key: string): Set<string> {
+  const next = new Set(set);
+  if (!next.delete(key)) next.add(key);
+  return next;
+}
+
+export function toggleProject(project: string): void {
+  collapsedProjects.set(toggled(collapsedProjects.get(), project));
+}
+
+export function toggleSession(sessionId: string): void {
+  expandedSessions.set(toggled(expandedSessions.get(), sessionId));
+}
+
+export function setAllCollapsed(projects: readonly string[], collapsed: boolean): void {
+  collapsedProjects.set(collapsed ? new Set(projects) : new Set<string>());
+  if (collapsed) expandedSessions.set(new Set<string>());
+}
+
+/**
+ * Brush a time range into the crossfilter, or clear it with `null`. The view
+ * calls this on drag; the agent `brush` action calls the same path, so there is
+ * one way to move the selection rather than two that can disagree.
+ *
+ * The range is mirrored into a signal because the *drawn* rectangle has to come
+ * from here rather than from the view's own drag state: otherwise a brush set
+ * or cleared by the agent tool would move the data while leaving the rectangle
+ * behind, showing the reader a selection that is not the one in force.
+ */
+export function brushTime(range: [number, number] | null): void {
+  brushRange.set(range);
+  clientBox.timeline?.publish(range);
+}
+
 /** Idempotent: the first caller kicks the load, everyone else awaits it. */
 export function ensureLoaded(): Promise<void> {
   engineBox.loading ??= load().catch((e: unknown) => {
@@ -178,6 +250,26 @@ async function load(): Promise<void> {
   progress.set({ fraction: 1, label: "summarizing" });
   await loadManifest();
   summary.set(await querySummary(conn));
+
+  // Connect the crossfilter clients only now: `prepare()` queries `turns`, so
+  // the tables have to exist before the coordinator initialises them.
+  const tl = new SessionTimelineClient({
+    filterBy: filter,
+    onResult: (data) => {
+      timeline.set(data);
+      timelineBusy.set(false);
+    },
+    onDomain: (d) => timelineDomain.set(d),
+    onPending: () => timelineBusy.set(true),
+    onError: (e) => {
+      timelineBusy.set(false);
+      loadError.set(e.message);
+    },
+  });
+  clientBox.timeline = tl;
+  coordinator.connect(tl);
+  coordinator.connect(new SelectionStatsClient(filter, (s) => selectionStats.set(s)));
+
   ready.set(true);
   progress.set({ fraction: 1, label: "ready" });
 }
@@ -265,4 +357,12 @@ export const store = {
   },
   ensureLoaded,
   sql,
+  // the session timeline's read side
+  timeline: timeline.get,
+  timelineDomain: timelineDomain.get,
+  timelineBusy: timelineBusy.get,
+  selectionStats: selectionStats.get,
+  brushRange: brushRange.get,
+  collapsedProjects: collapsedProjects.get,
+  expandedSessions: expandedSessions.get,
 };

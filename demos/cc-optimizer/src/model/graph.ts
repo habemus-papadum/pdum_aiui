@@ -20,7 +20,7 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
-import { appScope, idleGapMinutes, store } from "./store";
+import { appScope, brushTime, idleGapMinutes, setAllCollapsed, store } from "./store";
 
 /** One row of the "where did the money go" breakdown. */
 export interface CostSlice {
@@ -255,5 +255,56 @@ export const querySql = action({
     if (!query.trim()) return { error: "no sql provided" };
     const rows = await store.sql(`SELECT * FROM (${query}) LIMIT 200`);
     return { rows: rows.length, data: rows };
+  },
+});
+
+/**
+ * Move the session graph's time brush — the same path the drag uses, so there
+ * is one way to move the selection rather than two that can disagree.
+ *
+ * Beware the coordinator's batching when scripting this: a `report()` in the
+ * same tick reads the pre-brush numbers (seismos hit this too, NOTES.md
+ * finding 7). Await a task boundary before reading the result back.
+ */
+export const brush = action({
+  scope: appScope,
+  name: "brush",
+  description:
+    "Brush a wall-clock range into the shared cross-filter, narrowing every view. " +
+    "Omit both bounds to clear the brush.",
+  params: {
+    from: "ISO timestamp or epoch milliseconds for the start of the range.",
+    to: "ISO timestamp or epoch milliseconds for the end of the range.",
+  },
+  run: async (args?: Record<string, unknown>) => {
+    const ms = (v: unknown): number | null => {
+      if (v == null || v === "") return null;
+      const n = typeof v === "number" ? v : Date.parse(String(v));
+      return Number.isFinite(n) ? n : null;
+    };
+    const from = ms(args?.from);
+    const to = ms(args?.to);
+    if (from === null || to === null) {
+      brushTime(null);
+      return { brushed: null };
+    }
+    brushTime([Math.min(from, to), Math.max(from, to)]);
+    // The coordinator batches; let it settle so the returned stats are real.
+    await new Promise((r) => setTimeout(r, 120));
+    return { brushed: [Math.min(from, to), Math.max(from, to)], selection: store.selectionStats() };
+  },
+});
+
+/** Fold every project in the session graph to one row, or unfold them all. */
+export const foldProjects = action({
+  scope: appScope,
+  name: "fold-projects",
+  description: "Collapse every project in the session graph to a single row, or expand them all.",
+  params: { collapsed: "true to collapse every project, false to expand them all." },
+  run: async (args?: Record<string, unknown>) => {
+    const collapsed = args?.collapsed !== false && String(args?.collapsed) !== "false";
+    const projects = [...new Set(store.timeline().spans.map((s) => s.project))];
+    setAllCollapsed(projects, collapsed);
+    return { collapsed, projects: projects.length };
   },
 });
