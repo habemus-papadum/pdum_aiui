@@ -61,7 +61,7 @@ export function App() {
   return (
     <div class="app cco">
       <header class="cco-head">
-        <h1 class="cco-h1">ledger</h1>
+        <h1 class="cco-h1">cc-optimizer</h1>
         <p class="cco-sub">your own Claude Code usage, and whether it was time well spent</p>
       </header>
       {/* The dataset cell drives the load; the page is its view. */}
