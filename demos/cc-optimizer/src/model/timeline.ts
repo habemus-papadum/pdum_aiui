@@ -97,6 +97,14 @@ export interface TimelineSpan {
   agentType: string | null;
   /** `main` | `subagent` | `workflow-agent`. */
   context: string;
+  /**
+   * A session FILE that produced no billed turn — a fork taken and never
+   * continued. It is the user's own stated case ("sometimes I fork something I
+   * intend to continue but don't go back to it"), so it earns a mark rather
+   * than a gap, but a hollow one: there is no work here to compare against the
+   * filled bars, and no activity for an activity filter to act on.
+   */
+  ghost?: boolean;
 }
 
 /**
@@ -310,6 +318,8 @@ export interface LayoutBar {
    * than on a sub-lane of its own — the default, dense presentation.
    */
   strip: boolean;
+  /** A fork that produced no billed turn. Drawn hollow. See `TimelineSpan`. */
+  ghost: boolean;
 }
 
 export interface LayoutEdge {
@@ -524,6 +534,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
           cost: s.cost,
           collapsed: true,
           strip: false,
+          ghost: s.ghost === true,
         };
         bars.push(bar);
         barById.set(s.id, bar);
@@ -567,6 +578,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
           cost: s.cost,
           collapsed: false,
           strip: false,
+          ghost: s.ghost === true,
         };
         bars.push(bar);
         barById.set(s.id, bar);
@@ -596,6 +608,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
               cost: a.cost,
               collapsed: false,
               strip: true,
+              ghost: false,
             });
           }
         }
@@ -646,6 +659,7 @@ export function layoutTimeline(input: TimelineInput, opts: TimelineOptions): Tim
             cost: a.cost,
             collapsed: false,
             strip: false,
+            ghost: false,
           });
         }
       }
