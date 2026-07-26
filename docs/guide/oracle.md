@@ -1,89 +1,119 @@
 # The Oracle
 
-::: warning RETIRED (2026-07-25) — THIS PAGE IS THE HISTORICAL RECORD
-This page describes the oracle as it shipped **inside the intent client and channel** — a
-config-strip select riding the capture bus. That incarnation is **deleted end to end**: no
-client surface, no channel handler, no `oracle-*` events in the pipeline vocabulary (git
-history keeps the implementation; old traces render their oracle stages as generic cards).
-The oracle returns as a **standalone tool** (`packages/aiui-oracle`, built lab-first: browser
-WebRTC directly to the vendor over ephemeral keys) that deliberately contributes nothing to
-turns or prompt lowering. Until that package lands, the instructions quoted below are the
-**persona of record** — this page is their living home.
-:::
+The **oracle** is a realtime voice control surface for aiui apps: a component
+(`@habemus-papadum/aiui-oracle`) that opens a WebRTC session directly from the browser to
+OpenAI's Realtime API and presents the app's own cells and actions to the model as **tools**.
+The user talks; the oracle answers *and drives the app* — "make it a square wave and crank the
+frequency" moves the actual sliders, through the same validated setters the widgets use.
 
-The **oracle** is a direct, real-time voice conversation with a model, available mid-way through
-composing a briefing. Where the [prompt linter](./prompt-linting.md) is a *bystander* — it
-silently accumulates your briefing and gives one advisory read when you press **lint now** —
-the oracle is the *addressee*: while it is on, you are talking **to** the model, not past it.
+It is deliberately simple: one session, one tool surface, one conversation. The oracle tracks
+no navigation and no page content, and contributes **nothing** to intent turns or prompt
+lowering — it is an app feature, like the pencil, not part of the briefing
+pipeline. (An earlier, entirely different oracle lived inside the intent client and channel;
+it was deleted end to end on 2026-07-25 — git history keeps it, and
+`docs/proposals/aiui-oracle.md` records the research and decisions behind this rebuild.)
 
-The two are the same machinery (a live vendor session fed from the capture bus —
-`archive/capture-bus-and-consumers.md`), differing only in persona, tools, and **how the
-converse turn ends**:
+## Using it in an app
 
-| | linter | oracle |
-|---|---|---|
-| you are talking to… | the coding agent (it observes) | **the oracle itself** |
-| its turn ends | the **lint now** button | **the vendor's own voice-activity detection** |
-| after a reply | stays on, keeps accumulating | **loop — keep conversing** |
-| the prompt | keeps building | **pauses** |
-| vendor (v1) | OpenAI or Gemini | OpenAI |
+The package has four subpaths — dev-mode source-first like every workspace package:
 
-## Turning it on
+| Subpath | What lives there |
+|---|---|
+| `.` | the chromeless core: `OracleSession`, key sources, transports, the tool bridge |
+| `./widgets` | the Solid widgets: `OracleControl`, `OracleMind`, `OracleViewer` |
+| `./server` | node-only: the mint backend (`createMintBackend`, `runMintServer`) |
+| `./vite` | the `oracleDevKey()` dev-server plugin |
 
-The `oracle` select in the config strip (`off | openai`). It rides the hello at thread-open and
-also takes effect **live** mid-turn (the same control rail as the linter select). The oracle and
-the linter are **mutually exclusive** — turning one on flips the other off; the illegal
-combination is unrepresentable ("the journeys' XOR": a briefing is either being observed or
-paused for a side conversation, never both).
+A minimal integration, in an app whose store declares `control()`s and `action()`s:
 
-## Prompt building pauses — like tweak, for the mic
+```ts
+import {
+  OracleSession, standardKeySources, toolsFromControlSurface,
+  weaveInstructions, webRtcTransport,
+} from "@habemus-papadum/aiui-oracle";
+import { OracleControl, OracleViewer } from "@habemus-papadum/aiui-oracle/widgets";
 
-While the oracle is on, the mic is addressed to it: talk segments do **not** transcribe into the
-prompt (they resolve empty, with a traced `oracle addressed seg_N` marker), and nothing you say
-reaches the briefing. Turn the oracle off and the next talk segment builds the prompt again.
-**Send still works**: it sends the prompt as built *so far* — everything accumulated before (and
-after) the oracle conversation. The oracle select survives the send, so the next turn re-opens
-the conversation automatically.
+const session = new OracleSession({
+  config: {
+    instructions: weaveInstructions({ app: "What this app is, in a sentence or two." }),
+    tools: toolsFromControlSurface(),
+  },
+  keySource: standardKeySources(), // or { mintUrl: "/oracle/mint" } when a minter exists
+  transport: webRtcTransport(),
+});
+// then render <OracleControl session={session} /> and, if wanted, <OracleViewer …/>
+```
 
-Deliberate shots and selections behave normally — they land in the prompt *and* are shown to the
-oracle (only the *voice* switches addressee).
+`toolsFromControlSurface()` synthesizes one typed tool per control — `options` become an
+`enum`, `min`/`max` become schema bounds, and every `set_*` tool answers with the value
+**actually applied** (snapped and clamped), so the model reports honestly ("8 hertz, which is
+the maximum"). Actions become tools too; custom tools are just more entries in the array. The
+surface is **live**: `session.setTools(…)` / `setInstructions(…)` update mid-session, and
+`sendText(…)` / `sendImage(…)` inject ad-hoc context into the running conversation.
 
-## What is kept — the record, never the prompt
+## The three key flows
 
-The oracle's session transcribes both directions itself (vendor input transcription — the STT
-session is paused, so nothing double-transcribes):
+Auth is a pluggable `KeySource`; `standardKeySources()` is the decided priority chain:
 
-- **`oracle-heard`** — its transcript of what you said;
-- **`oracle-said`** — its reply (also spoken aloud, and shown as a 🔮 chip in the turn preview).
+1. **A pasted key trumps everything.** The control widget's key field writes
+   `localStorage`; whatever the user pastes (an `sk-…` parent key or a pre-minted `ek_…`)
+   wins. This is also the whole deployment story for a purely static app.
+2. **The dev key** — add `oracleDevKey()` from `./vite` to the app's Vite config and dev
+   mode just works: the dev server injects its own `OPENAI_API_KEY` into the page as a
+   runtime global. The plugin declares `apply: "serve"`, so it does not exist during
+   `vite build` — a production bundle structurally cannot contain the key.
+3. **A mint endpoint**, when the app has one: pass `mintUrl` and the chain fetches
+   short-lived credentials from it (cached, refreshed near expiry). The endpoint is the
+   host-neutral backend from `./server` — mountable in a Vite dev server, a standalone
+   express/node server, or (later) the channel sidecar, one code path everywhere.
 
-Both are **record events**: the compiler skips them in every configuration, exactly like
-`linter-*` events. They exist so a useful side conversation is not thrown away — it is
-chronicled on the turn, visible in the trace debugger, and available to future processing.
+Whatever the source, every connection uses an **ephemeral client secret** (`ek_…`, minted via
+`POST /v1/realtime/client_secrets`); a parent key mints in the browser only in the modes where
+the user knowingly holds their own key. The session ledger's `live` line names which flow
+answered (`key: dev-key`).
 
-## Tools
+## The widgets
 
-The oracle may call `read_file` — the same tool, cap, and full-trace recording policy as the
-linter ([Prompt Linting → tools](./prompt-linting.md)). Its calls ride `oracle-tool-call` /
-`oracle-tool-result` events. Richer task tools are deliberately out of scope for v1.
+- **`OracleControl`** — the embeddable strip: start / park / resume / stop / shush, a status
+  dot, a mic level meter, the streaming reply line, running token usage, and the key field.
+- **`OracleMind`** — the ambient one-liner answering *what is it doing right now*:
+  `listening…`, `thinking…`, the reply as it streams, `doing: set_freq`, `parked`.
+- **`OracleViewer`** — the debugging view: the session's ledger grouped into **turns** (an
+  utterance and everything it caused) with progressive detail — one story line per turn,
+  expandable to entries, expandable to an entry's JSON. Category chips
+  (`turn / tool / config / flow / error / raw`) keep the chatter off by default.
+
+**Park is free**: parking gates the mic and keeps the connection open — idle time bills
+nothing (cost accrues only when a response is generated); resume picks the conversation up
+exactly where it stopped. Sessions have a vendor-side 60-minute ceiling; the oracle closes
+cleanly and a new start begins fresh.
 
 ## The prompt
 
-The oracle persona, published verbatim (`ORACLE_INSTRUCTIONS` in
-`packages/aiui-claude-channel/src/oracle-sidecar.ts`; a hello may override it via
-`oracleInstructions`):
+`weaveInstructions()` composes the standard persona with the app-specific portion. The base
+persona, published verbatim (`ORACLE_BASE_PERSONA` in `packages/aiui-oracle/src/prompt.ts`):
 
-> You are the oracle: a real-time voice assistant a developer talks to DIRECTLY, mid-way
-> through composing a task briefing for a coding agent. While they address you, the briefing
-> is paused — you are a side conversation, and nothing you say enters the briefing. Answer
-> their questions plainly and briefly: a few spoken sentences, no lists, no preamble. You see
-> labeled screenshots ([image shot_3]) and on-screen selections ([selection sel_2: …]) they
-> share. You may call read_file to consult a file before answering — verify, don't browse.
-> If a question needs work you cannot do (editing files, running code), say so and suggest
-> they put it in the briefing instead.
+> You are the oracle: a real-time voice assistant embedded in an interactive app. You answer
+> questions about the app and drive it on the user's behalf through the tools you are given.
+> Speak plainly and briefly — a few spoken sentences, no lists, no preamble. When the user
+> asks for a change, make it with a tool call and confirm what you actually applied (tools
+> return the applied value — trust it over your intent). Only use tools that are currently
+> available; if something asked for has no tool, say so plainly. If unsure what the app
+> currently shows, consult your tools before guessing.
 
-## Cost & keys
+The woven prompt stays **generic about which tools exist** — the `tools` array is the single
+source of truth (a prompt naming an absent tool makes realtime models invent or pretend; the
+vendor documents this failure mode).
 
-The oracle needs `OPENAI_API_KEY` in the channel process; keyless, it degrades loudly (a note +
-error push) while briefing capture keeps working. Realtime conversation is billed per turn —
-including the persona on every turn and the input-transcription model
-(`gpt-4o-mini-transcribe`) for the record.
+## The lab
+
+`pnpm -C packages/aiui-oracle lab` — a standing-wave bench with the oracle wired in: all
+three key flows mounted, a composer for text/image injection, a live instructions editor,
+per-tool toggles, and the viewer. The lab is where every capability lands first.
+
+## Status
+
+V1 (2026-07-26): WebRTC transport, OpenAI only, live-verified end to end. Deliberately
+parked, with their seams in place: the WebSocket transport, the sideband control channel,
+session resume-by-replay, and the intent-panel embedding (the "intent oracle"). Gemini
+follows once the OpenAI shapes settle.
