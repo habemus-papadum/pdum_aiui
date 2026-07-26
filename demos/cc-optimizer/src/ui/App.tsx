@@ -21,6 +21,7 @@ import { graph } from "../model/graph";
 import { store } from "../model/store";
 import { Attribution } from "./Attribution";
 import { DailySpend } from "./DailySpend";
+import { ProjectFilter } from "./ProjectFilter";
 import { SessionDetail } from "./SessionDetail";
 import { SessionReplay } from "./SessionReplay";
 import { Sessions } from "./Sessions";
@@ -79,6 +80,7 @@ export function App() {
         {() => (
           <>
             <Summary />
+            <ProjectFilter />
             <SessionTimeline />
             <TurnScatter />
             <DailySpend />

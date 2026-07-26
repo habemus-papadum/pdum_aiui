@@ -843,3 +843,69 @@
   font-size: 10.5px;
   padding: 0 0 0 6px;
 }
+
+/* --- project filter: which projects the page is about ---------------------- */
+
+.cco-projects {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 0 18px;
+}
+
+.cco-projects-label {
+  color: var(--cco-fg-dim);
+  font-size: 11.5px;
+  text-transform: lowercase;
+}
+
+.cco-projects-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cco-pchip {
+  align-items: center;
+  background: var(--cco-panel);
+  border: 1px solid var(--cco-rule);
+  border-radius: 999px;
+  color: var(--cco-fg);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 11.5px;
+  gap: 6px;
+  padding: 3px 10px 3px 7px;
+}
+
+.cco-pchip:hover {
+  border-color: var(--cco-fg-dim);
+}
+
+/* Deselected chips keep their swatch but drop out of the foreground, so the
+   set of colours in play stays readable while off-state is unmistakable. */
+.cco-pchip-off {
+  color: #5c6577;
+  opacity: 0.55;
+}
+
+.cco-pchip-off .cco-pchip-dot {
+  opacity: 0.35;
+}
+
+.cco-pchip-dot {
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 9px;
+  width: 9px;
+}
+
+/* The corpus denominator behind a filtered strip: present, but never competing
+   with the live numbers it qualifies. */
+.cco-stat-of {
+  color: var(--cco-fg-dim);
+  font-size: 14px !important;
+  padding-top: 6px;
+}

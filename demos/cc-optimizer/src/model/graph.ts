@@ -20,6 +20,7 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
+import { projectScale } from "./palette";
 import type { ReplayRow } from "./replay";
 import type { DetailCompaction, DetailTurn } from "./session-detail";
 import { appScope, brushTime, focusSession, idleGapMinutes, setAllCollapsed, store } from "./store";
@@ -214,6 +215,69 @@ export const graph = hotCellGraph(
               dutyCycle: r.spanSeconds > 0 ? r.activeSeconds / r.spanSeconds : 1,
             })),
           );
+      },
+      { scope: appScope },
+    ),
+
+    /**
+     * The headline numbers under the current filter.
+     *
+     * The scatter's caption promises a brush filters "every panel above", and
+     * the summary strip is above it — so it has to follow, or the promise is
+     * false and the biggest numbers on the page are the stale ones.
+     *
+     * The unfiltered totals stay reachable through `store.summary()`, which is
+     * what the "of N" denominators read.
+     */
+    liveSummary: cell(
+      () => ({ v: store.filterVersion() }),
+      async () => {
+        const [row] = await store.sql<{
+          turns: number;
+          sessions: number;
+          projects: number;
+          firstTs: number;
+          lastTs: number;
+          totalCost: number;
+          costInput: number;
+          costOutput: number;
+          costCacheCreate: number;
+          costCacheRead: number;
+        }>(`
+          SELECT count(*)                       AS turns,
+                 count(DISTINCT sessionId)      AS sessions,
+                 count(DISTINCT project)        AS projects,
+                 epoch_ms(min(ts))              AS firstTs,
+                 epoch_ms(max(ts))              AS lastTs,
+                 sum(costTotal)                 AS totalCost,
+                 sum(costInput)                 AS costInput,
+                 sum(costOutput)                AS costOutput,
+                 sum(costCacheCreate)           AS costCacheCreate,
+                 sum(costCacheRead)             AS costCacheRead
+          FROM turns WHERE ${store.filterSql()}
+        `);
+        return row ?? null;
+      },
+      { scope: appScope },
+    ),
+
+    /**
+     * Every project in the corpus, with its total, and the colour scale the
+     * project-coloured charts share.
+     *
+     * Unfiltered on purpose — this IS the filter's own vocabulary. Deriving it
+     * from filtered data would delete a chip the moment you deselected it,
+     * leaving no way back.
+     */
+    projects: cell(
+      () => ({}),
+      async () => {
+        const rows = await store.sql<{ project: string; cost: number; turns: number }>(`
+          SELECT project, sum(costTotal) AS cost, count(*) AS turns
+          FROM turns GROUP BY 1 ORDER BY cost DESC
+        `);
+        const names = rows.map((r) => r.project);
+        return { rows, scale: projectScale(names) };
       },
       { scope: appScope },
     ),

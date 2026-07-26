@@ -37,13 +37,17 @@ import { filter, store } from "../model/store";
  * Log cannot draw a zero, so the zero-cost turns are counted and named in the
  * note rather than silently dropped.
  */
-function ScatterPlot(props: { zeroCost: number; turns: number }) {
+function ScatterPlot(props: {
+  zeroCost: number;
+  turns: number;
+  scale: { domain: string[]; range: string[] };
+}) {
   const [host, setHost] = createSignal<HTMLDivElement | undefined>();
   const [error, setError] = createSignal<string | null>(null);
 
   createEffect(
-    () => ({ el: host() }),
-    ({ el }) => {
+    () => ({ el: host(), scale: props.scale }),
+    ({ el, scale }) => {
       if (!el) return;
       el.replaceChildren();
       try {
@@ -59,6 +63,13 @@ function ScatterPlot(props: { zeroCost: number; turns: number }) {
           // Publishes into the same crossfilter the timeline uses. Two axes, so
           // a drag here says "these turns, in this cost band".
           vg.intervalXY({ as: filter, brush: { fill: "none", stroke: "#e6e9ef" } }),
+          // Pinned from the whole corpus, not derived from what survives the
+          // filter. Without this, isolating one project recoloured it — the
+          // filtered data had one category, so it took the scheme's first
+          // colour, and a colour that changes when you select it is not an
+          // identity. See palette.ts.
+          vg.colorDomain(scale.domain),
+          vg.colorRange(scale.range),
           vg.colorLegend({ as: filter, columns: 4 }),
           vg.width(900),
           vg.height(300),
@@ -132,7 +143,11 @@ export function TurnScatter() {
         </Show>
       </header>
       <CellView of={graph().scatterMeta}>
-        {(m) => <ScatterPlot zeroCost={m().zeroCost} turns={m().turns} />}
+        {(m) => (
+          <CellView of={graph().projects}>
+            {(p) => <ScatterPlot zeroCost={m().zeroCost} turns={m().turns} scale={p().scale} />}
+          </CellView>
+        )}
       </CellView>
     </section>
   );

@@ -24,6 +24,7 @@
 
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { control, scope } from "@habemus-papadum/aiui-viz";
+import { clausePoints } from "@uwdata/mosaic-core";
 import { Coordinator, Selection, wasmConnector } from "@uwdata/vgplot";
 // Asset imports, not public/ fetches: these resolve from THIS package, so the
 // data travels with the demo into any consumer's build.
@@ -252,6 +253,50 @@ export function brushTime(range: [number, number] | null): void {
 }
 
 /**
+ * Which projects are visible, or null for "all of them".
+ *
+ * Null rather than "every project selected" so the default needs no knowledge
+ * of which projects exist — the same reasoning as `collapsedProjects`, and it
+ * means no clause is published until the reader actually narrows something.
+ */
+const visibleProjects = appScope.durableSignal<ReadonlySet<string> | null>("visibleProjects", null);
+
+/**
+ * A stable clause source for the project filter.
+ *
+ * Stable identity is what makes a Selection *replace* this widget's clause
+ * rather than accumulate one per click. It is a bare object because the filter
+ * is not a MosaicClient — it publishes but never queries.
+ */
+const projectSource = { name: "project-filter" };
+
+/**
+ * Show only these projects, or `null` to show all.
+ *
+ * Publishes a point clause over `project`, so it composes with the timeline's
+ * time interval and the scatter's time×cost box exactly like any other clause —
+ * and the cell panels pick it up through `filterSql()` with no extra wiring.
+ */
+export function setVisibleProjects(projects: ReadonlySet<string> | null): void {
+  visibleProjects.set(projects);
+  filter.update(
+    clausePoints(["project"], projects ? [...projects].map((p) => [p]) : null, {
+      source: projectSource,
+    }),
+  );
+}
+
+/** Toggle one project without disturbing the others. */
+export function toggleProjectVisible(project: string, all: readonly string[]): void {
+  const current = visibleProjects.get() ?? new Set(all);
+  const next = new Set(current);
+  if (!next.delete(project)) next.add(project);
+  // Back to everything selected means back to no clause at all, so the page
+  // reads as unfiltered rather than as "filtered to all 12".
+  setVisibleProjects(next.size === all.length ? null : next);
+}
+
+/**
  * Bumped whenever the crossfilter changes, so cell-based panels can depend on
  * it and recompute.
  *
@@ -411,7 +456,11 @@ async function querySummary(c: AsyncDuckDBConnection): Promise<CorpusSummary> {
   const rows = await c.query(`
     SELECT count(*)                    AS turns,
            count(DISTINCT sessionId)   AS sessions,
-           count(DISTINCT projectSlug) AS projects,
+           -- project, not projectSlug. A slug is a cwd, so a worktree gets its
+           -- own; collapsing them to the repository root is what projectLabel
+           -- is for, and counting slugs here reported 18 projects for a corpus
+           -- that has 12.
+           count(DISTINCT project)     AS projects,
            min(epoch_ms(ts))           AS firstTs,
            max(epoch_ms(ts))           AS lastTs,
            sum(costTotal)              AS totalCost,
@@ -545,6 +594,9 @@ export const store = {
   collapsedProjects: collapsedProjects.get,
   expandedSessions: expandedSessions.get,
   focusedSession: focusedSession.get,
+  visibleProjects: visibleProjects.get,
+  toggleProjectVisible,
+  setVisibleProjects,
   replayIndex: replayIndex.get,
   filterVersion: filterVersion.get,
   filterSql,

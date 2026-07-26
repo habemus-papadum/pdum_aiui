@@ -26,12 +26,12 @@ interface DayRow {
  * owns a container and re-renders into it when the data changes. Nothing
  * reactive lives inside the SVG.
  */
-function SpendChart(props: { rows: DayRow[] }) {
+function SpendChart(props: { rows: DayRow[]; scale: { domain: string[]; range: string[] } }) {
   const [host, setHost] = createSignal<HTMLDivElement | undefined>();
 
   createEffect(
-    () => ({ el: host(), rows: props.rows }),
-    ({ el, rows }) => {
+    () => ({ el: host(), rows: props.rows, scale: props.scale }),
+    ({ el, rows, scale }) => {
       if (!el) return;
       el.replaceChildren();
       if (rows.length === 0) return;
@@ -42,7 +42,9 @@ function SpendChart(props: { rows: DayRow[] }) {
         marginBottom: 32,
         x: { type: "utc", label: null, grid: false },
         y: { label: "USD / day", grid: true, tickFormat: (d: number) => `$${d}` },
-        color: { legend: true, scheme: "observable10" },
+        // The same (domain, range) the scatter uses, so a project is one
+        // colour across the page rather than one per chart. See palette.ts.
+        color: { legend: true, domain: scale.domain, range: scale.range },
         style: { background: "transparent", color: "var(--cco-fg-dim)", fontSize: "11px" },
         marks: [
           Plot.rectY(rows, {
@@ -68,7 +70,13 @@ export function DailySpend() {
   return (
     <section class="cco-panel">
       <h2 class="cco-h2">spend by day</h2>
-      <CellView of={graph().dailyCost}>{(rows) => <SpendChart rows={rows()} />}</CellView>
+      <CellView of={graph().dailyCost}>
+        {(rows) => (
+          <CellView of={graph().projects}>
+            {(p) => <SpendChart rows={rows()} scale={p().scale} />}
+          </CellView>
+        )}
+      </CellView>
     </section>
   );
 }
