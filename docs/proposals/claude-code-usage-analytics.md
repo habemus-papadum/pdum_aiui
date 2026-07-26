@@ -715,7 +715,54 @@ Not benchmarked: behaviour under a live drag. With preagg off every brush tick i
 a full re-scan; 29k/35k rows is small and DuckDB executes this as a semi-join,
 but expect to need throttling.
 
-#### 5.6.4 Is the timeline expressible in SQL at all? — answered, with limits
+#### 5.6.4 What a zero-turn session does under a filter
+
+Forking something and never returning to it is a case the user named explicitly,
+so the timeline draws those sessions — hollow, dashed, no fill, never readable as
+work that happened. That raises a filtering question with a subtle wrong answer.
+
+**Only real forks count.** Of the five zero-turn sessions in the corpus, exactly
+**one** has a parent; the other four are parentless false starts with 0-second
+spans, one of which was manufacturing an entire project row (`scratchpad`) for a
+session that billed nothing. A *fork* graph should show forks: the grain filters
+on `parentSessionId IS NOT NULL`, which drops 5 ghosts to 1, removes the spurious
+project row, and leaves all 10 edges rendering. Fixing it at the source beats
+rewording a tooltip — the label is now true because only a real abandoned fork
+wears it.
+
+**The visibility rule, and the circular version to avoid.** The first rule drafted
+for this was:
+
+> ~~A session renders iff the filter selects it. An edge renders iff both endpoints
+> render. A ghost renders iff it is an endpoint of a rendering edge.~~
+
+That is mutually recursive, and its least fixed point is **no ghost ever
+renders** — self-consistent, so it would have looked like a working
+implementation quietly drawing nothing. The rule that ships is grounded in real
+sessions, so there is no recursion:
+
+> A ghost renders iff a fork edge connects it to a **real** session that survived
+> the filter.
+
+One pass, measured against real sessions only, so no ghost can justify another.
+Pruned before lane packing, so a dropped ghost costs neither a lane nor a project
+row. It is also **grain-agnostic** — it inherits whatever produced the filtered
+set, so it holds under a project clause, under a turn-grain clause this widget
+cannot introspect, and under the widget's own brush, where the real bars hold
+still by self-exclusion and the ghosts now hold still with them.
+
+**One surviving neighbour on *either* side, not both.** Requiring both was the
+other early mistake: an abandoned fork usually has *no children*, so a both-sides
+rule would have hidden almost exactly the case this feature exists to show. With
+a surviving parent and no children the mark is not orphaned — the parent and the
+parent→ghost edge both render, and what the reader sees is "you forked here and
+it went nowhere."
+
+Verified live rather than only in tests: no filter → 1 ghost / 10 edges / 12
+project rows; a clause selecting a different project → 0 ghosts; a clause
+selecting the ghost's own project → 1 ghost, chain intact.
+
+#### 5.6.5 Is the timeline expressible in SQL at all? — answered, with limits
 
 Yes: `forkEdges` / `lineages` / `agentRuns` in `demos/cc-slurp`. The measured
 result on the baseline corpus, and the limits worth knowing before trusting a
