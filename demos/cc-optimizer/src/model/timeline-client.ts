@@ -498,11 +498,17 @@ export class SessionTimelineClient extends MosaicClient {
   /**
    * Publish a brushed time range into the crossfilter — or `null` to clear it.
    *
-   * `clients: new Set([this])` is what keeps the timeline from filtering
-   * itself: in a crossfilter a clause is excluded from the predicate handed to
-   * its own source's clients, so the graph keeps every track on screen while
-   * the brush narrows everyone else. Without it, dragging a brush would delete
-   * the very tracks being brushed over.
+   * `clients: new Set()` — EMPTY, and explicitly so. Omitting the option does
+   * not mean "no clients": `clauseInterval` defaults it to `new Set([source])`
+   * whenever the source is a MosaicClient, which is exactly the self-exclusion
+   * being removed here. Only an empty set actually opts out.
+   *
+   * Why opt out at all: excluding itself used to keep the graph from deleting
+   * the very tracks being brushed over. That danger is gone — the layout is fed
+   * the whole corpus and marks excluded spans `dim` (see `loadAllSpans`), so
+   * our own clause now narrows the *highlight* rather than the chart. Keeping
+   * the exclusion would mean the one chart you are dragging on is the one chart
+   * that never responds.
    *
    * The field is `epoch_ms(ts)` rather than `ts` because the value is a number:
    * comparing a TIMESTAMP column against epoch-millisecond literals is a cast
@@ -512,10 +518,7 @@ export class SessionTimelineClient extends MosaicClient {
   publish(range: [number, number] | null): void {
     this.range = range;
     this.filterBy?.update(
-      clauseInterval(sql`epoch_ms(ts)`, range, {
-        source: this,
-        clients: new Set([this]),
-      }),
+      clauseInterval(sql`epoch_ms(ts)`, range, { source: this, clients: new Set() }),
     );
   }
 }

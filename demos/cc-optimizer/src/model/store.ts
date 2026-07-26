@@ -154,6 +154,26 @@ const summary = appScope.durableSignal<CorpusSummary | null>("summary", null);
  */
 export const filter: Selection = appScope.durable("filter", () => Selection.crossfilter());
 
+/**
+ * The same clauses, but with nothing skipped — what a *drawn layer* should obey.
+ *
+ * A crossfilter deliberately hides a client's own clause from it
+ * (`skip() === cross && clause.clients.has(client)`), so that a chart you are
+ * brushing keeps its full data underneath and the drag has something to aim at.
+ * That was the right default when a filtered-out mark disappeared. It is the
+ * wrong one now that every chart draws an unfiltered base layer: the context is
+ * already there in grey, so a chart applying its own brush to its coloured
+ * layer is exactly what "the selection is highlighted" means — and not applying
+ * it is what made brushing the scatter appear to do nothing to the scatter.
+ *
+ * `intersect` sets `cross: false`, so nothing is ever skipped; `include` relays
+ * every clause published to the crossfilter. Marks filter by this; clauses are
+ * still published to `filter`, so *other* clients keep crossfilter semantics.
+ */
+export const viewFilter: Selection = appScope.durable("viewFilter", () =>
+  Selection.intersect({ include: filter }),
+);
+
 /** DuckDB + Mosaic live in a durable box so a hot edit never re-instantiates them. */
 interface Engine {
   db: AsyncDuckDB;

@@ -930,3 +930,29 @@
 .cco-attr-fill {
   position: relative;
 }
+
+/* --- crossfilter panels: no progress theatre -------------------------------
+ *
+ * `CellView` dims its body and slides an indeterminate blue stripe under it
+ * while a cell recomputes. That is right for slow work — the replay grain is a
+ * 3.2 MB fetch and deserves to say so — and wrong for these four, which are
+ * sub-100ms aggregates re-run continuously while a brush is being dragged. The
+ * stripe strobes through the whole drag and reads as a fault; the honest
+ * feedback is the numbers moving, which they already do.
+ *
+ * Scoped by cell name rather than blanket-disabled, so a genuinely slow cell
+ * still reports itself.
+ */
+[data-cell$="/liveSummary"] > .progress-stripe,
+[data-cell$="/dailyCost"] > .progress-stripe,
+[data-cell$="/attribution"] > .progress-stripe,
+[data-cell$="/sessions"] > .progress-stripe {
+  display: none;
+}
+
+[data-cell$="/liveSummary"] > .cell-body-loading,
+[data-cell$="/dailyCost"] > .cell-body-loading,
+[data-cell$="/attribution"] > .cell-body-loading,
+[data-cell$="/sessions"] > .cell-body-loading {
+  opacity: 1;
+}

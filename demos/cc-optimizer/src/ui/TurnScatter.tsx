@@ -26,7 +26,7 @@ import { CellView } from "@habemus-papadum/aiui-viz";
 import { createAPIContext } from "@uwdata/vgplot";
 import { createEffect, createSignal, Show } from "solid-js";
 import { graph } from "../model/graph";
-import { filter, store } from "../model/store";
+import { filter, store, viewFilter } from "../model/store";
 
 /**
  * Log y, because turn cost spans nearly three orders of magnitude: p01 is
@@ -69,7 +69,10 @@ function ScatterPlot(props: {
             r: 1.4,
             fillOpacity: 0.12,
           }),
-          vg.dot(vg.from("turns", { filterBy: filter }), {
+          // `viewFilter`, not `filter`: a crossfilter would hide this plot's
+          // own brush from its own marks, so dragging a box here left every dot
+          // fully coloured and the selection invisible. See store.ts.
+          vg.dot(vg.from("turns", { filterBy: viewFilter }), {
             x: "ts",
             y: "costTotal",
             fill: "project",
