@@ -7,6 +7,9 @@ panel (§12) are in `demos/cc-slurp` + `demos/cc-optimizer`. §7 lists what is
 left, all of it optional.
 **Spike:** [`exploration/cc-usage/`](../../exploration/cc-usage/) (runnable, zero deps).
 **Generated schema reference:** [`exploration/cc-usage/SCHEMA.md`](../../exploration/cc-usage/SCHEMA.md).
+**Where it runs:** [`deployment-shapes.md`](./deployment-shapes.md) — this
+document designs the data; that one designs the static-page / Electron / backend
+question and the S3 layout.
 **Date:** 2026-07-26. Corpus: 965 files (485 JSONL) · 168,171 records · 677 MB ·
 Claude Code `2.1.186`–`2.1.220`. Figures quoted below were measured at various
 points as the corpus grew, so they will not all reconcile to the same total.
