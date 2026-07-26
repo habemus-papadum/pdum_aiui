@@ -76,9 +76,10 @@ export function staticKeySource(key: string, options: MintOptions = {}): KeySour
 }
 
 /**
- * The user's own key, from localStorage (the control widget's key prompt
- * writes the same slot). Read at connect time, so pasting a new key needs no
- * reload. In the standard chain this TRUMPS everything.
+ * The user's own key, from localStorage (the `OracleKey` widget writes the
+ * same slot — and the slot is ORIGIN-wide, so in a composed document one
+ * paste covers every app). Read at connect time, so pasting a new key needs
+ * no reload. In the standard chain this TRUMPS everything.
  */
 export function pasteKeySource(
   storage: Pick<Storage, "getItem"> = localStorage,

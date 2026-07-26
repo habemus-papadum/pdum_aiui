@@ -105,9 +105,9 @@ surface is **live**: `session.setTools(…)` / `setInstructions(…)` update mid
 
 Auth is a pluggable `KeySource`; `standardKeySources()` is the decided priority chain:
 
-1. **A pasted key trumps everything.** The control widget's key field writes
-   `localStorage`; whatever the user pastes (an `sk-…` parent key or a pre-minted `ek_…`)
-   wins. This is also the whole deployment story for a purely static app.
+1. **A pasted key trumps everything.** The `OracleKey` widget writes `localStorage`;
+   whatever the user pastes (an `sk-…` parent key or a pre-minted `ek_…`) wins. This is
+   also the whole deployment story for a purely static app.
 2. **The dev key** — opt in with `aiui({ devKeys: ["openai"] })` and dev mode just works:
    the dev server resolves the key (env first, OS vault fallback) and injects it as
    `window.__AIUI__.devKeys`. The seed applies to serve alone, so it does not exist during
@@ -125,7 +125,10 @@ answered (`key: dev-key`).
 ## The widgets
 
 - **`OracleControl`** — the embeddable strip: start / park / resume / stop / shush, a status
-  dot, a mic level meter, the streaming reply line, running token usage, and the key field.
+  dot, a mic level meter, the streaming reply line, running token usage.
+- **`OracleKey`** — key management as its own widget, deliberately separate from the strip:
+  the paste field, clear, and a hint about what blank falls through to. Placement is the
+  composition story (below).
 - **`OracleMind`** — the ambient one-liner answering *what is it doing right now*:
   `listening…`, `thinking…`, the reply as it streams, `doing: set_freq`, `parked`.
 - **`OracleViewer`** — the debugging view: the session's ledger grouped into **turns** (an
@@ -137,6 +140,27 @@ answered (`key: dev-key`).
 nothing (cost accrues only when a response is generated); resume picks the conversation up
 exactly where it stopped. Sessions have a vendor-side 60-minute ceiling; the oracle closes
 cleanly and a new start begins fresh.
+
+## Composed documents (the gallery pattern)
+
+When a shell composes many apps into one document — the gallery mounting every demo — the
+pieces are designed to already do the right thing, and the idiom is about **placement**:
+
+- **Keys are origin-shared by construction.** The paste slot is one fixed `localStorage`
+  key and the dev seed is one global, and a composed site is one origin — so the user
+  pastes once and every app's oracle sees it. Nothing to wire.
+- **Key UI placement follows the dual shape.** A demo's *standalone chrome* (the header
+  its `main.tsx` renders around the page) carries `OracleKey`; a composing shell renders
+  ONE `OracleKey` for the whole site; the *mounted page* never renders it. No host
+  detection — the layer that renders the widget is the decision.
+- **Per-app oracles scope their tools.** The control surface is document-global, so a
+  composed document makes an unscoped projection see every app's controls. An embedded
+  oracle passes its own scope — `toolsFromControlSurface({ scope: appScope })`. (Omitting
+  the scope deliberately is the seed of a *host-level* oracle that drives the whole
+  site — possible, not yet built.)
+- **Park rides `deactivate`.** The site shell's pause-not-destroy contract maps directly
+  onto the oracle's free park: park on page-switch away, resume on return, conversation
+  intact, $0 while parked.
 
 ## The prompt
 

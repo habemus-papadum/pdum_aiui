@@ -18,10 +18,10 @@ import {
   weaveInstructions,
   webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
-import { OracleControl, OracleViewer } from "@habemus-papadum/aiui-oracle/widgets";
+import { OracleControl, OracleKey, OracleViewer } from "@habemus-papadum/aiui-oracle/widgets";
 import { ControlSlider, ControlToggle } from "@habemus-papadum/aiui-viz";
 import { createEffect, createSignal, For, onCleanup, untrack } from "solid-js";
-import { amplitude, damping, freq, grid, kick, waveform } from "../model/store";
+import { amplitude, damping, freq, grid, kick, labScope, waveform } from "../model/store";
 import { Wave } from "./Wave";
 
 const APP_BLURB =
@@ -34,17 +34,20 @@ export function App() {
   // schemas) — untracked on purpose; re-projection on surface change is what
   // keeps it live.
   const [allTools, setAllTools] = createSignal<OracleTool[]>(
-    untrack(() => toolsFromControlSurface()),
+    untrack(() => toolsFromControlSurface({ scope: labScope })),
   );
   const [enabledNames, setEnabledNames] = createSignal<Set<string>>(
-    new Set(untrack(() => toolsFromControlSurface()).map((tool) => tool.name)),
+    new Set(untrack(() => toolsFromControlSurface({ scope: labScope })).map((tool) => tool.name)),
   );
   const initialInstructions = weaveInstructions({ app: APP_BLURB });
   const [instructions, setInstructions] = createSignal(initialInstructions);
   const [draft, setDraft] = createSignal("");
 
   const session = new OracleSession({
-    config: { instructions: initialInstructions, tools: untrack(() => toolsFromControlSurface()) },
+    config: {
+      instructions: initialInstructions,
+      tools: untrack(() => toolsFromControlSurface({ scope: labScope })),
+    },
     // All three flows, deliberately ordered mint-before-dev-key so the lab
     // EXERCISES the mint path (an app would use standardKeySources(), whose
     // default is paste → dev-key → mint).
@@ -55,7 +58,11 @@ export function App() {
     ]),
     transport: webRtcTransport(),
   });
-  onCleanup(onControlSurfaceChange(() => setAllTools(untrack(() => toolsFromControlSurface()))));
+  onCleanup(
+    onControlSurfaceChange(() =>
+      setAllTools(untrack(() => toolsFromControlSurface({ scope: labScope }))),
+    ),
+  );
   onCleanup(() => session.close());
 
   // The LIVE surface: toggles or a re-projection change what the model holds
@@ -87,7 +94,12 @@ export function App() {
 
   return (
     <div class="lab">
-      <h1>oracle lab — talk to the wave</h1>
+      {/* The bench header plays the STANDALONE-CHROME role: key management
+          lives here, not in the page a composing shell would mount. */}
+      <div class="lab-header">
+        <h1>oracle lab — talk to the wave</h1>
+        <OracleKey />
+      </div>
       <div class="lab-panel">
         <Wave />
       </div>

@@ -24,6 +24,39 @@ body {
   letter-spacing: 0.02em;
 }
 
+.lab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.aiui-oracle-keybox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.aiui-oracle-keybox button {
+  background: #262b33;
+  color: #e6e2d8;
+  border: 1px solid #3a404b;
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+}
+
+.aiui-oracle-keybox button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.aiui-oracle-key-hint {
+  font-size: 0.72rem;
+  color: #7d8590;
+}
+
 .lab-panel {
   background: #1c1f25;
   border: 1px solid #2a2e36;

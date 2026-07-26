@@ -82,6 +82,20 @@ describe("toolsFromControlSurface", () => {
   });
 });
 
+describe("the scope option — the composed-document guard", () => {
+  it("keeps one scope's entries; unscoped sees the whole document", () => {
+    control({ name: "orother/x", value: 1 });
+    const scoped = toolsFromControlSurface({ scope: "orlab" }).map((tool) => tool.name);
+    expect(scoped).toContain("set_orlab_freq");
+    expect(scoped).not.toContain("set_orother_x");
+    // A Scope-shaped object works too, and unscoped projections see everything.
+    const viaObject = toolsFromControlSurface({ scope: { name: "orlab" } }).map((t) => t.name);
+    expect(viaObject).toContain("set_orlab_freq");
+    const unscoped = toolsFromControlSurface().map((tool) => tool.name);
+    expect(unscoped).toContain("set_orother_x");
+  });
+});
+
 describe("toolsFromAiuiRegistry", () => {
   it("wraps registrations and routes calls through registry.call", async () => {
     const registry = ensureAiuiGlobal().tools;

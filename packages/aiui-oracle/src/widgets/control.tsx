@@ -9,15 +9,10 @@
  */
 
 import { createEffect, createSignal, onCleanup } from "solid-js";
-import { PASTED_KEY_STORAGE_KEY } from "../keys";
 import type { OracleSession, OracleState } from "../session";
 
 export interface OracleControlProps {
   session: OracleSession;
-  /** Show the paste-key field (the standalone/dev key mode). Default true. */
-  keyField?: boolean;
-  /** The storage the key field writes (the paste-key source's slot). */
-  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
 }
 
 /** Subscribe a signal to the session's state. */
@@ -30,8 +25,6 @@ export function useOracleState(session: OracleSession): () => OracleState {
 
 export function OracleControl(props: OracleControlProps) {
   const state = useOracleState(props.session);
-  const storage = props.storage ?? localStorage;
-  const [keyDraft, setKeyDraft] = createSignal(storage.getItem(PASTED_KEY_STORAGE_KEY) ?? "");
   const [level, setLevel] = createSignal(0);
 
   // The "is it hearing me" meter — an AnalyserNode over the mic stream (the
@@ -68,15 +61,6 @@ export function OracleControl(props: OracleControlProps) {
       });
     },
   );
-
-  const saveKey = (value: string) => {
-    setKeyDraft(value);
-    if (value.trim() === "") {
-      storage.removeItem(PASTED_KEY_STORAGE_KEY);
-    } else {
-      storage.setItem(PASTED_KEY_STORAGE_KEY, value.trim());
-    }
-  };
 
   const dot = () => {
     const s = state();
@@ -134,15 +118,6 @@ export function OracleControl(props: OracleControlProps) {
       >
         shush
       </button>
-      {props.keyField !== false && (state().status === "idle" || state().status === "error") ? (
-        <input
-          class="aiui-oracle-key"
-          type="password"
-          placeholder="OpenAI key (sk-…/ek_…) — blank falls through to the app's key source"
-          value={keyDraft()}
-          onInput={(event) => saveKey(event.currentTarget.value)}
-        />
-      ) : null}
       <span class="aiui-oracle-reply">{state().replyText}</span>
       <span class="aiui-oracle-usage" title="input / cached / output tokens">
         {state().usage.responses > 0

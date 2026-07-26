@@ -77,17 +77,35 @@ function controlDescription(entry: Extract<ControlSurfaceEntry, { kind: "control
 }
 
 export interface ControlSurfaceToolsOptions {
-  /** Keep only some of the surface (e.g. one scope's entries). */
+  /**
+   * Keep only one scope's entries (an aiui `Scope` or its name). The control
+   * surface is DOCUMENT-global — in a composed document (the gallery mounting
+   * many demos) an unscoped projection hands this oracle EVERY app's
+   * controls, so a per-app oracle passes its own scope. Omit deliberately for
+   * a host-level oracle that drives the whole document.
+   */
+  scope?: string | { name: string };
+  /** Arbitrary extra filtering (composes with `scope`). */
   filter?: (entry: ControlSurfaceEntry) => boolean;
   /** Include the `report` snapshot tool. Default true. */
   report?: boolean;
+}
+
+function surfaceFilter(
+  options: ControlSurfaceToolsOptions,
+): (entry: ControlSurfaceEntry) => boolean {
+  const scopeName = typeof options.scope === "string" ? options.scope : options.scope?.name;
+  return (entry) =>
+    (scopeName === undefined || entry.name.startsWith(`${scopeName}/`)) &&
+    (options.filter?.(entry) ?? true);
 }
 
 /** Project the page's control surface into typed oracle tools — a SNAPSHOT.
  * For a live surface, re-project on {@link onControlSurfaceChange} and hand
  * the result to `session.setTools` (the owner-decided day-one flexibility). */
 export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}): OracleTool[] {
-  const entries = controlSurface().filter(options.filter ?? (() => true));
+  const keep = surfaceFilter(options);
+  const entries = controlSurface().filter(keep);
   const tools: OracleTool[] = [];
   for (const entry of entries) {
     if (entry.kind === "control") {
@@ -136,7 +154,7 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
       parameters: { type: "object", properties: {}, additionalProperties: false },
       execute: () =>
         controlSurface()
-          .filter(options.filter ?? (() => true))
+          .filter(keep)
           .map((entry) =>
             entry.kind === "control"
               ? { control: entry.name, value: entry.value, ...entry.meta }
