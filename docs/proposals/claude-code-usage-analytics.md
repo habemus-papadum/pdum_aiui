@@ -564,7 +564,7 @@ same field in some records and not others and makes snapshots non-comparable.
 
 ### 5.5 The demo
 
-`demos/ccusage` (name TBD), private to the gallery — `package.json` carries no
+`demos/cc-optimizer`, private to the gallery — `package.json` carries no
 `aiui.sitePage` marker, so `demo-discovery.ts` will not pick it up, and it stays
 `"private": true` like every demo. It still gets `typecheck` and version
 lockstep for free.
@@ -647,10 +647,12 @@ Both are under investigation; §7 tracks the outcome.
 
 ## 6. Open questions
 
-- **Where does `fields.mjs` graduate to?** A package (`aiui-cc-schema`) is the
-  natural home if anything else ever wants it; otherwise it lives in the demo.
-  Defer until the demo exists — premature packaging is cheaper to avoid than to
-  undo.
+- ~~Where does `fields.mjs` graduate to?~~ **Settled.** It is
+  `demos/cc-slurp/src/fields.ts` — `@habemus-papadum/aiui-cc-slurp`, an internal
+  never-published library beside the demo that consumes it, in the same relation
+  `demos/optics` has to the wave-optics notebooks. The `.mjs` originals stay in
+  `exploration/cc-usage/` as the census/drift tooling, which is deliberately
+  dependency-free and outlives the workspace.
 - **Subscription vs API framing.** Flat-rate users don't pay these dollars. The
   honest framing is "API-equivalent value", useful for attribution and
   comparison. Worth a UI affordance, and worth checking whether rate-limit
@@ -668,13 +670,33 @@ Both are under investigation; §7 tracks the outcome.
 
 ## 7. Next steps
 
-1. **Ship the normaliser** — `census.mjs`'s walker + `fields.mjs`'s accessors,
-   plus dedup, into a `turns`/`toolCalls`/`events`/`sessions` Parquet writer.
-   The reader half is done and measured; this is assembly.
-2. **Validate cost against ground truth** — reconcile a month against `/usage`
-   or the Console's billing page. Every number after this depends on that
-   reconciliation being done once, honestly.
-3. **Scaffold the demo**, wire Mosaic to the Parquet, build view (1) end to end
-   before adding others.
-4. **Re-run the census in ~3 weeks** and read the `NEW` section. That is the
-   first real test of whether the drift workflow earns its keep.
+**Done.**
+
+1. ~~Ship the normaliser.~~ `demos/cc-slurp` — five Parquet grains + a manifest,
+   480 files / 163k records / 562 MB → 29,378 turns in 3.1s. `checkInvariants`
+   asserts `SUM(sessions.nativeCost) == SUM(turns.costTotal)` and runs on every
+   invocation.
+2. ~~Scaffold the demo.~~ `demos/cc-optimizer` — gallery-private, DuckDB-WASM
+   over the five tables, four panels, plus a `query` action giving the agent
+   read-only SQL. Verified rendering against the real corpus.
+
+**In flight.**
+
+3. **Validate cost against ground truth.** The honest comparison is `ccusage`
+   over the same window: any disagreement is diagnostic, because we know exactly
+   which traps we handle that it may not (fork-copy dedup — would read high; the
+   1h cache tier — would read ~7% low). The Console's billing page is the only
+   true ground truth and needs a human.
+4. **The two core widgets** (§5.6) and the two questions they raise: cross-table
+   filtering in Mosaic, and whether the session graph is expressible in SQL.
+   The data model for fork lineage / lanes / agent spans is the gating piece —
+   §1.6 established the provenance mechanism but the normalizer does not yet
+   emit lineage edges, only `fork-context-ref` events.
+
+**Standing.**
+
+5. **Re-run the census in ~3 weeks** (`exploration/cc-usage/`) and read the diff's
+   `NEW` section. That is the first real test of whether the drift workflow earns
+   its keep.
+6. **Cross-filter the existing panels.** They are static reads today; the
+   `Selection` is wired but nothing publishes into it yet.
