@@ -74,6 +74,9 @@ export class OracleSession {
   private readonly ledgerListeners = new Set<(entry: LedgerEntry) => void>();
   private readonly stateListeners = new Set<(state: OracleState) => void>();
   private readonly pendingUpdates: Array<Record<string, unknown>> = [];
+  /** `function_call_arguments.done` stamps, per call_id — the gate's cost
+   * (args-ready → response.done) is measured, not argued about. */
+  private readonly argsDoneAt = new Map<string, number>();
   private toolsByName = new Map<string, OracleTool>();
   private handle: TransportHandle | undefined;
   private seq = 0;
@@ -389,10 +392,19 @@ export class OracleSession {
         });
         return;
       }
+      case "response.function_call_arguments.done": {
+        // Not permission to execute (it fires for cancelled responses too) —
+        // but it IS the moment the arguments were ready, so stamp it: the
+        // tool-call entry's gateMs is the measured cost of waiting for
+        // response.done.
+        if (typeof event.call_id === "string") {
+          this.argsDoneAt.set(event.call_id, this.now());
+        }
+        return;
+      }
       // Streaming argument deltas and per-item adds are display material the
       // widgets don't need yet; the response.done path below is the record.
       case "response.function_call_arguments.delta":
-      case "response.function_call_arguments.done":
       case "response.output_audio_transcript.started":
       case "conversation.item.added":
       case "conversation.item.done":
@@ -442,6 +454,8 @@ export class OracleSession {
           name: typeof item.name === "string" ? item.name : "",
           args: typeof item.arguments === "string" ? item.arguments : "",
         };
+        const argsAt = this.argsDoneAt.get(call.callId);
+        this.argsDoneAt.delete(call.callId);
         this.record({
           kind: "tool-call",
           callId: call.callId,
@@ -453,6 +467,7 @@ export class OracleSession {
               : status === "cancelled"
                 ? "cancelled"
                 : "incomplete",
+          ...(argsAt !== undefined ? { gateMs: this.now() - argsAt } : {}),
         });
         if (status === "completed") {
           calls.push(call);

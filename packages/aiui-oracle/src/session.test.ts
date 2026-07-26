@@ -193,6 +193,42 @@ describe("the tool gate — response.done status decides execution", () => {
   });
 });
 
+describe("the gate's cost is measured", () => {
+  it("gateMs = arguments.done → response.done, on the tool-call entry", async () => {
+    let clock = 1000;
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: {
+        instructions: "x",
+        tools: [
+          { name: "set_x", description: "d", parameters: { type: "object" }, execute: () => null },
+        ],
+      },
+      keySource: testKeys,
+      transport: rig.transport,
+      now: () => clock,
+    });
+    await session.start();
+    rig.emit({ type: "response.function_call_arguments.done", call_id: "call_1" });
+    clock = 1420;
+    rig.emit(doneWithCall("completed", "call_1", "set_x", "{}"));
+    await settle();
+    const entry = session.ledger().find((e) => e.kind === "tool-call") as Extract<
+      LedgerEntry,
+      { kind: "tool-call" }
+    >;
+    expect(entry.gateMs).toBe(420);
+    // A call whose arguments-done was never seen carries no gateMs.
+    rig.emit(doneWithCall("completed", "call_2", "set_x", "{}"));
+    await settle();
+    const second = session
+      .ledger()
+      .filter((e) => e.kind === "tool-call")
+      .at(-1) as Extract<LedgerEntry, { kind: "tool-call" }>;
+    expect(second.gateMs).toBeUndefined();
+  });
+});
+
 describe("the live surface", () => {
   it("setTools sends a wholesale session.update and reconciles drift from the ack", async () => {
     const { session, rig } = makeSession([]);

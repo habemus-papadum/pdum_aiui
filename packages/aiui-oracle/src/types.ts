@@ -164,6 +164,9 @@ export type LedgerBody =
       /** `completed` responses execute; `cancelled`/`incomplete` NEVER do —
        * `function_call_arguments.done` fires for those too (research). */
       status: "completed" | "cancelled" | "incomplete";
+      /** The gate's measured cost: ms from `function_call_arguments.done` to
+       * the `response.done` that authorized (or refused) execution. */
+      gateMs?: number;
     }
   | { kind: "tool-result"; callId: string; name: string; ok: boolean; output: string; ms: number }
   | { kind: "injected"; role: "user" | "system"; text?: string; image?: boolean }

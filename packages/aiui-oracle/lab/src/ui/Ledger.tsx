@@ -26,7 +26,9 @@ function body(entry: LedgerEntry): string {
     case "said":
       return entry.text;
     case "tool-call":
-      return `${entry.name}(${entry.args}) [${entry.status}]`;
+      return `${entry.name}(${entry.args}) [${entry.status}${
+        entry.gateMs !== undefined ? `, gate ${entry.gateMs}ms` : ""
+      }]`;
     case "tool-result":
       return `${entry.name} ${entry.ok ? "→" : "✗"} ${entry.output} (${entry.ms}ms)`;
     case "injected":
