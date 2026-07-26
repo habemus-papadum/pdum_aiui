@@ -97,7 +97,7 @@
     }
   },
   "devDependencies": {
-    "@duckdb/duckdb-wasm": "1.33.1-dev45.0",
+    "@duckdb/duckdb-wasm": "1.33.1-dev61.0",
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@observablehq/plot": "^0.6.17",
     "@solidjs/web": "2.0.0-beta.15",

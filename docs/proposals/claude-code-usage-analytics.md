@@ -845,6 +845,63 @@ test pins it, and nothing at this corpus and zoom can trip it. It becomes real
 the moment a fork is abandoned for a day — which the user reports doing — so it
 should stay.
 
+## 6. Raw ingestion: two stages, and how JSON is stored
+
+The single pass in §5.2 becomes two, so that multi-machine works and so the
+finest drill-down (a session replay) has something to read — the five analytic
+grains deliberately drop message content.
+
+**Stage 1 — raw, per host.** JSONL to Parquet with as little interpretation as
+possible: one row per line, plus the filesystem facts (host, project, path, file
+kind, line number). Host-local and portable; the artifact is what moves between
+machines. Non-JSONL sidecars are captured too — their meaning can be decided
+later, but they cannot be recovered later.
+
+**Stage 2 — analytics, across hosts.** Consumes one or more hosts' raw sets and
+produces the eight grains, with `host` threaded through as a filterable
+dimension. Re-derivable: a schema change re-runs stage 2 rather than re-reading
+560 MB of JSONL on every machine.
+
+### 6.1 Store the JSON as Parquet VARIANT, unshredded
+
+Measured on a real 8.1 MB session file:
+
+| layout | size | vs JSONL | queryable |
+| --- | ---: | ---: | --- |
+| raw text column | 4.0 MB | 49% | `json_extract_string(...)`, everything a string |
+| **unshredded VARIANT** | **3.9 MB** | **48%** | **native dot paths, types preserved** |
+| shredded VARIANT | 4.2 MB | 52% | **broken** — see below |
+| text + VARIANT | 8.2 MB | 102% | either |
+
+VARIANT is both the smallest and the most queryable, and it needs no schema
+declared anywhere — which is the design constraint, not a happy accident.
+Fidelity verified at **2455/2455** records deep-equal to their originals.
+
+**Lossless means value-lossless.** VARIANT normalises JSON object key order.
+Two JSON texts differing only in key order encode the same value, so the
+round-trip test is deep equality, not byte equality. A line that *fails to
+parse* keeps its raw text, so malformed input is never silently dropped.
+
+**Do not shred.** Promoting hot paths to typed columns is bigger (52% vs 48%),
+slower, and — decisively — unreadable: DuckDB rejects `hyparquet-writer`'s
+shredded output with *"When 'typed_value' for a shredded Object is NULL, 'value'
+can not contain an Object value"*, a spec disagreement between the two. Verified
+against DuckDB 1.5.5; upgrading does not fix it.
+
+**Always CAST at the projection boundary.** DuckDB-WASM reads VARIANT parquet
+correctly but cannot hand a bare VARIANT across the Arrow bridge to JavaScript
+(`Unsupported Arrow type VARIANT`). Every path expression must project a
+concrete type. Verified in the browser against DuckDB v1.5.4:
+
+```sql
+SELECT CAST(rec.type AS VARCHAR), count(*) ...            -- assistant 931, user 514
+SELECT sum(CAST(rec.message.usage.output_tokens AS BIGINT))  -- 3,442,097
+SELECT CAST(rec.compactMetadata.preTokens AS BIGINT) ...     -- 1,007,841
+SELECT CAST(rec.message.content[1].type AS VARCHAR) ...      -- thinking / text / tool_use
+```
+
+Deep paths and array indexing both work, on fields nothing ever declared.
+
 ## 6. Open questions
 
 - ~~Where does `fields.mjs` graduate to?~~ **Settled.** It is
