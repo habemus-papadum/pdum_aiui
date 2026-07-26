@@ -13,6 +13,7 @@ import { checkInvariants, Normalizer } from "./normalize.ts";
 import type { PriceTable } from "./pricing.ts";
 import { LITELLM_URL, tableFromJson } from "./pricing.ts";
 import { findHostSets, readHostRecords } from "./raw-source.ts";
+import { ReplayBuilder } from "./replay.ts";
 import { defaultRoots, findTranscripts, readRecords } from "./scan.ts";
 
 export interface RunOptions {
@@ -28,6 +29,13 @@ export interface RunOptions {
   pricing: PriceTable;
   idleGapSeconds?: number;
   skipImages?: boolean;
+  /**
+   * Also build the replay grain — one row per conversational block, keeping the
+   * message bodies the analytic grains drop. Off by default because it roughly
+   * doubles the run's memory: the grains hold ~30k turns, replay holds ~500k
+   * blocks with their text.
+   */
+  replay?: boolean;
   onProgress?: (files: number, records: number) => void;
 }
 
@@ -36,6 +44,8 @@ export interface RunResult {
   invariants: InvariantResult;
   stats: NormalizeStats;
   rootsUsed: string[];
+  /** Present only when `replay` was requested. */
+  replay?: ReadonlyMap<string, import("./replay.ts").ReplayRow[]>;
 }
 
 /**
@@ -84,6 +94,7 @@ export async function normalizeCorpus(options: RunOptions): Promise<RunResult> {
     idleGapSeconds: options.idleGapSeconds,
     skipImages: options.skipImages,
   });
+  const replay = options.replay ? new ReplayBuilder() : null;
   const seen = new Set<string>();
   for (const root of roots) {
     for await (const file of findTranscripts(root)) {
@@ -94,6 +105,7 @@ export async function normalizeCorpus(options: RunOptions): Promise<RunResult> {
       n.noteFile(file);
       for await (const rec of readRecords(file.path, () => n.noteParseError())) {
         n.add(rec, file);
+        replay?.add(rec, file);
       }
       options.onProgress?.(n.stats.files, n.stats.records);
     }
@@ -104,6 +116,7 @@ export async function normalizeCorpus(options: RunOptions): Promise<RunResult> {
     invariants: checkInvariants(normalized),
     stats: normalized.stats,
     rootsUsed: roots,
+    ...(replay ? { replay: replay.sessions } : {}),
   };
 }
 
@@ -124,13 +137,17 @@ async function normalizeFromRaw(options: RunOptions, rawDir: string): Promise<Ru
     idleGapSeconds: options.idleGapSeconds,
     skipImages: options.skipImages,
   });
+  const replay = options.replay ? new ReplayBuilder() : null;
   for (const set of sets) {
     let seen = 0;
     // The same two-event loop the JSONL path runs, so a file with no readable
     // records is still registered as a file.
     for await (const item of readHostRecords(set)) {
       if (item.kind === "file") n.noteFile(item.file);
-      else n.add(item.rec, item.file);
+      else {
+        n.add(item.rec, item.file);
+        replay?.add(item.rec, item.file);
+      }
       if (++seen % 20000 === 0) options.onProgress?.(n.stats.files, n.stats.records);
     }
     options.onProgress?.(n.stats.files, n.stats.records);
@@ -141,5 +158,6 @@ async function normalizeFromRaw(options: RunOptions, rawDir: string): Promise<Ru
     invariants: checkInvariants(normalized),
     stats: normalized.stats,
     rootsUsed: sets.map((s) => `${s.host.hostname}:${s.dir}`),
+    ...(replay ? { replay: replay.sessions } : {}),
   };
 }

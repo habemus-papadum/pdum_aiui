@@ -37,6 +37,7 @@ import type {
   ToolCallRow,
   TurnRow,
 } from "./normalize.ts";
+import type { ReplayRow } from "./replay.ts";
 
 type ColType = "STRING" | "DOUBLE" | "INT64" | "BOOLEAN" | "TIMESTAMP";
 interface ColumnData {
@@ -341,4 +342,82 @@ export async function writeParquet(
     out[name] = { rows: rowCount(name, n), bytes: (await fs.stat(filename)).size };
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// the replay grain — partitioned, one file per session
+// ---------------------------------------------------------------------------
+
+const replayColumns = (rows: ReplayRow[]): ColumnData[] => [
+  col("seq", rows, "INT64", (r) => r.seq),
+  col("ts", rows, "TIMESTAMP", (r) => r.ts),
+  col("agentId", rows, "STRING", (r) => r.agentId),
+  col("context", rows, "STRING", (r) => r.context),
+  col("uuid", rows, "STRING", (r) => r.uuid),
+  col("parentUuid", rows, "STRING", (r) => r.parentUuid),
+  col("role", rows, "STRING", (r) => r.role),
+  col("kind", rows, "STRING", (r) => r.kind),
+  col("text", rows, "STRING", (r) => r.text),
+  col("truncated", rows, "BOOLEAN", (r) => r.truncated),
+  col("fullChars", rows, "INT64", (r) => r.fullChars),
+  col("toolName", rows, "STRING", (r) => r.toolName),
+  col("toolUseId", rows, "STRING", (r) => r.toolUseId),
+  col("ok", rows, "BOOLEAN", (r) => r.ok),
+  col("errorKind", rows, "STRING", (r) => r.errorKind),
+  col("exitCode", rows, "INT64", (r) => r.exitCode),
+  col("durationMs", rows, "INT64", (r) => r.durationMs),
+  col("model", rows, "STRING", (r) => r.model),
+];
+
+/**
+ * Write `replay/<sessionId>.parquet`, one file per session.
+ *
+ * Partitioned rather than pooled because the content does not fit in one table
+ * — see `replay.ts` — and because a replay is always scoped to one session
+ * anyway, so the viewer fetches exactly the file it needs and nothing else.
+ *
+ * `sessionId` is deliberately NOT a column: it is the filename, so it would be
+ * the same value on every row of every file. The index below carries it once.
+ */
+export async function writeReplay(
+  dir: string,
+  bySession: ReadonlyMap<string, ReplayRow[]>,
+  fs: {
+    mkdir: (p: string, o: { recursive: true }) => Promise<unknown>;
+    stat: (p: string) => Promise<{ size: number }>;
+    writeFile: (p: string, s: string) => Promise<unknown>;
+  },
+  join: (...p: string[]) => string,
+): Promise<{ sessions: number; rows: number; bytes: number }> {
+  const sub = join(dir, "replay");
+  await fs.mkdir(sub, { recursive: true });
+  const index: Array<{ sessionId: string; rows: number; bytes: number; t0: number; t1: number }> =
+    [];
+  let rows = 0;
+  let bytes = 0;
+  for (const [sessionId, list] of bySession) {
+    if (list.length === 0) continue;
+    // A session id comes from a directory name, but it reaches a URL, so a path
+    // separator in one would escape the output directory. Refuse rather than
+    // sanitise: a real id is a uuid and anything else is a bug worth seeing.
+    if (!/^[\w.-]+$/.test(sessionId)) continue;
+    const filename = join(sub, `${sessionId}.parquet`);
+    parquetWriteFile({ filename, columnData: replayColumns(list) as never });
+    const size = (await fs.stat(filename)).size;
+    const ts = list.map((r) => r.ts).filter((t) => t > 0);
+    index.push({
+      sessionId,
+      rows: list.length,
+      bytes: size,
+      t0: ts.length ? Math.min(...ts) : 0,
+      t1: ts.length ? Math.max(...ts) : 0,
+    });
+    rows += list.length;
+    bytes += size;
+  }
+  // An index so the viewer can tell "no replay for this session" from "not
+  // fetched yet" without a 404 round-trip.
+  index.sort((a, b) => (a.sessionId < b.sessionId ? -1 : 1));
+  await fs.writeFile(join(sub, "index.json"), `${JSON.stringify(index)}\n`);
+  return { sessions: index.length, rows, bytes };
 }

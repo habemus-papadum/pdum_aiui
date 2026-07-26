@@ -608,3 +608,238 @@
   border-color: var(--cco-accent);
   color: var(--cco-fg);
 }
+
+/* --- replay: the transcript ------------------------------------------------ */
+
+.cco-rp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+  margin: 10px 0 6px;
+}
+
+/* One cell per active hour; height encodes block count, so the strip doubles
+   as the shape of the session. */
+.cco-rp-hours {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 30px;
+  flex: 1 1 320px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.cco-rp-hour {
+  flex: 0 0 8px;
+  height: 100%;
+  min-width: 8px;
+  background: linear-gradient(
+    to top,
+    var(--cco-accent) 0,
+    var(--cco-accent) var(--fill, 30%),
+    #22262e var(--fill, 30%),
+    #22262e 100%
+  );
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cco-rp-hour:hover {
+  outline: 1px solid var(--cco-fg-dim);
+}
+
+.cco-rp-hour-bad {
+  background: linear-gradient(
+    to top,
+    #f7768e 0,
+    #f7768e var(--fill, 30%),
+    #22262e var(--fill, 30%),
+    #22262e 100%
+  );
+}
+
+.cco-rp-hour-all {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--cco-rule);
+  color: var(--cco-fg-dim);
+  font: inherit;
+  font-size: 11px;
+  padding: 0 8px;
+  height: 22px;
+  align-self: flex-end;
+}
+
+.cco-rp-on {
+  outline: 1px solid var(--cco-accent);
+  color: var(--cco-fg);
+}
+
+.cco-rp-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cco-rp-list {
+  margin-top: 10px;
+  max-height: 640px;
+  overflow-y: auto;
+  border-top: 1px solid var(--cco-rule);
+}
+
+.cco-rp-block {
+  display: flex;
+  gap: 10px;
+  padding: 3px 2px;
+  border-bottom: 1px solid #1d2128;
+  font-size: 12.5px;
+  align-items: baseline;
+}
+
+.cco-rp-time {
+  color: #5c6577;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 34px;
+}
+
+.cco-rp-agent {
+  color: #35a389;
+  font-size: 10.5px;
+  flex: 0 0 auto;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cco-rp-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cco-rp-label {
+  color: var(--cco-accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cco-rp-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cco-rp-prompt {
+  background: #191e28;
+}
+
+.cco-rp-assistant {
+  color: var(--cco-fg-dim);
+}
+
+.cco-rp-thinking {
+  color: #4d5568;
+  font-style: italic;
+  font-size: 11.5px;
+}
+
+.cco-rp-compaction {
+  color: var(--cco-input);
+  font-size: 11.5px;
+}
+
+.cco-rp-tool {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+  text-align: left;
+}
+
+.cco-rp-toolname {
+  color: var(--cco-cache-read);
+  flex: 0 0 auto;
+}
+
+.cco-rp-toolarg {
+  color: var(--cco-fg-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cco-rp-dur,
+.cco-rp-mark {
+  color: #5c6577;
+  font-size: 10.5px;
+  flex: 0 0 auto;
+}
+
+.cco-rp-mark-bad {
+  color: #f7768e;
+}
+
+.cco-rp-failed .cco-rp-toolname {
+  color: #f7768e;
+}
+
+.cco-rp-error {
+  color: #f7768e;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+}
+
+.cco-rp-out {
+  background: #0f1115;
+  border: 1px solid var(--cco-rule);
+  border-radius: 4px;
+  color: var(--cco-fg-dim);
+  font-size: 11px;
+  margin: 4px 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cco-rp-cut {
+  color: #5c6577;
+  font-size: 10.5px;
+}
+
+.cco-rp-more {
+  align-self: center;
+  color: var(--cco-fg-dim);
+  font-size: 10.5px;
+}
+
+.cco-rp-expand {
+  background: transparent;
+  border: 0;
+  color: var(--cco-accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10.5px;
+  padding: 0 0 0 6px;
+}

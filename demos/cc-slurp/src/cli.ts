@@ -13,7 +13,7 @@
 
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { writeParquet } from "./parquet.ts";
+import { writeParquet, writeReplay } from "./parquet.ts";
 import { loadPriceTable, normalizeCorpus } from "./run.ts";
 import { defaultRoots } from "./scan.ts";
 
@@ -21,6 +21,7 @@ interface Args {
   out: string;
   /** Derive from a raw host set (stage 1) instead of walking the filesystem. */
   rawDir?: string;
+  replay?: boolean;
   roots?: string[];
   offline: boolean;
   images: boolean;
@@ -46,14 +47,16 @@ function parseArgs(argv: string[]): Args {
     } else if (k === "--offline") a.offline = true;
     else if (k === "--no-images") a.images = false;
     else if (k === "--idle-gap") a.idleGapSeconds = Number(argv[++i]);
+    else if (k === "--replay") a.replay = true;
     else if (k === "--quiet") a.quiet = true;
     else if (k === "--help" || k === "-h") {
       process.stdout.write(
         "usage: cc-slurp [--out dir] [--raw dir | [--root dir]...] [--offline]\n" +
           "                [--no-images] [--idle-gap seconds] [--quiet]\n" +
           "\n" +
-          "  --raw   read the stage-1 raw layer (all hosts found under dir)\n" +
-          "  --root  read JSONL directly; repeatable; defaults to this machine's\n",
+          "  --raw     read the stage-1 raw layer (all hosts found under dir)\n" +
+          "  --replay  also write replay/<sessionId>.parquet (message bodies)\n" +
+          "  --root    read JSONL directly; repeatable; defaults to this machine's\n",
       );
       process.exit(0);
     } else {
@@ -90,18 +93,22 @@ const source = args.rawDir
   : { kind: "jsonl" as const, roots };
 log(args.rawDir ? `source:  raw @ ${args.rawDir}` : `source:  jsonl @ ${roots.join(", ")}`);
 
-const { normalized, invariants, stats } = await normalizeCorpus({
+const { normalized, invariants, stats, replay } = await normalizeCorpus({
   ...(args.rawDir ? { rawDir: args.rawDir } : {}),
   roots,
   pricing,
   idleGapSeconds: args.idleGapSeconds,
   skipImages: !args.images,
+  ...(args.replay ? { replay: true } : {}),
   onProgress: (files, records) => {
     if (files % 50 === 0) log(`  …${files} files, ${fmt(records)} records`);
   },
 });
 
 const written = await writeParquet(args.out, normalized, { mkdir, stat }, path.join);
+const replayOut = replay
+  ? await writeReplay(args.out, replay, { mkdir, stat, writeFile }, path.join)
+  : undefined;
 
 // A manifest beside the Parquet: what produced these numbers, and when. The
 // demo reads it to label its own figures honestly.
@@ -111,6 +118,7 @@ const manifest = {
   source,
   pricing: { source: pricing.source, version: pricing.version },
   tables: written,
+  ...(replayOut ? { replay: replayOut } : {}),
   stats,
   invariants,
 };
@@ -152,6 +160,14 @@ DERIVED COST                  ${usd(stats.totalCost)}   (${pricing.source} @ ${p
   unpriced turns              ${stats.unpricedTurns}
   turns without a timestamp   ${stats.turnsWithoutTimestamp}
 
+${
+  replayOut
+    ? `REPLAY → ${args.out}/replay/
+  sessions                    ${fmt(replayOut.sessions)}
+  blocks                      ${fmt(replayOut.rows)}   ${(replayOut.bytes / 1e6).toFixed(1)} MB total
+`
+    : ""
+}
 INVARIANTS                    ${invariants.ok ? "ok" : "FAILED"}
 ${invariants.problems.map((p) => `  ✗ ${p}`).join("\n")}
 

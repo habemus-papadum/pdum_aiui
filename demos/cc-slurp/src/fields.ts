@@ -437,6 +437,54 @@ export const toolUses = (rec: Rec): ToolUse[] =>
       return { id: str(o.id), name: str(o.name), input: o.input };
     });
 
+/**
+ * The one line that says what a tool call *did*.
+ *
+ * A replay that prints tool inputs as JSON is unreadable — `Bash` alone is
+ * 17,770 of this corpus's 39,138 calls, and its input is `{command,
+ * description, timeout, run_in_background, dangerouslySkipSandbox}` of which
+ * only `command` is the story. The key list per tool below was read off the
+ * corpus rather than guessed.
+ *
+ * Unknown tools (MCP servers especially, whose inputs are arbitrary) fall back
+ * to the first string-valued field, which is right far more often than a JSON
+ * dump and never worse.
+ */
+const TOOL_SUMMARY_KEYS: Record<string, readonly string[]> = {
+  Bash: ["command"],
+  Edit: ["file_path"],
+  Read: ["file_path"],
+  Write: ["file_path"],
+  Glob: ["pattern"],
+  Grep: ["pattern"],
+  WebFetch: ["url"],
+  WebSearch: ["query"],
+  ToolSearch: ["query"],
+  // The launch of a subagent: its name if it was given one, else what it was for.
+  Task: ["name", "description"],
+  Agent: ["name", "description"],
+  TaskCreate: ["subject", "description"],
+  TaskUpdate: ["status", "taskId"],
+  SendMessage: ["to", "summary"],
+};
+
+export function toolSummary(name: string | undefined, input: unknown): string | undefined {
+  const o = obj(input);
+  if (!o) return undefined;
+  for (const k of TOOL_SUMMARY_KEYS[name ?? ""] ?? []) {
+    const v = str(o[k]);
+    if (v) return v;
+  }
+  if (TOOL_SUMMARY_KEYS[name ?? ""]) return undefined;
+  // Unknown tool: the first string field, longest-first so a `prompt` beats an
+  // `id`. Deterministic — key order is not, after a VARIANT round trip.
+  const strings = Object.keys(o)
+    .sort()
+    .map((k) => str(o[k]))
+    .filter((v): v is string => !!v);
+  return strings.sort((a, b) => b.length - a.length)[0];
+}
+
 export interface ToolOutcome {
   shape: "string" | "array" | "object";
   ok?: boolean;

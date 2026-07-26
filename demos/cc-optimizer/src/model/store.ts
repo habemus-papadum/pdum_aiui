@@ -407,6 +407,65 @@ function unwrapBigInts(row: Record<string, unknown>): Record<string, unknown> {
   return row;
 }
 
+/**
+ * Sessions that have a replay file, resolved once from `replay/index.json`.
+ *
+ * An index rather than a 404 probe: "this session has no replay" and "the
+ * dataset was built without `--replay`" are different answers and the UI says
+ * different things about them.
+ */
+const replayIndex = appScope.durableSignal<ReadonlyMap<string, ReplayIndexEntry> | null>(
+  "replayIndex",
+  null,
+);
+
+export interface ReplayIndexEntry {
+  sessionId: string;
+  rows: number;
+  bytes: number;
+  t0: number;
+  t1: number;
+}
+
+async function loadReplayIndex(): Promise<void> {
+  try {
+    const res = await fetch(new URL("../data/replay/index.json", import.meta.url));
+    if (!res.ok) return;
+    const list = (await res.json()) as ReplayIndexEntry[];
+    replayIndex.set(new Map(list.map((e) => [e.sessionId, e])));
+  } catch {
+    /* dataset built without --replay; the panel says so */
+  }
+}
+
+/** Which replay files are already registered, so a re-open costs nothing. */
+const replayLoaded = appScope.durable<Set<string>>("replayLoaded", () => new Set<string>());
+
+/**
+ * Fetch and register one session's replay Parquet, then return its table name.
+ *
+ * The replay grain is 29.5 MB across 109 files and is deliberately NOT loaded
+ * at startup — a replay is always scoped to one session, so it is fetched when
+ * that session is opened and kept for the rest of the page's life.
+ */
+export async function ensureReplay(sessionId: string): Promise<string | null> {
+  await ensureLoaded();
+  if (replayIndex.get() === null) await loadReplayIndex();
+  if (!replayIndex.get()?.has(sessionId)) return null;
+  const table = `replay_${sessionId.replace(/-/g, "_")}`;
+  if (replayLoaded.has(sessionId)) return table;
+  const e = engineBox.engine;
+  if (!e) throw new Error("no connection");
+  const url = new URL(`../data/replay/${sessionId}.parquet`, import.meta.url);
+  const buf = await fetchWithProgress(url.href, () => {});
+  await e.db.registerFileBuffer(`${table}.parquet`, buf);
+  await e.conn.query(
+    `CREATE OR REPLACE TABLE "${table}" AS SELECT * FROM read_parquet('${table}.parquet')`,
+  );
+  replayLoaded.add(sessionId);
+  return table;
+}
+
 /** Ad-hoc query against the loaded tables. Used by cells and by agent tools. */
 export async function sql<T = Record<string, unknown>>(query: string): Promise<T[]> {
   await ensureLoaded();
@@ -440,4 +499,6 @@ export const store = {
   collapsedProjects: collapsedProjects.get,
   expandedSessions: expandedSessions.get,
   focusedSession: focusedSession.get,
+  replayIndex: replayIndex.get,
+  ensureReplay,
 };

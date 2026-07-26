@@ -20,6 +20,7 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
+import type { ReplayRow } from "./replay";
 import type { DetailCompaction, DetailTurn } from "./session-detail";
 import { appScope, brushTime, focusSession, idleGapMinutes, setAllCollapsed, store } from "./store";
 
@@ -38,6 +39,14 @@ export interface SessionDetailData {
   project: string;
   turns: DetailTurn[];
   compactions: DetailCompaction[];
+}
+
+/** One session's replay, or the fact that this dataset has none. */
+export interface ReplayData {
+  sessionId: string;
+  /** False when the dataset was built without `--replay`. */
+  available: boolean;
+  rows: ReplayRow[];
 }
 
 /** A session as the timeline view needs it: wall-clock vs work. */
@@ -268,6 +277,48 @@ export const graph = hotCellGraph(
           turns,
           compactions,
         };
+      },
+      { scope: appScope },
+    ),
+
+    /**
+     * The replay of the focused session — the finest drill-down.
+     *
+     * Keyed on the same `focusedSession` as `sessionDetail`, so the two panels
+     * always show the same session and picking one in the table moves both.
+     *
+     * The fetch is lazy and per session: the replay grain is 29.5 MB across 109
+     * files, so it is not part of the startup load. `ensureReplay` returns null
+     * when the dataset was built without `--replay`, which the panel reports as
+     * a missing feature rather than an error.
+     */
+    replay: cell(
+      () => ({ sessionId: store.focusedSession() }),
+      async ({ sessionId }): Promise<ReplayData | null> => {
+        const id =
+          sessionId ??
+          (
+            await store.sql<{ sessionId: string }>(`
+              SELECT sessionId FROM turns
+              GROUP BY 1 ORDER BY sum(costTotal) DESC LIMIT 1
+            `)
+          )[0]?.sessionId;
+        if (!id) return null;
+        const table = await store.ensureReplay(id);
+        if (!table) return { sessionId: id, available: false, rows: [] };
+        const rows = await store.sql<ReplayRow>(`
+          SELECT seq, epoch_ms(ts) AS ts, agentId, context, uuid, parentUuid,
+                 role, kind, text, truncated, fullChars,
+                 toolName, toolUseId, ok, errorKind, exitCode, durationMs, model
+          -- Time, not file order. seq follows the walk, which yields a
+          -- session's subagents/ directory BEFORE the session file beside it,
+          -- so ordering by it opens the transcript on an agent's work rather
+          -- than on the conversation that launched it. Every block in this
+          -- corpus carries a real timestamp (0 nulls of 113,569), so ordering
+          -- by ts is total; seq breaks same-millisecond ties in file order.
+          FROM "${table}" ORDER BY ts, seq
+        `);
+        return { sessionId: id, available: true, rows };
       },
       { scope: appScope },
     ),
