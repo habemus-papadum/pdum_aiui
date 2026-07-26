@@ -1,9 +1,10 @@
 # Claude Code usage analytics — schema research and ingestion design
 
-**Status:** built. Two-stage ingestion (§6.2), eight analytic grains, the
-session graph, and both drill-downs — per-turn cost (§10) and the transcript
-replay (§11) — are live in `demos/cc-slurp` + `demos/cc-optimizer`. What remains
-is the turn scatter and wiring the timeline's brush into the other panels (§7).
+**Status:** built, and the original scope is complete. Two-stage ingestion
+(§6.2), eight analytic grains + the replay grain, the session graph, both
+drill-downs (§10, §11), the turn scatter and a live crossfilter across every
+panel (§12) are in `demos/cc-slurp` + `demos/cc-optimizer`. §7 lists what is
+left, all of it optional.
 **Spike:** [`exploration/cc-usage/`](../../exploration/cc-usage/) (runnable, zero deps).
 **Generated schema reference:** [`exploration/cc-usage/SCHEMA.md`](../../exploration/cc-usage/SCHEMA.md).
 **Date:** 2026-07-26. Corpus: 965 files (485 JSONL) · 168,171 records · 677 MB ·
@@ -1012,16 +1013,13 @@ override in `pnpm-workspace.yaml` collapses them.
 9. ~~Session replay.~~ §11 — the transcript itself, multi-agent aware, scoped
    to the whole session or one hour inside it.
 
-**Next.**
-
-10. **The turn scatter** (§5.6.2) — stock vgplot, 10–20k points.
-11. **Cross-filter the existing panels.** Static reads today; the `Selection` is
-    wired but nothing publishes into it — the timeline's brush is the natural
-    first producer, via the semi-join pattern in §5.6.3.
+10. ~~The turn scatter~~ and ~~cross-filtering the existing panels~~ — §12.
+    Stock vgplot marks, publishing a two-axis clause; the aggregate panels read
+    the Selection's own predicate.
 
 **Standing.**
 
-12. **Re-run the census in ~3 weeks** (`exploration/cc-usage/`) and read the
+11. **Re-run the census in ~3 weeks** (`exploration/cc-usage/`) and read the
     diff's `NEW` section. That is the first real test of whether the drift
     workflow earns its keep.
 
@@ -1303,3 +1301,72 @@ omitted: the session is 92% idle and a strip of 307 blanks is not navigation.
 **Agents are a filter over one interleaved stream**, not a separate view, so
 "what was going on" includes the excursions. One session launched 78 agents, so
 the chip list says "+71 more" rather than stopping silently at 8.
+
+## 12. The turn scatter, and making the crossfilter reach
+
+### 12.1 Where the custom-client line falls
+
+The two Mosaic views in this app are on opposite sides of one question, and
+having both is what makes the boundary legible:
+
+| | session graph | turn scatter |
+| --- | --- | --- |
+| implementation | custom `MosaicClient` (§5.6.1) | stock `vg.dot` |
+| why | y is a **lane assignment** — a function of every *other* row (§5.6.6) | y is a **column** |
+| publishes | `clauseInterval` over time | `intervalXY` over time **and cost** |
+
+A mark whose position is a function of its own row is stock. One whose position
+depends on the rest of the data is not. That is the whole rule.
+
+`createAPIContext({ coordinator })` is required, not optional: `vg.plot`
+otherwise resolves the module-global coordinator, and this app runs its own with
+preagg disabled (§5.6.3).
+
+### 12.2 Log y, and the 34 turns it cannot draw
+
+| p01 | p10 | p50 | p90 | p99 | max |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| $0.025 | $0.080 | $0.219 | $0.72 | $1.90 | $20.86 |
+
+Nearly three orders of magnitude, so a linear axis renders 99% of the corpus as
+a smear along the bottom. A log axis has no zero, and 34 of 30,420 turns cost
+exactly zero — the caption states the number, counted by a cell rather than
+written down, so it cannot drift from a regenerated dataset.
+
+Both domains are pinned with Mosaic's `Fixed`. Same argument as the timeline's
+fixed x domain: an axis that rescales to the brush makes the next drag chase its
+own tail, and here it additionally broke alignment with the session graph's time
+axis directly above it.
+
+### 12.3 Read the Selection; do not mirror a range
+
+The aggregate panels are cells, not Mosaic clients, so they sit outside the
+coordinator's push and need something reactive to key on. The tempting shortcut
+is to mirror the timeline's brushed range into a signal — and it works exactly
+as long as the timeline is the only publisher.
+
+The scatter is the second publisher, with a second dimension. A mirror of one
+range would have ignored its cost clause silently, which is the worst failure
+mode available: the panels would have looked filtered and been wrong.
+
+So the predicate comes from the Selection itself. `predicate(undefined)` is
+documented as returning *all* clauses — correct here, because a cell is nobody's
+clause source and so nothing should be skipped on its behalf — and a version
+counter bridges Mosaic's push to Solid's pull. Any number of producers now
+compose, which is what a crossfilter is for.
+
+Measured, both directions:
+
+| brushed from | result |
+| --- | --- |
+| the scatter | daily bars 71 → 15, session rows 25 → 17, top agent $10,303 → $3,205 |
+| the timeline | 42 sessions · 8,723 turns · $2,456.87; scatter 30,386 → 3,477 dots, axis unmoved |
+
+### 12.4 A Solid 2 trap worth naming
+
+Assembling the caption from a fragment inside a ternary produced something Solid
+2 would not insert. The symptom was not an error in the panel: the **cell
+reported `ready` while the view stayed on its pending spinner**, because the
+render threw after the data arrived. Built as a string now. The lesson
+generalises — a stuck `CellView` with a ready cell means the *view* threw, not
+the cell.
