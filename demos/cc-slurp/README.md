@@ -12,14 +12,17 @@ pnpm -C demos/cc-slurp normalize -- --offline --no-images
 
 ## What it does
 
-`~/.claude/projects/**/*.jsonl` → five Parquet tables:
+`~/.claude/projects/**/*.jsonl` → eight Parquet tables:
 
 | table | grain |
 | --- | --- |
-| `turns` | one row per **deduped API response** (47 columns) |
+| `turns` | one row per **deduped API response** — the fact table |
 | `toolCalls` | one row per tool_use, joined to its result |
 | `events` | compaction / fallback / refusal / relocation, payload as JSON |
-| `sessions` | one row per session, wall-clock vs active time |
+| `sessions` | one row per session **file**, with its place in the fork forest |
+| `forkEdges` | one row per parent→child fork, with both endpoints in time |
+| `lineages` | one row per fork family — the unit a human means by "a session" |
+| `agentRuns` | one row per subagent / workflow-agent instance, with its span |
 | `images` | one row per image payload, with estimated tokens |
 
 Plus `manifest.json`: which price table produced the numbers, the corpus stats,
@@ -43,6 +46,10 @@ The traps that decide the design, each pinned by a test in `normalize.test.ts`:
   billed turn exists in several files (5.5% of `message.id`s). Only a corpus-wide
   dedup is correct. `session_id` (≠ `sessionId`) marks the copies, from Claude
   Code 2.1.199 onward.
+- **`session_id` marks a *link*, not a copy.** 2.1.220 also continues a session
+  into a fresh file with the marker on every record and not one shared uuid.
+  Believing it there hands a whole session's spend to its predecessor — so
+  `lineage.ts` verifies every marker against the named file's own uuids.
 - **There is no cost field.** Every dollar is derived and stamped with
   `pricingVersion`.
 - **Model fallback** hides the discarded attempt outside
@@ -51,6 +58,31 @@ The traps that decide the design, each pinned by a test in `normalize.test.ts`:
 `checkInvariants()` asserts `SUM(sessions.nativeCost) === SUM(turns.costTotal)`
 and that no billing key survived twice; the CLI runs it every time and exits
 non-zero on failure.
+
+## Fork lineage (`src/lineage.ts`)
+
+A session file is not a session. `lineage.ts` recovers the forest — who forked
+from whom, where in the parent's timeline, and how much context came along:
+
+- The parent is chosen by the **longest leading-uuid run**, because in a chain
+  `root → P → B` the child matches more of `P` than of `root`. The marker only
+  ever names *an* ancestor, and after a fork of a fork it names the grandparent
+  (the intervening records are `system`/`user` types that carry no `session_id`).
+- Direction comes from **shape**: in the child the shared records are a leading
+  prefix by construction; in the parent they usually are not, and only an
+  original can look like that. When both look identical, **file birthtime**
+  breaks the tie and the edge is flagged `ambiguous` — the one place this package
+  reads filesystem metadata, and it never decides anything silently.
+- `forkPointTs` is in the **parent's** timeline; `childFirstNativeTs` /
+  `createdTs` are in the child's. They can be days apart, and both are needed to
+  draw the edge.
+- Edges with no shared records are `kind = 'continuation'`; they leave the
+  parent's end rather than its middle.
+
+What it will not do is guess. A fork whose parent is not in the corpus, or two
+files that content cannot tell apart with no birthtime to break the tie, come
+out as a gap plus a reason — a lineage drawn confidently wrong is worse than one
+that admits it does not know.
 
 ## Pricing
 

@@ -1,5 +1,5 @@
 /**
- * The normalizer: raw JSONL records → the five analytic grains.
+ * The normalizer: raw JSONL records → the analytic grains.
  *
  * This is where every trap in `fields.ts` is actually paid off. The order of
  * operations is load-bearing:
@@ -7,12 +7,22 @@
  *   1. **Collect** every assistant record across the WHOLE corpus, keyed by
  *      `billingKey()`. Not per file, not per session — forking copies billed
  *      turns into sibling files, so anything narrower double-counts.
- *   2. **Choose** one record per key (`preferOriginal`: a sidechain replay
- *      loses to the parent's own copy).
- *   3. **Attribute** each surviving turn to `originSession()`, so a fork is
- *      credited to the session that actually produced the turn.
- *   4. **Price** over `billableUnits()` — the iterations ledger — never over
+ *   2. **Choose** one record per key (`preferForBilling`: the member carrying
+ *      the real output count; ties go to the non-sidechain copy).
+ *   3. **Resolve the fork forest** (`lineage.ts`) — which session file is a copy
+ *      of which, and where it branched off.
+ *   4. **Attribute** each surviving turn to the session that produced it: the
+ *      `session_id` marker where the build wrote one, otherwise the root-most
+ *      ancestor whose file already held that record's uuid.
+ *   5. **Price** over `billableUnits()` — the iterations ledger — never over
  *      top-level usage, which drops discarded fallback attempts.
+ *
+ * Step 3 must precede step 4, which is why lineage is resolved in `finish()`
+ * rather than while streaming: on a pre-2.1.199 build an inherited record is
+ * indistinguishable from a native one until the whole corpus is in memory. The
+ * same reason defers *events* to `finish()` — a fork copies the parent's
+ * compaction records too, so they need the same dedup-and-attribute treatment
+ * turns get.
  *
  * The invariant worth asserting: `SUM(sessions.nativeCost) === corpus total`.
  * `checkInvariants()` does exactly that, and the CLI runs it every time.
@@ -27,13 +37,13 @@ import {
   blockTypes,
   compaction,
   fallbackEvent,
+  forkContextRef,
   get,
   hadFallback,
   isInherited,
   isWasted,
   num,
   obj,
-  originSession,
   preferForBilling,
   splitModel,
   str,
@@ -44,6 +54,8 @@ import {
   UNPRICED_MODELS,
 } from "./fields.ts";
 import { imageRefs } from "./images.ts";
+import type { ForkKind, LineageResolution, ParentSource, SessionDigest } from "./lineage.ts";
+import { originForRecord, resolveLineage } from "./lineage.ts";
 import type { PriceTable } from "./pricing.ts";
 import { priceUnit } from "./pricing.ts";
 import type { FileKind, TranscriptFile } from "./scan.ts";
@@ -56,8 +68,12 @@ import { projectLabel, repoRoot } from "./scan.ts";
 export interface TurnRow {
   messageId: string;
   requestId?: string;
+  /** Record uuid of the chosen copy. Joins a turn to lineage and to events. */
+  uuid?: string;
   /** The session that produced (and paid for) this turn. */
   sessionId: string;
+  /** The fork family `sessionId` belongs to — denormalised for cross-filtering. */
+  lineageId: string;
   /** The file this copy was read from — may differ after a fork. */
   fileSessionId: string;
   projectSlug: string;
@@ -75,6 +91,8 @@ export interface TurnRow {
   context: string;
   agentId?: string;
   agentType?: string;
+  /** `wf_…` for a workflow-spawned agent; absent everywhere else. */
+  workflowId?: string;
   entrypoint?: string;
   sessionKind?: string;
   ccVersion?: string;
@@ -139,19 +157,148 @@ export interface SessionRow {
   project: string;
   cwd?: string;
   slug?: string;
-  firstTs: number;
-  lastTs: number;
+  // --- lineage: a file is not a session (proposal §1.6) ---
+  /** The session this one was forked/resumed from. Absent on a root. */
+  parentSessionId?: string;
+  /** Root of the fork family; equals `sessionId` on a root. Groups a lineage. */
+  lineageId: string;
+  /** Hops to the root. 0 on a root. */
+  depth: number;
+  /**
+   * Where this session branched off, **in the parent's timeline**. Absent on a
+   * root. This is the origin of a fork edge, and it can be far in the past: the
+   * fork of a session that went cold a week ago has a `forkPointTs` a week
+   * before `createdTs`.
+   */
+  forkPointTs?: number;
+  /** `marker` (2.1.199+ `session_id`) or `uuid-overlap` (content). */
+  parentSource?: ParentSource;
+  /** `copy` (the prefix is in this file) or `continuation` (only the link is). */
+  parentKind?: ForkKind;
+  /** The parent edge rested on file creation order, not content. Draw it dashed. */
+  parentAmbiguous: boolean;
+  /** Records carried in from ancestors — context this session did not produce. */
+  nRecordsInherited: number;
+  /** Billed turns this file carries a copy of but did not pay for. */
+  nTurnsInherited: number;
+  /** What those inherited turns cost their real owner. Never sums with siblings. */
+  inheritedCost: number;
+  // --- time ---
+  /** File birthtime: for a fork, the wall-clock moment it came into existence. */
+  createdTs?: number;
+  /** First record this session produced itself, turn or not. */
+  firstNativeTs?: number;
+  /** Last record in its file. */
+  lastNativeTs?: number;
+  /**
+   * First/last *billed turn* — **absent when the session produced none**, which
+   * five sessions in the baseline corpus did. Nullable rather than zero on
+   * purpose: an epoch-zero timestamp puts a mark at 1970 in any chart that
+   * forgets to check, whereas a null just disappears. Use
+   * `coalesce(firstTs, firstNativeTs)` when the question is "when was this
+   * session alive" rather than "when did it spend".
+   */
+  firstTs?: number;
+  lastTs?: number;
   spanSeconds: number;
   activeSeconds: number;
-  dutyCycle: number;
+  /** Absent with no turns: a session that did nothing has no duty cycle. */
+  dutyCycle?: number;
+  // --- volume ---
   nTurnsNative: number;
   nSubagentTurns: number;
+  nAgentRuns: number;
   nCompactions: number;
   peakContextTokens: number;
   /** Only this sums. Inherited turns belong to an ancestor. */
   nativeCost: number;
   models: string;
   ccVersions: string;
+}
+
+/**
+ * One parent→child fork edge. Denormalised on purpose: a timeline draws one
+ * bezier per row and should not have to self-join `sessions` to find the two
+ * endpoints in time.
+ */
+export interface ForkEdgeRow {
+  childSessionId: string;
+  parentSessionId: string;
+  lineageId: string;
+  depth: number;
+  projectSlug: string;
+  project: string;
+  /**
+   * `copy` — the prefix is physically in the child's file (§1.6's fork).
+   * `continuation` — the link is declared but nothing was copied; the edge
+   * leaves the parent's END rather than its middle. See `ForkKind`.
+   */
+  kind: ForkKind;
+  /** In the PARENT's timeline: the last inherited record (or its last record). */
+  forkPointTs: number;
+  /** In the CHILD's timeline: when its file appeared (0 = unknown). */
+  childCreatedTs: number;
+  /** In the CHILD's timeline: its first record of its own (0 = it made none). */
+  childFirstNativeTs: number;
+  /** How long the parent sat cold before being forked. Can be days. */
+  lagSeconds: number;
+  nRecordsInherited: number;
+  nTurnsInherited: number;
+  /** What the inherited prefix cost when it was first produced. */
+  inheritedCost: number;
+  source: ParentSource;
+  ambiguous: boolean;
+  /** A marker named the parent, but its file is not in the corpus. */
+  parentMissing: boolean;
+}
+
+/** One fork family — the unit a human means by "a session". */
+export interface LineageRow {
+  lineageId: string;
+  rootSessionId: string;
+  projectSlug: string;
+  project: string;
+  nSessions: number;
+  nForks: number;
+  maxDepth: number;
+  firstTs: number;
+  lastTs: number;
+  nTurns: number;
+  totalCost: number;
+  /** Comma-joined, in fork order. Cheap membership tests without a join. */
+  sessionIds: string;
+}
+
+/**
+ * One subagent or workflow-agent instance. A mark on its launching session's
+ * lane, and the answer to "what did agents actually cost".
+ */
+export interface AgentRunRow {
+  agentId: string;
+  /** `general-purpose`, `Explore`, `fork`, … Absent on pre-`attributionAgent` builds. */
+  agentType?: string;
+  /** The session that launched it. */
+  parentSessionId: string;
+  lineageId: string;
+  projectSlug: string;
+  project: string;
+  /** `subagent` | `workflow-agent`. */
+  context: string;
+  workflowId?: string;
+  firstTs: number;
+  lastTs: number;
+  spanSeconds: number;
+  nTurns: number;
+  nToolUses: number;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  models: string;
+  /** From `fork-context-ref`: how much parent context it started with. */
+  inheritedContextLength?: number;
+  /** From `fork-context-ref`: the parent record it forked at. */
+  parentLastUuid?: string;
 }
 
 export interface ImageRow {
@@ -178,6 +325,9 @@ export interface Normalized {
   toolCalls: ToolCallRow[];
   events: EventRow[];
   sessions: SessionRow[];
+  forkEdges: ForkEdgeRow[];
+  lineages: LineageRow[];
+  agentRuns: AgentRunRow[];
   images: ImageRow[];
   stats: NormalizeStats;
 }
@@ -205,6 +355,25 @@ export interface NormalizeStats {
    * transcripts), a zero value on a corpus with subagents is suspicious.
    */
   groupsWithVaryingOutput: number;
+  // --- lineage ---
+  sessionFiles: number;
+  /** Session files carrying no `session_id` on any record — pre-2.1.199 builds. */
+  sessionFilesWithoutMarker: number;
+  forkEdges: number;
+  forkEdgesFromMarker: number;
+  /** Edges whose direction rested on file creation order, not on content. */
+  forkEdgesAmbiguous: number;
+  lineages: number;
+  maxForkDepth: number;
+  /** Sessions that share a prefix with another file but whose parent is unknown. */
+  unresolvedForks: number;
+  /**
+   * Turns moved off the file that carried them by content-based lineage — the
+   * measurable value of the pre-2.1.199 fallback. Marker-attributed turns are
+   * not counted here; they never needed it.
+   */
+  reattributedTurns: number;
+  agentRuns: number;
   totalCost: number;
   pricingVersion: string;
 }
@@ -217,6 +386,16 @@ interface BilledTurn {
   blocks: number;
   toolUses: ReturnType<typeof toolUses>;
   thinkingChars: number;
+}
+
+/** An event held until lineage is known — see the module docstring. */
+interface PendingEvent {
+  ts: number;
+  uuid?: string;
+  markedOrigin?: string;
+  file: TranscriptFile;
+  kind: string;
+  payload: string;
 }
 
 /** Gap above which a session is considered idle rather than working. */
@@ -265,7 +444,8 @@ export class Normalizer {
    * a fork copy of the same paste is not counted twice.
    */
   private readonly imagesByUuid = new Map<string, ImageRow[]>();
-  private readonly events: EventRow[] = [];
+  /** Buffered until `finish()`; deduped by record uuid, then attributed. */
+  private readonly pendingEvents: PendingEvent[] = [];
   /**
    * projectSlug → the shortest repo root seen under it.
    *
@@ -276,11 +456,27 @@ export class Normalizer {
    * the repository itself, and every turn under that slug inherits it.
    */
   private readonly slugRoot = new Map<string, string>();
-  /** sessionId → per-session running facts that do not come from turns. */
+  /** sessionId → per-session facts that do not come from turns. */
   private readonly sessionMeta = new Map<
     string,
-    { slug?: string; cwd?: string; projectSlug: string; compactions: number; peakContext: number }
+    { slug?: string; cwd?: string; projectSlug: string }
   >();
+  /**
+   * One digest per session-kind FILE: the ordered uuids that let `lineage.ts`
+   * recover the fork forest. Bounded by the top-level transcripts only —
+   * subagent files never fork, so they are not indexed.
+   */
+  private readonly digests = new Map<string, SessionDigest>();
+  /** agentId → what its file and `fork-context-ref` say about it. */
+  private readonly agentMeta = new Map<
+    string,
+    { context: string; workflowId?: string; projectSlug: string; dirSessionId: string }
+  >();
+  private readonly agentForkRefs = new Map<
+    string,
+    { contextLength: number; parentLastUuid?: string }
+  >();
+  private lineage?: LineageResolution;
   readonly stats: NormalizeStats;
 
   constructor(options: NormalizeOptions) {
@@ -303,6 +499,16 @@ export class Normalizer {
       unpricedTurns: 0,
       turnsWithoutTimestamp: 0,
       groupsWithVaryingOutput: 0,
+      sessionFiles: 0,
+      sessionFilesWithoutMarker: 0,
+      forkEdges: 0,
+      forkEdgesFromMarker: 0,
+      forkEdgesAmbiguous: 0,
+      lineages: 0,
+      maxForkDepth: 0,
+      unresolvedForks: 0,
+      reattributedTurns: 0,
+      agentRuns: 0,
       totalCost: 0,
       pricingVersion: options.pricing.version,
     };
@@ -311,10 +517,48 @@ export class Normalizer {
   noteFile(file: TranscriptFile): void {
     this.stats.files++;
     this.stats.bytes += file.bytes;
+    // Register the file even if it holds nothing readable: a session that
+    // produced no billed turn is still a session, and a fork that produced
+    // none is exactly the row a timeline must draw to show the fork happened.
+    if (file.kind === "session") this.digestFor(file);
+    if (file.agentId) this.agentMetaFor(file, file.agentId);
   }
 
   noteParseError(): void {
     this.stats.parseErrors++;
+  }
+
+  private digestFor(file: TranscriptFile): SessionDigest {
+    let d = this.digests.get(file.fileSessionId);
+    if (!d) {
+      d = {
+        sessionId: file.fileSessionId,
+        projectSlug: file.projectSlug,
+        createdMs: file.createdMs,
+        uuids: [],
+        ts: [],
+        uuidSet: new Set(),
+        markerInherited: 0,
+        markerPresent: false,
+        records: 0,
+      };
+      this.digests.set(file.fileSessionId, d);
+    }
+    return d;
+  }
+
+  private agentMetaFor(file: TranscriptFile, agentId: string) {
+    let m = this.agentMeta.get(agentId);
+    if (!m) {
+      m = {
+        context: contextOf(file.kind),
+        workflowId: file.workflowId,
+        projectSlug: file.projectSlug,
+        dirSessionId: file.fileSessionId,
+      };
+      this.agentMeta.set(agentId, m);
+    }
+    return m;
   }
 
   /** Feed one record. Order within a file matters; order across files does not. */
@@ -328,6 +572,9 @@ export class Normalizer {
         this.slugRoot.set(file.projectSlug, root);
       }
     }
+    if (file.kind === "session") this.digestAdd(rec, file);
+    if (file.agentId) this.agentMetaFor(file, file.agentId);
+
     const type = str(rec.type);
 
     if (type === "assistant") {
@@ -389,51 +636,65 @@ export class Normalizer {
     }
 
     if (type === "system") {
-      const sid = originSession(rec) ?? file.fileSessionId;
       const c = compaction(rec);
-      if (c) {
-        const meta = this.metaFor(sid, file);
-        meta.compactions++;
-        meta.peakContext = Math.max(meta.peakContext, c.preTokens);
-        this.events.push({
-          ts: tsOf(rec),
-          sessionId: sid,
-          projectSlug: file.projectSlug,
-          kind: "compaction",
-          payload: JSON.stringify(c),
-        });
-      }
+      if (c) this.queueEvent(rec, file, "compaction", c);
       const fb = fallbackEvent(rec);
-      if (fb) {
-        this.events.push({
-          ts: tsOf(rec),
-          sessionId: sid,
-          projectSlug: file.projectSlug,
-          kind: "fallback",
-          payload: JSON.stringify(fb),
-        });
-      }
+      if (fb) this.queueEvent(rec, file, "fallback", fb);
       const refusal = str(rec.apiRefusalCategory);
       if (refusal) {
-        this.events.push({
-          ts: tsOf(rec),
-          sessionId: sid,
-          projectSlug: file.projectSlug,
-          kind: "refusal",
-          payload: JSON.stringify({ category: refusal, uuid: str(rec.refusedUserMessageUuid) }),
+        this.queueEvent(rec, file, "refusal", {
+          category: refusal,
+          uuid: str(rec.refusedUserMessageUuid),
         });
       }
       return;
     }
 
+    if (type === "fork-context-ref") {
+      const ref = forkContextRef(rec);
+      // The subagent's own declaration of the context it inherited. Copied along
+      // with the parent session when THAT is forked, so keyed by agentId, first
+      // one wins — the two copies are byte-identical.
+      if (ref?.agentId && !this.agentForkRefs.has(ref.agentId)) {
+        this.agentForkRefs.set(ref.agentId, {
+          contextLength: ref.contextLength,
+          parentLastUuid: ref.parentLastUuid,
+        });
+      }
+    }
+
     if (type === "relocated" || type === "fork-context-ref" || type === "pr-link") {
-      this.events.push({
-        ts: tsOf(rec),
-        sessionId: originSession(rec) ?? file.fileSessionId,
-        projectSlug: file.projectSlug,
-        kind: type,
-        payload: JSON.stringify(rec),
-      });
+      this.queueEvent(rec, file, type, rec);
+    }
+  }
+
+  private queueEvent(rec: Rec, file: TranscriptFile, kind: string, payload: unknown): void {
+    const marked = str(rec.session_id);
+    this.pendingEvents.push({
+      ts: tsOf(rec),
+      uuid: str(rec.uuid),
+      markedOrigin: marked && marked !== str(rec.sessionId) ? marked : undefined,
+      file,
+      kind,
+      payload: JSON.stringify(payload),
+    });
+  }
+
+  /** Accumulate the ordered-uuid digest a session file contributes to lineage. */
+  private digestAdd(rec: Rec, file: TranscriptFile): void {
+    const d = this.digestFor(file);
+    d.records++;
+    const uuid = str(rec.uuid);
+    if (uuid) {
+      d.uuids.push(uuid);
+      d.ts.push(tsOf(rec));
+      d.uuidSet.add(uuid);
+    }
+    if (str(rec.session_id)) d.markerPresent = true;
+    if (isInherited(rec)) {
+      d.markerInherited++;
+      d.markerParent = str(rec.session_id);
+      d.markerParentTs = tsOf(rec);
     }
   }
 
@@ -443,7 +704,7 @@ export class Normalizer {
     if (uuid && this.imagesByUuid.has(uuid)) return; // fork copy of the same paste
     const refs = imageRefs(rec);
     if (refs.length === 0) return;
-    const sessionId = originSession(rec) ?? file.fileSessionId;
+    const sessionId = str(rec.session_id) ?? str(rec.sessionId) ?? file.fileSessionId;
     const ts = tsOf(rec);
     const rows = refs.map((i) => ({
       uuid: uuid ?? "",
@@ -463,38 +724,97 @@ export class Normalizer {
   private metaFor(sessionId: string, file: TranscriptFile) {
     let m = this.sessionMeta.get(sessionId);
     if (!m) {
-      m = { projectSlug: file.projectSlug, compactions: 0, peakContext: 0 };
+      m = { projectSlug: file.projectSlug };
       this.sessionMeta.set(sessionId, m);
     }
     return m;
   }
 
+  /**
+   * `slug` and `cwd` describe the FILE, so they are keyed by it — the marker
+   * would send a fork's own description to its parent.
+   *
+   * The two fields want opposite rules. `slug` is nulled on a copy, so the first
+   * non-null one in a file is the file's own. `cwd` is copied verbatim, so the
+   * first one belongs to the ancestor and the LAST one is this session's.
+   */
   private recordSessionMeta(rec: Rec, file: TranscriptFile): void {
-    const sid = originSession(rec);
-    if (!sid) return;
+    const sid =
+      file.kind === "session"
+        ? file.fileSessionId
+        : (str(rec.sessionId) ?? str(rec.session_id) ?? file.fileSessionId);
     const m = this.metaFor(sid, file);
-    // Only a native record describes its own session: on a fork copy `slug` is
-    // nulled and `cwd` belongs to wherever the original ran.
-    if (!isInherited(rec)) {
-      m.slug ??= str(rec.slug);
-      m.cwd ??= str(rec.cwd);
-    }
+    m.slug ??= str(rec.slug);
+    m.cwd = str(rec.cwd) ?? m.cwd;
   }
 
-  /** Collapse everything collected into the five grains. */
+  /**
+   * Which session produced this record.
+   *
+   * `session_id` names a *link*, not a copy, and the two are not the same claim.
+   * On a fork it names the session whose record this is a copy of; on a
+   * continuation (`ForkKind`) every record carries it while none was copied, and
+   * following it blindly would hand a whole session's spend to its predecessor.
+   * So the marker is believed only when the named session's file actually
+   * contains this uuid — or when that file is gone and there is nothing better.
+   *
+   * With no marker at all (pre-2.1.199), the same question is answered purely by
+   * content: a record whose uuid already exists upstream was copied in and
+   * belongs to the root-most ancestor holding it. Without that, an unmarked fork
+   * is credited with everything it inherited and appears on a timeline to have
+   * started days before it did.
+   */
+  private originFor(
+    uuid: string | undefined,
+    marked: string | undefined,
+    own: string,
+    kind: FileKind,
+  ): string {
+    if (marked && marked !== own) {
+      const origin = this.digests.get(marked);
+      if (!origin) return marked; // unverifiable: the parent's file is not here
+      return uuid && origin.uuidSet.has(uuid) ? marked : own;
+    }
+    if (kind !== "session" || !this.lineage) return own;
+    return originForRecord(this.lineage, own, uuid, this.digests);
+  }
+
+  private originOfRecord(rec: Rec, file: TranscriptFile): string {
+    return this.originFor(
+      str(rec.uuid),
+      str(rec.session_id),
+      str(rec.sessionId) ?? file.fileSessionId,
+      file.kind,
+    );
+  }
+
+  /** Collapse everything collected into the grains. */
   finish(): Normalized {
+    // Lineage first: turn attribution depends on it (module docstring, step 3).
+    const digests = [...this.digests.values()];
+    const lineage = resolveLineage(digests);
+    this.lineage = lineage;
+    this.stats.sessionFiles = digests.length;
+    this.stats.sessionFilesWithoutMarker = digests.filter((d) => !d.markerPresent).length;
+    this.stats.unresolvedForks = lineage.unresolved.length;
+
+    const lineageOf = (sessionId: string): string => lineage.lineageId.get(sessionId) ?? sessionId;
+
     const turns: TurnRow[] = [];
     const toolCalls: ToolCallRow[] = [];
     const images: ImageRow[] = [];
 
     for (const [, entry] of this.billed) {
-      const row = this.turnRow(entry);
+      const row = this.turnRow(entry, lineageOf);
       if (!row) continue;
       turns.push(row);
       this.stats.dedupedOutputTokens += row.outputTokens;
       this.stats.totalCost += row.costTotal;
       if (row.unpriced) this.stats.unpricedTurns++;
       if (!row.ts) this.stats.turnsWithoutTimestamp++;
+      if (row.sessionId !== row.fileSessionId && !str(entry.rec.session_id)) {
+        this.stats.reattributedTurns++;
+      }
       toolCalls.push(...this.toolCallRows(entry, row));
     }
     for (const rows of this.imagesByUuid.values()) images.push(...rows);
@@ -504,22 +824,64 @@ export class Normalizer {
       if (files.size > 1) this.stats.crossFileDuplicates++;
     }
 
+    const events = this.eventRows();
     turns.sort((a, b) => a.ts - b.ts);
     toolCalls.sort((a, b) => a.ts - b.ts);
     images.sort((a, b) => a.ts - b.ts);
-    this.events.sort((a, b) => a.ts - b.ts);
+
+    const agentRuns = this.agentRunRows(turns, lineageOf);
+    const sessions = this.sessionRows(turns, events, agentRuns, lineage);
+    const forkEdges = this.forkEdgeRows(sessions, lineage);
+    const lineages = this.lineageRows(sessions);
+
+    this.stats.agentRuns = agentRuns.length;
+    this.stats.forkEdges = forkEdges.length;
+    this.stats.forkEdgesFromMarker = forkEdges.filter((e) => e.source === "marker").length;
+    this.stats.forkEdgesAmbiguous = forkEdges.filter((e) => e.ambiguous).length;
+    this.stats.lineages = lineages.length;
+    this.stats.maxForkDepth = sessions.reduce((m, s) => Math.max(m, s.depth), 0);
 
     return {
       turns,
       toolCalls,
-      events: this.events,
+      events,
+      sessions,
+      forkEdges,
+      lineages,
+      agentRuns,
       images,
-      sessions: this.sessionRows(turns),
       stats: this.stats,
     };
   }
 
-  private turnRow(entry: BilledTurn): TurnRow | undefined {
+  /**
+   * Events, deduped by record uuid and attributed like turns.
+   *
+   * A fork copies the parent's `system` records too, so without the dedup a
+   * compaction would appear once per file that carries it — and a timeline
+   * would draw the same compaction on two lanes.
+   */
+  private eventRows(): EventRow[] {
+    const seen = new Set<string>();
+    const rows: EventRow[] = [];
+    for (const e of this.pendingEvents) {
+      const key = e.uuid ?? `${e.kind} ${e.ts} ${e.payload}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const sessionId = this.originFor(e.uuid, e.markedOrigin, e.file.fileSessionId, e.file.kind);
+      rows.push({
+        ts: e.ts,
+        sessionId,
+        projectSlug: e.file.projectSlug,
+        kind: e.kind,
+        payload: e.payload,
+      });
+    }
+    rows.sort((a, b) => a.ts - b.ts);
+    return rows;
+  }
+
+  private turnRow(entry: BilledTurn, lineageOf: (s: string) => string): TurnRow | undefined {
     const { rec, file } = entry;
     const messageId = str(get(rec, "message.id"));
     if (!messageId) return undefined;
@@ -569,11 +931,14 @@ export class Normalizer {
     }
 
     const agent = agentIdentity(rec);
+    const sessionId = this.originOfRecord(rec, file);
 
     return {
       messageId,
       requestId: str(rec.requestId),
-      sessionId: originSession(rec) ?? file.fileSessionId,
+      uuid: str(rec.uuid),
+      sessionId,
+      lineageId: lineageOf(sessionId),
       fileSessionId: file.fileSessionId,
       projectSlug: file.projectSlug,
       project: projectLabel(file.projectSlug, this.slugRoot.get(file.projectSlug) ?? str(rec.cwd)),
@@ -587,8 +952,9 @@ export class Normalizer {
       serviceTier: str(get(rec, "message.usage.service_tier")),
       speed: str(get(rec, "message.usage.speed")),
       context: contextOf(file.kind),
-      agentId: agent?.agentId,
+      agentId: agent?.agentId ?? file.agentId,
       agentType: agent?.agentType,
+      workflowId: file.workflowId,
       entrypoint: str(rec.entrypoint),
       sessionKind: str(rec.sessionKind),
       ccVersion: str(rec.version),
@@ -648,37 +1014,142 @@ export class Normalizer {
   }
 
   /**
-   * Sessions are derived from the deduped turns, so a fork contributes only the
-   * turns it actually produced. `activeSeconds` sums inter-turn gaps below the
-   * idle threshold — computed over native turns only, or a fork would inherit
-   * its ancestor's elapsed time and report a nonsense duty cycle.
+   * One row per agent instance, materialised rather than left as a GROUP BY.
+   *
+   * The group-by is easy in isolation (`GROUP BY agentId`), but a cross-filtered
+   * dashboard would have to re-run it inside every brushed query, and two of the
+   * columns are not in `turns` at all: `workflowId` comes from the file path and
+   * the `fork-context-ref` fields come from a record type that carries no usage.
+   * A few hundred rows is a cheap price for a table a timeline can mark directly.
    */
-  private sessionRows(turns: TurnRow[]): SessionRow[] {
+  private agentRunRows(turns: TurnRow[], lineageOf: (s: string) => string): AgentRunRow[] {
+    const byAgent = new Map<string, TurnRow[]>();
+    for (const t of turns) {
+      if (!t.agentId || t.context === "main") continue;
+      const list = byAgent.get(t.agentId);
+      if (list) list.push(t);
+      else byAgent.set(t.agentId, [t]);
+    }
+    const rows: AgentRunRow[] = [];
+    for (const [agentId, list] of byAgent) {
+      list.sort((a, b) => a.ts - b.ts);
+      const meta = this.agentMeta.get(agentId);
+      const ref = this.agentForkRefs.get(agentId);
+      const models = new Set<string>();
+      let cost = 0;
+      let nToolUses = 0;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let cacheReadTokens = 0;
+      let agentType: string | undefined;
+      for (const t of list) {
+        if (t.model) models.add(t.model);
+        agentType ??= t.agentType;
+        cost += t.costTotal;
+        nToolUses += t.nToolUses;
+        inputTokens += t.inputTokens;
+        outputTokens += t.outputTokens;
+        cacheReadTokens += t.cacheReadTokens;
+      }
+      const firstTs = list[0].ts;
+      const lastTs = list[list.length - 1].ts;
+      // The turn's own sessionId is the launching session even on a fork copy
+      // (subagent records keep the original `sessionId`), so it beats the
+      // directory the file happens to sit in.
+      const parentSessionId = list[0].sessionId || (meta?.dirSessionId ?? "");
+      rows.push({
+        agentId,
+        agentType,
+        parentSessionId,
+        lineageId: lineageOf(parentSessionId),
+        projectSlug: meta?.projectSlug ?? list[0].projectSlug,
+        project: list[0].project,
+        context: meta?.context ?? list[0].context,
+        workflowId: meta?.workflowId ?? list[0].workflowId,
+        firstTs,
+        lastTs,
+        spanSeconds: Math.max(0, (lastTs - firstTs) / 1000),
+        nTurns: list.length,
+        nToolUses,
+        cost,
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        models: [...models].sort().join(","),
+        inheritedContextLength: ref?.contextLength,
+        parentLastUuid: ref?.parentLastUuid,
+      });
+    }
+    rows.sort((a, b) => a.firstTs - b.firstTs);
+    return rows;
+  }
+
+  /**
+   * Sessions are derived from the deduped turns plus the file digests, so a fork
+   * contributes only the turns it actually produced — and a fork that produced
+   * none still gets a row, because "this fork happened and went nowhere" is a
+   * thing a timeline has to be able to draw.
+   *
+   * `activeSeconds` sums inter-turn gaps below the idle threshold, over *native*
+   * turns only, or a fork would inherit its ancestor's elapsed time and report a
+   * nonsense duty cycle.
+   */
+  private sessionRows(
+    turns: TurnRow[],
+    events: EventRow[],
+    agentRuns: AgentRunRow[],
+    lineage: LineageResolution,
+  ): SessionRow[] {
     const bySession = new Map<string, TurnRow[]>();
     for (const t of turns) {
       const list = bySession.get(t.sessionId);
       if (list) list.push(t);
       else bySession.set(t.sessionId, [t]);
     }
+    // uuid → the session that paid for it, so a digest can be walked once to
+    // find the turns it merely carried (linear, not sessions × turns).
+    const turnByUuid = new Map<string, TurnRow>();
+    for (const t of turns) if (t.uuid) turnByUuid.set(t.uuid, t);
+
+    const compactionsBySession = new Map<string, { n: number; peak: number }>();
+    for (const e of events) {
+      if (e.kind !== "compaction") continue;
+      const c = compactionsBySession.get(e.sessionId) ?? { n: 0, peak: 0 };
+      c.n++;
+      const pre = num(obj(JSON.parse(e.payload))?.preTokens);
+      c.peak = Math.max(c.peak, pre);
+      compactionsBySession.set(e.sessionId, c);
+    }
+    const agentsBySession = new Map<string, number>();
+    for (const a of agentRuns) {
+      agentsBySession.set(a.parentSessionId, (agentsBySession.get(a.parentSessionId) ?? 0) + 1);
+    }
+
     const gapMs = this.opts.idleGapSeconds * 1000;
+    const ids = new Set<string>([...bySession.keys(), ...this.digests.keys()]);
     const rows: SessionRow[] = [];
-    for (const [sessionId, list] of bySession) {
+    for (const sessionId of ids) {
+      const list = bySession.get(sessionId) ?? [];
       list.sort((a, b) => a.ts - b.ts);
       const meta = this.sessionMeta.get(sessionId);
-      const firstTs = list[0].ts;
-      const lastTs = list[list.length - 1].ts;
+      const digest = this.digests.get(sessionId);
+      const edge = lineage.edges.get(sessionId);
+
       let activeMs = 0;
       for (let i = 1; i < list.length; i++) {
         const d = list[i].ts - list[i - 1].ts;
         if (d > 0 && d < gapMs) activeMs += d;
       }
-      const spanSeconds = Math.max(0, (lastTs - firstTs) / 1000);
+      const firstTs = list.length ? list[0].ts : undefined;
+      const lastTs = list.length ? list[list.length - 1].ts : undefined;
+      const spanSeconds = firstTs && lastTs ? Math.max(0, (lastTs - firstTs) / 1000) : 0;
       const activeSeconds = activeMs / 1000;
       const models = new Set<string>();
       const versions = new Set<string>();
       let nativeCost = 0;
       let nSubagentTurns = 0;
-      let peakContext = meta?.peakContext ?? 0;
+      const compactions = compactionsBySession.get(sessionId);
+      let peakContext = compactions?.peak ?? 0;
       for (const t of list) {
         if (t.model) models.add(t.model);
         if (t.ccVersion) versions.add(t.ccVersion);
@@ -688,24 +1159,135 @@ export class Normalizer {
         // size at that turn. Validated against compactMetadata.preTokens.
         peakContext = Math.max(peakContext, t.cacheReadTokens);
       }
+
+      // What this file carries but did not pay for.
+      let nTurnsInherited = 0;
+      let inheritedCost = 0;
+      const inheritedRecords = edge?.inheritedRecords ?? 0;
+      if (digest && inheritedRecords > 0) {
+        for (let i = 0; i < inheritedRecords; i++) {
+          const t = turnByUuid.get(digest.uuids[i]);
+          if (t && t.sessionId !== sessionId) {
+            nTurnsInherited++;
+            inheritedCost += t.costTotal;
+          }
+        }
+      }
+      const firstNativeIdx = inheritedRecords;
+
       rows.push({
         sessionId,
-        projectSlug: meta?.projectSlug ?? list[0].projectSlug,
-        project: list[0].project,
-        cwd: meta?.cwd ?? list[0].cwd,
+        projectSlug: meta?.projectSlug ?? digest?.projectSlug ?? list[0]?.projectSlug ?? "",
+        project: projectLabel(
+          meta?.projectSlug ?? digest?.projectSlug ?? list[0]?.projectSlug ?? "",
+          this.slugRoot.get(meta?.projectSlug ?? digest?.projectSlug ?? "") ?? meta?.cwd,
+        ),
+        cwd: meta?.cwd ?? list[0]?.cwd,
         slug: meta?.slug,
+        parentSessionId: edge?.parentSessionId,
+        lineageId: lineage.lineageId.get(sessionId) ?? sessionId,
+        depth: lineage.depth.get(sessionId) ?? 0,
+        forkPointTs: edge?.forkPointTs,
+        parentSource: edge?.source,
+        parentKind: edge?.kind,
+        parentAmbiguous: edge?.ambiguous ?? false,
+        nRecordsInherited: inheritedRecords,
+        nTurnsInherited,
+        inheritedCost,
+        createdTs: digest?.createdMs,
+        firstNativeTs:
+          digest && firstNativeIdx < digest.ts.length ? digest.ts[firstNativeIdx] : undefined,
+        lastNativeTs: digest?.ts.length ? digest.ts[digest.ts.length - 1] : undefined,
         firstTs,
         lastTs,
         spanSeconds,
         activeSeconds,
-        dutyCycle: spanSeconds > 0 ? activeSeconds / spanSeconds : 1,
+        dutyCycle: !list.length ? undefined : spanSeconds > 0 ? activeSeconds / spanSeconds : 1,
         nTurnsNative: list.length,
         nSubagentTurns,
-        nCompactions: meta?.compactions ?? 0,
+        nAgentRuns: agentsBySession.get(sessionId) ?? 0,
+        nCompactions: compactions?.n ?? 0,
         peakContextTokens: peakContext,
         nativeCost,
         models: [...models].sort().join(","),
         ccVersions: [...versions].sort().join(","),
+      });
+    }
+    rows.sort((a, b) => (a.firstTs || a.createdTs || 0) - (b.firstTs || b.createdTs || 0));
+    return rows;
+  }
+
+  private forkEdgeRows(sessions: SessionRow[], lineage: LineageResolution): ForkEdgeRow[] {
+    const bySession = new Map(sessions.map((s) => [s.sessionId, s]));
+    const rows: ForkEdgeRow[] = [];
+    for (const [childId, e] of lineage.edges) {
+      const child = bySession.get(childId);
+      if (!child) continue;
+      // The child's own first activity is the honest far endpoint; its file
+      // birthtime is the fallback for a fork that never produced anything.
+      const childStart = child.firstNativeTs || e.childCreatedTs || child.firstTs;
+      rows.push({
+        childSessionId: childId,
+        parentSessionId: e.parentSessionId,
+        lineageId: child.lineageId,
+        depth: child.depth,
+        projectSlug: child.projectSlug,
+        project: child.project,
+        kind: e.kind,
+        forkPointTs: e.forkPointTs,
+        childCreatedTs: e.childCreatedTs,
+        childFirstNativeTs: e.childFirstNativeTs,
+        lagSeconds: childStart && e.forkPointTs ? (childStart - e.forkPointTs) / 1000 : 0,
+        nRecordsInherited: e.inheritedRecords,
+        nTurnsInherited: child.nTurnsInherited,
+        inheritedCost: child.inheritedCost,
+        source: e.source,
+        ambiguous: e.ambiguous,
+        parentMissing: e.parentMissing,
+      });
+    }
+    rows.sort((a, b) => a.forkPointTs - b.forkPointTs);
+    return rows;
+  }
+
+  private lineageRows(sessions: SessionRow[]): LineageRow[] {
+    const byLineage = new Map<string, SessionRow[]>();
+    for (const s of sessions) {
+      const list = byLineage.get(s.lineageId);
+      if (list) list.push(s);
+      else byLineage.set(s.lineageId, [s]);
+    }
+    const rows: LineageRow[] = [];
+    for (const [lineageId, list] of byLineage) {
+      list.sort((a, b) => a.depth - b.depth || (a.createdTs ?? 0) - (b.createdTs ?? 0));
+      const root = list.find((s) => s.depth === 0) ?? list[0];
+      let firstTs = Infinity;
+      let lastTs = 0;
+      let totalCost = 0;
+      let nTurns = 0;
+      let maxDepth = 0;
+      for (const s of list) {
+        const lo = s.firstNativeTs || s.firstTs || s.createdTs || 0;
+        const hi = Math.max(s.lastNativeTs ?? 0, s.lastTs ?? 0);
+        if (lo) firstTs = Math.min(firstTs, lo);
+        lastTs = Math.max(lastTs, hi);
+        totalCost += s.nativeCost;
+        nTurns += s.nTurnsNative;
+        maxDepth = Math.max(maxDepth, s.depth);
+      }
+      rows.push({
+        lineageId,
+        rootSessionId: root.sessionId,
+        projectSlug: root.projectSlug,
+        project: root.project,
+        nSessions: list.length,
+        nForks: list.length - 1,
+        maxDepth,
+        firstTs: Number.isFinite(firstTs) ? firstTs : 0,
+        lastTs,
+        nTurns,
+        totalCost,
+        sessionIds: list.map((s) => s.sessionId).join(","),
       });
     }
     rows.sort((a, b) => a.firstTs - b.firstTs);
@@ -723,10 +1305,11 @@ export interface InvariantResult {
  * Cheap enough to run on every normalize, and the CLI does.
  *
  * Deliberately scoped to *our* faults — double-counting, lost attribution,
- * dedup running backwards. Upstream malformation (a record with no timestamp,
- * a usage blob that is a string) is counted in `stats`, not failed here: the
- * whole premise of this package is that it survives whatever Claude Code
- * writes, so malformed input must not be reported as a broken pipeline.
+ * dedup running backwards, a lineage that does not close. Upstream malformation
+ * (a record with no timestamp, a usage blob that is a string) is counted in
+ * `stats`, not failed here: the whole premise of this package is that it
+ * survives whatever Claude Code writes, so malformed input must not be reported
+ * as a broken pipeline.
  */
 export function checkInvariants(n: Normalized): InvariantResult {
   const problems: string[] = [];
@@ -751,6 +1334,67 @@ export function checkInvariants(n: Normalized): InvariantResult {
   if (n.stats.dedupedOutputTokens > n.stats.naiveOutputTokens) {
     problems.push(
       "deduped output exceeds the naive sum — dedup is adding tokens, not removing them.",
+    );
+  }
+
+  // --- lineage closes over itself ---
+  const bySession = new Map(n.sessions.map((s) => [s.sessionId, s]));
+  for (const s of n.sessions) {
+    if (!s.parentSessionId) {
+      if (s.depth !== 0) problems.push(`${s.sessionId}: no parent but depth ${s.depth}`);
+      if (s.lineageId !== s.sessionId) {
+        problems.push(`${s.sessionId}: root of no lineage yet lineageId ${s.lineageId}`);
+      }
+      continue;
+    }
+    const parent = bySession.get(s.parentSessionId);
+    if (!parent) {
+      // A marker can name a parent whose file is gone; that is data, not a bug,
+      // and the edge row carries `parentMissing` to say so. Anything else is us.
+      const edge = n.forkEdges.find((e) => e.childSessionId === s.sessionId);
+      if (!edge?.parentMissing) {
+        problems.push(`${s.sessionId}: parent ${s.parentSessionId} is not a session row`);
+      }
+      continue;
+    }
+    if (s.depth !== parent.depth + 1) {
+      problems.push(`${s.sessionId}: depth ${s.depth} but parent's is ${parent.depth}`);
+    }
+    if (s.lineageId !== parent.lineageId) {
+      problems.push(`${s.sessionId}: lineage ${s.lineageId} != parent's ${parent.lineageId}`);
+    }
+    // A child cannot start before the point it branched from.
+    const start = s.firstNativeTs || s.createdTs || s.firstTs;
+    if (s.forkPointTs && start && start < s.forkPointTs) {
+      problems.push(
+        `${s.sessionId}: starts ${new Date(start).toISOString()} before its fork point ` +
+          `${new Date(s.forkPointTs).toISOString()} — the edge is drawn backwards.`,
+      );
+    }
+  }
+
+  if (n.forkEdges.length !== n.sessions.filter((s) => s.parentSessionId).length) {
+    problems.push(
+      `forkEdges=${n.forkEdges.length} but ${n.sessions.filter((s) => s.parentSessionId).length} ` +
+        "sessions claim a parent — the two grains disagree.",
+    );
+  }
+
+  // --- the agent grain accounts for every sidechain turn exactly once ---
+  const sideTurns = n.turns.filter((t) => t.context !== "main" && t.agentId);
+  const agentTurnTotal = n.agentRuns.reduce((s, a) => s + a.nTurns, 0);
+  if (agentTurnTotal !== sideTurns.length) {
+    problems.push(
+      `SUM(agentRuns.nTurns)=${agentTurnTotal} != ${sideTurns.length} agent turns — ` +
+        "an agent run lost or duplicated turns.",
+    );
+  }
+
+  const lineageTotal = n.lineages.reduce((s, l) => s + l.totalCost, 0);
+  if (Math.abs(lineageTotal - turnTotal) > Math.max(eps, turnTotal * 1e-9)) {
+    problems.push(
+      `SUM(lineages.totalCost)=${lineageTotal} != SUM(turns.costTotal)=${turnTotal} — ` +
+        "a session belongs to no lineage.",
     );
   }
 

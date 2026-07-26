@@ -1,5 +1,5 @@
 /**
- * Writing the five grains to Parquet.
+ * Writing the grains to Parquet.
  *
  * `hyparquet-writer` is pure JS — no native module, so CI installs cannot break
  * on it, and the same files are read back by DuckDB-WASM in the browser demo.
@@ -16,8 +16,11 @@
 
 import { parquetWriteFile } from "hyparquet-writer";
 import type {
+  AgentRunRow,
   EventRow,
+  ForkEdgeRow,
   ImageRow,
+  LineageRow,
   Normalized,
   SessionRow,
   ToolCallRow,
@@ -50,7 +53,9 @@ function col<T>(name: string, rows: T[], type: ColType, pick: (r: T) => unknown)
 const turnColumns = (rows: TurnRow[]): ColumnData[] => [
   col("messageId", rows, "STRING", (r) => r.messageId),
   col("requestId", rows, "STRING", (r) => r.requestId),
+  col("uuid", rows, "STRING", (r) => r.uuid),
   col("sessionId", rows, "STRING", (r) => r.sessionId),
+  col("lineageId", rows, "STRING", (r) => r.lineageId),
   col("fileSessionId", rows, "STRING", (r) => r.fileSessionId),
   col("projectSlug", rows, "STRING", (r) => r.projectSlug),
   col("project", rows, "STRING", (r) => r.project),
@@ -66,6 +71,7 @@ const turnColumns = (rows: TurnRow[]): ColumnData[] => [
   col("context", rows, "STRING", (r) => r.context),
   col("agentId", rows, "STRING", (r) => r.agentId),
   col("agentType", rows, "STRING", (r) => r.agentType),
+  col("workflowId", rows, "STRING", (r) => r.workflowId),
   col("entrypoint", rows, "STRING", (r) => r.entrypoint),
   col("sessionKind", rows, "STRING", (r) => r.sessionKind),
   col("ccVersion", rows, "STRING", (r) => r.ccVersion),
@@ -127,6 +133,19 @@ const sessionColumns = (rows: SessionRow[]): ColumnData[] => [
   col("project", rows, "STRING", (r) => r.project),
   col("cwd", rows, "STRING", (r) => r.cwd),
   col("slug", rows, "STRING", (r) => r.slug),
+  col("parentSessionId", rows, "STRING", (r) => r.parentSessionId),
+  col("lineageId", rows, "STRING", (r) => r.lineageId),
+  col("depth", rows, "INT64", (r) => r.depth),
+  col("forkPointTs", rows, "TIMESTAMP", (r) => r.forkPointTs),
+  col("parentSource", rows, "STRING", (r) => r.parentSource),
+  col("parentKind", rows, "STRING", (r) => r.parentKind),
+  col("parentAmbiguous", rows, "BOOLEAN", (r) => r.parentAmbiguous),
+  col("nRecordsInherited", rows, "INT64", (r) => r.nRecordsInherited),
+  col("nTurnsInherited", rows, "INT64", (r) => r.nTurnsInherited),
+  col("inheritedCost", rows, "DOUBLE", (r) => r.inheritedCost),
+  col("createdTs", rows, "TIMESTAMP", (r) => r.createdTs),
+  col("firstNativeTs", rows, "TIMESTAMP", (r) => r.firstNativeTs),
+  col("lastNativeTs", rows, "TIMESTAMP", (r) => r.lastNativeTs),
   col("firstTs", rows, "TIMESTAMP", (r) => r.firstTs),
   col("lastTs", rows, "TIMESTAMP", (r) => r.lastTs),
   col("spanSeconds", rows, "DOUBLE", (r) => r.spanSeconds),
@@ -134,11 +153,70 @@ const sessionColumns = (rows: SessionRow[]): ColumnData[] => [
   col("dutyCycle", rows, "DOUBLE", (r) => r.dutyCycle),
   col("nTurnsNative", rows, "INT64", (r) => r.nTurnsNative),
   col("nSubagentTurns", rows, "INT64", (r) => r.nSubagentTurns),
+  col("nAgentRuns", rows, "INT64", (r) => r.nAgentRuns),
   col("nCompactions", rows, "INT64", (r) => r.nCompactions),
   col("peakContextTokens", rows, "INT64", (r) => r.peakContextTokens),
   col("nativeCost", rows, "DOUBLE", (r) => r.nativeCost),
   col("models", rows, "STRING", (r) => r.models),
   col("ccVersions", rows, "STRING", (r) => r.ccVersions),
+];
+
+const forkEdgeColumns = (rows: ForkEdgeRow[]): ColumnData[] => [
+  col("childSessionId", rows, "STRING", (r) => r.childSessionId),
+  col("parentSessionId", rows, "STRING", (r) => r.parentSessionId),
+  col("lineageId", rows, "STRING", (r) => r.lineageId),
+  col("depth", rows, "INT64", (r) => r.depth),
+  col("projectSlug", rows, "STRING", (r) => r.projectSlug),
+  col("project", rows, "STRING", (r) => r.project),
+  col("kind", rows, "STRING", (r) => r.kind),
+  col("forkPointTs", rows, "TIMESTAMP", (r) => r.forkPointTs || undefined),
+  col("childCreatedTs", rows, "TIMESTAMP", (r) => r.childCreatedTs || undefined),
+  col("childFirstNativeTs", rows, "TIMESTAMP", (r) => r.childFirstNativeTs || undefined),
+  col("lagSeconds", rows, "DOUBLE", (r) => r.lagSeconds),
+  col("nRecordsInherited", rows, "INT64", (r) => r.nRecordsInherited),
+  col("nTurnsInherited", rows, "INT64", (r) => r.nTurnsInherited),
+  col("inheritedCost", rows, "DOUBLE", (r) => r.inheritedCost),
+  col("source", rows, "STRING", (r) => r.source),
+  col("ambiguous", rows, "BOOLEAN", (r) => r.ambiguous),
+  col("parentMissing", rows, "BOOLEAN", (r) => r.parentMissing),
+];
+
+const lineageColumns = (rows: LineageRow[]): ColumnData[] => [
+  col("lineageId", rows, "STRING", (r) => r.lineageId),
+  col("rootSessionId", rows, "STRING", (r) => r.rootSessionId),
+  col("projectSlug", rows, "STRING", (r) => r.projectSlug),
+  col("project", rows, "STRING", (r) => r.project),
+  col("nSessions", rows, "INT64", (r) => r.nSessions),
+  col("nForks", rows, "INT64", (r) => r.nForks),
+  col("maxDepth", rows, "INT64", (r) => r.maxDepth),
+  col("firstTs", rows, "TIMESTAMP", (r) => r.firstTs),
+  col("lastTs", rows, "TIMESTAMP", (r) => r.lastTs),
+  col("nTurns", rows, "INT64", (r) => r.nTurns),
+  col("totalCost", rows, "DOUBLE", (r) => r.totalCost),
+  col("sessionIds", rows, "STRING", (r) => r.sessionIds),
+];
+
+const agentRunColumns = (rows: AgentRunRow[]): ColumnData[] => [
+  col("agentId", rows, "STRING", (r) => r.agentId),
+  col("agentType", rows, "STRING", (r) => r.agentType),
+  col("parentSessionId", rows, "STRING", (r) => r.parentSessionId),
+  col("lineageId", rows, "STRING", (r) => r.lineageId),
+  col("projectSlug", rows, "STRING", (r) => r.projectSlug),
+  col("project", rows, "STRING", (r) => r.project),
+  col("context", rows, "STRING", (r) => r.context),
+  col("workflowId", rows, "STRING", (r) => r.workflowId),
+  col("firstTs", rows, "TIMESTAMP", (r) => r.firstTs),
+  col("lastTs", rows, "TIMESTAMP", (r) => r.lastTs),
+  col("spanSeconds", rows, "DOUBLE", (r) => r.spanSeconds),
+  col("nTurns", rows, "INT64", (r) => r.nTurns),
+  col("nToolUses", rows, "INT64", (r) => r.nToolUses),
+  col("cost", rows, "DOUBLE", (r) => r.cost),
+  col("inputTokens", rows, "INT64", (r) => r.inputTokens),
+  col("outputTokens", rows, "INT64", (r) => r.outputTokens),
+  col("cacheReadTokens", rows, "INT64", (r) => r.cacheReadTokens),
+  col("models", rows, "STRING", (r) => r.models),
+  col("inheritedContextLength", rows, "INT64", (r) => r.inheritedContextLength),
+  col("parentLastUuid", rows, "STRING", (r) => r.parentLastUuid),
 ];
 
 const imageColumns = (rows: ImageRow[]): ColumnData[] => [
@@ -154,7 +232,16 @@ const imageColumns = (rows: ImageRow[]): ColumnData[] => [
   col("hash", rows, "STRING", (r) => r.hash),
 ];
 
-export const TABLES = ["turns", "toolCalls", "events", "sessions", "images"] as const;
+export const TABLES = [
+  "turns",
+  "toolCalls",
+  "events",
+  "sessions",
+  "forkEdges",
+  "lineages",
+  "agentRuns",
+  "images",
+] as const;
 export type TableName = (typeof TABLES)[number];
 
 export function columnsFor(name: TableName, n: Normalized): ColumnData[] {
@@ -167,6 +254,12 @@ export function columnsFor(name: TableName, n: Normalized): ColumnData[] {
       return eventColumns(n.events);
     case "sessions":
       return sessionColumns(n.sessions);
+    case "forkEdges":
+      return forkEdgeColumns(n.forkEdges);
+    case "lineages":
+      return lineageColumns(n.lineages);
+    case "agentRuns":
+      return agentRunColumns(n.agentRuns);
     case "images":
       return imageColumns(n.images);
   }
@@ -182,13 +275,19 @@ export function rowCount(name: TableName, n: Normalized): number {
       return n.events.length;
     case "sessions":
       return n.sessions.length;
+    case "forkEdges":
+      return n.forkEdges.length;
+    case "lineages":
+      return n.lineages.length;
+    case "agentRuns":
+      return n.agentRuns.length;
     case "images":
       return n.images.length;
   }
 }
 
 /**
- * Write all five tables into `dir`. Returns per-table byte sizes.
+ * Write every table into `dir`. Returns per-table byte sizes.
  *
  * A table with no rows is still written: an absent file makes the demo's
  * queries fail at load, while an empty one just yields no rows.

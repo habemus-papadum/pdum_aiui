@@ -112,6 +112,14 @@ DEDUP EARNED ITS KEEP
   groups w/ partial usage     ${fmt(stats.groupsWithVaryingOutput)}   (final record carries the real output)
   records marked inherited    ${fmt(stats.inheritedTurnsSeen)}   (session_id != sessionId)
 
+FORK LINEAGE
+  session files               ${fmt(stats.sessionFiles)}   (${fmt(stats.sessionFilesWithoutMarker)} predate the session_id marker)
+  fork edges                  ${fmt(stats.forkEdges)}   (${stats.forkEdgesFromMarker} confirmed by marker, ${stats.forkEdgesAmbiguous} decided by file creation order)
+  lineages                    ${fmt(stats.lineages)}   max depth ${stats.maxForkDepth}
+  turns re-attributed         ${fmt(stats.reattributedTurns)}   (would have been credited to the file that merely carried them)
+  forks left unresolved       ${stats.unresolvedForks}
+  agent runs                  ${fmt(stats.agentRuns)}
+
 TABLES → ${args.out}
 ${Object.entries(written)
   .map(
