@@ -1,9 +1,13 @@
 # Claude Code usage analytics — schema research and ingestion design
 
-**Status:** research complete, design proposed, nothing built beyond the spike.
+**Status:** built. Two-stage ingestion (§6.2), eight analytic grains, and the
+session graph are live in `demos/cc-slurp` + `demos/cc-optimizer`; the two
+drill-down tools in §7 are what remain.
 **Spike:** [`exploration/cc-usage/`](../../exploration/cc-usage/) (runnable, zero deps).
 **Generated schema reference:** [`exploration/cc-usage/SCHEMA.md`](../../exploration/cc-usage/SCHEMA.md).
-**Date:** 2026-07-26. Corpus: 477 files · 162,157 records · 559 MB · Claude Code `2.1.186`–`2.1.220`.
+**Date:** 2026-07-26. Corpus: 965 files (485 JSONL) · 168,171 records · 677 MB ·
+Claude Code `2.1.186`–`2.1.220`. Figures quoted below were measured at various
+points as the corpus grew, so they will not all reconcile to the same total.
 
 ## Goal
 
@@ -958,7 +962,7 @@ equivalence check. Unknown flags now exit 2. And Mosaic pins an exact older
 and `wasmConnector()` would not typecheck against our connection; a workspace
 override in `pnpm-workspace.yaml` collapses them.
 
-## 6. Open questions
+## Open questions
 
 - ~~Where does `fields.mjs` graduate to?~~ **Settled.** It is
   `demos/cc-slurp/src/fields.ts` — `@habemus-papadum/aiui-cc-slurp`, an internal
@@ -990,7 +994,7 @@ override in `pnpm-workspace.yaml` collapses them.
    and runs on every invocation.
 2. ~~Scaffold the demo.~~ `demos/cc-optimizer` — gallery-private, DuckDB-WASM
    over the tables, plus a `query` action giving the agent read-only SQL.
-3. ~~Validate cost against ground truth.~~ **It found a bug** — see §8.
+3. ~~Validate cost against ground truth.~~ **It found a bug** — see §9.
 4. ~~Fork lineage edges.~~ The normalizer emits `forkEdges` and `lineages`, not
    just `fork-context-ref` events; §1.6's provenance mechanism is implemented,
    uuid-overlap first with the `session_id` marker only corroborating.
@@ -998,29 +1002,109 @@ override in `pnpm-workspace.yaml` collapses them.
    questions it raised are answered in §5.6.3 and §5.6.6.
 6. ~~Two-stage ingestion.~~ §6.2 — built, and equivalence between the two paths
    is a test.
+7. ~~Names.~~ §8 — sessions and agents are labelled by what the user calls them,
+   with a rename surfaced rather than silently adopted.
 
 **Next.**
 
-7. **Session cost drill-down.** Pick one session; stacked per-turn bars over its
+8. **Session cost drill-down.** Pick one session; stacked per-turn bars over its
    timeline, one colour per cost class, compaction markers in place. This is
    also where `cache_read_input_tokens` gets validated as a context-size proxy
    against `compactMetadata.preTokens` — the two should track until a compaction
    resets the first.
-8. **Session replay.** The finest level: multi-agent aware, scoped to a whole
+9. **Session replay.** The finest level: multi-agent aware, scoped to a whole
    session or one hour inside it. This is the reason stage 1 keeps message
    bodies the analytic grains throw away.
-9. **The turn scatter** (§5.6.2) — stock vgplot, 10–20k points.
-10. **Cross-filter the existing panels.** Static reads today; the `Selection` is
+10. **The turn scatter** (§5.6.2) — stock vgplot, 10–20k points.
+11. **Cross-filter the existing panels.** Static reads today; the `Selection` is
     wired but nothing publishes into it — the timeline's brush is the natural
     first producer, via the semi-join pattern in §5.6.3.
 
 **Standing.**
 
-11. **Re-run the census in ~3 weeks** (`exploration/cc-usage/`) and read the
+12. **Re-run the census in ~3 weeks** (`exploration/cc-usage/`) and read the
     diff's `NEW` section. That is the first real test of whether the drift
     workflow earns its keep.
 
-## 8. Reconciliation against `ccusage`, and what it changed
+## 8. Names — what a human calls a session or an agent
+
+### 8.1 Four mechanisms, none of which covers a majority
+
+| source | record type / location | fields | coverage |
+| --- | --- | --- | ---: |
+| system-generated title | `ai-title` | `aiTitle`, `sessionId` | 82/109 (75%) |
+| `/rename` | `custom-title`, `agent-name` | `customTitle`/`agentName`, `sessionId` | 37/109 (34%) |
+| auto slug | `slug` on `user`/`assistant` | — | 25/109 (23%) |
+| agent name | encoded in the **agent id** | — | 43/368 agents |
+
+That table is the argument for a ladder — `explicit → ai → slug → id` — rather
+than one column. No single source labels even a majority, and the id fallback is
+what keeps every row labelled. It lifts named sessions from 25 to **90 of 109**.
+
+`custom-title` and `agent-name` are folded into one `explicit` kind. They are
+written as a pair and **never disagreed** (0 of the 33 sessions carrying both),
+but 4 sessions carry `agent-name` alone, so either one taken alone loses those.
+
+### 8.2 Three structural facts that decided the design
+
+**They carry no timestamp and no uuid.** A naming record is
+`{type, <the name>, sessionId}`
+and nothing else. So they cannot be ordered by time or deduped by
+uuid — **file position is the only order available**. This is a case the
+analytic grains could not have answered on their own; the raw layer's per-line
+addressing is where the ordering lives, and both ingest paths already guarantee
+within-file order, so first/last costs one comparison per record and no sort.
+
+**Their `sessionId` is always their own file's** — 12,496 of 12,496 records,
+zero exceptions — and they appear **only in main session files**, never in a
+subagent's or a workflow agent's. None of §1.6's fork/uuid-overlap attribution
+machinery applies; the file's session id is the answer.
+
+**They are re-emitted constantly**, not written once on change. One file carries
+444 of them for 3 distinct values, and 91% sit mid-file rather than in a header.
+The useful reduction is therefore first/last *distinct value*.
+
+### 8.3 First name vs last name
+
+The user's framing, and it is the right one: the first name is stable, the last
+is what you actually want to see. Both are stored (`nameFirst`, `name`), because
+they answer different questions — `name` is what you recognise today, `nameFirst`
+is what a note written before a rename still matches. Neither is a key: the
+stable identifier stays `sessionId`, and both of these are labels.
+
+`nameChanged` marks the 4 sessions in this corpus that were renamed. The
+tooltip shows `was "<old>"` rather than silently adopting the new label.
+
+`nameFirst` re-runs the whole ladder over first values instead of reusing
+whichever source won for `name`. A session that acquires an explicit name
+partway through has as its stable label the AI title it had *before*, not an
+explicit name that did not yet exist.
+
+### 8.4 An agent's name is in its id
+
+`a<name>-<16 hex>` when named, `a<hex>` when not — so no join to the launching
+`Task` call, which matters because that call lives in the parent's records and
+may have been compacted away. All **368 of 368** agent ids classify with no
+residue.
+
+The rule has one trap. Of 50 ids carrying a label, 43 are real `Task` `name`
+arguments and **7 are forks**, labelled from the opening words of the prompt:
+`where-is-the`, `can-you-change`, `one-thing-that`. Those read like names but the
+user never chose them, so they are marked `nameKind: "fork"` and deliberately
+not displayed as names.
+
+`agentType` is what separates the two — and note that explicitly named agents
+carry **no `attributionAgent` at all**, so name and type are complementary
+rather than redundant: every agent has exactly one of them.
+
+### 8.5 Where names are resolved in the UI
+
+In the Mosaic client's `prepare`, not in the filtered query. A brush cannot
+change what something is called, and the filtered query aggregates `turns`,
+which has no name column — the same reasoning that keeps `forkEdges` out of it
+(§5.6.3). Two small lookups (109 + 368 rows) beat widening every grouped query.
+
+## 9. Reconciliation against `ccusage`, and what it changed
 
 Run 2026-07-26, `ccusage@20.0.18 daily --since 20260619 --until 20260726`, over
 the identical corpus.
@@ -1046,7 +1130,7 @@ pushed higher). We were right about the other four traps; `ccusage` agrees on al
 of them, including pricing the 1h cache tier (flat-rating it would have put its
 total at $10,202.68).
 
-### 8.1 What this validates — and what it does not
+### 9.1 What this validates — and what it does not
 
 `ccusage` reads the same logs **and the same LiteLLM price table** we do, so the
 0.29% agreement validates **token extraction**, not **prices**. A wrong LiteLLM
@@ -1069,7 +1153,7 @@ genai-prices is not a LiteLLM quirk or an artefact of one model's entry, it is
 `2 / 1.25` — a structural property of Anthropic's cache pricing that any table
 modelling cache writes as a single bucket must get wrong.
 
-### 8.2 There is no dollar ground truth, and the label must say so
+### 9.2 There is no dollar ground truth, and the label must say so
 
 This account is on a **Max subscription**, not API-key billing. No per-token
 charge was ever incurred, and the Anthropic Console has nothing comparable to
