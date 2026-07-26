@@ -250,7 +250,22 @@ async function load(): Promise<void> {
   progress.set({ fraction: null, label: "starting DuckDB" });
   const db = await instantiateDuckDB(BUNDLES);
   const conn = await db.connect();
-  const coordinator = new Coordinator();
+  // preagg OFF, deliberately and permanently. It is the one component in
+  // mosaic-core that is coupled to a client's table: it materialises its view as
+  // `Query.from(clientQuery._from).select({...activeClauseColumns})` — the
+  // CLIENT's table with the CLAUSE's columns. A cross-table clause (our whole
+  // crossfilter design: a session-grain brush reaching a `turns` client via a
+  // semi-join) therefore makes it emit SQL naming a column that does not exist
+  // in that table, and the client gets a hard `Binder Error`, not a slow path.
+  //
+  // A per-client `filterStable = false` also makes preagg decline, and where it
+  // is TRUE it is the better fix — SessionTimelineClient says exactly that,
+  // because its group keys really are the surviving sessions. But it is not a
+  // general substitute: an aggregate that is *genuinely* stable under filtering
+  // (the token-class and attribution panels, grouped by model / project / skill)
+  // would have to misstate its own semantics purely to dodge the optimizer. The
+  // breakage is not about stability at all, so the switch belongs here.
+  const coordinator = new Coordinator(undefined, { preagg: { enabled: false } });
   coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: conn }));
   engineBox.engine = { db, conn, coordinator };
 
