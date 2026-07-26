@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * `cc-normalize` — scan Claude Code transcripts, write the five Parquet tables.
+ * `cc-slurp` — scan Claude Code transcripts, write the five Parquet tables.
  *
- *   pnpm -C demos/transcript normalize                    # → ./out
- *   pnpm -C demos/transcript normalize -- --out ../ledger/src/data
- *   pnpm -C demos/transcript normalize -- --offline --no-images
+ *   pnpm -C demos/cc-slurp normalize                    # → ./out
+ *   pnpm -C demos/cc-slurp normalize -- --out ../cc-optimizer/src/data
+ *   pnpm -C demos/cc-slurp normalize -- --offline --no-images
  *
  * Prints the measurements that justify the pipeline (how wrong a naive reader
  * would be) and runs `checkInvariants` every time — a silent regression in the
@@ -46,7 +46,7 @@ function parseArgs(argv: string[]): Args {
     else if (k === "--quiet") a.quiet = true;
     else if (k === "--help" || k === "-h") {
       process.stdout.write(
-        "usage: cc-normalize [--out dir] [--root dir]... [--offline] [--no-images]\n" +
+        "usage: cc-slurp [--out dir] [--root dir]... [--offline] [--no-images]\n" +
           "                   [--idle-gap seconds] [--quiet]\n",
       );
       process.exit(0);

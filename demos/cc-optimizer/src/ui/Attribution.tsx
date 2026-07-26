@@ -23,19 +23,19 @@ interface Slice {
 function Group(props: { title: string; note: string; rows: Slice[] }) {
   const max = () => Math.max(...props.rows.map((r) => r.cost), 1e-9);
   return (
-    <div class="lg-attr-group">
-      <h3 class="lg-h3">{props.title}</h3>
-      <p class="lg-note lg-note-tight">{props.note}</p>
+    <div class="cco-attr-group">
+      <h3 class="cco-h3">{props.title}</h3>
+      <p class="cco-note cco-note-tight">{props.note}</p>
       <For each={props.rows.slice(0, 8)}>
         {(r) => (
-          <div class={`lg-attr-row${r.key.startsWith("(") ? " lg-attr-baseline" : ""}`}>
-            <span class="lg-attr-key" title={r.key}>
+          <div class={`cco-attr-row${r.key.startsWith("(") ? " cco-attr-baseline" : ""}`}>
+            <span class="cco-attr-key" title={r.key}>
               {r.key}
             </span>
-            <span class="lg-attr-track">
-              <span class="lg-attr-fill" style={{ width: `${(r.cost / max()) * 100}%` }} />
+            <span class="cco-attr-track">
+              <span class="cco-attr-fill" style={{ width: `${(r.cost / max()) * 100}%` }} />
             </span>
-            <span class="lg-attr-cost">{usd(r.cost)}</span>
+            <span class="cco-attr-cost">{usd(r.cost)}</span>
           </div>
         )}
       </For>
@@ -45,11 +45,11 @@ function Group(props: { title: string; note: string; rows: Slice[] }) {
 
 export function Attribution() {
   return (
-    <section class="lg-panel">
-      <h2 class="lg-h2">what caused the spend</h2>
+    <section class="cco-panel">
+      <h2 class="cco-h2">what caused the spend</h2>
       <CellView of={graph().attribution}>
         {(rows) => (
-          <div class="lg-attr">
+          <div class="cco-attr">
             <Group
               title="by agent"
               note="(main loop) is every turn that ran in the top-level session."

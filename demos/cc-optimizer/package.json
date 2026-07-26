@@ -1,5 +1,5 @@
 {
-  "name": "@habemus-papadum/demo-ledger",
+  "name": "@habemus-papadum/demo-cc-optimizer",
   "version": "0.12.0+dev",
   "description": "Your own Claude Code usage: cost per turn, where it goes, and whether a session was time well spent. Gallery-private \u2014 no aiui.sitePage marker.",
   "private": true,
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
-    "directory": "demos/ledger"
+    "directory": "demos/cc-optimizer"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -20,7 +20,7 @@
   "scripts": {
     "claude": "../../bin/aiui claude",
     "dev": "vite",
-    "normalize": "pnpm -C ../transcript normalize -- --out ../ledger/src/data",
+    "normalize": "pnpm -C ../cc-slurp normalize -- --out ../cc-optimizer/src/data",
     "open": "../../bin/aiui open",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -29,7 +29,7 @@
     "@duckdb/duckdb-wasm": "1.33.1-dev45.0",
     "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-transcript": "workspace:^",
+    "@habemus-papadum/aiui-cc-slurp": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@observablehq/plot": "^0.6.17",
     "@solidjs/web": "2.0.0-beta.15",

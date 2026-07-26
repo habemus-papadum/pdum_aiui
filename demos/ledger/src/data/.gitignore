@@ -1,4 +1,0 @@
-# Personal telemetry: project names, branch names, cwd paths.
-# Regenerate with `pnpm normalize`; never commit.
-*.parquet
-manifest.json

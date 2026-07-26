@@ -22,21 +22,21 @@ const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 /** One class of token spend, sized by its share. */
 function ClassBar(props: { label: string; cost: number; total: number; tone: string }) {
   return (
-    <div class="lg-class">
-      <div class="lg-class-head">
-        <span class="lg-class-label">{props.label}</span>
-        <span class="lg-class-share">{pct(props.cost, props.total)}</span>
+    <div class="cco-class">
+      <div class="cco-class-head">
+        <span class="cco-class-label">{props.label}</span>
+        <span class="cco-class-share">{pct(props.cost, props.total)}</span>
       </div>
-      <div class="lg-class-track">
+      <div class="cco-class-track">
         <div
-          class="lg-class-fill"
+          class="cco-class-fill"
           style={{
             width: `${props.total > 0 ? (props.cost / props.total) * 100 : 0}%`,
             background: props.tone,
           }}
         />
       </div>
-      <div class="lg-class-cost">{usd(props.cost)}</div>
+      <div class="cco-class-cost">{usd(props.cost)}</div>
     </div>
   );
 }
@@ -48,59 +48,59 @@ export function Summary() {
   return (
     <Show when={s()}>
       {(sum) => (
-        <section class="lg-summary">
-          <div class="lg-stats">
-            <div class="lg-stat">
-              <div class="lg-stat-value">{usd(sum().totalCost)}</div>
-              <div class="lg-stat-label">derived spend</div>
+        <section class="cco-summary">
+          <div class="cco-stats">
+            <div class="cco-stat">
+              <div class="cco-stat-value">{usd(sum().totalCost)}</div>
+              <div class="cco-stat-label">derived spend</div>
             </div>
-            <div class="lg-stat">
-              <div class="lg-stat-value">{sum().turns.toLocaleString()}</div>
-              <div class="lg-stat-label">turns</div>
+            <div class="cco-stat">
+              <div class="cco-stat-value">{sum().turns.toLocaleString()}</div>
+              <div class="cco-stat-label">turns</div>
             </div>
-            <div class="lg-stat">
-              <div class="lg-stat-value">{sum().sessions.toLocaleString()}</div>
-              <div class="lg-stat-label">sessions</div>
+            <div class="cco-stat">
+              <div class="cco-stat-value">{sum().sessions.toLocaleString()}</div>
+              <div class="cco-stat-label">sessions</div>
             </div>
-            <div class="lg-stat">
-              <div class="lg-stat-value">{sum().projects}</div>
-              <div class="lg-stat-label">projects</div>
+            <div class="cco-stat">
+              <div class="cco-stat-value">{sum().projects}</div>
+              <div class="cco-stat-label">projects</div>
             </div>
-            <div class="lg-stat lg-stat-wide">
-              <div class="lg-stat-value">
+            <div class="cco-stat cco-stat-wide">
+              <div class="cco-stat-value">
                 {day(sum().firstTs)} → {day(sum().lastTs)}
               </div>
-              <div class="lg-stat-label">window</div>
+              <div class="cco-stat-label">window</div>
             </div>
           </div>
 
-          <div class="lg-classes">
-            <h2 class="lg-h2">where the money actually goes</h2>
+          <div class="cco-classes">
+            <h2 class="cco-h2">where the money actually goes</h2>
             <ClassBar
               label="cache read"
               cost={sum().costCacheRead}
               total={sum().totalCost}
-              tone="var(--lg-cache-read)"
+              tone="var(--cco-cache-read)"
             />
             <ClassBar
               label="cache creation"
               cost={sum().costCacheCreate}
               total={sum().totalCost}
-              tone="var(--lg-cache-create)"
+              tone="var(--cco-cache-create)"
             />
             <ClassBar
               label="output"
               cost={sum().costOutput}
               total={sum().totalCost}
-              tone="var(--lg-output)"
+              tone="var(--cco-output)"
             />
             <ClassBar
               label="fresh input"
               cost={sum().costInput}
               total={sum().totalCost}
-              tone="var(--lg-input)"
+              tone="var(--cco-input)"
             />
-            <p class="lg-note">
+            <p class="cco-note">
               Cache read + creation is{" "}
               <strong>{pct(sum().costCacheRead + sum().costCacheCreate, sum().totalCost)}</strong>{" "}
               of spend. Most of what you pay for is re-sending context, not generating tokens.
@@ -109,7 +109,7 @@ export function Summary() {
 
           <Show when={m()}>
             {(man) => (
-              <p class="lg-provenance">
+              <p class="cco-provenance">
                 No cost field exists in a Claude Code transcript — every figure here is tokens ×{" "}
                 <code>{man().pricing.source}</code> @ {man().pricing.version.slice(0, 10)}, derived
                 from {man().stats.files} files. A naive per-record sum would have reported{" "}
@@ -119,7 +119,7 @@ export function Summary() {
                 × these output tokens.
                 <Show when={!man().invariants.ok}>
                   {" "}
-                  <strong class="lg-warn">
+                  <strong class="cco-warn">
                     Invariants FAILED — treat these numbers as suspect.
                   </strong>
                 </Show>

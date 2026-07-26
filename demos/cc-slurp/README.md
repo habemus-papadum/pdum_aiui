@@ -1,13 +1,13 @@
-# `@habemus-papadum/aiui-transcript`
+# `@habemus-papadum/aiui-cc-slurp`
 
 Reader, normalizer and Parquet writer for **Claude Code session transcripts**.
-Internal, never published — the pure-model half of `demos/ledger`, in the same
+Internal, never published — the pure-model half of `demos/cc-optimizer`, in the same
 relation `demos/optics` has to the wave-optics notebooks.
 
 ```sh
-pnpm -C demos/transcript normalize                              # → ./out
-pnpm -C demos/transcript normalize -- --out ../ledger/src/data  # feed the demo
-pnpm -C demos/transcript normalize -- --offline --no-images
+pnpm -C demos/cc-slurp normalize                              # → ./out
+pnpm -C demos/cc-slurp normalize -- --out ../cc-optimizer/src/data  # feed the demo
+pnpm -C demos/cc-slurp normalize -- --offline --no-images
 ```
 
 ## What it does

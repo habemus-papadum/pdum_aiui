@@ -32,39 +32,39 @@ function SessionRow(props: { s: SessionShape; maxSpan: number }) {
   const activeFrac = () => Math.min(1, props.s.dutyCycle);
   return (
     <tr>
-      <td class="lg-sess-name">
-        <span class="lg-sess-project">{props.s.project}</span>
+      <td class="cco-sess-name">
+        <span class="cco-sess-project">{props.s.project}</span>
         <Show when={props.s.slug}>
-          <span class="lg-sess-slug">{props.s.slug}</span>
+          <span class="cco-sess-slug">{props.s.slug}</span>
         </Show>
       </td>
-      <td class="lg-sess-bar">
-        <div class="lg-span-track">
-          <div class="lg-span-fill" style={{ width: `${spanFrac() * 100}%` }}>
-            <div class="lg-active-fill" style={{ width: `${activeFrac() * 100}%` }} />
+      <td class="cco-sess-bar">
+        <div class="cco-span-track">
+          <div class="cco-span-fill" style={{ width: `${spanFrac() * 100}%` }}>
+            <div class="cco-active-fill" style={{ width: `${activeFrac() * 100}%` }} />
           </div>
         </div>
       </td>
-      <td class="lg-num">{dur(props.s.spanSeconds)}</td>
-      <td class="lg-num">{dur(props.s.activeSeconds)}</td>
-      <td class={`lg-num lg-duty${props.s.dutyCycle < 0.15 ? " lg-duty-low" : ""}`}>
+      <td class="cco-num">{dur(props.s.spanSeconds)}</td>
+      <td class="cco-num">{dur(props.s.activeSeconds)}</td>
+      <td class={`cco-num cco-duty${props.s.dutyCycle < 0.15 ? " cco-duty-low" : ""}`}>
         {(props.s.dutyCycle * 100).toFixed(0)}%
       </td>
-      <td class="lg-num">{props.s.nTurns}</td>
-      <td class="lg-num">{props.s.nCompactions || ""}</td>
-      <td class="lg-num">{usd(props.s.cost)}</td>
+      <td class="cco-num">{props.s.nTurns}</td>
+      <td class="cco-num">{props.s.nCompactions || ""}</td>
+      <td class="cco-num">{usd(props.s.cost)}</td>
     </tr>
   );
 }
 
 export function Sessions() {
   return (
-    <section class="lg-panel">
-      <header class="lg-panel-head">
-        <h2 class="lg-h2">sessions — elapsed vs worked</h2>
+    <section class="cco-panel">
+      <header class="cco-panel-head">
+        <h2 class="cco-h2">sessions — elapsed vs worked</h2>
         <ControlSlider of={idleGapMinutes} label="idle gap" />
       </header>
-      <p class="lg-note">
+      <p class="cco-note">
         The outer bar is wall-clock span; the filled part is time actually spent working, summing
         every inter-turn gap shorter than the idle threshold. Move the slider and watch the duty
         cycles move — where you draw that line is a judgement call, so it is yours to make.
@@ -74,20 +74,20 @@ export function Sessions() {
           const top = rows().slice(0, 25);
           const maxSpan = Math.max(...top.map((r) => r.spanSeconds), 1);
           return (
-            <div class="lg-table-scroll">
-              <table class="lg-table">
+            <div class="cco-table-scroll">
+              <table class="cco-table">
                 <thead>
                   <tr>
                     <th>session</th>
                     <th>span vs active</th>
-                    <th class="lg-num">span</th>
-                    <th class="lg-num">active</th>
-                    <th class="lg-num">duty</th>
-                    <th class="lg-num">turns</th>
-                    <th class="lg-num" title="context compactions">
+                    <th class="cco-num">span</th>
+                    <th class="cco-num">active</th>
+                    <th class="cco-num">duty</th>
+                    <th class="cco-num">turns</th>
+                    <th class="cco-num" title="context compactions">
                       cmpct
                     </th>
-                    <th class="lg-num">cost</th>
+                    <th class="cco-num">cost</th>
                   </tr>
                 </thead>
                 <tbody>
