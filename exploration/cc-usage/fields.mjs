@@ -73,6 +73,52 @@ export const messageId = (rec) => str(get(rec, "message.id"));
  */
 export const preferOriginal = (a, b) => (isSidechain(a) && !isSidechain(b) ? b : a);
 
+/**
+ * True when this record was COPIED into its file by a fork/resume rather than
+ * produced there. Its tokens were billed once, to `originSession(rec)`.
+ *
+ * Only decidable from Claude Code 2.1.199 onward — earlier builds omit
+ * `session_id`, so an inherited record from those builds is indistinguishable
+ * from a native one and must be caught by cross-file dedup instead.
+ */
+export const isInherited = (rec) => {
+  const origin = str(rec?.session_id);
+  const container = str(rec?.sessionId);
+  return Boolean(origin && container && origin !== container);
+};
+
+/** The session that actually paid for this turn. Falls back to the container. */
+export const originSession = (rec) => str(rec?.session_id) ?? str(rec?.sessionId);
+
+/** The session whose file this record lives in. */
+export const containingSession = (rec) => str(rec?.sessionId);
+
+/**
+ * A subagent that inherits its parent's context declares it in a
+ * `fork-context-ref` record: `{ agentId, parentSessionId, parentLastUuid,
+ * contextLength }`. Note these records are themselves copied when the parent
+ * session is forked, so the same agentId can appear under two session dirs.
+ */
+export const forkContextRef = (rec) =>
+  rec?.type === "fork-context-ref"
+    ? {
+        agentId: str(rec.agentId),
+        parentSessionId: str(rec.parentSessionId),
+        parentLastUuid: str(rec.parentLastUuid),
+        contextLength: num(rec.contextLength),
+      }
+    : undefined;
+
+/**
+ * Which agent produced this record. `attributionAgent` names the agent TYPE
+ * (`Explore`, `Plan`, `general-purpose`, `fork`, a custom agent name, …) and is
+ * present on ~76% of sidechain records; `agentId` is the per-instance id.
+ */
+export const agentIdentity = (rec) =>
+  isSidechain(rec)
+    ? { agentId: str(rec.agentId), agentType: str(rec.attributionAgent) }
+    : undefined;
+
 // ---------------------------------------------------------------------------
 // usage / tokens — the billing surface
 // ---------------------------------------------------------------------------
@@ -335,10 +381,26 @@ export const TRAPS = [
     fix: "splitModel() before pricing lookup; price the variant, do not silently strip it.",
   },
   {
-    id: "sessionid-doubled",
-    severity: "low",
-    what: "Both sessionId (100%) and session_id (78%) appear on the same records — a naming migration in flight.",
-    fix: "Read sessionId; treat session_id as a legacy alias.",
+    id: "fork-copies-the-prefix",
+    severity: "critical",
+    what:
+      "Resuming or forking a session COPIES the inherited transcript prefix into the new " +
+      "session's file, preserving uuid / timestamp / requestId / message.id. The same billed " +
+      "turn therefore exists in 2+ files (5.5% of message.ids here, chains up to 4 deep). " +
+      "Per-file or per-session summing double-counts; only a GLOBAL dedup is correct.",
+    detect: "count message.ids appearing in more than one file",
+    fix: "Dedup by billingKey() across the whole corpus, then attribute via originSession().",
+  },
+  {
+    id: "session-id-is-provenance-not-a-rename",
+    severity: "high",
+    what:
+      "sessionId and session_id are NOT a naming migration. On a copied record sessionId is " +
+      "rewritten to the CONTAINING session while session_id keeps the ORIGINATING one — it is " +
+      "the fork-provenance field. (`slug` is nulled on copies.) Introduced in Claude Code " +
+      "2.1.199; absent before, which is the whole reason its presence is ~78%.",
+    detect: "records where session_id !== sessionId are inherited, not native",
+    fix: "isInherited() / originSession(); never treat session_id as an alias of sessionId.",
   },
   {
     id: "sessionid-vs-file",

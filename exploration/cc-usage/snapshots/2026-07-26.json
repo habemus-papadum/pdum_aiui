@@ -1,6 +1,6 @@
 {
   "$schema": "aiui/cc-session-schema-snapshot@1",
-  "capturedAt": "2026-07-26T11:28:12.486Z",
+  "capturedAt": "2026-07-26T11:43:38.732Z",
   "root": "/Users/nehal/.claude/projects",
   "corpus": {
     "files": 477,
@@ -10,12 +10,12 @@
       "session": 109,
       "workflow-journal": 7
     },
-    "bytes": 559283291,
-    "records": 162266,
+    "bytes": 559666778,
+    "records": 162457,
     "parseErrors": 0,
     "timestampRange": [
       "2026-06-19T14:35:09.507Z",
-      "2026-07-26T11:28:09.259Z"
+      "2026-07-26T11:43:18.934Z"
     ],
     "collapsedDictPaths": [
       "annotations",
@@ -23,7 +23,7 @@
       "toolUseResult.annotations"
     ],
     "projects": {
-      "-Users-nehal-src-pdum-aiui": 88366,
+      "-Users-nehal-src-pdum-aiui": 88375,
       "-Users-nehal-src-pdum-dsl": 30324,
       "-Users-nehal-src-pdum-rfb": 21180,
       "-Users-nehal-src-helium": 8833,
@@ -31,8 +31,8 @@
       "-Users-nehal-src-pdum-aiui-demos-july09": 3387,
       "-Users-nehal-src-pdum-aiui-demos-circle": 2024,
       "-Users-nehal-src-aw": 792,
+      "-Users-nehal-src-pdum-aiui--claude-worktrees-cc-usage-research": 632,
       "-Users-nehal-src-pdum-aiui--claude-worktrees-streaming-transcript-preview": 560,
-      "-Users-nehal-src-pdum-aiui--claude-worktrees-cc-usage-research": 450,
       "-Users-nehal-src-pdum-dsl--claude-worktrees-nb07-marker-dsl": 443,
       "-Users-nehal-src-faicanteen": 393,
       "-Users-nehal-src-vivek-pdum-aiui-demos-july09": 388,
@@ -60,8 +60,8 @@
       "2.1.216": 2818,
       "2.1.210": 2736,
       "2.1.206": 2608,
+      "2.1.220": 2603,
       "2.1.209": 2542,
-      "2.1.220": 2482,
       "2.1.187": 2284,
       "2.1.195": 2224,
       "2.1.212": 1820,
@@ -74,19 +74,19 @@
       "2.1.204": 7
     },
     "models": {
-      "claude-fable-5": 36246,
+      "claude-fable-5": 36248,
       "claude-opus-4-8": 28037,
       "claude-opus-4-7": 3241,
-      "claude-opus-5": 695,
+      "claude-opus-5": 766,
       "claude-sonnet-5": 655,
       "claude-haiku-4-5-20251001": 356,
       "<synthetic>": 34
     },
     "tools": {
-      "Bash": 16812,
-      "Edit": 8388,
+      "Bash": 16839,
+      "Edit": 8393,
       "Read": 6585,
-      "Write": 1958,
+      "Write": 1959,
       "TaskUpdate": 974,
       "TaskCreate": 542,
       "WebFetch": 305,
@@ -194,13 +194,13 @@
       }
     },
     "content:assistant:text": {
-      "count": 9017,
+      "count": 9037,
       "fileKinds": {
-        "session": 9017
+        "session": 9037
       },
       "paths": {
         "text": {
-          "count": 9017,
+          "count": 9037,
           "presence": 1,
           "types": [
             "string"
@@ -212,7 +212,7 @@
           ]
         },
         "type": {
-          "count": 9017,
+          "count": 9037,
           "presence": 1,
           "types": [
             "string"
@@ -224,13 +224,13 @@
       }
     },
     "content:assistant:thinking": {
-      "count": 13816,
+      "count": 13836,
       "fileKinds": {
-        "session": 13816
+        "session": 13836
       },
       "paths": {
         "signature": {
-          "count": 13816,
+          "count": 13836,
           "presence": 1,
           "types": [
             "string"
@@ -242,7 +242,7 @@
           ]
         },
         "thinking": {
-          "count": 13816,
+          "count": 13836,
           "presence": 1,
           "types": [
             "string"
@@ -254,7 +254,7 @@
           ]
         },
         "type": {
-          "count": 13816,
+          "count": 13836,
           "presence": 1,
           "types": [
             "string"
@@ -266,20 +266,20 @@
       }
     },
     "content:assistant:tool_use": {
-      "count": 25922,
+      "count": 25955,
       "fileKinds": {
-        "session": 25922
+        "session": 25955
       },
       "paths": {
         "caller": {
-          "count": 25922,
+          "count": 25955,
           "presence": 1,
           "types": [
             "object"
           ]
         },
         "caller.type": {
-          "count": 25922,
+          "count": 25955,
           "presence": 1,
           "types": [
             "string"
@@ -289,7 +289,7 @@
           ]
         },
         "id": {
-          "count": 25922,
+          "count": 25955,
           "presence": 1,
           "types": [
             "string"
@@ -301,14 +301,14 @@
           ]
         },
         "input": {
-          "count": 25922,
+          "count": 25955,
           "presence": 1,
           "types": [
             "object"
           ]
         },
         "name": {
-          "count": 25922,
+          "count": 25955,
           "presence": 1,
           "types": [
             "string"
@@ -320,7 +320,7 @@
           ]
         },
         "type": {
-          "count": 25922,
+          "count": 25955,
           "presence": 1,
           "types": [
             "string"
@@ -681,13 +681,13 @@
       }
     },
     "content:user:tool_result": {
-      "count": 25921,
+      "count": 25955,
       "fileKinds": {
-        "session": 25921
+        "session": 25955
       },
       "paths": {
         "content": {
-          "count": 25921,
+          "count": 25955,
           "presence": 1,
           "types": [
             "array",
@@ -748,7 +748,7 @@
         },
         "content[].text": {
           "count": 958,
-          "presence": 0.037,
+          "presence": 0.0369,
           "types": [
             "string"
           ],
@@ -783,8 +783,8 @@
           ]
         },
         "is_error": {
-          "count": 11964,
-          "presence": 0.4616,
+          "count": 11994,
+          "presence": 0.4621,
           "types": [
             "boolean"
           ],
@@ -794,7 +794,7 @@
           ]
         },
         "tool_use_id": {
-          "count": 25921,
+          "count": 25955,
           "presence": 1,
           "types": [
             "string"
@@ -806,7 +806,7 @@
           ]
         },
         "type": {
-          "count": 25921,
+          "count": 25955,
           "presence": 1,
           "types": [
             "string"
@@ -1179,13 +1179,13 @@
       }
     },
     "record:ai-title": {
-      "count": 6040,
+      "count": 6049,
       "fileKinds": {
-        "session": 6040
+        "session": 6049
       },
       "paths": {
         "aiTitle": {
-          "count": 6040,
+          "count": 6049,
           "presence": 1,
           "types": [
             "string"
@@ -1197,7 +1197,7 @@
           ]
         },
         "sessionId": {
-          "count": 6040,
+          "count": 6049,
           "presence": 1,
           "types": [
             "string"
@@ -1209,7 +1209,7 @@
           ]
         },
         "type": {
-          "count": 6040,
+          "count": 6049,
           "presence": 1,
           "types": [
             "string"
@@ -1221,14 +1221,14 @@
       }
     },
     "record:assistant": {
-      "count": 48751,
+      "count": 48824,
       "fileKinds": {
-        "session": 48751
+        "session": 48824
       },
       "paths": {
         "attributionMcpServer": {
           "count": 2862,
-          "presence": 0.0587,
+          "presence": 0.0586,
           "types": [
             "string"
           ],
@@ -1241,7 +1241,7 @@
         },
         "attributionMcpTool": {
           "count": 2862,
-          "presence": 0.0587,
+          "presence": 0.0586,
           "types": [
             "string"
           ],
@@ -1288,7 +1288,7 @@
         },
         "attributionSkill": {
           "count": 1827,
-          "presence": 0.0375,
+          "presence": 0.0374,
           "types": [
             "string"
           ],
@@ -1300,7 +1300,7 @@
           ]
         },
         "cwd": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -1312,8 +1312,8 @@
           ]
         },
         "effort": {
-          "count": 14574,
-          "presence": 0.2989,
+          "count": 14647,
+          "presence": 0.3,
           "types": [
             "string"
           ],
@@ -1324,7 +1324,7 @@
           ]
         },
         "entrypoint": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -1335,7 +1335,7 @@
           ]
         },
         "gitBranch": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -1399,7 +1399,7 @@
           ]
         },
         "isSidechain": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "boolean"
@@ -1409,7 +1409,7 @@
           ]
         },
         "message": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "object"
@@ -1424,29 +1424,29 @@
           "nulls": 15
         },
         "message.content": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "array"
           ]
         },
         "message.content[]": {
-          "count": 48758,
+          "count": 48831,
           "presence": 1.0001,
           "types": [
             "object"
           ]
         },
         "message.content[].caller": {
-          "count": 25920,
-          "presence": 0.5317,
+          "count": 25953,
+          "presence": 0.5316,
           "types": [
             "object"
           ]
         },
         "message.content[].caller.type": {
-          "count": 25920,
-          "presence": 0.5317,
+          "count": 25953,
+          "presence": 0.5316,
           "types": [
             "string"
           ],
@@ -1472,8 +1472,8 @@
           ]
         },
         "message.content[].id": {
-          "count": 25920,
-          "presence": 0.5317,
+          "count": 25953,
+          "presence": 0.5316,
           "types": [
             "string"
           ],
@@ -1484,15 +1484,15 @@
           ]
         },
         "message.content[].input": {
-          "count": 25920,
-          "presence": 0.5317,
+          "count": 25953,
+          "presence": 0.5316,
           "types": [
             "object"
           ]
         },
         "message.content[].name": {
-          "count": 25920,
-          "presence": 0.5317,
+          "count": 25953,
+          "presence": 0.5316,
           "types": [
             "string"
           ],
@@ -1503,7 +1503,7 @@
           ]
         },
         "message.content[].signature": {
-          "count": 13816,
+          "count": 13836,
           "presence": 0.2834,
           "types": [
             "string"
@@ -1515,8 +1515,8 @@
           ]
         },
         "message.content[].text": {
-          "count": 9017,
-          "presence": 0.185,
+          "count": 9037,
+          "presence": 0.1851,
           "types": [
             "string"
           ],
@@ -1527,7 +1527,7 @@
           ]
         },
         "message.content[].thinking": {
-          "count": 13816,
+          "count": 13836,
           "presence": 0.2834,
           "types": [
             "string"
@@ -1556,7 +1556,7 @@
           ]
         },
         "message.content[].type": {
-          "count": 48758,
+          "count": 48831,
           "presence": 1.0001,
           "types": [
             "string"
@@ -1585,23 +1585,23 @@
           ]
         },
         "message.diagnostics": {
-          "count": 48736,
+          "count": 48809,
           "presence": 0.9997,
           "types": [
             "null",
             "object"
           ],
-          "nulls": 47458
+          "nulls": 47527
         },
         "message.diagnostics.cache_miss_reason": {
-          "count": 1278,
-          "presence": 0.0262,
+          "count": 1282,
+          "presence": 0.0263,
           "types": [
             "object"
           ]
         },
         "message.diagnostics.cache_miss_reason.cache_missed_input_tokens": {
-          "count": 520,
+          "count": 524,
           "presence": 0.0107,
           "types": [
             "number"
@@ -1614,14 +1614,14 @@
           "numeric": {
             "min": 17507,
             "max": 768880,
-            "mean": 153538.148,
-            "sum": 79839837,
-            "n": 520
+            "mean": 153464.445,
+            "sum": 80415369,
+            "n": 524
           }
         },
         "message.diagnostics.cache_miss_reason.type": {
-          "count": 1278,
-          "presence": 0.0262,
+          "count": 1282,
+          "presence": 0.0263,
           "types": [
             "string"
           ],
@@ -1635,7 +1635,7 @@
           ]
         },
         "message.id": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -1647,7 +1647,7 @@
           ]
         },
         "message.model": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -1663,7 +1663,7 @@
           ]
         },
         "message.role": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -1673,15 +1673,15 @@
           ]
         },
         "message.stop_details": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "null"
           ],
-          "nulls": 48751
+          "nulls": 48824
         },
         "message.stop_reason": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "null",
@@ -1695,19 +1695,19 @@
           ]
         },
         "message.stop_sequence": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "null",
             "string"
           ],
-          "nulls": 48736,
+          "nulls": 48809,
           "categorical": [
             ""
           ]
         },
         "message.type": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -1717,21 +1717,21 @@
           ]
         },
         "message.usage": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "object"
           ]
         },
         "message.usage.cache_creation": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "object"
           ]
         },
         "message.usage.cache_creation.ephemeral_1h_input_tokens": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "number"
@@ -1744,13 +1744,13 @@
           "numeric": {
             "min": 0,
             "max": 999735,
-            "mean": 7411.39,
-            "sum": 361312692,
-            "n": 48751
+            "mean": 7417.994,
+            "sum": 362176155,
+            "n": 48824
           }
         },
         "message.usage.cache_creation.ephemeral_5m_input_tokens": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "number"
@@ -1763,13 +1763,13 @@
           "numeric": {
             "min": 0,
             "max": 990451,
-            "mean": 4612.623,
-            "sum": 224869967,
-            "n": 48751
+            "mean": 4617.589,
+            "sum": 225449159,
+            "n": 48824
           }
         },
         "message.usage.cache_creation_input_tokens": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "number"
@@ -1782,13 +1782,13 @@
           "numeric": {
             "min": 0,
             "max": 990451,
-            "mean": 11829,
-            "sum": 576675580,
-            "n": 48751
+            "mean": 11840.862,
+            "sum": 578118235,
+            "n": 48824
           }
         },
         "message.usage.cache_read_input_tokens": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "number"
@@ -1801,13 +1801,13 @@
           "numeric": {
             "min": 0,
             "max": 998000,
-            "mean": 329567.801,
-            "sum": 16066759860,
-            "n": 48751
+            "mean": 329357.086,
+            "sum": 16080530361,
+            "n": 48824
           }
         },
         "message.usage.inference_geo": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "null",
@@ -1819,7 +1819,7 @@
           ]
         },
         "message.usage.input_tokens": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "number"
@@ -1832,13 +1832,13 @@
           "numeric": {
             "min": 0,
             "max": 24445,
-            "mean": 84.528,
-            "sum": 4120844,
-            "n": 48751
+            "mean": 84.405,
+            "sum": 4120979,
+            "n": 48824
           }
         },
         "message.usage.iterations": {
-          "count": 48731,
+          "count": 48804,
           "presence": 0.9996,
           "types": [
             "array",
@@ -1847,21 +1847,21 @@
           "nulls": 15
         },
         "message.usage.iterations[]": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "object"
           ]
         },
         "message.usage.iterations[].cache_creation": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "object"
           ]
         },
         "message.usage.iterations[].cache_creation.ephemeral_1h_input_tokens": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "number"
@@ -1874,13 +1874,13 @@
           "numeric": {
             "min": 0,
             "max": 999735,
-            "mean": 7424.026,
-            "sum": 361757921,
-            "n": 48728
+            "mean": 7430.614,
+            "sum": 362621384,
+            "n": 48801
           }
         },
         "message.usage.iterations[].cache_creation.ephemeral_5m_input_tokens": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "number"
@@ -1893,13 +1893,13 @@
           "numeric": {
             "min": 0,
             "max": 990451,
-            "mean": 4615.18,
-            "sum": 224888472,
-            "n": 48728
+            "mean": 4620.144,
+            "sum": 225467664,
+            "n": 48801
           }
         },
         "message.usage.iterations[].cache_creation_input_tokens": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "number"
@@ -1912,13 +1912,13 @@
           "numeric": {
             "min": 0,
             "max": 999735,
-            "mean": 12039.205,
-            "sum": 586646393,
-            "n": 48728
+            "mean": 12050.758,
+            "sum": 588089048,
+            "n": 48801
           }
         },
         "message.usage.iterations[].cache_read_input_tokens": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "number"
@@ -1931,13 +1931,13 @@
           "numeric": {
             "min": 0,
             "max": 998682,
-            "mean": 334597.242,
-            "sum": 16304254423,
-            "n": 48728
+            "mean": 334378.905,
+            "sum": 16318024924,
+            "n": 48801
           }
         },
         "message.usage.iterations[].input_tokens": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "number"
@@ -1950,9 +1950,9 @@
           "numeric": {
             "min": 1,
             "max": 24445,
-            "mean": 84.349,
-            "sum": 4110171,
-            "n": 48728
+            "mean": 84.226,
+            "sum": 4110306,
+            "n": 48801
           }
         },
         "message.usage.iterations[].model": {
@@ -1967,7 +1967,7 @@
           ]
         },
         "message.usage.iterations[].output_tokens": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "number"
@@ -1980,13 +1980,13 @@
           "numeric": {
             "min": 6,
             "max": 53149,
-            "mean": 1596.902,
-            "sum": 77813853,
-            "n": 48728
+            "mean": 1596.032,
+            "sum": 77887964,
+            "n": 48801
           }
         },
         "message.usage.iterations[].type": {
-          "count": 48728,
+          "count": 48801,
           "presence": 0.9995,
           "types": [
             "string"
@@ -1997,7 +1997,7 @@
           ]
         },
         "message.usage.output_tokens": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "number"
@@ -2010,20 +2010,20 @@
           "numeric": {
             "min": 0,
             "max": 53149,
-            "mean": 1575.754,
-            "sum": 76819569,
-            "n": 48751
+            "mean": 1574.916,
+            "sum": 76893680,
+            "n": 48824
           }
         },
         "message.usage.server_tool_use": {
-          "count": 48731,
+          "count": 48804,
           "presence": 0.9996,
           "types": [
             "object"
           ]
         },
         "message.usage.server_tool_use.web_fetch_requests": {
-          "count": 48731,
+          "count": 48804,
           "presence": 0.9996,
           "types": [
             "number"
@@ -2036,11 +2036,11 @@
             "max": 0,
             "mean": 0,
             "sum": 0,
-            "n": 48731
+            "n": 48804
           }
         },
         "message.usage.server_tool_use.web_search_requests": {
-          "count": 48731,
+          "count": 48804,
           "presence": 0.9996,
           "types": [
             "number"
@@ -2053,11 +2053,11 @@
             "max": 0,
             "mean": 0,
             "sum": 0,
-            "n": 48731
+            "n": 48804
           }
         },
         "message.usage.service_tier": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "null",
@@ -2069,7 +2069,7 @@
           ]
         },
         "message.usage.speed": {
-          "count": 48731,
+          "count": 48804,
           "presence": 0.9996,
           "types": [
             "null",
@@ -2081,7 +2081,7 @@
           ]
         },
         "parentUuid": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -2093,7 +2093,7 @@
           ]
         },
         "requestId": {
-          "count": 48736,
+          "count": 48809,
           "presence": 0.9997,
           "types": [
             "string"
@@ -2105,7 +2105,7 @@
           ]
         },
         "sessionId": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -2127,8 +2127,8 @@
           ]
         },
         "session_id": {
-          "count": 39403,
-          "presence": 0.8083,
+          "count": 39476,
+          "presence": 0.8085,
           "types": [
             "string"
           ],
@@ -2140,7 +2140,7 @@
         },
         "slug": {
           "count": 19308,
-          "presence": 0.3961,
+          "presence": 0.3955,
           "types": [
             "string"
           ],
@@ -2172,7 +2172,7 @@
           ]
         },
         "timestamp": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -2184,7 +2184,7 @@
           ]
         },
         "type": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -2194,7 +2194,7 @@
           ]
         },
         "userType": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -2204,7 +2204,7 @@
           ]
         },
         "uuid": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -2216,7 +2216,7 @@
           ]
         },
         "version": {
-          "count": 48751,
+          "count": 48824,
           "presence": 1,
           "types": [
             "string"
@@ -4370,16 +4370,16 @@
       }
     },
     "record:attachment": {
-      "count": 5844,
+      "count": 5854,
       "fileKinds": {
-        "session": 5073,
+        "session": 5083,
         "subagent": 419,
         "workflow-agent": 352
       },
       "paths": {
         "agentId": {
           "count": 771,
-          "presence": 0.1319,
+          "presence": 0.1317,
           "types": [
             "string"
           ],
@@ -4390,7 +4390,7 @@
           ]
         },
         "attachment": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "object"
@@ -4417,14 +4417,14 @@
         },
         "attachment.addedLines": {
           "count": 764,
-          "presence": 0.1307,
+          "presence": 0.1305,
           "types": [
             "array"
           ]
         },
         "attachment.addedLines[]": {
           "count": 2887,
-          "presence": 0.494,
+          "presence": 0.4932,
           "types": [
             "string"
           ],
@@ -4436,14 +4436,14 @@
         },
         "attachment.addedNames": {
           "count": 670,
-          "presence": 0.1146,
+          "presence": 0.1145,
           "types": [
             "array"
           ]
         },
         "attachment.addedNames[]": {
           "count": 2385,
-          "presence": 0.4081,
+          "presence": 0.4074,
           "types": [
             "string"
           ],
@@ -4455,14 +4455,14 @@
         },
         "attachment.addedTypes": {
           "count": 150,
-          "presence": 0.0257,
+          "presence": 0.0256,
           "types": [
             "array"
           ]
         },
         "attachment.addedTypes[]": {
           "count": 591,
-          "presence": 0.1011,
+          "presence": 0.101,
           "types": [
             "string"
           ],
@@ -4506,8 +4506,8 @@
           ]
         },
         "attachment.content": {
-          "count": 3388,
-          "presence": 0.5797,
+          "count": 3394,
+          "presence": 0.5798,
           "types": [
             "array",
             "object",
@@ -4521,7 +4521,7 @@
         },
         "attachment.content.content": {
           "count": 19,
-          "presence": 0.0033,
+          "presence": 0.0032,
           "types": [
             "string"
           ],
@@ -4533,7 +4533,7 @@
         },
         "attachment.content.contentDiffersFromDisk": {
           "count": 19,
-          "presence": 0.0033,
+          "presence": 0.0032,
           "types": [
             "boolean"
           ],
@@ -4647,7 +4647,7 @@
         },
         "attachment.content.path": {
           "count": 19,
-          "presence": 0.0033,
+          "presence": 0.0032,
           "types": [
             "string"
           ],
@@ -4678,7 +4678,7 @@
         },
         "attachment.content.type": {
           "count": 191,
-          "presence": 0.0327,
+          "presence": 0.0326,
           "types": [
             "string"
           ],
@@ -4688,15 +4688,15 @@
           ]
         },
         "attachment.content[]": {
-          "count": 3586,
-          "presence": 0.6136,
+          "count": 3588,
+          "presence": 0.6129,
           "types": [
             "object"
           ]
         },
         "attachment.content[].activeForm": {
-          "count": 3151,
-          "presence": 0.5392,
+          "count": 3153,
+          "presence": 0.5386,
           "types": [
             "string"
           ],
@@ -4707,22 +4707,22 @@
           ]
         },
         "attachment.content[].blockedBy": {
-          "count": 3586,
-          "presence": 0.6136,
+          "count": 3588,
+          "presence": 0.6129,
           "types": [
             "array"
           ]
         },
         "attachment.content[].blocks": {
-          "count": 3586,
-          "presence": 0.6136,
+          "count": 3588,
+          "presence": 0.6129,
           "types": [
             "array"
           ]
         },
         "attachment.content[].description": {
-          "count": 3586,
-          "presence": 0.6136,
+          "count": 3588,
+          "presence": 0.6129,
           "types": [
             "string"
           ],
@@ -4733,8 +4733,8 @@
           ]
         },
         "attachment.content[].id": {
-          "count": 3586,
-          "presence": 0.6136,
+          "count": 3588,
+          "presence": 0.6129,
           "types": [
             "string"
           ],
@@ -4760,8 +4760,8 @@
           ]
         },
         "attachment.content[].status": {
-          "count": 3586,
-          "presence": 0.6136,
+          "count": 3588,
+          "presence": 0.6129,
           "types": [
             "string"
           ],
@@ -4772,8 +4772,8 @@
           ]
         },
         "attachment.content[].subject": {
-          "count": 3586,
-          "presence": 0.6136,
+          "count": 3588,
+          "presence": 0.6129,
           "types": [
             "string"
           ],
@@ -4805,7 +4805,7 @@
         },
         "attachment.displayPath": {
           "count": 364,
-          "presence": 0.0623,
+          "presence": 0.0622,
           "types": [
             "string"
           ],
@@ -4816,8 +4816,8 @@
           ]
         },
         "attachment.filename": {
-          "count": 1503,
-          "presence": 0.2572,
+          "count": 1507,
+          "presence": 0.2574,
           "types": [
             "string"
           ],
@@ -5088,7 +5088,7 @@
         },
         "attachment.isInitial": {
           "count": 654,
-          "presence": 0.1119,
+          "presence": 0.1117,
           "types": [
             "boolean"
           ],
@@ -5128,8 +5128,8 @@
           ]
         },
         "attachment.itemCount": {
-          "count": 2684,
-          "presence": 0.4593,
+          "count": 2690,
+          "presence": 0.4595,
           "types": [
             "number"
           ],
@@ -5153,9 +5153,9 @@
           "numeric": {
             "min": 0,
             "max": 16,
-            "mean": 2.065,
-            "sum": 5543,
-            "n": 2684
+            "mean": 2.061,
+            "sum": 5545,
+            "n": 2690
           }
         },
         "attachment.lineEnd": {
@@ -5210,14 +5210,14 @@
         },
         "attachment.names": {
           "count": 504,
-          "presence": 0.0862,
+          "presence": 0.0861,
           "types": [
             "array"
           ]
         },
         "attachment.names[]": {
           "count": 1993,
-          "presence": 0.341,
+          "presence": 0.3405,
           "types": [
             "string"
           ],
@@ -5382,7 +5382,7 @@
         },
         "attachment.path": {
           "count": 19,
-          "presence": 0.0033,
+          "presence": 0.0032,
           "types": [
             "string"
           ],
@@ -5403,7 +5403,7 @@
         },
         "attachment.pendingMcpServers": {
           "count": 187,
-          "presence": 0.032,
+          "presence": 0.0319,
           "types": [
             "array"
           ]
@@ -5487,7 +5487,7 @@
         },
         "attachment.readdedNames": {
           "count": 614,
-          "presence": 0.1051,
+          "presence": 0.1049,
           "types": [
             "array"
           ]
@@ -5524,14 +5524,14 @@
         },
         "attachment.removedNames": {
           "count": 670,
-          "presence": 0.1146,
+          "presence": 0.1145,
           "types": [
             "array"
           ]
         },
         "attachment.removedNames[]": {
           "count": 88,
-          "presence": 0.0151,
+          "presence": 0.015,
           "types": [
             "string"
           ],
@@ -5564,14 +5564,14 @@
         },
         "attachment.removedTypes": {
           "count": 150,
-          "presence": 0.0257,
+          "presence": 0.0256,
           "types": [
             "array"
           ]
         },
         "attachment.showConcurrencyNote": {
           "count": 150,
-          "presence": 0.0257,
+          "presence": 0.0256,
           "types": [
             "boolean"
           ],
@@ -5582,7 +5582,7 @@
         },
         "attachment.skillCount": {
           "count": 504,
-          "presence": 0.0862,
+          "presence": 0.0861,
           "types": [
             "number"
           ],
@@ -5664,8 +5664,8 @@
           ]
         },
         "attachment.snippet": {
-          "count": 1131,
-          "presence": 0.1935,
+          "count": 1134,
+          "presence": 0.1937,
           "types": [
             "string"
           ],
@@ -5745,7 +5745,7 @@
           ]
         },
         "attachment.type": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5777,7 +5777,7 @@
           ]
         },
         "cwd": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5789,7 +5789,7 @@
           ]
         },
         "entrypoint": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5800,7 +5800,7 @@
           ]
         },
         "gitBranch": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5840,7 +5840,7 @@
           ]
         },
         "isSidechain": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "boolean"
@@ -5851,7 +5851,7 @@
           ]
         },
         "parentUuid": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5863,7 +5863,7 @@
           ]
         },
         "sessionId": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5885,8 +5885,8 @@
           ]
         },
         "session_id": {
-          "count": 3440,
-          "presence": 0.5886,
+          "count": 3448,
+          "presence": 0.589,
           "types": [
             "string"
           ],
@@ -5898,7 +5898,7 @@
         },
         "slug": {
           "count": 2502,
-          "presence": 0.4281,
+          "presence": 0.4274,
           "types": [
             "string"
           ],
@@ -5930,7 +5930,7 @@
           ]
         },
         "timestamp": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5942,7 +5942,7 @@
           ]
         },
         "type": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5952,7 +5952,7 @@
           ]
         },
         "userType": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5962,7 +5962,7 @@
           ]
         },
         "uuid": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -5974,7 +5974,7 @@
           ]
         },
         "version": {
-          "count": 5844,
+          "count": 5854,
           "presence": 1,
           "types": [
             "string"
@@ -6013,13 +6013,13 @@
       }
     },
     "record:bridge-session": {
-      "count": 6452,
+      "count": 6461,
       "fileKinds": {
-        "session": 6452
+        "session": 6461
       },
       "paths": {
         "bridgeSessionId": {
-          "count": 6452,
+          "count": 6461,
           "presence": 1,
           "types": [
             "string"
@@ -6031,7 +6031,7 @@
           ]
         },
         "lastSequenceNum": {
-          "count": 6452,
+          "count": 6461,
           "presence": 1,
           "types": [
             "number"
@@ -6048,13 +6048,13 @@
           "numeric": {
             "min": 0,
             "max": 2680,
-            "mean": 1.662,
+            "mean": 1.66,
             "sum": 10725,
-            "n": 6452
+            "n": 6461
           }
         },
         "sessionId": {
-          "count": 6452,
+          "count": 6461,
           "presence": 1,
           "types": [
             "string"
@@ -6066,7 +6066,7 @@
           ]
         },
         "type": {
-          "count": 6452,
+          "count": 6461,
           "presence": 1,
           "types": [
             "string"
@@ -6078,13 +6078,13 @@
       }
     },
     "record:custom-title": {
-      "count": 3012,
+      "count": 3013,
       "fileKinds": {
-        "session": 3012
+        "session": 3013
       },
       "paths": {
         "customTitle": {
-          "count": 3012,
+          "count": 3013,
           "presence": 1,
           "types": [
             "string"
@@ -6128,7 +6128,7 @@
           ]
         },
         "sessionId": {
-          "count": 3012,
+          "count": 3013,
           "presence": 1,
           "types": [
             "string"
@@ -6172,7 +6172,7 @@
           ]
         },
         "type": {
-          "count": 3012,
+          "count": 3013,
           "presence": 1,
           "types": [
             "string"
@@ -6184,26 +6184,26 @@
       }
     },
     "record:file-history-delta": {
-      "count": 1116,
+      "count": 1118,
       "fileKinds": {
-        "session": 1116
+        "session": 1118
       },
       "paths": {
         "backup": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "object"
           ]
         },
         "backup.backupFileName": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "null",
             "string"
           ],
-          "nulls": 410,
+          "nulls": 411,
           "examples": [
             "0c47aa868dba8c51@v1",
             "0b57a772f289f9f3@v1",
@@ -6211,7 +6211,7 @@
           ]
         },
         "backup.backupTime": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "string"
@@ -6223,8 +6223,8 @@
           ]
         },
         "backup.realParentDir": {
-          "count": 434,
-          "presence": 0.3889,
+          "count": 436,
+          "presence": 0.39,
           "types": [
             "string"
           ],
@@ -6235,7 +6235,7 @@
           ]
         },
         "backup.version": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "number"
@@ -6247,12 +6247,12 @@
             "min": 1,
             "max": 1,
             "mean": 1,
-            "sum": 1116,
-            "n": 1116
+            "sum": 1118,
+            "n": 1118
           }
         },
         "messageId": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "string"
@@ -6264,7 +6264,7 @@
           ]
         },
         "snapshotMessageId": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "string"
@@ -6276,7 +6276,7 @@
           ]
         },
         "timestamp": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "string"
@@ -6288,7 +6288,7 @@
           ]
         },
         "trackingPath": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "string"
@@ -6300,7 +6300,7 @@
           ]
         },
         "type": {
-          "count": 1116,
+          "count": 1118,
           "presence": 1,
           "types": [
             "string"
@@ -6312,13 +6312,13 @@
       }
     },
     "record:file-history-snapshot": {
-      "count": 2486,
+      "count": 2488,
       "fileKinds": {
-        "session": 2486
+        "session": 2488
       },
       "paths": {
         "isSnapshotUpdate": {
-          "count": 2486,
+          "count": 2488,
           "presence": 1,
           "types": [
             "boolean"
@@ -6329,7 +6329,7 @@
           ]
         },
         "messageId": {
-          "count": 2486,
+          "count": 2488,
           "presence": 1,
           "types": [
             "string"
@@ -6341,14 +6341,14 @@
           ]
         },
         "snapshot": {
-          "count": 2486,
+          "count": 2488,
           "presence": 1,
           "types": [
             "object"
           ]
         },
         "snapshot.messageId": {
-          "count": 2486,
+          "count": 2488,
           "presence": 1,
           "types": [
             "string"
@@ -6360,7 +6360,7 @@
           ]
         },
         "snapshot.timestamp": {
-          "count": 2486,
+          "count": 2488,
           "presence": 1,
           "types": [
             "string"
@@ -6372,7 +6372,7 @@
           ]
         },
         "snapshot.trackedFileBackups": {
-          "count": 2486,
+          "count": 2488,
           "presence": 1,
           "types": [
             "object"
@@ -7116,20 +7116,20 @@
           }
         },
         "snapshot.trackedFileBackups{}": {
-          "count": 6746,
-          "presence": 2.7136,
+          "count": 6752,
+          "presence": 2.7138,
           "types": [
             "object"
           ]
         },
         "snapshot.trackedFileBackups{}.backupFileName": {
-          "count": 6746,
-          "presence": 2.7136,
+          "count": 6752,
+          "presence": 2.7138,
           "types": [
             "null",
             "string"
           ],
-          "nulls": 2584,
+          "nulls": 2585,
           "examples": [
             "14d60a39f3ddbf4a@v1",
             "260295dc72b8ebd8@v2",
@@ -7137,8 +7137,8 @@
           ]
         },
         "snapshot.trackedFileBackups{}.backupTime": {
-          "count": 6746,
-          "presence": 2.7136,
+          "count": 6752,
+          "presence": 2.7138,
           "types": [
             "string"
           ],
@@ -7149,8 +7149,8 @@
           ]
         },
         "snapshot.trackedFileBackups{}.realParentDir": {
-          "count": 533,
-          "presence": 0.2144,
+          "count": 539,
+          "presence": 0.2166,
           "types": [
             "string"
           ],
@@ -7161,8 +7161,8 @@
           ]
         },
         "snapshot.trackedFileBackups{}.version": {
-          "count": 6746,
-          "presence": 2.7136,
+          "count": 6752,
+          "presence": 2.7138,
           "types": [
             "number"
           ],
@@ -7174,13 +7174,13 @@
           "numeric": {
             "min": 1,
             "max": 186,
-            "mean": 15.18,
-            "sum": 102402,
-            "n": 6746
+            "mean": 15.168,
+            "sum": 102415,
+            "n": 6752
           }
         },
         "type": {
-          "count": 2486,
+          "count": 2488,
           "presence": 1,
           "types": [
             "string"
@@ -7278,14 +7278,14 @@
       }
     },
     "record:last-prompt": {
-      "count": 6536,
+      "count": 6546,
       "fileKinds": {
-        "session": 6536
+        "session": 6546
       },
       "paths": {
         "lastPrompt": {
-          "count": 6414,
-          "presence": 0.9813,
+          "count": 6424,
+          "presence": 0.9814,
           "types": [
             "string"
           ],
@@ -7296,7 +7296,7 @@
           ]
         },
         "leafUuid": {
-          "count": 6536,
+          "count": 6546,
           "presence": 1,
           "types": [
             "string"
@@ -7308,7 +7308,7 @@
           ]
         },
         "sessionId": {
-          "count": 6536,
+          "count": 6546,
           "presence": 1,
           "types": [
             "string"
@@ -7320,7 +7320,7 @@
           ]
         },
         "type": {
-          "count": 6536,
+          "count": 6546,
           "presence": 1,
           "types": [
             "string"
@@ -7332,13 +7332,13 @@
       }
     },
     "record:mode": {
-      "count": 6523,
+      "count": 6533,
       "fileKinds": {
-        "session": 6523
+        "session": 6533
       },
       "paths": {
         "mode": {
-          "count": 6523,
+          "count": 6533,
           "presence": 1,
           "types": [
             "string"
@@ -7348,7 +7348,7 @@
           ]
         },
         "sessionId": {
-          "count": 6523,
+          "count": 6533,
           "presence": 1,
           "types": [
             "string"
@@ -7360,7 +7360,7 @@
           ]
         },
         "type": {
-          "count": 6523,
+          "count": 6533,
           "presence": 1,
           "types": [
             "string"
@@ -7372,13 +7372,13 @@
       }
     },
     "record:permission-mode": {
-      "count": 6477,
+      "count": 6486,
       "fileKinds": {
-        "session": 6477
+        "session": 6486
       },
       "paths": {
         "permissionMode": {
-          "count": 6477,
+          "count": 6486,
           "presence": 1,
           "types": [
             "string"
@@ -7392,7 +7392,7 @@
           ]
         },
         "sessionId": {
-          "count": 6477,
+          "count": 6486,
           "presence": 1,
           "types": [
             "string"
@@ -7404,7 +7404,7 @@
           ]
         },
         "type": {
-          "count": 6477,
+          "count": 6486,
           "presence": 1,
           "types": [
             "string"
@@ -7592,13 +7592,13 @@
       }
     },
     "record:relocated": {
-      "count": 1031,
+      "count": 1040,
       "fileKinds": {
-        "session": 1031
+        "session": 1040
       },
       "paths": {
         "relocatedCwd": {
-          "count": 1031,
+          "count": 1040,
           "presence": 1,
           "types": [
             "string"
@@ -7621,7 +7621,7 @@
           ]
         },
         "sessionId": {
-          "count": 1031,
+          "count": 1040,
           "presence": 1,
           "types": [
             "string"
@@ -7641,7 +7641,7 @@
           ]
         },
         "type": {
-          "count": 1031,
+          "count": 1040,
           "presence": 1,
           "types": [
             "string"
@@ -9446,9 +9446,9 @@
       }
     },
     "record:system": {
-      "count": 1851,
+      "count": 1853,
       "fileKinds": {
-        "session": 1851
+        "session": 1853
       },
       "paths": {
         "apiRefusalCategory": {
@@ -9648,7 +9648,7 @@
         },
         "compactMetadata.preCompactDiscoveredTools[]": {
           "count": 166,
-          "presence": 0.0897,
+          "presence": 0.0896,
           "types": [
             "string"
           ],
@@ -9756,7 +9756,7 @@
         },
         "compactMetadata.preservedMessages.allUuids[]": {
           "count": 179,
-          "presence": 0.0967,
+          "presence": 0.0966,
           "types": [
             "string"
           ],
@@ -9824,7 +9824,7 @@
         },
         "compactMetadata.preservedMessages.uuids[]": {
           "count": 179,
-          "presence": 0.0967,
+          "presence": 0.0966,
           "types": [
             "string"
           ],
@@ -10000,8 +10000,8 @@
           ]
         },
         "content": {
-          "count": 666,
-          "presence": 0.3598,
+          "count": 667,
+          "presence": 0.36,
           "types": [
             "string"
           ],
@@ -10012,7 +10012,7 @@
           ]
         },
         "cwd": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10034,8 +10034,8 @@
           ]
         },
         "durationMs": {
-          "count": 1181,
-          "presence": 0.638,
+          "count": 1182,
+          "presence": 0.6379,
           "types": [
             "number"
           ],
@@ -10047,13 +10047,13 @@
           "numeric": {
             "min": 29,
             "max": 385550109,
-            "mean": 877891.108,
-            "sum": 1036789398,
-            "n": 1181
+            "mean": 878174.967,
+            "sum": 1038002811,
+            "n": 1182
           }
         },
         "entrypoint": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10074,7 +10074,7 @@
           ]
         },
         "gitBranch": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10102,6 +10102,7 @@
             "worktree-aiui-pencil-proposal",
             "worktree-aiui-vscode",
             "worktree-bmap-exploration",
+            "worktree-cc-usage-research",
             "worktree-ephemeral-keys-explore",
             "worktree-intent-turn-abandon-gate",
             "worktree-nb07-marker-dsl",
@@ -10112,7 +10113,7 @@
           ]
         },
         "isMeta": {
-          "count": 1821,
+          "count": 1823,
           "presence": 0.9838,
           "types": [
             "boolean"
@@ -10122,7 +10123,7 @@
           ]
         },
         "isSidechain": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "boolean"
@@ -10133,7 +10134,7 @@
         },
         "level": {
           "count": 184,
-          "presence": 0.0994,
+          "presence": 0.0993,
           "types": [
             "string"
           ],
@@ -10193,8 +10194,8 @@
           ]
         },
         "messageCount": {
-          "count": 1181,
-          "presence": 0.638,
+          "count": 1182,
+          "presence": 0.6379,
           "types": [
             "number"
           ],
@@ -10206,9 +10207,9 @@
           "numeric": {
             "min": 6,
             "max": 2083,
-            "mean": 606.137,
-            "sum": 715848,
-            "n": 1181
+            "mean": 605.909,
+            "sum": 716185,
+            "n": 1182
           }
         },
         "originalModel": {
@@ -10222,7 +10223,7 @@
           ]
         },
         "parentUuid": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "null",
@@ -10237,7 +10238,7 @@
         },
         "pendingBackgroundAgentCount": {
           "count": 92,
-          "presence": 0.0497,
+          "presence": 0.0496,
           "types": [
             "number"
           ],
@@ -10335,7 +10336,7 @@
           ]
         },
         "sessionId": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10368,7 +10369,7 @@
         },
         "slug": {
           "count": 731,
-          "presence": 0.3949,
+          "presence": 0.3945,
           "types": [
             "string"
           ],
@@ -10400,7 +10401,7 @@
           ]
         },
         "subtype": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10418,7 +10419,7 @@
           ]
         },
         "timestamp": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10440,7 +10441,7 @@
           ]
         },
         "type": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10450,7 +10451,7 @@
           ]
         },
         "userType": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10460,7 +10461,7 @@
           ]
         },
         "uuid": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10472,7 +10473,7 @@
           ]
         },
         "version": {
-          "count": 1851,
+          "count": 1853,
           "presence": 1,
           "types": [
             "string"
@@ -10511,9 +10512,9 @@
       }
     },
     "record:user": {
-      "count": 27495,
+      "count": 27531,
       "fileKinds": {
-        "session": 27495
+        "session": 27531
       },
       "paths": {
         "classifierMetaLines": {
@@ -10528,7 +10529,7 @@
           ]
         },
         "cwd": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -10540,7 +10541,7 @@
           ]
         },
         "entrypoint": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -10551,7 +10552,7 @@
           ]
         },
         "gitBranch": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -10650,7 +10651,7 @@
           ]
         },
         "isSidechain": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "boolean"
@@ -10660,14 +10661,14 @@
           ]
         },
         "message": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "object"
           ]
         },
         "message.content": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "array",
@@ -10680,14 +10681,14 @@
           ]
         },
         "message.content[]": {
-          "count": 26234,
+          "count": 26268,
           "presence": 0.9541,
           "types": [
             "object"
           ]
         },
         "message.content[].content": {
-          "count": 25921,
+          "count": 25955,
           "presence": 0.9428,
           "types": [
             "array",
@@ -10701,7 +10702,7 @@
         },
         "message.content[].content[]": {
           "count": 1429,
-          "presence": 0.052,
+          "presence": 0.0519,
           "types": [
             "object"
           ]
@@ -10772,7 +10773,7 @@
         },
         "message.content[].content[].type": {
           "count": 1429,
-          "presence": 0.052,
+          "presence": 0.0519,
           "types": [
             "string"
           ],
@@ -10783,8 +10784,8 @@
           ]
         },
         "message.content[].is_error": {
-          "count": 11964,
-          "presence": 0.4351,
+          "count": 11994,
+          "presence": 0.4357,
           "types": [
             "boolean"
           ],
@@ -10846,7 +10847,7 @@
           ]
         },
         "message.content[].tool_use_id": {
-          "count": 25921,
+          "count": 25955,
           "presence": 0.9428,
           "types": [
             "string"
@@ -10858,7 +10859,7 @@
           ]
         },
         "message.content[].type": {
-          "count": 26234,
+          "count": 26268,
           "presence": 0.9541,
           "types": [
             "string"
@@ -10870,7 +10871,7 @@
           ]
         },
         "message.role": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -10880,14 +10881,14 @@
           ]
         },
         "origin": {
-          "count": 1278,
+          "count": 1280,
           "presence": 0.0465,
           "types": [
             "object"
           ]
         },
         "origin.kind": {
-          "count": 1278,
+          "count": 1280,
           "presence": 0.0465,
           "types": [
             "string"
@@ -10898,7 +10899,7 @@
           ]
         },
         "parentUuid": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "null",
@@ -10912,7 +10913,7 @@
           ]
         },
         "permissionMode": {
-          "count": 1296,
+          "count": 1298,
           "presence": 0.0471,
           "types": [
             "string"
@@ -10926,7 +10927,7 @@
           ]
         },
         "promptId": {
-          "count": 27466,
+          "count": 27502,
           "presence": 0.9989,
           "types": [
             "string"
@@ -10938,7 +10939,7 @@
           ]
         },
         "promptSource": {
-          "count": 1297,
+          "count": 1299,
           "presence": 0.0472,
           "types": [
             "string"
@@ -10962,7 +10963,7 @@
           ]
         },
         "sessionId": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -10984,8 +10985,8 @@
           ]
         },
         "session_id": {
-          "count": 21367,
-          "presence": 0.7771,
+          "count": 21401,
+          "presence": 0.7773,
           "types": [
             "string"
           ],
@@ -10997,7 +10998,7 @@
         },
         "slug": {
           "count": 10603,
-          "presence": 0.3856,
+          "presence": 0.3851,
           "types": [
             "string"
           ],
@@ -11029,7 +11030,7 @@
           ]
         },
         "sourceToolAssistantUUID": {
-          "count": 25921,
+          "count": 25955,
           "presence": 0.9428,
           "types": [
             "string"
@@ -11041,7 +11042,7 @@
           ]
         },
         "timestamp": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -11063,7 +11064,7 @@
           ]
         },
         "toolUseResult": {
-          "count": 25921,
+          "count": 25955,
           "presence": 0.9428,
           "types": [
             "array",
@@ -11517,7 +11518,7 @@
           ]
         },
         "toolUseResult.content": {
-          "count": 1568,
+          "count": 1569,
           "presence": 0.057,
           "types": [
             "array",
@@ -11742,7 +11743,7 @@
         },
         "toolUseResult.file": {
           "count": 3160,
-          "presence": 0.1149,
+          "presence": 0.1148,
           "types": [
             "object"
           ]
@@ -11844,7 +11845,7 @@
         },
         "toolUseResult.file.content": {
           "count": 3073,
-          "presence": 0.1118,
+          "presence": 0.1116,
           "types": [
             "string"
           ],
@@ -12072,7 +12073,7 @@
         },
         "toolUseResult.file.filePath": {
           "count": 3088,
-          "presence": 0.1123,
+          "presence": 0.1122,
           "types": [
             "string"
           ],
@@ -12084,7 +12085,7 @@
         },
         "toolUseResult.file.numLines": {
           "count": 3073,
-          "presence": 0.1118,
+          "presence": 0.1116,
           "types": [
             "number"
           ],
@@ -12122,7 +12123,7 @@
         },
         "toolUseResult.file.startLine": {
           "count": 3073,
-          "presence": 0.1118,
+          "presence": 0.1116,
           "types": [
             "number"
           ],
@@ -12141,7 +12142,7 @@
         },
         "toolUseResult.file.totalLines": {
           "count": 3073,
-          "presence": 0.1118,
+          "presence": 0.1116,
           "types": [
             "number"
           ],
@@ -12180,8 +12181,8 @@
           ]
         },
         "toolUseResult.filePath": {
-          "count": 8133,
-          "presence": 0.2958,
+          "count": 8137,
+          "presence": 0.2956,
           "types": [
             "string"
           ],
@@ -12510,8 +12511,8 @@
           ]
         },
         "toolUseResult.interrupted": {
-          "count": 11336,
-          "presence": 0.4123,
+          "count": 11363,
+          "presence": 0.4127,
           "types": [
             "boolean"
           ],
@@ -12540,8 +12541,8 @@
           ]
         },
         "toolUseResult.isImage": {
-          "count": 11336,
-          "presence": 0.4123,
+          "count": 11363,
+          "presence": 0.4127,
           "types": [
             "boolean"
           ],
@@ -12600,8 +12601,8 @@
           ]
         },
         "toolUseResult.memdirStamped": {
-          "count": 86,
-          "presence": 0.0031,
+          "count": 87,
+          "presence": 0.0032,
           "types": [
             "boolean"
           ],
@@ -12707,8 +12708,8 @@
           ]
         },
         "toolUseResult.newString": {
-          "count": 6566,
-          "presence": 0.2388,
+          "count": 6569,
+          "presence": 0.2386,
           "types": [
             "string"
           ],
@@ -12729,8 +12730,8 @@
           ]
         },
         "toolUseResult.noOutputExpected": {
-          "count": 11336,
-          "presence": 0.4123,
+          "count": 11363,
+          "presence": 0.4127,
           "types": [
             "boolean"
           ],
@@ -12750,8 +12751,8 @@
           ]
         },
         "toolUseResult.oldString": {
-          "count": 6566,
-          "presence": 0.2388,
+          "count": 6569,
+          "presence": 0.2386,
           "types": [
             "string"
           ],
@@ -12782,13 +12783,13 @@
           ]
         },
         "toolUseResult.originalFile": {
-          "count": 8123,
-          "presence": 0.2954,
+          "count": 8127,
+          "presence": 0.2952,
           "types": [
             "null",
             "string"
           ],
-          "nulls": 4843,
+          "nulls": 4846,
           "examples": [
             "\"\"\"CLI for helium-docs.\"\"\"\n\nfrom __future__ import annotations\n\nimport subprocess\nimport time\nfrom pathlib import Path\n\n… (len 5710)",
             "\"\"\"CLI for helium-docs.\"\"\"\n\nfrom __future__ import annotations\n\nimport subprocess\nimport time\nfrom pathlib import Path\n\n… (len 5765)",
@@ -12907,7 +12908,7 @@
         },
         "toolUseResult.prompt": {
           "count": 205,
-          "presence": 0.0075,
+          "presence": 0.0074,
           "types": [
             "string"
           ],
@@ -13029,8 +13030,8 @@
           ]
         },
         "toolUseResult.replaceAll": {
-          "count": 6566,
-          "presence": 0.2388,
+          "count": 6569,
+          "presence": 0.2386,
           "types": [
             "boolean"
           ],
@@ -13334,7 +13335,7 @@
           }
         },
         "toolUseResult.staleReadFileStateHint": {
-          "count": 351,
+          "count": 352,
           "presence": 0.0128,
           "types": [
             "string"
@@ -13369,14 +13370,14 @@
         },
         "toolUseResult.statusChange": {
           "count": 885,
-          "presence": 0.0322,
+          "presence": 0.0321,
           "types": [
             "object"
           ]
         },
         "toolUseResult.statusChange.from": {
           "count": 885,
-          "presence": 0.0322,
+          "presence": 0.0321,
           "types": [
             "string"
           ],
@@ -13388,7 +13389,7 @@
         },
         "toolUseResult.statusChange.to": {
           "count": 885,
-          "presence": 0.0322,
+          "presence": 0.0321,
           "types": [
             "string"
           ],
@@ -13400,8 +13401,8 @@
           ]
         },
         "toolUseResult.stderr": {
-          "count": 11336,
-          "presence": 0.4123,
+          "count": 11363,
+          "presence": 0.4127,
           "types": [
             "string"
           ],
@@ -13423,8 +13424,8 @@
           ]
         },
         "toolUseResult.stdout": {
-          "count": 11336,
-          "presence": 0.4123,
+          "count": 11363,
+          "presence": 0.4127,
           "types": [
             "string"
           ],
@@ -13435,29 +13436,29 @@
           ]
         },
         "toolUseResult.structuredPatch": {
-          "count": 8123,
-          "presence": 0.2954,
+          "count": 8127,
+          "presence": 0.2952,
           "types": [
             "array"
           ]
         },
         "toolUseResult.structuredPatch[]": {
-          "count": 7899,
-          "presence": 0.2873,
+          "count": 7902,
+          "presence": 0.287,
           "types": [
             "object"
           ]
         },
         "toolUseResult.structuredPatch[].lines": {
-          "count": 7899,
-          "presence": 0.2873,
+          "count": 7902,
+          "presence": 0.287,
           "types": [
             "array"
           ]
         },
         "toolUseResult.structuredPatch[].lines[]": {
-          "count": 31591,
-          "presence": 1.149,
+          "count": 31603,
+          "presence": 1.1479,
           "types": [
             "string"
           ],
@@ -13468,8 +13469,8 @@
           ]
         },
         "toolUseResult.structuredPatch[].newLines": {
-          "count": 7899,
-          "presence": 0.2873,
+          "count": 7902,
+          "presence": 0.287,
           "types": [
             "number"
           ],
@@ -13481,14 +13482,14 @@
           "numeric": {
             "min": 1,
             "max": 520,
-            "mean": 17.501,
-            "sum": 138242,
-            "n": 7899
+            "mean": 17.513,
+            "sum": 138389,
+            "n": 7902
           }
         },
         "toolUseResult.structuredPatch[].newStart": {
-          "count": 7899,
-          "presence": 0.2873,
+          "count": 7902,
+          "presence": 0.287,
           "types": [
             "number"
           ],
@@ -13500,14 +13501,14 @@
           "numeric": {
             "min": 1,
             "max": 1726,
-            "mean": 165.844,
-            "sum": 1310002,
-            "n": 7899
+            "mean": 165.81,
+            "sum": 1310230,
+            "n": 7902
           }
         },
         "toolUseResult.structuredPatch[].oldLines": {
-          "count": 7899,
-          "presence": 0.2873,
+          "count": 7902,
+          "presence": 0.287,
           "types": [
             "number"
           ],
@@ -13519,14 +13520,14 @@
           "numeric": {
             "min": 1,
             "max": 385,
-            "mean": 11.733,
-            "sum": 92681,
-            "n": 7899
+            "mean": 11.732,
+            "sum": 92703,
+            "n": 7902
           }
         },
         "toolUseResult.structuredPatch[].oldStart": {
-          "count": 7899,
-          "presence": 0.2873,
+          "count": 7902,
+          "presence": 0.287,
           "types": [
             "number"
           ],
@@ -13538,9 +13539,9 @@
           "numeric": {
             "min": 1,
             "max": 1726,
-            "mean": 165.092,
-            "sum": 1304060,
-            "n": 7899
+            "mean": 165.058,
+            "sum": 1304288,
+            "n": 7902
           }
         },
         "toolUseResult.success": {
@@ -13622,7 +13623,7 @@
         },
         "toolUseResult.task.id": {
           "count": 505,
-          "presence": 0.0184,
+          "presence": 0.0183,
           "types": [
             "string"
           ],
@@ -13658,7 +13659,7 @@
         },
         "toolUseResult.task.subject": {
           "count": 505,
-          "presence": 0.0184,
+          "presence": 0.0183,
           "types": [
             "string"
           ],
@@ -13693,7 +13694,7 @@
         },
         "toolUseResult.taskId": {
           "count": 907,
-          "presence": 0.033,
+          "presence": 0.0329,
           "types": [
             "string"
           ],
@@ -14216,8 +14217,8 @@
           ]
         },
         "toolUseResult.type": {
-          "count": 4717,
-          "presence": 0.1716,
+          "count": 4718,
+          "presence": 0.1714,
           "types": [
             "string"
           ],
@@ -14682,8 +14683,8 @@
           ]
         },
         "toolUseResult.userModified": {
-          "count": 8123,
-          "presence": 0.2954,
+          "count": 8127,
+          "presence": 0.2952,
           "types": [
             "boolean"
           ],
@@ -14761,7 +14762,7 @@
         },
         "toolUseResult[]": {
           "count": 805,
-          "presence": 0.0293,
+          "presence": 0.0292,
           "types": [
             "object"
           ]
@@ -14820,7 +14821,7 @@
         },
         "toolUseResult[].type": {
           "count": 805,
-          "presence": 0.0293,
+          "presence": 0.0292,
           "types": [
             "string"
           ],
@@ -14830,7 +14831,7 @@
           ]
         },
         "type": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -14850,7 +14851,7 @@
           ]
         },
         "userType": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -14860,7 +14861,7 @@
           ]
         },
         "uuid": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -14872,7 +14873,7 @@
           ]
         },
         "version": {
-          "count": 27495,
+          "count": 27531,
           "presence": 1,
           "types": [
             "string"
@@ -18112,13 +18113,13 @@
       }
     },
     "record:worktree-state": {
-      "count": 1025,
+      "count": 1034,
       "fileKinds": {
-        "session": 1025
+        "session": 1034
       },
       "paths": {
         "sessionId": {
-          "count": 1025,
+          "count": 1034,
           "presence": 1,
           "types": [
             "string"
@@ -18138,7 +18139,7 @@
           ]
         },
         "type": {
-          "count": 1025,
+          "count": 1034,
           "presence": 1,
           "types": [
             "string"
@@ -18148,7 +18149,7 @@
           ]
         },
         "worktreeSession": {
-          "count": 1025,
+          "count": 1034,
           "presence": 1,
           "types": [
             "null",
@@ -18158,7 +18159,7 @@
         },
         "worktreeSession.enteredExisting": {
           "count": 61,
-          "presence": 0.0595,
+          "presence": 0.059,
           "types": [
             "boolean"
           ],
@@ -18167,8 +18168,8 @@
           ]
         },
         "worktreeSession.originalBranch": {
-          "count": 564,
-          "presence": 0.5502,
+          "count": 573,
+          "presence": 0.5542,
           "types": [
             "string"
           ],
@@ -18178,8 +18179,8 @@
           ]
         },
         "worktreeSession.originalCwd": {
-          "count": 625,
-          "presence": 0.6098,
+          "count": 634,
+          "presence": 0.6132,
           "types": [
             "string"
           ],
@@ -18190,8 +18191,8 @@
           ]
         },
         "worktreeSession.originalHeadCommit": {
-          "count": 564,
-          "presence": 0.5502,
+          "count": 573,
+          "presence": 0.5542,
           "types": [
             "string"
           ],
@@ -18207,8 +18208,8 @@
           ]
         },
         "worktreeSession.preEnterOriginalCwd": {
-          "count": 625,
-          "presence": 0.6098,
+          "count": 634,
+          "presence": 0.6132,
           "types": [
             "string"
           ],
@@ -18218,8 +18219,8 @@
           ]
         },
         "worktreeSession.sessionId": {
-          "count": 625,
-          "presence": 0.6098,
+          "count": 634,
+          "presence": 0.6132,
           "types": [
             "string"
           ],
@@ -18238,8 +18239,8 @@
           ]
         },
         "worktreeSession.worktreeBranch": {
-          "count": 625,
-          "presence": 0.6098,
+          "count": 634,
+          "presence": 0.6132,
           "types": [
             "string"
           ],
@@ -18259,8 +18260,8 @@
           ]
         },
         "worktreeSession.worktreeName": {
-          "count": 625,
-          "presence": 0.6098,
+          "count": 634,
+          "presence": 0.6132,
           "types": [
             "string"
           ],
@@ -18280,8 +18281,8 @@
           ]
         },
         "worktreeSession.worktreePath": {
-          "count": 625,
-          "presence": 0.6098,
+          "count": 634,
+          "presence": 0.6132,
           "types": [
             "string"
           ],
@@ -18303,14 +18304,14 @@
       }
     },
     "toolResult:user": {
-      "count": 25921,
+      "count": 25955,
       "fileKinds": {
-        "session": 25921
+        "session": 25955
       },
       "paths": {
         "": {
-          "count": 620,
-          "presence": 0.0239,
+          "count": 623,
+          "presence": 0.024,
           "types": [
             "string"
           ],
@@ -18322,7 +18323,7 @@
         },
         "[]": {
           "count": 805,
-          "presence": 0.0311,
+          "presence": 0.031,
           "types": [
             "object"
           ]
@@ -18381,7 +18382,7 @@
         },
         "[].type": {
           "count": 805,
-          "presence": 0.0311,
+          "presence": 0.031,
           "types": [
             "string"
           ],
@@ -18402,7 +18403,7 @@
         },
         "agentId": {
           "count": 170,
-          "presence": 0.0066,
+          "presence": 0.0065,
           "types": [
             "string"
           ],
@@ -18426,7 +18427,7 @@
         },
         "agent_id": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -18481,7 +18482,7 @@
         },
         "annotations": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "object"
           ]
@@ -18517,7 +18518,7 @@
         },
         "answers": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "object"
           ]
@@ -18790,7 +18791,7 @@
         },
         "color": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -18831,7 +18832,7 @@
           ]
         },
         "content": {
-          "count": 1568,
+          "count": 1569,
           "presence": 0.0605,
           "types": [
             "array",
@@ -19056,7 +19057,7 @@
         },
         "file": {
           "count": 3160,
-          "presence": 0.1219,
+          "presence": 0.1217,
           "types": [
             "object"
           ]
@@ -19158,7 +19159,7 @@
         },
         "file.content": {
           "count": 3073,
-          "presence": 0.1186,
+          "presence": 0.1184,
           "types": [
             "string"
           ],
@@ -19386,7 +19387,7 @@
         },
         "file.filePath": {
           "count": 3088,
-          "presence": 0.1191,
+          "presence": 0.119,
           "types": [
             "string"
           ],
@@ -19398,7 +19399,7 @@
         },
         "file.numLines": {
           "count": 3073,
-          "presence": 0.1186,
+          "presence": 0.1184,
           "types": [
             "number"
           ],
@@ -19436,7 +19437,7 @@
         },
         "file.startLine": {
           "count": 3073,
-          "presence": 0.1186,
+          "presence": 0.1184,
           "types": [
             "number"
           ],
@@ -19455,7 +19456,7 @@
         },
         "file.totalLines": {
           "count": 3073,
-          "presence": 0.1186,
+          "presence": 0.1184,
           "types": [
             "number"
           ],
@@ -19494,8 +19495,8 @@
           ]
         },
         "filePath": {
-          "count": 8133,
-          "presence": 0.3138,
+          "count": 8137,
+          "presence": 0.3135,
           "types": [
             "string"
           ],
@@ -19824,8 +19825,8 @@
           ]
         },
         "interrupted": {
-          "count": 11336,
-          "presence": 0.4373,
+          "count": 11363,
+          "presence": 0.4378,
           "types": [
             "boolean"
           ],
@@ -19854,8 +19855,8 @@
           ]
         },
         "isImage": {
-          "count": 11336,
-          "presence": 0.4373,
+          "count": 11363,
+          "presence": 0.4378,
           "types": [
             "boolean"
           ],
@@ -19865,7 +19866,7 @@
         },
         "is_splitpane": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "boolean"
           ],
@@ -19914,8 +19915,8 @@
           ]
         },
         "memdirStamped": {
-          "count": 86,
-          "presence": 0.0033,
+          "count": 87,
+          "presence": 0.0034,
           "types": [
             "boolean"
           ],
@@ -19937,7 +19938,7 @@
         },
         "model": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -19978,7 +19979,7 @@
         },
         "name": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -20021,8 +20022,8 @@
           ]
         },
         "newString": {
-          "count": 6566,
-          "presence": 0.2533,
+          "count": 6569,
+          "presence": 0.2531,
           "types": [
             "string"
           ],
@@ -20043,8 +20044,8 @@
           ]
         },
         "noOutputExpected": {
-          "count": 11336,
-          "presence": 0.4373,
+          "count": 11363,
+          "presence": 0.4378,
           "types": [
             "boolean"
           ],
@@ -20064,8 +20065,8 @@
           ]
         },
         "oldString": {
-          "count": 6566,
-          "presence": 0.2533,
+          "count": 6569,
+          "presence": 0.2531,
           "types": [
             "string"
           ],
@@ -20096,13 +20097,13 @@
           ]
         },
         "originalFile": {
-          "count": 8123,
-          "presence": 0.3134,
+          "count": 8127,
+          "presence": 0.3131,
           "types": [
             "null",
             "string"
           ],
-          "nulls": 4843,
+          "nulls": 4846,
           "examples": [
             "\"\"\"CLI for helium-docs.\"\"\"\n\nfrom __future__ import annotations\n\nimport subprocess\nimport time\nfrom pathlib import Path\n\n… (len 5710)",
             "\"\"\"CLI for helium-docs.\"\"\"\n\nfrom __future__ import annotations\n\nimport subprocess\nimport time\nfrom pathlib import Path\n\n… (len 5765)",
@@ -20211,7 +20212,7 @@
         },
         "plan_mode_required": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "boolean"
           ],
@@ -20245,7 +20246,7 @@
         },
         "questions": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "array"
           ]
@@ -20343,8 +20344,8 @@
           ]
         },
         "replaceAll": {
-          "count": 6566,
-          "presence": 0.2533,
+          "count": 6569,
+          "presence": 0.2531,
           "types": [
             "boolean"
           ],
@@ -20355,7 +20356,7 @@
         },
         "resolvedModel": {
           "count": 170,
-          "presence": 0.0066,
+          "presence": 0.0065,
           "types": [
             "string"
           ],
@@ -20648,8 +20649,8 @@
           }
         },
         "staleReadFileStateHint": {
-          "count": 351,
-          "presence": 0.0135,
+          "count": 352,
+          "presence": 0.0136,
           "types": [
             "string"
           ],
@@ -20714,8 +20715,8 @@
           ]
         },
         "stderr": {
-          "count": 11336,
-          "presence": 0.4373,
+          "count": 11363,
+          "presence": 0.4378,
           "types": [
             "string"
           ],
@@ -20737,8 +20738,8 @@
           ]
         },
         "stdout": {
-          "count": 11336,
-          "presence": 0.4373,
+          "count": 11363,
+          "presence": 0.4378,
           "types": [
             "string"
           ],
@@ -20749,29 +20750,29 @@
           ]
         },
         "structuredPatch": {
-          "count": 8123,
-          "presence": 0.3134,
+          "count": 8127,
+          "presence": 0.3131,
           "types": [
             "array"
           ]
         },
         "structuredPatch[]": {
-          "count": 7899,
-          "presence": 0.3047,
+          "count": 7902,
+          "presence": 0.3045,
           "types": [
             "object"
           ]
         },
         "structuredPatch[].lines": {
-          "count": 7899,
-          "presence": 0.3047,
+          "count": 7902,
+          "presence": 0.3045,
           "types": [
             "array"
           ]
         },
         "structuredPatch[].lines[]": {
-          "count": 31591,
-          "presence": 1.2187,
+          "count": 31603,
+          "presence": 1.2176,
           "types": [
             "string"
           ],
@@ -20782,8 +20783,8 @@
           ]
         },
         "structuredPatch[].newLines": {
-          "count": 7899,
-          "presence": 0.3047,
+          "count": 7902,
+          "presence": 0.3045,
           "types": [
             "number"
           ],
@@ -20795,14 +20796,14 @@
           "numeric": {
             "min": 1,
             "max": 520,
-            "mean": 17.501,
-            "sum": 138242,
-            "n": 7899
+            "mean": 17.513,
+            "sum": 138389,
+            "n": 7902
           }
         },
         "structuredPatch[].newStart": {
-          "count": 7899,
-          "presence": 0.3047,
+          "count": 7902,
+          "presence": 0.3045,
           "types": [
             "number"
           ],
@@ -20814,14 +20815,14 @@
           "numeric": {
             "min": 1,
             "max": 1726,
-            "mean": 165.844,
-            "sum": 1310002,
-            "n": 7899
+            "mean": 165.81,
+            "sum": 1310230,
+            "n": 7902
           }
         },
         "structuredPatch[].oldLines": {
-          "count": 7899,
-          "presence": 0.3047,
+          "count": 7902,
+          "presence": 0.3045,
           "types": [
             "number"
           ],
@@ -20833,14 +20834,14 @@
           "numeric": {
             "min": 1,
             "max": 385,
-            "mean": 11.733,
-            "sum": 92681,
-            "n": 7899
+            "mean": 11.732,
+            "sum": 92703,
+            "n": 7902
           }
         },
         "structuredPatch[].oldStart": {
-          "count": 7899,
-          "presence": 0.3047,
+          "count": 7902,
+          "presence": 0.3045,
           "types": [
             "number"
           ],
@@ -20852,9 +20853,9 @@
           "numeric": {
             "min": 1,
             "max": 1726,
-            "mean": 165.092,
-            "sum": 1304060,
-            "n": 7899
+            "mean": 165.058,
+            "sum": 1304288,
+            "n": 7902
           }
         },
         "success": {
@@ -21007,7 +21008,7 @@
         },
         "taskId": {
           "count": 907,
-          "presence": 0.035,
+          "presence": 0.0349,
           "types": [
             "string"
           ],
@@ -21132,7 +21133,7 @@
         },
         "team_name": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -21150,7 +21151,7 @@
         },
         "teammate_id": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -21229,7 +21230,7 @@
         },
         "tmux_pane_id": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -21239,7 +21240,7 @@
         },
         "tmux_session_name": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -21249,7 +21250,7 @@
         },
         "tmux_window_name": {
           "count": 35,
-          "presence": 0.0014,
+          "presence": 0.0013,
           "types": [
             "string"
           ],
@@ -21530,8 +21531,8 @@
           ]
         },
         "type": {
-          "count": 4717,
-          "presence": 0.182,
+          "count": 4718,
+          "presence": 0.1818,
           "types": [
             "string"
           ],
@@ -21996,8 +21997,8 @@
           ]
         },
         "userModified": {
-          "count": 8123,
-          "presence": 0.3134,
+          "count": 8127,
+          "presence": 0.3131,
           "types": [
             "boolean"
           ],
@@ -23443,7 +23444,7 @@
   },
   "toolSchemas": {
     "Bash": {
-      "calls": 16812,
+      "calls": 16839,
       "params": {
         "command": {
           "presence": 1,
@@ -23478,7 +23479,7 @@
       }
     },
     "Edit": {
-      "calls": 8388,
+      "calls": 8393,
       "params": {
         "replace_all": {
           "presence": 1,
@@ -23542,7 +23543,7 @@
       }
     },
     "Write": {
-      "calls": 1958,
+      "calls": 1959,
       "params": {
         "file_path": {
           "presence": 1,
