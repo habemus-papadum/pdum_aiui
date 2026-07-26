@@ -129,19 +129,26 @@ export function preferForBilling(a: Rec, b: Rec): Rec {
 // ---------------------------------------------------------------------------
 
 /**
- * True when this record was COPIED into its file by a fork/resume rather than
- * produced there. Its tokens were billed once, to `originSession(rec)`.
+ * True when this record declares a session other than the file it lives in.
  *
  * Forking COPIES the inherited prefix into the new session's file, preserving
  * `uuid` / `timestamp` / `requestId` / `message.id`. On the copy, `sessionId`
  * is rewritten to the CONTAINING session while `session_id` keeps the
  * ORIGINATING one — so the snake/camel pair is provenance, not a rename.
  *
- * Only decidable from Claude Code 2.1.199 onward; earlier builds omit
- * `session_id` entirely, which is the whole reason its presence is ~78%. An
- * inherited record from those builds is indistinguishable from a native one and
- * must be caught by cross-file dedup instead — which is why dedup, not this, is
- * the correctness floor.
+ * **But this is a link, not proof of a copy.** Claude Code 2.1.220 also writes
+ * `session_id` on records it produced itself, in a file continuing an earlier
+ * session — every record marked, not one uuid shared with the named session.
+ * Believing this predicate there hands a whole session's spend to its
+ * predecessor. `lineage.ts` therefore verifies the claim against the named
+ * session's own file before attributing anything, and this function is only a
+ * cheap "does the record name someone else" test.
+ *
+ * Also: only ~78% of records carry `session_id` at all. Builds before 2.1.199
+ * omit it entirely, and even after, whole record types (`mode`, `last-prompt`,
+ * `custom-title`, most `system`) never carry it — so a fork's boundary record is
+ * often unmarked, and the last MARKED record can name a grandparent rather than
+ * the parent. Content, not the marker, is what settles both questions.
  */
 export function isInherited(rec: Rec): boolean {
   const origin = str(rec?.session_id);
@@ -149,7 +156,13 @@ export function isInherited(rec: Rec): boolean {
   return Boolean(origin && container && origin !== container);
 }
 
-/** The session that actually paid for this turn. Falls back to the container. */
+/**
+ * The session named by a record, marker first.
+ *
+ * Kept for the census and for callers that want the raw claim; the normalizer
+ * deliberately does NOT use it for attribution, because of the continuation case
+ * described on `isInherited`.
+ */
 export const originSession = (rec: Rec): string | undefined =>
   str(rec?.session_id) ?? str(rec?.sessionId);
 
@@ -510,7 +523,34 @@ export const TRAPS: readonly Trap[] = [
       "preserving uuid / timestamp / requestId / message.id. The same billed turn exists in 2+ " +
       "files (5.5% of message.ids, chains up to 4 deep). Per-file summing double-counts.",
     detect: "count message.ids appearing in more than one file",
-    fix: "Dedup by billingKey() across the WHOLE corpus, then attribute via originSession().",
+    fix: "Dedup by billingKey() across the WHOLE corpus, then attribute via lineage.ts.",
+  },
+  {
+    id: "session-id-marks-a-link-not-a-copy",
+    severity: "critical",
+    what:
+      "session_id names a session the record is LINKED to, which is not the same as one it was " +
+      "COPIED from. Claude Code 2.1.220 continues a session into a fresh file with session_id on " +
+      "every record and not one shared uuid (observed: b9282e52 -> 1cfc5437, 6 minutes apart, " +
+      "0 records in common, the child's first turn starting a fresh cache). Attributing by the " +
+      "marker alone gives that whole session's spend to its predecessor.",
+    detect:
+      "session files where every record's session_id names another session yet the leading-uuid " +
+      "run against that session's file is 0",
+    fix: "Believe session_id only when the named session's file actually contains that uuid.",
+  },
+  {
+    id: "the-marker-names-an-ancestor-not-the-parent",
+    severity: "high",
+    what:
+      "The LAST marked record in a fork's file names the session that produced it — which after a " +
+      "fork of a fork is the GRANDparent, because the intervening records the middle session added " +
+      "are `system`/`user` types that carry no session_id. Believing it turns a chain into a star: " +
+      "63baa90e -> 4df4dbb9 -> {70486150, de93c3a5} reads as three siblings of 63baa90e.",
+    detect:
+      "compare the leading-uuid run against the marked session with the run against every other " +
+      "file — a longer run names a nearer ancestor",
+    fix: "Pick the parent by longest leading-uuid run; use the marker to confirm, not to decide.",
   },
   {
     id: "session-id-is-provenance-not-a-rename",

@@ -28,13 +28,22 @@ const PRICES: PriceTable = {
   },
 };
 
-const FILE = (sessionId: string, kind: TranscriptFile["kind"] = "session"): TranscriptFile => ({
+const FILE = (
+  sessionId: string,
+  kind: TranscriptFile["kind"] = "session",
+  extra: Partial<TranscriptFile> = {},
+): TranscriptFile => ({
   path: `/x/${sessionId}${kind === "session" ? ".jsonl" : "/subagents/a.jsonl"}`,
   projectSlug: "-Users-x-proj",
   fileSessionId: sessionId,
   kind,
   bytes: 0,
+  ...extra,
 });
+
+/** A session file with a birthtime — lineage needs one to break a tie. */
+const BORN = (sessionId: string, iso: string): TranscriptFile =>
+  FILE(sessionId, "session", { createdMs: Date.parse(iso) });
 
 const usage = (o: Partial<Record<string, number>> = {}) => ({
   input_tokens: o.input ?? 10,
@@ -371,6 +380,491 @@ describe("sessions", () => {
     expect(s.spanSeconds).toBeCloseTo(5 * 3600 + 60);
     expect(s.activeSeconds).toBeCloseTo(60); // the 5h gap is idle, not work
     expect(s.dutyCycle).toBeLessThan(0.01);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fork lineage — the session-graph grain
+// ---------------------------------------------------------------------------
+
+/** A non-assistant record, since a fork copies those too and they carry uuids. */
+const plainRec = (o: {
+  type: string;
+  uuid: string;
+  session: string;
+  origin?: string;
+  ts: string;
+}) => ({
+  type: o.type,
+  uuid: o.uuid,
+  sessionId: o.session,
+  ...(o.origin ? { session_id: o.origin } : {}),
+  timestamp: o.ts,
+  cwd: "/Users/x/proj",
+});
+
+/**
+ * Replay a session's records into a fork's file the way Claude Code does:
+ * same uuid, same timestamp, `sessionId` rewritten, `session_id` preserved.
+ */
+const copyInto = (recs: Record<string, unknown>[], child: string, marked: boolean) =>
+  recs.map((r) => ({
+    ...r,
+    sessionId: child,
+    ...(marked ? { session_id: (r.session_id as string) ?? (r.sessionId as string) } : {}),
+  }));
+
+describe("fork lineage", () => {
+  it("finds the edge, the fork point, and the child's own start", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const parentRecs = [
+      assistantRec({ id: "m1", uuid: "u1", session: "p", ts: "2026-07-01T00:00:00.000Z" }),
+      assistantRec({ id: "m2", uuid: "u2", session: "p", ts: "2026-07-01T00:05:00.000Z" }),
+      assistantRec({ id: "m3", uuid: "u3", session: "p", ts: "2026-07-01T00:10:00.000Z" }),
+    ];
+    for (const r of parentRecs) n.add(r, BORN("p", "2026-07-01T00:00:00.000Z"));
+    // The fork copies the first two turns, then works on its own — three days
+    // later, which is the case the timeline has to be able to draw.
+    const childFile = BORN("c", "2026-07-04T09:00:00.000Z");
+    for (const r of copyInto(parentRecs.slice(0, 2), "c", true)) n.add(r, childFile);
+    n.add(
+      assistantRec({
+        id: "m9",
+        uuid: "u9",
+        session: "c",
+        originSession: "c",
+        ts: "2026-07-04T09:00:10.000Z",
+      }),
+      childFile,
+    );
+
+    const out = n.finish();
+    expect(out.forkEdges).toHaveLength(1);
+    const [e] = out.forkEdges;
+    expect(e.parentSessionId).toBe("p");
+    expect(e.childSessionId).toBe("c");
+    expect(e.kind).toBe("copy");
+    expect(e.source).toBe("marker");
+    expect(e.nRecordsInherited).toBe(2);
+    expect(e.nTurnsInherited).toBe(2);
+    // The bezier's two endpoints: where it left the parent, where the child began.
+    expect(new Date(e.forkPointTs).toISOString()).toBe("2026-07-01T00:05:00.000Z");
+    expect(new Date(e.childFirstNativeTs).toISOString()).toBe("2026-07-04T09:00:10.000Z");
+    expect(e.lagSeconds).toBeCloseTo(3 * 86400 + 9 * 3600 + 10 - 5 * 60);
+
+    const byId = new Map(out.sessions.map((s) => [s.sessionId, s]));
+    expect(byId.get("p")?.nTurnsNative).toBe(3);
+    expect(byId.get("c")?.nTurnsNative).toBe(1);
+    expect(byId.get("c")?.depth).toBe(1);
+    expect(byId.get("c")?.lineageId).toBe("p");
+    expect(byId.get("p")?.lineageId).toBe("p");
+    expect(out.lineages).toHaveLength(1);
+    expect(out.lineages[0].nSessions).toBe(2);
+    expect(checkInvariants(out).ok).toBe(true);
+  });
+
+  it("recovers the edge from uuid overlap alone when the build wrote no marker", () => {
+    // Pre-2.1.199: no `session_id` anywhere. Direction comes from shape — the
+    // parent compacted one record away, so its copy of the shared block is not
+    // its own leading prefix, and only an original can look like that.
+    const n = new Normalizer({ pricing: PRICES });
+    const head = plainRec({
+      type: "user",
+      uuid: "h",
+      session: "p",
+      ts: "2026-07-01T00:00:00.000Z",
+    });
+    const dropped = plainRec({
+      type: "user",
+      uuid: "x",
+      session: "p",
+      ts: "2026-07-01T00:01:00.000Z",
+    });
+    const kept = assistantRec({
+      id: "m1",
+      uuid: "u1",
+      session: "p",
+      ts: "2026-07-01T00:02:00.000Z",
+    });
+
+    // `c` before `p`, because that is the order the scanner walks them in — and
+    // it means the FORK's copy of the shared turn is the one dedup keeps, which
+    // is exactly when attribution has to be corrected rather than lucky.
+    const c = FILE("c");
+    for (const r of copyInto([head, kept], "c", false)) n.add(r, c);
+    n.add(assistantRec({ id: "m3", uuid: "u3", session: "c", ts: "2026-07-01T01:00:00.000Z" }), c);
+
+    const p = FILE("p");
+    for (const r of [head, dropped, kept]) n.add(r, p);
+    n.add(assistantRec({ id: "m2", uuid: "u2", session: "p", ts: "2026-07-01T00:03:00.000Z" }), p);
+
+    const out = n.finish();
+    expect(out.forkEdges).toHaveLength(1);
+    expect(out.forkEdges[0]).toMatchObject({
+      parentSessionId: "p",
+      childSessionId: "c",
+      source: "uuid-overlap",
+      ambiguous: false,
+      kind: "copy",
+    });
+    // And the payoff: the inherited turn is credited to p, not to the file that
+    // merely carries it. Without this the fork's lane would start an hour early.
+    const byId = new Map(out.sessions.map((s) => [s.sessionId, s]));
+    expect(byId.get("p")?.nTurnsNative).toBe(2);
+    expect(byId.get("c")?.nTurnsNative).toBe(1);
+    expect(byId.get("c")?.nTurnsInherited).toBe(1);
+    expect(out.stats.reattributedTurns).toBe(1);
+    expect(new Date(byId.get("c")?.firstNativeTs ?? 0).toISOString()).toBe(
+      "2026-07-01T01:00:00.000Z",
+    );
+    expect(checkInvariants(out).ok).toBe(true);
+  });
+
+  it("breaks a symmetric prefix by file creation order, and says it did", () => {
+    // Nothing was dropped, so both files hold the shared records as their own
+    // leading prefix and content cannot tell copy from original.
+    const n = new Normalizer({ pricing: PRICES });
+    const shared = [
+      plainRec({ type: "user", uuid: "h", session: "p", ts: "2026-07-01T00:00:00.000Z" }),
+      assistantRec({ id: "m1", uuid: "u1", session: "p", ts: "2026-07-01T00:01:00.000Z" }),
+    ];
+    const p = BORN("p", "2026-07-01T00:00:00.000Z");
+    for (const r of shared) n.add(r, p);
+    n.add(assistantRec({ id: "m2", uuid: "u2", session: "p", ts: "2026-07-01T00:09:00.000Z" }), p);
+
+    const c = BORN("c", "2026-07-01T00:05:00.000Z");
+    for (const r of copyInto(shared, "c", false)) n.add(r, c);
+    n.add(assistantRec({ id: "m3", uuid: "u3", session: "c", ts: "2026-07-01T00:06:00.000Z" }), c);
+
+    const out = n.finish();
+    expect(out.forkEdges).toHaveLength(1);
+    expect(out.forkEdges[0].parentSessionId).toBe("p");
+    // Flagged, because a widget must not draw a guess like a proof.
+    expect(out.forkEdges[0].ambiguous).toBe(true);
+    expect(out.stats.forkEdgesAmbiguous).toBe(1);
+  });
+
+  it("refuses to guess when nothing can break the tie", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const shared = [
+      plainRec({ type: "user", uuid: "h", session: "p", ts: "2026-07-01T00:00:00.000Z" }),
+      assistantRec({ id: "m1", uuid: "u1", session: "p", ts: "2026-07-01T00:01:00.000Z" }),
+    ];
+    for (const r of shared) n.add(r, FILE("p")); // no birthtime on either file
+    n.add(
+      assistantRec({ id: "m2", uuid: "u2", session: "p", ts: "2026-07-01T00:09:00.000Z" }),
+      FILE("p"),
+    );
+    for (const r of copyInto(shared, "c", false)) n.add(r, FILE("c"));
+    n.add(
+      assistantRec({ id: "m3", uuid: "u3", session: "c", ts: "2026-07-01T00:06:00.000Z" }),
+      FILE("c"),
+    );
+
+    const out = n.finish();
+    expect(out.forkEdges).toHaveLength(0);
+    expect(out.stats.unresolvedForks).toBeGreaterThan(0);
+    // A gap is the honest answer; a wrong lineage drawn confidently is not.
+    expect(out.sessions.every((s) => s.parentSessionId === undefined)).toBe(true);
+  });
+
+  it("lets content name a nearer parent than the marker does", () => {
+    // The real shape from the corpus: 63baa90e → 4df4dbb9 → 70486150. The
+    // records 4df4dbb9 added are `system`/`user` and carry no `session_id`, so
+    // the last MARKED record in 70486150's file still names the grandparent.
+    const n = new Normalizer({ pricing: PRICES });
+    const gp = BORN("gp", "2026-07-01T00:00:00.000Z");
+    const gpRecs = [
+      plainRec({
+        type: "user",
+        uuid: "h",
+        session: "gp",
+        origin: "gp",
+        ts: "2026-07-01T00:00:00.000Z",
+      }),
+      assistantRec({
+        id: "m1",
+        uuid: "u1",
+        session: "gp",
+        originSession: "gp",
+        ts: "2026-07-01T00:01:00.000Z",
+      }),
+    ];
+    for (const r of gpRecs) n.add(r, gp);
+
+    const mid = BORN("mid", "2026-07-01T01:00:00.000Z");
+    for (const r of copyInto(gpRecs, "mid", true)) n.add(r, mid);
+    // mid's own contribution: an unmarked record type, exactly as observed.
+    const midOwn = plainRec({
+      type: "system",
+      uuid: "s1",
+      session: "mid",
+      ts: "2026-07-01T01:00:05.000Z",
+    });
+    n.add(midOwn, mid);
+
+    const kid = BORN("kid", "2026-07-01T02:00:00.000Z");
+    for (const r of copyInto([...gpRecs, midOwn], "kid", true)) n.add(r, kid);
+    n.add(
+      assistantRec({
+        id: "m2",
+        uuid: "u2",
+        session: "kid",
+        originSession: "kid",
+        ts: "2026-07-01T02:00:10.000Z",
+      }),
+      kid,
+    );
+
+    const out = n.finish();
+    const byChild = new Map(out.forkEdges.map((e) => [e.childSessionId, e]));
+    expect(byChild.get("mid")?.parentSessionId).toBe("gp");
+    // The marker on kid's last marked record still says "gp"; content says mid.
+    expect(byChild.get("kid")?.parentSessionId).toBe("mid");
+    expect(new Map(out.sessions.map((s) => [s.sessionId, s.depth])).get("kid")).toBe(2);
+    expect(out.stats.maxForkDepth).toBe(2);
+    expect(checkInvariants(out).ok).toBe(true);
+  });
+
+  it("calls a marked link with no copied records a continuation", () => {
+    // Claude Code 2.1.220: every record carries `session_id` of an earlier
+    // session, yet not one uuid is shared. Believing the marker would hand this
+    // whole session's spend to its predecessor.
+    const n = new Normalizer({ pricing: PRICES });
+    const p = BORN("p", "2026-07-01T00:00:00.000Z");
+    n.add(
+      assistantRec({
+        id: "m1",
+        uuid: "u1",
+        session: "p",
+        originSession: "p",
+        ts: "2026-07-01T00:00:00.000Z",
+      }),
+      p,
+    );
+    n.add(
+      assistantRec({
+        id: "m2",
+        uuid: "u2",
+        session: "p",
+        originSession: "p",
+        ts: "2026-07-01T01:00:00.000Z",
+      }),
+      p,
+    );
+
+    const c = BORN("c", "2026-07-01T01:06:00.000Z");
+    n.add(
+      assistantRec({
+        id: "m3",
+        uuid: "u3",
+        session: "c",
+        originSession: "p",
+        ts: "2026-07-01T01:06:00.000Z",
+      }),
+      c,
+    );
+
+    const out = n.finish();
+    expect(out.forkEdges).toHaveLength(1);
+    expect(out.forkEdges[0]).toMatchObject({
+      parentSessionId: "p",
+      childSessionId: "c",
+      kind: "continuation",
+      nRecordsInherited: 0,
+      nTurnsInherited: 0,
+    });
+    // The edge leaves the parent's END, not its middle.
+    expect(new Date(out.forkEdges[0].forkPointTs).toISOString()).toBe("2026-07-01T01:00:00.000Z");
+    const byId = new Map(out.sessions.map((s) => [s.sessionId, s]));
+    expect(byId.get("c")?.nTurnsNative).toBe(1);
+    expect(byId.get("p")?.nTurnsNative).toBe(2);
+    expect(checkInvariants(out).ok).toBe(true);
+  });
+
+  it("gives a fork that produced nothing a row anyway", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const p = BORN("p", "2026-07-01T00:00:00.000Z");
+    const recs = [
+      assistantRec({
+        id: "m1",
+        uuid: "u1",
+        session: "p",
+        originSession: "p",
+        ts: "2026-07-01T00:00:00.000Z",
+      }),
+    ];
+    for (const r of recs) n.add(r, p);
+    const c = BORN("c", "2026-07-01T02:00:00.000Z");
+    n.noteFile(c);
+    for (const r of copyInto(recs, "c", true)) n.add(r, c);
+
+    const out = n.finish();
+    const child = out.sessions.find((s) => s.sessionId === "c");
+    expect(child).toBeDefined();
+    expect(child?.nTurnsNative).toBe(0);
+    expect(child?.nativeCost).toBe(0);
+    // With no activity of its own, its file birthtime is where it goes on a lane.
+    expect(new Date(child?.createdTs ?? 0).toISOString()).toBe("2026-07-01T02:00:00.000Z");
+    expect(checkInvariants(out).ok).toBe(true);
+  });
+
+  it("counts a compaction once even though the fork copied the record", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const compact = {
+      type: "system",
+      uuid: "sys1",
+      sessionId: "p",
+      session_id: "p",
+      timestamp: "2026-07-01T00:02:00.000Z",
+      compactMetadata: { trigger: "auto", preTokens: 120000, postTokens: 20000 },
+    };
+    const p = BORN("p", "2026-07-01T00:00:00.000Z");
+    n.add(
+      assistantRec({
+        id: "m1",
+        uuid: "u1",
+        session: "p",
+        originSession: "p",
+        ts: "2026-07-01T00:01:00.000Z",
+      }),
+      p,
+    );
+    n.add(compact, p);
+    const c = BORN("c", "2026-07-01T00:03:00.000Z");
+    for (const r of copyInto(
+      [
+        assistantRec({
+          id: "m1",
+          uuid: "u1",
+          session: "p",
+          originSession: "p",
+          ts: "2026-07-01T00:01:00.000Z",
+        }),
+        compact,
+      ],
+      "c",
+      true,
+    )) {
+      n.add(r, c);
+    }
+
+    const out = n.finish();
+    expect(out.events.filter((e) => e.kind === "compaction")).toHaveLength(1);
+    expect(out.events[0].sessionId).toBe("p");
+    const byId = new Map(out.sessions.map((s) => [s.sessionId, s]));
+    expect(byId.get("p")?.nCompactions).toBe(1);
+    expect(byId.get("c")?.nCompactions).toBe(0);
+    expect(byId.get("p")?.peakContextTokens).toBe(120000);
+  });
+});
+
+describe("agent runs", () => {
+  it("collapses a subagent's turns into one markable span", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const main = BORN("s1", "2026-07-01T00:00:00.000Z");
+    n.add(
+      assistantRec({ id: "m0", uuid: "u0", session: "s1", ts: "2026-07-01T00:00:00.000Z" }),
+      main,
+    );
+
+    const agentFile: TranscriptFile = {
+      path: "/x/s1/subagents/agent-aexplore-1.jsonl",
+      projectSlug: "-Users-x-proj",
+      fileSessionId: "s1",
+      kind: "subagent",
+      bytes: 0,
+      agentId: "aexplore-1",
+    };
+    n.noteFile(agentFile);
+    n.add(
+      {
+        type: "fork-context-ref",
+        agentId: "aexplore-1",
+        parentSessionId: "s1",
+        parentLastUuid: "u0",
+        contextLength: 191,
+      },
+      agentFile,
+    );
+    for (const [i, ts] of ["00:01:00", "00:02:00", "00:04:00"].entries()) {
+      n.add(
+        {
+          ...assistantRec({
+            id: `a${i}`,
+            uuid: `au${i}`,
+            session: "s1",
+            ts: `2026-07-01T${ts}.000Z`,
+          }),
+          isSidechain: true,
+          agentId: "aexplore-1",
+          attributionAgent: "Explore",
+        },
+        agentFile,
+      );
+    }
+
+    const out = n.finish();
+    expect(out.agentRuns).toHaveLength(1);
+    const [a] = out.agentRuns;
+    expect(a).toMatchObject({
+      agentId: "aexplore-1",
+      agentType: "Explore",
+      parentSessionId: "s1",
+      context: "subagent",
+      nTurns: 3,
+      inheritedContextLength: 191,
+      parentLastUuid: "u0",
+    });
+    expect(a.spanSeconds).toBeCloseTo(180);
+    expect(a.cost).toBeCloseTo(3 * (10 * 1e-6 + 100 * 10e-6));
+    // The launching session knows how many agents it ran.
+    expect(out.sessions.find((s) => s.sessionId === "s1")?.nAgentRuns).toBe(1);
+    expect(checkInvariants(out).ok).toBe(true);
+  });
+
+  it("keeps a workflow agent tagged with the workflow that spawned it", () => {
+    const n = new Normalizer({ pricing: PRICES });
+    const wfFile: TranscriptFile = {
+      path: "/x/s1/subagents/workflows/wf_abc/agent-a1.jsonl",
+      projectSlug: "-Users-x-proj",
+      fileSessionId: "s1",
+      kind: "workflow-agent",
+      bytes: 0,
+      agentId: "a1",
+      workflowId: "wf_abc",
+    };
+    n.add(
+      {
+        ...assistantRec({ id: "w1", uuid: "wu1", session: "s1" }),
+        isSidechain: true,
+        agentId: "a1",
+      },
+      wfFile,
+    );
+    const out = n.finish();
+    expect(out.agentRuns[0]).toMatchObject({ workflowId: "wf_abc", context: "workflow-agent" });
+    expect(out.turns[0].workflowId).toBe("wf_abc");
+  });
+});
+
+describe("invariants", () => {
+  it("catches a lineage that does not close", () => {
+    const ok = new Normalizer({ pricing: PRICES });
+    ok.add(assistantRec({ id: "m1", uuid: "u1", session: "s1" }), FILE("s1"));
+    const out = ok.finish();
+    expect(checkInvariants(out).ok).toBe(true);
+
+    // Hand-corrupt exactly the way a bad resolver would: a child pointing at a
+    // parent that is not in the corpus, with no `parentMissing` to explain it.
+    const broken = {
+      ...out,
+      sessions: [{ ...out.sessions[0], parentSessionId: "ghost", depth: 1, lineageId: "ghost" }],
+      forkEdges: [],
+    };
+    const res = checkInvariants(broken);
+    expect(res.ok).toBe(false);
+    expect(res.problems.join(" ")).toContain("ghost");
   });
 });
 

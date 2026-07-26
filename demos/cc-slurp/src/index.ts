@@ -12,5 +12,6 @@
  */
 export * from "./fields.ts";
 export * from "./images.ts";
+export * from "./lineage.ts";
 export * from "./normalize.ts";
 export * from "./pricing.ts";

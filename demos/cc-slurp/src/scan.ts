@@ -31,6 +31,22 @@ export interface TranscriptFile {
   fileSessionId: string;
   kind: FileKind;
   bytes: number;
+  /**
+   * File birthtime in ms, when the filesystem records one.
+   *
+   * The only place this package reads metadata rather than content, and it earns
+   * its keep twice: a fork's file is created at the moment of the fork, so this
+   * is the honest wall-clock position of a fork even when the fork went on to
+   * produce nothing; and it is the last-resort tiebreak when two files hold the
+   * same leading records and content cannot say which is the copy (see
+   * `lineage.ts`). Left undefined where the platform has no birthtime, so a
+   * lineage that would have to guess reports itself unresolved instead.
+   */
+  createdMs?: number;
+  /** `agent-<id>.jsonl` → `<id>`. Present on subagent and workflow-agent files. */
+  agentId?: string;
+  /** `wf_<id>` path segment, on workflow agents and their journal. */
+  workflowId?: string;
 }
 
 /**
@@ -96,12 +112,28 @@ async function* walk(
     // `<sessionId>.jsonl` itself, or the `<sessionId>/` directory we descended.
     const fileSessionId = rel.length === 0 ? e.name.slice(0, -".jsonl".length) : rel[0];
     let bytes = 0;
+    let createdMs: number | undefined;
     try {
-      bytes = (await stat(full)).size;
+      const st = await stat(full);
+      bytes = st.size;
+      // ext4 without statx reports 0; an epoch birthtime is worse than none.
+      createdMs = st.birthtimeMs > 0 ? st.birthtimeMs : undefined;
     } catch {
       /* raced with a delete; a zero size is fine for stats */
     }
-    yield { path: full, projectSlug, fileSessionId, kind: kindOf(rel, e.name), bytes };
+    const wf = rel.indexOf("workflows");
+    yield {
+      path: full,
+      projectSlug,
+      fileSessionId,
+      kind: kindOf(rel, e.name),
+      bytes,
+      createdMs,
+      agentId: e.name.startsWith("agent-")
+        ? e.name.slice("agent-".length, -".jsonl".length)
+        : undefined,
+      workflowId: wf >= 0 ? rel[wf + 1] : undefined,
+    };
   }
 }
 
