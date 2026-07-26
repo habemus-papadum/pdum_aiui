@@ -47,6 +47,13 @@ export interface TranscriptFile {
   agentId?: string;
   /** `wf_<id>` path segment, on workflow agents and their journal. */
   workflowId?: string;
+  /**
+   * Which machine the file came from. Undefined when walking the filesystem
+   * directly — there is only one machine in that case — and set from the raw
+   * layer's `host.json` when reading a host set, which is what lets the
+   * analytic grains be filtered by host.
+   */
+  hostId?: string;
 }
 
 /**
@@ -117,7 +124,12 @@ async function* walk(
       const st = await stat(full);
       bytes = st.size;
       // ext4 without statx reports 0; an epoch birthtime is worse than none.
-      createdMs = st.birthtimeMs > 0 ? st.birthtimeMs : undefined;
+      // Floored: APFS reports fractional milliseconds, but the raw layer stores
+      // this as an INT64, so keeping the fraction here would make a value
+      // derived from it (`lagSeconds`) disagree between the two ingest paths
+      // over sub-millisecond noise. Whole milliseconds are already finer than
+      // anything lineage asks of a birthtime.
+      createdMs = st.birthtimeMs > 0 ? Math.floor(st.birthtimeMs) : undefined;
     } catch {
       /* raced with a delete; a zero size is fine for stats */
     }

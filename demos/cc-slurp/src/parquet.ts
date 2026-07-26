@@ -62,6 +62,7 @@ function col<T>(name: string, rows: T[], type: ColType, pick: (r: T) => unknown)
 }
 
 const turnColumns = (rows: TurnRow[]): ColumnData[] => [
+  col("hostId", rows, "STRING", (r) => r.hostId),
   col("messageId", rows, "STRING", (r) => r.messageId),
   col("requestId", rows, "STRING", (r) => r.requestId),
   col("uuid", rows, "STRING", (r) => r.uuid),
@@ -139,6 +140,7 @@ const eventColumns = (rows: EventRow[]): ColumnData[] => [
 ];
 
 const sessionColumns = (rows: SessionRow[]): ColumnData[] => [
+  col("hostId", rows, "STRING", (r) => r.hostId),
   col("sessionId", rows, "STRING", (r) => r.sessionId),
   col("projectSlug", rows, "STRING", (r) => r.projectSlug),
   col("project", rows, "STRING", (r) => r.project),

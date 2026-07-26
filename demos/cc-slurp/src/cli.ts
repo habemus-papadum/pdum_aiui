@@ -19,6 +19,8 @@ import { defaultRoots } from "./scan.ts";
 
 interface Args {
   out: string;
+  /** Derive from a raw host set (stage 1) instead of walking the filesystem. */
+  rawDir?: string;
   roots?: string[];
   offline: boolean;
   images: boolean;
@@ -37,6 +39,7 @@ function parseArgs(argv: string[]): Args {
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--out") a.out = path.resolve(argv[++i]);
+    else if (k === "--raw") a.rawDir = path.resolve(argv[++i]);
     else if (k === "--root") {
       a.roots ??= [];
       a.roots.push(path.resolve(argv[++i]));
@@ -46,10 +49,20 @@ function parseArgs(argv: string[]): Args {
     else if (k === "--quiet") a.quiet = true;
     else if (k === "--help" || k === "-h") {
       process.stdout.write(
-        "usage: cc-slurp [--out dir] [--root dir]... [--offline] [--no-images]\n" +
-          "                   [--idle-gap seconds] [--quiet]\n",
+        "usage: cc-slurp [--out dir] [--raw dir | [--root dir]...] [--offline]\n" +
+          "                [--no-images] [--idle-gap seconds] [--quiet]\n" +
+          "\n" +
+          "  --raw   read the stage-1 raw layer (all hosts found under dir)\n" +
+          "  --root  read JSONL directly; repeatable; defaults to this machine's\n",
       );
       process.exit(0);
+    } else {
+      // Never fall through silently. An unrecognised flag once meant `--raw`
+      // was ignored and the run quietly read the whole live corpus instead of
+      // the frozen subset it was pointed at — the numbers looked plausible and
+      // the mistake showed up only as a failed equivalence check.
+      process.stderr.write(`cc-slurp: unknown argument ${k}\n`);
+      process.exit(2);
     }
   }
   return a;
@@ -68,10 +81,17 @@ const cacheFile = path.join(import.meta.dirname, "..", ".cache", "litellm-pricin
 const pricing = await loadPriceTable(cacheFile, { offline: args.offline });
 log(`pricing: ${Object.keys(pricing.entries).length} models @ ${pricing.version}`);
 
+// Where the records come from: the stage-1 raw layer (every host under one
+// directory) or this machine's JSONL. Log which one, because the two produce
+// the same table shapes and a mix-up is invisible in the output.
 const roots = args.roots ?? defaultRoots();
-log(`roots:   ${roots.join(", ")}`);
+const source = args.rawDir
+  ? { kind: "raw" as const, rawDir: args.rawDir }
+  : { kind: "jsonl" as const, roots };
+log(args.rawDir ? `source:  raw @ ${args.rawDir}` : `source:  jsonl @ ${roots.join(", ")}`);
 
 const { normalized, invariants, stats } = await normalizeCorpus({
+  ...(args.rawDir ? { rawDir: args.rawDir } : {}),
   roots,
   pricing,
   idleGapSeconds: args.idleGapSeconds,
@@ -88,7 +108,7 @@ const written = await writeParquet(args.out, normalized, { mkdir, stat }, path.j
 const manifest = {
   $schema: "aiui/cc-usage-manifest@1",
   generatedAt: new Date().toISOString(),
-  roots,
+  source,
   pricing: { source: pricing.source, version: pricing.version },
   tables: written,
   stats,
