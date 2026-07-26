@@ -587,6 +587,64 @@ pattern. Views, roughly in build order:
 Data flows in as `?url` Parquet asset imports (the `demos/seismos` precedent) so
 the demo runs standalone without a live scan.
 
+### 5.6 The two core widgets
+
+Everything else in this tool is a conventional cross-filter panel. Two widgets
+are not, and they carry the analysis — so they are specified here rather than
+left to whoever builds them.
+
+#### 5.6.1 The session timeline (git-commit-graph aesthetic)
+
+**Shape.** Very wide, short — on the order of 100–300px tall, running the full
+page width. Horizontal is time. Vertical is distinct traces.
+
+**Content.** Each session is a horizontal track from its first to its last turn.
+On those tracks: fork points, subagent launches, workflow launches. Colour (or
+another channel) encodes cost, so the eye reads spend along the time axis.
+
+**Nesting.** Traces collapse and expand. One level of nesting is the project,
+which may hold several concurrent tracks — running multiple sessions in one
+project at once is normal, not exceptional, so lanes must pack and be reused.
+
+**The hard case, stated up front.** A fork's edge connects the parent's fork
+point to the child's first native turn, and *those can be days apart*: forking
+something you mean to return to and never do is common. So the bezier can span a
+long horizontal gap with no vertical adjacency, and the layout cannot assume a
+fork's child starts near its parent's end. Both endpoints must exist in the data
+(§1.6 gives the provenance mechanism; the fork point is the timestamp of the last
+*inherited* turn, not the child's first turn).
+
+**Contract.** It must be a **proper `MosaicClient`** — brushing a time range
+publishes a Selection clause, and other widgets' filters re-query it. The working
+in-repo precedent for a hand-written client is `demos/seismos/src/stats-client.ts`.
+
+Whether this is buildable from stock Mosaic marks is an open question; the
+presumption is that it is not, and it needs a custom client.
+
+#### 5.6.2 The turn scatter
+
+One point per **deduped** turn (§1.3(a)), fork-aware (§1.6): x = time, y = cost
+or duration, colour = project or session. 10–20k points, which is squarely
+inside what vgplot handles — this one maps onto stock marks and exists to show
+the distribution rather than to be clever.
+
+It is the second half of the cross-filter: brushing the scatter should filter the
+timeline and vice versa, which is exactly the cross-table question below.
+
+#### 5.6.3 The two questions these raise
+
+1. **Can filters built from one table apply to visualizations over another?**
+   The timeline is backed by `sessions` (and a lineage/agent-run grain); the
+   scatter is backed by `turns`. Mosaic has historically assumed one source-of-truth
+   table with every clause built against it. If that still holds, either the schema
+   denormalizes or the clauses carry semi-join predicates — both have costs.
+2. **Is the timeline expressible in SQL at all?** Mosaic filtering *is* SQL
+   construction, so this is a data-representation problem before it is a
+   rendering problem: fork edges, lanes, and agent spans have to be columns
+   something can `WHERE` against, not shapes computed in a render pass.
+
+Both are under investigation; §7 tracks the outcome.
+
 ## 6. Open questions
 
 - **Where does `fields.mjs` graduate to?** A package (`aiui-cc-schema`) is the
