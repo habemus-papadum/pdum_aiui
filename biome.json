@@ -12,7 +12,8 @@
       "!**/.aiui/lsp",
       "!**/templates/*/aiui/lsp",
       "!.claude/worktrees",
-      "!archive"
+      "!archive",
+      "!exploration/cc-usage/snapshots"
     ]
   },
   "formatter": {
