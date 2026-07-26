@@ -105,3 +105,41 @@ Ground rules:
 
 Methodology docs (user guide, playbook, design choices, hard-won details):
 <https://habemus-papadum.github.io/pdum_aiui/guide/frontend-user-guide>
+
+## Hard-won: a test that stops testing is worse than one that never existed
+
+Found while tightening the session graph's ghost-node rules, and general enough
+to be worth the space here.
+
+Changing what the layout renders broke two tests. One failed loudly. **The other
+had silently become a tautology** and stayed green:
+
+```ts
+// The ghost is no longer rendered, so `find(...)` is undefined — and
+// `expect(undefined).not.toBe(0)` passes for entirely the wrong reason.
+expect(l.bars.find((b) => b.id === "empty")?.rowIndex).not.toBe(
+  l.bars.find((b) => b.id === "real")?.rowIndex,
+);
+```
+
+The optional chain is what does the damage. `?.` was added to satisfy Biome's
+`noNonNullAssertion`, and it converted "these two bars are on different rows"
+into "undefined is not zero" — a check that can never fail, on a fixture that no
+longer contains what it was written to inspect. It survives lint, typecheck,
+CI, and review, because a passing test reads as coverage.
+
+Two habits that catch it, both cheap:
+
+- **Assert existence before asserting about a property.** `expect(bar).toBeDefined()`
+  on its own line, then the real claim. One extra line converts a silent pass
+  into a named failure.
+- **Prefer `?.` over `!` in assertions only when the absence is itself part of
+  the claim.** Where the value must exist for the test to mean anything, a
+  non-null assertion that throws is *more* honest than an optional chain that
+  quietly yields `undefined` — Biome's warning is about production safety, and
+  a test is not production.
+
+The generalisation: when a change to fixtures or rendering rules makes a test's
+subject disappear, negative assertions (`not.toBe`, `not.toEqual`,
+`toHaveLength(0)`) turn vacuously true. After changing what a function emits,
+grep the tests for the removed thing rather than trusting a green run.
