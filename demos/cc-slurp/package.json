@@ -21,9 +21,10 @@
     "cc-slurp": "./bin/cc-slurp.mjs"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "normalize": "tsx src/cli.ts",
+    "raw": "tsx src/raw-cli.ts",
     "test": "vitest run",
-    "normalize": "tsx src/cli.ts"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "private": true,
   "dependencies": {
