@@ -146,14 +146,18 @@ dies with `no data yet` and a raw
 `RuntimeError: null function or function signature mismatch` — an opaque WASM
 failure, not a clean error.
 
-This is latent in the app **today, in a browser**. It breaks a packaged DMG
-offline, a network with egress rules, an archived static page, and any CDN
-outage.
+**Scoped down by decision, 2026-07-27: an open internet connection is assumed.**
+Offline operation is explicitly not a requirement, which demotes this from a
+defect to a robustness note. What remains true and worth knowing: it is a
+third-party dependency on the *first-query* path, so a CDN outage or an
+egress-restricted network still produces the opaque failure above, and it costs
+~4 MB of cold-start download. Neither is a blocker.
 
-Row E verifies the fix: serve the bytes from your own origin. Two details worth
-keeping — Chromium **aborts** a `https:` → `file:` redirect, but accepts
-`https:` → `app://` because that is a registered privileged scheme; and for a
-static page the equivalent lever is DuckDB's own `custom_extension_repository`.
+Row E verifies the fix should it ever be wanted: serve the bytes from your own
+origin. Two details worth keeping — Chromium **aborts** a `https:` → `file:`
+redirect, but accepts `https:` → `app://` because that is a registered
+privileged scheme; and for a static page the equivalent lever is DuckDB's own
+`custom_extension_repository`.
 
 ### 1.8 The Electron extension host is unnecessary
 
@@ -256,9 +260,9 @@ first assumed — there is no hard problem. What a thin package should own:
 
 - the `app://` handler with correct privilege flags, a path-traversal guard and
   SPA fallback;
-- the self-hosted DuckDB extension redirect (§1.7) — **the one thing that is
-  genuinely fiddly and genuinely required**;
 - an isolation-parity switch, plus the "feature-detect SAB" rule;
+- optionally, the self-hosted DuckDB extension redirect (§1.7) — descoped, but
+  the mechanism is measured and cheap to add if a CDN dependency ever bites;
 - desktop affordances as they arise (status bar, menus).
 
 Explicitly **not** in scope: wrapping HMR (needs no help), proxying CDP (already
@@ -277,14 +281,11 @@ collapses to "aligned by construction". Do not port the MV3 host.
 Three defects surfaced that are live in `main` today and are not contingent on
 adopting anything here:
 
-1. **`extensions.duckdb.org` at runtime** (§1.7) — an external hard dependency on
-   first query, with an opaque failure. Belongs in `aiui-viz`'s DuckDB helper so
-   every consumer inherits the fix.
-2. **A re-entrancy deadlock**: routing `querySummary` through the public `sql()`
+1. **A re-entrancy deadlock**: routing `querySummary` through the public `sql()`
    hangs boot forever at "summarizing" with no error, because `sql()` awaits
    `ensureLoaded()` — which is the `load()` calling it. Latent; any "make loading
    uniform" refactor walks into it.
-3. **Unguarded extension namespaces**: `chrome.contextMenus.onClicked` at module
+2. **Unguarded extension namespaces**: `chrome.contextMenus.onClicked` at module
    top level in `sw.ts:117` takes the whole service worker down on any Chromium
    host that lacks it, and `chrome.windows.getCurrent()` blanks the panel. Any
    non-Chrome host, not just Electron.
@@ -298,20 +299,19 @@ for this app.
 Ordered so each step is useful alone and none is wasted if the next is dropped.
 
 1. **Route all data access through the coordinator** (§2.1, seam 1). No behaviour
-   change; unblocks everything; fixes defect 2 on the way.
-2. **Self-host the DuckDB extensions** (§1.7, defect 1). Independent of shape;
-   fixes a live bug in the browser today.
-3. **`username` + the S3 layout** (§2.3, §2.4) in the ingestion tools, with
+   change; unblocks everything; fixes defect 1 on the way.
+2. **`username` + the S3 layout** (§2.3, §2.4) in the ingestion tools, with
    `index.json`. Still WASM-only, still a static page.
-4. **The byte resolver** (§2.1, seam 2) so a page can read grains from an HTTP
+3. **The byte resolver** (§2.1, seam 2) so a page can read grains from an HTTP
    base instead of bundled assets. This is what makes multi-machine work in the
    browser.
-5. **Electron shell** (§2.5) — packaging, no app changes.
-6. **The backend**, when raw-layer querying is wanted (§2.2). Port the replay and
+4. **Electron shell** (§2.5) — packaging, no app changes.
+5. **The backend**, when raw-layer querying is wanted (§2.2). Port the replay and
    scatter call sites at the same time (§1.3), or it is a regression.
 
-Steps 1–4 need no Electron and no backend. Step 6 is the only one that is
-genuinely large.
+Steps 1–3 need no Electron and no backend. Step 5 is the only one that is
+genuinely large. Self-hosting the DuckDB extensions (§1.7) is deliberately NOT
+in this list — see the scoping decision there.
 
 ## 5. Risks and open questions
 
