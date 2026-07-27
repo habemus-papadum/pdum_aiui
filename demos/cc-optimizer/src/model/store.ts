@@ -38,6 +38,7 @@ import toolCallsUrl from "../data/toolCalls.parquet?url";
 import turnsUrl from "../data/turns.parquet?url";
 import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "../duckdb";
 import { type DurableState, durableState, toggled } from "./durable-state";
+import { plainRow } from "./rows";
 import {
   type SelectionStats,
   SelectionStatsClient,
@@ -413,8 +414,11 @@ async function load(): Promise<void> {
 
   const registerTable = async (name: string, url: string, onBytes: (f: number) => void) => {
     const buf = await fetchWithProgress(url, onBytes);
+    // Same split as `ensureReplay`: handing bytes to an in-page database is
+    // WASM-specific, the CREATE is ordinary SQL and goes through the
+    // coordinator. By this point the connector is installed, so it is live.
     await db.registerFileBuffer(`${name}.parquet`, buf);
-    await conn.query(
+    await coordinator.exec(
       `CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_parquet('${name}.parquet')`,
     );
   };
@@ -444,7 +448,7 @@ async function load(): Promise<void> {
 
   progress.set({ fraction: 1, label: "summarizing" });
   await loadManifest();
-  summary.set(await querySummary(conn));
+  summary.set(await querySummary(coordinator));
 
   // Connect the crossfilter clients only now: `prepare()` queries `turns`, so
   // the tables have to exist before the coordinator initialises them.
@@ -493,8 +497,36 @@ async function loadManifest(): Promise<void> {
   }
 }
 
-async function querySummary(c: AsyncDuckDBConnection): Promise<CorpusSummary> {
-  const rows = await c.query(`
+/**
+ * Run SQL through the **coordinator**, never the connection underneath it.
+ *
+ * The coordinator is the only object that knows *where* the database is: the
+ * connector installed on it is what decides between DuckDB-WASM in this tab and
+ * DuckDB in a process. Reaching past it to `engine.conn` — which is what this
+ * app did at ~20 call sites — creates a second path to the data that agrees
+ * with the first only while both happen to end at the same in-page instance.
+ * Swap the connector and one path follows while the other keeps talking to a
+ * database that no longer has the rows. See docs/proposals/deployment-shapes.md
+ * §2.1.
+ *
+ * Arrow, not `{ type: 'json' }`. It is Mosaic's default and its typed result,
+ * and under a socket connector the result encoding IS the wire format — JSON
+ * measured ~2.4× the Parquet on this corpus's replay grain. Mosaic decodes to a
+ * flechette `Table`, whose `toArray()` already yields row objects, so this is
+ * also less work than the `.toJSON()`-per-row it replaces.
+ *
+ * Takes the coordinator explicitly rather than reading the engine, because the
+ * boot path must be able to query before `ready` is set — see `sql()`.
+ */
+async function queryRows<T>(coordinator: Coordinator, query: string): Promise<T[]> {
+  const table = await coordinator.query(query);
+  return table.toArray().map((r) => plainRow(r as Record<string, unknown>) as T);
+}
+
+async function querySummary(coordinator: Coordinator): Promise<CorpusSummary> {
+  const rows = await queryRows<Record<string, unknown>>(
+    coordinator,
+    `
     SELECT count(*)                    AS turns,
            count(DISTINCT sessionId)   AS sessions,
            -- project, not projectSlug. A slug is a cwd, so a worktree gets its
@@ -510,8 +542,9 @@ async function querySummary(c: AsyncDuckDBConnection): Promise<CorpusSummary> {
            sum(costCacheCreate)        AS costCacheCreate,
            sum(costCacheRead)          AS costCacheRead
     FROM turns
-  `);
-  const r = rows.get(0)?.toJSON() as Record<string, unknown> | undefined;
+  `,
+  );
+  const r = rows[0];
   const n = (k: string) => Number(r?.[k] ?? 0); // Number() handles the BigInt columns too
   return {
     turns: n("turns"),
@@ -525,22 +558,6 @@ async function querySummary(c: AsyncDuckDBConnection): Promise<CorpusSummary> {
     costCacheCreate: n("costCacheCreate"),
     costCacheRead: n("costCacheRead"),
   };
-}
-
-/**
- * DuckDB hands back INT64 / HUGEINT columns as BigInt, which then poisons every
- * downstream arithmetic and every `new Date(...)` with "Cannot convert a BigInt
- * value to a number". Coercing once here — rather than at each call site — is
- * what keeps the cells and the chart specs free of the problem. Token counts and
- * epoch-millisecond timestamps are both far inside Number's exact-integer range,
- * so nothing is lost.
- */
-function unwrapBigInts(row: Record<string, unknown>): Record<string, unknown> {
-  for (const k in row) {
-    const v = row[k];
-    if (typeof v === "bigint") row[k] = Number(v);
-  }
-  return row;
 }
 
 /**
@@ -594,21 +611,32 @@ export async function ensureReplay(sessionId: string): Promise<string | null> {
   if (!e) throw new Error("no connection");
   const url = new URL(`../data/replay/${sessionId}.parquet`, import.meta.url);
   const buf = await fetchWithProgress(url.href, () => {});
+  // registerFileBuffer is genuinely WASM-specific — it hands bytes to an
+  // in-page database. That is seam 2 (where bytes come from), and a backend
+  // would replace this whole function rather than this line. The CREATE, by
+  // contrast, is ordinary SQL and belongs to the coordinator like everything
+  // else.
   await e.db.registerFileBuffer(`${table}.parquet`, buf);
-  await e.conn.query(
+  await e.coordinator.exec(
     `CREATE OR REPLACE TABLE "${table}" AS SELECT * FROM read_parquet('${table}.parquet')`,
   );
   replayLoaded.add(sessionId);
   return table;
 }
 
-/** Ad-hoc query against the loaded tables. Used by cells and by agent tools. */
+/**
+ * Ad-hoc query against the loaded tables. Used by cells and by agent tools.
+ *
+ * `ensureLoaded()` here is why `queryRows` takes a coordinator rather than
+ * reading the engine: the boot path calls `querySummary` from inside `load()`,
+ * and routing that through this function would await the very load that is
+ * calling it — a deadlock with no error, hanging forever at "summarizing".
+ */
 export async function sql<T = Record<string, unknown>>(query: string): Promise<T[]> {
   await ensureLoaded();
   const e = engineBox.engine;
   if (!e) throw new Error("no connection");
-  const result = await e.conn.query(query);
-  return result.toArray().map((r) => unwrapBigInts(r.toJSON() as Record<string, unknown>) as T);
+  return queryRows<T>(e.coordinator, query);
 }
 
 export const store = {
