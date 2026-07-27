@@ -39,6 +39,15 @@ allowBuilds:
   # legacy credential store, vsce-sign's postinstall fetches its marketplace
   # signing binary — so both are explicitly denied, not trusted.
   "@vscode/vsce-sign": false
+  # cc-miner's second host (`pnpm dev:electron`). NOT optional and NOT cosmetic:
+  # pnpm 11 refuses to finish `pnpm install` while the decision is unmade
+  # (ERR_PNPM_IGNORED_BUILDS), and every script here runs a deps check first — so
+  # an undecided `electron` breaks the whole repo, including `pnpm dev` for apps
+  # that have nothing to do with Electron. Before you "correct" this: electron@43
+  # publishes NO `scripts` field at all (the ~200 MB binary is fetched lazily by
+  # index.js on the first `require("electron")`), and pnpm asks anyway. `true`
+  # buys no install-time download; it settles a question pnpm insists on.
+  electron: true
   esbuild: true
   keytar: false
 

@@ -15,6 +15,14 @@ Run the dev server with `pnpm dev` from this directory (plain `vite`); the inten
 reaches the channel through the channel-served `/intent/` page or the side panel, so the dev
 server needs no channel wiring of its own.
 
+**This app has a second host.** `pnpm dev:electron` runs the same app in an Electron window
+(port 5179, CDP on 9333) instead of a browser tab (port 5173). Both are dev servers over the
+same renderer; the split lives in `vite.config.ts` / `vite.electron.config.ts` with the shared
+part in `vite.config.base.ts`, and the shell code is in `electron/`. Two rules while editing:
+keep the two configs' delta small enough to read, and never branch the renderer on a build flag
+to tell the hosts apart — `src/host.ts` answers that at runtime, which is what keeps the bundles
+identical. See README.md.
+
 The app has a **dual shape** — it is both a standalone app and a library:
 
 - `src/main.tsx` mounts `src/page.tsx`, the app as a mountable `SitePage`

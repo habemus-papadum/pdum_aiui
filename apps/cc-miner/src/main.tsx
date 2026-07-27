@@ -29,8 +29,13 @@
  */
 
 import { render } from "@solidjs/web";
+import { HOST } from "./host";
 import { page } from "./page";
 
-document.title = page.title;
+// The only place the shell shows up in the renderer: a title suffix, so the two
+// dev servers are tellable apart when both are open. Everything below this line
+// is identical in a tab and in an Electron window — that is the invariant the
+// two Vite configs exist to preserve.
+document.title = HOST === "electron" ? `${page.title} · electron` : page.title;
 page.activate?.();
 render(() => <page.App />, document.getElementById("root") as HTMLElement);

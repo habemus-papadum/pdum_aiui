@@ -228,6 +228,17 @@ up in their own repository, installed by people who do not have this checkout.
 Today: `cc-miner` (a dashboard over your own Claude Code usage) and `cc-assay`
 (the tool that mines transcripts into Parquet).
 
+`cc-miner` is also where the **two-host pattern** is being worked out: the same
+app runs in a browser tab (`pnpm dev`) and in an Electron window
+(`pnpm dev:electron`), from two Vite configs over a shared
+`vite.config.base.ts`. Both are dev servers — Electron is a window pointed at a
+Vite server, not a different build — and there is deliberately no packaging yet.
+The renderer is byte-identical between them; where it needs to know its shell it
+asks at *runtime* (`src/host.ts` sniffs the Electron user-agent) rather than
+through a `define`, precisely so "it runs the same in both" stays a claim
+anyone can check. `apps/cc-miner/electron/` stays in-package until the shape has
+earned a home of its own (see `docs/proposals/deployment-shapes.md`).
+
 They are full workspace members right now — `workspace:^` source-first editing,
 CI typecheck, version lockstep — because that is what makes iteration fast while
 the `aiui-*` packages underneath them are still moving. What makes them
