@@ -72,8 +72,16 @@ For *this* app the backend moved slightly **more** data:
 
 Two call sites cause it: the replay query returns **8.05 MB of JSON where the
 Parquet was 3.37 MB** (~2.4×), and the scatter pulls all 30,420 rows. The real
-wins are **the absent 36 MB WASM binary and 4.4× faster time-to-ready**. If a
-backend is adopted, *those two call sites* are the port — not the connector.
+wins are **the absent 36 MB WASM binary and 4.4× faster time-to-ready**.
+
+**Caveat added 2026-07-27, and it softens this section.** That 8.05 MB was
+measured with `{ type: 'json' }`, so an unknown part of the regression is
+*encoding*, not payload. Mosaic's default is `arrow` — `query()` returns a
+flechette `Table`, and `type: 'json'` is the opt-out. Over a socket connector
+the result encoding IS the wire format, so Arrow should be the default there
+too, and this table should be re-measured before "the backend moves more bytes"
+is treated as settled. What does not change with encoding: the scatter genuinely
+pulls 30,420 rows, so that call site is a real port either way.
 
 ### 1.4 The connector swap is one line; the couplings are not
 
@@ -192,6 +200,18 @@ Mosaic's, which already exists:
 *provided* every data access goes through the coordinator — which today it does
 not (§1.4). **Routing `store.sql()` through the coordinator is the prerequisite
 for everything else in this document**, and is worth doing on its own merits.
+
+Use the **default `arrow` result type**, not `{ type: 'json' }`. Mosaic decodes
+to a flechette `Table` whose `toArray()` yields row objects directly, so the
+rewrite is *shorter* than the code it replaces and `unwrapBigInts` still applies:
+
+```ts
+const result = await e.coordinator.query(query);
+return result.toArray().map((r) => unwrapBigInts(r as Record<string, unknown>) as T);
+```
+
+Under `wasmConnector` the encoding is in-process and near-free either way. Under
+`socketConnector` it is the wire format — see the caveat in §1.3.
 
 **Seam 2 — bytes.** Only meaningful under `wasmConnector`: do the Parquet bytes
 come from bundled `?url` assets, or from an HTTP origin (a directory server, or
