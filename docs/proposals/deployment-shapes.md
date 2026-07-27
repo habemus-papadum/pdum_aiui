@@ -187,6 +187,123 @@ invocation-gesture / grant apparatus in `BEHAVIOR.md` exists to satisfy a Chrome
 permission gate Electron does not impose. `CaptureSource.grantless` already
 models this.
 
+### 1.9 The CDP port never needs hardcoding
+
+Measured on Electron 43.2.0, 2026-07-27, against the real `apps/cc-miner`
+Electron host.
+
+Electron writes **`DevToolsActivePort`** into `app.getPath("userData")`, in
+exactly Chrome's two-line format — port on line 1, browser-level websocket path
+on line 2:
+
+```
+65160
+/devtools/browser/022daf75-3e28-4c8e-9fc6-e12e748bd193
+```
+
+So `--remote-debugging-port=0` (let the OS choose) plus a read of that file is a
+complete discovery story, and it is the *same* mechanism
+`packages/aiui/src/util/browser.ts` already uses to find the session browser.
+The 9333 in `apps/cc-miner/electron/main.mjs` is a convenience, not a
+requirement; the only reason to keep a fixed port is a stable endpoint for
+things that attach without being able to read the profile directory.
+
+Two other routes exist and are worth knowing apart:
+
+- **`webContents.debugger`** — in-process CDP from the main process, no port, no
+  socket, no discovery at all. Right for anything the *shell* wants to do.
+- **The port** — needed only when a *renderer* speaks CDP over a WebSocket, which
+  is precisely the standalone intent panel's situation.
+
+### 1.10 Window partitioning: `WebContentsView` is the VS Code shape
+
+The question was whether an Electron window can be split into panes that are
+real browsing contexts, rather than iframes — because the standalone intent
+panel assumes it is a top-level page.
+
+`BaseWindow` + N × `WebContentsView` does exactly this. Measured, with the app
+on the left and a panel on the right:
+
+| property | result |
+| --- | --- |
+| CDP `page` targets | **2** — one per view, independently attachable |
+| `window.top === window.self` in the panel | `true` |
+| `window.parent === window.self` | `true` |
+| `frameElement` | `null` |
+| `window.opener` | `null` |
+| renderer processes | **distinct** (two OS pids) |
+| sessions | **distinct** — the panel ran in `partition: "persist:aiui-panel"` |
+| `getDisplayMedia` / `getUserMedia` | present |
+| resize | `win.on("resize")` → `setBounds` relayouts both |
+
+So a pane is not an iframe with extra steps: it is a separate top-level
+browsing context, its own process, its own cookie jar, its own CDP target,
+composited into one window at bounds the main process controls. Anything that
+works in a standalone tab works in a pane. (`<webview>` and the deprecated
+`BrowserView` also exist; `WebContentsView` supersedes both.)
+
+### 1.11 DevTools extensions work — and are the weakest of the three surfaces
+
+Also measured on Electron 43.2.0, with a minimal MV3 `devtools_page` extension.
+
+**What works.** `session.extensions.loadExtension()` accepts it; the MV3 module
+service worker runs; `chrome.devtools.panels.create(...)` fires its callback;
+and the panel appears in the DevTools tab strip as a real tab (confirmed by
+screenshotting the DevTools window — the strip reads `… Security · Lighthouse ·
+Recorder · aiui`). Inside the devtools page, `chrome.devtools` carries
+`inspectedWindow`, `languageServices`, `network`, `panels`, `performance`,
+`recorder`.
+
+**The namespace surface**, measured directly rather than inherited:
+
+| context | `chrome.*` |
+| --- | --- |
+| MV3 service worker | `extension, i18n, management, runtime, scripting, storage, tabs` |
+| devtools page | the same, plus `devtools` |
+| extension page in a `WebContentsView` | the same seven, with a live `chrome.runtime.id` |
+
+This refines §1.8's list rather than contradicting it: `action` appears there
+and not here only because that spike's manifest declared an `action` key and
+this probe's did not. **`chrome.debugger` is absent** — which matters, because
+the retired `aiui-devtools-extension` used `chrome.debugger.getTargets()` for
+tab identity. That mechanism does not port.
+
+**Weighed against the intent client's actual manifest**
+(`packages/aiui-intent-client/src/ext/manifest.ts`), three of its eight
+permissions survive in Electron:
+
+| declared | Electron |
+| --- | --- |
+| `storage`, `tabs`, `scripting` | ✅ (though §1.8: `tabs` **events** never fire) |
+| `sidePanel`, `tabCapture`, `webNavigation`, `nativeMessaging`, `contextMenus` | ❌ absent |
+| `action` (toolbar button) | ❌ — Electron has no browser toolbar to hang it on |
+
+**But the missing five are missing because Electron doesn't need them**, and each
+has a strictly more capable native equivalent: `sidePanel` → `WebContentsView`
+(§1.10); `tabCapture` → `setDisplayMediaRequestHandler` (§1.8); `nativeMessaging`
+→ you *are* a native process; `contextMenus` → `Menu`; `webNavigation` →
+`webContents` navigation events; `action` → your own chrome, drawn in your own
+window.
+
+Which is the conclusion: a DevTools extension in Electron is **not hard, and not
+the right shape**. Its panel is an iframe inside the DevTools window, so it
+cannot host a component that assumes a top-level context; it exists only while
+DevTools is open; it is scoped to one inspected page; and it buys back — via
+`inspectedWindow.eval` — only what `webContents.executeJavaScript` already gives
+the shell for free. The extension APIs are scaffolding around constraints
+Electron does not impose.
+
+One measured result points the other way and is worth keeping: an
+**extension-origin page loads fine in a `WebContentsView`**
+(`chrome-extension://<id>/page.html`), reports `isTopLevel: true`, has a working
+`chrome.runtime.id` and `chrome.storage.local`, **and `getDisplayMedia()`
+returned a live `video:Entire screen` track with no picker and no user gesture**.
+So the existing MV3 side-panel *build* of the intent client can be hosted as an
+Electron pane largely as-is — keeping `chrome.storage` and `chrome.runtime`
+while shedding the permission gate. (Aside, learned by tripping on it: MV3's
+`script-src 'self'` is enforced in Electron too — inline `<script>` in an
+extension page silently does nothing.)
+
 ## 2. The design
 
 ### 2.1 Two nested seams, not one
