@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * `cc-slurp raw` — stage 1. Ingest this machine's transcripts into a per-host
+ * `cc-assay raw` — stage 1. Ingest this machine's transcripts into a per-host
  * raw Parquet set.
  *
- *   pnpm -C demos/cc-slurp raw -- --out ~/.cache/aiui/cc-raw
+ *   pnpm -C apps/cc-assay raw -- --out ~/.cache/aiui/cc-raw
  *
  * The output directory is one host's artifact: `raw.parquet`, `files.parquet`
  * and `host.json`. It is meant to travel — copy several hosts' directories
@@ -26,13 +26,13 @@ for (let i = 0; i < argv.length; i++) {
   else if (k === "--root") roots.push(path.resolve(argv[++i]));
   else if (k === "--quiet") quiet = true;
   else if (k === "--help" || k === "-h") {
-    process.stdout.write("usage: cc-slurp raw [--out dir] [--root dir]... [--quiet]\n");
+    process.stdout.write("usage: cc-assay raw [--out dir] [--root dir]... [--quiet]\n");
     process.exit(0);
   } else {
     // An unknown flag must not degrade into a default run: `--raw` being
     // silently ignored by the stage-2 CLI once sent a whole-corpus ingest
     // where a three-project one was asked for, and the numbers looked fine.
-    process.stderr.write(`cc-slurp raw: unknown argument ${k}\n`);
+    process.stderr.write(`cc-assay raw: unknown argument ${k}\n`);
     process.exit(2);
   }
 }

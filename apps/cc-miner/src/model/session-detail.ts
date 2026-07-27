@@ -33,7 +33,7 @@
  * `hadFallback` is showing transmitted tokens, not context size.
  */
 
-/** One turn of the focused session, already priced by cc-slurp. */
+/** One turn of the focused session, already priced by cc-assay. */
 export interface DetailTurn {
   ts: number;
   costCacheRead: number;

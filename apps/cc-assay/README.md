@@ -1,13 +1,13 @@
-# `@habemus-papadum/aiui-cc-slurp`
+# `@habemus-papadum/cc-assay`
 
 Reader, normalizer and Parquet writer for **Claude Code session transcripts**.
-Internal, never published — the pure-model half of `demos/cc-optimizer`, in the same
+Internal, never published — the pure-model half of `apps/cc-miner`, in the same
 relation `demos/optics` has to the wave-optics notebooks.
 
 ```sh
-pnpm -C demos/cc-slurp normalize                              # → ./out
-pnpm -C demos/cc-slurp normalize -- --out ../cc-optimizer/src/data  # feed the demo
-pnpm -C demos/cc-slurp normalize -- --offline --no-images
+pnpm -C apps/cc-assay normalize                              # → ./out
+pnpm -C apps/cc-assay normalize -- --out ../cc-miner/src/data  # feed the demo
+pnpm -C apps/cc-assay normalize -- --offline --no-images
 ```
 
 ## What it does

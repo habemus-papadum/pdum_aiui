@@ -3,7 +3,7 @@
 **Status:** built, and the original scope is complete. Two-stage ingestion
 (§6.2), eight analytic grains + the replay grain, the session graph, both
 drill-downs (§10, §11), the turn scatter and a live crossfilter across every
-panel (§12) are in `demos/cc-slurp` + `demos/cc-optimizer`. §7 lists what is
+panel (§12) are in `apps/cc-assay` + `apps/cc-miner`. §7 lists what is
 left, all of it optional.
 **Spike:** [`exploration/cc-usage/`](../../exploration/cc-usage/) (runnable, zero deps).
 **Generated schema reference:** [`exploration/cc-usage/SCHEMA.md`](../../exploration/cc-usage/SCHEMA.md).
@@ -590,7 +590,7 @@ same field in some records and not others and makes snapshots non-comparable.
 
 ### 5.5 The demo
 
-`demos/cc-optimizer`, private to the gallery — `package.json` carries no
+`apps/cc-miner`, private to the gallery — `package.json` carries no
 `aiui.sitePage` marker, so `demo-discovery.ts` will not pick it up, and it stays
 `"private": true` like every demo. It still gets `typecheck` and version
 lockstep for free.
@@ -808,7 +808,7 @@ first-fit — bounded, and it can only affect the 6 multi-session families.
 
 #### 5.6.6 Is the timeline expressible in SQL at all? — answered, with limits
 
-Yes: `forkEdges` / `lineages` / `agentRuns` in `demos/cc-slurp`. The measured
+Yes: `forkEdges` / `lineages` / `agentRuns` in `apps/cc-assay`. The measured
 result on the baseline corpus, and the limits worth knowing before trusting a
 drawn lineage:
 
@@ -914,8 +914,8 @@ Deep paths and array indexing both work, on fields nothing ever declared.
 ### 6.2 Both stages are built, and equivalence is the test that keeps them honest
 
 ```sh
-pnpm -C demos/cc-slurp raw       -- --out ~/.cache/aiui/cc-raw/<host>   # stage 1
-pnpm -C demos/cc-slurp normalize -- --raw ~/.cache/aiui/cc-raw --out …  # stage 2
+pnpm -C apps/cc-assay raw       -- --out ~/.cache/aiui/cc-raw/<host>   # stage 1
+pnpm -C apps/cc-assay normalize -- --raw ~/.cache/aiui/cc-raw --out …  # stage 2
 ```
 
 Stage 1 on this machine: **965 files** (485 JSONL, 480 sidecar), **168,171
@@ -970,7 +970,7 @@ override in `pnpm-workspace.yaml` collapses them.
 ## Open questions
 
 - ~~Where does `fields.mjs` graduate to?~~ **Settled.** It is
-  `demos/cc-slurp/src/fields.ts` — `@habemus-papadum/aiui-cc-slurp`, an internal
+  `apps/cc-assay/src/fields.ts` — `@habemus-papadum/cc-assay`, an internal
   never-published library beside the demo that consumes it, in the same relation
   `demos/optics` has to the wave-optics notebooks. The `.mjs` originals stay in
   `exploration/cc-usage/` as the census/drift tooling, which is deliberately
@@ -994,10 +994,10 @@ override in `pnpm-workspace.yaml` collapses them.
 
 **Done.**
 
-1. ~~Ship the normaliser.~~ `demos/cc-slurp` — eight Parquet grains + a manifest.
+1. ~~Ship the normaliser.~~ `apps/cc-assay` — eight Parquet grains + a manifest.
    `checkInvariants` asserts `SUM(sessions.nativeCost) == SUM(turns.costTotal)`
    and runs on every invocation.
-2. ~~Scaffold the demo.~~ `demos/cc-optimizer` — gallery-private, DuckDB-WASM
+2. ~~Scaffold the demo.~~ `apps/cc-miner` — gallery-private, DuckDB-WASM
    over the tables, plus a `query` action giving the agent read-only SQL.
 3. ~~Validate cost against ground truth.~~ **It found a bug** — see §9.
 4. ~~Fork lineage edges.~~ The normalizer emits `forkEdges` and `lineages`, not
@@ -1167,7 +1167,7 @@ is. §1.3(b) already said cost is derived; this is the stronger statement, and i
 is the one that belongs on screen.
 ## 10. The session drill-down, and three things the data decided
 
-Built as `demos/cc-optimizer`'s last panel: cost per turn stacked by class, and
+Built as `apps/cc-miner`'s last panel: cost per turn stacked by class, and
 under it the context size that drives it, compactions ruled through both.
 
 ### 10.1 The x axis is a turn ordinal, not wall-clock

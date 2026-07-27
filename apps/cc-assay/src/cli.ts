@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * `cc-slurp` — scan Claude Code transcripts, write the five Parquet tables.
+ * `cc-assay` — scan Claude Code transcripts, write the five Parquet tables.
  *
- *   pnpm -C demos/cc-slurp normalize                    # → ./out
- *   pnpm -C demos/cc-slurp normalize -- --out ../cc-optimizer/src/data
- *   pnpm -C demos/cc-slurp normalize -- --offline --no-images
+ *   pnpm -C apps/cc-assay normalize                    # → ./out
+ *   pnpm -C apps/cc-assay normalize -- --out ../cc-miner/src/data
+ *   pnpm -C apps/cc-assay normalize -- --offline --no-images
  *
  * Prints the measurements that justify the pipeline (how wrong a naive reader
  * would be) and runs `checkInvariants` every time — a silent regression in the
@@ -51,7 +51,7 @@ function parseArgs(argv: string[]): Args {
     else if (k === "--quiet") a.quiet = true;
     else if (k === "--help" || k === "-h") {
       process.stdout.write(
-        "usage: cc-slurp [--out dir] [--raw dir | [--root dir]...] [--offline]\n" +
+        "usage: cc-assay [--out dir] [--raw dir | [--root dir]...] [--offline]\n" +
           "                [--no-images] [--idle-gap seconds] [--quiet]\n" +
           "\n" +
           "  --raw     read the stage-1 raw layer (all hosts found under dir)\n" +
@@ -64,7 +64,7 @@ function parseArgs(argv: string[]): Args {
       // was ignored and the run quietly read the whole live corpus instead of
       // the frozen subset it was pointed at — the numbers looked plausible and
       // the mistake showed up only as a failed equivalence check.
-      process.stderr.write(`cc-slurp: unknown argument ${k}\n`);
+      process.stderr.write(`cc-assay: unknown argument ${k}\n`);
       process.exit(2);
     }
   }

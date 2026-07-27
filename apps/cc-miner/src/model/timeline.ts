@@ -108,7 +108,7 @@ export interface TimelineSpan {
 }
 
 /**
- * What the child took from the parent (cc-slurp's `forkEdges.kind`).
+ * What the child took from the parent (cc-assay's `forkEdges.kind`).
  *
  * `copy` is a true fork: the inherited prefix was physically copied into the
  * child's file, so the branch leaves the MIDDLE of the parent's life.
@@ -134,7 +134,7 @@ export interface ForkEdgeInput {
   kind?: ForkKind;
   /**
    * The direction of this edge rested on file creation order, not on content —
-   * cc-slurp could not prove which of the two sessions was the copy. Drawn
+   * cc-assay could not prove which of the two sessions was the copy. Drawn
    * differently from a proven edge on purpose: a widget that renders a guess
    * identically to a fact is lying.
    */
@@ -356,7 +356,7 @@ export interface LayoutEdge {
    * tracks are neighbours.
    */
   long: boolean;
-  /** Fork edges only: cc-slurp could not prove the direction. */
+  /** Fork edges only: cc-assay could not prove the direction. */
   ambiguous: boolean;
   /** Fork edges only. */
   forkKind?: ForkKind;

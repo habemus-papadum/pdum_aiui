@@ -86,7 +86,7 @@ export interface TimelineClientOptions {
   onError?: (error: Error) => void;
   onDomain?: (domain: TimelineDomain) => void;
   /**
-   * Whether cc-slurp's `forkEdges` grain is loaded. False in an older dataset,
+   * Whether cc-assay's `forkEdges` grain is loaded. False in an older dataset,
    * where the client falls back to deriving edges from the turns table.
    */
   hasForkEdges?: boolean;
@@ -235,7 +235,7 @@ export class SessionTimelineClient extends MosaicClient {
   }
 
   /**
-   * Fork lineage, read once from cc-slurp's `forkEdges` grain.
+   * Fork lineage, read once from cc-assay's `forkEdges` grain.
    *
    * Fetched in `prepare` and held, rather than joined into the per-brush query,
    * for two reasons. It is tiny and static — ten rows for this corpus, and no
@@ -307,7 +307,7 @@ export class SessionTimelineClient extends MosaicClient {
    * that would legitimately remove one. They are drawn hollow (`ghost`) so they
    * can never be read as work that happened.
    *
-   * Times use cc-slurp's own recipe. `firstTs`/`lastTs` now strictly mean
+   * Times use cc-assay's own recipe. `firstTs`/`lastTs` now strictly mean
    * "first/last billed turn" and are NULL on exactly these rows — they used to
    * be epoch zero, which planted marks in 1970 — so the fallback chain runs
    * through `firstNativeTs` and the file's birthtime.
@@ -399,7 +399,7 @@ export class SessionTimelineClient extends MosaicClient {
 
     if (this.opts.hasForkEdges) return Query.unionAll(sessions, agents).with({ t });
 
-    // Fallback for a dataset predating cc-slurp's `forkEdges` grain: infer the
+    // Fallback for a dataset predating cc-assay's `forkEdges` grain: infer the
     // edge from a turn whose containing file is not its origin session, which
     // means a fork copied it there. Unsound, and knowingly so — dedup keeps ONE
     // copy of each billed turn and which file wins is arbitrary, so when the

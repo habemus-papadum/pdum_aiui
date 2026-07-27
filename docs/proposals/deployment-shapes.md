@@ -2,14 +2,14 @@
 
 **Status:** proposed. Based on three parallel spikes (branches
 `worktree-agent-a42a107a417764b6a`, `-a9ca018e71e265e51`, `-a5600f7749efed279`)
-plus direct measurement against `demos/cc-optimizer`.
+plus direct measurement against `apps/cc-miner`.
 **Date:** 2026-07-26.
 **Companion:** [`claude-code-usage-analytics.md`](./claude-code-usage-analytics.md)
 — that document designs the *data*; this one designs *where it runs*.
 
 ## The question
 
-`demos/cc-optimizer` today is a static page: Parquet arrives as Vite `?url`
+`apps/cc-miner` today is a static page: Parquet arrives as Vite `?url`
 assets, DuckDB-WASM runs in the tab. Three pressures push on that at once:
 
 1. **Multi-machine.** Usage data lives on several machines; it should merge in
@@ -118,7 +118,7 @@ Spike 2, confirmed by me against the real app:
 
 ### 1.6 DuckDB-WASM under Electron: works; SharedArrayBuffer is a red herring
 
-I ran the real `demos/cc-optimizer` build (110 MB `dist`, 95 emitted Parquet
+I ran the real `apps/cc-miner` build (110 MB `dist`, 95 emitted Parquet
 files) under Electron in five configurations:
 
 | # | configuration | origin | `crossOriginIsolated` | `SharedArrayBuffer` | app |

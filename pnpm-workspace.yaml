@@ -5,6 +5,14 @@ packages:
   # Note this also enrolls them in version lockstep — scripts/versioning.mjs reads
   # the globs in this list, so every demo carries the shared version.
   - "demos/*"
+  # Standalone apps, staged for eviction to their own repo. They are full
+  # workspace members TODAY — `workspace:^` source-first editing, CI typecheck,
+  # version lockstep — and `scripts/evict.mjs` rewrites a copy to consume
+  # `@habemus-papadum/*` from npm instead. Living here rather than in demos/
+  # says they are products, not illustrations: nothing discovers them, nothing
+  # composes them, and their dependency on this repo is meant to become a
+  # published version range. See CLAUDE.md → "The apps/ directory".
+  - "apps/*"
 
 # The ONE npm-pinned in-repo package (bootstrap/aiui-registry — outside the
 # workspace, published manually; see CLAUDE.md → "The bootstrap/ directory").
@@ -19,7 +27,7 @@ catalog:
 # connection into `wasmConnector()` fails to typecheck against the other copy's
 # `AsyncDuckDBConnection` — same shape, different declaration. Collapsing to one
 # copy is what makes the types unify; keep this in step with the version the
-# duckdb-wasm consumers (aiui-viz, demos/seismos, demos/cc-optimizer) declare.
+# duckdb-wasm consumers (aiui-viz, demos/seismos, apps/cc-miner) declare.
 overrides:
   "@duckdb/duckdb-wasm": 1.33.1-dev61.0
 

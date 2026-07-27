@@ -130,7 +130,7 @@ export async function normalizeCorpus(options: RunOptions): Promise<RunResult> {
 async function normalizeFromRaw(options: RunOptions, rawDir: string): Promise<RunResult> {
   const sets = await findHostSets(rawDir);
   if (sets.length === 0) {
-    throw new Error(`no host sets under ${rawDir} — run \`cc-slurp raw\` first`);
+    throw new Error(`no host sets under ${rawDir} — run \`cc-assay raw\` first`);
   }
   const n = new Normalizer({
     pricing: options.pricing,

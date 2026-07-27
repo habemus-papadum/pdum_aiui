@@ -348,7 +348,7 @@ export function SessionTimeline() {
             {/* edges under the bars: they are relationships, not marks */}
             <g fill="none">
               {/* Two independent dash codes, and they must not be confused.
-                  `1 3` (dotted) means cc-slurp could not PROVE which session
+                  `1 3` (dotted) means cc-assay could not PROVE which session
                   was the copy — a claim about certainty. `4 3` (dashed) means
                   the two endpoints are far apart in time — a claim about the
                   data. A proven fork across a long gap is solid-but-faded;

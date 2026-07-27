@@ -54,7 +54,7 @@ export interface ReplayData {
 export interface SessionShape {
   sessionId: string;
   project: string;
-  /** The resolved display name; see cc-slurp's `resolveSessionName`. */
+  /** The resolved display name; see cc-assay's `resolveSessionName`. */
   name: string | null;
   /** The name this session started with, when it was later renamed. */
   nameWas: string | null;
@@ -507,7 +507,7 @@ export const querySql = action({
   name: "query",
   description:
     "Run read-only SQL over the loaded tables: turns, toolCalls, events, sessions, images. " +
-    "Returns at most 200 rows as JSON. See aiui-cc-slurp's normalize.ts for the column list.",
+    "Returns at most 200 rows as JSON. See aiui-cc-assay's normalize.ts for the column list.",
   params: { sql: "A DuckDB SELECT statement over turns/toolCalls/events/sessions/images." },
   run: async (args?: Record<string, unknown>) => {
     const query = typeof args?.sql === "string" ? args.sql : "";

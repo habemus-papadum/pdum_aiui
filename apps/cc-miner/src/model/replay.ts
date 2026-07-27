@@ -2,7 +2,7 @@
  * replay.ts — the session replay's pure model (playbook layer 1).
  *
  * The finest drill-down: read one session back, block by block, multi-agent
- * aware. The grain it reads is written by cc-slurp's `replay.ts` and fetched
+ * aware. The grain it reads is written by cc-assay's `replay.ts` and fetched
  * per session; this module turns its flat rows into something readable.
  *
  * Two transformations do all the work.
