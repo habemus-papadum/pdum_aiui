@@ -64,6 +64,7 @@ guides, and a TypeDoc API reference automatically.
 - [The Agent's Browser](./chrome) — the shared session browser, the managed browser (Chromium / Chrome for Testing), profiles.
 - [Remote Development](./remote) — session on a remote box, browser on yours.
 - [Configuration](./config) — config.json: locations, keys, precedence.
+- [DuckDB in the Browser](./duckdb-mosaic) — Parquet into Wasm, the Quack remote protocol, Mosaic wiring, and measured numbers. Standalone; no aiui required.
 - [Frontend for Agents](./frontend-for-agents) — how the code itself should be written.
 - [⚠️ Read before running](./warning) — the security posture, plainly.
 - [Packages](/packages/) — the package index and per-package API references.

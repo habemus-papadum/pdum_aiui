@@ -225,6 +225,7 @@ function main() {
           { text: "The Agent's Browser", link: "/guide/chrome" },
           { text: "Remote Development", link: "/guide/remote" },
           { text: "Attribution: Gesture → Source", link: "/guide/attribution" },
+          { text: "DuckDB in the Browser", link: "/guide/duckdb-mosaic" },
           {
             text: "Frontend for Agents",
             collapsed: false,

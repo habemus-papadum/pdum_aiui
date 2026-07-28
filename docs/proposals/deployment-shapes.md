@@ -316,12 +316,15 @@ Two client shapes — stateless `quack_query(uri, sql, …)`, or
 `ATTACH 'quack:host:port' AS db (TOKEN '…')`. Token auth. Results ride DuckDB's
 internal serialisation, so complex types survive losslessly.
 
-**No version bump is needed.** The duckdb-wasm we already pin —
-`1.33.1-dev61.0` — embeds **DuckDB v1.5.4** and ships quack **statically
-linked** (`loaded: true, installed: false`, ext `40de7ba`); `LOAD quack` alone
-works, no `INSTALL`. (`dev64` carries v1.5.5. Native `@duckdb/node-api@1.5.5-r.2`
-*does* need an explicit `INSTALL quack` — the static linking is a Wasm-build
-property.)
+**A version bump IS needed — corrected 2026-07-28 by the performance pass.** The
+duckdb-wasm we pin, `1.33.1-dev61.0`, embeds **DuckDB v1.5.4** and ships quack
+**statically linked** (`loaded: true, installed: false`); `LOAD quack` alone
+works, no `INSTALL`. But its quack build is `40de7ba` while native
+`@duckdb/node-api@1.5.5-r.2` carries `c154811`. That skew answers simple queries
+correctly and then dies on a mixed-type aggregate with `INTERNAL Error:
+Vector::Reference used on vector of different type` — **which is fatal to the
+entire Wasm database**, not just the query. `1.33.1-dev64.0` carries v1.5.5 /
+`c154811` and matches. Client and server must run the same quack build.
 
 **It is browser-ready with zero configuration**, which the docs do not say
 outright. Captured off the wire through a logging proxy:
@@ -368,9 +371,38 @@ outright and re-querying: 250 rows before, 250 after.
 *queries*, nothing needs to serve *bytes*. Mode 1 (static assets + Wasm) is
 untouched and still the static-page deployment.
 
-**Not yet tested**: TLS, real network latency, large result sets, concurrency,
-the actual 289 MB corpus, reconnect/error behaviour, and how the token should be
-handled when the page is not talking to a local sidecar.
+### 1.13 The `ATTACH` route is a trap; `quack_query` is the real one
+
+The performance pass (2026-07-28, 272 MB / 45 M-row table, bytes counted by a
+proxy) found that the two Quack client shapes are not interchangeable:
+
+| query | time | wire | RPC |
+| --- | --- | --- | --- |
+| `ATTACH` → group-by aggregate, 5 rows | 2683 ms | **5261.7 MB** | 1853 |
+| `ATTACH` → `SELECT count(*)`, 1 row | 2677 ms | **5261.7 MB** | 1852 |
+| `quack_query` → same aggregate | **29 ms** | **~0 MB** | 3 |
+| `quack_query` → same count | **5 ms** | **~0 MB** | 3 |
+
+**`ATTACH` does no pushdown at all** — predicate, projection, aggregate or
+`LIMIT`. A bare `count(*)` drags the whole table over. From the browser the same
+aggregate took **30,987 ms**. So §1.12's `ATTACH`-plus-local-view recipe is
+correct for *addressing* a remote table and wrong for *querying* one at size.
+
+The working shape is a Mosaic connector that wraps Mosaic's generated SQL in
+`quack_query`, delegating to `wasmConnector` for the Arrow IPC decode (returning
+duckdb-wasm's apache-arrow table directly fails: Mosaic wants flechette). Four
+lines, and it makes the Wasm instance a pure protocol client. Measured with it: a
+live crossfilter `vgplot` chart over the 272 MB remote table renders in
+**406 ms with ~0 MB reaching the browser**, 12 RPC calls. Mosaic's
+pre-aggregation survives `quack_query`'s fresh-session-per-call semantics only
+because `PreAggregator` creates its cube with `{ temp: false }` — temp tables
+would not have.
+
+Full write-up, with the load-path numbers and runnable code, is the standalone
+guide: [`docs/guide/duckdb-mosaic.md`](../guide/duckdb-mosaic.md).
+
+**Not yet tested**: TLS, real network latency, reconnect/error behaviour, and how
+the token should be handled when the page is not talking to a local sidecar.
 
 ## 2. The design
 
