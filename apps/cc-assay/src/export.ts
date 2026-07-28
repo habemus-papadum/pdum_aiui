@@ -47,7 +47,12 @@ export interface ShardEntry {
   host: string;
   month?: string;
   path: string;
-  bytes: number;
+  /**
+   * Exact size, when the writer could see it. Absent for an S3 prefix, where
+   * there is no cheap stat — a fabricated number would be worse than none, so
+   * local-bytes selection falls back to Content-Length at fetch time.
+   */
+  bytes?: number;
   rows: number;
 }
 
@@ -94,8 +99,14 @@ export async function attachS3(conn: DuckDBConnection, profile: string): Promise
   await conn.run("LOAD httpfs");
   await conn.run("INSTALL aws");
   await conn.run("LOAD aws");
+  // CHAIN is NOT optional. The default credential chain has no SSO step, so an
+  // SSO profile fails at CREATE with "Secret Validation Failure" — measured
+  // against a real `sso_session` profile. 'sso' alone then breaks static
+  // profiles, so the chain names all three sources: env vars, SSO cache, then
+  // ~/.aws/credentials.
   await conn.run(
-    `CREATE OR REPLACE SECRET cc_s3 (TYPE s3, PROVIDER credential_chain, PROFILE '${profile}')`,
+    `CREATE OR REPLACE SECRET cc_s3 (TYPE s3, PROVIDER credential_chain, ` +
+      `CHAIN 'env;sso;config', PROFILE '${profile}')`,
   );
 }
 
@@ -151,7 +162,7 @@ export function buildIndex(
     ),
     shards,
     totals: {
-      bytes: shards.reduce((a, s) => a + s.bytes, 0),
+      bytes: shards.reduce((a, s) => a + (s.bytes ?? 0), 0),
       rows: shards.reduce((a, s) => a + s.rows, 0),
     },
   };
@@ -206,9 +217,12 @@ export function selectShards(index: CorpusIndex, budgetBytes: number): ShardEntr
   const out: ShardEntry[] = [];
   let total = 0;
   for (const s of ordered) {
-    if (total + s.bytes > budgetBytes) continue;
+    // An unsized shard (an S3 index) cannot be budgeted ahead of time; take it
+    // and let the fetcher stop on actual Content-Length.
+    const size = s.bytes ?? 0;
+    if (total + size > budgetBytes) continue;
     out.push(s);
-    total += s.bytes;
+    total += size;
   }
   return out;
 }

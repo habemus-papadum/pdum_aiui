@@ -120,10 +120,33 @@ For S3, the same statement with an `s3://` target, after one secret:
 CREATE OR REPLACE SECRET cc_s3 (TYPE s3, PROVIDER credential_chain, PROFILE '<aws-profile>');
 ```
 
-That is the entire AWS integration — no SDK, one credential mechanism for both
-reading and writing. `credential_chain` honours SSO profiles, which expire; a
-stale session must surface as "run `aws sso login --profile <p>`" rather than an
-opaque S3 error.
+**`CHAIN` is not optional.** DuckDB's default credential chain has **no SSO
+step**, so an `sso_session` profile fails outright at `CREATE SECRET` with
+`Secret Validation Failure` — measured against a real SSO profile. `CHAIN 'sso'`
+alone then breaks static profiles, so name all three sources:
+
+```sql
+CREATE OR REPLACE SECRET cc_s3 (
+  TYPE s3, PROVIDER credential_chain,
+  CHAIN 'env;sso;config', PROFILE '<aws-profile>');
+```
+
+That one statement is the entire AWS integration — no SDK, one credential
+mechanism for both reading and writing.
+
+**An expired SSO session is indistinguishable from a bad profile.** Measured with
+an isolated `HOME` holding a deliberately expired token cache: both produce the
+byte-identical
+
+```
+Invalid Configuration Error: Secret Validation Failure: during `create` …
+Profile: '<p>'  Credential Chain: 'env;sso;config'
+```
+
+with no "expired", no "token", nothing to match on. So do **not** write a
+regex that claims the session expired — it will be wrong half the time and send
+the reader down the wrong path. Name both causes and offer
+`aws sts get-caller-identity --profile <p>` as the disambiguator.
 
 ## `index.json`
 

@@ -99,8 +99,12 @@ async function main() {
     // One statement is the entire AWS integration — no SDK, no credential
     // plumbing. `credential_chain` honours SSO profiles, so an expired session
     // surfaces here as a clear error rather than a cryptic S3 failure later.
+    // CHAIN is NOT optional — the default chain has no SSO step and an SSO
+    // profile fails outright at CREATE. Naming all three sources covers env
+    // vars, the SSO cache, and static ~/.aws/credentials profiles alike.
     await conn.run(
-      `CREATE OR REPLACE SECRET cc_s3 (TYPE s3, PROVIDER credential_chain, PROFILE '${s3Profile}')`,
+      `CREATE OR REPLACE SECRET cc_s3 (TYPE s3, PROVIDER credential_chain, ` +
+        `CHAIN 'env;sso;config', PROFILE '${s3Profile}')`,
     );
   }
 
@@ -163,6 +167,19 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error("[duckdb-host] failed:", e?.message ?? e);
+  const msg = String(e?.message ?? e);
+  console.error("[duckdb-host] failed:", msg);
+  // Same ambiguity as the exporter: DuckDB reports an expired SSO session and a
+  // bad profile name with the identical "Secret Validation Failure", so name
+  // both rather than guessing.
+  if (/Secret Validation Failure|credential_chain/i.test(msg)) {
+    const p = process.argv[process.argv.indexOf("--s3-profile") + 1] ?? "<profile>";
+    console.error(
+      `\n  AWS credentials for profile '${p}' could not be resolved. Check both:\n` +
+        `    • expired SSO session  →  aws sso login --profile ${p}\n` +
+        `    • wrong/missing profile in ~/.aws/config\n` +
+        `  Confirm with: aws sts get-caller-identity --profile ${p}\n`,
+    );
+  }
   process.exit(1);
 });

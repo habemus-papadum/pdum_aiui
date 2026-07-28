@@ -6,9 +6,17 @@
  * The layout and the reasoning behind it are LAYOUT.md; the SQL is export.ts.
  * This file is only argument handling, iteration, and the index.
  */
-import { cpSync, existsSync, globSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  globSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
-import { DuckDBInstance } from "@duckdb/node-api";
+import { type DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import {
   attachS3,
   buildIndex,
@@ -58,14 +66,14 @@ async function main(): Promise<void> {
       continue;
     }
     await conn.run(exportGrainSql(grain, opts));
-    if (isS3) {
-      // No cheap local stat for an S3 prefix; the index records rows only, and
-      // a later `--reindex` against the bucket can fill in sizes.
-      console.log(`  ✓ ${grain.name} → ${to}/${grain.name}`);
-      continue;
-    }
-    for (const file of globSync(`${to}/${grain.name}/**/*.parquet`)) {
-      const rel = path.relative(to, file);
+    // `glob()` is DuckDB's, so it lists a local directory and an S3 prefix with
+    // the same call — which is what keeps this loop single-path.
+    const written = (
+      await conn.runAndReadAll(`SELECT file FROM glob('${to}/${grain.name}/**/*.parquet')`)
+    ).getRowObjects();
+    for (const row of written) {
+      const file = String(row.file);
+      const rel = file.startsWith(to) ? file.slice(to.length + 1) : path.relative(to, file);
       const rows = Number(
         (
           await conn.runAndReadAll(`SELECT count(*) AS n FROM read_parquet('${file}')`)
@@ -78,7 +86,10 @@ async function main(): Promise<void> {
         host: hostId,
         ...(month ? { month } : {}),
         path: rel,
-        bytes: statSync(file).size,
+        // Local prefixes get an exact size. On S3 there is no cheap stat, and a
+        // wrong number is worse than an absent one — local-bytes mode falls back
+        // to Content-Length at fetch time.
+        ...(isS3 ? {} : { bytes: statSync(file).size }),
         rows,
       });
     }
@@ -86,28 +97,71 @@ async function main(): Promise<void> {
   }
 
   // Replay is per-session and read by path, not globbed as a grain — it travels
-  // beside the partitions rather than inside them.
+  // beside the partitions rather than inside them. On S3 there is no `cp`, so
+  // each file is re-encoded through DuckDB; the schema is unchanged and it keeps
+  // the whole tool free of an AWS SDK.
   const replaySrc = path.resolve(from, "replay");
-  if (!isS3 && existsSync(replaySrc)) {
-    cpSync(replaySrc, path.join(to, "replay"), { recursive: true });
-    console.log("  ✓ replay/");
+  if (existsSync(replaySrc)) {
+    if (isS3) {
+      const files = globSync(`${replaySrc}/*.parquet`);
+      for (const f of files) {
+        await conn.run(
+          `COPY (SELECT * FROM read_parquet('${f}')) TO '${to}/replay/${path.basename(f)}' ` +
+            `(FORMAT parquet, COMPRESSION zstd)`,
+        );
+      }
+      console.log(`  ✓ replay/ (${files.length} sessions)`);
+    } else {
+      cpSync(replaySrc, path.join(to, "replay"), { recursive: true });
+      console.log("  ✓ replay/");
+    }
   }
-  const manifest = path.resolve(from, "manifest.json");
-  if (!isS3 && existsSync(manifest)) cpSync(manifest, path.join(to, "manifest.json"));
 
-  if (!isS3) {
-    const index = buildIndex(shards, { users: [username], hosts: { [hostId]: hostname } });
-    writeFileSync(path.join(to, "index.json"), `${JSON.stringify(index, null, 2)}\n`);
-    const mb = (index.totals.bytes / 1e6).toFixed(2);
-    console.log(`\n  ${shards.length} shards, ${mb} MB, ${index.totals.rows} rows → ${to}`);
+  const manifest = path.resolve(from, "manifest.json");
+  if (existsSync(manifest)) {
+    if (isS3) await writeBlob(conn, `${to}/manifest.json`, readFileSync(manifest, "utf8"));
+    else cpSync(manifest, path.join(to, "manifest.json"));
   }
+
+  const index = buildIndex(shards, { users: [username], hosts: { [hostId]: hostname } });
+  const json = `${JSON.stringify(index, null, 2)}\n`;
+  if (isS3) await writeBlob(conn, `${to}/index.json`, json);
+  else writeFileSync(path.join(to, "index.json"), json);
+
+  const size = index.totals.bytes ? `${(index.totals.bytes / 1e6).toFixed(2)} MB, ` : "";
+  console.log(`\n  ${shards.length} shards, ${size}${index.totals.rows} rows → ${to}`);
+}
+
+/**
+ * Write an arbitrary text file to a local path or S3, using only DuckDB.
+ *
+ * The CSV writer with quoting disabled emits the value verbatim, which is the
+ * one way to put a non-Parquet blob on S3 without pulling in an AWS SDK just for
+ * two small files.
+ */
+async function writeBlob(conn: DuckDBConnection, target: string, contents: string): Promise<void> {
+  const literal = contents.replaceAll("'", "''");
+  await conn.run(
+    `COPY (SELECT '${literal}' AS blob) TO '${target}' ` +
+      `(FORMAT csv, HEADER false, QUOTE '', DELIMITER ',')`,
+  );
 }
 
 main().catch((e) => {
   const msg = String(e?.message ?? e);
-  // SSO sessions expire; say what to do rather than surfacing an S3 403.
-  if (/expired|token|credential|sso/i.test(msg)) {
-    console.error(`\nAWS credentials look stale — try: aws sso login --profile <your-profile>\n`);
+  // Measured: an EXPIRED SSO session and a MISCONFIGURED profile produce the
+  // byte-identical "Secret Validation Failure" — no "expired", no "token", no
+  // way to tell them apart from the message. So this does not guess. Naming
+  // both causes is more useful than confidently naming the wrong one.
+  if (/Secret Validation Failure|credential_chain/i.test(msg)) {
+    const p = process.argv[process.argv.indexOf("--s3-profile") + 1] ?? "<profile>";
+    console.error(
+      `\nDuckDB could not resolve AWS credentials for profile '${p}'.\n` +
+        `DuckDB's error does not distinguish these, so check both:\n` +
+        `  • the SSO session has expired   →  aws sso login --profile ${p}\n` +
+        `  • the profile is missing or misnamed in ~/.aws/config\n` +
+        `Confirm with: aws sts get-caller-identity --profile ${p}\n`,
+    );
   }
   console.error(msg);
   process.exit(1);
