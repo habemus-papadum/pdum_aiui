@@ -20,6 +20,7 @@
 import aiui from "@habemus-papadum/aiui-source-processor";
 import type { UserConfig } from "vite";
 import solid from "vite-plugin-solid";
+import { duckdbHost } from "./server/vite-plugin";
 
 /**
  * Solid 2.0 (beta) via vite-plugin-solid@next (bundles solid-refresh for HMR).
@@ -38,6 +39,10 @@ import solid from "vite-plugin-solid";
  */
 export function ccMinerConfig(): UserConfig {
   return {
-    plugins: [aiui(), solid()],
+    // duckdbHost() is dev-server middleware only: it exposes `/quack` and
+    // `/__duckdb-host` so the page reaches the DuckDB process without ever
+    // knowing its port. Both hosts get it, because both serve the app from a
+    // Vite dev server.
+    plugins: [aiui(), solid(), duckdbHost()],
   };
 }

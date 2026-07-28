@@ -23,11 +23,13 @@
     "dev:electron": "node electron/dev.mjs",
     "normalize": "pnpm -C ../cc-assay normalize -- --out ../cc-miner/src/data",
     "open": "../../bin/aiui open",
+    "serve": "node server/duckdb-host.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.33.1-dev61.0",
+    "@duckdb/node-api": "1.5.5-r.2",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@habemus-papadum/cc-assay": "workspace:^",

@@ -13,10 +13,34 @@ a different build, it is a different window pointed at an equivalent Vite server
 packaging story yet — no DMG, no `app://`, no code signing.
 
 ```sh
-pnpm claude          # terminal 1 — Claude Code with the aiui channel + session browser
+pnpm serve           # terminal 1 — the DuckDB host (required; see below)
 pnpm dev             # terminal 2 — browser host, http://localhost:5173
 pnpm dev:electron    #     …or the Electron host, http://localhost:5179 in a window
+pnpm claude          # terminal 3 — Claude Code with the aiui channel + session browser
 ```
+
+## The DuckDB host
+
+The app does **not** query Parquet in the tab. A native DuckDB process holds the
+data and answers over [Quack](https://duckdb.org/docs/current/quack/overview),
+DuckDB's own HTTP remote protocol; the page's duckdb-wasm is kept solely to speak
+that protocol. Zero Parquet bytes reach the browser.
+
+```sh
+pnpm serve --flat                     # the legacy flat src/data layout
+pnpm serve --data <dir>               # a Hive-partitioned corpus on disk
+pnpm serve --s3-prefix s3://bucket/cc --s3-profile personal
+```
+
+It picks a free port, writes `.aiui-cache/duckdb-host.json`, and the Vite plugin
+proxies `/quack` there — so **no port is ever hardcoded in the page**. Start
+order does not matter: the runtime file is read per request, and the app says so
+plainly if the host is not up.
+
+Why not `ATTACH` the remote catalog and query it like a local table? Because
+`ATTACH` does no pushdown at all — a bare `count(*)` over a 272 MB table moved
+5.26 GB — while sending the SQL with `quack_query` answered it in 5 ms with ~0
+bytes. See [the DuckDB guide](../../docs/guide/duckdb-mosaic).
 
 The two can run at the same time; the Electron one suffixes its title with `· electron` so the
 windows are tellable apart. `pnpm dev:electron` opens a Chrome DevTools Protocol port on **9333**

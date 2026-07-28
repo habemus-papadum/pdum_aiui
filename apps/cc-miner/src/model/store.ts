@@ -25,19 +25,10 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { control, scope } from "@habemus-papadum/aiui-viz";
 import { clausePoints } from "@uwdata/mosaic-core";
-import { Coordinator, Selection, wasmConnector } from "@uwdata/vgplot";
-// Asset imports, not public/ fetches: these resolve from THIS package, so the
-// data travels with the demo into any consumer's build.
-import agentRunsUrl from "../data/agentRuns.parquet?url";
-import eventsUrl from "../data/events.parquet?url";
-import forkEdgesUrl from "../data/forkEdges.parquet?url";
-import imagesUrl from "../data/images.parquet?url";
-import lineagesUrl from "../data/lineages.parquet?url";
-import sessionsUrl from "../data/sessions.parquet?url";
-import toolCallsUrl from "../data/toolCalls.parquet?url";
-import turnsUrl from "../data/turns.parquet?url";
-import { BUNDLES, fetchWithProgress, instantiateDuckDB } from "../duckdb";
+import { Coordinator, Selection } from "@uwdata/vgplot";
+import { BUNDLES, instantiateDuckDB } from "../duckdb";
 import { type DurableState, durableState, toggled } from "./durable-state";
+import { fetchHostInfo, type HostInfo, quackConnector, quackUri, replayFileSql } from "./quack";
 import { plainRow } from "./rows";
 import {
   type SelectionStats,
@@ -77,26 +68,25 @@ export const idleGapMinutes = control({
 
 /** The five grains every version of the normalizer writes. */
 export const TABLES = {
-  turns: turnsUrl,
-  toolCalls: toolCallsUrl,
-  events: eventsUrl,
-  sessions: sessionsUrl,
-  images: imagesUrl,
+  turns: true,
+  toolCalls: true,
+  events: true,
+  sessions: true,
+  images: true,
 } as const;
 
 /**
  * Grains the normalizer grew later — fork lineage and per-agent runs.
  *
- * Optional, and loaded through a `?url` import that resolves at build time, so
- * a checkout whose `src/data` predates them still boots: a missing file 404s at
- * fetch and the app carries on without that table. The alternative — listing
- * them as required — turns a stale dataset into a blank page, and the sessions
- * are the point even when the lineage is absent.
+ * Optional because a corpus normalised before they existed simply has no such
+ * files, and the host reports which grains it actually resolved. The app runs
+ * without them; listing them as required would turn a stale dataset into a
+ * blank page, and the sessions are the point even when the lineage is absent.
  */
 export const OPTIONAL_TABLES = {
-  forkEdges: forkEdgesUrl,
-  agentRuns: agentRunsUrl,
-  lineages: lineagesUrl,
+  forkEdges: true,
+  agentRuns: true,
+  lineages: true,
 } as const;
 
 export type TableName = keyof typeof TABLES | keyof typeof OPTIONAL_TABLES;
@@ -133,7 +123,7 @@ export interface CorpusSummary {
 }
 
 export interface LoadProgress {
-  /** 0..1 across all five tables, or null before the first byte arrives. */
+  /** 0..1 through the boot steps, or null when the step has no measure. */
   fraction: number | null;
   label: string;
 }
@@ -200,6 +190,15 @@ const engineBox = appScope.durable<{ engine: Engine | null; loading: Promise<voi
   "engine",
   () => ({ engine: null, loading: null }),
 );
+
+/**
+ * What the DuckDB host told us at handshake. Kept because `ensureReplay` needs
+ * the host's replay location, which only the host knows — it differs between a
+ * local checkout and an S3 prefix.
+ */
+const hostInfoBox = appScope.durable<{ info: HostInfo | null }>("hostInfo", () => ({
+  info: null,
+}));
 
 // --- the session timeline: Mosaic's side of the crossfilter -------------------
 //
@@ -390,9 +389,23 @@ async function load(): Promise<void> {
   // compute — is inside one synchronously. After an await the owner is no
   // longer current, so every signal this function touches is written safely.
   await Promise.resolve();
+  progress.set({ fraction: null, label: "finding the DuckDB host" });
+
+  // The data lives in a native DuckDB process, not in this tab. Ask the dev
+  // server for its token before booting Wasm at all — a missing host is the
+  // common first-run state and deserves a plain message, not a Wasm boot
+  // followed by a cryptic query failure.
+  const host = await fetchHostInfo();
+  if (!host.ok || !host.token) {
+    throw new Error(host.error ?? "the DuckDB host is not running");
+  }
+
   progress.set({ fraction: null, label: "starting DuckDB" });
   const db = await instantiateDuckDB(BUNDLES);
   const conn = await db.connect();
+  // Wasm is a protocol client here and nothing else: quack is statically linked
+  // into the Wasm build, so LOAD alone suffices (no INSTALL, no network).
+  await conn.query("LOAD quack");
   // preagg OFF, deliberately and permanently. It is the one component in
   // mosaic-core that is coupled to a client's table: it materialises its view as
   // `Query.from(clientQuery._from).select({...activeClauseColumns})` — the
@@ -409,41 +422,29 @@ async function load(): Promise<void> {
   // would have to misstate its own semantics purely to dodge the optimizer. The
   // breakage is not about stability at all, so the switch belongs here.
   const coordinator = new Coordinator(undefined, { preagg: { enabled: false } });
-  coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: conn }));
+  coordinator.databaseConnector(
+    quackConnector({ connection: conn, uri: quackUri(), token: host.token }),
+  );
   engineBox.engine = { db, conn, coordinator };
+  hostInfoBox.info = host;
 
-  const registerTable = async (name: string, url: string, onBytes: (f: number) => void) => {
-    const buf = await fetchWithProgress(url, onBytes);
-    // Same split as `ensureReplay`: handing bytes to an in-page database is
-    // WASM-specific, the CREATE is ordinary SQL and goes through the
-    // coordinator. By this point the connector is installed, so it is live.
-    await db.registerFileBuffer(`${name}.parquet`, buf);
-    await coordinator.exec(
-      `CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_parquet('${name}.parquet')`,
-    );
-  };
-
-  const names = Object.keys(TABLES) as Array<keyof typeof TABLES>;
-  let done = 0;
-  for (const name of names) {
-    progress.set({ fraction: done / names.length, label: `loading ${name}` });
-    await registerTable(name, TABLES[name], (within: number) => {
-      progress.set({ fraction: (done + within) / names.length, label: `loading ${name}` });
-    });
-    done++;
+  // There is no loading step any more. The host already has the views — it
+  // created them at boot over local Parquet or over S3 — so "loading" is a
+  // handshake, not a download. The grains it reports are the grains that exist.
+  const available = new Set(host.grains ?? []);
+  for (const name of Object.keys(TABLES) as Array<keyof typeof TABLES>) {
+    if (!available.has(name)) {
+      throw new Error(
+        `the DuckDB host has no "${name}" grain (it reported: ${[...available].join(", ") || "none"})`,
+      );
+    }
   }
 
-  // The optional grains, each independently. One that is absent (an older
-  // src/data) or malformed must not take the other four down with it, so every
-  // failure is recorded and swallowed rather than propagated.
+  // The optional grains — fork lineage, per-agent runs. Absent from an older
+  // corpus, and the app must run without them, so this is a set membership test
+  // against what the host reported rather than a load that can fail.
   for (const name of Object.keys(OPTIONAL_TABLES) as Array<keyof typeof OPTIONAL_TABLES>) {
-    progress.set({ fraction: 1, label: `loading ${name}` });
-    try {
-      await registerTable(name, OPTIONAL_TABLES[name], () => {});
-      loaded.add(name);
-    } catch {
-      /* grain not in this dataset — the app runs without it */
-    }
+    if (available.has(name)) loaded.add(name);
   }
 
   progress.set({ fraction: 1, label: "summarizing" });
@@ -609,16 +610,16 @@ export async function ensureReplay(sessionId: string): Promise<string | null> {
   if (replayLoaded.has(sessionId)) return table;
   const e = engineBox.engine;
   if (!e) throw new Error("no connection");
-  const url = new URL(`../data/replay/${sessionId}.parquet`, import.meta.url);
-  const buf = await fetchWithProgress(url.href, () => {});
-  // registerFileBuffer is genuinely WASM-specific — it hands bytes to an
-  // in-page database. That is seam 2 (where bytes come from), and a backend
-  // would replace this whole function rather than this line. The CREATE, by
-  // contrast, is ordinary SQL and belongs to the coordinator like everything
-  // else.
-  await e.db.registerFileBuffer(`${table}.parquet`, buf);
+  // Once every query runs in the host, a replay is not something to *fetch* —
+  // it is a view the host creates over a file it already has. What used to be
+  // fetch + registerFileBuffer + CREATE is now one statement, and the 29.5 MB
+  // of replay Parquet never crosses into the page at all. The view persists
+  // because `quack_query` sessions share one database (only TEMP objects are
+  // per-call).
+  const base = hostInfoBox.info?.replayBase;
+  if (!base) throw new Error("the DuckDB host did not advertise a replay location");
   await e.coordinator.exec(
-    `CREATE OR REPLACE TABLE "${table}" AS SELECT * FROM read_parquet('${table}.parquet')`,
+    `CREATE OR REPLACE VIEW "${table}" AS SELECT * FROM read_parquet(${replayFileSql(base, sessionId)})`,
   );
   replayLoaded.add(sessionId);
   return table;
