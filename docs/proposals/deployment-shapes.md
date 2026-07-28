@@ -304,6 +304,74 @@ while shedding the permission gate. (Aside, learned by tripping on it: MV3's
 `script-src 'self'` is enforced in Electron too — inline `<script>` in an
 extension page silently does nothing.)
 
+### 1.12 Quack: DuckDB's own remote protocol reaches the WASM client
+
+Spiked 2026-07-28, end to end: native server, browser client, then Mosaic on top.
+This supersedes the assumption that mode 3 means reimplementing Mosaic's Python
+`duckdb-server` in JavaScript.
+
+**What Quack is.** An extension that turns a DuckDB instance into an HTTP server
+other DuckDB instances connect to as clients. Core repo, **DuckDB v1.5.3+**.
+Two client shapes — stateless `quack_query(uri, sql, …)`, or
+`ATTACH 'quack:host:port' AS db (TOKEN '…')`. Token auth. Results ride DuckDB's
+internal serialisation, so complex types survive losslessly.
+
+**No version bump is needed.** The duckdb-wasm we already pin —
+`1.33.1-dev61.0` — embeds **DuckDB v1.5.4** and ships quack **statically
+linked** (`loaded: true, installed: false`, ext `40de7ba`); `LOAD quack` alone
+works, no `INSTALL`. (`dev64` carries v1.5.5. Native `@duckdb/node-api@1.5.5-r.2`
+*does* need an explicit `INSTALL quack` — the static linking is a Wasm-build
+property.)
+
+**It is browser-ready with zero configuration**, which the docs do not say
+outright. Captured off the wire through a logging proxy:
+
+```
+>>> POST /quack   content-type: application/octet-stream
+<<< 200           content-type: application/vnd.duckdb
+                  access-control-allow-origin: *
+```
+
+Two things fall out. `application/octet-stream` makes this a CORS **simple
+request**, so **no preflight fires** — which is why the server answering `OPTIONS`
+with a 404 is harmless. And the RPC response carries `ACAO: *`. Measured from a
+page on `localhost:5175`: cross-origin straight at `:9494` **works, 14 ms**; through
+a same-origin proxy, 6 ms. No nginx required for the browser case — the docs'
+reverse proxy is about TLS, not CORS.
+
+**A trap worth recording**: `GET /` returns a friendly text page (*"This is a
+DuckDB Quack RPC endpoint"*) with **no CORS headers at all**. Probing that with
+curl says "no CORS support" and is simply the wrong endpoint. It cost a wrong
+conclusion here before the wire capture corrected it. Also: `quack_serve()`
+requires the `quack:` scheme on its own **listen** address — `'0.0.0.0:9494'`
+errors, `'quack:0.0.0.0:9494'` works.
+
+**Mosaic needs no changes.** `wasmConnector` is handed an ordinary duckdb-wasm
+instance that merely has a remote catalog attached; the remoteness lives entirely
+below Mosaic. Coordinator queries returned correct results in 7–17 ms.
+
+**One real gotcha, and it is Mosaic's, not Quack's.** Mosaic quotes a dotted
+table name as a *single* identifier — `api.from("remote.turns")` emits
+`FROM "remote.turns"` and dies with `Catalog Error: Table with name remote.turns
+does not exist!`. The fix is one line and copies nothing:
+
+```sql
+CREATE VIEW remote_turns AS SELECT * FROM remote.turns;   -- then api.from("remote_turns")
+```
+
+With that view, a `vgplot` `rectY`+`bin`+`intervalX` crossfilter chart rendered
+**identically to a local-table control — 21 marks / 103 ms versus 21 marks /
+101 ms**, zero console errors. Push-down was proven by dropping the local copy
+outright and re-querying: 250 rows before, 250 after.
+
+**So Quack is a better mode 3, and it subsumes mode 2** — if the server answers
+*queries*, nothing needs to serve *bytes*. Mode 1 (static assets + Wasm) is
+untouched and still the static-page deployment.
+
+**Not yet tested**: TLS, real network latency, large result sets, concurrency,
+the actual 289 MB corpus, reconnect/error behaviour, and how the token should be
+handled when the page is not talking to a local sidecar.
+
 ## 2. The design
 
 ### 2.1 Two nested seams, not one
