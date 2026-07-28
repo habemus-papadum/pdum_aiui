@@ -110,7 +110,13 @@ async function main(): Promise<void> {
             `(FORMAT parquet, COMPRESSION zstd)`,
         );
       }
-      console.log(`  ✓ replay/ (${files.length} sessions)`);
+      // The replay INDEX is metadata beside the shards, and the app is useless
+      // without it — an earlier version uploaded only the .parquet files and the
+      // panel reported "built without the replay grain".
+      const idx = path.join(replaySrc, "index.json");
+      if (existsSync(idx))
+        await writeBlob(conn, `${to}/replay/index.json`, readFileSync(idx, "utf8"));
+      console.log(`  ✓ replay/ (${files.length} sessions${existsSync(idx) ? " + index" : ""})`);
     } else {
       cpSync(replaySrc, path.join(to, "replay"), { recursive: true });
       console.log("  ✓ replay/");

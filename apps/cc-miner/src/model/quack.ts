@@ -31,6 +31,10 @@ export interface HostInfo {
   source?: { kind: "local" | "s3"; [k: string]: unknown };
   /** Where per-session replay Parquet lives — local dir or `s3://…` prefix. */
   replayBase?: string;
+  /** The corpus manifest, read by the host from the SAME source as the data. */
+  manifest?: unknown;
+  /** The per-session replay index, likewise from the served corpus. */
+  replayIndex?: unknown;
   error?: string;
 }
 

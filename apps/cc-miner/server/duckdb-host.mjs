@@ -124,6 +124,29 @@ async function main() {
     }
   }
 
+  // The manifest is JSON, not a grain, and it must come from the SAME source as
+  // the data — otherwise an S3-backed app silently reports the local checkout's
+  // provenance. read_text works identically on a directory and an s3:// key.
+  let manifest = null;
+  try {
+    const r = await conn.runAndReadAll(`SELECT content FROM read_text('${base}/manifest.json')`);
+    manifest = JSON.parse(String(r.getRowObjects()[0]?.content ?? "null"));
+  } catch {
+    /* a corpus without a manifest is legal; the app shows no provenance line */
+  }
+
+  // Same reasoning as the manifest: the replay index has to describe the corpus
+  // being served, not whatever happens to be in the local checkout.
+  let replayIndex = null;
+  try {
+    const r = await conn.runAndReadAll(
+      `SELECT content FROM read_text('${base}/replay/index.json')`,
+    );
+    replayIndex = JSON.parse(String(r.getRowObjects()[0]?.content ?? "null"));
+  } catch {
+    /* a corpus built without --replay; the panel says so */
+  }
+
   const port = await freePort();
   const token = randomBytes(24).toString("hex");
   const served = await conn.runAndReadAll(
@@ -144,6 +167,8 @@ async function main() {
     // base differs between a local checkout and an S3 prefix — so the host
     // advertises it and the page appends `<sessionId>.parquet`.
     replayBase: `${base}/replay`,
+    manifest,
+    replayIndex,
     grains: GRAINS.filter((g) => !failures.some((f) => f.grain === g)),
     missing: failures.map((f) => f.grain),
     startedAt: new Date().toISOString(),

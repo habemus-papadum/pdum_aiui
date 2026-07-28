@@ -448,7 +448,7 @@ async function load(): Promise<void> {
   }
 
   progress.set({ fraction: 1, label: "summarizing" });
-  await loadManifest();
+  loadManifest();
   summary.set(await querySummary(coordinator));
 
   // Connect the crossfilter clients only now: `prepare()` queries `turns`, so
@@ -485,17 +485,14 @@ async function load(): Promise<void> {
 }
 
 /**
- * Fetched rather than imported: the manifest is written beside the parquet by
- * the normalizer, and a missing one should degrade to "unlabelled numbers", not
- * a build error in a fresh checkout.
+ * It arrives through the host handshake rather than a local fetch, because it
+ * has to describe the data actually being served: an S3-backed app that read the
+ * checkout's manifest would report the wrong provenance while looking right. A
+ * corpus without one degrades to "unlabelled numbers", never to a build error.
  */
-async function loadManifest(): Promise<void> {
-  try {
-    const res = await fetch(new URL("../data/manifest.json", import.meta.url));
-    if (res.ok) manifest.set((await res.json()) as Manifest);
-  } catch {
-    /* no manifest — the UI falls back to "pricing table unknown" */
-  }
+function loadManifest(): void {
+  const m = hostInfoBox.info?.manifest;
+  if (m && typeof m === "object") manifest.set(m as Manifest);
 }
 
 /**
@@ -581,15 +578,18 @@ export interface ReplayIndexEntry {
   t1: number;
 }
 
-async function loadReplayIndex(): Promise<void> {
-  try {
-    const res = await fetch(new URL("../data/replay/index.json", import.meta.url));
-    if (!res.ok) return;
-    const list = (await res.json()) as ReplayIndexEntry[];
-    replayIndex.set(new Map(list.map((e) => [e.sessionId, e])));
-  } catch {
-    /* dataset built without --replay; the panel says so */
-  }
+function replayIndexNow(): ReadonlyMap<string, ReplayIndexEntry> | null {
+  const cached = replayIndex.get();
+  if (cached) return cached;
+  const list = hostInfoBox.info?.replayIndex;
+  if (!Array.isArray(list)) return null;
+  const map = new Map((list as ReplayIndexEntry[]).map((e) => [e.sessionId, e]));
+  replayIndex.set(map);
+  // RETURN the map rather than re-reading the signal. A Solid 2 write is staged
+  // until the next microtask, so `replayIndex.get()` on the next line still
+  // yields null — which is precisely how this broke when the function stopped
+  // being async and lost its implicit await. See durable-state.ts.
+  return map;
 }
 
 /** Which replay files are already registered, so a re-open costs nothing. */
@@ -604,8 +604,8 @@ const replayLoaded = appScope.durable<Set<string>>("replayLoaded", () => new Set
  */
 export async function ensureReplay(sessionId: string): Promise<string | null> {
   await ensureLoaded();
-  if (replayIndex.get() === null) await loadReplayIndex();
-  if (!replayIndex.get()?.has(sessionId)) return null;
+  const index = replayIndexNow();
+  if (!index?.has(sessionId)) return null;
   const table = `replay_${sessionId.replace(/-/g, "_")}`;
   if (replayLoaded.has(sessionId)) return table;
   const e = engineBox.engine;

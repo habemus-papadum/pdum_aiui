@@ -35,6 +35,8 @@ interface Runtime {
   url: string;
   source: { kind: "local" | "s3"; [k: string]: unknown };
   replayBase: string;
+  manifest: unknown;
+  replayIndex: unknown;
   grains: string[];
   missing: string[];
 }
@@ -66,6 +68,8 @@ export function duckdbHost(): Plugin {
                   missing: rt.missing,
                   source: rt.source,
                   replayBase: rt.replayBase,
+                  manifest: rt.manifest,
+                  replayIndex: rt.replayIndex,
                 }
               : {
                   ok: false,
