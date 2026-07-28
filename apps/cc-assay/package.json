@@ -21,6 +21,7 @@
     "cc-assay": "./bin/cc-assay.mjs"
   },
   "scripts": {
+    "export": "tsx src/export-cli.ts",
     "normalize": "tsx src/cli.ts",
     "raw": "tsx src/raw-cli.ts",
     "test": "vitest run",
@@ -28,6 +29,7 @@
   },
   "private": true,
   "dependencies": {
+    "@duckdb/node-api": "1.5.5-r.2",
     "hyparquet": "^1.20.0",
     "hyparquet-writer": "^0.16.1"
   },
