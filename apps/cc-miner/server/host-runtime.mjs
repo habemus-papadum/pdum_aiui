@@ -12,7 +12,7 @@
  * survive the packaged app, and the reason is worth recording because it is a
  * design lesson rather than a bug: the client built its endpoint as
  * `quack:${location.host}/quack`. Under `http://localhost:5191` that is right.
- * Under `app://cc-miner/` it becomes `quack:cc-miner/quack` — a hostname DuckDB
+ * Under `app://pdum-cc-miner/` it becomes `quack:cc-miner/quack` — a hostname DuckDB
  * dials over TCP, never touching the custom scheme. The renderer was **deriving
  * an assumption about its own origin**, and the assumption was false in one
  * host. It failed by hanging with no request and no error.
@@ -43,7 +43,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  *
  * Defaults to the app directory, which is right for a checkout and wrong for a
  * packaged app — inside a `.app` bundle that path is read-only. The packaged
- * shell therefore sets `CC_MINER_HOST_RUNTIME` to a file under `userData` and
+ * shell therefore sets `PDUM_CC_MINER_HOST_RUNTIME` to a file under `userData` and
  * passes the same value to the sidecar it spawns, so both ends of the lookup
  * agree by construction rather than by coincidence.
  *
@@ -56,7 +56,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * @returns {string}
  */
 export function runtimeFile() {
-  return process.env.CC_MINER_HOST_RUNTIME || resolve(HERE, "..", ".aiui-cache/duckdb-host.json");
+  return (
+    process.env.PDUM_CC_MINER_HOST_RUNTIME || resolve(HERE, "..", ".aiui-cache/duckdb-host.json")
+  );
 }
 
 /**

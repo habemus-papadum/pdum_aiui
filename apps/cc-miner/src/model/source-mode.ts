@@ -17,7 +17,7 @@
 export type SourceMode = "local" | "host";
 
 export const DEFAULT_MODE: SourceMode = "local";
-const STORAGE_KEY = "cc-miner.sourceMode";
+const STORAGE_KEY = "pdum-cc-miner.sourceMode";
 
 export function isSourceMode(v: unknown): v is SourceMode {
   return v === "local" || v === "host";

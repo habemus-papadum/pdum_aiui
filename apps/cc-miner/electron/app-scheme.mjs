@@ -15,7 +15,7 @@
  *                            address it, and Chromium still treats it as a
  *                            proper secure origin.
  *
- * So: `app://cc-miner/`. The renderer cannot tell the difference — it asks
+ * So: `app://pdum-cc-miner/`. The renderer cannot tell the difference — it asks
  * `/__duckdb-host` on its own origin either way, and is TOLD where the data is
  * rather than deriving it. That last part is not cosmetic: deriving the
  * endpoint from `location.host` is precisely what broke this app under
@@ -51,7 +51,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const DIST = resolve(HERE, "..", "dist");
 
 /** The scheme and host the packaged renderer is served from. */
-export const APP_ORIGIN = "app://cc-miner";
+export const APP_ORIGIN = "app://pdum-cc-miner";
 
 /**
  * Content types we must get right, keyed by extension.
@@ -129,7 +129,7 @@ export function registerAppScheme() {
 export function serveApp() {
   protocol.handle("app", async (req) => {
     const { pathname } = new URL(req.url);
-    if (process.env.CC_MINER_TRACE_SCHEME === "1")
+    if (process.env.PDUM_CC_MINER_TRACE_SCHEME === "1")
       console.error(`[scheme] ${req.method} ${pathname}`);
 
     if (pathname === "/__duckdb-host") {

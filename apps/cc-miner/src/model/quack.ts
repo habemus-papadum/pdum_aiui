@@ -32,7 +32,7 @@ export interface HostInfo {
    * Supplied by whatever served this page, never derived here. The page used to
    * build it from `location.host`, which quietly encoded an assumption that its
    * origin is `http://host:port` — true in a tab, false under the packaged
-   * app's `app://cc-miner/`, where it produced a hostname DuckDB dialled over
+   * app's `app://pdum-cc-miner/`, where it produced a hostname DuckDB dialled over
    * TCP and the load hung with no request and no error.
    */
   quackUri?: string;

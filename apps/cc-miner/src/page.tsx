@@ -17,6 +17,6 @@ import type { SitePage } from "@habemus-papadum/aiui-viz";
 import { App } from "./ui/App";
 
 export const page: SitePage = {
-  title: "cc-miner — an aiui app",
+  title: "pdum-cc-miner — an aiui app",
   App,
 };

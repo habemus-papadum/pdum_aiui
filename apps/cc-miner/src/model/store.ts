@@ -49,7 +49,7 @@ import {
  * a gallery shell, or composed as a library — without colliding on the
  * window-global registries. See the user guide's "Composing bigger apps".
  */
-export const appScope = scope("cc-miner");
+export const appScope = scope("pdum-cc-miner");
 
 /**
  * Where the line falls between "thinking" and "went to lunch", in minutes.

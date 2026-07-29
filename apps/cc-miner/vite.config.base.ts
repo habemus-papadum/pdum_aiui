@@ -40,7 +40,7 @@ import { duckdbHost } from "./server/vite-plugin";
 export function ccMinerConfig(): UserConfig {
   return {
     // Relative, so ONE `dist/` is valid everywhere it gets served from: the
-    // root of a static host, a subdirectory of one, and `app://cc-miner/` inside
+    // root of a static host, a subdirectory of one, and `app://pdum-cc-miner/` inside
     // the packaged Electron app. An absolute base would pin the build to a
     // deploy path and force a second build for the desktop package — which is
     // exactly the "two artifacts, one claim" trap this split exists to avoid.

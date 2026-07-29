@@ -42,28 +42,28 @@ let booting = null;
  *
  * Under `userData`, because everything inside a `.app` bundle is read-only and
  * signed — a corpus written there would break the signature even if the write
- * succeeded. `CC_MINER_CORPUS` overrides it, which is how this gets tested
+ * succeeded. `PDUM_CC_MINER_CORPUS` overrides it, which is how this gets tested
  * against a real corpus before the app can import one itself.
  *
  * @returns {string}
  */
 export function corpusDir() {
-  return process.env.CC_MINER_CORPUS || join(app.getPath("userData"), "corpus");
+  return process.env.PDUM_CC_MINER_CORPUS || join(app.getPath("userData"), "corpus");
 }
 
 /** The arguments the host is started with, from the environment. */
 function hostArgs() {
-  const s3Prefix = process.env.CC_MINER_S3_PREFIX;
-  const s3Profile = process.env.CC_MINER_S3_PROFILE;
+  const s3Prefix = process.env.PDUM_CC_MINER_S3_PREFIX;
+  const s3Profile = process.env.PDUM_CC_MINER_S3_PROFILE;
   if (s3Prefix) {
     return [
       "--s3-prefix",
       s3Prefix,
       ...(s3Profile ? ["--s3-profile", s3Profile] : []),
-      ...(process.env.CC_MINER_FLAT === "1" ? ["--flat"] : []),
+      ...(process.env.PDUM_CC_MINER_FLAT === "1" ? ["--flat"] : []),
     ];
   }
-  return ["--data", corpusDir(), ...(process.env.CC_MINER_FLAT === "1" ? ["--flat"] : [])];
+  return ["--data", corpusDir(), ...(process.env.PDUM_CC_MINER_FLAT === "1" ? ["--flat"] : [])];
 }
 
 /** Is the advertised host still the process we started, and still alive? */
@@ -96,13 +96,13 @@ export function ensureHost() {
     const runtime = runtimeFile();
     const args = hostArgs();
 
-    if (!process.env.CC_MINER_S3_PREFIX && !existsSync(corpusDir())) {
+    if (!process.env.PDUM_CC_MINER_S3_PREFIX && !existsSync(corpusDir())) {
       // Said before spawning, because DuckDB's own version of this complaint is
       // eight "file not found" errors and an empty app.
       booting = null;
       done(
         `no corpus found at ${corpusDir()}\n` +
-          `Export one there with cc-assay, or set CC_MINER_CORPUS to point at an existing corpus.`,
+          `Export one there with cc-assay, or set PDUM_CC_MINER_CORPUS to point at an existing corpus.`,
       );
       return;
     }
@@ -110,7 +110,7 @@ export function ensureHost() {
     let stderr = "";
     const proc = utilityProcess.fork(HOST_ENTRY, args, {
       stdio: "pipe",
-      env: { ...process.env, CC_MINER_HOST_RUNTIME: runtime },
+      env: { ...process.env, PDUM_CC_MINER_HOST_RUNTIME: runtime },
     });
     child = proc;
     proc.stderr?.on("data", (d) => {

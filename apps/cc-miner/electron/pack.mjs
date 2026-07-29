@@ -41,13 +41,13 @@ if (!(target in TARGETS)) {
 /**
  * The version the artifact carries.
  *
- * `CC_MINER_VERSION` when the release pipeline supplies one; otherwise a
+ * `PDUM_CC_MINER_VERSION` when the release pipeline supplies one; otherwise a
  * PRERELEASE derived from the commit — `0.12.0-dev.a1b2c3d`, which semver sorts
  * strictly BELOW `0.12.0`. A local build can therefore never look newer than a
  * real release to an updater, which is the failure mode worth designing out.
  */
 function appVersion() {
-  if (process.env.CC_MINER_VERSION) return process.env.CC_MINER_VERSION.replace(/^v/, "");
+  if (process.env.PDUM_CC_MINER_VERSION) return process.env.PDUM_CC_MINER_VERSION.replace(/^v/, "");
   const pkg = JSON.parse(readFileSync(resolve(APP_ROOT, "package.json"), "utf8"));
   const base = String(pkg.version).replace(/\+.*$/, "");
   const sha = spawnSync("git", ["rev-parse", "--short=7", "HEAD"], { encoding: "utf8" });
@@ -137,12 +137,12 @@ const args = [
   `-c.extraMetadata.main=electron/main.mjs`,
   `-c.extraMetadata.version=${version}`,
   ...signing.args,
-  // Publishing is OPT-IN, via CC_MINER_PUBLISH=always from the release
+  // Publishing is OPT-IN, via PDUM_CC_MINER_PUBLISH=always from the release
   // workflow. electron-builder's own default is "publish if it detects CI",
   // which is exactly the kind of implicit behaviour that ships something by
   // accident — a `pnpm pack:mac` on a CI runner should build, not release.
   "--publish",
-  process.env.CC_MINER_PUBLISH === "always" ? "always" : "never",
+  process.env.PDUM_CC_MINER_PUBLISH === "always" ? "always" : "never",
   ...process.argv.slice(3),
 ];
 const res = spawnSync("npx", args, { cwd: APP_ROOT, stdio: "inherit" });

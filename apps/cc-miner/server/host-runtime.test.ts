@@ -4,7 +4,7 @@
  * This is a contract test, not a unit test for its own sake. The page uses
  * `quackUri` VERBATIM — it deliberately no longer derives an endpoint from
  * `location`, because deriving one is what broke the packaged app: under
- * `app://cc-miner/`, `quack:${location.host}/quack` became `quack:cc-miner/quack`
+ * `app://pdum-cc-miner/`, `quack:${location.host}/quack` became `quack:cc-miner/quack`
  * and the load hung with no request and no error. So the field's presence and
  * shape are the seam, and a seam nobody checks is a seam that drifts.
  */
@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 const dir = mkdtempSync(join(tmpdir(), "cc-host-runtime-"));
 const file = join(dir, "duckdb-host.json");
-process.env.CC_MINER_HOST_RUNTIME = file;
+process.env.PDUM_CC_MINER_HOST_RUNTIME = file;
 
 // Imported AFTER the env var is set: the module resolves its path once, at load.
 const { hostInfo, readHostRuntime } = await import("./host-runtime.mjs");

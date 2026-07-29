@@ -1,5 +1,5 @@
 {
-  "name": "@habemus-papadum/cc-miner",
+  "name": "pdum-cc-miner",
   "version": "0.12.0+dev",
   "description": "Understand your own Claude Code usage, and whether it was time well spent.",
   "private": true,

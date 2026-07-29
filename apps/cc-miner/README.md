@@ -144,7 +144,7 @@ drafts are invisible to the updater — a release that looks published and updat
 The updater does not download without asking: the archive is ~190 MB, and a desktop tool quietly
 consuming that on someone's tethered connection is not a courtesy. Verified against a local feed —
 a 0.1.0 build pointed at a server advertising 0.9.9 finds it, reports
-`update-available: 0.9.9 (running 0.1.0)`, and then **waits**. `CC_MINER_UPDATE_URL` is the hook
+`update-available: 0.9.9 (running 0.1.0)`, and then **waits**. `PDUM_CC_MINER_UPDATE_URL` is the hook
 that makes that testable without publishing anything.
 
 **Auto-update only works on signed builds.** On macOS the swap is done by Squirrel.Mac, which
@@ -194,7 +194,7 @@ It picks a free port and writes `.aiui-cache/duckdb-host.json`. The page finds i
 through one lookup, `GET /__duckdb-host`, which returns the token and the
 endpoint to use. **The page never derives that endpoint** — it used to, from
 `location.host`, and that was right in a tab and wrong under the packaged app's
-`app://cc-miner/`, where it produced a hostname DuckDB dialled over TCP and the
+`app://pdum-cc-miner/`, where it produced a hostname DuckDB dialled over TCP and the
 load hung with no request and no error. Start order still does not matter: the
 runtime file is read per request.
 
@@ -213,8 +213,8 @@ Where it reads from, in a packaged app:
 | | |
 | --- | --- |
 | `<userData>/corpus` | the default — `~/Library/Application Support/cc-miner/corpus` on macOS |
-| `CC_MINER_CORPUS` | point at a corpus that already exists |
-| `CC_MINER_S3_PREFIX` + `CC_MINER_S3_PROFILE` | serve from S3 instead |
+| `PDUM_CC_MINER_CORPUS` | point at a corpus that already exists |
+| `PDUM_CC_MINER_S3_PREFIX` + `PDUM_CC_MINER_S3_PROFILE` | serve from S3 instead |
 
 Both no-corpus cases are named rather than shrugged at — a missing directory is
 caught before spawning, and a directory with no Parquet in it fails the host's

@@ -40,9 +40,9 @@ const child = spawn(electronBin, [mainEntry], {
   stdio: "inherit",
   env: {
     ...process.env,
-    CC_MINER_URL: url,
+    PDUM_CC_MINER_URL: url,
     // Not 9222 — see the note in main.mjs. Override or blank it out to disable.
-    CC_MINER_CDP_PORT: process.env.CC_MINER_CDP_PORT ?? "9333",
+    PDUM_CC_MINER_CDP_PORT: process.env.PDUM_CC_MINER_CDP_PORT ?? "9333",
   },
 });
 

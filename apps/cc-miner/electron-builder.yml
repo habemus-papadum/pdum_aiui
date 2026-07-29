@@ -9,8 +9,8 @@
 #            IGNORES build metadata, so `0.12.0+dev` and `0.12.0` compare EQUAL
 #            and an updater would never fire. It must be a real version.
 
-appId: com.habemus-papadum.cc-miner
-productName: cc-miner
+appId: com.habemus-papadum.pdum-cc-miner
+productName: pdum-cc-miner
 copyright: Copyright © 2026 Nehal Patel
 
 directories:

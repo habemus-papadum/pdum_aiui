@@ -29,7 +29,7 @@ describe("resolveMode", () => {
   });
 
   it("lets the URL pin a mode, outranking what was persisted", () => {
-    const s = store({ "cc-miner.sourceMode": "local" });
+    const s = store({ "pdum-cc-miner.sourceMode": "local" });
     expect(resolveMode("?source=host", s)).toBe("host");
   });
 
@@ -44,7 +44,7 @@ describe("resolveMode", () => {
   it("ignores nonsense rather than throwing or half-applying it", () => {
     expect(resolveMode("?source=s3", store())).toBe("local");
     expect(resolveMode("?source=", store())).toBe("local");
-    expect(resolveMode("", store({ "cc-miner.sourceMode": "banana" }))).toBe("local");
+    expect(resolveMode("", store({ "pdum-cc-miner.sourceMode": "banana" }))).toBe("local");
   });
 
   it("survives a store that is absent entirely", () => {

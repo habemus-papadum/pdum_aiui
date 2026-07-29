@@ -3,9 +3,9 @@
  *
  * ONE file, two ways in, and which one is live is decided by a single fact:
  *
- *   CC_MINER_URL set    DEV. A window onto the Vite server electron/dev.mjs
+ *   PDUM_CC_MINER_URL set    DEV. A window onto the Vite server electron/dev.mjs
  *                       started. HMR, source maps, the whole iteration loop.
- *   CC_MINER_URL unset  PACKAGED. A window onto `app://cc-miner/`, served out
+ *   PDUM_CC_MINER_URL unset  PACKAGED. A window onto `app://pdum-cc-miner/`, served out
  *                       of `dist/` by electron/app-scheme.mjs.
  *
  * The renderer is the same build either way, and it is never told which of the
@@ -18,9 +18,9 @@
  * where the packaged app could start behaving differently from the browser one.
  * The transport between renderer and data is HTTP in all three hosts.
  *
- *   CC_MINER_URL        dev server URL — presence selects dev mode
- *   CC_MINER_CDP_PORT   Chrome DevTools Protocol port, "" to disable
- *   CC_MINER_DEVTOOLS   "1" to open DevTools detached on start
+ *   PDUM_CC_MINER_URL        dev server URL — presence selects dev mode
+ *   PDUM_CC_MINER_CDP_PORT   Chrome DevTools Protocol port, "" to disable
+ *   PDUM_CC_MINER_DEVTOOLS   "1" to open DevTools detached on start
  */
 import { join } from "node:path";
 import { app, BrowserWindow, shell } from "electron";
@@ -28,14 +28,14 @@ import { APP_ORIGIN, distExists, registerAppScheme, serveApp } from "./app-schem
 import { bindSidecarLifetime } from "./duckdb-sidecar.mjs";
 import { initUpdater } from "./updater.mjs";
 
-const devUrl = process.env.CC_MINER_URL ?? "";
+const devUrl = process.env.PDUM_CC_MINER_URL ?? "";
 const isDev = devUrl !== "";
 
 // Named explicitly so `userData` — where the runtime file and the corpus live —
 // is the same directory whether this is run from a checkout or from a packaged
 // bundle. Left to default, the two disagree: unpackaged Electron calls itself
 // "Electron" and would put a shipped user's data somewhere else entirely.
-app.setName("cc-miner");
+app.setName("pdum-cc-miner");
 
 // Must happen before `app.whenReady()`: Chromium fixes a scheme's privileges at
 // startup and ignores a late registration silently. Registered unconditionally
@@ -47,7 +47,7 @@ registerAppScheme();
 // the shared aiui session browser, and colliding with it would make `aiui open`
 // and the Chrome DevTools MCP attach to this window by mistake. Unset in a
 // packaged app — a shipped product should not open a debug port by default.
-const cdpPort = process.env.CC_MINER_CDP_PORT ?? "";
+const cdpPort = process.env.PDUM_CC_MINER_CDP_PORT ?? "";
 if (cdpPort) app.commandLine.appendSwitch("remote-debugging-port", cdpPort);
 
 /** @param {string} url */
@@ -59,7 +59,7 @@ function createWindow(url) {
     // frame or two before the app's dark stylesheet lands, which reads as a
     // flash of broken rendering rather than a load.
     backgroundColor: "#14161a",
-    title: "cc-miner",
+    title: "pdum-cc-miner",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -68,7 +68,7 @@ function createWindow(url) {
   });
 
   win.loadURL(url);
-  if (process.env.CC_MINER_DEVTOOLS === "1") win.webContents.openDevTools({ mode: "detach" });
+  if (process.env.PDUM_CC_MINER_DEVTOOLS === "1") win.webContents.openDevTools({ mode: "detach" });
 
   // Anything off our own origin (docs links, an issue tracker) belongs in the
   // user's real browser, not in a chromeless window with no address bar.
@@ -90,7 +90,7 @@ async function start() {
   // Set BEFORE anything reads it. `userData` is not knowable until the app is
   // ready, which is why server/host-runtime.mjs resolves this path per call
   // rather than at import: a constant would have been frozen before this line.
-  process.env.CC_MINER_HOST_RUNTIME ??= join(app.getPath("userData"), "duckdb-host.json");
+  process.env.PDUM_CC_MINER_HOST_RUNTIME ??= join(app.getPath("userData"), "duckdb-host.json");
   bindSidecarLifetime();
 
   initUpdater();

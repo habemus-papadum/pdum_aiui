@@ -27,7 +27,7 @@ const { autoUpdater } = electronUpdater;
 const FIRST_CHECK_DELAY_MS = 8_000;
 
 /** Where releases live, if it is not what electron-builder compiled in. */
-const FEED_REPO = process.env.CC_MINER_RELEASE_REPO; // "owner/repo"
+const FEED_REPO = process.env.PDUM_CC_MINER_RELEASE_REPO; // "owner/repo"
 
 /**
  * Wire up update checking. Safe to call unconditionally — it decides for itself
@@ -50,8 +50,8 @@ export function initUpdater() {
   // against a real GitHub release — "it is configured" and "it detects a newer
   // version" are different claims, and only one of them is testable without
   // publishing something.
-  if (process.env.CC_MINER_UPDATE_URL) {
-    autoUpdater.setFeedURL({ provider: "generic", url: process.env.CC_MINER_UPDATE_URL });
+  if (process.env.PDUM_CC_MINER_UPDATE_URL) {
+    autoUpdater.setFeedURL({ provider: "generic", url: process.env.PDUM_CC_MINER_UPDATE_URL });
   } else if (FEED_REPO?.includes("/")) {
     const [owner, repo] = FEED_REPO.split("/");
     autoUpdater.setFeedURL({ provider: "github", owner, repo });
@@ -64,7 +64,7 @@ export function initUpdater() {
       buttons: ["Download", "Release notes", "Later"],
       defaultId: 0,
       cancelId: 2,
-      message: `cc-miner ${info.version} is available.`,
+      message: `pdum-cc-miner ${info.version} is available.`,
       detail: `You have ${app.getVersion()}. The download is about 190 MB and installs when you quit.`,
     });
     console.log(`[updater] user chose ${["download", "notes", "later"][response] ?? response}`);

@@ -73,14 +73,14 @@ jobs:
 
       - name: Build ${{ matrix.target }}
         env:
-          CC_MINER_VERSION: ${{ inputs.version }}
+          PDUM_CC_MINER_VERSION: ${{ inputs.version }}
           # Opt-in, and only when this is not a dry run. electron-builder would
           # otherwise publish on its own the moment it detects CI.
-          CC_MINER_PUBLISH: ${{ inputs.dry_run && 'never' || 'always' }}
+          PDUM_CC_MINER_PUBLISH: ${{ inputs.dry_run && 'never' || 'always' }}
           # Publishing to ANOTHER repo, so the automatic GITHUB_TOKEN is not
           # enough — it is scoped to this one. A PAT with `contents: write` on
           # habemus-papadum/cc-miner.
-          GH_TOKEN: ${{ secrets.CC_MINER_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.PDUM_CC_MINER_RELEASE_TOKEN }}
           # Signing (macOS). Absent → pack.mjs reports "unsigned" and carries on,
           # which is the right behaviour for a dry run and a loud one for a real
           # release.
