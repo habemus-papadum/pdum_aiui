@@ -58,6 +58,22 @@ buildDependenciesFromSource: false
 
 mac:
   category: public.app-category.developer-tools
+  # Required for notarization, and it costs four entitlements — see the
+  # justification for each in build/entitlements.mac.plist.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  # Helper processes get the same holes. The sidecar that loads libduckdb runs
+  # under the app's own binary, but the renderer helpers still need JIT, and a
+  # mismatch here fails at launch rather than at signing.
+  entitlementsInherit: build/entitlements.mac.plist
+  # `Developer ID Application`, never `Apple Development`. The latter is a
+  # local-testing certificate: notarytool rejects it, and Gatekeeper on any
+  # other machine rejects what it signs. Left to its own devices,
+  # electron-builder will happily pick up whichever it finds first.
+  identity: null # set by CI/env; see gatherSigning in electron/pack.mjs
+  # macOS 11+ everywhere the arm64 build can run anyway.
+  minimumSystemVersion: "11.0"
+  gatekeeperAssess: false
   # zip is NOT redundant beside dmg. electron-updater reads `latest-mac.yml`,
   # and electron-builder only generates it when a zip target is present — a dmg
   # alone silently produces a release the updater cannot see.

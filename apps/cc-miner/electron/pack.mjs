@@ -55,8 +55,74 @@ function appVersion() {
   return `${base}-dev.${suffix}`;
 }
 
+/**
+ * Decide how (and whether) this build is signed and notarized, and say so.
+ *
+ * The trap this exists to close: a Mac dev machine usually holds an **Apple
+ * Development** certificate, and electron-builder will cheerfully sign with it
+ * if left to auto-discover. What comes out looks signed, passes `codesign
+ * --verify`, runs on the machine that built it — and is rejected by notarytool
+ * and by Gatekeeper on every other Mac. Only **Developer ID Application** is
+ * valid for distribution outside the App Store, so this looks for that exact
+ * string and treats anything else as unsigned.
+ *
+ * @returns {{args: string[], summary: string}}
+ */
+function gatherSigning() {
+  if (target !== "mac") return { args: [], summary: "" };
+
+  // CI supplies the certificate as a base64 .p12 in CSC_LINK; electron-builder
+  // imports it into a temporary keychain itself.
+  const fromEnv = Boolean(process.env.CSC_LINK);
+  let identity = fromEnv ? "from CSC_LINK" : null;
+  if (!fromEnv) {
+    const found = spawnSync("security", ["find-identity", "-v", "-p", "codesigning"], {
+      encoding: "utf8",
+    });
+    const line = (found.stdout ?? "")
+      .split("\n")
+      .find((l) => l.includes("Developer ID Application"));
+    identity = line?.match(/"([^"]+)"/)?.[1] ?? null;
+  }
+
+  if (!identity) {
+    return {
+      args: ["-c.mac.identity=null", "-c.mac.notarize=false"],
+      summary:
+        "  unsigned — no `Developer ID Application` certificate found.\n" +
+        "  The artifact runs locally and Gatekeeper will refuse it anywhere else.\n" +
+        "  See README → Signing and notarization.",
+    };
+  }
+
+  // App Store Connect API key first: it needs no 2FA and no app-specific
+  // password, which is what makes it the one that works unattended in CI.
+  const apiKey =
+    process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER;
+  const appleId =
+    process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID;
+
+  if (!apiKey && !appleId) {
+    return {
+      args: [...(fromEnv ? [] : [`-c.mac.identity=${identity}`]), "-c.mac.notarize=false"],
+      summary:
+        `  signed as ${identity}, NOT notarized — no Apple credentials in the environment.\n` +
+        "  Gatekeeper shows the “cannot be opened” dialog on a machine that has not\n" +
+        "  seen this developer before. See README → Signing and notarization.",
+    };
+  }
+
+  return {
+    args: [...(fromEnv ? [] : [`-c.mac.identity=${identity}`]), "-c.mac.notarize=true"],
+    summary: `  signed as ${identity}, notarizing via ${apiKey ? "App Store Connect API key" : "Apple ID"}.`,
+  };
+}
+
 const version = appVersion();
-console.log(`\n  cc-miner ${version} → ${target}\n`);
+const signing = gatherSigning();
+console.log(`\n  cc-miner ${version} → ${target}`);
+if (signing.summary) console.log(signing.summary);
+console.log("");
 
 // The renderer first: the bundle's whole reason for existing is dist/, and
 // packaging a stale one produces an artifact that looks fine and is not.
@@ -70,6 +136,7 @@ const args = [
   "electron-builder.yml",
   `-c.extraMetadata.main=electron/main.mjs`,
   `-c.extraMetadata.version=${version}`,
+  ...signing.args,
   // Never publish as a side effect of building. Releasing is its own deliberate
   // act, and electron-builder's default of "publish if it detects CI" is
   // exactly the kind of implicit behaviour that ships something by accident.

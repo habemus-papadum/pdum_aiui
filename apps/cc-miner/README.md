@@ -73,8 +73,61 @@ production `dependency` on its own, and cc-miner's are the *renderer's* — soli
 duckdb-wasm's 143 MB — because this package is also a library. Excluding them and putting back
 only the native DuckDB took the `.app` from 661 MB to 495 MB.
 
-Two further levers, measured but **not** taken, because both change behaviour and neither is on
-the critical path:
+### Signing and notarization
+
+`electron/pack.mjs` looks for a **`Developer ID Application`** certificate and treats anything
+else as unsigned — including the `Apple Development` certificate most Mac dev machines carry.
+That is a deliberate refusal, not an oversight: left to auto-discover, electron-builder signs
+with whatever it finds, and an `Apple Development` build *looks* signed, passes
+`codesign --verify`, runs on the machine that built it, and is rejected by `notarytool` and by
+Gatekeeper on every other Mac.
+
+To sign and notarize for real, two things are needed and neither can be derived from the repo:
+
+1. **A `Developer ID Application` certificate.** Requires a paid Apple Developer Program
+   membership and the Account Holder / Admin role — a free personal team can only issue
+   `Apple Development`. Create it in Xcode (*Settings → Accounts → Manage Certificates → + →
+   Developer ID Application*) or at developer.apple.com. In CI, pass it as a base64 `.p12` in
+   `CSC_LINK` with `CSC_KEY_PASSWORD`.
+2. **Notarization credentials.** Either an App Store Connect API key — `APPLE_API_KEY` (path to
+   the `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` — or an Apple ID with `APPLE_ID`,
+   `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`. Prefer the API key: no 2FA prompt, so it works
+   unattended.
+
+With neither, `pnpm pack:mac` still produces working artifacts and says plainly what they are.
+
+#### The entitlement that is actually required — measured, not predicted
+
+Hardened runtime is mandatory for notarization, and it enables **library validation**: every
+Mach-O loaded into the process must be signed by the same Team ID, or by Apple. A controlled pair
+of builds, identical but for one key:
+
+| `disable-library-validation` | app launches | host mode |
+| --- | --- | --- |
+| absent | yes — local mode renders all 33 charts | **fails** |
+| present | yes | works — 30,420 turns, 104 sessions |
+
+The failure, in full:
+
+```
+dlopen(~/.duckdb/extensions/v1.5.5/osx_arm64/quack.duckdb_extension, 0x0006):
+  code signature not valid for use in process
+```
+
+Note *which* file. It is **not** `libduckdb.dylib` — electron-builder re-signs everything inside
+the bundle with our identity, so the bundled 112 MB engine passes. The blocker is the DuckDB
+extension that arrives **at runtime**, downloaded to `~/.duckdb/extensions/` on the first query
+and dlopen'd from there. It can never be re-signed by us, because it does not exist at packaging
+time.
+
+Bundling the extensions instead is not the escape it looks like: DuckDB verifies its *own*
+signature over the extension file, and `codesign` appends to the Mach-O, so re-signing one would
+break the check it was meant to satisfy. `com.apple.security.cs.disable-library-validation` is
+the answer, and `build/entitlements.mac.plist` justifies each of the four holes it punches.
+
+### Two further size levers
+
+Measured but **not** taken, because both change behaviour and neither is on the critical path:
 
 - **41 MB** — the `mvp` duckdb-wasm bundle. `selectBundle` picks `eh` on every browser since
   ~2021 and always in Electron, so `mvp` is never loaded; dropping it turns a graceful
