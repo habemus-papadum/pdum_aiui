@@ -17,7 +17,7 @@
 //   list [--slugs]        list the publishable packages (name + slug, or bare slugs)
 //   reserve [slug...]     placeholder-publish names not yet on the registry (local auth)
 //   trust   [slug...]     attach the OIDC trusted publisher to each (npm >= 11.15.0)
-//   publish               CI-only: pack each package and `npm publish` the tarball (OIDC)
+//   publish [--tag <t>]   CI-only: pack each package and `npm publish` the tarball (OIDC)
 //
 // `reserve`/`trust`/`publish` default to ALL publishable packages when no slug is
 // given. `reserve`/`trust` also accept `--dry-run`.
@@ -292,8 +292,14 @@ function cmdTrust(args) {
 // CI-only: build has already run. Pack each publishable package (pnpm rewrites
 // `workspace:^` -> the real version in the tarball), then `npm publish` the
 // tarball over OIDC (trusted publishing supplies auth; provenance is automatic).
-function cmdPublish() {
+function cmdPublish(args = []) {
   const targets = listPublishable();
+  // A dist-tag, for canary builds. npm defaults to `latest`, which is exactly
+  // what a prerelease must NOT become: `npm i @habemus-papadum/aiui-viz` would
+  // start handing people a canary.
+  const tagIdx = args.findIndex((a) => a === "--tag" || a.startsWith("--tag="));
+  const distTag = tagIdx < 0 ? null : (args[tagIdx].split("=")[1] ?? args[tagIdx + 1]);
+  if (tagIdx >= 0 && !distTag) fail("--tag needs a value, e.g. --tag canary");
   const staging = mkdtempSync(join(tmpdir(), "npm-publish-"));
   for (const p of targets) {
     process.stdout.write(`\n=== ${p.name} ===\n`);
@@ -309,10 +315,16 @@ function cmdPublish() {
       .filter((l) => l.endsWith(".tgz"))
       .pop();
     if (!tarball || !existsSync(tarball)) fail(`could not locate packed tarball for ${p.name}`);
-    execFileSync("npm", ["publish", tarball, "--provenance"], { stdio: "inherit" });
+    execFileSync(
+      "npm",
+      ["publish", tarball, "--provenance", ...(distTag ? ["--tag", distTag] : [])],
+      { stdio: "inherit" },
+    );
   }
   rmSync(staging, { recursive: true, force: true });
-  process.stdout.write(`\npublished ${targets.length} package(s) over OIDC.\n`);
+  process.stdout.write(
+    `\npublished ${targets.length} package(s) over OIDC${distTag ? ` under dist-tag "${distTag}"` : ""}.\n`,
+  );
 }
 
 // --- CLI -------------------------------------------------------------------

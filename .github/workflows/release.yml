@@ -3,6 +3,22 @@ name: release
 # The ONLY publish path. There is no local release script and no tag trigger,
 # which is what makes a local/CI double-publish impossible. Run from the Actions
 # UI (release -> Run workflow) or: gh workflow run release.yml -f bump=minor
+#
+# ── Two modes ────────────────────────────────────────────────────────────────
+# release  the real thing: stamp X.Y.Z across every manifest, commit, tag, publish
+#          to `latest`, cut a GitHub Release, deploy the gallery.
+#
+# canary   gh workflow run release.yml -f canary=true
+#          publish X.Y.Z-canary.<sha> under the `canary` dist-tag and stop. No
+#          commit, no tag, no GitHub Release, no site deploy — nothing durable
+#          except the tarballs. For getting a small upstream fix into a consumer
+#          (see cc-miner) in ~2 minutes instead of a full release.
+#
+# The canary lives HERE rather than in its own workflow file for a hard reason:
+# npm trusted publishing is bound to `habemus-papadum/pdum_aiui · release.yml`
+# exactly. A canary.yml would not be a trusted publisher and could not
+# authenticate, so a second workflow would need a stored token — which is the
+# thing this pipeline exists to avoid.
 
 on:
   workflow_dispatch:
@@ -18,6 +34,10 @@ on:
         default: false
       dry_run:
         description: "Compute the version + show the diff, but do NOT commit/tag/publish"
+        type: boolean
+        default: false
+      canary:
+        description: "Publish X.Y.Z-canary.<sha> under the `canary` dist-tag — no commit, no tag, no release"
         type: boolean
         default: false
 
@@ -79,7 +99,14 @@ jobs:
         run: |
           RELEASE=$(node scripts/versioning.mjs compute-release "${{ inputs.bump }}")
           LAST=$(node scripts/versioning.mjs latest-tag)
-          echo "Last release: ${LAST:-<none>} -> this release: $RELEASE"
+          if [ "${{ inputs.canary }}" = "true" ]; then
+            # A prerelease of the NEXT version, so semver sorts it above the last
+            # release and below the real one it precedes.
+            RELEASE="$RELEASE-canary.$(git rev-parse --short=7 HEAD)"
+            echo "Last release: ${LAST:-<none>} -> canary: $RELEASE (dist-tag: canary)"
+          else
+            echo "Last release: ${LAST:-<none>} -> this release: $RELEASE"
+          fi
           echo "version=$RELEASE" >> "$GITHUB_OUTPUT"
           echo "tag=v$RELEASE" >> "$GITHUB_OUTPUT"
 
@@ -99,8 +126,10 @@ jobs:
         if: ${{ inputs.dry_run }}
         run: echo "::notice::DRY RUN — computed ${{ steps.ver.outputs.version }} but did not commit, tag, or publish."
 
+      # A canary leaves nothing behind: no version commit, no tag. The stamped
+      # manifests exist only inside the npm-publish job's checkout.
       - name: Commit, tag, push
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && !inputs.canary }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -118,13 +147,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
+          # A release checks out its TAG, which carries the stamped versions. A
+          # canary never made one, so it takes the dispatch SHA and stamps here.
+          ref: ${{ inputs.canary && github.sha || needs.prepare.outputs.tag }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+      - name: Stamp the canary version (release mode gets it from the tag)
+        if: ${{ inputs.canary }}
+        run: |
+          node scripts/versioning.mjs set "${{ needs.prepare.outputs.version }}"
+          pnpm install --lockfile-only
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r run build
 
@@ -139,11 +175,11 @@ jobs:
           # tarball with `npm publish`, because `npm` — not `pnpm` — speaks the OIDC
           # handshake (pnpm #9812 / #11513). Needs npm >= 11.5.1; ensure a current one.
           npm install -g npm@latest
-          node scripts/npm-provision.mjs publish
+          node scripts/npm-provision.mjs publish ${{ inputs.canary && '--tag canary' || '' }}
 
   github-release:
     needs: [prepare, npm-publish]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !inputs.dry_run && !inputs.canary }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -207,7 +243,7 @@ jobs:
   # and the recreate commands are recorded in demos/gallery/PUBLISHING.md.
   publish-site:
     needs: [prepare, npm-publish]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !inputs.dry_run && !inputs.canary }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -284,7 +320,7 @@ jobs:
 
   finalize:
     needs: [prepare, npm-publish]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !inputs.dry_run && !inputs.canary }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

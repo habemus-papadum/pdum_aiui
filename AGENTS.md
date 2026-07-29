@@ -12,7 +12,19 @@ user — do not make it.
 
 Releasing is a single GitHub Actions workflow: `.github/workflows/release.yml`, a `workflow_dispatch`
 a human runs from the Actions UI (or `gh workflow run release.yml -f bump=minor`). There is **no**
-local release script and **no** tag trigger — CI is the only publish path. It authenticates via npm
+local release script and **no** tag trigger — CI is the only publish path.
+
+It has **two modes**, and both live in that one file because npm trusted publishing is bound to
+`habemus-papadum/pdum_aiui · release.yml` exactly — a second workflow file could not authenticate
+without a stored token:
+
+- **release** (default) — stamp `X.Y.Z` across every manifest, commit, tag, publish to `latest`,
+  cut a GitHub Release, deploy the gallery.
+- **canary** — `gh workflow run release.yml -f canary=true` publishes
+  `X.Y.Z-canary.<sha>` under the **`canary`** dist-tag and stops. No commit, no tag, no GitHub
+  Release, no site deploy. It exists so a small upstream fix can reach a consumer (see the
+  evicted `cc-miner` repo) in a couple of minutes rather than a full release, which is what
+  otherwise discourages making the fix upstream at all. `latest` is never touched. It authenticates via npm
 **trusted publishing (OIDC)** — no `NPM_TOKEN` secret. Never run `pnpm publish` / `npm publish` to
 cut a release, never push a `vX.Y.Z` tag, and do not suggest a release unless the user explicitly
 asks about the process.
