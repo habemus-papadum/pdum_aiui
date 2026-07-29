@@ -23,7 +23,7 @@
  * script exists rather than a line in a README telling someone to remember.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -137,12 +137,48 @@ const args = [
   `-c.extraMetadata.main=electron/main.mjs`,
   `-c.extraMetadata.version=${version}`,
   ...signing.args,
-  // Never publish as a side effect of building. Releasing is its own deliberate
-  // act, and electron-builder's default of "publish if it detects CI" is
-  // exactly the kind of implicit behaviour that ships something by accident.
+  // Publishing is OPT-IN, via CC_MINER_PUBLISH=always from the release
+  // workflow. electron-builder's own default is "publish if it detects CI",
+  // which is exactly the kind of implicit behaviour that ships something by
+  // accident — a `pnpm pack:mac` on a CI runner should build, not release.
   "--publish",
-  "never",
+  process.env.CC_MINER_PUBLISH === "always" ? "always" : "never",
   ...process.argv.slice(3),
 ];
 const res = spawnSync("npx", args, { cwd: APP_ROOT, stdio: "inherit" });
-process.exit(res.status ?? 1);
+if (res.status !== 0) process.exit(res.status ?? 1);
+process.exit(assertAsarBudget());
+
+/**
+ * Fail if app.asar has grown well past the renderer it is supposed to contain.
+ *
+ * `files` in electron-builder.yml excludes the renderer's dependency tree by
+ * NAME, and a denylist rots: add a heavy dependency and it ships silently,
+ * discovered later as "why is the download 400 MB". This is the counter-measure
+ * — the list cannot maintain itself, but its failure can be made loud.
+ *
+ * The budget is deliberately slack. It is a tripwire for a regression of tens of
+ * megabytes, not a limit to tune.
+ *
+ * @returns {number} exit code
+ */
+function assertAsarBudget() {
+  const BUDGET_MB = 140; // dist/ is ~108 MB; electron-updater's tree is ~1 MB
+  const asar = [
+    resolve(APP_ROOT, "release/mac-arm64/cc-miner.app/Contents/Resources/app.asar"),
+    resolve(APP_ROOT, "release/linux-unpacked/resources/app.asar"),
+  ].find((p) => existsSync(p));
+  if (!asar) return 0; // nothing built here to measure (a dmg-only rebuild, say)
+
+  const mb = statSync(asar).size / 1e6;
+  console.log(`\n  app.asar ${mb.toFixed(1)} MB (budget ${BUDGET_MB} MB)`);
+  if (mb <= BUDGET_MB) return 0;
+  console.error(
+    `\n  app.asar is ${mb.toFixed(1)} MB, over the ${BUDGET_MB} MB budget.\n` +
+      `  Something joined the bundle that belongs in dist/. Inspect it with:\n` +
+      `    npx asar list "${asar}" | grep '^/node_modules/' | cut -d/ -f3,4 | sort -u\n` +
+      `  Then either exclude it in electron-builder.yml → files, or raise the\n` +
+      `  budget here deliberately.`,
+  );
+  return 1;
+}

@@ -125,6 +125,33 @@ signature over the extension file, and `codesign` appends to the Mach-O, so re-s
 break the check it was meant to satisfy. `com.apple.security.cs.disable-library-validation` is
 the answer, and `build/entitlements.mac.plist` justifies each of the four holes it punches.
 
+### Releases and auto-update
+
+`.github/workflows/cc-miner-release.yml` (manual dispatch, `version` + `dry_run`) builds macOS on
+an arm64 runner and Linux on ubuntu, and publishes to GitHub Releases.
+
+**Releases go to a dedicated repo, not this one, and that is forced rather than chosen.**
+[`release.yml`](../../.github/workflows/release.yml) already owns the GitHub Releases list here —
+`vX.Y.Z`, carrying the `.vsix` and the Chrome extension zip. electron-updater asks GitHub for the
+*latest release* and then reads `latest-mac.yml` out of it, so the first npm release published
+after a cc-miner one would 404 every installed app's update check. Two feeds cannot share one
+release list. cc-miner is staged for eviction to its own repo anyway, so its releases start
+there.
+
+`releaseType: release` is set explicitly because electron-builder's default is **draft**, and
+drafts are invisible to the updater — a release that looks published and updates nobody.
+
+The updater does not download without asking: the archive is ~190 MB, and a desktop tool quietly
+consuming that on someone's tethered connection is not a courtesy. Verified against a local feed —
+a 0.1.0 build pointed at a server advertising 0.9.9 finds it, reports
+`update-available: 0.9.9 (running 0.1.0)`, and then **waits**. `CC_MINER_UPDATE_URL` is the hook
+that makes that testable without publishing anything.
+
+**Auto-update only works on signed builds.** On macOS the swap is done by Squirrel.Mac, which
+verifies the replacement's code signature against the running app's; an unsigned build downloads
+successfully and fails to install. So this is configured and its detection half is measured, but
+the install half cannot be true until a Developer ID certificate exists.
+
 ### Two further size levers
 
 Measured but **not** taken, because both change behaviour and neither is on the critical path:

@@ -29,17 +29,26 @@ files:
   - "!**/*.test.*"
   - "!electron/dev.mjs" # dev-only: starts a Vite server that is not here
   - package.json
-  # `files` does not govern node_modules — electron-builder adds every
-  # production `dependency` on its own, and cc-miner's are the RENDERER's
-  # (solid, mosaic, duckdb-wasm), because this package is also a library its
-  # siblings import source-first. Measured: 4,481 files and ~166 MB of asar,
-  # all of it already compiled into dist/. Only the native DuckDB is needed at
-  # runtime, so the tree is excluded and the one branch put back.
-  - "!node_modules/**"
-  - node_modules/@duckdb/node-api/**
-  - node_modules/@duckdb/node-bindings/**
-  - node_modules/@duckdb/node-bindings-darwin-*/**
-  - node_modules/@duckdb/node-bindings-linux-*/**
+  # electron-builder adds the whole production `dependency` tree on its own, and
+  # cc-miner's dependencies are the RENDERER's — solid, mosaic, duckdb-wasm —
+  # because this package is also a library its siblings import source-first.
+  # Measured: 4,481 files, ~166 MB of asar, every byte already compiled into
+  # dist/.
+  #
+  # Excluded by NAME rather than by excluding node_modules wholesale and adding
+  # back what is wanted. That was the first attempt, and it is a trap: it also
+  # drops electron-updater's 8 transitive dependencies, which fail at `require`
+  # time inside a packaged app — the most expensive place to find them. A
+  # denylist can rot as dependencies are added, so `pack.mjs` asserts the asar
+  # size and fails loudly rather than silently shipping the next 100 MB.
+  - "!node_modules/@duckdb/duckdb-wasm/**" # 143 MB of the 166; bundled into dist/
+  - "!node_modules/apache-arrow/**" # ~20 MB, transitively via duckdb-wasm
+  - "!node_modules/@uwdata/**" # mosaic + vgplot + flechette
+  - "!node_modules/@observablehq/**" # plot
+  - "!node_modules/@solidjs/**"
+  - "!node_modules/solid-js/**"
+  - "!node_modules/@habemus-papadum/**" # workspace siblings, all renderer-side
+  - "!node_modules/@types/**" # type declarations; never loaded at runtime
 
 # The native binding cannot be read from inside an asar archive: `duckdb.node`
 # is dlopen'd by path, and it in turn dlopens libduckdb.dylib beside it. Both
@@ -91,6 +100,26 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
+
+# ── The update feed ──────────────────────────────────────────────────────────
+# A DEDICATED repo, not the monorepo this lives in, and that is forced rather
+# than chosen: .github/workflows/release.yml already publishes GitHub Releases
+# here at `vX.Y.Z` carrying the .vsix and the Chrome extension. electron-updater
+# asks GitHub for the *latest release* and then reads `latest-mac.yml` out of
+# it — so the first npm release published after a cc-miner one would make every
+# installed app's update check 404. Two feeds cannot share one release list.
+#
+# cc-miner is staged for eviction to its own repo anyway (CLAUDE.md → "The apps/
+# directory"), so its releases belong there from the start.
+#
+# `releaseType: release` because electron-builder's default is DRAFT, and drafts
+# are invisible to the updater — a release that looks published and updates
+# nobody.
+publish:
+  provider: github
+  owner: habemus-papadum
+  repo: cc-miner
+  releaseType: release
 
 dmg:
   # The conventional drag-to-Applications layout, stated rather than defaulted

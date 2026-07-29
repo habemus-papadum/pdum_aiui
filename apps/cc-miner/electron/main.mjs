@@ -26,6 +26,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, shell } from "electron";
 import { APP_ORIGIN, distExists, registerAppScheme, serveApp } from "./app-scheme.mjs";
 import { bindSidecarLifetime } from "./duckdb-sidecar.mjs";
+import { initUpdater } from "./updater.mjs";
 
 const devUrl = process.env.CC_MINER_URL ?? "";
 const isDev = devUrl !== "";
@@ -92,6 +93,7 @@ async function start() {
   process.env.CC_MINER_HOST_RUNTIME ??= join(app.getPath("userData"), "duckdb-host.json");
   bindSidecarLifetime();
 
+  initUpdater();
   serveApp();
   if (!(await distExists())) {
     // A window onto a 404 is a mystery; this is a sentence. Reachable in a
