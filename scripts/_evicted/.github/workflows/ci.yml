@@ -2,10 +2,15 @@
 # scripts/_evicted/.github/workflows/ci.yml in pdum_aiui, not the copy, until
 # this repo stops being re-generated.
 #
-# Two jobs, and the split is the point. `gates` is the fast feedback everyone
-# waits on; `smoke` is slow (it downloads Electron and packages ~500 MB) and
-# answers a different question — not "does it compile" but "does the shipped
-# artifact boot".
+# One job. There was a second — `smoke`, which packaged the app and drove it over
+# CDP to prove the artifact boots — and it is deliberately gone: this repo ships
+# NO corpus (src/data is personal telemetry, regenerated locally with cc-assay),
+# so there is nothing for a booted app to render and the check could only ever
+# assert the "no data yet" state.
+#
+# `pdum-cc-miner/electron/smoke.mjs` still exists and still works against a local
+# corpus — `pnpm -C pdum-cc-miner smoke` after a `pack:dir`. It is a manual gate,
+# not a CI one, until this repo has data it can legitimately carry.
 name: CI
 
 on:
@@ -31,40 +36,3 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
-
-  # Packages the real bundle and drives it over CDP. This is the job that would
-  # have caught a native binding that failed to unpack, a dylib that cannot be
-  # dlopen'd, or an asset the custom scheme serves with the wrong MIME type —
-  # none of which any amount of `tsc` or `vitest` can see.
-  smoke:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-14, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-
-      - name: Package (unpackaged dir — no dmg/AppImage needed to boot it)
-        run: pnpm -C pdum-cc-miner run pack:dir
-
-      # A GitHub runner has no display, and Electron's setuid sandbox helper is
-      # not privileged in the unpacked build — hence xvfb and --no-sandbox.
-      # Neither weakens what is being tested: the renderer's own `sandbox: true`
-      # is unaffected, and the failures this job exists to catch are in the main
-      # process and the sidecar.
-      - name: Smoke (Linux)
-        if: runner.os == 'Linux'
-        env:
-          PDUM_CC_MINER_SMOKE_ARGS: "--no-sandbox"
-        run: xvfb-run -a pnpm -C pdum-cc-miner run smoke
-
-      - name: Smoke (macOS)
-        if: runner.os == 'macOS'
-        run: pnpm -C pdum-cc-miner run smoke

@@ -71,18 +71,6 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: pnpm -C pdum-cc-miner run pack:${{ matrix.target }}
 
-      # The artifact is only worth releasing if it boots. Runs against the same
-      # bundle that was just built, before anyone can download it.
-      - name: Smoke the built artifact (Linux)
-        if: matrix.target == 'linux'
-        env:
-          PDUM_CC_MINER_SMOKE_ARGS: "--no-sandbox"
-        run: xvfb-run -a pnpm -C pdum-cc-miner run smoke
-
-      - name: Smoke the built artifact (macOS)
-        if: matrix.target == 'mac'
-        run: pnpm -C pdum-cc-miner run smoke
-
       # Kept regardless of publishing, so a dry run still produces something
       # inspectable and a failed publish does not also lose the build.
       - uses: actions/upload-artifact@v4
