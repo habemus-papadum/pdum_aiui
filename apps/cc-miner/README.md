@@ -38,6 +38,50 @@ Verified at a matched viewport: the built app and the dev server agree exactly i
 29,323 turns, 102 sessions, 33 charts, 59,630 marks — and the built app reaches the full corpus in
 host mode (30,420 turns, 104 sessions).
 
+## Packaging
+
+```sh
+pnpm pack:dir      # release/mac-arm64/cc-miner.app — fastest, for checking a change
+pnpm pack:mac      # + .dmg, .zip and latest-mac.yml
+pnpm pack:linux    # + .AppImage, .deb and latest-linux.yml (must run ON Linux)
+```
+
+Two fields in this `package.json` are right for a workspace member and wrong for a desktop app,
+and neither may be edited in the tree — `electron/pack.mjs` rewrites both into the bundle's copy
+via `extraMetadata`:
+
+- **`main`** is `./src/index.ts`, the library barrel every sibling imports source-first. The
+  bundle needs `electron/main.mjs`.
+- **`version`** is `X.Y.Z+dev`, the lockstep marker owned by the release pipeline
+  ([AGENTS.md](../../AGENTS.md)). It is also a semver trap: comparison **ignores build metadata**,
+  so `0.12.0+dev` and `0.12.0` compare *equal* and an updater would never fire. Local builds get
+  `0.12.0-dev.<sha>` — a prerelease, which sorts strictly *below* `0.12.0`, so a dev build can
+  never look newer than a real release.
+
+### The size budget
+
+| | | |
+| --- | --- | --- |
+| Electron Framework | 273 MB | irreducible |
+| `app.asar` | 108 MB | exactly `dist/` |
+| `app.asar.unpacked` | 112 MB | `libduckdb.dylib` — the native engine |
+| **installed** | **495 MB** | |
+| **dmg / zip** | **192 MB** | what a user downloads |
+
+`files` in `electron-builder.yml` is an allowlist. It has to be: electron-builder adds every
+production `dependency` on its own, and cc-miner's are the *renderer's* — solid, mosaic, and
+duckdb-wasm's 143 MB — because this package is also a library. Excluding them and putting back
+only the native DuckDB took the `.app` from 661 MB to 495 MB.
+
+Two further levers, measured but **not** taken, because both change behaviour and neither is on
+the critical path:
+
+- **41 MB** — the `mvp` duckdb-wasm bundle. `selectBundle` picks `eh` on every browser since
+  ~2021 and always in Electron, so `mvp` is never loaded; dropping it turns a graceful
+  degradation into a hard failure on browsers nobody is targeting.
+- **28 MB** — the bundled replay corpus ships all 109 sessions while local mode is a 1-month trim
+  covering 102.
+
 ## Two data modes, declared not discovered
 
 | mode | where queries run | needs a server |

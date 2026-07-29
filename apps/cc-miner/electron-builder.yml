@@ -1,0 +1,89 @@
+# electron-builder.yml — how cc-miner becomes an installable artifact.
+#
+# Run it through `pnpm pack:mac` / `pnpm pack:linux`, never `electron-builder`
+# bare: two fields in the app's package.json are wrong for a desktop build and
+# are corrected at pack time rather than in the tree (see electron/pack.mjs).
+#   main     ./src/index.ts — the LIBRARY barrel, because this is a workspace
+#            member consumed source-first by its siblings
+#   version  X.Y.Z+dev — the workspace lockstep marker. Semver comparison
+#            IGNORES build metadata, so `0.12.0+dev` and `0.12.0` compare EQUAL
+#            and an updater would never fire. It must be a real version.
+
+appId: com.habemus-papadum.cc-miner
+productName: cc-miner
+copyright: Copyright © 2026 Nehal Patel
+
+directories:
+  output: release
+  buildResources: build
+
+# An ALLOWLIST. The default is "everything except a denylist", which here would
+# drag in the whole renderer dependency tree — solid, mosaic, and duckdb-wasm's
+# 143 MB — every byte of which is already compiled into dist/. What the shipped
+# app actually needs at runtime is the built renderer, the shell, the host
+# program, and one native DuckDB.
+files:
+  - dist/**
+  - electron/**
+  - server/**
+  - "!**/*.test.*"
+  - "!electron/dev.mjs" # dev-only: starts a Vite server that is not here
+  - package.json
+  # `files` does not govern node_modules — electron-builder adds every
+  # production `dependency` on its own, and cc-miner's are the RENDERER's
+  # (solid, mosaic, duckdb-wasm), because this package is also a library its
+  # siblings import source-first. Measured: 4,481 files and ~166 MB of asar,
+  # all of it already compiled into dist/. Only the native DuckDB is needed at
+  # runtime, so the tree is excluded and the one branch put back.
+  - "!node_modules/**"
+  - node_modules/@duckdb/node-api/**
+  - node_modules/@duckdb/node-bindings/**
+  - node_modules/@duckdb/node-bindings-darwin-*/**
+  - node_modules/@duckdb/node-bindings-linux-*/**
+
+# The native binding cannot be read from inside an asar archive: `duckdb.node`
+# is dlopen'd by path, and it in turn dlopens libduckdb.dylib beside it. Both
+# have to exist as real files on disk.
+asarUnpack:
+  - "**/*.node"
+  - "**/*.dylib"
+  - "**/*.so*"
+
+# Nothing here is built from source — @duckdb/node-bindings ships prebuilt
+# per-platform binaries and N-API keeps them ABI-stable across Electron
+# versions (measured: loads in utilityProcess with no rebuild).
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
+mac:
+  category: public.app-category.developer-tools
+  # zip is NOT redundant beside dmg. electron-updater reads `latest-mac.yml`,
+  # and electron-builder only generates it when a zip target is present — a dmg
+  # alone silently produces a release the updater cannot see.
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+
+linux:
+  category: Development
+  synopsis: Understand your own Claude Code usage
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+
+dmg:
+  # The conventional drag-to-Applications layout, stated rather than defaulted
+  # so a future background image cannot silently move the drop target.
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
