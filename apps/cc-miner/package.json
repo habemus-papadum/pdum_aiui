@@ -18,15 +18,17 @@
   "module": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
+    "build": "vite build",
     "claude": "../../bin/aiui claude",
     "dev": "vite",
     "dev:electron": "node electron/dev.mjs",
+    "preview": "vite preview",
     "normalize": "pnpm -C ../cc-assay normalize -- --out ../cc-miner/src/data",
     "open": "../../bin/aiui open",
     "serve": "node server/duckdb-host.mjs",
     "serve:s3": "node server/duckdb-host.mjs --s3-prefix",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.33.1-dev61.0",

@@ -26,12 +26,17 @@ import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DuckDBInstance } from "@duckdb/node-api";
+import { RUNTIME_FILE } from "./host-runtime.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(HERE, "..");
 
-/** Where the host advertises itself. Read this; never assume a port. */
-export const RUNTIME_FILE = resolve(APP_ROOT, ".aiui-cache/duckdb-host.json");
+// Where the host advertises itself. Deliberately imported rather than declared
+// here: the readers (Vite's middleware, the packaged app's scheme handler) and
+// this writer must agree on one path, and a packaged app overrides it by env —
+// so the agreement has to come from a shared constant, not two matching
+// literals. Read the file; never assume a port.
+export { RUNTIME_FILE };
 
 /** Extensions the host needs. `quack` serves; `httpfs`+`aws` reach S3. */
 const EXTENSIONS = ["quack", "httpfs", "aws"];
@@ -42,15 +47,36 @@ function freePort() {
     const s = createServer();
     s.on("error", rej);
     s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => res(port));
+      const addr = s.address();
+      if (addr === null || typeof addr === "string") {
+        s.close(() => rej(new Error("net server reported no numeric address")));
+        return;
+      }
+      s.close(() => res(addr.port));
     });
   });
 }
 
-function arg(name, fallback) {
+/**
+ * A `--name value` argument, or undefined.
+ *
+ * @param {string} name
+ * @returns {string | undefined}
+ */
+function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
-  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : undefined;
+}
+
+/**
+ * The message of an unknown throw. `catch (e)` gives `unknown`, and every place
+ * this is used wants the same thing: something printable.
+ *
+ * @param {unknown} e
+ * @returns {string}
+ */
+function errText(e) {
+  return String(e instanceof Error ? e.message : e);
 }
 
 /**
@@ -79,9 +105,9 @@ export const LAYOUT_GLOB = "/username=*/host=*/**/*.parquet";
 const FLAT_GLOB = ".parquet";
 
 async function main() {
-  const dataDir = resolve(APP_ROOT, arg("data", "src/data"));
-  const s3Profile = arg("s3-profile", null);
-  const s3Prefix = arg("s3-prefix", null);
+  const dataDir = resolve(APP_ROOT, arg("data") ?? "src/data");
+  const s3Profile = arg("s3-profile") ?? null;
+  const s3Prefix = arg("s3-prefix") ?? null;
   const flat = process.argv.includes("--flat");
 
   const instance = await DuckDBInstance.create(":memory:");
@@ -109,6 +135,7 @@ async function main() {
   }
 
   const base = s3Prefix ?? dataDir;
+  /** @type {{grain: string, err: string}[]} */
   const failures = [];
   for (const grain of GRAINS) {
     const src = flat ? `${base}/${grain}${FLAT_GLOB}` : `${base}/${grain}${LAYOUT_GLOB}`;
@@ -120,7 +147,7 @@ async function main() {
     } catch (e) {
       // A missing grain is normal — the normaliser grew some of these late, and
       // a checkout with older data should still boot. Record, do not fail.
-      failures.push({ grain, err: String(e?.message ?? e).split("\n")[0] });
+      failures.push({ grain, err: errText(e).split("\n")[0] });
     }
   }
 

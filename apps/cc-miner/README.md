@@ -8,16 +8,35 @@ from [`cc-assay`](../cc-assay) next door.
 
 ## Two hosts, one app
 
-cc-miner runs in a browser tab or in an Electron window. Both are **dev servers**: Electron is not
-a different build, it is a different window pointed at an equivalent Vite server. There is no
-packaging story yet — no DMG, no `app://`, no code signing.
+cc-miner runs in a browser tab or in an Electron window. Electron is not a different build — it is
+a different window pointed at the same renderer. Nothing in `src/` branches on a build flag to tell
+them apart; `src/host.ts` asks at runtime, which is what keeps that claim checkable.
 
 ```sh
-pnpm serve           # terminal 1 — the DuckDB host (required; see below)
+pnpm serve           # terminal 1 — the DuckDB host (host mode only; see below)
 pnpm dev             # terminal 2 — browser host, http://localhost:5173
 pnpm dev:electron    #     …or the Electron host, http://localhost:5179 in a window
 pnpm claude          # terminal 3 — Claude Code with the aiui channel + session browser
 ```
+
+## The production build
+
+One `vite build` produces one `dist/`, and that same directory is both the static web deploy and
+the payload inside the desktop package. It is not a dev-only convenience:
+
+```sh
+pnpm build           # → dist/  (relative base, so it works from any path)
+pnpm preview         # serve the BUILT app, host routes included
+```
+
+`pnpm preview` mounts the same `/__duckdb-host` and `/quack` routes the dev server does
+(`server/host-runtime.mjs`, one implementation), so **the built app can run host mode too**.
+Without that, host mode would silently be a dev-server-only feature — the sort of gap that stays
+invisible until someone ships.
+
+Verified at a matched viewport: the built app and the dev server agree exactly in local mode —
+29,323 turns, 102 sessions, 33 charts, 59,630 marks — and the built app reaches the full corpus in
+host mode (30,420 turns, 104 sessions).
 
 ## Two data modes, declared not discovered
 

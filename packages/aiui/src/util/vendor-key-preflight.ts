@@ -199,9 +199,7 @@ function invalidRemedy(key: ResolvedVendorKey): string {
       `Fix the export (or \`unset ${key.envVar}\` to fall back to the OS vault) and relaunch.`
     );
   }
-  return (
-    "The key came from the OS vault. Replace it and relaunch:\n" + `  aiui keys set ${key.provider}`
-  );
+  return `The key came from the OS vault. Replace it and relaunch:\n  aiui keys set ${key.provider}`;
 }
 
 /**

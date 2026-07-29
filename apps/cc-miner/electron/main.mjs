@@ -23,7 +23,7 @@
  */
 import { app, BrowserWindow, shell } from "electron";
 
-const url = process.env.CC_MINER_URL;
+const url = process.env.CC_MINER_URL ?? "";
 if (!url) {
   console.error("[cc-miner/electron] CC_MINER_URL is not set — start via `pnpm dev:electron`.");
   process.exit(2);

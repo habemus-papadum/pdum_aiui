@@ -39,10 +39,30 @@ import { duckdbHost } from "./server/vite-plugin";
  */
 export function ccMinerConfig(): UserConfig {
   return {
-    // duckdbHost() is dev-server middleware only: it exposes `/quack` and
-    // `/__duckdb-host` so the page reaches the DuckDB process without ever
-    // knowing its port. Both hosts get it, because both serve the app from a
-    // Vite dev server.
+    // Relative, so ONE `dist/` is valid everywhere it gets served from: the
+    // root of a static host, a subdirectory of one, and `app://cc-miner/` inside
+    // the packaged Electron app. An absolute base would pin the build to a
+    // deploy path and force a second build for the desktop package — which is
+    // exactly the "two artifacts, one claim" trap this split exists to avoid.
+    base: "./",
+
+    // duckdbHost() exposes `/quack` and `/__duckdb-host` so the page reaches the
+    // DuckDB process without ever knowing its port. It mounts on the dev server
+    // AND the preview server, so the BUILT app can run host mode too.
     plugins: [aiui(), solid(), duckdbHost()],
+
+    build: {
+      // Never base64-inline an asset. The default 4 KB limit swept 22 of the
+      // replay Parquet files into the entry chunk — measured — which costs the
+      // 33% base64 tax on the critical path and, worse, makes "how big is the
+      // data" unanswerable by looking at the assets. Parquet is data; data is a
+      // file.
+      assetsInlineLimit: 0,
+      // The entry chunk is genuinely ~200 KB and DuckDB's wasm is genuinely
+      // 36 MB; the default 500 KB warning has nothing useful to say about
+      // either. Silenced with a number rather than ignored, so a real regression
+      // in the app chunk still shows up.
+      chunkSizeWarningLimit: 2000,
+    },
   };
 }

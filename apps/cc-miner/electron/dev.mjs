@@ -49,6 +49,7 @@ const child = spawn(electronBin, [mainEntry], {
 console.log(`\n  ▸ electron window on ${url}\n`);
 
 let closing = false;
+/** @param {number} code */
 async function shutdown(code) {
   if (closing) return;
   closing = true;
