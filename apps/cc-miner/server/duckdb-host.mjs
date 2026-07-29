@@ -26,17 +26,20 @@ import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { RUNTIME_FILE } from "./host-runtime.mjs";
+import { runtimeFile } from "./host-runtime.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(HERE, "..");
 
-// Where the host advertises itself. Deliberately imported rather than declared
-// here: the readers (Vite's middleware, the packaged app's scheme handler) and
-// this writer must agree on one path, and a packaged app overrides it by env —
-// so the agreement has to come from a shared constant, not two matching
-// literals. Read the file; never assume a port.
-export { RUNTIME_FILE };
+// Where the host advertises itself. Deliberately resolved by the SHARED helper
+// rather than declared here: the readers (Vite's middleware, the packaged app's
+// scheme handler) and this writer must agree on one path, and a packaged app
+// overrides it by env — so the agreement has to come from one function, not
+// from two matching literals. Read the file; never assume a port.
+//
+// Resolved once, here, because this is a standalone process: whatever env it
+// was started with is the env it dies with.
+export const RUNTIME_FILE = runtimeFile();
 
 /** Extensions the host needs. `quack` serves; `httpfs`+`aws` reach S3. */
 const EXTENSIONS = ["quack", "httpfs", "aws"];
@@ -149,6 +152,20 @@ async function main() {
       // a checkout with older data should still boot. Record, do not fail.
       failures.push({ grain, err: errText(e).split("\n")[0] });
     }
+  }
+
+  // A missing grain is normal; ALL of them missing is not — it means the path
+  // is wrong, or empty, or the layout does not match. Booting anyway would put
+  // the app in front of eight empty views, which reads as "you have no usage"
+  // rather than "I looked in the wrong place". This distinction only started
+  // mattering when the app began spawning its own host, where nobody is
+  // watching a terminal for the per-grain warnings.
+  if (failures.length === GRAINS.length) {
+    throw new Error(
+      `no corpus at ${base} — all ${GRAINS.length} grains failed to open.\n` +
+        `  expected ${base}/<grain>${flat ? FLAT_GLOB : LAYOUT_GLOB}\n` +
+        `  first error: ${failures[0]?.err}`,
+    );
   }
 
   // The manifest is JSON, not a grain, and it must come from the SAME source as

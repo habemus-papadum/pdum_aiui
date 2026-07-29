@@ -46,9 +46,18 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * shell therefore sets `CC_MINER_HOST_RUNTIME` to a file under `userData` and
  * passes the same value to the sidecar it spawns, so both ends of the lookup
  * agree by construction rather than by coincidence.
+ *
+ * A FUNCTION, not a constant, and that is load-bearing. ESM evaluates imports
+ * before the importing module's body, so a constant here would be frozen from
+ * the environment before `electron/main.mjs` ever got to set it — and the shell
+ * cannot know `userData` any earlier. Read it per call and the ordering
+ * question disappears instead of being something to remember.
+ *
+ * @returns {string}
  */
-export const RUNTIME_FILE =
-  process.env.CC_MINER_HOST_RUNTIME || resolve(HERE, "..", ".aiui-cache/duckdb-host.json");
+export function runtimeFile() {
+  return process.env.CC_MINER_HOST_RUNTIME || resolve(HERE, "..", ".aiui-cache/duckdb-host.json");
+}
 
 /**
  * @typedef {object} HostRuntime
@@ -76,7 +85,7 @@ export const RUNTIME_FILE =
  */
 export function readHostRuntime() {
   try {
-    return JSON.parse(readFileSync(RUNTIME_FILE, "utf8"));
+    return JSON.parse(readFileSync(runtimeFile(), "utf8"));
   } catch {
     return null;
   }

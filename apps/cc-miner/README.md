@@ -43,7 +43,7 @@ host mode (30,420 turns, 104 sessions).
 | mode | where queries run | needs a server |
 | --- | --- | --- |
 | **local** (default) | Parquet shipped with the app, duckdb-wasm in the tab | no |
-| **host** | a native DuckDB answering over Quack | yes — `pnpm serve` |
+| **host** | a native DuckDB answering over Quack | yes — `pnpm serve`, or the packaged app's own sidecar |
 
 Pick with `?source=local` / `?source=host`; the choice is remembered. **There is
 no fallback in either direction**: asking for `host` with no host running is an
@@ -66,10 +66,36 @@ pnpm serve --data <dir>               # a Hive-partitioned corpus on disk
 pnpm serve --s3-prefix s3://bucket/cc --s3-profile personal
 ```
 
-It picks a free port, writes `.aiui-cache/duckdb-host.json`, and the Vite plugin
-proxies `/quack` there — so **no port is ever hardcoded in the page**. Start
-order does not matter: the runtime file is read per request, and the app says so
-plainly if the host is not up.
+It picks a free port and writes `.aiui-cache/duckdb-host.json`. The page finds it
+through one lookup, `GET /__duckdb-host`, which returns the token and the
+endpoint to use. **The page never derives that endpoint** — it used to, from
+`location.host`, and that was right in a tab and wrong under the packaged app's
+`app://cc-miner/`, where it produced a hostname DuckDB dialled over TCP and the
+load hung with no request and no error. Start order still does not matter: the
+runtime file is read per request.
+
+### In the packaged app, the app starts it
+
+There is no terminal in a shipped app, so the Electron shell spawns the *same*
+`server/duckdb-host.mjs` in a `utilityProcess` — measured: `@duckdb/node-api`
+loads there as ESM with no rebuild. It starts **lazily**, on the first
+`/__duckdb-host` request, which the renderer only makes in host mode. That is
+why this needs no IPC: the existing lookup already happens at exactly the moment
+the sidecar is wanted, so a user who stays in local mode never pays for a DuckDB
+process.
+
+Where it reads from, in a packaged app:
+
+| | |
+| --- | --- |
+| `<userData>/corpus` | the default — `~/Library/Application Support/cc-miner/corpus` on macOS |
+| `CC_MINER_CORPUS` | point at a corpus that already exists |
+| `CC_MINER_S3_PREFIX` + `CC_MINER_S3_PROFILE` | serve from S3 instead |
+
+Both no-corpus cases are named rather than shrugged at — a missing directory is
+caught before spawning, and a directory with no Parquet in it fails the host's
+boot with the glob it tried, instead of booting eight empty views and letting the
+app report that you have no usage.
 
 Why not `ATTACH` the remote catalog and query it like a local table? Because
 `ATTACH` does no pushdown at all — a bare `count(*)` over a 272 MB table moved

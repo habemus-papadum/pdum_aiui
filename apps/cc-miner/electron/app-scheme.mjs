@@ -36,6 +36,7 @@ import { dirname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { net, protocol } from "electron";
 import { hostInfo } from "../server/host-runtime.mjs";
+import { ensureHost } from "./duckdb-sidecar.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -132,7 +133,12 @@ export function serveApp() {
       console.error(`[scheme] ${req.method} ${pathname}`);
 
     if (pathname === "/__duckdb-host") {
-      return Response.json(hostInfo(), { headers: { "cache-control": "no-store" } });
+      // Starting the host HERE is what removes the need for IPC. The renderer
+      // asks this question only in host mode, so the sidecar's lifetime is
+      // already exactly the lifetime we want, with no signal to invent.
+      const failure = await ensureHost();
+      const body = failure ? { ok: false, error: failure } : hostInfo();
+      return Response.json(body, { headers: { "cache-control": "no-store" } });
     }
 
     // No `/quack` route here. The page talks to the DuckDB host directly, at the

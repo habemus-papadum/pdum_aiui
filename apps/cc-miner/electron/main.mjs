@@ -22,11 +22,19 @@
  *   CC_MINER_CDP_PORT   Chrome DevTools Protocol port, "" to disable
  *   CC_MINER_DEVTOOLS   "1" to open DevTools detached on start
  */
+import { join } from "node:path";
 import { app, BrowserWindow, shell } from "electron";
 import { APP_ORIGIN, distExists, registerAppScheme, serveApp } from "./app-scheme.mjs";
+import { bindSidecarLifetime } from "./duckdb-sidecar.mjs";
 
 const devUrl = process.env.CC_MINER_URL ?? "";
 const isDev = devUrl !== "";
+
+// Named explicitly so `userData` — where the runtime file and the corpus live —
+// is the same directory whether this is run from a checkout or from a packaged
+// bundle. Left to default, the two disagree: unpackaged Electron calls itself
+// "Electron" and would put a shipped user's data somewhere else entirely.
+app.setName("cc-miner");
 
 // Must happen before `app.whenReady()`: Chromium fixes a scheme's privileges at
 // startup and ignores a late registration silently. Registered unconditionally
@@ -78,6 +86,12 @@ async function start() {
     createWindow(devUrl);
     return;
   }
+  // Set BEFORE anything reads it. `userData` is not knowable until the app is
+  // ready, which is why server/host-runtime.mjs resolves this path per call
+  // rather than at import: a constant would have been frozen before this line.
+  process.env.CC_MINER_HOST_RUNTIME ??= join(app.getPath("userData"), "duckdb-host.json");
+  bindSidecarLifetime();
+
   serveApp();
   if (!(await distExists())) {
     // A window onto a 404 is a mystery; this is a sentence. Reachable in a
