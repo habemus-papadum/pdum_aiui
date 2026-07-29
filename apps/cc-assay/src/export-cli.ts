@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   const s3Profile = arg("s3-profile");
   if (!from || !to) {
     console.error(
-      "usage: export --from <dir-of-grains> --to <dir|s3://bucket/prefix> [--s3-profile <p>]",
+      "usage: export --from <dir> --to <dir|s3://bucket/prefix> [--s3-profile <p>] [--months <n>]",
     );
     process.exit(2);
   }
@@ -52,12 +52,15 @@ async function main(): Promise<void> {
   if (s3Profile) await attachS3(conn, s3Profile);
   if (!isS3) mkdirSync(to, { recursive: true });
 
+  const months = arg("months") ? Number(arg("months")) : undefined;
   const opts = {
     prefix: to,
     username,
     hostId,
     sourceSql: (g: string) => `read_parquet('${path.resolve(from, `${g}.parquet`)}')`,
+    ...(months ? { months } : {}),
   };
+  if (months) console.log(`  (trimmed to the most recent ${months} month(s))`);
 
   const shards: ShardEntry[] = [];
   for (const grain of GRAINS) {

@@ -28,8 +28,9 @@ import { clausePoints } from "@uwdata/mosaic-core";
 import { Coordinator, Selection } from "@uwdata/vgplot";
 import { BUNDLES, instantiateDuckDB } from "../duckdb";
 import { type DurableState, durableState, toggled } from "./durable-state";
-import { fetchHostInfo, type HostInfo, quackConnector, quackUri, replayFileSql } from "./quack";
 import { plainRow } from "./rows";
+import { type DataSource, resolveSource } from "./source";
+import { browserModeStore, persistMode, resolveMode, type SourceMode } from "./source-mode";
 import {
   type SelectionStats,
   SelectionStatsClient,
@@ -192,13 +193,39 @@ const engineBox = appScope.durable<{ engine: Engine | null; loading: Promise<voi
 );
 
 /**
- * What the DuckDB host told us at handshake. Kept because `ensureReplay` needs
- * the host's replay location, which only the host knows — it differs between a
- * local checkout and an S3 prefix.
+ * The resolved data source. Kept because `ensureReplay` needs its replay
+ * location and the UI needs its label — both differ between local bytes, a
+ * local host directory, and an S3 prefix.
  */
-const hostInfoBox = appScope.durable<{ info: HostInfo | null }>("hostInfo", () => ({
-  info: null,
+const sourceBox = appScope.durable<{ source: DataSource | null }>("source", () => ({
+  source: null,
 }));
+
+/** The mode this page is running in. Declared, never inferred. */
+export const sourceMode = appScope.durableSignal<SourceMode>(
+  "sourceMode",
+  resolveMode(typeof location === "undefined" ? "" : location.search, browserModeStore()),
+);
+
+/** Provenance for the UI: which mode, and what the host is reading. */
+export function sourceLabel(): string {
+  return sourceBox.source?.label ?? sourceMode.get();
+}
+
+/**
+ * Switch modes. A reload is the honest implementation: the connector, the
+ * registered files and every cached table belong to the old source, and
+ * swapping them in place would leave a half-migrated graph that is harder to
+ * reason about than a fresh start.
+ */
+export function setSourceMode(mode: SourceMode): void {
+  persistMode(mode, browserModeStore());
+  if (typeof location !== "undefined") {
+    const url = new URL(location.href);
+    url.searchParams.set("source", mode);
+    location.href = url.toString();
+  }
+}
 
 // --- the session timeline: Mosaic's side of the crossfilter -------------------
 //
@@ -389,23 +416,20 @@ async function load(): Promise<void> {
   // compute — is inside one synchronously. After an await the owner is no
   // longer current, so every signal this function touches is written safely.
   await Promise.resolve();
-  progress.set({ fraction: null, label: "finding the DuckDB host" });
-
-  // The data lives in a native DuckDB process, not in this tab. Ask the dev
-  // server for its token before booting Wasm at all — a missing host is the
-  // common first-run state and deserves a plain message, not a Wasm boot
-  // followed by a cryptic query failure.
-  const host = await fetchHostInfo();
-  if (!host.ok || !host.token) {
-    throw new Error(host.error ?? "the DuckDB host is not running");
-  }
-
+  const mode = sourceMode.get();
   progress.set({ fraction: null, label: "starting DuckDB" });
   const db = await instantiateDuckDB(BUNDLES);
   const conn = await db.connect();
-  // Wasm is a protocol client here and nothing else: quack is statically linked
-  // into the Wasm build, so LOAD alone suffices (no INSTALL, no network).
+  // quack is statically linked into the Wasm build, so LOAD alone suffices (no
+  // INSTALL, no network). Harmless in local mode, and loading it unconditionally
+  // keeps the two paths from diverging before the source is even resolved.
   await conn.query("LOAD quack");
+
+  const source = await resolveSource(mode, {
+    db,
+    connection: conn,
+    onProgress: (fraction, label) => progress.set({ fraction, label }),
+  });
   // preagg OFF, deliberately and permanently. It is the one component in
   // mosaic-core that is coupled to a client's table: it materialises its view as
   // `Query.from(clientQuery._from).select({...activeClauseColumns})` — the
@@ -422,16 +446,15 @@ async function load(): Promise<void> {
   // would have to misstate its own semantics purely to dodge the optimizer. The
   // breakage is not about stability at all, so the switch belongs here.
   const coordinator = new Coordinator(undefined, { preagg: { enabled: false } });
-  coordinator.databaseConnector(
-    quackConnector({ connection: conn, uri: quackUri(), token: host.token }),
-  );
+  coordinator.databaseConnector(source.connector);
   engineBox.engine = { db, conn, coordinator };
-  hostInfoBox.info = host;
+  sourceBox.source = source;
 
-  // There is no loading step any more. The host already has the views — it
-  // created them at boot over local Parquet or over S3 — so "loading" is a
-  // handshake, not a download. The grains it reports are the grains that exist.
-  const available = new Set(host.grains ?? []);
+  // In host mode the views already exist, created at boot over a directory or
+  // S3, so this is a handshake rather than a download. In local mode the shards
+  // were just registered. Either way the source reports what is actually there.
+  const available = new Set(source.grains);
+  await source.createViews((sql) => coordinator.exec(sql));
   for (const name of Object.keys(TABLES) as Array<keyof typeof TABLES>) {
     if (!available.has(name)) {
       throw new Error(
@@ -491,7 +514,7 @@ async function load(): Promise<void> {
  * corpus without one degrades to "unlabelled numbers", never to a build error.
  */
 function loadManifest(): void {
-  const m = hostInfoBox.info?.manifest;
+  const m = sourceBox.source?.manifest;
   if (m && typeof m === "object") manifest.set(m as Manifest);
 }
 
@@ -581,7 +604,7 @@ export interface ReplayIndexEntry {
 function replayIndexNow(): ReadonlyMap<string, ReplayIndexEntry> | null {
   const cached = replayIndex.get();
   if (cached) return cached;
-  const list = hostInfoBox.info?.replayIndex;
+  const list = sourceBox.source?.replayIndex;
   if (!Array.isArray(list)) return null;
   const map = new Map((list as ReplayIndexEntry[]).map((e) => [e.sessionId, e]));
   replayIndex.set(map);
@@ -616,10 +639,18 @@ export async function ensureReplay(sessionId: string): Promise<string | null> {
   // of replay Parquet never crosses into the page at all. The view persists
   // because `quack_query` sessions share one database (only TEMP objects are
   // per-call).
-  const base = hostInfoBox.info?.replayBase;
-  if (!base) throw new Error("the DuckDB host did not advertise a replay location");
+  const src = sourceBox.source;
+  const file = src?.replayFile(sessionId);
+  if (!file) throw new Error("this source does not provide replay data");
+  if (src?.mode === "local") {
+    // Local mode has not fetched this session's bytes yet — replay is the one
+    // grain deliberately left out of the boot registration.
+    const url = new URL(`../data/replay/${sessionId}.parquet`, import.meta.url);
+    const buf = new Uint8Array(await (await fetch(url.href)).arrayBuffer());
+    await e.db.registerFileBuffer(`replay/${sessionId}.parquet`, buf);
+  }
   await e.coordinator.exec(
-    `CREATE OR REPLACE VIEW "${table}" AS SELECT * FROM read_parquet(${replayFileSql(base, sessionId)})`,
+    `CREATE OR REPLACE VIEW "${table}" AS SELECT * FROM read_parquet(${file})`,
   );
   replayLoaded.add(sessionId);
   return table;

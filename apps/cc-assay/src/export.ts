@@ -118,6 +118,13 @@ export interface ExportOptions {
   hostId: string;
   /** How to read a grain's source rows, e.g. a `read_parquet(…)` expression. */
   sourceSql: (grain: string) => string;
+  /**
+   * Keep only the most recent N months. This is what makes a corpus small
+   * enough to ship as local bytes — the whole point of the local path is that
+   * it stays fast to start, so it carries a trailing window rather than
+   * everything. Absent means the whole corpus.
+   */
+  months?: number;
 }
 
 /**
@@ -134,9 +141,17 @@ export function exportGrainSql(grain: GrainSpec, opts: ExportOptions): string {
   const monthExpr = grain.partitionedByMonth
     ? `, strftime("${grain.timeColumn}", '%Y-%m') AS month`
     : "";
+  // The window is applied to EVERY grain, month-partitioned or not: a trimmed
+  // corpus whose `sessions` still covered all time would show sessions with no
+  // turns behind them. The cut uses each grain's own time column.
+  const where =
+    opts.months && opts.months > 0
+      ? ` WHERE "${grain.timeColumn}" >= (SELECT max("${grain.timeColumn}") ` +
+        `FROM ${opts.sourceSql(grain.name)}) - INTERVAL ${Math.floor(opts.months)} MONTH`
+      : "";
   return (
     `COPY (SELECT *, '${opts.username}' AS username, '${opts.hostId}' AS host${monthExpr} ` +
-    `FROM ${opts.sourceSql(grain.name)}) ` +
+    `FROM ${opts.sourceSql(grain.name)}${where}) ` +
     `TO '${opts.prefix}/${grain.name}' ` +
     `(FORMAT parquet, COMPRESSION zstd, PARTITION_BY (${keys.join(", ")}), ` +
     `FILENAME_PATTERN 'part', OVERWRITE_OR_IGNORE)`

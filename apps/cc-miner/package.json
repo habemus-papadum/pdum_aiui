@@ -24,6 +24,7 @@
     "normalize": "pnpm -C ../cc-assay normalize -- --out ../cc-miner/src/data",
     "open": "../../bin/aiui open",
     "serve": "node server/duckdb-host.mjs",
+    "serve:s3": "node server/duckdb-host.mjs --s3-prefix",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

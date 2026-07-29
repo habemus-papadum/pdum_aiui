@@ -19,6 +19,21 @@ pnpm dev:electron    #     …or the Electron host, http://localhost:5179 in a w
 pnpm claude          # terminal 3 — Claude Code with the aiui channel + session browser
 ```
 
+## Two data modes, declared not discovered
+
+| mode | where queries run | needs a server |
+| --- | --- | --- |
+| **local** (default) | Parquet shipped with the app, duckdb-wasm in the tab | no |
+| **host** | a native DuckDB answering over Quack | yes — `pnpm serve` |
+
+Pick with `?source=local` / `?source=host`; the choice is remembered. **There is
+no fallback in either direction**: asking for `host` with no host running is an
+error, never a quiet downgrade to local bytes. A stale local corpus standing in
+for the real one is invisible in the UI and expensive in trust.
+
+Local mode carries a **trimmed** corpus — `pnpm -C ../cc-assay export --months 1`
+— so the quick-start path stays quick as the real corpus grows.
+
 ## The DuckDB host
 
 The app does **not** query Parquet in the tab. A native DuckDB process holds the
