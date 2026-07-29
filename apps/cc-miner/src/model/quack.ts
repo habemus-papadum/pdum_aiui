@@ -26,6 +26,16 @@ import { wasmConnector } from "@uwdata/vgplot";
 export interface HostInfo {
   ok: boolean;
   token?: string;
+  /**
+   * Where to send queries, e.g. `quack:127.0.0.1:60679/quack`.
+   *
+   * Supplied by whatever served this page, never derived here. The page used to
+   * build it from `location.host`, which quietly encoded an assumption that its
+   * origin is `http://host:port` — true in a tab, false under the packaged
+   * app's `app://cc-miner/`, where it produced a hostname DuckDB dialled over
+   * TCP and the load hung with no request and no error.
+   */
+  quackUri?: string;
   grains?: string[];
   missing?: string[];
   source?: { kind: "local" | "s3"; [k: string]: unknown };
@@ -50,23 +60,14 @@ export function replayFileSql(replayBase: string, sessionId: string): string {
   return `'${replayBase}/${sessionId}.parquet'`;
 }
 
-/** Ask the dev server where (and whether) the DuckDB host is. */
+/** Ask whatever served this page where (and whether) the DuckDB host is. */
 export async function fetchHostInfo(): Promise<HostInfo> {
   try {
     const res = await fetch("/__duckdb-host", { cache: "no-store" });
     return (await res.json()) as HostInfo;
   } catch (e) {
-    return { ok: false, error: `could not reach the dev server: ${(e as Error).message}` };
+    return { ok: false, error: `could not reach the host lookup: ${(e as Error).message}` };
   }
-}
-
-/**
- * Same-origin Quack URI. The page never learns the host's port — `/quack` is
- * proxied by the dev-server plugin, which reads the port from the host's
- * runtime file per request.
- */
-export function quackUri(): string {
-  return `quack:${location.host}/quack`;
 }
 
 /**

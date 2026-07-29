@@ -1,41 +1,48 @@
 /**
- * electron/main.mjs — the Electron main process. DEV MODE ONLY.
+ * electron/main.mjs — the Electron main process, in both of its shapes.
  *
- * Deliberately the smallest shell that can hold the app: open a window, point
- * it at the Vite dev server, quit when it closes. No preload, no IPC, no
- * `app://` scheme, no menu — every one of those is a place where the Electron
- * build could start behaving differently from the browser build, and the point
- * of this step is that it doesn't. The renderer running inside this window is
- * byte-for-byte the one `pnpm dev` serves.
+ * ONE file, two ways in, and which one is live is decided by a single fact:
  *
- * It is launched by electron/dev.mjs, which starts the dev server first and
- * passes the URL it actually resolved to. Configuration arrives through the
- * environment rather than argv because Electron's own argv parsing treats the
- * first non-switch argument as the app path, and env vars sidestep the question
- * of what may legally follow it.
+ *   CC_MINER_URL set    DEV. A window onto the Vite server electron/dev.mjs
+ *                       started. HMR, source maps, the whole iteration loop.
+ *   CC_MINER_URL unset  PACKAGED. A window onto `app://cc-miner/`, served out
+ *                       of `dist/` by electron/app-scheme.mjs.
  *
- *   CC_MINER_URL        where the dev server is listening (required)
+ * The renderer is the same build either way, and it is never told which of the
+ * two it is in. `src/host.ts` answers "am I in Electron?" at runtime, and
+ * nothing answers "am I packaged?" at all, because nothing above this file is
+ * allowed to care. That is what makes "it runs the same in a tab and in a
+ * window" a claim someone can check rather than a hope.
+ *
+ * Deliberately still absent: preload, IPC, a menu. Every one of them is a place
+ * where the packaged app could start behaving differently from the browser one.
+ * The transport between renderer and data is HTTP in all three hosts.
+ *
+ *   CC_MINER_URL        dev server URL — presence selects dev mode
  *   CC_MINER_CDP_PORT   Chrome DevTools Protocol port, "" to disable
  *   CC_MINER_DEVTOOLS   "1" to open DevTools detached on start
- *
- * This file will move to a shared package (`aiui-electron-framework`) once the
- * shape has earned it; for now it lives with the one app that uses it.
  */
 import { app, BrowserWindow, shell } from "electron";
+import { APP_ORIGIN, distExists, registerAppScheme, serveApp } from "./app-scheme.mjs";
 
-const url = process.env.CC_MINER_URL ?? "";
-if (!url) {
-  console.error("[cc-miner/electron] CC_MINER_URL is not set — start via `pnpm dev:electron`.");
-  process.exit(2);
-}
+const devUrl = process.env.CC_MINER_URL ?? "";
+const isDev = devUrl !== "";
 
-// Must be appended before the app is ready. NOT 9222: that port belongs to the
-// shared aiui session browser, and colliding with it would make `aiui open`
-// and the Chrome DevTools MCP attach to this window by mistake.
+// Must happen before `app.whenReady()`: Chromium fixes a scheme's privileges at
+// startup and ignores a late registration silently. Registered unconditionally
+// so that the dev and packaged paths differ only in what the window is pointed
+// at, rather than in which subsystems exist.
+registerAppScheme();
+
+// Must also be appended before the app is ready. NOT 9222: that port belongs to
+// the shared aiui session browser, and colliding with it would make `aiui open`
+// and the Chrome DevTools MCP attach to this window by mistake. Unset in a
+// packaged app — a shipped product should not open a debug port by default.
 const cdpPort = process.env.CC_MINER_CDP_PORT ?? "";
 if (cdpPort) app.commandLine.appendSwitch("remote-debugging-port", cdpPort);
 
-function createWindow() {
+/** @param {string} url */
+function createWindow(url) {
   const win = new BrowserWindow({
     width: 1600,
     height: 1000,
@@ -54,10 +61,11 @@ function createWindow() {
   win.loadURL(url);
   if (process.env.CC_MINER_DEVTOOLS === "1") win.webContents.openDevTools({ mode: "detach" });
 
-  // Anything not on the dev server (docs links, an issue tracker) belongs in
-  // the user's real browser, not in a chromeless window with no address bar.
+  // Anything off our own origin (docs links, an issue tracker) belongs in the
+  // user's real browser, not in a chromeless window with no address bar.
+  const ownOrigin = isDev ? devUrl : `${APP_ORIGIN}/`;
   win.webContents.setWindowOpenHandler(({ url: target }) => {
-    if (!target.startsWith(url)) {
+    if (!target.startsWith(ownOrigin)) {
       shell.openExternal(target);
       return { action: "deny" };
     }
@@ -65,11 +73,30 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+async function start() {
+  if (isDev) {
+    createWindow(devUrl);
+    return;
+  }
+  serveApp();
+  if (!(await distExists())) {
+    // A window onto a 404 is a mystery; this is a sentence. Reachable in a
+    // checkout (`electron .` with no build), never in a packaged app, where
+    // dist/ is packaged or the build failed.
+    console.error("[cc-miner] no built renderer at dist/ — run `pnpm build` first.");
+    app.quit();
+    return;
+  }
+  createWindow(`${APP_ORIGIN}/`);
+}
 
-// A dev tool, not a Mac app: closing the window ends the run so `dev.mjs` can
-// shut the Vite server down with it.
+app.whenReady().then(start);
+
+// One window, one lifetime. Closing it ends the run on every platform — for a
+// dev shell so electron/dev.mjs can take the Vite server down with it, and for
+// the packaged app because a single-window utility that lingers in the dock
+// with nothing on screen is a puzzle, not a feature.
 app.on("window-all-closed", () => app.quit());
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createWindow(isDev ? devUrl : `${APP_ORIGIN}/`);
 });

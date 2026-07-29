@@ -25,7 +25,7 @@
 import type { AsyncDuckDB } from "@duckdb/duckdb-wasm";
 import type { Connector } from "@uwdata/mosaic-core";
 import { wasmConnector } from "@uwdata/vgplot";
-import { fetchHostInfo, type HostInfo, quackConnector, quackUri } from "./quack";
+import { fetchHostInfo, type HostInfo, quackConnector } from "./quack";
 import type { SourceMode } from "./source-mode";
 
 /**
@@ -115,7 +115,7 @@ export async function resolveSource(
 ): Promise<DataSource> {
   if (mode === "host") {
     const info: HostInfo = await fetchHostInfo();
-    if (!info.ok || !info.token) {
+    if (!info.ok || !info.token || !info.quackUri) {
       // Deliberately terminal. See the note at the top of this file.
       throw new Error(
         `${info.error ?? "the DuckDB host is not running"}\n` +
@@ -126,7 +126,7 @@ export async function resolveSource(
     return {
       mode: "host",
       label: `host · ${src?.prefix ?? src?.dataDir ?? "unknown source"}`,
-      connector: quackConnector({ connection, uri: quackUri(), token: info.token }),
+      connector: quackConnector({ connection, uri: info.quackUri, token: info.token }),
       manifest: info.manifest ?? null,
       replayIndex: info.replayIndex ?? null,
       grains: info.grains ?? [],
