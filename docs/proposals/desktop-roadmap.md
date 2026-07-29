@@ -1,6 +1,39 @@
 # Desktop roadmap: from spike results to a shipped app, and the packages left behind
 
-**Status:** proposed, 2026-07-28.
+**Status:** phases B–F' delivered 2026-07-29 (see the status table below); Phase A deferred by
+the user. Originally proposed 2026-07-28.
+
+## Status, 2026-07-29
+
+The packaging track was run end to end, ahead of the panel spike, at the user's direction.
+
+| phase | state | where it landed |
+| --- | --- | --- |
+| A — panel spike | **deferred**, deliberately | §2 below still stands unchanged |
+| B — data path | done | `097a117`…`5d7e6aa`; renderer + sidecar |
+| C — the shell | **partially, and only as packaging needed it** | `app://` scheme, sidecar lifetime. The `aiui claude --attach` half is untouched and still belongs to Phase A's world |
+| D — packaging | done, except credentials | `c3bc261`, `09cfaf6` |
+| E — updates | done, except the repo | `d4210be` |
+| F — extraction | not started | still the precondition for eviction |
+
+**The two things that are blocked, and only these:**
+
+1. A **`Developer ID Application`** certificate and Apple notarization credentials. Neither is
+   derivable from the repo; this machine has only an `Apple Development` certificate, which the
+   pack script now explicitly refuses (it produces something that looks signed and is rejected
+   everywhere else).
+2. The **`habemus-papadum/cc-miner`** repo the update feed points at. It cannot be this repo —
+   `release.yml` already owns the GitHub Releases list here, and electron-updater reads
+   `latest-mac.yml` out of whatever GitHub calls the latest release.
+
+**What §1's "unverified" row now says.** Library validation was the predicted first-notarization
+failure, and it is real — but not where predicted. `libduckdb.dylib` is re-signed by
+electron-builder as part of the bundle and passes. The blocker is the DuckDB extension downloaded
+**at runtime** into `~/.duckdb/extensions`, which can never be re-signed by us. Full measurement in
+`apps/cc-miner/README.md` → *Signing and notarization*.
+
+---
+
 **Companions:** [`deployment-shapes.md`](./deployment-shapes.md) (what was measured),
 [`../guide/duckdb-mosaic.md`](../guide/duckdb-mosaic.md) (the standalone DuckDB/Mosaic
 pattern), [`claude-code-usage-analytics.md`](./claude-code-usage-analytics.md) (the data).
