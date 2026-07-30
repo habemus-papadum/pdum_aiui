@@ -319,7 +319,9 @@ First light doubles as the empirical spike run (below).
   flags honest; park/resume polished; sideband attach exercised.
 - **O2c** — dev-env key seam; ephemeral-mint source (cloud function); reconnect-by-replay.
 - **O3** — the intent oracle: embed in the panel, superset tools over the global hook,
-  sideband/channel-minter exploration. Separate proposal when we get there.
+  sideband/channel-minter exploration. **That proposal now exists: `intent-oracle.md`**
+  (accepted 2026-07-30) — the oracle as the intent client's second *sink*, with the
+  page's tools, a writeable panel bar, and channel-side file tools.
 
 ## Sources
 
