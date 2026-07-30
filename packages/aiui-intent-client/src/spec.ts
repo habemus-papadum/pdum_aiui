@@ -404,7 +404,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // pencil (disarm clears it, above).
     {
       name: "area-needs-a-sink",
-      when: (s) => !turnCollecting(s) && s.region === true,
+      when: (s) => sink(s) === undefined && s.region === true,
       set: { region: false },
     },
     // A HOLD is a gesture into the TURN — you can no longer be "holding" once
@@ -460,13 +460,13 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // contribution acts at the machine, so caps, keys, the remote bar, and
     // agent writes all meet the same answer (BEHAVIOR.md).
     shot: (s, ctx) =>
-      turnCollecting(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
+      sink(s) !== undefined && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
     // The area drag is pixels too — turning it ON wants the same grant as a shot;
     // turning it OFF is always allowed (so a lost grant can't strand you in area
     // mode — you can always toggle back out, and Esc bypasses `available`).
     region: (s, ctx) =>
       s.region === true ||
-      (turnCollecting(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
+      (sink(s) !== undefined && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
     // Selection and clear are PAGE acts, not pixel acts (owner, 2026-07-14):
     // they ride the content script / bootstrap, which follows the tab in
     // view — no grant involved. Only pixels (shot, the stream, sampling) need
@@ -477,7 +477,8 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // …and only when the page actually HAS one (owner, 2026-07-14): a
     // selection pull with nothing selected is a guaranteed miss — the cap
     // grays and its tooltip points at selecting something first.
-    selection: (s, ctx) => turnCollecting(s) && ctx.activeTab !== undefined && ctx.selectionPresent,
+    selection: (s, ctx) =>
+      sink(s) !== undefined && ctx.activeTab !== undefined && ctx.selectionPresent,
     // Jump-to-editor is a PAGE act on instrumented pages only: the picker
     // reads the aiui stamps and source root, so a page without `__AIUI__`
     // grays the cap — the gate IS the feature detection (owner, 2026-07-15).

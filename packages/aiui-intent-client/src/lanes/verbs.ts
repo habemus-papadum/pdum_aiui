@@ -9,6 +9,7 @@
 
 import type { IntentLanes } from "../client";
 import { shotFlash } from "../config";
+import { sendSelectionToOracle, sendShotToOracle } from "./oracle-contributions";
 import { turnHasContent } from "./turn-config";
 import type { LaneContext } from "./types";
 
@@ -56,6 +57,20 @@ export function createVerbs(ctx: LaneContext): IntentLanes {
           if (shotFlash.get() === true) {
             void host.transport.requestPage(tab, "flash", { kind: "shot" }).catch(() => {});
           }
+          // THE FORK (O3d): the same cap, the same key, the same pixels — only
+          // the destination differs, and the sink is what names it. The oracle
+          // takes the image inline as an attachment; the turn stores it and
+          // references it by path.
+          if (ctx.sink?.() === "oracle") {
+            sendShotToOracle(ctx.oracle, {
+              bytes: shot.bytes,
+              mime: shot.mime,
+              rect: { x: 0, y: 0, w: shot.width, h: shot.height },
+              viewport: true,
+            });
+            status(`shot sent to the oracle (${shot.width}×${shot.height})`);
+            return;
+          }
           const marker = engine.shotDone(
             { x: 0, y: 0, w: shot.width, h: shot.height },
             [],
@@ -77,6 +92,14 @@ export function createVerbs(ctx: LaneContext): IntentLanes {
           const selection = await host.transport.requestPage(tab, "selection");
           if (selection === null || selection === undefined) {
             status("no selection on the page");
+            return;
+          }
+          if (ctx.sink?.() === "oracle") {
+            // The SAME rendering the lowered prompt uses (renderAppSelection),
+            // without composeIntent — see oracle-contributions.ts on why the
+            // passes are unnecessary by construction rather than skipped.
+            sendSelectionToOracle(ctx.oracle, selection as never);
+            status("selection sent to the oracle");
             return;
           }
           // The reply is AppSelection plus a `title` the event schema omits;

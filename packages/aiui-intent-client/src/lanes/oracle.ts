@@ -19,6 +19,7 @@
  * is a boolean, not a resource to acquire.
  */
 
+import { renderTabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   chainKeySource,
   mintingKeySource,
@@ -110,7 +111,12 @@ export interface OracleLanes {
   attach: (client: IntentClient) => () => void;
 }
 
-export function createOracleLanes(ctx: LaneContext): OracleLanes {
+/** Only the seams a session needs — NARROWER than LaneContext on purpose: the
+ * context carries the session itself (O3d's contribution fork reads it), so
+ * taking the whole thing here would be circular. */
+type OracleLaneContext = Pick<LaneContext, "config" | "host" | "status" | "toast">;
+
+export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
   const { config, host, status, toast } = ctx;
   // Set by `attach` (from lanes.bind) — the machine, for the moments that need
   // to READ state rather than be told about an edge.
@@ -162,6 +168,32 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
     } else {
       session.park();
     }
+  };
+
+  /**
+   * Tell the session what page the human is looking at (O3d), by re-weaving
+   * the instructions with the tab record the lowering renders — `renderTabRecord`
+   * verbatim, so the oracle reads the same `<tab …/>` shape the agent behind
+   * the channel does, and the human's "this page" means the same thing to
+   * both. Best-effort: a host with no `tabMeta` (the fake tier) simply gets
+   * the standing blurb.
+   */
+  const applyPrelude = async (): Promise<void> => {
+    const meta = await config.tabMeta?.().catch(() => undefined);
+    const url = typeof meta?.url === "string" ? meta.url : undefined;
+    if (url === undefined) {
+      return;
+    }
+    const record = renderTabRecord({
+      url,
+      ...(typeof meta?.title === "string" ? { title: meta.title } : {}),
+    });
+    session.setInstructions(
+      weaveInstructions({
+        app: PANEL_BLURB,
+        extra: `The page the developer is looking at right now:\n${record}`,
+      }),
+    );
   };
 
   /**
@@ -247,6 +279,11 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
       // …and the tool surface, for the same reason: the session was
       // constructed empty and a connect is not a change (O3b).
       applyTools();
+      // …and WHERE it is standing (O3d). Once per session rather than on
+      // every contributed item: a selection's own `<selection-metadata>`
+      // carries its tab, but a session that has been told the page up front
+      // can talk about it before anything is contributed at all.
+      await applyPrelude();
     },
     stop: () => session.close(),
     setMicEnabled: (on) => {

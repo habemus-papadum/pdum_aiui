@@ -32,6 +32,8 @@ export interface FakeBus extends IntentHost {
   switchTab(tab: number | undefined): void;
   /** Set a fake tab's identity (tab-boundary events read it via tabInfo). */
   setTabUrl(tab: number, url: string, title?: string): void;
+  /** Stage what a page capability answers with (the pull model's other half). */
+  answerWith(capability: string, reply: unknown): void;
   /** Push a page event at the panel (selection ping, interaction, key). */
   firePageEvent(event: PageEvent): void;
   /** Make a capability start failing (claim error paths). */
@@ -45,6 +47,7 @@ export function fakeBus(
 ): FakeBus {
   const log: string[] = [];
   const failures = new Map<string, string>();
+  const replies = new Map<string, unknown>();
   const pageHandlers = new Set<(event: PageEvent) => void>();
   const tabHandlers = new Set<(tab: number | undefined) => void>();
   const held = new Map<number, HeldStream>();
@@ -59,7 +62,11 @@ export function fakeBus(
         return Promise.reject(new Error(failure));
       }
       log.push(`page:${capability}@${tab} ${JSON.stringify(payload) ?? ""}`.trimEnd());
-      return Promise.resolve(undefined);
+      // Most capabilities answer nothing; a REPLY can be staged per capability
+      // (`answerWith`) so a test can drive the pull model — a selection the
+      // page actually returns, rather than the empty default every other
+      // capability wants.
+      return Promise.resolve(replies.get(capability) as never);
     },
     broadcastRing: (state) => {
       ringCount += 1;
@@ -151,6 +158,9 @@ export function fakeBus(
     },
     failCapability: (capability, error) => {
       failures.set(capability, error);
+    },
+    answerWith: (capability, reply) => {
+      replies.set(capability, reply);
     },
     clearLog: () => {
       log.length = 0;

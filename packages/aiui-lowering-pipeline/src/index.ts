@@ -22,7 +22,18 @@ export type { EngineListener } from "./engine";
 export { Engine } from "./engine";
 export type { DiffRun } from "./patch";
 export { applyPatch, wordDiff } from "./patch";
-export { renderPrompt, renderTabRecord } from "./render";
+// The renderers a RE-ATTACHER shares with the lowered prompt (the
+// defer-rendering rule: one implementation, however the item travels). The
+// intent panel's oracle composes a realtime conversation from exactly these —
+// same selection format, same element/cell block — without going near
+// composeIntent, whose passes exist to order MANY events into ONE prompt.
+export {
+  renderAppSelection,
+  renderCodeSelection,
+  renderPrompt,
+  renderShotMetadata,
+  renderTabRecord,
+} from "./render";
 export type {
   AppSelection,
   CodeSelection,

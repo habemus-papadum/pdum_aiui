@@ -237,9 +237,18 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
 - **Each sink owns its capture path.** The oracle's WebRTC track is opened once at connect
   and only enabled/disabled after; the turn's talk lane has its own source. A handover stops
   one and flips the other's boolean — no device re-open, and never two captures at once.
-- **Audio routes to either sink today; pixels and selections do not yet.** Shot, area, and
-  selection stay TURN-only (`contributesToTurn`) until their lane verbs learn to fork —
-  refusing at the machine rather than landing in the suspended turn behind the oracle.
+- **Shots, area drags and selections FOLLOW the sink** (O3d) — the two things carried into
+  oracle mode. Same caps, same keys, same pixels; only the destination forks, in the lane
+  verbs. The oracle takes an image INLINE as an attachment (there is no path to name, so
+  its caption says so) and a selection as `renderAppSelection`'s own text — the lowered
+  prompt's exact format, from the same exported renderers, without `composeIntent`, whose
+  passes exist to order MANY events into ONE prompt and are unnecessary for a conversation
+  already ordered by arrival. Both land with `respond: false` so a contribution never makes
+  the oracle talk over a user mid-sentence. **Talk does NOT follow** — it is the turn's,
+  permanently.
+- **A session is told where it stands** (O3d): the tab record, rendered by the lowering's
+  own `renderTabRecord`, is woven into the instructions at connect — so "this page" means
+  the same thing to the oracle and to the agent behind the channel.
 - **Gated on a channel and a mic that was not refused.** `micGranted: undefined` means
   nobody has asked yet and must not dead-end the cap; only a definitive `false` refuses.
   Turning a session OFF is always allowed, even after those gates lapse.

@@ -34,6 +34,7 @@ import type { ClaimLaneOptions } from "../claims";
 import type { IntentClient, IntentLanes } from "../client";
 import { linter, stt } from "../config";
 import { createLinterPulse } from "../linter-pulse";
+import { sink } from "../spec";
 import { createCaptureLanes } from "./capture-lanes";
 import { createConfigEffects } from "./config-effects";
 import { sessionStorageMirror } from "./mirror";
@@ -154,7 +155,11 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   // and disarm's sweep (clearAllPencils) clears it. Everything else on the
   // context is a stable reference to the pipeline built above.
   const pencilTabs = new Set<number>();
+  // The oracle is built BEFORE the context because the context carries its
+  // session (the contribution fork reads it) — it needs only the seams above.
+  const oracle = createOracleLanes({ host, config, status, toast });
   const ctx: LaneContext = {
+    oracle: oracle.session,
     host,
     config,
     engine,
@@ -173,7 +178,6 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   const captureOptions = createCaptureLanes(ctx);
 
   // ── the oracle (O3a): one session, started/stopped by its claim ────────────
-  const oracle = createOracleLanes(ctx);
   const claimOptions: ClaimLaneOptions = {
     ...captureOptions,
     oracle: { start: oracle.start, stop: oracle.stop },
@@ -241,6 +245,10 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     // ends unasked dropping the DESIRE so the cap never stays lit over a dead
     // session.
     const offOracleDrops = oracle.attach(client);
+    // Where a contribution goes, read at ACT time (O3d): a shot's grab is
+    // async, so the sink is asked when the pixels land, not when the key was
+    // pressed.
+    ctx.sink = () => sink(client.state());
 
     return () => {
       offEngine();

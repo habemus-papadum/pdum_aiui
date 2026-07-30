@@ -269,8 +269,16 @@ export class OracleSession {
     this.record({ kind: "injected", role, text });
   }
 
-  /** `image` is a data URL or fully-qualified URL (the vendor's contract). */
-  sendImage(image: string, caption?: string): void {
+  /**
+   * `image` is a data URL or fully-qualified URL (the vendor's contract).
+   *
+   * `respond` defaults to true — pasting an image into a lab bench is a
+   * question. Pass `false` when the image is CONTEXT the human is about to
+   * talk about: the intent panel's oracle does, because a shot taken
+   * mid-sentence must not make the model start answering over them (owner,
+   * 2026-07-30 — the same rule `sendText` already carries).
+   */
+  sendImage(image: string, caption?: string, options: { respond?: boolean } = {}): void {
     if (this.handle === undefined) {
       return;
     }
@@ -285,7 +293,9 @@ export class OracleSession {
         ],
       },
     });
-    this.send({ type: "response.create" });
+    if (options.respond !== false) {
+      this.send({ type: "response.create" });
+    }
     this.record({
       kind: "injected",
       role: "user",

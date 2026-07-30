@@ -516,10 +516,12 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
    * `onClose` hook, so a test can end a session the way the vendor's ~60-minute
    * cap does — from the outside, with nobody asking. */
   const fakeTransport = () => {
-    const seam: { close?: (reason: string) => void; micEnabled: boolean; connects: number } = {
-      micEnabled: true,
-      connects: 0,
-    };
+    const seam: {
+      close?: (reason: string) => void;
+      micEnabled: boolean;
+      connects: number;
+      sent: Array<Record<string, unknown>>;
+    } = { micEnabled: true, connects: 0, sent: [] };
     const transport = {
       name: "fake",
       capabilities: {
@@ -537,7 +539,7 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
         // testable instead of an artifact of a sticky fake.
         seam.micEnabled = true;
         return Promise.resolve({
-          send: () => {},
+          send: (event: Record<string, unknown>) => seam.sent.push(event),
           setMicEnabled: (on: boolean) => {
             seam.micEnabled = on;
           },
@@ -785,6 +787,96 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
     const callId = (JSON.parse(line.slice(line.indexOf("{"))) as { callId: string }).callId;
     r.bus.firePageEvent({ kind: "toolsResult", tab: 7, callId, ok: true, value: { kicked: 3 } });
     await expect(answer).resolves.toEqual({ kicked: 3 });
+  });
+
+  it("shots, area drags and selections FOLLOW the sink into the oracle (O3d)", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    activationGesture(r.client, 7); // a grant, so the pixel acts are live
+    r.bus.firePageEvent({ kind: "selectionPresent", tab: 7, present: true });
+    r.bus.answerWith("selection", { text: "42.7", sourceLoc: "src/Readout.tsx:12:4" });
+    r.client.dispatch("oracle");
+    await settle(30);
+    const injected = () => r.lanes.oracle.ledger().filter((e) => e.kind === "injected");
+
+    // A manual shot: attached as an IMAGE, with a caption — never a path,
+    // because the pixels ride inline (there is nothing on disk to name).
+    r.client.dispatch("shot");
+    await settle(30);
+    expect(injected().at(-1)).toMatchObject({ role: "user", image: true });
+    expect((injected().at(-1) as { text?: string }).text).toContain(
+      "screenshot of what I'm looking at",
+    );
+
+    // A selection: the lowered prompt's OWN rendering, verbatim.
+    r.client.dispatch("selection");
+    await settle(30);
+    const selection = injected().at(-1) as { text?: string; image?: boolean };
+    expect(selection.image).toBeUndefined();
+    expect(selection.text).toContain("[selected text:");
+
+    // …and NOTHING landed in the turn behind it.
+    expect(r.lanes.engine.events.some((e) => e.type === "shot")).toBe(false);
+    expect(r.lanes.engine.events.some((e) => e.type === "app-selection")).toBe(false);
+  });
+
+  it("an area drag reaches the oracle with its located elements (O3d)", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    activationGesture(r.client, 7);
+    r.client.dispatch("oracle");
+    await settle(30);
+
+    r.bus.firePageEvent({
+      kind: "regionDrag",
+      tab: 7,
+      rect: { x: 10, y: 20, w: 200, h: 100 },
+      viewport: { w: 1000, h: 800 },
+      takenAt: Date.now(),
+      components: [{ component: "LegendBox", source: "src/Legend.tsx:12:3" }],
+    });
+    await settle(30);
+
+    const last = r.lanes.oracle
+      .ledger()
+      .filter((e) => e.kind === "injected")
+      .at(-1) as {
+      text?: string;
+      image?: boolean;
+    };
+    expect(last.image).toBe(true);
+    expect(last.text).toContain("area I selected");
+    expect(last.text).toContain("200×100");
+    // The SAME element block the lowered prompt would carry — one renderer.
+    expect(last.text).toContain('<screenshot-metadata attached="true">');
+    expect(last.text).toContain('name="LegendBox"');
+    expect(r.lanes.engine.events.some((e) => e.type === "shot")).toBe(false);
+  });
+
+  it("with the turn as the sink they still land in the TURN — the fork is the only change", async () => {
+    const r = makeRig();
+    grantAndOpen(r.client, 7);
+    r.bus.firePageEvent({ kind: "selectionPresent", tab: 7, present: true });
+    r.client.dispatch("shot");
+    await settle(30);
+    expect(r.lanes.engine.events.some((e) => e.type === "shot")).toBe(true);
+    expect(r.lanes.oracle.ledger().filter((e) => e.kind === "injected")).toHaveLength(0);
+  });
+
+  it("tells the session which page it is standing on (O3d prelude)", async () => {
+    const { transport, seam } = fakeTransport();
+    const r = oracleRig({
+      oracleTransport: transport,
+      oracleKeySource: countingKeySource([]),
+      tabMeta: async () => ({ url: "http://localhost:5173/sim", title: "the sim" }),
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    // Re-woven instructions carrying the SAME `<tab …/>` shape the lowered
+    // prompt renders, so "this page" means one thing to both readers.
+    const updates = JSON.stringify(seam.sent.filter((e) => e.type === "session.update"));
+    expect(updates).toContain("localhost:5173/sim");
+    expect(updates).toContain("<tab");
   });
 
   it("the session comes up LISTENING, and park is what stops it", async () => {

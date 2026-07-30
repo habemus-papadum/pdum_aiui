@@ -29,6 +29,7 @@ import {
   initialContext,
   intentSpec,
   oracleMic,
+  sink,
   turnCollecting,
   turnSuspended,
 } from "./spec";
@@ -179,10 +180,12 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         }
         break;
       case "shot":
-        // Sink-gated like the spec's `available` (belt: dispatch already
-        // refused a sinkless shot) — and written in sink shape so slice 2's
-        // oracle routing forks here, not in a phase check.
-        if (turnCollecting(event.before) && grantedTab !== undefined) {
+        // ANY sink (O3d): the lane verb forks on it, so the client's job is
+        // only to say an act happened. Gating this on the TURN specifically —
+        // which it did until the routing existed — meant the oracle never saw
+        // a shot at all, because the verb was skipped before the fork could
+        // run (found by test).
+        if (sink(event.before) !== undefined && grantedTab !== undefined) {
           lanes.takeShot(grantedTab);
         }
         break;
@@ -192,7 +195,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       // the page act. Auto-exit (a completed drag / pick flips the mode off)
       // rides the page-event handler below, not this dispatch switch.
       case "selection":
-        if (turnCollecting(event.before) && activeTab !== undefined) {
+        if (sink(event.before) !== undefined && activeTab !== undefined) {
           lanes.addSelection(activeTab);
         }
         break;

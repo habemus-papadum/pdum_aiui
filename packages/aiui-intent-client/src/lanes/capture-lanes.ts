@@ -10,6 +10,7 @@
 import { VideoSampler } from "@habemus-papadum/aiui-intent-runtime/video";
 import type { ClaimLaneOptions } from "../claims";
 import { pencilFade, pencilVanish, shotFlash, videoPeriodSec } from "../config";
+import { sendShotToOracle } from "./oracle-contributions";
 import type { LaneContext } from "./types";
 
 export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
@@ -20,13 +21,18 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
   let pageInteracted = false;
   host.transport.onPageEvent((event) => {
     if (event.kind === "regionDrag") {
-      if (pauseGate.paused) {
-        // A stray late drag report after a pause (area mode itself already
-        // cleared via `area-needs-a-sink`) must not shoot into the paused turn.
+      // Route by SINK, and drop only when there is none (O3d). This used to
+      // test `pauseGate.paused`, which was right while the turn was the only
+      // destination — but the oracle taking the sink SETS that gate, so the
+      // old guard would have swallowed exactly the drags the oracle is
+      // supposed to receive. No sink at all still drops: a stray late report
+      // after the mode cleared (`area-needs-a-sink`) must land nowhere.
+      const drag = ctx.sink?.();
+      if (drag === undefined) {
         return;
       }
       // The armed `a` drag completed: crop the region (host-native — CDP clip
-      // or the warm stream's canvas), then into the turn exactly like a shot.
+      // or the warm stream's canvas), then into the SINK exactly like a shot.
       void (async () => {
         try {
           const shot =
@@ -35,6 +41,23 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
               : await host.capture.grabShot(event.tab); // degraded: full frame
           if (shotFlash.get() === true) {
             void host.transport.requestPage(event.tab, "flash", { kind: "shot" }).catch(() => {});
+          }
+          // The same fork the manual shot takes (O3d) — and the area drag is
+          // the one that most wants it: framing a thing is how you ask the
+          // oracle about that thing. The located elements ride along, so the
+          // caption carries the same element/cell block the prompt would.
+          if (drag === "oracle") {
+            sendShotToOracle(ctx.oracle, {
+              bytes: shot.bytes,
+              mime: shot.mime,
+              rect: event.rect,
+              components: (event.components ?? []) as never,
+              area: true,
+            });
+            status(
+              `area sent to the oracle (${Math.round(event.rect.w)}×${Math.round(event.rect.h)})`,
+            );
+            return;
           }
           const marker = engine.shotDone(
             event.rect,

@@ -16,6 +16,7 @@ import type {
   ComposedIntent,
   ComposedItem,
   ComposeOptions,
+  LocatedComponent,
   PromptSpan,
   ShotShare,
   TabRecord,
@@ -452,19 +453,48 @@ function renderShot(item: ComposedItem, cwd: string | undefined): string {
   }
   const note = notes.length > 0 ? ` (${notes.join("; ")})` : "";
   const head = `[${subject} located at ${target}${at}${note}]`;
-  const components = collapseDuplicates(item.components ?? []);
-  if (item.viewport || components.length === 0) {
+  if (item.viewport) {
     return head;
   }
-  const attrs: string[] = [
-    item.path
-      ? `path="${escapeXml(relativizePath(item.path, cwd))}"`
-      : `marker="${escapeXml(item.marker ?? "")}"`,
-  ];
-  if (components.length > MAX_ELEMENTS_IN_PROMPT) {
-    attrs.push(`elements-omitted="${components.length - MAX_ELEMENTS_IN_PROMPT}"`);
+  const identity = item.path
+    ? `path="${escapeXml(relativizePath(item.path, cwd))}"`
+    : `marker="${escapeXml(item.marker ?? "")}"`;
+  const meta = renderShotMetadata(item.components ?? [], identity, cwd);
+  // A shot with metadata is a multi-line block; `renderPrompt` sets it off from
+  // the surrounding prose with a blank line. The bare bracket line (a viewport
+  // shot, or one that framed nothing) reads fine inline mid-sentence.
+  return meta === undefined ? head : `${head}\n${meta}`;
+}
+
+/**
+ * The `<screenshot-metadata>` block for a shot's located elements — the
+ * element/cell frontier with its collapse rules ({@link MAX_ELEMENTS_IN_PROMPT},
+ * {@link MAX_CELLS_IN_PROMPT}, duplicate folding). `undefined` when nothing was
+ * located, which is the caller's cue to emit its bracket line alone.
+ *
+ * Exported (O3d) because the lowered prompt is no longer the only consumer:
+ * the intent panel's ORACLE attaches the same pixels to a realtime
+ * conversation, where there is no disk path to name — the image rides inline —
+ * so its caption is a different bracket line over THIS identical block. The
+ * `identity` attribute is the caller's: `path="…"` when the image is on disk,
+ * `marker="…"` when only the reference survives, and the oracle's own when the
+ * pixels are attached rather than stored. One implementation, three framings —
+ * the same reason `renderAppSelection` is exported.
+ */
+export function renderShotMetadata(
+  components: readonly LocatedComponent[],
+  identity: string,
+  cwd?: string,
+): string | undefined {
+  const collapsed = collapseDuplicates(components);
+  if (collapsed.length === 0) {
+    return undefined;
   }
-  const lines = components.slice(0, MAX_ELEMENTS_IN_PROMPT).map((c) => {
+  const attrs: string[] = [identity];
+  if (collapsed.length > MAX_ELEMENTS_IN_PROMPT) {
+    attrs.push(`elements-omitted="${collapsed.length - MAX_ELEMENTS_IN_PROMPT}"`);
+  }
+  const lines = collapsed.slice(0, MAX_ELEMENTS_IN_PROMPT).map((c) => {
     const el: string[] = [`name="${escapeXml(c.component)}"`];
     if (c.source && c.source !== "unknown") {
       el.push(`source="${escapeXml(relativizePath(c.source, cwd))}"`);
@@ -488,15 +518,9 @@ function renderShot(item: ComposedItem, cwd: string | undefined): string {
     });
     return [`  <element ${el.join(" ")}>`, ...kids, "  </element>"].join("\n");
   });
-  // A shot with metadata is a multi-line block; `renderPrompt` sets it off from
-  // the surrounding prose with a blank line. The bare bracket line (a viewport
-  // shot, or one that framed nothing) reads fine inline mid-sentence.
-  return [
-    head,
-    `<screenshot-metadata ${attrs.join(" ")}>`,
-    ...lines,
-    "</screenshot-metadata>",
-  ].join("\n");
+  return [`<screenshot-metadata ${attrs.join(" ")}>`, ...lines, "</screenshot-metadata>"].join(
+    "\n",
+  );
 }
 
 /** A shot element with its collapse count, as {@link collapseDuplicates} yields it. */
@@ -517,7 +541,7 @@ type CountedElement = NonNullable<ComposedItem["components"]>[number] & { count:
  * Render-time only, per the defer-rendering rule: the located record keeps
  * every element (each with its own rect); the prompt view is what collapses.
  */
-function collapseDuplicates(components: NonNullable<ComposedItem["components"]>): CountedElement[] {
+function collapseDuplicates(components: readonly LocatedComponent[]): CountedElement[] {
   const out: CountedElement[] = [];
   const byIdentity = new Map<string, CountedElement>();
   for (const c of components) {

@@ -14,6 +14,7 @@ import type { ClaimLaneOptions } from "../claims";
 import type { IntentClient, IntentLanes } from "../client";
 import type { LinterPulseView } from "../linter-pulse";
 import type { PageToolsRegistry } from "../page-tools";
+import type { Sink } from "../spec";
 import type { IntentHost } from "../transport";
 import type { TurnMirror } from "./mirror";
 
@@ -50,6 +51,15 @@ export interface LaneContext {
    * boundaries (navigation / tab-switch / a stray regionDrag).
    */
   pauseGate: { paused: boolean; onPause?: () => void; onResume?: () => void };
+  /**
+   * Where a contribution goes right now (O3d) — the machine's `sink`, read at
+   * ACT time rather than passed in, because a shot's grab is async and the
+   * sink could have moved while the pixels were being taken. Undefined until
+   * `bind` supplies the client (nothing can contribute before then anyway).
+   */
+  sink?: () => Sink | undefined;
+  /** The oracle session contributions fork to (O3d). */
+  oracle: OracleSession;
 }
 
 export interface ChannelLanesConfig {

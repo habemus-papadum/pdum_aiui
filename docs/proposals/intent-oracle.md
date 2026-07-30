@@ -307,10 +307,9 @@ the same reason the lowered prelude carries one.
   firehose. The sink says *whether* collection happens; per-source routing remains a
   per-source decision, so `videoSample` derives on `sink() === "turn"` specifically. Ad-hoc
   shots are the oracle's picture.
-- **Until O3d, so do shots, area drags, and selections** (`contributesToTurn` in spec.ts).
-  Their routing to the oracle is O3d's job, so O3a must refuse them rather than let them
-  land in the suspended turn sitting behind the oracle — a hole a spec test found. Audio is
-  the exception because its routing IS wired: a hold or hands-free follows the sink.
+- ~~Until O3d, so do shots, area drags, and selections.~~ **Landed**: they follow the sink
+  now. What does NOT follow is TALK — the turn's grips are the turn's permanently, since
+  the oracle hears through its own track under its own park.
 - **Pencil strokes** route nowhere, as today — they are page markup, and a shot taken after
   drawing carries them.
 - **Navigation and tab boundaries** are not oracle events. The turn's own

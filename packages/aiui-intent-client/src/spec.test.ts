@@ -310,10 +310,12 @@ const rows: Array<{
     expected: { phase: "armed", oracle: true },
   },
   {
-    name: "taking the oracle's sink clears a live area drag (area-needs-a-sink)",
+    // O3d: the oracle is a SINK for pixels now, so the crosshair stays up and
+    // the drag lands there. Only having NO sink clears it.
+    name: "taking the oracle's sink KEEPS the area drag — it shoots at the oracle now",
     start: { phase: "turn", region: true },
     command: "oracle",
-    expected: { oracle: true, region: false },
+    expected: { oracle: true, region: true },
   },
   {
     name: "the oracle leaves the manual pause alone — a paused turn stays paused after it leaves",
@@ -487,17 +489,17 @@ describe("spec-level properties", () => {
     });
     expect(e.canDispatch("shot")).toBe(true);
     e.dispatch("oracle");
-    // Everything that feeds the TURN refuses while the oracle holds the sink.
-    // Pixels and selections because their routing is O3d; the talk grips
-    // because they belong to the turn permanently (owner, 2026-07-30 — the
-    // oracle hears through its own track under its own park).
-    for (const command of ["shot", "selection", "region", "talkPress"]) {
-      expect(e.canDispatch(command), `${command} while the oracle holds the sink`).toBe(false);
+    // O3d: pixels and selections FOLLOW the sink — the two things the owner
+    // wanted carried into oracle mode, so these stay live and land there.
+    for (const command of ["shot", "selection", "region"]) {
+      expect(e.canDispatch(command), `${command} should follow the sink`).toBe(true);
     }
+    // The talk grips do NOT follow: they belong to the turn permanently, and
+    // the oracle hears through its own track under its own park.
+    expect(e.canDispatch("talkPress")).toBe(false);
     // …and the turn's own lifecycle stays live: you can still send what you had.
     expect(e.canDispatch("send")).toBe(true);
     e.dispatch("oracle"); // hand the sink back
-    expect(e.canDispatch("shot")).toBe(true);
     expect(e.canDispatch("talkPress")).toBe(true);
   });
 
