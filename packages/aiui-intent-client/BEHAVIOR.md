@@ -230,15 +230,32 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
 - **A hold ends when the turn stops collecting**, including the oracle taking over
   (`hold-needs-the-turn`) — a gesture with no consumer is nothing. A standing hands-free
   MODE survives: its window closes on the way in and reopens on the way out.
+- **Turn detection is `semantic_vad`, `eagerness: "low"`** (owner, 2026-07-30). `server_vad`
+  ends a turn on silence, so it hears that you STOPPED rather than that you FINISHED, and a
+  pause to think mid-sentence read as end-of-turn. The semantic classifier scores whether the
+  turn actually ended and sets its timeout from that; `low` buys the longest documented
+  patience (8 s max wait, against 4 s for `medium`/`auto` and 2 s for `high`). The
+  `threshold` that used to carry the anti-echo tuning is gone with it — it is a `server_vad`
+  field and does not exist on this side; that job now belongs to the first-reply window plus
+  `far_field`.
 - **Tuned so it does not barge in on itself** (owner, 2026-07-30): `noise_reduction:
-  far_field` plus a VAD `threshold` of 0.75. The browser's echo cancellation IS on (the
+  far_field`. The browser's echo cancellation IS on (the
   `session/live` ledger line records what the mic actually granted — `mic: aec+ns+agc`), but
   it fails on the FIRST reply of a session and never again, which is an echo canceller that
   has not converged: it has no model of the room until it has heard far-end audio, so the
   first thing the model says leaks, trips the vendor's VAD, and cancels the reply
-  mid-sentence. The defence therefore sits vendor-side, and both settings are checked
-  against the `session.updated` echo — the config entry's drift names any the server did not
-  take.
+  mid-sentence. The defence therefore sits vendor-side, and the setting is checked against
+  the `session.updated` echo — the config entry's drift names it if the server did not take
+  it.
+- **Both knob-boards are mounted in the panel** — `realtime session params` and `webrtc mic
+  constraints`, the same two widgets the oracle lab carries, live-editable mid-session.
+  Here rather than only in the lab because the panel's acoustics are the ones that matter (a
+  laptop mic listening to its own speakers), and tuning against the lab would be tuning
+  against a different room. Every row shows what we set, what the platform reports is in
+  force, and flags the two disagreeing — which is what makes the numbers above measurable
+  rather than inherited. Labels are the vendor's names verbatim, so the two namespaces stay
+  visibly unharmonized (`silence_duration_ms` beside `echoCancellation`): the casing tells
+  you which manual the word came from.
 - **The first reply cannot be interrupted** (owner, 2026-07-30) — the window the signature
   above points at, closed directly rather than tuned around. Until that reply has finished
   SPEAKING, `turn_detection` carries `interrupt_response: false`, so what the mic hears

@@ -19,7 +19,9 @@
 import {
   ORACLE_WIDGET_STYLES,
   OracleMind,
+  OracleRealtimeParams,
   OracleViewer,
+  OracleWebRtcParams,
 } from "@habemus-papadum/aiui-oracle/widgets";
 import type { JSX } from "@solidjs/web";
 import { Show } from "solid-js";
@@ -228,6 +230,18 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
         <details class="aiui-pane" data-testid="oracle-ledger">
           <summary>oracle ledger</summary>
           <OracleViewer session={props.lanes.oracle} mind={false} />
+        </details>
+        {/* The same two knob-boards the oracle lab carries. Here because the
+            panel's acoustics are the ones that matter — a laptop mic listening
+            to its own speakers — and tuning against the lab would be tuning
+            against a different room. */}
+        <details class="aiui-pane" data-testid="oracle-realtime-params">
+          <summary>realtime session params</summary>
+          <OracleRealtimeParams session={props.lanes.oracle} />
+        </details>
+        <details class="aiui-pane" data-testid="oracle-webrtc-params">
+          <summary>webrtc mic constraints</summary>
+          <OracleWebRtcParams session={props.lanes.oracle} />
         </details>
       </div>
     </Show>

@@ -379,7 +379,11 @@ describe("the mic a talking agent needs, and the VAD it can trip", () => {
         instructions: "x",
         // Vendor field names, not ours: sent as-is so the `session.updated`
         // echo can be checked rather than the acceptance assumed.
-        turnTuning: { threshold: 0.8, silence_duration_ms: 700 },
+        audio: {
+          input: {
+            turn_detection: { type: "server_vad", threshold: 0.8, silence_duration_ms: 700 },
+          },
+        },
       },
       keySource: testKeys,
       transport: rig.transport,
@@ -401,7 +405,11 @@ describe("the first-reply echo window", () => {
   const guarded = (config: Partial<OracleConfig> = {}, rig = fakeTransport()) => ({
     rig,
     session: new OracleSession({
-      config: { instructions: "x", turnTuning: { threshold: 0.75 }, ...config },
+      config: {
+        instructions: "x",
+        audio: { input: { turn_detection: { type: "server_vad", threshold: 0.75 } } },
+        ...config,
+      },
       keySource: testKeys,
       transport: rig.transport,
     }),
@@ -530,10 +538,10 @@ describe("the first-reply echo window", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(off.rig.sent).toEqual([]);
 
-    // `turn: "manual"` sends `turn_detection: null` — there is no object to
+    // `turn_detection: null` is the vendor's manual mode — there is no object to
     // carry the suppression, so the window must not open (and must not then
     // try to close by sending an update).
-    const manual = guarded({ turn: "manual" });
+    const manual = guarded({ audio: { input: { turn_detection: null } } });
     await manual.session.start();
     expect(turnDetection(manual.rig.sent[0])).toBeNull();
     manual.rig.sent.length = 0;
@@ -652,7 +660,15 @@ describe("the anti-self-interrupt tuning, and proving the vendor took it", () =>
   it("sends far_field noise reduction beside turn_detection, not inside it", async () => {
     const rig = fakeTransport();
     const session = new OracleSession({
-      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      config: {
+        instructions: "x",
+        audio: {
+          input: {
+            noise_reduction: { type: "far_field" },
+            turn_detection: { type: "server_vad", threshold: 0.75 },
+          },
+        },
+      },
       keySource: testKeys,
       transport: rig.transport,
     });
@@ -666,7 +682,15 @@ describe("the anti-self-interrupt tuning, and proving the vendor took it", () =>
   it("DRIFT names a tuning field the server did not take — the whole point of the echo", async () => {
     const rig = fakeTransport();
     const session = new OracleSession({
-      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      config: {
+        instructions: "x",
+        audio: {
+          input: {
+            noise_reduction: { type: "far_field" },
+            turn_detection: { type: "server_vad", threshold: 0.75 },
+          },
+        },
+      },
       keySource: testKeys,
       transport: rig.transport,
     });
@@ -688,13 +712,21 @@ describe("the anti-self-interrupt tuning, and proving the vendor took it", () =>
   it("re-tuning mid-session sends the WHOLE audio.input block, not the changed field", async () => {
     const rig = fakeTransport();
     const session = new OracleSession({
-      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      config: {
+        instructions: "x",
+        audio: {
+          input: {
+            noise_reduction: { type: "far_field" },
+            turn_detection: { type: "server_vad", threshold: 0.75 },
+          },
+        },
+      },
       keySource: testKeys,
       transport: rig.transport,
     });
     await session.start();
     rig.sent.length = 0;
-    session.setTurnTuning({ silence_duration_ms: 800 });
+    session.setSessionParam("audio.input.turn_detection.silence_duration_ms", 800);
     const input = (rig.sent[0] as { session: { audio: { input: Record<string, unknown> } } })
       .session.audio.input;
     // A lone `{ silence_duration_ms }` would drop type and threshold if the
@@ -711,7 +743,15 @@ describe("the anti-self-interrupt tuning, and proving the vendor took it", () =>
   it("no drift when the server holds exactly what we asked for", async () => {
     const rig = fakeTransport();
     const session = new OracleSession({
-      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      config: {
+        instructions: "x",
+        audio: {
+          input: {
+            noise_reduction: { type: "far_field" },
+            turn_detection: { type: "server_vad", threshold: 0.75 },
+          },
+        },
+      },
       keySource: testKeys,
       transport: rig.transport,
     });
@@ -723,5 +763,115 @@ describe("the anti-self-interrupt tuning, and proving the vendor took it", () =>
       { kind: "config" }
     >;
     expect(config.drift).toEqual([]);
+  });
+});
+
+describe("the live params surface — what the two knob-boards write through", () => {
+  const tuned = () => {
+    const rig = fakeTransport();
+    return {
+      rig,
+      session: new OracleSession({
+        config: {
+          instructions: "x",
+          audio: { input: { turn_detection: { type: "server_vad", threshold: 0.75 } } },
+          // Off, so these assertions read the CONFIGURED block rather than the
+          // block with the echo window's `interrupt_response: false` layered
+          // over it. The window has its own tests; this describe is about what
+          // the knob-boards write.
+          firstReplyGuard: false,
+        },
+        keySource: testKeys,
+        transport: rig.transport,
+      }),
+    };
+  };
+  const turnDetection = (event: unknown) =>
+    (event as { session: { audio: { input: { turn_detection: Record<string, unknown> } } } })
+      .session.audio.input.turn_detection;
+
+  it("switching type DROPS the other algorithm's knobs", async () => {
+    const { session, rig } = tuned();
+    await session.start();
+    rig.sent.length = 0;
+    session.setSessionParam("audio.input.turn_detection.type", "semantic_vad");
+    // `threshold` does not exist on semantic_vad. Sending it anyway would be
+    // us manufacturing the drift the drift check exists to catch.
+    expect(turnDetection(rig.sent[0])).toEqual({ type: "semantic_vad" });
+    session.setSessionParam("audio.input.turn_detection.eagerness", "low");
+    expect(turnDetection(rig.sent[1])).toEqual({ type: "semantic_vad", eagerness: "low" });
+  });
+
+  it("undefined UNSETS a field rather than sending it as null", async () => {
+    const { session, rig } = tuned();
+    await session.start();
+    rig.sent.length = 0;
+    session.setSessionParam("audio.input.turn_detection.threshold", undefined);
+    const held = turnDetection(rig.sent[0]);
+    expect(Object.hasOwn(held, "threshold")).toBe(false);
+    expect(held).toEqual({ type: "server_vad" });
+  });
+
+  it("sessionConfig carries the FROZEN fields the update may not", async () => {
+    const { session } = tuned();
+    await session.start();
+    const config = session.sessionConfig();
+    // A params widget must be able to display model/voice even though no
+    // session.update is allowed to carry them — otherwise the two rows would
+    // render permanently blank and read as "unset".
+    expect(config.model).toBeDefined();
+    expect((config.audio as { output: { voice: string } }).output.voice).toBeDefined();
+  });
+
+  it("effectiveSession is undefined until the server acks, then holds the echo", async () => {
+    const { session, rig } = tuned();
+    await session.start();
+    expect(session.effectiveSession()).toBeUndefined();
+    rig.emit({ type: "session.updated", session: { instructions: "held" } });
+    expect(session.effectiveSession()).toEqual({ instructions: "held" });
+  });
+
+  it("applying mic constraints goes to the TRACK, and a refusal propagates", async () => {
+    const rig = fakeTransport();
+    const applied: MediaTrackConstraints[] = [];
+    const withMic: OracleTransport = {
+      ...rig.transport,
+      connect: async (options) => ({
+        ...(await rig.transport.connect(options)),
+        applyAudioConstraints: async (constraints) => {
+          applied.push(constraints);
+          if (constraints.sampleRate !== undefined) {
+            // What a device saying no actually looks like.
+            throw new Error("OverconstrainedError");
+          }
+        },
+      }),
+    };
+    const session = new OracleSession({
+      config: { instructions: "x" },
+      keySource: testKeys,
+      transport: withMic,
+    });
+    await session.start();
+    await session.applyAudioConstraints({ echoCancellation: false });
+    expect(applied).toEqual([{ echoCancellation: false }]);
+    // Recorded as ours, like every other outbound control — the ledger has to
+    // be able to say "the mic changed because we changed it".
+    expect(
+      session.ledger().some((e) => e.kind === "sent" && e.type.startsWith("applyConstraints")),
+    ).toBe(true);
+
+    await expect(session.applyAudioConstraints({ sampleRate: 8_000 })).rejects.toThrow(
+      "OverconstrainedError",
+    );
+  });
+
+  it("a transport with no mic track says so instead of pretending", async () => {
+    const { session } = makeSession([]);
+    await session.start();
+    expect(session.audioSettings()).toBeUndefined();
+    await expect(session.applyAudioConstraints({ echoCancellation: true })).rejects.toThrow(
+      "no local mic track",
+    );
   });
 });

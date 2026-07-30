@@ -160,6 +160,7 @@ export function webRtcTransport(options: WebRtcTransportOptions = {}): OracleTra
           send({ type: "output_audio_buffer.clear" });
         },
         micStream: mic,
+        applyAudioConstraints: (constraints) => micTrack.applyConstraints(constraints),
         audioSettings: () => {
           try {
             return micTrack.getSettings() as Record<string, unknown>;

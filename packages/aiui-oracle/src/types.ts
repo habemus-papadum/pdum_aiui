@@ -28,52 +28,120 @@ export interface OracleTool {
   execute(args: Record<string, unknown>): unknown | Promise<unknown>;
 }
 
-/** Turn control, mapped onto the vendor's `turn_detection`. */
-export type OracleTurnMode = "auto" | "semantic" | "manual";
+/**
+ * `audio.input.turn_detection` — the vendor's object, verbatim.
+ *
+ * `server_vad` is energy-and-silence: it hears that you stopped, not that you
+ * FINISHED, so a pause to think reads as end-of-turn. `semantic_vad` runs a
+ * classifier over what you said and sets the timeout from the probability
+ * that the turn ended — audio trailing off into "uhhm" scores low and it
+ * waits. `eagerness` caps that wait: low 8 s, medium/auto 4 s, high 2 s.
+ *
+ * The two share only `create_response` and `interrupt_response`. There is no
+ * `threshold` on the semantic side and no `eagerness` on the energy side —
+ * which is why this is a discriminated union rather than one bag of options:
+ * switching type must not carry the other algorithm's knobs along.
+ *
+ * `null` is the vendor's own spelling for no turn detection at all (fully
+ * manual commits).
+ */
+export type TurnDetection = ServerVad | SemanticVad;
 
-/** The oracle's session configuration (ours, not the wire shape). */
-export interface OracleConfig {
-  /** Realtime model id. Default {@link DEFAULT_ORACLE_MODEL}. */
+export interface ServerVad {
+  type: "server_vad";
+  /** Activation energy, 0–1. Default 0.5; higher ignores quieter sound —
+   * including a reply leaking back through the mic. */
+  threshold?: number;
+  /** Audio retained BEFORE the detected start, ms. Default 300. */
+  prefix_padding_ms?: number;
+  /** Silence that ends a turn, ms. Default 500 — the field a thinking pause
+   * runs into. */
+  silence_duration_ms?: number;
+  /** Whether a VAD stop automatically generates a reply. */
+  create_response?: boolean;
+  /** Whether a VAD start automatically interrupts a reply in progress.
+   * NOTE: with both this and `create_response` false the model never responds
+   * automatically at all — documented, and a deadlock we shipped once. */
+  interrupt_response?: boolean;
+  /** Idle time before the model speaks unprompted, ms; `null` disables. */
+  idle_timeout_ms?: number | null;
+}
+
+export interface SemanticVad {
+  type: "semantic_vad";
+  /** How eager the model is to take the turn — the max wait it tunes:
+   * `low` 8 s, `medium`/`auto` 4 s, `high` 2 s. `auto` is the default and
+   * equals `medium`. */
+  eagerness?: "low" | "medium" | "high" | "auto";
+  create_response?: boolean;
+  interrupt_response?: boolean;
+}
+
+/** `audio.input.noise_reduction` — `null` for none. */
+export interface NoiseReduction {
+  /** `near_field` is a headset; `far_field` a laptop mic across the room from
+   * its own speakers (the documented speakerphone setting). */
+  type: "near_field" | "far_field";
+}
+
+/** `audio.input.transcription` — the vendor's transcription of the USER's
+ * audio (what makes the `heard` record). Costs transcription tokens. */
+export interface InputTranscription {
   model?: string;
-  /** Output voice — IMMUTABLE once the model has spoken; chosen up front.
-   * Default {@link DEFAULT_ORACLE_VOICE}. */
+  /** ISO-639-1, e.g. `en` — improves accuracy and latency when known. */
+  language?: string;
+  /** Free text steering vocabulary/style. */
+  prompt?: string;
+}
+
+export interface OracleAudioInput {
+  turn_detection?: TurnDetection | null;
+  noise_reduction?: NoiseReduction | null;
+  transcription?: InputTranscription;
+}
+
+export interface OracleAudioOutput {
+  /** IMMUTABLE once the model has spoken. Default {@link DEFAULT_ORACLE_VOICE}. */
   voice?: string;
+  /** Playback rate, 0.25–1.5. Default 1.0. */
+  speed?: number;
+}
+
+export interface OracleAudio {
+  input?: OracleAudioInput;
+  output?: OracleAudioOutput;
+}
+
+/**
+ * The oracle's session configuration.
+ *
+ * Deliberately spelled in the VENDOR's names, not ours (owner, 2026-07-30):
+ * this is a partial of the Realtime session object, so `audio.input
+ * .turn_detection.silence_duration_ms` here is the same string you would read
+ * in their docs, type into the params widget, or find in a `session.updated`
+ * echo. The package used to re-spell these (`turnTuning`, `noiseReduction`,
+ * `transcribeInput`, `turn: "auto" | "semantic" | "manual"`), which meant every
+ * value had to be translated twice to be reasoned about — and a setting you
+ * discover by experiment could not simply be pasted back in as a default.
+ *
+ * The exceptions are the fields that are BEHAVIOUR we implement rather than
+ * parameters they accept: {@link firstReplyGuard} and {@link mintTtlSeconds}.
+ * Those keep our names precisely so the distinction stays visible.
+ */
+export interface OracleConfig {
+  /** Realtime model id — FROZEN at connect. Default {@link DEFAULT_ORACLE_MODEL}. */
+  model?: string;
   /** The woven persona + app-specific prompt. Kept GENERIC about which tools
    * exist — the `tools` array is the single source of truth (the documented
    * "keep tool availability synchronized" failure mode). */
   instructions: string;
   /** The tool surface presented at session start (live-updatable after). */
   tools?: OracleTool[];
-  /** Turn control. Default "auto" (`server_vad`, vendor defaults). */
-  turn?: OracleTurnMode;
-  /**
-   * Extra fields merged into the vendor's `turn_detection` object — the VAD's
-   * own tuning (`threshold`, `prefix_padding_ms`, `silence_duration_ms`, and
-   * whether a detection may interrupt a reply in progress).
-   *
-   * A passthrough, deliberately untyped beyond `unknown`: these are the
-   * vendor's names, not ours, and this repo's rule is to never assume an API
-   * param exists — send it and read the server's ECHO. The `config` ledger
-   * entry carries `sent` / `effective` / `drift` for exactly that check, so a
-   * field the vendor ignores is visible rather than believed.
-   *
-   * The reason this exists: a voice agent that speaks through the same device
-   * it listens on can trigger its own VAD. Echo cancellation is the first
-   * defence (see `ECHO_SAFE_AUDIO`); raising the threshold is the second.
-   */
-  turnTuning?: Record<string, unknown>;
-  /**
-   * The vendor's INPUT noise reduction — `"near_field"` (a headset) or
-   * `"far_field"` (a laptop mic across the room from its own speakers). Sent
-   * as `audio.input.noise_reduction`, which is a sibling of `turn_detection`
-   * and so cannot ride {@link turnTuning}.
-   *
-   * `far_field` is the documented speakerphone setting and, with a raised
-   * {@link turnTuning} threshold, is what practitioners report fixes a model
-   * that barges in on its own voice. Verified the same way as everything else
-   * here: sent, then read back off the `session.updated` echo.
-   */
-  noiseReduction?: "near_field" | "far_field";
+  /** The vendor's `audio` block: input turn detection / noise reduction /
+   * transcription, and output voice / speed. */
+  audio?: OracleAudio;
+  /** Cap on a single response's output tokens; `"inf"` for the model's own. */
+  max_output_tokens?: number | "inf";
   /**
    * Protect the FIRST reply from the microphone's own echo. Default ON; pass
    * `false` to disable, or an object to tune the timings.
@@ -106,9 +174,6 @@ export interface OracleConfig {
    * events, which this package used to discard as chatter.
    */
   firstReplyGuard?: boolean | FirstReplyGuard;
-  /** Vendor-side transcription of the USER's audio (the "heard" record).
-   * Default on; costs transcription tokens. */
-  transcribeInput?: boolean;
   /**
    * TTL for a minted ephemeral secret, seconds (10–7200). Default 600.
    *
@@ -230,6 +295,20 @@ export interface TransportHandle {
    * recorded in the LEDGER at connect, where it stays.
    */
   readonly audioSettings?: () => Record<string, unknown> | undefined;
+  /**
+   * Re-negotiate the LIVE mic track's constraints — the input half of "change
+   * it mid-session and see whether it took".
+   *
+   * Which constraints a browser will honour on an already-open track is not
+   * knowable in advance and differs by platform, so nothing here predicts it:
+   * the call either resolves or rejects, and {@link audioSettings} says what
+   * is actually in force afterwards. That pairing is the same discipline the
+   * session config uses against `session.updated` — apply, then read the echo,
+   * never assume the request was granted.
+   *
+   * Absent on transports with no local capture (a fake, a server-side WS).
+   */
+  readonly applyAudioConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
   /** The vendor call id (WebRTC `Location` header) — the sideband hook. */
   readonly callId?: string;
   close(): void;

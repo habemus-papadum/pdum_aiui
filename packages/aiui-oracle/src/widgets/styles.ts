@@ -63,4 +63,26 @@ export const ORACLE_WIDGET_STYLES = `
   .aiui-oracle-entry-json { margin: 2px 0 4px 7.1rem; padding: 5px; border-radius: 6px;
     background: color-mix(in srgb, currentColor 8%, transparent); font-size: 11px;
     overflow-x: auto; }
+
+  /* the params widgets — a grid so name / control / in-force line up down the
+     column, which is what makes a drift visible at a glance rather than read */
+  .aiui-oracle-params { display: grid; gap: 2px 8px; font-size: 11px;
+    grid-template-columns: minmax(7rem, auto) minmax(6rem, 1fr) minmax(4rem, auto) auto auto; }
+  .aiui-oracle-params-head { display: contents; opacity: 0.5; }
+  .aiui-oracle-params-head span:first-child { grid-column: 2; }
+  .aiui-oracle-param { display: contents; }
+  .aiui-oracle-param-name { font-family: ui-monospace, monospace; cursor: help;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .aiui-oracle-param input, .aiui-oracle-param select { font: inherit; width: 100%;
+    padding: 1px 4px; border-radius: 4px; color: inherit; background: transparent;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
+  .aiui-oracle-param input:disabled, .aiui-oracle-param select:disabled { opacity: 0.35; }
+  .aiui-oracle-param-effective { font-family: ui-monospace, monospace; opacity: 0.7;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .aiui-oracle-param-why { opacity: 0.45; font-style: italic; white-space: nowrap; }
+  .aiui-oracle-param-drift { color: #d97706; font-weight: 600; }
+  .aiui-oracle-param[data-drift="true"] .aiui-oracle-param-effective { color: #d97706; opacity: 1; }
+  .aiui-oracle-params-note, .aiui-oracle-params-error { grid-column: 1 / -1; margin: 4px 0 0;
+    opacity: 0.6; }
+  .aiui-oracle-params-error { color: #dc2626; opacity: 1; font-family: ui-monospace, monospace; }
 `;

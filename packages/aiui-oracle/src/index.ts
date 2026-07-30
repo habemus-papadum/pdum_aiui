@@ -24,26 +24,48 @@ export {
   standardKeySources,
   staticKeySource,
 } from "./keys";
+export type { ParamSpec, ParamWhen } from "./params";
+export {
+  CONSTRAINT_PARAMS,
+  getPath,
+  pruneTurnDetection,
+  rowDrifts,
+  SESSION_PARAMS,
+  setPath,
+  specApplies,
+  TURN_DETECTION,
+  TURN_DETECTION_TYPE,
+} from "./params";
 export type { WeaveOptions } from "./prompt";
 export { ORACLE_BASE_PERSONA, weaveInstructions } from "./prompt";
 export type { OracleSessionOptions, OracleState } from "./session";
 export { OracleSession } from "./session";
 export type {
+  FirstReplyGuard,
+  InputTranscription,
   KeySource,
   LedgerBody,
   LedgerEntry,
+  NoiseReduction,
+  OracleAudio,
+  OracleAudioInput,
+  OracleAudioOutput,
   OracleConfig,
   OracleCredential,
   OracleStatus,
   OracleTool,
   OracleTransport,
-  OracleTurnMode,
+  SemanticVad,
+  ServerVad,
   TransportCapabilities,
   TransportConnectOptions,
   TransportHandle,
+  TurnDetection,
   UsageTotals,
 } from "./types";
 export {
+  DEFAULT_FIRST_REPLY_MAX_MS,
+  DEFAULT_FIRST_REPLY_PAD_MS,
   DEFAULT_INPUT_TRANSCRIPTION_MODEL,
   DEFAULT_ORACLE_MODEL,
   DEFAULT_ORACLE_VOICE,

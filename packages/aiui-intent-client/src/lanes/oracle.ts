@@ -249,21 +249,31 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       // mid-sentence. By the second reply the filter has adapted and a long
       // conversation runs clean.
       //
-      // So the defence moves to the vendor side, where practitioners landed
-      // on the same pair: `far_field` optimizes for a speakerphone-shaped
-      // room, and a threshold above the 0.5 default means the residue of an
-      // unconverged first cancellation is no longer loud enough to count as
-      // someone talking. Both are verified by the config echo's drift check —
-      // if the vendor ignores either, the ledger says so.
+      // So the defence moves to the vendor side: `far_field` optimizes for a
+      // speakerphone-shaped room. Verified by the config echo's drift check —
+      // if the vendor ignores it, the ledger says so. The unconverged first
+      // reply is additionally covered by `firstReplyGuard` (on by default,
+      // therefore not named here), which suppresses barge-in entirely until
+      // that reply has finished speaking.
       //
-      // These are the STANDING settings. The unconverged first reply is
-      // additionally covered by `firstReplyGuard`, which is on by default and
-      // therefore not named here: it suppresses barge-in entirely until that
-      // reply has finished speaking, which is precisely the window the
-      // signature above points at. Tuning is what makes the rest of the
-      // conversation robust; the guard is what makes the first reply safe.
-      noiseReduction: "far_field",
-      turnTuning: { threshold: 0.75 },
+      // TURN DETECTION is `semantic_vad` (owner, 2026-07-30). `server_vad`
+      // ends a turn on silence, so it hears that you STOPPED rather than that
+      // you FINISHED — and a pause to think inside a long sentence read as
+      // end-of-turn, which is the complaint that outlived the echo work.
+      // Semantic scores whether the turn actually ended and sets its timeout
+      // from that; `eagerness: "low"` gives it the longest documented patience
+      // (8 s max wait, against 4 s for medium/auto and 2 s for high).
+      //
+      // Note what is NOT here: `threshold`. It is a `server_vad` field and
+      // does not exist on this side — the anti-echo tuning it carried is now
+      // the guard's job plus `far_field`. Both params widgets are mounted in
+      // the panel, so these numbers are re-measurable rather than inherited.
+      audio: {
+        input: {
+          noise_reduction: { type: "far_field" },
+          turn_detection: { type: "semantic_vad", eagerness: "low" },
+        },
+      },
     },
     // The chain's order is the standard one (a pasted key TRUMPS everything),
     // with the channel's mint standing in for a deployed app's endpoint. The

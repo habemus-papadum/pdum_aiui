@@ -18,7 +18,13 @@ import {
   weaveInstructions,
   webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
-import { OracleControl, OracleKey, OracleViewer } from "@habemus-papadum/aiui-oracle/widgets";
+import {
+  OracleControl,
+  OracleKey,
+  OracleRealtimeParams,
+  OracleViewer,
+  OracleWebRtcParams,
+} from "@habemus-papadum/aiui-oracle/widgets";
 import { ControlSlider, ControlToggle } from "@habemus-papadum/aiui-viz";
 import { createEffect, createSignal, For, onCleanup, untrack } from "solid-js";
 import { amplitude, damping, freq, grid, kick, labScope, waveform } from "../model/store";
@@ -165,6 +171,17 @@ export function App() {
           <button type="button" onClick={() => session.setInstructions(instructions())}>
             apply
           </button>
+        </details>
+        {/* The bench's reason for existing, now: turn the knobs against a real
+            session and read what the vendor and the browser actually held, so
+            the defaults in a shipped config are measured rather than argued. */}
+        <details class="lab-fold">
+          <summary>realtime session params (live)</summary>
+          <OracleRealtimeParams session={session} />
+        </details>
+        <details class="lab-fold">
+          <summary>webrtc mic constraints (live)</summary>
+          <OracleWebRtcParams session={session} />
         </details>
         <details class="lab-fold">
           <summary>tools (live)</summary>

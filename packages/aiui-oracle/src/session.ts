@@ -17,6 +17,7 @@
  *  - unrecognized vendor events land in the ledger as `raw`, never dropped.
  */
 
+import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
 import type {
   KeySource,
   LedgerBody,
@@ -93,6 +94,8 @@ export class OracleSession {
   /** Whether the current reply ever produced audio — a reply that did not
    * (a tool-only turn) has no end-of-speech event to wait for. */
   private replyAudioStarted = false;
+  /** The last `session.updated` payload — what the server says it holds. */
+  private lastEffective: Record<string, unknown> | undefined;
   private seq = 0;
   private eventSeq = 0;
   private current: OracleState = {
@@ -270,24 +273,70 @@ export class OracleSession {
   }
 
   /**
-   * Re-tune the VAD mid-session (`threshold`, `silence_duration_ms`,
-   * `interrupt_response`, …) — merged over the configured
-   * {@link OracleConfig.turnTuning} and re-sent.
+   * Set one session parameter by its VENDOR path — `"audio.input
+   * .turn_detection.silence_duration_ms"`, `"audio.output.speed"` — and
+   * re-send. `undefined` deletes the key (back to the vendor's default);
+   * `null` is a value in its own right (`turn_detection: null` is manual).
    *
-   * Note what goes on the wire: the COMPLETE `audio.input` block, not the one
-   * field that changed. `turn_detection` travels as a whole object and there
-   * is no documented field-level patch, so whether the vendor merges INSIDE
-   * it is unverified — and if it replaces, a lone `{ interrupt_response: true }`
-   * would silently drop `type` and `threshold` back to defaults, undoing the
-   * anti-echo tuning while appearing to fix something. Re-sending the whole
-   * block is correct under either semantics. The `config` ledger entry's
-   * drift lines are how the question actually gets settled.
+   * What goes on the wire is the whole updatable session, not the field that
+   * changed. `turn_detection` travels as a complete object with no documented
+   * field-level patch, so whether the vendor merges INSIDE it is unverified —
+   * and if it replaces, a lone `{ silence_duration_ms }` would silently drop
+   * `type` and `threshold` back to defaults, undoing tuning while appearing
+   * to work. A whole-session send is correct under either semantics, and it
+   * means the `config` entry's drift covers everything rather than the one
+   * block someone remembered to include.
+   *
+   * Switching `turn_detection.type` drops the outgoing algorithm's knobs,
+   * because they do not exist on the other side: `threshold` is meaningless
+   * to `semantic_vad` and `eagerness` to `server_vad`.
    */
-  setTurnTuning(tuning: Record<string, unknown>): void {
-    this.options.config.turnTuning = { ...(this.options.config.turnTuning ?? {}), ...tuning };
-    if (this.handle !== undefined) {
-      this.sendSessionUpdate(this.audioSession());
+  setSessionParam(path: string, value: unknown): void {
+    const config = this.options.config as unknown as Record<string, unknown>;
+    if (path === TURN_DETECTION_TYPE) {
+      setPath(config, path, value);
+      pruneTurnDetection(this.options.config);
+    } else {
+      setPath(config, path, value);
     }
+    if (this.handle !== undefined) {
+      this.sendSessionUpdate(this.updatableSession());
+    }
+  }
+
+  /**
+   * What we INTEND the server to hold, as the vendor's session shape —
+   * INCLUDING the frozen fields (`model`, `voice`), which a params widget must
+   * still be able to display even though no update may carry them. Paired with
+   * {@link effectiveSession} this is the whole sent-vs-in-force story.
+   */
+  sessionConfig(): Record<string, unknown> {
+    return this.wireSession();
+  }
+
+  /** What the server said it holds, from the last `session.updated`.
+   * Undefined until the first ack — which is itself worth showing. */
+  effectiveSession(): Record<string, unknown> | undefined {
+    return this.lastEffective;
+  }
+
+  // ── the mic track (the WebRTC half of the same discipline) ─────────────────
+
+  /** Apply constraints to the LIVE mic track. Resolves if the browser took
+   * them; rejects otherwise — and {@link audioSettings} is what says which,
+   * since a browser may resolve and still not have changed anything. */
+  async applyAudioConstraints(constraints: MediaTrackConstraints): Promise<void> {
+    const apply = this.handle?.applyAudioConstraints;
+    if (apply === undefined) {
+      throw new Error("this transport has no local mic track");
+    }
+    await apply(constraints);
+    this.record({ kind: "sent", type: `applyConstraints ${JSON.stringify(constraints)}` });
+  }
+
+  /** The mic track's EFFECTIVE settings right now — the readback half. */
+  audioSettings(): Record<string, unknown> | undefined {
+    return this.handle?.audioSettings?.();
   }
 
   /** Every session.update goes through here: GA requires the `type`
@@ -372,25 +421,37 @@ export class OracleSession {
     }));
   }
 
-  /** The full wire config, baked at mint time (a default, not a sandbox). */
+  /** The full wire config, baked at mint time (a default, not a sandbox).
+   * `model` and `voice` ride ONLY here — both are frozen fields a
+   * `session.update` may not carry. */
   private wireSession(): Record<string, unknown> {
     const config = this.options.config;
+    const updatable = this.updatableSession();
+    const audio = updatable.audio as Record<string, unknown>;
     return {
+      ...updatable,
       type: "realtime",
       model: config.model ?? DEFAULT_ORACLE_MODEL,
       audio: {
-        output: { voice: config.voice ?? DEFAULT_ORACLE_VOICE },
+        ...audio,
+        output: {
+          ...(audio.output as Record<string, unknown> | undefined),
+          voice: config.audio?.output?.voice ?? DEFAULT_ORACLE_VOICE,
+        },
       },
-      ...this.updatableSession(),
     };
   }
 
   /** The session.update-safe subset — everything EXCEPT voice and model. */
   private updatableSession(): Record<string, unknown> {
+    const config = this.options.config;
     return {
-      instructions: this.options.config.instructions,
+      instructions: config.instructions,
       ...this.audioSession(),
       tools: this.toolSchemas(),
+      ...(config.max_output_tokens !== undefined
+        ? { max_output_tokens: config.max_output_tokens }
+        : {}),
     };
   }
 
@@ -405,41 +466,44 @@ export class OracleSession {
    * check against the ack covers the whole thing.
    */
   private audioSession(): Record<string, unknown> {
-    const config = this.options.config;
-    const turn = config.turn ?? "auto";
+    const input = this.options.config.audio?.input ?? {};
+    const output = this.options.config.audio?.output ?? {};
+    // `turn_detection` defaults to server_vad at the vendor's own settings;
+    // an explicit `null` means no turn detection, and must survive as null
+    // rather than being read as "unset".
+    const turnDetection =
+      input.turn_detection === null
+        ? null
+        : {
+            type: "server_vad",
+            ...input.turn_detection,
+            // …and the echo window wins over the configured values while
+            // open: the first reply may not be truncated by what the mic
+            // hears. Arming re-sends this block without the suppression.
+            //
+            // ONLY the interrupt. `create_response: false` also rode here for
+            // one commit and deadlocked the session mute: the window closes
+            // when a reply happens, and suppressing response CREATION means
+            // the human's first utterance never makes one — so
+            // `response.created` never fires, the cap never starts, and
+            // nothing can ever close the window. Every exit hangs off a
+            // response that cannot exist. The echo committing itself as a
+            // user turn is the lesser evil.
+            ...(this.guard !== undefined ? { interrupt_response: false } : {}),
+          };
     return {
       audio: {
         input: {
-          turn_detection:
-            turn === "manual"
-              ? null
-              : {
-                  type: turn === "semantic" ? "semantic_vad" : "server_vad",
-                  // The vendor's own tuning, passed through verbatim. Verified
-                  // by the `session.updated` echo the config ledger records —
-                  // never assumed to have been accepted.
-                  ...(config.turnTuning ?? {}),
-                  // …and the echo window wins over it while open: the first
-                  // reply may not be truncated by what the mic hears. Arming
-                  // re-sends this block without the suppression.
-                  //
-                  // ONLY the interrupt. `create_response: false` also rode
-                  // here for one commit and deadlocked the session mute: the
-                  // window closes when a reply happens, and suppressing
-                  // response CREATION means the human's first utterance never
-                  // makes one — so `response.created` never fires, the cap
-                  // never starts, and nothing can ever close the window. Every
-                  // exit below hangs off a response that cannot exist. The
-                  // echo committing itself as a user turn is the lesser evil.
-                  ...(this.guard !== undefined ? { interrupt_response: false } : {}),
-                },
-          ...(config.transcribeInput !== false
-            ? { transcription: { model: DEFAULT_INPUT_TRANSCRIPTION_MODEL } }
-            : {}),
-          ...(config.noiseReduction !== undefined
-            ? { noise_reduction: { type: config.noiseReduction } }
+          turn_detection: turnDetection,
+          transcription:
+            input.transcription === undefined
+              ? { model: DEFAULT_INPUT_TRANSCRIPTION_MODEL }
+              : input.transcription,
+          ...(input.noise_reduction !== undefined
+            ? { noise_reduction: input.noise_reduction }
             : {}),
         },
+        ...(output.speed !== undefined ? { output: { speed: output.speed } } : {}),
       },
     };
   }
@@ -452,7 +516,8 @@ export class OracleSession {
     this.clearGuardTimer();
     this.replyAudioStarted = false;
     const wanted = this.options.config.firstReplyGuard ?? true;
-    if (wanted === false || (this.options.config.turn ?? "auto") === "manual") {
+    // No `turn_detection` object means no `interrupt_response` to suppress.
+    if (wanted === false || this.options.config.audio?.input?.turn_detection === null) {
       this.guard = undefined;
       return;
     }
@@ -516,6 +581,7 @@ export class OracleSession {
       case "session.updated": {
         const sent = this.pendingUpdates.shift();
         const effective = (event.session ?? {}) as Record<string, unknown>;
+        this.lastEffective = effective;
         this.record({
           kind: "config",
           ...(sent !== undefined ? { sent } : {}),
