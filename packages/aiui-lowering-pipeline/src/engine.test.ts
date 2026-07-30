@@ -184,6 +184,74 @@ function pushCorrection(
   });
 }
 
+describe("the pause bracket (turn-pause / turn-resume — reason-free, never composed)", () => {
+  it("brackets a pause in the stream, and no-ops without an open thread", () => {
+    const engine = armedEngine();
+    engine.setPaused(true); // no thread yet — nothing to bracket
+    expect(engine.paused).toBe(false);
+    expect(engine.events).toHaveLength(1); // just the armed event
+
+    engine.talkStart();
+    engine.talkEnd();
+    engine.setPaused(true);
+    expect(engine.paused).toBe(true);
+    engine.setPaused(true); // idempotent — one bracket, not two
+    engine.setPaused(false);
+    expect(engine.paused).toBe(false);
+    const types = engine.events.map((e) => e.type);
+    expect(types.filter((t) => t === "turn-pause")).toHaveLength(1);
+    expect(types.filter((t) => t === "turn-resume")).toHaveLength(1);
+    expect(types.indexOf("turn-pause")).toBeLessThan(types.indexOf("turn-resume"));
+  });
+
+  it("never composes into the prompt", () => {
+    const engine = armedEngine();
+    const seg = engine.talkStart();
+    engine.transcriptFinal(seg ?? 1, "before the gap", 5, "test");
+    engine.talkEnd();
+    engine.setPaused(true);
+    engine.setPaused(false);
+    const composed = composeIntent(engine.events, "replace");
+    expect(composed.prompt).toContain("before the gap");
+    expect(composed.prompt).not.toContain("pause");
+    expect(composed.items.every((i) => i.kind === "text")).toBe(true);
+  });
+
+  it("a close while paused leaves the bracket unmatched (the close is the outer bracket)", () => {
+    const engine = armedEngine();
+    engine.talkStart();
+    engine.talkEnd();
+    engine.setPaused(true);
+    engine.send({ keepArmed: true });
+    expect(engine.paused).toBe(false);
+    const types = engine.events.map((e) => e.type);
+    expect(types).toContain("turn-pause");
+    expect(types).not.toContain("turn-resume");
+    expect(types.at(-1)).toBe("thread-close");
+  });
+
+  it("replay derives the flag, so recovery can close a dangling bracket", () => {
+    const engine = armedEngine();
+    const seg = engine.talkStart();
+    engine.transcriptFinal(seg ?? 1, "interrupted", 5, "test");
+    engine.talkEnd();
+    engine.setPaused(true);
+    const recovered = new Engine({}, () => 100);
+    recovered.replay([...engine.events], { threadOpen: true });
+    expect(recovered.paused).toBe(true);
+    recovered.setPaused(false); // recovery IS the resume (owner, 2026-07-30)
+    expect(recovered.events.at(-1)).toMatchObject({ type: "turn-resume" });
+
+    // A matched bracket replays to unpaused — no spurious resume possible.
+    const matched = new Engine({}, () => 200);
+    engine.setPaused(false);
+    matched.replay([...engine.events], { threadOpen: true });
+    expect(matched.paused).toBe(false);
+    matched.setPaused(false);
+    expect(matched.events.filter((e) => e.type === "turn-resume")).toHaveLength(1);
+  });
+});
+
 describe("composeIntent", () => {
   it("interleaves text and shots and applies replace-corrections", () => {
     const engine = armedEngine();

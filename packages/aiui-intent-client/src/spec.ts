@@ -34,12 +34,27 @@
 
 import {
   choice,
+  type EngineState,
   ladder,
   type ModeEngineSpec,
   type StatePatch,
   toggle,
 } from "@habemus-papadum/aiui-viz/modal";
 import type { CdpAlignment } from "./cdp-align";
+
+/**
+ * The SINK — where contributions route (owner, 2026-07-30; BEHAVIOR.md "The
+ * sink"). Everything that ADDS to a turn — transcribed audio, shots, the area
+ * drag, selection pulls, sampled frames, a hold-to-talk press — gates on this,
+ * not on the phase. Today the only sink is an open, unpaused turn; the oracle
+ * slice adds `"oracle"` as a second arm (armed-scope), and every gate below
+ * inherits it for free. `undefined` = nothing is collecting.
+ */
+export type Sink = "turn";
+
+export function sink(s: EngineState): Sink | undefined {
+  return s.phase === "turn" && s.paused !== true ? "turn" : undefined;
+}
 
 /** The world's facts (inputs, not choices — no command sets these). */
 export interface IntentContext {
@@ -93,6 +108,13 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      * of armed IS disarming, and there is only one disarmed (the hard one;
      * see the exclude). */
     phase: ladder(["disarmed", "armed", "turn"]),
+    /** Collection paused (⏸ / `b` — owner, 2026-07-30): the turn stays open
+     * and keeps everything in it, but the SINK goes away — no new audio,
+     * shots, or selections enter it (BEHAVIOR.md "The sink, and pausing a
+     * turn"). Orthogonal to the phase ladder on purpose (not a rung — Esc is
+     * untouched); meaningful only in a turn (`pause-needs-turn`); deliberately
+     * NOT durable — a recovered turn resumes collecting. */
+    paused: toggle(),
     /** Pencil markup mode (owner, 2026-07-16): standing (survives turns),
      * durable, disarm clears it. On ⇒ the pencilSurface claim engages the page
      * surface (mouse + pen + iPad); strokes survive turns until cleared. Vanish
@@ -163,8 +185,18 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      * escape: leaving the turn via `turn` cancels the thread. */
     turn: (s) =>
       s.phase === "armed" ? { phase: "turn" } : s.phase === "turn" ? { phase: "armed" } : null,
-    /** Enter — send the turn; the seat stays armed (divergence 2, decided). */
+    /** Enter — send the turn; the seat stays armed (divergence 2, decided).
+     * Deliberately live while PAUSED: pausing and then sending what you have
+     * is the point (owner, 2026-07-30). */
     send: (s) => (s.phase === "turn" ? { phase: "armed" } : null),
+    /** ⏸ / `b` — toggle the collection pause (owner, 2026-07-30). Only in a
+     * turn; the exclude resets it on exit so no turn opens pre-paused. */
+    pause: (s) => (s.phase === "turn" ? { paused: !(s.paused as boolean) } : null),
+    /** The explicit cancel cap — its OWN command, not a second route through
+     * the `turn` toggle: distinct in traces, and the panel's content-ful
+     * confirm gate names commands (owner, 2026-07-30). The verb effects treat
+     * it like escape: leaving the turn cancels the thread. */
+    cancelTurn: (s) => (s.phase === "turn" ? { phase: "armed" } : null),
     /** d — disarm from anywhere in-turn (same hard disarmed as everything). */
     disarm: () => ({ phase: "disarmed" }),
     // NOTE: `tweak` is GONE (C3′, owner 2026-07-25). It existed to escape
@@ -184,9 +216,11 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     video: (s) => ({ video: !(s.video as boolean) }),
     /** f — flip the cadence. */
     fpsMode: (s) => ({ videoMode: s.videoMode === "smart" ? "constant" : "smart" }),
-    /** Space down — open a hold-to-talk window (starts unmuted). */
+    /** Space down — open a hold-to-talk window (starts unmuted). Gated on the
+     * SINK, not the phase: a hold is a gesture, and a gesture with no consumer
+     * is nothing — refused while paused, live again on resume. */
     talkPress: (s) =>
-      s.phase === "turn" && s.talk === "off" ? { talk: "hold", micMuted: false } : null,
+      sink(s) !== undefined && s.talk === "off" ? { talk: "hold", micMuted: false } : null,
     /** Space up — ends only a HOLD window (hands-free ignores it). */
     talkRelease: (s) => (s.talk === "hold" ? { talk: "off" } : null),
     /** h — toggle hands-free talk (starts unmuted). ARMED-scope since C3′:
@@ -253,20 +287,30 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       when: (s) => s.phase === "disarmed",
       set: { pencil: false, jump: false, talk: "off" },
     },
-    // The area drag needs pixels IN a turn (the shot it fires lands in the
-    // prompt), so leaving the turn clears it. Jump left this exclude in C3′ —
-    // it is an EDITOR act, armed-scope like pencil (disarm clears it, above).
+    // Pause is a property OF a turn: leaving the turn (send, cancel, esc,
+    // disarm) resets it, so no turn ever opens pre-paused (owner, 2026-07-30).
     {
-      name: "area-needs-turn",
-      when: (s) => s.phase !== "turn" && s.region === true,
+      name: "pause-needs-turn",
+      when: (s) => s.phase !== "turn" && s.paused === true,
+      set: { paused: false },
+    },
+    // The area drag fires a shot into the SINK, so no sink clears it — leaving
+    // the turn, and PAUSING it (a live crosshair over a paused turn would shoot
+    // into it via the regionDrag pump). Was `area-needs-turn` until the pause
+    // slice generalized the term. Jump left this family in C3′ — an EDITOR
+    // act, armed-scope like pencil (disarm clears it, above).
+    {
+      name: "area-needs-a-sink",
+      when: (s) => sink(s) === undefined && s.region === true,
       set: { region: false },
     },
-    // A HOLD window is bound to a physical key inside a turn's grammar — you
-    // can no longer be "holding" once the turn is gone. (Hands-free is a
-    // STANDING mode since C3′ and survives turn exits; only disarm ends it.)
+    // A HOLD is a gesture into the sink — you can no longer be "holding" once
+    // nothing consumes it: turn gone, or turn paused. (Hands-free is a
+    // STANDING mode since C3′ and survives both; only disarm ends it.) Was
+    // `hold-needs-turn` until the pause slice.
     {
-      name: "hold-needs-turn",
-      when: (s) => s.phase !== "turn" && s.talk === "hold",
+      name: "hold-needs-a-sink",
+      when: (s) => sink(s) === undefined && s.talk === "hold",
       set: { talk: "off" },
     },
     // Mute exists only while talking.
@@ -301,14 +345,17 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // the grant persists on the old tab, and shooting a tab you are not
     // looking at would contradict the hollow ring saying "no pixels here".
     // (Grantless hosts keep the two in lockstep, so this never bites there.)
+    // …and only into a live SINK (the pause slice): a paused turn refuses the
+    // contribution acts at the machine, so caps, keys, the remote bar, and
+    // agent writes all meet the same answer (BEHAVIOR.md).
     shot: (s, ctx) =>
-      s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
+      sink(s) !== undefined && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
     // The area drag is pixels too — turning it ON wants the same grant as a shot;
     // turning it OFF is always allowed (so a lost grant can't strand you in area
     // mode — you can always toggle back out, and Esc bypasses `available`).
     region: (s, ctx) =>
       s.region === true ||
-      (s.phase === "turn" && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
+      (sink(s) !== undefined && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
     // Selection and clear are PAGE acts, not pixel acts (owner, 2026-07-14):
     // they ride the content script / bootstrap, which follows the tab in
     // view — no grant involved. Only pixels (shot, the stream, sampling) need
@@ -320,7 +367,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // selection pull with nothing selected is a guaranteed miss — the cap
     // grays and its tooltip points at selecting something first.
     selection: (s, ctx) =>
-      s.phase === "turn" && ctx.activeTab !== undefined && ctx.selectionPresent,
+      sink(s) !== undefined && ctx.activeTab !== undefined && ctx.selectionPresent,
     // Jump-to-editor is a PAGE act on instrumented pages only: the picker
     // reads the aiui stamps and source root, so a page without `__AIUI__`
     // grays the cap — the gate IS the feature detection (owner, 2026-07-15).

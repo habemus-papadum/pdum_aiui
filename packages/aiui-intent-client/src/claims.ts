@@ -12,7 +12,7 @@
 
 import type { ClaimSpecs, EngineState } from "@habemus-papadum/aiui-viz/modal";
 import { claimedPageKeys } from "./keys";
-import type { IntentContext } from "./spec";
+import { type IntentContext, sink } from "./spec";
 import type { HeldStream, IntentHost, RingState } from "./transport";
 
 /** Lane hooks: the REAL operations behind two claims (the fake host's
@@ -126,17 +126,20 @@ export function intentClaims(
       },
     },
 
-    /** Frame sampling: turn ∧ video ∧ grant — smart or constant cadence.
+    /** Frame sampling: sink ∧ video ∧ grant — smart or constant cadence.
      * Default applier asserts the page-side flag (the fake host / tests);
      * the real client passes `options.videoSampler`, whose start() runs the
      * VideoSampler pump (frames → engine shots → wire attachments). */
     videoSample: {
       // Gated like `shot` (spec.ts): pixels only while the tab in view IS the
       // granted tab — sampling a background tab would contradict the hollow
-      // ring. The warm stream below deliberately does NOT gate on this: it
-      // stays held on the granted tab so returning to it costs nothing.
+      // ring. Sampled frames feed the SINK, so a paused turn stops the pump
+      // (the claim releases) and a resume restarts it — while the video MODE
+      // stands lit throughout (pause never touches standing modes). The warm
+      // stream below deliberately does NOT gate on this: it stays held on the
+      // granted tab so returning to it costs nothing.
       derive: (s, ctx) =>
-        s.phase === "turn" &&
+        sink(s) !== undefined &&
         s.video === true &&
         ctx.grantedTab !== undefined &&
         ctx.grantedTab === ctx.activeTab

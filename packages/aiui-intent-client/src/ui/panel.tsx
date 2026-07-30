@@ -97,36 +97,46 @@ export function Panel(props: PanelProps) {
   });
   onCleanup(() => clearTimeout(blipTimer));
 
-  // The abandon-confirm gate (owner, 2026-07-20). The turn cap is a lit toggle
-  // that abandons an open turn in ONE click; a stray tap (meant for Enter)
-  // silently discards whatever you'd built. So when the turn holds content,
-  // that one tap raises a confirm instead of abandoning. Only the CAP is gated:
-  // Esc and `d` stay immediate (the dialog itself teaches Esc as the deliberate
-  // exit), and programmatic routes — agent control() writes, the activation
-  // gesture, tests — never tap the cap, so they never see the dialog.
-  const [confirming, setConfirming] = createSignal(false, { ownedWrite: true });
+  // The abandon-confirm gate (owner, 2026-07-20; widened 2026-07-30). The turn
+  // cap is a lit toggle that abandons an open turn in ONE click, and the
+  // explicit 🗑 cancel cap is the same discard spelled unambiguously — either
+  // way, one tap must not silently throw away a content-ful turn, so both
+  // raise a confirm instead. The signal stores WHICH command was intercepted,
+  // and confirming dispatches that command — distinct in traces. Only the
+  // CAPS are gated: Esc and `d` stay immediate (the dialog itself teaches Esc
+  // as the deliberate exit), and programmatic routes — agent control()
+  // writes, the activation gesture, tests — never tap a cap, so they never
+  // see the dialog.
+  const [confirming, setConfirming] = createSignal<string | undefined>(undefined, {
+    ownedWrite: true,
+  });
   const inOpenTurn = (): boolean => {
     const phase = client.state().phase;
     return phase === "turn";
   };
   const closeConfirm = (): void => {
-    setConfirming(false);
+    setConfirming(undefined);
   };
   const abandonTurn = (): void => {
-    setConfirming(false);
+    const command = confirming();
+    setConfirming(undefined);
     // Re-check: the turn may have closed while the dialog sat open (a send on
     // the control rail). Dispatching "turn" from armed would OPEN one — guard.
-    if (inOpenTurn()) {
-      client.dispatch("turn");
+    if (command !== undefined && inOpenTurn()) {
+      client.dispatch(command);
     }
   };
 
   // The tap-flash runtime, created ONCE and shared by the command bar and the
   // config strip (one flash closure, not one per strip). Its intercept guard is
-  // the gate: claim the turn-cap tap that would abandon a content-ful turn.
+  // the gate: claim the tap that would abandon a content-ful turn.
   const capRuntime = createCapRuntime(client.dispatch, (command) => {
-    if (command === "turn" && inOpenTurn() && props.turnHasContent?.() === true) {
-      setConfirming(true);
+    if (
+      (command === "turn" || command === "cancelTurn") &&
+      inOpenTurn() &&
+      props.turnHasContent?.() === true
+    ) {
+      setConfirming(command);
       return true;
     }
     return false;
@@ -139,7 +149,7 @@ export function Panel(props: PanelProps) {
   // danger button abandons. Every other key is swallowed so nothing leaks to
   // the machine behind the scrim.
   const onConfirmKey = (event: KeyboardEvent): void => {
-    if (!confirming()) {
+    if (confirming() === undefined) {
       return;
     }
     event.preventDefault();
@@ -156,10 +166,10 @@ export function Panel(props: PanelProps) {
   // Defensive: if the turn closes underneath an open dialog (an external send),
   // the prompt is gone anyway — drop the now-meaningless confirm.
   createEffect(
-    () => confirming() && !inOpenTurn(),
+    () => confirming() !== undefined && !inOpenTurn(),
     (stale) => {
       if (stale) {
-        setConfirming(false);
+        setConfirming(undefined);
       }
     },
   );
@@ -237,7 +247,7 @@ export function Panel(props: PanelProps) {
           content-ful turn. Keys are trapped in window-capture above (Esc/Enter
           keep the turn); the scrim covers the panel so only a deliberate click
           on the danger button abandons. */}
-      <Show when={confirming()}>
+      <Show when={confirming() !== undefined}>
         <div class="aiui-confirm-scrim" data-testid="abandon-confirm" role="presentation">
           <div
             class="aiui-confirm"

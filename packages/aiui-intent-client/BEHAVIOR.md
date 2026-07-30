@@ -134,12 +134,78 @@ so the iPad's remote bar carries it with no turn open; `k`/`c` ride the armed ke
 (panel-document scope — page keys stay the page's outside a turn). Still turn-scoped until
 its slice lands: talk/hands-free (C3).
 
+## The sink, and pausing a turn (owner, 2026-07-30)
+
+**Contributions route to a SINK, and the sink is the one predicate.** Everything that ADDS to
+a turn — transcribed audio, shots, the area drag, selection pulls, sampled video frames, a
+hold-to-talk press — gates on `sink(state)` (spec.ts), not on the phase. Today the only sink
+is `"turn"`: an open, **unpaused** turn. The oracle lands as a second sink (armed-scope, its
+own slice): entering it pauses the turn *by construction* — the sink is elsewhere — and
+leaving restores whatever the turn's own state was, because the oracle never writes the
+manual `paused` region. No memory, no restore logic, anywhere.
+
+**Pause (`⏸` / `b`) suspends collection, not the turn.** An orthogonal `paused` toggle — not
+a phase rung — meaningful only in a turn (`pause-needs-turn` resets it on exit, so no turn
+ever opens pre-paused). While paused:
+
+- **Nothing is collected, and the refusal is the machine's** (`available` reads the sink), so
+  caps, keys, the iPad's remote bar, and agent `control()` writes all meet the same answer.
+- **The talk WINDOW closes; the talk MODE stands** — the same mode/window split hands-free
+  already has across sends. Resume reopens the window by itself. A *hold* ends
+  (`hold-needs-a-sink` — you cannot be holding Space into no sink); area mode clears
+  (`area-needs-a-sink` — a live crosshair would fire a shot into the paused turn). Mute
+  persists across pause exactly as it persists across a send.
+- **Standing modes are untouched**: hands-free and video stay lit (they just have nothing to
+  feed — sampling stops with the videoPump claim and restarts on resume); the pencil keeps
+  working entirely — markup is page state, not turn content (a post-resume shot is what
+  carries it into the prompt).
+- **Send, cancel, pause, and Esc stay live.** Pausing and then sending what you have is the
+  point. The keyboard claim is unchanged (a paused turn is still a turn — the page's keys
+  stay claimed, and `b` resumes from anywhere).
+
+**The stream carries a reason-free bracket.** `turn-pause` / `turn-resume` events
+(aiui-lowering-pipeline) mark the gap — never composed into the prompt, visible in the trace.
+Deliberately NO reason field: a manual pause and a future oracle detour read identically in
+the stream; the *banner* is where the reason lives. Do not add one.
+
+**Boundaries across a pause collapse to a comparison (owner, 2026-07-30).** Intermediate
+navigations and tab switches while paused are suppressed — where the user wandered is
+nobody's business. At resume the client compares the tab in view against a snapshot taken at
+pause: a different tab emits ONE `tab-switch`, the same tab on a different URL emits ONE
+`navigation` (kind unknown), unchanged emits nothing. The boundary lands after the
+`turn-resume` bracket — its position is the attribution, as ever. (The compare is
+best-effort async; a word spoken in the first instant after resume can land before it — the
+accepted-race family.)
+
+**A reload during a pause resumes collecting.** `paused` is not durable and the exclude
+clears it before recovery re-opens the turn; recovery also closes a dangling `turn-pause`
+bracket in the recovered stream (the reload was the pause's end). The pause-time tab
+snapshot does not survive, so no resume boundary is emitted — the honest limitation.
+
+**The cluster and the hoist.** The turn tier's children are exactly **send · pause ·
+cancel** — what you do *with* the turn, bracketed beside the lit 💬 cap. The contribution
+caps — shot, area, selection, push-to-talk — are HOISTED to the armed tier (the same move
+C1/C2/C3′ made for video, pencil, and hands-free), visible whenever armed and dimmed unless
+a sink is live. Their keys ride the armed layer as **sink-gated** rows that `pass` with no
+sink — so while merely armed the page keeps `s`, `a`, `p`, and Space (scrolling), exactly as
+C3′ promised; the rows go live the day an armed-scope sink (the oracle) exists. Pause is
+`remote: true` (the couch case); cancel is desktop-only — its confirm gate lives in the
+panel UI, and a remote cap would silently bypass it.
+
+**Cancel is its own command (`cancelTurn`), and a content-ful cancel confirms.** The turn
+cap keeps its toggle-to-abandon (muscle memory, documented above); the explicit cancel cap
+is the unambiguous spelling. Both routes raise the same confirm dialog when the turn holds
+content — one click must not discard a five-minute brief. Esc, `d`, and programmatic routes
+stay immediate, as before.
+
 ## The bar
 
-- **A tree presented linearly**: root `arm · step out · help`; arming reveals the turn tier;
-  an engaged cap reveals its children (pencil → clear · vanish · fade; hands-free → mute;
-  video → cadence · rate). The renderer joins the depth tiers into one
-  wrapping flow with a `›` divider — no indentation, no one-cap rows.
+- **A tree presented linearly**: root `arm · step out · help`; arming reveals the turn cap,
+  its cluster (send · pause · cancel while a turn is open), and the standing tier — the
+  hoisted contribution caps (shot · area · selection · push-to-talk, dim without a sink)
+  plus jump, hands-free, video, pencil; an engaged cap reveals its children (pencil →
+  clear · vanish · fade; hands-free → mute; video → cadence · rate). The renderer joins the
+  depth tiers into one wrapping flow with a `›` divider — no indentation, no one-cap rows.
 - **Labels are stable**: a cap's text never changes with state; the lit highlight carries
   "engaged". Keyboard shortcuts are never cap text — tooltips and the help table only.
 - **Enabled is derived**: the engine dry-runs the reducer (`canDispatch`); verbs and gates
@@ -214,10 +280,11 @@ recording indicator: red while live, amber while muted.
 **Hands-free is a STANDING mode (C3′, owner 2026-07-25) — the mode survives turns; the
 WINDOW rides the consumer.** Toggling `h` while merely armed lights the mode with nothing
 recording (there is no consumer — deliberately: "dropped on the floor" is implemented as
-no-capture). A turn opening routes it — the window (real capture + upload) opens to the
-transcriber/linter — and a send closes the window while the MODE stands, so the next turn
-reopens it by itself. Only disarm ends the mode (`disarmed-is-hard`). A *hold* (Space) stays
-turn-scoped: it is a gesture bound to a physical key in the turn grammar.
+no-capture). A SINK appearing routes it — the window (real capture + upload) opens to the
+transcriber/linter when an unpaused turn opens — and a send (or a pause) closes the window
+while the MODE stands, so the next turn (or the resume) reopens it by itself. Only disarm
+ends the mode (`disarmed-is-hard`). A *hold* (Space) stays sink-scoped: it is a gesture, and
+a gesture with no consumer is nothing (`hold-needs-a-sink`).
 
 ## Sources, routes, and turns (the capture bus)
 

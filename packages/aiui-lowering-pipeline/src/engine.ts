@@ -36,6 +36,8 @@ export class Engine {
   mode: Mode = "ink";
   talking = false;
   threadOpen = false;
+  /** Collection is paused (the `turn-pause`/`turn-resume` bracket is open). */
+  paused = false;
 
   private listeners: EngineListener[] = [];
   private segmentCounter = 0;
@@ -311,6 +313,23 @@ export class Engine {
     return candidate;
   }
 
+  /**
+   * Bracket a collection pause in the stream (the client's ⏸ / `b` — see the
+   * `turn-pause` event's doc). The GATING lives in the client's mode machine
+   * (`available` reads the sink); this records the bracket so the trace shows
+   * the gap. Reason-free by decision (owner, 2026-07-30). No-op without an
+   * open thread; a thread may CLOSE while paused — `closeThread` resets the
+   * flag silently (the close is the outer bracket, no `turn-resume` rides a
+   * dying thread).
+   */
+  setPaused(on: boolean): void {
+    if (!this.threadOpen || on === this.paused) {
+      return;
+    }
+    this.paused = on;
+    this.emit(this.stamp({ type: on ? "turn-pause" : "turn-resume" }));
+  }
+
   send(options: { keepArmed?: boolean } = {}): void {
     if (this.threadOpen) {
       if (this.talking) {
@@ -330,6 +349,9 @@ export class Engine {
 
   private closeThread(reason: "send" | "cancel" | "timeout"): void {
     this.threadOpen = false;
+    // A close while paused leaves the pause bracket unmatched on purpose —
+    // the close IS the outer bracket (see setPaused).
+    this.paused = false;
     this.emit(this.stamp({ type: "thread-close", reason }));
   }
 
@@ -537,6 +559,12 @@ export class Engine {
     this.talking = false;
     this.threadOpen = state.threadOpen;
     this.mode = state.mode ?? "ink";
+    // Re-derived from the stream below (last bracket wins), so a recovery can
+    // see — and close — a pause the reload interrupted. Never resumed as a
+    // STATE: the client's machine recovers unpaused (a recovered turn resumes
+    // collecting — owner, 2026-07-30), and calls setPaused(false) to emit the
+    // closing `turn-resume` when the replayed stream left one dangling.
+    this.paused = false;
     let maxSegment = 0;
     let maxShot = 0;
     let maxSel = 0;
@@ -550,6 +578,11 @@ export class Engine {
       const segment = (event as { segment?: unknown }).segment;
       if (typeof segment === "number") {
         maxSegment = Math.max(maxSegment, segment);
+      }
+      if (event.type === "turn-pause") {
+        this.paused = true;
+      } else if (event.type === "turn-resume" || event.type === "thread-close") {
+        this.paused = false;
       }
       if (event.type === "shot") {
         maxShot = Math.max(maxShot, ordinal(event.marker, "shot_"));
@@ -566,5 +599,8 @@ export class Engine {
     this.shotCounter = maxShot;
     this.selCounter = maxSel;
     this.codeCounter = maxCode;
+    if (!this.threadOpen) {
+      this.paused = false; // no thread, no open bracket — keep the invariant
+    }
   }
 }

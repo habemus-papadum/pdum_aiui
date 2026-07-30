@@ -476,6 +476,24 @@ export type IntentEvent =
       type: "code-selection-drop";
       marker: string;
     }
+  | {
+      /**
+       * The client PAUSED collection mid-turn (the panel's ⏸ / `b` — and, when
+       * it lands, the oracle detour): from here to the matching `turn-resume`,
+       * no new audio, shots, or selections enter the turn. A bracket in the
+       * stream, deliberately REASON-FREE — a manual pause and an oracle detour
+       * read identically; the panel's banner is where the reason lives, never
+       * the trace (owner, 2026-07-30). Never composed: the lowering skips it.
+       * Boundary events (navigation / tab-switch) are suppressed while paused;
+       * the client compares tab identity at resume and emits at most one
+       * boundary AFTER the `turn-resume` (the intent client's capture lanes).
+       * A thread may close while paused — the close is the outer bracket, so
+       * an unmatched `turn-pause` before a `thread-close` is well-formed.
+       */
+      at: number;
+      type: "turn-pause";
+    }
+  | { at: number; type: "turn-resume" }
   | { at: number; type: "note"; text: string }
   /**
    * A prompt-linter observation — the realtime model's spoken diagnostic,

@@ -403,4 +403,51 @@ describe("the abandon-confirm gate (turn cap)", () => {
     expect(dialog(m.root)).toBeNull();
     expect(m.client.state().phase).toBe("turn");
   });
+
+  // The explicit cancel cap (owner, 2026-07-30): the same discard, spelled
+  // unambiguously — and gated identically. Confirming dispatches the command
+  // that was intercepted (cancelTurn here, turn above), distinct in traces.
+  const cancelCap = (root: HTMLElement) =>
+    root.querySelector<HTMLButtonElement>('[data-command="cancelTurn"]');
+
+  it("the 🗑 cancel cap on a content-ful turn raises the same confirm; confirming cancels", async () => {
+    const m = mountGated(() => true);
+    m.client.dispatch("turn");
+    await settle();
+
+    cancelCap(m.root)?.click();
+    await settle();
+    expect(dialog(m.root)).not.toBeNull(); // gated like the turn cap
+    expect(m.client.state().phase).toBe("turn"); // untouched behind the scrim
+
+    m.root.querySelector<HTMLButtonElement>('[data-testid="abandon-confirm-btn"]')?.click();
+    await settle();
+    expect(dialog(m.root)).toBeNull();
+    expect(m.client.state().phase).toBe("armed"); // the intercepted cancelTurn ran
+  });
+
+  it("the cancel cap on an EMPTY turn cancels in one click — nothing to lose", async () => {
+    const m = mountGated(() => false);
+    m.client.dispatch("turn");
+    await settle();
+
+    cancelCap(m.root)?.click();
+    await settle();
+    expect(dialog(m.root)).toBeNull();
+    expect(m.client.state().phase).toBe("armed");
+  });
+
+  it("a paused turn still sends and still cancels (the lifecycle stays live)", async () => {
+    const m = mountGated(() => false);
+    m.client.dispatch("turn");
+    m.client.dispatch("pause");
+    await settle();
+    const send = m.root.querySelector<HTMLButtonElement>('[data-command="send"]');
+    const pause = m.root.querySelector<HTMLButtonElement>('[data-command="pause"]');
+    const shot = m.root.querySelector<HTMLButtonElement>('[data-command="shot"]');
+    expect(pause?.dataset.lit).toBe("true");
+    expect(send?.disabled).toBe(false);
+    expect(cancelCap(m.root)?.disabled).toBe(false);
+    expect(shot?.disabled).toBe(true); // a contribution — refused while paused
+  });
 });

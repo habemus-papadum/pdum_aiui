@@ -36,6 +36,7 @@ function fakeLanes(log: string[]): IntentLanes {
     startTalk: entry("startTalk"),
     stopTalk: entry("stopTalk"),
     setMicMuted: entry("setMicMuted"),
+    setPaused: entry("setPaused"),
   };
 }
 
@@ -653,6 +654,99 @@ describe("talk — per-turn, hold vs hands-free", () => {
   });
 });
 
+describe("pause — the sink suspends, the turn survives (owner, 2026-07-30)", () => {
+  it("pausing a hands-free turn closes the WINDOW; resuming reopens it; the mode stands", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("handsFree");
+    expect(r.lanes).toContain("startTalk:handsFree");
+
+    r.client.dispatch("pause");
+    expect(r.client.state()).toMatchObject({ phase: "turn", paused: true, talk: "handsFree" });
+    expect(r.lanes).toContain("stopTalk"); // the window closed…
+    expect(r.lanes).toContain("setPaused:true"); // …and the lane got the bracket edge
+
+    r.client.dispatch("pause"); // resume
+    expect(r.lanes).toContain("setPaused:false");
+    expect(r.lanes.filter((l) => l === "startTalk:handsFree")).toHaveLength(2); // reopened itself
+  });
+
+  it("the stream reads bracket-first: setPaused lands BEFORE the talk verbs on both edges", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("handsFree");
+    r.client.dispatch("pause");
+    expect(r.lanes.indexOf("setPaused:true")).toBeLessThan(r.lanes.lastIndexOf("stopTalk"));
+    r.client.dispatch("pause");
+    expect(r.lanes.indexOf("setPaused:false")).toBeLessThan(
+      r.lanes.lastIndexOf("startTalk:handsFree"),
+    );
+  });
+
+  it("a paused turn refuses shot and selection at dispatch — no lane verb fires", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.setContext({ selectionPresent: true });
+    r.client.dispatch("pause");
+    r.client.dispatch("shot");
+    r.client.dispatch("selection");
+    expect(r.lanes).not.toContain("takeShot:7");
+    expect(r.lanes).not.toContain("addSelection:7");
+    r.client.dispatch("pause"); // resume — the same routes act again
+    r.client.dispatch("shot");
+    r.client.dispatch("selection");
+    expect(r.lanes).toContain("takeShot:7");
+    expect(r.lanes).toContain("addSelection:7");
+  });
+
+  it("video sampling stops with the pause and restarts on resume — the MODE stays lit", async () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("video");
+    await settle();
+    expect(r.client.claimStatuses().videoSample?.phase).toBe("active");
+
+    r.client.dispatch("pause");
+    await settle();
+    expect(r.client.state().video).toBe(true); // standing mode untouched
+    expect(r.bus.log).toContain('page:viewport@7 {"sample":false}'); // the pump released
+
+    r.client.dispatch("pause");
+    await settle();
+    expect(r.client.claimStatuses().videoSample?.phase).toBe("active"); // re-acquired
+  });
+
+  it("b toggles the pause from the keyboard (page or panel — the claim is unchanged)", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.handleKey("b", "down", false);
+    expect(r.client.state().paused).toBe(true);
+    r.client.handleKey("b", "down", false);
+    expect(r.client.state().paused).toBe(false);
+    expect(r.blips).toEqual([]); // a bound key, never a typo
+  });
+
+  it("cancel-while-paused relays the exit edge (the gate resets; the close is the outer bracket)", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("pause");
+    r.client.dispatch("cancelTurn");
+    expect(r.client.state()).toMatchObject({ phase: "armed", paused: false });
+    expect(r.lanes).toContain("cancelTurn"); // the explicit cancel cancels the thread
+    expect(r.lanes).toContain("setPaused:false"); // the exit edge still relays
+  });
+
+  it("cancelTurn is the escape family: it cancels the thread and keeps the seat armed", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("cancelTurn");
+    expect(r.client.state().phase).toBe("armed");
+    expect(r.lanes).toContain("cancelTurn");
+    r.client.dispatch("cancelTurn"); // outside a turn: refused, nothing fires
+    expect(r.lanes.filter((l) => l === "cancelTurn")).toHaveLength(1);
+  });
+});
+
 describe("keys — the grammar is the machine's only keyboard", () => {
   it("unknown in-turn keys swallow + blip; nothing leaks, nothing exits", () => {
     const r = makeRig();
@@ -747,14 +841,21 @@ describe("the bar: a tree presented linearly", () => {
     // below gate on the grant individually.
     expect(findCap(r, "turn")?.enabled).toBe(true);
     // C2: the pencil lives on the ARMED tier — togglable with no turn open
-    // (markup is a source); `shot` stays behind the closed turn tier.
+    // (markup is a source). Since the hoist (owner, 2026-07-30) `shot` lives
+    // there too — VISIBLE but refused with no sink; the lifecycle cluster
+    // (send · pause · cancel) stays behind the closed turn tier.
     expect(findCap(r, "pencil")).toBeDefined();
-    expect(findCap(r, "shot")).toBeUndefined(); // turn tier closed
+    expect(findCap(r, "shot")).toBeDefined(); // hoisted — present while armed…
+    expect(findCap(r, "shot")?.enabled).toBe(false); // …but no sink yet
+    expect(findCap(r, "send")).toBeUndefined(); // turn tier closed
+    expect(findCap(r, "pause")).toBeUndefined();
 
     r.client.dispatch("turn");
     expect(r.lanes).toContain("openTurn"); // the bar's turn opens the thread too
     expect(findCap(r, "pencil")).toBeDefined();
     expect(findCap(r, "send")?.enabled).toBe(true);
+    expect(findCap(r, "pause")?.enabled).toBe(true); // the lifecycle cluster
+    expect(findCap(r, "cancelTurn")?.enabled).toBe(true);
     // Ungranted turn: only the PIXEL verbs say no (the gate split, owner
     // 2026-07-14) — selection is a page act, gated on a selection EXISTING.
     expect(findCap(r, "shot")?.enabled).toBe(false);

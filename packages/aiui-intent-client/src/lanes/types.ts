@@ -40,6 +40,14 @@ export interface LaneContext {
   status: (line: string) => void;
   toast: (msg: string) => void;
   pencilTabs: Set<number>;
+  /**
+   * The pause gate (owner, 2026-07-30) — crosses the verbs/capture boundary
+   * like `pencilTabs`: verbs.setPaused writes `paused` and fires the hooks;
+   * the capture wing installs them (the tab snapshot at pause, the
+   * compare-and-emit at resume) and reads `paused` to suppress mid-pause
+   * boundaries (navigation / tab-switch / a stray regionDrag).
+   */
+  pauseGate: { paused: boolean; onPause?: () => void; onResume?: () => void };
 }
 
 export interface ChannelLanesConfig {

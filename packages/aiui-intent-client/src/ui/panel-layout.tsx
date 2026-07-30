@@ -108,6 +108,40 @@ function GrantBanner(props: { client: IntentClient }) {
 }
 
 /**
+ * The paused banner (owner, 2026-07-30): standing and quiet like the grant
+ * banner — never a toast — shown exactly while an open turn is PAUSED, gone
+ * the moment it resumes or closes. The real hazard of the pause feature is
+ * briefing into the void (a lit ⏸ cap and a dark REC pill are weak signals),
+ * so the banner says plainly that nothing is being collected. The REASON
+ * lives here and only here — the stream's pause bracket is deliberately
+ * reason-free (BEHAVIOR.md); when the oracle detour lands it swaps in its own
+ * line ("oracle live — the turn is paused") through this same component.
+ */
+function PausedBanner(props: { client: IntentClient }) {
+  const paused = (): boolean => {
+    const state = props.client.state();
+    return state.phase === "turn" && state.paused === true;
+  };
+  return (
+    <Show when={paused()}>
+      <div
+        data-testid="paused-banner"
+        style="margin: 8px 12px; font: 12px system-ui; border: 1px solid #7c3aed; border-radius: 6px; padding: 6px 8px; max-width: 460px"
+      >
+        <div>
+          <strong>turn paused</strong> — nothing is being added: audio isn't transcribed; shots,
+          selections, and video frames are off.
+        </div>
+        <div style="opacity: 0.7; margin-top: 2px">
+          the turn keeps everything it already holds — ⏸ (or <kbd>b</kbd>) resumes; send and cancel
+          still work.
+        </div>
+      </div>
+    </Show>
+  );
+}
+
+/**
  * The panel's render tree. Emits its own `<style>`, so an entry renders exactly
  * `<PanelLayout … />` and nothing else. The decided order (owner, 2026-07-14):
  * channel first, then the target tab (CDP only), the panel (bar + pills), the
@@ -132,6 +166,7 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
       </Show>
       {props.targetTab}
       <GrantBanner client={props.client} />
+      <PausedBanner client={props.client} />
       <Panel
         client={props.client}
         registerBlipSink={props.registerBlipSink}

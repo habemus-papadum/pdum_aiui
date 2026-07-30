@@ -210,10 +210,90 @@ const rows: Array<{
     expected: { jump: false },
   },
   {
-    name: "leaving the turn clears the area drag (area-needs-turn)",
+    name: "leaving the turn clears the area drag (area-needs-a-sink)",
     start: { phase: "turn", region: true },
     command: "send",
     expected: { phase: "armed", region: false },
+  },
+  // pause column (owner, 2026-07-30): an orthogonal toggle, only in a turn
+  {
+    name: "pause suspends collection in a turn",
+    start: { phase: "turn" },
+    command: "pause",
+    expected: { phase: "turn", paused: true },
+  },
+  {
+    name: "pause again resumes",
+    start: { phase: "turn", paused: true },
+    command: "pause",
+    expected: { phase: "turn", paused: false },
+  },
+  {
+    name: "pause outside a turn is nothing",
+    start: { phase: "armed" },
+    command: "pause",
+    expected: { phase: "armed", paused: false },
+  },
+  {
+    name: "send while paused still sends — and the exclude resets paused (pause-needs-turn)",
+    start: { phase: "turn", paused: true },
+    command: "send",
+    expected: { phase: "armed", paused: false },
+  },
+  {
+    name: "esc while paused cancels the turn (pause is not a rung)",
+    start: { phase: "turn", paused: true },
+    command: "escape",
+    expected: { phase: "armed", paused: false },
+  },
+  {
+    name: "pausing clears a live area drag (area-needs-a-sink — no sink, no crosshair)",
+    start: { phase: "turn", region: true },
+    command: "pause",
+    expected: { phase: "turn", paused: true, region: false },
+  },
+  {
+    name: "pausing ends a HOLD (hold-needs-a-sink — a gesture with no consumer is nothing)",
+    start: { phase: "turn", talk: "hold" },
+    command: "pause",
+    expected: { phase: "turn", paused: true, talk: "off" },
+  },
+  {
+    name: "pausing leaves the STANDING modes untouched (hands-free lit, video lit, pencil on)",
+    start: { phase: "turn", talk: "handsFree", video: true, pencil: true },
+    command: "pause",
+    expected: { paused: true, talk: "handsFree", video: true, pencil: true },
+  },
+  {
+    name: "space while paused is nothing (talkPress gates on the sink)",
+    start: { phase: "turn", paused: true },
+    command: "talkPress",
+    expected: { talk: "off" },
+  },
+  {
+    name: "mute still toggles while paused (the mode stands; mute is the source's)",
+    start: { phase: "turn", paused: true, talk: "handsFree" },
+    command: "mute",
+    expected: { micMuted: true },
+  },
+  // cancelTurn column (owner, 2026-07-30): the explicit cancel cap's command
+  {
+    name: "cancelTurn abandons the turn back to armed",
+    start: { phase: "turn" },
+    command: "cancelTurn",
+    expected: { phase: "armed" },
+  },
+  {
+    name: "cancelTurn outside a turn is nothing",
+    start: { phase: "armed" },
+    command: "cancelTurn",
+    expected: { phase: "armed" },
+  },
+  {
+    name: "cancelTurn while paused resets paused with the exit",
+    start: { phase: "turn", paused: true },
+    command: "cancelTurn",
+    expected: { phase: "armed", paused: false },
   },
   {
     name: "jump SURVIVES the turn (C3': an editor act, armed-scope like pencil)",
@@ -290,6 +370,38 @@ describe("spec-level properties", () => {
     expect(e.dispatch("turn")).toMatchObject({ phase: "turn", talk: "handsFree" });
     expect(e.dispatch("send")).toMatchObject({ phase: "armed", talk: "handsFree" });
     expect(e.dispatch("escape")).toMatchObject({ phase: "disarmed", talk: "off" });
+  });
+
+  it("a paused turn refuses the contribution acts AT THE MACHINE (owner, 2026-07-30)", () => {
+    // The world says yes to everything — grant on the tab in view, a live
+    // selection — so the only gate left is the sink. Every route in (cap,
+    // key, remote tap, agent write) meets `dispatch`'s refusal, not a dimmed
+    // button.
+    const e = createModeEngine(intentSpec, {
+      context: {
+        ...initialContext,
+        connected: true,
+        activeTab: 7,
+        grantedTab: 7,
+        selectionPresent: true,
+      },
+      initial: { phase: "turn" },
+    });
+    for (const command of ["shot", "selection", "region", "talkPress"]) {
+      expect(e.canDispatch(command), `${command} in a live turn`).toBe(true);
+    }
+    e.dispatch("pause");
+    for (const command of ["shot", "selection", "region", "talkPress"]) {
+      expect(e.canDispatch(command), `${command} while paused`).toBe(false);
+    }
+    // The lifecycle stays live: pausing then sending what you have is the point.
+    for (const command of ["send", "pause", "cancelTurn", "escape"]) {
+      expect(e.canDispatch(command), `${command} while paused`).toBe(true);
+    }
+    e.dispatch("pause"); // resume
+    for (const command of ["shot", "selection", "region", "talkPress"]) {
+      expect(e.canDispatch(command), `${command} after resume`).toBe(true);
+    }
   });
 
   it("help is a standing root-level toggle (blank system: arm · step out · help)", () => {

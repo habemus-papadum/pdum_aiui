@@ -1,7 +1,10 @@
 /**
  * caps.ts — the command bar, declared as a TREE (owner review 2026-07-13):
- * root = arm · step out · help; arming reveals the turn tier; engaging a cap
- * reveals its children (pencil → clear/vanish/fade, hands-free → mute, video →
+ * root = arm · step out · help; arming reveals the turn cap, the hoisted
+ * contribution caps (shot · area · selection · push-to-talk — sink-gated,
+ * owner 2026-07-30), and the standing modes; an open turn reveals its
+ * lifecycle cluster (send · pause · cancel); engaging a cap reveals its
+ * children (pencil → clear/vanish/fade, hands-free → mute, video →
  * cadence/rate). The projection flattens it into depth rows; a tap
  * dispatches the same command its key does.
  *
@@ -30,44 +33,68 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         // No key either: the turn opens from this cap alone — the invocation
         // gesture is grant-only now (see activation.ts) and must not
         // masquerade as this cap's binding.
+        //
+        // The children are exactly the turn-LIFECYCLE cluster (owner,
+        // 2026-07-30): send · pause · cancel, bracketed beside the lit 💬 cap
+        // — what you do WITH the turn. The contribution caps (shot · area ·
+        // selection · push-to-talk) were HOISTED to the armed tier below,
+        // sink-gated (BEHAVIOR.md "The cluster and the hoist").
         command: "turn",
         hint: { key: "", label: "turn", icon: "💬" },
         litWhen: ({ state }) => inTurn(state.phase),
         children: [
-          {
-            // Remote (owner, 2026-07-25): a one-off screenshot from the couch.
-            // Turn-tier, so the iPad's button EXISTS only while a turn is open
-            // (the projection is live — caps come and go with their tiers) and
-            // dims whenever the grant isn't on the tab in view (`available`).
-            command: "shot",
-            remote: true,
-            hint: { key: "s", label: "shot", icon: "🖼" },
-          },
-          {
-            command: "region",
-            hint: { key: "a", label: "area", icon: "⛶" },
-            litWhen: ({ state }) => state.region === true,
-          },
-          {
-            command: "selection",
-            hint: { key: "p", label: "selection", icon: "📋" },
-            litWhen: ({ ctx }) => ctx.selectionPresent,
-          },
-          // NOTE: the tweak cap is GONE (C3′ — the phase died with it; disarm
-          // is the escape hatch), and jump/hands-free/video moved to the
-          // ARMED tier below (standing modes, not turn perks).
-          {
-            // Push-to-talk: a HOLD cap — press opens the talk window, release
-            // ends it; the identical commands Space uses. A separate
-            // engagement affordance from hands-free; one exclusive talk
-            // region underneath (a second window is unrepresentable).
-            command: "talkPress",
-            hold: { down: "talkPress", up: "talkRelease" },
-            hint: { key: "␣", label: "push to talk", icon: "🎙" },
-            litWhen: ({ state }) => state.talk === "hold",
-          },
           { command: "send", hint: { key: "⏎", label: "send", icon: "📤" } },
+          {
+            // Remote: pausing from the couch is the point (owner, 2026-07-30).
+            command: "pause",
+            remote: true,
+            hint: { key: "b", label: "pause", icon: "⏸" },
+            litWhen: ({ state }) => state.paused === true,
+          },
+          {
+            // Deliberately NOT remote: the content-ful confirm gate lives in
+            // the panel UI (panel.tsx), and a remote cap would bypass it.
+            command: "cancelTurn",
+            hint: { key: "", label: "cancel", icon: "🗑", tone: "danger" },
+          },
         ],
+      },
+      // ── the hoisted contribution caps (owner, 2026-07-30): armed-tier so
+      // the cluster above stays pure lifecycle, DIMMED unless a sink is live
+      // (`available` reads sink()) — dim is REFUSED, not discouraged. The
+      // same move C1/C2/C3′ made for video, pencil, and hands-free; the
+      // oracle sink will light them with no turn open. ─────────────────────
+      {
+        // Remote (owner, 2026-07-25): a one-off screenshot from the couch.
+        // Armed-tier since the hoist — the iPad's button exists whenever
+        // armed and dims without a sink or when the grant isn't on the tab
+        // in view (`available`).
+        command: "shot",
+        remote: true,
+        hint: { key: "s", label: "shot", icon: "🖼" },
+      },
+      {
+        command: "region",
+        hint: { key: "a", label: "area", icon: "⛶" },
+        litWhen: ({ state }) => state.region === true,
+      },
+      {
+        command: "selection",
+        hint: { key: "p", label: "selection", icon: "📋" },
+        litWhen: ({ ctx }) => ctx.selectionPresent,
+      },
+      // NOTE: the tweak cap is GONE (C3′ — the phase died with it; disarm
+      // is the escape hatch); jump/hands-free/video moved to this tier in
+      // C3′ (standing modes, not turn perks).
+      {
+        // Push-to-talk: a HOLD cap — press opens the talk window, release
+        // ends it; the identical commands Space uses. A separate
+        // engagement affordance from hands-free; one exclusive talk
+        // region underneath (a second window is unrepresentable).
+        command: "talkPress",
+        hold: { down: "talkPress", up: "talkRelease" },
+        hint: { key: "␣", label: "push to talk", icon: "🎙" },
+        litWhen: ({ state }) => state.talk === "hold",
       },
       {
         // C3′: jump is an EDITOR act, armed-scope like pencil.

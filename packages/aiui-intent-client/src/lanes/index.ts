@@ -162,6 +162,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     status,
     toast,
     pencilTabs,
+    pauseGate: { paused: false },
   };
 
   // ── the capture wing: the page-event pump (region-drag crop, smart-mode
@@ -237,6 +238,13 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     // Replay re-feeds every listener: the wire re-dials on the replayed
     // thread-open, the panes see the events, the mirror re-persists.
     engine.replay(got.events, { threadOpen: true });
+    // A reload during a PAUSE resumes collecting (owner, 2026-07-30): the
+    // machine recovers unpaused (`paused` is not durable), so close the
+    // dangling `turn-pause` bracket the mirrored stream may carry — the
+    // reload was the pause's end. Replay derived the flag; this is a no-op
+    // on a stream whose brackets are matched. (The pause-time tab snapshot
+    // did not survive, so no resume boundary — the honest limitation.)
+    engine.setPaused(false);
     // The machine follows the recovered wire truth — through the ordinary
     // commands, and therefore through the ordinary GATES. Arming requires a
     // channel, so this must be called once the bus is CONNECTED (the entries

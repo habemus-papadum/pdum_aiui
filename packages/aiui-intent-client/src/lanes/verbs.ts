@@ -99,6 +99,29 @@ export function createVerbs(ctx: LaneContext): IntentLanes {
       }
       pencilTabs.clear();
     },
+    setPaused: (paused) => {
+      // The pause bracket + the resume boundary (owner, 2026-07-30). Fired on
+      // every `paused` edge, including turn exit (client.ts) — there the
+      // engine bracket no-ops (thread already closed) and only the gate
+      // reset matters.
+      const gate = ctx.pauseGate;
+      if (gate.paused === paused) {
+        return;
+      }
+      gate.paused = paused;
+      if (paused) {
+        gate.onPause?.(); // snapshot the tab in view (resume compares against it)
+        engine.setPaused(true); // bracket the stream (no-op with no open thread)
+      } else {
+        engine.setPaused(false);
+        // The resume compare wants a thread to receive its boundary. A
+        // close-while-paused never gets here (client.ts skips the exit edge),
+        // so this guard is belt — but a belt on attribution is cheap.
+        if (engine.threadOpen) {
+          gate.onResume?.();
+        }
+      }
+    },
     startTalk: () => {
       talk.startMainListening();
     },

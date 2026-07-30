@@ -136,4 +136,28 @@ describe("PanelLayout", () => {
     const { root } = mount({ lanes: undefined }, { grantless: true });
     expect(root.querySelector("[data-testid=grant-banner]")).toBeNull();
   });
+
+  it("shows the paused banner exactly while an open turn is paused (owner, 2026-07-30)", () => {
+    // Standing and quiet like the grant banner — the reason lives HERE, never
+    // in the stream (the pause bracket is reason-free). Gone on resume, gone
+    // when the turn closes however it closes.
+    const { root, client } = mount({ lanes: undefined }, { grantless: true });
+    const banner = () => root.querySelector("[data-testid=paused-banner]");
+    client.setContext({ connected: true }); // the edge arms
+    expect(banner()).toBeNull();
+
+    client.dispatch("turn");
+    expect(banner()).toBeNull(); // a live turn is not a paused one
+
+    client.dispatch("pause");
+    expect(banner()).not.toBeNull();
+    expect(banner()?.textContent).toContain("nothing is being added");
+
+    client.dispatch("pause"); // resume
+    expect(banner()).toBeNull();
+
+    client.dispatch("pause");
+    client.dispatch("cancelTurn"); // the close takes the banner with it
+    expect(banner()).toBeNull();
+  });
 });

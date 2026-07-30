@@ -24,7 +24,7 @@ import {
 import { configBar, intentBar } from "./caps";
 import { type ClaimLaneOptions, intentClaims } from "./claims";
 import { hintsFor, keyVerdict } from "./keys";
-import { type IntentContext, initialContext, intentSpec } from "./spec";
+import { type IntentContext, initialContext, intentSpec, sink } from "./spec";
 import type { IntentHost } from "./transport";
 // The standing config surface: importing registers the controls (durable,
 // agent-visible) that the bar's widget nodes bind by name.
@@ -62,6 +62,16 @@ export interface IntentLanes {
    * and talk on it, and its setArmed(false) is its own full abandon).
    */
   setArmed?(on: boolean): void;
+  /**
+   * The `paused` region's edge (⏸ / `b` — owner, 2026-07-30), including the
+   * exit edge (a cancel/send clears `paused` via the exclude in the same
+   * commit that closes the thread — the lane resets its gate then, brackets
+   * nothing, and skips the resume compare: the close is the outer bracket).
+   * Optional: hosts with a pipeline bracket the stream
+   * (`turn-pause`/`turn-resume`) and run the resume-boundary compare
+   * (lanes/verbs.ts).
+   */
+  setPaused?(paused: boolean): void;
 }
 
 export interface IntentClientConfig {
@@ -150,12 +160,16 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       case "disarm":
       case "arm":
       case "turn": // the toggle: pressed mid-turn, it abandons (owner 2026-07-14)
+      case "cancelTurn": // the explicit cancel cap (owner 2026-07-30)
         if (leftTurn) {
           lanes.cancelTurn();
         }
         break;
       case "shot":
-        if (event.before.phase === "turn" && grantedTab !== undefined) {
+        // Sink-gated like the spec's `available` (belt: dispatch already
+        // refused a sinkless shot) — and written in sink shape so slice 2's
+        // oracle routing forks here, not in a phase check.
+        if (sink(event.before) !== undefined && grantedTab !== undefined) {
           lanes.takeShot(grantedTab);
         }
         break;
@@ -165,7 +179,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       // the page act. Auto-exit (a completed drag / pick flips the mode off)
       // rides the page-event handler below, not this dispatch switch.
       case "selection":
-        if (event.before.phase === "turn" && activeTab !== undefined) {
+        if (sink(event.before) !== undefined && activeTab !== undefined) {
           lanes.addSelection(activeTab);
         }
         break;
@@ -183,17 +197,46 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         break;
     }
 
-    // Talk WINDOW lifecycle (C3′): the window — real capture + upload — opens
-    // only while the standing talk mode has a CONSUMER, i.e. an open turn
-    // (talk-lanes upload into the thread; hands-free with no turn stands with
-    // nothing recording — the owner's "dropped on the floor", implemented as
-    // no-capture). Derived from (talk ∧ phase), so every route lands here:
-    // h while armed (mode on, no window), turn opens (window opens), send
-    // (window closes, mode STANDS), disarm (exclude ends the mode too).
-    const windowBefore = event.before.talk !== "off" && event.before.phase === "turn";
-    const windowAfter = event.after.talk !== "off" && event.after.phase === "turn";
+    // The pause bracket (owner, 2026-07-30): every `paused` edge relays —
+    // including the exit edge (the exclude clears `paused` in the commit that
+    // leaves the turn), which the lane needs to reset its gate. Placement is
+    // load-bearing twice: AFTER the command switch above, so a
+    // cancel-while-paused has already closed the thread when the lane sees
+    // the edge (the engine bracket no-ops and the resume compare is skipped —
+    // the close is the outer bracket); BEFORE the talk block below, so the
+    // stream reads bracket-first (pause → talk-end · resume → talk-start).
+    const pausedBefore = event.before.paused === true;
+    const pausedAfter = event.after.paused === true;
+    if (pausedBefore !== pausedAfter) {
+      lanes.setPaused?.(pausedAfter);
+    }
+
+    // Talk WINDOW lifecycle (C3′, generalized by the pause slice): the window
+    // — real capture + upload — opens only while the standing talk mode has a
+    // CONSUMER: a live SINK (talk-lanes upload into the thread; hands-free
+    // with no sink stands with nothing recording — the owner's "dropped on
+    // the floor", implemented as no-capture). Derived from (talk ∧ sink), so
+    // every route lands here: h while armed (mode on, no window), turn opens
+    // (window opens), PAUSE (window closes, mode STANDS), resume (window
+    // reopens), send (window closes), disarm (exclude ends the mode too).
+    //
+    // A SINK-IDENTITY comparison, not a boolean, on purpose: a live mic can
+    // cross a sink change. none→sink opens, sink→none closes — and slice 2's
+    // turn→oracle is a consumer SWAP with the source still live (a reroute of
+    // the PCM under a held mic, never a stop/start — mute is a property of
+    // the source, BEHAVIOR.md). Unreachable while "turn" is the only sink;
+    // the shape is here so the one block that must be exactly right isn't
+    // rewritten when the oracle lands.
+    const windowBefore = event.before.talk !== "off" ? sink(event.before) : undefined;
+    const windowAfter = event.after.talk !== "off" ? sink(event.after) : undefined;
     if (windowBefore !== windowAfter) {
-      if (windowAfter) {
+      if (windowAfter !== undefined && windowBefore !== undefined) {
+        // Consumer swap (slice 2): today's lanes know one consumer, so the
+        // honest fallback is close-and-reopen; the oracle slice replaces this
+        // arm with the PCM reroute.
+        lanes.stopTalk();
+        lanes.startTalk(event.after.talk as string);
+      } else if (windowAfter !== undefined) {
         lanes.startTalk(event.after.talk as string);
       } else {
         lanes.stopTalk();
@@ -201,9 +244,9 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     }
     // Mute relays only while a window is open (tweak is gone; the user's
     // toggle is the one mute source again).
-    const muteBefore = windowBefore && event.before.micMuted === true;
-    const muteAfter = windowAfter && event.after.micMuted === true;
-    if (windowAfter && muteBefore !== muteAfter) {
+    const muteBefore = windowBefore !== undefined && event.before.micMuted === true;
+    const muteAfter = windowAfter !== undefined && event.after.micMuted === true;
+    if (windowAfter !== undefined && muteBefore !== muteAfter) {
       lanes.setMicMuted(muteAfter);
     }
   };

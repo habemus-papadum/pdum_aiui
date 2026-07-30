@@ -402,6 +402,113 @@ describe("navigation continuity — context riding the turn", () => {
   });
 });
 
+describe("pause — the bracket, the suppression, and the resume compare (owner, 2026-07-30)", () => {
+  const types = (r: Rig): string[] => r.lanes.engine.events.map((e) => e.type);
+
+  it("pause/resume bracket the stream, reason-free, and ride the wire like any event", async () => {
+    const r = makeRig();
+    grantAndOpen(r.client, 7);
+    r.client.dispatch("pause");
+    r.client.dispatch("pause");
+    await settle();
+    expect(types(r)).toContain("turn-pause");
+    expect(types(r)).toContain("turn-resume");
+    const pause = r.lanes.engine.events.find((e) => e.type === "turn-pause");
+    expect(Object.keys(pause ?? {}).sort()).toEqual(["at", "type"]); // no reason field — ever
+  });
+
+  it("an unchanged tab across the pause emits NO boundary (the whole point of the compare)", async () => {
+    const r = makeRig();
+    r.bus.setTabUrl(7, "fake://tab/7/docs");
+    grantAndOpen(r.client, 7);
+    await settle();
+    r.client.dispatch("pause");
+    await settle();
+    r.client.dispatch("pause"); // resume, having gone nowhere
+    await settle(20);
+    expect(types(r)).not.toContain("tab-switch");
+    expect(types(r)).not.toContain("navigation");
+  });
+
+  it("mid-pause tab switches are suppressed; resume emits ONE tab-switch, after the turn-resume", async () => {
+    const r = makeRig();
+    r.bus.setTabUrl(7, "fake://tab/7/docs");
+    r.bus.setTabUrl(8, "fake://tab/8/detour");
+    r.bus.setTabUrl(9, "fake://tab/9/app");
+    grantAndOpen(r.client, 7);
+    await settle();
+    r.client.dispatch("pause");
+    await settle();
+    r.bus.switchTab(8); // the wander — nobody's business
+    await settle(20);
+    r.bus.switchTab(9);
+    await settle(20);
+    expect(types(r)).not.toContain("tab-switch"); // suppressed while paused
+
+    r.client.dispatch("pause"); // resume on tab 9
+    await settle(20);
+    const switches = r.lanes.engine.events.filter((e) => e.type === "tab-switch");
+    expect(switches).toHaveLength(1); // ONE boundary for the whole gap
+    expect(switches[0]).toMatchObject({
+      from: "fake://tab/7/docs",
+      to: "fake://tab/9/app",
+      fromTab: 7,
+      toTab: 9,
+    });
+    const t = types(r);
+    expect(t.indexOf("turn-resume")).toBeLessThan(t.indexOf("tab-switch"));
+  });
+
+  it("the same tab on a DIFFERENT url resumes to ONE navigation, kind unknown", async () => {
+    const r = makeRig();
+    r.bus.setTabUrl(7, "fake://tab/7/before");
+    grantAndOpen(r.client, 7);
+    await settle();
+    r.client.dispatch("pause");
+    await settle();
+    r.bus.setTabUrl(7, "fake://tab/7/after");
+    r.bus.firePageEvent({
+      kind: "navigation",
+      tab: 7,
+      from: "fake://tab/7/before",
+      to: "fake://tab/7/after",
+      navKind: "push",
+    });
+    await settle();
+    expect(types(r)).not.toContain("navigation"); // suppressed while paused
+
+    r.client.dispatch("pause"); // resume
+    await settle(20);
+    const navs = r.lanes.engine.events.filter((e) => e.type === "navigation") as Array<{
+      from: string;
+      to: string;
+      kind?: string;
+    }>;
+    expect(navs).toHaveLength(1);
+    expect(navs[0]).toMatchObject({ from: "fake://tab/7/before", to: "fake://tab/7/after" });
+    expect(navs[0].kind).toBeUndefined(); // we deliberately were not watching how
+  });
+
+  it("a cancel while paused closes with the bracket unmatched — no resume rides a dying thread", async () => {
+    const r = makeRig();
+    grantAndOpen(r.client, 7);
+    r.client.dispatch("pause");
+    r.client.dispatch("cancelTurn");
+    await settle(20);
+    const t = types(r);
+    expect(t).toContain("turn-pause");
+    expect(t).not.toContain("turn-resume");
+    expect(t.filter((x) => x === "thread-close")).toHaveLength(1);
+    // …and the next turn opens with a clean gate: a mid-turn switch records.
+    r.bus.setTabUrl(9, "fake://tab/9/next");
+    r.client.dispatch("turn");
+    await settle();
+    r.bus.switchTab(9);
+    await settle(20);
+    expect(r.lanes.engine.events.filter((e) => e.type === "tab-switch")).toHaveLength(1);
+  });
+});
+
 describe("the pencilSurface claim (mode-gated, tab-following)", () => {
   it("engages only when markup is ON, re-relays fade live, re-points on tab switch, releases on disarm", async () => {
     const r = makeRig();
@@ -507,6 +614,69 @@ describe("turn recovery — the mirror", () => {
       ),
     ).toBe(true); // the content survived
     expect(stub2.thread.dials.length).toBeGreaterThan(0); // the wire re-dialed
+
+    unbind2();
+    await client2.dispose();
+    rig = undefined;
+  });
+
+  it("a reload during a PAUSE recovers collecting — the dangling bracket is closed at recovery", async () => {
+    let saved: { events: never[]; threadOpen: boolean } | undefined;
+    const mirror = {
+      persist: (events: never[], threadOpen: boolean) => {
+        saved = threadOpen && events.length > 0 ? { events, threadOpen } : undefined;
+      },
+      recover: () => saved,
+    };
+
+    // Page 1: a content-ful turn, paused, then the page dies.
+    const bus1 = fakeBus({ activeTab: 7 });
+    const stub1 = stubThread();
+    const lanes1 = createChannelLanes({
+      host: bus1,
+      port: () => 55555,
+      openThread: stub1.openThread,
+      mirror,
+    });
+    const client1 = createIntentClient({
+      host: bus1,
+      lanes: lanes1.lanes,
+      claimOptions: lanes1.claimOptions,
+    });
+    lanes1.bind(client1);
+    client1.setContext({ connected: true });
+    grantAndOpen(client1, 7);
+    lanes1.engine.contribute("paused mid-thought");
+    client1.dispatch("pause");
+    await settle(20);
+    await client1.dispose();
+
+    // Page 2: recovery resumes collecting (paused is not durable) and closes
+    // the bracket the reload interrupted.
+    const bus2 = fakeBus({ activeTab: 7 });
+    const stub2 = stubThread();
+    const lanes2 = createChannelLanes({
+      host: bus2,
+      port: () => 55555,
+      openThread: stub2.openThread,
+      mirror,
+    });
+    const client2 = createIntentClient({
+      host: bus2,
+      lanes: lanes2.lanes,
+      claimOptions: lanes2.claimOptions,
+    });
+    const unbind2 = lanes2.bind(client2);
+    client2.setContext({ connected: true });
+    expect(lanes2.recover(client2)).toBe(true);
+    await settle(30);
+
+    expect(client2.state()).toMatchObject({ phase: "turn", paused: false });
+    expect(lanes2.engine.paused).toBe(false);
+    const t = lanes2.engine.events.map((e) => e.type);
+    // The recovered stream carries the old pause AND its recovery-minted close.
+    expect(t.indexOf("turn-pause")).toBeGreaterThanOrEqual(0);
+    expect(t.indexOf("turn-resume")).toBeGreaterThan(t.indexOf("turn-pause"));
 
     unbind2();
     await client2.dispose();

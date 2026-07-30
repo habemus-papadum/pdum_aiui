@@ -18,6 +18,7 @@ import {
   keyHints,
   resolveKey,
 } from "@habemus-papadum/aiui-viz/modal";
+import { sink } from "./spec";
 
 /** Keys that must never blip when swallowed (chords in progress). */
 const MODIFIER_KEYS = new Set([
@@ -40,6 +41,13 @@ const onPress =
   (name: string) =>
   (_state: EngineState, _key: string, repeat: boolean): KeyClaim<string> =>
     repeat ? "swallow" : command(name);
+
+/** Fire only into a live SINK; with none the page keeps the key (`pass`) —
+ * the armed layer's contribution rows (the pause-slice hoist). */
+const onSinkPress =
+  (name: string) =>
+  (state: EngineState, _key: string, repeat: boolean): KeyClaim<string> =>
+    sink(state) === undefined ? "pass" : repeat ? "swallow" : command(name);
 
 /** The one in-turn layer (sub-layers — a config strip — slot above later). */
 export const turnLayer: KeyLayer<EngineState, string> = {
@@ -137,6 +145,14 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       }),
     },
     {
+      // b = PAUSE (owner, 2026-07-30): toggle the collection pause. The whole
+      // keyboard stays claimed while paused (a paused turn is still a turn),
+      // so `b` resumes from anywhere — page or panel.
+      keys: ["b", "B"],
+      down: onPress("pause"),
+      hint: (s) => ({ key: "b", label: "pause turn", icon: "⏸", active: s.paused === true }),
+    },
+    {
       keys: ["Enter"],
       down: onPress("send"),
       hint: { key: "⏎", label: "send", icon: "📤" },
@@ -216,6 +232,42 @@ export const armedLayer: KeyLayer<EngineState, string> = {
         !repeat && state.pencil === true ? command("pencilClear") : "pass",
       hint: (s) =>
         s.pencil === true ? { key: "c", label: "clear pencil", icon: "🧹" } : undefined,
+    },
+    // ── the hoisted contribution keys (the pause slice, owner 2026-07-30):
+    // SINK-gated rows that `pass` with no sink, so while merely armed the
+    // page keeps s/a/p and — critically — Space for scrolling, exactly as
+    // C3′ promised (claimedPageKeys probes the real resolver, so none of
+    // these are claimed page-side until a sink exists). Unreachable today —
+    // the only sink is an unpaused TURN, where this layer is inactive — they
+    // are the slice-2 seam: the day an armed-scope sink (the oracle) lands,
+    // these rows go live with no new machinery. Hints mirror the gate. ─────
+    {
+      keys: ["s", "S"],
+      down: onSinkPress("shot"),
+      hint: (s) => (sink(s) !== undefined ? { key: "s", label: "shot", icon: "🖼" } : undefined),
+    },
+    {
+      keys: ["a", "A"],
+      down: onSinkPress("region"),
+      hint: (s) =>
+        sink(s) !== undefined
+          ? { key: "a", label: "area shot", icon: "⛶", active: s.region === true }
+          : undefined,
+    },
+    {
+      keys: ["p", "P"],
+      down: onSinkPress("selection"),
+      hint: (s) =>
+        sink(s) !== undefined ? { key: "p", label: "pull selection", icon: "📋" } : undefined,
+    },
+    {
+      keys: [" "],
+      down: onSinkPress("talkPress"),
+      up: (state) => (sink(state) === undefined ? "pass" : command("talkRelease")),
+      hint: (s) =>
+        sink(s) !== undefined
+          ? { key: "␣", label: "talk (hold)", icon: "🎙", active: s.talk === "hold" }
+          : undefined,
     },
     {
       // Video is a standing source (C1) — its toggles ride armed too.

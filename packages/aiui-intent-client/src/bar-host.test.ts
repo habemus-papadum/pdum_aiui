@@ -93,19 +93,22 @@ function fakeSocket() {
 }
 
 describe("intentBarSource — the remote subset", () => {
-  it("projects the remote-flagged caps — the standing three plus SHOT — while in a turn", () => {
+  it("projects the remote-flagged caps — the hoisted shot, the standing three, and PAUSE — while in a turn", () => {
     const client = makeClient();
     enterTurn(client);
-    // shot rides the turn tier (a later bar row), so it JOINS the projection
-    // when a turn opens and leaves when it closes — the iPad's one-off
-    // screenshot button (owner, 2026-07-25).
-    expect(remoteCommands(client)).toEqual(["handsFree", "video", "pencil", "shot"]);
+    // shot rides the ARMED tier since the hoist (owner, 2026-07-30) and now
+    // LEADS the standing three; pause is turn-tier (the lifecycle cluster),
+    // so it joins when a turn opens — pausing from the couch is its point.
+    expect(remoteCommands(client)).toEqual(["shot", "handsFree", "video", "pencil", "pause"]);
   });
 
-  it("projects the SAME remote set while merely armed (C3': all three are standing modes)", () => {
+  it("projects the armed set while merely armed — shot present but sink-gated (the hoist)", () => {
     const client = makeClient();
     client.setContext({ connected: true }); // the edge arms — not in a turn
-    expect(remoteCommands(client)).toEqual(["handsFree", "video", "pencil"]);
+    // shot EXISTS on the armed tier now (dimmed without a sink — the machine
+    // refuses, the projection shows the refusal); pause stays behind the
+    // closed turn tier.
+    expect(remoteCommands(client)).toEqual(["shot", "handsFree", "video", "pencil"]);
   });
 });
 
@@ -131,10 +134,11 @@ describe("createBarHost", () => {
       channelPort: 5099,
     });
     expect(fs.lastBar()?.rows.map((r) => r.command)).toEqual([
+      "shot",
       "handsFree",
       "video",
       "pencil",
-      "shot",
+      "pause",
     ]);
   });
 

@@ -13,13 +13,18 @@ import { pencilFade, pencilVanish, shotFlash, videoPeriodSec } from "../config";
 import type { LaneContext } from "./types";
 
 export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
-  const { host, engine, wire, status, toast, pencilTabs } = ctx;
+  const { host, engine, wire, status, toast, pencilTabs, pauseGate } = ctx;
 
   // ── the video frame pump (the real videoSample applier) ───────────────────
   // Smart mode's gate: page interaction pings arm one frame (read-and-clear).
   let pageInteracted = false;
   host.transport.onPageEvent((event) => {
     if (event.kind === "regionDrag") {
+      if (pauseGate.paused) {
+        // A stray late drag report after a pause (area mode itself already
+        // cleared via `area-needs-a-sink`) must not shoot into the paused turn.
+        return;
+      }
       // The armed `a` drag completed: crop the region (host-native — CDP clip
       // or the warm stream's canvas), then into the turn exactly like a shot.
       void (async () => {
@@ -55,7 +60,12 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
       // Same-tab navigation: context riding the turn (the engine no-ops
       // without an open thread), rendered into the prompt by composeIntent.
       // The destination's tab record rides along when the reporter built one.
-      engine.navigation(event.from, event.to, event.navKind, event.tabRecord);
+      // SUPPRESSED while paused (owner, 2026-07-30): where the user wandered
+      // during a pause is nobody's business — the resume compare below emits
+      // at most one boundary for the whole gap.
+      if (!pauseGate.paused) {
+        engine.navigation(event.from, event.to, event.navKind, event.tabRecord);
+      }
     }
   });
 
@@ -82,6 +92,12 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
       if (prev === undefined || prev.id === tab) {
         return;
       }
+      // Mid-pause switches are SUPPRESSED (owner, 2026-07-30) — the tracker
+      // above still followed, so the resume compare (and the post-resume
+      // boundaries) stay grounded in where the user actually is.
+      if (pauseGate.paused) {
+        return;
+      }
       // `from` re-read at boundary time: the tab may have navigated since it
       // was last active; the boundary names where the user actually left, and
       // the two tab handles ride along. The destination's canonical record is
@@ -92,6 +108,55 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
       engine.tabSwitch(from ?? "", to?.url ?? "", prev.id, tab, record);
     })();
   });
+
+  // ── the pause snapshot + the resume compare (owner, 2026-07-30) ───────────
+  // Boundaries across a pause collapse to a comparison: snapshot the tab in
+  // view at pause; at resume, a different tab emits ONE tab-switch, the same
+  // tab on a different URL emits ONE navigation (kind unknown), unchanged
+  // emits nothing. The boundary is stamped at resume time and lands after the
+  // `turn-resume` bracket (verbs.ts orders the calls) — its position is the
+  // attribution. Best-effort async: the URL re-reads ride tabInfo, so a word
+  // spoken in the first instant after resume can land before the boundary
+  // (the accepted-race family, like the lint-final race).
+  let pausedAt: { id: number; url?: string } | undefined;
+  pauseGate.onPause = () => {
+    const id = host.targeting.activeTab();
+    if (id === undefined) {
+      pausedAt = undefined;
+      return;
+    }
+    // Seed from the tracker (may be stale if the tab navigated since its last
+    // switch), then let the authoritative re-read land over it.
+    const snapshot: { id: number; url?: string } = {
+      id,
+      url: lastActiveTab?.id === id ? lastActiveTab.url : undefined,
+    };
+    pausedAt = snapshot;
+    void host.targeting.tabInfo?.(id).then((info) => {
+      if (pausedAt === snapshot && info?.url !== undefined) {
+        snapshot.url = info.url;
+      }
+    });
+  };
+  pauseGate.onResume = () => {
+    const snapshot = pausedAt;
+    pausedAt = undefined;
+    void (async () => {
+      const tab = host.targeting.activeTab();
+      if (snapshot === undefined || tab === undefined) {
+        return;
+      }
+      const to = await host.targeting.tabInfo?.(tab);
+      const record = to?.url !== undefined ? { ...to, url: to.url } : undefined;
+      if (tab !== snapshot.id) {
+        engine.tabSwitch(snapshot.url ?? "", to?.url ?? "", snapshot.id, tab, record);
+      } else if (to?.url !== undefined && snapshot.url !== undefined && to.url !== snapshot.url) {
+        // Same tab, different page: a navigation with no attributable kind —
+        // we were deliberately not watching how it got there.
+        engine.navigation(snapshot.url, to.url, undefined, record);
+      }
+    })();
+  };
 
   return {
     pencilFadeSec: () => (pencilVanish.get() === true ? (pencilFade.get() as number) : 0),
