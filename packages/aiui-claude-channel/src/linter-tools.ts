@@ -1,9 +1,18 @@
 /**
- * The prompt linter's tool surface — today exactly one tool, `read_file`.
+ * The LOCAL-READ tool surface: `read_file`, `list_files`, and `grep`, under
+ * one execution policy.
  *
- * The linter (see {@link ./live-session}.LINTER_INSTRUCTIONS) may check a
- * file or selection against the actual source before flagging it — verify
- * suspicions, don't browse. The execution policy, deliberate and documented
+ * Two consumers advertise DIFFERENT subsets of it, which is the point of
+ * keeping the policy in one module (O3c, docs/proposals/intent-oracle.md):
+ *
+ *  - the **prompt linter** offers `read_file` alone — its brief is "verify a
+ *    suspicion before flagging it", and a linter that browses a repository is
+ *    a linter spending your realtime budget on wandering;
+ *  - the **intent panel's oracle** offers all three, reached over the intent
+ *    sidecar's `POST /intent/oracle/tool`, because answering "what does this
+ *    code do" genuinely needs to find the code first.
+ *
+ * The execution policy, deliberate and documented
  * (docs/guide/prompt-linting.md):
  *
  *  - **Anything readable, fully recorded.** The path resolves against the
@@ -20,8 +29,8 @@
  *  - **Errors return to the model** as readable strings (ENOENT etc.), never
  *    throw — a failed read is a linting datum, not a fault.
  */
-import { readFileSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { type Dirent, readdirSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 
 /** The read cap, in bytes — past this the content truncates with a marker. */
 export const READ_FILE_CAP_BYTES = 32 * 1024;
@@ -119,6 +128,280 @@ export function executeReadFile(args: Record<string, unknown>, cwd?: string): Re
     summary: `${rawPath} — ${kb} KB${truncated ? " (truncated)" : ""}`,
   };
 }
+
+// ── list_files and grep — the oracle's half of the surface (O3c) ─────────────
+//
+// Same policy as `read_file` above, one addition that is theirs alone: every
+// bound is SURFACED, never silently applied. A voice model told "42 matches
+// (capped at 40)" can ask for a narrower pattern; one handed 40 results that
+// look complete cannot. Directories that are never the answer (`.git`,
+// `node_modules`, build output) are skipped for SIGNAL, not for security —
+// the policy above is explicit that this is a local dev tool running as the
+// user, and what keeps it honest is that every call is recorded.
+
+/** Entries a single `list_files` may return before truncating. */
+export const LIST_FILES_CAP = 200;
+/** Matches a single `grep` may return before truncating. */
+export const GREP_MATCH_CAP = 40;
+/** Files a single `grep` will open before giving up on the search. */
+export const GREP_FILE_CAP = 2000;
+/** Longest match line handed to the model — a minified bundle is not evidence. */
+const GREP_LINE_CAP = 300;
+
+/** Directory names never worth walking: enormous, and never the answer. */
+const SKIP_DIRS = new Set([".git", "node_modules", "dist", "dist-ext", ".next", "coverage"]);
+
+export const LIST_FILES_TOOL_NAME = "list_files";
+export const GREP_TOOL_NAME = "grep";
+
+const LIST_FILES_DESCRIPTION =
+  "List files and directories under a path in the project, to find what to read. " +
+  "Relative paths resolve against the project root. Results are capped.";
+
+const GREP_DESCRIPTION =
+  "Search the project's text files for a regular expression and return matching lines " +
+  "with their file and line number. Use it to locate code before reading it. " +
+  "Results are capped.";
+
+/** The `list_files` declaration in OpenAI realtime's tool shape. */
+export const LIST_FILES_TOOL_OPENAI = {
+  type: "function",
+  name: LIST_FILES_TOOL_NAME,
+  description: LIST_FILES_DESCRIPTION,
+  parameters: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Directory to list (relative to the project root, or absolute).",
+      },
+      depth: {
+        type: "number",
+        description: "How many directory levels to descend. Default 1, max 5.",
+      },
+    },
+    required: ["path"],
+  },
+} as const;
+
+/** The `grep` declaration in OpenAI realtime's tool shape. */
+export const GREP_TOOL_OPENAI = {
+  type: "function",
+  name: GREP_TOOL_NAME,
+  description: GREP_DESCRIPTION,
+  parameters: {
+    type: "object",
+    properties: {
+      pattern: { type: "string", description: "JavaScript regular expression." },
+      path: {
+        type: "string",
+        description: "Directory or file to search (relative to the project root, or absolute).",
+      },
+      extensions: {
+        type: "array",
+        items: { type: "string" },
+        description: 'Limit to these file extensions, e.g. ["ts","tsx"].',
+      },
+    },
+    required: ["pattern"],
+  },
+} as const;
+
+/** Resolve an argument path the way `read_file` does: relative to the project. */
+function resolveUnder(raw: unknown, cwd?: string): string {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  const base = cwd ?? process.cwd();
+  if (value === "") {
+    return base;
+  }
+  return isAbsolute(value) ? value : resolve(base, value);
+}
+
+/** Execute a `list_files` call. Never throws. */
+export function executeListFiles(args: Record<string, unknown>, cwd?: string): ReadFileResult {
+  const root = resolveUnder(args.path, cwd);
+  const depth = Math.min(5, Math.max(1, typeof args.depth === "number" ? args.depth : 1));
+  const lines: string[] = [];
+  let truncated = false;
+
+  const walk = (dir: string, prefix: string, level: number): void => {
+    if (truncated || level > depth) {
+      return;
+    }
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch (error) {
+      lines.push(`${prefix}… (unreadable: ${error instanceof Error ? error.message : "?"})`);
+      return;
+    }
+    for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+      if (lines.length >= LIST_FILES_CAP) {
+        truncated = true;
+        return;
+      }
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) {
+          lines.push(`${prefix}${entry.name}/ (skipped)`);
+          continue;
+        }
+        lines.push(`${prefix}${entry.name}/`);
+        walk(join(dir, entry.name), `${prefix}  `, level + 1);
+      } else if (entry.isFile()) {
+        lines.push(`${prefix}${entry.name}`);
+      }
+    }
+  };
+
+  try {
+    if (!statSync(root).isDirectory()) {
+      return {
+        ok: false,
+        content: `list_files: ${root} is a file, not a directory — use read_file`,
+        summary: `${root} is a file`,
+      };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, content: `list_files error: ${message}`, summary: message };
+  }
+
+  walk(root, "", 1);
+  const body = lines.join("\n");
+  return {
+    ok: true,
+    content: truncated ? `${body}\n[…truncated at ${LIST_FILES_CAP} entries]` : body,
+    summary: `${root} — ${lines.length} entr${lines.length === 1 ? "y" : "ies"}${
+      truncated ? " (truncated)" : ""
+    }`,
+  };
+}
+
+/** Execute a `grep` call. Never throws — a bad regex is an answer, not a fault. */
+export function executeGrep(args: Record<string, unknown>, cwd?: string): ReadFileResult {
+  const source = typeof args.pattern === "string" ? args.pattern : "";
+  if (source === "") {
+    return { ok: false, content: "grep error: no pattern given", summary: "no pattern given" };
+  }
+  let re: RegExp;
+  try {
+    re = new RegExp(source);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, content: `grep error: bad pattern — ${message}`, summary: message };
+  }
+  const extensions = Array.isArray(args.extensions)
+    ? args.extensions
+        .filter((e): e is string => typeof e === "string")
+        .map((e) => e.replace(/^\./, ""))
+    : undefined;
+  const root = resolveUnder(args.path, cwd);
+
+  const matches: string[] = [];
+  let filesRead = 0;
+  let capped = false;
+
+  const search = (file: string): void => {
+    if (extensions !== undefined) {
+      const ext = file.slice(file.lastIndexOf(".") + 1);
+      if (!extensions.includes(ext)) {
+        return;
+      }
+    }
+    if (filesRead >= GREP_FILE_CAP) {
+      capped = true;
+      return;
+    }
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(file);
+    } catch {
+      return; // unreadable is not a match, and not a fault
+    }
+    filesRead += 1;
+    if (bytes.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
+      return; // binary: never evidence
+    }
+    const rel = cwd !== undefined && file.startsWith(cwd) ? file.slice(cwd.length + 1) : file;
+    const lines = bytes.toString("utf8").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (matches.length >= GREP_MATCH_CAP) {
+        capped = true;
+        return;
+      }
+      const line = lines[i] as string;
+      if (re.test(line)) {
+        const text = line.length > GREP_LINE_CAP ? `${line.slice(0, GREP_LINE_CAP)}…` : line;
+        matches.push(`${rel}:${i + 1}: ${text.trim()}`);
+      }
+    }
+  };
+
+  const walk = (dir: string): void => {
+    if (capped) {
+      return;
+    }
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (capped) {
+        return;
+      }
+      if (entry.isDirectory()) {
+        if (!SKIP_DIRS.has(entry.name)) {
+          walk(join(dir, entry.name));
+        }
+      } else if (entry.isFile()) {
+        search(join(dir, entry.name));
+      }
+    }
+  };
+
+  try {
+    if (statSync(root).isDirectory()) {
+      walk(root);
+    } else {
+      search(root);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, content: `grep error: ${message}`, summary: message };
+  }
+
+  if (matches.length === 0) {
+    return {
+      ok: true,
+      content: `no matches for /${source}/ under ${root} (${filesRead} files searched)`,
+      summary: `no matches (${filesRead} files)`,
+    };
+  }
+  // The cap is TOLD, not silently applied: a model that knows it was truncated
+  // can narrow the pattern; one handed a complete-looking list cannot.
+  const note = capped
+    ? `\n[…stopped at ${GREP_MATCH_CAP} matches — narrow the pattern or the path for the rest]`
+    : "";
+  return {
+    ok: true,
+    content: `${matches.join("\n")}${note}`,
+    summary: `${matches.length} match${matches.length === 1 ? "" : "es"} in ${filesRead} files${
+      capped ? " (truncated)" : ""
+    }`,
+  };
+}
+
+/** The three executors behind one name — the oracle route's dispatch table. */
+export const LOCAL_READ_TOOLS: Record<
+  string,
+  (args: Record<string, unknown>, cwd?: string) => ReadFileResult
+> = {
+  [READ_FILE_TOOL_NAME]: executeReadFile,
+  [LIST_FILES_TOOL_NAME]: executeListFiles,
+  [GREP_TOOL_NAME]: executeGrep,
+};
 
 /**
  * How a live consumer observes a tool round-trip — the consumer supplies its

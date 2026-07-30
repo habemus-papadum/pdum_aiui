@@ -22,7 +22,11 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
-import { absentKeyPhrase, vendorKey } from "@habemus-papadum/aiui-claude-channel/internal";
+import {
+  absentKeyPhrase,
+  LOCAL_READ_TOOLS,
+  vendorKey,
+} from "@habemus-papadum/aiui-claude-channel/internal";
 import { createMintBackend } from "@habemus-papadum/aiui-oracle/server";
 import { discoverSessionBrowserInProfiles } from "@habemus-papadum/aiui-util";
 import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
@@ -187,6 +191,57 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
         log: (line) => ctx.log(`intent: ${line}`),
       });
       app.use((req, res, next) => {
+        if (req.path === `${INTENT_PREFIX}/oracle/tool` && req.method === "POST") {
+          // The oracle's LOCAL-READ tools (O3c): `read_file`, `list_files`,
+          // `grep`. The oracle runs in the browser and speaks WebRTC straight
+          // to the vendor, so reaching a filesystem has to cross into node —
+          // and this is the crossing. ONE route with a dispatch table rather
+          // than three, mirroring the shape `runConsumerToolCall` already uses
+          // for the linter.
+          //
+          // The executors, their caps, and the policy are the CHANNEL's
+          // (linter-tools.ts): the same code the prompt linter runs, so a
+          // read's rules cannot drift between the two consumers — only which
+          // subset each advertises. `root` is the project the session is
+          // about, which is exactly the prompt cwd relative paths resolve
+          // against.
+          const chunks: Buffer[] = [];
+          let size = 0;
+          req.on("data", (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > 64 * 1024) {
+              req.destroy();
+              return;
+            }
+            chunks.push(chunk);
+          });
+          req.on("end", () => {
+            let payload: { tool?: unknown; args?: unknown };
+            try {
+              payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+            } catch {
+              res.status(400).json({ ok: false, error: "body was not valid JSON" });
+              return;
+            }
+            const tool = typeof payload.tool === "string" ? payload.tool : "";
+            const run = LOCAL_READ_TOOLS[tool];
+            if (run === undefined) {
+              // Answered IN BAND, like every other tool failure: the vendor has
+              // no error channel for tools, so the model must be able to read
+              // what went wrong.
+              res.json({ ok: false, content: `unknown tool "${tool}"`, summary: "unknown tool" });
+              return;
+            }
+            const args =
+              payload.args !== null && typeof payload.args === "object"
+                ? (payload.args as Record<string, unknown>)
+                : {};
+            const result = run(args, options.root);
+            ctx.log(`intent: oracle ${tool} — ${result.summary}`);
+            res.json(result);
+          });
+          return;
+        }
         if (req.path === `${INTENT_PREFIX}/oracle/mint`) {
           if (vendorKey("OPENAI_API_KEY") === undefined) {
             // Name the absence the way the rest of the channel does before the

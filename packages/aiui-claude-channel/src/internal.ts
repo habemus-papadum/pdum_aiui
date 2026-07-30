@@ -10,6 +10,21 @@
 // guards (protocol.test.ts) assert against — not on the root barrel, so the
 // guards import them from this no-semver seam instead.
 export type { LoweredPromptMessage, SpeechMessage } from "./intent-v1";
+// The local-read tool surface (linter-tools.ts). The intent sidecar serves the
+// oracle's `POST /intent/oracle/tool` from these executors, so the POLICY —
+// caps surfaced not silently applied, binary sniffing, errors returned to the
+// model rather than thrown — has one implementation and two advertised
+// subsets (the linter's `read_file` alone; the oracle's all three).
+export {
+  executeGrep,
+  executeListFiles,
+  executeReadFile,
+  GREP_TOOL_OPENAI,
+  LIST_FILES_TOOL_OPENAI,
+  LOCAL_READ_TOOLS,
+  READ_FILE_TOOL_OPENAI,
+  type ReadFileResult,
+} from "./linter-tools";
 export { REALTIME_VOICE_RATE } from "./pcm";
 export {
   type AgentsStatus,

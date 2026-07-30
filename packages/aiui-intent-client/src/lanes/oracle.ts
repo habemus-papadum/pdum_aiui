@@ -30,9 +30,10 @@ import {
 } from "@habemus-papadum/aiui-oracle";
 import { createEffect, createRoot } from "solid-js";
 import type { IntentClient } from "../client";
-import { oraclePageTools } from "../config";
+import { oracleFileTools, oraclePageTools, oraclePanelTools } from "../config";
 import { createPageTools, type PageToolsRegistry } from "../page-tools";
 import { oracleMic } from "../spec";
+import { fileTools, panelTools } from "./oracle-tools";
 import type { LaneContext } from "./types";
 
 /** What the panel oracle tells the model about where it is standing. Kept
@@ -175,8 +176,21 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
    */
   const applyTools = (): void => {
     const tab = bound?.context().activeTab;
-    const tools =
-      oraclePageTools.get() === true ? oracleToolsForTab(pageTools, tab) : ([] as OracleTool[]);
+    const tools: OracleTool[] = [];
+    if (oraclePageTools.get() === true) {
+      tools.push(...oracleToolsForTab(pageTools, tab));
+    }
+    if (oraclePanelTools.get() === true && bound !== undefined) {
+      tools.push(...panelTools(bound));
+    }
+    if (oracleFileTools.get() === true) {
+      tools.push(...fileTools({ port: config.port }));
+    }
+    // Three groups, one wholesale surface (the vendor's semantics). A group's
+    // toggle off means its tools are ABSENT, never stale — and the persona
+    // stays generic about what exists, because the array is the single source
+    // of truth (the documented vendor failure mode: a prompt naming an absent
+    // tool makes the model invent one).
     session.setTools(tools);
   };
 
@@ -254,7 +268,9 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
       const disposeTools = createRoot((dispose) => {
         createEffect(
           () => ({
-            on: oraclePageTools.get() === true,
+            page: oraclePageTools.get() === true,
+            panel: oraclePanelTools.get() === true,
+            files: oracleFileTools.get() === true,
             tab: client.context().activeTab,
             live: client.state().oracle === true,
           }),

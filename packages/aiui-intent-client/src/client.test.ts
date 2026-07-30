@@ -1071,7 +1071,15 @@ describe("the bar: a tree presented linearly", () => {
       .configStrip()
       .flatMap((row) => row.items)
       .map((i) => (i.kind === "widget" ? i.control : ""));
-    expect(widgets).toEqual(["stt", "linter", "logLevel", "shotFlash", "oraclePageTools"]);
+    expect(widgets).toEqual([
+      "stt",
+      "linter",
+      "logLevel",
+      "shotFlash",
+      "oraclePageTools",
+      "oraclePanelTools",
+      "oracleFileTools",
+    ]);
   });
 });
 

@@ -243,7 +243,28 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
 - **Gated on a channel and a mic that was not refused.** `micGranted: undefined` means
   nobody has asked yet and must not dead-end the cap; only a definitive `false` refuses.
   Turning a session OFF is always allowed, even after those gates lapse.
-- **It holds the tools of the page in view** (O3b, the `oracle tools` config toggle): the
+- **Three tool groups, three standing toggles** (`app tools` · `panel tools` · `file
+  tools`). Each toggle is the coarse on/off; a group turned off is ABSENT from the surface,
+  never stale. **File tools are off by default** — reading a project's source is a bigger
+  step than driving its UI, and it should be a deliberate one.
+  - **panel** — `panel_bar_list` reads the bar (label, key, enabled, engaged) and
+    `panel_bar_dispatch` presses a cap. Writeable, and the permission is **declared per
+    cap** (`oracle: true` in caps.ts, mirroring `remote`): absent means no, so a cap added
+    later is excluded until someone opts it in — the property a deny-list cannot offer.
+    Three families deliberately carry no flag: the turn LIFECYCLE (send is irreversible and
+    outward-facing), the LADDER (each would end the session that is asking), and its own
+    HEARING (the mic is the user's, and a model that can gate its own input can lock itself
+    out of the instruction that would restore it). Two gates apply: the flag says *never*,
+    `canDispatch` says *not right now*, and the two refusals read differently on purpose.
+  - **files** — `read_file`, `list_files`, `grep`, executed channel-side over
+    `POST /intent/oracle/tool` (the oracle speaks WebRTC from the browser, so a filesystem
+    needs a crossing). The executors and their policy are the prompt linter's own: one
+    implementation, two advertised subsets — the linter still offers `read_file` alone,
+    because its brief is "verify a suspicion", not "browse". Every bound is SURFACED, never
+    silently applied: a model told it was truncated can narrow its search; one handed a
+    complete-looking list cannot. Every call and result lands in the oracle's ledger, which
+    is what keeps these reads as visible as the linter's are in the trace.
+- **It holds the tools of the page in view** (O3b, the `app tools` toggle): the
   tab's `window.__AIUI__.tools` registrations, projected onto the live session and
   **re-projected mid-session** whenever they change — a tab switch, a navigation, or an app
   registering a tool at runtime. Namespaces prefix only when more than one registers (two

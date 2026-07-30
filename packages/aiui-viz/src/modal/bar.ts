@@ -73,6 +73,17 @@ export interface CapSpec<Ctx> {
    * property of the affordance, not the moment. Absent ⇒ desktop-only.
    */
   remote?: boolean;
+  /**
+   * This cap belongs to the ORACLE subset — a voice agent embedded in the host
+   * may press it. Static per node, exactly like {@link remote}: membership is
+   * a property of the affordance, not the moment, and the moment is already
+   * covered by the engine's own `canDispatch`.
+   *
+   * **Absent means no**, which is the whole reason it is declared rather than
+   * deny-listed: a cap added later is excluded until someone deliberately
+   * opts it in. A deny-list is safe only until the next commit.
+   */
+  oracle?: boolean;
   /** Revealed one depth down while this cap is shown AND lit. */
   children?: readonly BarNode<Ctx>[];
 }

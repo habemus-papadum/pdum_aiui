@@ -12,6 +12,18 @@
  * enabled is DERIVED (the engine dry-runs the reducer; verbs gate via the
  * spec's `available`); widgets are control-bound descriptors, so the whole
  * config surface is visible now and cannot get lost on the road to parity.
+ *
+ * Two membership flags ride the nodes, both static and both absent-means-no:
+ * `remote` (the iPad's bar-only subset) and — O3c, owner 2026-07-30 —
+ * `oracle`, the caps a voice agent embedded in this panel may PRESS. Three
+ * families deliberately carry no `oracle` flag: the turn LIFECYCLE (send is
+ * irreversible and outward-facing; pause/cancel duplicate or discard what the
+ * oracle already did by taking the sink), the LADDER (arm/disarm/escape/oracle
+ * — each would end the session that is asking), and its own HEARING
+ * (hands-free/mute/push-to-talk/park — the mic is the user's, and a model that
+ * can gate its own input can lock itself out of the instruction that would
+ * restore it). Everything else is a page, markup, or source act, and is fair
+ * game.
  */
 
 import { controlByName } from "@habemus-papadum/aiui-viz";
@@ -70,16 +82,19 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         // armed and dims without a sink or when the grant isn't on the tab
         // in view (`available`).
         command: "shot",
+        oracle: true,
         remote: true,
         hint: { key: "s", label: "shot", icon: "🖼" },
       },
       {
         command: "region",
+        oracle: true,
         hint: { key: "a", label: "area", icon: "⛶" },
         litWhen: ({ state }) => state.region === true,
       },
       {
         command: "selection",
+        oracle: true,
         hint: { key: "p", label: "selection", icon: "📋" },
         litWhen: ({ ctx }) => ctx.selectionPresent,
       },
@@ -117,6 +132,7 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
       {
         // C3′: jump is an EDITOR act, armed-scope like pencil.
         command: "jump",
+        oracle: true,
         hint: { key: "j", label: "jump", icon: "🎯" },
         litWhen: ({ state }) => state.jump === true,
       },
@@ -141,6 +157,7 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         // holding the iPad wants to toggle. Standing source (C1); its cadence
         // children stay desktop-only (a slider can't wire; fpsMode unflagged).
         command: "video",
+        oracle: true,
         remote: true,
         hint: { key: "v", label: "video", icon: "🎥" },
         litWhen: ({ state }) => state.video === true,
@@ -173,11 +190,16 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
       // already carries its own undo/clear.
       {
         command: "pencil",
+        oracle: true,
         remote: true,
         hint: { key: "k", label: "pencil", icon: "🖊" },
         litWhen: ({ state }) => state.pencil === true,
         children: [
-          { command: "pencilClear", hint: { key: "c", label: "clear", icon: "🧹" } },
+          {
+            command: "pencilClear",
+            oracle: true,
+            hint: { key: "c", label: "clear", icon: "🧹" },
+          },
           { kind: "widget", control: "pencilVanish", widget: "toggle", label: "vanish" },
           {
             // Visible with its siblings, DIMMED unless vanish is on (owner,
@@ -195,6 +217,7 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
   { command: "escape", hint: { key: "esc", label: "step out", icon: "✖" } },
   {
     command: "help",
+    oracle: true,
     hint: { key: "?", label: "help", icon: "❓" },
     litWhen: ({ state }) => state.help === true,
   },
@@ -207,7 +230,9 @@ export const configBar: readonly BarNode<IntentContext>[] = [
   { kind: "widget", control: "linter", widget: "select", label: "linter" },
   { kind: "widget", control: "logLevel", widget: "select", label: "log" },
   { kind: "widget", control: "shotFlash", widget: "toggle", label: "shot flash" },
-  // O3b: the oracle's first tool group. Visible even with no session — it is a
-  // standing setting, and seeing it off explains a silent oracle.
-  { kind: "widget", control: "oraclePageTools", widget: "toggle", label: "oracle tools" },
+  // The oracle's three tool groups (O3b/O3c). Visible even with no session —
+  // they are standing settings, and seeing one off explains a refusal.
+  { kind: "widget", control: "oraclePageTools", widget: "toggle", label: "app tools" },
+  { kind: "widget", control: "oraclePanelTools", widget: "toggle", label: "panel tools" },
+  { kind: "widget", control: "oracleFileTools", widget: "toggle", label: "file tools" },
 ];

@@ -680,7 +680,9 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
   it("hands the oracle the tab's tools, and re-projects them LIVE (O3b)", async () => {
     const { transport } = fakeTransport();
     const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
-    const names = () => r.lanes.oracle.state().toolNames;
+    // The PAGE group specifically: the panel group rides the same surface (O3c)
+    // and is asserted on its own below.
+    const names = () => r.lanes.oracle.state().toolNames.filter((n) => !n.startsWith("panel_"));
 
     // Tools registered BEFORE the session opens are there at connect — a
     // connect is not a change, so the projection has to be applied at both.
@@ -735,7 +737,10 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
     await settle(30);
     // Same bare name in two namespaces would collide in the vendor's flat tool
     // space; the prefix is what keeps them distinct.
-    expect(r.lanes.oracle.state().toolNames).toEqual(["app_kick", "viz_kick"]);
+    expect(r.lanes.oracle.state().toolNames.filter((n) => !n.startsWith("panel_"))).toEqual([
+      "app_kick",
+      "viz_kick",
+    ]);
   });
 
   it("the toggle is the off switch — off means an EMPTY surface, not a stale one", async () => {
@@ -746,16 +751,17 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
       tab: 7,
       registrations: [{ ns: "app", tools: [{ name: "kick", description: "" }] }],
     });
+    const pageNames = () => r.lanes.oracle.state().toolNames.filter((n) => !n.startsWith("panel_"));
     r.client.dispatch("oracle");
     await settle(30);
-    expect(r.lanes.oracle.state().toolNames).toEqual(["kick"]);
+    expect(pageNames()).toEqual(["kick"]);
 
     oraclePageTools.set(false);
     await settle(20);
-    expect(r.lanes.oracle.state().toolNames).toEqual([]);
+    expect(pageNames()).toEqual([]);
     oraclePageTools.set(true);
     await settle(20);
-    expect(r.lanes.oracle.state().toolNames).toEqual(["kick"]);
+    expect(pageNames()).toEqual(["kick"]);
   });
 
   it("a projected tool CALLS the page — and the tab it was built for, not the one in view", async () => {

@@ -188,7 +188,7 @@ Three things the build settled:
   connect is not a change, so an edge-driven projection alone hands a freshly-opened
   session nothing.
 
-### 2. The panel's own bar — writeable
+### 2. The panel's own bar — writeable. LANDED (O3c)
 
 `panel_bar_list` returns the projected caps with their enabled state and hints, so the
 oracle can answer "what button do I press to get into video mode?". `panel_bar_dispatch`
@@ -215,7 +215,7 @@ Three families deliberately carry no flag:
 What that leaves, and it is the interesting part: `pencil`, `pencilClear`, `jump`,
 `region`, `shot`, `selection`, `video`, `fpsMode`, `help`.
 
-### 3. Local file tools, through the channel
+### 3. Local file tools, through the channel — LANDED (O3c)
 
 The oracle runs in the browser and speaks WebRTC straight to the vendor, so a file read has
 to cross into node. The channel already holds the policy; the panel reaches it over one
@@ -368,8 +368,11 @@ Carried from `aiui-oracle.md` and unchanged: WebRTC transport, `gpt-realtime-2.1
   viewer fold, the pill, the banner text. ⭐ first light: press 🔮, talk, hear it answer.
 - **O3b — the app surface. DONE.** `pageTools` into `setTools`, live re-projection on tab
   and registry change, the `oracle tools` toggle. Now it drives the app.
-- **O3c — files and the panel.** The `/intent/oracle/tool` route with `read_file`,
+- **O3c — files and the panel. DONE.** The `/intent/oracle/tool` route with `read_file`,
   `list_files`, and `grep`; `panel_bar_list` and `panel_bar_dispatch` behind the `oracle`
-  cap flag; the three config toggles.
+  cap flag; the three config toggles (file tools off by default — reading source is a
+  bigger step than driving a UI). One thing the build added: `panel_bar_list` must
+  FLATTEN the bar's depth-first forest, or the oracle is handed three root caps and told
+  that is the panel (found by test).
 - **O3d — contributions.** Shot and selection routing, the `renderShot` metadata extraction,
   the caption format, the session prelude.

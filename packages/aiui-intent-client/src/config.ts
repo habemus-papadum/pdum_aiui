@@ -83,6 +83,24 @@ export const oraclePageTools = control({
   description: "give the oracle the tools of the page in view",
 });
 
+/** The oracle's second group (O3c): the panel's own command bar, readable and
+ * pressable. The caps it may press are declared per-cap (`oracle: true` in
+ * caps.ts), so this toggle is the coarse on/off, not the permission. */
+export const oraclePanelTools = control({
+  name: "oraclePanelTools",
+  value: true,
+  description: "let the oracle read and press the panel's own controls",
+});
+
+/** The oracle's third group (O3c): read_file · list_files · grep, executed
+ * channel-side. Off by default — reading a project's source is a bigger step
+ * than driving its UI, and it should be a deliberate one. */
+export const oracleFileTools = control({
+  name: "oracleFileTools",
+  value: false,
+  description: "let the oracle read and search the project's files",
+});
+
 /** Console log verbosity (quiet | info | debug). */
 export const logLevel = control({
   name: "logLevel",
