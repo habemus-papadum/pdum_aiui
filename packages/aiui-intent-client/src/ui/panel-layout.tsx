@@ -45,7 +45,12 @@ export const PANEL_LAYOUT_STYLES =
   // The oracle widgets ship their own (theme-neutral) rules — the same
   // host-concatenates-strings pattern as every strip above.
   ORACLE_WIDGET_STYLES +
-  `.aiui-oracle-panes { margin: 4px 12px; max-width: 460px; }`;
+  `.aiui-oracle-panes { margin: 4px 12px; max-width: 460px; }
+  /* Quiet by default; the off-view case is the one worth a colour, since it
+     is the state that used to read as "the oracle can't see my app". */
+  .aiui-oracle-source { font-size: 11px; opacity: 0.55; padding: 0 2px 2px; }
+  .aiui-oracle-source strong { font-weight: 600; }
+  .aiui-oracle-source[data-off-view] { opacity: 1; color: #d97706; }`;
 
 export interface PanelLayoutProps {
   /** The channel this panel is bound to (undefined = none found). */
@@ -173,6 +178,43 @@ function PausedBanner(props: { client: IntentClient }) {
  * trace stays neutral by decision, so this is where its record lives).
  * Rendered only with lanes: no lanes, no session.
  */
+/**
+ * Where the oracle's app tools come from — one quiet line under the mind strip
+ * (owner, 2026-07-30: "it doesn't have to be obnoxious").
+ *
+ * It exists because of the last-app rule: the surface may legitimately belong
+ * to a tab the developer is not looking at, and that is precisely the state
+ * that read as a bug before — the oracle insisting the app had no such tool
+ * while the tools sat under a tab behind the one in view. So the OFF-VIEW case
+ * is the one that speaks up (amber, and it names the app); the ordinary case
+ * stays a dim single line; and holding NO app tools says so rather than
+ * leaving the absence to be inferred.
+ */
+function ToolSourceLine(props: { lanes: ChannelLanes }) {
+  const source = () => props.lanes.toolSource();
+  return (
+    <div
+      class="aiui-oracle-source"
+      data-testid="oracle-tool-source"
+      data-off-view={source() !== undefined && !source()?.inView ? "" : undefined}
+    >
+      <Show
+        when={source()}
+        keyed
+        fallback={<span>no app tools — the tab in view isn't an aiui app</span>}
+      >
+        {(from) => (
+          <span>
+            {from.count} app tool{from.count === 1 ? "" : "s"} from{" "}
+            <strong>{from.label ?? `tab ${from.tab}`}</strong>
+            {from.inView ? "" : " — not the tab in view"}
+          </span>
+        )}
+      </Show>
+    </div>
+  );
+}
+
 function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
   const live = (): boolean => {
     const status = props.client.claimStatuses().oracleSession?.phase;
@@ -182,6 +224,7 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
     <Show when={live()}>
       <div class="aiui-oracle-panes" data-testid="oracle-panes">
         <OracleMind session={props.lanes.oracle} />
+        <ToolSourceLine lanes={props.lanes} />
         <details class="aiui-pane" data-testid="oracle-ledger">
           <summary>oracle ledger</summary>
           <OracleViewer session={props.lanes.oracle} mind={false} />

@@ -725,6 +725,32 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
     expect(names()).toEqual(["set_freq", "kick"]);
   });
 
+  it("says WHERE the tools came from, and when that is not the tab in view", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.bus.setTabUrl(7, "http://localhost:5173/", "mixture of gaussians");
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ns: "app", tools: [{ name: "kick", description: "" }] }],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(r.lanes.toolSource()).toMatchObject({ tab: 7, count: 1, inView: true });
+    // The label arrives once tabInfo answers — the page's own name, not an id.
+    expect(r.lanes.toolSource()?.label).toBe("mixture of gaussians");
+
+    // Look away: the tools STAY (the last-app rule) and the line says so.
+    r.bus.switchTab(9);
+    await settle(20);
+    expect(r.lanes.toolSource()).toMatchObject({ tab: 7, count: 1, inView: false });
+
+    // The app goes away entirely: nothing to point at.
+    r.bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: [] });
+    await settle(20);
+    expect(r.lanes.toolSource()).toBeUndefined();
+  });
+
   it("a DIFFERENT app in view wins over the remembered one", async () => {
     const { transport } = fakeTransport();
     const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });

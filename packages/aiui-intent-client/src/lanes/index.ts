@@ -299,6 +299,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     speech,
     oracle: oracle.session,
     pageTools: oracle.pageTools,
+    toolSource: oracle.toolSource,
     linterPulse: pulse.view,
     // The lint button pair: fire-and-forget onto the control rail.
     // sendControl itself no-ops without an open thread, so an idle press

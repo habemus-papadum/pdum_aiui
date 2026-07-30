@@ -29,7 +29,7 @@ import {
   weaveInstructions,
   webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
-import { createEffect, createRoot } from "solid-js";
+import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { IntentClient } from "../client";
 import { oracleFileTools, oraclePageTools, oraclePanelTools } from "../config";
 import { createPageTools, type PageToolsRegistry } from "../page-tools";
@@ -47,6 +47,20 @@ const PANEL_BLURB =
   "brief a coding agent about the web app they are building. When the developer's app is " +
   "in view and exposes tools, they are the app's own controls: use them to inspect and " +
   "drive it, and say plainly when something asked for has no tool.";
+
+/** A URL as a short label: host+path, or just the host when the path is bare. */
+function shortUrl(url: string | undefined): string | undefined {
+  if (url === undefined || url === "") {
+    return undefined;
+  }
+  try {
+    const u = new URL(url);
+    const path = `${u.pathname}${u.search}`;
+    return path === "/" || path === "" ? u.host : `${u.host}${path}`;
+  } catch {
+    return url;
+  }
+}
 
 /**
  * A page tool's name, sanitized for the vendor (`[a-zA-Z0-9_-]{1,64}`) and
@@ -125,11 +139,30 @@ export function oracleToolsForTab(
   );
 }
 
+/**
+ * Where the oracle's app tools are coming from — what the panel shows so the
+ * answer is never a mystery. It matters BECAUSE of the last-app rule: the
+ * surface can legitimately belong to a tab the developer is not looking at,
+ * and an invisible surface from an invisible tab is exactly the confusion
+ * that rule was introduced to end.
+ */
+export interface OracleToolSource {
+  tab: number;
+  /** The page's own label (title, else a short URL), once `tabInfo` answers. */
+  label?: string;
+  /** How many app tools the oracle currently holds from it. */
+  count: number;
+  /** False when the tools come from a tab the developer is NOT looking at. */
+  inView: boolean;
+}
+
 export interface OracleLanes {
   /** The session — stable for the panel's whole life; the claim connects it. */
   session: OracleSession;
   /** The page-tools registry the surface is projected from (O3b). */
   pageTools: PageToolsRegistry;
+  /** Which app the tool surface came from, reactively (undefined = none). */
+  toolSource: Accessor<OracleToolSource | undefined>;
   /** The claim's hooks (ClaimLaneOptions.oracle). */
   start: () => Promise<void>;
   stop: () => void;
@@ -165,6 +198,41 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
   /** The last surface actually sent, so an unchanged one is not re-sent. Reset
    * on every connect: a fresh session holds nothing until we tell it. */
   let appliedSignature: string | undefined;
+  const [toolSource, setToolSource] = createSignal<OracleToolSource | undefined>(undefined, {
+    ownedWrite: true,
+  });
+  /** Tab labels, once asked for. `tabInfo` is async and a tab's title does not
+   * move often, so a switch back is instant rather than re-fetched. */
+  const labels = new Map<number, string>();
+
+  /** Announce the tool source, filling the label in when the host answers. */
+  const publishSource = (tab: number | undefined, count: number, inView: boolean): void => {
+    if (tab === undefined || count === 0) {
+      setToolSource(undefined);
+      return;
+    }
+    const known = labels.get(tab);
+    setToolSource({ tab, count, inView, ...(known !== undefined ? { label: known } : {}) });
+    if (known !== undefined) {
+      return;
+    }
+    void host.targeting
+      .tabInfo?.(tab)
+      .then((info) => {
+        const label = info?.title ?? shortUrl(info?.url);
+        if (label === undefined) {
+          return;
+        }
+        labels.set(tab, label);
+        // Only if this tab is still the source — a fast switch must not
+        // relabel whatever replaced it.
+        const current = toolSource();
+        if (current?.tab === tab) {
+          setToolSource({ ...current, label });
+        }
+      })
+      .catch(() => {});
+  };
   const session = new OracleSession({
     config: { instructions: weaveInstructions({ app: PANEL_BLURB }) },
     // The chain's order is the standard one (a pasted key TRUMPS everything),
@@ -251,9 +319,17 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
     if (oraclePageTools.get() === true) {
       // The eye when it is on an app, else the last app — and REMEMBER what we
       // resolved to, which is what makes "the last one" mean anything.
-      const tab = resolveToolTab(pageTools, bound?.context().activeTab, toolTab);
+      const activeTab = bound?.context().activeTab;
+      const tab = resolveToolTab(pageTools, activeTab, toolTab);
       toolTab = tab;
-      tools.push(...oracleToolsForTab(pageTools, tab));
+      const appTools = oracleToolsForTab(pageTools, tab);
+      tools.push(...appTools);
+      // Published BEFORE the unchanged-surface early return below: looking at
+      // another tab changes `inView` without changing a single tool, and that
+      // is the transition the panel most needs to show.
+      publishSource(tab, appTools.length, tab !== undefined && tab === activeTab);
+    } else {
+      setToolSource(undefined);
     }
     if (oraclePanelTools.get() === true && bound !== undefined) {
       tools.push(...panelTools(bound));
@@ -300,6 +376,7 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
   return {
     session,
     pageTools,
+    toolSource,
     start: async () => {
       // Defensive close before a retry. `OracleSession.start` no-ops unless the
       // status is idle|closed, and a FAILED start leaves it at `error` — while

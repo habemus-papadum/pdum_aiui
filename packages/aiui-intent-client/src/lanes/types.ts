@@ -17,6 +17,7 @@ import type { PageToolsRegistry } from "../page-tools";
 import type { Sink } from "../spec";
 import type { IntentHost } from "../transport";
 import type { TurnMirror } from "./mirror";
+import type { OracleToolSource } from "./oracle";
 
 /** The seam createWire dials threads through — injectable for tests. */
 export type OpenThread = (options: {
@@ -119,6 +120,10 @@ export interface ChannelLanes {
    * tools, the trace's "what could it call") reads.
    */
   pageTools: PageToolsRegistry;
+  /** Which app the oracle's tool surface came from (O3b/O3d) — reactive, and
+   * shown in the panel because the last-app rule lets it be a tab the
+   * developer is not looking at. */
+  toolSource: Accessor<OracleToolSource | undefined>;
   /** The wire engine — the intent-event source (preview/trace read it). */
   engine: Engine;
   wire: Wire;
