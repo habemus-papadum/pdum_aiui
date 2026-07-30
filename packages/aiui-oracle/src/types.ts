@@ -46,6 +46,22 @@ export interface OracleConfig {
   tools?: OracleTool[];
   /** Turn control. Default "auto" (`server_vad`, vendor defaults). */
   turn?: OracleTurnMode;
+  /**
+   * Extra fields merged into the vendor's `turn_detection` object — the VAD's
+   * own tuning (`threshold`, `prefix_padding_ms`, `silence_duration_ms`, and
+   * whether a detection may interrupt a reply in progress).
+   *
+   * A passthrough, deliberately untyped beyond `unknown`: these are the
+   * vendor's names, not ours, and this repo's rule is to never assume an API
+   * param exists — send it and read the server's ECHO. The `config` ledger
+   * entry carries `sent` / `effective` / `drift` for exactly that check, so a
+   * field the vendor ignores is visible rather than believed.
+   *
+   * The reason this exists: a voice agent that speaks through the same device
+   * it listens on can trigger its own VAD. Echo cancellation is the first
+   * defence (see `ECHO_SAFE_AUDIO`); raising the threshold is the second.
+   */
+  turnTuning?: Record<string, unknown>;
   /** Vendor-side transcription of the USER's audio (the "heard" record).
    * Default on; costs transcription tokens. */
   transcribeInput?: boolean;

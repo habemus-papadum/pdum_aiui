@@ -34,6 +34,25 @@ export const WEBRTC_CAPABILITIES: TransportCapabilities = {
   sideband: true,
 };
 
+/**
+ * The mic constraints an agent that TALKS BACK through the same device must
+ * ask for. Explicit, not defaulted (found live 2026-07-30): a session
+ * consistently barged in on ITSELF — the reply played out of the panel, the
+ * mic heard it, server-VAD called it user speech, and the vendor truncated its
+ * own answer and re-answered. The ledger reads
+ * `speech/started · said · response cancelled · conversation.item.truncated`
+ * at one timestamp, which is that loop exactly.
+ *
+ * `{ audio: true }` leaves every processing decision to whatever the browser
+ * and the OS happen to default to. For this transport those three are not
+ * preferences, they are requirements — so they are stated.
+ */
+export const ECHO_SAFE_AUDIO: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
 export interface WebRtcTransportOptions {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
@@ -41,6 +60,9 @@ export interface WebRtcTransportOptions {
   getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
   /** Injected for tests; defaults to the real RTCPeerConnection. */
   createPeerConnection?: () => RTCPeerConnection;
+  /** Override the mic constraints ({@link ECHO_SAFE_AUDIO} by default) — e.g.
+   * to pin a `deviceId` when the human is on a headset. */
+  audio?: MediaTrackConstraints;
 }
 
 export function webRtcTransport(options: WebRtcTransportOptions = {}): OracleTransport {
@@ -51,7 +73,7 @@ export function webRtcTransport(options: WebRtcTransportOptions = {}): OracleTra
       const getUserMedia = options.getUserMedia ?? ((c) => navigator.mediaDevices.getUserMedia(c));
       const pc = (options.createPeerConnection ?? (() => new RTCPeerConnection()))();
 
-      const mic = await getUserMedia({ audio: true });
+      const mic = await getUserMedia({ audio: { ...ECHO_SAFE_AUDIO, ...options.audio } });
       const micTrack = mic.getAudioTracks()[0];
       if (micTrack === undefined) {
         pc.close();

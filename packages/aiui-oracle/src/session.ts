@@ -344,7 +344,13 @@ export class OracleSession {
           turn_detection:
             turn === "manual"
               ? null
-              : { type: turn === "semantic" ? "semantic_vad" : "server_vad" },
+              : {
+                  type: turn === "semantic" ? "semantic_vad" : "server_vad",
+                  // The vendor's own tuning, passed through verbatim. Verified
+                  // by the `session.updated` echo the config ledger records —
+                  // never assumed to have been accepted.
+                  ...(config.turnTuning ?? {}),
+                },
           ...(config.transcribeInput !== false
             ? { transcription: { model: DEFAULT_INPUT_TRANSCRIPTION_MODEL } }
             : {}),
