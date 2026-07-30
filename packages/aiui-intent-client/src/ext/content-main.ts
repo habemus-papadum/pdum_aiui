@@ -81,6 +81,19 @@ window.addEventListener("message", (event) => {
   if (event.source !== window) {
     return;
   }
+  // A RE-ANNOUNCEMENT request (content.ts's sayHello). `reportTools` fires
+  // once at injection and then only when the registry changes — so a panel
+  // that opens, or RELOADS, after this page did never learns the page has
+  // tools at all. The page facts had the same hole and solved it by
+  // re-announcing on hello; tools were left out, and the symptom is precise
+  // and confusing: the `aiui` pill lights, the ring works, screenshots work
+  // (background capabilities all), and the app's tools are invisible — to the
+  // panel's oracle AND to the channel's tool directory (found live
+  // 2026-07-30, the page holding four tools and the directory reporting none).
+  if ((event.data as { aiuiToolsRefresh?: boolean })?.aiuiToolsRefresh === true) {
+    reportTools();
+    return;
+  }
   const jump = (event.data as { aiuiJump?: { arm?: boolean } })?.aiuiJump;
   if (jump !== undefined) {
     if (jump.arm === true) {

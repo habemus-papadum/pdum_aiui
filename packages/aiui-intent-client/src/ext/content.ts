@@ -214,6 +214,13 @@ const sayHello = (): void => {
     focused: document.hasFocus(),
     aiui: aiuiPage,
   });
+  // …and the page's TOOLS with it. The hello is the one "a panel is (re)
+  // connecting" signal, and until 2026-07-30 it re-announced the facts but not
+  // the tool registrations — which are reported once at injection and then only
+  // on change. A panel that opened or reloaded after the page therefore saw an
+  // instrumented page with no tools, forever. The MAIN world owns the registry
+  // (this world cannot read `__AIUI__`), so this asks it to re-post.
+  window.postMessage({ aiuiToolsRefresh: true }, "*");
 };
 
 // ── driver liveness: self-cleanup when the panel dies mid-assertion ──────────
