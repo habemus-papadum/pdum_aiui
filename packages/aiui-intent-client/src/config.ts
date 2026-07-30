@@ -67,6 +67,22 @@ export const shotFlash = control({
   description: "flash the page on a manual shot",
 });
 
+/**
+ * Hand the ORACLE the driven page's own tools (O3b): while on, the tools the
+ * tab in view registers at `window.__AIUI__.tools` are projected onto the live
+ * session and re-projected whenever they change — so the oracle can DRIVE the
+ * app you are building, not just talk about it. Off leaves it conversational.
+ *
+ * A config control rather than a cap, alongside stt/linter: it is a standing
+ * setting, agent-visible, and the first of the proposal's three tool groups
+ * (page · panel · files).
+ */
+export const oraclePageTools = control({
+  name: "oraclePageTools",
+  value: true,
+  description: "give the oracle the tools of the page in view",
+});
+
 /** Console log verbosity (quiet | info | debug). */
 export const logLevel = control({
   name: "logLevel",

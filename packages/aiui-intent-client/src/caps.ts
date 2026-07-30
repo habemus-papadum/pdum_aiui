@@ -207,4 +207,7 @@ export const configBar: readonly BarNode<IntentContext>[] = [
   { kind: "widget", control: "linter", widget: "select", label: "linter" },
   { kind: "widget", control: "logLevel", widget: "select", label: "log" },
   { kind: "widget", control: "shotFlash", widget: "toggle", label: "shot flash" },
+  // O3b: the oracle's first tool group. Visible even with no session — it is a
+  // standing setting, and seeing it off explains a silent oracle.
+  { kind: "widget", control: "oraclePageTools", widget: "toggle", label: "oracle tools" },
 ];

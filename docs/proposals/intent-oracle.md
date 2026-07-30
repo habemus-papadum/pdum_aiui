@@ -167,12 +167,28 @@ Three groups, each a standing config toggle in the panel's config strip (durable
 agent-visible, exactly like `stt` / `linter`). Assembled at session start and kept live
 through `setTools`, which the package supports mid-session by design.
 
-### 1. The driven page's tools
+### 1. The driven page's tools — LANDED (O3b)
 
 From the existing `pageTools` feed, re-projected into `session.setTools(...)` on tab switch
 and on every registry change — so a navigation swaps the surface live. **The tools follow
 the tab in view** (owner, 2026-07-30), consistent with every other page act; the surface
 can therefore change mid-sentence, which is the honest behavior rather than a pinned lie.
+
+Three things the build settled:
+
+- **A second, independent consumer of the page-event stream** (`page-tools.ts`) rather than
+  a layer over `tools-link.ts`. That module owns a socket lifecycle — dial, re-dial,
+  register, close-means-forget — which has nothing to do with a local reader, and
+  entangling them would tie the oracle's tool surface to the health of a channel socket it
+  never uses. The one thing the two consumers must agree on is the `callId` space: both
+  issue `toolsCall` on the same page and both hear every `toolsResult`, so ours are
+  prefixed and each side ignores what it did not issue.
+- **A projected tool is bound to the tab it was built for**, not to whatever tab is in view
+  when the model finally calls. A switch re-projects, and the stale tool goes away with the
+  projection that made it.
+- **Applied at two moments**, the same rule the mic gate needed and for the same reason: a
+  connect is not a change, so an edge-driven projection alone hands a freshly-opened
+  session nothing.
 
 ### 2. The panel's own bar — writeable
 
@@ -346,12 +362,11 @@ Carried from `aiui-oracle.md` and unchanged: WebRTC transport, `gpt-realtime-2.1
 
 ## Phasing
 
-- **O3a — the session in the panel.** The `oracle` region, cap, and claim; the sink's second
-  arm; the mint route; the mic mapping through talk / park / mute; `OracleMind`, the viewer
-  fold, the pill, the banner text. No tools beyond the package's own `report`.
-  ⭐ first light: press 🔮, talk, hear it answer.
-- **O3b — the app surface.** `pageTools` into `setTools`, live re-projection on tab and
-  registry change, the `page` toggle. Now it drives the app.
+- **O3a — the session in the panel. DONE.** The `oracle` region, cap, and claim; the sink's
+  second arm; the mint route; the mic mapping through talk / park / mute; `OracleMind`, the
+  viewer fold, the pill, the banner text. ⭐ first light: press 🔮, talk, hear it answer.
+- **O3b — the app surface. DONE.** `pageTools` into `setTools`, live re-projection on tab
+  and registry change, the `oracle tools` toggle. Now it drives the app.
 - **O3c — files and the panel.** The `/intent/oracle/tool` route with `read_file`,
   `list_files`, and `grep`; `panel_bar_list` and `panel_bar_dispatch` behind the `oracle`
   cap flag; the three config toggles.

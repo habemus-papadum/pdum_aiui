@@ -238,6 +238,16 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
 - **Gated on a channel and a mic that was not refused.** `micGranted: undefined` means
   nobody has asked yet and must not dead-end the cap; only a definitive `false` refuses.
   Turning a session OFF is always allowed, even after those gates lapse.
+- **It holds the tools of the page in view** (O3b, the `oracle tools` config toggle): the
+  tab's `window.__AIUI__.tools` registrations, projected onto the live session and
+  **re-projected mid-session** whenever they change — a tab switch, a navigation, or an app
+  registering a tool at runtime. Namespaces prefix only when more than one registers (two
+  namespaces' identically-named tools would collide in the vendor's flat space). A tool is
+  bound to the tab it was projected FOR, so one can never fire into a page it was not built
+  for; the toggle off means an EMPTY surface, never a stale one. The panel keeps its own
+  local view of these descriptors (`page-tools.ts`) rather than reading them back through
+  the channel's tool directory — same event stream, two independent consumers, and the
+  `callId` spaces are kept apart so neither settles the other's calls.
 
 ## The bar
 

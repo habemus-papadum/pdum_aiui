@@ -13,6 +13,7 @@ import type { CdpAlignment } from "../cdp-align";
 import type { ClaimLaneOptions } from "../claims";
 import type { IntentClient, IntentLanes } from "../client";
 import type { LinterPulseView } from "../linter-pulse";
+import type { PageToolsRegistry } from "../page-tools";
 import type { IntentHost } from "../transport";
 import type { TurnMirror } from "./mirror";
 
@@ -75,6 +76,9 @@ export interface ChannelLanesConfig {
    */
   oracleTransport?: OracleTransport;
   oracleKeySource?: KeySource;
+  /** Test seam: the panel's page-tools registry (O3b). Absent = built over the
+   * host's own page-event stream, which is what production does. */
+  pageTools?: PageToolsRegistry;
   /** Console-channel status line (wire:/talk: narration). */
   onStatus?: (line: string) => void;
   /** The misuse/error channel (toasts in the page). */
@@ -99,6 +103,12 @@ export interface ChannelLanes {
    * on is the mode engine's `oracle` region.
    */
   oracle: OracleSession;
+  /**
+   * The panel's own view of the driven page's tools (O3b) — what the oracle's
+   * surface is projected from, and the handle a later slice (the panel bar's
+   * tools, the trace's "what could it call") reads.
+   */
+  pageTools: PageToolsRegistry;
   /** The wire engine — the intent-event source (preview/trace read it). */
   engine: Engine;
   wire: Wire;

@@ -11,7 +11,7 @@ import { disposeDurable } from "@habemus-papadum/aiui-viz";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { activationGesture } from "./activation";
 import { createIntentClient, type IntentClient } from "./client";
-import { linter, stt } from "./config";
+import { linter, oraclePageTools, stt } from "./config";
 import { type FakeBus, fakeBus } from "./fake-bus";
 import {
   type ChannelLanes,
@@ -20,6 +20,7 @@ import {
   currentThreadEvents,
   panelIntentConfig,
 } from "./lanes";
+import { oracleToolsForTab } from "./lanes/oracle";
 import { intentSpec } from "./spec";
 
 const settle = async (rounds = 16): Promise<void> => {
@@ -669,6 +670,110 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
     await settle(30);
     expect(r.client.state().oracle).toBe(false);
     expect(r.toasts.some((t) => t.includes("oracle session ended"))).toBe(false);
+  });
+
+  it("hands the oracle the tab's tools, and re-projects them LIVE (O3b)", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    const names = () => r.lanes.oracle.state().toolNames;
+
+    // Tools registered BEFORE the session opens are there at connect — a
+    // connect is not a change, so the projection has to be applied at both.
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ns: "app", tools: [{ name: "set_freq", description: "set frequency" }] }],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(names()).toEqual(["set_freq"]);
+
+    // The page registers another at runtime — mid-session, no reconnect.
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [
+        {
+          ns: "app",
+          tools: [
+            { name: "set_freq", description: "set frequency" },
+            { name: "kick", description: "kick the wave" },
+          ],
+        },
+      ],
+    });
+    await settle(20);
+    expect(names()).toEqual(["set_freq", "kick"]);
+
+    // A tab SWITCH swaps the surface: the tools follow the tab in view, so a
+    // tab with none leaves the oracle holding none (never the old page's).
+    r.bus.switchTab(9);
+    await settle(20);
+    expect(names()).toEqual([]);
+    r.bus.switchTab(7);
+    await settle(20);
+    expect(names()).toEqual(["set_freq", "kick"]);
+  });
+
+  it("prefixes with the namespace only when more than one registers", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [
+        { ns: "app", tools: [{ name: "kick", description: "" }] },
+        { ns: "viz", tools: [{ name: "kick", description: "" }] },
+      ],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    // Same bare name in two namespaces would collide in the vendor's flat tool
+    // space; the prefix is what keeps them distinct.
+    expect(r.lanes.oracle.state().toolNames).toEqual(["app_kick", "viz_kick"]);
+  });
+
+  it("the toggle is the off switch — off means an EMPTY surface, not a stale one", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ns: "app", tools: [{ name: "kick", description: "" }] }],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(r.lanes.oracle.state().toolNames).toEqual(["kick"]);
+
+    oraclePageTools.set(false);
+    await settle(20);
+    expect(r.lanes.oracle.state().toolNames).toEqual([]);
+    oraclePageTools.set(true);
+    await settle(20);
+    expect(r.lanes.oracle.state().toolNames).toEqual(["kick"]);
+  });
+
+  it("a projected tool CALLS the page — and the tab it was built for, not the one in view", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ns: "app", tools: [{ name: "kick", description: "" }] }],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+
+    // Reach the projected tool the way the session would when the model calls.
+    const tool = oracleToolsForTab(r.lanes.pageTools, 7).find((t) => t.name === "kick");
+    expect(tool).toBeDefined();
+    const answer = tool?.execute({ force: 3 });
+    await settle();
+    const line = r.bus.log.filter((l) => l.includes("toolsCall")).at(-1) ?? "";
+    expect(line).toContain("@7"); // the tab the projection named
+    const callId = (JSON.parse(line.slice(line.indexOf("{"))) as { callId: string }).callId;
+    r.bus.firePageEvent({ kind: "toolsResult", tab: 7, callId, ok: true, value: { kicked: 3 } });
+    await expect(answer).resolves.toEqual({ kicked: 3 });
   });
 
   it("the mic follows the grip through the real session object", async () => {

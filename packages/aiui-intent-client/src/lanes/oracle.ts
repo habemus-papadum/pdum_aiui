@@ -23,26 +23,77 @@ import {
   chainKeySource,
   mintingKeySource,
   OracleSession,
+  type OracleTool,
   pasteKeySource,
   weaveInstructions,
   webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
+import { createEffect, createRoot } from "solid-js";
 import type { IntentClient } from "../client";
+import { oraclePageTools } from "../config";
+import { createPageTools, type PageToolsRegistry } from "../page-tools";
 import { oracleMic } from "../spec";
 import type { LaneContext } from "./types";
 
-/** What the panel oracle tells the model about where it is standing. O3a is
- * deliberately thin here: the app-tool surface (O3b) and the tab-record
- * prelude (O3d) are what make this specific. */
+/** What the panel oracle tells the model about where it is standing. Kept
+ * GENERIC about which tools exist — the `tools` array is the single source of
+ * truth, and a prompt naming an absent tool makes the model invent one (the
+ * documented vendor failure mode the oracle's own persona is built around).
+ * The tab-record prelude (O3d) is what will make this specific. */
 const PANEL_BLURB =
   "You are embedded in the aiui intent panel — the control surface a developer uses to " +
-  "brief a coding agent about the web app they are building. Right now you have no tools " +
-  "beyond talking: answer from what the user tells you, and say plainly when you would " +
-  "need to look at something you cannot see.";
+  "brief a coding agent about the web app they are building. When the developer's app is " +
+  "in view and exposes tools, they are the app's own controls: use them to inspect and " +
+  "drive it, and say plainly when something asked for has no tool.";
+
+/**
+ * A page tool's name, sanitized for the vendor (`[a-zA-Z0-9_-]{1,64}`) and
+ * namespace-prefixed when more than one namespace is registered. Mirrors the
+ * rule in the oracle package's own `toolsFromAiuiRegistry` — the projection
+ * there reads the LOCAL window, which in the panel is the wrong document, so
+ * this is the same rule applied to descriptors that arrived over the page
+ * transport instead.
+ */
+function vendorToolName(prefix: string, name: string): string {
+  return `${prefix}${name}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+}
+
+/** Project the tab's registered descriptors into oracle tools that CALL back
+ * through the page transport. Pure over its inputs — the registry and the tab
+ * are the only state. */
+export function oracleToolsForTab(
+  registry: PageToolsRegistry,
+  tab: number | undefined,
+): OracleTool[] {
+  if (tab === undefined) {
+    return [];
+  }
+  const namespaces = registry.toolsFor(tab);
+  const prefixed = namespaces.length > 1;
+  return namespaces.flatMap((registration) =>
+    registration.tools.map((tool) => ({
+      name: vendorToolName(prefixed ? `${registration.ns}_` : "", tool.name),
+      description: tool.description,
+      parameters: tool.inputSchema ?? {
+        type: "object",
+        properties: {},
+        additionalProperties: true,
+      },
+      // The call goes to the tab the projection was built FOR, not to whatever
+      // tab is in view when the model finally calls: a tool the oracle was
+      // handed for one page must never fire into another (a switch re-projects
+      // and the stale tool goes away with it).
+      execute: (args: Record<string, unknown>) =>
+        registry.call(tab, registration.ns, tool.name, args),
+    })),
+  );
+}
 
 export interface OracleLanes {
   /** The session — stable for the panel's whole life; the claim connects it. */
   session: OracleSession;
+  /** The page-tools registry the surface is projected from (O3b). */
+  pageTools: PageToolsRegistry;
   /** The claim's hooks (ClaimLaneOptions.oracle). */
   start: () => Promise<void>;
   stop: () => void;
@@ -59,10 +110,14 @@ export interface OracleLanes {
 }
 
 export function createOracleLanes(ctx: LaneContext): OracleLanes {
-  const { config, status, toast } = ctx;
-  // Set by `attach` (from lanes.bind) — the machine, for the two moments that
-  // need to READ state rather than be told about an edge.
+  const { config, host, status, toast } = ctx;
+  // Set by `attach` (from lanes.bind) — the machine, for the moments that need
+  // to READ state rather than be told about an edge.
   let bound: IntentClient | undefined;
+  // The panel's own view of the driven page's tools — a second, independent
+  // consumer of the `pageTools` stream that tools-link already reads (see
+  // page-tools.ts on why they are not layered).
+  const pageTools = config.pageTools ?? createPageTools({ host });
   const session = new OracleSession({
     config: { instructions: weaveInstructions({ app: PANEL_BLURB }) },
     // The chain's order is the standard one (a pasted key TRUMPS everything),
@@ -108,6 +163,23 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
     }
   };
 
+  /**
+   * The app's tools, projected onto the live session (O3b). Called on every
+   * input change AND once at connect — the same two-moment rule the mic gate
+   * needed, and for the same reason: a connect is not a change, so an
+   * edge-driven projection alone would hand a freshly-opened session nothing.
+   *
+   * `setTools` is wholesale (the vendor's semantics) and no-ops the wire with
+   * no session open, so this is safe to call whenever and cheap when idle.
+   * The toggle off means an EMPTY surface, not a stale one.
+   */
+  const applyTools = (): void => {
+    const tab = bound?.context().activeTab;
+    const tools =
+      oraclePageTools.get() === true ? oracleToolsForTab(pageTools, tab) : ([] as OracleTool[]);
+    session.setTools(tools);
+  };
+
   // The session's own narration rides the panel's status line and toasts — the
   // ledger keeps the full record, but a failure has to be visible without
   // opening a fold.
@@ -126,6 +198,7 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
 
   return {
     session,
+    pageTools,
     start: async () => {
       // Defensive close before a retry. `OracleSession.start` no-ops unless the
       // status is idle|closed, and a FAILED start leaves it at `error` — while
@@ -157,6 +230,9 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
       // listens on activation" guarantee). The same predicate, at the one
       // moment an edge cannot cover; a grip already on comes up hearing.
       applyMicGate();
+      // …and the tool surface, for the same reason: the session was
+      // constructed empty and a connect is not a change (O3b).
+      applyTools();
     },
     stop: () => session.close(),
     setMicEnabled: (on) => {
@@ -168,6 +244,27 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
     },
     attach: (client) => {
       bound = client;
+      // Live re-projection (O3b): the surface follows the tab in view and the
+      // page's own registry, so a navigation, a tab switch, or an app
+      // registering a tool at runtime all swap what the model holds MID-SESSION
+      // — which the vendor supports and the package was built for. Solid's
+      // TWO-ARG effect shape (the one-arg form throws MISSING_EFFECT_FN — the
+      // repo footgun), everything read in the compute so nothing warns
+      // STRICT_READ_UNTRACKED.
+      const disposeTools = createRoot((dispose) => {
+        createEffect(
+          () => ({
+            on: oraclePageTools.get() === true,
+            tab: client.context().activeTab,
+            live: client.state().oracle === true,
+          }),
+          () => applyTools(),
+        );
+        return dispose;
+      });
+      // The registry is a plain callback, not a signal — an app registering a
+      // tool after load reaches us here.
+      const offRegistry = pageTools.onChange(() => applyTools());
       // A session can END without anyone asking: the vendor caps a session
       // (~60 minutes), the network drops, the data channel closes. The DESIRE
       // would otherwise stand over a dead session — a lit cap and an `active`
@@ -193,6 +290,9 @@ export function createOracleLanes(ctx: LaneContext): OracleLanes {
       return () => {
         bound = undefined;
         off();
+        offRegistry();
+        disposeTools();
+        pageTools.dispose();
       };
     },
   };
