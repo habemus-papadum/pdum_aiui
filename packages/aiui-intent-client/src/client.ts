@@ -29,7 +29,7 @@ import {
   initialContext,
   intentSpec,
   oracleMic,
-  sink,
+  turnCollecting,
   turnSuspended,
 } from "./spec";
 import type { IntentHost } from "./transport";
@@ -182,7 +182,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         // Sink-gated like the spec's `available` (belt: dispatch already
         // refused a sinkless shot) — and written in sink shape so slice 2's
         // oracle routing forks here, not in a phase check.
-        if (sink(event.before) !== undefined && grantedTab !== undefined) {
+        if (turnCollecting(event.before) && grantedTab !== undefined) {
           lanes.takeShot(grantedTab);
         }
         break;
@@ -192,7 +192,7 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
       // the page act. Auto-exit (a completed drag / pick flips the mode off)
       // rides the page-event handler below, not this dispatch switch.
       case "selection":
-        if (sink(event.before) !== undefined && activeTab !== undefined) {
+        if (turnCollecting(event.before) && activeTab !== undefined) {
           lanes.addSelection(activeTab);
         }
         break;
@@ -247,8 +247,8 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     // device on either side. (The swap arm would have started the turn's
     // capture WHILE the oracle held the sink — double capture, caught by the
     // handover test.)
-    const windowBefore = event.before.talk !== "off" && sink(event.before) === "turn";
-    const windowAfter = event.after.talk !== "off" && sink(event.after) === "turn";
+    const windowBefore = event.before.talk !== "off" && turnCollecting(event.before);
+    const windowAfter = event.after.talk !== "off" && turnCollecting(event.after);
     if (windowBefore !== windowAfter) {
       if (windowAfter) {
         lanes.startTalk(event.after.talk as string);

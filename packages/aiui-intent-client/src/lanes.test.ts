@@ -531,6 +531,11 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
       connect: (options: { onClose: (reason: string) => void }) => {
         seam.connects += 1;
         seam.close = options.onClose;
+        // A fresh connect means a fresh track, and a `getUserMedia` track comes
+        // up ENABLED (webrtc.ts) — so a reconnect must not inherit the last
+        // session's gate. Modelling this is what makes "opened while parked"
+        // testable instead of an artifact of a sticky fake.
+        seam.micEnabled = true;
         return Promise.resolve({
           send: () => {},
           setMicEnabled: (on: boolean) => {
@@ -776,18 +781,39 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
     await expect(answer).resolves.toEqual({ kicked: 3 });
   });
 
-  it("the mic follows the grip through the real session object", async () => {
+  it("the session comes up LISTENING, and park is what stops it", async () => {
     const { transport, seam } = fakeTransport();
     const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
     r.client.dispatch("oracle");
     await settle(30);
-    // No grip yet: connected, hearing nothing (park is the session's own idle).
-    expect(seam.micEnabled).toBe(false);
-    r.client.dispatch("handsFree");
+    // Turning it on means listening (owner, 2026-07-30) — asserted on the
+    // TRACK, not on the lane call that was supposed to enable it.
     expect(seam.micEnabled).toBe(true);
     r.client.dispatch("oraclePark");
     expect(seam.micEnabled).toBe(false);
     r.client.dispatch("oraclePark");
+    expect(seam.micEnabled).toBe(true);
+    // A turn-side grip never touches this track.
+    r.client.dispatch("handsFree");
+    expect(seam.micEnabled).toBe(true);
+  });
+
+  it("a session opened while PARKED comes up gated (the connect is not an edge)", async () => {
+    const { transport, seam } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.client.dispatch("oracle");
+    await settle(30);
+    r.client.dispatch("oraclePark");
+    expect(seam.micEnabled).toBe(false);
+
+    // Close and reopen with park still standing… except it does not stand:
+    // `park-needs-oracle` clears it with the session, so the next one comes up
+    // listening. That is the rule, and this pins it rather than the accident.
+    r.client.dispatch("oracle"); // off — the exclude clears oracleParked
+    await settle(20);
+    expect(r.client.state().oracleParked).toBe(false);
+    r.client.dispatch("oracle"); // on again
+    await settle(30);
     expect(seam.micEnabled).toBe(true);
   });
 });

@@ -824,7 +824,7 @@ describe("the oracle — a second sink in the panel (O3a)", () => {
     expect(r.lanes).toContain("setPaused:false");
   });
 
-  it("the turn's talk window closes on the handover and the oracle's mic opens", () => {
+  it("the turn's talk window closes on the handover, and reopens on the way back", () => {
     const r = makeRig();
     grantAndOpen(r);
     r.client.dispatch("handsFree");
@@ -832,42 +832,44 @@ describe("the oracle — a second sink in the panel (O3a)", () => {
 
     r.client.dispatch("oracle");
     expect(r.lanes).toContain("stopTalk"); // the turn stops capturing…
-    expect(r.lanes).toContain("setOracleMic:true"); // …and the oracle starts hearing
-    expect(r.client.state().talk).toBe("handsFree"); // the GRIP is untouched
+    expect(r.client.state().talk).toBe("handsFree"); // …and the MODE is untouched
 
     r.client.dispatch("oracle");
-    expect(r.lanes).toContain("setOracleMic:false");
-    expect(r.lanes.filter((l) => l === "startTalk:handsFree")).toHaveLength(2); // turn resumes
+    // The turn comes back exactly as it was — nothing to remember, because
+    // nothing about the grip was ever changed (owner, 2026-07-30).
+    expect(r.lanes.filter((l) => l === "startTalk:handsFree")).toHaveLength(2);
   });
 
-  it("the oracle does not listen on activation — it inherits the grip (no hot mic)", () => {
+  it("the oracle listens the moment it is on — the grips have no say", () => {
     const r = makeRig();
     armWithMic(r); // armed, no turn, talk off
     r.client.dispatch("oracle");
-    expect(r.lanes).not.toContain("setOracleMic:true");
-    r.client.dispatch("handsFree"); // NOW it hears
-    expect(r.lanes).toContain("setOracleMic:true");
+    expect(r.lanes).toContain("setOracleMic:true"); // on MEANS listening
+
+    // A turn-side grip is not the oracle's business in either direction.
+    const before = r.lanes.filter((l) => l.startsWith("setOracleMic")).length;
+    r.client.dispatch("handsFree");
+    r.client.dispatch("handsFree");
+    expect(r.lanes.filter((l) => l.startsWith("setOracleMic"))).toHaveLength(before);
   });
 
-  it("park, mute, and dropping the grip each gate the mic; any one of them is enough", () => {
+  it("park is the whole mic control — and mute is the turn's, not the oracle's", () => {
     const r = makeRig();
     armWithMic(r);
     r.client.dispatch("oracle");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
+
+    r.client.dispatch("oraclePark");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:false");
+    r.client.dispatch("oraclePark");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
+
+    // `mute` needs a talk window, and even with one it moves the TURN's mic —
+    // never the oracle's track.
     r.client.dispatch("handsFree");
-    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
-
-    r.client.dispatch("oraclePark");
-    expect(r.lanes.at(-1)).toBe("setOracleMic:false");
-    r.client.dispatch("oraclePark");
-    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
-
     r.client.dispatch("mute");
-    expect(r.lanes.at(-1)).toBe("setOracleMic:false");
-    r.client.dispatch("mute");
-    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
-
-    r.client.dispatch("handsFree"); // the grip goes away
-    expect(r.lanes.at(-1)).toBe("setOracleMic:false");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:true"); // unchanged since the park toggle
+    expect(r.client.state().micMuted).toBe(true);
   });
 
   it("disarm closes the session and gates the mic (disarmed-is-hard)", async () => {

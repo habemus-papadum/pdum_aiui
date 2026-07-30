@@ -13,7 +13,7 @@ import type { ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { type CdpAlignment, describeCdpAlignment, isSharedAlignment } from "../cdp-align";
 import type { IntentClient } from "../client";
-import { sink } from "../spec";
+import { oracleMic, turnCollecting } from "../spec";
 import { type RingState, ringForTab } from "../transport";
 
 export const PILLS_STYLES = `
@@ -110,8 +110,7 @@ export function StatusPills(props: { client: IntentClient; micLevel?: () => numb
   // The TURN's window specifically (O3a): `micLevel` taps the talk lane's own
   // capture, so an oracle session — a different track entirely — must leave
   // the meter dark rather than show a level it is not measuring.
-  const windowOpen = (): boolean =>
-    client.state().talk !== "off" && sink(client.state()) === "turn";
+  const windowOpen = (): boolean => client.state().talk !== "off" && turnCollecting(client.state());
   createEffect(
     () => windowOpen() && props.micLevel !== undefined,
     (talking) => {
@@ -144,34 +143,45 @@ export function StatusPills(props: { client: IntentClient; micLevel?: () => numb
         detail: ctx.micGranted === undefined ? "not asked" : ctx.micGranted ? "granted" : "denied",
       },
       ((): Pill => {
-        // Window semantics (C3′, generalized to the SINK in O3a): "live" only
-        // while something actually consumes the mic — a turn OR the oracle. A
-        // standing hands-free with no sink shows "busy" (nothing records), so
-        // the pill never claims a recording that isn't; and the detail names
-        // WHERE the audio is going, which is the one thing that changes when
-        // the oracle takes over.
-        const where = sink(state);
-        const silenced =
-          state.micMuted === true || (where === "oracle" && state.oracleParked === true);
+        // Window semantics (C3′): "live" only while the TURN actually consumes
+        // the mic. Talk is the turn's alone again (owner, 2026-07-30 —
+        // correcting O3a's routing of the grips into the oracle), so a standing
+        // hands-free shows "busy" whenever the turn is not collecting: no turn,
+        // paused, or the oracle holding the sink. The pill never claims a
+        // recording that isn't — and the ORACLE's mic is the oracle pill's
+        // business, never this one's.
         if (talk === "off") {
           return { label: "rec", state: "off" };
         }
-        if (where === undefined) {
+        if (!turnCollecting(state)) {
           return {
             label: "rec",
             state: "busy",
-            detail: `${talk} · standing (nothing records until a turn)`,
+            detail: `${talk} · standing (nothing records into the turn)`,
           };
         }
         return {
           label: "rec",
-          state: silenced ? "busy" : "live",
-          detail: `${talk} → ${where}${silenced ? (state.oracleParked === true ? " · parked" : " · muted") : ""}`,
+          state: state.micMuted === true ? "busy" : "live",
+          detail: state.micMuted === true ? `${talk} · muted` : talk,
         };
       })(),
-      // The oracle's SESSION, not the desire: pending while the mint and the
-      // WebRTC handshake are in flight, err when either failed (O3a).
-      { label: "oracle", state: claimPillState(claims.oracleSession) },
+      ((): Pill => {
+        // The oracle's SESSION and its own mic, which is park's alone: pending
+        // while the mint and the WebRTC handshake are in flight, err when
+        // either failed, and once live it says whether it is HEARING —
+        // "live" (red, like rec: something is listening) or parked.
+        const phase = claimPillState(claims.oracleSession);
+        if (phase !== "on") {
+          return { label: "oracle", state: phase };
+        }
+        const hearing = oracleMic(state);
+        return {
+          label: "oracle",
+          state: hearing ? "live" : "busy",
+          detail: hearing ? "listening" : "parked — mic gated, session open",
+        };
+      })(),
       { label: "stream", state: claimPillState(claims.tabStream) },
       { label: "video", state: claimPillState(claims.videoSample) },
       { label: "ink", state: claimPillState(claims.inkPointer) },

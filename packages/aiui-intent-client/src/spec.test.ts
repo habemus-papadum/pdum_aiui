@@ -7,7 +7,7 @@ import type { PageInstrumentation } from "@habemus-papadum/aiui-intent-runtime";
 import type { AiuiGlobal } from "@habemus-papadum/aiui-viz";
 import { createModeEngine, type EngineState } from "@habemus-papadum/aiui-viz/modal";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { initialContext, intentSpec } from "./spec";
+import { initialContext, intentSpec, oracleMic } from "./spec";
 
 /** The machine with a plausible world behind it: a channel to arm against (the
  * gate is enforced by `dispatch` itself, not merely greyed out in the bar) and
@@ -487,33 +487,68 @@ describe("spec-level properties", () => {
     });
     expect(e.canDispatch("shot")).toBe(true);
     e.dispatch("oracle");
-    // The PIXEL/selection acts refuse: their routing to the oracle is O3d, so
-    // until then they must not land in the suspended turn behind it.
-    for (const command of ["shot", "selection", "region"]) {
+    // Everything that feeds the TURN refuses while the oracle holds the sink.
+    // Pixels and selections because their routing is O3d; the talk grips
+    // because they belong to the turn permanently (owner, 2026-07-30 — the
+    // oracle hears through its own track under its own park).
+    for (const command of ["shot", "selection", "region", "talkPress"]) {
       expect(e.canDispatch(command), `${command} while the oracle holds the sink`).toBe(false);
     }
-    // AUDIO is different — its routing IS wired in O3a: a hold goes to the
-    // oracle, so push-to-talk stays live across the handover.
-    expect(e.canDispatch("talkPress")).toBe(true);
     // …and the turn's own lifecycle stays live: you can still send what you had.
     expect(e.canDispatch("send")).toBe(true);
     e.dispatch("oracle"); // hand the sink back
     expect(e.canDispatch("shot")).toBe(true);
+    expect(e.canDispatch("talkPress")).toBe(true);
   });
 
-  it("a HOLD survives the handover to the oracle and ends when no sink wants it", () => {
+  it("a HOLD ends when the turn stops collecting — including the oracle taking over", () => {
     const e = createModeEngine(intentSpec, {
       context: { ...initialContext, connected: true, micGranted: true },
       initial: { phase: "turn" },
     });
     e.dispatch("talkPress");
     expect(e.state().talk).toBe("hold");
-    e.dispatch("oracle"); // the sink moves; the gesture keeps its consumer
-    expect(e.state().talk).toBe("hold");
-    e.dispatch("oracle"); // back to the turn, still holding
-    expect(e.state().talk).toBe("hold");
-    e.dispatch("pause"); // now nothing consumes it (hold-needs-a-sink)
+    e.dispatch("oracle"); // the turn stops collecting: the gesture has no consumer
     expect(e.state().talk).toBe("off");
+
+    e.dispatch("oracle"); // back to the turn
+    e.dispatch("talkPress");
+    expect(e.state().talk).toBe("hold");
+    e.dispatch("pause"); // the other way to stop collecting
+    expect(e.state().talk).toBe("off");
+  });
+
+  it("HANDS-FREE survives an oracle detour untouched — that is what restores the turn exactly", () => {
+    const e = createModeEngine(intentSpec, {
+      context: { ...initialContext, connected: true, micGranted: true },
+      initial: { phase: "turn" },
+    });
+    e.dispatch("handsFree");
+    expect(e.state().talk).toBe("handsFree");
+    e.dispatch("oracle");
+    // The standing MODE is untouched (only its window closes — client.ts), so
+    // there is nothing to remember and nothing to restore.
+    expect(e.state()).toMatchObject({ talk: "handsFree", oracle: true });
+    e.dispatch("oracle");
+    expect(e.state()).toMatchObject({ talk: "handsFree", oracle: false, phase: "turn" });
+  });
+
+  it("park is the oracle's whole mic control — the grips have no say", () => {
+    const e = createModeEngine(intentSpec, {
+      context: { ...initialContext, connected: true, micGranted: true },
+      initial: { phase: "armed" },
+    });
+    e.dispatch("oracle");
+    expect(oracleMic(e.state())).toBe(true); // on means listening
+    e.dispatch("oraclePark");
+    expect(oracleMic(e.state())).toBe(false);
+    e.dispatch("oraclePark");
+    expect(oracleMic(e.state())).toBe(true);
+    // A turn-side grip changes nothing about what the oracle hears.
+    e.dispatch("handsFree");
+    expect(oracleMic(e.state())).toBe(true);
+    e.dispatch("handsFree");
+    expect(oracleMic(e.state())).toBe(true);
   });
 
   it("a definitively REFUSED mic gates the oracle; never-asked does not (O3a)", () => {

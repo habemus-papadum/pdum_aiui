@@ -216,15 +216,20 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
 - **`disarmed-is-hard` closes it.** A live WebRTC session with an open mic must never
   outlive disarm; that is what the escape hatch is for. Not in `escOrder` (like pencil and
   jump).
-- **It never listens on activation.** The oracle inherits the talk grip: `off` hears
-  nothing, hands-free hears continuously, a hold hears while Space is down. So there is no
-  hot mic on entry and none on exit.
-- **Three independent ways to say "do not listen", all of which do**: the grip being off,
-  **park** (`⏯`, the oracle's own "hold my place" — its own region, independent of the grip,
-  so parking never destroys hands-free), and mute. The gate is their conjunction, which is
-  monotone and cannot surprise, and it is applied both on every edge AND once more when a
-  session finishes connecting (a connect is not an edge, and the vendor's track comes up
-  enabled).
+- **It listens the moment it is on, and PARK is its whole mic control** (owner,
+  2026-07-30). The oracle does not touch the talk region at all: hands-free and
+  push-to-talk are the turn's grips and have no meaning here, because the oracle hears
+  through its own WebRTC track with its own park. Turning it on means listening; `⏯` park
+  gates the track and keeps the session ($0, connection open); turning it off ends it.
+  (O3a briefly routed the grips into the oracle. It was a mistake — two independent
+  mechanisms answering one question — and un-picking it is what makes "leaving the oracle
+  restores the turn exactly" true by construction: nothing about the turn's talk state is
+  ever touched, so there is no hot mic on entry and none on exit.)
+- **The gate is applied on every edge AND once more when a session finishes connecting** —
+  a connect is not an edge, and the vendor's track comes up enabled.
+- **A hold ends when the turn stops collecting**, including the oracle taking over
+  (`hold-needs-the-turn`) — a gesture with no consumer is nothing. A standing hands-free
+  MODE survives: its window closes on the way in and reopens on the way out.
 - **One fresh credential per session, and no session outlives the vendor's ~60 minutes.**
   Two clocks: the minted secret's TTL bounds how long it may OPEN a session; the vendor's
   cap bounds how long an open one runs. A session that ends unasked drops the desire and

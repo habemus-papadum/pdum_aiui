@@ -64,18 +64,29 @@ export function sink(s: EngineState): Sink | undefined {
 }
 
 /**
- * Is the ORACLE hearing anything right now (O3a)? The conjunction of the three
- * independent ways to say "do not listen" — the talk grip being off, park, and
- * mute — which is monotone and cannot surprise.
+ * Is the ORACLE hearing anything right now? A live session, not parked — and
+ * NOTHING else (owner, 2026-07-30, correcting O3a).
+ *
+ * O3a routed the talk region into the oracle: hands-free and push-to-talk
+ * decided whether it could hear. That was a mistake, and the owner named why —
+ * the oracle owns a WebRTC track with a park of its own, so borrowing the
+ * TURN's grips made two independent mechanisms answer one question. Talk is the
+ * turn's alone again; **park is the oracle's whole mic control**, and a session
+ * comes up listening because that is what turning it on means.
+ *
+ * What this buys back: leaving the oracle restores the turn *exactly*, since
+ * nothing about the turn's talk state was ever touched. The hot-mic hazard that
+ * made the grips look attractive in the first place is gone by construction
+ * rather than by a rule.
  *
  * Lives here, beside `sink`, because it has TWO callers by necessity: the
  * client relays it on every edge, and the lane applies it once more the moment
  * a session finishes connecting. An edge relay alone cannot gate a track that
- * did not exist yet — which is how a session came up with the vendor mic OPEN
- * despite `talk: "off"` (found by test). One predicate, both moments.
+ * did not exist yet — which is how a session once came up with the vendor mic
+ * open (found by test). One predicate, both moments.
  */
 export function oracleMic(s: EngineState): boolean {
-  return sink(s) === "oracle" && s.talk !== "off" && s.oracleParked !== true && s.micMuted !== true;
+  return sink(s) === "oracle" && s.oracleParked !== true;
 }
 
 /**
@@ -91,16 +102,23 @@ export function turnSuspended(s: EngineState): boolean {
 }
 
 /**
- * Where a PIXEL/SELECTION contribution may go today — the turn only.
+ * The turn is the live sink — it is open, unpaused, and the oracle has not
+ * taken over. Two kinds of thing read this:
  *
- * The audio routing to the oracle is wired (O3a: the mic gate follows the talk
- * grip into either sink), but shots, area drags, and selection pulls still know
- * one destination, so they must refuse while the oracle holds the sink rather
- * than land in the suspended turn behind it. O3d — which teaches the lane verbs
- * to fork on the sink — is the one place this narrowing is lifted, and then
- * these gates go back to reading `sink(s) !== undefined`.
+ *  - **TALK, permanently.** Hands-free and push-to-talk belong to the turn and
+ *    only the turn (owner, 2026-07-30): the oracle hears through its own track
+ *    under its own park, so a grip has no meaning there. A hold ends when the
+ *    turn stops collecting; a standing hands-free mode survives, closing its
+ *    window and reopening it on the way back — which is what makes leaving the
+ *    oracle restore the turn exactly.
+ *  - **PIXELS AND SELECTIONS, for now.** Shots, area drags, and selection pulls
+ *    know one destination, so they refuse while the oracle holds the sink
+ *    rather than land in the suspended turn behind it. These are the two things
+ *    the owner wants carried INTO oracle mode, so O3d — which teaches the lane
+ *    verbs to fork on the sink — is where those three gates widen to
+ *    `sink(s) !== undefined`. The talk rule above does not widen with them.
  */
-function contributesToTurn(s: EngineState): boolean {
+export function turnCollecting(s: EngineState): boolean {
   return sink(s) === "turn";
 }
 
@@ -291,10 +309,11 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     /** f — flip the cadence. */
     fpsMode: (s) => ({ videoMode: s.videoMode === "smart" ? "constant" : "smart" }),
     /** Space down — open a hold-to-talk window (starts unmuted). Gated on the
-     * SINK, not the phase: a hold is a gesture, and a gesture with no consumer
-     * is nothing — refused while paused, live again on resume. */
+     * TURN collecting: a hold is a gesture into the turn, and a gesture with no
+     * consumer is nothing — refused while paused or while the oracle holds the
+     * sink (it hears through its own track), live again on the way back. */
     talkPress: (s) =>
-      sink(s) !== undefined && s.talk === "off" ? { talk: "hold", micMuted: false } : null,
+      turnCollecting(s) && s.talk === "off" ? { talk: "hold", micMuted: false } : null,
     /** Space up — ends only a HOLD window (hands-free ignores it). */
     talkRelease: (s) => (s.talk === "hold" ? { talk: "off" } : null),
     /** h — toggle hands-free talk (starts unmuted). ARMED-scope since C3′:
@@ -380,21 +399,23 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // collecting clears it — leaving the turn, PAUSING it, or the ORACLE taking
     // the sink (a live crosshair over a suspended turn would shoot into it via
     // the regionDrag pump). Was `area-needs-turn` until the pause slice
-    // generalized the term; `contributesToTurn` is where O3d widens it to the
+    // generalized the term; `turnCollecting` is where O3d widens it to the
     // oracle. Jump left this family in C3′ — an EDITOR act, armed-scope like
     // pencil (disarm clears it, above).
     {
       name: "area-needs-a-sink",
-      when: (s) => !contributesToTurn(s) && s.region === true,
+      when: (s) => !turnCollecting(s) && s.region === true,
       set: { region: false },
     },
-    // A HOLD is a gesture into the sink — you can no longer be "holding" once
-    // nothing consumes it: turn gone, or turn paused. (Hands-free is a
-    // STANDING mode since C3′ and survives both; only disarm ends it.) Was
-    // `hold-needs-turn` until the pause slice.
+    // A HOLD is a gesture into the TURN — you can no longer be "holding" once
+    // the turn stops consuming it: turn gone, turn paused, or the oracle taking
+    // over. (Hands-free is a STANDING mode since C3′ and survives all three,
+    // closing its window and reopening it on the way back; only disarm ends
+    // it.) Was `hold-needs-turn`, briefly `hold-needs-a-sink` while O3a routed
+    // talk into the oracle — the turn scope is the permanent rule.
     {
-      name: "hold-needs-a-sink",
-      when: (s) => sink(s) === undefined && s.talk === "hold",
+      name: "hold-needs-the-turn",
+      when: (s) => !turnCollecting(s) && s.talk === "hold",
       set: { talk: "off" },
     },
     // Mute exists only while talking.
@@ -439,13 +460,13 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // contribution acts at the machine, so caps, keys, the remote bar, and
     // agent writes all meet the same answer (BEHAVIOR.md).
     shot: (s, ctx) =>
-      contributesToTurn(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
+      turnCollecting(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
     // The area drag is pixels too — turning it ON wants the same grant as a shot;
     // turning it OFF is always allowed (so a lost grant can't strand you in area
     // mode — you can always toggle back out, and Esc bypasses `available`).
     region: (s, ctx) =>
       s.region === true ||
-      (contributesToTurn(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
+      (turnCollecting(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
     // Selection and clear are PAGE acts, not pixel acts (owner, 2026-07-14):
     // they ride the content script / bootstrap, which follows the tab in
     // view — no grant involved. Only pixels (shot, the stream, sampling) need
@@ -456,8 +477,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // …and only when the page actually HAS one (owner, 2026-07-14): a
     // selection pull with nothing selected is a guaranteed miss — the cap
     // grays and its tooltip points at selecting something first.
-    selection: (s, ctx) =>
-      contributesToTurn(s) && ctx.activeTab !== undefined && ctx.selectionPresent,
+    selection: (s, ctx) => turnCollecting(s) && ctx.activeTab !== undefined && ctx.selectionPresent,
     // Jump-to-editor is a PAGE act on instrumented pages only: the picker
     // reads the aiui stamps and source root, so a page without `__AIUI__`
     // grays the cap — the gate IS the feature detection (owner, 2026-07-15).

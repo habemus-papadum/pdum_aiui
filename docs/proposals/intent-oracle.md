@@ -92,39 +92,37 @@ Consequences, all of them already designed:
   banner explains it). That is what makes "start a turn, dip into the oracle, come back"
   work.
 
-### The mic: talk, park, and mute all mean "do not listen"
+### The mic: the oracle's alone, and park is its only control
 
-The oracle does not listen on activation; it inherits the talk region (owner, 2026-07-30 —
-this is what removed the hot-mic hazard from the design).
+**Superseded, and worth recording as a wrong turn** (owner, 2026-07-30, after living with
+O3a). This section first said the oracle *inherits the talk region* — `off` hears nothing,
+hands-free hears continuously, a hold hears while Space is down — and that the mic gate was
+a conjunction of the grip, park, and mute. That is retired.
 
-| `talk` | the oracle's mic |
-| --- | --- |
-| `off` | gated |
-| `handsFree` | open; server VAD takes turns |
-| `hold` | open while Space is held — release gates it, and the silence ends the VAD turn |
+Why it was wrong: the oracle holds its own WebRTC track and the package already gives it a
+`park`. Borrowing the turn's grips made **two independent mechanisms answer one question**,
+and it coupled the oracle to a region that has nothing to do with it. It also made the
+promise "leaving the oracle restores the turn exactly" a *rule* to maintain rather than a
+consequence.
 
-So the window derivation the pause slice already wrote in sink-identity shape gains one
-arm: where sink `turn` maps open/close to `startTalk`/`stopTalk`, sink `oracle` maps it to
-`resume()`/`park()`. Same block, one more arm, and the mode/window discipline is unchanged.
-
-**Park is exposed as its own affordance** (owner, 2026-07-30): an `oracleParked` toggle
-revealed as a child of the lit oracle cap — the package's own vocabulary for "hold my
-place," independent of your talk grip, so parking does not destroy hands-free and
-un-parking restores it.
-
-The mic gate is therefore the conjunction of three independent ways to say the same thing,
-which is monotone and cannot surprise:
+The rule now:
 
 ```
-micEnabled = sink === "oracle" && talk !== "off" && !oracleParked && !micMuted
+micEnabled = sink === "oracle" && !oracleParked
 ```
 
-**It is applied at two moments, not one** (`oracleMic`, spec.ts). The client relays every
-edge — but a *connect* is not an edge, and the vendor's mic track comes up **enabled**, so
-a session opened with the grip off sat there hot: the exact opposite of the guarantee this
-section exists to make. The lane therefore applies the same predicate once more the instant
-a session finishes connecting. One predicate, two moments; found by a test that asserted on
-the device state rather than on the lane call that was supposed to produce it.
+- **Turning the oracle on means listening.** That is what turning it on is for.
+- **Park (`⏯`) is the whole mic control** — a child of the lit oracle cap, the package's own
+  vocabulary for "hold my place": track gated, session open, $0.
+- **Talk is the turn's alone.** A hold ends when the turn stops collecting
+  (`hold-needs-the-turn`); a standing hands-free MODE survives an oracle detour with its
+  window closing on the way in and reopening on the way out. Nothing about the turn's talk
+  state is touched, so restoring it is not a feature — it is the absence of one.
+- **Mute stays the turn's**, for the same reason.
+
+**Still applied at two moments** (`oracleMic`, spec.ts): the client relays every edge, and
+the lane applies the same predicate once more the instant a session finishes connecting,
+because a connect is not an edge and the vendor's track comes up enabled.
 
 **Each sink owns its own capture path — corrected against the build (O3a).** This proposal
 originally said a `turn → oracle` handover would keep one mic source live and re-route its
@@ -147,8 +145,8 @@ every way of saying "don't listen" gates the source rather than detaching a rout
 2. **The claim connects** — pill pending, then active. The `OracleMind` strip under the bar
    carries the ambient line ("connecting… / ready — talk to it / listening… / doing:
    set_freq / parked").
-3. **Talk with whatever grip you had.** With `talk: off` nothing is heard — press `h` or
-   hold Space. With hands-free already on, the mic simply re-routes.
+3. **Talk — it is already listening.** Park (`⏯`) when you want it to stop; the session
+   stays open and free. Your turn-side grip is untouched throughout.
 4. **Contribute** with the same caps and keys as a turn: 🖼 shot, ⛶ area, 📋 selection.
 5. **Park** to hold your place; **shush** to cut a reply short (the session's manual
    barge-in, safe with nothing in flight).
@@ -320,6 +318,9 @@ the same reason the lowered prelude carries one.
 
 ## Decisions (owner-approved 2026-07-30)
 
+0. **The oracle's mic is its own** (2026-07-30, after living with O3a): a session listens
+   from the moment it is on, park is its only gate, and the turn's talk grips are never
+   consulted. Supersedes the "inherits the grip" decision this proposal shipped with.
 1. **Contributions do not solicit a reply** — `respond: false`.
 2. **Role `user`**, not `system` — the verified path; the system-role spike stays a spike.
 3. **The panel bar is WRITEABLE to the oracle**, gated by a declared `oracle?: boolean` cap
