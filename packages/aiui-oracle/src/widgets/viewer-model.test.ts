@@ -79,4 +79,24 @@ describe("activityLine", () => {
     expect(activityLine(base).text).toContain("ready");
     expect(activityLine({ ...base, status: "parked" }).text).toContain("parked");
   });
+
+  it("KEEPS the finished reply — the text beats the audio, so clearing it wipes what you hear", () => {
+    // `response.done` flips `replying` off while the spoken audio is still
+    // playing (on WebRTC there are no reply-audio data events at all), so the
+    // completed line has to stand rather than snap back to an invitation.
+    const done = { ...base, replying: false, replyText: "the wave is a square now" };
+    expect(activityLine(done).text).toContain("square now");
+    expect(activityLine(done).text).not.toContain("ready");
+  });
+
+  it("the invitation is once per session — the human speaking replaces it, not a reset", () => {
+    const done = { ...base, replyText: "Paris is the capital of France." };
+    // Talking over / after it wins…
+    expect(activityLine({ ...done, speaking: true }).text).toBe("listening…");
+    // …and the NEXT reply clears replyText itself (at `response.created`),
+    // which is what puts "thinking…" back on the strip.
+    expect(activityLine({ ...done, replying: true, replyText: "" }).text).toBe("thinking…");
+    // A tool still outranks a standing reply.
+    expect(activityLine({ ...done, runningTool: "kick" }).text).toBe("doing: kick");
+  });
 });

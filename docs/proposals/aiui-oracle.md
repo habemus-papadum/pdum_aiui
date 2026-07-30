@@ -258,6 +258,16 @@ All optional, all reading the core's ledger + state cells; the integrator compos
 - **The session viewer** — the detailed full-session view: chips/cards per ledger entry
   (turns, tool calls with args/result/gating, injected items, errors, usage), raw vendor
   JSON where it makes sense. The trace-debugger sensibility applied to a live session.
+- **The mind strip** — one line answering "what is it doing right now". Its cue order is
+  listening → doing → thinking → **the last thing it said** → ready. That fourth rung is
+  the one worth stating (owner, 2026-07-30): a completed reply **stands** rather than
+  clearing back to "ready — talk to it". The transcript runs well ahead of the spoken
+  audio, and on WebRTC there are no reply-audio data events at all — the reply is a track,
+  not a stream we can time — so `response.done` says nothing about whether the human is
+  still listening. Clearing there wiped the very line they were hearing. "Ready — talk to
+  it" is therefore a **once-per-session invitation**, not a resting state the strip returns
+  to; `replyText` resets on `start`, which is what makes that true for a host holding one
+  session across reconnects.
 - (Later: transcript pane, tools inspector.)
 
 ### The lab

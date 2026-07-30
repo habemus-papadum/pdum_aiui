@@ -109,6 +109,37 @@ describe("start", () => {
   });
 });
 
+describe("replyText across a session's life", () => {
+  it("SURVIVES response.done — the audio outlasts the transcript", async () => {
+    const { session, rig } = makeSession([]);
+    await session.start();
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "response.output_audio_transcript.delta", delta: "Paris is " });
+    rig.emit({ type: "response.output_audio_transcript.delta", delta: "the capital." });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "completed", output: [] } });
+    expect(session.state().replying).toBe(false);
+    // The line stands: on WebRTC nothing tells us when the SPEECH ends, so a
+    // completed transcript must not be read as "nothing is happening".
+    expect(session.state().replyText).toBe("Paris is the capital.");
+  });
+
+  it("RESETS on start — a reconnect is a new conversation, not a continuation", async () => {
+    const { session, rig } = makeSession([]);
+    await session.start();
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "response.output_audio_transcript.delta", delta: "first session" });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "completed", output: [] } });
+    expect(session.state().replyText).toBe("first session");
+
+    // A host that holds ONE session for the page's life (the intent panel)
+    // reconnects through the same object; the vendor carries no history, so
+    // neither may the strip.
+    session.close();
+    await session.start();
+    expect(session.state().replyText).toBe("");
+  });
+});
+
 describe("the tool gate — response.done status decides execution", () => {
   it("a COMPLETED response executes, returns function_call_output, then one response.create", async () => {
     const calls: Array<Record<string, unknown>> = [];

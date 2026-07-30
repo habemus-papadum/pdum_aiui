@@ -204,11 +204,26 @@ export function activityLine(state: OracleState): { icon: string; text: string }
       if (state.runningTool !== undefined) {
         return { icon: "⚙", text: `doing: ${state.runningTool}` };
       }
-      if (state.replying) {
-        return state.replyText === ""
-          ? { icon: "💭", text: "thinking…" }
-          : { icon: "🔮", text: clip(state.replyText, 90) };
+      if (state.replying && state.replyText === "") {
+        return { icon: "💭", text: "thinking…" };
       }
+      // The last thing it said STANDS once the reply completes (owner,
+      // 2026-07-30) — it is not cleared back to an invitation.
+      //
+      // Why: the transcript arrives well ahead of the audio, and on WebRTC we
+      // have no reply-audio data events at all (`replyAudioData: false` — the
+      // reply is a track, not a stream we can time), so "the text finished"
+      // tells us NOTHING about whether the human is still listening. Snapping
+      // to "ready — talk to it" therefore wiped the one line they were still
+      // hearing. Keeping it is also just truer: it remains the most recent
+      // thing that happened until something replaces it — the human speaking
+      // (🎙 above), a tool running, or the next reply, which clears
+      // `replyText` at `response.created`.
+      if (state.replyText !== "") {
+        return { icon: "🔮", text: clip(state.replyText, 90) };
+      }
+      // Reached only before a session has said anything: the invitation is a
+      // once-per-session state, not somewhere the strip returns to.
       return { icon: "🟢", text: "ready — talk to it" };
   }
 }

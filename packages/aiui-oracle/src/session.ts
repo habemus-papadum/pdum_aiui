@@ -127,7 +127,14 @@ export class OracleSession {
     if (this.current.status !== "idle" && this.current.status !== "closed") {
       return;
     }
-    this.setState({ status: "connecting", playbackBlocked: false });
+    // `replyText` resets HERE, not on close: a new connection is a new
+    // conversation (the vendor carries no history across sessions), and a
+    // session object is REUSED across connects by hosts that hold one for the
+    // page's lifetime — the intent panel does. Without this, a reconnect would
+    // open showing the last session's reply, and "ready — talk to it" (the
+    // once-per-session invitation the strip no longer returns to) would never
+    // appear again.
+    this.setState({ status: "connecting", playbackBlocked: false, replyText: "" });
     this.record({
       kind: "session",
       phase: "connecting",
