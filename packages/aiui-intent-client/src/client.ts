@@ -19,13 +19,19 @@ import {
   barModel,
   barTree,
   type DispatchEvent,
-  type EngineState,
   type KeyHint,
 } from "@habemus-papadum/aiui-viz/modal";
 import { configBar, intentBar } from "./caps";
 import { type ClaimLaneOptions, intentClaims } from "./claims";
 import { hintsFor, keyVerdict } from "./keys";
-import { type IntentContext, initialContext, intentSpec, sink, turnSuspended } from "./spec";
+import {
+  type IntentContext,
+  initialContext,
+  intentSpec,
+  oracleMic,
+  sink,
+  turnSuspended,
+} from "./spec";
 import type { IntentHost } from "./transport";
 // The standing config surface: importing registers the controls (durable,
 // agent-visible) that the bar's widget nodes bind by name.
@@ -120,11 +126,6 @@ export interface IntentClient
 }
 
 const inTurn = (phase: unknown): boolean => phase === "turn";
-
-/** Is the ORACLE hearing anything right now (O3a)? The conjunction of the
- * three independent ways to say "do not listen" — see the edge relay below. */
-const oracleMic = (s: EngineState): boolean =>
-  sink(s) === "oracle" && s.talk !== "off" && s.oracleParked !== true && s.micMuted !== true;
 
 export function createIntentClient(config: IntentClientConfig): IntentClient {
   const { host, lanes } = config;

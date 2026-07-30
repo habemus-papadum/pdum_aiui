@@ -55,11 +55,19 @@ is the reconciled reality.
   `ctx.micGranted !== false` (a definitively refused mic means the oracle cannot work;
   `undefined` — never asked — must not dead-end the cap).
 - An `oracleSession` **claim** derives on `s.oracle === true`: `acquire` mints a
-  credential, constructs the session and starts it; `release` closes it. The claim
-  reconciler then supplies the async story for free — idle → pending → active → **error** —
-  which the pill strip already renders, exactly like the video pump. A mint 503, a denied
-  mic, or an ICE failure surfaces through the machinery that already exists instead of a
-  hand-rolled connect state sitting next to a mode flag.
+  credential and starts the session; `release` closes it. The claim reconciler then
+  supplies the async story — idle → pending → active → **error** — which the pill strip
+  already renders, exactly like the video pump. A mint 503, a denied mic, or an ICE failure
+  surfaces through the machinery that already exists instead of a hand-rolled connect state
+  sitting next to a mode flag.
+
+  Two things the build taught, both corrections to the paragraph above as first written:
+  `OracleSession.start()` is chromeless and **resolves either way**, recording the cause in
+  its own ledger — so the lane must translate a failed start into a rejection, or the claim
+  reports `active` over a session that never connected. And the reconciler never calls
+  `release` for an acquire that threw (nothing was held), which leaves the session at
+  `error` where its own `start` guard refuses to run again — so the lane closes it first,
+  or the retry is a silent no-op. Both were found by tests, not in the wild.
 
 ### The sink's second arm
 
@@ -110,6 +118,13 @@ which is monotone and cannot surprise:
 ```
 micEnabled = sink === "oracle" && talk !== "off" && !oracleParked && !micMuted
 ```
+
+**It is applied at two moments, not one** (`oracleMic`, spec.ts). The client relays every
+edge — but a *connect* is not an edge, and the vendor's mic track comes up **enabled**, so
+a session opened with the grip off sat there hot: the exact opposite of the guarantee this
+section exists to make. The lane therefore applies the same predicate once more the instant
+a session finishes connecting. One predicate, two moments; found by a test that asserted on
+the device state rather than on the lane call that was supposed to produce it.
 
 **Each sink owns its own capture path — corrected against the build (O3a).** This proposal
 originally said a `turn → oracle` handover would keep one mic source live and re-route its
@@ -304,11 +319,26 @@ Carried from `aiui-oracle.md` and unchanged: WebRTC transport, `gpt-realtime-2.1
 
 ## Open questions and spikes
 
-- **Session lifetime.** The vendor caps a session around 60 minutes and the founding
-  proposal's park spike (20+ minutes with the mic gated) was never run. The panel oracle's
-  expected use is a minute or two, so this is not slice-1 blocking — but the claim's
-  `acquire` is the natural place for a re-connect, and `resume-by-replay` exists in the
-  proposal as the recovery path.
+- ~~**Session lifetime.**~~ **Settled (owner, 2026-07-30): one fresh credential per
+  session, and no session outlives the vendor's cap.** Two independent clocks, and
+  conflating them is the trap:
+  - the **credential TTL** (10–7200 s; the channel mints at 600) bounds how long a secret
+    may *open* a session. It is set server-side because the server holds the parent key;
+    the page POSTs a session config and gets a secret, never a duration.
+  - the **session lifetime** (~60 minutes, the vendor's) bounds how long an *opened*
+    session runs. A session outliving its credential is normal and fine.
+
+  The panel therefore mints per `start()` — plain `mintingKeySource`, deliberately not
+  `cachingKeySource`. Caching earns its keep against a mint that costs something (a cloud
+  function, a cold start, a metered call); ours is a loopback round trip to our own
+  channel, so freshness is worth more than the milliseconds saved, and nothing outlives
+  the conversation it opened.
+
+  We do not manage the cap — we **handle** it. A session that ends without being asked to
+  drops the desire and says why, so the cap never stays lit over a dead session. Pressing
+  🔮 starts a fresh one, with a fresh credential. Auto-reconnect is deliberately absent: a
+  new session carries no history, so silently reopening one would fake a continuity that
+  does not exist.
 - **System-role context items** — spike #3, still open. It is the cleaner home for
   selections and captions if it works.
 - **Two panels, one oracle.** Nothing stops two panels each holding a session. Cost is the

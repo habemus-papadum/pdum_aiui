@@ -222,7 +222,13 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
 - **Three independent ways to say "do not listen", all of which do**: the grip being off,
   **park** (`⏯`, the oracle's own "hold my place" — its own region, independent of the grip,
   so parking never destroys hands-free), and mute. The gate is their conjunction, which is
-  monotone and cannot surprise.
+  monotone and cannot surprise, and it is applied both on every edge AND once more when a
+  session finishes connecting (a connect is not an edge, and the vendor's track comes up
+  enabled).
+- **One fresh credential per session, and no session outlives the vendor's ~60 minutes.**
+  Two clocks: the minted secret's TTL bounds how long it may OPEN a session; the vendor's
+  cap bounds how long an open one runs. A session that ends unasked drops the desire and
+  says why — the cap never stays lit over a dead session, and 🔮 starts a fresh one.
 - **Each sink owns its capture path.** The oracle's WebRTC track is opened once at connect
   and only enabled/disabled after; the turn's talk lane has its own source. A handover stops
   one and flips the other's boolean — no device re-open, and never two captures at once.

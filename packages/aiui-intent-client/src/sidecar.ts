@@ -171,9 +171,19 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
       // the channel's internal seam). `absentKeyPhrase` then distinguishes
       // "skipped by choice" from "missing" in the 503 the mint returns
       // keyless — the backend degrades loudly by design.
+      // TTL is set here because the SERVER owns it: the page POSTs a session
+      // config and gets a secret back, never a duration. Ten minutes is
+      // deliberately far more than needed — the panel mints one credential per
+      // session (lanes/oracle.ts) and it only has to survive the WebRTC
+      // offer/answer that follows, so the TTL is slack for a slow handshake,
+      // not a budget for reuse. Note the two independent clocks: this bounds
+      // how long a secret may OPEN a session; the vendor's ~60 minutes bounds
+      // how long an opened session runs, and a session that outlives its
+      // credential is normal and fine.
       const mint = createMintBackend({
         prefix: `${INTENT_PREFIX}/oracle`,
         resolveKey: () => vendorKey("OPENAI_API_KEY"),
+        ttlSeconds: 600,
         log: (line) => ctx.log(`intent: ${line}`),
       });
       app.use((req, res, next) => {

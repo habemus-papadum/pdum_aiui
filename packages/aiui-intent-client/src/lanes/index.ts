@@ -236,9 +236,16 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     // stt/linter re-apply, mid-thread linter control chunk). Composite dispose.
     const disposeEffects = createConfigEffects(ctx, client);
 
+    // The oracle's two machine-facing jobs: the mic gate applied at connect
+    // (an edge cannot cover a track that did not exist), and a session that
+    // ends unasked dropping the DESIRE so the cap never stays lit over a dead
+    // session.
+    const offOracleDrops = oracle.attach(client);
+
     return () => {
       offEngine();
       disposeEffects();
+      offOracleDrops();
     };
   };
 

@@ -64,6 +64,21 @@ export function sink(s: EngineState): Sink | undefined {
 }
 
 /**
+ * Is the ORACLE hearing anything right now (O3a)? The conjunction of the three
+ * independent ways to say "do not listen" — the talk grip being off, park, and
+ * mute — which is monotone and cannot surprise.
+ *
+ * Lives here, beside `sink`, because it has TWO callers by necessity: the
+ * client relays it on every edge, and the lane applies it once more the moment
+ * a session finishes connecting. An edge relay alone cannot gate a track that
+ * did not exist yet — which is how a session came up with the vendor mic OPEN
+ * despite `talk: "off"` (found by test). One predicate, both moments.
+ */
+export function oracleMic(s: EngineState): boolean {
+  return sink(s) === "oracle" && s.talk !== "off" && s.oracleParked !== true && s.micMuted !== true;
+}
+
+/**
  * The turn EXISTS but is not collecting — the lanes' pause condition, and
  * deliberately broader than the `paused` region: the oracle taking the sink
  * suspends the turn exactly as the ⏸ cap does, so both causes produce the same

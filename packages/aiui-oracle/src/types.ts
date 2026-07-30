@@ -49,7 +49,17 @@ export interface OracleConfig {
   /** Vendor-side transcription of the USER's audio (the "heard" record).
    * Default on; costs transcription tokens. */
   transcribeInput?: boolean;
-  /** TTL for a minted ephemeral secret, seconds (10–7200). Default 600. */
+  /**
+   * TTL for a minted ephemeral secret, seconds (10–7200). Default 600.
+   *
+   * NOT read by {@link OracleSession} — and structurally cannot be: the
+   * session never mints, it asks a {@link KeySource}. TTL belongs to whoever
+   * holds the parent key, which is `mintClientSecret`'s `MintOptions` for an
+   * in-browser mint and the mint SERVER's own option for a hosted one (the
+   * channel sets it on `createMintBackend`). Kept as documentation of the
+   * knob's existence and its range; a session-level value would be a lie
+   * about who decides.
+   */
   mintTtlSeconds?: number;
 }
 

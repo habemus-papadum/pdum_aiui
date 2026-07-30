@@ -15,6 +15,7 @@ import { linter, stt } from "./config";
 import { type FakeBus, fakeBus } from "./fake-bus";
 import {
   type ChannelLanes,
+  type ChannelLanesConfig,
   createChannelLanes,
   currentThreadEvents,
   panelIntentConfig,
@@ -506,6 +507,183 @@ describe("pause — the bracket, the suppression, and the resume compare (owner,
     r.bus.switchTab(9);
     await settle(20);
     expect(r.lanes.engine.events.filter((e) => e.type === "tab-switch")).toHaveLength(1);
+  });
+});
+
+describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)", () => {
+  /** A transport with no peer: it records what was sent and hands back the
+   * `onClose` hook, so a test can end a session the way the vendor's ~60-minute
+   * cap does — from the outside, with nobody asking. */
+  const fakeTransport = () => {
+    const seam: { close?: (reason: string) => void; micEnabled: boolean; connects: number } = {
+      micEnabled: true,
+      connects: 0,
+    };
+    const transport = {
+      name: "fake",
+      capabilities: {
+        replyAudioData: false,
+        serverBargeIn: true,
+        injectAudio: false,
+        sideband: false,
+      },
+      connect: (options: { onClose: (reason: string) => void }) => {
+        seam.connects += 1;
+        seam.close = options.onClose;
+        return Promise.resolve({
+          send: () => {},
+          setMicEnabled: (on: boolean) => {
+            seam.micEnabled = on;
+          },
+          interrupt: () => {},
+          close: () => {},
+        });
+      },
+    };
+    return { transport: transport as never, seam };
+  };
+
+  /** Counts credentials handed out — one per session start, by design. */
+  const countingKeySource = (issued: string[]) => ({
+    describe: () => "test",
+    credential: async () => {
+      issued.push(`ek_${issued.length + 1}`);
+      return { ek: issued[issued.length - 1] as string, expiresAt: 0 };
+    },
+  });
+
+  const oracleRig = (over: Partial<ChannelLanesConfig> = {}): Rig => {
+    const bus = fakeBus({ activeTab: 7 });
+    const { thread, openThread } = stubThread();
+    const toasts: string[] = [];
+    const statuses: string[] = [];
+    const lanes = createChannelLanes({
+      host: bus,
+      port: () => 55555,
+      openThread,
+      onToast: (m) => toasts.push(m),
+      onStatus: (line) => statuses.push(line),
+      ...over,
+    });
+    const client = createIntentClient({
+      host: bus,
+      lanes: lanes.lanes,
+      claimOptions: lanes.claimOptions,
+    });
+    const unbind = lanes.bind(client);
+    client.setContext({ connected: true, micGranted: true });
+    rig = { client, bus, lanes, thread, toasts, statuses, unbind };
+    return rig;
+  };
+
+  it("mints a FRESH credential per session — never reuses one across starts", async () => {
+    const issued: string[] = [];
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource(issued) });
+
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(issued).toHaveLength(1);
+
+    r.client.dispatch("oracle"); // off
+    await settle(20);
+    r.client.dispatch("oracle"); // on again
+    await settle(30);
+    // A caching source would reuse the live secret; per-session minting asks
+    // again — the mint is a loopback round trip, so freshness beats reuse.
+    expect(issued).toHaveLength(2);
+  });
+
+  it("a connect failure reaches the CLAIM (start resolves either way — it must be translated)", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({
+      oracleTransport: transport,
+      oracleKeySource: {
+        describe: () => "broken",
+        credential: () => Promise.reject(new Error("no OPENAI_API_KEY in the channel")),
+      },
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    // OracleSession.start() RESOLVES on failure (chromeless: it records and
+    // sets `error`), so a naive acquire would have reported `active` over a
+    // session that never connected.
+    expect(r.client.claimStatuses().oracleSession?.phase).toBe("error");
+    expect(r.toasts.some((t) => t.includes("no OPENAI_API_KEY"))).toBe(true);
+    // The DESIRE stands — the user asked, the world refused; the cap stays lit.
+    expect(r.client.state().oracle).toBe(true);
+  });
+
+  it("a failed start can be RETRIED — the error status does not wedge the session", async () => {
+    let refuse = true;
+    const { transport, seam } = fakeTransport();
+    const r = oracleRig({
+      oracleTransport: transport,
+      oracleKeySource: {
+        describe: () => "flaky",
+        credential: () =>
+          refuse
+            ? Promise.reject(new Error("mint refused"))
+            : Promise.resolve({ ek: "ek_ok", expiresAt: 0 }),
+      },
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(r.client.claimStatuses().oracleSession?.phase).toBe("error");
+
+    // Press again with the world fixed. Without the defensive close in the
+    // lane's `start`, the session's own guard (start no-ops unless idle|closed)
+    // would swallow this — and the reconciler never releases an acquire that
+    // threw, so nothing else would reset it.
+    refuse = false;
+    r.client.dispatch("oracle"); // off
+    await settle(20);
+    r.client.dispatch("oracle"); // on — the retry
+    await settle(30);
+    expect(r.client.claimStatuses().oracleSession?.phase).toBe("active");
+    expect(seam.connects).toBe(1);
+  });
+
+  it("a session that ends UNASKED drops the desire — no lit cap over a dead session", async () => {
+    const { transport, seam } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(r.client.state().oracle).toBe(true);
+
+    // The vendor's ~60-minute cap, a dropped data channel — the transport says
+    // it is over and nobody asked.
+    seam.close?.("data channel closed");
+    await settle(20);
+    expect(r.client.state().oracle).toBe(false);
+    expect(r.toasts.some((t) => t.includes("oracle session ended"))).toBe(true);
+    expect(r.toasts.some((t) => t.includes("data channel closed"))).toBe(true);
+  });
+
+  it("a DELIBERATE close does not toast — the region is already down when it lands", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.client.dispatch("oracle");
+    await settle(30);
+    r.client.dispatch("oracle"); // the user turns it off; release closes it
+    await settle(30);
+    expect(r.client.state().oracle).toBe(false);
+    expect(r.toasts.some((t) => t.includes("oracle session ended"))).toBe(false);
+  });
+
+  it("the mic follows the grip through the real session object", async () => {
+    const { transport, seam } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.client.dispatch("oracle");
+    await settle(30);
+    // No grip yet: connected, hearing nothing (park is the session's own idle).
+    expect(seam.micEnabled).toBe(false);
+    r.client.dispatch("handsFree");
+    expect(seam.micEnabled).toBe(true);
+    r.client.dispatch("oraclePark");
+    expect(seam.micEnabled).toBe(false);
+    r.client.dispatch("oraclePark");
+    expect(seam.micEnabled).toBe(true);
   });
 });
 

@@ -7,7 +7,7 @@
 import type { PcmSource, SpeechPlayer, Talk } from "@habemus-papadum/aiui-intent-runtime/talk";
 import type { Wire } from "@habemus-papadum/aiui-intent-runtime/wire";
 import type { Engine, IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
-import type { OracleSession } from "@habemus-papadum/aiui-oracle";
+import type { KeySource, OracleSession, OracleTransport } from "@habemus-papadum/aiui-oracle";
 import type { Accessor } from "solid-js";
 import type { CdpAlignment } from "../cdp-align";
 import type { ClaimLaneOptions } from "../claims";
@@ -65,6 +65,16 @@ export interface ChannelLanesConfig {
   pcmSource?: () => PcmSource;
   /** Test seam: replace the real WebSocket thread dialer. */
   openThread?: OpenThread;
+  /**
+   * Test seams for the ORACLE (O3a), the same shape as `openThread` and
+   * `pcmSource` above: a fake transport lets a test drive a session's whole
+   * lifecycle — including the endings nobody asks for (the vendor's ~60-minute
+   * cap, a dropped data channel) — without a real WebRTC peer, and a fake key
+   * source removes the mint from the picture. Absent in production: the panel
+   * uses the WebRTC transport and the channel's mint.
+   */
+  oracleTransport?: OracleTransport;
+  oracleKeySource?: KeySource;
   /** Console-channel status line (wire:/talk: narration). */
   onStatus?: (line: string) => void;
   /** The misuse/error channel (toasts in the page). */
