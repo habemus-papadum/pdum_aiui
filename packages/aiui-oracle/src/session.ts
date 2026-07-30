@@ -207,7 +207,16 @@ export class OracleSession {
 
   /** Manual barge-in — safe to fire with no reply in flight. */
   stopSpeaking(): void {
-    this.handle?.interrupt();
+    if (this.handle === undefined) {
+      return;
+    }
+    // Recorded HERE because the transport owns the wire shape of an interrupt
+    // (WebRTC sends `response.cancel` + `output_audio_buffer.clear`; another
+    // transport may differ), so `send` never sees it. Without this line a
+    // deliberate shush and a vendor barge-in are indistinguishable in the
+    // record — which is exactly the question the ledger has to answer.
+    this.record({ kind: "sent", type: "interrupt (shush)" });
+    this.handle.interrupt();
   }
 
   close(): void {
@@ -365,7 +374,16 @@ export class OracleSession {
     };
   }
 
+  /** Outbound control events worth a ledger line — the ones that can move a
+   * response's lifecycle, and therefore the ones a cancellation has to be
+   * attributable against. */
+  private static readonly TRACED_SENDS = new Set(["response.create", "response.cancel"]);
+
   private send(event: Record<string, unknown>): void {
+    const type = typeof event.type === "string" ? event.type : "";
+    if (OracleSession.TRACED_SENDS.has(type)) {
+      this.record({ kind: "sent", type });
+    }
     this.handle?.send({ event_id: `evt_${++this.eventSeq}`, ...event });
   }
 

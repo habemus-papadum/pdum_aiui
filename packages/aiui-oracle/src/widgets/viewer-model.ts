@@ -47,6 +47,7 @@ export function categoryOf(entry: LedgerEntry): LedgerCategory {
       return "config";
     case "speech":
     case "response":
+    case "sent":
       return "flow";
     case "error":
       return "error";
@@ -152,6 +153,10 @@ export function entryLine(entry: LedgerEntry): string {
       return `${entry.name} ${entry.ok ? "→" : "✗"} ${clip(entry.output, 120)} (${entry.ms}ms)`;
     case "injected":
       return `${entry.role}: ${entry.text ?? ""}${entry.image === true ? " [image]" : ""}`;
+    case "sent":
+      // The arrow is the point: everything else in the ledger came FROM the
+      // vendor, so an outbound line has to be unmistakable at a glance.
+      return `→ ${entry.type}`;
     case "response":
       return `response ${entry.status}${
         entry.usage !== undefined

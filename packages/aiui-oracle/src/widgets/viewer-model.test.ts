@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { OracleState } from "../session";
 import type { LedgerEntry } from "../types";
-import { activityLine, categoryOf, groupTurns, summarizeTurn } from "./viewer-model";
+import { activityLine, categoryOf, entryLine, groupTurns, summarizeTurn } from "./viewer-model";
 
 let seq = 0;
 const entry = (body: Omit<LedgerEntry, "at" | "seq">): LedgerEntry =>
@@ -56,6 +56,16 @@ describe("categoryOf defaults", () => {
     expect(categoryOf(entry({ kind: "speech", phase: "started" }))).toBe("flow");
     expect(categoryOf(entry({ kind: "raw", type: "t", event: {} }))).toBe("raw");
     expect(categoryOf(entry({ kind: "error", source: "vendor", message: "m" }))).toBe("error");
+  });
+});
+
+describe("outbound events are visibly OURS", () => {
+  it("classifies as flow and renders with an arrow", () => {
+    const e = entry({ kind: "sent", type: "response.create" });
+    expect(categoryOf(e)).toBe("flow");
+    // Everything else in the ledger came FROM the vendor; the arrow is what
+    // makes an outbound line unmistakable when attributing a cancellation.
+    expect(entryLine(e)).toBe("\u2192 response.create");
   });
 });
 

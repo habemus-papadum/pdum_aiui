@@ -211,6 +211,16 @@ export type LedgerBody =
     }
   | { kind: "tool-result"; callId: string; name: string; ok: boolean; output: string; ms: number }
   | { kind: "injected"; role: "user" | "system"; text?: string; image?: boolean }
+  /**
+   * A control event WE sent — `response.create`, `response.cancel`, the
+   * interrupt pair. The ledger was inbound-only, which left one question
+   * unanswerable from the record: when a reply is cancelled, did the vendor
+   * do it (a barge-in on detected speech) or did we? Both look identical from
+   * the `response.done` side, and "read the code and trust me" is not
+   * evidence. Deliberately NOT every outbound event — audio frames and
+   * session updates would drown the thing this exists to show.
+   */
+  | { kind: "sent"; type: string }
   | { kind: "response"; responseId: string; status: string; usage?: UsageTotals }
   | {
       kind: "error";

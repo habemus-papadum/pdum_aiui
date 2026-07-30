@@ -447,3 +447,34 @@ describe("the live line records what the browser ACTUALLY granted", () => {
     expect(live.detail).toContain("mic: NO PROCESSING");
   });
 });
+
+describe("attributing a cancellation — was it us or the vendor?", () => {
+  it("records the response.create WE send after a tool, so the record is two-sided", async () => {
+    const { session, rig } = makeSession([
+      { name: "set_x", description: "", parameters: { type: "object" }, execute: () => "ok" },
+    ]);
+    await session.start();
+    rig.emit(doneWithCall("completed", "call_1", "set_x", "{}"));
+    await settle();
+    const sent = session.ledger().filter((e) => e.kind === "sent");
+    expect(sent.map((e) => (e as { type: string }).type)).toEqual(["response.create"]);
+  });
+
+  it("a deliberate shush is DISTINGUISHABLE from a vendor barge-in in the ledger", async () => {
+    const { session, rig } = makeSession([]);
+    await session.start();
+
+    // The vendor cancelling on detected speech: an inbound `response.done`
+    // with no outbound line before it.
+    rig.emit({ type: "input_audio_buffer.speech_started" });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "cancelled", output: [] } });
+    expect(session.ledger().filter((e) => e.kind === "sent")).toHaveLength(0);
+
+    // A shush: an outbound line, and only then the cancellation.
+    session.stopSpeaking();
+    rig.emit({ type: "response.done", response: { id: "r2", status: "cancelled", output: [] } });
+    const sent = session.ledger().filter((e) => e.kind === "sent");
+    expect(sent).toHaveLength(1);
+    expect((sent[0] as { type: string }).type).toBe("interrupt (shush)");
+  });
+});
