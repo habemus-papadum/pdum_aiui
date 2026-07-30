@@ -16,6 +16,11 @@
  *    starts open (the page's simulate strip; the extension's CDP verdict).
  */
 
+import {
+  ORACLE_WIDGET_STYLES,
+  OracleMind,
+  OracleViewer,
+} from "@habemus-papadum/aiui-oracle/widgets";
 import type { JSX } from "@solidjs/web";
 import { Show } from "solid-js";
 import type { IntentClient } from "../client";
@@ -36,7 +41,11 @@ export const PANEL_LAYOUT_STYLES =
   TRACE_PANE_STYLES +
   CHANNEL_HEADER_STYLES +
   SESSION_NAME_STYLES +
-  TARGET_TAB_STYLES;
+  TARGET_TAB_STYLES +
+  // The oracle widgets ship their own (theme-neutral) rules — the same
+  // host-concatenates-strings pattern as every strip above.
+  ORACLE_WIDGET_STYLES +
+  `.aiui-oracle-panes { margin: 4px 12px; max-width: 460px; }`;
 
 export interface PanelLayoutProps {
   /** The channel this panel is bound to (undefined = none found). */
@@ -118,24 +127,65 @@ function GrantBanner(props: { client: IntentClient }) {
  * line ("oracle live — the turn is paused") through this same component.
  */
 function PausedBanner(props: { client: IntentClient }) {
-  const paused = (): boolean => {
+  // Two ways a turn stops collecting, and the banner is the ONE place the
+  // difference is spelled out (the stream's pause bracket is reason-free by
+  // decision): the ⏸ cap, or the oracle taking the sink (O3a).
+  const why = (): "manual" | "oracle" | undefined => {
     const state = props.client.state();
-    return state.phase === "turn" && state.paused === true;
+    if (state.phase !== "turn") {
+      return undefined;
+    }
+    if (state.oracle === true) {
+      return "oracle";
+    }
+    return state.paused === true ? "manual" : undefined;
   };
   return (
-    <Show when={paused()}>
-      <div
-        data-testid="paused-banner"
-        style="margin: 8px 12px; font: 12px system-ui; border: 1px solid #7c3aed; border-radius: 6px; padding: 6px 8px; max-width: 460px"
-      >
-        <div>
-          <strong>turn paused</strong> — nothing is being added: audio isn't transcribed; shots,
-          selections, and video frames are off.
+    <Show when={why()} keyed>
+      {(reason) => (
+        <div
+          data-testid="paused-banner"
+          data-reason={reason}
+          style="margin: 8px 12px; font: 12px system-ui; border: 1px solid #7c3aed; border-radius: 6px; padding: 6px 8px; max-width: 460px"
+        >
+          <div>
+            <strong>
+              {reason === "oracle" ? "oracle live — the turn is paused" : "turn paused"}
+            </strong>{" "}
+            — nothing is being added to the turn: audio isn't transcribed; shots, selections, and
+            video frames are off.
+          </div>
+          <div style="opacity: 0.7; margin-top: 2px">
+            {reason === "oracle"
+              ? "what you say and show goes to the oracle instead — 🔮 (or o) leaves, and the turn comes back exactly as it was."
+              : "the turn keeps everything it already holds — ⏸ (or b) resumes; send and cancel still work."}
+          </div>
         </div>
-        <div style="opacity: 0.7; margin-top: 2px">
-          the turn keeps everything it already holds — ⏸ (or <kbd>b</kbd>) resumes; send and cancel
-          still work.
-        </div>
+      )}
+    </Show>
+  );
+}
+
+/**
+ * The oracle's two panel surfaces (O3a): the ambient MIND strip — one line
+ * answering "what is it doing right now" — shown whenever a session exists,
+ * and the ledger VIEWER behind a fold, which is the oracle's trace (the intent
+ * trace stays neutral by decision, so this is where its record lives).
+ * Rendered only with lanes: no lanes, no session.
+ */
+function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
+  const live = (): boolean => {
+    const status = props.client.claimStatuses().oracleSession?.phase;
+    return props.client.state().oracle === true || status === "active" || status === "pending";
+  };
+  return (
+    <Show when={live()}>
+      <div class="aiui-oracle-panes" data-testid="oracle-panes">
+        <OracleMind session={props.lanes.oracle} />
+        <details class="aiui-pane" data-testid="oracle-ledger">
+          <summary>oracle ledger</summary>
+          <OracleViewer session={props.lanes.oracle} mind={false} />
+        </details>
       </div>
     </Show>
   );
@@ -175,6 +225,9 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
         lintControl={props.lanes !== undefined ? { now: props.lanes.lintNow } : undefined}
         turnHasContent={props.lanes !== undefined ? props.lanes.turnHasContent : undefined}
       />
+      <Show when={props.lanes} keyed>
+        {(lanes) => <OraclePanes client={props.client} lanes={lanes} />}
+      </Show>
       <Show when={props.lanes} keyed>
         {(lanes) => <TurnPreview lanes={lanes} />}
       </Show>

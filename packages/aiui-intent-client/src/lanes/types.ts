@@ -7,6 +7,7 @@
 import type { PcmSource, SpeechPlayer, Talk } from "@habemus-papadum/aiui-intent-runtime/talk";
 import type { Wire } from "@habemus-papadum/aiui-intent-runtime/wire";
 import type { Engine, IntentEvent } from "@habemus-papadum/aiui-lowering-pipeline";
+import type { OracleSession } from "@habemus-papadum/aiui-oracle";
 import type { Accessor } from "solid-js";
 import type { CdpAlignment } from "../cdp-align";
 import type { ClaimLaneOptions } from "../claims";
@@ -81,6 +82,13 @@ export interface ChannelLanes {
   lanes: IntentLanes;
   /** Claim hooks for createIntentClient (the real video pump + ink fade). */
   claimOptions: ClaimLaneOptions;
+  /**
+   * The oracle session (O3a) — STABLE from construction, connected and closed
+   * by its claim, so the mind strip and the ledger viewer can bind to it from
+   * the first render. Its status is the session's own; whether the desire is
+   * on is the mode engine's `oracle` region.
+   */
+  oracle: OracleSession;
   /** The wire engine — the intent-event source (preview/trace read it). */
   engine: Engine;
   wire: Wire;

@@ -37,6 +37,7 @@ function fakeLanes(log: string[]): IntentLanes {
     stopTalk: entry("stopTalk"),
     setMicMuted: entry("setMicMuted"),
     setPaused: entry("setPaused"),
+    setOracleMic: entry("setOracleMic"),
   };
 }
 
@@ -744,6 +745,155 @@ describe("pause — the sink suspends, the turn survives (owner, 2026-07-30)", (
     expect(r.lanes).toContain("cancelTurn");
     r.client.dispatch("cancelTurn"); // outside a turn: refused, nothing fires
     expect(r.lanes.filter((l) => l === "cancelTurn")).toHaveLength(1);
+  });
+});
+
+describe("the oracle — a second sink in the panel (O3a)", () => {
+  /** The oracle needs a channel and a mic that wasn't refused. */
+  const armWithMic = (r: Rig): void => {
+    r.client.setContext({ connected: true, micGranted: true });
+  };
+
+  it("the session is a CLAIM: the desire acquires it, dropping the desire releases it", async () => {
+    const r = makeRig();
+    const started: number[] = [];
+    const stopped: number[] = [];
+    await r.client.dispose();
+    const bus = fakeBus({ activeTab: 7 });
+    const lanes: string[] = [];
+    const client = createIntentClient({
+      host: bus,
+      lanes: fakeLanes(lanes),
+      claimOptions: {
+        oracle: {
+          start: async () => {
+            started.push(1);
+          },
+          stop: () => stopped.push(1),
+        },
+      },
+    });
+    rig = { client, bus, lanes, blips: [] };
+    client.setContext({ connected: true, micGranted: true });
+    await settle();
+    expect(client.claimStatuses().oracleSession?.phase).toBe("idle");
+
+    client.dispatch("oracle");
+    await settle();
+    expect(started).toHaveLength(1);
+    expect(client.claimStatuses().oracleSession?.phase).toBe("active");
+
+    client.dispatch("oracle");
+    await settle();
+    expect(stopped).toHaveLength(1);
+    expect(client.claimStatuses().oracleSession?.phase).toBe("idle");
+  });
+
+  it("a failed connect lands as the claim's ERROR — the pill's truth, not a flag out of step", async () => {
+    await rig?.client.dispose();
+    const bus = fakeBus({ activeTab: 7 });
+    const client = createIntentClient({
+      host: bus,
+      lanes: fakeLanes([]),
+      claimOptions: {
+        oracle: {
+          start: () => Promise.reject(new Error("no OPENAI_API_KEY in the channel")),
+          stop: () => {},
+        },
+      },
+    });
+    rig = { client, bus, lanes: [], blips: [] };
+    client.setContext({ connected: true, micGranted: true });
+    client.dispatch("oracle");
+    await settle(30);
+    expect(client.claimStatuses().oracleSession?.phase).toBe("error");
+    // The DESIRE stands — the user asked for a session; the world refused. The
+    // cap stays lit and pressing it again is the retry.
+    expect(client.state().oracle).toBe(true);
+  });
+
+  it("taking the sink suspends the turn — the same bracket a manual pause makes", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("oracle");
+    expect(r.client.state()).toMatchObject({ phase: "turn", oracle: true, paused: false });
+    // The lane's gate follows turnSuspended, not the `paused` region — so an
+    // oracle detour brackets the stream and suppresses boundaries too.
+    expect(r.lanes).toContain("setPaused:true");
+    r.client.dispatch("oracle");
+    expect(r.lanes).toContain("setPaused:false");
+  });
+
+  it("the turn's talk window closes on the handover and the oracle's mic opens", () => {
+    const r = makeRig();
+    grantAndOpen(r);
+    r.client.dispatch("handsFree");
+    expect(r.lanes).toContain("startTalk:handsFree");
+
+    r.client.dispatch("oracle");
+    expect(r.lanes).toContain("stopTalk"); // the turn stops capturing…
+    expect(r.lanes).toContain("setOracleMic:true"); // …and the oracle starts hearing
+    expect(r.client.state().talk).toBe("handsFree"); // the GRIP is untouched
+
+    r.client.dispatch("oracle");
+    expect(r.lanes).toContain("setOracleMic:false");
+    expect(r.lanes.filter((l) => l === "startTalk:handsFree")).toHaveLength(2); // turn resumes
+  });
+
+  it("the oracle does not listen on activation — it inherits the grip (no hot mic)", () => {
+    const r = makeRig();
+    armWithMic(r); // armed, no turn, talk off
+    r.client.dispatch("oracle");
+    expect(r.lanes).not.toContain("setOracleMic:true");
+    r.client.dispatch("handsFree"); // NOW it hears
+    expect(r.lanes).toContain("setOracleMic:true");
+  });
+
+  it("park, mute, and dropping the grip each gate the mic; any one of them is enough", () => {
+    const r = makeRig();
+    armWithMic(r);
+    r.client.dispatch("oracle");
+    r.client.dispatch("handsFree");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
+
+    r.client.dispatch("oraclePark");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:false");
+    r.client.dispatch("oraclePark");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
+
+    r.client.dispatch("mute");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:false");
+    r.client.dispatch("mute");
+    expect(r.lanes.at(-1)).toBe("setOracleMic:true");
+
+    r.client.dispatch("handsFree"); // the grip goes away
+    expect(r.lanes.at(-1)).toBe("setOracleMic:false");
+  });
+
+  it("disarm closes the session and gates the mic (disarmed-is-hard)", async () => {
+    const r = makeRig();
+    armWithMic(r);
+    r.client.dispatch("oracle");
+    r.client.dispatch("handsFree");
+    await settle();
+    r.client.dispatch("disarm");
+    await settle();
+    expect(r.client.state().oracle).toBe(false);
+    expect(r.lanes).toContain("setOracleMic:false");
+    expect(r.client.claimStatuses().oracleSession?.phase).toBe("idle");
+  });
+
+  it("`o` toggles it from the keyboard, armed or in a turn", () => {
+    const r = makeRig();
+    armWithMic(r);
+    r.client.handleKey("o", "down", false);
+    expect(r.client.state().oracle).toBe(true);
+    r.client.handleKey("o", "down", false);
+    expect(r.client.state().oracle).toBe(false);
+    grantAndOpen(r);
+    r.client.handleKey("o", "down", false);
+    expect(r.client.state().oracle).toBe(true);
+    expect(r.blips).toEqual([]); // a bound key in both layers, never a typo
   });
 });
 

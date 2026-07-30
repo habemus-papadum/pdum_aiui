@@ -276,6 +276,75 @@ const rows: Array<{
     command: "mute",
     expected: { micMuted: true },
   },
+  // oracle column (O3a, owner 2026-07-30): a standing armed-scope session that
+  // TAKES THE SINK — which is what pauses an open turn, without touching the
+  // manual `paused` region.
+  {
+    name: "oracle opens while merely armed (its own sink — nothing need be composing)",
+    start: { phase: "armed" },
+    command: "oracle",
+    expected: { phase: "armed", oracle: true },
+  },
+  {
+    name: "oracle from disarmed is nothing (arm first)",
+    start: {},
+    command: "oracle",
+    expected: { phase: "disarmed", oracle: false },
+  },
+  {
+    name: "oracle SURVIVES a send (standing, armed-scope like pencil)",
+    start: { phase: "turn", oracle: true },
+    command: "send",
+    expected: { phase: "armed", oracle: true },
+  },
+  {
+    name: "disarm closes the oracle (disarmed-is-hard — a live session must not outlive it)",
+    start: { phase: "turn", oracle: true },
+    command: "disarm",
+    expected: { phase: "disarmed", oracle: false },
+  },
+  {
+    name: "esc from a turn with the oracle on keeps the session (not a rung)",
+    start: { phase: "turn", oracle: true },
+    command: "escape",
+    expected: { phase: "armed", oracle: true },
+  },
+  {
+    name: "taking the oracle's sink clears a live area drag (area-needs-a-sink)",
+    start: { phase: "turn", region: true },
+    command: "oracle",
+    expected: { oracle: true, region: false },
+  },
+  {
+    name: "the oracle leaves the manual pause alone — a paused turn stays paused after it leaves",
+    start: { phase: "turn", paused: true, oracle: true },
+    command: "oracle",
+    expected: { phase: "turn", oracle: false, paused: true },
+  },
+  {
+    name: "park toggles while the oracle is live",
+    start: { phase: "armed", oracle: true },
+    command: "oraclePark",
+    expected: { oracle: true, oracleParked: true },
+  },
+  {
+    name: "park without a session is nothing",
+    start: { phase: "armed" },
+    command: "oraclePark",
+    expected: { oracleParked: false },
+  },
+  {
+    name: "closing the oracle un-parks it (park-needs-oracle)",
+    start: { phase: "armed", oracle: true, oracleParked: true },
+    command: "oracle",
+    expected: { oracle: false, oracleParked: false },
+  },
+  {
+    name: "park leaves the talk GRIP alone (independent of hands-free)",
+    start: { phase: "armed", oracle: true, talk: "handsFree" },
+    command: "oraclePark",
+    expected: { oracleParked: true, talk: "handsFree" },
+  },
   // cancelTurn column (owner, 2026-07-30): the explicit cancel cap's command
   {
     name: "cancelTurn abandons the turn back to armed",
@@ -402,6 +471,77 @@ describe("spec-level properties", () => {
     for (const command of ["shot", "selection", "region", "talkPress"]) {
       expect(e.canDispatch(command), `${command} after resume`).toBe(true);
     }
+  });
+
+  it("the oracle TAKES the sink, so a turn's contributions are refused while it holds it (O3a)", () => {
+    const e = createModeEngine(intentSpec, {
+      context: {
+        ...initialContext,
+        connected: true,
+        activeTab: 7,
+        grantedTab: 7,
+        selectionPresent: true,
+        micGranted: true,
+      },
+      initial: { phase: "turn" },
+    });
+    expect(e.canDispatch("shot")).toBe(true);
+    e.dispatch("oracle");
+    // The PIXEL/selection acts refuse: their routing to the oracle is O3d, so
+    // until then they must not land in the suspended turn behind it.
+    for (const command of ["shot", "selection", "region"]) {
+      expect(e.canDispatch(command), `${command} while the oracle holds the sink`).toBe(false);
+    }
+    // AUDIO is different — its routing IS wired in O3a: a hold goes to the
+    // oracle, so push-to-talk stays live across the handover.
+    expect(e.canDispatch("talkPress")).toBe(true);
+    // …and the turn's own lifecycle stays live: you can still send what you had.
+    expect(e.canDispatch("send")).toBe(true);
+    e.dispatch("oracle"); // hand the sink back
+    expect(e.canDispatch("shot")).toBe(true);
+  });
+
+  it("a HOLD survives the handover to the oracle and ends when no sink wants it", () => {
+    const e = createModeEngine(intentSpec, {
+      context: { ...initialContext, connected: true, micGranted: true },
+      initial: { phase: "turn" },
+    });
+    e.dispatch("talkPress");
+    expect(e.state().talk).toBe("hold");
+    e.dispatch("oracle"); // the sink moves; the gesture keeps its consumer
+    expect(e.state().talk).toBe("hold");
+    e.dispatch("oracle"); // back to the turn, still holding
+    expect(e.state().talk).toBe("hold");
+    e.dispatch("pause"); // now nothing consumes it (hold-needs-a-sink)
+    expect(e.state().talk).toBe("off");
+  });
+
+  it("a definitively REFUSED mic gates the oracle; never-asked does not (O3a)", () => {
+    const refused = createModeEngine(intentSpec, {
+      context: { ...initialContext, connected: true, micGranted: false },
+      initial: { phase: "armed" },
+    });
+    expect(refused.canDispatch("oracle")).toBe(false);
+
+    const unasked = createModeEngine(intentSpec, {
+      context: { ...initialContext, connected: true },
+      initial: { phase: "armed" },
+    });
+    expect(unasked.canDispatch("oracle")).toBe(true); // undefined = nobody asked yet
+
+    const offline = createModeEngine(intentSpec, {
+      context: { ...initialContext, connected: false, micGranted: true },
+      initial: { phase: "armed" },
+    });
+    expect(offline.canDispatch("oracle")).toBe(false); // no channel to mint through
+
+    // Turning a live session OFF is always allowed — never stranded, even
+    // after the world's gates lapse.
+    const stranded = createModeEngine(intentSpec, {
+      context: { ...initialContext, connected: false, micGranted: false },
+      initial: { phase: "armed", oracle: true },
+    });
+    expect(stranded.canDispatch("oracle")).toBe(true);
   });
 
   it("help is a standing root-level toggle (blank system: arm · step out · help)", () => {

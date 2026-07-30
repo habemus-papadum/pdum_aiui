@@ -19,12 +19,13 @@ import {
   barModel,
   barTree,
   type DispatchEvent,
+  type EngineState,
   type KeyHint,
 } from "@habemus-papadum/aiui-viz/modal";
 import { configBar, intentBar } from "./caps";
 import { type ClaimLaneOptions, intentClaims } from "./claims";
 import { hintsFor, keyVerdict } from "./keys";
-import { type IntentContext, initialContext, intentSpec, sink } from "./spec";
+import { type IntentContext, initialContext, intentSpec, sink, turnSuspended } from "./spec";
 import type { IntentHost } from "./transport";
 // The standing config surface: importing registers the controls (durable,
 // agent-visible) that the bar's widget nodes bind by name.
@@ -72,6 +73,12 @@ export interface IntentLanes {
    * (lanes/verbs.ts).
    */
   setPaused?(paused: boolean): void;
+  /**
+   * Gate the ORACLE's mic (O3a) — `handle.setMicEnabled` under the session's
+   * `park`/`resume`. Called on the edge of the derived conjunction in
+   * `runVerbs`; optional, like every oracle hook.
+   */
+  setOracleMic?(on: boolean): void;
 }
 
 export interface IntentClientConfig {
@@ -113,6 +120,11 @@ export interface IntentClient
 }
 
 const inTurn = (phase: unknown): boolean => phase === "turn";
+
+/** Is the ORACLE hearing anything right now (O3a)? The conjunction of the
+ * three independent ways to say "do not listen" — see the edge relay below. */
+const oracleMic = (s: EngineState): boolean =>
+  sink(s) === "oracle" && s.talk !== "off" && s.oracleParked !== true && s.micMuted !== true;
 
 export function createIntentClient(config: IntentClientConfig): IntentClient {
   const { host, lanes } = config;
@@ -197,18 +209,22 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
         break;
     }
 
-    // The pause bracket (owner, 2026-07-30): every `paused` edge relays —
-    // including the exit edge (the exclude clears `paused` in the commit that
-    // leaves the turn), which the lane needs to reset its gate. Placement is
-    // load-bearing twice: AFTER the command switch above, so a
-    // cancel-while-paused has already closed the thread when the lane sees
-    // the edge (the engine bracket no-ops and the resume compare is skipped —
-    // the close is the outer bracket); BEFORE the talk block below, so the
-    // stream reads bracket-first (pause → talk-end · resume → talk-start).
-    const pausedBefore = event.before.paused === true;
-    const pausedAfter = event.after.paused === true;
-    if (pausedBefore !== pausedAfter) {
-      lanes.setPaused?.(pausedAfter);
+    // The pause bracket (owner, 2026-07-30). The relay follows
+    // `turnSuspended` — the turn exists but is not collecting — NOT the
+    // `paused` region alone: the oracle taking the sink suspends the turn just
+    // as the ⏸ cap does, and both causes must produce the same bracket, the
+    // same boundary suppression, and the same resume compare (found by a spec
+    // test: gating on the region alone let a mid-oracle navigation land in the
+    // turn behind it). Placement is load-bearing twice: AFTER the command
+    // switch above, so a cancel-while-suspended has already closed the thread
+    // when the lane sees the edge (the engine bracket no-ops and the resume
+    // compare is skipped — the close is the outer bracket); BEFORE the talk
+    // block below, so the stream reads bracket-first (pause → talk-end ·
+    // resume → talk-start).
+    const suspendedBefore = turnSuspended(event.before);
+    const suspendedAfter = turnSuspended(event.after);
+    if (suspendedBefore !== suspendedAfter) {
+      lanes.setPaused?.(suspendedAfter);
     }
 
     // Talk WINDOW lifecycle (C3′, generalized by the pause slice): the window
@@ -220,23 +236,20 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     // (window opens), PAUSE (window closes, mode STANDS), resume (window
     // reopens), send (window closes), disarm (exclude ends the mode too).
     //
-    // A SINK-IDENTITY comparison, not a boolean, on purpose: a live mic can
-    // cross a sink change. none→sink opens, sink→none closes — and slice 2's
-    // turn→oracle is a consumer SWAP with the source still live (a reroute of
-    // the PCM under a held mic, never a stop/start — mute is a property of
-    // the source, BEHAVIOR.md). Unreachable while "turn" is the only sink;
-    // the shape is here so the one block that must be exactly right isn't
-    // rewritten when the oracle lands.
-    const windowBefore = event.before.talk !== "off" ? sink(event.before) : undefined;
-    const windowAfter = event.after.talk !== "off" ? sink(event.after) : undefined;
+    // Scoped to the TURN sink specifically. The pause slice left a
+    // sink-IDENTITY comparison here with a speculative turn→oracle "consumer
+    // swap" arm; O3a retired it, because each sink owns its OWN capture path —
+    // the talk lane's PcmSource feeds the turn, while the oracle's WebRTC
+    // transport opens its own track at connect and only enables/disables it
+    // (`setOracleMic` below). So there is no source to hand over: a handover
+    // stops this lane and flips the oracle's boolean, and nothing re-opens a
+    // device on either side. (The swap arm would have started the turn's
+    // capture WHILE the oracle held the sink — double capture, caught by the
+    // handover test.)
+    const windowBefore = event.before.talk !== "off" && sink(event.before) === "turn";
+    const windowAfter = event.after.talk !== "off" && sink(event.after) === "turn";
     if (windowBefore !== windowAfter) {
-      if (windowAfter !== undefined && windowBefore !== undefined) {
-        // Consumer swap (slice 2): today's lanes know one consumer, so the
-        // honest fallback is close-and-reopen; the oracle slice replaces this
-        // arm with the PCM reroute.
-        lanes.stopTalk();
-        lanes.startTalk(event.after.talk as string);
-      } else if (windowAfter !== undefined) {
+      if (windowAfter) {
         lanes.startTalk(event.after.talk as string);
       } else {
         lanes.stopTalk();
@@ -244,10 +257,23 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
     }
     // Mute relays only while a window is open (tweak is gone; the user's
     // toggle is the one mute source again).
-    const muteBefore = windowBefore !== undefined && event.before.micMuted === true;
-    const muteAfter = windowAfter !== undefined && event.after.micMuted === true;
-    if (windowAfter !== undefined && muteBefore !== muteAfter) {
+    const muteBefore = windowBefore && event.before.micMuted === true;
+    const muteAfter = windowAfter && event.after.micMuted === true;
+    if (windowAfter && muteBefore !== muteAfter) {
       lanes.setMicMuted(muteAfter);
+    }
+
+    // The ORACLE's mic (O3a): a gate on an already-open track, so it is an
+    // edge-driven boolean rather than a claim. THREE independent ways to say
+    // "do not listen", all of which do — the talk grip being off, park, and
+    // mute — which is monotone and cannot surprise. The session's own track is
+    // opened once at connect and only enabled/disabled after, so crossing the
+    // sink costs no device re-open on either side: the turn's capture stops
+    // (the window derivation above) while this flips a boolean.
+    const oracleMicBefore = oracleMic(event.before);
+    const oracleMicAfter = oracleMic(event.after);
+    if (oracleMicBefore !== oracleMicAfter) {
+      lanes.setOracleMic?.(oracleMicAfter);
     }
   };
 

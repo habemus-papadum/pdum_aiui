@@ -160,4 +160,28 @@ describe("PanelLayout", () => {
     client.dispatch("cancelTurn"); // the close takes the banner with it
     expect(banner()).toBeNull();
   });
+
+  it("the oracle taking the sink gives the banner its own wording (O3a)", () => {
+    const { root, client } = mount({ lanes: undefined }, { grantless: true });
+    const banner = () => root.querySelector("[data-testid=paused-banner]");
+    client.setContext({ connected: true, micGranted: true });
+    client.dispatch("turn");
+    client.dispatch("oracle");
+
+    expect(banner()?.getAttribute("data-reason")).toBe("oracle");
+    expect(banner()?.textContent).toContain("oracle live");
+    // The reason lives HERE and nowhere else — the stream's bracket is
+    // reason-free, so this is the only surface that distinguishes the causes.
+    client.dispatch("oracle");
+    expect(banner()).toBeNull();
+
+    // A manual pause underneath an oracle detour keeps the oracle's wording
+    // while it holds the sink, and reverts when it hands it back.
+    client.dispatch("pause");
+    expect(banner()?.getAttribute("data-reason")).toBe("manual");
+    client.dispatch("oracle");
+    expect(banner()?.getAttribute("data-reason")).toBe("oracle");
+    client.dispatch("oracle");
+    expect(banner()?.getAttribute("data-reason")).toBe("manual");
+  });
 });

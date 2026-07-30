@@ -46,14 +46,47 @@ import type { CdpAlignment } from "./cdp-align";
  * The SINK — where contributions route (owner, 2026-07-30; BEHAVIOR.md "The
  * sink"). Everything that ADDS to a turn — transcribed audio, shots, the area
  * drag, selection pulls, sampled frames, a hold-to-talk press — gates on this,
- * not on the phase. Today the only sink is an open, unpaused turn; the oracle
- * slice adds `"oracle"` as a second arm (armed-scope), and every gate below
- * inherits it for free. `undefined` = nothing is collecting.
+ * not on the phase. `undefined` = nothing is collecting.
+ *
+ * The ORACLE WINS when it is on (O3a, docs/proposals/intent-oracle.md): an
+ * open turn is therefore paused *by construction* — the sink is simply
+ * elsewhere — and leaving the oracle restores whatever that turn's own state
+ * was, because the oracle never writes the manual `paused` region. No memory,
+ * no restore logic, anywhere.
  */
-export type Sink = "turn";
+export type Sink = "turn" | "oracle";
 
 export function sink(s: EngineState): Sink | undefined {
+  if (s.oracle === true) {
+    return "oracle";
+  }
   return s.phase === "turn" && s.paused !== true ? "turn" : undefined;
+}
+
+/**
+ * The turn EXISTS but is not collecting — the lanes' pause condition, and
+ * deliberately broader than the `paused` region: the oracle taking the sink
+ * suspends the turn exactly as the ⏸ cap does, so both causes produce the same
+ * stream bracket, the same boundary suppression, and the same resume compare
+ * (lanes/capture-lanes.ts). A turn that has CLOSED is not suspended — the
+ * close is its own outer bracket.
+ */
+export function turnSuspended(s: EngineState): boolean {
+  return s.phase === "turn" && sink(s) !== "turn";
+}
+
+/**
+ * Where a PIXEL/SELECTION contribution may go today — the turn only.
+ *
+ * The audio routing to the oracle is wired (O3a: the mic gate follows the talk
+ * grip into either sink), but shots, area drags, and selection pulls still know
+ * one destination, so they must refuse while the oracle holds the sink rather
+ * than land in the suspended turn behind it. O3d — which teaches the lane verbs
+ * to fork on the sink — is the one place this narrowing is lifted, and then
+ * these gates go back to reading `sink(s) !== undefined`.
+ */
+function contributesToTurn(s: EngineState): boolean {
+  return sink(s) === "turn";
 }
 
 /** The world's facts (inputs, not choices — no command sets these). */
@@ -134,6 +167,24 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      * since C3′ (owner: an editor act, not a prompt act) — durable like pencil;
      * disarm clears it. */
     jump: toggle({ durable: true }),
+    /** The ORACLE — a live realtime voice session (O3a, owner 2026-07-30):
+     * armed-scope and standing like pencil/jump, durable, cleared by
+     * `disarmed-is-hard` (a WebRTC session must never outlive disarm). The
+     * region is the DESIRE; the `oracleSession` claim is the reconciled
+     * reality (connecting / live / failed), so a mint 503 or a refused mic
+     * surfaces through the claim status, never through a flag out of step
+     * with a connection. Deliberately NOT in `escOrder`, like the other
+     * standing modes — `d` / the arm cap is the hard exit. */
+    oracle: toggle({
+      durable: true,
+      agent: "oracleOn",
+      description: "hold a live oracle voice session (pauses the turn while on)",
+    }),
+    /** Park — the oracle's own "hold my place" (mic gated, connection open,
+     * $0). Its own region rather than a re-labelled mute (owner, 2026-07-30):
+     * independent of the talk GRIP, so parking never destroys hands-free and
+     * un-parking restores it. Meaningless without a session (`park-needs-oracle`). */
+    oracleParked: toggle(),
     /** Video sampling — standing, durable, agent-visible. */
     video: toggle({
       durable: true,
@@ -212,6 +263,14 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
      * armed or in a turn — C2: markup is a SOURCE, not a turn perk). */
     pencil: (s): StatePatch =>
       s.pencil ? { pencil: false } : { pencil: true, region: false, jump: false },
+    /** o — toggle the oracle session (standing, armed-scope). Taking it ON
+     * takes the SINK, which is what pauses an open turn; turning it off hands
+     * the sink back. Refused while disarmed (there is nothing to talk over);
+     * the world's gates — a channel to mint through, a mic that was not
+     * refused — ride `available` below. */
+    oracle: (s) => (s.phase === "disarmed" ? null : { oracle: !(s.oracle as boolean) }),
+    /** The oracle's park toggle — gate the mic, keep the session. */
+    oraclePark: (s) => (s.oracle === true ? { oracleParked: !(s.oracleParked as boolean) } : null),
     /** v — toggle video sampling (standing; the claim gates on turn). */
     video: (s) => ({ video: !(s.video as boolean) }),
     /** f — flip the cadence. */
@@ -285,7 +344,15 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     {
       name: "disarmed-is-hard",
       when: (s) => s.phase === "disarmed",
-      set: { pencil: false, jump: false, talk: "off" },
+      // …and the ORACLE (O3a): a live WebRTC session with an open mic must
+      // never outlive disarm — that is the whole point of the escape hatch.
+      set: { pencil: false, jump: false, talk: "off", oracle: false },
+    },
+    // Park is a property OF a session: no oracle, nothing to park.
+    {
+      name: "park-needs-oracle",
+      when: (s) => s.oracle !== true && s.oracleParked === true,
+      set: { oracleParked: false },
     },
     // Pause is a property OF a turn: leaving the turn (send, cancel, esc,
     // disarm) resets it, so no turn ever opens pre-paused (owner, 2026-07-30).
@@ -294,14 +361,16 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       when: (s) => s.phase !== "turn" && s.paused === true,
       set: { paused: false },
     },
-    // The area drag fires a shot into the SINK, so no sink clears it — leaving
-    // the turn, and PAUSING it (a live crosshair over a paused turn would shoot
-    // into it via the regionDrag pump). Was `area-needs-turn` until the pause
-    // slice generalized the term. Jump left this family in C3′ — an EDITOR
-    // act, armed-scope like pencil (disarm clears it, above).
+    // The area drag fires a shot into the turn, so anything that stops the turn
+    // collecting clears it — leaving the turn, PAUSING it, or the ORACLE taking
+    // the sink (a live crosshair over a suspended turn would shoot into it via
+    // the regionDrag pump). Was `area-needs-turn` until the pause slice
+    // generalized the term; `contributesToTurn` is where O3d widens it to the
+    // oracle. Jump left this family in C3′ — an EDITOR act, armed-scope like
+    // pencil (disarm clears it, above).
     {
       name: "area-needs-a-sink",
-      when: (s) => sink(s) === undefined && s.region === true,
+      when: (s) => !contributesToTurn(s) && s.region === true,
       set: { region: false },
     },
     // A HOLD is a gesture into the sink — you can no longer be "holding" once
@@ -336,6 +405,12 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // Arming needs a channel. Note the shape: you can always arm DOWN
     // (disarm), whatever the world says.
     arm: (s, ctx) => s.phase !== "disarmed" || ctx.connected,
+    // The oracle needs a channel to mint its credential through, and a mic
+    // that was not REFUSED (O3a). `micGranted: undefined` means nobody has
+    // asked yet — gating on that would dead-end the cap before the browser
+    // ever got the chance, so only a definitive `false` refuses. Turning the
+    // session OFF is always allowed (never stranded, like every other mode).
+    oracle: (s, ctx) => s.oracle === true || (ctx.connected && ctx.micGranted !== false),
     // NOTE deliberately NO `turn` gate: a turn is a WIRE concept — talk and
     // text work grantless — so armed → turn derives from the reducer. The
     // capture GRANT gates the capture-dependent acts individually (below);
@@ -349,13 +424,13 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // contribution acts at the machine, so caps, keys, the remote bar, and
     // agent writes all meet the same answer (BEHAVIOR.md).
     shot: (s, ctx) =>
-      sink(s) !== undefined && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
+      contributesToTurn(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab,
     // The area drag is pixels too — turning it ON wants the same grant as a shot;
     // turning it OFF is always allowed (so a lost grant can't strand you in area
     // mode — you can always toggle back out, and Esc bypasses `available`).
     region: (s, ctx) =>
       s.region === true ||
-      (sink(s) !== undefined && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
+      (contributesToTurn(s) && ctx.grantedTab !== undefined && ctx.grantedTab === ctx.activeTab),
     // Selection and clear are PAGE acts, not pixel acts (owner, 2026-07-14):
     // they ride the content script / bootstrap, which follows the tab in
     // view — no grant involved. Only pixels (shot, the stream, sampling) need
@@ -367,7 +442,7 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
     // selection pull with nothing selected is a guaranteed miss — the cap
     // grays and its tooltip points at selecting something first.
     selection: (s, ctx) =>
-      sink(s) !== undefined && ctx.activeTab !== undefined && ctx.selectionPresent,
+      contributesToTurn(s) && ctx.activeTab !== undefined && ctx.selectionPresent,
     // Jump-to-editor is a PAGE act on instrumented pages only: the picker
     // reads the aiui stamps and source root, so a page without `__AIUI__`
     // grays the cap — the gate IS the feature detection (owner, 2026-07-15).

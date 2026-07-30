@@ -111,11 +111,19 @@ which is monotone and cannot surprise:
 micEnabled = sink === "oracle" && talk !== "off" && !oracleParked && !micMuted
 ```
 
-**A consumer swap keeps the source live.** `talk: handsFree` with the sink moving
-`turn → oracle` is a re-route, not a stop-and-start: the mic source stays held and only the
-PCM's consumer changes. Restarting it would drop a device gap and flicker REC mid-sentence,
-and it would contradict the standing rule that mute is a property of the source and never
-of a route.
+**Each sink owns its own capture path — corrected against the build (O3a).** This proposal
+originally said a `turn → oracle` handover would keep one mic source live and re-route its
+PCM. The implementation refutes it: the WebRTC transport opens its **own** track inside
+`connect()`, while the turn's talk lane has its own `PcmSource`. There is no shared source
+to hand over.
+
+The outcome is better than the design it replaces. The oracle's track is opened once at
+connect and only enabled/disabled after, so a handover **stops the turn's lane and flips a
+boolean** — no device re-open on either side, no gap to flicker through, and never two
+captures at once. (The speculative swap arm left in the pause slice would have started the
+turn's capture while the oracle held the sink; a handover test caught it.) What survives
+intact is the rule that motivated the original claim: mute is a property of the source, so
+every way of saying "don't listen" gates the source rather than detaching a route.
 
 ## The lifecycle, as the user experiences it
 
@@ -270,6 +278,10 @@ the same reason the lowered prelude carries one.
   firehose. The sink says *whether* collection happens; per-source routing remains a
   per-source decision, so `videoSample` derives on `sink() === "turn"` specifically. Ad-hoc
   shots are the oracle's picture.
+- **Until O3d, so do shots, area drags, and selections** (`contributesToTurn` in spec.ts).
+  Their routing to the oracle is O3d's job, so O3a must refuse them rather than let them
+  land in the suspended turn sitting behind the oracle — a hole a spec test found. Audio is
+  the exception because its routing IS wired: a hold or hands-free follows the sink.
 - **Pencil strokes** route nowhere, as today — they are page markup, and a shot taken after
   drawing carries them.
 - **Navigation and tab boundaries** are not oracle events. The turn's own

@@ -22,6 +22,8 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
+import { absentKeyPhrase, vendorKey } from "@habemus-papadum/aiui-claude-channel/internal";
+import { createMintBackend } from "@habemus-papadum/aiui-oracle/server";
 import { discoverSessionBrowserInProfiles } from "@habemus-papadum/aiui-util";
 import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
 import type { Express } from "express";
@@ -157,7 +159,34 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
         // The node `ws` client speaks the CdpSocket surface the tagger needs.
         socketFactory: (url) => new WebSocket(url) as unknown as CdpSocket,
       });
+      // The oracle's credential mint (O3a, docs/proposals/intent-oracle.md):
+      // `POST /intent/oracle/mint`. The panel's oracle needs an ephemeral `ek_`
+      // to open a realtime session, and this is the honest end of the
+      // installed-keys posture — the PARENT key stays in the channel process
+      // and the page only ever sees the short-lived secret.
+      //
+      // The key comes from the channel's boot-time STASH, never
+      // `process.env`: an installed channel resolves the OS vault into the
+      // stash precisely so keys never enter an environment (`vendorKey`,
+      // the channel's internal seam). `absentKeyPhrase` then distinguishes
+      // "skipped by choice" from "missing" in the 503 the mint returns
+      // keyless — the backend degrades loudly by design.
+      const mint = createMintBackend({
+        prefix: `${INTENT_PREFIX}/oracle`,
+        resolveKey: () => vendorKey("OPENAI_API_KEY"),
+        log: (line) => ctx.log(`intent: ${line}`),
+      });
       app.use((req, res, next) => {
+        if (req.path === `${INTENT_PREFIX}/oracle/mint`) {
+          if (vendorKey("OPENAI_API_KEY") === undefined) {
+            // Name the absence the way the rest of the channel does before the
+            // backend's generic remedy line takes over.
+            ctx.log(`intent: oracle mint asked for, but ${absentKeyPhrase("OPENAI_API_KEY")}`);
+          }
+          if (mint.handleHttp(req, res)) {
+            return;
+          }
+        }
         if (req.path === `${INTENT_PREFIX}/page-bundle.js`) {
           // The page bundle (locator · jump · pencil), bundled to ONE
           // self-contained script for the bus to evaluate inside a victim page.

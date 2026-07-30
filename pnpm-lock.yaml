@@ -847,6 +847,9 @@ importers:
       '@habemus-papadum/aiui-lowering-pipeline':
         specifier: workspace:^
         version: link:../aiui-lowering-pipeline
+      '@habemus-papadum/aiui-oracle':
+        specifier: workspace:^
+        version: link:../aiui-oracle
       '@habemus-papadum/aiui-pencil':
         specifier: workspace:^
         version: link:../aiui-pencil

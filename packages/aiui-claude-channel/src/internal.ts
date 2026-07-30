@@ -23,3 +23,10 @@ export {
 } from "./registry";
 export { selectMcpServer } from "./select";
 export { projectCacheDir } from "./trace";
+// The boot-time vendor-key stash (vendor-key-stash.ts). A SIDECAR that needs a
+// vendor key — the intent client's oracle mint — must read it through this, not
+// `process.env`: an installed channel resolves the OS vault into the stash and
+// deliberately never puts keys in the environment. The stash lives on
+// `globalThis` under a `Symbol.for`, so a sidecar's own module instance sees the
+// same one the channel's boot resolved.
+export { absentKeyPhrase, vendorKey, vendorKeySkipped } from "./vendor-key-stash";

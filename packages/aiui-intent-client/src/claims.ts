@@ -28,6 +28,18 @@ export interface ClaimLaneOptions {
   videoSampler?: {
     start: (desire: { tab: number; mode: string }) => Promise<() => void>;
   };
+  /**
+   * The real oracle session (O3a): `start` connects it (mint → WebRTC →
+   * `session.update`), `stop` closes it. Deliberately shaped like
+   * `videoSampler` — the desire is the mode region, the reconciler owns the
+   * lifecycle, and its per-claim status IS the connecting/live/failed truth
+   * the pill renders. Hosts without an oracle (tests' fakes, a keyless
+   * session) omit it and the claim degrades to a no-op assertion.
+   */
+  oracle?: {
+    start: () => Promise<void>;
+    stop: () => void;
+  };
 }
 
 export function intentClaims(
@@ -186,6 +198,32 @@ export function intentClaims(
       },
       release: async (tab: number) => {
         await transport.requestPage(tab, "keylayer", { capture: false });
+      },
+    },
+
+    /**
+     * The oracle SESSION (O3a, docs/proposals/intent-oracle.md) — the mode
+     * region is the desire, this claim is the reconciled reality. Deriving it
+     * is what buys the async story: `pending` while the mint and the WebRTC
+     * offer/answer are in flight, `active` once live, and **`error`** when the
+     * mint 503s, the mic is refused, or ICE fails — all rendered by the pill
+     * strip that already reads claim statuses, with no connect state kept in
+     * step with a flag by hand.
+     *
+     * Tab-independent on purpose: the session belongs to the PANEL's document
+     * (the panel owns the mic), so a tab switch never re-points it. The mic
+     * GATE is not here — it is a per-edge derivation in client.ts, since
+     * gating is a boolean on a held track, not a resource to acquire.
+     */
+    oracleSession: {
+      derive: (s) => (s.oracle === true ? { on: true } : null),
+      acquire: async (desire: { on: true }) => {
+        await options.oracle?.start();
+        return desire;
+      },
+      release: () => {
+        options.oracle?.stop();
+        return Promise.resolve();
       },
     },
 

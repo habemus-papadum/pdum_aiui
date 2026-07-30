@@ -1,7 +1,7 @@
 /**
  * pills.tsx — the status-pill strip: internal state an expert wants at a
- * glance (channel · mic · rec · stream · video · ink · keys · ring · sel ·
- * aiui · ipad), plus the REC meter. Claim statuses and context facts,
+ * glance (channel · cdp · mic · rec · oracle · stream · video · ink · keys ·
+ * ring · sel · aiui · ipad), plus the REC meter. Claim statuses and context facts,
  * rendered; nothing stored. The ring pill projects through ringForTab — the
  * same pure projection the buses use — so solid-vs-hollow cannot drift from
  * the on-page dot; keeping the ring CSS comment and that projection in this
@@ -13,6 +13,7 @@ import type { ClaimStatus } from "@habemus-papadum/aiui-viz/modal";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { type CdpAlignment, describeCdpAlignment, isSharedAlignment } from "../cdp-align";
 import type { IntentClient } from "../client";
+import { sink } from "../spec";
 import { type RingState, ringForTab } from "../transport";
 
 export const PILLS_STYLES = `
@@ -106,8 +107,11 @@ export function StatusPills(props: { client: IntentClient; micLevel?: () => numb
   // live 2026-07-25: the volume bar lingered after escaping the turn).
   const [micLevel, setMicLevel] = createSignal(0, { ownedWrite: true });
   let meterTimer: ReturnType<typeof setInterval> | undefined;
+  // The TURN's window specifically (O3a): `micLevel` taps the talk lane's own
+  // capture, so an oracle session — a different track entirely — must leave
+  // the meter dark rather than show a level it is not measuring.
   const windowOpen = (): boolean =>
-    client.state().talk !== "off" && client.state().phase === "turn";
+    client.state().talk !== "off" && sink(client.state()) === "turn";
   createEffect(
     () => windowOpen() && props.micLevel !== undefined,
     (talking) => {
@@ -139,28 +143,35 @@ export function StatusPills(props: { client: IntentClient; micLevel?: () => numb
         state: ctx.micGranted === undefined ? "off" : ctx.micGranted ? "on" : "err",
         detail: ctx.micGranted === undefined ? "not asked" : ctx.micGranted ? "granted" : "denied",
       },
-      {
-        label: "rec",
-        // Window semantics (C3′): "live"/"muted" only while a turn routes the
-        // mic; a STANDING hands-free with no turn shows "busy" (armed, idle —
-        // nothing records) so the pill never claims a recording that isn't.
-        state:
-          talk === "off"
-            ? "off"
-            : state.phase !== "turn"
-              ? "busy"
-              : state.micMuted === true
-                ? "busy"
-                : "live",
-        detail:
-          talk === "off"
-            ? undefined
-            : state.phase !== "turn"
-              ? `${talk} · standing (nothing records until a turn)`
-              : state.micMuted === true
-                ? `${talk} · muted`
-                : talk,
-      },
+      ((): Pill => {
+        // Window semantics (C3′, generalized to the SINK in O3a): "live" only
+        // while something actually consumes the mic — a turn OR the oracle. A
+        // standing hands-free with no sink shows "busy" (nothing records), so
+        // the pill never claims a recording that isn't; and the detail names
+        // WHERE the audio is going, which is the one thing that changes when
+        // the oracle takes over.
+        const where = sink(state);
+        const silenced =
+          state.micMuted === true || (where === "oracle" && state.oracleParked === true);
+        if (talk === "off") {
+          return { label: "rec", state: "off" };
+        }
+        if (where === undefined) {
+          return {
+            label: "rec",
+            state: "busy",
+            detail: `${talk} · standing (nothing records until a turn)`,
+          };
+        }
+        return {
+          label: "rec",
+          state: silenced ? "busy" : "live",
+          detail: `${talk} → ${where}${silenced ? (state.oracleParked === true ? " · parked" : " · muted") : ""}`,
+        };
+      })(),
+      // The oracle's SESSION, not the desire: pending while the mint and the
+      // WebRTC handshake are in flight, err when either failed (O3a).
+      { label: "oracle", state: claimPillState(claims.oracleSession) },
       { label: "stream", state: claimPillState(claims.tabStream) },
       { label: "video", state: claimPillState(claims.videoSample) },
       { label: "ink", state: claimPillState(claims.inkPointer) },

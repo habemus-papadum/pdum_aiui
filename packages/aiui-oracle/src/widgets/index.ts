@@ -4,6 +4,7 @@ export type { OracleControlProps } from "./control";
 export { OracleControl, useOracleState } from "./control";
 export type { OracleKeyProps } from "./key";
 export { OracleKey } from "./key";
+export { ORACLE_WIDGET_STYLES } from "./styles";
 export type { OracleViewerProps } from "./viewer";
 export { OracleMind, OracleViewer } from "./viewer";
 export type { LedgerCategory, TurnGroup } from "./viewer-model";

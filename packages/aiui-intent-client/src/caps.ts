@@ -97,6 +97,24 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         litWhen: ({ state }) => state.talk === "hold",
       },
       {
+        // The ORACLE (O3a, owner 2026-07-30): a standing armed-scope session
+        // that TAKES THE SINK — an open turn pauses itself while it is on.
+        // Remote, and strongly so: asking the oracle from across the room is
+        // the case. Its child is park (mic gated, session open).
+        command: "oracle",
+        remote: true,
+        hint: { key: "o", label: "oracle", icon: "🔮" },
+        litWhen: ({ state }) => state.oracle === true,
+        children: [
+          {
+            command: "oraclePark",
+            remote: true,
+            hint: { key: "", label: "park", icon: "⏯" },
+            litWhen: ({ state }) => state.oracleParked === true,
+          },
+        ],
+      },
+      {
         // C3′: jump is an EDITOR act, armed-scope like pencil.
         command: "jump",
         hint: { key: "j", label: "jump", icon: "🎯" },

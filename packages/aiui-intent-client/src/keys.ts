@@ -121,6 +121,13 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       }),
     },
     {
+      // o = the ORACLE (O3a): dip into a voice session mid-turn. Taking the
+      // sink pauses the turn; `o` again hands it back.
+      keys: ["o", "O"],
+      down: onPress("oracle"),
+      hint: (s) => ({ key: "o", label: "oracle", icon: "🔮", active: s.oracle === true }),
+    },
+    {
       keys: ["m", "M"],
       down: (state, _key, repeat) =>
         !repeat && state.talk !== "off" ? command("mute") : "swallow",
@@ -219,6 +226,13 @@ export const armedLayer: KeyLayer<EngineState, string> = {
       keys: ["j", "J"],
       down: onPress("jump"),
       hint: (s) => ({ key: "j", label: "jump to editor", icon: "🎯", active: s.jump === true }),
+    },
+    {
+      // O3a: the oracle is a standing armed-scope session — open one with no
+      // turn at all (its own sink; nothing needs to be composing).
+      keys: ["o", "O"],
+      down: onPress("oracle"),
+      hint: (s) => ({ key: "o", label: "oracle", icon: "🔮", active: s.oracle === true }),
     },
     {
       // C2: the pencil rides armed — toggle markup with no turn open.

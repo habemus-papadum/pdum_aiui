@@ -138,11 +138,18 @@ its slice lands: talk/hands-free (C3).
 
 **Contributions route to a SINK, and the sink is the one predicate.** Everything that ADDS to
 a turn — transcribed audio, shots, the area drag, selection pulls, sampled video frames, a
-hold-to-talk press — gates on `sink(state)` (spec.ts), not on the phase. Today the only sink
-is `"turn"`: an open, **unpaused** turn. The oracle lands as a second sink (armed-scope, its
-own slice): entering it pauses the turn *by construction* — the sink is elsewhere — and
-leaving restores whatever the turn's own state was, because the oracle never writes the
-manual `paused` region. No memory, no restore logic, anywhere.
+hold-to-talk press — gates on `sink(state)` (spec.ts), not on the phase. Two sinks exist:
+`"turn"` (an open, **unpaused** turn) and `"oracle"`, which WINS while it is on. Entering
+the oracle therefore pauses the turn *by construction* — the sink is elsewhere — and leaving
+restores whatever the turn's own state was, because the oracle never writes the manual
+`paused` region. No memory, no restore logic, anywhere. See "The oracle" below and
+docs/proposals/intent-oracle.md.
+
+**A suspended turn is one that exists but is not collecting** (`turnSuspended`), whichever
+cause suspended it. The lanes gate on THAT, not on the `paused` region: an oracle detour
+brackets the stream, suppresses boundaries, and runs the resume compare exactly as the ⏸ cap
+does. (Gating on the region alone let a mid-oracle navigation land in the turn behind it —
+found by a spec test, not in the wild.)
 
 **Pause (`⏸` / `b`) suspends collection, not the turn.** An orthogonal `paused` toggle — not
 a phase rung — meaningful only in a turn (`pause-needs-turn` resets it on exit, so no turn
@@ -197,6 +204,34 @@ cap keeps its toggle-to-abandon (muscle memory, documented above); the explicit 
 is the unambiguous spelling. Both routes raise the same confirm dialog when the turn holds
 content — one click must not discard a five-minute brief. Esc, `d`, and programmatic routes
 stay immediate, as before.
+
+## The oracle — the second sink (O3a, owner 2026-07-30)
+
+The full contract is docs/proposals/intent-oracle.md; what the client guarantees:
+
+- **A region AND a claim.** `oracle` (`🔮`, `o`, armed-scope, durable, `remote: true`) is the
+  DESIRE; the `oracleSession` claim is the reconciled reality, so connecting / live / failed
+  is the reconciler's status — the `oracle` pill — and never a flag kept in step by hand. A
+  refused mint leaves the cap lit: you asked, the world said no, pressing again retries.
+- **`disarmed-is-hard` closes it.** A live WebRTC session with an open mic must never
+  outlive disarm; that is what the escape hatch is for. Not in `escOrder` (like pencil and
+  jump).
+- **It never listens on activation.** The oracle inherits the talk grip: `off` hears
+  nothing, hands-free hears continuously, a hold hears while Space is down. So there is no
+  hot mic on entry and none on exit.
+- **Three independent ways to say "do not listen", all of which do**: the grip being off,
+  **park** (`⏯`, the oracle's own "hold my place" — its own region, independent of the grip,
+  so parking never destroys hands-free), and mute. The gate is their conjunction, which is
+  monotone and cannot surprise.
+- **Each sink owns its capture path.** The oracle's WebRTC track is opened once at connect
+  and only enabled/disabled after; the turn's talk lane has its own source. A handover stops
+  one and flips the other's boolean — no device re-open, and never two captures at once.
+- **Audio routes to either sink today; pixels and selections do not yet.** Shot, area, and
+  selection stay TURN-only (`contributesToTurn`) until their lane verbs learn to fork —
+  refusing at the machine rather than landing in the suspended turn behind the oracle.
+- **Gated on a channel and a mic that was not refused.** `micGranted: undefined` means
+  nobody has asked yet and must not dead-end the cap; only a definitive `false` refuses.
+  Turning a session OFF is always allowed, even after those gates lapse.
 
 ## The bar
 
@@ -296,12 +331,13 @@ Phase 2 implemented 2026-07-18):
 - **linter** (converse, on-demand) — accumulates silently and speaks one comprehensive
   advisory read when the **lint now** button asks; never touches the prompt. (Overhear — the
   automatic pause-lints — retired 2026-07-19.)
-A third route, the **oracle** — a direct voice conversation the mic was ADDRESSED to — is
-**deleted end to end** (owner, 2026-07-25/26): no client surface, no channel handler, no
-`oracle-*` events in the pipeline vocabulary. It returns as a standalone WebRTC tool
-(`packages/aiui-oracle`, lab-first) that deliberately contributes NOTHING to turns or prompt
-lowering; the journeys' XOR (oracle ⊕ linter) died with it. Git history keeps the old
-implementation; `docs/guide/oracle.md` keeps the persona of record.
+A third route, the **oracle** — a direct voice conversation the mic was ADDRESSED to — was
+**deleted end to end** as a route (owner, 2026-07-25/26): no `oracle-*` events in the
+pipeline vocabulary, and the journeys' XOR (oracle ⊕ linter) died with it. It came back
+2026-07-30 as something else entirely — not a route onto the turn but a **second SINK**
+(`packages/aiui-oracle` in the panel, O3a above): it still contributes NOTHING to turns or
+prompt lowering, and the pause bracket an oracle detour leaves in the stream is deliberately
+reason-free. `docs/guide/oracle.md` keeps the persona of record.
 
 **Reply audio STREAMS (owner, 2026-07-19: "we don't want whole playback anything").** Every
 live consumer's spoken reply reaches the client as `seq`-ordered PCM chunks the moment the

@@ -30,12 +30,14 @@ import { openIntentThread } from "@habemus-papadum/aiui-intent-runtime/thread";
 import { createWire } from "@habemus-papadum/aiui-intent-runtime/wire";
 import { Engine } from "@habemus-papadum/aiui-lowering-pipeline";
 import { createSignal } from "solid-js";
-import type { IntentClient } from "../client";
+import type { ClaimLaneOptions } from "../claims";
+import type { IntentClient, IntentLanes } from "../client";
 import { linter, stt } from "../config";
 import { createLinterPulse } from "../linter-pulse";
 import { createCaptureLanes } from "./capture-lanes";
 import { createConfigEffects } from "./config-effects";
 import { sessionStorageMirror } from "./mirror";
+import { createOracleLanes } from "./oracle";
 import { currentThreadEvents, panelIntentConfig, turnHasContent } from "./turn-config";
 import type { ChannelLanes, ChannelLanesConfig, LaneContext, OpenThread } from "./types";
 import { createVerbs } from "./verbs";
@@ -168,10 +170,20 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
   // ── the capture wing: the page-event pump (region-drag crop, smart-mode
   // interaction gate, same-tab navigation), the tab-switch boundary tracker,
   // and the claim hooks (ink fade + the video frame pump). ───────────────────
-  const claimOptions = createCaptureLanes(ctx);
+  const captureOptions = createCaptureLanes(ctx);
+
+  // ── the oracle (O3a): one session, started/stopped by its claim ────────────
+  const oracle = createOracleLanes(ctx);
+  const claimOptions: ClaimLaneOptions = {
+    ...captureOptions,
+    oracle: { start: oracle.start, stop: oracle.stop },
+  };
 
   // ── the verbs: the IntentLanes the mode engine drives, over the context ────
-  const lanes = createVerbs(ctx);
+  const lanes: IntentLanes = {
+    ...createVerbs(ctx),
+    setOracleMic: oracle.setMicEnabled,
+  };
 
   // ── the linter pulse: the sidecar's state machine, mirrored for the dot ────
   const pulse = createLinterPulse({
@@ -270,6 +282,7 @@ export function createChannelLanes(config: ChannelLanesConfig): ChannelLanes {
     wire,
     talk,
     speech,
+    oracle: oracle.session,
     linterPulse: pulse.view,
     // The lint button pair: fire-and-forget onto the control rail.
     // sendControl itself no-ops without an open thread, so an idle press

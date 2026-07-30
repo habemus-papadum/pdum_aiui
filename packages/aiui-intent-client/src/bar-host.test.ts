@@ -99,7 +99,14 @@ describe("intentBarSource — the remote subset", () => {
     // shot rides the ARMED tier since the hoist (owner, 2026-07-30) and now
     // LEADS the standing three; pause is turn-tier (the lifecycle cluster),
     // so it joins when a turn opens — pausing from the couch is its point.
-    expect(remoteCommands(client)).toEqual(["shot", "handsFree", "video", "pencil", "pause"]);
+    expect(remoteCommands(client)).toEqual([
+      "shot",
+      "oracle",
+      "handsFree",
+      "video",
+      "pencil",
+      "pause",
+    ]);
   });
 
   it("projects the armed set while merely armed — shot present but sink-gated (the hoist)", () => {
@@ -108,7 +115,14 @@ describe("intentBarSource — the remote subset", () => {
     // shot EXISTS on the armed tier now (dimmed without a sink — the machine
     // refuses, the projection shows the refusal); pause stays behind the
     // closed turn tier.
-    expect(remoteCommands(client)).toEqual(["shot", "handsFree", "video", "pencil"]);
+    expect(remoteCommands(client)).toEqual(["shot", "oracle", "handsFree", "video", "pencil"]);
+  });
+
+  it("a lit oracle reveals PARK to the remote — asking, and holding your place, from the couch", () => {
+    const client = makeClient();
+    client.setContext({ connected: true });
+    client.dispatch("oracle");
+    expect(remoteCommands(client)).toContain("oraclePark");
   });
 });
 
@@ -135,6 +149,7 @@ describe("createBarHost", () => {
     });
     expect(fs.lastBar()?.rows.map((r) => r.command)).toEqual([
       "shot",
+      "oracle",
       "handsFree",
       "video",
       "pencil",
