@@ -368,6 +368,9 @@ export class OracleSession {
           ...(config.transcribeInput !== false
             ? { transcription: { model: DEFAULT_INPUT_TRANSCRIPTION_MODEL } }
             : {}),
+          ...(config.noiseReduction !== undefined
+            ? { noise_reduction: { type: config.noiseReduction } }
+            : {}),
         },
       },
       tools: this.toolSchemas(),
@@ -684,7 +687,42 @@ function configDrift(sent: Record<string, unknown>, effective: Record<string, un
       drift.push("instructions differ from intended");
     }
   }
+  // The AUDIO INPUT block — turn detection and noise reduction. These are the
+  // knobs a self-interrupting session is tuned with, and "we set threshold
+  // 0.75" is worth nothing unless the server agrees it holds 0.75. Compared
+  // field by field so a name the vendor does not know shows up as drift
+  // rather than as a silently ignored setting (the house rule: send it, then
+  // read the echo).
+  const sentInput = audioInput(sent);
+  const heldInput = audioInput(effective);
+  for (const block of ["turn_detection", "noise_reduction"] as const) {
+    const want = sentInput[block];
+    if (want === null || typeof want !== "object") {
+      continue;
+    }
+    const held = heldInput[block];
+    if (held === null || typeof held !== "object") {
+      drift.push(`${block} not held`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(want as Record<string, unknown>)) {
+      const got = (held as Record<string, unknown>)[key];
+      if (got !== value) {
+        drift.push(`${block}.${key}: sent ${JSON.stringify(value)}, holds ${JSON.stringify(got)}`);
+      }
+    }
+  }
   return drift;
+}
+
+/** The `audio.input` sub-object, defensively (either side may omit it). */
+function audioInput(session: Record<string, unknown>): Record<string, unknown> {
+  const audio = session.audio;
+  if (audio === null || typeof audio !== "object") {
+    return {};
+  }
+  const input = (audio as Record<string, unknown>).input;
+  return input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
 }
 
 function tallyUsage(usage: unknown): UsageTotals | undefined {

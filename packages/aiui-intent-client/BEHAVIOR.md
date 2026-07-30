@@ -230,6 +230,15 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
 - **A hold ends when the turn stops collecting**, including the oracle taking over
   (`hold-needs-the-turn`) — a gesture with no consumer is nothing. A standing hands-free
   MODE survives: its window closes on the way in and reopens on the way out.
+- **Tuned so it does not barge in on itself** (owner, 2026-07-30): `noise_reduction:
+  far_field` plus a VAD `threshold` of 0.75. The browser's echo cancellation IS on (the
+  `session/live` ledger line records what the mic actually granted — `mic: aec+ns+agc`), but
+  it fails on the FIRST reply of a session and never again, which is an echo canceller that
+  has not converged: it has no model of the room until it has heard far-end audio, so the
+  first thing the model says leaks, trips the vendor's VAD, and cancels the reply
+  mid-sentence. The defence therefore sits vendor-side, and both settings are checked
+  against the `session.updated` echo — the config entry's drift names any the server did not
+  take.
 - **One fresh credential per session, and no session outlives the vendor's ~60 minutes.**
   Two clocks: the minted secret's TTL bounds how long it may OPEN a session; the vendor's
   cap bounds how long an open one runs. A session that ends unasked drops the desire and

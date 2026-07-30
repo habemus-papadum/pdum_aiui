@@ -234,7 +234,30 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       .catch(() => {});
   };
   const session = new OracleSession({
-    config: { instructions: weaveInstructions({ app: PANEL_BLURB }) },
+    config: {
+      instructions: weaveInstructions({ app: PANEL_BLURB }),
+      // Tuned for the panel's actual acoustics: a laptop mic listening to the
+      // same machine's speakers (owner, 2026-07-30, after the session kept
+      // barging in on ITSELF).
+      //
+      // Why the browser's echo cancellation was not enough — and the ledger
+      // proves it was on (`mic: aec+ns+agc`): the failure happened on the
+      // FIRST reply of a session and never again, which is the signature of
+      // an echo canceller that has not converged yet. It has no model of the
+      // room until it has heard far-end audio, so the very first thing the
+      // model says leaks, trips the vendor's VAD, and cancels the reply
+      // mid-sentence. By the second reply the filter has adapted and a long
+      // conversation runs clean.
+      //
+      // So the defence moves to the vendor side, where practitioners landed
+      // on the same pair: `far_field` optimizes for a speakerphone-shaped
+      // room, and a threshold above the 0.5 default means the residue of an
+      // unconverged first cancellation is no longer loud enough to count as
+      // someone talking. Both are verified by the config echo's drift check —
+      // if the vendor ignores either, the ledger says so.
+      noiseReduction: "far_field",
+      turnTuning: { threshold: 0.75 },
+    },
     // The chain's order is the standard one (a pasted key TRUMPS everything),
     // with the channel's mint standing in for a deployed app's endpoint. The
     // URL is resolved per call so a channel rebind is picked up without

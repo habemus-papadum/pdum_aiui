@@ -478,3 +478,58 @@ describe("attributing a cancellation — was it us or the vendor?", () => {
     expect((sent[0] as { type: string }).type).toBe("interrupt (shush)");
   });
 });
+
+describe("the anti-self-interrupt tuning, and proving the vendor took it", () => {
+  it("sends far_field noise reduction beside turn_detection, not inside it", async () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    const input = (rig.sent[0] as { session: { audio: { input: Record<string, unknown> } } })
+      .session.audio.input;
+    expect(input.noise_reduction).toEqual({ type: "far_field" });
+    expect(input.turn_detection).toMatchObject({ type: "server_vad", threshold: 0.75 });
+  });
+
+  it("DRIFT names a tuning field the server did not take — the whole point of the echo", async () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    // The server acks with the DEFAULT threshold and no noise reduction — the
+    // silent-ignore case that "we set it" would otherwise paper over.
+    rig.emit({
+      type: "session.updated",
+      session: { audio: { input: { turn_detection: { type: "server_vad", threshold: 0.5 } } } },
+    });
+    const config = session.ledger().find((e) => e.kind === "config") as Extract<
+      LedgerEntry,
+      { kind: "config" }
+    >;
+    expect(config.drift?.join(" ")).toContain("turn_detection.threshold: sent 0.75, holds 0.5");
+    expect(config.drift?.join(" ")).toContain("noise_reduction not held");
+  });
+
+  it("no drift when the server holds exactly what we asked for", async () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    const sentSession = (rig.sent[0] as { session: Record<string, unknown> }).session;
+    rig.emit({ type: "session.updated", session: sentSession });
+    const config = session.ledger().find((e) => e.kind === "config") as Extract<
+      LedgerEntry,
+      { kind: "config" }
+    >;
+    expect(config.drift).toEqual([]);
+  });
+});

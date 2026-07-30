@@ -62,6 +62,18 @@ export interface OracleConfig {
    * defence (see `ECHO_SAFE_AUDIO`); raising the threshold is the second.
    */
   turnTuning?: Record<string, unknown>;
+  /**
+   * The vendor's INPUT noise reduction — `"near_field"` (a headset) or
+   * `"far_field"` (a laptop mic across the room from its own speakers). Sent
+   * as `audio.input.noise_reduction`, which is a sibling of `turn_detection`
+   * and so cannot ride {@link turnTuning}.
+   *
+   * `far_field` is the documented speakerphone setting and, with a raised
+   * {@link turnTuning} threshold, is what practitioners report fixes a model
+   * that barges in on its own voice. Verified the same way as everything else
+   * here: sent, then read back off the `session.updated` echo.
+   */
+  noiseReduction?: "near_field" | "far_field";
   /** Vendor-side transcription of the USER's audio (the "heard" record).
    * Default on; costs transcription tokens. */
   transcribeInput?: boolean;
