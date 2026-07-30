@@ -74,6 +74,35 @@ export interface OracleConfig {
    * here: sent, then read back off the `session.updated` echo.
    */
   noiseReduction?: "near_field" | "far_field";
+  /**
+   * Protect the FIRST reply from the microphone's own echo. Default ON; pass
+   * `false` to disable, or an object to tune the timings.
+   *
+   * The problem it solves: a browser's echo canceller is adaptive — it has no
+   * model of the room until it has actually heard far-end audio come back
+   * through the mic. So the very first reply leaks, the VAD hears "speech",
+   * and the session barges in on itself. Which is exactly the reported
+   * symptom: it happens on the first interaction and never again.
+   *
+   * The fix is a window, not a setting: until the first reply has finished
+   * speaking, `turn_detection` carries `interrupt_response: false` AND
+   * `create_response: false` — nothing the mic hears may truncate that reply
+   * or answer it. Then the complete block is re-sent with the configured
+   * values, and the session behaves normally for the rest of its life.
+   *
+   * `create_response` rides along deliberately: suppressing only the
+   * interrupt leaves the echo committed as a user turn, which then generates
+   * a reply to its own voice — a quieter bug, not a fixed one. The cost is
+   * confined to the first reply: if the human genuinely talks over it, they
+   * are heard and transcribed but not answered until they speak again.
+   *
+   * Closing the window needs a real end-of-speech signal, and `response.done`
+   * is not one (the transcript finishes seconds ahead of the audio, and on
+   * WebRTC the reply is a track we cannot time). {@link LedgerBody}'s
+   * `reply-audio` entry is that signal — the vendor's `output_audio_buffer.*`
+   * events, which this package used to discard as chatter.
+   */
+  firstReplyGuard?: boolean | FirstReplyGuard;
   /** Vendor-side transcription of the USER's audio (the "heard" record).
    * Default on; costs transcription tokens. */
   transcribeInput?: boolean;
@@ -90,6 +119,34 @@ export interface OracleConfig {
    */
   mintTtlSeconds?: number;
 }
+
+/** Timings for {@link OracleConfig.firstReplyGuard}. */
+export interface FirstReplyGuard {
+  /**
+   * Grace after the reply's audio stops before interrupts are armed, ms.
+   * Default {@link DEFAULT_FIRST_REPLY_PAD_MS}.
+   *
+   * `output_audio_buffer.stopped` means the SERVER finished sending; the
+   * client's jitter buffer may still have a few hundred milliseconds to play,
+   * and that tail is echo like any other.
+   */
+  padMs?: number;
+  /**
+   * Hard cap from the first response's creation, ms. Default
+   * {@link DEFAULT_FIRST_REPLY_MAX_MS}.
+   *
+   * The end-of-audio event is undocumented (community-verified only) and has
+   * been reported to arrive late, so it never gets to be the ONLY way out of
+   * the window — a reply that produces no audio at all, or an event that
+   * simply never comes, must not leave barge-in disabled for the session.
+   * Arming late is harmless: echo cancellation converges within a second or
+   * two of far-end audio, so by the cap the hazard is long past.
+   */
+  maxMs?: number;
+}
+
+export const DEFAULT_FIRST_REPLY_PAD_MS = 400;
+export const DEFAULT_FIRST_REPLY_MAX_MS = 15_000;
 
 export const DEFAULT_ORACLE_MODEL = "gpt-realtime-2.1";
 export const DEFAULT_ORACLE_VOICE = "marin";
@@ -207,6 +264,18 @@ export type LedgerBody =
       drift?: string[];
     }
   | { kind: "speech"; phase: "started" | "stopped" }
+  /**
+   * The REPLY's audio lifecycle — the vendor's `output_audio_buffer.*` events,
+   * WebRTC-only and undocumented in the API reference, but the only thing that
+   * says when the agent actually stopped talking. `response.done` is not that:
+   * the transcript completes seconds ahead of the speech.
+   *
+   * These were in this package's known-chatter drop list, which made
+   * "has it finished speaking?" unanswerable from a record that in fact
+   * contained the answer. `cleared` is an interrupt flushing the buffer, and
+   * counts as an ending like any other.
+   */
+  | { kind: "reply-audio"; phase: "started" | "stopped" | "cleared" }
   | { kind: "heard"; text: string }
   | { kind: "said"; responseId: string; text: string }
   | {

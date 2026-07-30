@@ -29,6 +29,8 @@ import type {
   UsageTotals,
 } from "./types";
 import {
+  DEFAULT_FIRST_REPLY_MAX_MS,
+  DEFAULT_FIRST_REPLY_PAD_MS,
   DEFAULT_INPUT_TRANSCRIPTION_MODEL,
   DEFAULT_ORACLE_MODEL,
   DEFAULT_ORACLE_VOICE,
@@ -82,6 +84,15 @@ export class OracleSession {
   private readonly argsDoneAt = new Map<string, number>();
   private toolsByName = new Map<string, OracleTool>();
   private handle: TransportHandle | undefined;
+  /** The first-reply echo window, while it is OPEN — `undefined` once
+   * interrupts are armed (or when the guard is off). Read by
+   * {@link audioSession}, which is what makes the window a property of the
+   * config we send rather than a flag anyone has to remember to apply. */
+  private guard: { padMs: number; maxMs: number } | undefined;
+  private guardTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Whether the current reply ever produced audio — a reply that did not
+   * (a tool-only turn) has no end-of-speech event to wait for. */
+  private replyAudioStarted = false;
   private seq = 0;
   private eventSeq = 0;
   private current: OracleState = {
@@ -135,6 +146,11 @@ export class OracleSession {
     // once-per-session invitation the strip no longer returns to) would never
     // appear again.
     this.setState({ status: "connecting", playbackBlocked: false, replyText: "" });
+    // The echo window opens BEFORE the config is built: `audioSession` reads
+    // `this.guard`, so the baked session and the opening update carry the
+    // suppressed interrupt from the very first byte. A reconnect re-opens it —
+    // a new peer connection is a new echo canceller, with nothing learned.
+    this.openGuard();
     this.record({
       kind: "session",
       phase: "connecting",
@@ -220,6 +236,7 @@ export class OracleSession {
   }
 
   close(): void {
+    this.clearGuardTimer();
     if (this.handle === undefined) {
       this.setState({ status: "closed" });
       return;
@@ -249,6 +266,27 @@ export class OracleSession {
     this.options.config.instructions = instructions;
     if (this.handle !== undefined) {
       this.sendSessionUpdate({ instructions });
+    }
+  }
+
+  /**
+   * Re-tune the VAD mid-session (`threshold`, `silence_duration_ms`,
+   * `interrupt_response`, …) — merged over the configured
+   * {@link OracleConfig.turnTuning} and re-sent.
+   *
+   * Note what goes on the wire: the COMPLETE `audio.input` block, not the one
+   * field that changed. `turn_detection` travels as a whole object and there
+   * is no documented field-level patch, so whether the vendor merges INSIDE
+   * it is unverified — and if it replaces, a lone `{ interrupt_response: true }`
+   * would silently drop `type` and `threshold` back to defaults, undoing the
+   * anti-echo tuning while appearing to fix something. Re-sending the whole
+   * block is correct under either semantics. The `config` ledger entry's
+   * drift lines are how the question actually gets settled.
+   */
+  setTurnTuning(tuning: Record<string, unknown>): void {
+    this.options.config.turnTuning = { ...(this.options.config.turnTuning ?? {}), ...tuning };
+    if (this.handle !== undefined) {
+      this.sendSessionUpdate(this.audioSession());
     }
   }
 
@@ -349,10 +387,27 @@ export class OracleSession {
 
   /** The session.update-safe subset — everything EXCEPT voice and model. */
   private updatableSession(): Record<string, unknown> {
+    return {
+      instructions: this.options.config.instructions,
+      ...this.audioSession(),
+      tools: this.toolSchemas(),
+    };
+  }
+
+  /**
+   * The COMPLETE `audio.input` block, always built whole.
+   *
+   * Its parts are siblings that must travel together: `noise_reduction` sits
+   * beside `turn_detection`, not inside it, and the guard's suppression sits
+   * inside `turn_detection` beside the tuning. Since nested merge semantics
+   * are unverified (see {@link setTurnTuning}), every send of this block is a
+   * full statement of intent rather than a patch — which also means a drift
+   * check against the ack covers the whole thing.
+   */
+  private audioSession(): Record<string, unknown> {
     const config = this.options.config;
     const turn = config.turn ?? "auto";
     return {
-      instructions: config.instructions,
       audio: {
         input: {
           turn_detection:
@@ -364,6 +419,12 @@ export class OracleSession {
                   // by the `session.updated` echo the config ledger records —
                   // never assumed to have been accepted.
                   ...(config.turnTuning ?? {}),
+                  // …and the echo window wins over it while open: for the
+                  // first reply, nothing the mic hears may truncate the reply
+                  // or answer it. Arming re-sends this block without them.
+                  ...(this.guard !== undefined
+                    ? { interrupt_response: false, create_response: false }
+                    : {}),
                 },
           ...(config.transcribeInput !== false
             ? { transcription: { model: DEFAULT_INPUT_TRANSCRIPTION_MODEL } }
@@ -373,8 +434,58 @@ export class OracleSession {
             : {}),
         },
       },
-      tools: this.toolSchemas(),
     };
+  }
+
+  // ── the first-reply echo window ────────────────────────────────────────────
+
+  /** Open the window, if the config wants one and there is a VAD to suppress
+   * (manual turn control has no `turn_detection` object to carry it). */
+  private openGuard(): void {
+    this.clearGuardTimer();
+    this.replyAudioStarted = false;
+    const wanted = this.options.config.firstReplyGuard ?? true;
+    if (wanted === false || (this.options.config.turn ?? "auto") === "manual") {
+      this.guard = undefined;
+      return;
+    }
+    const tuning = wanted === true ? {} : wanted;
+    this.guard = {
+      padMs: tuning.padMs ?? DEFAULT_FIRST_REPLY_PAD_MS,
+      maxMs: tuning.maxMs ?? DEFAULT_FIRST_REPLY_MAX_MS,
+    };
+  }
+
+  /** Close the window: re-send the audio block with the configured values. */
+  private armInterrupts(reason: string): void {
+    if (this.guard === undefined) {
+      return;
+    }
+    this.guard = undefined;
+    this.clearGuardTimer();
+    if (this.handle === undefined) {
+      return;
+    }
+    // A `sent` line, because arming is OURS and the ledger's job here is
+    // attribution: a barge-in after this point is the vendor's doing, and the
+    // record has to show when that became possible.
+    this.record({ kind: "sent", type: `interrupts armed (${reason})` });
+    this.sendSessionUpdate(this.audioSession());
+  }
+
+  private armLater(ms: number, reason: string): void {
+    this.clearGuardTimer();
+    this.guardTimer = setTimeout(() => {
+      this.guardTimer = undefined;
+      this.armInterrupts(reason);
+    }, ms);
+  }
+
+  private clearGuardTimer(): void {
+    if (this.guardTimer !== undefined) {
+      clearTimeout(this.guardTimer);
+      this.guardTimer = undefined;
+    }
   }
 
   /** Outbound control events worth a ledger line — the ones that can move a
@@ -433,7 +544,32 @@ export class OracleSession {
       }
       case "response.created":
         this.setState({ replying: true, replyText: "" });
+        this.replyAudioStarted = false;
+        // The cap starts counting at the FIRST response, not at connect: an
+        // idle session has no echo to guard against. `guardTimer === undefined`
+        // is the "first" test — once armed or scheduled, this leaves it alone.
+        if (this.guard !== undefined && this.guardTimer === undefined) {
+          this.armLater(this.guard.maxMs, "timeout");
+        }
         return;
+      // The reply's own audio lifecycle — WebRTC-only, undocumented, and the
+      // only honest answer to "has it stopped talking?". Recorded, and the
+      // hinge the echo window turns on.
+      case "output_audio_buffer.started":
+        this.replyAudioStarted = true;
+        this.record({ kind: "reply-audio", phase: "started" });
+        return;
+      case "output_audio_buffer.stopped":
+      case "output_audio_buffer.cleared": {
+        const phase = type === "output_audio_buffer.stopped" ? "stopped" : "cleared";
+        this.record({ kind: "reply-audio", phase });
+        if (this.guard !== undefined) {
+          // Not immediately: `stopped` says the SERVER finished sending, and
+          // the client still has a jitter buffer's worth of speech to play.
+          this.armLater(this.guard.padMs, `reply audio ${phase}`);
+        }
+        return;
+      }
       case "response.output_audio_transcript.delta": {
         const delta = typeof event.delta === "string" ? event.delta : "";
         this.setState({ replyText: this.current.replyText + delta });
@@ -489,9 +625,6 @@ export class OracleSession {
       case "response.output_audio.done":
       case "input_audio_buffer.committed":
       case "input_audio_buffer.cleared":
-      case "output_audio_buffer.started":
-      case "output_audio_buffer.stopped":
-      case "output_audio_buffer.cleared":
       case "rate_limits.updated":
         return;
       default:
@@ -521,7 +654,6 @@ export class OracleSession {
       status,
       ...(usage !== undefined ? { usage } : {}),
     });
-
     const calls: PendingFunctionCall[] = [];
     const output = Array.isArray(response.output) ? response.output : [];
     for (const item of output as Array<Record<string, unknown>>) {
@@ -550,6 +682,16 @@ export class OracleSession {
           calls.push(call);
         }
       }
+    }
+    // A response that never spoke leaves no end-of-audio event to wait for and
+    // poses no echo risk, so close the window rather than burn the cap on it.
+    // But NOT when tool calls follow: that response is about to be answered by
+    // a spoken one, and arming here would disarm the guard immediately before
+    // the first words the session ever says — the exact hazard, one turn later.
+    // Spoken responses never reach this test; `output_audio_buffer.started`
+    // arrives well before `response.done` (and `stopped` after it).
+    if (!this.replyAudioStarted && calls.length === 0) {
+      this.armInterrupts("no reply audio");
     }
     if (calls.length > 0) {
       void this.runToolCalls(calls);
@@ -609,6 +751,7 @@ export class OracleSession {
   }
 
   private onTransportClose(reason: string): void {
+    this.clearGuardTimer();
     if (this.current.status === "closed" || this.current.status === "error") {
       return;
     }

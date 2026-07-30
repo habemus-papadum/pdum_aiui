@@ -46,6 +46,7 @@ export function categoryOf(entry: LedgerEntry): LedgerCategory {
     case "config":
       return "config";
     case "speech":
+    case "reply-audio":
     case "response":
     case "sent":
       return "flow";
@@ -141,6 +142,10 @@ export function entryLine(entry: LedgerEntry): string {
     }
     case "speech":
       return `speech ${entry.phase}`;
+    case "reply-audio":
+      // "speech" is the human's; this is the agent's own voice. Reading the
+      // two side by side is how self-interruption shows itself.
+      return `reply audio ${entry.phase}`;
     case "heard":
       return entry.text;
     case "said":

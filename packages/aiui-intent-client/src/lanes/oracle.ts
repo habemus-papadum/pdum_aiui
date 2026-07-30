@@ -255,6 +255,13 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       // unconverged first cancellation is no longer loud enough to count as
       // someone talking. Both are verified by the config echo's drift check —
       // if the vendor ignores either, the ledger says so.
+      //
+      // These are the STANDING settings. The unconverged first reply is
+      // additionally covered by `firstReplyGuard`, which is on by default and
+      // therefore not named here: it suppresses barge-in entirely until that
+      // reply has finished speaking, which is precisely the window the
+      // signature above points at. Tuning is what makes the rest of the
+      // conversation robust; the guard is what makes the first reply safe.
       noiseReduction: "far_field",
       turnTuning: { threshold: 0.75 },
     },

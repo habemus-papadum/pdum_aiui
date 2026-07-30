@@ -5,9 +5,9 @@
  * live-surface reconciliation, park semantics, and the total ledger (unknown
  * vendor events retained as `raw`).
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OracleSession } from "./session";
-import type { KeySource, LedgerEntry, OracleTool, OracleTransport } from "./types";
+import type { KeySource, LedgerEntry, OracleConfig, OracleTool, OracleTransport } from "./types";
 
 const testKeys: KeySource = {
   describe: () => "test-keys",
@@ -181,7 +181,9 @@ describe("the tool gate — response.done status decides execution", () => {
     rig.emit(doneWithCall("cancelled", "call_1", "set_x", "{}"));
     await settle();
     expect(calls).toEqual([]);
-    expect(rig.sent).toEqual([]);
+    // Nothing about the CALL went out — no output, no follow-up response.
+    // (Session bookkeeping may still travel; it is not the subject here.)
+    expect(rig.sent.filter((event) => event.type !== "session.update")).toEqual([]);
     const entry = session.ledger().find((e) => e.kind === "tool-call") as Extract<
       LedgerEntry,
       { kind: "tool-call" }
@@ -384,11 +386,153 @@ describe("the mic a talking agent needs, and the VAD it can trip", () => {
     });
     await session.start();
     const opening = rig.sent[0] as { session: { audio: { input: { turn_detection: unknown } } } };
-    expect(opening.session.audio.input.turn_detection).toEqual({
+    expect(opening.session.audio.input.turn_detection).toMatchObject({
       type: "server_vad",
       threshold: 0.8,
       silence_duration_ms: 700,
     });
+  });
+});
+
+describe("the first-reply echo window", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const guarded = (config: Partial<OracleConfig> = {}, rig = fakeTransport()) => ({
+    rig,
+    session: new OracleSession({
+      config: { instructions: "x", turnTuning: { threshold: 0.75 }, ...config },
+      keySource: testKeys,
+      transport: rig.transport,
+    }),
+  });
+
+  const turnDetection = (event: unknown) =>
+    (event as { session: { audio: { input: { turn_detection: Record<string, unknown> } } } })
+      .session.audio.input.turn_detection;
+
+  /** Drive one spoken reply, the way the vendor orders it: audio starts, the
+   * transcript completes, and only THEN does the audio stop. */
+  const speakAReply = (rig: ReturnType<typeof fakeTransport>) => {
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "output_audio_buffer.started" });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "completed", output: [] } });
+    rig.emit({ type: "output_audio_buffer.stopped" });
+  };
+
+  it("opens SUPPRESSED — the first reply cannot be truncated or answered by the echo", async () => {
+    const { session, rig } = guarded();
+    await session.start();
+    // The window is a property of the config we send, so it is on from the
+    // first byte rather than applied by someone remembering to apply it.
+    expect(turnDetection(rig.sent[0])).toMatchObject({
+      type: "server_vad",
+      threshold: 0.75,
+      interrupt_response: false,
+      create_response: false,
+    });
+  });
+
+  it("arms when the reply's AUDIO stops — not when its transcript does", async () => {
+    const { session, rig } = guarded();
+    await session.start();
+    rig.sent.length = 0;
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "output_audio_buffer.started" });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "completed", output: [] } });
+    // response.done is NOT the signal: the transcript finishes seconds ahead
+    // of the speech, and arming here re-opens the very hazard being guarded.
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(rig.sent).toEqual([]);
+
+    rig.emit({ type: "output_audio_buffer.stopped" });
+    // Still not instantly — `stopped` means the SERVER stopped sending.
+    expect(rig.sent).toEqual([]);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(turnDetection(rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+    // …and arming is attributable: a barge-in after this line is the vendor's.
+    const armed = session.ledger().filter((e) => e.kind === "sent");
+    expect((armed[0] as { type: string }).type).toContain("interrupts armed");
+  });
+
+  it("arms ONCE — a later reply does not re-send the block", async () => {
+    const { session, rig } = guarded();
+    await session.start();
+    speakAReply(rig);
+    await vi.advanceTimersByTimeAsync(400);
+    rig.sent.length = 0;
+    speakAReply(rig);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(rig.sent).toEqual([]);
+  });
+
+  it("the cap is the way out when the end-of-audio event never comes", async () => {
+    // It is undocumented and reported to arrive late; it never gets to be the
+    // only exit, or a missing event disables barge-in for the whole session.
+    const { session, rig } = guarded({ firstReplyGuard: { maxMs: 9_000 } });
+    await session.start();
+    rig.sent.length = 0;
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "output_audio_buffer.started" });
+    await vi.advanceTimersByTimeAsync(8_999);
+    expect(rig.sent).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(turnDetection(rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+  });
+
+  it("a reply that never SPOKE closes the window immediately — no echo to guard", async () => {
+    const { session, rig } = guarded();
+    await session.start();
+    rig.sent.length = 0;
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "failed", output: [] } });
+    expect(turnDetection(rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+  });
+
+  it("the reply's audio lifecycle is LEDGERED — it used to be dropped as chatter", async () => {
+    const { session, rig } = guarded();
+    await session.start();
+    speakAReply(rig);
+    const phases = session
+      .ledger()
+      .filter((e) => e.kind === "reply-audio")
+      .map((e) => (e as { phase: string }).phase);
+    expect(phases).toEqual(["started", "stopped"]);
+  });
+
+  it("opt out with false, and manual turn control has nothing to suppress", async () => {
+    const off = guarded({ firstReplyGuard: false });
+    await off.session.start();
+    expect(turnDetection(off.rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+    off.rig.sent.length = 0;
+    speakAReply(off.rig);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(off.rig.sent).toEqual([]);
+
+    // `turn: "manual"` sends `turn_detection: null` — there is no object to
+    // carry the suppression, so the window must not open (and must not then
+    // try to close by sending an update).
+    const manual = guarded({ turn: "manual" });
+    await manual.session.start();
+    expect(turnDetection(manual.rig.sent[0])).toBeNull();
+    manual.rig.sent.length = 0;
+    speakAReply(manual.rig);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(manual.rig.sent).toEqual([]);
+  });
+
+  it("a RECONNECT re-opens it — a new peer connection has learned nothing", async () => {
+    const { session, rig } = guarded();
+    await session.start();
+    speakAReply(rig);
+    await vi.advanceTimersByTimeAsync(400);
+    session.close();
+
+    rig.sent.length = 0;
+    await session.start();
+    // The echo canceller is per-connection and adaptive; the second session
+    // starts as naive about the room as the first did.
+    expect(turnDetection(rig.sent[0])).toMatchObject({ interrupt_response: false });
   });
 });
 
@@ -465,7 +609,11 @@ describe("attributing a cancellation — was it us or the vendor?", () => {
     await session.start();
 
     // The vendor cancelling on detected speech: an inbound `response.done`
-    // with no outbound line before it.
+    // with no outbound line before it. The reply is SPEAKING when it happens —
+    // which is both what a real barge-in looks like and what keeps the
+    // first-reply window open, so the only `sent` lines are the ones under test.
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "output_audio_buffer.started" });
     rig.emit({ type: "input_audio_buffer.speech_started" });
     rig.emit({ type: "response.done", response: { id: "r1", status: "cancelled", output: [] } });
     expect(session.ledger().filter((e) => e.kind === "sent")).toHaveLength(0);
@@ -514,6 +662,29 @@ describe("the anti-self-interrupt tuning, and proving the vendor took it", () =>
     >;
     expect(config.drift?.join(" ")).toContain("turn_detection.threshold: sent 0.75, holds 0.5");
     expect(config.drift?.join(" ")).toContain("noise_reduction not held");
+  });
+
+  it("re-tuning mid-session sends the WHOLE audio.input block, not the changed field", async () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "x", noiseReduction: "far_field", turnTuning: { threshold: 0.75 } },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    rig.sent.length = 0;
+    session.setTurnTuning({ silence_duration_ms: 800 });
+    const input = (rig.sent[0] as { session: { audio: { input: Record<string, unknown> } } })
+      .session.audio.input;
+    // A lone `{ silence_duration_ms }` would drop type and threshold if the
+    // vendor replaces rather than merges inside turn_detection — unverified,
+    // so the block is always a complete statement of intent.
+    expect(input.turn_detection).toMatchObject({
+      type: "server_vad",
+      threshold: 0.75,
+      silence_duration_ms: 800,
+    });
+    expect(input.noise_reduction).toEqual({ type: "far_field" });
   });
 
   it("no drift when the server holds exactly what we asked for", async () => {

@@ -239,6 +239,24 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
   mid-sentence. The defence therefore sits vendor-side, and both settings are checked
   against the `session.updated` echo — the config entry's drift names any the server did not
   take.
+- **The first reply cannot be interrupted at all** (owner, 2026-07-30) — the window the
+  signature above points at, closed directly rather than tuned around. Until that reply has
+  finished SPEAKING, `turn_detection` carries `interrupt_response: false` and
+  `create_response: false`: nothing the mic hears may truncate it or answer it. (Both, not
+  just the interrupt — suppressing only the interrupt leaves the echo committed as a user
+  turn, which then generates a reply to its own voice. The cost is confined to that one
+  reply: a human who genuinely talks over it is heard and transcribed, but must speak again
+  to be answered.) Then the COMPLETE `audio.input` block is re-sent with the standing
+  values, and an `interrupts armed (…)` line lands in the ledger — so a barge-in after that
+  point is provably the vendor's, not ours.
+- **The close signal is the reply's AUDIO, not its transcript.** `response.done` finishes
+  seconds ahead of the speech, and on WebRTC the reply is a track we cannot time; the
+  vendor's `output_audio_buffer.*` events are the only honest answer, and this repo used to
+  drop them as chatter. They are ledgered now (`reply-audio`). Because they are undocumented
+  and reported to arrive late, they never get to be the only way out: a short pad covers the
+  client's jitter buffer, a cap covers an event that never comes, and a response that never
+  spoke closes the window at once — unless tool calls follow it, since the spoken reply is
+  then still ahead.
 - **One fresh credential per session, and no session outlives the vendor's ~60 minutes.**
   Two clocks: the minted secret's TTL bounds how long it may OPEN a session; the vendor's
   cap bounds how long an open one runs. A session that ends unasked drops the desire and
