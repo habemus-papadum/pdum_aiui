@@ -425,12 +425,33 @@ describe("the first-reply echo window", () => {
     await session.start();
     // The window is a property of the config we send, so it is on from the
     // first byte rather than applied by someone remembering to apply it.
-    expect(turnDetection(rig.sent[0])).toMatchObject({
+    expect(turnDetection(rig.sent[0])).toEqual({
       type: "server_vad",
       threshold: 0.75,
       interrupt_response: false,
-      create_response: false,
     });
+  });
+
+  it("does NOT suppress reply creation — that deadlocks the session mute", async () => {
+    // The window closes when a reply happens. `create_response: false` rode
+    // here for one commit and made the first utterance produce no reply at
+    // all: `response.created` never fires, the cap never starts, and every
+    // exit hangs off a response that cannot exist. The session was heard,
+    // transcribed, and permanently silent.
+    const { session, rig } = guarded();
+    await session.start();
+    expect(turnDetection(rig.sent[0])).not.toHaveProperty("create_response");
+
+    // The premise the other tests assume and none of them checked: a human
+    // utterance still gets answered while the window is open.
+    rig.emit({ type: "input_audio_buffer.speech_started" });
+    rig.emit({ type: "input_audio_buffer.speech_stopped" });
+    rig.emit({ type: "response.created" });
+    rig.emit({ type: "output_audio_buffer.started" });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "completed", output: [] } });
+    rig.emit({ type: "output_audio_buffer.stopped" });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(session.ledger().some((e) => e.kind === "sent")).toBe(true);
   });
 
   it("arms when the reply's AUDIO stops — not when its transcript does", async () => {

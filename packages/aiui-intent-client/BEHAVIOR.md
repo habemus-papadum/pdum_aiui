@@ -239,16 +239,17 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
   mid-sentence. The defence therefore sits vendor-side, and both settings are checked
   against the `session.updated` echo — the config entry's drift names any the server did not
   take.
-- **The first reply cannot be interrupted at all** (owner, 2026-07-30) — the window the
-  signature above points at, closed directly rather than tuned around. Until that reply has
-  finished SPEAKING, `turn_detection` carries `interrupt_response: false` and
-  `create_response: false`: nothing the mic hears may truncate it or answer it. (Both, not
-  just the interrupt — suppressing only the interrupt leaves the echo committed as a user
-  turn, which then generates a reply to its own voice. The cost is confined to that one
-  reply: a human who genuinely talks over it is heard and transcribed, but must speak again
-  to be answered.) Then the COMPLETE `audio.input` block is re-sent with the standing
+- **The first reply cannot be interrupted** (owner, 2026-07-30) — the window the signature
+  above points at, closed directly rather than tuned around. Until that reply has finished
+  SPEAKING, `turn_detection` carries `interrupt_response: false`, so what the mic hears
+  cannot truncate it. Then the COMPLETE `audio.input` block is re-sent with the standing
   values, and an `interrupts armed (…)` line lands in the ledger — so a barge-in after that
-  point is provably the vendor's, not ours.
+  point is provably the vendor's, not ours. **That field and no other**: `create_response:
+  false` shipped alongside it for one commit, to stop the echo being committed as a user
+  turn and answering itself, and it deadlocked the session mute — the window closes when a
+  reply happens, so suppressing reply creation meant the first utterance was heard,
+  transcribed, and never answered, with no exit reachable. The echo answering itself is the
+  lesser evil.
 - **The close signal is the reply's AUDIO, not its transcript.** `response.done` finishes
   seconds ahead of the speech, and on WebRTC the reply is a track we cannot time; the
   vendor's `output_audio_buffer.*` events are the only honest answer, and this repo used to

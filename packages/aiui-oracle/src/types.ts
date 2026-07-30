@@ -85,16 +85,19 @@ export interface OracleConfig {
    * symptom: it happens on the first interaction and never again.
    *
    * The fix is a window, not a setting: until the first reply has finished
-   * speaking, `turn_detection` carries `interrupt_response: false` AND
-   * `create_response: false` — nothing the mic hears may truncate that reply
-   * or answer it. Then the complete block is re-sent with the configured
-   * values, and the session behaves normally for the rest of its life.
+   * speaking, `turn_detection` carries `interrupt_response: false`, so what
+   * the mic hears cannot truncate that reply. Then the complete block is
+   * re-sent with the configured values, and the session behaves normally for
+   * the rest of its life.
    *
-   * `create_response` rides along deliberately: suppressing only the
-   * interrupt leaves the echo committed as a user turn, which then generates
-   * a reply to its own voice — a quieter bug, not a fixed one. The cost is
-   * confined to the first reply: if the human genuinely talks over it, they
-   * are heard and transcribed but not answered until they speak again.
+   * That field and no other. `create_response: false` also rode here for one
+   * commit — to stop the echo being committed as a user turn and generating a
+   * reply to its own voice — and it deadlocked the session MUTE: the window
+   * closes when a reply happens, so suppressing reply creation means the
+   * human's first utterance never makes one, `response.created` never fires,
+   * the cap never starts, and no exit can ever be reached. Anything added
+   * here must leave the session able to produce the very reply this window
+   * waits for.
    *
    * Closing the window needs a real end-of-speech signal, and `response.done`
    * is not one (the transcript finishes seconds ahead of the audio, and on

@@ -419,12 +419,19 @@ export class OracleSession {
                   // by the `session.updated` echo the config ledger records —
                   // never assumed to have been accepted.
                   ...(config.turnTuning ?? {}),
-                  // …and the echo window wins over it while open: for the
-                  // first reply, nothing the mic hears may truncate the reply
-                  // or answer it. Arming re-sends this block without them.
-                  ...(this.guard !== undefined
-                    ? { interrupt_response: false, create_response: false }
-                    : {}),
+                  // …and the echo window wins over it while open: the first
+                  // reply may not be truncated by what the mic hears. Arming
+                  // re-sends this block without the suppression.
+                  //
+                  // ONLY the interrupt. `create_response: false` also rode
+                  // here for one commit and deadlocked the session mute: the
+                  // window closes when a reply happens, and suppressing
+                  // response CREATION means the human's first utterance never
+                  // makes one — so `response.created` never fires, the cap
+                  // never starts, and nothing can ever close the window. Every
+                  // exit below hangs off a response that cannot exist. The
+                  // echo committing itself as a user turn is the lesser evil.
+                  ...(this.guard !== undefined ? { interrupt_response: false } : {}),
                 },
           ...(config.transcribeInput !== false
             ? { transcription: { model: DEFAULT_INPUT_TRANSCRIPTION_MODEL } }
