@@ -109,6 +109,22 @@ export interface PageCapabilityMap {
    * only the ack — the real answer rides the report wire as a `toolsResult`
    * PageEvent, correlated by callId (async — the call may take a while). */
   toolsCall: { payload: { ns: string; name: string; args?: unknown; callId: string }; reply: Ack };
+  /**
+   * ASK the page to re-announce its `__AIUI__.tools` registrations (owner,
+   * 2026-07-30). The answer is only the ack — the registrations arrive on the
+   * report wire as a `pageTools` PageEvent, exactly as an unprompted change
+   * does, so there is one delivery path and one shape.
+   *
+   * Why a REQUEST exists at all: registrations were broadcast-only. A page
+   * announces at injection and on change, and whoever happens to be listening
+   * at that instant learns; everyone else — a panel opened later, a panel
+   * reloaded, a bus that had not subscribed yet — is left believing an
+   * instrumented page has no tools, with nothing able to correct it. Every
+   * fix aimed at the broadcast side (re-announce on hello) just moves the
+   * race. Asking removes it: the panel finds out because it wanted to know,
+   * not because it was lucky.
+   */
+  toolsRefresh: { payload: undefined; reply: Ack };
 }
 
 /** The requestable page-capability set — derived from {@link PageCapabilityMap}

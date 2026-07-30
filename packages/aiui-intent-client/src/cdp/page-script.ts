@@ -360,6 +360,13 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
           }
           return { ok: true } satisfies PageCapabilityMap["region"]["reply"];
         }
+        case "toolsRefresh": {
+          // The panel asking what tools this page has — answered on the report
+          // wire like any change, so there is one delivery path (see the
+          // capability's doc in transport.ts).
+          reportTools();
+          return { ok: true } satisfies PageCapabilityMap["toolsRefresh"]["reply"];
+        }
         case "toolsCall": {
           const p = (payload ?? {}) as {
             ns?: string;

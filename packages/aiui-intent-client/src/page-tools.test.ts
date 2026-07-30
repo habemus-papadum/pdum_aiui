@@ -138,6 +138,33 @@ describe("the page-tools registry", () => {
     }
   });
 
+  it("ASKS a tab it holds nothing for — the fix for a broadcast-only bridge", async () => {
+    const { bus } = rig();
+    // Asked for the tab in view at construction…
+    expect(bus.log.some((l) => l.startsWith("page:toolsRefresh@7"))).toBe(true);
+    // …and for each new tab in view.
+    bus.switchTab(9);
+    expect(bus.log.some((l) => l.startsWith("page:toolsRefresh@9"))).toBe(true);
+  });
+
+  it("asks a tab ONCE — a page with genuinely no tools is not re-asked on every glance", () => {
+    const { bus, registry } = rig();
+    const asks = () => bus.log.filter((l) => l.startsWith("page:toolsRefresh@9")).length;
+    bus.switchTab(9);
+    expect(asks()).toBe(1);
+    bus.switchTab(7);
+    bus.switchTab(9);
+    expect(asks()).toBe(1);
+    expect(registry.toolsFor(9)).toEqual([]);
+  });
+
+  it("does not ask for a tab whose tools it already has", () => {
+    const { bus } = rig();
+    register(bus, 9, ["kick"]);
+    bus.switchTab(9);
+    expect(bus.log.filter((l) => l.startsWith("page:toolsRefresh@9"))).toHaveLength(0);
+  });
+
   it("dispose rejects what is still in flight and stops listening", async () => {
     const { bus, registry } = rig();
     register(bus, 7, ["kick"]);

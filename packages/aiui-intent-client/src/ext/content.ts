@@ -256,6 +256,13 @@ const driverWatch = createDriverWatch({
 
 // ── the capability surface (the same command set the CDP page serves) ────────
 servePageCapabilities({
+  /** The panel asking what tools this page has (see the capability's doc).
+   * The MAIN world owns the registry, so this forwards and the answer comes
+   * back on the report wire like any other announcement. */
+  toolsRefresh: () => {
+    window.postMessage({ aiuiToolsRefresh: true }, "*");
+    return { ok: true };
+  },
   heartbeat: (payload) => {
     const session = String((payload as { session?: string } | null)?.session ?? "");
     // A session id this script has not seen means a NEW panel boot — one that

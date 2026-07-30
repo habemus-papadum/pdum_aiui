@@ -49,6 +49,8 @@ export interface PageToolsRegistry {
   call(tab: number, ns: string, name: string, args: Record<string, unknown>): Promise<unknown>;
   /** Fires whenever any tab's registrations change (add, replace, or clear). */
   onChange(listener: () => void): () => void;
+  /** Ask a tab to re-announce (idempotent per tab; see the note in the impl). */
+  ask(tab: number | undefined): void;
   dispose(): void;
 }
 
@@ -122,8 +124,35 @@ export function createPageTools(options: PageToolsOptions): PageToolsRegistry {
     }
   });
 
+  // ASK, rather than wait to be told (owner, 2026-07-30). Registrations were
+  // broadcast-only: a page announces at injection and on change, so a panel
+  // opened later — or reloaded, or whose bus subscribed a tick after the
+  // announcement — believed an instrumented page had no tools, permanently and
+  // silently. Every attempted fix on the broadcast side just relocated the
+  // race. So whenever the tab in view is one we hold nothing for, we ask it;
+  // the answer arrives as an ordinary `pageTools` event, so there is still one
+  // delivery path and one shape.
+  //
+  // Asked ONCE per tab per registry: a page with genuinely no tools answers
+  // with an empty set and must not be re-asked on every glance, and a page
+  // that later registers some announces on its own.
+  const asked = new Set<number>();
+  const askFor = (tab: number | undefined): void => {
+    if (tab === undefined || asked.has(tab) || byTab.has(tab)) {
+      return;
+    }
+    asked.add(tab);
+    void options.host.transport.requestPage(tab, "toolsRefresh", undefined).catch(() => {
+      // A tab with no content script (chrome://, the store, a PDF) simply has
+      // nothing to answer — not a fault, and not worth a retry.
+    });
+  };
+  const offTab = options.host.targeting.onActiveTabChange(askFor);
+  askFor(options.host.targeting.activeTab());
+
   return {
     toolsFor: (tab) => (tab === undefined ? [] : (byTab.get(tab) ?? [])),
+    ask: askFor,
     call: (tab, ns, name, args) =>
       new Promise<unknown>((resolve, reject) => {
         const callId = `${CALL_PREFIX}${++seq}`;
@@ -149,6 +178,7 @@ export function createPageTools(options: PageToolsOptions): PageToolsRegistry {
     },
     dispose: () => {
       offPage();
+      offTab();
       for (const [callId] of pending) {
         settle(callId)?.reject(new Error("the panel closed"));
       }
