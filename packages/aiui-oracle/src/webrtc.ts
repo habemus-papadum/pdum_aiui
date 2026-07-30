@@ -160,6 +160,13 @@ export function webRtcTransport(options: WebRtcTransportOptions = {}): OracleTra
           send({ type: "output_audio_buffer.clear" });
         },
         micStream: mic,
+        audioSettings: () => {
+          try {
+            return micTrack.getSettings() as Record<string, unknown>;
+          } catch {
+            return undefined;
+          }
+        },
         ...(callId !== undefined && callId !== "" ? { callId } : {}),
         close() {
           channel.onclose = null;

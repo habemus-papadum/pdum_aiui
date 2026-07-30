@@ -146,6 +146,18 @@ export interface TransportHandle {
   interrupt(): void;
   /** Live mic MediaStream (level meters tap this). Undefined pre-connect. */
   readonly micStream?: MediaStream;
+  /**
+   * What the browser ACTUALLY gave us for the mic — the track's effective
+   * settings, not what we asked for.
+   *
+   * Constraints are requests; a device, an OS setting, or a driver can refuse
+   * one silently. For an agent that talks back through the same speakers it
+   * listens on, whether echo cancellation is really on is the single fact that
+   * explains "it keeps interrupting itself" — and asking after the fact is
+   * useless, because the session that misbehaved has closed by then. So it is
+   * recorded in the LEDGER at connect, where it stays.
+   */
+  readonly audioSettings?: () => Record<string, unknown> | undefined;
   /** The vendor call id (WebRTC `Location` header) — the sideband hook. */
   readonly callId?: string;
   close(): void;

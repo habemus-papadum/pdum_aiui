@@ -391,3 +391,59 @@ describe("the mic a talking agent needs, and the VAD it can trip", () => {
     });
   });
 });
+
+describe("the live line records what the browser ACTUALLY granted", () => {
+  it("names the processing that is on — the fact a closed session can no longer be asked for", async () => {
+    const rig = fakeTransport();
+    const withAudio: OracleTransport = {
+      ...rig.transport,
+      connect: async (options) => ({
+        ...(await rig.transport.connect(options)),
+        audioSettings: () => ({
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }),
+      }),
+    };
+    const session = new OracleSession({
+      config: { instructions: "x" },
+      keySource: testKeys,
+      transport: withAudio,
+    });
+    await session.start();
+    const live = session
+      .ledger()
+      .find((e) => e.kind === "session" && e.phase === "live") as Extract<
+      LedgerEntry,
+      { kind: "session" }
+    >;
+    expect(live.detail).toContain("mic: aec+ns+agc");
+  });
+
+  it("says NO PROCESSING loudly when the device refused it all", async () => {
+    const rig = fakeTransport();
+    const bare: OracleTransport = {
+      ...rig.transport,
+      connect: async (options) => ({
+        ...(await rig.transport.connect(options)),
+        audioSettings: () => ({ echoCancellation: false }),
+      }),
+    };
+    const session = new OracleSession({
+      config: { instructions: "x" },
+      keySource: testKeys,
+      transport: bare,
+    });
+    await session.start();
+    const live = session
+      .ledger()
+      .find((e) => e.kind === "session" && e.phase === "live") as Extract<
+      LedgerEntry,
+      { kind: "session" }
+    >;
+    // Constraints are REQUESTS; a device or OS can refuse one silently, and
+    // that refusal is the whole explanation for a reply that interrupts itself.
+    expect(live.detail).toContain("mic: NO PROCESSING");
+  });
+});

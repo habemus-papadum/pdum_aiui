@@ -173,6 +173,11 @@ export class OracleSession {
     const liveBits = [
       ...(callId !== undefined ? [`call ${callId}`] : []),
       ...(credential.source !== undefined ? [`key: ${credential.source}`] : []),
+      // The mic's EFFECTIVE processing, recorded where it survives the
+      // session: a reply that keeps interrupting itself is echo, and the one
+      // fact that settles it is whether the browser really granted echo
+      // cancellation — which cannot be asked after the session has closed.
+      ...describeAudio(this.handle.audioSettings?.()),
     ];
     this.record({
       kind: "session",
@@ -611,6 +616,22 @@ export class OracleSession {
       listener(full);
     }
   }
+}
+
+/**
+ * The mic's processing as one readable phrase — `mic: aec+ns+agc` when the
+ * browser honored all three, and conspicuously shorter when it did not.
+ * Empty when the transport reports nothing (a fake, a WS handle).
+ */
+function describeAudio(settings: Record<string, unknown> | undefined): string[] {
+  if (settings === undefined) {
+    return [];
+  }
+  const on: string[] = [];
+  if (settings.echoCancellation === true) on.push("aec");
+  if (settings.noiseSuppression === true) on.push("ns");
+  if (settings.autoGainControl === true) on.push("agc");
+  return [`mic: ${on.length > 0 ? on.join("+") : "NO PROCESSING"}`];
 }
 
 function message(error: unknown): string {
