@@ -12,6 +12,7 @@ import { intentBar } from "../caps";
 import { createIntentClient, type IntentClient } from "../client";
 import { fakeBus } from "../fake-bus";
 import { intentSpec } from "../spec";
+import { resolveToolTab } from "./oracle";
 import { fileTools, panelTools } from "./oracle-tools";
 
 let client: IntentClient | undefined;
@@ -183,5 +184,41 @@ describe("the file tools", () => {
     });
     await tools[0]?.execute({ path: "a" });
     expect(calls[0]).toBe("/intent/oracle/tool");
+  });
+});
+
+describe("resolveToolTab — the eye, else the last app (owner, 2026-07-30)", () => {
+  const registry = (byTab: Record<number, number>) =>
+    ({
+      toolsFor: (tab?: number) =>
+        tab !== undefined && (byTab[tab] ?? 0) > 0
+          ? [
+              {
+                ns: "app",
+                tools: Array.from({ length: byTab[tab] as number }, () => ({
+                  name: "t",
+                  description: "",
+                })),
+              },
+            ]
+          : [],
+    }) as never;
+
+  it("prefers the tab in view when it has tools", () => {
+    expect(resolveToolTab(registry({ 7: 2, 9: 1 }), 9, 7)).toBe(9);
+  });
+
+  it("falls back to the remembered app when the eye is elsewhere", () => {
+    // The console, a doc, chrome://extensions — none of them an app.
+    expect(resolveToolTab(registry({ 7: 2 }), 99, 7)).toBe(7);
+  });
+
+  it("drops a remembered tab that no longer has tools", () => {
+    expect(resolveToolTab(registry({}), 99, 7)).toBeUndefined();
+  });
+
+  it("has nothing to offer before any app has been seen", () => {
+    expect(resolveToolTab(registry({}), 99, undefined)).toBeUndefined();
+    expect(resolveToolTab(registry({}), undefined, undefined)).toBeUndefined();
   });
 });

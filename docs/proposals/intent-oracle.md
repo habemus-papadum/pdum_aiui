@@ -326,7 +326,11 @@ the same reason the lowered prelude carries one.
    flag (mirroring `remote`), with turn lifecycle, the ladder, and its own hearing excluded.
 4. **Park is exposed** as a child of the oracle cap, its own region, independent of the talk
    grip.
-5. **App tools follow the tab in view**, consistent with every other page act.
+5. ~~App tools follow the tab in view.~~ **Superseded 2026-07-30, after living with it:**
+   the tab in view when it has tools, else the last app that did. Consistency with the other
+   page acts was the wrong instinct — they are instantaneous, a tool surface is ambient, and
+   the strict rule silently emptied the surface whenever the developer glanced at a console
+   or the extensions page.
 6. **File tools are read, list, and grep** — one shared policy module, one route, bounded
    and recorded.
 

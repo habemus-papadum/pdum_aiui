@@ -714,14 +714,58 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
     await settle(20);
     expect(names()).toEqual(["set_freq", "kick"]);
 
-    // A tab SWITCH swaps the surface: the tools follow the tab in view, so a
-    // tab with none leaves the oracle holding none (never the old page's).
+    // Looking at a tab with NO tools keeps the last app's (owner, 2026-07-30 —
+    // a tool surface is ambient; it must not evaporate because you glanced at
+    // a console). Switching back changes nothing, because nothing was lost.
     r.bus.switchTab(9);
     await settle(20);
-    expect(names()).toEqual([]);
+    expect(names()).toEqual(["set_freq", "kick"]);
     r.bus.switchTab(7);
     await settle(20);
     expect(names()).toEqual(["set_freq", "kick"]);
+  });
+
+  it("a DIFFERENT app in view wins over the remembered one", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    const names = () => r.lanes.oracle.state().toolNames.filter((n) => !n.startsWith("panel_"));
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ns: "app", tools: [{ name: "first", description: "" }] }],
+    });
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 9,
+      registrations: [{ ns: "app", tools: [{ name: "second", description: "" }] }],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(names()).toEqual(["first"]);
+    r.bus.switchTab(9); // the eye is on another APP — it wins
+    await settle(20);
+    expect(names()).toEqual(["second"]);
+  });
+
+  it("a remembered tab that LOSES its tools drops out rather than firing into nothing", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    const names = () => r.lanes.oracle.state().toolNames.filter((n) => !n.startsWith("panel_"));
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ns: "app", tools: [{ name: "kick", description: "" }] }],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    r.bus.switchTab(9); // remembered: tab 7
+    await settle(20);
+    expect(names()).toEqual(["kick"]);
+
+    // The app tab closed / unloaded its tools.
+    r.bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: [] });
+    await settle(20);
+    expect(names()).toEqual([]);
   });
 
   it("prefixes with the namespace only when more than one registers", async () => {

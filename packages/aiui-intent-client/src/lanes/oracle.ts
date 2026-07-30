@@ -60,6 +60,40 @@ function vendorToolName(prefix: string, name: string): string {
   return `${prefix}${name}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 }
 
+/**
+ * WHICH tab's tools the oracle holds — the tab in view when it has any,
+ * otherwise the last tab that did and still does (owner, 2026-07-30,
+ * superseding "the tools follow the tab in view").
+ *
+ * The original rule was chosen for consistency with every other page act, and
+ * it was wrong for this one. Those acts are INSTANTANEOUS — a shot captures
+ * what you are looking at, so following the eye is exactly right. A tool
+ * surface is AMBIENT, and following the eye means it evaporates the moment you
+ * glance at a console, a doc, or `chrome://extensions` — silently, mid-
+ * conversation, with the oracle then insisting the app exposes no such thing.
+ * That is precisely how it presented live: the registry held all four tools
+ * under the app's tab while the panel projected from the extensions page the
+ * developer had opened to read an error.
+ *
+ * So the eye still wins when it is on an app; otherwise the last app STANDS.
+ * The staleness check matters as much as the memory: a remembered tab that has
+ * closed, navigated away, or unloaded its tools drops out rather than offering
+ * tools that would fire into nothing.
+ */
+export function resolveToolTab(
+  registry: PageToolsRegistry,
+  activeTab: number | undefined,
+  remembered: number | undefined,
+): number | undefined {
+  if (activeTab !== undefined && registry.toolsFor(activeTab).length > 0) {
+    return activeTab;
+  }
+  if (remembered !== undefined && registry.toolsFor(remembered).length > 0) {
+    return remembered;
+  }
+  return undefined;
+}
+
 /** Project the tab's registered descriptors into oracle tools that CALL back
  * through the page transport. Pure over its inputs — the registry and the tab
  * are the only state. */
@@ -125,6 +159,12 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
   // consumer of the `pageTools` stream that tools-link already reads (see
   // page-tools.ts on why they are not layered).
   const pageTools = config.pageTools ?? createPageTools({ host });
+  /** The app tab the tool surface is currently projected from — the memory
+   * behind `resolveToolTab`. Undefined until an instrumented tab is seen. */
+  let toolTab: number | undefined;
+  /** The last surface actually sent, so an unchanged one is not re-sent. Reset
+   * on every connect: a fresh session holds nothing until we tell it. */
+  let appliedSignature: string | undefined;
   const session = new OracleSession({
     config: { instructions: weaveInstructions({ app: PANEL_BLURB }) },
     // The chain's order is the standard one (a pasted key TRUMPS everything),
@@ -207,9 +247,12 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
    * The toggle off means an EMPTY surface, not a stale one.
    */
   const applyTools = (): void => {
-    const tab = bound?.context().activeTab;
     const tools: OracleTool[] = [];
     if (oraclePageTools.get() === true) {
+      // The eye when it is on an app, else the last app — and REMEMBER what we
+      // resolved to, which is what makes "the last one" mean anything.
+      const tab = resolveToolTab(pageTools, bound?.context().activeTab, toolTab);
+      toolTab = tab;
       tools.push(...oracleToolsForTab(pageTools, tab));
     }
     if (oraclePanelTools.get() === true && bound !== undefined) {
@@ -223,6 +266,18 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
     // stays generic about what exists, because the array is the single source
     // of truth (the documented vendor failure mode: a prompt naming an absent
     // tool makes the model invent one).
+    //
+    // Skipped when nothing actually changed. The inputs move more often than
+    // the SURFACE does — every glance at another tab re-runs this and, under
+    // the last-app rule, resolves to the same tools — and each `setTools` is a
+    // mid-conversation `session.update`. The signature carries the tab because
+    // the tools' closures are bound to it: same names on a different tab is a
+    // real change, even though the wire shape is identical.
+    const signature = `${toolTab ?? "-"}|${tools.map((tool) => tool.name).join(",")}`;
+    if (signature === appliedSignature) {
+      return;
+    }
+    appliedSignature = signature;
     session.setTools(tools);
   };
 
@@ -277,7 +332,10 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       // moment an edge cannot cover; a grip already on comes up hearing.
       applyMicGate();
       // …and the tool surface, for the same reason: the session was
-      // constructed empty and a connect is not a change (O3b).
+      // constructed empty and a connect is not a change (O3b). The signature
+      // clears first — a NEW session holds nothing, so "unchanged since last
+      // time" would skip the one application that matters.
+      appliedSignature = undefined;
       applyTools();
       // …and WHERE it is standing (O3d). Once per session rather than on
       // every contributed item: a selection's own `<selection-metadata>`
