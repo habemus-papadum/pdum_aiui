@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cc-assay",
-  "version": "0.13.0",
+  "version": "0.13.0+dev",
   "description": "Mine Claude Code transcripts into Parquet: raw ingest, then analytic grains.",
   "type": "module",
   "license": "MIT",
