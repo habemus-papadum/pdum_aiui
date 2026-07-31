@@ -16,7 +16,6 @@
  * otherwise (`echo "$OPENAI_API_KEY" | aiui keys set openai`).
  */
 import {
-  readSecret,
   VENDOR_KEYS,
   type VendorProvider,
   vaultDelete,
@@ -27,6 +26,7 @@ import {
 } from "@habemus-papadum/aiui-util";
 import { loadAiuiConfig } from "../util/config";
 import { keysMode, keysStatus, persistKeyDecision, runKeysInterview } from "../util/keys-interview";
+import { promptSecret } from "../util/prompt";
 import { printError, printNote, printWarning } from "../util/ui";
 
 function parseProvider(raw: string): VendorProvider {
@@ -79,7 +79,14 @@ export async function runKeysInterviewCommand(): Promise<void> {
 export async function runKeysSet(rawProvider: string): Promise<void> {
   const provider = parseProvider(rawProvider);
   const spec = vendorKeySpec(provider);
-  const secret = (await readSecret(spec.envVar)).trim();
+  // Same paste-or-Enter question as the interview (a pipe skips the block and
+  // reads one line, so `echo "$KEY" | aiui keys set openai` is unchanged).
+  const secret = (
+    await promptSecret({
+      title: `${spec.label} API key (${spec.envVar})`,
+      detail: `It powers ${spec.purpose}. Stored in your OS vault, never in a config file.`,
+    })
+  ).trim();
   if (secret === "") {
     printError("empty value — nothing stored");
     process.exit(2);

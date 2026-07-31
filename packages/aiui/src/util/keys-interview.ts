@@ -15,14 +15,20 @@
  *    interview`. The full interview walks every provider with keep / replace /
  *    skip, and there offers import-from-env because it is user-initiated.
  *
+ * **Paste or Enter, never a letter first.** Wherever the only two outcomes are
+ * "here is the key" and "not this provider" — the whole gap-fill, and the
+ * interview's keyless providers — the question is a bare {@link promptSecret}:
+ * the paste IS the answer, an empty line is the skip. The keyed menu survives
+ * only where there is genuinely a third thing to say (keep the stored key,
+ * import `$VAR`), which cannot arise on a fresh install.
+ *
  * Secrets never ride argv here: pastes go through aiui-util's `readSecret`
- * (masked at a TTY, piped otherwise), and every store is verified by an
+ * (echoed as `*` at a TTY, piped otherwise), and every store is verified by an
  * immediate read-back — both platform CLIs' observed failure modes were
  * SILENT corruption, so a write that isn't read back isn't a write.
  */
 import {
   readKeyDecisions,
-  readSecret,
   resolveVendorKeys,
   VENDOR_KEYS,
   type VendorKeySpec,
@@ -32,7 +38,7 @@ import {
   vendorKeysMode,
 } from "@habemus-papadum/aiui-util";
 import { type AiuiConfig, type KeyDecisionValue, updateUserConfig } from "./config";
-import { type Choice, choose, type Prompt } from "./prompt";
+import { type Choice, choose, type Prompt, promptSecret, type SecretPromptOptions } from "./prompt";
 import { printNote, printWarning, theme } from "./ui";
 
 /** Injectable for tests; matches {@link choose} without a default key. */
@@ -43,7 +49,7 @@ export interface KeysInterviewSeams {
   ask?: Ask;
   lookup?: (account: string) => Promise<string | null>;
   store?: (account: string, secret: string) => Promise<void>;
-  secret?: (label: string) => Promise<string>;
+  secret?: (prompt: Prompt, options?: SecretPromptOptions) => Promise<string>;
   persist?: (provider: VendorProvider, decision: KeyDecisionValue) => void;
   note?: (message: string) => void;
   warn?: (message: string) => void;
@@ -78,7 +84,7 @@ function seams(overrides: KeysInterviewSeams): NormalizedSeams {
     ask: overrides.ask ?? choose,
     lookup: overrides.lookup ?? ((account) => vaultLookup(account)),
     store: overrides.store ?? ((account, secret) => vaultStore(account, secret)),
-    secret: overrides.secret ?? ((label) => readSecret(label)),
+    secret: overrides.secret ?? ((prompt, options) => promptSecret(prompt, options)),
     persist:
       overrides.persist ??
       ((provider, decision) => {
@@ -110,48 +116,47 @@ async function storeVerified(
 }
 
 /**
- * Ask about ONE undecided provider. Returns the decision persisted, or
- * undefined when the exchange ended without one (an empty paste re-asks; a
- * failed verify leaves the provider undecided so the next launch asks again).
+ * Ask for ONE provider's key with nothing but the paste: a value stores it, an
+ * empty line is the skip. Returns the decision persisted, or undefined when a
+ * failed read-back leaves the provider undecided so the next launch re-asks.
  *
- * The gap-fill offers only paste or skip — never "import from the environment".
- * A source checkout with the env var set is handled BEFORE we get here (the
+ * This is the shape for every "we have no key for this provider" question — the
+ * gap-fill always, the full interview when there is neither a stored key to
+ * keep nor a `$VAR` to import. It offers no "import from the environment": a
+ * source checkout with the env var set is handled BEFORE we get here (the
  * launch uses that key at runtime and asks nothing), and installed mode ignores
  * the environment entirely, so env → vault migration is exclusively an explicit
  * act: `aiui keys set` / `aiui keys interview`, never a launch side effect.
  */
-async function askUndecided(
+async function askForKey(
   spec: VendorKeySpec,
+  detail: string,
   s: NormalizedSeams,
 ): Promise<KeyDecisionValue | undefined> {
-  const question: Prompt = {
-    title: `Set up the ${spec.label} API key (${spec.envVar})?`,
-    detail:
-      `It powers ${spec.purpose}. aiui keeps keys in your OS vault (keychain / Secret Service), ` +
-      `never in a config file. Skipping just disables ${spec.label}-backed features until you revisit.`,
-  };
-  const choices: Choice[] = [
-    { key: "p", label: "paste the key now (stored in the OS vault, input hidden)" },
-    { key: "s", label: `skip — don't use ${spec.label}` },
-  ];
-  for (;;) {
-    const answer = await s.ask(question, choices);
-    if (answer === "s") {
-      s.persist(spec.provider, "skip");
-      s.note(REVISIT_NOTE);
-      return "skip";
-    }
-    const secret = await s.secret(`${spec.envVar}`);
-    if (secret.trim() === "") {
-      s.warn("empty value — nothing stored");
-      continue; // re-present the menu; skip remains the deliberate exit
-    }
-    if (await storeVerified(spec, secret.trim(), s)) {
-      s.persist(spec.provider, "vault");
-      return "vault";
-    }
-    return undefined; // verify failed: leave undecided, the next launch re-asks
+  const secret = (
+    await s.secret(
+      { title: `${spec.label} API key (${spec.envVar})`, detail },
+      { emptyMeans: `skip ${spec.label}` },
+    )
+  ).trim();
+  if (secret === "") {
+    s.persist(spec.provider, "skip");
+    s.note(REVISIT_NOTE);
+    return "skip";
   }
+  if (await storeVerified(spec, secret, s)) {
+    s.persist(spec.provider, "vault");
+    return "vault";
+  }
+  return undefined; // verify failed: leave undecided, the next launch re-asks
+}
+
+/** The gap-fill's framing of {@link askForKey}: what the key buys, where it goes. */
+function gapFillDetail(spec: VendorKeySpec): string {
+  return (
+    `It powers ${spec.purpose}. aiui keeps keys in your OS vault (keychain / Secret Service), ` +
+    `never in a config file. Skipping just disables ${spec.label}-backed features until you revisit.`
+  );
 }
 
 /**
@@ -209,7 +214,7 @@ export async function ensureKeyDecisions(
       keys = { ...keys, [spec.provider]: "vault" as const };
       continue;
     }
-    const decision = await askUndecided(spec, s);
+    const decision = await askForKey(spec, gapFillDetail(spec), s);
     if (decision !== undefined) {
       keys = { ...keys, [spec.provider]: decision };
     }
@@ -228,7 +233,7 @@ export async function runKeysInterview(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   const s = seams(overrides);
-  const mode = keysMode();
+  const mode = overrides.mode ?? keysMode();
   for (const spec of VENDOR_KEYS) {
     const decision = config.keys?.[spec.provider];
     let stored: string | null = null;
@@ -248,6 +253,12 @@ export async function runKeysInterview(
       hasKey ? "vault entry: present" : "vault entry: none",
       ...(envValue ? [`$${spec.envVar} set (wins at runtime in this source checkout)`] : []),
     ].join(" · ");
+    // Nothing to keep and nothing to import: there is no third answer, so ask
+    // the same bare paste-or-Enter question the launch gap-fill asks.
+    if (!hasKey && !envValue) {
+      await askForKey(spec, `${state}. It powers ${spec.purpose}.`, s);
+      continue;
+    }
     const question: Prompt = {
       title: `${spec.label} (${spec.envVar})`,
       detail: `${state}. It powers ${spec.purpose}.`,
@@ -274,10 +285,18 @@ export async function runKeysInterview(
         s.note(REVISIT_NOTE);
         break;
       }
-      const secret = answer === "e" && envValue ? envValue : await s.secret(`${spec.envVar}`);
+      const secret =
+        answer === "e" && envValue
+          ? envValue
+          : await s.secret(
+              {
+                title: `${spec.label} API key (${spec.envVar})`,
+                detail: `Stored in your OS vault${hasKey ? ", replacing the entry that's there" : ""}.`,
+              },
+              { emptyMeans: "go back to the choices" },
+            );
       if (secret.trim() === "") {
-        s.warn("empty value — nothing stored");
-        continue;
+        continue; // Enter alone: back to the choices, as the prompt offered
       }
       if (await storeVerified(spec, secret.trim(), s)) {
         s.persist(spec.provider, "vault");

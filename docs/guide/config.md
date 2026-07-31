@@ -142,8 +142,11 @@ keys come from depends on how aiui itself is running:
 
 What the vault holds is the secret; what `config.json` holds is the per-provider **decision**
 (`keys.openai` etc.): `"vault"` (in use) or `"skip"` (deliberately unused). A provider with no
-decision gets **one question** at the next interactive `aiui claude` — paste the key (masked,
-stored straight into the vault) or skip; skipping prints how to revisit. **In a source checkout,
+decision gets **one question** at the next interactive `aiui claude` — and the question is just a
+prompt to paste into: **paste the key and press Enter to store it (straight into the vault), or
+press Enter alone to skip.** There is no letter to press first; the input itself is the answer.
+What you paste echoes as `*` per character, so you can see that it landed and roughly how long it
+is without the secret ever appearing on screen. Skipping prints how to revisit. **In a source checkout,
 a provider whose key is already in the environment is used silently — no question, and nothing is
 written to the vault.** The launch never migrates an env key into the vault or records a decision
 on your behalf; that is deliberately an explicit act (`aiui keys set <provider>`). If the env var
@@ -153,7 +156,8 @@ all of it:
 ```sh
 aiui keys status            # per-provider decision + effective source — never values
 aiui keys interview         # all providers: keep the stored key, replace it, or skip
-aiui keys set openai        # store one key (masked prompt; or pipe it on stdin)
+                            #   (a provider with no key gets the same paste-or-Enter prompt)
+aiui keys set openai        # store one key (paste prompt, echoed as *; or pipe it on stdin)
 aiui keys unset openai      # remove the vault entry and mark the provider skipped
 ```
 
