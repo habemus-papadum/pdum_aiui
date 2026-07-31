@@ -9,9 +9,18 @@
  * fields; a browser resolves `applyConstraints` without necessarily changing
  * anything).
  *
+ * A row is a SELF-CONTAINED block: a name/control line with a status line
+ * under it. It was briefly a `display: contents` row inside a shared grid, so
+ * that columns would line up down the page — and that broke badly, because
+ * rows emit different numbers of cells depending on whether they carry a
+ * reason or a drift flag, so every short row sheared the next one across the
+ * columns. A block cannot shear, and it also survives the narrow side panel,
+ * which a five-column grid never could.
+ *
  * Labels are the vendor's names verbatim — see the note in `params.ts`.
  */
 
+import type { JSX } from "@solidjs/web";
 import { Show } from "solid-js";
 import { type ParamSpec, rowDrifts } from "../params";
 
@@ -23,7 +32,7 @@ export interface ParamRowProps {
   effective: unknown;
   /** Why this row cannot be edited right now; editable when undefined. */
   disabledReason?: string | undefined;
-  /** `undefined` means "unset — take the vendor's default". */
+  /** `undefined` means "unset — take the platform's default". */
   onChange: (value: unknown) => void;
 }
 
@@ -35,12 +44,12 @@ const show = (value: unknown): string =>
 
 export function ParamRow(props: ParamRowProps) {
   const disabled = () => props.disabledReason !== undefined;
-  // The label and its control are SIBLINGS, not nested: the row is
-  // `display: contents` so its cells land in the parent grid's columns, and
-  // wrapping the input in the label would collapse that. Hence an explicit
-  // association. Paths are unique across both tables, so they make the id.
-  const id = () => `aiui-oracle-param-${props.spec.path}`;
   const drifts = () => rowDrifts(props.value, props.effective);
+  // The label and its control are siblings on the head line, so the
+  // association is explicit. Paths are unique across both tables.
+  const id = () => `aiui-oracle-param-${props.spec.path}`;
+  const asText = () =>
+    props.value === undefined || props.value === null ? "" : String(props.value);
 
   const control = () => {
     const spec = props.spec;
@@ -59,7 +68,7 @@ export function ParamRow(props: ParamRowProps) {
             props.onChange(raw === "" ? undefined : raw === "true");
           }}
         >
-          <option value="">—</option>
+          <option value="">— default</option>
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
@@ -76,7 +85,7 @@ export function ParamRow(props: ParamRowProps) {
             props.onChange(raw === "" ? undefined : raw === NULL_OPTION ? null : raw);
           }}
         >
-          <option value="">—</option>
+          <option value="">— default</option>
           {(spec.options ?? []).map((option) => (
             <option value={option === null ? NULL_OPTION : option}>
               {option === null ? NULL_OPTION : option}
@@ -94,7 +103,8 @@ export function ParamRow(props: ParamRowProps) {
           min={spec.min}
           max={spec.max}
           step={spec.step}
-          value={props.value === undefined || props.value === null ? "" : String(props.value)}
+          placeholder={spec.default ?? ""}
+          value={asText()}
           onChange={(event) => {
             const raw = event.currentTarget.value;
             props.onChange(raw === "" ? undefined : Number(raw));
@@ -107,7 +117,8 @@ export function ParamRow(props: ParamRowProps) {
         id={id()}
         type="text"
         disabled={disabled()}
-        value={props.value === undefined || props.value === null ? "" : String(props.value)}
+        placeholder={spec.default ?? ""}
+        value={asText()}
         onChange={(event) => {
           const raw = event.currentTarget.value.trim();
           props.onChange(raw === "" ? undefined : raw);
@@ -117,22 +128,39 @@ export function ParamRow(props: ParamRowProps) {
   };
 
   return (
-    <div class="aiui-oracle-param" data-drift={drifts()} data-disabled={disabled()}>
-      <label class="aiui-oracle-param-name" for={id()} title={props.spec.hint}>
-        {props.spec.name}
-      </label>
-      {control()}
-      <span class="aiui-oracle-param-effective" title="what the platform reports is in force">
-        {show(props.effective)}
-      </span>
-      <Show when={props.disabledReason}>
-        {(reason) => <span class="aiui-oracle-param-why">{reason()}</span>}
-      </Show>
-      <Show when={drifts()}>
-        <span class="aiui-oracle-param-drift" title="set here, not held there">
-          drift
+    <div class="aiui-oracle-param" data-drift={drifts() ? "true" : "false"}>
+      <div class="aiui-oracle-param-head">
+        <label class="aiui-oracle-param-name" for={id()} title={props.spec.hint}>
+          {props.spec.name}
+        </label>
+        {control()}
+      </div>
+      <div class="aiui-oracle-param-foot">
+        <span class="aiui-oracle-param-effective">
+          in force <strong>{show(props.effective)}</strong>
         </span>
-      </Show>
+        <Show when={props.spec.default}>
+          {(fallback) => <span class="aiui-oracle-param-default">default {fallback()}</span>}
+        </Show>
+        <Show when={drifts()}>
+          <span class="aiui-oracle-param-drift" title="set here, not held there">
+            drift
+          </span>
+        </Show>
+        <Show when={props.disabledReason}>
+          {(reason) => <span class="aiui-oracle-param-why">{reason()}</span>}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+/** A labelled run of rows — the vendor object they all belong to. */
+export function ParamGroup(props: { name: string; children: JSX.Element }) {
+  return (
+    <div class="aiui-oracle-param-group">
+      <div class="aiui-oracle-param-group-name">{props.name}</div>
+      {props.children}
     </div>
   );
 }

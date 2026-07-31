@@ -32,12 +32,20 @@ export const ORACLE_WIDGET_STYLES = `
 
   /* the session viewer */
   .aiui-oracle-chips { display: flex; gap: 4px; margin: 4px 0 6px; flex-wrap: wrap; }
+  /* An OFF chip is outlined and faded; an ON chip is filled and inverted. The
+     two used to differ only by opacity and an 8% wash, which read as no
+     response to a click at all — a toggle has to look toggled. */
   .aiui-oracle-chip { font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 999px;
-    cursor: pointer; opacity: 0.55; color: inherit; background: transparent;
-    border: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
-  .aiui-oracle-chip[data-on="true"] { opacity: 1;
-    border-color: color-mix(in srgb, currentColor 45%, transparent);
-    background: color-mix(in srgb, currentColor 8%, transparent); }
+    cursor: pointer; opacity: 0.5; color: inherit; background: transparent;
+    transition: background-color 90ms, color 90ms, opacity 90ms;
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+  .aiui-oracle-chip:hover { opacity: 0.8;
+    border-color: color-mix(in srgb, currentColor 40%, transparent); }
+  .aiui-oracle-chip:active { transform: translateY(1px); }
+  .aiui-oracle-chip[data-on="true"] { opacity: 1; font-weight: 600;
+    color: Canvas; background: CanvasText;
+    border-color: color-mix(in srgb, currentColor 60%, transparent); }
+  .aiui-oracle-chip[data-on="true"]:hover { opacity: 0.85; }
   .aiui-oracle-turns { display: flex; flex-direction: column; gap: 4px;
     max-height: 420px; overflow-y: auto; }
   .aiui-oracle-turn { border-radius: 8px;
@@ -64,25 +72,34 @@ export const ORACLE_WIDGET_STYLES = `
     background: color-mix(in srgb, currentColor 8%, transparent); font-size: 11px;
     overflow-x: auto; }
 
-  /* the params widgets — a grid so name / control / in-force line up down the
-     column, which is what makes a drift visible at a glance rather than read */
-  .aiui-oracle-params { display: grid; gap: 2px 8px; font-size: 11px;
-    grid-template-columns: minmax(7rem, auto) minmax(6rem, 1fr) minmax(4rem, auto) auto auto; }
-  .aiui-oracle-params-head { display: contents; opacity: 0.5; }
-  .aiui-oracle-params-head span:first-child { grid-column: 2; }
-  .aiui-oracle-param { display: contents; }
-  .aiui-oracle-param-name { font-family: ui-monospace, monospace; cursor: help;
+  /* the params widgets. A row is a BLOCK (name + control, then a status line),
+     never a cell in a shared grid: rows carry a variable number of trailing
+     annotations, which sheared a grid's columns apart, and a fixed multi-column
+     layout could not survive the side panel's width either. */
+  .aiui-oracle-params { display: flex; flex-direction: column; gap: 10px; font-size: 11px; }
+  .aiui-oracle-param-group { display: flex; flex-direction: column; gap: 5px; }
+  .aiui-oracle-param-group-name { font: 10px ui-monospace, monospace; letter-spacing: 0.06em;
+    text-transform: uppercase; opacity: 0.45; padding-bottom: 2px;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+  .aiui-oracle-param-head { display: flex; align-items: center; gap: 8px; }
+  .aiui-oracle-param-name { flex: 1 1 auto; min-width: 0; cursor: help;
+    font-family: ui-monospace, monospace;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .aiui-oracle-param input, .aiui-oracle-param select { font: inherit; width: 100%;
-    padding: 1px 4px; border-radius: 4px; color: inherit; background: transparent;
+  .aiui-oracle-param-head input, .aiui-oracle-param-head select { font: inherit;
+    flex: 0 0 10rem; max-width: 55%; padding: 2px 4px; border-radius: 4px; color: inherit;
+    background: transparent;
     border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
-  .aiui-oracle-param input:disabled, .aiui-oracle-param select:disabled { opacity: 0.35; }
-  .aiui-oracle-param-effective { font-family: ui-monospace, monospace; opacity: 0.7;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .aiui-oracle-param-why { opacity: 0.45; font-style: italic; white-space: nowrap; }
-  .aiui-oracle-param-drift { color: #d97706; font-weight: 600; }
-  .aiui-oracle-param[data-drift="true"] .aiui-oracle-param-effective { color: #d97706; opacity: 1; }
-  .aiui-oracle-params-note, .aiui-oracle-params-error { grid-column: 1 / -1; margin: 4px 0 0;
-    opacity: 0.6; }
+  .aiui-oracle-param-head input:disabled, .aiui-oracle-param-head select:disabled {
+    opacity: 0.4; }
+  .aiui-oracle-param-foot { display: flex; flex-wrap: wrap; gap: 4px 10px; padding-left: 2px;
+    font-size: 10px; opacity: 0.6; }
+  .aiui-oracle-param-effective { font-family: ui-monospace, monospace; }
+  .aiui-oracle-param-effective strong { font-weight: 600; opacity: 1; }
+  .aiui-oracle-param-default { font-family: ui-monospace, monospace; opacity: 0.75; }
+  .aiui-oracle-param-why { font-style: italic; }
+  .aiui-oracle-param[data-drift="true"] .aiui-oracle-param-foot { opacity: 1; }
+  .aiui-oracle-param[data-drift="true"] .aiui-oracle-param-effective { color: #d97706; }
+  .aiui-oracle-param-drift { color: #d97706; font-weight: 700; letter-spacing: 0.04em; }
+  .aiui-oracle-params-note, .aiui-oracle-params-error { margin: 2px 0 0; opacity: 0.6; }
   .aiui-oracle-params-error { color: #dc2626; opacity: 1; font-family: ui-monospace, monospace; }
 `;

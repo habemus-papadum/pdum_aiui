@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   CONSTRAINT_PARAMS,
   getPath,
+  groupSpecs,
   pruneTurnDetection,
   rowDrifts,
   SESSION_PARAMS,
@@ -156,11 +157,38 @@ describe("the tables themselves", () => {
     }
   });
 
+  it("every row names a group and a default — the two questions asked first", () => {
+    for (const spec of [...SESSION_PARAMS, ...CONSTRAINT_PARAMS]) {
+      expect(spec.group).not.toBe("");
+      // "What is the default?" belongs in the tool, not in a chat log that
+      // goes stale the moment the vendor changes one.
+      expect(spec.default).toBeDefined();
+    }
+  });
+
+  it("groups keep TABLE order, not alphabetical — the tables are tuning order", () => {
+    const groups = groupSpecs(SESSION_PARAMS);
+    expect(groups[0]?.name).toBe("turn_detection");
+    expect(groups.map((group) => group.name)).toEqual([
+      "turn_detection",
+      "noise_reduction",
+      "transcription",
+      "audio.output",
+      "session",
+    ]);
+    expect(groupSpecs(CONSTRAINT_PARAMS).map((group) => group.name)).toEqual([
+      "processing",
+      "capture",
+    ]);
+  });
+
   it("marks the frozen fields as frozen", () => {
-    const when = (name: string) => SESSION_PARAMS.find((spec) => spec.name === name)?.when;
+    // Keyed by PATH, not name: names are scoped by their group now, so
+    // `model` is both `transcription.model` and the session's own.
+    const when = (path: string) => SESSION_PARAMS.find((spec) => spec.path === path)?.when;
     expect(when("model")).toBe("connect");
     // Not connect-time: the vendor freezes voice once the model has SPOKEN.
-    expect(when("voice")).toBe("before-first-reply");
-    expect(when(TURN_DETECTION_TYPE.split(".").pop() as string)).toBe("live");
+    expect(when("audio.output.voice")).toBe("before-first-reply");
+    expect(when(TURN_DETECTION_TYPE)).toBe("live");
   });
 });

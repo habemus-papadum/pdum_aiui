@@ -26,11 +26,19 @@ export const ALL_CATEGORIES: readonly LedgerCategory[] = [
   "raw",
 ];
 
-/** What a debugging session wants on by default: the conversation, the
- * actions, the config record, and every error. The per-event chatter (flow)
- * and unclassified vendor payloads (raw) are opt-in detail levels. */
+/**
+ * What a debugging session wants on by default: the conversation, the actions,
+ * the config record, every error — and FLOW.
+ *
+ * Flow was opt-in as "per-event chatter" and got promoted (owner, 2026-07-30):
+ * it is where the lifecycle lives, and the lifecycle turned out to be the
+ * thing every hard question this session asked was actually about. `speech`
+ * and `reply-audio` next to each other are what self-interruption looks like;
+ * the `sent` lines are what make a cancellation attributable to us or to the
+ * vendor. Only `raw` — unclassified vendor payloads — stays off.
+ */
 export function defaultCategories(): Set<LedgerCategory> {
-  return new Set(["turn", "tool", "config", "error"]);
+  return new Set(["turn", "tool", "config", "flow", "error"]);
 }
 
 export function categoryOf(entry: LedgerEntry): LedgerCategory {

@@ -6,7 +6,8 @@
  *    for END USERS of an app that embeds the oracle.
  *  - {@link OracleViewer} — the debugging view: TURN-grouped ledger with
  *    progressive detail (turn line → entries → entry payload as JSON) and
- *    category chips whose defaults keep the chatter off. Latest turn open,
+ *    category chips — on by default except `raw`, since the lifecycle (flow)
+ *    is where the hard questions actually get answered. Latest turn open,
  *    history collapsed, pinned to live.
  *
  * Both render exclusively from the session's state + ledger — no vendor
@@ -108,7 +109,13 @@ export function OracleViewer(props: OracleViewerProps) {
             <button
               type="button"
               class="aiui-oracle-chip"
-              data-on={enabled().has(category)}
+              // A STRING, not a boolean: an attribute set to `false` is
+              // removed rather than rendered as "false", which left the CSS
+              // with nothing to match and the chips looking identical whether
+              // on or off. `aria-pressed` says the same thing to a screen
+              // reader — these are toggles, not links.
+              data-on={enabled().has(category) ? "true" : "false"}
+              aria-pressed={enabled().has(category) ? "true" : "false"}
               onClick={() => flip(category)}
             >
               {category}
@@ -121,7 +128,7 @@ export function OracleViewer(props: OracleViewerProps) {
           {(group, index) => {
             const last = () => index() === groups().length - 1;
             return (
-              <div class="aiui-oracle-turn" data-open={isOpen(group.id, last())}>
+              <div class="aiui-oracle-turn" data-open={isOpen(group.id, last()) ? "true" : "false"}>
                 <button
                   type="button"
                   class="aiui-oracle-turn-summary"

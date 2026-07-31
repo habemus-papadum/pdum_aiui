@@ -38,6 +38,18 @@ export type ParamWhen =
 export interface ParamSpec {
   /** The vendor's own name. Also the label — see the module note. */
   name: string;
+  /** The enclosing object's vendor name — the heading rows sit under, so a
+   * row can be labelled `type` without ambiguity about WHICH type. */
+  group: string;
+  /**
+   * The platform's default, as text, for display beside the control.
+   *
+   * Here rather than in prose because "what is the default" is the first
+   * question anyone tuning this asks, and an answer that lives in a chat log
+   * or a doc goes stale silently. Shown as the input's placeholder, so an
+   * UNSET control reads as the value it will actually behave as.
+   */
+  default?: string;
   /** Dotted path, rooted at the session object or the constraints object. */
   path: string;
   kind: "boolean" | "number" | "enum" | "text";
@@ -69,6 +81,8 @@ const isSemanticVad = { path: TURN_DETECTION_TYPE, equals: "semantic_vad" } as c
 export const SESSION_PARAMS: readonly ParamSpec[] = [
   {
     name: "type",
+    group: "turn_detection",
+    default: "server_vad",
     path: TURN_DETECTION_TYPE,
     kind: "enum",
     options: ["server_vad", "semantic_vad", null],
@@ -77,6 +91,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "threshold",
+    group: "turn_detection",
+    default: "0.5",
     path: `${TURN_DETECTION}.threshold`,
     kind: "number",
     min: 0,
@@ -88,6 +104,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "silence_duration_ms",
+    group: "turn_detection",
+    default: "500",
     path: `${TURN_DETECTION}.silence_duration_ms`,
     kind: "number",
     min: 0,
@@ -99,6 +117,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "prefix_padding_ms",
+    group: "turn_detection",
+    default: "300",
     path: `${TURN_DETECTION}.prefix_padding_ms`,
     kind: "number",
     min: 0,
@@ -110,6 +130,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "idle_timeout_ms",
+    group: "turn_detection",
+    default: "null (off)",
     path: `${TURN_DETECTION}.idle_timeout_ms`,
     kind: "number",
     min: 0,
@@ -121,6 +143,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "eagerness",
+    group: "turn_detection",
+    default: "auto (= medium, 4s)",
     path: `${TURN_DETECTION}.eagerness`,
     kind: "enum",
     options: ["low", "medium", "high", "auto"],
@@ -130,6 +154,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "create_response",
+    group: "turn_detection",
+    default: "true",
     path: `${TURN_DETECTION}.create_response`,
     kind: "boolean",
     when: "live",
@@ -137,13 +163,17 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "interrupt_response",
+    group: "turn_detection",
+    default: "true",
     path: `${TURN_DETECTION}.interrupt_response`,
     kind: "boolean",
     when: "live",
     hint: "Whether detected speech interrupts a reply in progress. Default true. firstReplyGuard forces this off until the first reply finishes.",
   },
   {
-    name: "noise_reduction.type",
+    name: "type",
+    group: "noise_reduction",
+    default: "null (off)",
     path: "audio.input.noise_reduction.type",
     kind: "enum",
     options: ["near_field", "far_field", null],
@@ -151,14 +181,18 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
     hint: "near_field is a headset; far_field a mic across the room from its own speakers.",
   },
   {
-    name: "transcription.model",
+    name: "model",
+    group: "transcription",
+    default: "null (no transcription)",
     path: "audio.input.transcription.model",
     kind: "text",
     when: "live",
     hint: "Transcribes YOUR audio — what makes the `heard` record. Costs transcription tokens.",
   },
   {
-    name: "transcription.language",
+    name: "language",
+    group: "transcription",
+    default: "auto-detect",
     path: "audio.input.transcription.language",
     kind: "text",
     when: "live",
@@ -166,6 +200,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "speed",
+    group: "audio.output",
+    default: "1.0",
     path: "audio.output.speed",
     kind: "number",
     min: 0.25,
@@ -175,7 +211,18 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
     hint: "Reply playback rate. Default 1.0.",
   },
   {
+    name: "voice",
+    group: "audio.output",
+    default: "marin (ours)",
+    path: "audio.output.voice",
+    kind: "text",
+    when: "before-first-reply",
+    hint: "FROZEN once the model has spoken — a session.update may not change it after.",
+  },
+  {
     name: "max_output_tokens",
+    group: "session",
+    default: "inf",
     path: "max_output_tokens",
     kind: "number",
     min: 1,
@@ -185,14 +232,9 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
     hint: "Cap on one response. Unset means the model's own limit.",
   },
   {
-    name: "voice",
-    path: "audio.output.voice",
-    kind: "text",
-    when: "before-first-reply",
-    hint: "FROZEN once the model has spoken — a session.update may not change it after.",
-  },
-  {
     name: "model",
+    group: "session",
+    default: "gpt-realtime-2.1 (ours)",
     path: "model",
     kind: "text",
     when: "connect",
@@ -214,6 +256,8 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
 export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   {
     name: "echoCancellation",
+    group: "processing",
+    default: "true (we ASK for it — ECHO_SAFE_AUDIO)",
     path: "echoCancellation",
     kind: "boolean",
     when: "live",
@@ -221,6 +265,8 @@ export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "noiseSuppression",
+    group: "processing",
+    default: "true (we ASK for it — ECHO_SAFE_AUDIO)",
     path: "noiseSuppression",
     kind: "boolean",
     when: "live",
@@ -228,6 +274,8 @@ export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "autoGainControl",
+    group: "processing",
+    default: "true (we ASK for it — ECHO_SAFE_AUDIO)",
     path: "autoGainControl",
     kind: "boolean",
     when: "live",
@@ -235,6 +283,8 @@ export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "channelCount",
+    group: "capture",
+    default: "the device's own",
     path: "channelCount",
     kind: "number",
     min: 1,
@@ -245,6 +295,8 @@ export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "sampleRate",
+    group: "capture",
+    default: "the device's own",
     path: "sampleRate",
     kind: "number",
     min: 8_000,
@@ -255,6 +307,8 @@ export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "sampleSize",
+    group: "capture",
+    default: "the device's own",
     path: "sampleSize",
     kind: "number",
     min: 8,
@@ -265,6 +319,8 @@ export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "latency",
+    group: "capture",
+    default: "the device's own",
     path: "latency",
     kind: "number",
     min: 0,
@@ -275,6 +331,8 @@ export const CONSTRAINT_PARAMS: readonly ParamSpec[] = [
   },
   {
     name: "deviceId",
+    group: "capture",
+    default: "default",
     path: "deviceId",
     kind: "text",
     when: "connect",
@@ -377,6 +435,24 @@ export function rowDrifts(value: unknown, effective: unknown): boolean {
     return false;
   }
   return JSON.stringify(value) !== JSON.stringify(effective);
+}
+
+/** Runs of rows sharing a `group`, in table order — the widgets' sections.
+ * Order is the table's, not alphabetical: the tables are already ordered as
+ * you would tune them, and re-sorting would discard that. */
+export function groupSpecs(
+  specs: readonly ParamSpec[],
+): Array<{ name: string; specs: ParamSpec[] }> {
+  const groups: Array<{ name: string; specs: ParamSpec[] }> = [];
+  for (const spec of specs) {
+    const last = groups.at(-1);
+    if (last !== undefined && last.name === spec.group) {
+      last.specs.push(spec);
+    } else {
+      groups.push({ name: spec.group, specs: [spec] });
+    }
+  }
+  return groups;
 }
 
 /** Whether a row applies, given the config it is rendering. */

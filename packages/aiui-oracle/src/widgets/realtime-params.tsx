@@ -11,9 +11,9 @@
  */
 
 import { createSignal, For, onCleanup, Show } from "solid-js";
-import { getPath, SESSION_PARAMS, specApplies } from "../params";
+import { getPath, groupSpecs, SESSION_PARAMS, specApplies } from "../params";
 import type { OracleSession } from "../session";
-import { ParamRow } from "./param-row";
+import { ParamGroup, ParamRow } from "./param-row";
 
 export interface OracleRealtimeParamsProps {
   session: OracleSession;
@@ -63,22 +63,24 @@ export function OracleRealtimeParams(props: OracleRealtimeParamsProps) {
 
   return (
     <div class="aiui-oracle-params" data-testid="oracle-realtime-params">
-      <div class="aiui-oracle-params-head">
-        <span>set</span>
-        <span>in force</span>
-      </div>
-      <For each={SESSION_PARAMS.filter((spec) => specApplies(spec, intended()))}>
-        {(spec) => (
-          <ParamRow
-            spec={spec}
-            value={getPath(intended(), spec.path)}
-            effective={getPath(effective(), spec.path)}
-            disabledReason={reasonFor(spec.when)}
-            onChange={(value) => {
-              props.session.setSessionParam(spec.path, value);
-              bump();
-            }}
-          />
+      <For each={groupSpecs(SESSION_PARAMS.filter((spec) => specApplies(spec, intended())))}>
+        {(group) => (
+          <ParamGroup name={group.name}>
+            <For each={group.specs}>
+              {(spec) => (
+                <ParamRow
+                  spec={spec}
+                  value={getPath(intended(), spec.path)}
+                  effective={getPath(effective(), spec.path)}
+                  disabledReason={reasonFor(spec.when)}
+                  onChange={(value) => {
+                    props.session.setSessionParam(spec.path, value);
+                    bump();
+                  }}
+                />
+              )}
+            </For>
+          </ParamGroup>
         )}
       </For>
       <Show when={effective() === undefined}>

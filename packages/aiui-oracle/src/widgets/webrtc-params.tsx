@@ -19,9 +19,9 @@
  */
 
 import { createSignal, For, onCleanup, Show } from "solid-js";
-import { CONSTRAINT_PARAMS, getPath } from "../params";
+import { CONSTRAINT_PARAMS, getPath, groupSpecs } from "../params";
 import type { OracleSession } from "../session";
-import { ParamRow } from "./param-row";
+import { ParamGroup, ParamRow } from "./param-row";
 
 export interface OracleWebRtcParamsProps {
   session: OracleSession;
@@ -80,19 +80,21 @@ export function OracleWebRtcParams(props: OracleWebRtcParamsProps) {
 
   return (
     <div class="aiui-oracle-params" data-testid="oracle-webrtc-params">
-      <div class="aiui-oracle-params-head">
-        <span>asked</span>
-        <span>in force</span>
-      </div>
-      <For each={CONSTRAINT_PARAMS}>
-        {(spec) => (
-          <ParamRow
-            spec={spec}
-            value={asked()[spec.name]}
-            effective={getPath(settings(), spec.path)}
-            disabledReason={reasonFor(spec.name, spec.when)}
-            onChange={(value) => apply(spec.name, value)}
-          />
+      <For each={groupSpecs(CONSTRAINT_PARAMS)}>
+        {(group) => (
+          <ParamGroup name={group.name}>
+            <For each={group.specs}>
+              {(spec) => (
+                <ParamRow
+                  spec={spec}
+                  value={asked()[spec.name]}
+                  effective={getPath(settings(), spec.path)}
+                  disabledReason={reasonFor(spec.name, spec.when)}
+                  onChange={(value) => apply(spec.name, value)}
+                />
+              )}
+            </For>
+          </ParamGroup>
         )}
       </For>
       <Show when={error()}>{(message) => <p class="aiui-oracle-params-error">{message()}</p>}</Show>
