@@ -895,7 +895,7 @@ describe("the unattended session parks itself", () => {
   it("parks after the idle window — the mic closes, the session does NOT", async () => {
     const { session, rig } = walkAway();
     await session.start();
-    await vi.advanceTimersByTimeAsync(14_000);
+    await vi.advanceTimersByTimeAsync(119_000);
     expect(session.state().status).toBe("live");
     await vi.advanceTimersByTimeAsync(1_000);
     expect(session.state().status).toBe("parked");
@@ -904,13 +904,13 @@ describe("the unattended session parks itself", () => {
     expect(rig.mic).toEqual([false]);
     const entry = session.ledger().at(-1) as Extract<LedgerEntry, { kind: "session" }>;
     expect(entry.phase).toBe("parked");
-    expect(entry.detail).toContain("idle 15s");
+    expect(entry.detail).toContain("idle 120s");
   });
 
   it("says WHY it parked — walking away is news, parking it yourself is not", async () => {
     const { session } = walkAway();
     await session.start();
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(120_000);
     expect(session.state().parkedReason).toBe("idle");
     session.resume();
     expect(session.state().parkedReason).toBeUndefined();
@@ -921,14 +921,14 @@ describe("the unattended session parks itself", () => {
   it("activity restarts the clock; BOOKKEEPING does not", async () => {
     const { session, rig } = walkAway();
     await session.start();
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(100_000);
     rig.emit({ type: "input_audio_buffer.speech_started" });
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(100_000);
     expect(session.state().status).toBe("live");
 
     // A config ack is the session talking to itself. Counting it would keep an
     // abandoned session awake forever — the exact state this exists to end.
-    await vi.advanceTimersByTimeAsync(4_000);
+    await vi.advanceTimersByTimeAsync(19_000);
     rig.emit({ type: "session.updated", session: {} });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(session.state().status).toBe("parked");
@@ -940,23 +940,23 @@ describe("the unattended session parks itself", () => {
     // handing it an image mid-thought.
     const { session } = walkAway();
     await session.start();
-    await vi.advanceTimersByTimeAsync(14_000);
+    await vi.advanceTimersByTimeAsync(119_000);
     session.sendText("look at this", { respond: false });
-    await vi.advanceTimersByTimeAsync(14_000);
+    await vi.advanceTimersByTimeAsync(119_000);
     expect(session.state().status).toBe("live");
   });
 
   it("a parked session stays parked — the clock does not run against itself", async () => {
     const { session } = walkAway();
     await session.start();
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(120_000);
     expect(session.state().status).toBe("parked");
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(600_000);
     expect(session.state().status).toBe("parked");
     // Resuming restarts it rather than re-parking against a stale stopwatch.
     session.resume();
     expect(session.state().status).toBe("live");
-    await vi.advanceTimersByTimeAsync(14_000);
+    await vi.advanceTimersByTimeAsync(119_000);
     expect(session.state().status).toBe("live");
   });
 
@@ -979,7 +979,7 @@ describe("the unattended session parks itself", () => {
     const { session } = walkAway();
     await session.start();
     session.close();
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(600_000);
     expect(session.state().status).toBe("closed");
   });
 });

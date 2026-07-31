@@ -68,7 +68,13 @@ export function RichTracePane(props: { baseUrl: string }) {
       data-testid="rich-trace-pane"
       onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}
     >
-      <summary>traces</summary>
+      {/* "prompt history" rather than "traces" (owner, 2026-07-31): what this
+          pane holds is the record of prompts that have been lowered and sent,
+          and "trace" names the mechanism rather than the content — legible to
+          someone who already knows the pipeline, opaque to everyone else. The
+          internals keep the word (trace ids, the trace debugger, the on-disk
+          `traces/` directory); this is the label on the drawer. */}
+      <summary>prompt history</summary>
       {host}
     </details>
   );

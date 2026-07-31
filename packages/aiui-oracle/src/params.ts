@@ -256,7 +256,7 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
     name: "parkAfterIdleSeconds",
     group: "aiui — ours, not the vendor's",
     scope: "aiui",
-    default: "15",
+    default: "120",
     path: "parkAfterIdleSeconds",
     kind: "range",
     min: 0,

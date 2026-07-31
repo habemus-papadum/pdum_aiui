@@ -240,8 +240,16 @@ export interface FirstReplyGuard {
 export const DEFAULT_FIRST_REPLY_PAD_MS = 400;
 export const DEFAULT_FIRST_REPLY_MAX_MS = 15_000;
 
-/** Idle seconds before an unattended session parks itself (owner, 2026-07-31). */
-export const DEFAULT_PARK_AFTER_IDLE_SECONDS = 15;
+/**
+ * Idle seconds before an unattended session parks itself (owner, 2026-07-31).
+ *
+ * Two minutes, revised up from 15 s the same day. 15 s was tight against
+ * `semantic_vad` at `eagerness: "low"`, which will itself wait up to 8 s: a
+ * pause DURING a turn is safe (speech events reset the clock), but sitting
+ * with a reply for a quarter of a minute before answering is ordinary, and
+ * being parked for thinking is worse than the hazard it guards.
+ */
+export const DEFAULT_PARK_AFTER_IDLE_SECONDS = 120;
 
 export const DEFAULT_ORACLE_MODEL = "gpt-realtime-2.1";
 export const DEFAULT_ORACLE_VOICE = "marin";

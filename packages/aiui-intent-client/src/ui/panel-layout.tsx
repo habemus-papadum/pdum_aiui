@@ -50,6 +50,11 @@ export const PANEL_LAYOUT_STYLES =
   // host-concatenates-strings pattern as every strip above.
   ORACLE_WIDGET_STYLES +
   `.aiui-oracle-panes { margin: 4px 12px; max-width: 460px; }
+  /* The section's own label — quiet, but unmistakably a heading, and set off
+     by a rule so the folds below read as belonging to it. */
+  .aiui-oracle-panes-title { font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; opacity: 0.55; padding: 2px 0 3px; margin-bottom: 3px;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
   /* Quiet by default; the off-view case is the one worth a colour, since it
      is the state that used to read as "the oracle can't see my app". */
   .aiui-oracle-source { font-size: 11px; opacity: 0.55; padding: 0 2px 2px; }
@@ -243,6 +248,14 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
   };
   return (
     <div class="aiui-oracle-panes" data-testid="oracle-panes" data-live={live() ? "true" : "false"}>
+      {/* The block has to SAY it is the oracle's, and making the panes stand
+          is what created the need: while they only appeared with a live
+          session the context was obvious, but a status dot reading "off"
+          above three folds could belong to anything on the panel. The folds
+          name the oracle individually; the strip above them did not.
+          No state here — the mind strip directly below is the one place that
+          answers "what is it doing", and two of them would disagree eventually. */}
+      <div class="aiui-oracle-panes-title">🔮 oracle</div>
       <OracleParkBanner session={props.lanes.oracle} />
       <OracleMind session={props.lanes.oracle} />
       <OracleUsage session={props.lanes.oracle} />
@@ -305,11 +318,14 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
         lintControl={props.lanes !== undefined ? { now: props.lanes.lintNow } : undefined}
         turnHasContent={props.lanes !== undefined ? props.lanes.turnHasContent : undefined}
       />
-      <Show when={props.lanes} keyed>
-        {(lanes) => <OraclePanes client={props.client} lanes={lanes} />}
-      </Show>
+      {/* The TURN comes first (owner, 2026-07-31) — it is what the panel is
+          for, and what you are in the middle of. The oracle is the detour and
+          sits after it; the prompt history is the record and sits last. */}
       <Show when={props.lanes} keyed>
         {(lanes) => <TurnPreview lanes={lanes} />}
+      </Show>
+      <Show when={props.lanes} keyed>
+        {(lanes) => <OraclePanes client={props.client} lanes={lanes} />}
       </Show>
       <Show when={props.lanes !== undefined && props.port !== undefined}>
         <RichTracePane baseUrl={`http://127.0.0.1:${props.port}`} />
