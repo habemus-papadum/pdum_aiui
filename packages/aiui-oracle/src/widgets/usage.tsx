@@ -41,7 +41,16 @@ function Chip(props: { icon: string; label: string; count: number; kind: string 
   );
 }
 
-/** The rows the strip shows, given a tally. Text is what is left after audio. */
+/**
+ * The rows the strip shows, given a tally. Text is what is left after audio.
+ *
+ * ALL of them, always — including zeros (owner, 2026-07-31). Filtering empty
+ * chips made the strip appear only once something had been charged, and made
+ * it reflow as each kind first appeared, so the position of a number kept
+ * moving just as you were learning where to look. A fixed set starting at zero
+ * is both a stable target and an honest statement: nothing has been spent yet,
+ * which is different from having nothing to say.
+ */
 export function usageChips(
   usage: UsageTotals,
 ): Array<{ icon: string; label: string; count: number; kind: string }> {
@@ -78,42 +87,45 @@ export function usageChips(
       count: outputText,
       kind: "out-text",
     },
-  ].filter((chip) => chip.count > 0);
+  ];
 }
 
 export function OracleUsage(props: OracleUsageProps) {
   const state = useOracleState(props.session);
   const usage = () => state().usage;
+  // Before anything is charged there is no price to report, but the answer is
+  // known and it is zero — so it says zero rather than nothing. `usd` stays
+  // undefined only when responses HAVE happened and the catalog could not
+  // price them, which is a different claim and reads differently below.
+  const spent = () => (usage().responses === 0 ? 0 : usage().usd);
   return (
-    <Show when={usage().responses > 0}>
-      <div class="aiui-oracle-usage" data-testid="oracle-usage">
-        {usageChips(usage()).map((chip) => (
-          <Chip icon={chip.icon} label={chip.label} count={chip.count} kind={chip.kind} />
-        ))}
-        <Show when={usage().usd !== undefined}>
-          <span
-            class="aiui-oracle-usage-cost"
-            title={
-              usage().approximateResponses > 0
-                ? "approximate — this model id is not in the price catalog, so its base model's rates were used. From @pydantic/genai-prices; a signal, not an invoice."
-                : "estimated from @pydantic/genai-prices — a signal, not an invoice"
-            }
-          >
-            {usage().approximateResponses > 0 ? "~" : ""}
-            {formatUsd(usage().usd ?? 0)}
-          </span>
-        </Show>
-        {/* Never fold an unknown price into the total as zero: a cost display
+    <div class="aiui-oracle-usage" data-testid="oracle-usage">
+      {usageChips(usage()).map((chip) => (
+        <Chip icon={chip.icon} label={chip.label} count={chip.count} kind={chip.kind} />
+      ))}
+      <Show when={spent() !== undefined}>
+        <span
+          class="aiui-oracle-usage-cost"
+          title={
+            usage().approximateResponses > 0
+              ? "approximate — this model id is not in the price catalog, so its base model's rates were used. From @pydantic/genai-prices; a signal, not an invoice."
+              : "estimated from @pydantic/genai-prices — a signal, not an invoice"
+          }
+        >
+          {usage().approximateResponses > 0 ? "~" : ""}
+          {formatUsd(spent() ?? 0)}
+        </span>
+      </Show>
+      {/* Never fold an unknown price into the total as zero: a cost display
             that under-reports without saying so is worse than none. */}
-        <Show when={usage().unpricedResponses > 0}>
-          <span
-            class="aiui-oracle-usage-unpriced"
-            title="the price catalog has no entry for this model — the total is at least this much"
-          >
-            +{usage().unpricedResponses} unpriced
-          </span>
-        </Show>
-      </div>
-    </Show>
+      <Show when={usage().unpricedResponses > 0}>
+        <span
+          class="aiui-oracle-usage-unpriced"
+          title="the price catalog has no entry for this model — the total is at least this much"
+        >
+          +{usage().unpricedResponses} unpriced
+        </span>
+      </Show>
+    </div>
   );
 }

@@ -219,36 +219,55 @@ function ToolSourceLine(props: { lanes: ChannelLanes }) {
   );
 }
 
+/**
+ * The oracle's panes — STANDING, not gated on the oracle being on (owner,
+ * 2026-07-31).
+ *
+ * They used to render only while a session was live or connecting, which threw
+ * away the record at the moment it became useful: you turn the oracle off and
+ * the ledger of what it just did, what it cost, and what config the server
+ * actually held vanishes with it. The trace viewer is the precedent — a
+ * finished run is exactly when you read it.
+ *
+ * Nothing here needs a session to render. The lane holds ONE `OracleSession`
+ * for the panel's life and its ledger accumulates across connects (`start()`
+ * resets the reply line, never the entries), so the history is genuinely
+ * continuous rather than a snapshot of the last connection. The params boards
+ * disable their rows with a reason when nothing is open, and the mind strip
+ * says "off" — both are true statements rather than absences.
+ */
 function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
   const live = (): boolean => {
     const status = props.client.claimStatuses().oracleSession?.phase;
     return props.client.state().oracle === true || status === "active" || status === "pending";
   };
   return (
-    <Show when={live()}>
-      <div class="aiui-oracle-panes" data-testid="oracle-panes">
-        <OracleParkBanner session={props.lanes.oracle} />
-        <OracleMind session={props.lanes.oracle} />
-        <OracleUsage session={props.lanes.oracle} />
+    <div class="aiui-oracle-panes" data-testid="oracle-panes" data-live={live() ? "true" : "false"}>
+      <OracleParkBanner session={props.lanes.oracle} />
+      <OracleMind session={props.lanes.oracle} />
+      <OracleUsage session={props.lanes.oracle} />
+      {/* Which app's tools the oracle can see is only a live-session question;
+          off, there is no session to hold them and the line would be noise. */}
+      <Show when={live()}>
         <ToolSourceLine lanes={props.lanes} />
-        <details class="aiui-pane" data-testid="oracle-ledger">
-          <summary>oracle ledger</summary>
-          <OracleViewer session={props.lanes.oracle} mind={false} />
-        </details>
-        {/* The same two knob-boards the oracle lab carries. Here because the
-            panel's acoustics are the ones that matter — a laptop mic listening
-            to its own speakers — and tuning against the lab would be tuning
-            against a different room. */}
-        <details class="aiui-pane" data-testid="oracle-realtime-params">
-          <summary>realtime session params</summary>
-          <OracleRealtimeParams session={props.lanes.oracle} />
-        </details>
-        <details class="aiui-pane" data-testid="oracle-webrtc-params">
-          <summary>webrtc mic constraints</summary>
-          <OracleWebRtcParams session={props.lanes.oracle} />
-        </details>
-      </div>
-    </Show>
+      </Show>
+      <details class="aiui-pane" data-testid="oracle-ledger">
+        <summary>oracle ledger</summary>
+        <OracleViewer session={props.lanes.oracle} mind={false} />
+      </details>
+      {/* The same two knob-boards the oracle lab carries. Here because the
+          panel's acoustics are the ones that matter — a laptop mic listening
+          to its own speakers — and tuning against the lab would be tuning
+          against a different room. */}
+      <details class="aiui-pane" data-testid="oracle-realtime-params">
+        <summary>realtime session params</summary>
+        <OracleRealtimeParams session={props.lanes.oracle} />
+      </details>
+      <details class="aiui-pane" data-testid="oracle-webrtc-params">
+        <summary>webrtc mic constraints</summary>
+        <OracleWebRtcParams session={props.lanes.oracle} />
+      </details>
+    </div>
   );
 }
 

@@ -260,6 +260,22 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
   vendor's**, since the verbatim-names rule would be worthless if an aiui knob could pass
   itself off as a vendor field. Not to be confused with `turn_detection.idle_timeout_ms`,
   which is the opposite behaviour: this one stops listening, that one starts talking.
+- **The oracle's panes STAND — they are not gated on the oracle being on** (owner,
+  2026-07-31). They used to render only while a session was live or connecting, which threw
+  the record away at the moment it became useful: turn the oracle off and the ledger of what
+  it just did, what it cost, and what config the server actually held went with it. The
+  trace viewer is the precedent — a finished run is exactly when you read one. The lane
+  holds ONE session for the panel's life and its ledger accumulates across connects
+  (`start()` resets the reply line, never the entries), so the history is continuous rather
+  than a snapshot of the last connection. Off, the params rows disable with a reason and the
+  mind strip says "off" — true statements, not absences. The one thing still gated is the
+  tool-source line: which app's tools the oracle can see is only a live-session question.
+- **The usage strip reads from ZERO**, not from the first charge. A fixed set of five chips
+  plus the cost, present the moment the panel is, so nothing has been spent is a statement
+  rather than an empty space — and the number you are watching does not move as each kind of
+  token first appears. Totals are cumulative across reconnects, matching the ledger beneath
+  them; `$0` before anything is charged is a known answer, while a missing price after a
+  charge means the catalog could not price it and says so separately.
 - **Both knob-boards are mounted in the panel** — `realtime session params` and `webrtc mic
   constraints`, the same two widgets the oracle lab carries, live-editable mid-session.
   Here rather than only in the lab because the panel's acoustics are the ones that matter (a
