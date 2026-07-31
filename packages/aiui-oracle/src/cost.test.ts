@@ -76,11 +76,26 @@ describe("pricing", () => {
     expect(noCache?.usd).toBeCloseTo(0.1616, 4);
   });
 
-  it("falls back to the base model id, and SAYS it is approximate", () => {
-    // Our default is gpt-realtime-2.1, which the catalog does not carry.
+  it("prices OUR default model exactly — no approximation", () => {
+    // gpt-realtime-2.1 was absent from the catalog at 0.0.69 and priced by
+    // trimming to gpt-realtime; 0.1.0 carries it, so the fallback no longer
+    // fires here and the strip drops its `~`. Pinned because a regression
+    // would be invisible: the number would still appear, just approximated.
     const priced = priceRealtimeUsage("gpt-realtime-2.1", { input_tokens: 1000 });
-    expect(priced?.pricedAs).toBe("gpt-realtime");
-    expect(priced?.approximate).toBe(true);
+    expect(priced?.pricedAs).toBe("gpt-realtime-2.1");
+    expect(priced?.approximate).toBe(false);
+  });
+
+  it("still falls back for an id the catalog has not caught up with", () => {
+    // The mechanism keeps earning its keep: dated snapshots and future point
+    // releases appear before the catalog carries them.
+    const dated = priceRealtimeUsage("gpt-realtime-2.1-2027-01-01", { input_tokens: 1000 });
+    expect(dated?.pricedAs).toBe("gpt-realtime-2.1");
+    expect(dated?.approximate).toBe(true);
+
+    const future = priceRealtimeUsage("gpt-realtime-9.9", { input_tokens: 1000 });
+    expect(future?.pricedAs).toBe("gpt-realtime");
+    expect(future?.approximate).toBe(true);
   });
 
   it("never trims to something generic enough to match the wrong family", () => {

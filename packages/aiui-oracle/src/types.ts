@@ -380,10 +380,11 @@ export interface UsageTotals {
    */
   unpricedResponses: number;
   /**
-   * Responses priced under a TRIMMED model id — `gpt-realtime-2.1` is not in
-   * the catalog, `gpt-realtime` is. A point release usually shares its base
-   * rates, but "usually" is not "verified", so a total containing any of these
-   * is shown with a `~`.
+   * Responses priced under a TRIMMED model id, because the catalog had no
+   * entry for the exact one — which happens with dated snapshots and fresh
+   * point releases. A point release usually shares its base rates, but
+   * "usually" is not "verified", so a total containing any of these is shown
+   * with a `~`.
    */
   approximateResponses: number;
 }

@@ -14,11 +14,12 @@
  *  - **It never throws.** `calcPrice` validates aggressively (audio subsets
  *    must not exceed their totals, and providers report them inconsistently),
  *    and a pricing hiccup must never disturb a live conversation.
- *  - **Unknown models still account.** The catalog lags brand-new models, and
- *    `gpt-realtime-2.1` may well be one — those responses report their token
- *    usage with no `usd`, and the UI shows the count as UNPRICED rather than
- *    folding a silent zero into a running total. A cost display that
- *    under-reports without saying so is worse than none.
+ *  - **Unknown models still account.** The catalog lags brand-new model ids —
+ *    dated snapshots and fresh point releases both appear before it carries
+ *    them. Those responses report their token usage with no `usd`, and the UI
+ *    shows the count as UNPRICED rather than folding a silent zero into a
+ *    running total. A cost display that under-reports without saying so is
+ *    worse than none.
  *
  * DUPLICATION, deliberate and bounded: `usageFromRealtimeResponse` also exists
  * in `aiui-claude-channel/src/cost.ts`, which maps four vendor dialects for the
@@ -80,11 +81,17 @@ export function usageFromRealtimeResponse(raw: unknown): Usage | undefined {
 /**
  * Candidate catalog ids for a model, most specific first.
  *
- * The catalog matches exact ids, and ours is `gpt-realtime-2.1`, which it does
- * not carry — only `gpt-realtime`. Rather than show every session as unpriced,
- * trailing version segments are trimmed and the result is flagged APPROXIMATE:
- * a point release usually shares its base model's rates, but "usually" is not
- * "verified", so the number wears a `~` and says why.
+ * The catalog matches exact ids and lags new ones. `gpt-realtime-2.1` — ours —
+ * was absent at 0.0.69 and priced by trimming to `gpt-realtime`; 0.1.0 carries
+ * it, so that particular fallback no longer fires. The mechanism stays because
+ * the situation recurs: dated snapshots (`…-2027-01-01`) and future point
+ * releases both arrive before the catalog does.
+ *
+ * Rather than show such a session as unpriced, trailing version segments are
+ * trimmed and the result is flagged APPROXIMATE: a point release usually
+ * shares its base model's rates, but "usually" is not "verified", so the
+ * number wears a `~` and says why. (It is not free: at 0.0.69 the trim priced
+ * a sample turn at $0.058320 where the real entry gives $0.058720.)
  *
  * Stops at two segments so a trim can never reach something generic enough to
  * match the wrong family (`gpt-realtime` must not degrade to `gpt`).

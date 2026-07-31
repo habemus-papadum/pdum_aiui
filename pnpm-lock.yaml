@@ -770,8 +770,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@pydantic/genai-prices':
-        specifier: ^0.0.69
-        version: 0.0.69
+        specifier: ^0.1.0
+        version: 0.1.0
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -947,8 +947,8 @@ importers:
         specifier: workspace:^
         version: link:../aiui-viz
       '@pydantic/genai-prices':
-        specifier: ^0.0.69
-        version: 0.0.69
+        specifier: ^0.1.0
+        version: 0.1.0
       '@solidjs/web':
         specifier: 2.0.0-beta.15
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
@@ -2465,8 +2465,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  '@pydantic/genai-prices@0.0.69':
-    resolution: {integrity: sha512-IkeJG4bZSj78k6OfQp/zqy/iS05czr3m6Ts/UgKZ0fS44v+BMUp8fITlKEZyJl6px8bFTQbETINvvJp4YY11/Q==}
+  '@pydantic/genai-prices@0.1.0':
+    resolution: {integrity: sha512-8CR0V3QyeUQm5bP+W6gA7iovqQY1rfLbPW9uxlfWtVUq4CUTXsm162sk6z8s/snGaLMFFda8StvtY6A5dNBfFg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -7326,7 +7326,7 @@ snapshots:
       - react-native-b4a
       - supports-color
 
-  '@pydantic/genai-prices@0.0.69':
+  '@pydantic/genai-prices@0.1.0':
     dependencies:
       yargs: 17.7.3
 
