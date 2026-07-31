@@ -59,7 +59,9 @@ describe("mapping a response.done usage", () => {
 
 describe("pricing", () => {
   it("prices a real turn, and the cache credit is worth ~3x", () => {
-    const withCache = priceRealtimeUsage("gpt-realtime", usageFromRealtimeResponse(realtimeUsage)!);
+    const mapped = usageFromRealtimeResponse(realtimeUsage);
+    expect(mapped).toBeDefined();
+    const withCache = priceRealtimeUsage("gpt-realtime", mapped ?? {});
     expect(withCache?.usd).toBeCloseTo(0.05832, 5);
     expect(withCache?.approximate).toBe(false);
 
