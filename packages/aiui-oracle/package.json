@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-oracle",
-  "version": "0.12.0+dev",
-  "description": "The oracle \u2014 a realtime voice control surface for aiui apps (WebRTC to OpenAI Realtime, the app's cells as tools).",
+  "version": "0.13.0",
+  "description": "The oracle — a realtime voice control surface for aiui apps (WebRTC to OpenAI Realtime, the app's cells as tools).",
   "type": "module",
   "license": "MIT",
   "repository": {

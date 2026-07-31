@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-morphogen",
-  "version": "0.12.0+dev",
-  "description": "Gray-Scott reaction\u2013diffusion lab: a WebGL simulation island, a worker analysis pipeline, and an observable history ring \u2014 the original aiui reference notebook.",
+  "version": "0.13.0",
+  "description": "Gray-Scott reaction–diffusion lab: a WebGL simulation island, a worker analysis pipeline, and an observable history ring — the original aiui reference notebook.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -21,7 +21,7 @@
   "aiui": {
     "sitePage": {
       "title": "morphogen",
-      "desc": "reaction\u2013diffusion lab",
+      "desc": "reaction–diffusion lab",
       "order": 10,
       "card": "./card"
     }

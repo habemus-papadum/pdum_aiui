@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-holograms",
-  "version": "0.12.0+dev",
-  "description": "The film that remembers light: record interference on a virtual bench, develop the film, replay the reference, and the object's wavefront comes back \u2014 parallax, cut-the-film, magnification remixes, and every real failure mode, computed live from the wave equation.",
+  "version": "0.13.0",
+  "description": "The film that remembers light: record interference on a virtual bench, develop the film, replay the reference, and the object's wavefront comes back — parallax, cut-the-film, magnification remixes, and every real failure mode, computed live from the wave equation.",
   "private": true,
   "type": "module",
   "license": "MIT",
