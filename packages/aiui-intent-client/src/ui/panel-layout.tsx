@@ -19,6 +19,7 @@
 import {
   ORACLE_WIDGET_STYLES,
   OracleMind,
+  OracleParkBanner,
   OracleRealtimeParams,
   OracleViewer,
   OracleWebRtcParams,
@@ -225,6 +226,7 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
   return (
     <Show when={live()}>
       <div class="aiui-oracle-panes" data-testid="oracle-panes">
+        <OracleParkBanner session={props.lanes.oracle} />
         <OracleMind session={props.lanes.oracle} />
         <ToolSourceLine lanes={props.lanes} />
         <details class="aiui-pane" data-testid="oracle-ledger">

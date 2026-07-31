@@ -35,6 +35,7 @@ import {
   DEFAULT_INPUT_TRANSCRIPTION_MODEL,
   DEFAULT_ORACLE_MODEL,
   DEFAULT_ORACLE_VOICE,
+  DEFAULT_PARK_AFTER_IDLE_SECONDS,
 } from "./types";
 
 export interface OracleState {
@@ -49,6 +50,9 @@ export interface OracleState {
    * (`| undefined` so the clear can ride a setState patch.) */
   runningTool?: string | undefined;
   usage: UsageTotals;
+  /** Why the session is parked — the banner says "you did this" or "you left
+   * it", which are different things to a human coming back to it. */
+  parkedReason?: "manual" | "idle" | undefined;
   toolNames: string[];
   /** The vendor call id (WebRTC) — the sideband hook, surfaced first-class. */
   callId?: string;
@@ -91,6 +95,8 @@ export class OracleSession {
    * config we send rather than a flag anyone has to remember to apply. */
   private guard: { padMs: number; maxMs: number } | undefined;
   private guardTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The unattended-session stopwatch — restarted by every activity entry. */
+  private idleTimer: ReturnType<typeof setTimeout> | undefined;
   /** Whether the current reply ever produced audio — a reply that did not
    * (a tool-only turn) has no end-of-speech event to wait for. */
   private replyAudioStarted = false;
@@ -203,16 +209,27 @@ export class OracleSession {
       phase: "live",
       ...(liveBits.length > 0 ? { detail: liveBits.join(" · ") } : {}),
     });
+    // Connecting is not activity, but it IS the moment the mic opens — so the
+    // stopwatch starts here. A session opened and then abandoned before a word
+    // is said is the same hazard as one abandoned mid-conversation.
+    this.touchIdle();
   }
 
   /** Gate the mic, keep the connection: the free park. */
-  park(): void {
+  park(reason: "manual" | "idle" = "manual"): void {
     if (this.current.status !== "live" || this.handle === undefined) {
       return;
     }
+    this.clearIdleTimer();
     this.handle.setMicEnabled(false);
-    this.setState({ status: "parked", speaking: false });
-    this.record({ kind: "session", phase: "parked" });
+    this.setState({ status: "parked", speaking: false, parkedReason: reason });
+    this.record({
+      kind: "session",
+      phase: "parked",
+      ...(reason === "idle"
+        ? { detail: `idle ${this.parkAfterIdleSeconds()}s — mic gated, session kept` }
+        : {}),
+    });
   }
 
   resume(): void {
@@ -220,8 +237,11 @@ export class OracleSession {
       return;
     }
     this.handle.setMicEnabled(true);
-    this.setState({ status: "live" });
+    this.setState({ status: "live", parkedReason: undefined });
     this.record({ kind: "session", phase: "live", detail: "resumed" });
+    // A resume IS activity — otherwise an unpark with nothing said after it
+    // would re-park against a stopwatch that never restarted.
+    this.touchIdle();
   }
 
   /** Manual barge-in — safe to fire with no reply in flight. */
@@ -240,6 +260,7 @@ export class OracleSession {
 
   close(): void {
     this.clearGuardTimer();
+    this.clearIdleTimer();
     if (this.handle === undefined) {
       this.setState({ status: "closed" });
       return;
@@ -560,6 +581,69 @@ export class OracleSession {
     }
   }
 
+  // ── the unattended session ────────────────────────────────────────────────
+
+  /**
+   * Ledger kinds that count as ACTIVITY.
+   *
+   * Named explicitly rather than derived from the viewer's categories: the
+   * engine must not depend on a widget's presentation choices, and the list
+   * is a behavioural decision worth reading in one place. What is absent
+   * matters most — `session` and `config` entries are bookkeeping that ticks
+   * along on its own, and counting them would keep an abandoned session awake
+   * forever, which is exactly the state this exists to end.
+   */
+  private static readonly ACTIVITY = new Set<LedgerBody["kind"]>([
+    "speech",
+    "heard",
+    "said",
+    "reply-audio",
+    "tool-call",
+    "tool-result",
+    "injected",
+    "response",
+  ]);
+
+  private parkAfterIdleSeconds(): number {
+    return this.options.config.parkAfterIdleSeconds ?? DEFAULT_PARK_AFTER_IDLE_SECONDS;
+  }
+
+  /** Restart the stopwatch. Only a LIVE session can go idle — a parked one is
+   * already where the timer would send it, and a closed one has nothing to
+   * gate. */
+  private touchIdle(): void {
+    this.clearIdleTimer();
+    const seconds = this.parkAfterIdleSeconds();
+    if (seconds <= 0 || this.current.status !== "live") {
+      return;
+    }
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = undefined;
+      this.park("idle");
+    }, seconds * 1000);
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer !== undefined) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = undefined;
+    }
+  }
+
+  /** The aiui-side knobs — ours, not the vendor's, and applied immediately
+   * rather than sent anywhere (there is nothing on the wire to send). */
+  behavior(): { parkAfterIdleSeconds: number } {
+    return { parkAfterIdleSeconds: this.parkAfterIdleSeconds() };
+  }
+
+  setBehavior(path: string, value: unknown): void {
+    setPath(this.options.config as unknown as Record<string, unknown>, path, value);
+    // Take effect NOW, not on the next activity: shortening the timeout while
+    // an idle session sits there should park it, not wait for something to
+    // happen first — which by definition is not going to.
+    this.touchIdle();
+  }
+
   /** Outbound control events worth a ledger line — the ones that can move a
    * response's lifecycle, and therefore the ones a cancellation has to be
    * attributable against. */
@@ -825,6 +909,7 @@ export class OracleSession {
 
   private onTransportClose(reason: string): void {
     this.clearGuardTimer();
+    this.clearIdleTimer();
     if (this.current.status === "closed" || this.current.status === "error") {
       return;
     }
@@ -834,6 +919,7 @@ export class OracleSession {
   }
 
   private fail(source: "key" | "transport", error: unknown): void {
+    this.clearIdleTimer();
     this.setState({ status: "error" });
     this.record({ kind: "error", source, message: message(error) });
     this.record({ kind: "session", phase: "error", detail: message(error) });
@@ -849,6 +935,13 @@ export class OracleSession {
   private record(entry: LedgerBody): void {
     const full: LedgerEntry = { at: this.now(), seq: ++this.seq, ...entry };
     this.entries.push(full);
+    // The stopwatch hangs off the LEDGER rather than off the vendor event
+    // stream, so anything that counts as having happened resets it exactly
+    // once, by construction — including things with no vendor event at all,
+    // like an injected screenshot.
+    if (OracleSession.ACTIVITY.has(entry.kind)) {
+      this.touchIdle();
+    }
     for (const listener of this.ledgerListeners) {
       listener(full);
     }

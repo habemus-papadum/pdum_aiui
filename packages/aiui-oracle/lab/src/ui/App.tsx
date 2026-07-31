@@ -21,6 +21,7 @@ import {
 import {
   OracleControl,
   OracleKey,
+  OracleParkBanner,
   OracleRealtimeParams,
   OracleViewer,
   OracleWebRtcParams,
@@ -131,6 +132,7 @@ export function App() {
       </div>
       <div class="lab-panel">
         <OracleControl session={session} />
+        <OracleParkBanner session={session} />
         <div class="lab-composer">
           <input
             type="text"

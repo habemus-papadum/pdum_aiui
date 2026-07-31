@@ -175,6 +175,30 @@ export interface OracleConfig {
    */
   firstReplyGuard?: boolean | FirstReplyGuard;
   /**
+   * PARK the session after this many seconds with no activity. `0` disables.
+   * Default {@link DEFAULT_PARK_AFTER_IDLE_SECONDS}.
+   *
+   * The failure it prevents is leaving a live microphone open because you
+   * walked away and forgot — which no amount of care fixes, since forgetting
+   * is the whole failure mode.
+   *
+   * Park rather than close, deliberately: parking gates the mic and keeps the
+   * connection, which costs nothing while idle, so resuming is one click and
+   * the conversation survives. Closing would throw away the context you were
+   * mid-way through and need a fresh credential to rebuild.
+   *
+   * "Activity" is what the LEDGER records as having happened — speech heard,
+   * a reply spoken or its audio playing, a tool running, something injected.
+   * Deliberately NOT config acks or session bookkeeping: those tick along on
+   * their own and would keep an abandoned session awake forever, which is
+   * precisely the state this exists to end.
+   *
+   * Not to be confused with the vendor's `turn_detection.idle_timeout_ms`,
+   * which is the opposite behaviour — the model speaking UNPROMPTED after a
+   * silence. This one stops listening; that one starts talking.
+   */
+  parkAfterIdleSeconds?: number;
+  /**
    * TTL for a minted ephemeral secret, seconds (10–7200). Default 600.
    *
    * NOT read by {@link OracleSession} — and structurally cannot be: the
@@ -215,6 +239,9 @@ export interface FirstReplyGuard {
 
 export const DEFAULT_FIRST_REPLY_PAD_MS = 400;
 export const DEFAULT_FIRST_REPLY_MAX_MS = 15_000;
+
+/** Idle seconds before an unattended session parks itself (owner, 2026-07-31). */
+export const DEFAULT_PARK_AFTER_IDLE_SECONDS = 15;
 
 export const DEFAULT_ORACLE_MODEL = "gpt-realtime-2.1";
 export const DEFAULT_ORACLE_VOICE = "marin";

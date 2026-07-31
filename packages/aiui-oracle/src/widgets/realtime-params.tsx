@@ -32,6 +32,10 @@ export function OracleRealtimeParams(props: OracleRealtimeParamsProps) {
     tick();
     return props.session.sessionConfig();
   };
+  const ours = () => {
+    tick();
+    return props.session.behavior();
+  };
   const effective = () => {
     tick();
     return props.session.effectiveSession();
@@ -70,11 +74,27 @@ export function OracleRealtimeParams(props: OracleRealtimeParamsProps) {
               {(spec) => (
                 <ParamRow
                   spec={spec}
-                  value={getPath(intended(), spec.path)}
-                  effective={getPath(effective(), spec.path)}
-                  disabledReason={reasonFor(spec.when)}
+                  value={
+                    spec.scope === "aiui"
+                      ? getPath(ours(), spec.path)
+                      : getPath(intended(), spec.path)
+                  }
+                  // An aiui knob has no server to disagree with, so what is
+                  // in force IS what we hold — never "—", never drift.
+                  effective={
+                    spec.scope === "aiui"
+                      ? getPath(ours(), spec.path)
+                      : getPath(effective(), spec.path)
+                  }
+                  // …and it applies with no session open, because parking is
+                  // ours to schedule whether or not the vendor is listening.
+                  disabledReason={spec.scope === "aiui" ? undefined : reasonFor(spec.when)}
                   onChange={(value) => {
-                    props.session.setSessionParam(spec.path, value);
+                    if (spec.scope === "aiui") {
+                      props.session.setBehavior(spec.path, value);
+                    } else {
+                      props.session.setSessionParam(spec.path, value);
+                    }
                     bump();
                   }}
                 />

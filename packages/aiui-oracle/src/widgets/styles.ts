@@ -72,6 +72,19 @@ export const ORACLE_WIDGET_STYLES = `
     background: color-mix(in srgb, currentColor 8%, transparent); font-size: 11px;
     overflow-x: auto; }
 
+  /* the park banner — for someone who walked away, not someone watching */
+  .aiui-oracle-park { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    border-radius: 8px; font-size: 12px;
+    border: 1px solid color-mix(in srgb, #d97706 55%, transparent);
+    background: color-mix(in srgb, #d97706 12%, transparent); }
+  .aiui-oracle-park-icon { font-size: 14px; }
+  .aiui-oracle-park-text { flex: 1; min-width: 0; }
+  .aiui-oracle-park-note { opacity: 0.65; }
+  .aiui-oracle-park button { font: inherit; font-size: 11px; padding: 2px 10px;
+    border-radius: 6px; cursor: pointer; color: inherit; background: transparent;
+    border: 1px solid color-mix(in srgb, currentColor 40%, transparent); }
+  .aiui-oracle-park button:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+
   /* the params widgets. A row is a BLOCK (name + control, then a status line),
      never a cell in a shared grid: rows carry a variable number of trailing
      annotations, which sheared a grid's columns apart, and a fixed multi-column
@@ -81,6 +94,7 @@ export const ORACLE_WIDGET_STYLES = `
   .aiui-oracle-param-group-name { font: 10px ui-monospace, monospace; letter-spacing: 0.06em;
     text-transform: uppercase; opacity: 0.45; padding-bottom: 2px;
     border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+  .aiui-oracle-param-head input[type="range"] { padding: 0; accent-color: currentColor; }
   .aiui-oracle-param-head { display: flex; align-items: center; gap: 8px; }
   .aiui-oracle-param-name { flex: 1 1 auto; min-width: 0; cursor: help;
     font-family: ui-monospace, monospace;

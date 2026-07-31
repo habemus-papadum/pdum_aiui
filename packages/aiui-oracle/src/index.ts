@@ -69,6 +69,7 @@ export {
   DEFAULT_INPUT_TRANSCRIPTION_MODEL,
   DEFAULT_ORACLE_MODEL,
   DEFAULT_ORACLE_VOICE,
+  DEFAULT_PARK_AFTER_IDLE_SECONDS,
 } from "./types";
 export type { WebRtcTransportOptions } from "./webrtc";
 export { WEBRTC_CAPABILITIES, webRtcTransport } from "./webrtc";

@@ -6,6 +6,8 @@ export type { OracleKeyProps } from "./key";
 export { OracleKey } from "./key";
 export type { ParamRowProps } from "./param-row";
 export { ParamRow } from "./param-row";
+export type { OracleParkBannerProps } from "./park-banner";
+export { OracleParkBanner } from "./park-banner";
 export type { OracleRealtimeParamsProps } from "./realtime-params";
 export { OracleRealtimeParams } from "./realtime-params";
 export { ORACLE_WIDGET_STYLES } from "./styles";

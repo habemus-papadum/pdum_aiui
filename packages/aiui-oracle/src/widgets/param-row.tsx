@@ -94,6 +94,25 @@ export function ParamRow(props: ParamRowProps) {
         </select>
       );
     }
+    if (spec.kind === "range") {
+      // A slider needs a value at all times, so an aiui knob falls back to its
+      // own default rather than rendering empty — there is no "unset" for a
+      // behaviour we implement ourselves.
+      const current = () =>
+        props.value === undefined ? Number(spec.default ?? 0) : Number(props.value);
+      return (
+        <input
+          id={id()}
+          type="range"
+          disabled={disabled()}
+          min={spec.min}
+          max={spec.max}
+          step={spec.step}
+          value={String(current())}
+          onInput={(event) => props.onChange(Number(event.currentTarget.value))}
+        />
+      );
+    }
     if (spec.kind === "number") {
       return (
         <input

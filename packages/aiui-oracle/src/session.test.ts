@@ -875,3 +875,111 @@ describe("the live params surface — what the two knob-boards write through", (
     );
   });
 });
+
+describe("the unattended session parks itself", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const walkAway = (config: Partial<OracleConfig> = {}) => {
+    const rig = fakeTransport();
+    return {
+      rig,
+      session: new OracleSession({
+        config: { instructions: "x", firstReplyGuard: false, ...config },
+        keySource: testKeys,
+        transport: rig.transport,
+      }),
+    };
+  };
+
+  it("parks after the idle window — the mic closes, the session does NOT", async () => {
+    const { session, rig } = walkAway();
+    await session.start();
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(session.state().status).toBe("live");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.state().status).toBe("parked");
+    // Park, not close: the mic is gated and the connection stands, so resuming
+    // is one click and the conversation is still there.
+    expect(rig.mic).toEqual([false]);
+    const entry = session.ledger().at(-1) as Extract<LedgerEntry, { kind: "session" }>;
+    expect(entry.phase).toBe("parked");
+    expect(entry.detail).toContain("idle 15s");
+  });
+
+  it("says WHY it parked — walking away is news, parking it yourself is not", async () => {
+    const { session } = walkAway();
+    await session.start();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(session.state().parkedReason).toBe("idle");
+    session.resume();
+    expect(session.state().parkedReason).toBeUndefined();
+    session.park();
+    expect(session.state().parkedReason).toBe("manual");
+  });
+
+  it("activity restarts the clock; BOOKKEEPING does not", async () => {
+    const { session, rig } = walkAway();
+    await session.start();
+    await vi.advanceTimersByTimeAsync(10_000);
+    rig.emit({ type: "input_audio_buffer.speech_started" });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(session.state().status).toBe("live");
+
+    // A config ack is the session talking to itself. Counting it would keep an
+    // abandoned session awake forever — the exact state this exists to end.
+    await vi.advanceTimersByTimeAsync(4_000);
+    rig.emit({ type: "session.updated", session: {} });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.state().status).toBe("parked");
+  });
+
+  it("an injected screenshot counts, though no vendor event says so", async () => {
+    // The stopwatch hangs off the LEDGER, not the vendor stream, so anything
+    // the session considers to have happened resets it — including the panel
+    // handing it an image mid-thought.
+    const { session } = walkAway();
+    await session.start();
+    await vi.advanceTimersByTimeAsync(14_000);
+    session.sendText("look at this", { respond: false });
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(session.state().status).toBe("live");
+  });
+
+  it("a parked session stays parked — the clock does not run against itself", async () => {
+    const { session } = walkAway();
+    await session.start();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(session.state().status).toBe("parked");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(session.state().status).toBe("parked");
+    // Resuming restarts it rather than re-parking against a stale stopwatch.
+    session.resume();
+    expect(session.state().status).toBe("live");
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(session.state().status).toBe("live");
+  });
+
+  it("0 disables it, and the slider applies AT ONCE", async () => {
+    const { session } = walkAway({ parkAfterIdleSeconds: 0 });
+    await session.start();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(session.state().status).toBe("live");
+
+    // Shortening the window while an idle session sits there must park it —
+    // waiting for the next activity would mean waiting for the thing that is
+    // by definition not going to happen.
+    session.setBehavior("parkAfterIdleSeconds", 5);
+    expect(session.behavior().parkAfterIdleSeconds).toBe(5);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(session.state().status).toBe("parked");
+  });
+
+  it("a closed session leaves no timer running", async () => {
+    const { session } = walkAway();
+    await session.start();
+    session.close();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(session.state().status).toBe("closed");
+  });
+});

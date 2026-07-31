@@ -155,6 +155,13 @@ describe("the tables themselves", () => {
     for (const spec of [...SESSION_PARAMS, ...CONSTRAINT_PARAMS]) {
       expect(spec.name).not.toMatch(/^[A-Z]| /);
     }
+    // The one row that is NOT a vendor field declares itself, and its group
+    // says so in words. Nothing else may claim that scope.
+    const ourRows = SESSION_PARAMS.filter((spec) => spec.scope === "aiui");
+    expect(ourRows.map((spec) => spec.name)).toEqual(["parkAfterIdleSeconds"]);
+    for (const spec of ourRows) {
+      expect(spec.group).toContain("ours");
+    }
   });
 
   it("every row names a group and a default — the two questions asked first", () => {
@@ -175,6 +182,9 @@ describe("the tables themselves", () => {
       "transcription",
       "audio.output",
       "session",
+      // Ours, and visibly labelled as such — the verbatim-names rule would be
+      // worthless if an aiui knob could pass itself off as a vendor field.
+      "aiui — ours, not the vendor's",
     ]);
     expect(groupSpecs(CONSTRAINT_PARAMS).map((group) => group.name)).toEqual([
       "processing",

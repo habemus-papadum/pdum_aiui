@@ -50,9 +50,21 @@ export interface ParamSpec {
    * UNSET control reads as the value it will actually behave as.
    */
   default?: string;
-  /** Dotted path, rooted at the session object or the constraints object. */
+  /**
+   * Which surface the row belongs to. `"session"` (the default) is the
+   * vendor's own object; `"aiui"` is a knob WE implement, which has no wire
+   * representation at all.
+   *
+   * The distinction is load-bearing given the verbatim-names rule: an aiui row
+   * cannot claim vendor provenance, so it is marked, grouped separately, and
+   * labelled as ours. Mixing the two silently would make the whole table's
+   * naming claim untrustworthy.
+   */
+  scope?: "session" | "aiui";
+  /** Dotted path, rooted at the session object, the constraints object, or —
+   * for `scope: "aiui"` — the config's own behaviour fields. */
   path: string;
-  kind: "boolean" | "number" | "enum" | "text";
+  kind: "boolean" | "number" | "range" | "enum" | "text";
   /** For `kind: "enum"`. Values are the vendor's literals; `null` where the
    * vendor's own spelling for "off" is null. */
   options?: readonly (string | null)[];
@@ -239,6 +251,19 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
     kind: "text",
     when: "connect",
     hint: "FROZEN at connect. Changing it needs a new session.",
+  },
+  {
+    name: "parkAfterIdleSeconds",
+    group: "aiui — ours, not the vendor's",
+    scope: "aiui",
+    default: "15",
+    path: "parkAfterIdleSeconds",
+    kind: "range",
+    min: 0,
+    max: 300,
+    step: 5,
+    when: "live",
+    hint: "Park the session after this long with no activity. 0 disables. Not the vendor's idle_timeout_ms — this one STOPS listening, that one starts talking.",
   },
 ];
 

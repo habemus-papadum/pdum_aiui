@@ -247,6 +247,19 @@ The full contract is docs/proposals/intent-oracle.md; what the client guarantees
   mid-sentence. The defence therefore sits vendor-side, and the setting is checked against
   the `session.updated` echo — the config entry's drift names it if the server did not take
   it.
+- **An unattended oracle parks itself after 15 s of no activity** (owner, 2026-07-31), and a
+  standing banner says so with one button to resume. PARK, not close: the mic is gated, the
+  connection and the conversation stand, and idle costs nothing — so the remedy is one click
+  rather than a reconnect. The failure it prevents is walking away from a live microphone,
+  which no amount of care fixes because forgetting is the whole failure mode. "Activity" is
+  what the LEDGER records as having happened (speech, a reply, its audio, a tool, an
+  injection) — deliberately NOT config acks or session bookkeeping, which tick along on
+  their own and would keep an abandoned session awake forever. The banner names WHY it
+  parked: you did it, or you left. Adjustable (0 disables) on the `parkAfterIdleSeconds`
+  slider in the realtime params board — filed under a group labelled **ours, not the
+  vendor's**, since the verbatim-names rule would be worthless if an aiui knob could pass
+  itself off as a vendor field. Not to be confused with `turn_detection.idle_timeout_ms`,
+  which is the opposite behaviour: this one stops listening, that one starts talking.
 - **Both knob-boards are mounted in the panel** — `realtime session params` and `webrtc mic
   constraints`, the same two widgets the oracle lab carries, live-editable mid-session.
   Here rather than only in the lab because the panel's acoustics are the ones that matter (a
