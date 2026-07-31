@@ -351,12 +351,41 @@ export interface OracleTransport {
 
 export type OracleStatus = "idle" | "connecting" | "live" | "parked" | "closed" | "error";
 
-/** Token usage tallied from `response.done` payloads. */
+/**
+ * Token usage tallied from `response.done` payloads, with the MODALITY split
+ * the vendor reports — because that is what pricing turns on: realtime audio
+ * and text differ by roughly 8× per token, so a flat total cannot be costed.
+ * Audio figures are SUBSETS of their totals (genai-prices' convention and the
+ * vendor's), so text = total − audio.
+ */
 export interface UsageTotals {
   inputTokens: number;
+  /** The audio subset of {@link inputTokens}. */
+  inputAudioTokens: number;
+  /** The cached subset of {@link inputTokens} — billed at a deep discount, and
+   * the single biggest lever on what a long conversation costs. */
   cachedInputTokens: number;
   outputTokens: number;
+  /** The audio subset of {@link outputTokens}. */
+  outputAudioTokens: number;
   responses: number;
+  /** Running cost, when the price catalog knew the model. */
+  usd?: number;
+  /**
+   * Responses the catalog could NOT price.
+   *
+   * Carried so a running total is never quietly short: a cost display that
+   * under-reports without saying so is worse than no display, and the catalog
+   * genuinely lags new model ids. Non-zero means "at least this much".
+   */
+  unpricedResponses: number;
+  /**
+   * Responses priced under a TRIMMED model id — `gpt-realtime-2.1` is not in
+   * the catalog, `gpt-realtime` is. A point release usually shares its base
+   * rates, but "usually" is not "verified", so a total containing any of these
+   * is shown with a `~`.
+   */
+  approximateResponses: number;
 }
 
 export type LedgerEntry = { at: number; seq: number } & LedgerBody;

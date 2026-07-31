@@ -119,11 +119,11 @@ export function OracleControl(props: OracleControlProps) {
         shush
       </button>
       <span class="aiui-oracle-reply">{state().replyText}</span>
-      <span class="aiui-oracle-usage" title="input / cached / output tokens">
-        {state().usage.responses > 0
-          ? `${state().usage.inputTokens}·${state().usage.cachedInputTokens}·${state().usage.outputTokens}`
-          : ""}
-      </span>
+      {/* The token triple that used to sit here — `input·cached·output` as raw
+          numbers — is now `OracleUsage`, which both hosts mount beside this
+          strip. Three undifferentiated integers could not say WHICH kind of
+          token was accumulating, and audio-vs-text is an ~8× difference in
+          what it costs. */}
       {state().playbackBlocked ? (
         <span class="aiui-oracle-blocked">audio blocked — click anywhere</span>
       ) : null}

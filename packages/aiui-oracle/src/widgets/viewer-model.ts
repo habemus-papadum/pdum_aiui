@@ -11,6 +11,7 @@
  * rendering (the Solid plugin is off under Vitest — the house recipe).
  */
 
+import { formatUsd } from "../cost";
 import type { OracleState } from "../session";
 import type { LedgerEntry } from "../types";
 
@@ -119,6 +120,13 @@ export function summarizeTurn(group: TurnGroup): string {
         : sum,
     0,
   );
+  // Per-turn cost, so an expensive turn is identifiable rather than just
+  // visible in a running total — it is usually the one that busted the cache.
+  const usd = group.entries.reduce(
+    (sum, entry) =>
+      entry.kind === "response" && entry.usage?.usd !== undefined ? sum + entry.usage.usd : sum,
+    0,
+  );
   const bits = [asked];
   if (tools > 0) {
     bits.push(`⚙ ${tools}`);
@@ -131,6 +139,9 @@ export function summarizeTurn(group: TurnGroup): string {
   }
   if (tokens > 0) {
     bits.push(`${tokens} tok`);
+  }
+  if (usd > 0) {
+    bits.push(formatUsd(usd));
   }
   return bits.join("  ·  ");
 }

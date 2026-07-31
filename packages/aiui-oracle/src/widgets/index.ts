@@ -11,6 +11,8 @@ export { OracleParkBanner } from "./park-banner";
 export type { OracleRealtimeParamsProps } from "./realtime-params";
 export { OracleRealtimeParams } from "./realtime-params";
 export { ORACLE_WIDGET_STYLES } from "./styles";
+export type { OracleUsageProps } from "./usage";
+export { OracleUsage, usageChips } from "./usage";
 export type { OracleViewerProps } from "./viewer";
 export { OracleMind, OracleViewer } from "./viewer";
 export type { LedgerCategory, TurnGroup } from "./viewer-model";

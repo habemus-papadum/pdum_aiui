@@ -21,6 +21,7 @@ import {
   OracleMind,
   OracleParkBanner,
   OracleRealtimeParams,
+  OracleUsage,
   OracleViewer,
   OracleWebRtcParams,
 } from "@habemus-papadum/aiui-oracle/widgets";
@@ -228,6 +229,7 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
       <div class="aiui-oracle-panes" data-testid="oracle-panes">
         <OracleParkBanner session={props.lanes.oracle} />
         <OracleMind session={props.lanes.oracle} />
+        <OracleUsage session={props.lanes.oracle} />
         <ToolSourceLine lanes={props.lanes} />
         <details class="aiui-pane" data-testid="oracle-ledger">
           <summary>oracle ledger</summary>

@@ -22,7 +22,20 @@ export const ORACLE_WIDGET_STYLES = `
     color: inherit; background: transparent;
     border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
   .aiui-oracle-reply { flex-basis: 100%; min-height: 1.2em; font-style: italic; opacity: 0.8; }
-  .aiui-oracle-usage { font-size: 11px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+  /* the usage strip — read peripherally, so glyph pairs and abbreviated counts */
+  .aiui-oracle-usage { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+    font-size: 11px; font-variant-numeric: tabular-nums; padding: 2px; }
+  .aiui-oracle-usage-chip { display: inline-flex; align-items: baseline; gap: 3px; opacity: 0.7;
+    white-space: nowrap; cursor: help; }
+  .aiui-oracle-usage-icon { font-size: 10px; letter-spacing: -1px; }
+  /* Audio dominates the bill, so it is the pair that stays legible; cached is
+     the one you WANT going up, so it reads as good news rather than spend. */
+  .aiui-oracle-usage-chip[data-kind="out-audio"],
+  .aiui-oracle-usage-chip[data-kind="in-audio"] { opacity: 1; }
+  .aiui-oracle-usage-chip[data-kind="cached"] { color: #16a34a; opacity: 1; }
+  .aiui-oracle-usage-cost { font-weight: 600; cursor: help;
+    font-variant-numeric: tabular-nums; }
+  .aiui-oracle-usage-unpriced { color: #d97706; cursor: help; }
   .aiui-oracle-blocked { font-size: 12px; color: #d97706; }
 
   /* the mind strip — the ambient "what is it doing right now" line */

@@ -165,6 +165,20 @@ export function usageFromRealtimeResponse(raw: unknown): Usage | undefined {
     ...(typeof inDetails?.cached_tokens === "number"
       ? { cache_read_tokens: inDetails.cached_tokens }
       : {}),
+    // The cached AUDIO subset must travel separately (measured 2026-07-31, and
+    // this line's absence was a silent bug): genai-prices' identity is
+    // `uncached_text = input − input_audio − (cache_read − cache_audio_read)`
+    // and it REJECTS a negative, so lumping cached audio into `cache_read`
+    // alone throws the moment a voice conversation has any history — which is
+    // immediately. `priceCall` catches, so the effect was not an error but
+    // realtime responses quietly priced at NOTHING.
+    ...(typeof asRecord(inDetails?.cached_tokens_details)?.audio_tokens === "number"
+      ? {
+          cache_audio_read_tokens: (
+            asRecord(inDetails?.cached_tokens_details) as Record<string, number>
+          ).audio_tokens,
+        }
+      : {}),
     ...(typeof outDetails?.audio_tokens === "number"
       ? { output_audio_tokens: outDetails.audio_tokens }
       : {}),

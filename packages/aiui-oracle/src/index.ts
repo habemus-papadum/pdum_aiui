@@ -11,6 +11,13 @@ export {
   toolsFromAiuiRegistry,
   toolsFromControlSurface,
 } from "./aiui-tools";
+export type { Usage } from "./cost";
+export {
+  abbreviateTokens,
+  formatUsd,
+  priceRealtimeUsage,
+  usageFromRealtimeResponse,
+} from "./cost";
 export type { StandardKeySourcesOptions } from "./keys";
 export {
   cachingKeySource,

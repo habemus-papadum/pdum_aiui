@@ -328,7 +328,7 @@ describe("the ledger is total", () => {
         usage: { input_tokens: 10, output_tokens: 5 },
       },
     });
-    expect(session.state().usage).toEqual({
+    expect(session.state().usage).toMatchObject({
       inputTokens: 110,
       cachedInputTokens: 80,
       outputTokens: 45,

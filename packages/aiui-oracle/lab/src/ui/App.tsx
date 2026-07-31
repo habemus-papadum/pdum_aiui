@@ -23,6 +23,7 @@ import {
   OracleKey,
   OracleParkBanner,
   OracleRealtimeParams,
+  OracleUsage,
   OracleViewer,
   OracleWebRtcParams,
 } from "@habemus-papadum/aiui-oracle/widgets";
@@ -133,6 +134,7 @@ export function App() {
       <div class="lab-panel">
         <OracleControl session={session} />
         <OracleParkBanner session={session} />
+        <OracleUsage session={session} />
         <div class="lab-composer">
           <input
             type="text"

@@ -17,6 +17,7 @@
  *  - unrecognized vendor events land in the ledger as `raw`, never dropped.
  */
 
+import { priceRealtimeUsage, usageFromRealtimeResponse } from "./cost";
 import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
 import type {
   KeySource,
@@ -109,7 +110,7 @@ export class OracleSession {
     speaking: false,
     replying: false,
     replyText: "",
-    usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, responses: 0 },
+    usage: EMPTY_USAGE,
     toolNames: [],
     playbackBlocked: false,
   };
@@ -793,16 +794,9 @@ export class OracleSession {
   private onResponseDone(response: Record<string, unknown>): void {
     const responseId = typeof response.id === "string" ? response.id : "";
     const status = typeof response.status === "string" ? response.status : "unknown";
-    const usage = tallyUsage(response.usage);
+    const usage = tallyUsage(response.usage, this.options.config.model ?? DEFAULT_ORACLE_MODEL);
     if (usage !== undefined) {
-      this.setState({
-        usage: {
-          inputTokens: this.current.usage.inputTokens + usage.inputTokens,
-          cachedInputTokens: this.current.usage.cachedInputTokens + usage.cachedInputTokens,
-          outputTokens: this.current.usage.outputTokens + usage.outputTokens,
-          responses: this.current.usage.responses + 1,
-        },
-      });
+      this.setState({ usage: addUsage(this.current.usage, usage) });
     }
     this.setState({ replying: false });
     this.record({
@@ -1034,17 +1028,64 @@ function audioInput(session: Record<string, unknown>): Record<string, unknown> {
   return input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
 }
 
-function tallyUsage(usage: unknown): UsageTotals | undefined {
+/**
+ * One response's usage, with the modality split kept — and priced.
+ *
+ * `model` decides the rate, so it is passed in rather than assumed: a session
+ * may have been opened against a model the catalog does not know, and that
+ * case has to stay distinguishable from "cost zero".
+ */
+function tallyUsage(usage: unknown, model: string): UsageTotals | undefined {
   if (usage === null || typeof usage !== "object") {
     return undefined;
   }
   const u = usage as Record<string, unknown>;
-  const details = (u.input_token_details ?? {}) as Record<string, unknown>;
+  const input = (u.input_token_details ?? {}) as Record<string, unknown>;
+  const output = (u.output_token_details ?? {}) as Record<string, unknown>;
+  const priceable = usageFromRealtimeResponse(u);
+  const usd = priceable === undefined ? undefined : priceRealtimeUsage(model, priceable);
   return {
     inputTokens: numberOr0(u.input_tokens),
-    cachedInputTokens: numberOr0(details.cached_tokens),
+    inputAudioTokens: numberOr0(input.audio_tokens),
+    cachedInputTokens: numberOr0(input.cached_tokens),
     outputTokens: numberOr0(u.output_tokens),
+    outputAudioTokens: numberOr0(output.audio_tokens),
     responses: 1,
+    ...(usd !== undefined ? { usd: usd.usd } : {}),
+    unpricedResponses: usd === undefined ? 1 : 0,
+    approximateResponses: usd?.approximate === true ? 1 : 0,
+  };
+}
+
+/** A zero tally — the shape in one place, since three sites need it. */
+const EMPTY_USAGE: UsageTotals = {
+  inputTokens: 0,
+  inputAudioTokens: 0,
+  cachedInputTokens: 0,
+  outputTokens: 0,
+  outputAudioTokens: 0,
+  responses: 0,
+  unpricedResponses: 0,
+  approximateResponses: 0,
+};
+
+/** Running totals. `usd` stays ABSENT until something was priced, so "no
+ * price known" and "$0.00 so far" never render as the same thing. */
+function addUsage(running: UsageTotals, one: UsageTotals): UsageTotals {
+  const usd =
+    running.usd === undefined && one.usd === undefined
+      ? undefined
+      : (running.usd ?? 0) + (one.usd ?? 0);
+  return {
+    inputTokens: running.inputTokens + one.inputTokens,
+    inputAudioTokens: running.inputAudioTokens + one.inputAudioTokens,
+    cachedInputTokens: running.cachedInputTokens + one.cachedInputTokens,
+    outputTokens: running.outputTokens + one.outputTokens,
+    outputAudioTokens: running.outputAudioTokens + one.outputAudioTokens,
+    responses: running.responses + one.responses,
+    ...(usd !== undefined ? { usd } : {}),
+    unpricedResponses: running.unpricedResponses + one.unpricedResponses,
+    approximateResponses: running.approximateResponses + one.approximateResponses,
   };
 }
 
