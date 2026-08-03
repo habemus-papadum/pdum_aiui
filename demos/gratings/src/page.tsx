@@ -15,4 +15,5 @@ import { App } from "./ui/App";
 export const page: SitePage = {
   title: "gratings — steering light with stripes",
   App,
+  toolsNs: "gratings",
 };

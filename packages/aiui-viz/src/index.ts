@@ -70,9 +70,9 @@ export type { Scope } from "./scope";
 export { scope } from "./scope";
 // site-page.ts — the mountable-page contract between an app and a site shell,
 // and the landing-card contract (type-only; the chrome lives behind ./site).
-export type { DemoCard, SitePage } from "./site-page";
+export { type DemoCard, type SitePage, setSitePageActive } from "./site-page";
 // standard-tools.ts — the app-independent `locate` tool and `cells` reporter.
-export { registerStandardTools } from "./standard-tools";
+export { registerStandardTools, type StandardToolsOptions } from "./standard-tools";
 export type { ThrottledBox } from "./throttle";
 // throttle.ts — the imperative boundary's outbound valve: a write policy (at most
 // hz commits/sec, latest wins, the last value always lands) over any SignalBox.

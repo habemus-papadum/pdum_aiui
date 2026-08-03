@@ -66,6 +66,13 @@ export interface AgentToolkit {
   registerTool(tool: AgentTool): void;
   /** Register (or replace, by name) one section of `report()`. */
   registerReporter(name: string, reporter: () => unknown): void;
+  /**
+   * Flip this namespace's ACTIVITY bit on the shared registry (see
+   * AiuiToolsRegistry.setActive — docs/proposals/page-tools.md). For apps
+   * that drive their own client-side routing; pages mounted by a shell
+   * declare `toolsNs` on their SitePage and let the shell flip it.
+   */
+  setActive(active: boolean): void;
   handle(): AgentToolkitHandle;
 }
 
@@ -159,6 +166,17 @@ export function agentToolkit(ns: string): AgentToolkit {
       const h = handle();
       h.reporters.set(name, reporter);
       forwardToRegistry(ns, h);
+    },
+    setActive(active: boolean): void {
+      try {
+        // Optional-chained twice over: an ADOPTED registry from an older
+        // bundle may predate the activity bit (aiui-global's adopt-don't-
+        // clobber contract) — flipping is then a silent no-op, which only
+        // costs the projection filter, never the tools.
+        ensureAiuiGlobal()?.tools?.setActive?.(ns, active);
+      } catch {
+        // Activity is a convenience bit; never let it disturb the page.
+      }
     },
     handle,
   };

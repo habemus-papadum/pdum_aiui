@@ -15,6 +15,7 @@ import { App } from "./ui/App";
 export const page: SitePage = {
   title: "morphogen — aiui demo app",
   App,
+  toolsNs: "morphogen",
   activate: () => sim.loop.resume(),
   deactivate: () => sim.loop.pause(),
 };

@@ -19,4 +19,5 @@ import { App } from "./ui/App";
 export const page: SitePage = {
   title: "DNA scripts",
   App,
+  toolsNs: "dna-script",
 };

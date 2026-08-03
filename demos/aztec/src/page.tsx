@@ -16,6 +16,7 @@ import { App } from "./ui/App";
 export const page: SitePage = {
   title: "aztec — aiui demo app",
   App,
+  toolsNs: "aztec",
   activate: () => player.resume(),
   deactivate: () => player.pause(),
 };

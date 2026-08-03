@@ -14,4 +14,5 @@ import { App } from "./ui/App";
 export const page: SitePage = {
   title: "gears — aiui demo app",
   App,
+  toolsNs: "gears",
 };

@@ -26,11 +26,30 @@ export interface AiuiPageTool {
 export interface AiuiToolsRegistry {
   /** Declare a namespace's FULL current tool set (replace-by-namespace). */
   register(ns: string, tools: AiuiPageTool[]): void;
-  /** Every namespace's current tools — internal clients and bridges alike. */
-  list(): Array<{ ns: string; tools: AiuiPageTool[] }>;
+  /** Every namespace's current tools — internal clients and bridges alike.
+   * `active` is the namespace's activity bit (see {@link setActive}). */
+  list(): Array<{ ns: string; tools: AiuiPageTool[]; active: boolean }>;
   /** Invoke one tool by namespace + name. Rejects on unknown. */
   call(ns: string, name: string, args?: unknown): Promise<unknown>;
-  /** Fires after every `register`. Returns the unsubscribe. */
+  /**
+   * Flip a namespace's ACTIVITY bit (proposal: docs/proposals/page-tools.md).
+   * Default **true** — a standalone app never calls this. A multi-page shell
+   * flips it with the SitePage activate/deactivate lifecycle (`toolsNs`); an
+   * app with its own client-side routing calls it directly (or through its
+   * kit's `setActive`). Consumers choose policy: the coding agent sees every
+   * namespace with the flag; the oracle/linter projections filter to active.
+   * The bit survives re-registration (HMR re-register must not re-activate a
+   * parked page) and may be set BEFORE the namespace registers.
+   */
+  setActive(ns: string, active: boolean): void;
+  /**
+   * The debugging enumeration — one row per (namespace, tool), with the
+   * namespace's activity riding each row. `console.table`-friendly; the
+   * same truth `list()` carries, flattened for eyes.
+   */
+  ledger(): Array<{ ns: string; tool: string; description: string; active: boolean }>;
+  /** Fires after every `register` AND every activity flip. Returns the
+   * unsubscribe. */
   onChange(handler: () => void): () => void;
 }
 
@@ -49,20 +68,31 @@ export interface AiuiGlobal {
 
 function createRegistry(): AiuiToolsRegistry {
   const byNs = new Map<string, AiuiPageTool[]>();
+  // Parked namespaces, kept SEPARATE from the tool sets so the bit survives
+  // re-registration (HMR) and can be set before the namespace registers
+  // (route decided, module still lazy-loading). Absence = active.
+  const parked = new Set<string>();
   const handlers = new Set<() => void>();
+  const notify = (): void => {
+    for (const handler of handlers) {
+      try {
+        handler();
+      } catch {
+        // one bridge's error must not starve the others
+      }
+    }
+  };
   return {
     register(ns, tools) {
       byNs.set(ns, [...tools]);
-      for (const handler of handlers) {
-        try {
-          handler();
-        } catch {
-          // one bridge's error must not starve the others
-        }
-      }
+      notify();
     },
     list() {
-      return [...byNs.entries()].map(([ns, tools]) => ({ ns, tools: [...tools] }));
+      return [...byNs.entries()].map(([ns, tools]) => ({
+        ns,
+        tools: [...tools],
+        active: !parked.has(ns),
+      }));
     },
     async call(ns, name, args) {
       const tool = byNs.get(ns)?.find((t) => t.name === name);
@@ -70,6 +100,27 @@ function createRegistry(): AiuiToolsRegistry {
         throw new Error(`no such page tool: ${ns}.${name}`);
       }
       return await tool.run(args);
+    },
+    setActive(ns, active) {
+      const changed = parked.has(ns) === active; // parked+activate or live+park
+      if (active) {
+        parked.delete(ns);
+      } else {
+        parked.add(ns);
+      }
+      if (changed) {
+        notify();
+      }
+    },
+    ledger() {
+      return [...byNs.entries()].flatMap(([ns, tools]) =>
+        tools.map((t) => ({
+          ns,
+          tool: t.name,
+          description: t.description,
+          active: !parked.has(ns),
+        })),
+      );
     },
     onChange(handler) {
       handlers.add(handler);

@@ -14,4 +14,5 @@ import { App } from "./ui/App";
 export const page: SitePage = {
   title: "holograms — the film that remembers light",
   App,
+  toolsNs: "holograms",
 };

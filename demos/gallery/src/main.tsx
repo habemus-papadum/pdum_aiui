@@ -23,6 +23,7 @@
 import { render } from "@solidjs/web";
 import "@habemus-papadum/aiui-journal/styles.css";
 import { initTheme } from "@habemus-papadum/aiui-journal";
+import { setSitePageActive } from "@habemus-papadum/aiui-viz";
 import { SiteNav } from "@habemus-papadum/aiui-viz/site";
 import { createEffect, createSignal, Show, untrack } from "solid-js";
 import { Landing } from "./site/Landing";
@@ -48,15 +49,19 @@ function Shell() {
   const show = async (r: Route): Promise<void> => {
     const my = ++seq;
     if (r === LANDING) {
-      untrack(view)?.page.deactivate?.(); // park the demo's loops; keep durables
+      const parked = untrack(view)?.page;
+      if (parked) setSitePageActive(parked, false); // park loops + tools bit; keep durables
       document.title = "aiui notebooks";
       return;
     }
     const page = await loadPage(r); // cached after the first visit
     if (my !== seq) return; // superseded by a faster navigation (e.g. back home)
     const prev = untrack(view);
-    if (prev?.route !== r) prev?.page.deactivate?.(); // park the old page's loops...
-    page.activate?.(); // ...wake the new one's
+    // setSitePageActive drives BOTH lifecycles — the rAF park/resume and the
+    // page-tools activity bit (page.toolsNs) — so route-following consumers
+    // (the oracle) see only the notebook in view (docs/proposals/page-tools.md).
+    if (prev?.route !== r && prev !== undefined) setSitePageActive(prev.page, false);
+    setSitePageActive(page, true);
     document.title = page.title;
     setView({ route: r, page });
   };

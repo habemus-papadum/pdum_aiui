@@ -59,10 +59,42 @@ export interface SitePage {
   /** The page's root component — mounted per visit, disposable (a pure reader
    * over the page's durable state, the HMR discipline reused for routing). */
   App: Component;
+  /**
+   * The app's agent-toolkit namespace (its `agentToolkit(ns)` / scope slug).
+   * A shell that drives activate/deactivate flips this namespace's ACTIVITY
+   * bit on the page-tools registry in the same breath
+   * (`__AIUI__.tools.setActive` — docs/proposals/page-tools.md), so
+   * route-following consumers (the oracle, the linter) see only the page in
+   * view while the full inventory stays enumerable. Omit for pages with no
+   * toolkit; apps that route internally flip their kit's bit themselves.
+   */
+  toolsNs?: string;
   /** Resume continuous work (rAF loops). Called before mount; idempotent. */
   activate?(): void;
   /** Park continuous work. Called when the route leaves; idempotent. */
   deactivate?(): void;
+}
+
+/**
+ * Drive one page's pause-not-destroy edge AND its tools-activity bit — the
+ * helper a shell calls instead of bare `page.activate?.()`, so the two
+ * lifecycles cannot drift. Safe against adopted registries that predate the
+ * activity bit (optional-chained through).
+ */
+export function setSitePageActive(page: SitePage, active: boolean): void {
+  if (active) {
+    page.activate?.();
+  } else {
+    page.deactivate?.();
+  }
+  if (page.toolsNs !== undefined && typeof window !== "undefined") {
+    const tools = (window as unknown as { __AIUI__?: { tools?: { setActive?: unknown } } }).__AIUI__
+      ?.tools;
+    (tools?.setActive as ((ns: string, active: boolean) => void) | undefined)?.(
+      page.toolsNs,
+      active,
+    );
+  }
 }
 
 /**

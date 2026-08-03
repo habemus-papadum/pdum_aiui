@@ -5,7 +5,10 @@
  * docs/proposals/front_end_controls_guide_and_more.md).
  *
  * From one `registerStandardTools(kit)` call an app's agent surface is
- * ASSEMBLED from the reflection layer:
+ * ASSEMBLED from the reflection layer — restricted to the KIT'S VIEW of the
+ * global registries (its own scope subtree + unscoped declarations, plus any
+ * `scopes` the caller declares — see {@link KitView}; the reason: a multi-app
+ * document like the gallery must not cross-pollinate kits):
  *
  *  - `report` — the whole picture in one call: controls (+values), cells
  *    (+states), actions, dependency edges, plus the app's custom reporter
@@ -32,15 +35,68 @@ import type { AgentTool, AgentToolkit } from "./agent-tools";
 import { cellRegistry } from "./cell";
 import { actionByName, controlByName, controlSurface, subscribeControlSurface } from "./control";
 import { dependencyEdges } from "./graph-trace";
+import type { Scope } from "./scope";
 
 /** How many elements `locate` will describe in one call. */
 const LOCATE_LIMIT = 20;
 
-/** The `report` tool's payload for one format. */
-function buildReport(kit: AgentToolkit, format: "brief" | "full"): Record<string, unknown> {
-  const surface = controlSurface();
-  const cells = cellRegistry();
-  const edges = dependencyEdges();
+/** Options for {@link registerStandardTools}. */
+export interface StandardToolsOptions {
+  /**
+   * Extra scopes this kit SERVES, beyond its default view (see
+   * {@link kitView}) — the composition escape hatch
+   * (docs/proposals/page-tools.md). The twins shape: a kit named `app`
+   * hosting slices scoped `left`/`right` declares them here, and their
+   * actions surface as `left/kick` / `right/kick`. Accepts Scope objects or
+   * bare scope names.
+   */
+  scopes?: readonly (Scope | string)[];
+}
+
+/**
+ * The kit's VIEW of the global registries: which declarations belong to it.
+ * By default a kit serves its own scope subtree (`ns` or `ns/…`) plus
+ * UNSCOPED declarations (a single-app document's common case); `scopes`
+ * declares more (composition). A multi-app document (the gallery: N kits,
+ * N scopes) is the reason this exists at all — a kit iterating the whole
+ * global surface registered every app's actions on every kit (M×N
+ * contamination, found live 2026-08-03).
+ */
+class KitView {
+  private readonly prefixes: readonly string[];
+  constructor(kit: AgentToolkit, options: StandardToolsOptions | undefined) {
+    const declared = (options?.scopes ?? []).map((s) => (typeof s === "string" ? s : s.name));
+    this.prefixes = [kit.ns, ...declared];
+  }
+  /** Does a declaration with this `scope` field belong to the kit? */
+  ownsScope(scope: string | undefined): boolean {
+    if (scope === undefined) {
+      return true; // unscoped declarations belong everywhere
+    }
+    return this.prefixes.some((p) => scope === p || scope.startsWith(`${p}/`));
+  }
+  /** Does a registry entry with this (scope-qualified) NAME belong to the
+   * kit? Cells carry no scope field in their snapshot — the qualified name
+   * is the identity — so ownership reads off the prefix. */
+  ownsName(name: string): boolean {
+    if (!name.includes("/")) {
+      return true; // unqualified = unscoped
+    }
+    return this.prefixes.some((p) => name.startsWith(`${p}/`));
+  }
+}
+
+/** The `report` tool's payload for one format — the KIT's view, not the
+ * document's: in a multi-app document, aztec's report must not narrate
+ * gears' controls. */
+function buildReport(
+  kit: AgentToolkit,
+  view: KitView,
+  format: "brief" | "full",
+): Record<string, unknown> {
+  const surface = controlSurface().filter((e) => view.ownsScope(e.scope));
+  const cells = cellRegistry().filter((c) => view.ownsName(c.name));
+  const edges = dependencyEdges().filter((e) => view.ownsName(e.cell));
 
   if (format === "brief") {
     return {
@@ -126,7 +182,11 @@ function kitRelativeName(kit: AgentToolkit, name: string, scope: string | undefi
  * under HMR. Returns an unsubscribe for the control-surface watcher (rarely
  * needed; a page teardown drops everything anyway).
  */
-export function registerStandardTools(kit: AgentToolkit): () => void {
+export function registerStandardTools(
+  kit: AgentToolkit,
+  options?: StandardToolsOptions,
+): () => void {
+  const view = new KitView(kit, options);
   kit.registerTool({
     name: "report",
     description:
@@ -142,7 +202,7 @@ export function registerStandardTools(kit: AgentToolkit): () => void {
       properties: { format: { type: "string", enum: ["brief", "full"] } },
       additionalProperties: false,
     },
-    run: (args) => buildReport(kit, args?.format === "full" ? "full" : "brief"),
+    run: (args) => buildReport(kit, view, args?.format === "full" ? "full" : "brief"),
   });
 
   kit.registerTool({
@@ -162,9 +222,12 @@ export function registerStandardTools(kit: AgentToolkit): () => void {
     run: (args) => {
       const name = String(args?.name ?? "");
       const c = controlByName(name);
-      if (!c) {
+      // OWNED controls only — same view as report, so a kit cannot write a
+      // sibling app's control in a multi-app document (and the error's
+      // control list stays the kit's own, not the document's).
+      if (!c || !view.ownsScope(c.scope)) {
         const known = controlSurface()
-          .filter((e) => e.kind === "control")
+          .filter((e) => e.kind === "control" && view.ownsScope(e.scope))
           .map((e) => e.name)
           .join(", ");
         throw new Error(`no control "${name}" — controls: ${known || "(none declared)"}`);
@@ -191,16 +254,18 @@ export function registerStandardTools(kit: AgentToolkit): () => void {
     },
   });
 
-  // The attribution table: every live named cell, its state, and where it is
-  // defined — names match the data-cell stamps in the DOM. (Kept as a reporter
-  // so handle.report() aggregations and older consumers keep working; the
-  // `report` tool above is the format-aware superset.)
-  kit.registerReporter("cells", () => cellRegistry());
+  // The attribution table: every live named cell OF THIS KIT'S VIEW, its
+  // state, and where it is defined — names match the data-cell stamps in the
+  // DOM. (Kept as a reporter so handle.report() aggregations and older
+  // consumers keep working; the `report` tool above is the format-aware
+  // superset.)
+  kit.registerReporter("cells", () => cellRegistry().filter((c) => view.ownsName(c.name)));
 
   // ---- actions become real tools, whatever order they were declared in -----
+  // OWNED actions only: the control surface is global, the kit's view is not.
   const syncActionTools = () => {
     for (const entry of controlSurface()) {
-      if (entry.kind !== "action") continue;
+      if (entry.kind !== "action" || !view.ownsScope(entry.scope)) continue;
       const tool = toolOfAction(entry.name, kitRelativeName(kit, entry.name, entry.scope));
       if (tool) kit.registerTool(tool);
     }

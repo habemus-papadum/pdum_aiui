@@ -270,12 +270,14 @@ describe("the derived tools (registerStandardTools)", () => {
     expect(kit.handle().call("re-seed")).toBe("seeded");
   });
 
-  it("a foreign-scoped action keeps its qualified name — slices stay distinguishable", () => {
-    // The twins shape: a composing kit hosting two instances of one slice.
+  it("a DECLARED foreign scope keeps its qualified name — slices stay distinguishable", () => {
+    // The twins shape: a composing kit hosting two instances of one slice
+    // declares them (scopes accepts Scope objects or bare names); their
+    // actions surface qualified, so the instances never collide.
     action({ name: "re-seed", scope: scope("left"), run: () => "L" });
     action({ name: "re-seed", scope: scope("right"), run: () => "R" });
     const kit = agentToolkit("ctlComposed");
-    registerStandardTools(kit);
+    registerStandardTools(kit, { scopes: [scope("left"), "right"] });
     expect(kit.handle().call("left/re-seed")).toBe("L");
     expect(kit.handle().call("right/re-seed")).toBe("R");
   });
@@ -285,5 +287,41 @@ describe("the derived tools (registerStandardTools)", () => {
     const kit = agentToolkit("ctlNested");
     registerStandardTools(kit);
     expect(kit.handle().call("inner/re-seed")).toBe("nested");
+  });
+
+  it("a kit serves only its OWN scope's view — no cross-kit contamination (the gallery bug)", () => {
+    // Two apps in one document, the gallery shape. Each kit must carry its
+    // own actions/controls and NOT the sibling's (found live 2026-08-03:
+    // aztec/gears/reset, seismos/aztec/play, …).
+    action({ name: "regrow", scope: scope("ctlAz"), run: () => "az" });
+    action({ name: "reset", scope: scope("ctlGears"), run: () => "gears" });
+    control({ name: "spin", scope: scope("ctlGears"), value: 1 });
+    const az = agentToolkit("ctlAz");
+    const gears = agentToolkit("ctlGears");
+    registerStandardTools(az);
+    registerStandardTools(gears);
+
+    expect(az.handle().tools.map((t) => t.name)).toContain("regrow");
+    expect(az.handle().tools.map((t) => t.name)).not.toContain("reset");
+    expect(gears.handle().tools.map((t) => t.name)).toContain("reset");
+    expect(gears.handle().tools.map((t) => t.name)).not.toContain("regrow");
+
+    // The report is the kit's view too — az must not narrate gears' controls.
+    const azReport = az.handle().call("report") as { controls: Record<string, unknown> };
+    expect(Object.keys(azReport.controls)).not.toContain("ctlGears/spin");
+    const gearsReport = gears.handle().call("report") as { controls: Record<string, unknown> };
+    expect(Object.keys(gearsReport.controls)).toContain("ctlGears/spin");
+
+    // …and so is `set`: writing a sibling's control is refused.
+    expect(() => az.handle().call("set", { name: "ctlGears/spin", value: 2 })).toThrow(
+      /no control/,
+    );
+  });
+
+  it("unscoped declarations belong to every kit (the single-app common case)", () => {
+    action({ name: "re-seed", run: () => "seeded" });
+    const kit = agentToolkit("ctlUnscopedView");
+    registerStandardTools(kit);
+    expect(kit.handle().call("re-seed")).toBe("seeded");
   });
 });

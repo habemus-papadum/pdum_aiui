@@ -16,5 +16,6 @@ import { App } from "./ui/App";
 export const page: SitePage = {
   title: "circle — aiui demo app",
   App,
+  toolsNs: "circle",
   deactivate: () => centerGhost.disarm(),
 };
