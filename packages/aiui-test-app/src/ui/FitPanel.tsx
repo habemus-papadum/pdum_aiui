@@ -1,73 +1,73 @@
 /**
- * FitPanel.tsx — what EM currently believes, next to the truth it is chasing.
+ * FitPanel.tsx — what EM currently believes, one row per component.
  *
- * The `fit` cell is an async iterable, so this panel updates once per EM
- * iteration rather than once per run. Watching `logLik` climb monotonically is
- * the cheapest correctness check the algorithm has.
+ * The `fit` cell streams from the worker once per iteration, so the numbers
+ * walk toward the answer live. The backend badge reports which engine
+ * ACTUALLY computed the step — asking for webgpu on a machine without an
+ * adapter honestly shows `js`.
  */
 import { CellView } from "@habemus-papadum/aiui-viz";
-import { Show } from "solid-js";
-import { appGraph, EM_ITERATIONS } from "../model/graph";
-import { mu1, mu2, sigma1, sigma2, weight } from "../model/store";
+import { For, Show } from "solid-js";
+import { EM_ITERATIONS, graph } from "../model/graph";
+import { ellipseFromGaussian } from "../model/mixture2d";
+import { ellipses } from "../model/store";
 
-const num = (v: number, digits = 3) => v.toFixed(digits);
+const num = (v: number, digits = 1) => v.toFixed(digits);
 
 export function FitPanel() {
   return (
     <section class="panel">
       <h2>EM fit</h2>
-      <Show when={appGraph()} fallback={<p class="muted">building dataflow graph…</p>}>
-        {(graph) => (
-          <CellView of={graph().fit} label="fitting">
-            {(step) => (
-              <>
-                <p class="muted">
-                  iteration {step().iter} / {EM_ITERATIONS} &nbsp;·&nbsp; log-likelihood{" "}
-                  <b>{num(step().logLik, 1)}</b>
-                </p>
-                <table class="kv">
-                  <thead>
-                    <tr>
-                      <th />
-                      <th>estimate</th>
-                      <th>truth</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <th>weight</th>
-                      <td>{num(step().params.weight)}</td>
-                      <td class="muted">{num(weight.get())}</td>
-                    </tr>
-                    <tr>
-                      <th>μ₁</th>
-                      <td>{num(step().params.mu1)}</td>
-                      <td class="muted">{num(mu1.get())}</td>
-                    </tr>
-                    <tr>
-                      <th>σ₁</th>
-                      <td>{num(step().params.sigma1)}</td>
-                      <td class="muted">{num(sigma1.get())}</td>
-                    </tr>
-                    <tr>
-                      <th>μ₂</th>
-                      <td>{num(step().params.mu2)}</td>
-                      <td class="muted">{num(mu2.get())}</td>
-                    </tr>
-                    <tr>
-                      <th>σ₂</th>
-                      <td>{num(step().params.sigma2)}</td>
-                      <td class="muted">{num(sigma2.get())}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <p class="note muted">
-                  EM does not know which component is which — a swapped pair is the same fit.
-                </p>
-              </>
-            )}
-          </CellView>
-        )}
+      <Show
+        when={ellipses.get().length > 0}
+        fallback={<p class="muted">draw at least one component to start fitting</p>}
+      >
+        <CellView of={graph().fit} label="fitting">
+          {(step) => (
+            <>
+              <p class="muted">
+                iteration {step().iter} / {EM_ITERATIONS} &nbsp;·&nbsp;{" "}
+                <span class="badge">{step().backend}</span> &nbsp;·&nbsp; log-likelihood{" "}
+                <b>{num(step().logLik)}</b>
+              </p>
+              <table class="kv">
+                <thead>
+                  <tr>
+                    <th />
+                    <th>weight</th>
+                    <th>centre</th>
+                    <th>2σ axes</th>
+                    <th>tilt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={step().params.components}>
+                    {(g, j) => {
+                      const e = () => ellipseFromGaussian(g);
+                      return (
+                        <tr>
+                          <th>{j() + 1}</th>
+                          <td>{step().params.weights[j()].toFixed(3)}</td>
+                          <td>
+                            {num(g.mx, 0)}, {num(g.my, 0)}
+                          </td>
+                          <td>
+                            {num(e().a, 0)} × {num(e().b, 0)}
+                          </td>
+                          <td>{num((e().angle * 180) / Math.PI, 0)}°</td>
+                        </tr>
+                      );
+                    }}
+                  </For>
+                </tbody>
+              </table>
+              <p class="note muted">
+                EM does not know which drawn ellipse is which — components may come back permuted.
+                Drawn components carry equal weights; recovered weights should approach 1/k.
+              </p>
+            </>
+          )}
+        </CellView>
       </Show>
     </section>
   );

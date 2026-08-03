@@ -5,10 +5,11 @@
  * vite.config.ts — that plugin *is* the whole aiui integration). The app splits
  * along HMR lines:
  *
- *   src/model/store.ts    durable roots — slider positions survive hot edits
- *   src/model/mixture.ts  pure mathematics (no Solid, no aiui)
- *   src/model/graph.ts    the cell graph + the agent tools
- *   src/ui/               components — freely hot-swappable
+ *   src/model/store.ts      durable roots — drawn components survive hot edits
+ *   src/model/mixture2d.ts  pure mathematics (no Solid, no aiui)
+ *   src/model/em.worker.ts  the EM loop, off-thread (JS or WebGPU backend)
+ *   src/model/graph.ts      the cell graph + the agent tools
+ *   src/ui/                 components — freely hot-swappable
  *
  * Run it against a channel that has no Claude session behind it:
  *

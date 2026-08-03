@@ -1,84 +1,104 @@
 /**
- * store.ts — the durable roots.
+ * store.ts — the durable roots and the control surface.
  *
- * Everything here survives a hot edit: slider positions are the user's
- * interaction state, the most precious thing in the HMR contract. The cell
- * graph (graph.ts) is disposable and rebuilds over these roots; the roots
- * themselves are created once and adopted by any re-evaluated module.
+ * Everything here survives a hot edit. The genuinely durable, imperative
+ * object is the {@link paper}: a `PencilSurface` from
+ * `@habemus-papadum/aiui-pencil` the user draws mixture components on. A
+ * finished stroke is immediately REPLACED by its best-fit ellipse: the
+ * `onStrokeEnd` callback fits in board units, appends to {@link ellipses}
+ * (the app's ground truth), and pops the ink — the drawn Gaussian lives on as
+ * geometry, not pixels.
  *
  * Add new state HERE; add new dataflow over it in graph.ts.
  */
-import { durable } from "@habemus-papadum/aiui-viz";
-import { type Accessor, createSignal, type Setter } from "solid-js";
+import { PencilSurface, SKETCH } from "@habemus-papadum/aiui-pencil";
+import { control, scope } from "@habemus-papadum/aiui-viz";
+import { type EllipseShape, fitStrokeEllipse, type Vec2 } from "./mixture2d";
 
-function signalBox<T>(
-  key: string,
-  // biome-ignore lint/complexity/noBannedTypes: mirrors createSignal's own Exclude<T, Function> overload
-  initial: Exclude<T, Function>,
-): { get: Accessor<T>; set: Setter<T> } {
-  return durable(key, () => {
-    const [get, set] = createSignal<T>(initial);
-    return { get, set };
-  });
+/** The app's instance scope: ONE slug qualifying every control, durable,
+ * cell, and action — and naming the graph key + agent toolkit. */
+export const appScope = scope("testapp");
+
+/** The board's fixed coordinate space (viewBox units). The drawing canvas,
+ * every sample, every ellipse, and the hex grid all live in this space; the
+ * canvas maps its CSS pixels onto it at stroke end. */
+export const BOARD_W = 680;
+export const BOARD_H = 460;
+
+// ── the control surface ──────────────────────────────────────────────────────
+
+/** How many points to draw from the mixture. */
+export const sampleCount = control({
+  scope: appScope,
+  value: 8000,
+  min: 1000,
+  max: 50000,
+  step: 1000,
+});
+
+/** Which backend runs the EM E-step: plain JavaScript on the worker thread,
+ * or a WebGPU compute kernel (falls back to js when no adapter exists — the
+ * fit panel reports which one actually computed). */
+export const backend = control<"js" | "webgpu">({
+  scope: appScope,
+  value: "js",
+  options: ["js", "webgpu"],
+});
+
+/** Whether this browser exposes WebGPU at all — the toggle's enablement. */
+export const webgpuAvailable = typeof navigator !== "undefined" && "gpu" in navigator;
+
+// ── durable state ────────────────────────────────────────────────────────────
+
+/** PRNG seed behind the sample draw — bumped by the `reseed` action. */
+export const seed = appScope.durableSignal<number>("seed", 20260803);
+
+/** The drawn mixture components, in stroke order — the app's ground truth.
+ * Board units. Every cell in the graph hangs off this list. */
+export const ellipses = appScope.durableSignal<readonly EllipseShape[]>("ellipses", []);
+
+// ── the instrument ───────────────────────────────────────────────────────────
+
+/** Map stroke points from canvas CSS px into board units. */
+export function toBoard(
+  points: ReadonlyArray<{ x: number; y: number }>,
+  cssW: number,
+  cssH: number,
+): Vec2[] {
+  const sx = cssW > 0 ? BOARD_W / cssW : 1;
+  const sy = cssH > 0 ? BOARD_H / cssH : 1;
+  return points.map((p) => ({ x: p.x * sx, y: p.y * sy }));
 }
 
-// --- the generative model's parameters (what the samples are drawn from) -----
+/**
+ * The drawing surface. Ink persists only as long as the stroke is in flight:
+ * on pen-up the stroke is fitted ({@link fitStrokeEllipse}) and replaced by
+ * its ellipse — a stroke too short or too thin to fit is simply ignored. The
+ * board component re-parents the canvas into the stage and arms it.
+ */
+export const paper = appScope.durable(
+  "paper",
+  () =>
+    new PencilSurface({
+      className: "board-paper",
+      params: () => ({ ...SKETCH, size: 3, color: "#7aa2ff" }),
+      // Transparent: the hexbin chart shows through, ink floats on it.
+      background: () => undefined,
+      onStrokeEnd: (end) => {
+        const { width, height } = paper.size();
+        const fitted = fitStrokeEllipse(toBoard(end.points, width, height));
+        if (fitted !== null) {
+          ellipses.set((list) => [...list, fitted]);
+        }
+        // The stroke's job is done — it pops, and the ellipse stands in for it.
+        paper.clearAnimated(0.4);
+      },
+    }),
+);
 
-/** Mixing weight of the first component. */
-export const weight = signalBox("param:weight", 0.35);
-export const mu1 = signalBox("param:mu1", -1.6);
-export const sigma1 = signalBox("param:sigma1", 0.7);
-export const mu2 = signalBox("param:mu2", 1.9);
-export const sigma2 = signalBox("param:sigma2", 1.1);
-
-// --- how much data, and how it is drawn and binned ---------------------------
-
-export const sampleCount = signalBox("param:sampleCount", 4000);
-export const bins = signalBox("param:bins", 48);
-/** Reseeding the PRNG redraws the sample without touching the model. */
-export const seed = signalBox("param:seed", 20260709);
-
-// --- bounds, shared by the sliders and the agent tools -----------------------
-
-export const LIMITS = {
-  weight: { min: 0.05, max: 0.95, step: 0.01 },
-  mu1: { min: -6, max: 6, step: 0.1 },
-  mu2: { min: -6, max: 6, step: 0.1 },
-  sigma1: { min: 0.2, max: 3, step: 0.05 },
-  sigma2: { min: 0.2, max: 3, step: 0.05 },
-  sampleCount: { min: 500, max: 20000, step: 500 },
-  bins: { min: 12, max: 120, step: 4 },
-} as const;
-
-/** Every tunable, as one object — the shape the agent tools read and write. */
-export type ParamName = keyof typeof LIMITS;
-
-export const PARAMS: Record<ParamName, { get: Accessor<number>; set: Setter<number> }> = {
-  weight,
-  mu1,
-  mu2,
-  sigma1,
-  sigma2,
-  sampleCount,
-  bins,
-};
-
-/** Read every tunable at once. */
-export function readParams(): Record<ParamName, number> {
-  return {
-    weight: weight.get(),
-    mu1: mu1.get(),
-    mu2: mu2.get(),
-    sigma1: sigma1.get(),
-    sigma2: sigma2.get(),
-    sampleCount: sampleCount.get(),
-    bins: bins.get(),
-  };
-}
-
-/** Clamp to the declared bounds, and round the ones that must stay integers. */
-export function clampParam(name: ParamName, value: number): number {
-  const { min, max } = LIMITS[name];
-  const clamped = Math.min(max, Math.max(min, value));
-  return name === "sampleCount" || name === "bins" ? Math.round(clamped) : clamped;
-}
+/** The EM worker — durable: created once, adopted across hot edits. */
+export const emWorker = (): Worker =>
+  appScope.durable(
+    "em-worker",
+    () => new Worker(new URL("./em.worker.ts", import.meta.url), { type: "module" }),
+  );

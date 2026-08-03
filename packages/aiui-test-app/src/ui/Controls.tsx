@@ -1,50 +1,66 @@
 /**
- * Controls.tsx — the sliders.
- *
- * Each writes a durable signal in store.ts and nothing else; the cell graph
- * decides what has to be recomputed. Moving μ₁ redraws the sample (it changed
- * the generative model); moving `bins` does not (only the histogram depends on
- * it). That asymmetry is the dataflow graph doing its job, visible from here.
+ * Controls.tsx — the whole deliberate control surface: one slider (sample
+ * count), one backend switch, three verbs. The mixture itself has NO sliders —
+ * it is drawn, not dialed.
  */
-import { For } from "solid-js";
-import { clampParam, LIMITS, PARAMS, type ParamName, seed } from "../model/store";
-
-const LABELS: Record<ParamName, string> = {
-  weight: "weight",
-  mu1: "μ₁",
-  sigma1: "σ₁",
-  mu2: "μ₂",
-  sigma2: "σ₂",
-  sampleCount: "samples",
-  bins: "bins",
-};
-
-const ORDER: ParamName[] = ["weight", "mu1", "sigma1", "mu2", "sigma2", "sampleCount", "bins"];
+import { ControlSlider } from "@habemus-papadum/aiui-viz";
+import { clearAction, reseedAction, undoAction } from "../model/graph";
+import { backend, ellipses, sampleCount, webgpuAvailable } from "../model/store";
 
 export function Controls() {
   return (
     <section class="panel controls">
-      <h2>model</h2>
-      <For each={ORDER}>
-        {(name) => (
-          <label class="slider">
-            <span class="slider-label">
-              {LABELS[name]} <b>{PARAMS[name].get()}</b>
-            </span>
-            <input
-              type="range"
-              min={LIMITS[name].min}
-              max={LIMITS[name].max}
-              step={LIMITS[name].step}
-              value={PARAMS[name].get()}
-              onInput={(e) => PARAMS[name].set(clampParam(name, e.currentTarget.valueAsNumber))}
-            />
-          </label>
-        )}
-      </For>
-      <button type="button" class="btn btn-outline" onClick={() => seed.set((s) => (s + 1) >>> 0)}>
-        reseed
-      </button>
+      <h2>sampler</h2>
+      <ControlSlider of={sampleCount} label="samples" />
+
+      <div class="seg" data-control={backend.name} title={backend.description}>
+        <span class="slider-label">EM backend</span>
+        <div class="seg-buttons">
+          <button
+            type="button"
+            class={backend.get() === "js" ? "seg-btn seg-btn-on" : "seg-btn"}
+            onClick={() => backend.set("js")}
+          >
+            js
+          </button>
+          <button
+            type="button"
+            class={backend.get() === "webgpu" ? "seg-btn seg-btn-on" : "seg-btn"}
+            disabled={!webgpuAvailable}
+            title={webgpuAvailable ? undefined : "this browser exposes no WebGPU adapter"}
+            onClick={() => backend.set("webgpu")}
+          >
+            webgpu
+          </button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button
+          type="button"
+          class="btn btn-outline"
+          disabled={ellipses.get().length === 0}
+          onClick={() => reseedAction.run()}
+        >
+          reseed
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline"
+          disabled={ellipses.get().length === 0}
+          onClick={() => undoAction.run()}
+        >
+          undo
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline"
+          disabled={ellipses.get().length === 0}
+          onClick={() => clearAction.run()}
+        >
+          clear
+        </button>
+      </div>
     </section>
   );
 }

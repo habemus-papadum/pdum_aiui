@@ -2,36 +2,45 @@
 
 **Internal, never published.** A deliberately small SolidJS app for exercising the
 intent client and the [channel](../../docs/guide/channel.md)
-without the weight of `demos/gallery` (no workers, no DuckDB, no Mosaic, no multi-page routing).
+without the weight of `demos/gallery`.
 
-It fits a **mixture of two Gaussians**: draw a sample, bin it, measure it, and recover the
-parameters with EM — five computation cells, four widgets, one file of mathematics.
+It fits a **mixture of 2-D Gaussians that you draw**: sketch each component as an
+ellipse on the board (centre = mean, shape and tilt = covariance, read as the 2σ
+contour), and the app samples the mixture, hex-bins it, and recovers the
+components with EM — streaming one iteration at a time, on a JS or WebGPU
+backend, in a Web Worker.
 
 ## The graph
 
 ```
-samples ──┬─→ histogram ──┐
-          │               ├─→ curves
-          ├─→ moments ──┐ │
-          │             │ │
-          └─────────────┴─┴─→ fit ─→ (curves)
+ellipses (drawn) ──→ samples ──┬─→ hexes
+                               └─→ fit  (worker: JS or WebGPU)
 ```
 
 | cell | kind | what it shows off |
 | --- | --- | --- |
-| `samples` | async, abortable | `ctx.signal` + `ctx.progress`; a slider drag aborts the run in flight |
-| `histogram` | sync | a cheap derived cell that only some sliders invalidate |
-| `moments` | sync | a second, independent reading of the same upstream |
-| `fit` | **async iterable** | one yield per EM iteration — downstream recomputes per partial |
-| `curves` | sync | a join of three upstreams; redraws as `fit` streams |
+| `samples` | async, abortable | `ctx.signal` + `ctx.progress`; a new stroke aborts the draw in flight |
+| `hexes` | sync | the 2-D histogram (pointy-top hexbin) |
+| `fit` | **async iterable** | `fromWorker` streaming — one EM iteration per partial; cancel actually stops the worker |
 
-`src/model/mixture.ts` is pure mathematics — no Solid, no aiui, no async. Everything reactive is in
-`src/model/graph.ts`; everything visual is in `src/ui/`.
+The drawing surface is a `PencilSurface` (`@habemus-papadum/aiui-pencil`, the
+circle demo's instrument): a finished stroke is fitted by its second moments
+(`fitStrokeEllipse`) and REPLACED by the ellipse — ink never persists. Drawing
+another ellipse while EM runs supersedes the `fit` cell, which posts `cancel`
+to the worker: the running computation stops, the typical pattern everywhere
+in this framework.
 
-**No cell writes its own `name` or `loc`.** The source-locator babel pass (the `aiui()`
-plugin in `vite.config.ts`) injects both at compile time from the declaration, so `const samples =
-cell(…)` registers as `"samples"` and `CellView` stamps `data-cell="samples"`. Writing them by hand
-is redundant and goes stale the moment the code moves.
+`src/model/mixture2d.ts` is pure mathematics — no Solid, no aiui, no async
+(sampling via Cholesky, hexbin, EM with log-sum-exp; unit-tested, including
+monotone log-likelihood). `src/model/em.worker.ts` is the thin protocol shell;
+`src/model/em-gpu.ts` is the WebGPU E-step kernel (central-moment accumulation
+so f32 survives; falls back to JS when no adapter exists — the fit panel
+reports which backend actually computed).
+
+**No cell writes its own `name` or `loc`.** The source-locator babel pass (the
+`aiui()` plugin in `vite.config.ts`) injects both at compile time from the
+declaration, so `const samples = cell(…)` registers as `"testapp/samples"` and
+`CellView` stamps `data-cell` on the element that renders it.
 
 ## Run it
 
@@ -60,5 +69,8 @@ the selector will offer the real channel.
 
 ## Agent tools
 
-Registered under the `testapp` namespace and reachable as `page_tools_*` MCP tools:
-`get-params`, `set-params`, `reseed`, plus `cells` and `params` report sections.
+Registered under the `testapp` namespace via `registerStandardTools` and
+reachable as `page_tools_*` MCP tools: `report` / `set` / `locate` derived
+from the declarations (controls `testapp/sampleCount`, `testapp/backend`),
+plus one named tool per action — `testapp/reseed`, `testapp/clear`,
+`testapp/undo`, and `testapp/add-ellipse` (the tool twin of drawing one).

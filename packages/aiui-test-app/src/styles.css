@@ -93,6 +93,12 @@ kbd {
   }
 }
 
+.charts {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
 .rail {
   display: grid;
   gap: 20px;
@@ -121,21 +127,99 @@ kbd {
   display: block;
 }
 
-.bar {
-  fill: var(--bar);
+/* --- the board: a self-contained dark plate in both color modes ------------ */
+
+.board {
+  position: relative;
+  aspect-ratio: 680 / 460;
+  background: #12151c;
+  border: 1px solid #262c3a;
+  border-radius: 10px;
+  overflow: hidden;
+  touch-action: none;
 }
 
-.curve-truth {
+.board-layer,
+.board-stage {
+  position: absolute;
+  inset: 0;
+}
+
+/* CellView's wrapper divs must not break the absolute layering. Its outer
+ * div carries an inline `position: relative`, so size it explicitly rather
+ * than fighting the inline style with `inset`. */
+.board-layer [data-cell],
+.board-layer .cell-body {
+  height: 100%;
+}
+
+.board-layer .cell-pending {
+  position: absolute;
+  left: 12px;
+  bottom: 4px;
+  color: #9aa1ad;
+}
+
+.board-layer .progress-stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-top: 0;
+  background: #262c3a;
+}
+
+.board-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.board-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  margin: 0;
+  padding: 0 15%;
+  text-align: center;
+  color: #6b7484;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* Cross-mode constants — the plate is dark in both themes. */
+.hex {
+  fill: #8fa3c8;
+}
+
+.ellipse-truth {
   fill: none;
-  stroke: var(--truth);
+  stroke: #7aa2ff;
   stroke-width: 2;
 }
 
-.curve-fitted {
+.ellipse-fit {
+  fill: none;
+  stroke: #ff7ab8;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.fit-mean {
+  fill: #ff7ab8;
+}
+
+.curve-loglik {
   fill: none;
   stroke: var(--fitted);
   stroke-width: 2;
-  stroke-dasharray: 6 4;
+}
+
+.loglik-dot {
+  fill: var(--fitted);
 }
 
 .grid {
@@ -166,15 +250,15 @@ kbd {
   margin-right: 4px;
 }
 
-.swatch-bar {
+.swatch-hex {
   height: 10px;
-  background: var(--bar);
+  background: #8fa3c8;
 }
 .swatch-truth {
-  background: var(--truth);
+  background: #7aa2ff;
 }
-.swatch-fitted {
-  background: linear-gradient(90deg, var(--fitted) 60%, transparent 60%);
+.swatch-fit {
+  background: linear-gradient(90deg, #ff7ab8 60%, transparent 60%);
 }
 
 /* --- tables, sliders, lists ----------------------------------------------- */
@@ -229,6 +313,59 @@ kbd {
 .slider input {
   width: 100%;
   accent-color: var(--accent);
+}
+
+/* --- the backend segmented switch + verb row ------------------------------- */
+
+.seg {
+  display: block;
+  margin: 12px 0;
+}
+
+.seg-buttons {
+  display: inline-flex;
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  font: inherit;
+  padding: 4px 14px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--line);
+}
+
+.seg-btn-on {
+  background: var(--accent);
+  color: var(--panel);
+}
+
+.seg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .preview {

@@ -3,30 +3,31 @@
  * signals and the cell graph, so any of them can be redesigned or replaced
  * without touching the dataflow.
  */
+import { Board } from "./Board";
 import { Controls } from "./Controls";
-import { DensityChart } from "./DensityChart";
 import { FitPanel } from "./FitPanel";
-import { MomentsTable } from "./MomentsTable";
-import { SamplePanel } from "./SamplePanel";
+import { LogLikChart } from "./LogLikChart";
 
 export function App() {
   return (
     <div class="app">
       <header class="masthead">
-        <h1>mixture of gaussians</h1>
+        <h1>mixture of gaussians, drawn</h1>
         <p class="muted">
-          A five-cell dataflow graph: <code>samples</code> → <code>histogram</code> /{" "}
-          <code>moments</code> → <code>fit</code> → <code>curves</code>. Arm the intent client with{" "}
-          <kbd>`</kbd> and talk about what you see.
+          Draw 2-D Gaussians as ellipses on the board; the app samples the mixture, hex-bins it, and
+          recovers the components with EM (<code>samples</code> → <code>hexes</code> →{" "}
+          <code>fit</code>, streaming). Arm the intent client with <kbd>`</kbd> and talk about what
+          you see.
         </p>
       </header>
       <main class="stage">
-        <DensityChart />
+        <div class="charts">
+          <Board />
+          <LogLikChart />
+        </div>
         <aside class="rail">
           <Controls />
           <FitPanel />
-          <MomentsTable />
-          <SamplePanel />
         </aside>
       </main>
     </div>

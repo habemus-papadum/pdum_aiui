@@ -4,7 +4,7 @@
     "noEmit": true,
     "jsx": "preserve",
     "jsxImportSource": "@solidjs/web",
-    "types": ["vite/client"]
+    "types": ["vite/client", "@webgpu/types"]
   },
   "include": ["src"]
 }

@@ -1,271 +1,206 @@
 /**
  * graph.ts — the cell graph: every dataflow in the app, in one place.
  *
- * Five cells, chained:
+ * Three cells, chained off the drawn components:
  *
- *     samples ──┬─→ histogram ──┐
- *               │               ├─→ curves
- *               ├─→ moments ──┐ │
- *               │             │ │
- *               └─────────────┴─┴─→ fit ─→ (curves)
+ *     ellipses (durable) ──→ samples ──┬─→ hexes
+ *                                      └─→ fit (worker, streams)
  *
- *   samples    draw N points from the mixture   (async, abortable, progress)
- *   histogram  bin them                          (sync, cheap)
- *   moments    mean / sd / skewness              (sync, cheap)
- *   fit        EM, one yield per iteration       (async iterable — streams)
- *   curves     the plottable geometry            (recomputes as `fit` streams)
+ *   samples  draw N points from the drawn mixture  (async, abortable, progress)
+ *   hexes    hex-bin them onto the board            (sync, cheap)
+ *   fit      EM in the worker, one partial per      (async iterable — streams;
+ *            iteration, JS or WebGPU backend         restarts on any new stroke)
  *
- * Note what is NOT written here: no `cell(deps, compute, { name, loc })`. The
- * source-locator babel pass (the `aiui()` plugin in
- * vite.config.ts) injects each cell's `{ name, loc }` from its declaration at
- * compile time, so `const samples = cell(…)` registers as "samples" and
- * `CellView` stamps `data-cell="samples"` on the element that renders it.
- * Passing them by hand is redundant, and it drifts the moment the code moves.
+ * Supersession IS cancellation: drawing another ellipse changes `ellipses`,
+ * `samples` re-runs (aborting any run in flight), and `fit`'s workerStream
+ * posts `cancel` to the worker — the running EM actually stops.
  *
- * This module is *disposable logic*: it builds the graph from the durable
- * roots in store.ts, publishes it through a durable box, and on a hot edit
- * disposes the old graph and swaps in a new one. Sliders keep their positions;
- * every cell recomputes. The UI reads the box, never a module export, so it can
- * never hold a stale cell.
+ * No cell writes its own `name`/`loc`: the source-locator babel pass (the
+ * `aiui()` plugin in vite.config.ts) injects both from the declaration.
  */
 import {
+  action,
   agentToolkit,
   type Cell,
   cell,
-  cellGraph,
-  cellRegistry,
-  durable,
+  fromWorker,
+  hotCellGraph,
+  registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
-import { createSignal } from "solid-js";
+import type { EmProgress, EmRunParams } from "./em.worker";
 import {
-  buildHistogram,
-  computeMoments,
-  densityCurve,
-  drawSample,
-  emStep,
-  type FitStep,
-  type Histogram,
-  initialGuess,
-  type MixtureParams,
-  type Moments,
+  clampEllipse,
+  hexbin,
+  mixtureFromEllipses,
   mulberry32,
-} from "./mixture";
+  prepareSampler,
+  samplePoint,
+} from "./mixture2d";
 import {
-  bins,
-  clampParam,
-  LIMITS,
-  mu1,
-  mu2,
-  PARAMS,
-  type ParamName,
-  readParams,
+  appScope,
+  BOARD_H,
+  BOARD_W,
+  backend,
+  ellipses,
+  emWorker,
+  paper,
   sampleCount,
   seed,
-  sigma1,
-  sigma2,
-  weight,
 } from "./store";
 
-/** How many EM iterations to run, and how long to pause between yields. */
-export const EM_ITERATIONS = 24;
-const EM_FRAME_MS = 50;
+/** How many EM iterations a run streams, and the pause between partials. */
+export const EM_ITERATIONS = 40;
+const EM_FRAME_MS = 40;
 /** Points drawn per chunk before yielding to the event loop (keeps aborts live). */
-const SAMPLE_CHUNK = 2000;
+const SAMPLE_CHUNK = 4000;
+/** Hex circumradius, board units — the "bin width" of the 2-D histogram. */
+export const HEX_RADIUS = 11;
 
-/** The plottable geometry: bars plus two density curves over one shared range. */
-export interface Curves {
-  lo: number;
-  hi: number;
-  /** Y extent, padded — bars and both curves fit under it. */
-  yMax: number;
-  bars: Array<{ x: number; y: number; width: number }>;
-  truth: Array<{ x: number; y: number }>;
-  fitted: Array<{ x: number; y: number }>;
-}
-
-export interface AppGraph {
-  samples: Cell<Float64Array>;
-  histogram: Cell<Histogram>;
-  moments: Cell<Moments>;
-  fit: Cell<FitStep>;
-  curves: Cell<Curves>;
-}
-
-/** The model the samples are actually drawn from — read reactively. */
-function trueParams(): MixtureParams {
-  return {
-    weight: weight.get(),
-    mu1: mu1.get(),
-    sigma1: sigma1.get(),
-    mu2: mu2.get(),
-    sigma2: sigma2.get(),
-  };
-}
-
-// --- the durable box the UI subscribes to ------------------------------------
-
-const graphBox = durable("graphBox", () => {
-  const [get, set] = createSignal<{ graph: AppGraph; dispose: () => void }>();
-  return { get, set };
-});
-
-/** The current graph — a stable accessor that survives hot swaps. */
-export const appGraph = (): AppGraph | undefined => graphBox.get()?.graph;
-
-// --- graph construction ------------------------------------------------------
-
-function build(): { graph: AppGraph; dispose: () => void } {
-  return cellGraph(() => {
-    // The `Cell<…>` annotations on `samples` and `fit` are load-bearing, not
-    // decoration: a compute may return `T | Promise<T> | AsyncIterable<T>`, and
-    // from an async body TS cannot tell which arm of that union it is looking
-    // at — it gives up and infers `unknown`. The annotation supplies `T`
-    // contextually. The sync cells infer fine on their own.
-
-    // 1. The data. Chunked so a slider drag can abort a run in flight: each
-    //    chunk boundary is a macrotask, which is the only place `signal.aborted`
-    //    can have become true.
-    const samples: Cell<Float64Array> = cell(
-      () => ({ n: sampleCount.get(), s: seed.get(), params: trueParams() }),
-      async ({ n, s, params }, ctx) => {
-        const rand = mulberry32(s);
-        const out = new Float64Array(n);
-        for (let i = 0; i < n; i++) {
-          out[i] = drawSample(params, rand);
-          if ((i + 1) % SAMPLE_CHUNK === 0) {
-            await new Promise((r) => setTimeout(r, 0));
-            if (ctx.signal.aborted) return out; // superseded — the value is discarded
-            ctx.progress((i + 1) / n);
+/** Build the graph — exported so headless tests build it inside `cellHarness`. */
+export function buildGraph(worker: () => Worker = emWorker) {
+  // 1. The data. Chunked so a slider drag or a fresh stroke aborts a draw in
+  //    flight. Zero components legitimately yields zero points — the board
+  //    empties rather than holding a stale cloud.
+  const samples: Cell<Float64Array> = cell(
+    () => ({ n: sampleCount.get(), s: seed.get(), list: ellipses.get() }),
+    async ({ n, s, list }, ctx) => {
+      if (list.length === 0) {
+        return new Float64Array(0);
+      }
+      const mix = mixtureFromEllipses(list);
+      const sampler = prepareSampler(mix);
+      const rand = mulberry32(s);
+      const out = new Float64Array(2 * n);
+      for (let i = 0; i < n; i++) {
+        const p = samplePoint(mix, sampler, rand);
+        out[2 * i] = p.x;
+        out[2 * i + 1] = p.y;
+        if ((i + 1) % SAMPLE_CHUNK === 0) {
+          await new Promise((r) => setTimeout(r, 0));
+          if (ctx.signal.aborted) {
+            return out; // superseded — the value is discarded
           }
-        }
-        ctx.progress(1);
-        return out;
-      },
-    );
-
-    // 2 & 3. Two independent readings of the same data. Reading `samples()` in
-    //        a deps function throws NotReadyError while it is pending, which is
-    //        exactly how a downstream cell holds without any explicit guard.
-    const histogram = cell(
-      () => ({ data: samples(), count: bins.get() }),
-      ({ data, count }) => buildHistogram(data, count),
-    );
-
-    const moments = cell(
-      () => samples(),
-      (data) => computeMoments(data),
-    );
-
-    // 4. EM, streaming. `stream: "commit"` is the default, so every yield is
-    //    committed to the graph and `curves` below recomputes per iteration —
-    //    the fitted curve visibly walks onto the data.
-    const fit: Cell<FitStep> = cell(
-      () => ({ data: samples(), start: initialGuess(moments()) }),
-      async function* ({ data, start }, ctx) {
-        let params = start;
-        for (let iter = 1; iter <= EM_ITERATIONS; iter++) {
-          if (ctx.signal.aborted) return;
-          const step = emStep(data, params);
-          params = step.params;
-          ctx.progress(iter / EM_ITERATIONS);
-          yield { iter, params, logLik: step.logLik };
-          await new Promise((r) => setTimeout(r, EM_FRAME_MS));
-        }
-      },
-    );
-
-    // 5. Geometry for the chart: the bars, the true density, and the current
-    //    EM estimate, all on one shared range and y-scale.
-    const curves = cell(
-      () => ({ hist: histogram(), step: fit(), truth: trueParams() }),
-      ({ hist, step, truth }): Curves => {
-        const truthCurve = densityCurve(hist.lo, hist.hi, truth);
-        const fittedCurve = densityCurve(hist.lo, hist.hi, step.params);
-        const peak = Math.max(
-          ...hist.density,
-          ...truthCurve.map((p) => p.y),
-          ...fittedCurve.map((p) => p.y),
-        );
-        return {
-          lo: hist.lo,
-          hi: hist.hi,
-          yMax: peak * 1.1,
-          bars: hist.centers.map((x, i) => ({
-            x,
-            y: hist.density[i],
-            width: hist.width,
-          })),
-          truth: truthCurve,
-          fitted: fittedCurve,
-        };
-      },
-    );
-
-    return { samples, histogram, moments, fit, curves } satisfies AppGraph;
-  });
-}
-
-// --- agent tools -------------------------------------------------------------
-//
-// Every operation a human can perform has a tool twin, so the agent can drive
-// and inspect the app rather than guess at it.
-
-function registerTools(): void {
-  const { registerTool, registerReporter } = agentToolkit("testapp");
-
-  registerTool({
-    name: "get-params",
-    description: "Every tunable of the mixture model and the sampler.",
-    run: () => readParams(),
-  });
-
-  registerTool({
-    name: "set-params",
-    description:
-      "Set one or more tunables. Values are clamped to their slider bounds; the graph recomputes.",
-    params: Object.fromEntries(
-      Object.entries(LIMITS).map(([name, { min, max }]) => [name, `number in ${min}..${max}`]),
-    ),
-    run: (args) => {
-      // Return what was written, not a fresh read: Solid 2.0 commits signal
-      // writes transactionally, so a same-scope .get() still sees old values.
-      const next = readParams();
-      for (const [key, box] of Object.entries(PARAMS) as Array<
-        [ParamName, (typeof PARAMS)[ParamName]]
-      >) {
-        const raw = args?.[key];
-        if (typeof raw === "number" && Number.isFinite(raw)) {
-          next[key] = clampParam(key, raw);
-          box.set(next[key]);
+          ctx.progress((i + 1) / n);
         }
       }
-      return next;
+      ctx.progress(1);
+      return out;
     },
-  });
+    { scope: appScope },
+  );
 
-  registerTool({
-    name: "reseed",
-    description: "Redraw the sample from the same model with a fresh PRNG seed.",
-    run: () => {
-      const next = (seed.get() + 1) >>> 0;
-      seed.set(next);
-      return { seed: next };
+  // 2. The 2-D histogram: pointy-top hexes over the board.
+  const hexes = cell(
+    () => samples(),
+    (data) => hexbin(data, HEX_RADIUS, BOARD_W, BOARD_H),
+    { scope: appScope },
+  );
+
+  // 3. EM, streaming from the worker — one partial per iteration, each
+  //    carrying the whole logLik trace so far and the backend that actually
+  //    computed it. Holds (shows nothing new) while there are no components.
+  const fit: Cell<EmProgress> = cell(
+    () => {
+      const k = ellipses.get().length;
+      const data = samples();
+      if (k === 0 || data.length === 0) {
+        return undefined;
+      }
+      return {
+        data,
+        k,
+        seed: seed.get(),
+        iterations: EM_ITERATIONS,
+        frameMs: EM_FRAME_MS,
+        backend: backend.get(),
+      } satisfies EmRunParams;
     },
-  });
+    fromWorker<EmRunParams, EmProgress>(worker),
+    { scope: appScope },
+  );
 
-  // The attribution table: every live named cell, its state, and where it is
-  // defined — the names match the data-cell stamps in the DOM.
-  registerReporter("cells", () => cellRegistry());
-  registerReporter("params", () => readParams());
+  return { samples, hexes, fit };
 }
 
-// --- module evaluation = (re)build -------------------------------------------
+/** The current graph — a stable accessor that survives hot swaps. */
+export const graph = hotCellGraph("testapp", buildGraph, import.meta.hot);
 
-graphBox.get()?.dispose(); // an HMR re-evaluation swaps the previous graph out
-graphBox.set(build());
-registerTools(); // idempotent by name — re-registration replaces
-if (import.meta.hot) {
-  import.meta.hot.accept(() => {
-    console.info("[test-app:hmr] graph rebuilt over durable roots");
-  });
-}
+/** The graph's shape, inferred — components type against it. */
+export type AppGraph = ReturnType<typeof graph>;
+
+// ── the agent surface ────────────────────────────────────────────────────────
+//
+// Declaring IS exposing: the standard tools derive `report`/`set`/`locate`
+// and one named tool per action below from the declarations themselves.
+
+const kit = agentToolkit("testapp");
+
+/** Redraw the sample from the same components with a fresh PRNG seed. */
+export const reseedAction = action({
+  scope: appScope,
+  name: "reseed",
+  description: "Redraw the sample from the same mixture with a fresh PRNG seed.",
+  run: () => {
+    const next = (seed.get() + 1) >>> 0;
+    seed.set(next);
+    return { seed: next };
+  },
+});
+
+/** Remove every drawn component (and any ink) — the reset. */
+export const clearAction = action({
+  scope: appScope,
+  name: "clear",
+  description: "Remove every drawn component and reset the board to empty.",
+  run: () => {
+    ellipses.set([]);
+    paper.clearAnimated();
+    return { components: 0 };
+  },
+});
+
+/** Remove the most recently drawn component. */
+export const undoAction = action({
+  scope: appScope,
+  name: "undo",
+  description: "Remove the most recently drawn component.",
+  run: () => {
+    const remaining = Math.max(0, ellipses.get().length - 1);
+    ellipses.set((list) => list.slice(0, -1));
+    return { components: remaining };
+  },
+});
+
+/** Add a component programmatically — the tool twin of drawing an ellipse. */
+export const addEllipseAction = action({
+  scope: appScope,
+  name: "add-ellipse",
+  description:
+    "Add a mixture component as an ellipse (its 2σ contour), without drawing. Board is 680×460.",
+  params: {
+    cx: "number, centre x in 0..680",
+    cy: "number, centre y in 0..460",
+    a: "number, semi-major axis (board units, e.g. 40..150)",
+    b: "number, semi-minor axis",
+    angle: "number, tilt in radians (optional, default 0)",
+  },
+  run: (args) => {
+    const num = (v: unknown, fallback: number): number =>
+      typeof v === "number" && Number.isFinite(v) ? v : fallback;
+    const e = clampEllipse(
+      {
+        cx: num(args?.cx, BOARD_W / 2),
+        cy: num(args?.cy, BOARD_H / 2),
+        a: num(args?.a, 80),
+        b: num(args?.b, 50),
+        angle: num(args?.angle, 0),
+      },
+      BOARD_W,
+      BOARD_H,
+    );
+    ellipses.set((list) => [...list, e]);
+    return e;
+  },
+});
+
+registerStandardTools(kit);
