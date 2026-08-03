@@ -132,6 +132,45 @@ describe("createToolsLink", () => {
     });
   });
 
+  it("registration carries the activity bit and a content hash (change detection)", () => {
+    const bus = fakeBus({ activeTab: 7 });
+    const { all, factory } = fakeSockets();
+    createToolsLink({ host: bus, port: () => 5050, socketFactory: factory });
+    bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ...REGS[0], active: false }],
+    });
+    all[0].emit("open");
+    const register = JSON.parse(all[0].sent[0]);
+    expect(register.active).toBe(false);
+    expect(typeof register.hash).toBe("string");
+    expect(register.hash.length).toBeGreaterThan(0);
+
+    // A route flip re-registers with the SAME hash (activity rides outside
+    // it), so the directory updates the bit without a "changed" broadcast.
+    bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
+    const second = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register")[1];
+    expect(second.active).toBe(true);
+    expect(second.hash).toBe(register.hash);
+  });
+
+  it("a CLOSED tab drops its socket — the leak that kept dead namespaces registered", () => {
+    const bus = fakeBus({ activeTab: 7 });
+    const { all, factory } = fakeSockets();
+    createToolsLink({ host: bus, port: () => 5050, socketFactory: factory });
+    bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
+    all[0].emit("open");
+
+    bus.firePageEvent({ kind: "tabClosed", tab: 7 });
+    expect(all[0].closed).toBe(true);
+    expect(all).toHaveLength(1); // deliberate close — no re-dial
+
+    // A REOPENED app gets a fresh socket, not the ghost's.
+    bus.firePageEvent({ kind: "pageTools", tab: 8, registrations: REGS });
+    expect(all).toHaveLength(2);
+  });
+
   it("dispose closes every socket and stops listening", () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();

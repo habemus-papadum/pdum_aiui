@@ -323,6 +323,11 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
         const next = byTab.keys().next();
         setActive(focusedTab ?? visibleTab ?? (next.done ? undefined : next.value));
       }
+      // Tell per-tab state holders the tab is GONE — the tools link closes
+      // its socket (so the channel's directory forgets this tab's namespaces)
+      // and the panel registry drops its descriptors. Detach alone used to
+      // pass silently, and the leak advertised dead tools forever.
+      emit({ kind: "tabClosed", tab: page.tab });
       return;
     }
     if (event.method === "Page.frameNavigated") {

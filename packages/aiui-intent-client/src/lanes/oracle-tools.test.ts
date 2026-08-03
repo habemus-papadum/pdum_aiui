@@ -221,4 +221,19 @@ describe("resolveToolTab — the eye, else the last app (owner, 2026-07-30)", ()
     expect(resolveToolTab(registry({}), 99, undefined)).toBeUndefined();
     expect(resolveToolTab(registry({}), undefined, undefined)).toBeUndefined();
   });
+
+  it("PARKED namespaces don't count — the oracle's surface is route-following", () => {
+    // A tab whose only namespaces are parked (a gallery notebook off-route)
+    // reads as toolless: the projection withholds it and the resolution falls
+    // through to the remembered app (docs/proposals/page-tools.md).
+    const parked = {
+      toolsFor: (tab?: number) =>
+        tab === 9
+          ? [{ ns: "aztec", active: false, tools: [{ name: "regrow", description: "" }] }]
+          : tab === 7
+            ? [{ ns: "gears", active: true, tools: [{ name: "reset", description: "" }] }]
+            : [],
+    } as never;
+    expect(resolveToolTab(parked, 9, 7)).toBe(7); // the eye's tab is all-parked
+  });
 });

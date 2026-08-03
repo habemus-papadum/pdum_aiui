@@ -54,12 +54,27 @@ export interface PageToolRegistration {
   /** ISO timestamp of the (latest) registration. */
   registeredAt: string;
   /**
+   * The NAMESPACE's activity bit (docs/proposals/page-tools.md): false when
+   * the page parked this app (a gallery notebook off-route). Parked tools
+   * stay listed and callable — the agent sees the flag; route-following
+   * consumers (the panel's oracle) filter page-side. Deliberately NOT in the
+   * change signature: a route flip is not a "page tools changed" event.
+   */
+  active: boolean;
+  /**
    * Present when this registration's tab is a window's active tab (per the
    * `activation` messages — see {@link PageToolDirectory.handleClientMessage}).
    * Derived at {@link PageToolDirectory.list} time, never stored: an activation
    * flip re-flags the next list without touching registrations.
    */
   activeTab?: true;
+  /**
+   * Derived at {@link PageToolDirectory.list} time: this registration's
+   * namespace collides with another connection's, and call routing would
+   * pick the OTHER one. Advisory — the honest rendering of a duplicate
+   * instead of two identical rows (docs/proposals/page-tools.md).
+   */
+  shadowed?: true;
 }
 
 /** A call the agent asks the directory to route to a page. */
@@ -368,6 +383,10 @@ export class PageToolDirectory {
       ...(asRecord(msg.source) ? { source: asRecord(msg.source) as SourceInfo } : {}),
       hash,
       tools,
+      // Absent on registrations from links predating the bit ⇒ active. The
+      // bit rides OUTSIDE the hash (the client excludes it), so a route flip
+      // updates this entry without waking the change signal.
+      active: msg.active !== false,
       registeredAt: this.now().toISOString(),
     };
     conn.registrations.set(msg.ns, entry);
@@ -401,16 +420,47 @@ export class PageToolDirectory {
   }
 
   /**
+   * Rank two same-namespace registrations for routing: the user's eye first
+   * (a window's active tab), then a live (non-parked) namespace over a parked
+   * one, then the newer registration. Shared by the shadow marking in
+   * {@link list} and the tie-break in {@link call}, so the list's marks and
+   * the router's choice cannot disagree.
+   */
+  private preferable(a: PageToolRegistration, b: PageToolRegistration): PageToolRegistration {
+    const eyeA = this.isActive(a);
+    if (eyeA !== this.isActive(b)) {
+      return eyeA ? a : b;
+    }
+    if (a.active !== b.active) {
+      return a.active ? a : b;
+    }
+    return a.registeredAt >= b.registeredAt ? a : b;
+  }
+
+  /**
    * Every current registration, across all connections — active-tab entries
    * first (stable within each group): the agent reads the list top-down and
-   * the tab the user is looking at is the likeliest routing target.
+   * the tab the user is looking at is the likeliest routing target. When two
+   * connections carry the SAME namespace, the losers are marked `shadowed`
+   * (the honest rendering of a duplicate — call routing prefers the winner).
    */
   list(): PageToolRegistration[] {
     const out: PageToolRegistration[] = [];
+    const winners = new Map<string, PageToolRegistration>();
     for (const conn of this.connections.values()) {
       for (const reg of conn.registrations.values()) {
-        // Shallow copies, so the derived flag never leaks into stored state.
-        out.push(this.isActive(reg) ? { ...reg, activeTab: true } : { ...reg });
+        // Shallow copies, so the derived flags never leak into stored state.
+        const copy: PageToolRegistration = this.isActive(reg)
+          ? { ...reg, activeTab: true }
+          : { ...reg };
+        out.push(copy);
+        const rival = winners.get(reg.ns);
+        winners.set(reg.ns, rival === undefined ? copy : this.preferable(rival, copy));
+      }
+    }
+    for (const reg of out) {
+      if (winners.get(reg.ns) !== reg) {
+        reg.shadowed = true;
       }
     }
     return out.sort((a, b) => Number(b.activeTab === true) - Number(a.activeTab === true));
@@ -437,6 +487,7 @@ export class PageToolDirectory {
       ...(reg.url ? { url: reg.url } : {}),
       ...(reg.tab?.title ? { tab: reg.tab.title } : {}),
       ...(this.isActive(reg) ? { activeTab: true } : {}),
+      ...(reg.active ? {} : { parked: true }),
     });
   }
 
@@ -467,10 +518,18 @@ export class PageToolDirectory {
     if (candidates.length > 1) {
       // Active-tab preference resolves cross-tab ambiguity only when it picks
       // exactly one candidate; two active matches (two namespaces in one tab)
-      // or none fall through to the candidates error below.
+      // or none fall through to the next narrowing.
       const active = candidates.filter((c) => this.isActive(c.reg));
       if (active.length === 1) {
         candidates = active;
+      }
+    }
+    if (candidates.length > 1) {
+      // Then a LIVE namespace beats a parked one (the gallery: the notebook
+      // in view over its off-route twin) — again only when that is decisive.
+      const live = candidates.filter((c) => c.reg.active);
+      if (live.length === 1) {
+        candidates = live;
       }
     }
 

@@ -224,6 +224,9 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
       kind: "tools",
       registrations: registry.list().map((entry) => ({
         ns: entry.ns,
+        // Adopted registries predating the activity bit report no `active`
+        // field — normalize to true rather than dropping the namespace.
+        active: (entry as { active?: boolean }).active !== false,
         tools: entry.tools.map((tool) => ({
           name: tool.name,
           description: tool.description,

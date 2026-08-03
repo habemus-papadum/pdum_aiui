@@ -51,10 +51,13 @@ export type PageReport =
   /** A jump pick finished — committed (VS Code opens) or cancelled (Esc /
    * click-away). Auto-exits jump mode (owner, 2026-07-16). */
   | { kind: "jumpDone" }
-  /** The page's `__AIUI__.tools` registry — full current set, descriptors only. */
+  /** The page's `__AIUI__.tools` registry — full current set, descriptors
+   * only. `active` is the namespace's ACTIVITY bit (route-following
+   * consumers filter on it; absent on registries predating the bit ⇒ treat
+   * as active — docs/proposals/page-tools.md). */
   | {
       kind: "tools";
-      registrations: Array<{ ns: string; tools: PageToolDescriptorReport[] }>;
+      registrations: Array<{ ns: string; tools: PageToolDescriptorReport[]; active?: boolean }>;
     }
   /** A `toolsCall` capability's answer, correlated by callId. */
   | { kind: "toolsResult"; callId: string; ok: boolean; value?: unknown; error?: string };

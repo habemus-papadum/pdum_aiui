@@ -243,6 +243,11 @@ export async function connectExtensionBus(options: ExtensionBusOptions): Promise
   chrome.tabs.onActivated.addListener(onActivated);
   const onRemoved = (tabId: number): void => {
     sticky.delete(tabId);
+    // Per-tab state holders (the tools link's socket, the panel's descriptor
+    // registry) must learn the tab is GONE — an empty-set report never comes
+    // from a closed tab, and the silent leak kept dead namespaces registered
+    // on the channel forever (found live 2026-08-03).
+    emit({ kind: "tabClosed", tab: tabId });
     if (tabId === activeTab) {
       void readActiveTab();
     }

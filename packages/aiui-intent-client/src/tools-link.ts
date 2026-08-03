@@ -48,13 +48,33 @@ interface TabLink {
   socket?: ToolsSocket;
   open: boolean;
   /** The tab's current registrations (re-sent on open/reconnect). */
-  registrations: Array<{ ns: string; tools: unknown[] }>;
+  registrations: Array<{ ns: string; tools: unknown[]; active?: boolean }>;
+  /** The tab's identity (url/title), fetched once per link — rides every
+   * register so the directory's ambiguity messages can NAME the page. */
+  meta?: { url?: string; title?: string };
   /** Deliberate close (empty registration / dispose) — no re-dial. */
   closing: boolean;
   queue: string[];
 }
 
 const REDIAL_MS = 3000;
+
+/** A cheap, stable content hash (djb2 over the canonical JSON). The directory
+ * keys its change detection on `ns|hash` — with no hash every registration
+ * looked identical, so a tool-set CHANGE inside a namespace never fired
+ * `tools/list_changed` (found by the channel-plumbing audit, 2026-08-03).
+ * The ACTIVITY bit is deliberately excluded: a route flip re-registers with
+ * an unchanged hash, so the directory updates the record without announcing
+ * "page tools changed" on every gallery navigation (the same reason the
+ * directory's signature excludes the active-tab flag). */
+export function toolsHash(registration: { ns: string; tools: unknown[] }): string {
+  const canon = JSON.stringify({ ns: registration.ns, tools: registration.tools });
+  let h = 5381;
+  for (let i = 0; i < canon.length; i++) {
+    h = ((h << 5) + h + canon.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(16);
+}
 
 export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } {
   const log = options.log ?? (() => {});
@@ -81,9 +101,16 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
         type: "register",
         ns: registration.ns,
         tools: registration.tools,
+        // The namespace's activity bit + a content hash: the directory's
+        // change detection keys on the hash, projections filter on the bit.
+        active: registration.active !== false,
+        hash: toolsHash(registration),
+        ...(link.meta?.url !== undefined ? { url: link.meta.url } : {}),
         tab: {
           chromeTabId: tab,
           ...(options.windowId !== undefined ? { windowId: options.windowId } : {}),
+          ...(link.meta?.url !== undefined ? { url: link.meta.url } : {}),
+          ...(link.meta?.title !== undefined ? { title: link.meta.title } : {}),
         },
       });
     }
@@ -175,8 +202,32 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
         links.set(event.tab, link);
         dial(event.tab, link);
         log(`tools: tab ${event.tab} connected (${event.registrations.length} namespace(s))`);
+        // The tab's identity, once per link — best-effort, then re-register
+        // so the directory's records (and its ambiguity messages) carry the
+        // page's url/title instead of a bare clientId.
+        void options.host.targeting
+          .tabInfo?.(event.tab)
+          .then((info) => {
+            if (info !== undefined && links.get(event.tab) === link) {
+              link.meta = { url: info.url, title: info.title };
+              registerAll(event.tab, link);
+            }
+          })
+          .catch(() => {});
       }
       registerAll(event.tab, link);
+    } else if (event.kind === "tabClosed") {
+      // The tab is GONE: close its socket so the directory forgets its
+      // namespaces (close = cleanup, the connection-scoped contract). This is
+      // the leak fix — without it, a closed tab's registrations shadowed the
+      // reopened app's forever (the duplicate testapp/report, 2026-08-03).
+      const link = links.get(event.tab);
+      if (link !== undefined) {
+        link.closing = true;
+        link.socket?.close();
+        links.delete(event.tab);
+        log(`tools: tab ${event.tab} closed — namespaces dropped`);
+      }
     } else if (event.kind === "toolsResult") {
       const tab = pendingCalls.get(event.callId);
       pendingCalls.delete(event.callId);

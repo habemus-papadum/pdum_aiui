@@ -32,10 +32,13 @@ export interface PageToolDescriptor {
   inputSchema?: Record<string, unknown>;
 }
 
-/** A namespace's worth of registrations, as `pageTools` reports them. */
+/** A namespace's worth of registrations, as `pageTools` reports them.
+ * `active` is the namespace's activity bit (absent = active): the oracle's
+ * projection filters on it, the ledger renders it. */
 export interface PageToolNamespace {
   ns: string;
   tools: PageToolDescriptor[];
+  active?: boolean;
 }
 
 export interface PageToolsRegistry {
@@ -109,6 +112,16 @@ export function createPageTools(options: PageToolsOptions): PageToolsRegistry {
       }
       byTab.set(event.tab, event.registrations as PageToolNamespace[]);
       announce();
+      return;
+    }
+    if (event.kind === "tabClosed") {
+      // The tab is gone for good — drop its descriptors AND its asked mark
+      // (tab ids can be recycled by the fake tier; a real id never is, and
+      // clearing costs nothing).
+      asked.delete(event.tab);
+      if (byTab.delete(event.tab)) {
+        announce();
+      }
       return;
     }
     if (event.kind === "toolsResult") {

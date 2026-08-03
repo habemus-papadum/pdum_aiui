@@ -32,7 +32,7 @@ import {
 import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
 import type { IntentClient } from "../client";
 import { oracleFileTools, oraclePageTools, oraclePanelTools } from "../config";
-import { createPageTools, type PageToolsRegistry } from "../page-tools";
+import { createPageTools, type PageToolNamespace, type PageToolsRegistry } from "../page-tools";
 import { oracleMic } from "../spec";
 import { fileTools, panelTools } from "./oracle-tools";
 import type { LaneContext } from "./types";
@@ -94,15 +94,23 @@ function vendorToolName(prefix: string, name: string): string {
  * closed, navigated away, or unloaded its tools drops out rather than offering
  * tools that would fire into nothing.
  */
+/** The tab's ACTIVE namespaces — the oracle's projection is route-following
+ * (docs/proposals/page-tools.md): a parked page's tools (a gallery notebook
+ * off-route) stay enumerable to the agent but are withheld from the realtime
+ * session, whose tool budget and attention belong to the page in view. */
+function activeNamespaces(registry: PageToolsRegistry, tab: number): PageToolNamespace[] {
+  return registry.toolsFor(tab).filter((registration) => registration.active !== false);
+}
+
 export function resolveToolTab(
   registry: PageToolsRegistry,
   activeTab: number | undefined,
   remembered: number | undefined,
 ): number | undefined {
-  if (activeTab !== undefined && registry.toolsFor(activeTab).length > 0) {
+  if (activeTab !== undefined && activeNamespaces(registry, activeTab).length > 0) {
     return activeTab;
   }
-  if (remembered !== undefined && registry.toolsFor(remembered).length > 0) {
+  if (remembered !== undefined && activeNamespaces(registry, remembered).length > 0) {
     return remembered;
   }
   return undefined;
@@ -110,7 +118,8 @@ export function resolveToolTab(
 
 /** Project the tab's registered descriptors into oracle tools that CALL back
  * through the page transport. Pure over its inputs — the registry and the tab
- * are the only state. */
+ * are the only state. Parked namespaces are withheld (see
+ * {@link activeNamespaces}). */
 export function oracleToolsForTab(
   registry: PageToolsRegistry,
   tab: number | undefined,
@@ -118,7 +127,7 @@ export function oracleToolsForTab(
   if (tab === undefined) {
     return [];
   }
-  const namespaces = registry.toolsFor(tab);
+  const namespaces = activeNamespaces(registry, tab);
   const prefixed = namespaces.length > 1;
   return namespaces.flatMap((registration) =>
     registration.tools.map((tool) => ({

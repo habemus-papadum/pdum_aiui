@@ -236,8 +236,18 @@ export type PageEvent =
       registrations: Array<{
         ns: string;
         tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+        /** The namespace's ACTIVITY bit (absent = active): route-following
+         * consumers (the oracle) filter on it; the agent sees it as a flag. */
+        active?: boolean;
       }>;
     }
+  /** The tab is GONE (window closed, target detached). Distinct from an empty
+   * `pageTools` set — nothing will ever report from this tab again, so
+   * holders of per-tab state (the tools link's socket, the panel's descriptor
+   * registry) must drop it. Without this, a closed tab's tools socket stayed
+   * open and the channel's directory advertised its namespaces forever (the
+   * duplicate-tools leak, found live 2026-08-03). */
+  | { kind: "tabClosed"; tab: number }
   /** A `toolsCall`'s answer, correlated by callId. */
   | {
       kind: "toolsResult";

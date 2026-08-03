@@ -98,6 +98,7 @@ describe("PageToolDirectory registration", () => {
         source: { root: "/repo" },
         hash: "h1",
         tools: [{ name: "set-params", description: "set params", inputSchema: { type: "object" } }],
+        active: true, // absent on the wire ⇒ the namespace is live
         registeredAt: "2026-07-05T00:00:00.000Z",
       },
     ]);
@@ -126,6 +127,50 @@ describe("PageToolDirectory registration", () => {
     const entries = dir.list();
     expect(entries).toHaveLength(1);
     expect(entries[0].tools.map((t) => t.name)).toEqual(["b"]);
+  });
+});
+
+describe("namespace activity + shadow marking (docs/proposals/page-tools.md)", () => {
+  it("records the parked bit; a re-register with the same hash updates it silently", () => {
+    const { dir, log } = makeDirectory();
+    const page = connectPage(dir);
+    const tools = [{ name: "regrow", description: "regrow" }];
+    page.register("aztec", tools, "h1");
+    expect(dir.list()[0]?.active).toBe(true);
+    page.register("aztec", tools, "h1", { active: false }); // route left the page
+    expect(dir.list()[0]?.active).toBe(false);
+    // The flip is not a "page tools changed" event: hash unchanged, one log line.
+    expect(log.filter((l) => l.includes("aztec declared"))).toHaveLength(1);
+  });
+
+  it("a live namespace SHADOWS a parked duplicate, and routing prefers it", async () => {
+    const { dir } = makeDirectory();
+    const stale = connectPage(dir, { greet: () => "stale" });
+    const fresh = connectPage(dir, { greet: () => "fresh" });
+    const tools = [{ name: "greet", description: "greet" }];
+    stale.register("morpho", tools, "h1", { active: false });
+    fresh.register("morpho", tools, "h1", { active: true });
+
+    const listed = dir.list();
+    expect(listed.find((r) => r.clientId === stale.clientId)?.shadowed).toBe(true);
+    expect(listed.find((r) => r.clientId === fresh.clientId)?.shadowed).toBeUndefined();
+    // The call goes to the winner — no ambiguity error for a parked twin.
+    await expect(dir.call({ name: "greet" })).resolves.toBe("fresh");
+  });
+
+  it("two LIVE duplicates: the newer registration wins the shadow mark", () => {
+    let tick = 0;
+    const { dir } = makeDirectory({
+      now: () => new Date(Date.parse("2026-07-05T00:00:00.000Z") + ++tick * 1000),
+    });
+    const older = connectPage(dir);
+    const newer = connectPage(dir);
+    const tools = [{ name: "greet", description: "greet" }];
+    older.register("morpho", tools, "h1");
+    newer.register("morpho", tools, "h1");
+    const listed = dir.list();
+    expect(listed.find((r) => r.clientId === older.clientId)?.shadowed).toBe(true);
+    expect(listed.find((r) => r.clientId === newer.clientId)?.shadowed).toBeUndefined();
   });
 });
 
