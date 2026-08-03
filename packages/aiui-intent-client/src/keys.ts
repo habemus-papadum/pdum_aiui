@@ -93,11 +93,12 @@ export const turnLayer: KeyLayer<EngineState, string> = {
       }),
     },
     {
+      // In a turn every key is claimed anyway, so `c` clears unconditionally
+      // (owner, 2026-08-03): strokes survive leaving pencil mode, and clearing
+      // them must not require re-entering it.
       keys: ["c", "C"],
-      down: (state, _key, repeat) =>
-        !repeat && state.pencil === true ? command("pencilClear") : "swallow",
-      hint: (s) =>
-        s.pencil === true ? { key: "c", label: "clear pencil", icon: "🧹" } : undefined,
+      down: (_state, _key, repeat) => (!repeat ? command("pencilClear") : "swallow"),
+      hint: () => ({ key: "c", label: "clear ink", icon: "🧹" }),
     },
     {
       keys: [" "],
@@ -241,11 +242,15 @@ export const armedLayer: KeyLayer<EngineState, string> = {
       hint: (s) => ({ key: "k", label: "pencil", icon: "🖊", active: s.pencil === true }),
     },
     {
+      // ARMED keeps the pencil gate deliberately (unlike the in-turn row):
+      // this resolver feeds claimedPageKeys, so an unconditional binding would
+      // steal every armed-scope `c` from the page — typing into its inputs
+      // included. With pencil off the BUTTON still clears (cap gate,
+      // spec.ts); only the bare key stays the page's.
       keys: ["c", "C"],
       down: (state, _key, repeat) =>
         !repeat && state.pencil === true ? command("pencilClear") : "pass",
-      hint: (s) =>
-        s.pencil === true ? { key: "c", label: "clear pencil", icon: "🧹" } : undefined,
+      hint: (s) => (s.pencil === true ? { key: "c", label: "clear ink", icon: "🧹" } : undefined),
     },
     // ── the hoisted contribution keys (the pause slice, owner 2026-07-30):
     // SINK-gated rows that `pass` with no sink, so while merely armed the

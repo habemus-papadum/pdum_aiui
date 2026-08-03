@@ -59,6 +59,9 @@ export interface AgentToolkitHandle {
 }
 
 export interface AgentToolkit {
+  /** The toolkit's namespace — the `<ns>` of `window.__<ns>`, and the prefix
+   * the shared registry publishes tools under (`<ns>/<tool>`). */
+  readonly ns: string;
   /** Register (or replace, by name) one tool. HMR-safe. */
   registerTool(tool: AgentTool): void;
   /** Register (or replace, by name) one section of `report()`. */
@@ -144,6 +147,7 @@ export function agentToolkit(ns: string): AgentToolkit {
   };
 
   return {
+    ns,
     registerTool(tool: AgentTool): void {
       const h = handle();
       const i = h.tools.findIndex((t) => t.name === tool.name);

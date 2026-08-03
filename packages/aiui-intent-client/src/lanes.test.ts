@@ -309,14 +309,83 @@ describe("shots and selections ride the wire", () => {
       const r = makeRig();
       grantAndOpen(r.client, 7);
       r.client.dispatch("video"); // constant-cadence would wait videoPeriodSec;
-      r.client.dispatch("fpsMode"); // smart mode ticks at 1 s with the gate
+      r.client.dispatch("fpsMode"); // …so flip to constant and back:
       await vi.advanceTimersByTimeAsync(50); // claims settle
-      r.client.dispatch("fpsMode"); // back to smart (1 s tick)
+      r.client.dispatch("fpsMode"); // back to smart (250ms decision ticks)
       r.bus.firePageEvent({ kind: "interaction", tab: 7 }); // arm the gate
       await vi.advanceTimersByTimeAsync(1100);
       expect(r.bus.log.filter((l) => l.startsWith("shot@7")).length).toBeGreaterThan(0);
       expect(r.bus.log.filter((l) => l.includes("flash")).length).toBe(0); // never flash
       expect(r.thread.chunks.some((c) => c.kind.startsWith("attachment:shot_"))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ── the smart cadence (owner, 2026-08-03): activity → frames at the slider
+  // period; quiescence → ONE settle frame; a still page → nothing. ───────────
+  const shotCount = (r: ReturnType<typeof makeRig>): number =>
+    r.bus.log.filter((l) => l.startsWith("shot@7")).length;
+
+  it("smart mode: sustained activity records at the slider period, not per tick", async () => {
+    vi.useFakeTimers();
+    try {
+      const r = makeRig();
+      grantAndOpen(r.client, 7);
+      r.client.dispatch("video"); // smart is the default mode
+      await vi.advanceTimersByTimeAsync(50); // claims settle; the opening frame lands
+      const startup = shotCount(r);
+      // "Drawing continuously": a ping every 200ms for 6s (the page throttles
+      // real events to ≤1 per 250ms; the ledger only needs the timestamps).
+      for (let t = 0; t < 6000; t += 200) {
+        r.bus.firePageEvent({ kind: "interaction", tab: 7 });
+        await vi.advanceTimersByTimeAsync(200);
+      }
+      const during = shotCount(r) - startup;
+      // 6s of activity at the 5s default period: the immediate first-activity
+      // frame plus one cadence frame — never a frame-per-tick barrage.
+      expect(during).toBeGreaterThanOrEqual(2);
+      expect(during).toBeLessThanOrEqual(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("smart mode: stopping earns ONE settle frame ~1s later, then silence", async () => {
+    vi.useFakeTimers();
+    try {
+      const r = makeRig();
+      grantAndOpen(r.client, 7);
+      r.client.dispatch("video");
+      await vi.advanceTimersByTimeAsync(50);
+      const startup = shotCount(r);
+      // A short burst of drawing…
+      for (let t = 0; t < 600; t += 200) {
+        r.bus.firePageEvent({ kind: "interaction", tab: 7 });
+        await vi.advanceTimersByTimeAsync(200);
+      }
+      // …then hands off. The burst bought its immediate frame; the quiet
+      // second after it buys exactly one settle frame (the finished stroke).
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(shotCount(r) - startup).toBe(2);
+      // A long still stretch afterwards records NOTHING further.
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(shotCount(r) - startup).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("smart mode: a share over a still page records only the opening frame", async () => {
+    vi.useFakeTimers();
+    try {
+      const r = makeRig();
+      grantAndOpen(r.client, 7);
+      r.client.dispatch("video");
+      await vi.advanceTimersByTimeAsync(50);
+      const startup = shotCount(r);
+      await vi.advanceTimersByTimeAsync(12000); // no interaction at all
+      expect(shotCount(r)).toBe(startup);
     } finally {
       vi.useRealTimers();
     }

@@ -147,22 +147,14 @@ const { arm: armRegion, disarm: disarmRegion } = createRegionSurface({
   locate: (rect) => locateComponents(rect),
 });
 
-// ── pencil: the markup surface, imported (no injection, no CSP fight) ────────
-// The `{op, …}` dispatcher is the shared surface (../page/surfaces); the mount
-// is imported here (always present — no bundle to wait for), so the factory's
-// "not injected" guard never fires on this tier.
-const pencilOps = createPencilOps(() => mountPencil);
-
-// ── selection: structured, via the runtime's watcher ─────────────────────────
-const watcher = installSelectionWatcher({
-  onChange: (snap) => report({ kind: "selection", present: snap !== undefined }),
-});
-
-// ── the interaction ping (the smart-video gate) ──────────────────────────────
+// ── the interaction ping (the smart-video gate's activity signal) ────────────
+// Throttled to ≤1 per 250ms — fast enough that the panel's quiescence gate
+// (1s) can tell "still drawing" from "stopped"; slow enough to stay cheap.
+const INTERACTION_THROTTLE_MS = 250;
 let lastInteraction = 0;
 const interaction = (): void => {
   const now = Date.now();
-  if (now - lastInteraction > 1000) {
+  if (now - lastInteraction >= INTERACTION_THROTTLE_MS) {
     lastInteraction = now;
     report({ kind: "interaction" });
   }
@@ -170,6 +162,29 @@ const interaction = (): void => {
 for (const type of ["pointerdown", "keydown", "wheel", "scroll"] as const) {
   window.addEventListener(type, interaction, { passive: true, capture: true });
 }
+// A held drag (a pencil stroke, a slider) is ONE pointerdown then silence —
+// pointermove with a button down keeps it reading as active for its duration.
+window.addEventListener(
+  "pointermove",
+  (e) => {
+    if (e.buttons !== 0) {
+      interaction();
+    }
+  },
+  { passive: true, capture: true },
+);
+
+// ── pencil: the markup surface, imported (no injection, no CSP fight) ────────
+// The `{op, …}` dispatcher is the shared surface (../page/surfaces); the mount
+// is imported here (always present — no bundle to wait for), so the factory's
+// "not injected" guard never fires on this tier. Remote iPad strokes arrive as
+// ops, not DOM events — the dispatcher pings `interaction` itself.
+const pencilOps = createPencilOps(() => mountPencil, interaction);
+
+// ── selection: structured, via the runtime's watcher ─────────────────────────
+const watcher = installSelectionWatcher({
+  onChange: (snap) => report({ kind: "selection", present: snap !== undefined }),
+});
 
 // ── the MAIN-world probe's answers: instrumentation, tools, tool results ─────
 let aiuiPage = false;

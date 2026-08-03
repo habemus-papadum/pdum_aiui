@@ -120,7 +120,8 @@ describe("the invocation gesture — grant-only (owner, 2026-07-20)", () => {
   it("mid-turn it re-grants and never cancels (the one salvage kept)", () => {
     const r = makeRig();
     grantAndOpen(r);
-    activationGesture(r.client, 9); // e.g. re-granting after a tab switch
+    r.bus.switchTab(9); // the user moved; the invocation lands on the tab in view
+    activationGesture(r.client, 9); // re-granting after the switch
     expect(r.client.state().phase).toBe("turn"); // untouched
     expect(r.client.context().grantedTab).toBe(9);
     expect(r.lanes).toEqual(["openTurn"]); // no second open, no cancel
@@ -132,6 +133,51 @@ describe("the invocation gesture — grant-only (owner, 2026-07-20)", () => {
     expect(r.client.state().phase).toBe("disarmed");
     expect(r.client.context().grantedTab).toBe(7);
     expect(r.lanes).toEqual([]);
+  });
+
+  it("a grant SURVIVES visiting another tab — returning re-points capture, no new gesture", async () => {
+    // Chrome's invocation-gated standing is PER TAB and durable until that tab
+    // navigates or closes; the single-slot model forgot it and re-asked (the
+    // regression of 2026-08-03). The ledger remembers like Chrome does.
+    const r = makeRig(); // the gated (MV3-shaped) tier
+    r.client.setContext({ connected: true });
+    activationGesture(r.client, 7);
+    expect(r.client.context().grantedTab).toBe(7);
+
+    r.bus.switchTab(9); // an ungranted tab: the anchor stays parked on 7…
+    await settle();
+    expect(r.client.context().activeTab).toBe(9);
+    expect(r.client.context().grantedTab).toBe(7); // …so the banner shows for 9
+
+    activationGesture(r.client, 9); // grant this one too
+    expect(r.client.context().grantedTab).toBe(9);
+
+    r.bus.switchTab(7); // BACK: 7's grant still stands — capture re-points, no re-ask
+    await settle();
+    expect(r.client.context().grantedTab).toBe(7);
+    expect(r.client.context().grantedTabs).toEqual([7, 9]);
+  });
+
+  it("Chrome refusing a believed grant DEMOTES it — the ledger self-corrects", async () => {
+    const r = makeRig();
+    r.client.setContext({ connected: true });
+    activationGesture(r.client, 7);
+    await settle();
+    expect(r.bus.heldStreams()).toEqual([7]); // the warm stream took the grant
+    // Every tab's Chrome standing dies (navigation): holds now refuse with the
+    // invocation-gate error, verbatim.
+    r.bus.failCapability(
+      "stream",
+      "Extension has not been invoked for the current page (see activeTab permission).",
+    );
+    r.bus.switchTab(9);
+    await settle();
+    activationGesture(r.client, 9); // a grant the world no longer honors
+    await settle(40);
+    // The cascade: 9's hold fails → demoted; the anchor falls back to 7, whose
+    // re-hold fails too → demoted. The ledger ends honest — empty.
+    expect(r.client.context().grantedTabs).toEqual([]);
+    expect(r.client.context().grantedTab).toBeUndefined();
   });
 });
 
@@ -303,8 +349,10 @@ describe("the capture grant is the HOST's business, not a ritual", () => {
     // opening a turn just to clear ink.
     const r = makeRig();
     r.client.setContext({ connected: true }); // the edge arms
-    // Mode off by default (like ink); clear rides the MODE, so it is dark.
-    expect(r.client.canDispatch("pencilClear")).toBe(false);
+    // Clear is live from the moment we're armed, pencil mode or not (owner,
+    // 2026-08-03): strokes survive leaving the mode, so the ink you want gone
+    // is often on screen while the toggle is dark.
+    expect(r.client.canDispatch("pencilClear")).toBe(true);
 
     r.client.dispatch("pencil"); // markup mode ON — while ARMED, no turn
     await settle();
@@ -1043,14 +1091,15 @@ describe("the bar: a tree presented linearly", () => {
     r.client.dispatch("video");
     // The cadence is a MODE SELECT + an always-visible slider now (owner,
     // 2026-07-25) — the "constant" cap whose unlit state didn't read as
-    // "smart" is gone; the slider dims via enabledWhen unless constant.
+    // "smart" is gone. The slider is LIVE in both modes (owner, 2026-08-03):
+    // smart reads it as the active-page frame rate, constant as the clock.
     expect(flatBar(r).find((i) => i.kind === "widget" && i.control === "videoMode")).toBeDefined();
     const slider = () =>
       flatBar(r).find((i) => i.kind === "widget" && i.control === "videoPeriodSec") as
         | { enabled: boolean }
         | undefined;
     expect(slider()).toBeDefined(); // always visible…
-    expect(slider()?.enabled).toBe(false); // …but DIMMED in smart mode
+    expect(slider()?.enabled).toBe(true); // …and live in smart mode too
     r.client.dispatch("fpsMode");
     expect(slider()?.enabled).toBe(true); // constant: the slider is live
   });

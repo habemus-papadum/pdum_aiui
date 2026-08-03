@@ -80,12 +80,16 @@ function custom(kit: AgentToolkit): Record<string, unknown> {
   return out;
 }
 
-/** An action, dressed as the agent tool it becomes. */
-function toolOfAction(name: string): AgentTool | undefined {
+/**
+ * An action, dressed as the agent tool it becomes. `toolName` is the action's
+ * identity RELATIVE to the kit (see {@link kitRelativeName}); `name` stays the
+ * registry's fully-qualified identity, which the run stays late-bound through.
+ */
+function toolOfAction(name: string, toolName: string): AgentTool | undefined {
   const a = actionByName(name);
   if (!a) return undefined;
   return {
-    name: a.name,
+    name: toolName,
     description: a.description ?? `Run the app's "${a.name}" action.`,
     ...(a.params !== undefined ? { params: a.params } : {}),
     ...(a.inputSchema !== undefined ? { inputSchema: a.inputSchema } : {}),
@@ -97,6 +101,23 @@ function toolOfAction(name: string): AgentTool | undefined {
       return live.run(args);
     },
   };
+}
+
+/**
+ * A tool's name inside a kit is its identity relative to that kit. An action's
+ * registry name is scope-qualified (`testapp/reseed`), and the shared registry
+ * republishes every kit tool under `<ns>/<tool>` — so for the common app shape
+ * (kit ns == app scope) keeping the qualified name would double the prefix
+ * (`testapp/testapp/reseed` on the channel). Strip the kit's namespace when
+ * the action's SCOPE sits inside it; a foreign-scoped action keeps its
+ * qualified name, so a kit `app` hosting slices `left`/`right` still exposes
+ * distinguishable `app/left/reseed` / `app/right/reseed`.
+ */
+function kitRelativeName(kit: AgentToolkit, name: string, scope: string | undefined): string {
+  if (scope === kit.ns || scope?.startsWith(`${kit.ns}/`)) {
+    return name.slice(kit.ns.length + 1);
+  }
+  return name;
 }
 
 /**
@@ -180,7 +201,7 @@ export function registerStandardTools(kit: AgentToolkit): () => void {
   const syncActionTools = () => {
     for (const entry of controlSurface()) {
       if (entry.kind !== "action") continue;
-      const tool = toolOfAction(entry.name);
+      const tool = toolOfAction(entry.name, kitRelativeName(kit, entry.name, entry.scope));
       if (tool) kit.registerTool(tool);
     }
   };

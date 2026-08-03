@@ -163,6 +163,21 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
   // silently absent). So the bus evaluates the bundle first, and the handlers
   // below just use the global it defines.
 
+  // ── the interaction ping (the smart-video gate's activity signal) ──────────
+  // Throttled to ≤1 per 250ms — fast enough that the panel's quiescence gate
+  // (1s) can tell "still drawing" from "stopped"; slow enough to stay cheap.
+  // Defined here, above the pencil ops: remote iPad strokes arrive as ops, not
+  // DOM events, so the dispatcher pings this itself. The DOM listeners are
+  // registered further down with their fact-reporting kin.
+  let lastInteraction = 0;
+  const interaction = (): void => {
+    const now = Date.now();
+    if (now - lastInteraction >= 250) {
+      lastInteraction = now;
+      report({ kind: "interaction" });
+    }
+  };
+
   // ── pencil: the same evaluated bundle, a second surface (local + remote) ────
   // The `{op, …}` dispatcher is shared with the MV3 content script (surfaces.ts).
   // Here the mount arrives on the evaluated page bundle (`ensureBundle`) and is
@@ -170,6 +185,7 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
   // the factory answers when it is missing.
   const pencilOps = makePencilOps(
     () => (w.__aiuiIntentPage as { mountPencil?: () => PencilHandle } | undefined)?.mountPencil,
+    interaction,
   );
 
   // ── world facts, callback-based ────────────────────────────────────────────
@@ -441,17 +457,21 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
     }
   });
 
-  let lastInteraction = 0;
-  const interaction = (): void => {
-    const now = Date.now();
-    if (now - lastInteraction > 1000) {
-      lastInteraction = now;
-      report({ kind: "interaction" });
-    }
-  };
   document.addEventListener("pointerdown", interaction, true);
   document.addEventListener("keydown", interaction, true);
   document.addEventListener("wheel", interaction, { capture: true, passive: true });
+  document.addEventListener("scroll", interaction, { capture: true, passive: true });
+  // A held drag (a pencil stroke, a slider) is ONE pointerdown then silence —
+  // pointermove with a button down keeps it reading as active for its duration.
+  document.addEventListener(
+    "pointermove",
+    (e) => {
+      if (e.buttons !== 0) {
+        interaction();
+      }
+    },
+    { capture: true, passive: true },
+  );
 
   // SPA navigations (full loads re-run this bootstrap and re-hello).
   let hereUrl = location.href;

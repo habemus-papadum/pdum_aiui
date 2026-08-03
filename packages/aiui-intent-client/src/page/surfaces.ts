@@ -179,9 +179,15 @@ export function createRegionSurface(deps: {
  * in the page world (absent until the bundle lands, hence the engage guard). A
  * `size` op answers the FRAME box (innerWidth×innerHeight — a capture frames the
  * scrollbar too), a window fact never gated on the mount. Ops before an engage
- * are tolerated as no-ops (a stray op after disengage). */
+ * are tolerated as no-ops (a stray op after disengage).
+ *
+ * `onActivity` (optional, throttled by the caller) fires for every op that
+ * changes PIXELS — remote iPad strokes arrive as these ops, never as DOM
+ * pointer events, so without this the smart-video gate is blind to a whole
+ * drawing session (found live 2026-08-03). */
 export function createPencilOps(
   getMount: () => (() => PencilHandle) | undefined,
+  onActivity?: () => void,
 ): (payload: Record<string, unknown>) => PageCapabilityMap["pencil"]["reply"] {
   let handle: PencilHandle | undefined;
   // Stroke-LEVEL breadcrumbs (never per-point): the X-stroke hunt needs to
@@ -227,6 +233,19 @@ export function createPencilOps(
       // pencil mode ever engaged on this document — the decided contract (the
       // mode is the switch), and the breadcrumb above says so out loud.
       return { ok: true };
+    }
+    // Every op past this guard that changes pixels is page activity — the
+    // smart-video gate's food. rpoint included: a long remote stroke must keep
+    // reading as active for its whole duration, not just at its endpoints.
+    if (
+      op === "clear" ||
+      op === "undo" ||
+      op === "rbegin" ||
+      op === "rpoint" ||
+      op === "rend" ||
+      op === "rcancel"
+    ) {
+      onActivity?.();
     }
     switch (op) {
       case "disengage":

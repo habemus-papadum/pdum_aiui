@@ -299,6 +299,18 @@ export interface PanelShot {
   thumb?: string;
 }
 
+/**
+ * Is this error Chrome's invocation gate saying "this tab was never invoked"
+ * (or its grant has since died — navigation, close)? The MV3 tier surfaces it
+ * verbatim from `tabCapture` (ext/capture.ts throws it untouched; the message
+ * is Chrome's own — the same match the retired extension used). Grantless
+ * hosts never produce it, so the check is tier-safe.
+ */
+export function isGrantRejection(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /has not been invoked/i.test(message);
+}
+
 /** Pixels: the capture half (tabCapture in MV3, getDisplayMedia elsewhere). */
 export interface CaptureSource {
   /**

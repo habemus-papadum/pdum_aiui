@@ -13,7 +13,7 @@
 import type { ClaimSpecs, EngineState } from "@habemus-papadum/aiui-viz/modal";
 import { claimedPageKeys } from "./keys";
 import { type IntentContext, sink } from "./spec";
-import type { HeldStream, IntentHost, RingState } from "./transport";
+import { type HeldStream, type IntentHost, isGrantRejection, type RingState } from "./transport";
 
 /** Lane hooks: the REAL operations behind two claims (the fake host's
  * transport assertions remain the default, which is what harness tests
@@ -40,6 +40,13 @@ export interface ClaimLaneOptions {
     start: () => Promise<void>;
     stop: () => void;
   };
+  /**
+   * Chrome refused a capture with the invocation-gate error for a tab the
+   * grant ledger believed granted (it navigated or closed since its gesture).
+   * The client prunes the ledger here (owner, 2026-08-03) — the claim still
+   * fails (status renders), but the NEXT derivation is honest.
+   */
+  onGrantRejected?: (tab: number) => void;
 }
 
 export function intentClaims(
@@ -132,7 +139,19 @@ export function intentClaims(
     tabStream: {
       derive: (s, ctx) =>
         s.phase !== "disarmed" && ctx.grantedTab !== undefined ? { tab: ctx.grantedTab } : null,
-      acquire: (desire: { tab: number }) => capture.holdStream(desire.tab),
+      acquire: async (desire: { tab: number }) => {
+        try {
+          return await capture.holdStream(desire.tab);
+        } catch (err) {
+          // The warm stream is the FIRST capture after a (believed) grant, so
+          // it is where a stale ledger entry surfaces: demote and rethrow (the
+          // claim fails either way; the ledger stops lying).
+          if (isGrantRejection(err)) {
+            options.onGrantRejected?.(desire.tab);
+          }
+          throw err;
+        }
+      },
       release: (stream: HeldStream) => {
         stream.release();
       },

@@ -21,9 +21,16 @@
  */
 
 import type { IntentClient } from "./client";
+import { grantAnchor, withGrant } from "./spec";
 
 export function activationGesture(client: IntentClient, grantTab: number | undefined): void {
   if (grantTab !== undefined) {
-    client.setContext({ grantedTab: grantTab });
+    // The grant joins the LEDGER (per-tab, like Chrome's own standing — owner,
+    // 2026-08-03) and the anchor re-derives: granting one tab must not forget
+    // another's still-live grant, or returning to it re-asks for what Chrome
+    // still remembers.
+    const ctx = client.context();
+    const grantedTabs = withGrant(ctx.grantedTabs, grantTab);
+    client.setContext({ grantedTabs, grantedTab: grantAnchor(grantedTabs, ctx.activeTab) });
   }
 }

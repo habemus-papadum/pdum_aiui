@@ -27,7 +27,9 @@ export const linter = control({
   description: "realtime prompt linter",
 });
 
-/** Constant mode's cadence, SECONDS PER FRAME (the slider under video). */
+/** The video cadence, SECONDS PER FRAME (the slider under video). Constant
+ * mode reads it as the fixed clock; smart mode as the frame rate while the
+ * page is ACTIVE (a quiet page sends nothing — capture-lanes' gate). */
 export const videoPeriodSec = control({
   name: "videoPeriodSec",
   value: 5,
@@ -35,7 +37,7 @@ export const videoPeriodSec = control({
   max: 10,
   step: 0.1,
   unit: "s",
-  description: "constant-mode video cadence, seconds per frame",
+  description: "video cadence, seconds per frame (smart mode: while the page is active)",
 });
 
 /** Vanishing pencil: off = strokes persist on the page (§13.6 default); on =

@@ -164,22 +164,21 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         children: [
           // The cadence, made READABLE (owner, 2026-07-25): a mode SELECT
           // (smart | constant — the videoMode agent control) replaces the
-          // ambiguous "constant" cap whose unlit state didn't say "smart";
-          // the period slider stays visible and DIMS unless constant is the
-          // mode — the honest signal that smart never reads it (smart's
-          // quiescence gate is its own fixed clock).
+          // ambiguous "constant" cap whose unlit state didn't say "smart".
+          // The period slider is live in BOTH modes (owner, 2026-08-03):
+          // constant reads it as the fixed cadence; smart reads it as the
+          // frame rate while the page is active (capture-lanes' gate).
           { kind: "widget", control: "videoMode", widget: "select", label: "mode" },
           {
             kind: "widget",
             control: "videoPeriodSec",
             widget: "slider",
             label: "every",
-            enabledWhen: ({ state }) => state.videoMode === "constant",
           },
         ],
       },
       // The pencil markup surface (mouse + stylus locally, iPad remotely) — a
-      // `k` on/off toggle that lights, revealing clear · vanish · fade. Lives
+      // `k` on/off toggle that lights, revealing vanish · fade. Lives
       // on the ARMED tier since C2 (owner, 2026-07-25 — markup is a source):
       // togglable and clearable with no turn open, on the desktop bar and the
       // iPad's remote bar alike (the founding complaint was opening a turn
@@ -195,11 +194,6 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
         hint: { key: "k", label: "pencil", icon: "🖊" },
         litWhen: ({ state }) => state.pencil === true,
         children: [
-          {
-            command: "pencilClear",
-            oracle: true,
-            hint: { key: "c", label: "clear", icon: "🧹" },
-          },
           { kind: "widget", control: "pencilVanish", widget: "toggle", label: "vanish" },
           {
             // Visible with its siblings, DIMMED unless vanish is on (owner,
@@ -211,6 +205,16 @@ export const intentBar: readonly BarNode<IntentContext>[] = [
             enabledWhen: () => controlByName("pencilVanish")?.get() === true,
           },
         ],
+      },
+      // Clear stands OUTSIDE the pencil group, always visible (owner,
+      // 2026-08-03): strokes survive leaving pencil mode, so the ink you want
+      // gone is often on screen while the toggle is dark — hiding clear
+      // behind the lit parent forced a pointless re-enter. The iPad strip
+      // still carries its own clear, so no `remote`.
+      {
+        command: "pencilClear",
+        oracle: true,
+        hint: { key: "c", label: "clear ink", icon: "🧹" },
       },
     ],
   },

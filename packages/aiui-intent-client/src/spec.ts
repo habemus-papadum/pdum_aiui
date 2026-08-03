@@ -126,8 +126,26 @@ export function turnCollecting(s: EngineState): boolean {
 export interface IntentContext {
   /** The tab the user is looking at (targeting; ring/keys follow it). */
   activeTab: number | undefined;
-  /** The tab whose capture the user granted (⌘B's invocation gate). */
+  /**
+   * The grant ANCHOR — the tab whose pixels the client takes right now: the
+   * active tab when it holds a grant, else the most recently granted tab (the
+   * warm stream parks there so returning costs nothing). Derived from
+   * {@link IntentContext.grantedTabs} by {@link grantAnchor}; the gesture and
+   * the tab-switch handler keep it in step. Consumers read THIS; only the
+   * ledger's writers touch `grantedTabs`.
+   */
   grantedTab: number | undefined;
+  /**
+   * EVERY tab holding a live capture grant, most recent last (owner,
+   * 2026-08-03). Chrome's invocation-gated `tabCapture` standing is per-tab
+   * and durable until that tab navigates or closes — the retired extension
+   * leaned on Chrome remembering, and a single-slot model made returning to a
+   * granted tab ask again (the regression this fixes). The client stays
+   * OPTIMISTIC and self-corrects: a capture refused with the invocation-gate
+   * error prunes the tab (client.ts), the try-and-demote posture the old
+   * extension measured. Grantless hosts keep this `[activeTab]`.
+   */
+  grantedTabs: readonly number[];
   /** The page reported a live selection (affordance only — pull model). */
   selectionPresent: boolean;
   /** The channel session is connected (arming requires it). */
@@ -151,6 +169,7 @@ export interface IntentContext {
 export const initialContext: IntentContext = {
   activeTab: undefined,
   grantedTab: undefined,
+  grantedTabs: [],
   selectionPresent: false,
   connected: false,
   micGranted: undefined,
@@ -158,6 +177,30 @@ export const initialContext: IntentContext = {
   aiuiPage: false,
   cdpAlignment: undefined,
 };
+
+// ── the grant ledger's three pure moves (writers: activation.ts, client.ts) ──
+
+/** The ledger with `tab` granted — appended or moved to most-recent. */
+export function withGrant(tabs: readonly number[], tab: number): readonly number[] {
+  return [...tabs.filter((t) => t !== tab), tab];
+}
+
+/** The ledger with `tab`'s grant revoked (navigation, close, Chrome's no). */
+export function withoutGrant(tabs: readonly number[], tab: number): readonly number[] {
+  return tabs.filter((t) => t !== tab);
+}
+
+/** The anchor a ledger implies (see {@link IntentContext.grantedTab}): the
+ * active tab when granted, else the most recent grant still standing. */
+export function grantAnchor(
+  tabs: readonly number[],
+  activeTab: number | undefined,
+): number | undefined {
+  if (activeTab !== undefined && tabs.includes(activeTab)) {
+    return activeTab;
+  }
+  return tabs.length > 0 ? tabs[tabs.length - 1] : undefined;
+}
 
 /**
  * The spec. Region lifecycles, in the inventory's vocabulary: `phase` is the
@@ -488,13 +531,12 @@ export const intentSpec: ModeEngineSpec<IntentContext> = {
       ((s.phase === "turn" || s.phase === "armed") && ctx.activeTab !== undefined && ctx.aiuiPage),
     // Pencil markup is a PAGE act (the surface follows the tab in view, no grant
     // — a mouse, a stylus, and the iPad's strokes all land in-page). Its clear
-    // rides the MODE, not the turn (C2, owner 2026-07-25 — superseding the
-    // in-a-turn gate of 2026-07-16): the owner's founding complaint was having
-    // to open a turn just to clear ink. Enabled while pencil mode is on, armed
-    // or in-turn. Vanish/fade are config controls, not commands.
+    // rides NEITHER the turn NOR the mode (owner, 2026-08-03 — superseding the
+    // mode gate of C2 2026-07-25 and the in-a-turn gate of 2026-07-16): strokes
+    // survive leaving pencil mode, so the ink you want gone is often on screen
+    // while the mode is off — clear must not make you re-enter it. Enabled
+    // whenever armed or in-turn. Vanish/fade are config controls, not commands.
     pencilClear: (s, ctx) =>
-      (s.phase === "turn" || s.phase === "armed") &&
-      s.pencil === true &&
-      ctx.activeTab !== undefined,
+      (s.phase === "turn" || s.phase === "armed") && ctx.activeTab !== undefined,
   },
 };

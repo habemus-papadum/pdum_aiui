@@ -25,6 +25,7 @@ import { configBar, intentBar } from "./caps";
 import { type ClaimLaneOptions, intentClaims } from "./claims";
 import { hintsFor, keyVerdict } from "./keys";
 import {
+  grantAnchor,
   type IntentContext,
   initialContext,
   intentSpec,
@@ -32,6 +33,7 @@ import {
   sink,
   turnCollecting,
   turnSuspended,
+  withoutGrant,
 } from "./spec";
 import type { IntentHost } from "./transport";
 // The standing config surface: importing registers the controls (durable,
@@ -284,7 +286,20 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
   const engine = solidModeEngine<IntentContext>({
     spec: intentSpec,
     context: initialContext,
-    claims: intentClaims(host, config.claimOptions),
+    claims: intentClaims(host, {
+      ...config.claimOptions,
+      // Chrome said no where the ledger said yes (the tab navigated or closed
+      // since its gesture): DEMOTE it — the ledger self-corrects, the anchor
+      // re-derives, and the hollow ring + banner come back honestly. The
+      // try-and-demote posture the retired extension measured (its sw ledger
+      // was "a debugging aid, not the source of truth"). `engine` is safely
+      // late-bound: acquires only run after commits, long past construction.
+      onGrantRejected: (tab) => {
+        const ctx = engine.context();
+        const grantedTabs = withoutGrant(ctx.grantedTabs, tab);
+        engine.setContext({ grantedTabs, grantedTab: grantAnchor(grantedTabs, ctx.activeTab) });
+      },
+    }),
     onDispatch: (event) => {
       runVerbs(event);
       config.onDispatch?.(event);
@@ -329,7 +344,24 @@ export function createIntentClient(config: IntentClientConfig): IntentClient {
   };
 
   const noteTab = (tab: number | undefined): void => {
-    engine.setContext(grantless ? { activeTab: tab, grantedTab: tab } : { activeTab: tab });
+    if (grantless) {
+      // Free grants: the ledger is simply "the tab in view" (lockstep).
+      engine.setContext({
+        activeTab: tab,
+        grantedTab: tab,
+        grantedTabs: tab !== undefined ? [tab] : [],
+      });
+    } else {
+      // The anchor follows the view THROUGH the ledger (owner, 2026-08-03):
+      // returning to a tab whose grant still stands re-points capture there
+      // with no fresh gesture — Chrome's own per-tab standing already allows
+      // it. An ungranted tab in view leaves the anchor on the last grant (the
+      // warm stream stays parked; the hollow ring says how to grant HERE).
+      engine.setContext({
+        activeTab: tab,
+        grantedTab: grantAnchor(engine.context().grantedTabs, tab),
+      });
+    }
     deriveTabFacts(tab);
   };
   host.targeting.onActiveTabChange(noteTab);

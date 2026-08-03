@@ -10,6 +10,7 @@ import { agentToolkit } from "./agent-tools";
 import { cell } from "./cell";
 import { action, clearControlSurface, control, controlSurface } from "./control";
 import { dependencyEdges } from "./graph-trace";
+import { scope } from "./scope";
 import { registerStandardTools } from "./standard-tools";
 import { type CellHarness, cellHarness, tick, whenReady } from "./testing";
 
@@ -255,5 +256,34 @@ describe("the derived tools (registerStandardTools)", () => {
     registerStandardTools(kit);
     action({ name: "re-seed", run: () => "new" }); // module re-evaluated
     expect(kit.handle().call("re-seed")).toBe("new"); // late-bound through the registry
+  });
+
+  it("a scoped action's tool name is kit-relative — no doubled prefix on the channel", () => {
+    // The common app shape: ONE scope naming both the identities and the kit.
+    action({ name: "re-seed", scope: scope("ctlScoped"), run: () => "seeded" });
+    const kit = agentToolkit("ctlScoped");
+    registerStandardTools(kit);
+    // Registry identity stays qualified; the KIT tool is the leaf, so the
+    // shared registry's `<ns>/<tool>` publication yields "ctlScoped/re-seed".
+    expect(kit.handle().tools.map((t) => t.name)).toContain("re-seed");
+    expect(kit.handle().tools.map((t) => t.name)).not.toContain("ctlScoped/re-seed");
+    expect(kit.handle().call("re-seed")).toBe("seeded");
+  });
+
+  it("a foreign-scoped action keeps its qualified name — slices stay distinguishable", () => {
+    // The twins shape: a composing kit hosting two instances of one slice.
+    action({ name: "re-seed", scope: scope("left"), run: () => "L" });
+    action({ name: "re-seed", scope: scope("right"), run: () => "R" });
+    const kit = agentToolkit("ctlComposed");
+    registerStandardTools(kit);
+    expect(kit.handle().call("left/re-seed")).toBe("L");
+    expect(kit.handle().call("right/re-seed")).toBe("R");
+  });
+
+  it("a child-scoped action under the kit's scope strips only the kit prefix", () => {
+    action({ name: "re-seed", scope: scope("ctlNested").child("inner"), run: () => "nested" });
+    const kit = agentToolkit("ctlNested");
+    registerStandardTools(kit);
+    expect(kit.handle().call("inner/re-seed")).toBe("nested");
   });
 });

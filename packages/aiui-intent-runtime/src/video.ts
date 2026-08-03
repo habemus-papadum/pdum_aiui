@@ -10,10 +10,11 @@
  *
  * Two cadence modes (`VideoCaptureMode`), both riding this one machine:
  *
- *  - **smart** (the default, 🦉): a tick captures only if the user has touched
- *    the app since the last frame — `shouldCapture` is the interaction monitor's
- *    `consume()`. A still screen sends nothing, so leaving the share on while
- *    you think costs nothing.
+ *  - **smart** (the default, 🦉): the host's `shouldCapture` gate decides which
+ *    ticks become frames — the intent client ticks fast (250ms) and grants a
+ *    frame on a cadence while the page is ACTIVE, plus one settle frame once
+ *    activity goes quiet. A still screen sends nothing, so leaving the share
+ *    on while you think costs nothing.
  *  - **continuous** (🔫): every tick captures, cadence or bust. For narrating
  *    an animation, a drag, anything that moves on its own.
  *
@@ -95,10 +96,12 @@ export interface VideoSamplerDeps<T = Uint8Array> {
   intervalMs?: number | (() => number);
   /**
    * Smart mode's gate, consulted **once per tick** (the first frame of a share
-   * excepted, which always fires): capture this frame? The host passes the
-   * interaction monitor's `consume()`, which reads *and clears* the "the user
-   * touched something" flag — so it must be called exactly once per tick, and
-   * only for ticks that actually get to decide. Omit for continuous mode.
+   * excepted, which always fires): capture this frame? The host's policy —
+   * the intent client grants on an activity-aware cadence — and typically
+   * read-and-CLEAR: a grant consumes the state that earned it (`rearm` hands
+   * it back when the frame never delivers), so the machine calls it exactly
+   * once per tick, and only for ticks that actually get to decide. Omit for
+   * continuous mode.
    *
    * A tick the gate declines is not a frame: `seq` doesn't advance and nothing
    * reaches `sendFrame`, so a share sitting over a still screen is free.

@@ -13,12 +13,25 @@ import { pencilFade, pencilVanish, shotFlash, videoPeriodSec } from "../config";
 import { sendShotToOracle } from "./oracle-contributions";
 import type { LaneContext } from "./types";
 
+/** Smart mode's decision tick — every tick DECIDES against the activity
+ * ledger; few become frames. Fast enough that the settle frame lands within
+ * ~¼s of quiescence elapsing. */
+const SMART_TICK_MS = 250;
+/** Activity that stayed quiet this long earns the settle frame — the shot of
+ * the FINISHED stroke. Must exceed the page's ping throttle (250ms), or a
+ * continuous stroke's ping gaps would read as quiescence mid-stroke. */
+const QUIESCE_MS = 1000;
+
 export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
   const { host, engine, wire, status, toast, pencilTabs, pauseGate } = ctx;
 
   // ── the video frame pump (the real videoSample applier) ───────────────────
-  // Smart mode's gate: page interaction pings arm one frame (read-and-clear).
+  // Smart mode's activity ledger: interaction pings (pointer/keys/wheel, pencil
+  // strokes local AND remote — the page throttles them to ≤1 per 250ms) mark
+  // unphotographed activity and stamp its wall-clock. The gate below turns the
+  // ledger into frames.
   let pageInteracted = false;
+  let lastActivityAt = 0;
   host.transport.onPageEvent((event) => {
     if (event.kind === "regionDrag") {
       // Route by SINK, and drop only when there is none (O3d). This used to
@@ -79,6 +92,7 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
     }
     if (event.kind === "interaction") {
       pageInteracted = true;
+      lastActivityAt = Date.now();
     } else if (event.kind === "navigation") {
       // Same-tab navigation: context riding the turn (the engine no-ops
       // without an open thread), rendered into the prompt by composeIntent.
@@ -186,6 +200,10 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
     onPencilEngaged: (tab) => pencilTabs.add(tab),
     videoSampler: {
       start: async (desire) => {
+        // The gate's frame ledger: when it last granted a frame, and the value
+        // to roll back to when a granted tick delivers nothing (rearm).
+        let lastFrameAt = 0;
+        let prevFrameAt = 0;
         const sampler = new VideoSampler({
           captureFrame: async () => {
             try {
@@ -209,18 +227,43 @@ export function createCaptureLanes(ctx: LaneContext): ClaimLaneOptions {
             );
             void wire.uploadAttachment(marker, shot.mime, shot.bytes);
           },
+          // Smart mode ticks FAST and captures rarely: every tick is a cheap
+          // decision against the activity ledger; the gate below says which
+          // ticks become frames. Constant mode ticks exactly at the cadence.
           intervalMs: () =>
-            desire.mode === "smart" ? 1000 : (videoPeriodSec.get() as number) * 1000,
+            desire.mode === "smart" ? SMART_TICK_MS : (videoPeriodSec.get() as number) * 1000,
+          // Smart mode's gate (owner, 2026-08-03). Three rules, from the
+          // activity ledger:
+          //  - sustained activity (drawing, dragging) → a frame every
+          //    videoPeriodSec, the SAME slider constant mode reads;
+          //  - activity that then went quiet for QUIESCE_MS → one settle
+          //    frame, so the END of every stroke is photographed (pings keep
+          //    re-arming the flag after a mid-stroke frame);
+          //  - no activity → no frames, however long the share sits.
           shouldCapture: () => {
             if (desire.mode !== "smart") {
               return true;
             }
-            const had = pageInteracted;
+            if (!pageInteracted) {
+              return false;
+            }
+            const now = Date.now();
+            const settled = now - lastActivityAt >= QUIESCE_MS;
+            const due = now - lastFrameAt >= (videoPeriodSec.get() as number) * 1000;
+            if (!settled && !due) {
+              return false;
+            }
             pageInteracted = false;
-            return had;
+            prevFrameAt = lastFrameAt;
+            lastFrameAt = now;
+            return true;
           },
           rearm: () => {
-            pageInteracted = true; // the tick consumed the gate, delivered nothing
+            // The tick consumed the gate but delivered nothing: hand back the
+            // flag AND the cadence slot it claimed, or the retry waits a full
+            // period for a frame it already earned.
+            pageInteracted = true;
+            lastFrameAt = prevFrameAt;
           },
         });
         sampler.start();
