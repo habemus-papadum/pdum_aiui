@@ -29,7 +29,7 @@ import {
   weaveInstructions,
   webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
-import { type Accessor, createEffect, createRoot, createSignal } from "solid-js";
+import { type Accessor, createEffect, createRoot, createSignal, untrack } from "solid-js";
 import type { IntentClient } from "../client";
 import { oracleFileTools, oraclePageTools, oraclePanelTools } from "../config";
 import { createPageTools, type PageToolNamespace, type PageToolsRegistry } from "../page-tools";
@@ -484,8 +484,12 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       // registering a tool at runtime all swap what the model holds MID-SESSION
       // — which the vendor supports and the package was built for. Solid's
       // TWO-ARG effect shape (the one-arg form throws MISSING_EFFECT_FN — the
-      // repo footgun), everything read in the compute so nothing warns
-      // STRICT_READ_UNTRACKED.
+      // repo footgun). The COMPUTE owns the dependency list; `applyTools`
+      // re-reads the same inputs itself (it also runs from non-reactive
+      // callers — connect, the registry callback), so the callback wraps it
+      // in `untrack`: the re-reads are deliberate, and every one of them is
+      // already tracked above (without this, each re-projection spammed ~24
+      // STRICT_READ_UNTRACKED warnings across CI's test logs).
       const disposeTools = createRoot((dispose) => {
         createEffect(
           () => ({
@@ -495,7 +499,7 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
             tab: client.context().activeTab,
             live: client.state().oracle === true,
           }),
-          () => applyTools(),
+          () => untrack(() => applyTools()),
         );
         return dispose;
       });

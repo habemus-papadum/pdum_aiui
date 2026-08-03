@@ -48,58 +48,21 @@ export const CHANNEL_HEADER_STYLES = `
     max-width: 280px; }
 `;
 
-/** One channel, as the ENRICHED listings carry them (mirror route or native
- * host — both serve the registry package's enriched shape; only `port` is
- * load-bearing here, the rest is display). */
-export interface ChannelEntry {
-  port: number;
-  tag?: string;
-  cwd?: string;
-  pid?: number;
-  /** "channel" | "debug" | "remote" — a debug server carries no session. */
-  kind?: string;
-  /** Assigned name → live Claude session name → host → pid (listing-computed). */
-  resolvedName?: string;
-}
+// The listing DATA contract + pure helpers moved to ../channel-listing.ts
+// (2026-08-03): ext/channel.ts consumes `agentsWarning`, and reaching it
+// through this COMPONENT file dragged solid-js into the discovery module
+// graph — its reset-per-test reloads re-instantiated Solid and spammed the
+// "multiple instances" warning across CI. Re-exported here so UI-side
+// importers keep their path.
+export {
+  type AgentsStatusLike,
+  agentsWarning,
+  type ChannelEntry,
+  type ChannelListing,
+  channelLabel,
+} from "../channel-listing";
 
-/** The enrichment source's health, as listings report it (loud, per design). */
-export interface AgentsStatusLike {
-  status: string;
-  claudePath?: string;
-  error?: string;
-}
-
-/** What the list seam answers: the channels, plus whether the extension's
- * native host failed to answer (absent on the page tier, which has no host),
- * plus a session-name degradation warning. The distinction picks the hint: an
- * empty list from a WORKING host means "nothing running" (`aiui claude`); a
- * host error means native messaging is broken and the remedy is
- * `aiui extension install-native-host`; an agents warning means channels work
- * but their live names don't (claude missing/broken). */
-export interface ChannelListing {
-  channels: ChannelEntry[];
-  nativeHostError?: string;
-  agentsWarning?: string;
-}
-
-/** The loud-but-partial message for a degraded agents join, or undefined. */
-export const agentsWarning = (agents: AgentsStatusLike | undefined): string | undefined => {
-  if (agents === undefined || agents.status === "ok") {
-    return undefined;
-  }
-  return agents.status === "claude-missing"
-    ? `Claude Code not found${agents.claudePath !== undefined ? ` at ${agents.claudePath}` : ""} — ` +
-        "session names unavailable; re-run aiui to repair the native host"
-    : `session names unavailable — \`claude agents\` failed${
-        agents.error !== undefined ? ` (${agents.error})` : ""
-      }`;
-};
-
-/** "name :port" — the resolved name (else the cwd tail) names the session. */
-export const channelLabel = (entry: ChannelEntry): string => {
-  const name = entry.resolvedName ?? entry.cwd?.split("/").filter(Boolean).at(-1) ?? "channel";
-  return `${name} :${entry.port}${entry.kind === "debug" ? " (debug)" : ""}`;
-};
+import { type ChannelEntry, type ChannelListing, channelLabel } from "../channel-listing";
 
 export function ChannelHeader(props: {
   /** The channel this panel is bound to (undefined = none found). */

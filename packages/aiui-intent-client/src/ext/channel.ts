@@ -28,7 +28,7 @@
  * own under its own extension id, and the two never meet.
  */
 
-import { type AgentsStatusLike, agentsWarning } from "../ui/channel-header";
+import { type AgentsStatusLike, agentsWarning } from "../channel-listing";
 import { CDP_DRIVER_TAG_FRESH_MS, CDP_DRIVER_TAG_PREFIX } from "./manifest";
 
 const RECENT_KEY = "aiui2.recentPorts";
