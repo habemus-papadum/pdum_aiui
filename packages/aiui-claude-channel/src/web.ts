@@ -295,6 +295,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       // which rows are this server's (a traceDir implies the store exists).
       ...(traceStore?.session !== undefined ? { session: traceStore.session } : {}),
       ...(options.debug === true ? { debug: true } : {}),
+      pageTools: () => pageTools.list(),
     });
   }
 

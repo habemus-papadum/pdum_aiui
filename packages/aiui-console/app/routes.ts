@@ -15,6 +15,8 @@ export const CONSOLE_PREFIX = "/__aiui";
 export const CONSOLE_HOME_PATH = `${CONSOLE_PREFIX}/`;
 /** The trace debugger (a client-side route in this same app). */
 export const CONSOLE_DEBUG_PATH = `${CONSOLE_PREFIX}/debug`;
+/** The page-tools ledger (a client-side route in this same app). */
+export const CONSOLE_TOOLS_PATH = `${CONSOLE_PREFIX}/tools`;
 
 /** The remote pencil client, served by the pencil sidecar. */
 export const PENCIL_PATH = "/pencil/";

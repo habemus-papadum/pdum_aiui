@@ -26,7 +26,7 @@ import {
   OracleWebRtcParams,
 } from "@habemus-papadum/aiui-oracle/widgets";
 import type { JSX } from "@solidjs/web";
-import { Show } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { IntentClient } from "../client";
 import type { ChannelLanes } from "../lanes";
 import { CHANNEL_HEADER_STYLES, ChannelHeader, type ChannelListing } from "./channel-header";
@@ -285,6 +285,56 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
 }
 
 /**
+ * The page-tools LEDGER pane (docs/proposals/page-tools.md, step 3): what the
+ * tab in view advertises — namespace · tool · active/parked — from the
+ * panel's own descriptor registry (the same one the oracle projects from).
+ * This is the PAGE-side view; the channel's twin (what the agent sees, shadow
+ * marks included) lives on the console at /__aiui/tools. Standing and
+ * collapsible, like the oracle ledger: enumeration is the debugging surface.
+ */
+function PageToolsLedgerPane(props: { client: IntentClient; lanes: ChannelLanes }) {
+  const [rev, setRev] = createSignal(0, { ownedWrite: true });
+  onCleanup(props.lanes.pageTools.onChange(() => setRev((n) => n + 1)));
+  const namespaces = () => {
+    rev(); // re-read on every registry change
+    return props.lanes.pageTools.toolsFor(props.client.context().activeTab);
+  };
+  return (
+    <details class="aiui-pane" data-testid="page-tools-ledger">
+      <summary>
+        page tools{" "}
+        <span style="opacity:.6">
+          {namespaces().reduce((n, reg) => n + reg.tools.length, 0)} from the tab in view
+        </span>
+      </summary>
+      <Show
+        when={namespaces().length > 0}
+        fallback={<div style="opacity:.6;padding:4px 0">the tab in view registers no tools</div>}
+      >
+        <For each={namespaces()}>
+          {(reg) => (
+            <div data-testid="ledger-ns" data-ns={reg.ns}>
+              <div style="margin:4px 0 2px">
+                <code>{reg.ns}</code>{" "}
+                <span style="opacity:.6">{reg.active !== false ? "active" : "parked"}</span>
+              </div>
+              <For each={reg.tools}>
+                {(tool) => (
+                  <div style="padding-left:1em;opacity:.85">
+                    <code>{tool.name}</code>
+                    <span style="opacity:.7"> — {tool.description}</span>
+                  </div>
+                )}
+              </For>
+            </div>
+          )}
+        </For>
+      </Show>
+    </details>
+  );
+}
+
+/**
  * The panel's render tree. Emits its own `<style>`, so an entry renders exactly
  * `<PanelLayout … />` and nothing else. The decided order (owner, 2026-07-14):
  * channel first, then the target tab (CDP only), the panel (bar + pills), the
@@ -326,6 +376,12 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
       </Show>
       <Show when={props.lanes} keyed>
         {(lanes) => <OraclePanes client={props.client} lanes={lanes} />}
+      </Show>
+      {/* The tools ledger sits with the other records: what the tab in view
+          advertises, enumerable at a glance (the channel's twin is on the
+          console at /__aiui/tools). */}
+      <Show when={props.lanes} keyed>
+        {(lanes) => <PageToolsLedgerPane client={props.client} lanes={lanes} />}
       </Show>
       <Show when={props.lanes !== undefined && props.port !== undefined}>
         <RichTracePane baseUrl={`http://127.0.0.1:${props.port}`} />

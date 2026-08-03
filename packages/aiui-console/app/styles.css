@@ -292,3 +292,39 @@ code {
 .card-open:hover {
   text-decoration: underline;
 }
+
+/* ── the page-tools ledger (/__aiui/tools) ─────────────────────────────────── */
+
+.tagline {
+  margin: 4px 0 0;
+  opacity: 0.75;
+}
+
+.ledger {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ledger th {
+  text-align: left;
+  font-weight: 600;
+  opacity: 0.7;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.ledger td {
+  padding: 5px 10px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  vertical-align: top;
+}
+
+.ledger-desc {
+  opacity: 0.8;
+  max-width: 34em;
+}
+
+.ledger-shadowed {
+  opacity: 0.45;
+}

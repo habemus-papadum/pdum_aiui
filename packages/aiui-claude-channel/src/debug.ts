@@ -149,6 +149,13 @@ export interface DebugHooks {
   session?: string;
   /** True on a debug-mode server (`serve`); echoed on /debug/api/info. */
   debug?: boolean;
+  /**
+   * The page-tools ledger for GET /debug/api/page-tools — the CHANNEL's view
+   * of every registered namespace (what the agent actually sees:
+   * registrations with activity + shadow marks), the ground truth when
+   * page-side and channel-side disagree (docs/proposals/page-tools.md).
+   */
+  pageTools?: () => unknown;
 }
 
 /** Mount the debug tool's routes onto the backend's express app. */
@@ -178,6 +185,7 @@ export function registerDebugRoutes(
       api: [
         "/debug/api/info",
         "/debug/api/channels",
+        "/debug/api/page-tools",
         "/debug/api/traces",
         "/debug/api/traces/:id",
         "/debug/api/traces/:id/live",
@@ -186,6 +194,17 @@ export function registerDebugRoutes(
         "/debug/blob/:id/:file",
       ],
     });
+  });
+
+  // The page-tools ledger — the channel's own view (registrations with
+  // activity + shadow marks), rendered by the console's tools page and
+  // curl-able when the page-side and channel-side views disagree.
+  app.get("/debug/api/page-tools", (_req, res) => {
+    if (hooks.pageTools === undefined) {
+      res.status(404).json({ error: "this server exposes no page-tools directory" });
+      return;
+    }
+    res.json({ registrations: hooks.pageTools() });
   });
 
   // Every channel this machine is running — how a connected debug viewer

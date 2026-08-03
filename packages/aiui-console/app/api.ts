@@ -63,3 +63,23 @@ export const fetchChannelInfo = (): Promise<ChannelInfo | undefined> =>
   getJson<ChannelInfo>("/debug/api/info");
 
 export const fetchHealth = (): Promise<HealthInfo | undefined> => getJson<HealthInfo>("/health");
+
+/** One page-tools registration as `/debug/api/page-tools` lists it — the
+ * channel's own view (what the AGENT sees), activity + shadow marks included
+ * (docs/proposals/page-tools.md). */
+export interface PageToolRegistrationInfo {
+  clientId?: string;
+  ns?: string;
+  url?: string;
+  tab?: { url?: string; title?: string; chromeTabId?: number; windowId?: number };
+  hash?: string;
+  tools?: Array<{ name?: string; description?: string }>;
+  registeredAt?: string;
+  active?: boolean;
+  activeTab?: boolean;
+  shadowed?: boolean;
+}
+
+export const fetchPageTools = (): Promise<
+  { registrations?: PageToolRegistrationInfo[] } | undefined
+> => getJson<{ registrations?: PageToolRegistrationInfo[] }>("/debug/api/page-tools");

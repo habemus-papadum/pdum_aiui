@@ -134,6 +134,35 @@ describe("web backend with traceDir", () => {
     }
   });
 
+  it("serves the page-tools ledger on /debug/api/page-tools (the console's feed)", async () => {
+    const { port } = await startTraced();
+    const empty = (await (await fetch(`http://127.0.0.1:${port}/debug/api/page-tools`)).json()) as {
+      registrations: unknown[];
+    };
+    expect(empty.registrations).toEqual([]);
+
+    // A page registers over the /tools hub; the ledger reflects it.
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/tools`);
+    await new Promise<void>((resolve) => ws.once("open", () => resolve()));
+    ws.send(
+      JSON.stringify({
+        v: 1,
+        type: "register",
+        ns: "plotapp",
+        hash: "h1",
+        active: false,
+        tools: [{ name: "set_range", description: "set the x range" }],
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const body = (await (await fetch(`http://127.0.0.1:${port}/debug/api/page-tools`)).json()) as {
+      registrations: Array<{ ns: string; active: boolean; tools: unknown[] }>;
+    };
+    expect(body.registrations).toHaveLength(1);
+    expect(body.registrations[0]).toMatchObject({ ns: "plotapp", active: false });
+    ws.close();
+  });
+
   it("serves NO page at /debug — a JSON pointer at the viewers — plus blobs; 404s missing traces", async () => {
     const { cache, port } = await startTraced();
 

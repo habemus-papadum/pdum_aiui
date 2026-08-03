@@ -13,7 +13,7 @@ import {
   fetchHealth,
   type HealthInfo,
 } from "./api";
-import { CONSOLE_DEBUG_PATH, INTENT_PATH, PENCIL_PATH } from "./routes";
+import { CONSOLE_DEBUG_PATH, CONSOLE_TOOLS_PATH, INTENT_PATH, PENCIL_PATH } from "./routes";
 import "./styles.css";
 
 /** One label/value row; the value is monospace, and absent values read "—". */
@@ -253,6 +253,11 @@ export function Dashboard(): JSX.Element {
               <LinkCard href={CONSOLE_DEBUG_PATH} title="Trace debugger">
                 The lowering-trace debugger for this channel — inspect each turn's intermediate
                 representations, stage by stage.
+              </LinkCard>
+
+              <LinkCard href={CONSOLE_TOOLS_PATH} title="Page-tools ledger">
+                Every tool pages have registered on this channel, as the coding agent sees them —
+                namespaces, activity, and shadowed duplicates.
               </LinkCard>
             </div>
           </Section>
