@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-optics",
-  "version": "0.13.0+dev",
+  "version": "0.14.0+dev",
   "description": "Scalar wave-optics engine + shared field widgets for the diffraction/holography notebooks (demos/gratings, demos/holograms). Internal, never published.",
   "type": "module",
   "license": "MIT",
