@@ -30,6 +30,14 @@ catalog:
 # duckdb-wasm consumers (aiui-viz, demos/seismos, apps/cc-miner) declare.
 overrides:
   "@duckdb/duckdb-wasm": 1.33.1-dev61.0
+  # vite-plugin-solid@next floats babel-preset-solid across every 2.0 beta, but
+  # the JSX compiler must match the @solidjs/web runtime beta — newer presets
+  # emit helpers (claimElement) that beta.15 doesn't export, breaking consumers
+  # at dev/build time. The monorepo lockfile happens to hold beta.15 already;
+  # this makes the invariant explicit and keeps `pnpm update` honest. Bump in
+  # step with the solid-js / @solidjs/web pins (see frontend-hard-won.md,
+  # "Ecosystem status").
+  babel-preset-solid: 2.0.0-beta.15
 
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)

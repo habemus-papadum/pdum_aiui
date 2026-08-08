@@ -18,7 +18,13 @@ describe("resolvePackageCli", () => {
     // The tests run against the workspace, where the package still has its src/.
     const { command, args } = resolvePackageCli(CHANNEL_PKG);
     expect(command).toBe(process.execPath);
-    expect(args.slice(0, 2)).toEqual(["--import", "tsx"]);
+    expect(args[0]).toBe("--import");
+    // An absolute loader path, never the bare "tsx" specifier — bare specifiers
+    // resolve from the spawned process's cwd (the user's project, which has no
+    // tsx), not from this repo.
+    expect(isAbsolute(args[1])).toBe(true);
+    expect(args[1]).toContain("tsx");
+    expect(existsSync(args[1])).toBe(true);
     expect(args[2].endsWith("src/cli.ts")).toBe(true);
     expect(existsSync(args[2])).toBe(true);
   });

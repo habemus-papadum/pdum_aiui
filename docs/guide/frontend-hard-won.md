@@ -204,6 +204,19 @@ Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
 - **The 2.0 toolchain that works together:** `solid-js@next` + `@solidjs/web@next` +
   `vite-plugin-solid@next` (bundles a 2.0-compatible solid-refresh). TypeScript ≥ 5.x with
   `jsx: "preserve"`, `jsxImportSource: "@solidjs/web"`.
+- **`babel-preset-solid` floats ahead of the runtime pin — fresh installs break.**
+  Symptom: `"claimElement" is not exported by @solidjs/web/dist/web.js` at `vite build` (dev can
+  hit the same missing import — neither `dev.js` nor `web.js` in beta.15 exports it). Cause:
+  `vite-plugin-solid@3.0.0-next.5` declares `babel-preset-solid: ">=2.0.0-beta.0
+  <2.0.0-experimental.0"`, so a *fresh* lockfile resolves the newest preset (beta.31 as of
+  Aug 2026, via `@dom-expressions/babel-plugin-jsx@0.50.0-next.37`) against the pinned
+  `@solidjs/web@2.0.0-beta.15` runtime — and the newer compiler emits helpers the older runtime
+  doesn't ship. The monorepo never sees it (this lockfile froze the preset at beta.15); any
+  consumer minting its own lockfile — a create-aiui scaffold, an external site (first paid for
+  in fai-design's styleguide) — gets the broken combo on day one. Rule: during the 2.0 beta the
+  JSX compiler and runtime move in lockstep; pin `babel-preset-solid` to the same beta as
+  `solid-js`/`@solidjs/web` via a pnpm override (now in the root `pnpm-workspace.yaml` and the
+  create-aiui app template), and bump preset and runtime together.
 
 ## Testing cells and controls headless
 

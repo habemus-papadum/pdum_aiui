@@ -9,3 +9,11 @@ allowBuilds:
   esbuild: true
 onlyBuiltDependencies:
   - esbuild
+
+# vite-plugin-solid floats babel-preset-solid across every Solid 2.0 beta, but
+# the JSX compiler must match the @solidjs/web runtime beta pinned in
+# package.json — newer presets emit helpers (claimElement) the beta.15 runtime
+# doesn't export, so a fresh install breaks in dev and at `vite build`. Bump
+# this in step with the solid-js / @solidjs/web pins.
+overrides:
+  babel-preset-solid: 2.0.0-beta.15

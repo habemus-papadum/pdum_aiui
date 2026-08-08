@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { packageRoot, runningFromSource } from "@habemus-papadum/aiui-util";
+
+// Resolve modules the way this package would at runtime.
+const nodeRequire = createRequire(import.meta.url);
 
 // `packageRoot` (and the "`main` still points into src/ → dev checkout" heuristic below)
 // moved to aiui-util as shared provenance logic; re-exported here so existing
@@ -40,9 +44,13 @@ export function resolvePackageCli(packageName: string, binName?: string): CliInv
   }
 
   if (runningFromSource(root)) {
-    // dev: dist/cli.js -> src/cli.ts, run through tsx (no build needed).
+    // dev: dist/cli.js -> src/cli.ts, run through tsx (no build needed). The
+    // loader must be our tsx's absolute path, not the bare "tsx" specifier:
+    // `--import` resolves bare specifiers from the spawned process's cwd, and
+    // MCP hosts spawn us from the user's project, where tsx isn't installed.
+    const tsxLoader = nodeRequire.resolve("tsx");
     const srcRel = binRel.replace(/^\.?\/?dist\//, "src/").replace(/\.js$/, ".ts");
-    return { command: process.execPath, args: ["--import", "tsx", resolve(root, srcRel)] };
+    return { command: process.execPath, args: ["--import", tsxLoader, resolve(root, srcRel)] };
   }
   // installed: run the built entry directly.
   return { command: process.execPath, args: [resolve(root, binRel)] };
