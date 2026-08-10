@@ -300,12 +300,20 @@ describe("generator computes (streaming)", () => {
     expect(seen).toEqual([[1], [1, 2], [1, 2, 3]]); // one downstream run per yield
   });
 
-  it("latest mode: partials are visible on latest(), the graph commits once", async () => {
+  // Solid 2.0.0-beta.32 changed what "latest" mode can promise (established
+  // by probe 2026-08-10; see frontend-hard-won.md, "Ecosystem status"):
+  // while a downstream consumer is PENDING on the cell (its deps read threw
+  // NotReadyError and it awaits the commit), the in-flight run's writes are
+  // staged into the pending question's transaction — latest() shows nothing
+  // new, to ANY reader, until the run settles. With no pending consumer the
+  // side channel streams per yield exactly as before. The two tests below pin
+  // each half.
+  it("latest mode with a pending downstream: one commit, side channel coalesces", async () => {
     const [go, setGo] = createSignal<number | undefined>(undefined);
     const commits: number[][] = [];
-    const partials: Array<number[] | undefined> = [];
-    root(() => {
-      const up = cell(
+    const partials: number[][] = [];
+    const { up } = root(() => {
+      const upCell = cell(
         go,
         async function* (_n, ctx) {
           for (const chunk of [[1], [1, 2], [1, 2, 3]]) {
@@ -317,28 +325,56 @@ describe("generator computes (streaming)", () => {
         { stream: "latest" },
       );
       const down = cell(
-        () => ({ rows: up() }),
+        () => ({ rows: upCell() }),
         (d) => {
           commits.push(d.rows);
           return d.rows.length;
         },
       );
-      watch(up);
+      watch(upCell);
       watch(down);
+      return { up: upCell };
+    });
+    setGo(1);
+    await until(() => {
+      const v = up.latest();
+      if (v && v !== partials.at(-1)) partials.push(v);
+      return commits.length > 0;
+    });
+    await tick(); // a settle beat: would a second (wrong) commit follow?
+    await tick();
+    expect(commits).toEqual([[1, 2, 3]]); // exactly one downstream run
+    expect(partials.at(-1)).toEqual([1, 2, 3]); // settle value arrived intact
+  });
+
+  it("latest mode with no pending consumer: partials stream on latest()", async () => {
+    const [go, setGo] = createSignal<number | undefined>(undefined);
+    const partials: Array<number[] | undefined> = [];
+    const { up } = root(() => {
+      const upCell = cell(
+        go,
+        async function* (_n, ctx) {
+          for (const chunk of [[1], [1, 2], [1, 2, 3]]) {
+            await tick();
+            if (ctx.signal.aborted) return;
+            yield chunk;
+          }
+        },
+        { stream: "latest" },
+      );
+      watch(upCell);
       createEffect(
-        () => up.latest(),
+        () => upCell.latest(),
         (v) => {
           if (v) partials.push(v);
         },
       );
-      return { up };
+      return { up: upCell };
     });
     setGo(1);
-    await until(() => commits.length > 0);
-    await tick(); // a settle beat: would a second (wrong) commit follow?
+    await until(() => up.settled() && up.latest()?.length === 3);
     await tick();
-    expect(commits).toEqual([[1, 2, 3]]); // exactly one downstream run
-    expect(partials.length).toBeGreaterThan(1); // but the stream was watchable
+    expect(partials).toEqual([[1], [1, 2], [1, 2, 3]]); // every yield observable
   });
 
   it("settledOnly: a consumer opts out of partials while others stream", async () => {

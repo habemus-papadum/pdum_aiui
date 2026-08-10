@@ -88,7 +88,14 @@ export interface CellOptions {
    *   cells recompute per partial (Observable generator semantics).
    * - "latest": partials are visible only on `latest()`/`progress()`; the
    *   graph commits once, on the final value. Use when downstream work is
-   *   expensive.
+   *   expensive. Caveat (solid 2.0.0-beta.32, probed 2026-08-10): while a
+   *   downstream consumer is PENDING on this cell — its deps read threw
+   *   NotReadyError and it awaits the single commit — the in-flight run's
+   *   writes are staged into the pending question's transaction, so latest()
+   *   coalesces to the settle value for every reader. With no pending
+   *   consumer (the side channel's real use: UI observing a run whose
+   *   consumers already hold a previous value, or none exist yet), partials
+   *   stream per yield. Pinned by the two latest-mode tests in cell.test.ts.
    */
   stream?: "commit" | "latest";
 }

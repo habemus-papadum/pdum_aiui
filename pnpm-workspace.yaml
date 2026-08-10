@@ -54,9 +54,9 @@ catalogs:
   # in lockstep (see the babel-preset-solid override below); bumping Solid is
   # editing these three lines plus the two overrides below and the template.
   solid:
-    solid-js: 2.0.0-beta.15
-    "@solidjs/web": 2.0.0-beta.15
-    vite-plugin-solid: 3.0.0-next.5
+    solid-js: 2.0.0-beta.32
+    "@solidjs/web": 2.0.0-beta.32
+    vite-plugin-solid: 3.0.0-next.24
 
 # Mosaic pins an exact, older duckdb-wasm (`@uwdata/mosaic-core@0.28.1` wants
 # 1.33.1-dev45.0). Without this override two copies install, and passing our
@@ -69,17 +69,16 @@ overrides:
   "@duckdb/duckdb-wasm": 1.33.1-dev61.0
   # vite-plugin-solid@next floats babel-preset-solid across every 2.0 beta, but
   # the JSX compiler must match the @solidjs/web runtime beta — newer presets
-  # emit helpers (claimElement) that beta.15 doesn't export, breaking consumers
-  # at dev/build time. The monorepo lockfile happens to hold beta.15 already;
-  # this makes the invariant explicit and keeps `pnpm update` honest. Bump in
-  # step with the `solid` catalog above (see frontend-hard-won.md,
-  # "Ecosystem status").
-  babel-preset-solid: 2.0.0-beta.15
+  # emit helpers (claimElement, scope) that older runtimes don't export,
+  # breaking consumers at dev/build time. This makes the invariant explicit and
+  # keeps `pnpm update` honest. Bump in step with the `solid` catalog above
+  # (see frontend-hard-won.md, "Ecosystem status").
+  babel-preset-solid: 2.0.0-beta.32
   # Same trap, one layer down: solid-js depends on @solidjs/signals via a caret
   # that floats across betas (`^2.0.0-beta.N` matches every later beta), so a
   # fresh lockfile can pair an old solid-js with a newer signals core. Pin it to
   # the same beta as the `solid` catalog and bump them together.
-  "@solidjs/signals": 2.0.0-beta.15
+  "@solidjs/signals": 2.0.0-beta.32
 
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)
@@ -114,3 +113,4 @@ minimumReleaseAgeExclude:
   - '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-linux-x64@0.1.0'
   - '@habemus-papadum/aiui-registry@0.1.0'
+  - vite-plugin-solid@3.0.0-next.24

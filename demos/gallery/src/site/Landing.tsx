@@ -40,8 +40,12 @@ function DemoCardTile(props: { entry: DemoPageEntry }) {
             )
           }
         >
-          {/* Mount the demo's live preview component (self-contained). */}
-          {(Preview) => Preview()({})}
+          {/* Mount the demo's live preview component (self-contained). The
+              fragment matters: Show invokes the children callback untracked,
+              so a bare Preview()({}) reads the accessor outside any tracking
+              scope (Solid 2.0-beta.32 flags it STRICT_READ_UNTRACKED); the
+              fragment's expression container is a tracked insert. */}
+          {(Preview) => <>{Preview()({})}</>}
         </Show>
       </div>
       <div class="demo-card-body">

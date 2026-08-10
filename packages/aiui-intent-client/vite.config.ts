@@ -28,6 +28,14 @@ export default defineConfig({
   // Compiles the panel's JSX; dev serving (`pnpm dev`) gets the plain page.
   plugins: [solid()],
   test: {
+    // Explicit, not a default: vite-plugin-solid 3.0.0-next.24 started
+    // defaulting the vitest environment to jsdom, which flipped this
+    // package's pragma-less NODE tests (the ws/CDP bridge, the esbuild
+    // sidecar) into jsdom — where node-required esbuild dies on its own
+    // TextEncoder realm invariant and the ws handshake wedges. Node is the
+    // package default; the DOM tests each carry a `@vitest-environment
+    // jsdom` pragma, which wins per-file.
+    environment: "node",
     server: {
       // Solid must be INLINED under Vitest, not node-resolved — the full
       // finding lives with solidTestDeps (@habemus-papadum/aiui-build-config).

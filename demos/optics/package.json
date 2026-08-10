@@ -24,7 +24,7 @@
   },
   "private": true,
   "peerDependencies": {
-    "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0"
+    "solid-js": ">=2.0.0-beta.32 <2.0.0-experimental.0"
   },
   "devDependencies": {
     "@solidjs/web": "catalog:solid",

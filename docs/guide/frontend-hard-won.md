@@ -201,22 +201,37 @@ Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
   optimizer; `solid-devtools` pins solid-js `^1.9`. Hence the in-repo source locator
   (`data-source-loc` with real line:col, dependency-free bar `@babel/core`), now owned by the dev
   source processor (`packages/aiui-source-processor`, the `aiui()` plugin).
-- **The 2.0 toolchain that works together:** `solid-js@next` + `@solidjs/web@next` +
-  `vite-plugin-solid@next` (bundles a 2.0-compatible solid-refresh). TypeScript ≥ 5.x with
-  `jsx: "preserve"`, `jsxImportSource: "@solidjs/web"`.
-- **`babel-preset-solid` floats ahead of the runtime pin — fresh installs break.**
-  Symptom: `"claimElement" is not exported by @solidjs/web/dist/web.js` at `vite build` (dev can
-  hit the same missing import — neither `dev.js` nor `web.js` in beta.15 exports it). Cause:
-  `vite-plugin-solid@3.0.0-next.5` declares `babel-preset-solid: ">=2.0.0-beta.0
-  <2.0.0-experimental.0"`, so a *fresh* lockfile resolves the newest preset (beta.31 as of
-  Aug 2026, via `@dom-expressions/babel-plugin-jsx@0.50.0-next.37`) against the pinned
-  `@solidjs/web@2.0.0-beta.15` runtime — and the newer compiler emits helpers the older runtime
-  doesn't ship. The monorepo never sees it (this lockfile froze the preset at beta.15); any
-  consumer minting its own lockfile — a create-aiui scaffold, an external site (first paid for
-  in fai-design's styleguide) — gets the broken combo on day one. Rule: during the 2.0 beta the
-  JSX compiler and runtime move in lockstep; pin `babel-preset-solid` to the same beta as
-  `solid-js`/`@solidjs/web` via a pnpm override (now in the root `pnpm-workspace.yaml` and the
-  create-aiui app template), and bump preset and runtime together.
+- **The 2.0 toolchain that works together (beta.32 line, upgraded 2026-08-10):** `solid-js@next` +
+  `@solidjs/web@next` + `vite-plugin-solid@next`. TypeScript ≥ 5.x with `jsx: "preserve"`,
+  `jsxImportSource: "@solidjs/web"`. Since `vite-plugin-solid@3.0.0-next.13` the default JSX
+  compiler is the **native `@dom-expressions/compiler`** (exact-pinned by the plugin;
+  `compiler: 'babel'` remains as an escape hatch), and **`solid-refresh` is dead** — the HMR
+  runtime moved into core as the dev-only `solid-js/refresh` entry, with granular per-component
+  refresh on by default. The in-repo source locator is unaffected by the native default *by
+  design* (its own `enforce: "pre"` Babel pass, not the plugin's `babel` option) — verified:
+  `data-source-loc` stamps and HMR hot-swap both work under the native compiler.
+- **The JSX compiler and runtime move in lockstep — fresh installs break otherwise.** Symptom:
+  `"claimElement" is not exported by @solidjs/web/…` (or `scope`) at dev/build time: the newer
+  compiler emits helpers the older runtime doesn't ship, and the plugin's `babel-preset-solid`
+  range floats to the newest beta on any *fresh* lockfile (first paid for in fai-design's
+  styleguide). Same trap one layer down: `solid-js` depends on `@solidjs/signals` via a
+  beta-crossing caret. Rule: pin `babel-preset-solid` AND `@solidjs/signals` to the same beta as
+  the `solid` catalog via pnpm overrides (root `pnpm-workspace.yaml` and the create-aiui app
+  template), and bump the catalog + overrides + template together. Newer plugin versions also
+  ratchet their own peer floors (`next.24` requires runtime ≥ beta.32), so pnpm now refuses the
+  worst mixed states outright.
+- **beta.32 scheduler semantics — async pendingness holds effects.** While a question is pending
+  without a containing boundary (e.g. a downstream memo threw `NotReadyError` and awaits a
+  commit), the scheduler defers effect propagation — user AND render tiers — until the graph
+  settles, and writes made *from inside the in-flight run* are staged into the pending question's
+  transaction (invisible even to pull reads). Consequence for cells: `stream: "commit"` (the
+  production mode) is unaffected — every yield commits and the world flows — but latest-mode
+  side-channel partials coalesce to the settle value whenever a downstream consumer is pending
+  on the cell. Probed 2026-08-10; pinned by the two latest-mode tests in aiui-viz's cell.test.ts.
+- **beta.32 dev lint `STRICT_READ_UNTRACKED`:** reading a reactive value directly in a `<Show>`
+  children callback body (Show invokes it untracked) now warns "will not update". Move the read
+  into a tracked JSX expression container — wrap in a fragment: `{(v) => <>{v()(...)}</>}` (see
+  `demos/gallery/src/site/Landing.tsx`).
 
 ## Testing cells and controls headless
 
